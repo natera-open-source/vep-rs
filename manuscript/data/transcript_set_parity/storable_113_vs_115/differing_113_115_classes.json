@@ -1,0 +1,21 @@
+{
+  "version_a": "113",
+  "version_b": "115",
+  "transcripts": 310,
+  "per_class": {
+    "peptide": 236,
+    "predictions": 235,
+    "protein_features": 265
+  },
+  "class_combinations": {
+    "peptide+predictions+protein_features": 191,
+    "protein_features": 74,
+    "peptide+predictions": 44,
+    "peptide": 1
+  },
+  "json_cache": "json_cache_grch37",
+  "json_cache_peptide_matches": {
+    "113": 236,
+    "both": 74
+  }
+}

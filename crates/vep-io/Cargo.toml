@@ -1,0 +1,23 @@
+[package]
+name = "vep-io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Input parsers (VCF, Ensembl, HGVS, Region) and output formatters (VEP, VCF, JSON, Tab, Parquet)"
+
+[dependencies]
+vep-core = { workspace = true }
+noodles = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+indexmap = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+smallvec = { workspace = true }
+
+[[bench]]
+name = "json_format_bench"
+harness = false

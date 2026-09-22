@@ -1,0 +1,58 @@
+[package]
+name = "vep-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CLI binary for Ensembl VEP Rust implementation"
+default-run = "vep"
+
+[lib]
+name = "vep_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vep"
+path = "src/main.rs"
+
+[[bin]]
+name = "bench_plugins"
+path = "src/bin/bench_plugins.rs"
+
+[dependencies]
+vep-core = { workspace = true }
+vep-effects = { workspace = true }
+vep-io = { workspace = true }
+vep-plugin = { workspace = true }
+vep-builtins = { workspace = true }
+vep-fasta = { workspace = true }
+noodles = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+csv = { workspace = true }
+flate2 = { workspace = true }
+rayon = { workspace = true }
+rustc-hash = { workspace = true }
+bstr = { workspace = true }
+coitrees = { workspace = true }
+smallvec = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+base64 = { workspace = true }
+mimalloc = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+serde_json = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "cache_load_bench"
+harness = false
+
+[features]
+default = ["mimalloc"]
+# Use mimalloc as the `vep` binary's global allocator.
+mimalloc = ["dep:mimalloc"]

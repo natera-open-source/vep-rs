@@ -1,0 +1,16 @@
+[package]
+name = "vep-fasta"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Indexed FASTA access wrapper for VEP"
+
+[dependencies]
+vep-core = { workspace = true }
+noodles = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+memmap2 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -1,0 +1,79 @@
+{
+  "date": "2026-09-18",
+  "sweep_id": "sweep-20260918T050530Z",
+  "purpose": "The ClinVar GRCh37 (s01) reference output was generated at VEP cache version 113; the other five SNP and indel references at 115. This record compares the two GRCh37 Storable caches transcript by transcript and the two references tuple key by tuple key.",
+  "engine": {
+    "image": "ensemblorg/ensembl-vep",
+    "image_digest": "sha256:ff3c7e20d68e7e499c0bd79d398c7c121465db65f311ee87df425b2b600b853e"
+  },
+  "caches": {
+    "113_GRCh37": {
+      "assembly": "GRCh37",
+      "source_gencode": "GENCODE 19",
+      "source_genebuild": "2011-04",
+      "source_assembly": "GRCh37.p13",
+      "sift": "b",
+      "polyphen": "b"
+    },
+    "115_GRCh37": {
+      "assembly": "GRCh37",
+      "source_gencode": "GENCODE 19",
+      "source_genebuild": "2011-04",
+      "source_assembly": "GRCh37.p13",
+      "sift": "b",
+      "polyphen": "b"
+    }
+  },
+  "transcript_comparison": {
+    "tool": "scripts/data/compare_storable_cache_versions.pl inside the image and scripts/data/compare_storable_cache_versions.py (one digest line per transcript of each cache, joined on transcript id); scripts/data/dump_storable_transcripts.pl inside the image and scripts/data/classify_storable_transcript_differences.py (the differing transcripts' field-level classes and the JSON cache's peptide matches)",
+    "transcripts_113": 195232,
+    "transcripts_115": 195232,
+    "only_in_113": 0,
+    "only_in_115": 0,
+    "identical_content": 194922,
+    "differing_content": 310,
+    "content_digest_normalises": [
+      "dbID",
+      "adaptor",
+      "created_date",
+      "modified_date",
+      "_gene_version",
+      "integer scalars stored as strings"
+    ],
+    "differing_by_class": {
+      "peptide": 236,
+      "predictions": 235,
+      "protein_features": 265
+    },
+    "differing_class_combinations": {
+      "peptide+predictions+protein_features": 191,
+      "protein_features": 74,
+      "peptide+predictions": 44,
+      "peptide": 1
+    },
+    "peptide_difference": "on every differing peptide the 115 build stores an initial methionine where the 113 build stores the leucine of a non-ATG start codon; the sequences are otherwise identical, and the SIFT and PolyPhen matrices keyed on the 113 peptide are absent from the 115 build",
+    "json_cache": "json_cache_grch37",
+    "json_cache_peptide_matches": {
+      "113": 236,
+      "both": 74
+    },
+    "lists": "manuscript/data/transcript_set_parity/storable_113_vs_115/"
+  },
+  "reference_comparison": {
+    "input": "ClinVar GRCh37 canonical VCF (s01)",
+    "invocation": "the s01 reference's own invocation with --cache_version 115 in place of 113 (--offline --cache --fork 16 --buffer_size 5000 --fasta)",
+    "elapsed": "16:52.15",
+    "exit_status": 0,
+    "output_sha256": "ce344c759d8829ecbe7f38eafc28495e0c8720c2ecb42cbc27569952bcf388c5",
+    "reference_113_output_sha256": "ce344c759d8829ecbe7f38eafc28495e0c8720c2ecb42cbc27569952bcf388c5",
+    "reference_113_output_sha256_source": "sha256 of the archived s01 reference output (S3.3), hashed from the archive object",
+    "byte_identical": true,
+    "tuple_keys_113": 33483881,
+    "tuple_keys_115": 33483881,
+    "intersection": 33483881,
+    "only_113": 0,
+    "only_115": 0,
+    "comparator": "scripts/concordance/compare_vep_outputs.py, the SNP and indel comparator"
+  },
+  "reading": "The two GRCh37 caches hold the same 195,232 transcripts; 194,922 are identical in content and 310 differ in the stored peptide's first residue or in protein-domain features. A ClinVar GRCh37 reference regenerated at cache version 115 reproduces the 113 reference output byte for byte (sha256 ce344c759d8829ec...), 33,483,881 tuple keys on each side, so the published s01 F1 rests on a reference the 115 cache reproduces exactly."
+}

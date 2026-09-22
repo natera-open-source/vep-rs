@@ -1,0 +1,153 @@
+{
+  "conditions": [
+    {
+      "buffer_size": 5000,
+      "case": "alone_fork1_default",
+      "consequence_set_tallies_for_record": {},
+      "description": "the record alone, --fork 1, default --max_sv_size",
+      "distinct_transcripts_for_record": 0,
+      "exit_code": 0,
+      "extra_args": "",
+      "fork": 1,
+      "input": "alone.vcf",
+      "input_records": 1,
+      "output_rows_total": 0,
+      "rows_for_record": 0,
+      "wall_time_sec": 1.18
+    },
+    {
+      "buffer_size": 5000,
+      "case": "window82_fork1_default",
+      "consequence_set_tallies_for_record": {
+        "feature_truncation,coding_transcript_variant": 7,
+        "feature_truncation,non_coding_transcript_exon_variant,intron_variant": 1,
+        "feature_truncation,non_coding_transcript_variant": 14
+      },
+      "description": "the record inside its 82-record neighbourhood of the source file, --fork 1, default --max_sv_size",
+      "distinct_transcripts_for_record": 22,
+      "exit_code": 0,
+      "extra_args": "",
+      "fork": 1,
+      "input": "window82.vcf",
+      "input_records": 82,
+      "output_rows_total": 322,
+      "rows_for_record": 22,
+      "wall_time_sec": 1.18
+    },
+    {
+      "buffer_size": 5000,
+      "case": "alone_fork1_maxsv500M",
+      "consequence_set_tallies_for_record": {
+        "feature_truncation,NMD_transcript_variant": 60,
+        "feature_truncation,coding_transcript_variant": 505,
+        "feature_truncation,non_coding_transcript_exon_variant,intron_variant": 1,
+        "feature_truncation,non_coding_transcript_variant": 696,
+        "mature_miRNA_variant": 19
+      },
+      "description": "the record alone, --fork 1, --max_sv_size 500000000 (above the record's span)",
+      "distinct_transcripts_for_record": 1281,
+      "exit_code": 0,
+      "extra_args": "--max_sv_size 500000000",
+      "fork": 1,
+      "input": "alone.vcf",
+      "input_records": 1,
+      "output_rows_total": 1281,
+      "rows_for_record": 1281,
+      "wall_time_sec": 1.52
+    },
+    {
+      "buffer_size": 5000,
+      "case": "full_fork1_default",
+      "consequence_set_tallies_for_record": {
+        "feature_truncation,NMD_transcript_variant": 16,
+        "feature_truncation,coding_transcript_variant": 239,
+        "feature_truncation,non_coding_transcript_exon_variant,intron_variant": 1,
+        "feature_truncation,non_coding_transcript_variant": 380,
+        "mature_miRNA_variant": 13
+      },
+      "description": "the whole source file, --fork 1, default --max_sv_size",
+      "distinct_transcripts_for_record": 649,
+      "exit_code": 0,
+      "extra_args": "",
+      "fork": 1,
+      "input": "full.vcf",
+      "input_records": 4921,
+      "output_rows_total": 44341,
+      "rows_for_record": 649,
+      "wall_time_sec": 5.65
+    },
+    {
+      "buffer_size": 5000,
+      "case": "full_fork4_default",
+      "consequence_set_tallies_for_record": {
+        "feature_truncation,coding_transcript_variant": 44,
+        "feature_truncation,non_coding_transcript_exon_variant,intron_variant": 1,
+        "feature_truncation,non_coding_transcript_variant": 171,
+        "mature_miRNA_variant": 8
+      },
+      "description": "the whole source file, --fork 4, default --max_sv_size (the reference output's setting)",
+      "distinct_transcripts_for_record": 224,
+      "exit_code": 0,
+      "extra_args": "",
+      "fork": 4,
+      "input": "full.vcf",
+      "input_records": 4921,
+      "output_rows_total": 35010,
+      "rows_for_record": 224,
+      "wall_time_sec": 3.56
+    },
+    {
+      "buffer_size": 5000,
+      "case": "full_fork16_default",
+      "consequence_set_tallies_for_record": {
+        "feature_truncation,coding_transcript_variant": 17,
+        "feature_truncation,non_coding_transcript_exon_variant,intron_variant": 1,
+        "feature_truncation,non_coding_transcript_variant": 31,
+        "mature_miRNA_variant": 1
+      },
+      "description": "the whole source file, --fork 16, default --max_sv_size (the timed cells' setting)",
+      "distinct_transcripts_for_record": 50,
+      "exit_code": 0,
+      "extra_args": "",
+      "fork": 16,
+      "input": "full.vcf",
+      "input_records": 4921,
+      "output_rows_total": 29959,
+      "rows_for_record": 50,
+      "wall_time_sec": 2.4
+    }
+  ],
+  "date": "2026-09-16",
+  "engine": {
+    "cache": "full-genome Ensembl release 115 GRCh37 Storable cache, --offline --cache --fasta",
+    "cache_version": 115,
+    "image_digest": "ensemblorg/ensembl-vep@sha256:ff3c7e20d68e7e499c0bd79d398c7c121465db65f311ee87df425b2b600b853e",
+    "instance_type": "r8gd.8xlarge",
+    "kernel": [
+      "6.1.172-216.329.amzn2023.aarch64"
+    ],
+    "max_sv_size_default": 10000000
+  },
+  "purpose": "Show that Perl VEP's annotation of a breakend spanning more than its --max_sv_size default depends on the other records in its batch and on --fork, by annotating one such record under controlled batch compositions.",
+  "reading": "Alone, the record yields 0 rows: VEP skips a variant longer than --max_sv_size unless another variant of the same batch has already loaded overlapping transcripts. Inside its 82-record neighbourhood it yields 22, and with --max_sv_size raised above its span 1281, which is every transcript it overlaps. On the whole file the count follows the fork setting, 649 at --fork 1, 224 at --fork 4 and 50 at --fork 16, because forking partitions the batch and each partition loads its own transcripts. vep-rs's independence from batch composition on this shape is asserted by test_annotate_batch_large_bnd_is_batch_independent in crates/vep-cli/src/runner.rs, which annotates a breakend of this span alone and with a neighbour and requires the same transcript set; this record measures VEP only.",
+  "record": "giant_breakend_batch_replay",
+  "variant": {
+    "alt": "<BND>",
+    "assembly": "GRCh37",
+    "chr2": "21",
+    "chrom": "21",
+    "id": "gnomAD-SV_v2.1_BND_21_56725",
+    "pos": 15727643,
+    "pos2": 42458164,
+    "record_data_line_index": 371,
+    "source_file": "gnomad_sv_v2.1_chr21 canonical input of the structural-variant corpus",
+    "source_file_records": 4921,
+    "svlen": 26730521,
+    "svtype": "BND",
+    "window": {
+      "hi": 412,
+      "lo": 331,
+      "records": 82
+    }
+  }
+}

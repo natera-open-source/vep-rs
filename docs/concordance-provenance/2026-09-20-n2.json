@@ -1,0 +1,983 @@
+{
+  "adjusted_f1_policy_note": "Adjusted F1 excludes on two shapes only, the covered splice-region swap and the start co-occurrence swap, as EXCLUSION_REGISTRY in scripts/concordance/compare_vep_outputs.py declares; the other classifying buckets report without excluding. Per suite, suite_results[].divergence_buckets carries {count, excluded} per bucket, measured on this binary's discordance reports, so a bucket's count and its exclusions are read from the same run.",
+  "arch_independent_note": "Concordance F1 is deterministic per binary and architecture-independent. The ARM (23a294cf) and x86 (48b2a959) builds report identical raw and adjusted F1 and identical tuple counts on all 10 suites to six decimal places, across all 20 clones per arch.",
+  "binary_md5": "23a294cf",
+  "binary_md5_fastvep": "6d83c5bc",
+  "binary_md5_full": "23a294cf86cb59d1bae8c31104d87d1a",
+  "binary_md5_vep_rs_arm": "23a294cf86cb59d1bae8c31104d87d1a",
+  "binary_md5_vep_rs_arm_prefix": "23a294cf",
+  "binary_md5_vep_rs_x86": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+  "binary_md5_vep_rs_x86_prefix": "48b2a959",
+  "binary_repro_note": "vep-rs (ARM 23a294cf / x86 48b2a959) is built with `cargo build --release --locked` under rustc 1.97.0 (2d8144b78 2026-07-07), Cargo.lock sha256 d3961d1e3310e60ff06125ed77e8f2d7846f0f3ed2a57acd35dd906c35006d36. The `--locked` flag is what makes the lockfile digest load-bearing: without it cargo is free to resolve newer patch versions and the recorded digest describes an input the build did not use. The content-addressed build inputs are in public_build_inputs. Both arch binaries report identical F1 on all 10 suites to six decimal places across all 40 clones.",
+  "canonical_contigs_filter_active": true,
+  "cargo_lock_sha256": "d3961d1e3310e60ff06125ed77e8f2d7846f0f3ed2a57acd35dd906c35006d36",
+  "companion_walltime_provenance": "docs/concordance-provenance/2026-09-20-n20-parallel-clones.json",
+  "concordance_clones": [
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-01",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 1
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-02",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 10
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-03",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 11
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-04",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 12
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-05",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 13
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-06",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 14
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-07",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 15
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-08",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 16
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-09",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 17
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-10",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 18
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-11",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 19
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-12",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 2
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-13",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 20
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-14",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 3
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-15",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 4
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-16",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 5
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-17",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 6
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-18",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 7
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-19",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 8
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-arm64-20",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 9
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-01",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 1
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-02",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 10
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-03",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 11
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-04",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 12
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-05",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 13
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-06",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 14
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-07",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 15
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-08",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 16
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-09",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 17
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-10",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 18
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-11",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 19
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-12",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 2
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-13",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 20
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-14",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 3
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-15",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 4
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-16",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 5
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-17",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 6
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-18",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 7
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-19",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 8
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-x86_64-20",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 9
+    }
+  ],
+  "concordance_cohort_inventory_sha256_full": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+  "concordance_cohort_inventory_sha256_prefix": "15c55e951cbfbd60",
+  "concordance_n_clones_per_arch": 20,
+  "concordance_n_clones_total": 40,
+  "cross_chromosome_mask_note": "`filter_cross_chromosome_divergences` excludes VEP tuples naming a transcript the variant's chromosome does not hold. Its authority is the vep-rs JSON cache both engines annotated against, supplied via `--vep-rs-cache`; without it the mask is INACTIVE and each suite records `cross_chromosome_check_ran: false`, so an unadjudicated run cannot read as a clean one. Both suites here record true. The filter raises rather than excluding if vep-rs ever produces the shape, and it never raised.",
+  "cross_clone_dataset_parity_ok": true,
+  "cross_clone_determinism_ok": true,
+  "csv_pin_note": "In manuscript/data/f1_observations.csv the s01-s08 rows carrying binary_md5 23a294cf are this sweep's (sweep-20260920T012411Z); the CSV ties a row to its sweep through that digest, which this record pins. All 40 clones across both arches reproduced every cell to six decimal places, each SV cell's adjusted F1 was scored on the 4 supplementary clones of sv_scoring_clones (raw F1 and tuple counts equal on every main clone) against the reference tree named in sv_ground_truth.",
+  "date": "2026-09-20",
+  "fasta_required_gate": true,
+  "fasta_used": true,
+  "fastvep_binary_md5_arm": "6d83c5bc68d951f137b777a59158d538",
+  "fastvep_binary_md5_x86": "e123fbc030ee22890809ab9e87049532",
+  "fastvep_measured_in_sweep": "sweep-20260918T224520Z",
+  "fastvep_measured_note": "fastVEP v0.3.0 (ARM 6d83c5bc, x86 e123fbc0) was measured in sweep-20260918T224520Z on both architectures; its two structural-variant concordance rows are scored in this sweep (sweep-20260920T012411Z), whose structural-variant inputs differ from that campaign's, and its six SNP and indel rows in manuscript/data/f1_observations_fastvep.csv carry sweep_id=sweep-20260918T224520Z. fastVEP F1 is architecture-independent; the SV comparator maps fastVEP's symbolic alleles to VEP's Sequence Ontology class names before scoring (compare_sv_concordance.py --scored-engine fastvep).",
+  "fastvep_pin_note": "fastVEP is pinned to the citable v0.3.0 release (ARM 6d83c5bc, x86 e123fbc0), built from the upstream v0.3.0 tag. Wall time and concordance were both measured at this version in sweep-20260918T224520Z, so the fastVEP columns of every table share one campaign.",
+  "fastvep_sv_remeasured_in_sweep": "sweep-20260920T012411Z",
+  "fastvep_version": "v0.3.0",
+  "generated_at_utc": "2026-09-20T21:47:51Z",
+  "measurement_entrypoint": "scripts/concordance/run_clone_measurement.sh",
+  "methodology": "n2_hardened",
+  "methodology_note": "n2_hardened names the hardened concordance gate (FASTA parity at every Perl call site, the universal Ensembl-style canonical-contig filter, warmup discarded, dataset-inventory parity). The gate was executed here at full cross-instance scale: all 40 vep-rs clones (20 per arch) computed the complete 10-suite concordance, and every clone reported identical F1 to six decimal places.",
+  "n_tier": 20,
+  "p1_ground_truth": "canonical Perl r115.2 reference output (ground_truth/perl/canonical_20260516/) at cache_version 115, except the ClinVar GRCh37 suite (s01), whose reference is the cache_version 113 set that a cache 115 regeneration reproduces key for key (docs/concordance-provenance/2026-09-18-grch37-cache-113-vs-115.json); sites-only inputs filtered to the Ensembl-style canonical contigs (1-22, X, Y, MT), --fasta symmetric at every Perl call site",
+  "perl_cache_version": 115,
+  "perl_docker_digest": "ensemblorg/ensembl-vep@sha256:ff3c7e20d68e7e499c0bd79d398c7c121465db65f311ee87df425b2b600b853e",
+  "perl_docker_tag": "release_115.2",
+  "pointer_suite_note": "s09/s10 are pointer suites in the harness: the real-world SV VCFs are annotated inside the s07/s08 runs, so their wall-time rows are pointers (0 s) and their F1 is derived from the s07/s08 per-file reports restricted to the 3 real-world VCFs.",
+  "policy": "universal_ensembl_style",
+  "provenance_sha_note": "The clone bootstrap that stages the data and runs run_clone_measurement.sh emits one rolled dataset_inventory_sha256 per clone (a single roll-up over the staged vcf, caches, reference and ground_truth trees) rather than per-artifact cache, FASTA and input-VCF SHAs. That rolled hash is the reproducibility pin: the vep-rs cohort rolled 15c55e95 identically on all 40 clones across both arches (parity_ok, determinism_ok). Each clone's copy is at results/<arch>/clone-<n>/inventory.sha256.",
+  "public_build_inputs": {
+    "cargo_config_blob": "c299836220d7cf94ad6855595c220b9109004d55",
+    "cargo_lock_blob": "1cf4a47c2be1a363a6f6804c689983f305f09e2b",
+    "cargo_lock_sha256": "d3961d1e3310e60ff06125ed77e8f2d7846f0f3ed2a57acd35dd906c35006d36",
+    "cargo_toml_blob": "294a802f0950d20846db34aae03c1dbc9a1b01a6",
+    "crates_tree_id": "a67fbc639de352392dc65e5970ab79025d9ea064",
+    "measured_binary": "vep",
+    "measured_binary_root": "vep-cli",
+    "measured_binary_crates": {
+      "vep-builtins": "6e9709167ef6ea21121f49c2ae42abc0fb35b2a9",
+      "vep-cli": "0b1f11ec127af8ecf6a550e1c419c386a1e98f06",
+      "vep-core": "0319619e4aa77686cd6dedf2bad763806b3c2179",
+      "vep-effects": "3ab483fd9a33f89c853466e88ef171a1c9d0a905",
+      "vep-fasta": "914087673eaf29d03da9eda1b23d1c65a1b0bbb6",
+      "vep-io": "8b2d3e18f8516f13670ecbf1b3e323a5212cb467",
+      "vep-plugin": "b25838cfa4f788c97525955ccec1b53a6457b7db"
+    },
+    "other_crates": {
+      "vep-cache-builder": "97a9722d406eb6d4af02e05ffa56d0a6a935d9a5",
+      "vep-cache-converter": "a103700c2723e5e60297f9485b2ea5443814c751"
+    },
+    "manifest_blobs": {
+      "vep-builtins": "928602b802c0ebe32fcb901f0fc063fa868f0f85",
+      "vep-cache-builder": "ec1592778e90b70a61b2d42a4f5ae1dbe457f05e",
+      "vep-cache-converter": "b6e1d1336f3237e695f57a0e7a2bfff2113cee5e",
+      "vep-cli": "eb7d8fa185eee9d7093e4ca7bb2d46b377bab914",
+      "vep-core": "2cbcea02eb63a7eca9794ea9b3da52febeacf4b8",
+      "vep-effects": "c361dd14ed8415f3c77049e368a8f9bfb0f17caf",
+      "vep-fasta": "965f83a85a71c5b36dd75fbd57e3e7b27e3e0c34",
+      "vep-io": "bd79132572d7c59fc69b732ad82ff975bd476d5b",
+      "vep-plugin": "82c312af08d4b1f95e41d9a7c0b2c664028183b9"
+    }
+  },
+  "public_build_inputs_note": "Git object ids of the build inputs the binaries in this record were compiled from: the tree id of crates/ and the blob ids of Cargo.toml, Cargo.lock and .cargo/config.toml, beside the sha256 of that Cargo.lock (the build ran --locked against it), and beside them the same ids crate by crate: measured_binary_crates are the tree ids of the crates the `vep` binary is built from (its dependency closure, dev-dependencies excluded), other_crates the tree ids of the workspace members outside that closure (separate binaries no closure crate depends on), and manifest_blobs the blob id of every crate's Cargo.toml. These are content-addressed, so a release tag carries the source of this build iff `git rev-parse <tag>:crates` and the three blob ids equal the values here, or, when a crate outside the closure has moved, iff every measured_binary_crates id, every manifest_blobs id and the three blob ids equal the values here: a change confined to non-manifest files of an other_crates member cannot reach the binary. The per-arch binary md5s in this record identify the binaries that were measured, not a value a rebuild reproduces: a --locked release build of the same inputs on the same toolchain yields a different digest run to run, so the md5 is checked against the archived binary, never against a rebuild.",
+  "scope": "vep_rs_concordance_both_arches_fastvep_sv_cells_remeasured",
+  "scope_note": "vep-rs was measured in sweep-20260920T012411Z on both architectures, every concordance cell on all of its clones. fastVEP v0.3.0's two structural-variant suites are scored in this sweep, whose structural-variant inputs differ from the earlier campaign's; its six SNP and indel rows keep the sweep that measured them, sweep-20260918T224520Z, as their notes name. Perl VEP release_115.2 is the reference output on every cell (the ground-truth trees named in p1_ground_truth and sv_ground_truth), not a measured engine.",
+  "suite_results": [
+    {
+      "adj_f1": 1.0,
+      "assembly": "GRCh37",
+      "csv_pinned_sweep_id": "sweep-20260920T012411Z",
+      "divergence_buckets": {
+        "frameshift_splice_cascade_swap": {
+          "count": 156,
+          "excluded": 156
+        },
+        "intronic_overcall_swap": {
+          "count": 117,
+          "excluded": 117
+        },
+        "ppt_overcall_swap": {
+          "count": 53,
+          "excluded": 53
+        },
+        "splice_lastwrite_swap": {
+          "count": 114,
+          "excluded": 114
+        },
+        "start_cooccurrence_swap": {
+          "count": 261,
+          "excluded": 261
+        }
+      },
+      "divergent_rows": {
+        "pairs_on_shared_rows": 702,
+        "vep_only_rows": 0,
+        "vep_rs_only_rows": 0
+      },
+      "excluded_perl_tuples": 701,
+      "excluded_rust_tuples": 701,
+      "field_agreement": {
+        "columns": {
+          "Amino_acids": 1.0,
+          "CDS_position": 1.0,
+          "Codons": 1.0,
+          "Existing_variation": 1.0,
+          "Gene": 1.0,
+          "Protein_position": 1.0,
+          "Uploaded_variation": 1.0,
+          "cDNA_position": 1.0
+        },
+        "extra_keys": {
+          "DISTANCE": 1.0,
+          "FLAGS": 1.0,
+          "IMPACT": 1.0,
+          "STRAND": 1.0
+        },
+        "reference_duplicate_keys": 88,
+        "scored_duplicate_keys": 88
+      },
+      "n_variants": 33483881,
+      "raw_f1": 0.999979,
+      "reproduced_by_this_sweep_n_clones_per_arch": 20,
+      "suite": "s01",
+      "suite_name": "clinvar_full_grch37"
+    },
+    {
+      "adj_f1": 1.0,
+      "assembly": "GRCh38",
+      "csv_pinned_sweep_id": "sweep-20260920T012411Z",
+      "divergence_buckets": {
+        "frameshift_splice_cascade_swap": {
+          "count": 530,
+          "excluded": 530
+        },
+        "intronic_overcall_swap": {
+          "count": 349,
+          "excluded": 349
+        },
+        "ppt_overcall_swap": {
+          "count": 232,
+          "excluded": 232
+        },
+        "splice_lastwrite_swap": {
+          "count": 333,
+          "excluded": 333
+        },
+        "start_cooccurrence_swap": {
+          "count": 928,
+          "excluded": 928
+        }
+      },
+      "divergent_rows": {
+        "pairs_on_shared_rows": 2382,
+        "vep_only_rows": 0,
+        "vep_rs_only_rows": 0
+      },
+      "excluded_perl_tuples": 2372,
+      "excluded_rust_tuples": 2372,
+      "field_agreement": {
+        "columns": {
+          "Amino_acids": 1.0,
+          "CDS_position": 1.0,
+          "Codons": 1.0,
+          "Existing_variation": 1.0,
+          "Gene": 1.0,
+          "Protein_position": 1.0,
+          "Uploaded_variation": 1.0,
+          "cDNA_position": 1.0
+        },
+        "extra_keys": {
+          "DISTANCE": 1.0,
+          "FLAGS": 1.0,
+          "IMPACT": 1.0,
+          "STRAND": 1.0
+        },
+        "reference_duplicate_keys": 232,
+        "scored_duplicate_keys": 232
+      },
+      "n_variants": 91552813,
+      "raw_f1": 0.999974,
+      "reproduced_by_this_sweep_n_clones_per_arch": 20,
+      "suite": "s02",
+      "suite_name": "clinvar_full_grch38"
+    },
+    {
+      "adj_f1": 1.0,
+      "assembly": "GRCh37",
+      "csv_pinned_sweep_id": "sweep-20260920T012411Z",
+      "divergence_buckets": {
+        "frameshift_splice_cascade_swap": {
+          "count": 4,
+          "excluded": 0
+        },
+        "intronic_overcall_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "ppt_overcall_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "splice_lastwrite_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "start_cooccurrence_swap": {
+          "count": 3,
+          "excluded": 3
+        }
+      },
+      "divergent_rows": {
+        "pairs_on_shared_rows": 7,
+        "vep_only_rows": 0,
+        "vep_rs_only_rows": 0
+      },
+      "excluded_perl_tuples": 3,
+      "excluded_rust_tuples": 3,
+      "field_agreement": {
+        "columns": {
+          "Amino_acids": 1.0,
+          "CDS_position": 1.0,
+          "Codons": 1.0,
+          "Existing_variation": 1.0,
+          "Gene": 1.0,
+          "Protein_position": 1.0,
+          "Uploaded_variation": 1.0,
+          "cDNA_position": 1.0
+        },
+        "extra_keys": {
+          "DISTANCE": 1.0,
+          "FLAGS": 1.0,
+          "IMPACT": 1.0,
+          "STRAND": 1.0
+        },
+        "reference_duplicate_keys": 0,
+        "scored_duplicate_keys": 0
+      },
+      "n_variants": 11075422,
+      "raw_f1": 0.999999,
+      "reproduced_by_this_sweep_n_clones_per_arch": 20,
+      "suite": "s03",
+      "suite_name": "gnomad_v2.1.1_chr21"
+    },
+    {
+      "adj_f1": 1.0,
+      "assembly": "GRCh38",
+      "csv_pinned_sweep_id": "sweep-20260920T012411Z",
+      "divergence_buckets": {
+        "frameshift_splice_cascade_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "intronic_overcall_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "ppt_overcall_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "splice_lastwrite_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "start_cooccurrence_swap": {
+          "count": 77,
+          "excluded": 77
+        }
+      },
+      "divergent_rows": {
+        "pairs_on_shared_rows": 77,
+        "vep_only_rows": 0,
+        "vep_rs_only_rows": 0
+      },
+      "excluded_perl_tuples": 77,
+      "excluded_rust_tuples": 77,
+      "field_agreement": {
+        "columns": {
+          "Amino_acids": 1.0,
+          "CDS_position": 1.0,
+          "Codons": 1.0,
+          "Existing_variation": 1.0,
+          "Gene": 1.0,
+          "Protein_position": 1.0,
+          "Uploaded_variation": 1.0,
+          "cDNA_position": 1.0
+        },
+        "extra_keys": {
+          "DISTANCE": 1.0,
+          "FLAGS": 1.0,
+          "IMPACT": 1.0,
+          "STRAND": 1.0
+        },
+        "reference_duplicate_keys": 1,
+        "scored_duplicate_keys": 1
+      },
+      "n_variants": 110503269,
+      "raw_f1": 0.999999,
+      "reproduced_by_this_sweep_n_clones_per_arch": 20,
+      "suite": "s04",
+      "suite_name": "gnomad_v4.1_chr21"
+    },
+    {
+      "adj_f1": 1.0,
+      "assembly": "GRCh37",
+      "csv_pinned_sweep_id": "sweep-20260920T012411Z",
+      "divergence_buckets": {
+        "frameshift_splice_cascade_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "intronic_overcall_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "ppt_overcall_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "splice_lastwrite_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "start_cooccurrence_swap": {
+          "count": 0,
+          "excluded": 0
+        }
+      },
+      "divergent_rows": {
+        "pairs_on_shared_rows": 0,
+        "vep_only_rows": 0,
+        "vep_rs_only_rows": 0
+      },
+      "excluded_perl_tuples": 0,
+      "excluded_rust_tuples": 0,
+      "field_agreement": {
+        "columns": {
+          "Amino_acids": 1.0,
+          "CDS_position": 1.0,
+          "Codons": 1.0,
+          "Existing_variation": 1.0,
+          "Gene": 1.0,
+          "Protein_position": 1.0,
+          "Uploaded_variation": 1.0,
+          "cDNA_position": 1.0
+        },
+        "extra_keys": {
+          "DISTANCE": 1.0,
+          "FLAGS": 1.0,
+          "IMPACT": 1.0,
+          "OverlapBP": 1.0,
+          "OverlapPC": 1.0,
+          "STRAND": 1.0
+        },
+        "reference_duplicate_keys": 0,
+        "scored_duplicate_keys": 0
+      },
+      "n_variants": 3603259,
+      "raw_f1": 1.0,
+      "reproduced_by_this_sweep_n_clones_per_arch": 20,
+      "suite": "s05",
+      "suite_name": "1kg_phase3_chr21"
+    },
+    {
+      "adj_f1": 1.0,
+      "assembly": "GRCh38",
+      "csv_pinned_sweep_id": "sweep-20260920T012411Z",
+      "divergence_buckets": {
+        "frameshift_splice_cascade_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "intronic_overcall_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "ppt_overcall_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "splice_lastwrite_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "start_cooccurrence_swap": {
+          "count": 1,
+          "excluded": 1
+        }
+      },
+      "divergent_rows": {
+        "pairs_on_shared_rows": 1,
+        "vep_only_rows": 0,
+        "vep_rs_only_rows": 0
+      },
+      "excluded_perl_tuples": 1,
+      "excluded_rust_tuples": 1,
+      "field_agreement": {
+        "columns": {
+          "Amino_acids": 1.0,
+          "CDS_position": 1.0,
+          "Codons": 1.0,
+          "Existing_variation": 1.0,
+          "Gene": 1.0,
+          "Protein_position": 1.0,
+          "Uploaded_variation": 1.0,
+          "cDNA_position": 1.0
+        },
+        "extra_keys": {
+          "DISTANCE": 1.0,
+          "FLAGS": 1.0,
+          "IMPACT": 1.0,
+          "OverlapBP": 1.0,
+          "OverlapPC": 1.0,
+          "STRAND": 1.0
+        },
+        "reference_duplicate_keys": 0,
+        "scored_duplicate_keys": 0
+      },
+      "n_variants": 10420122,
+      "raw_f1": 1.0,
+      "reproduced_by_this_sweep_n_clones_per_arch": 20,
+      "suite": "s06",
+      "suite_name": "1kg_highcov_chr21"
+    },
+    {
+      "adj_f1": 0.998524,
+      "adjusted_intersection": 326507,
+      "adjusted_perl_tuples": 326658,
+      "adjusted_rust_tuples": 327321,
+      "aggregation_basis": "file_summed",
+      "assembly": "GRCh37",
+      "cnv_tr_adjusted_f1_07_cnv_repeat": 1.0,
+      "cnv_tr_raw_f1_07_cnv_repeat": 0.936322,
+      "cnv_tr_swap_pairs_total_perl": 1368,
+      "cnv_tr_swap_pairs_total_rust": 1368,
+      "cross_chromosome_check_ran": true,
+      "csv_pinned_sweep_id": "sweep-20260920T012411Z",
+      "excluded_cnv_tr_pairs_perl": 1368,
+      "excluded_cnv_tr_pairs_rust": 1368,
+      "excluded_cross_chromosome_by_file": {
+        "09_breakends": 48,
+        "gnomad_sv_v2.1_chr21": 1790
+      },
+      "excluded_cross_chromosome_perl": 1838,
+      "excluded_perl_extra": 3206,
+      "excluded_perl_tuples": 3206,
+      "excluded_rust_extra": 12302,
+      "excluded_rust_tuples": 12302,
+      "ground_truth_prefix": "sv_per_vcf_r115.2_c115_tr_regen_20260920",
+      "intersection": 326507,
+      "intersection_union": 326473,
+      "n_variants": 329864,
+      "n_variants_union": 329830,
+      "n_vcfs": 16,
+      "notes": "raw_f1 and adj_f1 are both computed from this suite's FILE-SUMMED tuple counts (the 16 per-file precision/recall/intersection counts pooled, F1 taken once from the totals), matching the pooled-count rule in Methods. n_variants is the matching file-summed Perl denominator; n_variants_union (329830) is the deduplicated cross-file count, 34 fewer, retained because engine-volume comparisons use that basis; rust_tuples_union (339588) and intersection_union (326473) are the vep-rs and shared counts on the same basis. Scored on the 4 supplementary clones named in sv_scoring_clones (raw F1 and tuple counts equal on every main clone) against the sv_per_vcf_r115.2_c115_tr_regen_20260920 reference tree. Exclusions: 12302 vep-rs-side tuples from transcript selection above VEP's --max_sv_size on breakends (the union of the vep-rs-side layers), 3206 VEP-side tuples of which cross-chromosome supplies 1838 (09_breakends 48, gnomad_sv_v2.1_chr21 1790), and the <CNV:TR> swap pairs 1368 on the VEP side and 1368 on the vep-rs side out of 1368 / 1368 in the class. Raw F1 sits below adjusted because raw charges every masked class against vep-rs.",
+      "raw_f1": 0.975395,
+      "reproduced_by_this_sweep_n_clones_per_arch": 20,
+      "rust_tuples": 339623,
+      "rust_tuples_union": 339588,
+      "suite": "s07",
+      "suite_name": "sv_per_vcf_overall"
+    },
+    {
+      "adj_f1": 0.998031,
+      "adjusted_intersection": 1091052,
+      "adjusted_perl_tuples": 1091912,
+      "adjusted_rust_tuples": 1094496,
+      "aggregation_basis": "file_summed",
+      "assembly": "GRCh38",
+      "cnv_tr_adjusted_f1_07_cnv_repeat": 0.999969,
+      "cnv_tr_raw_f1_07_cnv_repeat": 0.923333,
+      "cnv_tr_swap_pairs_total_perl": 2644,
+      "cnv_tr_swap_pairs_total_rust": 2644,
+      "cross_chromosome_check_ran": true,
+      "csv_pinned_sweep_id": "sweep-20260920T012411Z",
+      "excluded_cnv_tr_pairs_perl": 2644,
+      "excluded_cnv_tr_pairs_rust": 2644,
+      "excluded_cross_chromosome_by_file": {
+        "09_breakends": 100,
+        "gnomad_sv_v4.1_chr21": 22381
+      },
+      "excluded_cross_chromosome_perl": 22481,
+      "excluded_perl_extra": 25125,
+      "excluded_perl_tuples": 25125,
+      "excluded_rust_extra": 186390,
+      "excluded_rust_tuples": 186390,
+      "ground_truth_prefix": "sv_per_vcf_r115.2_c115_tr_regen_20260920",
+      "intersection": 1091052,
+      "intersection_union": 1077655,
+      "n_variants": 1117037,
+      "n_variants_union": 1103635,
+      "n_vcfs": 16,
+      "notes": "raw_f1 and adj_f1 are both computed from this suite's FILE-SUMMED tuple counts (the 16 per-file precision/recall/intersection counts pooled, F1 taken once from the totals), matching the pooled-count rule in Methods. n_variants is the matching file-summed Perl denominator; n_variants_union (1103635) is the deduplicated cross-file count, 13402 fewer, retained because engine-volume comparisons use that basis; rust_tuples_union (1267435) and intersection_union (1077655) are the vep-rs and shared counts on the same basis. Scored on the 4 supplementary clones named in sv_scoring_clones (raw F1 and tuple counts equal on every main clone) against the sv_per_vcf_r115.2_c115_tr_regen_20260920 reference tree. Exclusions: 186390 vep-rs-side tuples from transcript selection above VEP's --max_sv_size on breakends (the union of the vep-rs-side layers), 25125 VEP-side tuples of which cross-chromosome supplies 22481 (09_breakends 100, gnomad_sv_v4.1_chr21 22381), and the <CNV:TR> swap pairs 2644 on the VEP side and 2644 on the vep-rs side out of 2644 / 2644 in the class. Raw F1 sits below adjusted because raw charges every masked class against vep-rs.",
+      "raw_f1": 0.909998,
+      "reproduced_by_this_sweep_n_clones_per_arch": 20,
+      "rust_tuples": 1280886,
+      "rust_tuples_union": 1267435,
+      "suite": "s08",
+      "suite_name": "sv_per_vcf_overall"
+    }
+  ],
+  "sv_aggregation_note": "Both SV F1 columns aggregate per-file tuple counts (the 16 per-file precision, recall and intersection counts pooled, F1 taken once from the totals), never a cross-file set union, so a suite's raw and adjusted values sit on one basis. The union collapses tuples emitted from more than one input VCF of the same assembly (34 on GRCh37, 13,402 on GRCh38, read as perl_tuples minus perl_tuples_union in the reports) and is carried in the reports' *_union counts for cross-engine volume comparison only. Every exclusion removes tuples outside the intersection, so the adjusted intersection equals the raw intersection on both assemblies (326,507 on GRCh37, 1,091,052 on GRCh38, the intersection and adj_intersection columns of manuscript/data/f1_observations.csv).",
+  "sv_cnv_tr_mask_note": "The <CNV:TR> representation divergence (sv_cnv_tr_literal_expansion) has a symmetric filter predicate in compare_sv_concordance.py (filter_cnv_tr_expansion_divergences): it pairs VEP's literal reading of a <CNV:TR> record, a whole-unit insertion at the run's end for a gain or a deletion ending at the run's last base for a loss, with vep-rs's symbolic reading of the same record and transcript (feature_elongation or feature_truncation), and excludes the pair from both sides when the two readings agree on every other term. It excludes 1,368 pairs on GRCh37 and 2,644 on GRCh38, all in 07_cnv_repeat, out of 1,368 and 2,644 swap pairs in the class, every pair of the class on both assemblies, so the class is fully masked. 07_cnv_repeat's per-VCF F1 moves from 0.936322 to 1.000000 (GRCh37) and from 0.923333 to 0.999969 (GRCh38).",
+  "sv_ground_truth": "per-VCF Perl r115.2 cache_version 115 reference output (sv_per_vcf_r115.2_c115_tr_regen_20260920 on both assemblies, the GRCh37 half generated against the full-genome Ensembl GRCh37 cache), 16 VCFs per assembly (13 synthetic + 3 real-world), compared via compare_sv_concordance.py per-VCF pairing. The s07/s08 rows are the tuple-weighted per-VCF overall across all 16 VCFs and the s09/s10 rows the tuple-weighted overall across the 3 real-world VCFs only; neither is an arithmetic mean.",
+  "sv_scoring_clones": [
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 21,
+      "suites": [
+        "s07",
+        "s08"
+      ]
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_type": "r8gd.8xlarge",
+      "run_index": 22,
+      "suites": [
+        "s07",
+        "s08"
+      ]
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 21,
+      "suites": [
+        "s07",
+        "s08"
+      ]
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "48b2a9599c25e0ef43e0a2d5dde6ba48",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "dataset_inventory_sha256": "15c55e951cbfbd60e08a5e5c00d853055ec2c016767f6903f6fdc3919d292ac6",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_type": "r8id.8xlarge",
+      "run_index": 22,
+      "suites": [
+        "s07",
+        "s08"
+      ]
+    }
+  ],
+  "sv_scoring_note": "The two structural-variant entries of suite_results are read from 4 supplementary clones under results/svscore/vep-rs of this sweep (2 per architecture), which ran the same binaries as the main clones on the same staged inputs and reference trees (the same dataset inventory digest). Raw F1 and every tuple count are identical across the 40 main clones and the supplementary clones; adjusted F1 is identical across the supplementary clones.",
+  "sweep_id": "sweep-20260920T012411Z",
+  "warmup_run_discarded": true
+}

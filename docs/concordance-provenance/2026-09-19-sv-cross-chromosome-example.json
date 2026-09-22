@@ -1,0 +1,660 @@
+{
+  "date": "2026-09-19",
+  "record": "sv_cross_chromosome_transcript_annotation_example",
+  "purpose": "Show, on one record of the archived per-VCF reference output, the cross-chromosome transcript-annotation class: VEP names transcripts the shared transcript cache holds on a chromosome other than the variant's. The listing is what filter_cross_chromosome_divergences in scripts/validation/compare_sv_concordance.py classifies; the mechanism is not established.",
+  "engine": {
+    "image": "ensemblorg/ensembl-vep:release_115.2",
+    "image_digest": "ensemblorg/ensembl-vep@sha256:ff3c7e20d68e7e499c0bd79d398c7c121465db65f311ee87df425b2b600b853e",
+    "cache_version": 115,
+    "flags": "--offline --cache_version 115 --fasta <fa> --format vcf --fork 4 --buffer_size 5000 --force_overwrite --no_stats --quiet"
+  },
+  "reference": {
+    "set": "sv_per_vcf_r115.2_c115_20260601",
+    "file": "gnomad_sv_v4.1_chr21",
+    "assembly": "grch38",
+    "output_sha256": "f539b1760fe2c6d9745bc9aa2bc6f0e60f22c7b398a87824d584e7b12541ccfd",
+    "canonical_input_sha256": "ea030f1d749c14efa763313c719aac98d8fefd1740c767adbeb0cc9fa1fc6195",
+    "output_data_lines": 481416
+  },
+  "variant": {
+    "chrom": "21",
+    "pos": 23699592,
+    "id": "gnomAD-SV_v3_DEL_chr21_55f8f183",
+    "ref": "N",
+    "alt": "<DEL>",
+    "svtype": "DEL",
+    "end": 23724683,
+    "svlen": 25091,
+    "span_bp": 25091,
+    "info_chr2": "chr21"
+  },
+  "vep_rows_for_record": 122,
+  "consequence_set_tallies_for_record": {
+    "downstream_gene_variant": 10,
+    "feature_truncation,non_coding_transcript_exon_variant,intron_variant": 104,
+    "transcript_ablation": 8
+  },
+  "distinct_transcripts_named": 122,
+  "transcripts_by_cache_chromosome": {
+    "22": 120,
+    "21": 2
+  },
+  "transcripts_on_another_chromosome": 120,
+  "cache_shards_scanned": [
+    "21",
+    "22"
+  ],
+  "transcripts": [
+    {
+      "id": "ENST00000662613",
+      "cache_chromosome": "21",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000826590",
+      "cache_chromosome": "21",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000290691",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000401461",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000422506",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000423392",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000432595",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000435868",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000437294",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000441897",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000444220",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000452208",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000460003",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000460167",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000467354",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000612432",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000615003",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735030",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735031",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735032",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735033",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735034",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735035",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735036",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735037",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735038",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735039",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735040",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735041",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735042",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735043",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735044",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735045",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735046",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735047",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735048",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735049",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735050",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735051",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735052",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735053",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735054",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735055",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735056",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735057",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735058",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735059",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735060",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735061",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735062",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735063",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735064",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735065",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735066",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735067",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735068",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735069",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735070",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735071",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735072",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735073",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735074",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735075",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735076",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735077",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735078",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735079",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735080",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735081",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735082",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735083",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735084",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735085",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735086",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735087",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735088",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735089",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735090",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735091",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735092",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735093",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735094",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735095",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735096",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735097",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735098",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735099",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735100",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735101",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735102",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735103",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735104",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735105",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735106",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735107",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735108",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735109",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735110",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735111",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735112",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735113",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735114",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735115",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735126",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735164",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735165",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735166",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735204",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735264",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735271",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735272",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735273",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735274",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735275",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735276",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735277",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735278",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735287",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735288",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735293",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735294",
+      "cache_chromosome": "22",
+      "rows": 1
+    },
+    {
+      "id": "ENST00000735295",
+      "cache_chromosome": "22",
+      "rows": 1
+    }
+  ],
+  "reading": "VEP names 122 transcripts for this DEL of 25,091 bp on chromosome 21; the shared cache holds 120 of them on another chromosome and the record's INFO/CHR2 names its own chromosome, so no field of the input points elsewhere."
+}

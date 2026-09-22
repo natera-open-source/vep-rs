@@ -1,0 +1,29 @@
+name: DCO
+
+# Every commit in a pull request must carry a `Signed-off-by:` trailer
+# (`git commit -s`), which is the contributor's assertion under the Developer
+# Certificate of Origin that they may submit the change under this project's
+# licence. See CONTRIBUTING.md, "Sign your commits".
+#
+# dco-check reads the pull request's commits through the GitHub API, so no
+# checkout is needed and a shallow clone cannot hide a commit from it. Merge
+# commits are skipped by default; every authored commit is checked. Runs on
+# pull requests only: that is where a contribution is accepted, and it keeps a
+# maintainer's direct push to main from turning this into noise there.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  dco:
+    name: Check DCO
+    runs-on: ubuntu-latest
+    steps:
+      - uses: christophebedard/dco-check@0.5.1
+        with:
+          args: "--verbose"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

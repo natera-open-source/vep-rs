@@ -1,0 +1,30 @@
+[package]
+name = "vep-cache-builder"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Builds the VEP JSON transcript cache from Ensembl GFF3, protein FASTA and variation VCF release files"
+
+[[bin]]
+name = "vep-cache-builder"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+flate2 = { workspace = true }
+base64 = { workspace = true }
+reqwest = { version = "0.12", features = ["blocking"] }
+noodles = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+rayon = { workspace = true }
+anyhow = { workspace = true }
+vep-fasta = { workspace = true }
+vep-core = { workspace = true }
+mysql = "25"
+md5 = "0.7"
+
+[dev-dependencies]
+tempfile = { workspace = true }

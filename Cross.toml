@@ -1,0 +1,17 @@
+# Configuration for `cross`, used only by the aarch64 Linux job in
+# .github/workflows/release.yml. Native builds ignore this file.
+#
+# vep-cache-builder links OpenSSL on Linux targets: both `reqwest` and `mysql`
+# pull `native-tls`, which is Security.framework on macOS and OpenSSL everywhere
+# else. The cross container images ship no OpenSSL for the target architecture,
+# so without this step the aarch64 release build fails to link `openssl-sys`.
+# The recipe is cross's own documented one: enable the target's
+# Debian architecture, then install the target-arch development package.
+# `CROSS_DEB_ARCH` is set by cross to the Debian name of the target (arm64).
+#
+# https://github.com/cross-rs/cross/blob/main/docs/config_file.md
+[target.aarch64-unknown-linux-gnu]
+pre-build = [
+    "dpkg --add-architecture $CROSS_DEB_ARCH",
+    "apt-get update && apt-get install --assume-yes libssl-dev:$CROSS_DEB_ARCH",
+]

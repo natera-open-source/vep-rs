@@ -1,0 +1,9 @@
+dataset,assembly,suite,source_release,input_records,source_file
+ClinVar,GRCh37,s01,2026-03-02,4388172,s01.vcf.gz
+ClinVar,GRCh38,s02,2026-03-21,4398127,s02.vcf.gz
+gnomAD v2.1.1 chr21,GRCh37,s03,v2.1.1,3483000,s03.vcf.gz
+gnomAD v4.1 chr21,GRCh38,s04,v4.1,10958898,s04.vcf.gz
+1000G Phase 3 chr21,GRCh37,s05,Phase 3,1105538,s05.vcf.gz
+1000G high-coverage,GRCh38,s06,high-cov,1002753,s06.vcf.gz
+SV per-VCF,GRCh37,s07,"ClinVar 2026-03-02 (CLNVC structural classes); gnomAD-SV v2.1; 1000G Phase 3 SV v8 2013-05-02; synthetic corpus",23992,canonical_inputs/grch37/ (16 VCFs)
+SV per-VCF,GRCh38,s08,"ClinVar 2026-03-02 (CLNVC structural classes); gnomAD-SV v4.1; 1000G high-coverage SV freeze V3 2021-01-24; synthetic corpus",53212,canonical_inputs/grch38/ (16 VCFs)

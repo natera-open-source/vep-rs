@@ -1,0 +1,30 @@
+[package]
+name = "vep-builtins"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Built-in VEP plugins: tabix annotation engine, allele matching, and clinical plugins"
+
+[dependencies]
+vep-core = { workspace = true }
+vep-fasta = { workspace = true }
+flate2 = { workspace = true }
+noodles = { workspace = true }
+bigtools = { workspace = true }
+bstr = { workspace = true }
+indexmap = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+rayon = { workspace = true }
+memmap2 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+criterion = { workspace = true }
+smallvec = { workspace = true }
+
+[[bench]]
+name = "binary_store_bench"
+harness = false

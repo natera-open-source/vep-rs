@@ -1,0 +1,112 @@
+[workspace]
+members = [
+    "crates/vep-core",
+    "crates/vep-cache-converter",
+    "crates/vep-builtins",
+    "crates/vep-effects",
+    "crates/vep-io",
+    "crates/vep-plugin",
+    "crates/vep-fasta",
+    "crates/vep-cli",
+    "crates/vep-cache-builder",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/natera-open-source/vep-rs"
+# Dependency-driven, not source-driven. The implementation crates' own code needs
+# only 1.80 (`std::sync::LazyLock` in vep-core/src/codon.rs), but the locked
+# dependency graph floors higher: `time 0.3.47` (via mysql -> mysql_common, a
+# vep-cache-builder dependency) declares rust-version 1.88 and its manifest
+# requires the `edition2024` Cargo feature, so a 1.80 toolchain cannot even parse
+# it; `half` and `indexmap` require 1.81 and 1.82. The `msrv` CI job builds on
+# exactly this version. Lowering it requires dropping or pinning back the
+# dependency that sets the floor.
+rust-version = "1.88"
+
+[workspace.dependencies]
+# Workspace crates
+vep-core = { path = "crates/vep-core" }
+vep-effects = { path = "crates/vep-effects" }
+vep-io = { path = "crates/vep-io" }
+vep-plugin = { path = "crates/vep-plugin" }
+vep-builtins = { path = "crates/vep-builtins" }
+vep-fasta = { path = "crates/vep-fasta" }
+
+# Serialization / cache
+memmap2 = "0.9"
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+flate2 = "1"
+csv = "1.3"
+
+# Parallelism
+rayon = "1.10"
+crossbeam-channel = "0.5"
+parking_lot = "0.12"
+
+# Genomics
+noodles = { version = "0.88", features = ["vcf", "bgzf", "core", "fasta", "tabix", "csi"] }
+# bigWig reader for the optional LoFTEE plugin's GERP-weighted END_TRUNC filter.
+# Only exercised when `--plugin LoFTEE,gerp_bigwig=...` is passed; the default
+# vep-rs run never touches it. MIT-licensed. Only the
+# `read` feature is enabled: drops the `cli` (clap) and `remote` (attohttpc
+# network stack) + `write` features for a minimal local-file-read dependency.
+bigtools = { version = "0.5", default-features = false, features = ["read"] }
+
+# CLI
+clap = { version = "4", features = ["derive", "env", "string"] }
+
+# Plugin system
+libloading = "0.8"
+
+# Encoding
+base64 = "0.22"
+
+# Allocator: the `vep` binary's default global allocator (vep-cli feature
+# `mimalloc`, on by default). Opt out with
+# `cargo build -p vep-cli --no-default-features --bin vep`; the package must
+# be named because another workspace member depends on vep-cli with its
+# default features.
+mimalloc = "0.1"
+
+# Data structures
+rustc-hash = "2"
+bstr = "1"
+indexmap = { version = "2", features = ["serde"] }
+# Inline small vectors: the per-transcript consequence-term list is typically
+# 1-8 entries; SmallVec keeps it on the stack, eliminating a heap alloc + drop
+# per (variant x transcript) consequence. `serde` is required because
+# TranscriptConsequence derives Serialize/Deserialize; `union` saves a word for
+# the Copy `Consequence` payload.
+smallvec = { version = "1", features = ["serde", "union"] }
+# Implicit interval tree (Jones 2024, Rust port of cgranges; Heng Li 2021).
+# An opt-in transcript-overlap index (`--transcript_index_impl=coitrees`); the
+# default is the UCSC binning index (`bin`, see crates/vep-cli/src/args.rs).
+coitrees = "0.4"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Testing
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[profile.release-with-debug]
+inherits = "release"
+debug = "line-tables-only"
+strip = "none"

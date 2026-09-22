@@ -1,0 +1,7 @@
+# Python dependencies of manuscript/figures/generate_figures.py.
+# Install via: pip install -r manuscript/requirements.txt
+
+matplotlib>=3.8,<4.0
+scienceplots>=2.1,<3.0
+numpy>=1.26,<3.0
+pandas>=2.1,<3.0

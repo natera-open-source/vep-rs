@@ -1,0 +1,180 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Test
+            command: cargo test --workspace --locked
+          - name: Clippy
+            command: cargo clippy --workspace -- -D warnings
+          - name: Format
+            command: cargo fmt --all -- --check
+          # Catches a license header run into a module's `//!` doc line with no
+          # blank line between them. Test/Clippy/Format are all blind to it: the
+          # joined line is a valid comment, so everything compiles and passes while
+          # the first rustdoc line is silently lost.
+          - name: Module Docs
+            command: scripts/check_module_docs.sh
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      # The Parquet round-trip test skips itself without the DuckDB CLI; the
+      # Test job installs it so the skip cannot hide a regression.
+      - if: matrix.name == 'Test'
+        run: |
+          curl -sSL -o /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/download/v1.5.5/duckdb_cli-linux-amd64.zip
+          sudo unzip -q -o /tmp/duckdb.zip -d /usr/local/bin
+          duckdb --version
+      - run: ${{ matrix.command }}
+
+  # The Python comparators and the golden-corpus generator ship with their own
+  # test files; a file that fails to import reports zero failures, so the
+  # collected count is asserted per file.
+  comparator-tests:
+    name: Comparator Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pytest
+      - run: |
+          set -e
+          fail=0
+          check() {
+            n=$(python3 -m pytest --collect-only -q "$1" | grep -cE '::' || true)
+            echo "collected $n from $1 (floor $2)"
+            if [ "$n" -lt "$2" ]; then
+              echo "ERROR: [comparator-tests] $1 collected $n tests, expected >= $2." >&2
+              fail=1
+            fi
+          }
+          check scripts/concordance/test_compare_vep_outputs.py 133
+          check scripts/validation/test_compare_sv_concordance.py 98
+          check scripts/concordance/test_compare_output_formats.py 33
+          check scripts/concordance/test_compare_vep_fields.py 6
+          check scripts/concordance/test_compare_plugin_outputs.py 3
+          check scripts/golden/test_golden_scripts.py 11
+          [ "$fail" -eq 0 ]
+          python3 -m pytest -q \
+            scripts/validation/test_compare_sv_concordance.py \
+            scripts/concordance/test_compare_vep_outputs.py \
+            scripts/concordance/test_compare_output_formats.py \
+            scripts/concordance/test_compare_vep_fields.py \
+            scripts/concordance/test_compare_plugin_outputs.py \
+            scripts/golden/test_golden_scripts.py
+      # Every plugin data path run_concordance.sh passes is a file setup_plugin_data.sh
+      # stages; both read scripts/data/plugin_data_layout.sh, and this suite proves it.
+      - run: |
+          bash -n scripts/concordance/run_concordance.sh
+          out=$(bash scripts/data/test_plugin_data_layout.sh 2>&1) || { printf '%s\n' "$out"; exit 1; }
+          n=$(printf '%s\n' "$out" | grep -c '^  ok ') || n=0
+          echo "plugin data layout suite reported $n ok lines (floor 40)"
+          [ "$n" -ge 40 ]
+
+  # The measurement harness and the reference-output generator each ship with a
+  # pure-bash test suite (stub engines, a stub bcftools, a stub docker) whose
+  # checks inject a fault and prove the matching fail-closed gate fires. A suite
+  # exits 1 on any failure and prints one `ok` line per passing check; the count
+  # is asserted so a suite that silently ran nothing cannot pass.
+  harness-tests:
+    name: Harness Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -e
+          check() {
+            out=$(bash "$1" 2>&1) || { printf '%s\n' "$out"; exit 1; }
+            n=$(printf '%s\n' "$out" | grep -c '^  ok ') || n=0
+            echo "$1 reported $n ok lines (floor $2)"
+            [ "$n" -ge "$2" ]
+          }
+          check scripts/concordance/test_run_clone_measurement.sh 60
+          check scripts/concordance/test_generate_reference_output.sh 70
+
+  # A `cargo audit` advisory is a failure only when the advisory's crate is
+  # reachable from the `vep` binary; scripts/check_advisory_reachability.sh makes
+  # that distinction and carries the dated allowlist for the rest. cargo-audit is
+  # installed from its pinned prebuilt release rather than compiled with
+  # `cargo install`, which would dominate the cost of a check that itself
+  # compiles nothing.
+  advisory-reachability:
+    name: Advisory Reachability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: |
+          set -euo pipefail
+          CARGO_AUDIT_VERSION=0.22.2
+          ASSET="cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}"
+          curl -fsSL "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/${ASSET}.tgz" | tar xz -C /tmp
+          install -m 0755 "/tmp/${ASSET}/cargo-audit" "${CARGO_HOME:-$HOME/.cargo}/bin/cargo-audit"
+          cargo audit --version
+      - run: scripts/check_advisory_reachability.sh
+
+  # Builds on the DECLARED minimum supported Rust version rather than current
+  # stable. Every job above runs stable, so without this one nothing ever
+  # compiles against `rust-version`, and the manifest's floor is a claim no
+  # build has exercised. The floor is dependency-driven (see the comment on
+  # `rust-version` in Cargo.toml), so a dependency bump can raise it without any
+  # source change; this job is what turns that into a failing check instead of
+  # a broken promise to whoever reads the manifest.
+  #
+  # The toolchain version is pinned in the action ref, so the first step asserts
+  # that the pin still equals the manifest's declaration: bumping one without
+  # the other fails here rather than leaving this job quietly testing the old
+  # floor.
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88
+      - name: Toolchain matches the declared rust-version
+        run: |
+          declared=$(sed -n 's/^rust-version *= *"\([^"]*\)".*/\1/p' Cargo.toml | head -1)
+          actual=$(rustc --version | awk '{print $2}')
+          echo "declared rust-version=$declared, toolchain=$actual"
+          case "$actual" in
+            "$declared" | "$declared".*) ;;
+            *) echo "ERROR: [msrv] toolchain $actual is not the declared rust-version $declared; update both the action ref and Cargo.toml together" >&2; exit 1 ;;
+          esac
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --workspace --locked
+
+  build-release:
+    name: Build Release
+    needs: [check, msrv]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked --bin vep
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vep-linux-x86_64
+          path: target/release/vep
+          retention-days: 30

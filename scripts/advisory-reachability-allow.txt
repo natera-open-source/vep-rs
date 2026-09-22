@@ -1,0 +1,27 @@
+# Allowlist for scripts/check_advisory_reachability.sh
+#
+# One line per suppressed advisory:
+#
+#     RUSTSEC-ID | YYYY-MM-DD | why the defect cannot be triggered here
+#
+# An entry suppresses an advisory that IS reachable from the production binary
+# (`vep-cli`). It does not suppress anything else, because everything else
+# already only warns.
+#
+# The expiry date is mandatory and is the point of the file. An entry that is
+# still suppressing a live finding after its expiry date FAILS the gate, so an
+# accepted risk has to be re-argued on a schedule instead of becoming permanent
+# by inattention. An entry that matches nothing warns, so it gets deleted rather
+# than accumulating.
+#
+# An expiry is one a maintainer would defend: the next release, or the next
+# quarter.
+#
+# An entry is a written claim that a specific defect cannot be triggered from
+# the production binary via untrusted input, which is the release requirement
+# the gate enforces. Upgrading the crate or removing the dependency edge is
+# nearly always the better answer than an entry.
+#
+# Format example (a comment; the parser reads only uncommented lines):
+#
+#   RUSTSEC-YYYY-NNNN | YYYY-MM-DD | <crate>: which call the defect needs and why the production binary never makes it

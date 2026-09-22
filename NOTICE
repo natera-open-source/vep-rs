@@ -1,0 +1,24 @@
+vep-rs
+Copyright (c) 2026-present Natera, Inc.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+------------------------------------------------------------------------------
+Attribution
+------------------------------------------------------------------------------
+
+vep-rs is an independent Rust implementation of the variant effect prediction
+algorithm published as the Ensembl Variant Effect Predictor (VEP). It reads a
+JSON transcript cache built from Ensembl release files or converted from a Perl
+VEP cache, and produces compatible output. It is not affiliated with, nor
+endorsed by, EMBL-EBI or the Ensembl project.
+
+The algorithm is described in:
+
+  McLaren W, Gil L, Hunt SE, Riat HS, Ritchie GRS, Thormann A, Flicek P,
+  Cunningham F. The Ensembl Variant Effect Predictor.
+  Genome Biology 17, 122 (2016). https://doi.org/10.1186/s13059-016-0974-4
+
+The upstream Ensembl VEP is developed by the Wellcome Trust Sanger Institute
+and the EMBL-European Bioinformatics Institute and is distributed under the
+Apache License, Version 2.0.

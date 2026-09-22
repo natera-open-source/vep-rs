@@ -1,0 +1,19 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:ff3c7e20d68e7e499c0bd79d398c7c121465db65f311ee87df425b2b600b853e",
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "binary_md5": "4575bacbe3c96c16501a7eea3f9a23f3",
+  "arch": "arm64"
+ },
+ "vep_command": "vep -i input.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 115 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/115_GRCh38",
+ "json_cache_source": "json_cache_grch38",
+ "fasta": "none on either side",
+ "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py",
+ "sha256": {
+  "default.txt": "3dad6e070c9be52a2d403e96f3a1ab4416a4ea30670eaa846a363ba85423ca2c",
+  "json.jsonl": "368bd01d9e8ab5e40e9e5c23a0fd0ca6471c588f62257f6c1cc18e7402541278",
+  "tab.txt": "29c3654ea014c42985ff89bf61b681645d012144b7b8167718ae5369a65ddf92",
+  "vcf.vcf": "2d58b63a929e731fa23663079ced6b26df4f0900ac1911c6cacce3ceabf73a07"
+ }
+}

@@ -1,0 +1,44 @@
+# Citation metadata in Citation File Format 1.2.0
+# (https://citation-file-format.github.io). GitHub renders this file as the
+# repository's "Cite this repository" entry; Zenodo reads .zenodo.json instead.
+cff-version: 1.2.0
+message: >-
+  If you use vep-rs in your work, please cite the software (this file) and, once
+  it is published, the article named in the README's Citing section.
+type: software
+title: vep-rs
+abstract: >-
+  vep-rs is a fast, memory-efficient variant effect predictor written in Rust.
+  It annotates genomic variants with their predicted functional effects on
+  genes, transcripts, and protein sequences, implementing the Ensembl Variant
+  Effect Predictor (VEP) algorithm, reading a JSON transcript cache built from
+  Ensembl release files or converted from a Perl VEP cache, and producing
+  compatible output. Its concordance with Ensembl VEP release 115.2 is measured
+  at population scale: over 260 million VEP consequence tuples from ClinVar,
+  gnomAD and 1000 Genomes data on GRCh37 and GRCh38, reported per dataset and
+  per Sequence Ontology term, with raw F1 above 0.9999 on each of the six SNP
+  and indel datasets and structural variants measured separately. Wall time is
+  measured against VEP and fastVEP on twenty independently provisioned machines
+  per engine and architecture. Every published aggregate re-derives from the
+  data files released with the code, and the accompanying manuscript documents
+  the remaining divergence classes.
+authors:
+  - family-names: Porter
+    given-names: Matthew
+    orcid: https://orcid.org/0009-0001-4316-5185
+    affiliation: Natera, Inc.
+  - family-names: Borkowski
+    given-names: Robert
+    affiliation: Natera, Inc.
+license: Apache-2.0
+repository-code: https://github.com/natera-open-source/vep-rs
+version: 0.1.0
+date-released: 2026-09-22
+doi: 10.5281/zenodo.22837897
+keywords:
+  - variant annotation
+  - variant effect prediction
+  - Ensembl VEP
+  - Rust
+  - genomics
+  - bioinformatics

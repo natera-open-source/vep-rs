@@ -1,0 +1,9 @@
+date,suite,assembly,raw_f1,adj_f1,binary_md5,perl_tuples,rust_tuples,intersection,adj_perl_tuples,adj_rust_tuples,adj_intersection,verdict
+2026-09-20,s01,GRCh37,0.999979,1.000000,23a294cf,33483881,33483881,33483179,,,,n_tier=20;methodology=cross_instance_parallel_clone;sweep_id=sweep-20260920T012411Z;binary_x86=48b2a959
+2026-09-20,s02,GRCh38,0.999974,1.000000,23a294cf,91552813,91552813,91550431,,,,n_tier=20;methodology=cross_instance_parallel_clone;sweep_id=sweep-20260920T012411Z;binary_x86=48b2a959
+2026-09-20,s03,GRCh37,0.999999,1.000000,23a294cf,11075422,11075422,11075415,,,,n_tier=20;methodology=cross_instance_parallel_clone;sweep_id=sweep-20260920T012411Z;binary_x86=48b2a959
+2026-09-20,s04,GRCh38,0.999999,1.000000,23a294cf,110503269,110503269,110503192,,,,n_tier=20;methodology=cross_instance_parallel_clone;sweep_id=sweep-20260920T012411Z;binary_x86=48b2a959
+2026-09-20,s05,GRCh37,1.000000,1.000000,23a294cf,3603259,3603259,3603259,,,,n_tier=20;methodology=cross_instance_parallel_clone;sweep_id=sweep-20260920T012411Z;binary_x86=48b2a959
+2026-09-20,s06,GRCh38,1.000000,1.000000,23a294cf,10420122,10420122,10420121,,,,n_tier=20;methodology=cross_instance_parallel_clone;sweep_id=sweep-20260920T012411Z;binary_x86=48b2a959
+2026-09-20,s07,GRCh37,0.975395,0.998524,23a294cf,329864,339623,326507,326658,327321,326507,n_tier=20;methodology=cross_instance_parallel_clone;sweep_id=sweep-20260920T012411Z;binary_x86=48b2a959;sv_aggregation=file_summed;sv_ground_truth=sv_per_vcf_r115.2_c115_tr_regen_20260920;sv_gt_cache=ensembl_115_GRCh37_full_genome;cnvtr_swap_pairs_total=1368
+2026-09-20,s08,GRCh38,0.909998,0.998031,23a294cf,1117037,1280886,1091052,1091912,1094496,1091052,n_tier=20;methodology=cross_instance_parallel_clone;sweep_id=sweep-20260920T012411Z;binary_x86=48b2a959;sv_aggregation=file_summed;sv_ground_truth=sv_per_vcf_r115.2_c115_tr_regen_20260920;cnvtr_swap_pairs_total=2644

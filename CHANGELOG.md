@@ -1,0 +1,81 @@
+# Changelog
+
+All notable changes to this project are recorded in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - 2026-09-22
+
+First public release.
+
+### Added
+
+- `vep`, a from-scratch Rust implementation of the Ensembl Variant Effect
+  Predictor algorithm. It reads a JSON transcript cache converted from the
+  Ensembl VEP cache, accepts VCF, Ensembl default, HGVS and region input, and
+  annotates SNVs, indels, MNPs and structural variants (deletions,
+  duplications, insertions, inversions, copy-number variants and breakends)
+  with Sequence Ontology consequence terms, HGVS notation, protein predictions
+  and co-located variation.
+- Output in the four Perl VEP formats (VEP default, VCF, JSON, Tab), each
+  field for field Ensembl VEP 115.2's for the same input and flags, for every
+  row outside the keys the golden manifests list as divergent (header lines carrying a time,
+  a path or Perl API component versions excepted), plus Parquet, a vep-rs
+  extension: five key columns (`chrom`, `pos`, `end`, `ref`, `alt`) then
+  exactly the tab columns, `-` stored as NULL, Parquet v2, ZSTD 9, sorted row
+  groups, a dictionary and a Bloom filter on every column, and the run's
+  identity in the footer metadata.
+- Golden corpora under `tests/golden/<release>/<assembly>/`: per Ensembl
+  release and assembly, exemplar records for every consequence-set combination
+  observed on the benchmark datasets, Ensembl VEP's output for them in the
+  default, tab, VCF and JSON formats, a pruned JSON cache, and a manifest of
+  the consequence keys documented to differ. `crates/vep-cli/tests/golden.rs`
+  and `format_parity.rs` compare every column of every format against them on
+  each `cargo test`, and the Parquet output round-trips through
+  `scripts/adapters/parquet_to_vep_tab.py` to the tab output. Generator and
+  pruner under `scripts/golden/`.
+- `scripts/concordance/compare_vep_fields.py`: per-column and per-Extra-key
+  agreement between two default-format outputs over their shared consequence
+  keys, written as `fields.json` beside every F1 report the measurement
+  harness produces.
+- `--max_sv_size` (default 10,000,000): as in VEP, a wider structural variant
+  keeps its VCF line without consequences and is absent from the JSON output;
+  the default and tab formats list every transcript it overlaps.
+- Parallel annotation with `--fork N`; output is deterministic and identical at
+  every `--fork` value.
+- Built-in plugins for CADD, REVEL, gnomADc, AlphaMissense, dbscSNV, LoFTEE,
+  LoFtool and pLI on both GRCh37 and GRCh38, GWAS and SpliceAI on GRCh38, and
+  dbNSFP, built in but unsupported;
+  a binary annotation-store format for plugin data; and a dynamic-library
+  plugin ABI (`vep-plugin`) for plugins built outside this repository.
+- `vep-cache-builder`, which builds the JSON transcript cache directly from
+  Ensembl source data (GFF3, protein FASTA, variation VCF, and with `--gtf`
+  the release's GTF for the `cds_start_NF` / `cds_end_NF` transcript
+  attributes and the assembly and genebuild versions) without a Perl
+  installation, and `vep-cache-converter`, which validates an existing JSON
+  cache for runtime use and converts tabix-indexed plugin data to the binary
+  annotation-store format. Every JSON cache carries its `source_versions` in
+  `info.json`.
+- A concordance harness that compares vep-rs output against Perl VEP
+  (release 115) tuple by tuple and classifies every divergence, and
+  structural-variant validation VCFs for both assemblies under
+  `tests/sv_validation/`.
+- Documentation under `docs/` covering the CLI, output formats, plugins and
+  cache setup, the runbook for reproducing the published concordance under
+  `scripts/`, and the data and figure sources for the accompanying manuscript
+  under `manuscript/`.
+- `scripts/check_advisory_reachability.sh`, which fails when a known
+  third-party advisory is reachable from the `vep` binary rather than merely
+  present somewhere in the workspace, with an expiring allowlist for accepted
+  risks.
+- Continuous integration on GitHub Actions: tests, Clippy, formatting, a
+  build on the declared minimum supported Rust version, a module-documentation
+  check, a Developer Certificate of Origin check on pull
+  requests, and a release workflow that publishes Linux (x86_64, aarch64) and
+  macOS (aarch64) tarballs with sha256 and md5 checksum files.
+
+[Unreleased]: https://github.com/natera-open-source/vep-rs/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/natera-open-source/vep-rs/releases/tag/v0.1.0

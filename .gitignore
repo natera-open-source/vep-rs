@@ -1,0 +1,51 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+/tmp/
+*.tmp
+
+# Python
+__pycache__/
+*.pyc
+.ruff_cache/
+
+# Benchmark data
+/criterion/
+
+# Script data / cache (default VEP_* output root)
+/.vep/
+
+# Real-world test VCFs. Large public downloads, not committed.
+# scripts/data/download_real_world_vcfs.sh writes them under .vep/vcf/<asm>/sv/
+# (covered by the /.vep/ rule above); this in-tree path is the symlink or copy
+# of that directory the validation scripts read (tests/sv_validation/README.md).
+# No trailing slash, so a symlink is ignored as well as a directory.
+tests/sv_validation/*/real_world
+
+# Cached Perl VEP outputs used as concordance ground truth. Large and specific to
+# one cache release, so not committed; produce them with
+# scripts/concordance/run_concordance.sh --perl-vep-mode docker.
+tests/concordance_fixtures/
+
+# Cache converter temporary output
+/converted_cache/
+
+# Generated test outputs (contain timestamps)
+tests/golden/*_output.txt
+
+# Python test cache
+.pytest_cache/
+
+# Intermediate 1200 dpi TIFF renders of the figures are regenerable from
+# manuscript/figures/generate_figures.py and are not tracked.
+manuscript/figures/*.tif

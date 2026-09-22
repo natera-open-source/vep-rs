@@ -1,0 +1,23 @@
+[package]
+name = "vep-cache-converter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Validates JSON caches for vep-cli runtime use and converts tabix plugin data to the binary annotation-store format"
+
+[[bin]]
+name = "vep-cache-converter"
+path = "src/main.rs"
+
+[dependencies]
+vep-core = { workspace = true }
+vep-cli = { path = "../vep-cli" }
+vep-builtins = { workspace = true }
+noodles = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+rand = "0.8"

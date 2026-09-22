@@ -1,0 +1,16 @@
+[package]
+name = "vep-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core types for Ensembl VEP: variants, transcripts, consequences, coordinates"
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+indexmap = { workspace = true }
+flate2 = { workspace = true }
+smallvec = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

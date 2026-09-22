@@ -1,0 +1,10 @@
+# Stored with CRLF endings; `-text` leaves the bytes alone, where `eol=crlf` would rewrite the blob.
+manuscript/data/wall_times.csv -text
+
+# Byte-exact Ensembl VEP output and VCF inputs whose header lines are re-emitted verbatim.
+tests/golden/** -text
+
+# Omitted from `git archive`.
+.gitlab-ci.yml export-ignore
+.gitlab export-ignore
+.gitlab/** export-ignore

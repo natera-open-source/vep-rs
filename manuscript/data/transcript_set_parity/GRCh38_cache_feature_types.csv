@@ -1,0 +1,17 @@
+feature_type,cache_transcripts,admitted_by_fastvep_loader
+mRNA,232307,yes
+lnc_RNA,222695,yes
+transcript,28643,yes
+pseudogenic_transcript,15200,yes
+snRNA,1906,yes
+miRNA,1879,yes
+unconfirmed_transcript,1106,no
+snoRNA,942,yes
+V_gene_segment,253,yes
+J_gene_segment,97,yes
+rRNA,49,yes
+scRNA,49,yes
+D_gene_segment,42,yes
+C_gene_segment,29,yes
+tRNA,22,yes
+processed_transcript,12,no

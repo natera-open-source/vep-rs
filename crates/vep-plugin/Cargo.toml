@@ -1,0 +1,18 @@
+[package]
+name = "vep-plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Plugin trait definition, dylib loader, and registry for VEP"
+
+[dependencies]
+vep-core = { workspace = true }
+libloading = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# The example is a plugin, so it is built as the dynamic library the loader
+# opens; `tests/echo_roundtrip.rs` loads it from the profile's `examples/` dir.
+[[example]]
+name = "echo_plugin"
+crate-type = ["cdylib"]

@@ -1,0 +1,43 @@
+shape,dataset,tuples,sweep_id,binary_md5,description
+cooccurrence_swap_masked,s01,261,sweep-20260920T012411Z,23a294cf,"VEP emits start_lost and start_retained_variant; vep-rs emits the same set minus the erroneous member for the allele kind, start_lost on a sequence variant and start_retained_variant on a structural allele (the start_cooccurrence_swap mask excludes these)"
+cooccurrence_swap_masked,s02,928,sweep-20260920T012411Z,23a294cf,"VEP emits start_lost and start_retained_variant; vep-rs emits the same set minus the erroneous member for the allele kind, start_lost on a sequence variant and start_retained_variant on a structural allele (the start_cooccurrence_swap mask excludes these)"
+cooccurrence_swap_masked,s03,3,sweep-20260920T012411Z,23a294cf,"VEP emits start_lost and start_retained_variant; vep-rs emits the same set minus the erroneous member for the allele kind, start_lost on a sequence variant and start_retained_variant on a structural allele (the start_cooccurrence_swap mask excludes these)"
+cooccurrence_swap_masked,s04,77,sweep-20260920T012411Z,23a294cf,"VEP emits start_lost and start_retained_variant; vep-rs emits the same set minus the erroneous member for the allele kind, start_lost on a sequence variant and start_retained_variant on a structural allele (the start_cooccurrence_swap mask excludes these)"
+cooccurrence_swap_masked,s05,0,sweep-20260920T012411Z,23a294cf,"VEP emits start_lost and start_retained_variant; vep-rs emits the same set minus the erroneous member for the allele kind, start_lost on a sequence variant and start_retained_variant on a structural allele (the start_cooccurrence_swap mask excludes these)"
+cooccurrence_swap_masked,s06,1,sweep-20260920T012411Z,23a294cf,"VEP emits start_lost and start_retained_variant; vep-rs emits the same set minus the erroneous member for the allele kind, start_lost on a sequence variant and start_retained_variant on a structural allele (the start_cooccurrence_swap mask excludes these)"
+cooccurrence_swap_masked,pooled,1270,sweep-20260920T012411Z,23a294cf,"VEP emits start_lost and start_retained_variant; vep-rs emits the same set minus the erroneous member for the allele kind, start_lost on a sequence variant and start_retained_variant on a structural allele (the start_cooccurrence_swap mask excludes these)"
+vep_both_rust_neither,s01,0,sweep-20260920T012411Z,23a294cf,VEP emits both start terms; vep-rs emits neither
+vep_both_rust_neither,s02,0,sweep-20260920T012411Z,23a294cf,VEP emits both start terms; vep-rs emits neither
+vep_both_rust_neither,s03,0,sweep-20260920T012411Z,23a294cf,VEP emits both start terms; vep-rs emits neither
+vep_both_rust_neither,s04,0,sweep-20260920T012411Z,23a294cf,VEP emits both start terms; vep-rs emits neither
+vep_both_rust_neither,s05,0,sweep-20260920T012411Z,23a294cf,VEP emits both start terms; vep-rs emits neither
+vep_both_rust_neither,s06,0,sweep-20260920T012411Z,23a294cf,VEP emits both start terms; vep-rs emits neither
+vep_both_rust_neither,pooled,0,sweep-20260920T012411Z,23a294cf,VEP emits both start terms; vep-rs emits neither
+vep_both_rust_retained_only,s01,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_retained_variant and drops start_lost, outside the mask (a structural allele, or the sets differ elsewhere too)"
+vep_both_rust_retained_only,s02,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_retained_variant and drops start_lost, outside the mask (a structural allele, or the sets differ elsewhere too)"
+vep_both_rust_retained_only,s03,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_retained_variant and drops start_lost, outside the mask (a structural allele, or the sets differ elsewhere too)"
+vep_both_rust_retained_only,s04,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_retained_variant and drops start_lost, outside the mask (a structural allele, or the sets differ elsewhere too)"
+vep_both_rust_retained_only,s05,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_retained_variant and drops start_lost, outside the mask (a structural allele, or the sets differ elsewhere too)"
+vep_both_rust_retained_only,s06,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_retained_variant and drops start_lost, outside the mask (a structural allele, or the sets differ elsewhere too)"
+vep_both_rust_retained_only,pooled,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_retained_variant and drops start_lost, outside the mask (a structural allele, or the sets differ elsewhere too)"
+vep_both_rust_lost_only,s01,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_lost and drops start_retained_variant, outside the mask (a sequence variant, or the sets differ elsewhere too)"
+vep_both_rust_lost_only,s02,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_lost and drops start_retained_variant, outside the mask (a sequence variant, or the sets differ elsewhere too)"
+vep_both_rust_lost_only,s03,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_lost and drops start_retained_variant, outside the mask (a sequence variant, or the sets differ elsewhere too)"
+vep_both_rust_lost_only,s04,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_lost and drops start_retained_variant, outside the mask (a sequence variant, or the sets differ elsewhere too)"
+vep_both_rust_lost_only,s05,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_lost and drops start_retained_variant, outside the mask (a sequence variant, or the sets differ elsewhere too)"
+vep_both_rust_lost_only,s06,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_lost and drops start_retained_variant, outside the mask (a sequence variant, or the sets differ elsewhere too)"
+vep_both_rust_lost_only,pooled,0,sweep-20260920T012411Z,23a294cf,"VEP emits both start terms; vep-rs keeps start_lost and drops start_retained_variant, outside the mask (a sequence variant, or the sets differ elsewhere too)"
+vep_retained_only_rust_omits,s01,0,sweep-20260920T012411Z,23a294cf,VEP emits start_retained_variant without start_lost; vep-rs omits the term
+vep_retained_only_rust_omits,s02,0,sweep-20260920T012411Z,23a294cf,VEP emits start_retained_variant without start_lost; vep-rs omits the term
+vep_retained_only_rust_omits,s03,0,sweep-20260920T012411Z,23a294cf,VEP emits start_retained_variant without start_lost; vep-rs omits the term
+vep_retained_only_rust_omits,s04,0,sweep-20260920T012411Z,23a294cf,VEP emits start_retained_variant without start_lost; vep-rs omits the term
+vep_retained_only_rust_omits,s05,0,sweep-20260920T012411Z,23a294cf,VEP emits start_retained_variant without start_lost; vep-rs omits the term
+vep_retained_only_rust_omits,s06,0,sweep-20260920T012411Z,23a294cf,VEP emits start_retained_variant without start_lost; vep-rs omits the term
+vep_retained_only_rust_omits,pooled,0,sweep-20260920T012411Z,23a294cf,VEP emits start_retained_variant without start_lost; vep-rs omits the term
+other,s01,0,sweep-20260920T012411Z,23a294cf,every other VEP-only tuple carrying start_retained_variant
+other,s02,0,sweep-20260920T012411Z,23a294cf,every other VEP-only tuple carrying start_retained_variant
+other,s03,0,sweep-20260920T012411Z,23a294cf,every other VEP-only tuple carrying start_retained_variant
+other,s04,0,sweep-20260920T012411Z,23a294cf,every other VEP-only tuple carrying start_retained_variant
+other,s05,0,sweep-20260920T012411Z,23a294cf,every other VEP-only tuple carrying start_retained_variant
+other,s06,0,sweep-20260920T012411Z,23a294cf,every other VEP-only tuple carrying start_retained_variant
+other,pooled,0,sweep-20260920T012411Z,23a294cf,every other VEP-only tuple carrying start_retained_variant

@@ -1,0 +1,10 @@
+{
+  "date": "2026-09-09",
+  "record_id": "2026-09-09-grch37-sv-gt-regeneration",
+  "invocation": "docker run ensemblorg/ensembl-vep:release_115.2 vep --offline --cache --dir_cache <full-genome> --cache_version 115 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 4 --fasta Homo_sapiens.GRCh37.75.dna.primary_assembly.fa -i <each of 16 canonical_inputs/grch37/*.vcf> --no_headers --no_stats --quiet --force_overwrite",
+  "cache": {
+    "source": "https://ftp.ensembl.org/pub/grch37/release-115/variation/indexed_vep_cache/homo_sapiens_vep_115_GRCh37.tar.gz",
+    "bytes": 24466861382
+  },
+  "inputs": "ground_truth/perl/sv_per_vcf_r115.2_c115_20260601/canonical_inputs/grch37/, the 16 files the shipped ground truth was generated from. NOT the gzipped vcf/grch37/{synthetic,real_world}/ siblings, which are a different artefact."
+}

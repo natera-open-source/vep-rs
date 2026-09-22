@@ -1,0 +1,22 @@
+[package]
+name = "vep-effects"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Consequence calculation engine for VEP"
+
+[dependencies]
+vep-core = { workspace = true }
+vep-fasta = { workspace = true }
+indexmap = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+smallvec = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = { workspace = true }
+
+[[bench]]
+name = "consequence_bench"
+harness = false
