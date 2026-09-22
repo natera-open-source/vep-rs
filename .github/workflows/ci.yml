@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
@@ -123,7 +123,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.1
       - run: |
           set -euo pipefail
           CARGO_AUDIT_VERSION=0.22.2
@@ -133,8 +133,9 @@ jobs:
           cargo audit --version
       - run: scripts/check_advisory_reachability.sh
 
-  # Builds on the DECLARED minimum supported Rust version rather than current
-  # stable. Every job above runs stable, so without this one nothing ever
+  # Builds on the DECLARED minimum supported Rust version rather than the
+  # pinned toolchain. Every job above runs the pinned 1.97.1, the toolchain the
+  # released binaries are built with, so without this one nothing ever
   # compiles against `rust-version`, and the manifest's floor is a claim no
   # build has exercised. The floor is dependency-driven (see the comment on
   # `rust-version` in Cargo.toml), so a dependency bump can raise it without any
@@ -170,7 +171,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.1
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --locked --bin vep
       - uses: actions/upload-artifact@v4

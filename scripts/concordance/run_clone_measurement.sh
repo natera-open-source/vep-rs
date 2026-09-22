@@ -353,7 +353,13 @@ time_run() {
 	local start end rc
 	start=$(date +%s.%N)
 	set +e
-	"${VEP_TIME_BIN:-/usr/bin/time}" -v "$@" 2>"$out_txt" || "$@" 2>"$out_txt"
+	# GNU time propagates the command's exit status, so the fallback to a bare run
+	# is decided by whether GNU time is usable, never by the command failing.
+	if "${VEP_TIME_BIN:-/usr/bin/time}" -v true >/dev/null 2>&1; then
+		"${VEP_TIME_BIN:-/usr/bin/time}" -v "$@" 2>"$out_txt"
+	else
+		"$@" 2>"$out_txt"
+	fi
 	rc=$?
 	set -e
 	end=$(date +%s.%N)
