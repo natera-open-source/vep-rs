@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        vep-rs aims to match Perl VEP (`ensemblorg/ensembl-vep`, release 115) exactly. Before filing, check two things. [docs/cli-reference.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/cli-reference.md#compatibility-with-perl-vep) lists flags that are accepted but not implemented. Each `tests/golden/<release>/<assembly>/manifest.json` lists the consequence keys whose terms are documented to differ.
+        vep-rs matches Perl VEP (`ensemblorg/ensembl-vep`, release 115) exactly, except for a small set of documented divergences, most of them Perl VEP defects that vep-rs deliberately does not reproduce. Before filing, check three things. The [Results](https://github.com/natera-open-source/vep-rs/blob/main/README.md#results) section of the README describes the documented divergence classes. [docs/cli-reference.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/cli-reference.md#compatibility-with-perl-vep) lists flags that are accepted but not implemented. Each `tests/golden/<release>/<assembly>/manifest.json` lists the consequence keys whose terms are documented to differ.
   - type: input
     id: version
     attributes:
