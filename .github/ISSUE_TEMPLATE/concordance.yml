@@ -1,0 +1,53 @@
+name: Output differs from Perl VEP
+description: vep-rs and Perl VEP give different annotations for the same input
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        vep-rs aims to match Perl VEP (`ensemblorg/ensembl-vep`, release 115) exactly. Before filing, check two things. [docs/cli-reference.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/cli-reference.md#compatibility-with-perl-vep) lists flags that are accepted but not implemented. Each `tests/golden/<release>/<assembly>/manifest.json` lists the consequence keys whose terms are documented to differ.
+  - type: input
+    id: version
+    attributes:
+      label: vep-rs version
+      description: Output of `vep --version`, or the commit you built from.
+    validations:
+      required: true
+  - type: input
+    id: perl-vep
+    attributes:
+      label: Perl VEP version
+      description: Release, or the Docker image tag or digest.
+      placeholder: ensemblorg/ensembl-vep:release_115.2
+    validations:
+      required: true
+  - type: textarea
+    id: cache
+    attributes:
+      label: Cache
+      description: Assembly and Ensembl release. For vep-rs, say whether the JSON cache came from `vep-cache-builder` or from converting the same Perl VEP cache.
+    validations:
+      required: true
+  - type: textarea
+    id: commands
+    attributes:
+      label: Commands
+      description: Both command lines, vep-rs and Perl VEP.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: variants
+    attributes:
+      label: Variants
+      description: The VCF lines where the output differs. Do not post patient or other identifiable data.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: diff
+    attributes:
+      label: The difference
+      description: The rows from each tool, or just the columns that differ (for example Consequence, HGVSc, or a plugin field).
+    validations:
+      required: true
