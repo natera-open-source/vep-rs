@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        If vep-rs runs cleanly but its output differs from Perl VEP's, use the **Output differs from Perl VEP** form instead. Report security vulnerabilities by email per [SECURITY.md](https://github.com/natera-open-source/vep-rs/blob/main/SECURITY.md), not here.
+        If vep-rs runs cleanly but its output differs from Perl VEP's, use the **Output differs from Perl VEP** form instead. Report security vulnerabilities privately per [SECURITY.md](https://github.com/natera-open-source/vep-rs/blob/main/SECURITY.md), not here.
   - type: input
     id: version
     attributes:
@@ -43,7 +43,7 @@ body:
     id: cache
     attributes:
       label: Cache and reference
-      description: Assembly and Ensembl release, and whether the JSON cache came from `vep-cache-builder` or from converting a Perl VEP cache.
+      description: Assembly and Ensembl release, whether the JSON cache came from `vep-cache-builder` or from converting a Perl VEP cache, and the `--fasta` file if you passed one.
       placeholder: GRCh38, release 115, built with vep-cache-builder
     validations:
       required: true

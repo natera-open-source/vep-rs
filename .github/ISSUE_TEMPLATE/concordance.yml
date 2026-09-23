@@ -1,6 +1,6 @@
 name: Output differs from Perl VEP
 description: vep-rs and Perl VEP give different annotations for the same input
-labels: ["bug"]
+labels: ["bug", "concordance"]
 body:
   - type: markdown
     attributes:
