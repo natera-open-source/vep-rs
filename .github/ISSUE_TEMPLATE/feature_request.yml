@@ -1,0 +1,22 @@
+name: Feature request
+description: A Perl VEP flag or plugin you need, a new output, or some other change
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need
+      description: What you are trying to do and what stops you today. If it's a Perl VEP flag or plugin, name it and say how your pipeline uses it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: "Optional. What the change would look like: flag names, output fields, an example."
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'm willing to open a pull request for this.
