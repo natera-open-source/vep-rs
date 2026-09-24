@@ -340,7 +340,7 @@ fn verify_concordance(
         all_positions
     } else {
         use rand::seq::SliceRandom;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut sampled = all_positions.clone();
         sampled.shuffle(&mut rng);
         sampled.truncate(1000);
