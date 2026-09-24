@@ -3376,12 +3376,10 @@ fn concordance_splice_donor_region_vs_5th_base_forward_delins() {
 }
 
 /// Companion to the TP53 shape above, on the forward test transcript, whose
-/// intron 1 is 25_000_300-25_001_999.
-/// This places a complex delins
-///
-/// with a single matching base at the 5th-base position,
-/// to cover the case where the differing regions are non-contiguous and span
-/// the 5th-base window on both sides without hitting it.
+/// intron 1 is 25_000_300-25_001_999. This places a complex delins with a
+/// single matching base at the 5th-base position, to cover the case where the
+/// differing regions are non-contiguous and span the 5th-base window on both
+/// sides without hitting it.
 #[test]
 fn concordance_splice_donor_region_vs_5th_base_noncontiguous() {
     let tx = make_test_transcript();
@@ -3518,11 +3516,6 @@ fn build_utr_stop_shift_fasta() -> (tempfile::TempDir, vep_fasta::IndexedFasta) 
     // already A,A (stop codon 2nd and 3rd base from TAA placement above).
     seq[25_004_300 - 1] = b'G';
     seq[25_004_301 - 1] = b'A';
-    // After deletion, genomic 25_004_298 takes on what was at 25_004_302
-    // and 25_004_299 takes on what was at 25_004_303. For the codon at
-    // the original stop position (genomic 25_004_297..25_004_299 =
-    // cDNA 898-900) to remain `T + A + A = TAA`, 25_004_302 and 25_004_303 must
-    // both be A.
     seq[25_004_302 - 1] = b'A';
     seq[25_004_303 - 1] = b'A';
 

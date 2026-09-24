@@ -1096,7 +1096,7 @@ pub fn compute_codon_window_peptide_alleles(
 
     // This codon window stops at the CDS end and appends no 3' UTR. The cached UTR
     // (`vefc.three_prime_utr`, see `compute_three_prime_utr_sequence`) is appended
-    // instead by `PerlAllele::alternate_cds`, the whole port of Perl's
+    // instead by `PerlCodingEval::alternate_cds`, the whole port of Perl's
     // `_get_alternate_cds`.
 
     if ref_window_end < window_start_idx {
@@ -3943,7 +3943,7 @@ mod tests {
     fn test_codon_window_does_not_extend_past_cds_end_even_with_cached_utr() {
         let mut tx = make_test_transcript();
         // A cached 3' UTR is not appended to this codon window; the whole port in
-        // `PerlAllele::alternate_cds` is the path that reads it.
+        // `PerlCodingEval::alternate_cds` is the path that reads it.
         if let Some(vefc) = tx.vefc.as_mut() {
             vefc.three_prime_utr = Some("AA".into());
         } else {
@@ -4459,8 +4459,8 @@ mod tests {
 
     #[test]
     fn test_is_frameshift_cds_aware_cds_span_non_mod3() {
-        // CDS span covers 2 bases (partial exon overlap), 3bp alt →
-        // abs(3 - 2) % 3 = 1 → frameshift (even though raw 3bp insertion is mod-3)
+        // The CDS span covers 2 bases (partial exon overlap), so the frame test
+        // reads abs(allele_len - 2) % 3: a 5 bp alt is in frame, a 4 bp alt is not.
         let variant = vep_core::variant::InputVariant::new(
             "21".into(),
             100,

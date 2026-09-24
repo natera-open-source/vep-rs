@@ -1385,8 +1385,9 @@ fn apply_position(
                         } else {
                             analysis_cds_pos_5prime(*cds_pos, bounds.as_ref())
                         };
-                        // both the start position and the CDS span end, so a deletion
-                        // starting before the stop codon but extending through it counts.
+                        // The stop-loss test reads both the start position and the CDS
+                        // span end, so a deletion starting before the stop codon but
+                        // extending through it counts.
                         let span_overlaps_stop = stop_loss_cds_pos >= stop_codon_start
                             || bounds
                                 .as_ref()
@@ -3021,8 +3022,8 @@ fn add_exonic_splice_region(
         return;
     }
 
-    // all differing regions, as Perl's _get_differing_regions XORs ref/alt
-    // character by character and groups consecutive differences; a complex indel
+    // Every differing region is visited, as Perl's _get_differing_regions XORs
+    // ref/alt character by character and groups consecutive differences; a complex indel
     // with matching bases inside the pair (ACCCCA to CTTCC shares CC at positions
     // 3-4) yields multiple non-contiguous regions.
     let regions = get_differing_regions(variant, shifted_variant_coords);
