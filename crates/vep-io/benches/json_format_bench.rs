@@ -22,8 +22,9 @@
 //! Run with:
 //!     cargo bench --package vep-io --bench json_format_bench
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use smallvec::smallvec;
+use std::hint::black_box;
 use vep_core::consequence::{Consequence, FeatureType, Impact, TranscriptConsequence};
 use vep_core::variant::{ColocatedVariant, InputVariant};
 use vep_io::output::fields::FieldOptions;

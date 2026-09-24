@@ -6,7 +6,8 @@
 //! Builds a realistic test transcript and benchmarks the core
 //! `calculate_consequences` function for different variant types.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 
 use vep_core::coordinate::Strand;
 use vep_core::transcript::*;

@@ -10,7 +10,8 @@
 
 use std::sync::Arc;
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
 
 use vep_builtins::annotation_store::AnnotationStore;
 use vep_builtins::binary_store::{BinaryAnnotator, BinaryStoreWriter};
