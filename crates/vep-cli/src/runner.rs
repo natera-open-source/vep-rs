@@ -370,9 +370,9 @@ impl Runner {
             if self.config.input_file.ends_with(".gz") {
                 match std::num::NonZeroUsize::new(self.config.decompression_threads) {
                     Some(n) if n.get() > 1 => {
-                        Box::new(bgzf::MultithreadedReader::with_worker_count(n, f))
+                        Box::new(bgzf::io::MultithreadedReader::with_worker_count(n, f))
                     }
-                    _ => Box::new(bgzf::Reader::new(f)),
+                    _ => Box::new(bgzf::io::Reader::new(f)),
                 }
             } else {
                 Box::new(f)

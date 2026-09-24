@@ -269,7 +269,7 @@ impl TabixAnnotator {
             .file
             .try_clone()
             .map_err(|e| PluginError::Run(format!("failed to clone bgzf file handle: {e}")))?;
-        let mut bgzf_reader = bgzf::Reader::new(file);
+        let mut bgzf_reader = bgzf::io::Reader::new(file);
 
         // Do not hand-roll this by comparing `virtual_position()` against
         // `chunk.end()` around a `BufReader`: a chunk end is a bgzf virtual
@@ -473,7 +473,7 @@ fn find_index_path(data_path: &Path) -> Result<PathBuf, PluginError> {
 
 /// Load a tabix index from a .tbi file.
 fn load_index(index_path: &Path) -> Result<tabix::Index, PluginError> {
-    tabix::read(index_path).map_err(|e| {
+    tabix::fs::read(index_path).map_err(|e| {
         PluginError::Run(format!(
             "failed to read tabix index {}: {e}",
             index_path.display()
@@ -525,7 +525,7 @@ pub fn detect_assembly_marker(
 ) -> Result<Option<vep_core::assembly::Assembly>, PluginError> {
     let file = std::fs::File::open(path)
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
-    let reader = bgzf::Reader::new(BufReader::new(file));
+    let reader = bgzf::io::Reader::new(BufReader::new(file));
     let buf_reader = BufReader::new(reader);
 
     for line_result in buf_reader.lines() {
@@ -566,7 +566,7 @@ pub fn detect_assembly_marker(
 pub fn first_data_row_field(path: &Path, col: usize) -> Result<Option<String>, PluginError> {
     let file = std::fs::File::open(path)
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
-    let reader = bgzf::Reader::new(BufReader::new(file));
+    let reader = bgzf::io::Reader::new(BufReader::new(file));
     let buf_reader = BufReader::new(reader);
 
     for line_result in buf_reader.lines() {
@@ -605,7 +605,7 @@ pub fn first_data_row_field(path: &Path, col: usize) -> Result<Option<String>, P
 pub fn parse_header(path: &Path, start_col: usize) -> Result<Option<Vec<String>>, PluginError> {
     let file = std::fs::File::open(path)
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
-    let reader = bgzf::Reader::new(BufReader::new(file));
+    let reader = bgzf::io::Reader::new(BufReader::new(file));
     let buf_reader = BufReader::new(reader);
 
     let mut last_header_line = None;

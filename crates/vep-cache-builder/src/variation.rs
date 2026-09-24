@@ -258,7 +258,9 @@ pub fn parse_variation_vcf(path: &Path, somatic: bool) -> Result<Vec<VariationRe
         .extension()
         .is_some_and(|ext| ext == "gz" || ext == "bgz")
     {
-        Box::new(std::io::BufReader::new(noodles::bgzf::Reader::new(file)))
+        Box::new(std::io::BufReader::new(noodles::bgzf::io::Reader::new(
+            file,
+        )))
     } else {
         Box::new(std::io::BufReader::new(file))
     };

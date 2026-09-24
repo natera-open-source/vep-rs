@@ -240,7 +240,7 @@ fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRe
 
     let file =
         fs::File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
-    let reader = bgzf::Reader::new(file);
+    let reader = bgzf::io::Reader::new(file);
     let buf_reader = BufReader::new(reader);
 
     let mut header_names: Vec<String> = Vec::new();

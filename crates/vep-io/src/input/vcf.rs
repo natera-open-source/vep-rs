@@ -57,9 +57,11 @@ impl VcfParser {
         {
             match std::num::NonZeroUsize::new(decompression_threads) {
                 Some(n) if n.get() > 1 => Box::new(std::io::BufReader::new(
-                    noodles::bgzf::MultithreadedReader::with_worker_count(n, file),
+                    noodles::bgzf::io::MultithreadedReader::with_worker_count(n, file),
                 )),
-                _ => Box::new(std::io::BufReader::new(noodles::bgzf::Reader::new(file))),
+                _ => Box::new(std::io::BufReader::new(noodles::bgzf::io::Reader::new(
+                    file,
+                ))),
             }
         } else {
             Box::new(std::io::BufReader::new(file))

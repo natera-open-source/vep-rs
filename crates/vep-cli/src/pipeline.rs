@@ -198,7 +198,7 @@ pub(crate) fn tabix_contig_order(input_file: &str) -> Vec<String> {
     if !Path::new(&index_path).is_file() {
         return Vec::new();
     }
-    let index = match noodles::tabix::read(&index_path) {
+    let index = match noodles::tabix::fs::read(&index_path) {
         Ok(index) => index,
         Err(e) => {
             debug!("ignoring tabix index {index_path}: {e}");
