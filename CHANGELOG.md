@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Dependencies: noodles 0.109 (the last release declaring rust-version 1.88;
+  the bgzf readers and writer and the tabix index loader moved to their
+  `io` and `fs` modules), mysql 28 (vep-cache-builder), rand 0.10
+  (vep-cache-converter), criterion 0.8 (benches), rustls 0.23.45, and the
+  minor and patch releases of bigtools, bstr, clap, crossbeam-channel,
+  flate2, indexmap, rayon, rustc-hash, serde, serde_json, smallvec, tempfile,
+  thiserror and tracing-subscriber. The declared rust-version stays 1.88.
+- Workflows: every action is pinned to a commit sha with its tag beside it,
+  each rust-toolchain step names its Rust version through the `toolchain:`
+  input, and the CI workflow's token is read-only. Dependabot ignores
+  noodles 0.110 and later (rust-version 1.89) and the pinned toolchain refs.
+
+### Security
+
+- Cleared from the dependency tree: RUSTSEC-2026-0235 (rkyv),
+  RUSTSEC-2026-0173 (proc-macro-error2), RUSTSEC-2026-0002 (lru 0.12) and
+  RUSTSEC-2026-0097 (rand 0.8), all through the mysql and rand updates, and
+  RUSTSEC-2026-0285 (rustls) through the rustls update. None was reachable
+  from the `vep` binary; all sat under vep-cache-builder or
+  vep-cache-converter.
+
 ## [0.1.0] - 2026-09-22
 
 First public release.
