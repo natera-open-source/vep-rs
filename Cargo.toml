@@ -19,12 +19,11 @@ license = "Apache-2.0"
 repository = "https://github.com/natera-open-source/vep-rs"
 # Dependency-driven, not source-driven. The implementation crates' own code needs
 # only 1.80 (`std::sync::LazyLock` in vep-core/src/codon.rs), but the locked
-# dependency graph floors higher: `time 0.3.47` (via mysql -> mysql_common, a
-# vep-cache-builder dependency) declares rust-version 1.88 and its manifest
-# requires the `edition2024` Cargo feature, so a 1.80 toolchain cannot even parse
-# it; `half` and `indexmap` require 1.81 and 1.82. The `msrv` CI job builds on
-# exactly this version. Lowering it requires dropping or pinning back the
-# dependency that sets the floor.
+# dependency graph floors higher: `darling 0.23.0` (via mysql -> mysql_common ->
+# mysql-common-derive, a vep-cache-builder dependency) declares rust-version
+# 1.88.0; the next tier down is 1.85 (`indexmap`, `hashbrown`, `clap_lex`). The
+# `msrv` CI job builds on exactly this version. Lowering it requires dropping or
+# pinning back the dependency that sets the floor.
 rust-version = "1.88"
 
 [workspace.dependencies]
