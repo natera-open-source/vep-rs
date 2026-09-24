@@ -2962,7 +2962,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vep-builtins"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bigtools",
  "bstr",
@@ -2984,7 +2984,7 @@ dependencies = [
 
 [[package]]
 name = "vep-cache-builder"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3006,7 +3006,7 @@ dependencies = [
 
 [[package]]
 name = "vep-cache-converter"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -3023,7 +3023,7 @@ dependencies = [
 
 [[package]]
 name = "vep-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3054,7 +3054,7 @@ dependencies = [
 
 [[package]]
 name = "vep-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "flate2",
  "indexmap",
@@ -3066,7 +3066,7 @@ dependencies = [
 
 [[package]]
 name = "vep-effects"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "criterion",
  "indexmap",
@@ -3080,7 +3080,7 @@ dependencies = [
 
 [[package]]
 name = "vep-fasta"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "memmap2",
  "noodles",
@@ -3092,7 +3092,7 @@ dependencies = [
 
 [[package]]
 name = "vep-io"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "criterion",
  "indexmap",
@@ -3107,7 +3107,7 @@ dependencies = [
 
 [[package]]
 name = "vep-plugin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libloading",
  "thiserror 2.0.18",
