@@ -1645,8 +1645,7 @@ fn concordance_hgvsp_frameshift_uses_fs_notation() {
         b"T".to_vec(), // 1bp insertion = frameshift
     );
 
-    let consequences = vec![Consequence::FrameshiftVariant];
-    let hgvsp = generate_hgvsp(&variant, &tx, &consequences);
+    let hgvsp = generate_hgvsp(&variant, &tx, None);
     assert!(hgvsp.is_some(), "Should generate HGVSp for frameshift");
     let notation = hgvsp.unwrap();
 
@@ -1677,8 +1676,7 @@ fn concordance_hgvsp_frameshift_includes_ter_position() {
         b"CC".to_vec(), // 2bp insertion = frameshift
     );
 
-    let consequences = vec![Consequence::FrameshiftVariant];
-    let hgvsp = generate_hgvsp(&variant, &tx, &consequences);
+    let hgvsp = generate_hgvsp(&variant, &tx, None);
     assert!(hgvsp.is_some(), "Should generate HGVSp for frameshift");
     let notation = hgvsp.unwrap();
 
@@ -1779,19 +1777,11 @@ fn concordance_hgvsp_protein_position_matches_codon_number() {
         b"-".to_vec(),
     );
 
-    let consequences = vec![Consequence::InframeDeletion];
-    let hgvsp = generate_hgvsp(&variant, &tx, &consequences);
-    assert!(
-        hgvsp.is_some(),
-        "Should generate HGVSp for inframe deletion"
-    );
-    let notation = hgvsp.unwrap();
+    let hgvsp = generate_hgvsp(&variant, &tx, None);
 
-    // Codon 3 = amino acid 3 = Gly. Perl says p.Gly3del.
-    assert!(
-        notation.contains("Gly3"),
-        "protein position should be 3 for codon 3, got: {notation}"
-    );
+    // Codon 3 = amino acid 3 = Gly, and the residue after it (Lys) differs, so
+    // the deletion does not move: Perl says p.Gly3del.
+    assert_eq!(hgvsp.as_deref(), Some("ENSP00000000001.1:p.Gly3del"));
 }
 
 /// Inversion notation: Perl detects inversions (CT to AG) and uses `inv`.
@@ -1826,6 +1816,228 @@ fn concordance_hgvsc_inversion_uses_inv_notation() {
     assert!(
         !notation.contains("delins"),
         "should not use 'delins' for a true inversion"
+    );
+}
+
+// HGVSp parity with Perl's `hgvs_protein` (`coding::perl_hgvs_protein`). Every
+// expected string is what `TranscriptVariationAllele::hgvs_protein` prints for the
+// same fixture; the derivations cite its helpers. `make_test_transcript()` has no
+// cached UTR strings and no FASTA, so the alternate CDS carries `N`-padded UTRs.
+
+/// `hgvsp_stop(utr)`: the terminal-stop fixture with a 3' UTR of `utr`.
+fn make_transcript_with_terminal_stop_and_utr(utr: &str) -> Transcript {
+    let mut tx = make_transcript_with_terminal_stop();
+    if let Some(ref mut vefc) = tx.vefc {
+        vefc.three_prime_utr = Some(utr.to_string());
+    }
+    tx
+}
+
+fn hgvsp_on(
+    tx: &Transcript,
+    start: u64,
+    end: u64,
+    ref_allele: &[u8],
+    alt_allele: &[u8],
+) -> Option<String> {
+    let variant = InputVariant::new(
+        "21".into(),
+        start,
+        end,
+        ref_allele.to_vec(),
+        alt_allele.to_vec(),
+    );
+    crate::hgvs::generate_hgvsp(&variant, tx, None)
+}
+
+/// H07. In-frame insertion between codons 3 and 4 whose reference peptide window
+/// is empty: `_get_hgvs_protein_type` reads `ins`, `_get_surrounding_peptides`
+/// names the flanking residues.
+#[test]
+fn concordance_hgvsp_h07_insertion_between_codons_names_flanking_residues() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"AGA").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3_Lys4insArg")
+    );
+}
+
+/// H08. The inserted residue equals the residue before the site:
+/// `_check_for_peptide_duplication` turns the insertion into a duplication.
+#[test]
+fn concordance_hgvsp_h08_insertion_equal_to_preceding_residue_is_dup() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"GGA").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3dup")
+    );
+}
+
+/// H09. Two inserted residues equal to residues 2 and 3: a ranged duplication.
+#[test]
+fn concordance_hgvsp_h09_two_residue_duplication_is_ranged() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"GCTGGA").as_deref(),
+        Some("ENSP00000000001.1:p.Ala2_Gly3dup")
+    );
+}
+
+/// H10. The inserted residue equals the residue after the site: `_shift_3prime`
+/// moves the insertion past Lys4, and the duplication check then matches it.
+#[test]
+fn concordance_hgvsp_h10_insertion_shifts_past_matching_residue_then_dups() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"AAA").as_deref(),
+        Some("ENSP00000000001.1:p.Lys4dup")
+    );
+}
+
+/// H11a. An inserted stop: `*` becomes `X`, then `Xaa`, then `Ter`.
+#[test]
+fn concordance_hgvsp_h11a_inserted_stop_is_ter() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"TAA").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3_Lys4insTer")
+    );
+}
+
+/// H11b. A residue then a stop: both are reported.
+#[test]
+fn concordance_hgvsp_h11b_residue_then_stop_reports_both() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"GATTAA").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3_Lys4insAspTer")
+    );
+}
+
+/// H11c. A stop then a residue: `s/Ter\w+/Ter/` drops what follows the stop.
+#[test]
+fn concordance_hgvsp_h11c_stop_then_residue_reports_stop_only() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"TAAGAT").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3_Lys4insTer")
+    );
+}
+
+/// H12a. Stop-loss substitution with the next stop in the 3' UTR: the first stop
+/// of the alternate translation sits at residue 286, and
+/// `_stop_loss_extra_AA` counts 286 - 1 - 282 = 3.
+#[test]
+fn concordance_hgvsp_h12a_stop_loss_substitution_counts_to_utr_stop() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCATAA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_296, 25_004_296, b"T", b"C").as_deref(),
+        Some("ENSP00000000001.1:p.Ter283GlnextTer3")
+    );
+}
+
+/// H12b. Stop-loss substitution with no stop in the alternate translation: `?`.
+#[test]
+fn concordance_hgvsp_h12b_stop_loss_substitution_without_downstream_stop() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCAGCA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_296, 25_004_296, b"T", b"C").as_deref(),
+        Some("ENSP00000000001.1:p.Ter283GlnextTer?")
+    );
+}
+
+/// H13a. In-frame deletion of the last residue and the stop: the reference
+/// peptide is `A*`, the type `del`, and the stop-loss branch of
+/// `_get_hgvs_protein_format` counts 284 - 1 - 282 = 1 residue to the UTR stop.
+#[test]
+fn concordance_hgvsp_h13a_deletion_of_last_residue_and_stop() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCATAA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_293, 25_004_298, b"GCTTAA", b"-").as_deref(),
+        Some("ENSP00000000001.1:p.Ala282_Ter283delextTer1")
+    );
+}
+
+/// H13b. In-frame deletion of the stop codon alone: 285 - 1 - 282 = 2.
+#[test]
+fn concordance_hgvsp_h13b_deletion_of_stop_codon() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCATAA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_296, 25_004_298, b"TAA", b"-").as_deref(),
+        Some("ENSP00000000001.1:p.Ter283delextTer2")
+    );
+}
+
+/// H13c. An insertion inside the stop codon that recreates a stop: `_clip_alleles`
+/// returns `=` on the leading stops, `_get_hgvs_protein_type` then reads `X`
+/// against `X*` as `delins`, and the alt `TerTer` collapses to `Ter`.
+#[test]
+fn concordance_hgvsp_h13c_insertion_in_stop_codon_recreating_stop() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCATAA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_297, 25_004_296, b"-", b"AGT").as_deref(),
+        Some("ENSP00000000001.1:p.Ter283delinsTer")
+    );
+}
+
+/// H14. In-frame deletion of one codon whose following residue differs:
+/// `_shift_3prime` does not move it.
+#[test]
+fn concordance_hgvsp_h14_single_codon_deletion_does_not_shift() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_056, 25_000_058, b"GGA", b"-").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3del")
+    );
+}
+
+/// H15. Two codons replaced by two others: `delins` over the range.
+#[test]
+fn concordance_hgvsp_h15_two_codon_replacement_is_delins() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_053, 25_000_058, b"GCTGGA", b"AAAAAA").as_deref(),
+        Some("ENSP00000000001.1:p.Ala2_Gly3delinsLysLys")
+    );
+}
+
+/// H16. Deleting the start codon with a 5' UTR that ends in `ATG`: Perl's
+/// `start_lost` predicate holds and it prints `Met1?`; this engine keeps
+/// `start_retained_variant` (the CDS is a suffix of the edited sequence) and
+/// drops `start_lost`, so the short-circuit is suppressed and the deletion is
+/// described as one. Intended divergence.
+#[test]
+fn concordance_hgvsp_h16_start_codon_deletion_with_retained_start_is_del() {
+    let mut tx = make_test_transcript();
+    if let Some(ref mut vefc) = tx.vefc {
+        vefc.five_prime_utr = Some(format!("{}GCCACATG", "GCCACC".repeat(7)));
+    }
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_050, 25_000_052, b"ATG", b"-").as_deref(),
+        Some("ENSP00000000001.1:p.Met1del")
+    );
+}
+
+/// H17. An in-frame insertion of a second Met after the start codon: start
+/// retained only, `_clip_alleles` leaves an insertion of `M` at 2, and the
+/// duplication check matches the residue before it.
+#[test]
+fn concordance_hgvsp_h17_insertion_duplicating_the_start_methionine() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_052, 25_000_051, b"-", b"GAT").as_deref(),
+        Some("ENSP00000000001.1:p.Met1dup")
+    );
+}
+
+/// H18. Deleting one codon of a long Ala run: `_shift_3prime` walks the deletion
+/// to the run's last residue.
+#[test]
+fn concordance_hgvsp_h18_deletion_in_a_repeat_shifts_to_its_end() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_068, 25_000_070, b"GCT", b"-").as_deref(),
+        Some("ENSP00000000001.1:p.Ala283del")
     );
 }
 

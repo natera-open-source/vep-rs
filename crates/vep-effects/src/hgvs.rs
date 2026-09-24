@@ -5,17 +5,13 @@
 //!
 //! Produces HGVSc (coding DNA) and HGVSp (protein) notation strings following
 //! the Human Genome Variation Society nomenclature conventions, matching Perl
-//! VEP's output for clinical reporting compatibility.
+//! VEP's output.
 //!
 //! Reference: <https://varnomen.hgvs.org/>
 
-use vep_core::codon::translate_codon;
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 use vep_core::variant::{InputVariant, VariantClass};
-
-use crate::coding::compute_codon_window_peptide_alleles;
-use crate::mapper::{map_genomic_span_to_cds_bounds, CdsSpanBounds};
 
 /// Convert a single-letter amino acid code to its three-letter abbreviation.
 pub fn amino_acid_three_letter(one_letter: u8) -> &'static str {
@@ -43,6 +39,10 @@ pub fn amino_acid_three_letter(one_letter: u8) -> &'static str {
         b'*' => "Ter",
         b'X' => "Xaa",
         b'U' => "Sec",
+        b'B' => "Asx",
+        b'Z' => "Glx",
+        b'J' => "Xle",
+        b'O' => "Pyl",
         _ => "Xaa",
     }
 }
@@ -871,23 +871,21 @@ fn reverse_complement_string(seq: &[u8]) -> String {
         .collect()
 }
 
-/// Generate HGVSp notation for a variant-transcript pair.
+/// Generate HGVSp notation for a variant-transcript pair: Perl VEP's
+/// `hgvs_protein` (`coding::perl_hgvs_protein`) behind the `ENSP...:p.` prefix.
 ///
-/// Returns notation like:
-/// - `ENSP00000000001.1:p.Ala41Val` (missense)
-/// - `ENSP00000000001.1:p.Ala41=` (synonymous)
-/// - `ENSP00000000001.1:p.Arg41Ter` (nonsense / stop_gained)
-/// - `ENSP00000000001.1:p.Arg41GlyfsTer23` (frameshift)
-/// - `ENSP00000000001.1:p.Ala41_Gly42insVal` (inframe insertion)
-/// - `ENSP00000000001.1:p.Ala41del` (inframe deletion)
-/// - `ENSP00000000001.1:p.Met1?` (start_lost)
+/// Returns `None` when the transcript has no coding model or protein id, the
+/// alternate allele carries a character outside `ACGT-` or equals the
+/// reference, or Perl would return `undef` for the span. An insertion or
+/// deletion is first shifted to its most 3' position on the transcript strand
+/// (Perl's `_return_3prime(1)`, applied for HGVS whatever `--shift_3prime`
+/// says) when a reference FASTA is available; the shifted alleles are the
+/// deleted reference bases at the new position and the rotated insertion.
 pub fn generate_hgvsp(
     variant: &InputVariant,
     transcript: &Transcript,
-    consequences: &[vep_core::consequence::Consequence],
+    reference_fasta: Option<&vep_fasta::IndexedFasta>,
 ) -> Option<String> {
-    use vep_core::consequence::Consequence;
-
     let vefc = transcript.vefc.as_ref()?;
     let mapper = vefc.mapper.as_ref()?;
     let has_coding_model = transcript.translation.is_some()
@@ -897,498 +895,51 @@ pub fn generate_hgvsp(
         return None;
     }
 
-    let translateable_seq = vefc.translateable_seq.as_ref()?;
-    if translateable_seq.is_empty() {
+    let alt_allele = variant.alt_allele();
+    if alt_allele
+        .iter()
+        .any(|b| !matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T' | b'-'))
+    {
+        return None;
+    }
+    if alt_allele == variant.ref_allele.as_slice() {
         return None;
     }
 
     let protein_id = transcript.protein_id.as_ref()?;
-    let protein_prefix = if let Some(ref translation) = transcript.translation {
-        if let Some(version) = translation.version {
-            format!("{protein_id}.{version}:p.")
-        } else {
-            format!("{protein_id}:p.")
-        }
-    } else {
-        format!("{protein_id}:p.")
+    let protein_prefix = match transcript.translation.as_ref().and_then(|t| t.version) {
+        Some(version) => format!("{protein_id}.{version}:p."),
+        None => format!("{protein_id}:p."),
     };
 
-    let has_frameshift = consequences.contains(&Consequence::FrameshiftVariant);
-    let has_stop_gained = consequences.contains(&Consequence::StopGained);
-    let has_stop_lost = consequences.contains(&Consequence::StopLost);
-    let has_start_lost = consequences.contains(&Consequence::StartLost);
-    let has_missense = consequences.contains(&Consequence::MissenseVariant);
-    let has_synonymous = consequences.contains(&Consequence::SynonymousVariant);
-    let has_inframe_ins = consequences.contains(&Consequence::InframeInsertion);
-    let has_inframe_del = consequences.contains(&Consequence::InframeDeletion);
-    let has_stop_retained = consequences.contains(&Consequence::StopRetainedVariant);
-    let has_start_retained = consequences.contains(&Consequence::StartRetainedVariant);
-    let has_protein_altering = consequences.contains(&Consequence::ProteinAlteringVariant);
-
-    let bounds = map_genomic_span_to_cds_bounds(variant.start, variant.end, transcript)?;
-
-    if has_start_lost {
-        return Some(format!("{protein_prefix}Met1?"));
-    }
-
-    if has_start_retained {
-        return Some(format!("{protein_prefix}Met1="));
-    }
-
-    let cds = translateable_seq.as_bytes();
-    let cds_start = bounds.cds_start;
-    if cds_start == 0 {
-        return None;
-    }
-
-    if has_frameshift {
-        return generate_hgvsp_frameshift(variant, transcript, &bounds, &protein_prefix, cds);
-    }
-
-    if has_missense || has_synonymous || has_stop_gained || has_stop_retained || has_stop_lost {
-        let sub_flags = SubstitutionFlags {
-            has_synonymous,
-            has_stop_gained,
-            has_stop_lost,
-        };
-        return generate_hgvsp_substitution(
+    let shifted = reference_fasta.and_then(|fasta| {
+        crate::consequences::shift_indel_3prime_coords(variant, transcript, fasta, 2000)
+    });
+    let notation = match shifted {
+        Some((start, end)) if (start, end) != (variant.start, variant.end) => {
+            let ref_allele = normalized_hgvs_ref_allele(variant, shifted, reference_fasta)
+                .unwrap_or_else(|| b"-".to_vec());
+            let alt_allele = normalized_hgvs_alt_allele(variant, transcript, shifted)
+                .unwrap_or_else(|| b"-".to_vec());
+            let shifted_variant =
+                InputVariant::new(variant.chr.clone(), start, end, ref_allele, alt_allele);
+            crate::coding::perl_hgvs_protein(
+                &shifted_variant,
+                transcript,
+                start,
+                end,
+                reference_fasta,
+            )?
+        }
+        _ => crate::coding::perl_hgvs_protein(
             variant,
             transcript,
-            &bounds,
-            &protein_prefix,
-            cds,
-            &sub_flags,
-        );
-    }
-
-    if has_inframe_ins {
-        return generate_hgvsp_inframe_insertion(
-            variant,
-            transcript,
-            &bounds,
-            &protein_prefix,
-            cds,
-        );
-    }
-
-    if has_inframe_del {
-        return generate_hgvsp_inframe_deletion(variant, transcript, &bounds, &protein_prefix, cds);
-    }
-
-    if has_protein_altering {
-        return generate_hgvsp_protein_altering(variant, transcript, &bounds, &protein_prefix, cds);
-    }
-
-    None
-}
-
-/// Consequence flags for HGVSp substitution generation.
-struct SubstitutionFlags {
-    has_synonymous: bool,
-    has_stop_gained: bool,
-    has_stop_lost: bool,
-}
-
-/// Generate HGVSp for a simple substitution (SNV).
-fn generate_hgvsp_substitution(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    protein_prefix: &str,
-    cds: &[u8],
-    flags: &SubstitutionFlags,
-) -> Option<String> {
-    let cds_idx = (bounds.cds_start - 1) as usize;
-    let codon_start = (cds_idx / 3) * 3;
-
-    if codon_start + 3 > cds.len() {
-        return None;
-    }
-
-    let ref_codon = &cds[codon_start..codon_start + 3];
-    let ref_aa = translate_codon(ref_codon);
-    let protein_pos = bounds.translation_start;
-    let ref_three = amino_acid_three_letter(ref_aa);
-
-    let pos_in_codon = cds_idx % 3;
-    let alt_allele = variant.alt_allele();
-    let alt_is_dash = alt_allele == b"-" || alt_allele.is_empty();
-
-    if alt_is_dash || alt_allele.len() != 1 || variant.ref_allele.len() != 1 {
-        let (ref_pep, alt_pep) = compute_codon_window_peptide_alleles(variant, transcript, bounds)?;
-        if ref_pep.is_empty() || alt_pep.is_empty() {
-            return None;
-        }
-        let ref_aa_byte = ref_pep[0];
-        let alt_aa_byte = alt_pep[0];
-        let r3 = amino_acid_three_letter(ref_aa_byte);
-        let a3 = amino_acid_three_letter(alt_aa_byte);
-
-        if ref_aa_byte == alt_aa_byte {
-            return Some(format!("{protein_prefix}{r3}{protein_pos}="));
-        }
-        return Some(format!("{protein_prefix}{r3}{protein_pos}{a3}"));
-    }
-
-    let alt_base = alt_allele[0];
-    let effective_alt = if transcript.strand == Strand::Reverse {
-        vep_core::codon::complement_base(alt_base)
-    } else {
-        alt_base
+            variant.start,
+            variant.end,
+            reference_fasta,
+        )?,
     };
-
-    let mut alt_codon = ref_codon.to_vec();
-    alt_codon[pos_in_codon] = effective_alt.to_ascii_uppercase();
-    let alt_aa = translate_codon(&alt_codon);
-    let alt_three = amino_acid_three_letter(alt_aa);
-
-    if flags.has_synonymous || ref_aa == alt_aa {
-        Some(format!("{protein_prefix}{ref_three}{protein_pos}="))
-    } else if flags.has_stop_gained {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}"
-        ))
-    } else if flags.has_stop_lost {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}ext*?"
-        ))
-    } else {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}"
-        ))
-    }
-}
-
-/// Generate HGVSp for a frameshift variant.
-///
-/// Format: `p.Ref{pos}AltfsTer{stop_position}`
-/// Where stop_position is the distance to the nearest downstream stop codon.
-fn generate_hgvsp_frameshift(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    protein_prefix: &str,
-    cds: &[u8],
-) -> Option<String> {
-    let protein_pos = bounds.translation_start;
-
-    let cds_idx = (bounds.cds_start.min(bounds.cds_end).saturating_sub(1)) as usize;
-    let codon_start = (cds_idx / 3) * 3;
-    let ref_aa = if codon_start + 3 <= cds.len() {
-        translate_codon(&cds[codon_start..codon_start + 3])
-    } else {
-        b'X'
-    };
-    let ref_three = amino_acid_three_letter(ref_aa);
-
-    let (_, alt_pep) = compute_codon_window_peptide_alleles(variant, transcript, bounds)
-        .unwrap_or((vec![ref_aa], vec![b'X']));
-
-    let first_alt_aa = if !alt_pep.is_empty() {
-        alt_pep[0]
-    } else {
-        b'X'
-    };
-    let alt_three = amino_acid_three_letter(first_alt_aa);
-
-    let ter_pos = find_frameshift_ter_position(variant, transcript, bounds, cds);
-
-    if first_alt_aa == b'*' {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}"
-        ))
-    } else if let Some(ter_distance) = ter_pos {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}fsTer{ter_distance}"
-        ))
-    } else {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}fsTer?"
-        ))
-    }
-}
-
-/// Find the distance to the nearest stop codon in the alternate reading frame
-/// after a frameshift.
-fn find_frameshift_ter_position(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    cds: &[u8],
-) -> Option<u64> {
-    let vefc = transcript.vefc.as_ref()?;
-
-    let cds_start = bounds.cds_start;
-    let cds_end = bounds.cds_end;
-    let splice_start = (cds_start.min(cds_end) - 1) as usize;
-    let splice_end = cds_start.max(cds_end) as usize;
-
-    let alt_allele = variant.alt_allele();
-    let alt_is_dash = alt_allele == b"-" || alt_allele.is_empty();
-
-    let alt_seq = if alt_is_dash {
-        Vec::new()
-    } else if transcript.strand == Strand::Reverse {
-        crate::coding::reverse_complement_pub(alt_allele)
-    } else {
-        alt_allele.to_vec()
-    };
-
-    if splice_start > cds.len() {
-        return None;
-    }
-    let actual_splice_end = splice_end.min(cds.len());
-
-    let mut alt_cds = Vec::with_capacity(cds.len());
-    alt_cds.extend_from_slice(&cds[..splice_start]);
-    alt_cds.extend_from_slice(&alt_seq);
-    if actual_splice_end <= cds.len() {
-        alt_cds.extend_from_slice(&cds[actual_splice_end..]);
-    }
-
-    // The 3' UTR is appended so a frameshift's new stop can lie past the CDS.
-    if let Some(utr) = vefc.three_prime_utr.as_ref() {
-        if !utr.is_empty() {
-            alt_cds.extend_from_slice(utr.as_bytes());
-        }
-    }
-
-    let scan_start = (splice_start / 3) * 3;
-
-    let mut codon_idx = scan_start;
-    let mut protein_offset = 0u64;
-
-    while codon_idx + 3 <= alt_cds.len() {
-        let codon = &alt_cds[codon_idx..codon_idx + 3];
-        let aa = translate_codon(codon);
-        protein_offset += 1;
-
-        if aa == b'*' {
-            return Some(protein_offset);
-        }
-        codon_idx += 3;
-    }
-
-    None
-}
-
-/// Generate HGVSp for an inframe insertion.
-fn generate_hgvsp_inframe_insertion(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    protein_prefix: &str,
-    cds: &[u8],
-) -> Option<String> {
-    let (ref_pep, alt_pep) = compute_codon_window_peptide_alleles(variant, transcript, bounds)?;
-
-    if ref_pep.is_empty() {
-        return None;
-    }
-
-    let protein_pos = bounds.translation_start;
-
-    let mut prefix_len = 0;
-    let min_len = ref_pep.len().min(alt_pep.len());
-    while prefix_len < min_len && ref_pep[prefix_len] == alt_pep[prefix_len] {
-        prefix_len += 1;
-    }
-
-    let mut suffix_len = 0;
-    while suffix_len < (min_len - prefix_len)
-        && ref_pep[ref_pep.len() - 1 - suffix_len] == alt_pep[alt_pep.len() - 1 - suffix_len]
-    {
-        suffix_len += 1;
-    }
-
-    let inserted = &alt_pep[prefix_len..alt_pep.len() - suffix_len];
-    if inserted.is_empty() {
-        let ref_aa = ref_pep[0];
-        let ref_three = amino_acid_three_letter(ref_aa);
-        return Some(format!("{protein_prefix}{ref_three}{protein_pos}="));
-    }
-
-    let flank_start_pos = protein_pos + prefix_len as u64;
-    let flank_end_pos = flank_start_pos + 1;
-
-    let flank_start_idx = (flank_start_pos - 1) as usize;
-    let flank_end_idx = flank_start_idx + 1;
-
-    let start_aa = if flank_start_idx * 3 + 3 <= cds.len() {
-        translate_codon(&cds[flank_start_idx * 3..flank_start_idx * 3 + 3])
-    } else if prefix_len < ref_pep.len() {
-        ref_pep[prefix_len.saturating_sub(1)]
-    } else {
-        b'X'
-    };
-    let end_aa = if flank_end_idx * 3 + 3 <= cds.len() {
-        translate_codon(&cds[flank_end_idx * 3..flank_end_idx * 3 + 3])
-    } else {
-        b'X'
-    };
-
-    let start_three = amino_acid_three_letter(start_aa);
-    let end_three = amino_acid_three_letter(end_aa);
-
-    let inserted_str: String = inserted
-        .iter()
-        .map(|&aa| amino_acid_three_letter(aa))
-        .collect();
-
-    if inserted.len() == 1 && flank_start_pos > 0 {
-        // A single inserted residue equal to the preceding one is a duplication.
-        if inserted[0] == start_aa {
-            return Some(format!("{protein_prefix}{start_three}{flank_start_pos}dup"));
-        }
-    }
-
-    Some(format!(
-        "{protein_prefix}{start_three}{flank_start_pos}_{end_three}{flank_end_pos}ins{inserted_str}"
-    ))
-}
-
-/// Generate HGVSp for an inframe deletion.
-fn generate_hgvsp_inframe_deletion(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    protein_prefix: &str,
-    _cds: &[u8],
-) -> Option<String> {
-    let (ref_pep, alt_pep) = compute_codon_window_peptide_alleles(variant, transcript, bounds)?;
-
-    if ref_pep.is_empty() {
-        return None;
-    }
-
-    let protein_pos = bounds.translation_start;
-
-    let mut prefix_len = 0;
-    let min_len = ref_pep.len().min(alt_pep.len());
-    while prefix_len < min_len && ref_pep[prefix_len] == alt_pep[prefix_len] {
-        prefix_len += 1;
-    }
-
-    let mut suffix_len = 0;
-    while suffix_len < (min_len - prefix_len)
-        && ref_pep[ref_pep.len() - 1 - suffix_len] == alt_pep[alt_pep.len() - 1 - suffix_len]
-    {
-        suffix_len += 1;
-    }
-
-    let deleted = &ref_pep[prefix_len..ref_pep.len() - suffix_len];
-    if deleted.is_empty() {
-        let ref_aa = ref_pep[0];
-        let ref_three = amino_acid_three_letter(ref_aa);
-        return Some(format!("{protein_prefix}{ref_three}{protein_pos}="));
-    }
-
-    let del_start_pos = protein_pos + prefix_len as u64;
-    let del_end_pos = del_start_pos + deleted.len() as u64 - 1;
-    let start_three = amino_acid_three_letter(deleted[0]);
-
-    if deleted.len() == 1 {
-        Some(format!("{protein_prefix}{start_three}{del_start_pos}del"))
-    } else {
-        let end_three = amino_acid_three_letter(deleted[deleted.len() - 1]);
-        Some(format!(
-            "{protein_prefix}{start_three}{del_start_pos}_{end_three}{del_end_pos}del"
-        ))
-    }
-}
-
-/// Generate HGVSp for a protein-altering variant (complex indel).
-fn generate_hgvsp_protein_altering(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    protein_prefix: &str,
-    _cds: &[u8],
-) -> Option<String> {
-    let (ref_pep, alt_pep) = compute_codon_window_peptide_alleles(variant, transcript, bounds)?;
-
-    if ref_pep.is_empty() {
-        return None;
-    }
-
-    let protein_pos = bounds.translation_start;
-
-    let mut prefix_len = 0;
-    let min_len = ref_pep.len().min(alt_pep.len());
-    while prefix_len < min_len && ref_pep[prefix_len] == alt_pep[prefix_len] {
-        prefix_len += 1;
-    }
-
-    let mut suffix_len = 0;
-    while suffix_len < (min_len - prefix_len)
-        && ref_pep[ref_pep.len() - 1 - suffix_len] == alt_pep[alt_pep.len() - 1 - suffix_len]
-    {
-        suffix_len += 1;
-    }
-
-    let ref_changed = &ref_pep[prefix_len..ref_pep.len() - suffix_len];
-    let alt_changed = &alt_pep[prefix_len..alt_pep.len() - suffix_len];
-
-    if ref_changed.is_empty() && alt_changed.is_empty() {
-        let ref_aa = ref_pep[0];
-        let ref_three = amino_acid_three_letter(ref_aa);
-        return Some(format!("{protein_prefix}{ref_three}{protein_pos}="));
-    }
-
-    let change_start_pos = protein_pos + prefix_len as u64;
-
-    if ref_changed.is_empty() {
-        let inserted_str: String = alt_changed
-            .iter()
-            .map(|&aa| amino_acid_three_letter(aa))
-            .collect();
-        let flank_start_pos = change_start_pos.saturating_sub(1).max(1);
-        let flank_end_pos = change_start_pos;
-        let start_three = if prefix_len > 0 {
-            amino_acid_three_letter(ref_pep[prefix_len - 1])
-        } else {
-            "Met"
-        };
-        let end_three = if prefix_len < ref_pep.len() {
-            amino_acid_three_letter(ref_pep[prefix_len])
-        } else {
-            "Ter"
-        };
-        return Some(format!(
-            "{protein_prefix}{start_three}{flank_start_pos}_{end_three}{flank_end_pos}ins{inserted_str}"
-        ));
-    }
-
-    if alt_changed.is_empty() {
-        let start_three = amino_acid_three_letter(ref_changed[0]);
-        if ref_changed.len() == 1 {
-            return Some(format!(
-                "{protein_prefix}{start_three}{change_start_pos}del"
-            ));
-        }
-        let end_pos = change_start_pos + ref_changed.len() as u64 - 1;
-        let end_three = amino_acid_three_letter(ref_changed[ref_changed.len() - 1]);
-        return Some(format!(
-            "{protein_prefix}{start_three}{change_start_pos}_{end_three}{end_pos}del"
-        ));
-    }
-
-    let start_three = amino_acid_three_letter(ref_changed[0]);
-    let alt_str: String = alt_changed
-        .iter()
-        .map(|&aa| amino_acid_three_letter(aa))
-        .collect();
-    if ref_changed.len() == 1 {
-        Some(format!(
-            "{protein_prefix}{start_three}{change_start_pos}delins{alt_str}"
-        ))
-    } else {
-        let end_pos = change_start_pos + ref_changed.len() as u64 - 1;
-        let end_three = amino_acid_three_letter(ref_changed[ref_changed.len() - 1]);
-        Some(format!(
-            "{protein_prefix}{start_three}{change_start_pos}_{end_three}{end_pos}delins{alt_str}"
-        ))
-    }
+    Some(format!("{protein_prefix}{notation}"))
 }
 
 #[cfg(test)]
@@ -1402,6 +953,10 @@ mod tests {
         assert_eq!(amino_acid_three_letter(b'M'), "Met");
         assert_eq!(amino_acid_three_letter(b'*'), "Ter");
         assert_eq!(amino_acid_three_letter(b'X'), "Xaa");
+        assert_eq!(amino_acid_three_letter(b'B'), "Asx");
+        assert_eq!(amino_acid_three_letter(b'Z'), "Glx");
+        assert_eq!(amino_acid_three_letter(b'J'), "Xle");
+        assert_eq!(amino_acid_three_letter(b'O'), "Pyl");
     }
 
     #[test]
@@ -1580,7 +1135,6 @@ mod tests {
     #[test]
     fn test_hgvsp_missense() {
         let tx = make_test_transcript();
-        use vep_core::consequence::Consequence;
         // CDS pos 5, GCT -> GAT = Ala -> Asp
         let variant = InputVariant::new(
             "21".into(),
@@ -1589,7 +1143,7 @@ mod tests {
             b"C".to_vec(),
             b"A".to_vec(),
         );
-        let hgvsp = generate_hgvsp(&variant, &tx, &[Consequence::MissenseVariant]);
+        let hgvsp = generate_hgvsp(&variant, &tx, None);
         assert!(hgvsp.is_some());
         let notation = hgvsp.unwrap();
         assert!(
@@ -1601,7 +1155,6 @@ mod tests {
     #[test]
     fn test_hgvsp_synonymous() {
         let tx = make_test_transcript();
-        use vep_core::consequence::Consequence;
         // CDS pos 6, GCT -> GCC = Ala -> Ala (synonymous)
         let variant = InputVariant::new(
             "21".into(),
@@ -1610,7 +1163,7 @@ mod tests {
             b"T".to_vec(),
             b"C".to_vec(),
         );
-        let hgvsp = generate_hgvsp(&variant, &tx, &[Consequence::SynonymousVariant]);
+        let hgvsp = generate_hgvsp(&variant, &tx, None);
         assert!(hgvsp.is_some());
         let notation = hgvsp.unwrap();
         assert!(
@@ -1622,7 +1175,6 @@ mod tests {
     #[test]
     fn test_hgvsp_stop_gained() {
         let tx = make_test_transcript();
-        use vep_core::consequence::Consequence;
         // CDS pos 7, GGA -> TGA = Gly -> Stop
         let variant = InputVariant::new(
             "21".into(),
@@ -1631,7 +1183,7 @@ mod tests {
             b"G".to_vec(),
             b"T".to_vec(),
         );
-        let hgvsp = generate_hgvsp(&variant, &tx, &[Consequence::StopGained]);
+        let hgvsp = generate_hgvsp(&variant, &tx, None);
         assert!(hgvsp.is_some());
         let notation = hgvsp.unwrap();
         assert!(
@@ -1643,7 +1195,6 @@ mod tests {
     #[test]
     fn test_hgvsp_start_lost() {
         let tx = make_test_transcript();
-        use vep_core::consequence::Consequence;
         // ATG -> ACG = Met -> Thr (start_lost)
         let variant = InputVariant::new(
             "21".into(),
@@ -1652,7 +1203,7 @@ mod tests {
             b"T".to_vec(),
             b"C".to_vec(),
         );
-        let hgvsp = generate_hgvsp(&variant, &tx, &[Consequence::StartLost]);
+        let hgvsp = generate_hgvsp(&variant, &tx, None);
         assert!(hgvsp.is_some());
         let notation = hgvsp.unwrap();
         assert!(
@@ -1664,22 +1215,18 @@ mod tests {
     #[test]
     fn test_hgvsp_frameshift() {
         let tx = make_test_transcript();
-        use vep_core::consequence::Consequence;
-        // 2bp insertion at CDS pos 3 = frameshift
+        // 2 bp insertion after the start codon (CDS 3|4): the alternate frame reads
+        // ATG AAG CTG ..., so residue 2 becomes Lys and no stop precedes the
+        // N-padded 3' UTR. An insertion inside ATG is a start loss (`Met1?`).
         let variant = InputVariant::new(
             "21".into(),
+            25_000_053,
             25_000_052,
-            25_000_051,
             b"-".to_vec(),
             b"AA".to_vec(),
         );
-        let hgvsp = generate_hgvsp(&variant, &tx, &[Consequence::FrameshiftVariant]);
-        assert!(hgvsp.is_some());
-        let notation = hgvsp.unwrap();
-        assert!(
-            notation.contains("fs"),
-            "Frameshift should contain 'fs', got: {notation}"
-        );
+        let hgvsp = generate_hgvsp(&variant, &tx, None);
+        assert_eq!(hgvsp.as_deref(), Some("ENSP00000000001.1:p.Ala2LysfsTer?"));
     }
 
     #[test]

@@ -489,7 +489,7 @@ fn calculate_terms(
     let (hgvsc, hgvsp) = if config.compute_hgvs {
         (
             crate::hgvs::generate_hgvsc(variant, transcript, config.reference_fasta.as_deref()),
-            crate::hgvs::generate_hgvsp(variant, transcript, &consequences),
+            crate::hgvs::generate_hgvsp(variant, transcript, config.reference_fasta.as_deref()),
         )
     } else {
         (None, None)
