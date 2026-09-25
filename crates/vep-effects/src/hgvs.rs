@@ -51,7 +51,7 @@ pub fn amino_acid_three_letter(one_letter: u8) -> &'static str {
 /// move an insertion or deletion of `len` bases: it compares against 1,000 bases
 /// of flank, so a pattern that fits the flank moves at most `1001 - len`
 /// positions and a longer one at most 1,000, except that on the reverse strand
-/// a 1,001-base pattern gets a loop bound of zero and never moves.
+/// `len == 1001` gets a loop bound of zero and never moves.
 fn hgvs_shift_limit(len: usize, reverse: bool) -> u64 {
     match len {
         0..=1000 => 1001 - len as u64,
