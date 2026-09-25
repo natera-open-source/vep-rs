@@ -2920,9 +2920,8 @@ pub fn perl_hgvs_protein(
     if !ev.coding_pred(transcript) {
         return None;
     }
-    let (Some(tl_start), Some(tl_end)) = (truthy(ev.span.tl_start), truthy(ev.span.tl_end)) else {
-        return None;
-    };
+    let tl_start = truthy(ev.span.tl_start)?;
+    let tl_end = truthy(ev.span.tl_end)?;
     let alt_pep = ev.peptide(false);
     let ref_pep = ev.peptide(true).filter(|p| !p.is_empty())?;
     let mut n = HgvsProteinNotation {
@@ -2942,7 +2941,7 @@ pub fn perl_hgvs_protein(
         return None;
     }
     hgvsp_peptides(&mut ev, &mut n)?;
-    Some(hgvsp_format(&mut ev, &mut n))
+    Some(hgvsp_format(&mut ev, &n))
 }
 
 /// Perl's `$hgvs_notation` hash. `ref_pep` and `alt_pep` are `None` where the
@@ -3016,27 +3015,27 @@ fn replace_xaa_with_ter(pep: &mut [u8]) {
 /// overwrites the type unconditionally, and the `dup` re-set applies only to
 /// nucleotide numbering.
 fn hgvsp_clip_alleles(n: &mut HgvsProteinNotation) {
-    let ref_pep = n.ref_pep.clone().unwrap_or_default();
-    let alt_pep = n.alt_pep.clone().unwrap_or_default();
-    n.original_ref = ref_pep.clone();
-    let mut check_ref: &[u8] = &ref_pep;
-    let mut check_alt: &[u8] = &alt_pep;
+    let ref_pep: &[u8] = n.ref_pep.as_deref().unwrap_or_default();
+    let alt_pep: &[u8] = n.alt_pep.as_deref().unwrap_or_default();
+    n.original_ref = ref_pep.to_vec();
+    let mut check_ref = ref_pep;
+    let mut check_alt = alt_pep;
     let mut preseq = Vec::new();
     for _ in 0..ref_pep.len() {
-        let (next_ref, next_alt) = (check_ref.first().copied(), check_alt.first().copied());
+        let next_ref = check_ref.first().copied();
+        let next_alt = check_alt.first().copied();
         if next_ref == Some(b'*') && next_alt == Some(b'*') {
             n.kind = HgvspKind::Eq;
             return;
         }
-        if next_ref.is_some() && next_ref == next_alt {
-            n.start += 1;
-            check_ref = &check_ref[1.min(check_ref.len())..];
-            check_alt = &check_alt[1.min(check_alt.len())..];
-            if let Some(b) = next_ref {
-                preseq.push(b);
+        match next_ref {
+            Some(shared) if next_alt == Some(shared) => {
+                n.start += 1;
+                check_ref = &check_ref[1..];
+                check_alt = &check_alt[1..];
+                preseq.push(shared);
             }
-        } else {
-            break;
+            _ => break,
         }
     }
     for _ in 0..check_ref.len() {
@@ -3163,7 +3162,7 @@ fn hgvsp_peptides(ev: &mut PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> O
 /// of the alternate CDS (3' UTR appended) differs from the reference peptide plus
 /// its stop, from `translation_start`. `Del` when the alternate translation ends
 /// before that position; `Eq` when both sides reach a stop together.
-fn hgvsp_fs_peptides(ev: &mut PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> Option<()> {
+fn hgvsp_fs_peptides(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> Option<()> {
     let alt_cds = ev.alternate_cds()?;
     if !alt_cds
         .iter()
@@ -3182,17 +3181,15 @@ fn hgvsp_fs_peptides(ev: &mut PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -
     }
     while n.start <= alt_trans.len() as i64 {
         let i = (n.start - 1) as usize;
-        let r: Vec<u8> = ref_trans.get(i).map(|&b| vec![b]).unwrap_or_default();
-        let a: Vec<u8> = alt_trans.get(i).map(|&b| vec![b]).unwrap_or_default();
-        let same = r == a;
-        let both_stop = r.as_slice() == b"*" && a.as_slice() == b"*";
-        n.ref_pep = Some(r);
-        n.alt_pep = Some(a);
-        if both_stop {
+        let r = ref_trans.get(i).copied();
+        let a = alt_trans.get(i).copied();
+        n.ref_pep = Some(r.into_iter().collect());
+        n.alt_pep = Some(a.into_iter().collect());
+        if r == Some(b'*') && a == Some(b'*') {
             n.kind = HgvspKind::Eq;
             return Some(());
         }
-        if !same {
+        if r != a {
             break;
         }
         n.start += 1;
@@ -3235,19 +3232,18 @@ fn hgvsp_surrounding(
 /// residues just before it (the table-1 reference translation plus `preseq`)
 /// becomes a `Dup` of those residues, three-lettered here and not again.
 fn hgvsp_check_duplication(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) {
-    let alt = n.alt_pep.clone().unwrap_or_default();
-    let reference_trans = perl_translate(ev.cds, 1);
-    let up_len = ((n.start - 1).max(0) as usize).min(reference_trans.len());
-    let mut upstream = reference_trans[..up_len].to_vec();
+    let alt: &[u8] = n.alt_pep.as_deref().unwrap_or_default();
+    let mut upstream = perl_translate(ev.cds, 1);
+    upstream.truncate((n.start - 1).max(0) as usize);
     upstream.extend_from_slice(&n.preseq);
     let test_new_start = n.start - alt.len() as i64 - 1;
     if test_new_start >= 0 && upstream.len() as i64 >= test_new_start + alt.len() as i64 {
         let s = test_new_start as usize;
-        if &upstream[s..s + alt.len()] == alt.as_slice() {
+        if &upstream[s..s + alt.len()] == alt {
             n.kind = HgvspKind::Dup;
             n.end = n.start - 1;
             n.start -= alt.len() as i64;
-            n.alt_pep = Some(seq3(&alt));
+            n.alt_pep = Some(seq3(alt));
         }
     }
 }
@@ -3301,12 +3297,11 @@ fn hgvsp_post_var_shift(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) {
     let Some(post_seq) = hgvsp_surrounding(ev, n.end + 1, &n.original_ref, None) else {
         return;
     };
-    let mut seq_to_check = match n.kind {
-        HgvspKind::Ins => n.alt_pep.clone(),
-        HgvspKind::Del => n.ref_pep.clone(),
+    let seq_to_check = match n.kind {
+        HgvspKind::Ins => n.alt_pep.get_or_insert_default(),
+        HgvspKind::Del => n.ref_pep.get_or_insert_default(),
         _ => return,
-    }
-    .unwrap_or_default();
+    };
     let deleted_length = seq_to_check.len() as i64;
     let mut i = 0i64;
     while i <= post_seq.len() as i64 - deleted_length {
@@ -3321,165 +3316,88 @@ fn hgvsp_post_var_shift(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) {
         }
         i += 1;
     }
-    match n.kind {
-        HgvspKind::Ins => n.alt_pep = Some(seq_to_check),
-        HgvspKind::Del => n.ref_pep = Some(seq_to_check),
-        _ => {}
-    }
 }
 
 /// `_get_hgvs_protein_format` (1834) with three-letter conversion on and no
 /// prediction parentheses.
-fn hgvsp_format(ev: &mut PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> String {
-    let ref_pep = n.ref_pep.clone().unwrap_or_default();
-    let mut alt = n.alt_pep.clone().unwrap_or_default();
-    let (start, end) = (n.start, n.end);
-    let first3 = |s: &[u8]| s[..3.min(s.len())].to_vec();
-    let last3 = |s: &[u8]| s[s.len().saturating_sub(3)..].to_vec();
-    let mut out = Vec::new();
-    let ext = |out: &mut Vec<u8>, parts: &[&[u8]]| {
-        for p in parts {
-            out.extend_from_slice(p);
-        }
-    };
-    let kind = n.kind;
+fn hgvsp_format(ev: &mut PerlCodingEval<'_>, n: &HgvsProteinNotation) -> String {
+    let ref_pep: &[u8] = n.ref_pep.as_deref().unwrap_or_default();
+    let alt: &[u8] = n.alt_pep.as_deref().unwrap_or_default();
+    let (start, end, kind) = (n.start, n.end, n.kind);
+    let text = |s: &[u8]| String::from_utf8_lossy(s).into_owned();
+    let first3 = |s: &[u8]| text(&s[..3.min(s.len())]);
+    let last3 = |s: &[u8]| text(&s[s.len().saturating_sub(3)..]);
     if ref_pep == alt && kind != HgvspKind::Fs && kind != HgvspKind::Ins {
-        ext(&mut out, &[&ref_pep, start.to_string().as_bytes(), b"="]);
+        format!("{}{start}=", text(ref_pep))
     } else if ev.stop_lost() && (kind == HgvspKind::Del || kind == HgvspKind::Sub) {
-        alt = first3(&alt);
-        let aa_til_stop = hgvsp_stop_loss_extra_aa(ev, start - 1, false)
-            .map_or_else(|| b"?".to_vec(), |v| v.to_string().into_bytes());
-        alt.extend_from_slice(b"extTer");
-        alt.extend_from_slice(&aa_til_stop);
+        let aa_til_stop = match hgvsp_stop_loss_extra_aa(ev, start - 1, false) {
+            Some(extra) => extra.to_string(),
+            None => "?".to_string(),
+        };
+        let alt = format!("{}extTer{aa_til_stop}", first3(alt));
         if ref_pep.len() > 3 && kind == HgvspKind::Del {
-            ext(
-                &mut out,
-                &[
-                    &first3(&ref_pep),
-                    start.to_string().as_bytes(),
-                    b"_",
-                    &last3(&ref_pep),
-                    end.to_string().as_bytes(),
-                    &alt,
-                ],
-            );
+            format!("{}{start}_{}{end}{alt}", first3(ref_pep), last3(ref_pep))
         } else {
-            ext(&mut out, &[&ref_pep, start.to_string().as_bytes(), &alt]);
+            format!("{}{start}{alt}", text(ref_pep))
         }
     } else if kind == HgvspKind::Dup {
         if start < end {
-            ext(
-                &mut out,
-                &[
-                    &first3(&alt),
-                    start.to_string().as_bytes(),
-                    b"_",
-                    &last3(&alt),
-                    end.to_string().as_bytes(),
-                    b"dup",
-                ],
-            );
+            format!("{}{start}_{}{end}dup", first3(alt), last3(alt))
         } else {
-            ext(&mut out, &[&alt, start.to_string().as_bytes(), b"dup"]);
+            format!("{}{start}dup", text(alt))
         }
     } else if kind == HgvspKind::Sub {
-        ext(&mut out, &[&ref_pep, start.to_string().as_bytes(), &alt]);
+        format!("{}{start}{}", text(ref_pep), text(alt))
     } else if kind == HgvspKind::Delins || kind == HgvspKind::Ins {
         // `s/Ter\w+/Ter/`: nothing after the first stop is reported.
+        let mut alt = alt.to_vec();
         if let Some(p) = alt.windows(3).position(|w| w == b"Ter") {
-            let tail = &alt[p + 3..];
-            let word_len = tail
+            let word_len = alt[p + 3..]
                 .iter()
                 .take_while(|b| b.is_ascii_alphanumeric() || **b == b'_')
                 .count();
-            if word_len > 0 {
-                alt.drain(p + 3..p + 3 + word_len);
-            }
+            alt.drain(p + 3..p + 3 + word_len);
         }
-        let ref_first = first3(&ref_pep);
-        let ref_last = if ref_pep.last() == Some(&b'X') {
-            b"Ter".to_vec()
+        let mut alt = text(&alt);
+        let ref_first = first3(ref_pep);
+        let ref_ends_in_x = ref_pep.last() == Some(&b'X');
+        let ref_last = if ref_ends_in_x {
+            "Ter".to_string()
         } else {
-            last3(&ref_pep)
+            last3(ref_pep)
         };
-        if ref_pep.last() == Some(&b'X') {
-            if let Some(v) = hgvsp_stop_loss_extra_aa(ev, start - 1, false) {
-                alt.extend_from_slice(b"extTer");
-                alt.extend_from_slice(v.to_string().as_bytes());
+        if ref_ends_in_x {
+            if let Some(extra) = hgvsp_stop_loss_extra_aa(ev, start - 1, false) {
+                alt.push_str(&format!("extTer{extra}"));
             }
         }
         if start == end && kind == HgvspKind::Delins {
-            ext(
-                &mut out,
-                &[&ref_first, start.to_string().as_bytes(), b"delins", &alt],
-            );
+            format!("{ref_first}{start}delins{alt}")
         } else {
-            let (s, e) = if start > end {
-                (end, start)
-            } else {
-                (start, end)
-            };
-            ext(
-                &mut out,
-                &[
-                    &ref_first,
-                    s.to_string().as_bytes(),
-                    b"_",
-                    &ref_last,
-                    e.to_string().as_bytes(),
-                    kind.as_str().as_bytes(),
-                    &alt,
-                ],
-            );
+            let (s, e) = (start.min(end), start.max(end));
+            format!("{ref_first}{s}_{ref_last}{e}{}{alt}", kind.as_str())
         }
     } else if kind == HgvspKind::Fs {
         if alt == b"Ter" {
-            ext(&mut out, &[&ref_pep, start.to_string().as_bytes(), &alt]);
+            format!("{}{start}{}", text(ref_pep), text(alt))
         } else {
-            let aa_til_stop = hgvsp_stop_loss_extra_aa(ev, start - 1, true)
-                .map_or_else(|| b"?".to_vec(), |v| v.to_string().into_bytes());
-            ext(
-                &mut out,
-                &[
-                    &ref_pep,
-                    start.to_string().as_bytes(),
-                    &alt,
-                    b"fsTer",
-                    &aa_til_stop,
-                ],
-            );
+            let aa_til_stop = match hgvsp_stop_loss_extra_aa(ev, start - 1, true) {
+                Some(extra) => extra.to_string(),
+                None => "?".to_string(),
+            };
+            format!("{}{start}{}fsTer{aa_til_stop}", text(ref_pep), text(alt))
         }
     } else if kind == HgvspKind::Del {
         if ref_pep.len() > 3 {
-            ext(
-                &mut out,
-                &[
-                    &first3(&ref_pep),
-                    start.to_string().as_bytes(),
-                    b"_",
-                    &last3(&ref_pep),
-                    end.to_string().as_bytes(),
-                    b"del",
-                ],
-            );
+            format!("{}{start}_{}{end}del", first3(ref_pep), last3(ref_pep))
         } else {
-            ext(&mut out, &[&ref_pep, start.to_string().as_bytes(), b"del"]);
+            format!("{}{start}del", text(ref_pep))
         }
     } else if start != end {
-        ext(
-            &mut out,
-            &[
-                &ref_pep,
-                start.to_string().as_bytes(),
-                b"_",
-                &alt,
-                end.to_string().as_bytes(),
-            ],
-        );
+        format!("{}{start}_{}{end}", text(ref_pep), text(alt))
     } else {
-        ext(&mut out, &[&ref_pep, start.to_string().as_bytes(), &alt]);
+        format!("{}{start}{}", text(ref_pep), text(alt))
     }
-    String::from_utf8_lossy(&out).into_owned()
 }
 
 impl<'a> PerlCodingEval<'a> {

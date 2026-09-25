@@ -912,33 +912,26 @@ pub fn generate_hgvsp(
         None => format!("{protein_id}:p."),
     };
 
-    let shifted = reference_fasta.and_then(|fasta| {
-        crate::consequences::shift_indel_3prime_coords(variant, transcript, fasta, 2000)
+    let shifted = reference_fasta
+        .and_then(|fasta| {
+            crate::consequences::shift_indel_3prime_coords(variant, transcript, fasta, 2000)
+        })
+        .filter(|&(start, end)| (start, end) != (variant.start, variant.end));
+    let shifted_variant = shifted.map(|(start, end)| {
+        let ref_allele = normalized_hgvs_ref_allele(variant, shifted, reference_fasta)
+            .unwrap_or_else(|| b"-".to_vec());
+        let alt_allele = normalized_hgvs_alt_allele(variant, transcript, shifted)
+            .unwrap_or_else(|| b"-".to_vec());
+        InputVariant::new(variant.chr.clone(), start, end, ref_allele, alt_allele)
     });
-    let notation = match shifted {
-        Some((start, end)) if (start, end) != (variant.start, variant.end) => {
-            let ref_allele = normalized_hgvs_ref_allele(variant, shifted, reference_fasta)
-                .unwrap_or_else(|| b"-".to_vec());
-            let alt_allele = normalized_hgvs_alt_allele(variant, transcript, shifted)
-                .unwrap_or_else(|| b"-".to_vec());
-            let shifted_variant =
-                InputVariant::new(variant.chr.clone(), start, end, ref_allele, alt_allele);
-            crate::coding::perl_hgvs_protein(
-                &shifted_variant,
-                transcript,
-                start,
-                end,
-                reference_fasta,
-            )?
-        }
-        _ => crate::coding::perl_hgvs_protein(
-            variant,
-            transcript,
-            variant.start,
-            variant.end,
-            reference_fasta,
-        )?,
-    };
+    let hgvs_variant = shifted_variant.as_ref().unwrap_or(variant);
+    let notation = crate::coding::perl_hgvs_protein(
+        hgvs_variant,
+        transcript,
+        hgvs_variant.start,
+        hgvs_variant.end,
+        reference_fasta,
+    )?;
     Some(format!("{protein_prefix}{notation}"))
 }
 
