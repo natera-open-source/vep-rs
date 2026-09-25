@@ -12,6 +12,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import build_golden_corpus as bgc  # noqa: E402
+import extract_reference as xr  # noqa: E402
 import prune_json_cache as pjc  # noqa: E402
 
 
@@ -120,6 +121,75 @@ def test_classify_marks_documented_and_unexplained_divergences(tmp_path: Path):
     assert by_loc["21:300"] == "splice_family_swap"
     assert "21:100" not in by_loc
     assert m["divergence_summary"] == {"start_cooccurrence_swap": 1, "splice_family_swap": 1}
+
+
+def test_select_focus_terms_take_more_exemplars(tmp_path: Path):
+    """A combination containing a focus term takes --focus-k exemplars; every other
+    combination takes --k."""
+    ref = tmp_path / "ref.txt"
+    rows = ""
+    vcf_lines = ""
+    for i in range(1, 6):
+        rows += _row(f"rs{i}", f"21:{i * 100}", "G", "ENST1", "inframe_insertion")
+        rows += _row(f"rs{i}", f"21:{i * 100}", "G", "ENST2", "intron_variant")
+        vcf_lines += f"21\t{i * 100}\trs{i}\tA\tG\t.\tPASS\t.\n"
+    ref.write_text(rows, encoding="utf-8")
+    vcf = tmp_path / "in.vcf"
+    vcf.write_text("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n" + vcf_lines, encoding="utf-8")
+    out = tmp_path / "corpus"
+    rc = bgc.main(["select", "--release", "115", "--assembly", "GRCh37", "--suite", f"s01={ref}={vcf}", "--out", str(out),
+                   "--k", "1", "--focus-term", "inframe_insertion", "--focus-k", "4", "--seed", "1", "--multi-allelic-per-suite", "0"])
+    assert rc == 0
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["focus_terms"] == ["inframe_insertion"] and m["focus_exemplars_per_combination"] == 4
+    assert m["combinations"]["inframe_insertion"]["exemplar_records"] == 4
+    # A record's combinations are the ones it was chosen for, so intron_variant keeps --k.
+    assert m["combinations"]["intron_variant"]["exemplar_records"] == 1
+    assert 4 <= len(m["records"]) <= 5
+
+
+def test_classify_records_field_divergences_on_agreeing_keys(tmp_path: Path):
+    """A named field that differs on a key whose consequence sets agree is a
+    field divergence (never documented, so `unexplained_residual`); a key whose sets
+    differ is a consequence divergence and its fields are not compared."""
+    corpus = tmp_path / "c"
+    corpus.mkdir()
+    (corpus / "manifest.json").write_text(json.dumps({"records": []}), encoding="utf-8")
+    vep = tmp_path / "vep.txt"
+    rs = tmp_path / "rs.txt"
+    vep.write_text(
+        _row("rs1", "21:100", "G", "ENST1", "missense_variant", "IMPACT=MODERATE;STRAND=1;HGVSc=ENST1.1:c.5C>A;HGVSp=ENSP1.1:p.Ala2Asp")
+        + _row("rs2", "21:200", "-", "ENST2", "inframe_insertion", "IMPACT=MODERATE;STRAND=1;HGVSc=ENST2.1:c.9_10insAGA;HGVSp=ENSP2.1:p.Gly3_Lys4insArg")
+        + _row("rs3", "21:300", "-", "ENST3", "start_lost,start_retained_variant", "IMPACT=HIGH;STRAND=1;HGVSp=ENSP3.1:p.Met1?"),
+        encoding="utf-8",
+    )
+    rs.write_text(
+        _row("rs1", "21:100", "G", "ENST1", "missense_variant", "IMPACT=MODERATE;STRAND=1;HGVSc=ENST1.1:c.5C>A;HGVSp=ENSP1.1:p.Ala2Asp")
+        + _row("rs2", "21:200", "-", "ENST2", "inframe_insertion", "IMPACT=MODERATE;STRAND=1;HGVSc=ENST2.1:c.9_10insAGA;HGVSp=-")
+        + _row("rs3", "21:300", "-", "ENST3", "start_retained_variant", "IMPACT=LOW;STRAND=1;HGVSp=ENSP3.1:p.Met1del"),
+        encoding="utf-8",
+    )
+    rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs), "--field", "HGVSc", "--field", "HGVSp"])
+    assert rc == 0
+    m = json.loads((corpus / "manifest.json").read_text())
+    assert m["fields_compared"] == ["HGVSc", "HGVSp"]
+    assert [(d["location"], d["field"], d["vep"], d["vep_rs"], d["expected_divergence"]) for d in m["field_divergences"]] == [
+        ("21:200", "HGVSp", "ENSP2.1:p.Gly3_Lys4insArg", "-", "unexplained_residual"),
+    ]
+    assert m["field_divergence_summary"] == {"unexplained_residual": 1}
+    assert {d["location"]: d["expected_divergence"] for d in m["divergences"]} == {"21:300": "start_cooccurrence_swap"}
+
+
+def test_extract_reference_writes_the_contig_and_its_index(tmp_path: Path):
+    src = tmp_path / "genome.fa"
+    src.write_text(">1 dna:chromosome\nACGTACGTAC\nGGGG\n>21 dna:chromosome chromosome:GRCh37:21:1:14:1 REF\nAACCGGTTAA\nCCGN\n>22\nTTTT\n", encoding="utf-8")
+    out = tmp_path / "reference.fa"
+    rc = xr.main([str(src), "--contig", "21", "--out", str(out)])
+    assert rc == 0
+    assert out.read_text(encoding="utf-8") == ">21\nAACCGGTTAA\nCCGN\n"
+    assert Path(str(out) + ".fai").read_text(encoding="utf-8") == "21\t14\t4\t10\t11\n"
+    with pytest.raises(SystemExit):
+        xr.main([str(src), "--contig", "MT", "--out", str(tmp_path / "none.fa")])
 
 
 def test_prune_keeps_reachable_transcripts_in_every_shard(tmp_path: Path):
@@ -231,9 +301,13 @@ def test_committed_expected_files_match_their_provenance_digests(corpus: Path):
         data = gzip.open(gz, "rb").read() if gz.is_file() else plain.read_bytes()
         assert hashlib.sha256(data).hexdigest() == digest, f"{corpus.name}/{name} differs from its recorded digest"
     manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["release"] == corpus.parent.name and manifest["assembly"] == corpus.name
+    # The directory is the assembly, optionally suffixed (`GRCh37-hgvs`).
+    assembly = corpus.name.split("-", 1)[0]
+    assert manifest["release"] == corpus.parent.name and manifest["assembly"] == assembly
     info = json.loads((corpus / "json_cache" / "info.json").read_text(encoding="utf-8"))
-    assert info["assembly"] == corpus.name and info["source_versions"], "info.json must carry the cache source versions"
+    assert info["assembly"] == assembly and info["source_versions"], "info.json must carry the cache source versions"
+    if "fasta" in manifest:
+        assert (corpus / manifest["fasta"]).is_file() and (corpus / (manifest["fasta"].removesuffix(".gz") + ".fai")).is_file()
 
 
 def _corpora_with_peptides() -> list[Path]:

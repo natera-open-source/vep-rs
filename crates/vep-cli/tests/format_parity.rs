@@ -23,7 +23,7 @@ fn check(corpus: &Corpus, label: &str, header: String, body: String, failures: &
     if !header.is_empty() || !body.is_empty() {
         failures.push(format!(
             "== corpus {}/{} ({label})\n{header}{body}",
-            corpus.release, corpus.assembly
+            corpus.release, corpus.name
         ));
     }
 }
@@ -119,7 +119,7 @@ fn parquet_round_trips_to_the_tab_output() {
         for shape in ["flat", "nested"] {
             let parquet_dir = tmp.path().join(format!(
                 "{}_{}_{shape}.parquet",
-                corpus.release, corpus.assembly
+                corpus.release, corpus.name
             ));
             let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
             cmd.arg("-i")
@@ -129,7 +129,7 @@ fn parquet_round_trips_to_the_tab_output() {
                 .arg("--offline")
                 .arg("--json_cache")
                 .arg(corpus.dir.join("json_cache"))
-                .args(["--species", "homo_sapiens", "--assembly", &corpus.assembly])
+                .args(["--species", "homo_sapiens", "--assembly", &corpus.name])
                 .args([
                     "--buffer_size",
                     "5000",
@@ -169,7 +169,7 @@ fn parquet_round_trips_to_the_tab_output() {
                 failures.push(format!(
                     "== corpus {}/{} (parquet {shape} round trip): {} tab rows vs {} round-trip rows; first difference at sorted line {first}:\n  tab:     {:?}\n  parquet: {:?}",
                     corpus.release,
-                    corpus.assembly,
+                    corpus.name,
                     expected_rows.len(),
                     actual_rows.len(),
                     expected_rows.get(first),
@@ -180,7 +180,7 @@ fn parquet_round_trips_to_the_tab_output() {
                 if let Some(report) = parquet_metadata_report(&parquet_dir) {
                     failures.push(format!(
                         "== corpus {}/{} (parquet metadata): {report}",
-                        corpus.release, corpus.assembly
+                        corpus.release, corpus.name
                     ));
                 }
             }
@@ -211,7 +211,7 @@ fn parquet_row_groups_prune_on_bloom_filters() {
         .arg("--offline")
         .arg("--json_cache")
         .arg(corpus.dir.join("json_cache"))
-        .args(["--species", "homo_sapiens", "--assembly", &corpus.assembly])
+        .args(["--species", "homo_sapiens", "--assembly", &corpus.name])
         .args([
             "--buffer_size",
             "5000",
