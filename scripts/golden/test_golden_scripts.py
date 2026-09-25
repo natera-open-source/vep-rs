@@ -146,6 +146,8 @@ def test_select_focus_terms_take_more_exemplars(tmp_path: Path):
     # A record's combinations are the ones it was chosen for, so intron_variant keeps --k.
     assert m["combinations"]["intron_variant"]["exemplar_records"] == 1
     assert 4 <= len(m["records"]) <= 5
+    # Without --flag or --fasta-name the manifest carries neither key.
+    assert "flags" not in m and "fasta" not in m
 
 
 def test_classify_records_field_divergences_on_agreeing_keys(tmp_path: Path):
@@ -169,10 +171,13 @@ def test_classify_records_field_divergences_on_agreeing_keys(tmp_path: Path):
         + _row("rs3", "21:300", "-", "ENST3", "start_retained_variant", "IMPACT=LOW;STRAND=1;HGVSp=ENSP3.1:p.Met1del"),
         encoding="utf-8",
     )
-    rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs), "--field", "HGVSc", "--field", "HGVSp"])
+    rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs), "--field", "HGVSc", "--field", "HGVSp",
+                   "--flag=--hgvs", "--fasta-name", "reference.fa.gz"])
     assert rc == 0
     m = json.loads((corpus / "manifest.json").read_text())
     assert m["fields_compared"] == ["HGVSc", "HGVSp"]
+    # The run options the harness replays on both engines travel with the manifest.
+    assert m["flags"] == ["--hgvs"] and m["fasta"] == "reference.fa.gz"
     assert [(d["location"], d["field"], d["vep"], d["vep_rs"], d["expected_divergence"]) for d in m["field_divergences"]] == [
         ("21:200", "HGVSp", "ENSP2.1:p.Gly3_Lys4insArg", "-", "unexplained_residual"),
     ]

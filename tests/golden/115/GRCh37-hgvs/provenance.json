@@ -1,0 +1,19 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:ff3c7e20d68e7e499c0bd79d398c7c121465db65f311ee87df425b2b600b853e",
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "binary_md5": "7cc598b402141365cf3d8733535a173b",
+  "arch": "arm64"
+ },
+ "vep_command": "vep -i input.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 115 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --hgvs --fasta reference.fa [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/115_GRCh37",
+ "json_cache_source": "json_cache_grch37",
+ "fasta": "GRCh37 chromosome 21, complete, from Homo_sapiens.GRCh37.75.dna.primary_assembly.fa (reference.fa.gz beside this file, with the .fai of the plain file)",
+ "generator": "scripts/golden/build_golden_corpus.py select --focus-term ... --focus-k 8; scripts/golden/extract_reference.py --contig 21; scripts/golden/prune_json_cache.py; scripts/golden/build_golden_corpus.py classify --field HGVSc --field HGVSp --flag=--hgvs --fasta-name reference.fa.gz",
+ "sha256": {
+  "default.txt": "1eb3e143664942973751c0eb0bb5d79edf5d7b4e80d3fd27d33486857c861db6",
+  "json.jsonl": "3162694a6c7cb524519137411204a64cad22a4646acd73b857f13a3230050e64",
+  "tab.txt": "595f8a1335e58b821a49bbd8f5c4186abd5b70cca640dfe200e95f6bdc6bba03",
+  "vcf.vcf": "8cf94c629aa1022573e556b888b3fbd58fbb1fb4e67c20e3618a5e5b87e0b721"
+ }
+}

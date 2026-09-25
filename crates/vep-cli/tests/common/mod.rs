@@ -118,16 +118,13 @@ fn corpus_fasta(corpus: &Corpus, out_dir: &Path) -> Option<PathBuf> {
     Some(target)
 }
 
-/// Runs the `vep` binary on the corpus in one output format and returns the
-/// output file's text. `format` is `default`, `tab`, `vcf`, `json` or `parquet`.
-/// The manifest's `flags` and `fasta` are applied after the fixed arguments.
-pub fn run_vep(corpus: &Corpus, format: &str, out_dir: &Path, extra: &[&str]) -> String {
-    let out = out_dir.join(format!("{}-{format}.out", corpus.name));
+/// The `vep` invocation every golden run starts from: the corpus input and
+/// cache, the fixed arguments, then the manifest's `flags` and `fasta`. The
+/// caller adds the output path and format.
+pub fn vep_command(corpus: &Corpus, out_dir: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
     cmd.arg("-i")
         .arg(corpus.dir.join("variants.vcf"))
-        .arg("-o")
-        .arg(&out)
         .arg("--offline")
         .arg("--json_cache")
         .arg(corpus.dir.join("json_cache"))
@@ -145,6 +142,15 @@ pub fn run_vep(corpus: &Corpus, format: &str, out_dir: &Path, extra: &[&str]) ->
     if let Some(fasta) = corpus_fasta(corpus, out_dir) {
         cmd.arg("--fasta").arg(fasta);
     }
+    cmd
+}
+
+/// Runs the `vep` binary on the corpus in one output format and returns the
+/// output file's text. `format` is `default`, `tab`, `vcf` or `json`.
+pub fn run_vep(corpus: &Corpus, format: &str, out_dir: &Path, extra: &[&str]) -> String {
+    let out = out_dir.join(format!("{}-{format}.out", corpus.name));
+    let mut cmd = vep_command(corpus, out_dir);
+    cmd.arg("-o").arg(&out);
     match format {
         "default" => {}
         "tab" => {

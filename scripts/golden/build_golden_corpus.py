@@ -347,6 +347,18 @@ def resolve_records(
     return found, headers, multi
 
 
+def run_options(args: argparse.Namespace) -> dict:
+    """The manifest keys the golden harness passes to both engines: `flags` (extra
+    command-line flags such as `--hgvs`) and `fasta` (a gzipped reference beside the
+    manifest, decompressed and passed to `--fasta`)."""
+    options: dict = {}
+    if getattr(args, "flag", None):
+        options["flags"] = list(args.flag)
+    if getattr(args, "fasta_name", None):
+        options["fasta"] = args.fasta_name
+    return options
+
+
 def cmd_select(args: argparse.Namespace) -> int:
     suites = [parse_suite_arg(s) for s in args.suite]
     rng = random.Random(args.seed)
@@ -421,6 +433,7 @@ def cmd_select(args: argparse.Namespace) -> int:
         "exemplars_per_combination": args.k,
         **({"focus_terms": sorted(args.focus_term), "focus_exemplars_per_combination": args.focus_k} if args.focus_term else {}),
         "max_span": args.max_span,
+        **run_options(args),
         # File names only: the directory each suite was staged in belongs to the build
         # host, not to the corpus, and the tests read neither field.
         "suites": {sid: {"reference": Path(ref).name, "input": Path(inp).name, "rows": sum(per_suite[sid].values()), "combinations": len(per_suite[sid])} for sid, ref, inp in suites},
@@ -557,6 +570,7 @@ def cmd_classify(args: argparse.Namespace) -> int:
         manifest["field_divergences"] = field_divergences
         manifest["field_divergence_summary"] = dict(Counter(d["expected_divergence"] for d in field_divergences))
         field_note = f"; field divergences {len(field_divergences)} ({manifest['field_divergence_summary']})"
+    manifest.update(run_options(args))
     (corpus / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
     print(f"divergent VEP rows {len(divergences)} ({manifest['divergence_summary']}); vep-rs-only tuples {len(extra_rust)}{field_note}")
     return 0
@@ -579,6 +593,13 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 1 if missing else 0
 
 
+def add_run_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--flag", action="append",
+                        help="a command-line flag both engines ran with, written --flag=--hgvs (repeatable), recorded as `flags`")
+    parser.add_argument("--fasta-name", default=None,
+                        help="file name of the gzipped reference beside the manifest, recorded as `fasta`")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -597,6 +618,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--focus-term", action="append",
                    help="a consequence term; combinations containing it take --focus-k exemplars")
     s.add_argument("--focus-k", type=int, default=None, help="exemplars per focus combination")
+    add_run_options(s)
     s.set_defaults(fn=cmd_select)
     c = sub.add_parser("classify")
     c.add_argument("--corpus", required=True)
@@ -604,6 +626,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--vep-rs-output", required=True, help="vep-rs default-format output for variants.vcf")
     c.add_argument("--field", action="append",
                    help="an Extra field (HGVSc, HGVSp) compared on every key whose consequence sets agree")
+    add_run_options(c)
     c.set_defaults(fn=cmd_classify)
     k = sub.add_parser("check")
     k.add_argument("--corpus", required=True)
