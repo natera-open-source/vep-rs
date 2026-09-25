@@ -3011,9 +3011,8 @@ fn replace_xaa_with_ter(pep: &mut [u8]) {
 /// `_clip_alleles` (2118) with `numbering` `p`: trims the residues the alleles
 /// share from the front, then from the back, moving `start` and `end`, and
 /// records `original_ref` and `preseq`. A leading stop on both sides returns
-/// `Eq` at once. The type re-set block is skipped: `_get_hgvs_protein_type`
-/// overwrites the type unconditionally, and the `dup` re-set applies only to
-/// nucleotide numbering.
+/// `Eq` at once. The type re-set block runs as written except its `dup` case,
+/// which applies only to nucleotide numbering.
 fn hgvsp_clip_alleles(n: &mut HgvsProteinNotation) {
     let ref_pep: &[u8] = n.ref_pep.as_deref().unwrap_or_default();
     let alt_pep: &[u8] = n.alt_pep.as_deref().unwrap_or_default();
@@ -3047,9 +3046,24 @@ fn hgvsp_clip_alleles(n: &mut HgvsProteinNotation) {
             break;
         }
     }
-    n.ref_pep = Some(check_ref.to_vec());
-    n.alt_pep = Some(check_alt.to_vec());
+    let kind = if check_ref == check_alt {
+        Some(HgvspKind::Eq)
+    } else if check_ref != b"-" && check_ref.len() == 1 && check_alt.len() == 1 {
+        Some(HgvspKind::Sub)
+    } else if check_ref.is_empty() && !check_alt.is_empty() {
+        Some(HgvspKind::Ins)
+    } else if !check_ref.is_empty() && check_alt.is_empty() {
+        Some(HgvspKind::Del)
+    } else {
+        None
+    };
+    let (check_ref, check_alt) = (check_ref.to_vec(), check_alt.to_vec());
+    n.ref_pep = Some(check_ref);
+    n.alt_pep = Some(check_alt);
     n.preseq = preseq;
+    if let Some(kind) = kind {
+        n.kind = kind;
+    }
 }
 
 /// `_get_hgvs_protein_type` (1977): `fs` from the frameshift predicate; else the
@@ -3082,7 +3096,8 @@ fn hgvsp_protein_type(ev: &mut PerlCodingEval<'_>, n: &mut HgvsProteinNotation) 
         };
         return;
     }
-    let len_less_dash = |s: &[u8]| s.iter().filter(|&&b| b != b'-').count() as i64;
+    // `_get_allele_length`: `s/\-//` strips the first dash only.
+    let len_less_dash = |s: &[u8]| (s.len() - usize::from(s.contains(&b'-'))) as i64;
     let (ref_length, alt_length) = (len_less_dash(ev.ref_allele), len_less_dash(ev.alt_allele));
     if alt_length > 1 {
         n.kind = if n.start == n.end + 1 {
