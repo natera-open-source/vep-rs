@@ -2555,6 +2555,25 @@ fn concordance_hgvsp_h20_straddling_deletion_is_a_frameshift_on_its_shifted_span
     );
 }
 
+/// H21. A `cds_start_NF` transcript whose first codon is `CTG` and whose cached
+/// peptide opens with the codon's own `L`: `Transcript::translate` writes `M` over
+/// position 1 of any start codon, and `_get_surrounding_peptides` reads that
+/// string, so an insertion between residues 1 and 2 names `Met1`, while a
+/// substitution inside the codon (`peptide`, per codon) still names `Leu1`.
+#[test]
+fn concordance_hgvsp_h21_start_codon_reads_met_in_the_transcript_peptide() {
+    let mut tx = make_start_codon_transcript("CTGGCTGGAAAATTCGAT", 50, 1, Some("LAGKFD"));
+    tx.flags = vec!["cds_start_NF".to_string()].into();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_053, 25_000_052, b"-", b"CCG").as_deref(),
+        Some("ENSP00000000001.1:p.Met1_Ala2insPro")
+    );
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_051, 25_000_051, b"T", b"A").as_deref(),
+        Some("ENSP00000000001.1:p.Leu1Gln")
+    );
+}
+
 /// No spurious UTR term on an SNV at the CDS/UTR boundary: the per-endpoint
 /// mapping already classifies a single position as coding or UTR, so
 /// `add_utr_for_overlapping_span()` must not fire for it.

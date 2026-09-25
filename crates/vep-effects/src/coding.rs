@@ -2085,6 +2085,24 @@ pub(crate) fn initial_met_edit(cds: &[u8], pep_seq: &[u8], table: u8) -> Option<
     Some(b'M')
 }
 
+/// A cached peptide as `Bio::EnsEMBL::Transcript::translate` writes it: position
+/// 1 is `M` whenever the first codon is a start codon of the table, whatever
+/// residue that codon translates to on its own. The JSON cache carries the codon's
+/// own residue there for a `CTG` or `TTG` start, and Perl's `_peptide` (the string
+/// `hgvs_protein` reads for surrounding, frameshift and deletion peptides) carries
+/// the `M`, so the rewrite is applied here. The per-codon translation of
+/// [`PerlCodingEval::peptide`] is untouched, as Perl's `peptide` is.
+fn with_initial_met<'a>(pep: &'a [u8], cds: &[u8], table: u8) -> Cow<'a, [u8]> {
+    match (pep.first(), cds.get(..3)) {
+        (Some(&first), Some(codon)) if first != b'M' && perl_is_start_codon(codon, table) => {
+            let mut owned = pep.to_vec();
+            owned[0] = b'M';
+            Cow::Owned(owned)
+        }
+        _ => Cow::Borrowed(pep),
+    }
+}
+
 /// `Bio::EnsEMBL::Transcript::translate` on the translateable sequence: whole
 /// codons only, the terminal stop dropped, a start codon read as `M`. This is
 /// the `_peptide` Perl compares against in `ref_eq_alt_sequence` when the cache
@@ -3532,7 +3550,7 @@ impl<'a> PerlCodingEval<'a> {
             .collect();
         let table = codon_table_for(transcript);
         let pep_seq: Cow<'a, [u8]> = match vefc.peptide.as_deref() {
-            Some(p) => Cow::Borrowed(p.as_bytes()),
+            Some(p) => with_initial_met(p.as_bytes(), cds, table),
             None => Cow::Owned(perl_transcript_peptide(cds, table)),
         };
         // A cache without UTR strings still has the UTR lengths: `N` placeholders
@@ -3593,12 +3611,24 @@ impl<'a> PerlCodingEval<'a> {
         })
     }
 
-    /// `_bvfo_preds` `coding`: the span overlaps the coding region and an exon and
-    /// projects to at least one CDS segment (a lone gap counts, as in Perl).
+    /// `_bvfo_preds` `coding`: the span is within the feature, overlaps the coding
+    /// region and an exon, and projects to at least one CDS segment (a lone gap
+    /// counts, as in Perl). `within_feature` is read from the coordinates as
+    /// given, so an insertion between the transcript's first base and the base
+    /// before it (`end < start`) is outside the feature; the tests after it read
+    /// the ordered span.
     fn coding_pred(&self, transcript: &Transcript) -> bool {
         let Some((crs, cre)) = self.coding_region else {
             return false;
         };
+        if !perl_overlap(
+            self.vf_start,
+            self.vf_end,
+            transcript.start as i64,
+            transcript.end as i64,
+        ) {
+            return false;
+        }
         let (lo, hi) = (
             self.vf_start.min(self.vf_end),
             self.vf_start.max(self.vf_end),
