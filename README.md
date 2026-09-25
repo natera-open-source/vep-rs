@@ -130,6 +130,42 @@ Wall time is the median of 20 independent machine measurements per cell, each on
 
 Across those cells vep-rs is faster than Perl VEP by a geometric mean of 176× (ARM) / 135× (x86) and faster than fastVEP by 9.07× (ARM) / 6.55× (x86). vep-rs was timed in one campaign and the comparators' SNP and indel cells in another, on the same instance types against the same dataset inventory, so every ratio in the table divides medians from separate machines and campaigns; the structural-variant cells of all three engines come from the vep-rs campaign. The structural-variant sets are annotated as 16 separate per-file invocations, so per-invocation start-up weighs far more there; vep-rs is faster than Perl VEP on those cells by 52.9× (GRCh37) and 23.1× (GRCh38) on ARM and 37.5× and 22.5× on x86 (0.61 s, 2.81 s, 0.79 s and 2.63 s against Perl's 32.28 s, 64.92 s, 29.62 s and 59.29 s). No fastVEP structural-variant speedup is given, because fastVEP emits 62% and 88% of Perl VEP's tuple volume on those sets and recovers only 12.5% and 12.7% of Perl VEP's tuples, so its wall time does not buy comparable annotations. Plugin output and HGVS notation are outside every F1 above.
 
+### Current release: v0.1.1
+
+The tables above are the figures the paper reports and stay as published. Each released version is measured again with the same protocol and stated here beside them: concordance from one run of the released binary on the ten suites (F1 is deterministic per binary and independent of architecture), and wall time as the median of 20 independent machine measurements per cell on both architectures, each on a fresh instance after a discarded warmup, on the same sites-only inputs and instance types as the paper's cells. The one difference from the paper's protocol: the discarded warmup's output is flushed and deleted before the timed run, so the timed run starts with the memory the warmup had. Every value below is recorded in [`docs/concordance-provenance/2026-09-25-release-v0.1.1.json`](docs/concordance-provenance/2026-09-25-release-v0.1.1.json): the per-suite concordance, each cell's median and P5 to P95 with the wall time every one of the 20 machines reported, and a same-day comparison against v0.1.0. The v0.1.0 and Perl VEP medians beside them are the ones in the tables above.
+
+| Dataset | Assembly | v0.1.1 Raw F1 | v0.1.1 Adj F1 | v0.1.0 Raw F1 | v0.1.0 Adj F1 |
+| --- | --- | --- | --- | --- | --- |
+| ClinVar full | GRCh37 | 0.999979 | 1.000000 | 0.999979 | 1.000000 |
+| ClinVar full | GRCh38 | 0.999974 | 1.000000 | 0.999974 | 1.000000 |
+| gnomAD v2.1.1 chr21 | GRCh37 | 0.999999 | 1.000000 | 0.999999 | 1.000000 |
+| gnomAD v4.1 chr21 | GRCh38 | 0.999999 | 1.000000 | 0.999999 | 1.000000 |
+| 1KG Phase 3 chr21 | GRCh37 | 1.000000 | 1.000000 | 1.000000 | 1.000000 |
+| 1KG high-cov chr21 | GRCh38 | 1.000000 | 1.000000 | 1.000000 | 1.000000 |
+| SV per-VCF (16 files) | GRCh37 | 0.975395 | 0.998524 | 0.975395 | 0.998524 |
+| SV per-VCF (16 files) | GRCh38 | 0.909998 | 0.998031 | 0.909998 | 0.998031 |
+
+| Arch | Dataset | Assembly | v0.1.1 (s) | P5 to P95 (s) | v0.1.0 (s) | Perl VEP (s) | v0.1.1 vs Perl |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ARM | ClinVar full | GRCh37 | 5.82 | 5.58 to 6.23 | 6.00 | 961.08 | 165× |
+| ARM | ClinVar full | GRCh38 | 11.71 | 11.46 to 12.10 | 12.35 | 2722.01 | 233× |
+| ARM | gnomAD v2.1.1 chr21 | GRCh37 | 6.78 | 6.74 to 6.93 | 6.84 | 1500.91 | 221× |
+| ARM | gnomAD v4.1 chr21 | GRCh38 | 13.03 | 12.54 to 13.79 | 13.92 | 3953.00 | 303× |
+| ARM | 1KG Phase 3 chr21 | GRCh37 | 0.85 | 0.80 to 0.96 | 1.05 | 106.29 | 125× |
+| ARM | 1KG high-cov chr21 | GRCh38 | 1.22 | 1.17 to 1.36 | 1.85 | 249.15 | 204× |
+| ARM | SV per-VCF (16 files) | GRCh37 | 0.60 | 0.58 to 0.64 | 0.61 | 32.28 | 53.8× |
+| ARM | SV per-VCF (16 files) | GRCh38 | 2.75 | 2.67 to 2.97 | 2.81 | 64.92 | 23.6× |
+| x86 | ClinVar full | GRCh37 | 6.10 | 5.92 to 6.35 | 6.20 | 849.97 | 139× |
+| x86 | ClinVar full | GRCh38 | 12.28 | 11.90 to 12.64 | 12.56 | 2378.35 | 194× |
+| x86 | gnomAD v2.1.1 chr21 | GRCh37 | 9.88 | 9.76 to 10.06 | 10.16 | 1341.62 | 136× |
+| x86 | gnomAD v4.1 chr21 | GRCh38 | 16.88 | 16.43 to 17.42 | 17.06 | 3276.52 | 194× |
+| x86 | 1KG Phase 3 chr21 | GRCh37 | 1.01 | 0.94 to 1.07 | 1.09 | 85.31 | 84.9× |
+| x86 | 1KG high-cov chr21 | GRCh38 | 1.43 | 1.35 to 1.50 | 1.75 | 205.16 | 143× |
+| x86 | SV per-VCF (16 files) | GRCh37 | 0.79 | 0.75 to 0.82 | 0.79 | 29.62 | 37.5× |
+| x86 | SV per-VCF (16 files) | GRCh38 | 2.63 | 2.59 to 2.73 | 2.63 | 59.29 | 22.6× |
+
+Across the six SNP/indel cells v0.1.1 is faster than Perl VEP by a geometric mean of 201× (ARM) / 143× (x86), against the same Perl VEP medians the paper reports. The v0.1.1 medians sit below v0.1.0's on every cell because of the protocol difference above, not the code: measured on the same day under one protocol, the two binaries agree within 2% in wall time on every cell with a single timing mode and within 4% in CPU time on every cell above 60 CPU-seconds; the record carries that comparison. HGVS notation is outside every F1 above.
+
 `scripts/concordance/run_clone_measurement.sh` re-measures these cells on your own machines and `scripts/concordance/run_concordance.sh` times both engines on a directory of your own VCFs; [scripts/README.md](scripts/README.md#reproducing-the-published-concordance) is the runbook for reproducing the concordance numbers.
 
 ## Documentation

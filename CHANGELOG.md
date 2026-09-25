@@ -13,9 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   between codons, duplications, stop-loss extensions (`extTer{n}` and
   `extTer?`), insertions carrying a stop codon and deletions shifted at the
   peptide level print VEP's string where they printed nothing or a different
-  one. The one intended difference: on a variant that keeps the start codon
-  intact and is reported as `start_retained_variant`, VEP prints `p.Met1?`
-  from its own `start_lost` call while vep-rs prints the peptide change.
+  one. The coding gate is read from the allele as annotated and the
+  frameshift test from its 3'-shifted span, as VEP reads them, and the
+  transcript peptide as `Transcript::translate` writes it (`Met1` for any
+  start codon of the table). The one intended difference: on a variant that
+  keeps the start codon intact and is reported as `start_retained_variant`,
+  VEP prints `p.Met1?` from its own `start_lost` call while vep-rs prints
+  the peptide change.
 - HGVSc is Perl VEP's `hgvs_transcript`, ported whole: the 3' shift within
   1,000 bases of flank, the variant typing and duplication lookup of
   `hgvs_variant_notation`, allele clipping and `_get_cDNA_position`.
@@ -31,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`tests/golden/115/GRCh37-hgvs/`), carrying the complete chromosome 21
   reference so the golden tests compare `HGVSc`, `HGVSp` and `HGVS_OFFSET`
   against Ensembl VEP's output in every format with no external file.
+- Release measurements beside the paper's: the README's "Current release"
+  section states the released version's ten-suite concordance and its wall
+  times (20 independent machines per cell on both architectures) beneath the
+  paper's tables, which stay as published, from the release's provenance
+  record under `docs/concordance-provenance/`.
 
 ### Changed
 
@@ -47,6 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   noodles 0.110 and later (rust-version 1.89) and the pinned toolchain refs.
 - Golden corpus provenance records the digest of the released 0.1.0 binary
   that classified the manifests.
+- The measurement harness (`scripts/concordance/run_clone_measurement.sh`)
+  flushes and deletes the discarded warmup's output before every timed run,
+  so the timed run starts with the memory the warmup had; the warmup's
+  pages otherwise had to be reclaimed while the timed run wrote its own,
+  and that reclaim landed in the timed wall time while user and system time
+  stayed unchanged.
 
 ### Security
 
