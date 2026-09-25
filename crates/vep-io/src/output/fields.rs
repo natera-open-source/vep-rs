@@ -782,8 +782,7 @@ pub fn field_value(
             })
             .unwrap_or_default(),
         "HGVS_OFFSET" => tc
-            .and_then(|x| x.hgvs_offset)
-            .map(|o| o.to_string())
+            .and_then(|x| x.hgvs_offset.map(|o| o.to_string()))
             .unwrap_or_default(),
         "CLIN_SIG" => joined_unique(
             variant

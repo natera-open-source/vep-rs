@@ -10,7 +10,7 @@
 //! Reference: <https://varnomen.hgvs.org/>
 
 use vep_core::coordinate::Strand;
-use vep_core::transcript::Transcript;
+use vep_core::transcript::{MapperPair, Transcript};
 use vep_core::variant::{InputVariant, VariantClass};
 
 /// Convert a single-letter amino acid code to its three-letter abbreviation.
@@ -47,7 +47,7 @@ pub fn amino_acid_three_letter(one_letter: u8) -> &'static str {
     }
 }
 
-/// How far Perl VEP's `perform_shift` (TranscriptVariationAllele.pm 290) can
+/// How far Perl VEP's `perform_shift` (TranscriptVariationAllele.pm 291) can
 /// move an insertion or deletion of `len` bases: it compares against 1,000 bases
 /// of flank, so a pattern that fits the flank moves at most `1001 - len`
 /// positions and a longer one at most 1,000, except that on the reverse strand
@@ -108,6 +108,15 @@ impl TranscriptSlice<'_> {
             self.tr_end - pos + 1
         } else {
             self.tr_start + pos - 1
+        }
+    }
+
+    /// 1-based slice position of genomic position `g`, the inverse of `genomic`.
+    fn position(&self, g: i64) -> i64 {
+        if self.reverse {
+            self.tr_end - g + 1
+        } else {
+            g - self.tr_start + 1
         }
     }
 
@@ -200,8 +209,7 @@ fn hgvs_variant_notation(
         return Some(n);
     }
     if ref_length == 0 {
-        // The bases after the site first, then the bases before it: a match is a
-        // duplication of those bases.
+        // Perl's `lookup_order` 1: the bases after the site are tried first.
         let after = slice.substr(ref_end + 1, alt_length);
         if after.as_deref() == Some(n.alt_seq.as_slice()) {
             n.end = n.start + alt_length as i64 - 1;
@@ -240,25 +248,21 @@ fn hgvs_variant_notation(
 fn hgvsc_clip_alleles(n: &mut HgvscNotation) {
     let mut ref_seq: &[u8] = &n.ref_seq;
     let mut alt_seq: &[u8] = &n.alt_seq;
-    for _ in 0..n.ref_seq.len() {
-        match (ref_seq.first(), alt_seq.first()) {
-            (Some(r), Some(a)) if r == a => {
-                n.start += 1;
-                ref_seq = &ref_seq[1..];
-                alt_seq = &alt_seq[1..];
-            }
-            _ => break,
+    while let (Some(r), Some(a)) = (ref_seq.first(), alt_seq.first()) {
+        if r != a {
+            break;
         }
+        n.start += 1;
+        ref_seq = &ref_seq[1..];
+        alt_seq = &alt_seq[1..];
     }
-    for _ in 0..ref_seq.len() {
-        match (ref_seq.last(), alt_seq.last()) {
-            (Some(r), Some(a)) if r == a => {
-                ref_seq = &ref_seq[..ref_seq.len() - 1];
-                alt_seq = &alt_seq[..alt_seq.len() - 1];
-                n.end -= 1;
-            }
-            _ => break,
+    while let (Some(r), Some(a)) = (ref_seq.last(), alt_seq.last()) {
+        if r != a {
+            break;
         }
+        ref_seq = &ref_seq[..ref_seq.len() - 1];
+        alt_seq = &alt_seq[..alt_seq.len() - 1];
+        n.end -= 1;
     }
     let kind = if ref_seq != b"-" && ref_seq.len() == 1 && alt_seq.len() == 1 && ref_seq != alt_seq
     {
@@ -270,9 +274,8 @@ fn hgvsc_clip_alleles(n: &mut HgvscNotation) {
     } else {
         None
     };
-    let (ref_seq, alt_seq) = (ref_seq.to_vec(), alt_seq.to_vec());
-    n.ref_seq = ref_seq;
-    n.alt_seq = alt_seq;
+    n.ref_seq = ref_seq.to_vec();
+    n.alt_seq = alt_seq.to_vec();
     if let Some(kind) = kind {
         n.kind = kind;
     }
@@ -285,6 +288,23 @@ struct ExonSpan {
     end: i64,
     cdna_start: i64,
     cdna_end: i64,
+}
+
+impl ExonSpan {
+    /// The mapper's exon pairs sorted by genomic start, Perl's `_sorted_exons`.
+    fn in_genomic_order(pairs: &[MapperPair]) -> Vec<ExonSpan> {
+        let mut exons: Vec<ExonSpan> = pairs
+            .iter()
+            .map(|p| ExonSpan {
+                start: p.to_start as i64,
+                end: p.to_end as i64,
+                cdna_start: p.from_start as i64,
+                cdna_end: p.from_end as i64,
+            })
+            .collect();
+        exons.sort_by_key(|e| e.start);
+        exons
+    }
 }
 
 /// `_get_cDNA_position` (TranscriptVariationAllele.pm 2683): the HGVS cDNA
@@ -341,9 +361,8 @@ fn perl_cdna_position(
             coord -= stop_codon;
             prefix = "*";
         } else if coord == stop_codon && offset.is_some() {
-            // Perl clears the coordinate, prefixes `*` and strips the `+` from the
-            // offset, so the stop codon's last base plus an intronic distance
-            // prints as `*` followed by the bare distance.
+            // Perl drops the coordinate and the `+` here: the stop codon's last base
+            // plus an intronic distance prints as `*` and the bare distance.
             prefix = "*";
             offset_text = offset_text.map(|t| t.replace('+', ""));
             return Some(format!("{prefix}{}", offset_text.unwrap_or_default()));
@@ -407,11 +426,10 @@ fn format_hgvs_string(
         format!("{start}_{end}")
     };
     let alt = String::from_utf8_lossy(&n.alt_seq);
+    let substitution = || format!("{start}{}>{alt}", String::from_utf8_lossy(&n.ref_seq));
     let body = match &n.kind {
-        HgvscKind::Sub => format!("{start}{}>{alt}", String::from_utf8_lossy(&n.ref_seq)),
-        HgvscKind::Inv if n.ref_seq.len() == 1 => {
-            format!("{start}{}>{alt}", String::from_utf8_lossy(&n.ref_seq))
-        }
+        HgvscKind::Sub => substitution(),
+        HgvscKind::Inv if n.ref_seq.len() == 1 => substitution(),
         HgvscKind::Del => format!("{coordinates}del"),
         HgvscKind::Inv => format!("{coordinates}inv"),
         HgvscKind::Dup => format!("{coordinates}dup"),
@@ -420,6 +438,22 @@ fn format_hgvs_string(
         HgvscKind::Multiple(m) => format!("{coordinates}[{m}]"),
     };
     format!("{ref_name}:{numbering}.{body}")
+}
+
+/// The reference-sequence name of an HGVS string, `hgvs_transcript`
+/// (TranscriptVariationAllele.pm 1435) and `hgvs_protein` (1695): the stable id
+/// with its version appended unless there is none, the id already ends in
+/// `.<digits>`, or the id is an LRG identifier.
+fn versioned_reference_name(stable_id: &str, version: Option<u32>) -> String {
+    let already_versioned = stable_id
+        .rsplit_once('.')
+        .is_some_and(|(_, tail)| !tail.is_empty() && tail.bytes().all(|b| b.is_ascii_digit()));
+    match version {
+        Some(version) if !already_versioned && !stable_id.contains("LRG") => {
+            format!("{stable_id}.{version}")
+        }
+        _ => stable_id.to_string(),
+    }
 }
 
 /// The HGVS output of one variant-transcript pair under `--hgvs`.
@@ -513,22 +547,23 @@ fn hgvsc_at(
     let reverse = transcript.strand == Strand::Reverse;
     let offset = shifted.map_or(0, |(start, _)| start.abs_diff(variant.start) as i64);
 
-    // The alternate sequence in transcript orientation: the rotated allele of a
-    // shifted insertion, dashes removed, complemented on the reverse strand.
-    let mut alt_seq: Vec<u8> = match variant.variant_class {
-        VariantClass::Insertion => normalized_hgvs_alt_allele(variant, transcript, shifted)
-            .unwrap_or_else(|| alt_allele.to_ascii_uppercase()),
-        _ => alt_allele.to_ascii_uppercase(),
+    // `hgvs_transcript` reverse-complements an allele onto the transcript strand
+    // and `hgvs_variant_notation` strips its gap characters before reading it.
+    let in_transcript_orientation = |mut allele: Vec<u8>| {
+        allele.make_ascii_uppercase();
+        allele.retain(|&b| b != b'-');
+        if reverse {
+            allele = crate::coding::reverse_complement(&allele);
+        }
+        allele
     };
-    alt_seq.retain(|&b| b != b'-');
-    if reverse {
-        alt_seq = crate::coding::reverse_complement(&alt_seq);
-    }
-    let mut fallback_ref: Vec<u8> = variant.ref_allele.to_ascii_uppercase();
-    fallback_ref.retain(|&b| b != b'-');
-    if reverse {
-        fallback_ref = crate::coding::reverse_complement(&fallback_ref);
-    }
+    // A shifted insertion is described by its rotated allele.
+    let alt_seq = in_transcript_orientation(match variant.variant_class {
+        VariantClass::Insertion => normalized_hgvs_alt_allele(variant, transcript, shifted)
+            .unwrap_or_else(|| alt_allele.to_vec()),
+        _ => alt_allele.to_vec(),
+    });
+    let fallback_ref = in_transcript_orientation(variant.ref_allele.clone());
 
     let slice = TranscriptSlice {
         chr: &variant.chr,
@@ -538,10 +573,11 @@ fn hgvsc_at(
         fasta: reference_fasta,
     };
     let (vf_start, vf_end) = (variant.start as i64, variant.end as i64);
+    // `_var2transcript_slice_coords`: on the reverse strand the ends swap.
     let (slice_start, slice_end) = if reverse {
-        (slice.tr_end - vf_end + 1, slice.tr_end - vf_start + 1)
+        (slice.position(vf_end), slice.position(vf_start))
     } else {
-        (vf_start - slice.tr_start + 1, vf_end - slice.tr_start + 1)
+        (slice.position(vf_start), slice.position(vf_end))
     };
     let tr_len = slice.len();
     if slice_start < 1 || slice_end < 1 || slice_start > tr_len || slice_end > tr_len {
@@ -562,27 +598,13 @@ fn hgvsc_at(
         hgvsc_clip_alleles(&mut n);
     }
 
-    let ref_name = match transcript.version {
-        Some(version) if !transcript.stable_id.contains("LRG") => {
-            format!("{}.{version}", transcript.stable_id)
-        }
-        _ => transcript.stable_id.to_string(),
-    };
+    let ref_name = versioned_reference_name(&transcript.stable_id, transcript.version);
 
     let coding = (transcript.translation.is_some() && mapper.cdna_coding_start > 0).then_some((
         mapper.cdna_coding_start as i64,
         mapper.cdna_coding_end as i64,
     ));
-    let mut exons: Vec<ExonSpan> = pairs
-        .iter()
-        .map(|p| ExonSpan {
-            start: p.to_start as i64,
-            end: p.to_end as i64,
-            cdna_start: p.from_start as i64,
-            cdna_end: p.from_end as i64,
-        })
-        .collect();
-    exons.sort_by_key(|e| e.start);
+    let exons = ExonSpan::in_genomic_order(pairs);
 
     let same_pos = n.start == n.end;
     let is_snp = variant.ref_allele.len() == 1
@@ -747,10 +769,13 @@ fn hgvsp_at(
     }
 
     let protein_id = transcript.protein_id.as_ref()?;
-    let protein_prefix = match transcript.translation.as_ref().and_then(|t| t.version) {
-        Some(version) => format!("{protein_id}.{version}:p."),
-        None => format!("{protein_id}:p."),
-    };
+    let protein_prefix = format!(
+        "{}:p.",
+        versioned_reference_name(
+            protein_id,
+            transcript.translation.as_ref().and_then(|t| t.version)
+        )
+    );
 
     let shifted_variant = shifted.map(|(start, end)| {
         let ref_allele = normalized_hgvs_ref_allele(variant, shifted, reference_fasta)
@@ -785,21 +810,11 @@ mod tests {
         assert_eq!(amino_acid_three_letter(b'O'), "Pyl");
     }
 
-    /// The fixture transcript as `_get_cDNA_position` sees it: the mapper's
-    /// three exon pairs and the CDS bounds cDNA 51..900.
+    /// The fixture transcript as `_get_cDNA_position` walks it: a forward-strand
+    /// slice with no FASTA and the mapper's exon pairs.
     fn fixture_slice_and_exons(tx: &Transcript) -> (TranscriptSlice<'static>, Vec<ExonSpan>) {
         let mapper = tx.vefc.as_ref().unwrap().mapper.as_ref().unwrap();
-        let exons = mapper
-            .exon_coord_mapper
-            .pairs
-            .iter()
-            .map(|p| ExonSpan {
-                start: p.to_start as i64,
-                end: p.to_end as i64,
-                cdna_start: p.from_start as i64,
-                cdna_end: p.from_end as i64,
-            })
-            .collect();
+        let exons = ExonSpan::in_genomic_order(&mapper.exon_coord_mapper.pairs);
         let slice = TranscriptSlice {
             chr: "21",
             tr_start: tx.start as i64,
@@ -1026,6 +1041,27 @@ mod tests {
             reverse: false,
             fasta: None,
         }
+    }
+
+    #[test]
+    fn test_versioned_reference_name() {
+        assert_eq!(
+            versioned_reference_name("ENST00000000001", Some(1)),
+            "ENST00000000001.1"
+        );
+        assert_eq!(
+            versioned_reference_name("ENST00000000001", None),
+            "ENST00000000001"
+        );
+        assert_eq!(
+            versioned_reference_name("NM_000001.2", Some(3)),
+            "NM_000001.2"
+        );
+        assert_eq!(versioned_reference_name("LRG_1t1", Some(1)), "LRG_1t1");
+        assert_eq!(
+            versioned_reference_name("ENSP00000000001", Some(7)),
+            "ENSP00000000001.7"
+        );
     }
 
     #[test]

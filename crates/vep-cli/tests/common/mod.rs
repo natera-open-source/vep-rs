@@ -153,14 +153,8 @@ pub fn run_vep(corpus: &Corpus, format: &str, out_dir: &Path, extra: &[&str]) ->
     cmd.arg("-o").arg(&out);
     match format {
         "default" => {}
-        "tab" => {
-            cmd.arg("--tab");
-        }
-        "vcf" => {
-            cmd.arg("--vcf");
-        }
-        "json" => {
-            cmd.arg("--json");
+        "tab" | "vcf" | "json" => {
+            cmd.arg(format!("--{format}"));
         }
         other => panic!("unknown format {other}"),
     }
