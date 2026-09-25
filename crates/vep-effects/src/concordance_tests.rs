@@ -2487,6 +2487,74 @@ fn concordance_hgvsp_h18_deletion_in_a_repeat_shifts_to_its_end() {
     );
 }
 
+/// H19. An intronic deletion of the two acceptor bases whose 3' shift lands in
+/// exon 2: `hgvs_protein` reads the `coding` pre-consequence predicate of the
+/// allele as annotated, which is false in the intron, so it prints nothing even
+/// though the shifted span (CDS 251..252) is coding.
+#[test]
+fn concordance_hgvsp_h19_intronic_deletion_shifted_into_the_cds_has_no_hgvsp() {
+    let tx = make_test_transcript();
+    let annotated = InputVariant::new(
+        "21".into(),
+        25_001_998,
+        25_001_999,
+        b"AG".to_vec(),
+        b"-".to_vec(),
+    );
+    let shifted = InputVariant::new(
+        "21".into(),
+        25_002_000,
+        25_002_001,
+        b"CT".to_vec(),
+        b"-".to_vec(),
+    );
+    assert_eq!(
+        crate::coding::perl_hgvs_protein(
+            &annotated,
+            Some((&shifted, 25_002_000, 25_002_001)),
+            &tx,
+            None
+        ),
+        None
+    );
+}
+
+/// H20. An eight-base deletion straddling the acceptor (four intronic bases, CDS
+/// 251..254) whose shift lands fully in exon 2 (CDS 251..258). The annotated
+/// allele is coding, so the notation is produced; `frameshift` is not cached, and
+/// its length arithmetic runs on the shifted span (8 bases against an empty
+/// allele: a frameshift) where the annotated span, with no defined CDS start,
+/// would not be one. Codon 84 (CDS 250..252, `GCT`) becomes `GGC` and every codon
+/// after it `TGC`, with no stop before the `N`-padded UTR.
+#[test]
+fn concordance_hgvsp_h20_straddling_deletion_is_a_frameshift_on_its_shifted_span() {
+    let tx = make_test_transcript();
+    let annotated = InputVariant::new(
+        "21".into(),
+        25_001_996,
+        25_002_003,
+        b"AAAGCTGC".to_vec(),
+        b"-".to_vec(),
+    );
+    let shifted = InputVariant::new(
+        "21".into(),
+        25_002_000,
+        25_002_007,
+        b"CTGCTGCT".to_vec(),
+        b"-".to_vec(),
+    );
+    assert_eq!(
+        crate::coding::perl_hgvs_protein(
+            &annotated,
+            Some((&shifted, 25_002_000, 25_002_007)),
+            &tx,
+            None
+        )
+        .as_deref(),
+        Some("Ala84GlyfsTer?")
+    );
+}
+
 /// No spurious UTR term on an SNV at the CDS/UTR boundary: the per-endpoint
 /// mapping already classifies a single position as coding or UTR, so
 /// `add_utr_for_overlapping_span()` must not fire for it.

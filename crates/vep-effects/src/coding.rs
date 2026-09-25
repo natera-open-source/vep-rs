@@ -2656,6 +2656,13 @@ impl<'a> PerlCodingEval<'a> {
         if self.stop_retained() {
             return false;
         }
+        self.frameshift_by_length()
+    }
+
+    /// The length arithmetic of Perl's `frameshift` (VariationEffect.pm 1447-1455)
+    /// without its two cached guards: the allele length against the CDS span the
+    /// variant covers, `false` when either end of that span is undefined.
+    fn frameshift_by_length(&self) -> bool {
         let (Some(cds_start), Some(cds_end)) = (self.span.cds_start, self.span.cds_end) else {
             return false;
         };
@@ -2901,17 +2908,24 @@ pub fn perl_codon_peptides(
 /// `variant` is the allele as annotated; `shifted`, when the caller moved an
 /// insertion or deletion to its most 3' position (Perl's `_return_3prime(1)`),
 /// is the shifted allele with its span. Perl reads the peptides, the translation
-/// coordinates and the alternate CDS from the shifted allele, but `frameshift`,
-/// `stop_lost` and `start_lost` come from `_predicate_cache`, filled while the
+/// coordinates and the alternate CDS from the shifted allele, but the `coding`
+/// pre-consequence predicate (1667) and the cached predicates `stop_lost`,
+/// `start_lost`, `partial_codon` and `stop_retained` were filled while the
 /// consequences were computed on the unshifted allele (`hgvs_transcript` clears
 /// that cache only under `--shift_3prime`, 1405), so those verdicts are taken
-/// from `variant` here whatever the shift.
+/// from `variant` here whatever the shift. `frameshift` (VariationEffect.pm
+/// 1435) is not cached: its two guards read the cache, but its length
+/// arithmetic runs on the CDS span the transcript variation carries at that
+/// point, which is the shifted span, so an indel that shifts fully into the
+/// CDS is a frameshift there even where the annotated allele straddles an
+/// exon boundary.
 ///
-/// `None` where Perl returns `undef`: the span is not coding, has no translation
-/// start or end, or its reference peptide is undefined. The alternate-CDS
-/// translations inside use codon table 1 whatever the transcript's table, as
-/// BioPerl's argument-less `translate()` does at 2263, 2380, 2422 and 2485; the
-/// transcript's own peptide keeps its table (Ensembl `Transcript::translate`).
+/// `None` where Perl returns `undef`: the annotated allele does not overlap the
+/// coding sequence, the (shifted) span has no translation start or end, or its
+/// reference peptide is undefined. The alternate-CDS translations inside use
+/// codon table 1 whatever the transcript's table, as BioPerl's argument-less
+/// `translate()` does at 2263, 2380, 2422 and 2485; the transcript's own
+/// peptide keeps its table (Ensembl `Transcript::translate`).
 ///
 /// One intended divergence: Perl prints `Met1?` whenever its `start_lost`
 /// predicate holds (2091), including the start co-emission pairs on which this
@@ -2924,17 +2938,20 @@ pub fn perl_hgvs_protein(
     fasta: Option<&vep_fasta::IndexedFasta>,
 ) -> Option<String> {
     let mut ev = PerlCodingEval::new(variant, transcript, variant.start, variant.end, fasta)?;
-    let preds = HgvsPredicates {
-        frameshift: ev.frameshift(),
-        stop_lost: ev.stop_lost(),
-        start_lost: ev.start_lost() && !ev.start_retained_variant(),
-    };
-    if let Some((shifted_variant, span_start, span_end)) = shifted {
-        ev = PerlCodingEval::new(shifted_variant, transcript, span_start, span_end, fasta)?;
-    }
     if !ev.coding_pred(transcript) {
         return None;
     }
+    let frameshift_guard = ev.partial_codon() || ev.stop_retained();
+    let stop_lost = ev.stop_lost();
+    let start_lost = ev.start_lost() && !ev.start_retained_variant();
+    if let Some((shifted_variant, span_start, span_end)) = shifted {
+        ev = PerlCodingEval::new(shifted_variant, transcript, span_start, span_end, fasta)?;
+    }
+    let preds = HgvsPredicates {
+        frameshift: !frameshift_guard && ev.frameshift_by_length(),
+        stop_lost,
+        start_lost,
+    };
     let tl_start = truthy(ev.span.tl_start)?;
     let tl_end = truthy(ev.span.tl_end)?;
     let alt_pep = ev.peptide(false);
@@ -2959,9 +2976,11 @@ pub fn perl_hgvs_protein(
     Some(hgvsp_format(&ev, &preds, &n))
 }
 
-/// The three predicate verdicts `hgvs_protein` reads from Perl's
-/// `_predicate_cache`: those of the allele as annotated, not of its shifted form.
-/// `start_lost` already carries the start co-emission gate of this engine.
+/// The three predicate verdicts `hgvs_protein` reads: `stop_lost` and
+/// `start_lost` from Perl's `_predicate_cache` (the allele as annotated, not its
+/// shifted form), `frameshift` recomputed on the shifted span behind the cached
+/// `partial_codon` and `stop_retained` guards. `start_lost` already carries the
+/// start co-emission gate of this engine.
 struct HgvsPredicates {
     frameshift: bool,
     stop_lost: bool,
