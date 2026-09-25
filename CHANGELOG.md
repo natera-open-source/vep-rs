@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- HGVSp is Perl VEP's `hgvs_protein`, ported whole. In-frame insertions
+  between codons, duplications, stop-loss extensions (`extTer{n}` and
+  `extTer?`), insertions carrying a stop codon and deletions shifted at the
+  peptide level print VEP's string where they printed nothing or a different
+  one. The one intended difference: on a variant that keeps the start codon
+  intact and is reported as `start_retained_variant`, VEP prints `p.Met1?`
+  from its own `start_lost` call while vep-rs prints the peptide change.
+- HGVSc is Perl VEP's `hgvs_transcript`, ported whole: the 3' shift within
+  1,000 bases of flank, the variant typing and duplication lookup of
+  `hgvs_variant_notation`, allele clipping and `_get_cDNA_position`.
+  Deletions that cross an exon boundary or the start or stop codon,
+  reverse-strand `delins` ranges, insertions without a readable reference
+  and variants outside the transcript span now match VEP.
+- `HGVS_OFFSET` is emitted beside `HGVSc` and `HGVSp` when an insertion or
+  deletion was shifted, signed by the transcript strand as VEP signs it.
+
+### Added
+
+- A GRCh37 chromosome 21 golden corpus generated with `--hgvs`
+  (`tests/golden/115/GRCh37-hgvs/`), carrying the complete chromosome 21
+  reference so the golden tests compare `HGVSc`, `HGVSp` and `HGVS_OFFSET`
+  against Ensembl VEP's output in every format with no external file.
+
 ### Changed
 
 - Dependencies: noodles 0.109 (the last release declaring rust-version 1.88;
@@ -20,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each rust-toolchain step names its Rust version through the `toolchain:`
   input, and the CI workflow's token is read-only. Dependabot ignores
   noodles 0.110 and later (rust-version 1.89) and the pinned toolchain refs.
+- Golden corpus provenance records the digest of the released 0.1.0 binary
+  that classified the manifests.
 
 ### Security
 
