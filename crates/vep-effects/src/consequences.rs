@@ -49,8 +49,8 @@ pub struct EffectsConfig {
     /// Off by default. On the default `-o vep` path HGVS is emitted only under
     /// `--hgvs` (Perl VEP parity: Perl emits HGVS solely under that flag), so
     /// computing it unconditionally spends significant CPU building `String`s
-    /// that are then discarded. When off, `TranscriptConsequence.hgvsc` /
-    /// `.hgvsp` stay `None`.
+    /// that are then discarded. When off, `TranscriptConsequence.hgvsc`,
+    /// `.hgvsp` and `.hgvs_offset` stay `None`.
     ///
     /// Callers must enable this whenever the consumer reads the fields without
     /// consulting `--hgvs`. The VCF and Parquet CSQ field lists carry
@@ -246,6 +246,7 @@ fn calculate_terms(
                 intron: None,
                 hgvsc: None,
                 hgvsp: None,
+                hgvs_offset: None,
                 sift: None,
                 polyphen: None,
                 domains: Vec::new(),
@@ -486,13 +487,10 @@ fn calculate_terms(
 
     // HGVS strings are consumed solely by the output layer, so they are built
     // only when `compute_hgvs` is set.
-    let (hgvsc, hgvsp) = if config.compute_hgvs {
-        (
-            crate::hgvs::generate_hgvsc(variant, transcript, config.reference_fasta.as_deref()),
-            crate::hgvs::generate_hgvsp(variant, transcript, config.reference_fasta.as_deref()),
-        )
+    let hgvs = if config.compute_hgvs {
+        crate::hgvs::generate_hgvs(variant, transcript, config.reference_fasta.as_deref())
     } else {
-        (None, None)
+        crate::hgvs::HgvsNotation::default()
     };
 
     Some(TranscriptConsequence {
@@ -517,8 +515,9 @@ fn calculate_terms(
         strand: transcript.strand.as_i8(),
         exon: None,
         intron: None,
-        hgvsc,
-        hgvsp,
+        hgvsc: hgvs.hgvsc,
+        hgvsp: hgvs.hgvsp,
+        hgvs_offset: hgvs.offset,
         sift: None,
         polyphen: None,
         domains: Vec::new(),

@@ -781,7 +781,10 @@ pub fn field_value(
                     .join(list_sep)
             })
             .unwrap_or_default(),
-        "HGVS_OFFSET" => String::new(),
+        "HGVS_OFFSET" => tc
+            .and_then(|x| x.hgvs_offset)
+            .map(|o| o.to_string())
+            .unwrap_or_default(),
         "CLIN_SIG" => joined_unique(
             variant
                 .colocated_variants
