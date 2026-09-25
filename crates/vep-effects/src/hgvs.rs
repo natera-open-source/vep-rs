@@ -924,12 +924,10 @@ pub fn generate_hgvsp(
             .unwrap_or_else(|| b"-".to_vec());
         InputVariant::new(variant.chr.clone(), start, end, ref_allele, alt_allele)
     });
-    let hgvs_variant = shifted_variant.as_ref().unwrap_or(variant);
     let notation = crate::coding::perl_hgvs_protein(
-        hgvs_variant,
+        variant,
+        shifted_variant.as_ref().map(|v| (v, v.start, v.end)),
         transcript,
-        hgvs_variant.start,
-        hgvs_variant.end,
         reference_fasta,
     )?;
     Some(format!("{protein_prefix}{notation}"))

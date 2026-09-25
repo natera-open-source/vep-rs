@@ -2896,8 +2896,16 @@ pub fn perl_codon_peptides(
 }
 
 /// Perl `TranscriptVariationAllele::hgvs_protein` (TranscriptVariationAllele.pm
-/// 1593), the text after `p.`, for the allele span `span_start..=span_end`
-/// (already 3'-shifted by the caller, as Perl's `_return_3prime(1)` does).
+/// 1593), the text after `p.`.
+///
+/// `variant` is the allele as annotated; `shifted`, when the caller moved an
+/// insertion or deletion to its most 3' position (Perl's `_return_3prime(1)`),
+/// is the shifted allele with its span. Perl reads the peptides, the translation
+/// coordinates and the alternate CDS from the shifted allele, but `frameshift`,
+/// `stop_lost` and `start_lost` come from `_predicate_cache`, filled while the
+/// consequences were computed on the unshifted allele (`hgvs_transcript` clears
+/// that cache only under `--shift_3prime`, 1405), so those verdicts are taken
+/// from `variant` here whatever the shift.
 ///
 /// `None` where Perl returns `undef`: the span is not coding, has no translation
 /// start or end, or its reference peptide is undefined. The alternate-CDS
@@ -2911,12 +2919,19 @@ pub fn perl_codon_peptides(
 /// that short-circuit only when it emits `start_lost` itself.
 pub fn perl_hgvs_protein(
     variant: &InputVariant,
+    shifted: Option<(&InputVariant, u64, u64)>,
     transcript: &Transcript,
-    span_start: u64,
-    span_end: u64,
     fasta: Option<&vep_fasta::IndexedFasta>,
 ) -> Option<String> {
-    let mut ev = PerlCodingEval::new(variant, transcript, span_start, span_end, fasta)?;
+    let mut ev = PerlCodingEval::new(variant, transcript, variant.start, variant.end, fasta)?;
+    let preds = HgvsPredicates {
+        frameshift: ev.frameshift(),
+        stop_lost: ev.stop_lost(),
+        start_lost: ev.start_lost() && !ev.start_retained_variant(),
+    };
+    if let Some((shifted_variant, span_start, span_end)) = shifted {
+        ev = PerlCodingEval::new(shifted_variant, transcript, span_start, span_end, fasta)?;
+    }
     if !ev.coding_pred(transcript) {
         return None;
     }
@@ -2936,12 +2951,21 @@ pub fn perl_hgvs_protein(
     if n.alt_pep.is_some() && n.alt_pep != n.ref_pep {
         hgvsp_clip_alleles(&mut n);
     }
-    hgvsp_protein_type(&mut ev, &mut n);
+    hgvsp_protein_type(&ev, &preds, &mut n);
     if n.kind == HgvspKind::Unset {
         return None;
     }
-    hgvsp_peptides(&mut ev, &mut n)?;
-    Some(hgvsp_format(&mut ev, &n))
+    hgvsp_peptides(&ev, &preds, &mut n)?;
+    Some(hgvsp_format(&ev, &preds, &n))
+}
+
+/// The three predicate verdicts `hgvs_protein` reads from Perl's
+/// `_predicate_cache`: those of the allele as annotated, not of its shifted form.
+/// `start_lost` already carries the start co-emission gate of this engine.
+struct HgvsPredicates {
+    frameshift: bool,
+    stop_lost: bool,
+    start_lost: bool,
 }
 
 /// Perl's `$hgvs_notation` hash. `ref_pep` and `alt_pep` are `None` where the
@@ -3069,8 +3093,12 @@ fn hgvsp_clip_alleles(n: &mut HgvsProteinNotation) {
 /// `_get_hgvs_protein_type` (1977): `fs` from the frameshift predicate; else the
 /// first stop of each peptide becomes `X` and the lengths decide; without both
 /// peptides the allele lengths less `-` decide.
-fn hgvsp_protein_type(ev: &mut PerlCodingEval<'_>, n: &mut HgvsProteinNotation) {
-    if ev.frameshift() {
+fn hgvsp_protein_type(
+    ev: &PerlCodingEval<'_>,
+    preds: &HgvsPredicates,
+    n: &mut HgvsProteinNotation,
+) {
+    if preds.frameshift {
         n.kind = HgvspKind::Fs;
         return;
     }
@@ -3114,7 +3142,11 @@ fn hgvsp_protein_type(ev: &mut PerlCodingEval<'_>, n: &mut HgvsProteinNotation) 
 
 /// `_get_hgvs_peptides` (2044) with three-letter conversion on. `None` where Perl
 /// returns `undef`: an insertion with no flanking residue to name.
-fn hgvsp_peptides(ev: &mut PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> Option<()> {
+fn hgvsp_peptides(
+    ev: &PerlCodingEval<'_>,
+    preds: &HgvsPredicates,
+    n: &mut HgvsProteinNotation,
+) -> Option<()> {
     match n.kind {
         HgvspKind::Fs => hgvsp_fs_peptides(ev, n)?,
         HgvspKind::Ins => {
@@ -3144,7 +3176,7 @@ fn hgvsp_peptides(ev: &mut PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> O
     if n.alt_pep.as_deref() == Some(b"-") {
         n.alt_pep = Some(b"del".to_vec());
     }
-    if ev.start_lost() && !ev.start_retained_variant() {
+    if preds.start_lost {
         n.alt_pep = Some(b"?".to_vec());
         n.kind = HgvspKind::Bare;
     } else if n.kind == HgvspKind::Del {
@@ -3335,7 +3367,11 @@ fn hgvsp_post_var_shift(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) {
 
 /// `_get_hgvs_protein_format` (1834) with three-letter conversion on and no
 /// prediction parentheses.
-fn hgvsp_format(ev: &mut PerlCodingEval<'_>, n: &HgvsProteinNotation) -> String {
+fn hgvsp_format(
+    ev: &PerlCodingEval<'_>,
+    preds: &HgvsPredicates,
+    n: &HgvsProteinNotation,
+) -> String {
     let ref_pep: &[u8] = n.ref_pep.as_deref().unwrap_or_default();
     let alt: &[u8] = n.alt_pep.as_deref().unwrap_or_default();
     let (start, end, kind) = (n.start, n.end, n.kind);
@@ -3344,7 +3380,7 @@ fn hgvsp_format(ev: &mut PerlCodingEval<'_>, n: &HgvsProteinNotation) -> String 
     let last3 = |s: &[u8]| text(&s[s.len().saturating_sub(3)..]);
     if ref_pep == alt && kind != HgvspKind::Fs && kind != HgvspKind::Ins {
         format!("{}{start}=", text(ref_pep))
-    } else if ev.stop_lost() && (kind == HgvspKind::Del || kind == HgvspKind::Sub) {
+    } else if preds.stop_lost && (kind == HgvspKind::Del || kind == HgvspKind::Sub) {
         let aa_til_stop = match hgvsp_stop_loss_extra_aa(ev, start - 1, false) {
             Some(extra) => extra.to_string(),
             None => "?".to_string(),
