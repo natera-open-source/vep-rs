@@ -10,8 +10,19 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # noodles 0.110 and later declare rust-version 1.89, above the
+      # workspace's declared rust-version.
+      - dependency-name: noodles
+        versions: [">= 0.110"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # The `toolchain:` input of every rust-toolchain step is a Rust version,
+      # not an action version: the MSRV job's must equal the manifest's
+      # rust-version and the others must equal the release toolchain, so a
+      # proposal to change either is not a dependency update.
+      - dependency-name: dtolnay/rust-toolchain

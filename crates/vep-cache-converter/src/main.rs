@@ -240,7 +240,7 @@ fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRe
 
     let file =
         fs::File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
-    let reader = bgzf::Reader::new(file);
+    let reader = bgzf::io::Reader::new(file);
     let buf_reader = BufReader::new(reader);
 
     let mut header_names: Vec<String> = Vec::new();
@@ -340,7 +340,7 @@ fn verify_concordance(
         all_positions
     } else {
         use rand::seq::SliceRandom;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut sampled = all_positions.clone();
         sampled.shuffle(&mut rng);
         sampled.truncate(1000);

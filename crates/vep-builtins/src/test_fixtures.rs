@@ -86,7 +86,8 @@ pub fn write_tabix_fixture(
     // `virtual_position()` between lines forces a block per record and hides the
     // truncation of records that share a block.
     let body: String = lines.iter().map(|l| format!("{l}\n")).collect();
-    let mut writer = bgzf::Writer::new(std::fs::File::create(&data_path).expect("create fixture"));
+    let mut writer =
+        bgzf::io::Writer::new(std::fs::File::create(&data_path).expect("create fixture"));
     write!(writer, "{body}").expect("write fixture body");
     writer.try_finish().expect("finish bgzf");
 

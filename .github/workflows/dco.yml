@@ -22,7 +22,7 @@ jobs:
     name: Check DCO
     runs-on: ubuntu-latest
     steps:
-      - uses: christophebedard/dco-check@0.5.1
+      - uses: christophebedard/dco-check@ec8bfc43106afe98b323ace9133650df10497e12 # 0.5.1
         with:
           args: "--verbose"
         env:
