@@ -336,6 +336,17 @@ echo "engine,run_id,host_id,replicate,suite_id,suite_name,assembly,run_kind,wall
 # id so the column is never empty.
 [[ -n "$REPLICATE" ]] || REPLICATE="$HOST_ID"
 
+# discard_warmup_output <suite_dir>
+# The discarded warmup's output must be gone before the timed run starts: its pages,
+# dirty or clean, are memory the timed run would otherwise reclaim while writing its
+# own, and the reclaim lands in the timed wall time while user and system time stay
+# unchanged. The warmup's purpose, a warm page cache for the inputs, survives the
+# flush and the delete.
+discard_warmup_output() {
+	sync
+	find "$1/rust" "$1/perl_scratch" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.stderr' \) -delete 2>/dev/null || true
+}
+
 # time_run <label> <out_time_txt> -- <cmd...>
 # Runs the command under GNU /usr/bin/time -v when available, capturing the
 # timing block to <out_time_txt>. Echoes "<wall_seconds>|<exit_code>". Never
@@ -561,6 +572,7 @@ measure_p1() {
 			rc="${res##*|}"
 			echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)]   $suite_id $run_kind wall=${wall}s rc=$rc"
 			csv_row "$suite_id" "$suite_name" "$assembly" "$run_kind" "$wall" "$rc"
+			[[ "$run_kind" == warmup ]] && discard_warmup_output "$suite_dir"
 		done
 		if [[ "$WALLTIME_ONLY" != "true" ]] && ground_truth_ready "$suite_id" "$suite_name" "$assembly" "$gt_dir"; then
 			mkdir -p "$suite_dir/perl"
@@ -606,6 +618,7 @@ measure_p1() {
 			rc="${res##*|}"
 			echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)]   $suite_id $run_kind wall=${wall}s rc=$rc"
 			csv_row "$suite_id" "$suite_name" "$assembly" "$run_kind" "$wall" "$rc"
+			[[ "$run_kind" == warmup ]] && discard_warmup_output "$suite_dir"
 		done
 		if [[ "$WALLTIME_ONLY" != "true" ]] && ground_truth_ready "$suite_id" "$suite_name" "$assembly" "$gt_dir"; then
 			# Normalize the timed raw output (intergenic Feature_type=Transcript -> -).
@@ -673,6 +686,7 @@ measure_p1() {
 			rc="${res##*|}"
 			echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)]   $suite_id $run_kind wall=${wall}s rc=$rc"
 			csv_row "$suite_id" "$suite_name" "$assembly" "$run_kind" "$wall" "$rc"
+			[[ "$run_kind" == warmup ]] && discard_warmup_output "$suite_dir"
 		done
 		# Before the scratch directory goes, confirm the timed run actually annotated. This is
 		# the only point at which the evidence exists.
@@ -973,6 +987,7 @@ measure_sv() {
 				return 1
 			fi
 			csv_row "$suite_id" "$suite_name" "$assembly" "$run_kind" "$wall" "$rc"
+			[[ "$run_kind" == warmup ]] && discard_warmup_output "$suite_dir"
 		done
 		if [[ "$WALLTIME_ONLY" != "true" ]]; then
 			# `--vep-rs-cache` is what activates the cross-chromosome mask, which removes
@@ -1035,6 +1050,7 @@ measure_sv() {
 				return 1
 			fi
 			csv_row "$suite_id" "$suite_name" "$assembly" "$run_kind" "$wall" "$rc"
+			[[ "$run_kind" == warmup ]] && discard_warmup_output "$suite_dir"
 		done
 		# SV concordance is best-effort for fastVEP: a loop that produces no non-empty
 		# output is skipped, never hard-failed.
@@ -1144,6 +1160,7 @@ measure_sv() {
 			rc="${res##*|}"
 			echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)]   $suite_id $run_kind wall=${wall}s rc=$rc"
 			csv_row "$suite_id" "$suite_name" "$assembly" "$run_kind" "$wall" "$rc"
+			[[ "$run_kind" == warmup ]] && discard_warmup_output "$suite_dir"
 		done
 		# Same gate as the SNP/indel path: the per-VCF Perl output is about to be discarded.
 		if ! assert_perl_annotated "$suite_dir/perl_scratch" "$sv_inputs" "$suite_id"; then
