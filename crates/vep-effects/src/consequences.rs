@@ -49,8 +49,8 @@ pub struct EffectsConfig {
     /// Off by default. On the default `-o vep` path HGVS is emitted only under
     /// `--hgvs` (Perl VEP parity: Perl emits HGVS solely under that flag), so
     /// computing it unconditionally spends significant CPU building `String`s
-    /// that are then discarded. When off, `TranscriptConsequence.hgvsc` /
-    /// `.hgvsp` stay `None`.
+    /// that are then discarded. When off, `TranscriptConsequence.hgvsc`,
+    /// `.hgvsp` and `.hgvs_offset` stay `None`.
     ///
     /// Callers must enable this whenever the consumer reads the fields without
     /// consulting `--hgvs`. The VCF and Parquet CSQ field lists carry
@@ -246,6 +246,7 @@ fn calculate_terms(
                 intron: None,
                 hgvsc: None,
                 hgvsp: None,
+                hgvs_offset: None,
                 sift: None,
                 polyphen: None,
                 domains: Vec::new(),
@@ -486,13 +487,10 @@ fn calculate_terms(
 
     // HGVS strings are consumed solely by the output layer, so they are built
     // only when `compute_hgvs` is set.
-    let (hgvsc, hgvsp) = if config.compute_hgvs {
-        (
-            crate::hgvs::generate_hgvsc(variant, transcript, config.reference_fasta.as_deref()),
-            crate::hgvs::generate_hgvsp(variant, transcript, &consequences),
-        )
+    let hgvs = if config.compute_hgvs {
+        crate::hgvs::generate_hgvs(variant, transcript, config.reference_fasta.as_deref())
     } else {
-        (None, None)
+        crate::hgvs::HgvsNotation::default()
     };
 
     Some(TranscriptConsequence {
@@ -517,8 +515,9 @@ fn calculate_terms(
         strand: transcript.strand.as_i8(),
         exon: None,
         intron: None,
-        hgvsc,
-        hgvsp,
+        hgvsc: hgvs.hgvsc,
+        hgvsp: hgvs.hgvsp,
+        hgvs_offset: hgvs.offset,
         sift: None,
         polyphen: None,
         domains: Vec::new(),
@@ -1385,8 +1384,9 @@ fn apply_position(
                         } else {
                             analysis_cds_pos_5prime(*cds_pos, bounds.as_ref())
                         };
-                        // both the start position and the CDS span end, so a deletion
-                        // starting before the stop codon but extending through it counts.
+                        // The stop-loss test reads both the start position and the CDS
+                        // span end, so a deletion starting before the stop codon but
+                        // extending through it counts.
                         let span_overlaps_stop = stop_loss_cds_pos >= stop_codon_start
                             || bounds
                                 .as_ref()
@@ -3021,8 +3021,8 @@ fn add_exonic_splice_region(
         return;
     }
 
-    // all differing regions, as Perl's _get_differing_regions XORs ref/alt
-    // character by character and groups consecutive differences; a complex indel
+    // Every differing region is visited, as Perl's _get_differing_regions XORs
+    // ref/alt character by character and groups consecutive differences; a complex indel
     // with matching bases inside the pair (ACCCCA to CTTCC shares CC at positions
     // 3-4) yields multiple non-contiguous regions.
     let regions = get_differing_regions(variant, shifted_variant_coords);

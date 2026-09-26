@@ -2,7 +2,7 @@
  "vep_image": "ensemblorg/ensembl-vep@sha256:ff3c7e20d68e7e499c0bd79d398c7c121465db65f311ee87df425b2b600b853e",
  "divergences_classified_against": {
   "engine": "vep-rs",
-  "binary_md5": "4575bacbe3c96c16501a7eea3f9a23f3",
+  "binary_md5": "23a294cf86cb59d1bae8c31104d87d1a",
   "arch": "arm64"
  },
  "vep_command": "vep -i input.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 115 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",

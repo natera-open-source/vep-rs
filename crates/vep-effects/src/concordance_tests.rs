@@ -175,7 +175,12 @@ fn make_reverse_strand_transcript() -> Transcript {
 /// Shift the standard test transcript down to small chr1 coordinates so tests can
 /// build compact temporary FASTA fixtures without needing multi-megabase reference files.
 fn make_compact_test_transcript() -> Transcript {
-    let mut tx = make_test_transcript();
+    compact_on_chr1(make_test_transcript())
+}
+
+/// Move a transcript built at the standard 25 Mb coordinates down by 24,999,900
+/// onto chromosome 1, so a 7,000-base FASTA covers it.
+fn compact_on_chr1(mut tx: Transcript) -> Transcript {
     let shift = 24_999_900;
 
     tx.chr = "1".into();
@@ -1645,8 +1650,7 @@ fn concordance_hgvsp_frameshift_uses_fs_notation() {
         b"T".to_vec(), // 1bp insertion = frameshift
     );
 
-    let consequences = vec![Consequence::FrameshiftVariant];
-    let hgvsp = generate_hgvsp(&variant, &tx, &consequences);
+    let hgvsp = generate_hgvsp(&variant, &tx, None);
     assert!(hgvsp.is_some(), "Should generate HGVSp for frameshift");
     let notation = hgvsp.unwrap();
 
@@ -1677,8 +1681,7 @@ fn concordance_hgvsp_frameshift_includes_ter_position() {
         b"CC".to_vec(), // 2bp insertion = frameshift
     );
 
-    let consequences = vec![Consequence::FrameshiftVariant];
-    let hgvsp = generate_hgvsp(&variant, &tx, &consequences);
+    let hgvsp = generate_hgvsp(&variant, &tx, None);
     assert!(hgvsp.is_some(), "Should generate HGVSp for frameshift");
     let notation = hgvsp.unwrap();
 
@@ -1779,19 +1782,11 @@ fn concordance_hgvsp_protein_position_matches_codon_number() {
         b"-".to_vec(),
     );
 
-    let consequences = vec![Consequence::InframeDeletion];
-    let hgvsp = generate_hgvsp(&variant, &tx, &consequences);
-    assert!(
-        hgvsp.is_some(),
-        "Should generate HGVSp for inframe deletion"
-    );
-    let notation = hgvsp.unwrap();
+    let hgvsp = generate_hgvsp(&variant, &tx, None);
 
-    // Codon 3 = amino acid 3 = Gly. Perl says p.Gly3del.
-    assert!(
-        notation.contains("Gly3"),
-        "protein position should be 3 for codon 3, got: {notation}"
-    );
+    // Codon 3 = amino acid 3 = Gly, and the residue after it (Lys) differs, so
+    // the deletion does not move: Perl says p.Gly3del.
+    assert_eq!(hgvsp.as_deref(), Some("ENSP00000000001.1:p.Gly3del"));
 }
 
 /// Inversion notation: Perl detects inversions (CT to AG) and uses `inv`.
@@ -1826,6 +1821,756 @@ fn concordance_hgvsc_inversion_uses_inv_notation() {
     assert!(
         !notation.contains("delins"),
         "should not use 'delins' for a true inversion"
+    );
+}
+
+// HGVSc parity with Perl's `hgvs_transcript` (`hgvs::generate_hgvsc`). Every
+// expected string is what `TranscriptVariationAllele::hgvs_transcript` prints for
+// the same fixture; the derivations cite its helpers. Without a FASTA the
+// reference bases come from the variant and no indel shifts, which is Perl's
+// behaviour on a transcript slice it cannot read.
+
+/// A single-base coding substitution takes `cds_start` directly: cDNA 55 is CDS 5.
+#[test]
+fn concordance_hgvsc_perl_coding_snv_uses_cds_position() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_test_transcript();
+    let variant = InputVariant::new(
+        "21".into(),
+        25_000_054,
+        25_000_054,
+        b"C".to_vec(),
+        b"A".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&variant, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.5C>A")
+    );
+}
+
+/// `_get_cDNA_position`: cDNA 10 lies 41 bases before the A of the start codon
+/// (cDNA 51), cDNA 901 one base past the stop codon's last base (cDNA 900).
+#[test]
+fn concordance_hgvsc_perl_utr_positions_count_from_the_codons() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_test_transcript();
+    let five_prime = InputVariant::new(
+        "21".into(),
+        25_000_009,
+        25_000_009,
+        b"A".to_vec(),
+        b"G".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&five_prime, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.-41A>G")
+    );
+    let three_prime = InputVariant::new(
+        "21".into(),
+        25_004_300,
+        25_004_300,
+        b"A".to_vec(),
+        b"G".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&three_prime, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.*1A>G")
+    );
+}
+
+/// An intronic base is named from the nearer exon boundary: 3 bases past the
+/// last base of exon 1 (cDNA 300 = CDS 250) is `250+3`, 2 bases before the first
+/// base of exon 2 (cDNA 301 = CDS 251) is `251-2`.
+#[test]
+fn concordance_hgvsc_perl_intronic_offsets_follow_the_nearer_exon() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_test_transcript();
+    let donor_side = InputVariant::new(
+        "21".into(),
+        25_000_302,
+        25_000_302,
+        b"A".to_vec(),
+        b"G".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&donor_side, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.250+3A>G")
+    );
+    let acceptor_side = InputVariant::new(
+        "21".into(),
+        25_001_998,
+        25_001_998,
+        b"A".to_vec(),
+        b"G".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&acceptor_side, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.251-2A>G")
+    );
+}
+
+/// A deletion that leaves exon 1 through the donor site: its start is exonic
+/// (cDNA 299 = CDS 249) and its end intronic (`250+3`), each end named on its own
+/// by `_get_cDNA_position`.
+#[test]
+fn concordance_hgvsc_perl_deletion_spanning_donor_names_both_ends() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_test_transcript();
+    let variant = InputVariant::new(
+        "21".into(),
+        25_000_298,
+        25_000_302,
+        b"GCTGC".to_vec(),
+        b"-".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&variant, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.249_250+3del")
+    );
+}
+
+/// A deletion entering exon 2 through the acceptor site: `251-2` to CDS 252.
+#[test]
+fn concordance_hgvsc_perl_deletion_spanning_acceptor_names_both_ends() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_test_transcript();
+    let variant = InputVariant::new(
+        "21".into(),
+        25_001_998,
+        25_002_001,
+        b"AGGC".to_vec(),
+        b"-".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&variant, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.251-2_252del")
+    );
+}
+
+/// Deletions across the codons: cDNA 49..53 runs from `-2` over the start codon
+/// to CDS 3, and cDNA 899..903 from CDS 849 past the stop codon to `*3`.
+#[test]
+fn concordance_hgvsc_perl_deletions_spanning_start_and_stop_codons() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_test_transcript();
+    let over_start = InputVariant::new(
+        "21".into(),
+        25_000_048,
+        25_000_052,
+        b"AAATG".to_vec(),
+        b"-".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&over_start, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.-2_3del")
+    );
+    let over_stop = InputVariant::new(
+        "21".into(),
+        25_004_298,
+        25_004_302,
+        b"CTAAA".to_vec(),
+        b"-".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&over_stop, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.849_*3del")
+    );
+}
+
+/// `hgvs_variant_notation` types an equal-length change `delins` unless it is one
+/// base (`>`) or the reverse complement (`inv`); `_clip_alleles` then trims the
+/// shared flanks and re-types what is left, so `GCT/GAT` becomes a substitution.
+#[test]
+fn concordance_hgvsc_perl_equal_length_changes_are_typed_after_clipping() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_test_transcript();
+    let delins = InputVariant::new(
+        "21".into(),
+        25_000_053,
+        25_000_055,
+        b"GCT".to_vec(),
+        b"AAA".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&delins, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.4_6delinsAAA")
+    );
+    let shared_prefix = InputVariant::new(
+        "21".into(),
+        25_000_053,
+        25_000_055,
+        b"GCT".to_vec(),
+        b"GAA".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&shared_prefix, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.5_6delinsAA")
+    );
+    let clipped_to_one = InputVariant::new(
+        "21".into(),
+        25_000_053,
+        25_000_055,
+        b"GCT".to_vec(),
+        b"GAT".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&clipped_to_one, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.5C>A")
+    );
+    let inversion = InputVariant::new(
+        "21".into(),
+        25_000_054,
+        25_000_055,
+        b"CT".to_vec(),
+        b"AG".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&inversion, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.5_6inv")
+    );
+}
+
+/// An insertion with no reference to read is `ins` between its flanking bases,
+/// the smaller coordinate first (`hgvs_variant_notation` swaps them).
+#[test]
+fn concordance_hgvsc_perl_insertion_without_fasta_is_ins() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_test_transcript();
+    let variant = InputVariant::new(
+        "21".into(),
+        25_000_059,
+        25_000_058,
+        b"-".to_vec(),
+        b"AGA".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&variant, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.9_10insAGA")
+    );
+}
+
+/// `_var2transcript_slice_coords` returns nothing for a variant outside the
+/// transcript's genomic span, so an upstream or downstream variant has no HGVSc;
+/// an alternate allele outside `ACGT-` or equal to the reference has none either.
+#[test]
+fn concordance_hgvsc_perl_returns_none_outside_the_transcript() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_test_transcript();
+    let upstream = InputVariant::new(
+        "21".into(),
+        24_999_990,
+        24_999_990,
+        b"A".to_vec(),
+        b"G".to_vec(),
+    );
+    assert_eq!(generate_hgvsc(&upstream, &tx, None), None);
+    let downstream = InputVariant::new(
+        "21".into(),
+        25_006_005,
+        25_006_005,
+        b"A".to_vec(),
+        b"G".to_vec(),
+    );
+    assert_eq!(generate_hgvsc(&downstream, &tx, None), None);
+    let ambiguous = InputVariant::new(
+        "21".into(),
+        25_000_054,
+        25_000_054,
+        b"C".to_vec(),
+        b"N".to_vec(),
+    );
+    assert_eq!(generate_hgvsc(&ambiguous, &tx, None), None);
+    let reference = InputVariant::new(
+        "21".into(),
+        25_000_054,
+        25_000_054,
+        b"C".to_vec(),
+        b"C".to_vec(),
+    );
+    assert_eq!(generate_hgvsc(&reference, &tx, None), None);
+}
+
+/// A transcript without a CDS numbers from its first base with `n.`.
+#[test]
+fn concordance_hgvsc_perl_non_coding_transcript_uses_n_numbering() {
+    use crate::hgvs::generate_hgvsc;
+
+    let mut tx = make_test_transcript();
+    tx.biotype = "lncRNA".into();
+    tx.translation = None;
+    let exonic = InputVariant::new(
+        "21".into(),
+        25_000_050,
+        25_000_050,
+        b"A".to_vec(),
+        b"G".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&exonic, &tx, None).as_deref(),
+        Some("ENST00000000001.1:n.51A>G")
+    );
+    let intronic = InputVariant::new(
+        "21".into(),
+        25_000_302,
+        25_000_302,
+        b"A".to_vec(),
+        b"G".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&intronic, &tx, None).as_deref(),
+        Some("ENST00000000001.1:n.300+3A>G")
+    );
+}
+
+/// Reverse strand, no FASTA: the slice runs from the transcript's genomic end, and
+/// the alleles are complemented into transcript orientation. On
+/// `make_descending_reverse_strand_transcript()` CDS 1 is genomic 25_005_950.
+#[test]
+fn concordance_hgvsc_perl_reverse_strand_reads_the_slice_from_the_transcript_end() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_descending_reverse_strand_transcript();
+    // CDS 5 (cDNA 55) is genomic 25_005_946; the CDS reads C there, the genome G.
+    let snv = InputVariant::new(
+        "21".into(),
+        25_005_946,
+        25_005_946,
+        b"G".to_vec(),
+        b"T".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&snv, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.5C>A")
+    );
+    // CDS 4..6 (GCT) is genomic 25_005_945..25_005_947, AGC on the genome.
+    let deletion = InputVariant::new(
+        "21".into(),
+        25_005_945,
+        25_005_947,
+        b"AGC".to_vec(),
+        b"-".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&deletion, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.4_6del")
+    );
+    // Three bases into intron 1 on the transcript's 3' side of exon 1, which ends
+    // at genomic 25_005_701 (cDNA 300 = CDS 250): `250+3`, offset sign flipped.
+    let intronic = InputVariant::new(
+        "21".into(),
+        25_005_698,
+        25_005_698,
+        b"A".to_vec(),
+        b"G".to_vec(),
+    );
+    assert_eq!(
+        generate_hgvsc(&intronic, &tx, None).as_deref(),
+        Some("ENST00000000001.1:c.250+3T>C")
+    );
+}
+
+/// The compact forward transcript on a 7,000-base reference: exon 1 is 100..399
+/// with CDS 1 at genomic 150, so genomic `g` in exon 1 is CDS `g - 149`.
+fn hgvsc_fasta_fixture(edits: &[(usize, u8)]) -> (tempfile::TempDir, vep_fasta::IndexedFasta) {
+    let mut sequence = vec![b'T'; 7000];
+    for &(pos, base) in edits {
+        sequence[pos - 1] = base;
+    }
+    load_test_fasta("1", &String::from_utf8(sequence).expect("ASCII reference"))
+}
+
+/// `hgvs_variant_notation` looks for a duplication after the insertion site
+/// first, then before it: an inserted `G` after a reference `G` at CDS 61 is
+/// `c.61dup`, an inserted `GA` after reference `GA` at CDS 60..61 is `c.60_61dup`.
+#[test]
+fn concordance_hgvsc_perl_insertion_matching_preceding_bases_is_dup() {
+    use crate::hgvs::generate_hgvsc;
+
+    let tx = make_compact_test_transcript();
+    let (_dir, fasta) = hgvsc_fasta_fixture(&[(209, b'G'), (210, b'A')]);
+
+    let single = InputVariant::new("1".into(), 211, 210, b"-".to_vec(), b"A".to_vec());
+    assert_eq!(
+        generate_hgvsc(&single, &tx, Some(&fasta)).as_deref(),
+        Some("ENST00000000001.1:c.61dup")
+    );
+    let pair = InputVariant::new("1".into(), 211, 210, b"-".to_vec(), b"GA".to_vec());
+    assert_eq!(
+        generate_hgvsc(&pair, &tx, Some(&fasta)).as_deref(),
+        Some("ENST00000000001.1:c.60_61dup")
+    );
+}
+
+/// `perform_shift` moves an insertion 3' while the next reference base matches
+/// its first base; the notation describes the shifted site and `HGVS_OFFSET`
+/// carries the distance. An inserted `G` before `GG` moves two bases and then
+/// duplicates the `G` now before it: `c.63dup`, offset 2.
+#[test]
+fn concordance_hgvsc_perl_shifted_insertion_reports_the_offset() {
+    use crate::hgvs::generate_hgvs;
+
+    let tx = make_compact_test_transcript();
+    let (_dir, fasta) = hgvsc_fasta_fixture(&[(211, b'G'), (212, b'G')]);
+
+    let variant = InputVariant::new("1".into(), 211, 210, b"-".to_vec(), b"G".to_vec());
+    let hgvs = generate_hgvs(&variant, &tx, Some(&fasta));
+    assert_eq!(hgvs.hgvsc.as_deref(), Some("ENST00000000001.1:c.63dup"));
+    assert_eq!(hgvs.offset, Some(2));
+}
+
+/// A deletion shifts the same way: deleting `GG` at genomic 210..211 with another
+/// `G` at 212 moves one base and is `c.62_63del`, offset 1.
+#[test]
+fn concordance_hgvsc_perl_shifted_deletion_reports_the_offset() {
+    use crate::hgvs::generate_hgvs;
+
+    let tx = make_compact_test_transcript();
+    let (_dir, fasta) = hgvsc_fasta_fixture(&[(210, b'G'), (211, b'G'), (212, b'G')]);
+
+    let variant = InputVariant::new("1".into(), 210, 211, b"GG".to_vec(), b"-".to_vec());
+    let hgvs = generate_hgvs(&variant, &tx, Some(&fasta));
+    assert_eq!(hgvs.hgvsc.as_deref(), Some("ENST00000000001.1:c.62_63del"));
+    assert_eq!(hgvs.offset, Some(1));
+
+    // No matching base after the deletion: it stays put and no offset is emitted.
+    let (_dir, fasta) = hgvsc_fasta_fixture(&[(210, b'G'), (211, b'G')]);
+    let hgvs = generate_hgvs(&variant, &tx, Some(&fasta));
+    assert_eq!(hgvs.hgvsc.as_deref(), Some("ENST00000000001.1:c.61_62del"));
+    assert_eq!(hgvs.offset, None);
+}
+
+/// On the reverse strand the 3' shift runs towards lower genomic coordinates and
+/// `HGVS_OFFSET` is negative. With CDS 1 at genomic 6050, an inserted `C` before
+/// genomic `CC` at 5989..5990 moves two bases and duplicates the transcript's `G`
+/// at CDS 62.
+#[test]
+fn concordance_hgvsc_perl_reverse_strand_shift_has_negative_offset() {
+    use crate::hgvs::generate_hgvs;
+
+    let tx = compact_on_chr1(make_descending_reverse_strand_transcript());
+    let (_dir, fasta) = hgvsc_fasta_fixture(&[(5989, b'C'), (5990, b'C')]);
+
+    let variant = InputVariant::new("1".into(), 5991, 5990, b"-".to_vec(), b"C".to_vec());
+    let hgvs = generate_hgvs(&variant, &tx, Some(&fasta));
+    assert_eq!(hgvs.hgvsc.as_deref(), Some("ENST00000000001.1:c.62dup"));
+    assert_eq!(hgvs.offset, Some(-2));
+}
+
+// HGVSp parity with Perl's `hgvs_protein` (`coding::perl_hgvs_protein`). Every
+// expected string is what `TranscriptVariationAllele::hgvs_protein` prints for the
+// same fixture; the derivations cite its helpers. `make_test_transcript()` has no
+// cached UTR strings and no FASTA, so the alternate CDS carries `N`-padded UTRs.
+
+/// `hgvsp_stop(utr)`: the terminal-stop fixture with a 3' UTR of `utr`.
+fn make_transcript_with_terminal_stop_and_utr(utr: &str) -> Transcript {
+    let mut tx = make_transcript_with_terminal_stop();
+    if let Some(ref mut vefc) = tx.vefc {
+        vefc.three_prime_utr = Some(utr.to_string());
+    }
+    tx
+}
+
+fn hgvsp_on(
+    tx: &Transcript,
+    start: u64,
+    end: u64,
+    ref_allele: &[u8],
+    alt_allele: &[u8],
+) -> Option<String> {
+    let variant = InputVariant::new(
+        "21".into(),
+        start,
+        end,
+        ref_allele.to_vec(),
+        alt_allele.to_vec(),
+    );
+    crate::hgvs::generate_hgvsp(&variant, tx, None)
+}
+
+/// H07. In-frame insertion between codons 3 and 4 whose reference peptide window
+/// is empty: `_get_hgvs_protein_type` reads `ins`, `_get_surrounding_peptides`
+/// names the flanking residues.
+#[test]
+fn concordance_hgvsp_h07_insertion_between_codons_names_flanking_residues() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"AGA").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3_Lys4insArg")
+    );
+}
+
+/// H08. The inserted residue equals the residue before the site:
+/// `_check_for_peptide_duplication` turns the insertion into a duplication.
+#[test]
+fn concordance_hgvsp_h08_insertion_equal_to_preceding_residue_is_dup() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"GGA").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3dup")
+    );
+}
+
+/// H09. Two inserted residues equal to residues 2 and 3: a ranged duplication.
+#[test]
+fn concordance_hgvsp_h09_two_residue_duplication_is_ranged() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"GCTGGA").as_deref(),
+        Some("ENSP00000000001.1:p.Ala2_Gly3dup")
+    );
+}
+
+/// H10. The inserted residue equals the residue after the site: `_shift_3prime`
+/// moves the insertion past Lys4, and the duplication check then matches it.
+#[test]
+fn concordance_hgvsp_h10_insertion_shifts_past_matching_residue_then_dups() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"AAA").as_deref(),
+        Some("ENSP00000000001.1:p.Lys4dup")
+    );
+}
+
+/// H11a. An inserted stop: `*` becomes `X`, then `Xaa`, then `Ter`.
+#[test]
+fn concordance_hgvsp_h11a_inserted_stop_is_ter() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"TAA").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3_Lys4insTer")
+    );
+}
+
+/// H11b. A residue then a stop: both are reported.
+#[test]
+fn concordance_hgvsp_h11b_residue_then_stop_reports_both() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"GATTAA").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3_Lys4insAspTer")
+    );
+}
+
+/// H11c. A stop then a residue: `s/Ter\w+/Ter/` drops what follows the stop.
+#[test]
+fn concordance_hgvsp_h11c_stop_then_residue_reports_stop_only() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_059, 25_000_058, b"-", b"TAAGAT").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3_Lys4insTer")
+    );
+}
+
+/// H12a. Stop-loss substitution with the next stop in the 3' UTR: the first stop
+/// of the alternate translation sits at residue 286, and
+/// `_stop_loss_extra_AA` counts 286 - 1 - 282 = 3.
+#[test]
+fn concordance_hgvsp_h12a_stop_loss_substitution_counts_to_utr_stop() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCATAA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_296, 25_004_296, b"T", b"C").as_deref(),
+        Some("ENSP00000000001.1:p.Ter283GlnextTer3")
+    );
+}
+
+/// H12b. Stop-loss substitution with no stop in the alternate translation: `?`.
+#[test]
+fn concordance_hgvsp_h12b_stop_loss_substitution_without_downstream_stop() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCAGCA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_296, 25_004_296, b"T", b"C").as_deref(),
+        Some("ENSP00000000001.1:p.Ter283GlnextTer?")
+    );
+}
+
+/// H13a. In-frame deletion of the last residue and the stop: the reference
+/// peptide is `A*`, the type `del`, and the stop-loss branch of
+/// `_get_hgvs_protein_format` counts 284 - 1 - 282 = 1 residue to the UTR stop.
+#[test]
+fn concordance_hgvsp_h13a_deletion_of_last_residue_and_stop() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCATAA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_293, 25_004_298, b"GCTTAA", b"-").as_deref(),
+        Some("ENSP00000000001.1:p.Ala282_Ter283delextTer1")
+    );
+}
+
+/// H13b. In-frame deletion of the stop codon alone: 285 - 1 - 282 = 2.
+#[test]
+fn concordance_hgvsp_h13b_deletion_of_stop_codon() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCATAA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_296, 25_004_298, b"TAA", b"-").as_deref(),
+        Some("ENSP00000000001.1:p.Ter283delextTer2")
+    );
+}
+
+/// H13c. An insertion inside the stop codon that recreates a stop: `_clip_alleles`
+/// returns `=` on the leading stops, `_get_hgvs_protein_type` then reads `X`
+/// against `X*` as `delins`, and the alt `TerTer` collapses to `Ter`.
+#[test]
+fn concordance_hgvsp_h13c_insertion_in_stop_codon_recreating_stop() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCATAA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_297, 25_004_296, b"-", b"AGT").as_deref(),
+        Some("ENSP00000000001.1:p.Ter283delinsTer")
+    );
+}
+
+/// H14. In-frame deletion of one codon whose following residue differs:
+/// `_shift_3prime` does not move it.
+#[test]
+fn concordance_hgvsp_h14_single_codon_deletion_does_not_shift() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_056, 25_000_058, b"GGA", b"-").as_deref(),
+        Some("ENSP00000000001.1:p.Gly3del")
+    );
+}
+
+/// H15. Two codons replaced by two others: `delins` over the range.
+#[test]
+fn concordance_hgvsp_h15_two_codon_replacement_is_delins() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_053, 25_000_058, b"GCTGGA", b"AAAAAA").as_deref(),
+        Some("ENSP00000000001.1:p.Ala2_Gly3delinsLysLys")
+    );
+}
+
+/// H16. Deleting the start codon with a 5' UTR that ends in `ATG`: Perl's
+/// `start_lost` predicate holds and it prints `Met1?`; this engine keeps
+/// `start_retained_variant` (the CDS is a suffix of the edited sequence) and
+/// drops `start_lost`, so the short-circuit is suppressed and the deletion is
+/// described as one. Intended divergence.
+#[test]
+fn concordance_hgvsp_h16_start_codon_deletion_with_retained_start_is_del() {
+    let mut tx = make_test_transcript();
+    if let Some(ref mut vefc) = tx.vefc {
+        vefc.five_prime_utr = Some(format!("{}GCCACATG", "GCCACC".repeat(7)));
+    }
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_050, 25_000_052, b"ATG", b"-").as_deref(),
+        Some("ENSP00000000001.1:p.Met1del")
+    );
+}
+
+/// H17. An in-frame insertion of a second Met after the start codon: start
+/// retained only, `_clip_alleles` leaves an insertion of `M` at 2, and the
+/// duplication check matches the residue before it.
+#[test]
+fn concordance_hgvsp_h17_insertion_duplicating_the_start_methionine() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_052, 25_000_051, b"-", b"GAT").as_deref(),
+        Some("ENSP00000000001.1:p.Met1dup")
+    );
+}
+
+/// H18. Deleting one codon of a long Ala run: `_shift_3prime` walks the deletion
+/// to the run's last residue.
+#[test]
+fn concordance_hgvsp_h18_deletion_in_a_repeat_shifts_to_its_end() {
+    let tx = make_test_transcript();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_068, 25_000_070, b"GCT", b"-").as_deref(),
+        Some("ENSP00000000001.1:p.Ala283del")
+    );
+}
+
+/// H19. An intronic deletion of the two acceptor bases whose 3' shift lands in
+/// exon 2: `hgvs_protein` reads the `coding` pre-consequence predicate of the
+/// allele as annotated, which is false in the intron, so it prints nothing even
+/// though the shifted span (CDS 251..252) is coding.
+#[test]
+fn concordance_hgvsp_h19_intronic_deletion_shifted_into_the_cds_has_no_hgvsp() {
+    let tx = make_test_transcript();
+    let annotated = InputVariant::new(
+        "21".into(),
+        25_001_998,
+        25_001_999,
+        b"AG".to_vec(),
+        b"-".to_vec(),
+    );
+    let shifted = InputVariant::new(
+        "21".into(),
+        25_002_000,
+        25_002_001,
+        b"CT".to_vec(),
+        b"-".to_vec(),
+    );
+    assert_eq!(
+        crate::coding::perl_hgvs_protein(
+            &annotated,
+            Some((&shifted, 25_002_000, 25_002_001)),
+            &tx,
+            None
+        ),
+        None
+    );
+}
+
+/// H20. An eight-base deletion straddling the acceptor (four intronic bases, CDS
+/// 251..254) whose shift lands fully in exon 2 (CDS 251..258). The annotated
+/// allele is coding, so the notation is produced; `frameshift` is not cached, and
+/// its length arithmetic runs on the shifted span (8 bases against an empty
+/// allele: a frameshift) where the annotated span, with no defined CDS start,
+/// would not be one. Codon 84 (CDS 250..252, `GCT`) becomes `GGC` and every codon
+/// after it `TGC`, with no stop before the `N`-padded UTR.
+#[test]
+fn concordance_hgvsp_h20_straddling_deletion_is_a_frameshift_on_its_shifted_span() {
+    let tx = make_test_transcript();
+    let annotated = InputVariant::new(
+        "21".into(),
+        25_001_996,
+        25_002_003,
+        b"AAAGCTGC".to_vec(),
+        b"-".to_vec(),
+    );
+    let shifted = InputVariant::new(
+        "21".into(),
+        25_002_000,
+        25_002_007,
+        b"CTGCTGCT".to_vec(),
+        b"-".to_vec(),
+    );
+    assert_eq!(
+        crate::coding::perl_hgvs_protein(
+            &annotated,
+            Some((&shifted, 25_002_000, 25_002_007)),
+            &tx,
+            None
+        )
+        .as_deref(),
+        Some("Ala84GlyfsTer?")
+    );
+}
+
+/// H21. A `cds_start_NF` transcript whose first codon is `CTG` and whose cached
+/// peptide opens with the codon's own `L`: `Transcript::translate` writes `M` over
+/// position 1 of any start codon, and `_get_surrounding_peptides` reads that
+/// string, so an insertion between residues 1 and 2 names `Met1`, while a
+/// substitution inside the codon (`peptide`, per codon) still names `Leu1`.
+#[test]
+fn concordance_hgvsp_h21_start_codon_reads_met_in_the_transcript_peptide() {
+    let mut tx = make_start_codon_transcript("CTGGCTGGAAAATTCGAT", 50, 1, Some("LAGKFD"));
+    tx.flags = vec!["cds_start_NF".to_string()].into();
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_053, 25_000_052, b"-", b"CCG").as_deref(),
+        Some("ENSP00000000001.1:p.Met1_Ala2insPro")
+    );
+    assert_eq!(
+        hgvsp_on(&tx, 25_000_051, 25_000_051, b"T", b"A").as_deref(),
+        Some("ENSP00000000001.1:p.Leu1Gln")
     );
 }
 
@@ -3164,12 +3909,10 @@ fn concordance_splice_donor_region_vs_5th_base_forward_delins() {
 }
 
 /// Companion to the TP53 shape above, on the forward test transcript, whose
-/// intron 1 is 25_000_300-25_001_999.
-/// This places a complex delins
-///
-/// with a single matching base at the 5th-base position,
-/// to cover the case where the differing regions are non-contiguous and span
-/// the 5th-base window on both sides without hitting it.
+/// intron 1 is 25_000_300-25_001_999. This places a complex delins with a
+/// single matching base at the 5th-base position, to cover the case where the
+/// differing regions are non-contiguous and span the 5th-base window on both
+/// sides without hitting it.
 #[test]
 fn concordance_splice_donor_region_vs_5th_base_noncontiguous() {
     let tx = make_test_transcript();
@@ -3306,11 +4049,6 @@ fn build_utr_stop_shift_fasta() -> (tempfile::TempDir, vep_fasta::IndexedFasta) 
     // already A,A (stop codon 2nd and 3rd base from TAA placement above).
     seq[25_004_300 - 1] = b'G';
     seq[25_004_301 - 1] = b'A';
-    // After deletion, genomic 25_004_298 takes on what was at 25_004_302
-    // and 25_004_299 takes on what was at 25_004_303. For the codon at
-    // the original stop position (genomic 25_004_297..25_004_299 =
-    // cDNA 898-900) to remain `T + A + A = TAA`, 25_004_302 and 25_004_303 must
-    // both be A.
     seq[25_004_302 - 1] = b'A';
     seq[25_004_303 - 1] = b'A';
 

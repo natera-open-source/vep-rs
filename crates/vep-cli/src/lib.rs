@@ -6,8 +6,8 @@
 //! # Public API surface
 //!
 //! The `pub use`s below are the **intended** library surface for downstream
-//! consumers, including a long-lived service that holds an `Annotator` directly
-//! and serves many requests from one load. Code that pulls from one of these
+//! consumers, including a long-lived process that holds an `Annotator` and
+//! annotates many batches from one load. Code that pulls from one of these
 //! re-exports is opting in to a stable contract; code that reaches into the
 //! submodules below relies on implementation details that may move between
 //! releases.

@@ -87,9 +87,7 @@ pub enum AnnotationError {
     Annotation(String),
 }
 
-/// A simple-allele row: chr, 1-based pos, ref, alt. The shape a batch service
-/// consumer produces after splitting a `[row_id, asm, chr, pos, ref, alt]`
-/// payload.
+/// A simple-allele row: chr, 1-based pos, ref, alt, one allele per row.
 ///
 /// This is the per-row library input. For richer VCF features (multi-allelic,
 /// symbolic SVs, breakends) callers should construct `InputVariant` themselves
@@ -172,13 +170,13 @@ pub fn row_to_input_variant(row: &RawRow) -> Result<InputVariant, AnnotationErro
 
 /// Reusable annotator bound to one loaded assembly/cache.
 ///
-/// Holds a scoped rayon thread pool so concurrent annotators (e.g. one per
-/// assembly inside an HTTP service) don't oversubscribe a single global pool.
-/// Parallel work inside `annotate_batch` runs through `pool.install(...)`.
+/// Holds a scoped rayon thread pool so concurrent annotators (one per assembly,
+/// say) don't oversubscribe a single global pool. Parallel work inside
+/// `annotate_batch` runs through `pool.install(...)`.
 ///
-/// `Clone` is cheap: all state is wrapped in `Arc`. Callers can hand
-/// out `Annotator` clones across HTTP request handlers, worker threads, etc.
-/// without rewrapping in `Arc<Annotator>` themselves.
+/// `Clone` is cheap: all state is wrapped in `Arc`. Callers can hand out
+/// `Annotator` clones across threads without rewrapping in `Arc<Annotator>`
+/// themselves.
 #[derive(Clone)]
 pub struct Annotator {
     inner: Arc<AnnotatorInner>,
@@ -571,7 +569,7 @@ pub fn annotate_batch(
         }
 
         // The runner's implementation is shared, not duplicated: a second copy
-        // here could let the worker and the CLI disagree on the same BND.
+        // here could let the two entry points disagree on the same BND.
         crate::runner::append_bnd_mate_consequences(
             variant,
             resources.transcripts.as_ref(),

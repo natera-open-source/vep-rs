@@ -191,15 +191,28 @@ def reservoir_pass(suites: list[tuple[str, Path, Path]], seed: int) -> tuple[dic
     return reservoir, seen, per_suite
 
 
-def choose_exemplars(reservoir: dict[str, list[Row]], k: int, rng: random.Random, max_span: int = 0) -> dict[str, list[Row]]:
+def choose_exemplars(
+    reservoir: dict[str, list[Row]],
+    k: int,
+    rng: random.Random,
+    max_span: int = 0,
+    focus_terms: Iterable[str] = (),
+    focus_k: int | None = None,
+) -> dict[str, list[Row]]:
     """Up to K rows per combination, distinct (class, strand) first, higher preference first.
 
     Rows wider than `max_span` bases (when > 0) come after every narrower row, so a
     combination takes a wide structural variant only when nothing narrower shows it:
     each wide record pulls every transcript of its span into the fixture cache.
+
+    A combination containing any of `focus_terms` takes up to `focus_k` rows instead of
+    `k`, so a corpus can carry many exemplars of the consequence shapes it exists to test
+    beside one exemplar of every other shape.
     """
+    focus = set(focus_terms)
     chosen: dict[str, list[Row]] = {}
     for combo in sorted(reservoir):
+        want = focus_k if focus_k is not None and focus & set(combo.split(",")) else k
         cands = list(reservoir[combo])
         rng.shuffle(cands)
         cands.sort(key=lambda r: (1 if max_span and r.span > max_span else 0, -r.preference()))
@@ -211,10 +224,10 @@ def choose_exemplars(reservoir: dict[str, list[Row]], k: int, rng: random.Random
                 continue
             picked.append(r)
             strata_seen.add(stratum)
-            if len(picked) == k:
+            if len(picked) == want:
                 break
         for r in cands:
-            if len(picked) == k:
+            if len(picked) == want:
                 break
             if r not in picked:
                 picked.append(r)
@@ -334,11 +347,23 @@ def resolve_records(
     return found, headers, multi
 
 
+def run_options(args: argparse.Namespace) -> dict:
+    """The manifest keys the golden harness passes to both engines: `flags` (extra
+    command-line flags such as `--hgvs`) and `fasta` (a gzipped reference beside the
+    manifest, decompressed and passed to `--fasta`)."""
+    options: dict = {}
+    if getattr(args, "flag", None):
+        options["flags"] = list(args.flag)
+    if getattr(args, "fasta_name", None):
+        options["fasta"] = args.fasta_name
+    return options
+
+
 def cmd_select(args: argparse.Namespace) -> int:
     suites = [parse_suite_arg(s) for s in args.suite]
     rng = random.Random(args.seed)
     reservoir, seen, per_suite = reservoir_pass(suites, args.seed)
-    chosen = choose_exemplars(reservoir, args.k, rng, args.max_span)
+    chosen = choose_exemplars(reservoir, args.k, rng, args.max_span, args.focus_term or (), args.focus_k)
     wanted: dict[str, set[str]] = defaultdict(set)
     for combo, rows in chosen.items():
         for r in rows:
@@ -406,7 +431,9 @@ def cmd_select(args: argparse.Namespace) -> int:
         "generator_version": GENERATOR_VERSION,
         "seed": args.seed,
         "exemplars_per_combination": args.k,
+        **({"focus_terms": sorted(args.focus_term), "focus_exemplars_per_combination": args.focus_k} if args.focus_term else {}),
         "max_span": args.max_span,
+        **run_options(args),
         # File names only: the directory each suite was staged in belongs to the build
         # host, not to the corpus, and the tests read neither field.
         "suites": {sid: {"reference": Path(ref).name, "input": Path(inp).name, "rows": sum(per_suite[sid].values()), "combinations": len(per_suite[sid])} for sid, ref, inp in suites},
@@ -434,6 +461,25 @@ def load_tuples(path: Path) -> tuple[dict[tuple[str, str, str, str], set[str]], 
         out[key].add(r.consequence_set)
         names[key].add(r.uploaded_variation)
     return out, names
+
+
+def load_fields(path: Path, fields: list[str]) -> dict[tuple[str, str, str, str, str], dict[str, str]]:
+    """(Location, Allele, Feature, Feature_type, consequence set) -> the named Extra fields ('-' when absent)."""
+    out: dict[tuple[str, str, str, str, str], dict[str, str]] = {}
+    with opener(path)(path, "rt", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if not line or line.startswith("#"):
+                continue
+            f = line.rstrip("\n").split("\t")
+            if len(f) < 7:
+                continue
+            while len(f) < 14:
+                f.append("-")
+            extra = parse_extra(f[13])
+            key = (f[1], f[2], f[4], f[5], normalize_consequence_set(f[6]))
+            out.setdefault(key, {name: extra.get(name, "-") for name in fields})
+    return out
+
 
 
 def record_name_index(records: list[dict]) -> dict[str, list[int]]:
@@ -497,8 +543,36 @@ def cmd_classify(args: argparse.Namespace) -> int:
     manifest["divergences"] = divergences
     manifest["vep_rs_only_tuples"] = extra_rust
     manifest["divergence_summary"] = dict(Counter(d["expected_divergence"] for d in divergences))
+    field_note = ""
+    if args.field:
+        # Field values are compared only on keys whose consequence sets agree; a key whose
+        # terms differ is already a documented (or unexplained) divergence above and the
+        # golden test skips its fields, which is where the start co-emission keys land (VEP
+        # prints `Met1?` wherever its start_lost predicate holds, vep-rs the peptide change
+        # wherever it keeps start_retained_variant). No field difference on an agreeing key
+        # is documented, so each one is an `unexplained_residual` the golden test fails on.
+        perl_fields = load_fields(Path(args.vep_default), args.field)
+        rust_fields = load_fields(Path(args.vep_rs_output), args.field)
+        field_divergences: list[dict] = []
+        for key, pvals in sorted(perl_fields.items()):
+            rvals = rust_fields.get(key)
+            if rvals is None:
+                continue
+            for name in args.field:
+                if pvals[name] != rvals[name]:
+                    field_divergences.append({
+                        "location": key[0], "allele": key[1], "feature": key[2], "feature_type": key[3],
+                        "record_indices": records_for(key[:4]),
+                        "consequence_set": key[4], "field": name, "vep": pvals[name], "vep_rs": rvals[name],
+                        "expected_divergence": "unexplained_residual",
+                    })
+        manifest["fields_compared"] = list(args.field)
+        manifest["field_divergences"] = field_divergences
+        manifest["field_divergence_summary"] = dict(Counter(d["expected_divergence"] for d in field_divergences))
+        field_note = f"; field divergences {len(field_divergences)} ({manifest['field_divergence_summary']})"
+    manifest.update(run_options(args))
     (corpus / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
-    print(f"divergent VEP rows {len(divergences)} ({manifest['divergence_summary']}); vep-rs-only tuples {len(extra_rust)}")
+    print(f"divergent VEP rows {len(divergences)} ({manifest['divergence_summary']}); vep-rs-only tuples {len(extra_rust)}{field_note}")
     return 0
 
 
@@ -519,6 +593,13 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 1 if missing else 0
 
 
+def add_run_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--flag", action="append",
+                        help="a command-line flag both engines ran with, written --flag=--hgvs (repeatable), recorded as `flags`")
+    parser.add_argument("--fasta-name", default=None,
+                        help="file name of the gzipped reference beside the manifest, recorded as `fasta`")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -534,11 +615,18 @@ def main(argv: list[str] | None = None) -> int:
                    help="multi-allelic sequence records sampled per suite and stratum (SNV-only, indel)")
     s.add_argument("--max-span", type=int, default=1_000_000,
                    help="prefer exemplars no wider than this many bases; 0 disables the preference")
+    s.add_argument("--focus-term", action="append",
+                   help="a consequence term; combinations containing it take --focus-k exemplars")
+    s.add_argument("--focus-k", type=int, default=None, help="exemplars per focus combination")
+    add_run_options(s)
     s.set_defaults(fn=cmd_select)
     c = sub.add_parser("classify")
     c.add_argument("--corpus", required=True)
     c.add_argument("--vep-default", required=True, help="VEP default-format output for variants.vcf")
     c.add_argument("--vep-rs-output", required=True, help="vep-rs default-format output for variants.vcf")
+    c.add_argument("--field", action="append",
+                   help="an Extra field (HGVSc, HGVSp) compared on every key whose consequence sets agree")
+    add_run_options(c)
     c.set_defaults(fn=cmd_classify)
     k = sub.add_parser("check")
     k.add_argument("--corpus", required=True)
