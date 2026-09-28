@@ -32,9 +32,13 @@ authors:
     affiliation: Natera, Inc.
 license: Apache-2.0
 repository-code: https://github.com/natera-open-source/vep-rs
-version: 0.1.0
-date-released: 2026-09-22
-doi: 10.5281/zenodo.22837897
+version: 0.2.0
+date-released: 2026-09-29
+doi: 10.5281/zenodo.22837896
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22837897
+    description: version 0.1.0
 keywords:
   - variant annotation
   - variant effect prediction

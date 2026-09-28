@@ -201,7 +201,7 @@ The software itself is archived at Zenodo, and that archive is the citation for 
 
 > Porter M, Borkowski R. _vep-rs_, version 0.1.0. Zenodo (2026). [doi:10.5281/zenodo.22837897](https://doi.org/10.5281/zenodo.22837897)
 
-`CITATION.cff` at the repository root carries the software citation and its DOI in machine-readable form, so GitHub's "Cite this repository" button and citation managers pick it up directly; the article is added there on acceptance. The concordance and wall-time figures the paper reports re-derive from `manuscript/data/*.csv` in this tree; see [manuscript/data/README.md](manuscript/data/README.md).
+`CITATION.cff` at the repository root carries the software citation in machine-readable form with the all-versions DOI ([10.5281/zenodo.22837896](https://doi.org/10.5281/zenodo.22837896)) and the archived version's own, so GitHub's "Cite this repository" button and citation managers pick it up directly; the article is added there on acceptance. The concordance and wall-time figures the paper reports re-derive from `manuscript/data/*.csv` in this tree; see [manuscript/data/README.md](manuscript/data/README.md).
 
 ## Acknowledgments
 
