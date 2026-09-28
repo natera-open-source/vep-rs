@@ -2574,6 +2574,21 @@ fn concordance_hgvsp_h21_start_codon_reads_met_in_the_transcript_peptide() {
     );
 }
 
+/// H22. A shared residue trimmed before a shared stop: `_clip_alleles` advances a
+/// local start and writes it back only after both loops, so its leading-stop
+/// return (`=`) discards the increment and the notation keeps start 282 and end
+/// 283; `_get_hgvs_protein_type` then reads `AX` against `AXG` as `delins` and
+/// the formatter prints the range. A port that moved `start` in place printed
+/// `Ala283delinsAlaTer`.
+#[test]
+fn concordance_hgvsp_h22_clip_leading_stop_return_keeps_start() {
+    let tx = make_transcript_with_terminal_stop_and_utr("GCAGCATAA");
+    assert_eq!(
+        hgvsp_on(&tx, 25_004_293, 25_004_298, b"GCTTAA", b"GCTTAAGGC").as_deref(),
+        Some("ENSP00000000001.1:p.Ala282_Ter283delinsAlaTer")
+    );
+}
+
 /// No spurious UTR term on an SNV at the CDS/UTR boundary: the per-endpoint
 /// mapping already classifies a single position as coding or UTR, so
 /// `add_utr_for_overlapping_span()` must not fire for it.

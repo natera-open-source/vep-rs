@@ -3070,16 +3070,19 @@ fn replace_xaa_with_ter(pep: &mut [u8]) {
 }
 
 /// `_clip_alleles` (2118) with `numbering` `p`: trims the residues the alleles
-/// share from the front, then from the back, moving `start` and `end`, and
-/// records `original_ref` and `preseq`. A leading stop on both sides returns
-/// `Eq` at once. The type re-set block runs as written except its `dup` case,
-/// which applies only to nucleotide numbering.
+/// share from the front, then from the back, and records `original_ref` and
+/// `preseq`. Perl trims into local copies of `start` and `end` and writes them
+/// back only after both loops, so a leading stop on both sides, which returns
+/// `Eq` at once, leaves the notation's positions and peptides as they were,
+/// residues already trimmed included. The type re-set block runs as written
+/// except its `dup` case, which applies only to nucleotide numbering.
 fn hgvsp_clip_alleles(n: &mut HgvsProteinNotation) {
     let ref_pep: &[u8] = n.ref_pep.as_deref().unwrap_or_default();
     let alt_pep: &[u8] = n.alt_pep.as_deref().unwrap_or_default();
     n.original_ref = ref_pep.to_vec();
     let mut check_ref = ref_pep;
     let mut check_alt = alt_pep;
+    let (mut start, mut end) = (n.start, n.end);
     let mut preseq = Vec::new();
     for _ in 0..ref_pep.len() {
         let next_ref = check_ref.first().copied();
@@ -3090,7 +3093,7 @@ fn hgvsp_clip_alleles(n: &mut HgvsProteinNotation) {
         }
         match next_ref {
             Some(shared) if next_alt == Some(shared) => {
-                n.start += 1;
+                start += 1;
                 check_ref = &check_ref[1..];
                 check_alt = &check_alt[1..];
                 preseq.push(shared);
@@ -3102,11 +3105,13 @@ fn hgvsp_clip_alleles(n: &mut HgvsProteinNotation) {
         if check_ref.last().is_some() && check_ref.last() == check_alt.last() {
             check_ref = &check_ref[..check_ref.len() - 1];
             check_alt = &check_alt[..check_alt.len() - 1];
-            n.end -= 1;
+            end -= 1;
         } else {
             break;
         }
     }
+    n.start = start;
+    n.end = end;
     let kind = if check_ref == check_alt {
         Some(HgvspKind::Eq)
     } else if check_ref != b"-" && check_ref.len() == 1 && check_alt.len() == 1 {
