@@ -16,9 +16,7 @@ commit) and on a dry run (`--changelog-section Unreleased --date <today>`).
 from __future__ import annotations
 
 import argparse
-import csv
 import json
-import math
 import re
 import sys
 from decimal import ROUND_HALF_UP, Decimal
@@ -56,14 +54,6 @@ def half_up(x: float, places: int) -> str:
     return str(
         Decimal(str(x)).quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
     )
-
-
-def speedup(x: float) -> str:
-    if x >= 100:
-        return f"{half_up(x, 0)}×"
-    if x >= 10:
-        return f"{half_up(x, 1)}×"
-    return f"{half_up(x, 2)}×"
 
 
 def changelog_section(text: str, name: str) -> tuple[str, str | None]:
@@ -143,9 +133,8 @@ SUITE_LABELS = {
 
 def load_release_measurements(repo: Path, version: str):
     """The release's provenance record (docs/concordance-provenance/<date>-release-v<version>.json):
-    its per-suite concordance and per-cell wall-time aggregates, plus the paper's Perl VEP medians
-    from manuscript/data/wall_times.csv; the record, not a file under manuscript/data, carries a
-    release's own measurements."""
+    its per-suite concordance and per-cell wall-time aggregates. The record, not a file under
+    manuscript/data, carries a release's own measurements."""
     records = sorted((repo / "docs" / "concordance-provenance").glob(f"*-release-v{version}.json"))
     if not records:
         sys.exit(
@@ -158,28 +147,21 @@ def load_release_measurements(repo: Path, version: str):
         (cell["arch"], cell["suite_id"]): (float(cell["median_sec"]), int(cell["n_clones"]))
         for cell in record.get("per_cell_aggregates") or []
     }
-    perl = {}
-    for row in csv.DictReader(open(repo / "manuscript" / "data" / "wall_times.csv", newline="")):
-        if row["engine"] == "perl" and row["run_index"].startswith("median_of"):
-            notes = dict(
-                kv.split("=", 1) for kv in row["notes"].split(";") if "=" in kv
-            )
-            perl[(notes["arch"], notes["suite_id"])] = float(row["wall_time_sec"])
     missing = [s for s in SCORED if s not in conc]
     if missing:
         sys.exit(
             f"ERROR: [render_release_notes] {record_path.name} lacks concordance rows for {missing}"
         )
-    return conc, walls, perl, record_path.relative_to(repo).as_posix()
+    return conc, walls, record_path.relative_to(repo).as_posix()
 
 
 def measurements_section(repo: Path, version: str, date: str) -> str:
-    conc, walls, perl, record_rel = load_release_measurements(repo, version)
+    conc, walls, record_rel = load_release_measurements(repo, version)
     record_dir = record_rel.rsplit("/", 1)[0]
     lines = [
         "## Concordance and wall time for this release",
         "",
-        "The paper's published figures are unchanged; these are the released binary's own, from the",
+        "The paper's published figures are unchanged; these are the released version's own, from the",
         f"release's provenance record under [`{record_dir}/`]({REPO_URL}/tree/v{version}/{record_dir})",
         "(method: `scripts/concordance/run_clone_measurement.sh`).",
         "",
@@ -194,13 +176,7 @@ def measurements_section(repo: Path, version: str, date: str) -> str:
             f"{int(r['perl']):,} | {int(r['rust']):,} | {int(r['intersection']):,} |"
         )
     n = next(iter(walls.values()))[1] if walls else 0
-    cells, geo = [], {}
-    for arch, label in (("arm64", "ARM"), ("x86_64", "x86")):
-        logs = []
-        for s in SNP_INDEL:
-            if (arch, s) in walls and (arch, s) in perl:
-                logs.append(math.log(perl[(arch, s)] / walls[(arch, s)][0]))
-        geo[label] = math.exp(sum(logs) / len(logs)) if logs else float("nan")
+    cells = []
     for s in SNP_INDEL:
         if ("arm64", s) in walls and ("x86_64", s) in walls:
             dataset, assembly = SUITE_LABELS[s]
@@ -212,10 +188,8 @@ def measurements_section(repo: Path, version: str, date: str) -> str:
     lines += [
         "",
         f"Wall time, median of {n} independent machines per cell, ARM Graviton4 (`r8gd.8xlarge`)",
-        "and x86 Intel (`r8id.8xlarge`), 16 threads, local NVMe, sites-only inputs: "
-        + "; ".join(cells)
-        + ".",
-        f"Geomean speedup over Ensembl VEP 115.2 (the paper's medians): {speedup(geo['ARM'])} ARM, {speedup(geo['x86'])} x86.",
+        "and x86 Intel (`r8id.8xlarge`), 16 threads, local NVMe, sites-only inputs, the discarded warmup's",
+        "output deleted before the timed run: " + "; ".join(cells) + ".",
     ]
     return "\n".join(lines)
 

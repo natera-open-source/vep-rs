@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +16,6 @@ SUITES = ("s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08")
 
 def fixture_repo(tmp_path: Path, *, record: bool = True, cff_version_doi: bool = False) -> Path:
     repo = tmp_path / "repo"
-    (repo / "manuscript" / "data").mkdir(parents=True)
     (repo / "docs" / "concordance-provenance").mkdir(parents=True)
     (repo / ".github" / "release-notes").mkdir(parents=True)
     (repo / "Cargo.toml").write_text('[workspace.package]\nversion = "9.9.9"\nrust-version = "1.88"\n')
@@ -36,12 +34,6 @@ def fixture_repo(tmp_path: Path, *, record: bool = True, cff_version_doi: bool =
             "  - type: doi\n    value: 10.5281/zenodo.22837897\n    description: version 0.1.0\n"
         )
     (repo / "CITATION.cff").write_text(cff)
-    rows = ["date,engine,engine_version,suite,assembly,instance_type,run_index,wall_time_sec,peak_rss_mb,pct_cpu,major_page_faults,minor_page_faults,cache_state,notes"]
-    for arch in ("arm64", "x86_64"):
-        for i, s in enumerate(SUITES, start=1):
-            rows.append(f"2026-09-20,perl,115.2,x,GRCh37,r8gd.8xlarge,median_of_20,{100.0 * i},,,,,warm,arch={arch};suite_id={s}")
-            rows.append(f"2026-09-20,vep-rs,0.1.0,x,GRCh37,r8gd.8xlarge,median_of_20,{2.0 * i},,,,,warm,arch={arch};suite_id={s}")
-    (repo / "manuscript" / "data" / "wall_times.csv").write_text("\n".join(rows) + "\n")
     if record:
         conc = {s: {"raw_f1": 0.999979, "adj_f1": 1.0, "perl": 1000 + i, "rust": 1000 + i, "intersection": 999 + i} for i, s in enumerate(SUITES)}
         cells = [
@@ -93,11 +85,10 @@ def test_body_follows_the_template(tmp_path: Path) -> None:
     # eight concordance rows with grouped tuple counts
     assert "| ClinVar full | GRCh37 | 0.999979 | 1.000000 | 1,000 | 1,000 | 999 |" in body
     assert body.count("| 1.000000 |") == 8
-    # wall time: the medians, and the geomean of perl/release over the six SNP/indel suites
+    # wall time: the release's own medians, no ratio against the paper's Perl medians
     assert "Wall time, median of 20 independent machines per cell" in body
     assert "ClinVar GRCh37 1.00 s ARM / 1.00 s x86" in body
-    geo = math.exp(sum(math.log(100.0 * i / (1.0 * i)) for i in range(1, 7)) / 6)
-    assert f"{round(geo):d}× ARM" in body  # 100×
+    assert "×" not in body and "Geomean" not in body and "paper's protocol" not in body
     # install rows carry the digests of SHA256SUMS
     assert "| `" + "a" * 64 + "` |" in body
     assert "vep-rs-9.9.9.tar.gz` is `git archive --format=tar.gz --prefix=vep-rs-9.9.9/ v9.9.9`, sha256 `" + "d" * 64 + "`" in body
