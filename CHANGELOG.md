@@ -43,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Releases: the workflow creates a draft that a maintainer publishes, with a
+  body rendered from the repository's files (`scripts/release/render_release_notes.py`);
+  the archives are `vep-X.Y.Z-<target>.tar.gz`, each unpacking to its own
+  directory; a `git archive` source tarball ships with its `.sha256`; one
+  `SHA256SUMS` covers every archive and every file in it carries a build
+  provenance attestation (`gh attestation verify`); `MD5SUMS` is not published.
+  `workflow_dispatch` runs the same build as a dry run without a release.
 - Dependencies: noodles 0.109 (the last release declaring rust-version 1.88;
   the bgzf readers and writer and the tabix index loader moved to their
   `io` and `fs` modules), mysql 28 (vep-cache-builder), rand 0.10

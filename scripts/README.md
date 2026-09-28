@@ -25,6 +25,7 @@ These scripts read their data locations from environment variables, each with a 
 | `data/`        | Download input VCFs and stage plugin annotation data                          | Internet access, tabix        |
 | `golden/`      | Build the per-release, per-assembly golden corpora under `tests/golden/`      | Python 3.10+; Ensembl VEP outputs and a JSON cache |
 | `adapters/`    | Convert vep-rs outputs between formats                                        | `duckdb` CLI                  |
+| `release/`     | Render the GitHub release body the release workflow publishes as a draft       | Python 3.10+                  |
 
 ## Reproducing the published concordance
 
@@ -179,3 +180,10 @@ To inspect a Storable object's raw structure, use Perl's `Data::Dumper` inside t
 container; the converter has no dump mode.
 
 Output: `{output}/transcripts/{chr}/{start}-{end}.json` + `{output}/info.json`
+
+### release/
+
+| Script                          | Description                                                                                                                                              |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `render_release_notes.py`       | Renders the release body from the repository's own files: the version's `CHANGELOG.md` section, the release's provenance record under `docs/concordance-provenance/`, `SHA256SUMS`, `CITATION.cff`'s DOIs, the workspace `rust-version`, and `.github/release-notes/vX.Y.Z.md` (the summary sentence, upgrade notes and known issues, the only hand-written lines). `.github/workflows/release.yml` runs it on every tag and on a `workflow_dispatch` dry run. |
+| `test_render_release_notes.py`  | Tests on a fixture repository: section order, the CHANGELOG section verbatim, the concordance and wall-time lines, the digests, the DOI lines, the failure modes            |
