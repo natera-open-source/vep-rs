@@ -542,6 +542,9 @@ pub struct TranscriptConsequence {
     pub hgvsc: Option<String>,
     /// HGVS protein notation.
     pub hgvsp: Option<String>,
+    /// Bases the HGVS notations were shifted 3' along the transcript, signed by
+    /// the transcript strand; `None` when nothing shifted.
+    pub hgvs_offset: Option<i64>,
     /// SIFT prediction and score.
     pub sift: Option<String>,
     /// PolyPhen prediction and score.
@@ -646,6 +649,7 @@ impl Default for TranscriptConsequence {
             intron: None,
             hgvsc: None,
             hgvsp: None,
+            hgvs_offset: None,
             sift: None,
             polyphen: None,
             domains: Vec::new(),

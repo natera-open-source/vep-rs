@@ -736,11 +736,10 @@ pub fn calculate_sv_consequences(
                     ))
             {
                 // Ensembl's `--max_sv_size` decides whether an SV is annotated at all,
-                // never which terms it gets. The cheap path below is an order of
-                // magnitude faster than `deletion::calculate` on giant spans and emits
-                // `feature_truncation`, a biotype context term and `intron_variant` from
-                // two interval tests, the set the full path yields for an engulfing
-                // span or a non-coding transcript.
+                // never which terms it gets. The path below emits `feature_truncation`,
+                // a biotype context term and `intron_variant` from two interval tests,
+                // the set the full `deletion::calculate` path yields for an engulfing
+                // span or a non-coding transcript, without walking the span.
                 let sv_span = variant
                     .sv_end
                     .unwrap_or(variant.end)

@@ -16,14 +16,14 @@ use std::process::Command;
 
 use common::{
     compare_entries, compare_tab_headers, compare_vcf_headers, corpora, input_records, parse_json,
-    parse_tab, parse_vcf, read_expected, run_vep, Corpus, Documented,
+    parse_tab, parse_vcf, read_expected, run_vep, vep_command, Corpus, Documented,
 };
 
 fn check(corpus: &Corpus, label: &str, header: String, body: String, failures: &mut Vec<String>) {
     if !header.is_empty() || !body.is_empty() {
         failures.push(format!(
             "== corpus {}/{} ({label})\n{header}{body}",
-            corpus.release, corpus.assembly
+            corpus.release, corpus.name
         ));
     }
 }
@@ -119,25 +119,15 @@ fn parquet_round_trips_to_the_tab_output() {
         for shape in ["flat", "nested"] {
             let parquet_dir = tmp.path().join(format!(
                 "{}_{}_{shape}.parquet",
-                corpus.release, corpus.assembly
+                corpus.release, corpus.name
             ));
-            let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
-            cmd.arg("-i")
-                .arg(corpus.dir.join("variants.vcf"))
-                .arg("-o")
-                .arg(&parquet_dir)
-                .arg("--offline")
-                .arg("--json_cache")
-                .arg(corpus.dir.join("json_cache"))
-                .args(["--species", "homo_sapiens", "--assembly", &corpus.assembly])
-                .args([
-                    "--buffer_size",
-                    "5000",
-                    "--force_overwrite",
-                    "--no_stats",
-                    "--quiet",
-                ])
-                .args(["--output_format", "parquet", "--parquet_shape", shape]);
+            let mut cmd = vep_command(corpus, tmp.path());
+            cmd.arg("-o").arg(&parquet_dir).args([
+                "--output_format",
+                "parquet",
+                "--parquet_shape",
+                shape,
+            ]);
             let out = cmd.output().unwrap();
             assert!(
                 out.status.success(),
@@ -169,7 +159,7 @@ fn parquet_round_trips_to_the_tab_output() {
                 failures.push(format!(
                     "== corpus {}/{} (parquet {shape} round trip): {} tab rows vs {} round-trip rows; first difference at sorted line {first}:\n  tab:     {:?}\n  parquet: {:?}",
                     corpus.release,
-                    corpus.assembly,
+                    corpus.name,
                     expected_rows.len(),
                     actual_rows.len(),
                     expected_rows.get(first),
@@ -180,7 +170,7 @@ fn parquet_round_trips_to_the_tab_output() {
                 if let Some(report) = parquet_metadata_report(&parquet_dir) {
                     failures.push(format!(
                         "== corpus {}/{} (parquet metadata): {report}",
-                        corpus.release, corpus.assembly
+                        corpus.release, corpus.name
                     ));
                 }
             }
@@ -203,22 +193,9 @@ fn parquet_row_groups_prune_on_bloom_filters() {
     let tmp = tempfile::tempdir().unwrap();
     let corpus = &corpora()[0];
     let parquet_dir = tmp.path().join("rowgroups.parquet");
-    let out = Command::new(env!("CARGO_BIN_EXE_vep"))
-        .arg("-i")
-        .arg(corpus.dir.join("variants.vcf"))
+    let out = vep_command(corpus, tmp.path())
         .arg("-o")
         .arg(&parquet_dir)
-        .arg("--offline")
-        .arg("--json_cache")
-        .arg(corpus.dir.join("json_cache"))
-        .args(["--species", "homo_sapiens", "--assembly", &corpus.assembly])
-        .args([
-            "--buffer_size",
-            "5000",
-            "--force_overwrite",
-            "--no_stats",
-            "--quiet",
-        ])
         .args(["--output_format", "parquet", "--parquet_shape", "flat"])
         .args(["--parquet_row_group_size", "2048"])
         .output()

@@ -5,17 +5,13 @@
 //!
 //! Produces HGVSc (coding DNA) and HGVSp (protein) notation strings following
 //! the Human Genome Variation Society nomenclature conventions, matching Perl
-//! VEP's output for clinical reporting compatibility.
+//! VEP's output.
 //!
 //! Reference: <https://varnomen.hgvs.org/>
 
-use vep_core::codon::translate_codon;
 use vep_core::coordinate::Strand;
-use vep_core::transcript::Transcript;
+use vep_core::transcript::{MapperPair, Transcript};
 use vep_core::variant::{InputVariant, VariantClass};
-
-use crate::coding::compute_codon_window_peptide_alleles;
-use crate::mapper::{map_genomic_span_to_cds_bounds, CdsSpanBounds};
 
 /// Convert a single-letter amino acid code to its three-letter abbreviation.
 pub fn amino_acid_three_letter(one_letter: u8) -> &'static str {
@@ -43,24 +39,492 @@ pub fn amino_acid_three_letter(one_letter: u8) -> &'static str {
         b'*' => "Ter",
         b'X' => "Xaa",
         b'U' => "Sec",
+        b'B' => "Asx",
+        b'Z' => "Glx",
+        b'J' => "Xle",
+        b'O' => "Pyl",
         _ => "Xaa",
     }
 }
 
-/// Generate HGVSc notation for a variant-transcript pair.
+/// How far Perl VEP's `perform_shift` (TranscriptVariationAllele.pm 291) can
+/// move an insertion or deletion of `len` bases: it compares against 1,000 bases
+/// of flank, so a pattern that fits the flank moves at most `1001 - len`
+/// positions and a longer one at most 1,000, except that on the reverse strand
+/// `len == 1001` gets a loop bound of zero and never moves.
+fn hgvs_shift_limit(len: usize, reverse: bool) -> u64 {
+    match len {
+        0..=1000 => 1001 - len as u64,
+        1001 if reverse => 0,
+        _ => 1000,
+    }
+}
+
+/// The 3'-shifted span of an insertion or deletion, Perl's `_return_3prime(1)`
+/// (TranscriptVariationAllele.pm 109): along the genome in the transcript's 3'
+/// direction, whatever `--shift_3prime` says, when a reference FASTA is present
+/// and the shift moves the variant.
+fn hgvs_shift(
+    variant: &InputVariant,
+    transcript: &Transcript,
+    reference_fasta: Option<&vep_fasta::IndexedFasta>,
+) -> Option<(u64, u64)> {
+    let len = match variant.variant_class {
+        VariantClass::Insertion => variant.alt_allele().len(),
+        VariantClass::Deletion => variant.ref_allele.len(),
+        _ => return None,
+    };
+    let fasta = reference_fasta?;
+    let reverse = transcript.strand == Strand::Reverse;
+    crate::consequences::shift_indel_3prime_coords(
+        variant,
+        transcript,
+        fasta,
+        hgvs_shift_limit(len, reverse),
+    )
+    .filter(|&(start, end)| (start, end) != (variant.start, variant.end))
+}
+
+/// The transcript's genomic span read in transcript orientation (Perl's
+/// transcript feature slice): position 1 is the transcript's first base on its
+/// own strand. Bases come from the reference FASTA, complemented on the reverse
+/// strand; without a FASTA nothing can be read.
+struct TranscriptSlice<'a> {
+    chr: &'a str,
+    tr_start: i64,
+    tr_end: i64,
+    reverse: bool,
+    fasta: Option<&'a vep_fasta::IndexedFasta>,
+}
+
+impl TranscriptSlice<'_> {
+    fn len(&self) -> i64 {
+        self.tr_end - self.tr_start + 1
+    }
+
+    /// Genomic position of 1-based slice position `pos`.
+    fn genomic(&self, pos: i64) -> i64 {
+        if self.reverse {
+            self.tr_end - pos + 1
+        } else {
+            self.tr_start + pos - 1
+        }
+    }
+
+    /// 1-based slice position of genomic position `g`, the inverse of `genomic`.
+    fn position(&self, g: i64) -> i64 {
+        if self.reverse {
+            self.tr_end - g + 1
+        } else {
+            g - self.tr_start + 1
+        }
+    }
+
+    /// Perl `substr($slice->seq, $start - 1, $len)`, or `None` when the FASTA is
+    /// absent or the span leaves the slice.
+    fn substr(&self, start: i64, len: usize) -> Option<Vec<u8>> {
+        let fasta = self.fasta?;
+        if len == 0 {
+            return Some(Vec::new());
+        }
+        let end = start + len as i64 - 1;
+        if start < 1 || end > self.len() {
+            return None;
+        }
+        let (g_lo, g_hi) = if self.reverse {
+            (self.genomic(end), self.genomic(start))
+        } else {
+            (self.genomic(start), self.genomic(end))
+        };
+        let mut seq = fasta.sequence(self.chr, g_lo as u64, g_hi as u64)?;
+        seq.make_ascii_uppercase();
+        if self.reverse {
+            seq = crate::coding::reverse_complement(&seq);
+        }
+        Some(seq)
+    }
+}
+
+/// Perl's HGVS variant type (`hgvs_variant_notation`, Utils/Sequence.pm 493).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum HgvscKind {
+    Del,
+    Sub,
+    Inv,
+    Delins,
+    Dup,
+    Ins,
+    /// `[n]`: the alternate allele is the reference repeated `n` times, `n > 2`.
+    Multiple(usize),
+}
+
+/// Perl's `$hgvs_notation` hash for a transcript-level description.
+struct HgvscNotation {
+    start: i64,
+    end: i64,
+    ref_seq: Vec<u8>,
+    alt_seq: Vec<u8>,
+    kind: HgvscKind,
+}
+
+/// `hgvs_variant_notation` (Utils/Sequence.pm 493) with the default lookup
+/// order: the type and displayed span of `alt_seq` replacing slice positions
+/// `ref_start..=ref_end`. `None` where Perl returns `undef` (the alleles are
+/// equal) or the reference bases cannot be read.
+fn hgvs_variant_notation(
+    slice: &TranscriptSlice<'_>,
+    fallback_ref: &[u8],
+    alt_seq: Vec<u8>,
+    ref_start: i64,
+    ref_end: i64,
+) -> Option<HgvscNotation> {
+    let ref_length = (ref_end - ref_start + 1).max(0) as usize;
+    let ref_seq = match slice.substr(ref_start, ref_length) {
+        Some(s) => s,
+        None if slice.fasta.is_none() => fallback_ref.to_vec(),
+        None => return None,
+    };
+    if ref_seq == alt_seq {
+        return None;
+    }
+    let alt_length = alt_seq.len();
+    let mut n = HgvscNotation {
+        start: ref_start,
+        end: ref_end,
+        ref_seq,
+        alt_seq,
+        kind: HgvscKind::Del,
+    };
+    if alt_length == 0 {
+        return Some(n);
+    }
+    if ref_length == alt_length {
+        n.kind = if ref_length == 1 {
+            HgvscKind::Sub
+        } else if n.alt_seq == crate::coding::reverse_complement(&n.ref_seq) {
+            HgvscKind::Inv
+        } else {
+            HgvscKind::Delins
+        };
+        return Some(n);
+    }
+    if ref_length == 0 {
+        // Perl's `lookup_order` 1: the bases after the site are tried first.
+        let after = slice.substr(ref_end + 1, alt_length);
+        if after.as_deref() == Some(n.alt_seq.as_slice()) {
+            n.end = n.start + alt_length as i64 - 1;
+            n.kind = HgvscKind::Dup;
+            return Some(n);
+        }
+        let before = slice.substr(ref_end - alt_length as i64 + 1, alt_length);
+        if before.as_deref() == Some(n.alt_seq.as_slice()) {
+            n.start = n.end - alt_length as i64 + 1;
+            n.kind = HgvscKind::Dup;
+            return Some(n);
+        }
+        (n.start, n.end) = (ref_end, ref_start);
+        n.kind = HgvscKind::Ins;
+        return Some(n);
+    }
+    if alt_length.is_multiple_of(ref_length) {
+        let multiple = alt_length / ref_length;
+        if n.alt_seq == n.ref_seq.repeat(multiple) {
+            n.kind = if multiple == 2 {
+                HgvscKind::Dup
+            } else {
+                HgvscKind::Multiple(multiple)
+            };
+            return Some(n);
+        }
+    }
+    n.kind = HgvscKind::Delins;
+    Some(n)
+}
+
+/// `_clip_alleles` (TranscriptVariationAllele.pm 2118) as `hgvs_transcript`
+/// calls it, before `numbering` is set: the shared residues are trimmed from the
+/// front and the back, moving `start` and `end`, and the type is re-read from
+/// what remains; the `=` and `dup` re-sets, which need `numbering`, never fire.
+fn hgvsc_clip_alleles(n: &mut HgvscNotation) {
+    let mut ref_seq: &[u8] = &n.ref_seq;
+    let mut alt_seq: &[u8] = &n.alt_seq;
+    while let (Some(r), Some(a)) = (ref_seq.first(), alt_seq.first()) {
+        if r != a {
+            break;
+        }
+        n.start += 1;
+        ref_seq = &ref_seq[1..];
+        alt_seq = &alt_seq[1..];
+    }
+    while let (Some(r), Some(a)) = (ref_seq.last(), alt_seq.last()) {
+        if r != a {
+            break;
+        }
+        ref_seq = &ref_seq[..ref_seq.len() - 1];
+        alt_seq = &alt_seq[..alt_seq.len() - 1];
+        n.end -= 1;
+    }
+    let kind = if ref_seq != b"-" && ref_seq.len() == 1 && alt_seq.len() == 1 && ref_seq != alt_seq
+    {
+        Some(HgvscKind::Sub)
+    } else if ref_seq.is_empty() && !alt_seq.is_empty() {
+        Some(HgvscKind::Ins)
+    } else if !ref_seq.is_empty() && alt_seq.is_empty() {
+        Some(HgvscKind::Del)
+    } else {
+        None
+    };
+    n.ref_seq = ref_seq.to_vec();
+    n.alt_seq = alt_seq.to_vec();
+    if let Some(kind) = kind {
+        n.kind = kind;
+    }
+}
+
+/// One exon of the transcript as `_get_cDNA_position` walks them: genomic span
+/// and cDNA span, from the transcript mapper's pairs.
+struct ExonSpan {
+    start: i64,
+    end: i64,
+    cdna_start: i64,
+    cdna_end: i64,
+}
+
+impl ExonSpan {
+    /// The mapper's exon pairs sorted by genomic start, Perl's `_sorted_exons`.
+    fn in_genomic_order(pairs: &[MapperPair]) -> Vec<ExonSpan> {
+        let mut exons: Vec<ExonSpan> = pairs
+            .iter()
+            .map(|p| ExonSpan {
+                start: p.to_start as i64,
+                end: p.to_end as i64,
+                cdna_start: p.from_start as i64,
+                cdna_end: p.from_end as i64,
+            })
+            .collect();
+        exons.sort_by_key(|e| e.start);
+        exons
+    }
+}
+
+/// `_get_cDNA_position` (TranscriptVariationAllele.pm 2683): the HGVS cDNA
+/// coordinate of 1-based slice position `pos`, exonic as a plain coordinate,
+/// intronic as the nearest exon boundary with a `+` or `-` distance (the
+/// upstream exon on a tie), then made relative to the start codon (`-` before it)
+/// and the stop codon (`*` after it) on a coding transcript.
+fn perl_cdna_position(
+    slice: &TranscriptSlice<'_>,
+    exons: &[ExonSpan],
+    coding: Option<(i64, i64)>,
+    pos: i64,
+) -> Option<String> {
+    let g = slice.genomic(pos);
+    let mut coord: Option<i64> = None;
+    let mut offset: Option<(u8, i64)> = None;
+    for (i, exon) in exons.iter().enumerate() {
+        if g > exon.end {
+            continue;
+        }
+        if g >= exon.start {
+            coord = Some(if slice.reverse {
+                exon.cdna_start + (exon.end - g)
+            } else {
+                exon.cdna_start + (g - exon.start)
+            });
+            break;
+        }
+        let prev = exons.get(i.checked_sub(1)?)?;
+        let updist = (g - prev.end).abs();
+        let downdist = (exon.start - g).abs();
+        if updist < downdist || (updist == downdist && !slice.reverse) {
+            coord = Some(if slice.reverse {
+                prev.cdna_start
+            } else {
+                prev.cdna_end
+            });
+            offset = Some((if slice.reverse { b'-' } else { b'+' }, updist));
+        } else {
+            coord = Some(if slice.reverse {
+                exon.cdna_end
+            } else {
+                exon.cdna_start
+            });
+            offset = Some((if slice.reverse { b'+' } else { b'-' }, downdist));
+        }
+        break;
+    }
+    let mut coord = coord?;
+    let mut prefix = "";
+    let mut offset_text = offset.map(|(sign, d)| format!("{}{d}", sign as char));
+    if let Some((start_codon, stop_codon)) = coding {
+        if coord > stop_codon {
+            coord -= stop_codon;
+            prefix = "*";
+        } else if coord == stop_codon && offset.is_some() {
+            // Perl drops the coordinate and the `+` here: the stop codon's last base
+            // plus an intronic distance prints as `*` and the bare distance.
+            prefix = "*";
+            offset_text = offset_text.map(|t| t.replace('+', ""));
+            return Some(format!("{prefix}{}", offset_text.unwrap_or_default()));
+        }
+        if prefix.is_empty() {
+            coord += i64::from(coord >= start_codon);
+            coord -= start_codon;
+        }
+    }
+    Some(format!(
+        "{prefix}{coord}{}",
+        offset_text.unwrap_or_default()
+    ))
+}
+
+/// The `(exon coordinate, intron offset)` pair Perl reads back from an HGVS
+/// coordinate string with `m/(\-?[0-9]+)\+?(\-?[0-9]+)?/`: the first signed
+/// integer (a `*` prefix is skipped) and the signed integer after it, if any.
+fn hgvs_coordinate_parts(text: &str) -> (i64, i64) {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && !(bytes[i].is_ascii_digit() || bytes[i] == b'-') {
+        i += 1;
+    }
+    let read_int = |from: usize| -> (Option<i64>, usize) {
+        let mut j = from;
+        if j < bytes.len() && bytes[j] == b'-' {
+            j += 1;
+        }
+        let digits_from = j;
+        while j < bytes.len() && bytes[j].is_ascii_digit() {
+            j += 1;
+        }
+        if j == digits_from {
+            return (None, from);
+        }
+        (text[from..j].parse().ok(), j)
+    };
+    let (exon, mut next) = read_int(i);
+    let Some(exon) = exon else {
+        return (0, 0);
+    };
+    if next < bytes.len() && bytes[next] == b'+' {
+        next += 1;
+    }
+    let (offset, _) = read_int(next);
+    (exon, offset.unwrap_or(0))
+}
+
+/// `format_hgvs_string` (Utils/Sequence.pm 635).
+fn format_hgvs_string(
+    ref_name: &str,
+    numbering: char,
+    start: &str,
+    end: &str,
+    n: &HgvscNotation,
+) -> String {
+    let coordinates = if start == end {
+        start.to_string()
+    } else {
+        format!("{start}_{end}")
+    };
+    let alt = String::from_utf8_lossy(&n.alt_seq);
+    let substitution = || format!("{start}{}>{alt}", String::from_utf8_lossy(&n.ref_seq));
+    let body = match &n.kind {
+        HgvscKind::Sub => substitution(),
+        HgvscKind::Inv if n.ref_seq.len() == 1 => substitution(),
+        HgvscKind::Del => format!("{coordinates}del"),
+        HgvscKind::Inv => format!("{coordinates}inv"),
+        HgvscKind::Dup => format!("{coordinates}dup"),
+        HgvscKind::Delins => format!("{coordinates}delins{alt}"),
+        HgvscKind::Ins => format!("{coordinates}ins{alt}"),
+        HgvscKind::Multiple(m) => format!("{coordinates}[{m}]"),
+    };
+    format!("{ref_name}:{numbering}.{body}")
+}
+
+/// The reference-sequence name of an HGVS string, `hgvs_transcript`
+/// (TranscriptVariationAllele.pm 1435) and `hgvs_protein` (1695): the stable id
+/// with its version appended unless there is none, the id already ends in
+/// `.<digits>`, or the id is an LRG identifier.
+fn versioned_reference_name(stable_id: &str, version: Option<u32>) -> String {
+    let already_versioned = stable_id
+        .rsplit_once('.')
+        .is_some_and(|(_, tail)| !tail.is_empty() && tail.bytes().all(|b| b.is_ascii_digit()));
+    match version {
+        Some(version) if !already_versioned && !stable_id.contains("LRG") => {
+            format!("{stable_id}.{version}")
+        }
+        _ => stable_id.to_string(),
+    }
+}
+
+/// The HGVS output of one variant-transcript pair under `--hgvs`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HgvsNotation {
+    /// HGVSc, `generate_hgvsc`.
+    pub hgvsc: Option<String>,
+    /// HGVSp, `generate_hgvsp`.
+    pub hgvsp: Option<String>,
+    /// VEP's `HGVS_OFFSET`: the bases the insertion or deletion was shifted 3'
+    /// along the transcript, negative on the reverse strand, present only when
+    /// the shift moved it and at least one notation was produced.
+    pub offset: Option<i64>,
+}
+
+/// HGVSc, HGVSp and the shift offset for a variant-transcript pair, the indel
+/// shift computed once for both notations.
+pub fn generate_hgvs(
+    variant: &InputVariant,
+    transcript: &Transcript,
+    reference_fasta: Option<&vep_fasta::IndexedFasta>,
+) -> HgvsNotation {
+    let shifted = hgvs_shift(variant, transcript, reference_fasta);
+    let hgvsc = hgvsc_at(variant, transcript, reference_fasta, shifted);
+    let hgvsp = hgvsp_at(variant, transcript, reference_fasta, shifted);
+    let offset = shifted
+        .filter(|_| hgvsc.is_some() || hgvsp.is_some())
+        .map(|(start, _)| {
+            let length = start.abs_diff(variant.start) as i64;
+            if transcript.strand == Strand::Reverse {
+                -length
+            } else {
+                length
+            }
+        });
+    HgvsNotation {
+        hgvsc,
+        hgvsp,
+        offset,
+    }
+}
+
+/// Generate HGVSc notation for a variant-transcript pair: Perl VEP's
+/// `hgvs_transcript` (TranscriptVariationAllele.pm 1311) for an Ensembl
+/// transcript.
 ///
-/// Returns notation like:
-/// - `ENST00000366667.4:c.803T>C` (coding SNV)
-/// - `ENST00000366667.4:c.803delT` (coding deletion)
-/// - `ENST00000366667.4:c.803_804insAA` (coding insertion)
-/// - `ENST00000366667.4:c.-14T>C` (5' UTR)
-/// - `ENST00000366667.4:c.*42T>C` (3' UTR)
-/// - `ENST00000366667.4:c.803+2T>C` (intronic near donor)
-/// - `ENST00000366667.4:n.803T>C` (non-coding transcript)
+/// Returns `None` when the alternate allele carries a character outside
+/// `ACGT-` or equals the reference, when the variant lies outside the
+/// transcript's genomic span (so an upstream or downstream variant has no HGVSc),
+/// when the 3'-shifted span leaves it, or when the alleles agree at the shifted
+/// position. An insertion or deletion is described at its most 3' position on
+/// the transcript strand when a FASTA is present; the type and the displayed
+/// span follow `hgvs_variant_notation`, shared bases are clipped, an exonic
+/// single-base substitution inside the CDS takes its CDS coordinate and every
+/// other position goes through `_get_cDNA_position`. Without a FASTA the
+/// reference bases come from the variant and no duplication is detected.
 pub fn generate_hgvsc(
     variant: &InputVariant,
     transcript: &Transcript,
     reference_fasta: Option<&vep_fasta::IndexedFasta>,
+) -> Option<String> {
+    let shifted = hgvs_shift(variant, transcript, reference_fasta);
+    hgvsc_at(variant, transcript, reference_fasta, shifted)
+}
+
+/// `generate_hgvsc` with the 3' shift already computed.
+fn hgvsc_at(
+    variant: &InputVariant,
+    transcript: &Transcript,
+    reference_fasta: Option<&vep_fasta::IndexedFasta>,
+    shifted: Option<(u64, u64)>,
 ) -> Option<String> {
     let vefc = transcript.vefc.as_ref()?;
     let mapper = vefc.mapper.as_ref()?;
@@ -69,457 +533,124 @@ pub fn generate_hgvsc(
         return None;
     }
 
-    // Perl VEP 3'-shifts every indel for HGVS: to its most 3' position on the
-    // transcript strand.
-    let shifted = reference_fasta.and_then(|fasta| {
-        crate::consequences::shift_indel_3prime_coords(variant, transcript, fasta, 2000)
-    });
-    let (var_start, var_end) = if let Some((s, e)) = shifted {
-        (s, e)
-    } else {
-        (variant.start, variant.end)
-    };
-
-    let normalized_ref_allele = normalized_hgvs_ref_allele(variant, shifted, reference_fasta);
-    let normalized_alt_allele = normalized_hgvs_alt_allele(variant, transcript, shifted);
-    let ref_allele = normalized_ref_allele
-        .as_deref()
-        .unwrap_or(variant.ref_allele.as_slice());
-    let alt_allele_raw = normalized_alt_allele
-        .as_deref()
-        .unwrap_or_else(|| variant.alt_allele());
-
-    let has_coding_model = transcript.translation.is_some()
-        && mapper.cdna_coding_start > 0
-        && mapper.cdna_coding_end >= mapper.cdna_coding_start;
-
-    let prefix_type = if has_coding_model { "c" } else { "n" };
-
-    let transcript_prefix = if let Some(version) = transcript.version {
-        format!("{}.{}:{}", transcript.stable_id, version, prefix_type)
-    } else {
-        format!("{}:{}", transcript.stable_id, prefix_type)
-    };
-
-    let cdna_start = genomic_to_cdna_pos(var_start, pairs);
-    let cdna_end = if var_end != var_start {
-        genomic_to_cdna_pos(var_end, pairs)
-    } else {
-        cdna_start
-    };
-
-    let start_intronic =
-        cdna_start.is_none() && var_start >= transcript.start && var_start <= transcript.end;
-    let end_intronic =
-        cdna_end.is_none() && var_end >= transcript.start && var_end <= transcript.end;
-
-    let ref_is_dash = ref_allele == b"-" || ref_allele.is_empty();
-    let alt_is_dash = alt_allele_raw == b"-" || alt_allele_raw.is_empty();
-
-    // `Cow` avoids a heap allocation for the common "-" case.
-    let (display_ref, display_alt): (std::borrow::Cow<'_, str>, std::borrow::Cow<'_, str>) =
-        if transcript.strand == Strand::Reverse {
-            (
-                if ref_is_dash {
-                    std::borrow::Cow::Borrowed("-")
-                } else {
-                    std::borrow::Cow::Owned(reverse_complement_string(ref_allele))
-                },
-                if alt_is_dash {
-                    std::borrow::Cow::Borrowed("-")
-                } else {
-                    std::borrow::Cow::Owned(reverse_complement_string(alt_allele_raw))
-                },
-            )
-        } else {
-            (
-                if ref_is_dash {
-                    std::borrow::Cow::Borrowed("-")
-                } else {
-                    // Alleles are always ASCII nucleotides; use from_utf8 directly
-                    std::borrow::Cow::Owned(
-                        std::str::from_utf8(ref_allele)
-                            .unwrap_or("-")
-                            .to_uppercase(),
-                    )
-                },
-                if alt_is_dash {
-                    std::borrow::Cow::Borrowed("-")
-                } else {
-                    std::borrow::Cow::Owned(
-                        std::str::from_utf8(alt_allele_raw)
-                            .unwrap_or("-")
-                            .to_uppercase(),
-                    )
-                },
-            )
-        };
-
-    let is_insertion = variant.variant_class == VariantClass::Insertion;
-    let is_deletion = variant.variant_class == VariantClass::Deletion;
-
-    if start_intronic || end_intronic {
-        if is_insertion {
-            if let Some(dup_desc) =
-                check_duplication_cdna(variant, var_start, var_end, transcript, reference_fasta)
-            {
-                return Some(format!("{transcript_prefix}{dup_desc}"));
-            }
-        }
-
-        let ctx = IntronicHgvsContext {
-            transcript,
-            pairs,
-            mapper,
-            has_coding_model,
-        };
-        return generate_hgvsc_intronic_shifted(
-            variant,
-            var_start,
-            var_end,
-            &ctx,
-            &transcript_prefix,
-            &display_ref,
-            &display_alt,
-        );
+    let alt_allele = variant.alt_allele();
+    if alt_allele
+        .iter()
+        .any(|b| !matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T' | b'-'))
+    {
+        return None;
+    }
+    if alt_allele == variant.ref_allele.as_slice() {
+        return None;
     }
 
-    let cdna_s = cdna_start?;
-    let cdna_e = cdna_end.unwrap_or(cdna_s);
+    let reverse = transcript.strand == Strand::Reverse;
+    let offset = shifted.map_or(0, |(start, _)| start.abs_diff(variant.start) as i64);
 
-    let cdna_lo = cdna_s.min(cdna_e);
-    let cdna_hi = cdna_s.max(cdna_e);
+    // `hgvs_transcript` reverse-complements an allele onto the transcript strand
+    // and `hgvs_variant_notation` strips its gap characters before reading it.
+    let in_transcript_orientation = |mut allele: Vec<u8>| {
+        allele.make_ascii_uppercase();
+        allele.retain(|&b| b != b'-');
+        if reverse {
+            allele = crate::coding::reverse_complement(&allele);
+        }
+        allele
+    };
+    // A shifted insertion is described by its rotated allele.
+    let alt_seq = in_transcript_orientation(match variant.variant_class {
+        VariantClass::Insertion => normalized_hgvs_alt_allele(variant, transcript, shifted)
+            .unwrap_or_else(|| alt_allele.to_vec()),
+        _ => alt_allele.to_vec(),
+    });
+    let fallback_ref = in_transcript_orientation(variant.ref_allele.clone());
 
-    let pos_start = format_cdna_position(cdna_lo, mapper, has_coding_model);
-    let pos_end = if cdna_hi != cdna_lo {
-        Some(format_cdna_position(cdna_hi, mapper, has_coding_model))
+    let slice = TranscriptSlice {
+        chr: &variant.chr,
+        tr_start: transcript.start as i64,
+        tr_end: transcript.end as i64,
+        reverse,
+        fasta: reference_fasta,
+    };
+    let (vf_start, vf_end) = (variant.start as i64, variant.end as i64);
+    // `_var2transcript_slice_coords`: on the reverse strand the ends swap.
+    let (slice_start, slice_end) = if reverse {
+        (slice.position(vf_end), slice.position(vf_start))
+    } else {
+        (slice.position(vf_start), slice.position(vf_end))
+    };
+    let tr_len = slice.len();
+    if slice_start < 1 || slice_end < 1 || slice_start > tr_len || slice_end > tr_len {
+        return None;
+    }
+    if tr_len < slice_end + offset {
+        return None;
+    }
+
+    let mut n = hgvs_variant_notation(
+        &slice,
+        &fallback_ref,
+        alt_seq,
+        slice_start + offset,
+        slice_end + offset,
+    )?;
+    if n.kind != HgvscKind::Dup {
+        hgvsc_clip_alleles(&mut n);
+    }
+
+    let ref_name = versioned_reference_name(&transcript.stable_id, transcript.version);
+
+    let coding = (transcript.translation.is_some() && mapper.cdna_coding_start > 0).then_some((
+        mapper.cdna_coding_start as i64,
+        mapper.cdna_coding_end as i64,
+    ));
+    let exons = ExonSpan::in_genomic_order(pairs);
+
+    let same_pos = n.start == n.end;
+    let is_snp = variant.ref_allele.len() == 1
+        && alt_allele.len() == 1
+        && variant.ref_allele != b"-"
+        && alt_allele != b"-";
+    let exonic = exons
+        .iter()
+        .any(|e| vf_start.min(vf_end) <= e.end && vf_start.max(vf_end) >= e.start);
+    let cds_snp_position = if is_snp && exonic && coding.is_some() {
+        crate::coding::perl_span(transcript, variant.start, variant.end)
+            .and_then(|s| s.cds_start.zip(s.cds_end))
+            .map(|(cds_start, _)| cds_start)
     } else {
         None
     };
-
-    let variant_desc = if is_insertion {
-        // Perl VEP writes an insertion between its two flanking positions. A
-        // VEP-convention insertion has start > end, so cdna_s maps from the
-        // higher genomic position; HGVS needs ascending order.
-        let (ins_start, ins_end) = if cdna_s == cdna_e {
-            // Both endpoints map to the same cDNA position, so use its flanks.
-            let lo = cdna_s.saturating_sub(1).max(1);
-            (
-                format_cdna_position(lo, mapper, has_coding_model),
-                format_cdna_position(cdna_s, mapper, has_coding_model),
-            )
-        } else {
-            let lo = cdna_s.min(cdna_e);
-            let hi = cdna_s.max(cdna_e);
-            (
-                format_cdna_position(lo, mapper, has_coding_model),
-                format_cdna_position(hi, mapper, has_coding_model),
-            )
-        };
-
-        if let Some(dup_desc) =
-            check_duplication_cdna(variant, var_start, var_end, transcript, reference_fasta)
-        {
-            dup_desc
-        } else {
-            format!(".{ins_start}_{ins_end}ins{display_alt}")
-        }
-    } else if is_deletion {
-        if let Some(ref pos_e) = pos_end {
-            format!(".{pos_start}_{pos_e}del")
-        } else {
-            format!(".{pos_start}del")
-        }
-    } else if is_hgvs_inversion(ref_allele, alt_allele_raw) {
-        if let Some(ref pos_e) = pos_end {
-            format!(".{pos_start}_{pos_e}inv")
-        } else {
-            format!(".{pos_start}inv")
-        }
-    } else if ref_allele.len() > 1 && alt_allele_raw.len() > 1 && !ref_is_dash && !alt_is_dash {
-        if ref_allele.len() == 1 {
-            format!(".{pos_start}delins{display_alt}")
-        } else if let Some(ref pos_e) = pos_end {
-            format!(".{pos_start}_{pos_e}delins{display_alt}")
-        } else {
-            format!(".{pos_start}delins{display_alt}")
-        }
-    } else if ref_allele.len() == 1 && alt_allele_raw.len() == 1 && !ref_is_dash && !alt_is_dash {
-        format!(".{pos_start}{display_ref}>{display_alt}")
-    } else if ref_is_dash && !alt_is_dash {
-        let prev_pos =
-            format_cdna_position(cdna_s.saturating_sub(1).max(1), mapper, has_coding_model);
-        format!(".{prev_pos}_{pos_start}ins{display_alt}")
-    } else if !ref_is_dash && alt_is_dash {
-        if let Some(ref pos_e) = pos_end {
-            format!(".{pos_start}_{pos_e}del")
-        } else {
-            format!(".{pos_start}del")
-        }
-    } else {
-        if let Some(ref pos_e) = pos_end {
-            format!(".{pos_start}_{pos_e}delins{display_alt}")
-        } else {
-            format!(".{pos_start}delins{display_alt}")
-        }
-    };
-
-    Some(format!("{transcript_prefix}{variant_desc}"))
-}
-
-/// Format a cDNA position as an HGVS coding position.
-///
-/// Returns positions like:
-/// - `"42"`: coding region (c.42)
-/// - `"-14"`: 5' UTR (c.-14)
-/// - `"*42"`: 3' UTR (c.*42)
-fn format_cdna_position(
-    cdna_pos: u64,
-    mapper: &vep_core::transcript::TranscriptMapper,
-    has_coding_model: bool,
-) -> String {
-    if !has_coding_model {
-        return cdna_pos.to_string();
-    }
-
-    let coding_start = mapper.cdna_coding_start;
-    let coding_end = mapper.cdna_coding_end;
-    let start_phase_offset = u64::try_from(mapper.start_phase).unwrap_or(0);
-
-    if cdna_pos < coding_start {
-        let offset = coding_start - cdna_pos;
-        format!("-{offset}")
-    } else if cdna_pos > coding_end {
-        let offset = cdna_pos - coding_end;
-        format!("*{offset}")
-    } else {
-        let cds_pos = cdna_pos - coding_start + 1 + start_phase_offset;
-        cds_pos.to_string()
-    }
-}
-
-/// Shared context for intronic HGVS coordinate calculations.
-struct IntronicHgvsContext<'a> {
-    transcript: &'a Transcript,
-    pairs: &'a [vep_core::transcript::MapperPair],
-    mapper: &'a vep_core::transcript::TranscriptMapper,
-    has_coding_model: bool,
-}
-
-/// Generate HGVSc for intronic variants using (possibly shifted) coordinates.
-///
-/// Uses offset notation relative to nearest exon boundary:
-/// - `c.803+2T>C` (donor/5' splice site)
-/// - `c.804-3T>C` (acceptor/3' splice site)
-fn generate_hgvsc_intronic_shifted(
-    variant: &InputVariant,
-    var_start: u64,
-    var_end: u64,
-    ctx: &IntronicHgvsContext<'_>,
-    transcript_prefix: &str,
-    display_ref: &str,
-    display_alt: &str,
-) -> Option<String> {
-    let vefc = ctx.transcript.vefc.as_ref()?;
-    let pairs = ctx.pairs;
-
-    let introns = if !vefc.introns.is_empty() {
-        &vefc.introns
-    } else {
-        &ctx.transcript.introns
-    };
-
-    for (intron_idx, intron) in introns.iter().enumerate() {
-        let in_intron = var_start >= intron.start && var_start <= intron.end;
-        if !in_intron {
-            continue;
-        }
-
-        let (dist_to_prev_exon, dist_to_next_exon) = match ctx.transcript.strand {
-            Strand::Forward => {
-                let d_donor = var_start - intron.start + 1;
-                let d_acceptor = intron.end - var_start + 1;
-                (d_donor, d_acceptor)
-            }
-            Strand::Reverse => {
-                let d_donor = intron.end - var_start + 1;
-                let d_acceptor = var_start - intron.start + 1;
-                (d_donor, d_acceptor)
-            }
-        };
-
-        let use_donor = dist_to_prev_exon <= dist_to_next_exon;
-
-        let (base_cdna, offset, sign) = if use_donor {
-            let preceding_exon_idx = intron_idx;
-            if preceding_exon_idx < pairs.len() {
-                let pair = &pairs[preceding_exon_idx];
-                let exon_cdna_end = pair.from_end;
-                (exon_cdna_end, dist_to_prev_exon as i64, "+")
+    let (start, end) = match cds_snp_position {
+        Some(cds_start) => (cds_start.to_string(), cds_start.to_string()),
+        None => {
+            let start = perl_cdna_position(&slice, &exons, coding, n.start)?;
+            let end = if same_pos {
+                start.clone()
             } else {
-                return None;
-            }
-        } else {
-            let following_exon_idx = intron_idx + 1;
-            if following_exon_idx < pairs.len() {
-                let pair = &pairs[following_exon_idx];
-                let exon_cdna_start = pair.from_start;
-                (exon_cdna_start, -(dist_to_next_exon as i64), "-")
-            } else {
-                return None;
-            }
-        };
-
-        // Perl VEP does not apply start_phase_offset to the intronic reference
-        // position. Counteract the offset that format_cdna_position will add by
-        // pre-subtracting it from the cDNA coordinate.
-        let spo = u64::try_from(ctx.mapper.start_phase).unwrap_or(0);
-        let adjusted_cdna = if ctx.has_coding_model && spo > 0 && base_cdna >= spo {
-            base_cdna - spo
-        } else {
-            base_cdna
-        };
-        let base_pos = format_cdna_position(adjusted_cdna, ctx.mapper, ctx.has_coding_model);
-        let offset_abs = offset.unsigned_abs();
-
-        let is_snv = variant.variant_class == VariantClass::Snv;
-
-        let variant_desc = if is_snv {
-            format!(".{base_pos}{sign}{offset_abs}{display_ref}>{display_alt}")
-        } else if variant.variant_class == VariantClass::Deletion {
-            if var_start == var_end {
-                format!(".{base_pos}{sign}{offset_abs}del")
-            } else {
-                let end_offset = compute_intronic_end_offset(var_end, intron, intron_idx, ctx);
-                if let Some((end_base_pos, end_sign, end_offset_abs)) = end_offset {
-                    // Ensure HGVS ascending genomic order:
-                    // For donor (+): smaller offset first (closer to exon)
-                    // For acceptor (-): larger offset first (further from exon)
-                    let needs_swap = base_pos == end_base_pos
-                        && sign == end_sign
-                        && ((sign == "+" && offset_abs > end_offset_abs)
-                            || (sign == "-" && offset_abs < end_offset_abs));
-                    let (p1, s1, o1, p2, s2, o2) = if needs_swap {
-                        (
-                            &end_base_pos,
-                            end_sign,
-                            end_offset_abs,
-                            &base_pos,
-                            sign,
-                            offset_abs,
-                        )
-                    } else {
-                        (
-                            &base_pos,
-                            sign,
-                            offset_abs,
-                            &end_base_pos,
-                            end_sign,
-                            end_offset_abs,
-                        )
-                    };
-                    format!(".{p1}{s1}{o1}_{p2}{s2}{o2}del")
-                } else {
-                    format!(".{base_pos}{sign}{offset_abs}del")
-                }
-            }
-        } else if variant.variant_class == VariantClass::Insertion {
-            let prev_offset = if offset > 0 { offset - 1 } else { offset };
-            let next_offset = offset;
-            if prev_offset == 0 {
-                format!(".{base_pos}_{base_pos}{sign}{next_offset}ins{display_alt}")
-            } else {
-                let prev_abs = prev_offset.unsigned_abs();
-                format!(".{base_pos}{sign}{prev_abs}_{base_pos}{sign}{offset_abs}ins{display_alt}")
-            }
-        } else {
-            if var_start != var_end {
-                let end_offset = compute_intronic_end_offset(var_end, intron, intron_idx, ctx);
-                if let Some((end_base_pos, end_sign, end_offset_abs)) = end_offset {
-                    format!(".{base_pos}{sign}{offset_abs}_{end_base_pos}{end_sign}{end_offset_abs}delins{display_alt}")
-                } else {
-                    format!(".{base_pos}{sign}{offset_abs}delins{display_alt}")
-                }
-            } else {
-                format!(".{base_pos}{sign}{offset_abs}delins{display_alt}")
-            }
-        };
-
-        return Some(format!("{transcript_prefix}{variant_desc}"));
-    }
-
-    None
-}
-
-/// Compute intronic end offset for multi-base intronic variants.
-fn compute_intronic_end_offset(
-    end_pos: u64,
-    intron: &vep_core::transcript::Intron,
-    intron_idx: usize,
-    ctx: &IntronicHgvsContext<'_>,
-) -> Option<(String, &'static str, u64)> {
-    if end_pos >= intron.start && end_pos <= intron.end {
-        let (dist_to_prev, dist_to_next) = match ctx.transcript.strand {
-            Strand::Forward => {
-                let d_donor = end_pos - intron.start + 1;
-                let d_acceptor = intron.end - end_pos + 1;
-                (d_donor, d_acceptor)
-            }
-            Strand::Reverse => {
-                let d_donor = intron.end - end_pos + 1;
-                let d_acceptor = end_pos - intron.start + 1;
-                (d_donor, d_acceptor)
-            }
-        };
-
-        let use_donor = dist_to_prev <= dist_to_next;
-        let spo = u64::try_from(ctx.mapper.start_phase).unwrap_or(0);
-        if use_donor {
-            let preceding_exon_idx = intron_idx;
-            if preceding_exon_idx < ctx.pairs.len() {
-                let pair = &ctx.pairs[preceding_exon_idx];
-                let cdna = if ctx.has_coding_model && spo > 0 && pair.from_end >= spo {
-                    pair.from_end - spo
-                } else {
-                    pair.from_end
-                };
-                let base_pos = format_cdna_position(cdna, ctx.mapper, ctx.has_coding_model);
-                return Some((base_pos, "+", dist_to_prev));
-            }
-        } else {
-            let following_exon_idx = intron_idx + 1;
-            if following_exon_idx < ctx.pairs.len() {
-                let pair = &ctx.pairs[following_exon_idx];
-                let cdna = if ctx.has_coding_model && spo > 0 && pair.from_start >= spo {
-                    pair.from_start - spo
-                } else {
-                    pair.from_start
-                };
-                let base_pos = format_cdna_position(cdna, ctx.mapper, ctx.has_coding_model);
-                return Some((base_pos, "-", dist_to_next));
-            }
-        }
-    }
-
-    None
-}
-
-/// Convert genomic position to cDNA position using mapper pairs.
-fn genomic_to_cdna_pos(
-    genomic_pos: u64,
-    pairs: &[vep_core::transcript::MapperPair],
-) -> Option<u64> {
-    for pair in pairs {
-        if genomic_pos >= pair.to_start && genomic_pos <= pair.to_end {
-            let cdna_pos = if pair.ori == 1 {
-                pair.from_start + (genomic_pos - pair.to_start)
-            } else {
-                pair.from_start + (pair.to_end - genomic_pos)
+                perl_cdna_position(&slice, &exons, coding, n.end)?
             };
-            return Some(cdna_pos);
+            (start, end)
         }
-    }
-    None
+    };
+
+    let (exon_start, intron_start) = hgvs_coordinate_parts(&start);
+    let (exon_end, intron_end) = if same_pos {
+        (exon_start, intron_start)
+    } else {
+        hgvs_coordinate_parts(&end)
+    };
+    let (start, end) = if (exon_start > exon_end
+        || (exon_start == exon_end && intron_start > intron_end))
+        && !end.contains('*')
+    {
+        (end, start)
+    } else {
+        (start, end)
+    };
+
+    let numbering = if coding.is_some() { 'c' } else { 'n' };
+    Some(format_hgvs_string(&ref_name, numbering, &start, &end, &n))
 }
 
 fn normalized_hgvs_ref_allele(
@@ -592,302 +723,31 @@ fn rotate_sequence_for_transcript_3prime(
     rotated
 }
 
-fn is_hgvs_inversion(ref_allele: &[u8], alt_allele: &[u8]) -> bool {
-    ref_allele.len() > 1
-        && ref_allele.len() == alt_allele.len()
-        && !ref_allele.eq_ignore_ascii_case(alt_allele)
-        && reverse_complement_string(ref_allele)
-            .as_bytes()
-            .eq_ignore_ascii_case(alt_allele)
-}
-
-/// Check if an insertion is actually a duplication of the preceding sequence.
+/// `hgvs_protein` (`coding::perl_hgvs_protein`) behind the `ENSP...:p.` prefix.
 ///
-/// When `reference_fasta` is available, uses the genomic reference sequence
-/// for duplication detection (works in UTR, intronic, intergenic contexts).
-/// Falls back to CDS-only check when FASTA is unavailable.
-fn check_duplication_cdna(
-    variant: &InputVariant,
-    var_start: u64,
-    var_end: u64,
-    transcript: &Transcript,
-    reference_fasta: Option<&vep_fasta::IndexedFasta>,
-) -> Option<String> {
-    let alt_allele = variant.alt_allele();
-    let alt_is_dash = alt_allele == b"-" || alt_allele.is_empty();
-    if alt_is_dash {
-        return None;
-    }
-    let alt_len = alt_allele.len();
-    if alt_len == 0 {
-        return None;
-    }
-
-    let vefc = transcript.vefc.as_ref()?;
-    let mapper = vefc.mapper.as_ref()?;
-    let pairs = &mapper.exon_coord_mapper.pairs;
-
-    let has_coding_model = transcript.translation.is_some()
-        && mapper.cdna_coding_start > 0
-        && mapper.cdna_coding_end >= mapper.cdna_coding_start;
-
-    // After 3' shifting the alt allele is rotated, so the reference bases
-    // adjacent to the insertion are compared against it by cyclic rotation.
-    // Forward strand shifts right, so the duplicated region precedes the
-    // insertion point; reverse shifts left, so it follows.
-    if let Some(fasta) = reference_fasta {
-        let al = alt_len as u64;
-        // For VEP-convention insertions, var_end < var_start.
-        if transcript.strand == Strand::Forward {
-            let ins_pos = var_end;
-            if ins_pos >= al {
-                let dup_start = ins_pos - al + 1;
-                let dup_end = ins_pos;
-                if let Some(ref_seg) = fasta.sequence(&variant.chr, dup_start, dup_end) {
-                    if ref_seg.len() == alt_len && is_rotation(&ref_seg, alt_allele) {
-                        return build_dup_notation(
-                            dup_start,
-                            dup_end,
-                            transcript,
-                            pairs,
-                            mapper,
-                            has_coding_model,
-                        );
-                    }
-                }
-            }
-        } else {
-            // Reverse strand: duplicated region is after the insertion point (higher coords)
-            let dup_start = var_start;
-            let dup_end = var_start + al - 1;
-            if let Some(ref_seg) = fasta.sequence(&variant.chr, dup_start, dup_end) {
-                if ref_seg.len() == alt_len && is_rotation(&ref_seg, alt_allele) {
-                    return build_dup_notation(
-                        dup_start,
-                        dup_end,
-                        transcript,
-                        pairs,
-                        mapper,
-                        has_coding_model,
-                    );
-                }
-            }
-        }
-        return None;
-    }
-
-    // Without a FASTA, only the CDS (translateable_seq) can be checked.
-    let translateable_seq = vefc.translateable_seq.as_ref()?;
-    let cds = translateable_seq.as_bytes();
-
-    if !has_coding_model {
-        return None;
-    }
-
-    let cdna_pos = genomic_to_cdna_pos(var_start, pairs)?;
-    let coding_start = mapper.cdna_coding_start;
-    let coding_end = mapper.cdna_coding_end;
-
-    if cdna_pos < coding_start || cdna_pos > coding_end {
-        return None;
-    }
-
-    let start_phase_offset = u64::try_from(mapper.start_phase).unwrap_or(0);
-    let cds_pos = cdna_pos - coding_start + 1 + start_phase_offset;
-    let idx = (cds_pos - 1) as usize;
-
-    if idx < alt_len {
-        return None;
-    }
-
-    let preceding_start = idx - alt_len;
-    if preceding_start + alt_len > cds.len() {
-        return None;
-    }
-    let preceding = &cds[preceding_start..preceding_start + alt_len];
-
-    let alt_mrna = if transcript.strand == Strand::Reverse {
-        crate::coding::reverse_complement_pub(alt_allele)
-    } else {
-        alt_allele.to_vec()
-    };
-
-    if preceding.eq_ignore_ascii_case(&alt_mrna) {
-        let dup_start = format_cdna_position(
-            coding_start + (preceding_start as u64) - start_phase_offset,
-            mapper,
-            has_coding_model,
-        );
-        if alt_len == 1 {
-            Some(format!(".{dup_start}dup"))
-        } else {
-            let dup_end = format_cdna_position(
-                coding_start + (preceding_start + alt_len - 1) as u64 - start_phase_offset,
-                mapper,
-                has_coding_model,
-            );
-            Some(format!(".{dup_start}_{dup_end}dup"))
-        }
-    } else {
-        None
-    }
-}
-
-const HGVS_POSITION_SCALE: i64 = 1_000_000;
-
-struct HgvsPosition {
-    display: String,
-    sort_key: i64,
-}
-
-/// Build duplication notation from genomic coordinates of the duplicated region.
-fn build_dup_notation(
-    genomic_dup_start: u64,
-    genomic_dup_end: u64,
-    transcript: &Transcript,
-    pairs: &[vep_core::transcript::MapperPair],
-    mapper: &vep_core::transcript::TranscriptMapper,
-    has_coding_model: bool,
-) -> Option<String> {
-    let start_pos = genomic_to_hgvs_position(
-        genomic_dup_start,
-        transcript,
-        pairs,
-        mapper,
-        has_coding_model,
-    )?;
-    let end_pos =
-        genomic_to_hgvs_position(genomic_dup_end, transcript, pairs, mapper, has_coding_model)?;
-
-    let (first, second) = if start_pos.sort_key <= end_pos.sort_key {
-        (start_pos, end_pos)
-    } else {
-        (end_pos, start_pos)
-    };
-
-    if first.sort_key == second.sort_key {
-        Some(format!(".{}dup", first.display))
-    } else {
-        Some(format!(".{}_{}dup", first.display, second.display))
-    }
-}
-
-fn genomic_to_hgvs_position(
-    genomic_pos: u64,
-    transcript: &Transcript,
-    pairs: &[vep_core::transcript::MapperPair],
-    mapper: &vep_core::transcript::TranscriptMapper,
-    has_coding_model: bool,
-) -> Option<HgvsPosition> {
-    if let Some(cdna_pos) = genomic_to_cdna_pos(genomic_pos, pairs) {
-        return Some(HgvsPosition {
-            display: format_cdna_position(cdna_pos, mapper, has_coding_model),
-            sort_key: i64::try_from(cdna_pos).ok()? * HGVS_POSITION_SCALE,
-        });
-    }
-
-    let vefc = transcript.vefc.as_ref()?;
-    let introns = if !vefc.introns.is_empty() {
-        &vefc.introns
-    } else {
-        &transcript.introns
-    };
-
-    let spo = u64::try_from(mapper.start_phase).unwrap_or(0);
-
-    for (intron_idx, intron) in introns.iter().enumerate() {
-        if genomic_pos < intron.start || genomic_pos > intron.end {
-            continue;
-        }
-
-        let (dist_to_prev, dist_to_next) = match transcript.strand {
-            Strand::Forward => (genomic_pos - intron.start + 1, intron.end - genomic_pos + 1),
-            Strand::Reverse => (intron.end - genomic_pos + 1, genomic_pos - intron.start + 1),
-        };
-
-        let use_donor = dist_to_prev <= dist_to_next;
-        if use_donor {
-            let pair = pairs.get(intron_idx)?;
-            let adjusted_cdna = if has_coding_model && spo > 0 && pair.from_end >= spo {
-                pair.from_end - spo
-            } else {
-                pair.from_end
-            };
-            let offset = i64::try_from(dist_to_prev).ok()?;
-            return Some(HgvsPosition {
-                display: format!(
-                    "{}+{}",
-                    format_cdna_position(adjusted_cdna, mapper, has_coding_model),
-                    dist_to_prev
-                ),
-                sort_key: i64::try_from(pair.from_end).ok()? * HGVS_POSITION_SCALE + offset,
-            });
-        }
-
-        let pair = pairs.get(intron_idx + 1)?;
-        let adjusted_cdna = if has_coding_model && spo > 0 && pair.from_start >= spo {
-            pair.from_start - spo
-        } else {
-            pair.from_start
-        };
-        let offset = i64::try_from(dist_to_next).ok()?;
-        return Some(HgvsPosition {
-            display: format!(
-                "{}-{}",
-                format_cdna_position(adjusted_cdna, mapper, has_coding_model),
-                dist_to_next
-            ),
-            sort_key: i64::try_from(pair.from_start).ok()? * HGVS_POSITION_SCALE - offset,
-        });
-    }
-
-    None
-}
-
-/// Check if `a` is a cyclic rotation of `b` (case-insensitive).
-fn is_rotation(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() || a.is_empty() {
-        return false;
-    }
-    // (b ++ b) contains a iff a is a rotation of b
-    let mut doubled: Vec<u8> = b.iter().map(|c| c.to_ascii_uppercase()).collect();
-    doubled.extend(b.iter().map(|c| c.to_ascii_uppercase()));
-    let needle: Vec<u8> = a.iter().map(|c| c.to_ascii_uppercase()).collect();
-    doubled
-        .windows(needle.len())
-        .any(|w| w == needle.as_slice())
-}
-
-fn reverse_complement_string(seq: &[u8]) -> String {
-    seq.iter()
-        .rev()
-        .map(|&b| match b.to_ascii_uppercase() {
-            b'A' => 'T',
-            b'T' => 'A',
-            b'C' => 'G',
-            b'G' => 'C',
-            _ => 'N',
-        })
-        .collect()
-}
-
-/// Generate HGVSp notation for a variant-transcript pair.
-///
-/// Returns notation like:
-/// - `ENSP00000000001.1:p.Ala41Val` (missense)
-/// - `ENSP00000000001.1:p.Ala41=` (synonymous)
-/// - `ENSP00000000001.1:p.Arg41Ter` (nonsense / stop_gained)
-/// - `ENSP00000000001.1:p.Arg41GlyfsTer23` (frameshift)
-/// - `ENSP00000000001.1:p.Ala41_Gly42insVal` (inframe insertion)
-/// - `ENSP00000000001.1:p.Ala41del` (inframe deletion)
-/// - `ENSP00000000001.1:p.Met1?` (start_lost)
+/// Returns `None` when the transcript has no coding model or protein id, the
+/// alternate allele carries a character outside `ACGT-` or equals the
+/// reference, or Perl would return `undef` for the span. An insertion or
+/// deletion is first shifted to its most 3' position on the transcript strand
+/// (Perl's `_return_3prime(1)`, applied for HGVS whatever `--shift_3prime`
+/// says) when a reference FASTA is available; the shifted alleles are the
+/// deleted reference bases at the new position and the rotated insertion.
 pub fn generate_hgvsp(
     variant: &InputVariant,
     transcript: &Transcript,
-    consequences: &[vep_core::consequence::Consequence],
+    reference_fasta: Option<&vep_fasta::IndexedFasta>,
 ) -> Option<String> {
-    use vep_core::consequence::Consequence;
+    let shifted = hgvs_shift(variant, transcript, reference_fasta);
+    hgvsp_at(variant, transcript, reference_fasta, shifted)
+}
 
+/// `generate_hgvsp` with the 3' shift already computed.
+fn hgvsp_at(
+    variant: &InputVariant,
+    transcript: &Transcript,
+    reference_fasta: Option<&vep_fasta::IndexedFasta>,
+    shifted: Option<(u64, u64)>,
+) -> Option<String> {
     let vefc = transcript.vefc.as_ref()?;
     let mapper = vefc.mapper.as_ref()?;
     let has_coding_model = transcript.translation.is_some()
@@ -897,498 +757,40 @@ pub fn generate_hgvsp(
         return None;
     }
 
-    let translateable_seq = vefc.translateable_seq.as_ref()?;
-    if translateable_seq.is_empty() {
+    let alt_allele = variant.alt_allele();
+    if alt_allele
+        .iter()
+        .any(|b| !matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T' | b'-'))
+    {
+        return None;
+    }
+    if alt_allele == variant.ref_allele.as_slice() {
         return None;
     }
 
     let protein_id = transcript.protein_id.as_ref()?;
-    let protein_prefix = if let Some(ref translation) = transcript.translation {
-        if let Some(version) = translation.version {
-            format!("{protein_id}.{version}:p.")
-        } else {
-            format!("{protein_id}:p.")
-        }
-    } else {
-        format!("{protein_id}:p.")
-    };
-
-    let has_frameshift = consequences.contains(&Consequence::FrameshiftVariant);
-    let has_stop_gained = consequences.contains(&Consequence::StopGained);
-    let has_stop_lost = consequences.contains(&Consequence::StopLost);
-    let has_start_lost = consequences.contains(&Consequence::StartLost);
-    let has_missense = consequences.contains(&Consequence::MissenseVariant);
-    let has_synonymous = consequences.contains(&Consequence::SynonymousVariant);
-    let has_inframe_ins = consequences.contains(&Consequence::InframeInsertion);
-    let has_inframe_del = consequences.contains(&Consequence::InframeDeletion);
-    let has_stop_retained = consequences.contains(&Consequence::StopRetainedVariant);
-    let has_start_retained = consequences.contains(&Consequence::StartRetainedVariant);
-    let has_protein_altering = consequences.contains(&Consequence::ProteinAlteringVariant);
-
-    let bounds = map_genomic_span_to_cds_bounds(variant.start, variant.end, transcript)?;
-
-    if has_start_lost {
-        return Some(format!("{protein_prefix}Met1?"));
-    }
-
-    if has_start_retained {
-        return Some(format!("{protein_prefix}Met1="));
-    }
-
-    let cds = translateable_seq.as_bytes();
-    let cds_start = bounds.cds_start;
-    if cds_start == 0 {
-        return None;
-    }
-
-    if has_frameshift {
-        return generate_hgvsp_frameshift(variant, transcript, &bounds, &protein_prefix, cds);
-    }
-
-    if has_missense || has_synonymous || has_stop_gained || has_stop_retained || has_stop_lost {
-        let sub_flags = SubstitutionFlags {
-            has_synonymous,
-            has_stop_gained,
-            has_stop_lost,
-        };
-        return generate_hgvsp_substitution(
-            variant,
-            transcript,
-            &bounds,
-            &protein_prefix,
-            cds,
-            &sub_flags,
-        );
-    }
-
-    if has_inframe_ins {
-        return generate_hgvsp_inframe_insertion(
-            variant,
-            transcript,
-            &bounds,
-            &protein_prefix,
-            cds,
-        );
-    }
-
-    if has_inframe_del {
-        return generate_hgvsp_inframe_deletion(variant, transcript, &bounds, &protein_prefix, cds);
-    }
-
-    if has_protein_altering {
-        return generate_hgvsp_protein_altering(variant, transcript, &bounds, &protein_prefix, cds);
-    }
-
-    None
-}
-
-/// Consequence flags for HGVSp substitution generation.
-struct SubstitutionFlags {
-    has_synonymous: bool,
-    has_stop_gained: bool,
-    has_stop_lost: bool,
-}
-
-/// Generate HGVSp for a simple substitution (SNV).
-fn generate_hgvsp_substitution(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    protein_prefix: &str,
-    cds: &[u8],
-    flags: &SubstitutionFlags,
-) -> Option<String> {
-    let cds_idx = (bounds.cds_start - 1) as usize;
-    let codon_start = (cds_idx / 3) * 3;
-
-    if codon_start + 3 > cds.len() {
-        return None;
-    }
-
-    let ref_codon = &cds[codon_start..codon_start + 3];
-    let ref_aa = translate_codon(ref_codon);
-    let protein_pos = bounds.translation_start;
-    let ref_three = amino_acid_three_letter(ref_aa);
-
-    let pos_in_codon = cds_idx % 3;
-    let alt_allele = variant.alt_allele();
-    let alt_is_dash = alt_allele == b"-" || alt_allele.is_empty();
-
-    if alt_is_dash || alt_allele.len() != 1 || variant.ref_allele.len() != 1 {
-        let (ref_pep, alt_pep) = compute_codon_window_peptide_alleles(variant, transcript, bounds)?;
-        if ref_pep.is_empty() || alt_pep.is_empty() {
-            return None;
-        }
-        let ref_aa_byte = ref_pep[0];
-        let alt_aa_byte = alt_pep[0];
-        let r3 = amino_acid_three_letter(ref_aa_byte);
-        let a3 = amino_acid_three_letter(alt_aa_byte);
-
-        if ref_aa_byte == alt_aa_byte {
-            return Some(format!("{protein_prefix}{r3}{protein_pos}="));
-        }
-        return Some(format!("{protein_prefix}{r3}{protein_pos}{a3}"));
-    }
-
-    let alt_base = alt_allele[0];
-    let effective_alt = if transcript.strand == Strand::Reverse {
-        vep_core::codon::complement_base(alt_base)
-    } else {
-        alt_base
-    };
-
-    let mut alt_codon = ref_codon.to_vec();
-    alt_codon[pos_in_codon] = effective_alt.to_ascii_uppercase();
-    let alt_aa = translate_codon(&alt_codon);
-    let alt_three = amino_acid_three_letter(alt_aa);
-
-    if flags.has_synonymous || ref_aa == alt_aa {
-        Some(format!("{protein_prefix}{ref_three}{protein_pos}="))
-    } else if flags.has_stop_gained {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}"
-        ))
-    } else if flags.has_stop_lost {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}ext*?"
-        ))
-    } else {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}"
-        ))
-    }
-}
-
-/// Generate HGVSp for a frameshift variant.
-///
-/// Format: `p.Ref{pos}AltfsTer{stop_position}`
-/// Where stop_position is the distance to the nearest downstream stop codon.
-fn generate_hgvsp_frameshift(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    protein_prefix: &str,
-    cds: &[u8],
-) -> Option<String> {
-    let protein_pos = bounds.translation_start;
-
-    let cds_idx = (bounds.cds_start.min(bounds.cds_end).saturating_sub(1)) as usize;
-    let codon_start = (cds_idx / 3) * 3;
-    let ref_aa = if codon_start + 3 <= cds.len() {
-        translate_codon(&cds[codon_start..codon_start + 3])
-    } else {
-        b'X'
-    };
-    let ref_three = amino_acid_three_letter(ref_aa);
-
-    let (_, alt_pep) = compute_codon_window_peptide_alleles(variant, transcript, bounds)
-        .unwrap_or((vec![ref_aa], vec![b'X']));
-
-    let first_alt_aa = if !alt_pep.is_empty() {
-        alt_pep[0]
-    } else {
-        b'X'
-    };
-    let alt_three = amino_acid_three_letter(first_alt_aa);
-
-    let ter_pos = find_frameshift_ter_position(variant, transcript, bounds, cds);
-
-    if first_alt_aa == b'*' {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}"
-        ))
-    } else if let Some(ter_distance) = ter_pos {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}fsTer{ter_distance}"
-        ))
-    } else {
-        Some(format!(
-            "{protein_prefix}{ref_three}{protein_pos}{alt_three}fsTer?"
-        ))
-    }
-}
-
-/// Find the distance to the nearest stop codon in the alternate reading frame
-/// after a frameshift.
-fn find_frameshift_ter_position(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    cds: &[u8],
-) -> Option<u64> {
-    let vefc = transcript.vefc.as_ref()?;
-
-    let cds_start = bounds.cds_start;
-    let cds_end = bounds.cds_end;
-    let splice_start = (cds_start.min(cds_end) - 1) as usize;
-    let splice_end = cds_start.max(cds_end) as usize;
-
-    let alt_allele = variant.alt_allele();
-    let alt_is_dash = alt_allele == b"-" || alt_allele.is_empty();
-
-    let alt_seq = if alt_is_dash {
-        Vec::new()
-    } else if transcript.strand == Strand::Reverse {
-        crate::coding::reverse_complement_pub(alt_allele)
-    } else {
-        alt_allele.to_vec()
-    };
-
-    if splice_start > cds.len() {
-        return None;
-    }
-    let actual_splice_end = splice_end.min(cds.len());
-
-    let mut alt_cds = Vec::with_capacity(cds.len());
-    alt_cds.extend_from_slice(&cds[..splice_start]);
-    alt_cds.extend_from_slice(&alt_seq);
-    if actual_splice_end <= cds.len() {
-        alt_cds.extend_from_slice(&cds[actual_splice_end..]);
-    }
-
-    // The 3' UTR is appended so a frameshift's new stop can lie past the CDS.
-    if let Some(utr) = vefc.three_prime_utr.as_ref() {
-        if !utr.is_empty() {
-            alt_cds.extend_from_slice(utr.as_bytes());
-        }
-    }
-
-    let scan_start = (splice_start / 3) * 3;
-
-    let mut codon_idx = scan_start;
-    let mut protein_offset = 0u64;
-
-    while codon_idx + 3 <= alt_cds.len() {
-        let codon = &alt_cds[codon_idx..codon_idx + 3];
-        let aa = translate_codon(codon);
-        protein_offset += 1;
-
-        if aa == b'*' {
-            return Some(protein_offset);
-        }
-        codon_idx += 3;
-    }
-
-    None
-}
-
-/// Generate HGVSp for an inframe insertion.
-fn generate_hgvsp_inframe_insertion(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    protein_prefix: &str,
-    cds: &[u8],
-) -> Option<String> {
-    let (ref_pep, alt_pep) = compute_codon_window_peptide_alleles(variant, transcript, bounds)?;
-
-    if ref_pep.is_empty() {
-        return None;
-    }
-
-    let protein_pos = bounds.translation_start;
-
-    let mut prefix_len = 0;
-    let min_len = ref_pep.len().min(alt_pep.len());
-    while prefix_len < min_len && ref_pep[prefix_len] == alt_pep[prefix_len] {
-        prefix_len += 1;
-    }
-
-    let mut suffix_len = 0;
-    while suffix_len < (min_len - prefix_len)
-        && ref_pep[ref_pep.len() - 1 - suffix_len] == alt_pep[alt_pep.len() - 1 - suffix_len]
-    {
-        suffix_len += 1;
-    }
-
-    let inserted = &alt_pep[prefix_len..alt_pep.len() - suffix_len];
-    if inserted.is_empty() {
-        let ref_aa = ref_pep[0];
-        let ref_three = amino_acid_three_letter(ref_aa);
-        return Some(format!("{protein_prefix}{ref_three}{protein_pos}="));
-    }
-
-    let flank_start_pos = protein_pos + prefix_len as u64;
-    let flank_end_pos = flank_start_pos + 1;
-
-    let flank_start_idx = (flank_start_pos - 1) as usize;
-    let flank_end_idx = flank_start_idx + 1;
-
-    let start_aa = if flank_start_idx * 3 + 3 <= cds.len() {
-        translate_codon(&cds[flank_start_idx * 3..flank_start_idx * 3 + 3])
-    } else if prefix_len < ref_pep.len() {
-        ref_pep[prefix_len.saturating_sub(1)]
-    } else {
-        b'X'
-    };
-    let end_aa = if flank_end_idx * 3 + 3 <= cds.len() {
-        translate_codon(&cds[flank_end_idx * 3..flank_end_idx * 3 + 3])
-    } else {
-        b'X'
-    };
-
-    let start_three = amino_acid_three_letter(start_aa);
-    let end_three = amino_acid_three_letter(end_aa);
-
-    let inserted_str: String = inserted
-        .iter()
-        .map(|&aa| amino_acid_three_letter(aa))
-        .collect();
-
-    if inserted.len() == 1 && flank_start_pos > 0 {
-        // A single inserted residue equal to the preceding one is a duplication.
-        if inserted[0] == start_aa {
-            return Some(format!("{protein_prefix}{start_three}{flank_start_pos}dup"));
-        }
-    }
-
-    Some(format!(
-        "{protein_prefix}{start_three}{flank_start_pos}_{end_three}{flank_end_pos}ins{inserted_str}"
-    ))
-}
-
-/// Generate HGVSp for an inframe deletion.
-fn generate_hgvsp_inframe_deletion(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    protein_prefix: &str,
-    _cds: &[u8],
-) -> Option<String> {
-    let (ref_pep, alt_pep) = compute_codon_window_peptide_alleles(variant, transcript, bounds)?;
-
-    if ref_pep.is_empty() {
-        return None;
-    }
-
-    let protein_pos = bounds.translation_start;
-
-    let mut prefix_len = 0;
-    let min_len = ref_pep.len().min(alt_pep.len());
-    while prefix_len < min_len && ref_pep[prefix_len] == alt_pep[prefix_len] {
-        prefix_len += 1;
-    }
-
-    let mut suffix_len = 0;
-    while suffix_len < (min_len - prefix_len)
-        && ref_pep[ref_pep.len() - 1 - suffix_len] == alt_pep[alt_pep.len() - 1 - suffix_len]
-    {
-        suffix_len += 1;
-    }
-
-    let deleted = &ref_pep[prefix_len..ref_pep.len() - suffix_len];
-    if deleted.is_empty() {
-        let ref_aa = ref_pep[0];
-        let ref_three = amino_acid_three_letter(ref_aa);
-        return Some(format!("{protein_prefix}{ref_three}{protein_pos}="));
-    }
-
-    let del_start_pos = protein_pos + prefix_len as u64;
-    let del_end_pos = del_start_pos + deleted.len() as u64 - 1;
-    let start_three = amino_acid_three_letter(deleted[0]);
-
-    if deleted.len() == 1 {
-        Some(format!("{protein_prefix}{start_three}{del_start_pos}del"))
-    } else {
-        let end_three = amino_acid_three_letter(deleted[deleted.len() - 1]);
-        Some(format!(
-            "{protein_prefix}{start_three}{del_start_pos}_{end_three}{del_end_pos}del"
-        ))
-    }
-}
-
-/// Generate HGVSp for a protein-altering variant (complex indel).
-fn generate_hgvsp_protein_altering(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    bounds: &CdsSpanBounds,
-    protein_prefix: &str,
-    _cds: &[u8],
-) -> Option<String> {
-    let (ref_pep, alt_pep) = compute_codon_window_peptide_alleles(variant, transcript, bounds)?;
-
-    if ref_pep.is_empty() {
-        return None;
-    }
-
-    let protein_pos = bounds.translation_start;
-
-    let mut prefix_len = 0;
-    let min_len = ref_pep.len().min(alt_pep.len());
-    while prefix_len < min_len && ref_pep[prefix_len] == alt_pep[prefix_len] {
-        prefix_len += 1;
-    }
-
-    let mut suffix_len = 0;
-    while suffix_len < (min_len - prefix_len)
-        && ref_pep[ref_pep.len() - 1 - suffix_len] == alt_pep[alt_pep.len() - 1 - suffix_len]
-    {
-        suffix_len += 1;
-    }
-
-    let ref_changed = &ref_pep[prefix_len..ref_pep.len() - suffix_len];
-    let alt_changed = &alt_pep[prefix_len..alt_pep.len() - suffix_len];
-
-    if ref_changed.is_empty() && alt_changed.is_empty() {
-        let ref_aa = ref_pep[0];
-        let ref_three = amino_acid_three_letter(ref_aa);
-        return Some(format!("{protein_prefix}{ref_three}{protein_pos}="));
-    }
-
-    let change_start_pos = protein_pos + prefix_len as u64;
-
-    if ref_changed.is_empty() {
-        let inserted_str: String = alt_changed
-            .iter()
-            .map(|&aa| amino_acid_three_letter(aa))
-            .collect();
-        let flank_start_pos = change_start_pos.saturating_sub(1).max(1);
-        let flank_end_pos = change_start_pos;
-        let start_three = if prefix_len > 0 {
-            amino_acid_three_letter(ref_pep[prefix_len - 1])
-        } else {
-            "Met"
-        };
-        let end_three = if prefix_len < ref_pep.len() {
-            amino_acid_three_letter(ref_pep[prefix_len])
-        } else {
-            "Ter"
-        };
-        return Some(format!(
-            "{protein_prefix}{start_three}{flank_start_pos}_{end_three}{flank_end_pos}ins{inserted_str}"
-        ));
-    }
-
-    if alt_changed.is_empty() {
-        let start_three = amino_acid_three_letter(ref_changed[0]);
-        if ref_changed.len() == 1 {
-            return Some(format!(
-                "{protein_prefix}{start_three}{change_start_pos}del"
-            ));
-        }
-        let end_pos = change_start_pos + ref_changed.len() as u64 - 1;
-        let end_three = amino_acid_three_letter(ref_changed[ref_changed.len() - 1]);
-        return Some(format!(
-            "{protein_prefix}{start_three}{change_start_pos}_{end_three}{end_pos}del"
-        ));
-    }
-
-    let start_three = amino_acid_three_letter(ref_changed[0]);
-    let alt_str: String = alt_changed
-        .iter()
-        .map(|&aa| amino_acid_three_letter(aa))
-        .collect();
-    if ref_changed.len() == 1 {
-        Some(format!(
-            "{protein_prefix}{start_three}{change_start_pos}delins{alt_str}"
-        ))
-    } else {
-        let end_pos = change_start_pos + ref_changed.len() as u64 - 1;
-        let end_three = amino_acid_three_letter(ref_changed[ref_changed.len() - 1]);
-        Some(format!(
-            "{protein_prefix}{start_three}{change_start_pos}_{end_three}{end_pos}delins{alt_str}"
-        ))
-    }
+    let protein_prefix = format!(
+        "{}:p.",
+        versioned_reference_name(
+            protein_id,
+            transcript.translation.as_ref().and_then(|t| t.version)
+        )
+    );
+
+    let shifted_variant = shifted.map(|(start, end)| {
+        let ref_allele = normalized_hgvs_ref_allele(variant, shifted, reference_fasta)
+            .unwrap_or_else(|| b"-".to_vec());
+        let alt_allele = normalized_hgvs_alt_allele(variant, transcript, shifted)
+            .unwrap_or_else(|| b"-".to_vec());
+        InputVariant::new(variant.chr.clone(), start, end, ref_allele, alt_allele)
+    });
+    let notation = crate::coding::perl_hgvs_protein(
+        variant,
+        shifted_variant.as_ref().map(|v| (v, v.start, v.end)),
+        transcript,
+        reference_fasta,
+    )?;
+    Some(format!("{protein_prefix}{notation}"))
 }
 
 #[cfg(test)]
@@ -1402,52 +804,126 @@ mod tests {
         assert_eq!(amino_acid_three_letter(b'M'), "Met");
         assert_eq!(amino_acid_three_letter(b'*'), "Ter");
         assert_eq!(amino_acid_three_letter(b'X'), "Xaa");
+        assert_eq!(amino_acid_three_letter(b'B'), "Asx");
+        assert_eq!(amino_acid_three_letter(b'Z'), "Glx");
+        assert_eq!(amino_acid_three_letter(b'J'), "Xle");
+        assert_eq!(amino_acid_three_letter(b'O'), "Pyl");
+    }
+
+    /// The fixture transcript as `_get_cDNA_position` walks it: a forward-strand
+    /// slice with no FASTA and the mapper's exon pairs.
+    fn fixture_slice_and_exons(tx: &Transcript) -> (TranscriptSlice<'static>, Vec<ExonSpan>) {
+        let mapper = tx.vefc.as_ref().unwrap().mapper.as_ref().unwrap();
+        let exons = ExonSpan::in_genomic_order(&mapper.exon_coord_mapper.pairs);
+        let slice = TranscriptSlice {
+            chr: "21",
+            tr_start: tx.start as i64,
+            tr_end: tx.end as i64,
+            reverse: false,
+            fasta: None,
+        };
+        (slice, exons)
     }
 
     #[test]
-    fn test_format_cdna_position_coding() {
+    fn test_perl_cdna_position_coding() {
         let tx = make_test_transcript();
-        let vefc = tx.vefc.as_ref().unwrap();
-        let mapper = vefc.mapper.as_ref().unwrap();
-
-        // CDS pos 1 = cDNA 51
-        assert_eq!(format_cdna_position(51, mapper, true), "1");
-        // CDS pos 10 = cDNA 60
-        assert_eq!(format_cdna_position(60, mapper, true), "10");
+        let (slice, exons) = fixture_slice_and_exons(&tx);
+        let coding = Some((51, 900));
+        // cDNA 51 is CDS 1; cDNA 60 is CDS 10 (slice position = cDNA in exon 1).
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, coding, 51).as_deref(),
+            Some("1")
+        );
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, coding, 60).as_deref(),
+            Some("10")
+        );
     }
 
     #[test]
-    fn test_format_cdna_position_five_prime_utr() {
+    fn test_perl_cdna_position_five_prime_utr() {
         let tx = make_test_transcript();
-        let vefc = tx.vefc.as_ref().unwrap();
-        let mapper = vefc.mapper.as_ref().unwrap();
-
-        // cDNA 50 is 1bp before coding start (51) -> c.-1
-        assert_eq!(format_cdna_position(50, mapper, true), "-1");
-        // cDNA 1 is 50bp before coding start -> c.-50
-        assert_eq!(format_cdna_position(1, mapper, true), "-50");
+        let (slice, exons) = fixture_slice_and_exons(&tx);
+        let coding = Some((51, 900));
+        // The base before the start codon is c.-1; the transcript's first base c.-50.
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, coding, 50).as_deref(),
+            Some("-1")
+        );
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, coding, 1).as_deref(),
+            Some("-50")
+        );
     }
 
     #[test]
-    fn test_format_cdna_position_three_prime_utr() {
+    fn test_perl_cdna_position_three_prime_utr() {
         let tx = make_test_transcript();
-        let vefc = tx.vefc.as_ref().unwrap();
-        let mapper = vefc.mapper.as_ref().unwrap();
-
-        // cDNA 901 is 1bp after coding end (900) -> c.*1
-        assert_eq!(format_cdna_position(901, mapper, true), "*1");
-        // cDNA 910 is 10bp after coding end -> c.*10
-        assert_eq!(format_cdna_position(910, mapper, true), "*10");
+        let (slice, exons) = fixture_slice_and_exons(&tx);
+        let coding = Some((51, 900));
+        // cDNA 901 (slice 25_004_300 - 25_000_000 + 1 = 4_301) is the first base
+        // after the stop codon, c.*1; ten bases on is c.*10.
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, coding, 4_301).as_deref(),
+            Some("*1")
+        );
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, coding, 4_310).as_deref(),
+            Some("*10")
+        );
     }
 
     #[test]
-    fn test_format_cdna_position_non_coding() {
+    fn test_perl_cdna_position_intronic_offsets() {
         let tx = make_test_transcript();
-        let vefc = tx.vefc.as_ref().unwrap();
-        let mapper = vefc.mapper.as_ref().unwrap();
+        let (slice, exons) = fixture_slice_and_exons(&tx);
+        let coding = Some((51, 900));
+        // Intron 1 spans genomic 25_000_300..25_001_999 between cDNA 300 and 301:
+        // two bases into it is c.250+2, two bases before exon 2 is c.251-2, and
+        // the midpoint (850 bases from either exon) goes to the upstream exon.
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, coding, 302).as_deref(),
+            Some("250+2")
+        );
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, coding, 1_999).as_deref(),
+            Some("251-2")
+        );
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, coding, 1_150).as_deref(),
+            Some("250+850")
+        );
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, coding, 1_151).as_deref(),
+            Some("251-850")
+        );
+    }
 
-        // Non-coding: just the raw cDNA position
-        assert_eq!(format_cdna_position(42, mapper, false), "42");
+    #[test]
+    fn test_perl_cdna_position_non_coding() {
+        let tx = make_test_transcript();
+        let (slice, exons) = fixture_slice_and_exons(&tx);
+        // Without a CDS the coordinate is the raw cDNA position.
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, None, 42).as_deref(),
+            Some("42")
+        );
+        assert_eq!(
+            perl_cdna_position(&slice, &exons, None, 302).as_deref(),
+            Some("300+2")
+        );
+    }
+
+    #[test]
+    fn test_hgvs_coordinate_parts() {
+        assert_eq!(hgvs_coordinate_parts("250"), (250, 0));
+        assert_eq!(hgvs_coordinate_parts("-50"), (-50, 0));
+        assert_eq!(hgvs_coordinate_parts("250+2"), (250, 2));
+        assert_eq!(hgvs_coordinate_parts("251-2"), (251, -2));
+        assert_eq!(hgvs_coordinate_parts("*10"), (10, 0));
+        assert_eq!(hgvs_coordinate_parts("*3"), (3, 0));
+        assert_eq!(hgvs_coordinate_parts("-12+7"), (-12, 7));
     }
 
     #[test]
@@ -1461,16 +937,9 @@ mod tests {
             b"C".to_vec(),
             b"A".to_vec(),
         );
-        let hgvsc = generate_hgvsc(&variant, &tx, None);
-        assert!(hgvsc.is_some(), "HGVSc should be generated for coding SNV");
-        let notation = hgvsc.unwrap();
-        assert!(
-            notation.starts_with("ENST00000000001.1:c."),
-            "Should have transcript prefix, got: {notation}"
-        );
-        assert!(
-            notation.contains(">"),
-            "SNV should use substitution notation, got: {notation}"
+        assert_eq!(
+            generate_hgvsc(&variant, &tx, None).as_deref(),
+            Some("ENST00000000001.1:c.5C>A")
         );
     }
 
@@ -1485,12 +954,9 @@ mod tests {
             b"A".to_vec(),
             b"G".to_vec(),
         );
-        let hgvsc = generate_hgvsc(&variant, &tx, None);
-        assert!(hgvsc.is_some());
-        let notation = hgvsc.unwrap();
-        assert!(
-            notation.contains("c.-"),
-            "5' UTR should use negative notation, got: {notation}"
+        assert_eq!(
+            generate_hgvsc(&variant, &tx, None).as_deref(),
+            Some("ENST00000000001.1:c.-41A>G")
         );
     }
 
@@ -1506,12 +972,9 @@ mod tests {
             b"A".to_vec(),
             b"G".to_vec(),
         );
-        let hgvsc = generate_hgvsc(&variant, &tx, None);
-        assert!(hgvsc.is_some());
-        let notation = hgvsc.unwrap();
-        assert!(
-            notation.contains("c.*"),
-            "3' UTR should use * notation, got: {notation}"
+        assert_eq!(
+            generate_hgvsc(&variant, &tx, None).as_deref(),
+            Some("ENST00000000001.1:c.*1A>G")
         );
     }
 
@@ -1527,12 +990,9 @@ mod tests {
             b"A".to_vec(),
             b"G".to_vec(),
         );
-        let hgvsc = generate_hgvsc(&variant, &tx, None);
-        assert!(hgvsc.is_some());
-        let notation = hgvsc.unwrap();
-        assert!(
-            notation.contains("+"),
-            "Intronic donor side should use + notation, got: {notation}"
+        assert_eq!(
+            generate_hgvsc(&variant, &tx, None).as_deref(),
+            Some("ENST00000000001.1:c.250+3A>G")
         );
     }
 
@@ -1547,12 +1007,9 @@ mod tests {
             b"GCT".to_vec(),
             b"-".to_vec(),
         );
-        let hgvsc = generate_hgvsc(&variant, &tx, None);
-        assert!(hgvsc.is_some());
-        let notation = hgvsc.unwrap();
-        assert!(
-            notation.contains("del"),
-            "Deletion should use del notation, got: {notation}"
+        assert_eq!(
+            generate_hgvsc(&variant, &tx, None).as_deref(),
+            Some("ENST00000000001.1:c.4_6del")
         );
     }
 
@@ -1568,19 +1025,143 @@ mod tests {
             b"A".to_vec(),
             b"G".to_vec(),
         );
-        let hgvsc = generate_hgvsc(&variant, &tx, None);
-        assert!(hgvsc.is_some());
-        let notation = hgvsc.unwrap();
-        assert!(
-            notation.contains(":n."),
-            "Non-coding transcript should use n. prefix, got: {notation}"
+        assert_eq!(
+            generate_hgvsc(&variant, &tx, None).as_deref(),
+            Some("ENST00000000001.1:n.51A>G")
+        );
+    }
+
+    /// A slice with no FASTA: `substr` reads nothing, so the reference comes from
+    /// the caller and no duplication lookup can succeed.
+    fn unreadable_slice() -> TranscriptSlice<'static> {
+        TranscriptSlice {
+            chr: "21",
+            tr_start: 1,
+            tr_end: 10_000,
+            reverse: false,
+            fasta: None,
+        }
+    }
+
+    #[test]
+    fn test_versioned_reference_name() {
+        assert_eq!(
+            versioned_reference_name("ENST00000000001", Some(1)),
+            "ENST00000000001.1"
+        );
+        assert_eq!(
+            versioned_reference_name("ENST00000000001", None),
+            "ENST00000000001"
+        );
+        assert_eq!(
+            versioned_reference_name("NM_000001.2", Some(3)),
+            "NM_000001.2"
+        );
+        assert_eq!(versioned_reference_name("LRG_1t1", Some(1)), "LRG_1t1");
+        assert_eq!(
+            versioned_reference_name("ENSP00000000001", Some(7)),
+            "ENSP00000000001.7"
+        );
+    }
+
+    #[test]
+    fn test_hgvs_variant_notation_types() {
+        let slice = unreadable_slice();
+        let kind = |r: &[u8], a: &[u8]| {
+            let end = 100 + r.len() as i64 - 1;
+            hgvs_variant_notation(&slice, r, a.to_vec(), 100, end).map(|n| (n.kind, n.start, n.end))
+        };
+        assert_eq!(kind(b"A", b"G"), Some((HgvscKind::Sub, 100, 100)));
+        assert_eq!(kind(b"ACG", b""), Some((HgvscKind::Del, 100, 102)));
+        assert_eq!(kind(b"ACG", b"CGT"), Some((HgvscKind::Inv, 100, 102)));
+        assert_eq!(kind(b"ACG", b"TTT"), Some((HgvscKind::Delins, 100, 102)));
+        assert_eq!(kind(b"AC", b"ACAC"), Some((HgvscKind::Dup, 100, 101)));
+        assert_eq!(
+            kind(b"AC", b"ACACAC"),
+            Some((HgvscKind::Multiple(3), 100, 101))
+        );
+        assert_eq!(kind(b"AC", b"ACACAG"), Some((HgvscKind::Delins, 100, 101)));
+        assert_eq!(kind(b"ACG", b"ACG"), None);
+        // An insertion (`ref_end < ref_start`) lists the smaller coordinate first.
+        assert_eq!(
+            hgvs_variant_notation(&slice, b"", b"TT".to_vec(), 100, 99)
+                .map(|n| (n.kind, n.start, n.end)),
+            Some((HgvscKind::Ins, 99, 100))
+        );
+    }
+
+    #[test]
+    fn test_hgvsc_clip_alleles_trims_shared_flanks_and_retypes() {
+        let mut n = HgvscNotation {
+            start: 10,
+            end: 14,
+            ref_seq: b"GATTC".to_vec(),
+            alt_seq: b"GACTC".to_vec(),
+            kind: HgvscKind::Delins,
+        };
+        hgvsc_clip_alleles(&mut n);
+        assert_eq!((n.start, n.end), (12, 12));
+        assert_eq!(
+            (n.ref_seq.as_slice(), n.alt_seq.as_slice()),
+            (&b"T"[..], &b"C"[..])
+        );
+        assert_eq!(n.kind, HgvscKind::Sub);
+
+        let mut n = HgvscNotation {
+            start: 10,
+            end: 12,
+            ref_seq: b"GAT".to_vec(),
+            alt_seq: b"GATTC".to_vec(),
+            kind: HgvscKind::Delins,
+        };
+        hgvsc_clip_alleles(&mut n);
+        assert_eq!((n.start, n.end), (13, 12));
+        assert_eq!(n.alt_seq, b"TC");
+        assert_eq!(n.kind, HgvscKind::Ins);
+
+        let mut n = HgvscNotation {
+            start: 10,
+            end: 14,
+            ref_seq: b"GATTC".to_vec(),
+            alt_seq: b"GTC".to_vec(),
+            kind: HgvscKind::Delins,
+        };
+        hgvsc_clip_alleles(&mut n);
+        assert_eq!((n.start, n.end), (11, 12));
+        assert_eq!(n.ref_seq, b"AT");
+        assert_eq!(n.kind, HgvscKind::Del);
+    }
+
+    #[test]
+    fn test_format_hgvs_string_bodies() {
+        let n = |kind: HgvscKind, r: &[u8], a: &[u8]| HgvscNotation {
+            start: 0,
+            end: 0,
+            ref_seq: r.to_vec(),
+            alt_seq: a.to_vec(),
+            kind,
+        };
+        let f =
+            |kind, r: &[u8], a: &[u8], s, e| format_hgvs_string("T.1", 'c', s, e, &n(kind, r, a));
+        assert_eq!(f(HgvscKind::Sub, b"A", b"G", "5", "5"), "T.1:c.5A>G");
+        assert_eq!(f(HgvscKind::Del, b"AC", b"", "5", "6"), "T.1:c.5_6del");
+        assert_eq!(f(HgvscKind::Del, b"A", b"", "5", "5"), "T.1:c.5del");
+        assert_eq!(f(HgvscKind::Inv, b"AC", b"GT", "5", "6"), "T.1:c.5_6inv");
+        assert_eq!(f(HgvscKind::Dup, b"", b"AC", "5", "6"), "T.1:c.5_6dup");
+        assert_eq!(f(HgvscKind::Ins, b"", b"AC", "5", "6"), "T.1:c.5_6insAC");
+        assert_eq!(
+            f(HgvscKind::Delins, b"AC", b"TTT", "250+3", "251-2"),
+            "T.1:c.250+3_251-2delinsTTT"
+        );
+        assert_eq!(
+            f(HgvscKind::Multiple(3), b"AC", b"ACACAC", "5", "6"),
+            "T.1:c.5_6[3]"
         );
     }
 
     #[test]
     fn test_hgvsp_missense() {
         let tx = make_test_transcript();
-        use vep_core::consequence::Consequence;
         // CDS pos 5, GCT -> GAT = Ala -> Asp
         let variant = InputVariant::new(
             "21".into(),
@@ -1589,7 +1170,7 @@ mod tests {
             b"C".to_vec(),
             b"A".to_vec(),
         );
-        let hgvsp = generate_hgvsp(&variant, &tx, &[Consequence::MissenseVariant]);
+        let hgvsp = generate_hgvsp(&variant, &tx, None);
         assert!(hgvsp.is_some());
         let notation = hgvsp.unwrap();
         assert!(
@@ -1601,7 +1182,6 @@ mod tests {
     #[test]
     fn test_hgvsp_synonymous() {
         let tx = make_test_transcript();
-        use vep_core::consequence::Consequence;
         // CDS pos 6, GCT -> GCC = Ala -> Ala (synonymous)
         let variant = InputVariant::new(
             "21".into(),
@@ -1610,7 +1190,7 @@ mod tests {
             b"T".to_vec(),
             b"C".to_vec(),
         );
-        let hgvsp = generate_hgvsp(&variant, &tx, &[Consequence::SynonymousVariant]);
+        let hgvsp = generate_hgvsp(&variant, &tx, None);
         assert!(hgvsp.is_some());
         let notation = hgvsp.unwrap();
         assert!(
@@ -1622,7 +1202,6 @@ mod tests {
     #[test]
     fn test_hgvsp_stop_gained() {
         let tx = make_test_transcript();
-        use vep_core::consequence::Consequence;
         // CDS pos 7, GGA -> TGA = Gly -> Stop
         let variant = InputVariant::new(
             "21".into(),
@@ -1631,7 +1210,7 @@ mod tests {
             b"G".to_vec(),
             b"T".to_vec(),
         );
-        let hgvsp = generate_hgvsp(&variant, &tx, &[Consequence::StopGained]);
+        let hgvsp = generate_hgvsp(&variant, &tx, None);
         assert!(hgvsp.is_some());
         let notation = hgvsp.unwrap();
         assert!(
@@ -1643,7 +1222,6 @@ mod tests {
     #[test]
     fn test_hgvsp_start_lost() {
         let tx = make_test_transcript();
-        use vep_core::consequence::Consequence;
         // ATG -> ACG = Met -> Thr (start_lost)
         let variant = InputVariant::new(
             "21".into(),
@@ -1652,7 +1230,7 @@ mod tests {
             b"T".to_vec(),
             b"C".to_vec(),
         );
-        let hgvsp = generate_hgvsp(&variant, &tx, &[Consequence::StartLost]);
+        let hgvsp = generate_hgvsp(&variant, &tx, None);
         assert!(hgvsp.is_some());
         let notation = hgvsp.unwrap();
         assert!(
@@ -1664,28 +1242,17 @@ mod tests {
     #[test]
     fn test_hgvsp_frameshift() {
         let tx = make_test_transcript();
-        use vep_core::consequence::Consequence;
-        // 2bp insertion at CDS pos 3 = frameshift
+        // 2 bp insertion after the start codon (CDS 3|4): the alternate frame reads
+        // ATG AAG CTG ..., so residue 2 becomes Lys and no stop precedes the
+        // N-padded 3' UTR. An insertion inside ATG is a start loss (`Met1?`).
         let variant = InputVariant::new(
             "21".into(),
+            25_000_053,
             25_000_052,
-            25_000_051,
             b"-".to_vec(),
             b"AA".to_vec(),
         );
-        let hgvsp = generate_hgvsp(&variant, &tx, &[Consequence::FrameshiftVariant]);
-        assert!(hgvsp.is_some());
-        let notation = hgvsp.unwrap();
-        assert!(
-            notation.contains("fs"),
-            "Frameshift should contain 'fs', got: {notation}"
-        );
-    }
-
-    #[test]
-    fn test_reverse_complement_string() {
-        assert_eq!(reverse_complement_string(b"ATCG"), "CGAT");
-        assert_eq!(reverse_complement_string(b"A"), "T");
-        assert_eq!(reverse_complement_string(b"AAAA"), "TTTT");
+        let hgvsp = generate_hgvsp(&variant, &tx, None);
+        assert_eq!(hgvsp.as_deref(), Some("ENSP00000000001.1:p.Ala2LysfsTer?"));
     }
 }

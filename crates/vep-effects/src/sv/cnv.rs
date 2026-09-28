@@ -341,6 +341,7 @@ fn build_consequence(
         intron: None,
         hgvsc: None,
         hgvsp: None,
+        hgvs_offset: None,
         sift: None,
         polyphen: None,
         domains: Vec::new(),

@@ -5,13 +5,20 @@
 //! discovery, running the `vep` binary on a corpus, parsing each output format
 //! into comparable entries, and rendering every mismatch in one report.
 //!
-//! A corpus lives at `tests/golden/<release>/<assembly>/` with `variants.vcf`,
+//! A corpus lives at `tests/golden/<release>/<name>/` with `variants.vcf`,
 //! `manifest.json`, `json_cache/` and `expected/{default.txt,tab.txt,vcf.vcf,
-//! json.jsonl}[.gz]`. Its `manifest.json` `divergences` list names the
-//! (Location, Allele, Feature) keys whose consequence terms are documented to
-//! differ between VEP and vep-rs (with the corpus record ordinals they belong
-//! to), and `vep_rs_only_tuples` the keys only vep-rs emits; both are compared
-//! against their documented shape rather than for equality.
+//! json.jsonl}[.gz]`; `<name>` is the assembly, optionally suffixed
+//! (`GRCh37-hgvs`), and the manifest's `assembly` is what the run passes to
+//! `--assembly`. The manifest may also carry `flags` (extra command-line flags,
+//! such as `--hgvs`) and `fasta` (a gzipped reference beside the manifest with
+//! its `.fai`, decompressed once per run and passed to `--fasta`). Its
+//! `divergences` list names the (Location, Allele, Feature) keys whose
+//! consequence terms are documented to differ between VEP and vep-rs (with the
+//! corpus record ordinals they belong to), and `vep_rs_only_tuples` the keys
+//! only vep-rs emits; both are compared against their documented shape rather
+//! than for equality. `field_divergences` names keys whose terms agree but whose
+//! named field (an HGVS string) is documented to differ, with the value vep-rs
+//! prints; every other field of such a key compares exactly.
 
 #![allow(dead_code)]
 
@@ -24,6 +31,9 @@ use std::process::Command;
 /// One corpus directory.
 pub struct Corpus {
     pub release: String,
+    /// The directory name: the assembly, optionally suffixed.
+    pub name: String,
+    /// The assembly passed to `--assembly`: the manifest's `assembly`, else the name.
     pub assembly: String,
     pub dir: PathBuf,
     pub manifest: serde_json::Value,
@@ -48,15 +58,21 @@ pub fn corpora() -> Vec<Corpus> {
             let manifest: serde_json::Value =
                 serde_json::from_str(&fs::read_to_string(dir.join("manifest.json")).unwrap())
                     .unwrap();
+            let name = asm.file_name().to_string_lossy().into_owned();
+            let assembly = manifest["assembly"]
+                .as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| name.clone());
             out.push(Corpus {
                 release: rel.file_name().to_string_lossy().into_owned(),
-                assembly: asm.file_name().to_string_lossy().into_owned(),
+                name,
+                assembly,
                 dir,
                 manifest,
             });
         }
     }
-    out.sort_by(|a, b| (&a.release, &a.assembly).cmp(&(&b.release, &b.assembly)));
+    out.sort_by(|a, b| (&a.release, &a.name).cmp(&(&b.release, &b.name)));
     out
 }
 
@@ -75,15 +91,40 @@ pub fn read_expected(dir: &Path, name: &str) -> String {
     text
 }
 
-/// Runs the `vep` binary on the corpus in one output format and returns the
-/// output file's text. `format` is `default`, `tab`, `vcf`, `json` or `parquet`.
-pub fn run_vep(corpus: &Corpus, format: &str, out_dir: &Path, extra: &[&str]) -> String {
-    let out = out_dir.join(format!("{format}.out"));
+/// The corpus's reference FASTA decompressed into `out_dir` (once; later calls
+/// reuse it), with its `.fai` copied beside it; `None` when the manifest names
+/// no `fasta`.
+fn corpus_fasta(corpus: &Corpus, out_dir: &Path) -> Option<PathBuf> {
+    let name = corpus.manifest["fasta"].as_str()?;
+    let plain_name = name.strip_suffix(".gz").unwrap_or(name);
+    let target = out_dir.join(format!("{}-{plain_name}", corpus.name));
+    if !target.is_file() {
+        let src = corpus.dir.join(name);
+        let mut data = Vec::new();
+        if name.ends_with(".gz") {
+            flate2::read::GzDecoder::new(fs::File::open(&src).unwrap())
+                .read_to_end(&mut data)
+                .unwrap();
+        } else {
+            data = fs::read(&src).unwrap();
+        }
+        fs::write(&target, data).unwrap();
+        fs::copy(
+            corpus.dir.join(format!("{plain_name}.fai")),
+            format!("{}.fai", target.display()),
+        )
+        .unwrap();
+    }
+    Some(target)
+}
+
+/// The `vep` invocation every golden run starts from: the corpus input and
+/// cache, the fixed arguments, then the manifest's `flags` and `fasta`. The
+/// caller adds the output path and format.
+pub fn vep_command(corpus: &Corpus, out_dir: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
     cmd.arg("-i")
         .arg(corpus.dir.join("variants.vcf"))
-        .arg("-o")
-        .arg(&out)
         .arg("--offline")
         .arg("--json_cache")
         .arg(corpus.dir.join("json_cache"))
@@ -95,16 +136,25 @@ pub fn run_vep(corpus: &Corpus, format: &str, out_dir: &Path, extra: &[&str]) ->
             "--no_stats",
             "--quiet",
         ]);
+    for flag in corpus.manifest["flags"].as_array().into_iter().flatten() {
+        cmd.arg(flag.as_str().expect("manifest flags are strings"));
+    }
+    if let Some(fasta) = corpus_fasta(corpus, out_dir) {
+        cmd.arg("--fasta").arg(fasta);
+    }
+    cmd
+}
+
+/// Runs the `vep` binary on the corpus in one output format and returns the
+/// output file's text. `format` is `default`, `tab`, `vcf` or `json`.
+pub fn run_vep(corpus: &Corpus, format: &str, out_dir: &Path, extra: &[&str]) -> String {
+    let out = out_dir.join(format!("{}-{format}.out", corpus.name));
+    let mut cmd = vep_command(corpus, out_dir);
+    cmd.arg("-o").arg(&out);
     match format {
         "default" => {}
-        "tab" => {
-            cmd.arg("--tab");
-        }
-        "vcf" => {
-            cmd.arg("--vcf");
-        }
-        "json" => {
-            cmd.arg("--json");
+        "tab" | "vcf" | "json" => {
+            cmd.arg(format!("--{format}"));
         }
         other => panic!("unknown format {other}"),
     }
@@ -114,7 +164,7 @@ pub fn run_vep(corpus: &Corpus, format: &str, out_dir: &Path, extra: &[&str]) ->
         output.status.success(),
         "vep --{format} failed on {}/{}:\n{}",
         corpus.release,
-        corpus.assembly,
+        corpus.name,
         String::from_utf8_lossy(&output.stderr)
     );
     fs::read_to_string(&out).unwrap()
@@ -406,6 +456,10 @@ pub struct Documented {
     /// Keys only vep-rs emits.
     extra_by_location: BTreeSet<(String, String, String)>,
     extra_by_record: BTreeSet<(usize, String, String)>,
+    /// (Location, Allele, Feature) -> field name -> the value vep-rs is
+    /// documented to print where VEP prints another.
+    fields_by_location: HashMap<(String, String, String), BTreeMap<String, String>>,
+    fields_by_record: HashMap<(usize, String, String), BTreeMap<String, String>>,
 }
 
 impl Documented {
@@ -415,6 +469,8 @@ impl Documented {
             by_record: HashMap::new(),
             extra_by_location: BTreeSet::new(),
             extra_by_record: BTreeSet::new(),
+            fields_by_location: HashMap::new(),
+            fields_by_record: HashMap::new(),
         };
         let s = |v: &serde_json::Value, k: &str| {
             v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string()
@@ -456,7 +512,55 @@ impl Documented {
                 }
             }
         }
+        for item in manifest["field_divergences"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let (field, value) = (s(item, "field"), s(item, "vep_rs"));
+            d.fields_by_location
+                .entry((s(item, "location"), s(item, "allele"), s(item, "feature")))
+                .or_default()
+                .insert(field.clone(), value.clone());
+            for r in item["record_indices"].as_array().into_iter().flatten() {
+                if let Some(r) = r.as_u64() {
+                    d.fields_by_record
+                        .entry((r as usize, s(item, "allele"), s(item, "feature")))
+                        .or_default()
+                        .insert(field.clone(), value.clone());
+                }
+            }
+        }
         d
+    }
+
+    /// The documented vep-rs value of `field` for an entry, when the field is
+    /// documented to differ on its key. `field` is matched as the format spells
+    /// it: the manifest names the default-format key (`HGVSp`), the JSON format
+    /// its lower-case form.
+    pub fn divergent_field(&self, e: &Entry, field: &str) -> Option<&String> {
+        fn lookup<'m>(m: &'m BTreeMap<String, String>, field: &str) -> Option<&'m String> {
+            m.get(field).or_else(|| {
+                m.iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case(field))
+                    .map(|(_, v)| v)
+            })
+        }
+        let (allele, feature) = (dash(&e.allele), dash(&e.feature));
+        if let Some(loc) = &e.location {
+            if let Some(m) =
+                self.fields_by_location
+                    .get(&(loc.clone(), allele.clone(), feature.clone()))
+            {
+                return lookup(m, field);
+            }
+        }
+        if let Some(r) = e.record {
+            if let Some(m) = self.fields_by_record.get(&(r, allele, feature)) {
+                return lookup(m, field);
+            }
+        }
+        None
     }
 
     /// Documented vep-rs consequence sets for an entry, if its key is documented.
@@ -507,6 +611,12 @@ impl Documented {
     pub fn is_empty(&self) -> bool {
         self.by_location.is_empty() && self.by_record.is_empty()
     }
+}
+
+/// The default format's Extra values and the VCF's CSQ values percent-encode
+/// `=` and `;`; a documented field value is compared with both undone.
+fn decode_extra(s: &str) -> String {
+    s.replace("%3D", "=").replace("%3B", ";")
 }
 
 /// The default format prints an absent value as `-`; the VCF and JSON formats
@@ -586,6 +696,18 @@ pub fn compare_entries(expected: &[Entry], actual: &[Entry], documented: &Docume
             }
             let ev = e.fields.get(name).map(String::as_str).unwrap_or("<absent>");
             let av = a.fields.get(name).map(String::as_str).unwrap_or("<absent>");
+            if let Some(documented_value) = documented.divergent_field(e, name) {
+                // The field is documented to differ: vep-rs must print the documented
+                // value (compared after the Extra/CSQ percent-encoding of `=` and `;`
+                // is undone), or the documentation is stale.
+                if decode_extra(av) != decode_extra(documented_value) {
+                    stale_divergences.push(format!(
+                        "{}: field {name} documented as {:?}, vep-rs now prints {:?} (VEP: {:?})",
+                        e.key, documented_value, av, ev
+                    ));
+                }
+                continue;
+            }
             if ev != av {
                 *mismatch_totals.entry(name.clone()).or_default() += 1;
                 let group = mismatches

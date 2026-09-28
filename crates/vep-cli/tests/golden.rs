@@ -38,7 +38,7 @@ fn default_output_matches_vep_on_every_corpus() {
         if !header.is_empty() || !body.is_empty() {
             failures.push(format!(
                 "== corpus {}/{} (default format)\n{header}{body}",
-                corpus.release, corpus.assembly
+                corpus.release, corpus.name
             ));
         }
     }
@@ -60,7 +60,7 @@ fn manifest_covers_every_combination_it_claims() {
             inputs.len(),
             "{}/{}: manifest records vs variants.vcf data lines",
             corpus.release,
-            corpus.assembly
+            corpus.name
         );
         for (i, (rec, line)) in records.iter().zip(inputs.iter()).enumerate() {
             assert_eq!(
@@ -68,14 +68,14 @@ fn manifest_covers_every_combination_it_claims() {
                 line,
                 "{}/{}: record {i} differs between manifest and variants.vcf",
                 corpus.release,
-                corpus.assembly
+                corpus.name
             );
         }
         assert!(
             m["uncovered_combinations"].as_array().unwrap().is_empty(),
             "{}/{}: combinations without an exemplar: {:?}",
             corpus.release,
-            corpus.assembly,
+            corpus.name,
             m["uncovered_combinations"]
         );
         let expected = read_expected(&corpus.dir, "default.txt");
@@ -94,7 +94,7 @@ fn manifest_covers_every_combination_it_claims() {
             unmet.is_empty(),
             "{}/{}: {} combination(s) in the manifest never appear in expected/default.txt: {:?}",
             corpus.release,
-            corpus.assembly,
+            corpus.name,
             unmet.len(),
             unmet
         );
@@ -106,22 +106,36 @@ fn manifest_covers_every_combination_it_claims() {
         assert_eq!(
             listed, claimed,
             "{}/{}: the records' combinations and the combination table disagree",
-            corpus.release, corpus.assembly
+            corpus.release, corpus.name
         );
     }
 }
 
-/// Each corpus stays inside its in-repository size budget.
+/// Each corpus stays inside its in-repository size budget. A corpus that ships a
+/// reference contig (`manifest["fasta"]`) has that file measured on its own
+/// against a budget of its own, since a whole chromosome compresses to about
+/// ten mebibytes and would otherwise consume the corpus budget by itself.
 #[test]
 fn each_corpus_fits_its_size_budget() {
     const BUDGET_BYTES: u64 = 15 * 1024 * 1024;
+    const FASTA_BUDGET_BYTES: u64 = 11 * 1024 * 1024;
     for corpus in corpora() {
-        let size = common::dir_size(&corpus.dir);
+        let mut size = common::dir_size(&corpus.dir);
+        if let Some(fasta) = corpus.manifest["fasta"].as_str() {
+            let fasta_size = std::fs::metadata(corpus.dir.join(fasta)).unwrap().len();
+            assert!(
+                fasta_size <= FASTA_BUDGET_BYTES,
+                "{}/{}: {fasta} is {fasta_size} bytes, over the {FASTA_BUDGET_BYTES} byte reference budget",
+                corpus.release,
+                corpus.name
+            );
+            size -= fasta_size;
+        }
         assert!(
             size <= BUDGET_BYTES,
-            "{}/{} is {} bytes on disk, over the {} byte budget",
+            "{}/{} is {} bytes on disk (reference excluded), over the {} byte budget",
             corpus.release,
-            corpus.assembly,
+            corpus.name,
             size,
             BUDGET_BYTES
         );

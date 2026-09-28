@@ -50,7 +50,7 @@ Mechanism column names how the plugin reads its data and matches a variant.
 | pLI           | Flat file loaded at init, gene symbol lookup                                                   | Yes    | Yes      | `pLI_gene_value`                                                                                                                              |
 | GWAS          | Flat file loaded at init, position + risk allele match                                         | No     | Yes      | `GWAS_accessions`, `GWAS_associated_gene`, `GWAS_beta_coef`, `GWAS_odds_ratio`, `GWAS_p_value`, `GWAS_pmid`, `GWAS_risk_allele`, `GWAS_study` |
 | SpliceAI      | Annotation store, position + allele + gene symbol match                                        | No     | SNV only | `SpliceAI_pred_*` (9 fields)                                                                                                                  |
-| dbNSFP        | Annotation store, position + allele + transcript match, per transcript                         | No     | No       | User-selected columns; not supported (its license requires a paid commercial license for clinical use)                                        |
+| dbNSFP        | Annotation store, position + allele + transcript match, per transcript                         | No     | No       | User-selected columns; not supported (its academic license excludes commercial use)                                                          |
 
 LoFtool and pLI are keyed by gene symbol, so one data file serves both assemblies.
 LoFTEE reads GERP from a tabix TSV on GRCh37 (`gerp_tabix=`) and from a bigWig on

@@ -339,7 +339,6 @@ impl Config {
     }
 
     /// The cache directory the output headers name: the JSON cache when one is
-    /// given, else VEP's layout below.
     /// given, else VEP's `<dir_cache>/<species>[_<assembly>]/<version>` layout.
     pub fn cache_dir_path(&self) -> String {
         if let Some(json_cache) = &self.json_cache {
