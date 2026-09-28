@@ -16,6 +16,9 @@
 #                  recorded and skipped.
 #   GROUND-TRUTH   a suite with no Perl ground truth that leaves a dangling
 #                  symlink, which a copy of the output tree reports as an error.
+#   WARMUP-OUTPUT  a timed run that starts with the discarded warmup's output
+#                  still on disk, whose pages the timed run then reclaims while
+#                  writing its own.
 #
 # Run: bash scripts/concordance/test_run_clone_measurement.sh
 
@@ -759,6 +762,57 @@ STUB
         echo "  skip functional probe run: /usr/bin/time -v is not GNU time here"
     fi
 fi
+
+echo
+echo "WARMUP-OUTPUT: the timed run must start with the warmup's output gone"
+
+# The function under test is the harness's own, extracted by name so the test
+# proves the shipped definition rather than a copy of it.
+HARNESS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run_clone_measurement.sh"
+eval "$(sed -n '/^discard_warmup_output() {/,/^}/p' "$HARNESS")"
+declare -F discard_warmup_output >/dev/null &&
+    ok "discard_warmup_output is defined in the harness" ||
+    bad "discard_warmup_output is not defined in the harness"
+
+# Stub engine: writes its output like a run, and on the timed run records
+# whether the warmup's output and stderr were still present when it started.
+SUITE="$TMP/suite"
+mkdir -p "$SUITE/rust" "$SUITE/perl_scratch" "$SUITE/perf"
+cat >"$TMP/engine_warm.sh" <<'EOF'
+#!/usr/bin/env bash
+# $1 = run kind, $2 = suite dir
+if [[ "$1" == timed ]]; then
+    n=$(find "$2/rust" "$2/perl_scratch" -maxdepth 1 -type f \( -name '*.txt' -o -name '*.stderr' \) | wc -l | tr -d ' ')
+    echo "$n" >"$2/perf/leftover_at_timed_start"
+fi
+head -c 4096 /dev/zero >"$2/rust/output.txt"
+echo "log" >"$2/rust/output.stderr"
+echo "scratch" >"$2/perl_scratch/output.txt"
+EOF
+chmod +x "$TMP/engine_warm.sh"
+
+# The harness's warmup-then-timed loop shape, with the discard step.
+for run_kind in warmup timed; do
+    "$TMP/engine_warm.sh" "$run_kind" "$SUITE"
+    [[ "$run_kind" == warmup ]] && discard_warmup_output "$SUITE"
+done
+leftover=$(cat "$SUITE/perf/leftover_at_timed_start")
+[[ "$leftover" -eq 0 ]] &&
+    ok "the timed run started with no warmup output on disk" ||
+    bad "the timed run found $leftover warmup file(s) still on disk"
+[[ -s "$SUITE/rust/output.txt" ]] &&
+    ok "the timed run's own output survives the step" ||
+    bad "the timed run's output is missing after the step"
+
+# The same loop without the step is the shape the test exists to catch.
+rm -f "$SUITE"/rust/* "$SUITE"/perl_scratch/* "$SUITE/perf/leftover_at_timed_start"
+for run_kind in warmup timed; do
+    "$TMP/engine_warm.sh" "$run_kind" "$SUITE"
+done
+leftover=$(cat "$SUITE/perf/leftover_at_timed_start")
+[[ "$leftover" -eq 3 ]] &&
+    ok "without the step the timed run starts over the warmup's 3 files (the fault the step removes)" ||
+    bad "without the step the timed run found $leftover file(s), expected 3"
 
 echo
 echo "----------------------------------------"
