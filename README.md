@@ -195,7 +195,7 @@ vep-rs was created and is maintained by:
 
 If you use vep-rs in published work, cite the paper:
 
-> Porter M, Borkowski R. _vep-rs: high-throughput Rust variant annotation with population-scale concordance to Ensembl VEP._ The journal DOI will be added here on acceptance.
+> Porter M, Borkowski R. _vep-rs: high-throughput Rust variant annotation with population-scale concordance to Ensembl VEP._ bioRxiv (2026). [doi:10.64898/2026.09.22.753614](https://doi.org/10.64898/2026.09.22.753614). The journal DOI will be added here on acceptance.
 
 The software itself is archived at Zenodo, and that archive is the citation for the code and the released data files:
 
