@@ -29,6 +29,12 @@
       "identifier": "https://github.com/natera-open-source/vep-rs",
       "relation": "isSupplementTo",
       "resource_type": "software"
+    },
+    {
+      "identifier": "10.64898/2026.09.22.753614",
+      "relation": "isSupplementTo",
+      "resource_type": "publication-preprint",
+      "scheme": "doi"
     }
   ]
 }
