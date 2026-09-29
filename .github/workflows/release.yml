@@ -164,7 +164,7 @@ jobs:
       # md5, and those are different builds, so no md5 is published here.
       - name: Write checksums
         run: |
-          sha256sum -- vep-*.tar.gz vep-rs-*.tar.gz > SHA256SUMS
+          sha256sum -- vep-*.tar.gz > SHA256SUMS
           cat SHA256SUMS
 
       - name: Attest every file in SHA256SUMS
