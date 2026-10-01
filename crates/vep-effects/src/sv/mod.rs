@@ -469,15 +469,7 @@ fn calculate_small_bnd_single_breakend(
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
-    // Derived single-breakend BNDs are structural variants; `is_structural` is
-    // preserved for deletion.rs.
-    let bnd_as_del = variant.clone();
-    let mut tc = deletion::calculate(
-        &bnd_as_del,
-        transcript,
-        upstream_distance,
-        downstream_distance,
-    );
+    let mut tc = deletion::calculate(variant, transcript, upstream_distance, downstream_distance);
 
     if let Some(ref mut tc) = tc {
         // Perl's StructuralVariationOverlap assigns no stop_lost or start_lost to a
