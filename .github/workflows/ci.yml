@@ -72,8 +72,8 @@ jobs:
               fail=1
             fi
           }
-          check scripts/concordance/test_compare_vep_outputs.py 133
-          check scripts/validation/test_compare_sv_concordance.py 148
+          check scripts/concordance/test_compare_vep_outputs.py 155
+          check scripts/validation/test_compare_sv_concordance.py 157
           check scripts/validation/test_breakend_mate_context.py 24
           check scripts/concordance/test_compare_output_formats.py 33
           check scripts/concordance/test_compare_vep_fields.py 6

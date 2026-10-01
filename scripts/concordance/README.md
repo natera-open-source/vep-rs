@@ -110,6 +110,7 @@ After a concordance run, results are in `<work-dir>/reports/` (default `tmp/conc
 - `summary.json`: machine-readable metrics (precision, recall, F1, variant counts)
 - `summary.md`: human-readable report
 - `discordant.tsv`: all variants where Perl and Rust disagree
+- `discordant_open.tsv`: the rows of `discordant.tsv` that no excluding rule removes, in the same order and layout; its row count is the adjusted one-sided total
 - `provenance.json`: exact versions, flags, and cache checksums used
 
 ## How It Works

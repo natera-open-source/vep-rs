@@ -500,6 +500,19 @@ class SvFilterSetTests(unittest.TestCase):
     consequence-normalisation mask exists.
     """
 
+    def test_there_is_no_consequence_divergence_filter(self) -> None:
+        self.assertFalse(
+            hasattr(C, "filter_consequence_divergences"),
+            "a BND non-coding normalisation mask would exclude pairs on which the two "
+            "engines agree; the `filter_*_divergences` name shape marks a real mask",
+        )
+
+    def test_there_is_no_normalization_predicate(self) -> None:
+        self.assertFalse(
+            hasattr(C, "_is_nc_normalization_swap"),
+            "the predicate has no caller without the filter",
+        )
+
     def test_the_sv_filter_set_is_exactly_the_expected_one(self) -> None:
         """Two full masks (transcript selection, cross-chromosome annotation), each with
         a second arm on the same class (the mate allele of a giant breakend; the vep-rs
@@ -1582,8 +1595,188 @@ class CnvTrTotalReportEndToEndTests(unittest.TestCase):
         self.assertEqual(adj["cnvtr_swap_pairs_total_by_file"], {})
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+class AdjustedDiscordantTsvEndToEndTests(unittest.TestCase):
+    """``discordant_adjusted.tsv`` lists exactly the one-sided tuples the adjusted
+    row counts: every mask layer removes its pairs from it, and nothing else does.
+
+    The corpus puts one tuple under each layer and two outside every layer:
+
+    * ``09_breakends``: a giant deletion on which vep-rs names three transcripts Perl
+      lacks (transcript-selection layer, vep-rs side) and Perl names one chr22
+      transcript (cross-chromosome layer, Perl side); on a 1 kb deletion below the
+      transcript-selection scope Perl names a chr21 transcript vep-rs lacks, which
+      stays: a genuine vep-rs gap.
+    * ``07_cnv_repeat``: a ``<CNV:TR>`` gain pair differing only in representation
+      (the literal-expansion layer, both sides) and a loss pair whose literal reading
+      carries ``start_lost``, which stays on both sides.
+    """
+
+    TX_BY_CHR = {"21": ["ENST_P", "ENST_Q", "ENST_R", "ENST_S", "ENST_GAP", "ENST_A", "ENST_B"],
+                 "22": ["ENST_CHR22"]}
+    GIANT = "21:1000000-21000000"
+    SMALL = "21:5000-6000"
+
+    @staticmethod
+    def _row(uploaded: str, loc: str, allele: str, feature: str, csq: str):
+        return (uploaded, loc, allele, "G", feature, "Transcript", csq)
+
+    def setUp(self):
+        import json
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        for sub in ("in", "perl", "rust", "out", "cache"):
+            (self.tmp / sub).mkdir()
+        for chrom, ids in self.TX_BY_CHR.items():
+            shard = self.tmp / "cache" / "transcripts" / chrom
+            shard.mkdir(parents=True)
+            (shard / "0-1.json").write_text(json.dumps([{"stable_id": i} for i in ids]))
+        with open(self.tmp / "in" / "07_cnv_repeat.vcf", "w") as fh:
+            fh.write("##fileformat=VCFv4.2\n")
+            fh.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
+            fh.write("21\t1984\t.\tA\t<CNV:TR>\t.\tPASS\tSVTYPE=CNV;SVLEN=16\n")
+            fh.write("21\t2984\t.\tA\t<CNV:TR>\t.\tPASS\tSVTYPE=CNV;SVLEN=16\n")
+        with open(self.tmp / "in" / "09_breakends.vcf", "w") as fh:
+            fh.write("##fileformat=VCFv4.2\n")
+            fh.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
+            fh.write("21\t1000000\t.\tA\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=21000000\n")
+            fh.write("21\t5000\t.\tA\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=6000\n")
+        tr = "tandem_repeat"
+        write_vep(
+            self.tmp / "perl" / "07_cnv_repeat.txt",
+            [
+                self._row("v1", "21:2000-2001", "ATAT", "ENST_A", "intron_variant"),
+                self._row("v2", "21:2997-3000", "-", "ENST_B", "intron_variant,start_lost"),
+            ],
+        )
+        write_vep(
+            self.tmp / "rust" / "07_cnv_repeat.txt",
+            [
+                self._row("v1", "21:1985-2000", tr, "ENST_A", "intron_variant,feature_elongation"),
+                self._row("v2", "21:2985-3000", tr, "ENST_B", "intron_variant,feature_truncation"),
+            ],
+        )
+        write_vep(
+            self.tmp / "perl" / "09_breakends.txt",
+            [
+                self._row("g1", self.GIANT, "deletion", "ENST_P", "feature_truncation"),
+                self._row("g1", self.GIANT, "deletion", "ENST_CHR22", "feature_truncation"),
+                self._row("g2", self.SMALL, "deletion", "ENST_GAP", "feature_truncation"),
+            ],
+        )
+        write_vep(
+            self.tmp / "rust" / "09_breakends.txt",
+            [self._row("g1", self.GIANT, "deletion", f"ENST_{c}", "feature_truncation") for c in "PQRS"],
+        )
+        argv = sys.argv
+        sys.argv = [
+            "compare_sv_concordance.py",
+            "--assembly",
+            "grch37",
+            "--input-dir",
+            str(self.tmp / "in"),
+            "--perl-dir",
+            str(self.tmp / "perl"),
+            "--rust-dir",
+            str(self.tmp / "rust"),
+            "--output-dir",
+            str(self.tmp / "out"),
+            "--vep-rs-cache",
+            str(self.tmp / "cache"),
+        ]
+        try:
+            C.main()
+        except SystemExit as exc:
+            if exc.code not in (0, None):
+                raise
+        finally:
+            sys.argv = argv
+        with open(self.tmp / "out" / "concordance_report.json") as fh:
+            self.report = json.load(fh)
+        self.raw_lines = (self.tmp / "out" / "discordant.tsv").read_text().splitlines()
+        self.adj_lines = (self.tmp / "out" / "discordant_adjusted.tsv").read_text().splitlines()
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_every_layer_fired_on_the_fixture(self):
+        """The corpus must exercise all three layers, or the subtraction below is
+        vacuous."""
+        adj = self.report["adjusted"]
+        self.assertEqual(adj["excluded_transcript_selection_rust"], 3)
+        self.assertEqual(adj["excluded_cross_chromosome_perl"], 1)
+        self.assertEqual((adj["excluded_cnvtr_rust"], adj["excluded_cnvtr_perl"]), (1, 1))
+
+    def test_same_header_as_the_raw_file(self):
+        self.assertEqual(self.adj_lines[0], self.raw_lines[0])
+
+    def test_row_count_is_the_adjusted_one_sided_total(self):
+        adj = self.report["adjusted"]
+        self.assertEqual(len(self.adj_lines) - 1, adj["only_perl"] + adj["only_rust"])
+        self.assertEqual(
+            len(self.adj_lines) - 1,
+            sum(m["only_perl"] + m["only_rust"] for m in self.report["per_file_adjusted"].values()),
+        )
+
+    def test_raw_file_still_carries_every_one_sided_tuple(self):
+        ov = self.report["overall"]
+        self.assertEqual(len(self.raw_lines) - 1, ov["only_perl"] + ov["only_rust"])
+        self.assertGreater(len(self.raw_lines), len(self.adj_lines))
+
+    def test_rows_are_a_subset_of_the_raw_rows_in_raw_order(self):
+        raw_index = {line: i for i, line in enumerate(self.raw_lines)}
+        positions = [raw_index[line] for line in self.adj_lines]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_exactly_the_unmasked_tuples_survive(self):
+        survivors = {tuple(line.split("\t")[2:6]) for line in self.adj_lines[1:]}
+        self.assertEqual(
+            survivors,
+            {
+                ("only_perl", self.SMALL, "deletion", "ENST_GAP"),
+                ("only_perl", "21:2997-3000", "-", "ENST_B"),
+                ("only_rust", "21:2985-3000", "tandem_repeat", "ENST_B"),
+            },
+        )
+        masked = {("only_rust", self.GIANT, "deletion", f"ENST_{c}") for c in "QRS"}
+        masked |= {
+            ("only_perl", self.GIANT, "deletion", "ENST_CHR22"),
+            ("only_perl", "21:2000-2001", "ATAT", "ENST_A"),
+            ("only_rust", "21:1985-2000", "tandem_repeat", "ENST_A"),
+        }
+        raw_keys = {tuple(line.split("\t")[2:6]) for line in self.raw_lines[1:]}
+        self.assertEqual(raw_keys, survivors | masked)
+
+    def test_file_is_written_empty_with_a_header_when_nothing_survives(self):
+        write_vep(self.tmp / "perl" / "07_cnv_repeat.txt", [])
+        write_vep(self.tmp / "rust" / "07_cnv_repeat.txt", [])
+        rows = [self._row("g1", self.GIANT, "deletion", "ENST_P", "feature_truncation")]
+        write_vep(self.tmp / "perl" / "09_breakends.txt", rows)
+        write_vep(self.tmp / "rust" / "09_breakends.txt", rows)
+        argv = sys.argv
+        sys.argv = [
+            "compare_sv_concordance.py",
+            "--assembly",
+            "grch37",
+            "--input-dir",
+            str(self.tmp / "in"),
+            "--perl-dir",
+            str(self.tmp / "perl"),
+            "--rust-dir",
+            str(self.tmp / "rust"),
+            "--output-dir",
+            str(self.tmp / "out"),
+        ]
+        try:
+            C.main()
+        except SystemExit as exc:
+            if exc.code not in (0, None):
+                raise
+        finally:
+            sys.argv = argv
+        lines = (self.tmp / "out" / "discordant_adjusted.tsv").read_text().splitlines()
+        self.assertEqual(lines, [self.raw_lines[0]])
 
 
 # The vep-rs side of the cross-chromosome mask

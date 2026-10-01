@@ -4,7 +4,9 @@
 The default input is the synthetic corpus under ``tests/sv_validation/``; a
 real-world SV set is scored the same way through ``--input-dir``. Produces
 per-variant-type concordance metrics with JSON, Markdown, and TSV reports of
-discordant annotation tuples.
+discordant annotation tuples. ``discordant.tsv`` lists every one-sided tuple;
+``discordant_adjusted.tsv``, same columns, lists the ones every mask leaves in
+place, so its row count is the adjusted row's ``only_perl + only_rust``.
 
 Usage:
     python3 scripts/validation/compare_sv_concordance.py \
@@ -2005,7 +2007,8 @@ def main() -> None:
         all_perl_tuples,
         all_perl_locations,
         all_rust_tuples,
-        all_rust_locations,        all_location_types,
+        all_rust_locations,
+        all_location_types,
     )
 
     # Adjusted metrics: three layers of divergence exclusion.
@@ -2084,6 +2087,9 @@ def main() -> None:
 
     # Per-file adjusted metrics (from stored per-file data, no re-parsing)
     adjusted_file_metrics: dict[str, Metrics] = {}
+    # The one-sided tuples the adjusted row counts, collected from the same per-file
+    # sets it is computed from so the file and the row cannot disagree.
+    adjusted_discordants: list[DiscordantRecord] = []
     cnvtr_rust_by_file: dict[str, int] = {}
     cnvtr_perl_by_file: dict[str, int] = {}
     cnvtr_total_by_file: dict[str, dict[str, int]] = {}
@@ -2097,7 +2103,7 @@ def main() -> None:
     adj_perl_filesum = 0
     adj_rust_filesum = 0
     adj_intersection_filesum = 0
-    for basename, (variants_f, perl_t, perl_l, rust_t, rust_l, _loc_types_f) in file_data.items():
+    for basename, (variants_f, perl_t, perl_l, rust_t, rust_l, loc_types_f) in file_data.items():
         excluded_rust_f, excluded_perl_f = filter_intended_divergences(perl_t, rust_t)
         cnvtr_excl_rust_f, cnvtr_excl_perl_f = filter_cnv_tr_expansion_divergences(
             perl_t, rust_t
@@ -2144,6 +2150,9 @@ def main() -> None:
         adjusted_file_metrics[basename] = compute_metrics(
             variants_f, adj_perl_f, perl_l, adj_rust_f, rust_l
         )
+        adjusted_discordants.extend(
+            collect_discordants(basename, variants_f, adj_perl_f, adj_rust_f, loc_types_f)
+        )
         adj_perl_filesum += len(adj_perl_f)
         adj_rust_filesum += len(adj_rust_f)
         adj_intersection_filesum += len(adj_perl_f & adj_rust_f)
@@ -2177,6 +2186,7 @@ def main() -> None:
     json_path = output_dir / "concordance_report.json"
     md_path = output_dir / "concordance_report.md"
     tsv_path = output_dir / "discordant.tsv"
+    adjusted_tsv_path = output_dir / "discordant_adjusted.tsv"
 
     write_json_report(
         json_path,
@@ -2234,6 +2244,7 @@ def main() -> None:
         cnvtr_swap_pairs_total_rust=cnvtr_total_rust,
     )
     write_discordant_tsv(tsv_path, all_discordants)
+    write_discordant_tsv(adjusted_tsv_path, adjusted_discordants)
 
     print()
     total_excluded = excluded_count + excluded_perl_count
@@ -2287,6 +2298,10 @@ def main() -> None:
     print(f"  {json_path.name}")
     print(f"  {md_path.name}")
     print(f"  {tsv_path.name} ({len(all_discordants)} discordant records)")
+    print(
+        f"  {adjusted_tsv_path.name} ({len(adjusted_discordants)} one-sided records "
+        f"surviving every mask)"
+    )
 
 
 if __name__ == "__main__":
