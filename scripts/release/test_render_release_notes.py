@@ -73,7 +73,7 @@ def test_body_follows_the_template(tmp_path: Path) -> None:
     headings = [l for l in lines if l.startswith("## ")]
     assert headings == [
         "## Upgrade notes", "## Changes", "## Concordance and wall time for this release",
-        "## Install", "## Verify", "## Source archive and DOI", "## Citing", "## Known issues",
+        "## Install", "## Verify", "## Source archive", "## Citing", "## Known issues",
     ]
     # the CHANGELOG section of the version, verbatim, without its heading
     assert "### Fixed\n\n- A fix.\n\n### Added\n\n- A thing." in body
@@ -95,8 +95,9 @@ def test_body_follows_the_template(tmp_path: Path) -> None:
     assert "from tag `v9.9.9` (commit `0123abcd`) with Rust 1.97.1" in body
     assert "From source (Rust 1.88 or newer)" in body
     assert "`docker pull ghcr.io/natera-open-source/vep-rs:9.9.9`" in body
-    # no deposit of its own: the archived 0.1.0 deposit and the concept DOI are named
-    assert "This version has no Zenodo deposit of its own; the archived version is 0.1.0, [10.5281/zenodo.22837897]" in body
+    # no deposit of its own: the source-archive section is the tarball sentence alone, and the
+    # citation carries the concept DOI
+    assert "Zenodo deposit" not in body and "All versions:" not in body and "Version DOI" not in body
     assert "Porter M, Borkowski R. vep-rs, version 9.9.9. 2031. doi:10.5281/zenodo.22837896." in body
     assert body.rstrip().endswith("- A known issue.")
 
