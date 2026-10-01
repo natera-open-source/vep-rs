@@ -36,7 +36,7 @@
 
 use smallvec::SmallVec;
 use vep_core::consequence::TranscriptConsequence;
-use vep_core::transcript::{ExonCoordMapper, MapperPair, Transcript, TranscriptMapper};
+use vep_core::transcript::{ExonCoordMapper, MapperPair, SeqEdit, Transcript, TranscriptMapper};
 use vep_core::variant::InputVariant;
 
 /// One mapped piece of a genomic range, in the target coordinate system.
@@ -447,8 +447,11 @@ struct Allele<'a> {
 struct CodingContext<'a> {
     cds: &'a [u8],
     utr3: &'a [u8],
-    /// The cached translation, SeqEdits applied, for the reference peptide.
+    /// The cached translation, SeqEdits applied, for the reference peptide of a
+    /// cache without `seq_edits`.
     pep_seq: &'a [u8],
+    /// The translation's SeqEdits, applied to the reference peptide.
+    seq_edits: &'a [SeqEdit],
     codon_table: u8,
     /// The transcript's cDNA coding start, for the codon position.
     cdna_coding_start: Option<i64>,
@@ -627,19 +630,22 @@ fn peptide(ctx: &CodingContext, allele: &Allele, window: Option<&Bases>) -> Opti
         .chunks(3)
         .map(|c| translate_codon(c, ctx.codon_table))
         .collect();
-    // SeqEdits apply to the reference peptide only: the cached residues, then the
-    // `initial_met` edit at protein position 1, as `coding::peptide` applies them.
-    if allele.is_reference && !pep.is_empty() {
+    // SeqEdits apply to the reference peptide only, as `coding::peptide` applies them.
+    if allele.is_reference {
         if let (Some(a), Some(b)) = (ctx.pep_start, ctx.pep_end) {
-            let tv_lo = a.min(b);
-            crate::coding::overlay_seq_edits(&mut pep, ctx.pep_seq, tv_lo, ctx.cds.len());
-            if tv_lo == 1 {
-                if let Some(m) =
-                    crate::coding::initial_met_edit(ctx.cds, ctx.pep_seq, ctx.codon_table)
-                {
-                    pep[0] = m;
-                }
+            let mut edited = pep.to_vec();
+            if !crate::coding::edit_reference_peptide(
+                &mut edited,
+                ctx.seq_edits,
+                ctx.pep_seq,
+                ctx.cds,
+                ctx.codon_table,
+                a.min(b),
+                a.max(b),
+            ) {
+                return None;
             }
+            pep = Bases::from_slice(&edited);
         }
     }
     if whole_len < codon.len() && pep.as_slice() != b"*" {
@@ -819,10 +825,12 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
         .and_then(|v| v.peptide.as_deref())
         .unwrap_or("")
         .as_bytes();
+    let seq_edits: &[SeqEdit] = vefc.map_or(&[], |v| v.seq_edits.as_slice());
     let ctx = CodingContext {
         cds: cds_seq,
         utr3,
         pep_seq,
+        seq_edits,
         codon_table: crate::coding::codon_table_for(transcript),
         cdna_coding_start: transcript
             .cdna_coding_start
@@ -1016,6 +1024,34 @@ mod tests {
         tx.vefc = Some(vefc);
         let d = display_fields(&snv(1050, "G", "A"), &tx);
         assert_eq!(d.amino_acids.as_deref(), Some("V/M"));
+    }
+
+    #[test]
+    fn seq_edits_decide_the_reference_residue_over_a_start_codon() {
+        // Two transcripts with the same CTG start and the same cached peptide `M...`
+        // (the dump writes `M` over any start codon): the one carrying the
+        // `initial_met` edit prints the edited reference, the one without it the
+        // codon's own residue, so a synonymous `CTG>TTG` collapses to `L` there.
+        let edited = |edits: Vec<SeqEdit>| {
+            let mut tx = forward_transcript();
+            let mut vefc = tx.vefc.take().unwrap();
+            vefc.translateable_seq = Some("CTG".to_string() + &"GCT".repeat(98) + "TAA");
+            vefc.peptide = Some("M".to_string() + &"A".repeat(98));
+            vefc.seq_edits = edits;
+            tx.vefc = Some(vefc);
+            tx
+        };
+        let with_edit = edited(vec![SeqEdit {
+            start: 1,
+            end: 1,
+            alt_seq: "M".to_string(),
+        }]);
+        let d = display_fields(&snv(1050, "C", "T"), &with_edit);
+        assert_eq!(d.codons.as_deref(), Some("Ctg/Ttg"));
+        assert_eq!(d.amino_acids.as_deref(), Some("M/L"));
+        let without_edit = edited(Vec::new());
+        let d = display_fields(&snv(1050, "C", "T"), &without_edit);
+        assert_eq!(d.amino_acids.as_deref(), Some("L"));
     }
 
     #[test]

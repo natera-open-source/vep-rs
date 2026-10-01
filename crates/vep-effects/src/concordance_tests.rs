@@ -6715,9 +6715,9 @@ fn concordance_deletion_touching_transcript_start_of_cds_start_nf_has_no_five_pr
 // SeqEdits on the reference peptide.
 //
 // `TranscriptVariationAllele::peptide` applies the translation's SeqEdits to the
-// reference peptide, so a selenocysteine `TGA` reads `U`. The JSON cache has no
-// `seq_edits`, but its `peptide` is the edited translation, and the edited
-// residue is read from it.
+// reference peptide, so a selenocysteine `TGA` reads `U`. A cache that lists the
+// transcript's `seq_edits` supplies them directly; a cache without the key has
+// its `peptide`, the edited translation, and the edited residue is read from it.
 
 /// The test transcript with codon 4 (`AAA`) replaced by `TGA` and the cached
 /// translation carrying `residue` there, as Ensembl's `Translation->seq` does for
@@ -6772,6 +6772,32 @@ fn concordance_snv_turning_selenocysteine_codon_into_stop_is_stop_gained() {
         b"A".to_vec(),
     );
     let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["stop_gained"]);
+    assert_eq!(tc.amino_acids.as_deref(), Some("U/*"));
+}
+
+/// The same two selenocysteine changes with the edit supplied by `seq_edits`
+/// (`_selenocysteine` 4-4 `U`) over a cached peptide that still reads `*` at
+/// codon 4: the listed edit, not the cached residue, decides the reference, so
+/// `TGA>TGG` is `missense_variant` `U/W` and `TGA>TAA` is `stop_gained` `U/*`
+/// (Perl: `19:48283989 G ENST00000593892`; `1:26139281 A ENST00000361547`).
+#[test]
+fn concordance_selenocysteine_seq_edit_reads_u_over_an_unedited_cached_peptide() {
+    let mut tx = make_transcript_with_edited_codon_4(b'*');
+    tx.vefc.as_mut().unwrap().seq_edits = vec![SeqEdit {
+        start: 4,
+        end: 4,
+        alt_seq: "U".to_string(),
+    }];
+    let config = EffectsConfig::default();
+    let snv = |pos: u64, r: &[u8], a: &[u8]| {
+        let variant = InputVariant::new("21".into(), pos, pos, r.to_vec(), a.to_vec());
+        calculate_consequences(&variant, &tx, &config).expect("annotates")
+    };
+    let tc = snv(25_000_061, b"A", b"G");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["missense_variant"]);
+    assert_eq!(tc.amino_acids.as_deref(), Some("U/W"));
+    let tc = snv(25_000_060, b"G", b"A");
     crate::test_helpers::assert_consequence_set_eq(&tc, &["stop_gained"]);
     assert_eq!(tc.amino_acids.as_deref(), Some("U/*"));
 }
@@ -7038,23 +7064,125 @@ fn concordance_initial_met_edit_gtg_to_atg_is_start_retained() {
 /// `start_retained_variant` (the new codon is `ATG`), a co-emission on a
 /// sequence variant, and vep-rs keeps `start_retained_variant` of that pair:
 /// the codon after the edit is `ATG`, so the start is retained and the
-/// peptide-route `start_lost` is the erroneous member. A `CTG` start is a
-/// table-1 start codon `Transcript::translate` reads as `M` itself, so a
-/// peptide starting with `M` there is no evidence of an edit and the ref
-/// residue stays `L`.
+/// peptide-route `start_lost` is the erroneous member.
 #[test]
 fn concordance_start_codon_snv_to_atg_without_edit_is_start_retained_only() {
     let no_edit = make_start_codon_transcript("GTGTTATGG", 0, 1, Some("VLW"));
     assert_start_codon_snv(&no_edit, 25_000_000, "G", "A", &["start_retained_variant"]);
+}
 
-    let forced_met = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
+/// A `CTG` start with no edit on any route: the cache lists none, and its
+/// peptide reads `M` there only because the translation dump writes `M` over
+/// any start codon. Both alleles read the codon's own residue. With no 5' UTR
+/// `_inv_start_altered` returns 0 and the peptide route sees `L` in `L`, so a
+/// synonymous `CTG>CTT` is `synonymous_variant` alone and a missense `CTG>CCG`
+/// is `start_lost` (P neither starts nor ends with L) with `missense_variant`
+/// gated off; behind a 5' UTR `_inv_start_altered` adds `start_lost` to the
+/// synonymous change (Perl: `20:30640230 T ENST00000375852`, `ctG/ctT`,
+/// Amino_acids `L`).
+#[test]
+fn concordance_ctg_start_without_any_edit_reads_the_codon_residue_on_both_alleles() {
+    let no_utr = make_start_codon_transcript("CTGCAGGAC", 0, 1, Some("MQD"));
+    assert!(no_utr.vefc.as_ref().unwrap().seq_edits.is_empty());
+    assert_start_codon_snv(&no_utr, 25_000_002, "G", "T", &["synonymous_variant"]);
+    assert_start_codon_snv(&no_utr, 25_000_001, "T", "C", &["start_lost"]);
+
+    let with_utr = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
     assert_start_codon_snv(
-        &forced_met,
+        &with_utr,
         25_000_052,
         "G",
         "T",
         &["start_lost", "synonymous_variant"],
     );
+}
+
+/// With the transcript's `seq_edits` present, `TranscriptVariationAllele::peptide`
+/// translates both codons literally with the transcript's table and applies the
+/// edits overlapping the span to the reference allele only (`if
+/// ($self->{is_reference})` around the SeqEdit loop): an `initial_met` edit over
+/// a `CTG` start behind a 5' UTR gives ref `M`, alt `L`. `start_lost` comes from
+/// `_inv_start_altered` (the edited codon is not `ATG`) and `synonymous_variant`
+/// needs `$alt_pep eq $ref_pep`, which `M` and `L` fail, so the set is
+/// `start_lost` alone for `CTG>TTG` and `CTG>CTT` (Perl: `20:32052425 T` and
+/// `20:32052427 T` on `ENST00000375852`, `Ctg/Ttg` and `ctG/ctT`, Amino_acids
+/// `M/L`); the cached-peptide reading of the same transcript adds
+/// `synonymous_variant`.
+#[test]
+fn concordance_initial_met_seq_edit_over_ctg_start_makes_codon_one_snv_start_lost_only() {
+    let mut edited = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
+    edited.vefc.as_mut().unwrap().seq_edits = vec![initial_met_seq_edit()];
+    assert_start_codon_snv(&edited, 25_000_050, "C", "T", &["start_lost"]);
+    assert_start_codon_snv(&edited, 25_000_052, "G", "T", &["start_lost"]);
+}
+
+/// Two transcripts with the same `CTG` start and the same cached peptide (the
+/// dump writes `M` over any start codon) differ only in their `seq_edits`: the
+/// one carrying `initial_met` reads ref `M`, the other ref `L` (Perl:
+/// `20:3889432 A` on `ENST00000610179`, `M/Q`, and on `ENST00000336066`,
+/// `L/Q`, both `start_lost`). On a synonymous change the sets part:
+/// `start_lost` alone with the edit, `start_lost,synonymous_variant` without it
+/// (Perl for the edit-less reading: `20:30640228 T ENST00000375852`, `Ctg/Ttg`,
+/// Amino_acids `L`).
+#[test]
+fn concordance_seq_edits_separate_transcripts_with_identical_cached_peptides() {
+    let mut with_edit = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
+    with_edit.vefc.as_mut().unwrap().seq_edits = vec![initial_met_seq_edit()];
+    assert_start_codon_snv(&with_edit, 25_000_051, "T", "A", &["start_lost"]);
+    assert_start_codon_snv(&with_edit, 25_000_050, "C", "T", &["start_lost"]);
+
+    let without_edit = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
+    assert!(without_edit.vefc.as_ref().unwrap().seq_edits.is_empty());
+    assert_start_codon_snv(&without_edit, 25_000_051, "T", "A", &["start_lost"]);
+    assert_start_codon_snv(
+        &without_edit,
+        25_000_050,
+        "C",
+        "T",
+        &["start_lost", "synonymous_variant"],
+    );
+}
+
+/// A mitochondrial `ATT` start (Ile under table 2) with an `initial_met` edit:
+/// ref `M`, alt `I` for `ATT>ATC`. With no 5' UTR `_inv_start_altered` returns 0
+/// and the peptide route decides `start_lost` (`translation_start == 1`, `I`
+/// neither starts nor ends with `M`); `synonymous_variant` fails on `M ne I`
+/// and `missense_variant` is gated by `start_lost` (Perl: `MT:4472 C
+/// ENST00000361453`, `atT/atC`, Amino_acids `M/I`). Without the edit both
+/// alleles read `I`, the peptide route sees `I` in `I`, the edited codon `ATC`
+/// is not `ATG`, and the set is `synonymous_variant` alone, which is also the
+/// cached-peptide reading of the edited transcript because `ATT` is a table-2
+/// start codon.
+#[test]
+fn concordance_initial_met_seq_edit_over_mt_att_start_makes_att_to_atc_start_lost() {
+    let mut edited = make_start_codon_transcript("ATTAACGAA", 0, 2, Some("MNE"));
+    edited.vefc.as_mut().unwrap().seq_edits = vec![initial_met_seq_edit()];
+    assert_start_codon_snv(&edited, 25_000_002, "T", "C", &["start_lost"]);
+
+    let unedited = make_start_codon_transcript("ATTAACGAA", 0, 2, Some("MNE"));
+    assert_start_codon_snv(&unedited, 25_000_002, "T", "C", &["synonymous_variant"]);
+}
+
+/// On a `cds_start_NF` transcript a cached `M` over a `CTG` start is the dump's
+/// start-codon rewrite and the transcript carries no edit: `_overlaps_start_codon`
+/// returns 0 so no start predicate fires, and the residues are the codons' own,
+/// `L` and `L` for `CTG>CTC` (Perl: `1:16936793 C ENST00000467715`, `ctG/ctC`,
+/// Amino_acids `L`, `synonymous_variant`) or `L` and `V` for `CTG>GTG` (Perl:
+/// `1:43736320 G ENST00000533933`, `Ctg/Gtg`, `L/V`, `missense_variant`).
+#[test]
+fn concordance_cached_met_on_cds_start_nf_ctg_start_is_the_codon_residue() {
+    let mut rewritten = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
+    rewritten.flags = vec!["cds_start_NF".to_string()].into();
+    assert_start_codon_snv(&rewritten, 25_000_052, "G", "C", &["synonymous_variant"]);
+    assert_start_codon_snv(&rewritten, 25_000_050, "C", "G", &["missense_variant"]);
+}
+
+fn initial_met_seq_edit() -> SeqEdit {
+    SeqEdit {
+        start: 1,
+        end: 1,
+        alt_seq: "M".to_string(),
+    }
 }
 
 /// `perl_coding_terms` takes an SNV only when its position maps into cDNA
