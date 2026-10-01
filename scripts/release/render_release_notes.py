@@ -94,29 +94,23 @@ def hand_written(path: Path | None) -> dict[str, str]:
     return out
 
 
-def read_dois(cff: Path, version: str) -> tuple[str | None, str | None]:
-    """(this version's DOI or None, "X.Y.Z (doi)" of the newest archived version or None).
+def read_doi(cff: Path, version: str) -> str | None:
+    """This version's own DOI, or None.
 
-    A version DOI is read from an `identifiers` entry whose description names `version X.Y.Z`, or
-    from the top-level `doi` when the file's `version` is this version and the DOI is not the
-    concept DOI; the concept DOI never counts as a version's own."""
+    Read from an `identifiers` entry whose description names `version X.Y.Z`, or from the
+    top-level `doi` when the file's `version` is this version and the DOI is not the concept
+    DOI; the concept DOI never counts as a version's own."""
     text = cff.read_text()
-    this, latest = None, None
     for m in re.finditer(r"value: (10\.5281/zenodo\.\d+)\n\s+description: (.*)", text):
         doi, desc = m.group(1), m.group(2)
         vm = re.search(r"version (\d+\.\d+\.\d+)", desc)
-        if vm and doi != CONCEPT_DOI:
-            if vm.group(1) == version:
-                this = doi
-            latest = (vm.group(1), doi)
+        if vm and doi != CONCEPT_DOI and vm.group(1) == version:
+            return doi
     top_doi = re.search(r"^doi: (10\.5281/zenodo\.\d+)$", text, re.MULTILINE)
     top_version = re.search(r"^version: (\d+\.\d+\.\d+)$", text, re.MULTILINE)
-    if top_doi and top_version and top_doi.group(1) != CONCEPT_DOI:
-        if top_version.group(1) == version:
-            this = this or top_doi.group(1)
-        if latest is None:
-            latest = (top_version.group(1), top_doi.group(1))
-    return this, (None if latest is None else f"{latest[0]} ({latest[1]})")
+    if top_doi and top_version and top_doi.group(1) != CONCEPT_DOI and top_version.group(1) == version:
+        return top_doi.group(1)
+    return None
 
 
 SUITE_LABELS = {
@@ -243,7 +237,7 @@ def main() -> None:
             "ERROR: [render_release_notes] the release-notes file needs a summary paragraph"
         )
     sums = read_sums(a.sha256sums)
-    version_doi, archived = read_dois(repo / "CITATION.cff", v)
+    version_doi = read_doi(repo / "CITATION.cff", v)
     dl = f"{REPO_URL}/releases/download/{tag}"
     ph = "`<sha256 from SHA256SUMS>`"
 
@@ -300,7 +294,7 @@ def main() -> None:
         f"gh attestation verify {x86} --repo natera-open-source/vep-rs",
         "```",
         "",
-        "## Source archive and DOI",
+        "## Source archive",
         "",
     ]
     src = f"vep-rs-{v}.tar.gz"
@@ -310,16 +304,6 @@ def main() -> None:
     )
     if version_doi:
         out.append(f"Version DOI [{version_doi}](https://doi.org/{version_doi}).")
-    elif archived:
-        av, adoi = archived.split(" (")
-        adoi = adoi.rstrip(")")
-        out.append(
-            f"This version has no Zenodo deposit of its own; the archived version is {av},"
-            f" [{adoi}](https://doi.org/{adoi})."
-        )
-    else:
-        out.append("This version has no Zenodo deposit of its own.")
-    out.append(f"All versions: [{CONCEPT_DOI}](https://doi.org/{CONCEPT_DOI}).")
     cite_doi = version_doi or CONCEPT_DOI
     out += [
         "",
