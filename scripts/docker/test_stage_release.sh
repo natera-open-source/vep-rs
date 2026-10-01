@@ -89,6 +89,9 @@ fi
 grep -q -- "--signer-workflow natera-open-source/vep-rs/.github/workflows/release.yml" "$TMP/gh.log" &&
     ok "the attestation must come from release.yml" ||
     bad "gh attestation verify was not pinned to release.yml: $(cat "$TMP/gh.log")"
+grep -q -- "--source-ref refs/tags/v9.9.9" "$TMP/gh.log" &&
+    ok "the attestation must come from this release's tag" ||
+    bad "gh attestation verify was not pinned to refs/tags/v9.9.9: $(cat "$TMP/gh.log")"
 
 TAG=0.2.0 expect_fail "a tag without the v prefix fails" "is not vX.Y.Z"
 TAG=v1.0 expect_fail "a two-part tag fails" "is not vX.Y.Z"
@@ -103,6 +106,14 @@ echo "$(printf 'a%.0s' {1..64})  $ARCHIVE" >"$RELEASE/SHA256SUMS"
 expect_fail "a checksum mismatch fails" "does not match SHA256SUMS"
 good_sums
 expect_fail "a missing attestation fails" "has no attestation" STUB_ATTEST_RC=1
+
+rm "$TMP/src/vep-9.9.9-x86_64-unknown-linux-gnu/vep-cache-converter"
+tar -czf "$RELEASE/$ARCHIVE" -C "$TMP/src" vep-9.9.9-x86_64-unknown-linux-gnu
+good_sums
+dest="$TMP/ctx-partial"
+err=$(run "$dest" 2>&1 >/dev/null) && bad "an archive without vep-cache-converter was staged" ||
+    { [[ "$err" == *"has no vep-cache-converter"* && ! -e "$dest" ]] && ok "an incomplete archive leaves nothing staged" ||
+        bad "incomplete archive: staged=$([[ -e "$dest" ]] && echo yes || echo no), stderr: $err"; }
 
 echo
 echo "passed: $PASS   failed: $FAIL"

@@ -48,6 +48,13 @@ records_out=$(grep -vc '^#' "$WORK/out.vcf") || records_out=0
     fail "--vcf wrote $records_out records for $records_in input records"
 pass "--vcf writes every input record ($records_in)"
 
+# 1,002 of the corpus's 1,008 records carry a consequence; a cache that failed
+# to load echoes the records back without one.
+annotated=$(grep -v '^#' "$WORK/out.vcf" | grep -c 'CSQ=') || annotated=0
+((annotated * 10 >= records_in * 9)) ||
+    fail "$annotated of $records_in --vcf records carry CSQ, expected at least 90%"
+pass "--vcf annotates $annotated of $records_in records"
+
 vep "${common[@]}" --tab -o "$WORK/out.tab"
 tab_rows=$(grep -vc '^#' "$WORK/out.tab") || tab_rows=0
 [[ "$tab_rows" -gt 0 ]] || fail "--tab wrote no rows"
@@ -55,6 +62,7 @@ pass "--tab writes $tab_rows rows"
 
 vep "${common[@]}" --output_format parquet --parquet_shape flat -o "$WORK/out.parquet"
 pq_rows=$(duckdb -noheader -list -c \
-    "SELECT count(*) FROM read_parquet('$WORK/out.parquet/**/*.parquet', hive_partitioning=false)")
+    "SELECT count(*) FROM read_parquet('$WORK/out.parquet/**/*.parquet', hive_partitioning=false)") ||
+    fail "duckdb could not read the Parquet output"
 [[ "$pq_rows" == "$tab_rows" ]] || fail "Parquet has $pq_rows rows, --tab has $tab_rows"
 pass "Parquet row count matches --tab"

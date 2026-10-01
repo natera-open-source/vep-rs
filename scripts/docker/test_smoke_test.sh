@@ -47,7 +47,12 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 case "$fmt" in
-    vcf) { echo '##fileformat=VCFv4.2'; for ((i = 0; i < ${STUB_VCF_RECORDS:-3}; i++)); do echo "21 $i"; done; } >"$out" ;;
+    vcf) {
+        echo '##fileformat=VCFv4.2'
+        for ((i = 0; i < ${STUB_VCF_RECORDS:-3}; i++)); do
+            if ((i < ${STUB_VCF_CSQ:-3})); then echo "21 $i CSQ=G|missense_variant"; else echo "21 $i ."; fi
+        done
+    } >"$out" ;;
     tab) { echo '#Uploaded_variation'; for ((i = 0; i < ${STUB_TAB_ROWS:-5}; i++)); do echo "r$i"; done; } >"$out" ;;
     parquet) mkdir -p "$out" ;;
 esac
@@ -55,6 +60,7 @@ STUB
 cat >"$STUBS/duckdb" <<'STUB'
 #!/usr/bin/env bash
 [[ "$1" == --version ]] && { echo v1.5.5; exit "${STUB_DUCKDB_RC:-0}"; }
+[[ "${STUB_PQ_RC:-0}" -eq 0 ]] || { echo "IO Error: No files found" >&2; exit 1; }
 echo "${STUB_PQ_ROWS:-5}"
 STUB
 cat >"$STUBS/vep-cache-builder" <<'STUB'
@@ -89,7 +95,7 @@ bash -n "$SMOKE" && ok "smoke_test.sh parses" || bad "smoke_test.sh has a syntax
 out=$(smoke 2>&1)
 rc=$?
 n=$(printf '%s\n' "$out" | grep -c '^  ok ') || n=0
-[[ "$rc" -eq 0 && "$n" -eq 9 ]] && ok "a healthy image passes all 9 checks" || bad "healthy run: rc=$rc, $n ok lines: $out"
+[[ "$rc" -eq 0 && "$n" -eq 10 ]] && ok "a healthy image passes all 10 checks" || bad "healthy run: rc=$rc, $n ok lines: $out"
 
 expect_fail "a wrong vep version fails" "vep --version printed 'vep 1.0.0'" STUB_VERSION=1.0.0
 expect_fail "a broken vep-cache-builder fails" "vep-cache-builder --help exited non-zero" STUB_BUILDER_RC=1
@@ -98,8 +104,10 @@ expect_fail "a broken duckdb fails" "duckdb --version exited non-zero" STUB_DUCK
 expect_fail "a missing CA bundle fails" "no CA bundle" CA_BUNDLE="$TMP/absent.crt"
 expect_fail "running as root fails" "runs as root" STUB_UID=0
 expect_fail "a dropped VCF record fails" "--vcf wrote 2 records for 3" STUB_VCF_RECORDS=2
+expect_fail "VCF records without CSQ fail" "2 of 3 --vcf records carry CSQ" STUB_VCF_CSQ=2
 expect_fail "an empty tab output fails" "--tab wrote no rows" STUB_TAB_ROWS=0
 expect_fail "a Parquet row-count mismatch fails" "Parquet has 4 rows, --tab has 5" STUB_PQ_ROWS=4
+expect_fail "an unreadable Parquet output fails" "duckdb could not read the Parquet output" STUB_PQ_RC=1
 
 echo
 echo "passed: $PASS   failed: $FAIL"

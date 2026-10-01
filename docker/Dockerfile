@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # The vep-rs runtime image. It packages the attested release binaries that
 # scripts/docker/stage_release.sh stages into the build context; it never
 # compiles them. Built and pushed by .github/workflows/docker.yml.
