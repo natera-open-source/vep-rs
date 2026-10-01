@@ -8043,3 +8043,265 @@ fn concordance_breakend_bracket_allele_over_engulfed_ig_v_gene_is_intergenic_or_
         "the mate is 10 kb from the transcript, so no bracket allele exists for it"
     );
 }
+
+// Structural alleles engulfing a transcript: the biotype-gated context terms.
+//
+// For a complete overlap `_bvfo_preds` (BaseVariationFeatureOverlapAllele.pm:465-477)
+// returns only `complete_overlap`, `within_feature` and the transcript biotype, so the
+// `include` hashes in `Utils/Constants.pm` leave three tier-3 predicates to run:
+// `NMD_transcript_variant` (`nonsense_mediated_decay => 1`),
+// `non_coding_transcript_variant` (`protein_coding => 0`, needs no translation) and
+// `coding_transcript_variant` (`protein_coding => 1`, needs a translation). When none
+// holds the row carries `$DEFAULT_OVERLAP_CONSEQUENCE` (:285), `intergenic_variant`.
+
+/// `make_test_transcript()` relabelled with `biotype`, keeping its CDS and translation.
+fn make_translated_transcript_with_biotype(biotype: &str) -> Transcript {
+    let mut tx = make_test_transcript();
+    tx.biotype = biotype.into();
+    tx
+}
+
+/// A symbolic structural allele of `class` spanning 24_999_000-25_007_000, which
+/// engulfs the 25_000_000-25_006_000 test transcript.
+fn make_engulfing_sv(alt: &[u8], class: vep_core::variant::VariantClass) -> InputVariant {
+    let mut variant = InputVariant::new(
+        "21".into(),
+        24_999_000,
+        25_007_000,
+        b"N".to_vec(),
+        alt.to_vec(),
+    );
+    variant.variant_class = class;
+    variant.is_structural = true;
+    variant.sv_end = Some(25_007_000);
+    variant
+}
+
+/// An inversion engulfing a `nonsense_mediated_decay` transcript is
+/// `NMD_transcript_variant` alone (Perl: `21:20333756-29497356 inversion
+/// ENST00000460212`): `within_nmd_transcript` holds on the biotype, the
+/// `protein_coding => 1` include keeps `coding_transcript_variant` from running,
+/// and `within_non_coding_gene` fails on the transcript's translation.
+#[test]
+fn concordance_inversion_engulfing_nmd_transcript_is_nmd_transcript_variant() {
+    let tx = make_translated_transcript_with_biotype("nonsense_mediated_decay");
+    let config = EffectsConfig::default();
+    let variant = make_engulfing_sv(b"<INV>", vep_core::variant::VariantClass::Inversion);
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["NMD_transcript_variant"]);
+}
+
+/// A `<CPX>` allele engulfing the same NMD transcript takes the same path
+/// (Perl: `21:23636112-39413570 CPX ENST00000460212`).
+#[test]
+fn concordance_complex_sv_engulfing_nmd_transcript_is_nmd_transcript_variant() {
+    let tx = make_translated_transcript_with_biotype("nonsense_mediated_decay");
+    let config = EffectsConfig::default();
+    let variant = make_engulfing_sv(b"<CPX>", vep_core::variant::VariantClass::ComplexStructural);
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["NMD_transcript_variant"]);
+}
+
+/// A `<CNV>` engulfing a translated `IG_V_gene` transcript is `intergenic_variant`
+/// on the transcript row (Perl: `21:10481414-10650900 copy_number_variation
+/// ENST00000622028`, `IMPACT=MODIFIER;OverlapPC=100.00`): `coding_transcript_variant`
+/// is excluded by its `protein_coding => 1` include, `within_non_coding_gene`
+/// fails on the translation, and nothing else is a candidate.
+#[test]
+fn concordance_cnv_engulfing_translated_ig_v_gene_is_intergenic_variant() {
+    let tx = make_translated_transcript_with_biotype("IG_V_gene");
+    let config = EffectsConfig::default();
+    let variant = make_engulfing_sv(
+        b"<CNV>",
+        vep_core::variant::VariantClass::CopyNumberVariation,
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["intergenic_variant"]);
+    assert_eq!(&*tc.transcript_id, "ENST00000000001");
+}
+
+/// The `<CPX>` form of the same fallthrough (Perl: `21:5052509-44407133 CPX
+/// ENST00000622028`).
+#[test]
+fn concordance_complex_sv_engulfing_translated_ig_v_gene_is_intergenic_variant() {
+    let tx = make_translated_transcript_with_biotype("IG_V_gene");
+    let config = EffectsConfig::default();
+    let variant = make_engulfing_sv(b"<CPX>", vep_core::variant::VariantClass::ComplexStructural);
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["intergenic_variant"]);
+}
+
+/// The inversion arm reaches the same fallthrough for a translated non-`protein_coding`
+/// biotype.
+#[test]
+fn concordance_inversion_engulfing_translated_ig_v_gene_is_intergenic_variant() {
+    let tx = make_translated_transcript_with_biotype("IG_V_gene");
+    let config = EffectsConfig::default();
+    let variant = make_engulfing_sv(b"<INV>", vep_core::variant::VariantClass::Inversion);
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["intergenic_variant"]);
+}
+
+/// An engulfed `protein_coding` transcript keeps `coding_transcript_variant` on both
+/// arms: `coding_transcript_variant` (VariationEffect.pm:491-493) is
+/// `not coding_unknown and complete_overlap_feature and within_coding_gene`, and
+/// `coding_unknown` (:1507-1512) returns 0 on a complete overlap.
+#[test]
+fn concordance_engulfed_protein_coding_transcript_keeps_coding_transcript_variant() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    for (alt, class) in [
+        (&b"<INV>"[..], vep_core::variant::VariantClass::Inversion),
+        (
+            &b"<CNV>"[..],
+            vep_core::variant::VariantClass::CopyNumberVariation,
+        ),
+        (
+            &b"<CPX>"[..],
+            vep_core::variant::VariantClass::ComplexStructural,
+        ),
+    ] {
+        let variant = make_engulfing_sv(alt, class);
+        let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+        crate::test_helpers::assert_consequence_set_eq(&tc, &["coding_transcript_variant"]);
+    }
+}
+
+// Insertion-class structural alleles over the start codon.
+//
+// Perl's structural arm of `start_lost` (VariationEffect.pm:886-896) is a genomic
+// overlap with the three start-codon bases for every structural class, reached
+// through `_overlaps_start_codon` (:965-990), which needs both span ends in exons
+// and no `cds_start_NF`. `start_retained_variant` co-fires there because
+// `_ins_del_start_altered` returns 0 for a structural allele without reading
+// sequence; that term is Perl's and is not emitted.
+
+/// An 82 bp `<DUP>` inside exon 1 (25_000_000-25_000_299) covering the start
+/// codon at 25_000_050-25_000_052 is `5_prime_UTR_variant,coding_sequence_variant,
+/// feature_elongation,start_lost` (Perl: `21:30487315-30487396 duplication
+/// ENST00000334055`, less its `start_retained_variant`): `feature_elongation` from
+/// `within_cdna and complete_within_feature and copy_number_gain`, `utr` from the
+/// span starting before `coding_region_start`, `coding_sequence_variant` from
+/// `coding_unknown` (`within_cds` with `inframe_insertion` and `frameshift` both 0
+/// for a gain).
+#[test]
+fn concordance_duplication_over_start_codon_is_start_lost_without_start_retained() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::Duplication,
+        25_000_040,
+        25_000_121,
+        b"<DUP>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_elongation",
+            "start_lost",
+        ],
+    );
+}
+
+/// A ranged `<INS>` over the same bases carries the same set (Perl:
+/// `21:37420264-37526076 insertion ENST00000646548` is the intron-spanning form
+/// with `3_prime_UTR_variant` and `intron_variant` added).
+#[test]
+fn concordance_ranged_insertion_over_start_codon_is_start_lost_without_start_retained() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::StructuralInsertion,
+        25_000_040,
+        25_000_121,
+        b"<INS>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_elongation",
+            "start_lost",
+        ],
+    );
+}
+
+/// A ranged Alu insertion is the same predicate on the mobile-element class
+/// (Perl: `21:39660415-39660694 Alu_insertion ENST00000852645`). The span ends
+/// inside exon 1 (25_000_000-25_000_299); one that ran into intron 1 would lose
+/// `cdna_end` and with it `start_lost`.
+#[test]
+fn concordance_ranged_alu_insertion_over_start_codon_is_start_lost_without_start_retained() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::MobileElementInsertion,
+        25_000_040,
+        25_000_290,
+        b"<INS:ME:ALU>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_elongation",
+            "start_lost",
+        ],
+    );
+}
+
+/// A duplication whose far end lies in intron 1 covers the start codon but has no
+/// `cdna_end` (`cdna_start_unshifted`, BaseTranscriptVariation.pm:194-208, leaves it
+/// undefined when the last mapped segment is a Gap), so `_overlaps_start_codon`
+/// returns 0 and the set is the regional one.
+#[test]
+fn concordance_duplication_over_start_codon_ending_in_intron_has_no_start_lost() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::Duplication,
+        25_000_040,
+        25_001_000,
+        b"<DUP>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_elongation",
+            "intron_variant",
+        ],
+    );
+}
+
+/// `_overlaps_start_codon` returns 0 on a `cds_start_NF` transcript (:975), so a
+/// duplication over the annotated first codon of such a transcript has no `start_lost`.
+#[test]
+fn concordance_duplication_over_start_codon_of_cds_start_nf_transcript_has_no_start_lost() {
+    let tx = make_test_transcript_with_flags(&["cds_start_NF"]);
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::Duplication,
+        25_000_040,
+        25_000_121,
+        b"<DUP>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_elongation",
+        ],
+    );
+}

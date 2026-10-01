@@ -25,6 +25,8 @@
 //!   `within_cdna AND complete_within_feature AND insertion`); HIGH impact,
 //!   because the transcript gets longer.
 //! - `coding_sequence_variant`: Overlap with any CDS exon.
+//! - `start_lost`: the span covers a start-codon base with both ends in exons
+//!   (`structural_start_lost`).
 //! - `5_prime_UTR_variant` / `3_prime_UTR_variant`: Overlap with UTR regions.
 //! - `intron_variant`: Overlap with an intron.
 //! - `non_coding_transcript_exon_variant`: Exon overlap in a non-coding transcript.
@@ -37,8 +39,9 @@
 //! (`Bio/EnsEMBL/Variation/...`).
 
 use super::{
-    is_mature_mirna_sv, overlaps_any_exon, overlaps_any_intron_trimmed, overlaps_cds_exon,
-    overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
+    engulfed_transcript_row_terms, is_mature_mirna_sv, overlaps_any_exon,
+    overlaps_any_intron_trimmed, overlaps_cds_exon, overlaps_five_prime_utr,
+    overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
 };
 use smallvec::{smallvec, SmallVec};
 use vep_core::consequence::{
@@ -137,15 +140,12 @@ pub fn calculate(
             return Some(tc);
         }
 
-        let consequence = if transcript.has_cds() {
-            Consequence::CodingTranscriptVariant
-        } else if transcript.is_nmd_transcript() {
-            Consequence::NmdTranscriptVariant
-        } else {
-            Consequence::NonCodingTranscriptVariant
-        };
-        tc.consequences = smallvec![consequence];
-        tc.impact = consequence.impact();
+        tc.consequences = engulfed_transcript_row_terms(transcript, sv_start, sv_end);
+        tc.impact = tc
+            .consequences
+            .first()
+            .map(|c| c.impact())
+            .unwrap_or(Impact::MODIFIER);
         return Some(tc);
     }
 
@@ -180,6 +180,10 @@ pub fn calculate(
 
         if complete_within && hits_exon {
             consequences.push(Consequence::FeatureElongation);
+        }
+
+        if structural_start_lost(transcript, sv_start, sv_end) {
+            consequences.push(Consequence::StartLost);
         }
 
         if hits_cds {
@@ -379,6 +383,39 @@ fn classify_upstream_downstream(
             }
         }
     }
+}
+
+/// Perl's structural-variant arm of `start_lost` (Utils/VariationEffect.pm:886-896):
+/// a genomic overlap between the allele's span and the three start-codon bases,
+/// `coding_region_start..+2` on the forward strand and `coding_region_end-2..` on
+/// the reverse, for every structural class. `_overlaps_start_codon` (:965-990) runs
+/// first and needs `cdna_start` and `cdna_end` defined, which `cdna_start_unshifted`
+/// (BaseTranscriptVariation.pm:194-208) leaves undefined when either end of the span
+/// maps to a Gap, so both span ends must lie in exons; it also returns 0 on a
+/// `cds_start_NF` transcript. `start_retained_variant` co-fires in Perl on every such
+/// allele because `_ins_del_start_altered` returns 0 for a
+/// `TranscriptStructuralVariationAllele` without reading sequence; that term is not
+/// emitted here.
+pub(super) fn structural_start_lost(transcript: &Transcript, sv_start: u64, sv_end: u64) -> bool {
+    let (Some(cds_start), Some(cds_end)) =
+        (transcript.coding_region_start, transcript.coding_region_end)
+    else {
+        return false;
+    };
+    if transcript.facts().cds_start_nf {
+        return false;
+    }
+    let (start_lo, start_hi) = match transcript.strand {
+        Strand::Forward => (cds_start, cds_start + 2),
+        Strand::Reverse => (cds_end.saturating_sub(2), cds_end),
+    };
+    let in_exon = |pos: u64| {
+        transcript
+            .exons
+            .iter()
+            .any(|e| pos >= e.start && pos <= e.end)
+    };
+    sv_end >= start_lo && sv_start <= start_hi && in_exon(sv_start) && in_exon(sv_end)
 }
 
 #[cfg(test)]
@@ -717,6 +754,39 @@ mod tests {
             .consequences
             .contains(&Consequence::CodingSequenceVariant));
         assert!(tc.consequences.contains(&Consequence::FeatureElongation));
+        // The span covers the start codon at 25_000_050-25_000_052 with both ends in
+        // exon 1, so Perl's structural `start_lost` arm holds; its co-fired
+        // `start_retained_variant` is not emitted.
+        assert!(tc.consequences.contains(&Consequence::StartLost));
+        assert!(!tc.consequences.contains(&Consequence::StartRetainedVariant));
+        assert_eq!(tc.impact, Impact::HIGH);
+    }
+
+    /// `structural_start_lost` on the reverse strand reads the start codon from
+    /// `coding_region_end`: 25_004_297-25_004_299 inside exon 3 (25_004_000-25_006_000).
+    #[test]
+    fn test_structural_start_lost_reverse_strand_reads_coding_region_end() {
+        let mut tx = make_test_transcript();
+        tx.strand = Strand::Reverse;
+        assert!(structural_start_lost(&tx, 25_004_250, 25_004_350));
+        assert!(structural_start_lost(&tx, 25_004_299, 25_004_299));
+        assert!(!structural_start_lost(&tx, 25_004_250, 25_004_296));
+        assert!(!structural_start_lost(&tx, 25_004_300, 25_004_400));
+        // The forward-strand codon (25_000_050-25_000_052) is not a start codon here.
+        assert!(!structural_start_lost(&tx, 25_000_040, 25_000_100));
+    }
+
+    /// Both span ends must map to exons: a span from exon 1 into intron 1 covers the
+    /// forward-strand start codon but has no `cdna_end`, so `_overlaps_start_codon`
+    /// returns 0.
+    #[test]
+    fn test_structural_start_lost_needs_both_ends_in_exons() {
+        let tx = make_test_transcript();
+        assert!(structural_start_lost(&tx, 25_000_040, 25_000_100));
+        assert!(!structural_start_lost(&tx, 25_000_040, 25_001_000));
+        assert!(!structural_start_lost(&tx, 24_999_990, 25_000_100));
+        // Exon 1 to exon 2: both ends exonic, the codon inside the span.
+        assert!(structural_start_lost(&tx, 25_000_040, 25_002_100));
     }
 
     #[test]

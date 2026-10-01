@@ -9652,48 +9652,6 @@
    "expected_divergence": "vep_only_transcript"
   },
   {
-   "location": "21:21706068-30869676",
-   "allele": "inversion",
-   "feature": "ENST00000460212",
-   "feature_type": "Transcript",
-   "record_indices": [
-    709
-   ],
-   "vep_consequence_set": "NMD_transcript_variant",
-   "vep_rs_consequence_sets": [
-    "coding_transcript_variant"
-   ],
-   "expected_divergence": "unexplained_residual"
-  },
-  {
-   "location": "21:21706068-30869676",
-   "allele": "inversion",
-   "feature": "ENST00000460679",
-   "feature_type": "Transcript",
-   "record_indices": [
-    709
-   ],
-   "vep_consequence_set": "NMD_transcript_variant",
-   "vep_rs_consequence_sets": [
-    "coding_transcript_variant"
-   ],
-   "expected_divergence": "unexplained_residual"
-  },
-  {
-   "location": "21:21706068-30869676",
-   "allele": "inversion",
-   "feature": "ENST00000483326",
-   "feature_type": "Transcript",
-   "record_indices": [
-    709
-   ],
-   "vep_consequence_set": "NMD_transcript_variant",
-   "vep_rs_consequence_sets": [
-    "coding_transcript_variant"
-   ],
-   "expected_divergence": "unexplained_residual"
-  },
-  {
    "location": "21:26037668",
    "allele": "N[22:26037668[",
    "feature": "ENST00000324198",
@@ -11000,6 +10958,6 @@
   "start_cooccurrence_swap": 80,
   "splice_family_swap": 9,
   "vep_only_transcript": 41,
-  "unexplained_residual": 7
+  "unexplained_residual": 4
  }
 }

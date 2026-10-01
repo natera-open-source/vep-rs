@@ -9523,9 +9523,9 @@
    ],
    "vep_consequence_set": "5_prime_UTR_variant,coding_sequence_variant,feature_elongation,start_lost,start_retained_variant",
    "vep_rs_consequence_sets": [
-    "5_prime_UTR_variant,coding_sequence_variant,feature_elongation"
+    "5_prime_UTR_variant,coding_sequence_variant,feature_elongation,start_lost"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "start_cooccurrence_swap"
   },
   {
    "location": "21:30755356-30755423",
@@ -9607,9 +9607,9 @@
    ],
    "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,coding_sequence_variant,feature_elongation,intron_variant,start_lost,start_retained_variant",
    "vep_rs_consequence_sets": [
-    "3_prime_UTR_variant,5_prime_UTR_variant,coding_sequence_variant,feature_elongation,intron_variant"
+    "3_prime_UTR_variant,5_prime_UTR_variant,coding_sequence_variant,feature_elongation,intron_variant,start_lost"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "start_cooccurrence_swap"
   },
   {
    "location": "21:37419145-37525997",
@@ -9635,9 +9635,9 @@
    ],
    "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,coding_sequence_variant,feature_elongation,intron_variant,start_lost,start_retained_variant",
    "vep_rs_consequence_sets": [
-    "3_prime_UTR_variant,5_prime_UTR_variant,coding_sequence_variant,feature_elongation,intron_variant"
+    "3_prime_UTR_variant,5_prime_UTR_variant,coding_sequence_variant,feature_elongation,intron_variant,start_lost"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "start_cooccurrence_swap"
   },
   {
    "location": "21:39659446-39660688",
@@ -9663,9 +9663,9 @@
    ],
    "vep_consequence_set": "5_prime_UTR_variant,coding_sequence_variant,feature_elongation,start_lost,start_retained_variant",
    "vep_rs_consequence_sets": [
-    "5_prime_UTR_variant,coding_sequence_variant,feature_elongation"
+    "5_prime_UTR_variant,coding_sequence_variant,feature_elongation,start_lost"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "start_cooccurrence_swap"
   },
   {
    "location": "21:39660415-39660694",
@@ -9677,9 +9677,9 @@
    ],
    "vep_consequence_set": "5_prime_UTR_variant,coding_sequence_variant,feature_elongation,start_lost,start_retained_variant",
    "vep_rs_consequence_sets": [
-    "5_prime_UTR_variant,coding_sequence_variant,feature_elongation"
+    "5_prime_UTR_variant,coding_sequence_variant,feature_elongation,start_lost"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "start_cooccurrence_swap"
   },
   {
    "location": "21:44285983-44286584",
@@ -12372,9 +12372,8 @@
  ],
  "vep_rs_only_tuples": [],
  "divergence_summary": {
-  "start_cooccurrence_swap": 282,
+  "start_cooccurrence_swap": 287,
   "splice_family_swap": 43,
-  "vep_only_transcript": 41,
-  "unexplained_residual": 5
+  "vep_only_transcript": 41
  }
 }

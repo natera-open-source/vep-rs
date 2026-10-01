@@ -17,7 +17,8 @@ pub mod duplication;
 pub mod insertion;
 pub mod inversion;
 
-use vep_core::consequence::{Consequence, Impact, TranscriptConsequence};
+use smallvec::SmallVec;
+use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 use vep_core::variant::{InputVariant, VariantClass};
@@ -73,6 +74,69 @@ pub(crate) fn is_mature_mirna_sv(transcript: &Transcript, sv_start: u64, sv_end:
         }
     }
     false
+}
+
+/// Perl's context terms for a structural allele that engulfs a transcript, without
+/// the row default; empty for a translated transcript of any biotype other than
+/// `protein_coding` and `nonsense_mediated_decay` (`IG_V_gene`, `TR_C_gene`,
+/// `polymorphic_pseudogene`).
+///
+/// For a complete overlap `_bvfo_preds`
+/// (BaseVariationFeatureOverlapAllele.pm:465-477) returns only `complete_overlap`,
+/// `within_feature` and the transcript biotype as a key, so `_skip_oc` (:317-329)
+/// leaves these predicates to run, each gated by its `include` hash in
+/// `Utils/Constants.pm`:
+///
+/// - `mature_miRNA_variant` (:1079-1098, `protein_coding => 0`,
+///   `nonsense_mediated_decay => 0`) is tier 2: once it fires
+///   `get_all_OverlapConsequences` (BaseVariationFeatureOverlapAllele.pm:267) stops
+///   before every tier-3 term, so it is the whole list, `feature_truncation` included.
+/// - `NMD_transcript_variant` (:1180-1197, `nonsense_mediated_decay => 1`):
+///   `within_nmd_transcript` (VariationEffect.pm:477-482) holds on the biotype alone.
+/// - `non_coding_transcript_variant` (:1199-1216, `protein_coding => 0`): runs for
+///   every biotype but `protein_coding`; `within_non_coding_gene` (:495-500) needs
+///   `not $feat->translation`.
+/// - `coding_transcript_variant` (:1218-1235, `protein_coding => 1`): runs only for
+///   biotype `protein_coding`; `within_coding_gene` (:484-489) needs a translation.
+pub(crate) fn engulfed_transcript_context_terms(
+    transcript: &Transcript,
+    sv_start: u64,
+    sv_end: u64,
+) -> ConsequenceList {
+    let mut terms: ConsequenceList = SmallVec::new();
+    if is_mature_mirna_sv(transcript, sv_start, sv_end) {
+        terms.push(Consequence::MatureMirnaVariant);
+        return terms;
+    }
+    if transcript.is_nmd_transcript() {
+        terms.push(Consequence::NmdTranscriptVariant);
+    }
+    if transcript.is_protein_coding() {
+        if transcript.has_cds() {
+            terms.push(Consequence::CodingTranscriptVariant);
+        }
+    } else if !transcript.has_cds() {
+        terms.push(Consequence::NonCodingTranscriptVariant);
+    }
+    terms
+}
+
+/// The whole row for a structural allele that engulfs a transcript and takes no
+/// tier-1 term (`transcript_ablation` needs the `deletion` class,
+/// `transcript_amplification` a copy-number gain): the context terms of
+/// `engulfed_transcript_context_terms`, or `intergenic_variant` when there are none,
+/// which is `$cons = [$DEFAULT_OVERLAP_CONSEQUENCE] unless @$cons`
+/// (BaseVariationFeatureOverlapAllele.pm:285) written on the transcript row.
+pub(crate) fn engulfed_transcript_row_terms(
+    transcript: &Transcript,
+    sv_start: u64,
+    sv_end: u64,
+) -> ConsequenceList {
+    let mut terms = engulfed_transcript_context_terms(transcript, sv_start, sv_end);
+    if terms.is_empty() {
+        terms.push(Consequence::IntergenicVariant);
+    }
+    terms
 }
 
 /// Parse a "N-M" pattern from a miRNA attribute value, returning (start, end) as cDNA positions.
@@ -452,40 +516,13 @@ fn calculate_small_bnd_single_breakend(
                 )
             });
             if !has_context {
-                // The context term is selected by biotype, not by translation. Each
-                // term's `include` hash (`Utils/Constants.pm`) is tested against a
-                // pre-predicate hash keyed on the transcript biotype
-                // (`BaseVariationFeatureOverlapAllele.pm:449-451`):
-                // `coding_transcript_variant` carries
-                // `include => {protein_coding => 1, within_feature => 1}`
-                // (`Constants.pm:1218-1235`) and so runs only for biotype
-                // `protein_coding`; `NMD_transcript_variant` only for
-                // `nonsense_mediated_decay`; `non_coding_transcript_variant` runs for
-                // every other biotype and then needs no translation
-                // (`within_non_coding_gene`, `Utils/VariationEffect.pm:495-500`). A
-                // translated transcript of another biotype (`IG_V_gene`, `TR_V_gene`)
-                // therefore gets no context term at all.
-                if transcript.is_nmd_transcript() {
-                    tc.consequences.push(Consequence::NmdTranscriptVariant);
-                } else if transcript.is_protein_coding() {
-                    if transcript.has_cds() {
-                        tc.consequences.push(Consequence::CodingTranscriptVariant);
-                    }
-                } else if !transcript.has_cds() {
-                    if is_mature_mirna_sv(transcript, variant.start, variant.end) {
-                        tc.consequences.push(Consequence::MatureMirnaVariant);
-                    } else {
-                        // Reached only when the variant engulfed the transcript (this
-                        // block is gated on transcript_ablation). Perl's
-                        // `non_coding_exon_variant` opens with
-                        // `return 0 if complete_overlap_feature(@_)`
-                        // (Utils/VariationEffect.pm:502-519) and `within_non_coding_gene`
-                        // (`:495-500`) is its complement, so an engulfing variant
-                        // receives the generic term.
-                        tc.consequences
-                            .push(Consequence::NonCodingTranscriptVariant);
-                    }
-                }
+                // Reached only when the variant engulfed the transcript (this block is
+                // gated on transcript_ablation), so the complete-overlap rule applies.
+                tc.consequences.extend(engulfed_transcript_context_terms(
+                    transcript,
+                    variant.start,
+                    variant.end,
+                ));
             }
             if tc.consequences.is_empty() {
                 // `$cons = [$DEFAULT_OVERLAP_CONSEQUENCE] unless @$cons`
@@ -2158,6 +2195,80 @@ mod tests {
             tc.consequences.contains(&Consequence::IntronVariant),
             "Small BND should keep intron_variant (Perl keeps it for real-world SVs): {:?}",
             tc.consequences
+        );
+    }
+
+    /// The engulfed-transcript context terms by biotype and translation, one row per
+    /// combination Perl's `include`-gated predicates can produce, and the row default
+    /// `engulfed_transcript_row_terms` adds when they produce nothing.
+    #[test]
+    fn test_engulfed_transcript_context_terms_by_biotype_and_translation() {
+        let cases: [(&str, bool, &[Consequence]); 6] = [
+            (
+                "protein_coding",
+                true,
+                &[Consequence::CodingTranscriptVariant],
+            ),
+            ("protein_coding", false, &[]),
+            (
+                "nonsense_mediated_decay",
+                true,
+                &[Consequence::NmdTranscriptVariant],
+            ),
+            (
+                "nonsense_mediated_decay",
+                false,
+                &[
+                    Consequence::NmdTranscriptVariant,
+                    Consequence::NonCodingTranscriptVariant,
+                ],
+            ),
+            ("IG_V_gene", true, &[]),
+            ("lncRNA", false, &[Consequence::NonCodingTranscriptVariant]),
+        ];
+        for (biotype, translated, expected) in cases {
+            let mut tx = crate::test_helpers::make_test_transcript();
+            tx.biotype = biotype.into();
+            if !translated {
+                tx.coding_region_start = None;
+                tx.coding_region_end = None;
+                tx.translation = None;
+                tx.protein_id = None;
+            }
+            let terms = engulfed_transcript_context_terms(&tx, 24_999_000, 25_007_000);
+            assert_eq!(
+                terms.to_vec(),
+                expected.to_vec(),
+                "biotype {biotype}, translated {translated}"
+            );
+            let row = engulfed_transcript_row_terms(&tx, 24_999_000, 25_007_000);
+            let want_row: Vec<Consequence> = if expected.is_empty() {
+                vec![Consequence::IntergenicVariant]
+            } else {
+                expected.to_vec()
+            };
+            assert_eq!(
+                row.to_vec(),
+                want_row,
+                "row for biotype {biotype}, translated {translated}"
+            );
+        }
+    }
+
+    /// A mature-miRNA overlap is the tier-2 term alone; the same transcript with the
+    /// mature window off the span gets the tier-3 non-coding term.
+    #[test]
+    fn test_engulfed_transcript_context_terms_mature_mirna_is_alone() {
+        let tx = make_mature_mirna_transcript();
+        assert_eq!(
+            engulfed_transcript_context_terms(&tx, 24_999_000, 25_001_000).to_vec(),
+            vec![Consequence::MatureMirnaVariant]
+        );
+        let mut off = make_mature_mirna_transcript();
+        off.attributes[0].value = "5000-5010".into();
+        assert_eq!(
+            engulfed_transcript_context_terms(&off, 24_999_000, 25_001_000).to_vec(),
+            vec![Consequence::NonCodingTranscriptVariant]
         );
     }
 
