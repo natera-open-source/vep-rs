@@ -123,6 +123,43 @@ def test_classify_marks_documented_and_unexplained_divergences(tmp_path: Path):
     assert m["divergence_summary"] == {"start_cooccurrence_swap": 1, "splice_family_swap": 1}
 
 
+def test_classify_names_the_mate_side_local_read(tmp_path: Path):
+    """A point breakend's mate-side Transcript row: VEP reads it at the local coordinate
+    (`feature_truncation` alone when the local coordinate lands nowhere near the mate
+    transcript), vep-rs at the mate (`feature_truncation,intron_variant` for a mate in
+    intron 1 of a transcript filed in the corpus cache)."""
+    corpus = tmp_path / "c"
+    (corpus / "json_cache" / "transcripts" / "21").mkdir(parents=True)
+    (corpus / "json_cache" / "transcripts" / "21" / "33000001-34000000.json").write_text(json.dumps([{
+        "stable_id": "ENST1", "start": 33031935, "end": 33041244, "strand": 1, "biotype": "protein_coding",
+        "exons": [{"start": 33031935, "end": 33032154}, {"start": 33036103, "end": 33036199}],
+        "variation_effect_feature_cache": {"mapper": {"pairs": [
+            {"from_start": 1, "from_end": 220, "to_start": 33031935, "to_end": 33032154, "ori": 1},
+            {"from_start": 221, "from_end": 317, "to_start": 33036103, "to_end": 33036199, "ori": 1},
+        ], "pair_count": 2, "cdna_coding_start": 50, "cdna_coding_end": 300}},
+    }]), encoding="utf-8")
+    (corpus / "manifest.json").write_text(json.dumps({"records": []}), encoding="utf-8")
+    vep = tmp_path / "vep.txt"
+    rs = tmp_path / "rs.txt"
+    vep.write_text(
+        _row("b1", "1:14374334", "]21:33034355]A", "ENST1", "feature_truncation")
+        + _row("b2", "1:14374334", "]21:33034355]A", "ENST2", "feature_truncation"),
+        encoding="utf-8",
+    )
+    rs.write_text(
+        _row("b1", "1:14374334", "]21:33034355]A", "ENST1", "feature_truncation,intron_variant")
+        + _row("b2", "1:14374334", "]21:33034355]A", "ENST2", "feature_truncation,intron_variant"),
+        encoding="utf-8",
+    )
+    rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)])
+    assert rc == 0
+    m = json.loads((corpus / "manifest.json").read_text())
+    by_feature = {d["feature"]: d["expected_divergence"] for d in m["divergences"]}
+    assert by_feature["ENST1"] == "breakend_mate_local_read"
+    # a transcript the corpus cache does not carry is not adjudicated
+    assert by_feature["ENST2"] == "unexplained_residual"
+
+
 def test_select_focus_terms_take_more_exemplars(tmp_path: Path):
     """A combination containing a focus term takes --focus-k exemplars; every other
     combination takes --k."""

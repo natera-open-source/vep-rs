@@ -454,6 +454,9 @@ fn classify_symbolic_allele(alt: &str, svtype: Option<&str>) -> VariantClass {
                     _ => {}
                 }
             }
+            if upper == "<NON_REF>" {
+                return VariantClass::ReferenceBlock;
+            }
             VariantClass::ComplexStructural
         }
     }
@@ -1035,12 +1038,16 @@ mod tests {
     }
 
     #[test]
-    fn test_non_ref_symbolic_passes_filter() {
-        // <NON_REF> is not filtered: Perl VEP annotates it as an SV.
+    fn test_non_ref_symbolic_is_a_reference_block() {
+        // <NON_REF> is not filtered: the record is one reference-confidence block.
         let data = make_vcf_data("21\t100\t.\tA\t<NON_REF>\t.\t.\tEND=200\n");
         let reader: Box<dyn BufRead + Send> = Box::new(std::io::Cursor::new(data));
         let mut parser = VcfParser::new(reader).unwrap();
-        let variant = parser.next_variant();
-        assert!(variant.is_some(), "<NON_REF> should not be filtered");
+        let variant = parser
+            .next_variant()
+            .expect("<NON_REF> should not be filtered")
+            .unwrap();
+        assert_eq!(variant.variant_class, VariantClass::ReferenceBlock);
+        assert!(variant.is_structural);
     }
 }

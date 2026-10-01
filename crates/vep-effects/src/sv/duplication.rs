@@ -12,15 +12,18 @@
 //!   does not get it.
 //! - Regional sub-consequences are added when the DUP overlaps specific transcript
 //!   regions (CDS, UTRs, introns, non-coding exons).
+//! - **start_lost**: the DUP span covers a start-codon base with both ends in exons
+//!   (`insertion::structural_start_lost`).
 //! - **upstream_gene_variant / downstream_gene_variant**: DUP is entirely within the
 //!   upstream or downstream region (no transcript body overlap).
 //!
 //! Perl citations name modules of ensembl-variation release/115
 //! (`Bio/EnsEMBL/Variation/...`).
 
+use super::insertion::structural_start_lost;
 use super::{
     is_mature_mirna_sv, overlaps_any_exon, overlaps_any_intron_trimmed, overlaps_cds_exon,
-    overlaps_five_prime_utr, overlaps_three_prime_utr,
+    overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
 };
 use smallvec::SmallVec;
 use vep_core::consequence::{
@@ -154,6 +157,9 @@ fn add_regional_consequences(
     let is_protein_coding = transcript.has_cds();
 
     if is_protein_coding {
+        if structural_start_lost(transcript, sv_lo, sv_hi) {
+            push_unique(consequences, Consequence::StartLost);
+        }
         if overlaps_cds_exon(transcript, sv_lo, sv_hi) {
             push_unique(consequences, Consequence::CodingSequenceVariant);
         }
@@ -177,6 +183,9 @@ fn add_regional_consequences(
     // invariant donor/acceptor bases gets no `intron_variant`.
     if overlaps_any_intron_trimmed(transcript, sv_lo, sv_hi) {
         push_unique(consequences, Consequence::IntronVariant);
+    }
+    if overlaps_polypyrimidine_tract(transcript, sv_lo, sv_hi) {
+        push_unique(consequences, Consequence::SplicePolypyrimidineTractVariant);
     }
 
     // Perl VEP: for non-coding transcripts, non_coding_transcript_variant is added
@@ -561,6 +570,41 @@ mod tests {
             tc.consequences.contains(&Consequence::FeatureElongation),
             "Internal DUP overlapping exons should get feature_elongation"
         );
+        // Both ends exonic (exon 1 and exon 3) and the span covers the start codon.
+        assert!(tc.consequences.contains(&Consequence::StartLost));
+        assert!(!tc.consequences.contains(&Consequence::StartRetainedVariant));
+    }
+
+    /// A DUP inside exon 1 over the start codon (25_000_050-25_000_052) is exactly
+    /// `feature_elongation, start_lost, coding_sequence_variant, 5_prime_UTR_variant`,
+    /// Perl's structural `start_lost` arm without its co-fired `start_retained_variant`.
+    #[test]
+    fn test_dup_over_start_codon_within_exon_is_start_lost() {
+        let tx = make_test_transcript();
+        let v = make_dup(25_000_040, 25_000_121, VariantClass::Duplication);
+        let tc = calculate(&v, &tx, 5000, 5000).expect("DUP must annotate the transcript");
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![
+                Consequence::StartLost,
+                Consequence::FeatureElongation,
+                Consequence::CodingSequenceVariant,
+                Consequence::FivePrimeUtrVariant,
+            ],
+            "got: {:?}",
+            tc.consequences
+        );
+        assert_eq!(tc.impact, Impact::HIGH);
+    }
+
+    /// The same DUP ending in intron 1 has no `cdna_end`, so no `start_lost`.
+    #[test]
+    fn test_dup_over_start_codon_ending_in_intron_has_no_start_lost() {
+        let tx = make_test_transcript();
+        let v = make_dup(25_000_040, 25_001_000, VariantClass::Duplication);
+        let tc = calculate(&v, &tx, 5000, 5000).expect("DUP must annotate the transcript");
+        assert!(!tc.consequences.contains(&Consequence::StartLost));
+        assert!(tc.consequences.contains(&Consequence::IntronVariant));
     }
 
     #[test]

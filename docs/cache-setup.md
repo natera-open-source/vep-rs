@@ -47,13 +47,22 @@ Storable cache directory (for example `~/.vep/homo_sapiens/115_GRCh38`) and writ
 JSON layout for chromosomes 1-22, X, Y and MT, with an `info.json` derived from the cache's
 `info.txt`; it runs inside the `ensemblorg/ensembl-vep` container
 ([scripts/README.md](../scripts/README.md) gives the invocation), and its output goes straight
-to `--json_cache`. The published concordance figures were measured on that conversion ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)), which holds the transcript set identical between the two engines; the converted caches carry 195,232 transcripts (GRCh37) and 505,231
+to `--json_cache`. The published concordance figures were measured on such a conversion ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)), which holds the transcript set identical between the two engines; the converted caches carry 195,232 transcripts (GRCh37) and 505,231
 (GRCh38); the GRCh37 conversion is of the cache-version-113 Storable that VEP release 115 ships
 for that assembly, which differs from the cache-version-115 build in 310 of those transcripts
 (the `storable_113_*` columns of `manuscript/data/transcript_set_parity.csv`). A converted cache carries no variation data and no SIFT
 or PolyPhen matrices.
 `vep-cache-converter --json-dir <converted> --output-dir <dest>` copies a converted cache
 into the runtime layout and sanity-checks it on the way.
+
+The conversion carries each translation's sequence edits (`seq_edits`: the initial-methionine,
+selenocysteine and amino-acid-substitution edits VEP applies to the reference peptide at
+annotation time), and vep-rs applies them the same way. A cache converted without that key, the
+published conversions among them, still loads, but on it a variant at codon 1 of a transcript
+with an alternative initiation codon is called from the cached peptide rather than from the edit;
+convert such a cache again to get VEP's call. A natively built cache carries no edit list either:
+its peptide is the protein FASTA's sequence, with the edits already applied, and none of the
+builder's inputs carries the list.
 
 ## SIFT and PolyPhen predictions
 

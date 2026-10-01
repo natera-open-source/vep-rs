@@ -25,7 +25,7 @@ use tracing::info;
 use vep_core::coordinate::Strand;
 use vep_core::transcript::{
     Attribute, Exon, ExonCoordMapper, Intron, MapperPair, PredictionMatrix, ProteinFeature,
-    ProteinFunctionPredictions, Transcript, TranscriptMapper, TranscriptVEFC, Translation,
+    ProteinFunctionPredictions, SeqEdit, Transcript, TranscriptMapper, TranscriptVEFC, Translation,
 };
 use vep_core::variation::CachedVariation;
 
@@ -446,6 +446,23 @@ struct JsonVEFC {
     protein_features: Vec<JsonProteinFeature>,
     #[serde(default)]
     protein_function_predictions: Option<JsonProteinFunctionPredictions>,
+    #[serde(default)]
+    seq_edits: Vec<JsonSeqEdit>,
+}
+
+/// A translation SeqEdit as the Storable cache stores it (`Bio::EnsEMBL::SeqEdit`
+/// over `Translation::get_all_SeqEdits`): `start` and `end` are protein
+/// positions, `alt_seq` the residues written over them. A cache without the key
+/// loads none, and the reference peptide is then read from the cached
+/// translation.
+#[derive(Deserialize)]
+struct JsonSeqEdit {
+    #[serde(deserialize_with = "deserialize_string_or_number")]
+    start: u64,
+    #[serde(deserialize_with = "deserialize_string_or_number")]
+    end: u64,
+    #[serde(default)]
+    alt_seq: String,
 }
 
 /// JSON-serialized SIFT/PolyPhen prediction matrices.
@@ -760,6 +777,16 @@ fn convert_transcript(jt: JsonTranscript, chr_override: &str) -> Transcript {
             .protein_function_predictions
             .map(convert_protein_function_predictions);
 
+        let seq_edits: Vec<SeqEdit> = v
+            .seq_edits
+            .into_iter()
+            .map(|e| SeqEdit {
+                start: e.start,
+                end: e.end,
+                alt_seq: e.alt_seq,
+            })
+            .collect();
+
         let vefc = TranscriptVEFC {
             codon_table: v.codon_table.unwrap_or(1),
             five_prime_utr: v.five_prime_utr,
@@ -771,7 +798,7 @@ fn convert_transcript(jt: JsonTranscript, chr_override: &str) -> Transcript {
             mapper,
             protein_features,
             protein_function_predictions,
-            seq_edits: vec![],
+            seq_edits,
         };
 
         (Some(vefc), tx_introns)
@@ -1823,6 +1850,38 @@ mod tests {
             facts.has_frameshift_intron,
             facts.vefc_has_frameshift_intron
         );
+    }
+
+    /// A transcript's `seq_edits` load in protein coordinates with the residues
+    /// written over them; a cache written without the key loads with none and keeps
+    /// the cached-translation reading of the reference peptide.
+    #[test]
+    fn loaded_transcript_carries_its_seq_edits_and_tolerates_their_absence() {
+        let with_edits = r#"{"stable_id":"ENST1","gene_stable_id":"ENSG1","start":100,"end":300,
+            "strand":1,"biotype":"protein_coding","source":"ensembl",
+            "exons":[{"start":100,"end":300}],
+            "variation_effect_feature_cache":{"peptide":"MAU","translateable_seq":"CTGGCTTGA",
+            "seq_edits":[{"code":"initial_met","name":"Initial methionine","start":1,"end":1,"alt_seq":"M"},
+                         {"code":"_selenocysteine","start":"3","end":"3","alt_seq":"U"}]}}"#;
+        let jt: JsonTranscript = serde_json::from_str(with_edits).unwrap();
+        let vefc = convert_transcript(jt, "1").vefc.unwrap();
+        let edits: Vec<(u64, u64, &str)> = vefc
+            .seq_edits
+            .iter()
+            .map(|e| (e.start, e.end, e.alt_seq.as_str()))
+            .collect();
+        assert_eq!(edits, vec![(1, 1, "M"), (3, 3, "U")]);
+
+        let without_key = r#"{"stable_id":"ENST2","gene_stable_id":"ENSG2","start":100,"end":300,
+            "strand":1,"biotype":"protein_coding","source":"ensembl",
+            "exons":[{"start":100,"end":300}],
+            "variation_effect_feature_cache":{"peptide":"MAU","translateable_seq":"CTGGCTTGA"}}"#;
+        let jt: JsonTranscript = serde_json::from_str(without_key).unwrap();
+        assert!(convert_transcript(jt, "1")
+            .vefc
+            .unwrap()
+            .seq_edits
+            .is_empty());
     }
 
     #[test]

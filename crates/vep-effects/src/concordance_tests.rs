@@ -6575,6 +6575,129 @@ fn concordance_snv_inside_one_bp_intron_of_non_coding_transcript_is_transcript_v
     crate::test_helpers::assert_consequence_set_eq(&tc, &["non_coding_transcript_variant"]);
 }
 
+// A deletion covering a frameshift intron from exon to exon.
+//
+// `_intron_effects` tests one differing region for such a deletion, the whole
+// reference span, and that region overlaps the intron, so both loops `next`
+// past it: no splice flag is written, `within_frameshift_intron` is the only
+// flag set, and the intronic donor window `[intron_end-4, intron_end-4]` (or
+// `[intron_start+4, intron_start+4]`), which for a 1 bp intron lies in the
+// flanking exon and inside the deletion, is never read. `within_intron` is
+// false as well. The coding predicates alone decide the row: `frameshift`
+// counts the CDS bases between `cds_start` and `cds_end`, which excludes the
+// intron base, so a deletion is in frame when its exonic bases number a
+// multiple of 3.
+
+/// Shrink intron 1 of `make_descending_reverse_strand_transcript()` to `len`
+/// bases, keeping exon 1 fixed and pulling exon 2 up to meet it; intron 2 ends
+/// where the moved exon 2 starts, and the coding region is unchanged because exons 1
+/// and 3 are.
+fn make_reverse_transcript_with_short_first_intron(len: u64) -> Transcript {
+    let mut tx = make_descending_reverse_strand_transcript();
+    let intron_end = 25_005_700;
+    let intron_start = intron_end + 1 - len;
+    let exon2_end = intron_start - 1;
+    let exon2_start = exon2_end - 299;
+
+    tx.exons[1].start = exon2_start;
+    tx.exons[1].end = exon2_end;
+    tx.introns[0].start = intron_start;
+    tx.introns[0].end = intron_end;
+    tx.introns[1].end = exon2_start - 1;
+
+    if let Some(vefc) = tx.vefc.as_mut() {
+        vefc.sorted_exons = tx.exons.clone();
+        vefc.sorted_exons.sort_by_key(|e| e.start);
+        vefc.introns = tx.introns.clone();
+        if let Some(mapper) = vefc.mapper.as_mut() {
+            let mut pairs = mapper.exon_coord_mapper.pairs.clone();
+            pairs[1].to_start = exon2_start;
+            pairs[1].to_end = exon2_end;
+            mapper.exon_coord_mapper = ExonCoordMapper::new(pairs);
+        }
+    }
+    tx
+}
+
+/// `21:47612435-47612549 -` on ENST00000594486 (reverse strand, GRCh37): a
+/// deletion from the exon before a 1 bp intron into the exon after it, 21 of
+/// whose 22 bases are CDS. Perl: `inframe_deletion` alone. The reverse-strand
+/// 5th-base position `intron_end - 4` is the fourth exonic base before the
+/// intron, inside the deletion; reading it would add
+/// `splice_donor_5th_base_variant`.
+#[test]
+fn concordance_inframe_deletion_covering_one_bp_intron_reverse_strand_has_no_splice_term() {
+    let tx = make_reverse_transcript_with_short_first_intron(1);
+    // Intron 1 is 25_005_700. Exon 2 (cDNA 310..301, CDS 260..251) supplies
+    // 25_005_690..25_005_699 and exon 1 (cDNA 300..290, CDS 250..240)
+    // 25_005_701..25_005_711: CDS 240..260, 21 bases, codon 80 base 3 through
+    // codon 87 base 2, so the alternate codon `GCT` is a prefix of the eight
+    // reference codons.
+    let variant = InputVariant::new(
+        "21".into(),
+        25_005_690,
+        25_005_711,
+        b"GCAGCAGCAGTCAGCAGCAGCA".to_vec(),
+        b"-".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["inframe_deletion"]);
+}
+
+/// `21:47612474-47612586 -` on the same transcript: 112 CDS bases, so
+/// `frameshift_variant` alone. Here the deletion removes CDS 241..260, 20
+/// bases.
+#[test]
+fn concordance_frameshift_deletion_covering_one_bp_intron_reverse_strand_has_no_splice_term() {
+    let tx = make_reverse_transcript_with_short_first_intron(1);
+    let variant = InputVariant::new(
+        "21".into(),
+        25_005_690,
+        25_005_710,
+        b"GCAGCAGCAGTCAGCAGCAGC".to_vec(),
+        b"-".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["frameshift_variant"]);
+}
+
+/// The forward-strand form: the 5th-base position `intron_start + 4` is the
+/// fourth exonic base after the intron, inside the deletion, and the exonic
+/// donor window `[intron_start-3, intron_start-1]` is covered too; neither is
+/// read. CDS 242..256, 15 bases, codon 81 base 2 through codon 86 base 1: the
+/// alternate codon `GCT` is a prefix of the six reference codons.
+#[test]
+fn concordance_inframe_deletion_covering_one_bp_intron_forward_strand_has_no_splice_term() {
+    let tx = make_transcript_with_short_first_intron(1);
+    // Intron 1 is 25_000_300; exon 1 ends 25_000_299 (cDNA 300) and exon 2
+    // starts 25_000_301 (cDNA 301).
+    let variant = InputVariant::new(
+        "21".into(),
+        25_000_291,
+        25_000_306,
+        b"CTGCTGCTGACTGCTG".to_vec(),
+        b"-".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["inframe_deletion"]);
+}
+
+/// One base shorter on the exon 2 side: CDS 242..255, 14 bases, so
+/// `frameshift_variant` alone.
+#[test]
+fn concordance_frameshift_deletion_covering_one_bp_intron_forward_strand_has_no_splice_term() {
+    let tx = make_transcript_with_short_first_intron(1);
+    let variant = InputVariant::new(
+        "21".into(),
+        25_000_291,
+        25_000_305,
+        b"CTGCTGCTGACTGCT".to_vec(),
+        b"-".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["frameshift_variant"]);
+}
+
 // CDS-boundary spans and the UTR terms.
 //
 // Perl's `VariationEffect::within_5_prime_utr` / `within_3_prime_utr`
@@ -6715,9 +6838,9 @@ fn concordance_deletion_touching_transcript_start_of_cds_start_nf_has_no_five_pr
 // SeqEdits on the reference peptide.
 //
 // `TranscriptVariationAllele::peptide` applies the translation's SeqEdits to the
-// reference peptide, so a selenocysteine `TGA` reads `U`. The JSON cache has no
-// `seq_edits`, but its `peptide` is the edited translation, and the edited
-// residue is read from it.
+// reference peptide, so a selenocysteine `TGA` reads `U`. A cache that lists the
+// transcript's `seq_edits` supplies them directly; a cache without the key has
+// its `peptide`, the edited translation, and the edited residue is read from it.
 
 /// The test transcript with codon 4 (`AAA`) replaced by `TGA` and the cached
 /// translation carrying `residue` there, as Ensembl's `Translation->seq` does for
@@ -6772,6 +6895,32 @@ fn concordance_snv_turning_selenocysteine_codon_into_stop_is_stop_gained() {
         b"A".to_vec(),
     );
     let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["stop_gained"]);
+    assert_eq!(tc.amino_acids.as_deref(), Some("U/*"));
+}
+
+/// The same two selenocysteine changes with the edit supplied by `seq_edits`
+/// (`_selenocysteine` 4-4 `U`) over a cached peptide that still reads `*` at
+/// codon 4: the listed edit, not the cached residue, decides the reference, so
+/// `TGA>TGG` is `missense_variant` `U/W` and `TGA>TAA` is `stop_gained` `U/*`
+/// (Perl: `19:48283989 G ENST00000593892`; `1:26139281 A ENST00000361547`).
+#[test]
+fn concordance_selenocysteine_seq_edit_reads_u_over_an_unedited_cached_peptide() {
+    let mut tx = make_transcript_with_edited_codon_4(b'*');
+    tx.vefc.as_mut().unwrap().seq_edits = vec![SeqEdit {
+        start: 4,
+        end: 4,
+        alt_seq: "U".to_string(),
+    }];
+    let config = EffectsConfig::default();
+    let snv = |pos: u64, r: &[u8], a: &[u8]| {
+        let variant = InputVariant::new("21".into(), pos, pos, r.to_vec(), a.to_vec());
+        calculate_consequences(&variant, &tx, &config).expect("annotates")
+    };
+    let tc = snv(25_000_061, b"A", b"G");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["missense_variant"]);
+    assert_eq!(tc.amino_acids.as_deref(), Some("U/W"));
+    let tc = snv(25_000_060, b"G", b"A");
     crate::test_helpers::assert_consequence_set_eq(&tc, &["stop_gained"]);
     assert_eq!(tc.amino_acids.as_deref(), Some("U/*"));
 }
@@ -7038,23 +7187,125 @@ fn concordance_initial_met_edit_gtg_to_atg_is_start_retained() {
 /// `start_retained_variant` (the new codon is `ATG`), a co-emission on a
 /// sequence variant, and vep-rs keeps `start_retained_variant` of that pair:
 /// the codon after the edit is `ATG`, so the start is retained and the
-/// peptide-route `start_lost` is the erroneous member. A `CTG` start is a
-/// table-1 start codon `Transcript::translate` reads as `M` itself, so a
-/// peptide starting with `M` there is no evidence of an edit and the ref
-/// residue stays `L`.
+/// peptide-route `start_lost` is the erroneous member.
 #[test]
 fn concordance_start_codon_snv_to_atg_without_edit_is_start_retained_only() {
     let no_edit = make_start_codon_transcript("GTGTTATGG", 0, 1, Some("VLW"));
     assert_start_codon_snv(&no_edit, 25_000_000, "G", "A", &["start_retained_variant"]);
+}
 
-    let forced_met = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
+/// A `CTG` start with no edit on any route: the cache lists none, and its
+/// peptide reads `M` there only because the translation dump writes `M` over
+/// any start codon. Both alleles read the codon's own residue. With no 5' UTR
+/// `_inv_start_altered` returns 0 and the peptide route sees `L` in `L`, so a
+/// synonymous `CTG>CTT` is `synonymous_variant` alone and a missense `CTG>CCG`
+/// is `start_lost` (P neither starts nor ends with L) with `missense_variant`
+/// gated off; behind a 5' UTR `_inv_start_altered` adds `start_lost` to the
+/// synonymous change (Perl: `20:30640230 T ENST00000375852`, `ctG/ctT`,
+/// Amino_acids `L`).
+#[test]
+fn concordance_ctg_start_without_any_edit_reads_the_codon_residue_on_both_alleles() {
+    let no_utr = make_start_codon_transcript("CTGCAGGAC", 0, 1, Some("MQD"));
+    assert!(no_utr.vefc.as_ref().unwrap().seq_edits.is_empty());
+    assert_start_codon_snv(&no_utr, 25_000_002, "G", "T", &["synonymous_variant"]);
+    assert_start_codon_snv(&no_utr, 25_000_001, "T", "C", &["start_lost"]);
+
+    let with_utr = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
     assert_start_codon_snv(
-        &forced_met,
+        &with_utr,
         25_000_052,
         "G",
         "T",
         &["start_lost", "synonymous_variant"],
     );
+}
+
+/// With the transcript's `seq_edits` present, `TranscriptVariationAllele::peptide`
+/// translates both codons literally with the transcript's table and applies the
+/// edits overlapping the span to the reference allele only (`if
+/// ($self->{is_reference})` around the SeqEdit loop): an `initial_met` edit over
+/// a `CTG` start behind a 5' UTR gives ref `M`, alt `L`. `start_lost` comes from
+/// `_inv_start_altered` (the edited codon is not `ATG`) and `synonymous_variant`
+/// needs `$alt_pep eq $ref_pep`, which `M` and `L` fail, so the set is
+/// `start_lost` alone for `CTG>TTG` and `CTG>CTT` (Perl: `20:32052425 T` and
+/// `20:32052427 T` on `ENST00000375852`, `Ctg/Ttg` and `ctG/ctT`, Amino_acids
+/// `M/L`); the cached-peptide reading of the same transcript adds
+/// `synonymous_variant`.
+#[test]
+fn concordance_initial_met_seq_edit_over_ctg_start_makes_codon_one_snv_start_lost_only() {
+    let mut edited = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
+    edited.vefc.as_mut().unwrap().seq_edits = vec![initial_met_seq_edit()];
+    assert_start_codon_snv(&edited, 25_000_050, "C", "T", &["start_lost"]);
+    assert_start_codon_snv(&edited, 25_000_052, "G", "T", &["start_lost"]);
+}
+
+/// Two transcripts with the same `CTG` start and the same cached peptide (the
+/// dump writes `M` over any start codon) differ only in their `seq_edits`: the
+/// one carrying `initial_met` reads ref `M`, the other ref `L` (Perl:
+/// `20:3889432 A` on `ENST00000610179`, `M/Q`, and on `ENST00000336066`,
+/// `L/Q`, both `start_lost`). On a synonymous change the sets part:
+/// `start_lost` alone with the edit, `start_lost,synonymous_variant` without it
+/// (Perl for the edit-less reading: `20:30640228 T ENST00000375852`, `Ctg/Ttg`,
+/// Amino_acids `L`).
+#[test]
+fn concordance_seq_edits_separate_transcripts_with_identical_cached_peptides() {
+    let mut with_edit = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
+    with_edit.vefc.as_mut().unwrap().seq_edits = vec![initial_met_seq_edit()];
+    assert_start_codon_snv(&with_edit, 25_000_051, "T", "A", &["start_lost"]);
+    assert_start_codon_snv(&with_edit, 25_000_050, "C", "T", &["start_lost"]);
+
+    let without_edit = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
+    assert!(without_edit.vefc.as_ref().unwrap().seq_edits.is_empty());
+    assert_start_codon_snv(&without_edit, 25_000_051, "T", "A", &["start_lost"]);
+    assert_start_codon_snv(
+        &without_edit,
+        25_000_050,
+        "C",
+        "T",
+        &["start_lost", "synonymous_variant"],
+    );
+}
+
+/// A mitochondrial `ATT` start (Ile under table 2) with an `initial_met` edit:
+/// ref `M`, alt `I` for `ATT>ATC`. With no 5' UTR `_inv_start_altered` returns 0
+/// and the peptide route decides `start_lost` (`translation_start == 1`, `I`
+/// neither starts nor ends with `M`); `synonymous_variant` fails on `M ne I`
+/// and `missense_variant` is gated by `start_lost` (Perl: `MT:4472 C
+/// ENST00000361453`, `atT/atC`, Amino_acids `M/I`). Without the edit both
+/// alleles read `I`, the peptide route sees `I` in `I`, the edited codon `ATC`
+/// is not `ATG`, and the set is `synonymous_variant` alone, which is also the
+/// cached-peptide reading of the edited transcript because `ATT` is a table-2
+/// start codon.
+#[test]
+fn concordance_initial_met_seq_edit_over_mt_att_start_makes_att_to_atc_start_lost() {
+    let mut edited = make_start_codon_transcript("ATTAACGAA", 0, 2, Some("MNE"));
+    edited.vefc.as_mut().unwrap().seq_edits = vec![initial_met_seq_edit()];
+    assert_start_codon_snv(&edited, 25_000_002, "T", "C", &["start_lost"]);
+
+    let unedited = make_start_codon_transcript("ATTAACGAA", 0, 2, Some("MNE"));
+    assert_start_codon_snv(&unedited, 25_000_002, "T", "C", &["synonymous_variant"]);
+}
+
+/// On a `cds_start_NF` transcript a cached `M` over a `CTG` start is the dump's
+/// start-codon rewrite and the transcript carries no edit: `_overlaps_start_codon`
+/// returns 0 so no start predicate fires, and the residues are the codons' own,
+/// `L` and `L` for `CTG>CTC` (Perl: `1:16936793 C ENST00000467715`, `ctG/ctC`,
+/// Amino_acids `L`, `synonymous_variant`) or `L` and `V` for `CTG>GTG` (Perl:
+/// `1:43736320 G ENST00000533933`, `Ctg/Gtg`, `L/V`, `missense_variant`).
+#[test]
+fn concordance_cached_met_on_cds_start_nf_ctg_start_is_the_codon_residue() {
+    let mut rewritten = make_start_codon_transcript("CTGCAGGAC", 50, 1, Some("MQD"));
+    rewritten.flags = vec!["cds_start_NF".to_string()].into();
+    assert_start_codon_snv(&rewritten, 25_000_052, "G", "C", &["synonymous_variant"]);
+    assert_start_codon_snv(&rewritten, 25_000_050, "C", "G", &["missense_variant"]);
+}
+
+fn initial_met_seq_edit() -> SeqEdit {
+    SeqEdit {
+        start: 1,
+        end: 1,
+        alt_seq: "M".to_string(),
+    }
 }
 
 /// `perl_coding_terms` takes an SNV only when its position maps into cDNA
@@ -7088,4 +7339,1074 @@ fn concordance_perl_coding_terms_gates_snvs_on_the_first_codon() {
         Some(vec![Consequence::StartLost])
     );
     assert!(snv(25_000_053, "G", "T").is_none());
+}
+
+/// A same-length or longer ALT over a span that covers the whole transcript,
+/// the shape the tests below share: `complete_overlap` holds and the allele
+/// pre-predicate is `snp` or `insertion`, never `deletion`.
+fn make_transcript_covering_variant(alt_len_delta: i64) -> InputVariant {
+    let (start, end) = (24_999_900u64, 25_006_100u64);
+    let ref_len = (end - start + 1) as usize;
+    let alt_len = (ref_len as i64 + alt_len_delta) as usize;
+    InputVariant::new(
+        "21".into(),
+        start,
+        end,
+        vec![b'A'; ref_len],
+        vec![b'C'; alt_len],
+    )
+}
+
+/// `transcript_ablation` needs the `deletion` pre-predicate, `ref_length >
+/// alt_length` with `ref_length` the reference span
+/// (`BaseVariationFeatureOverlapAllele::_pre_consequence_predicates`), beside
+/// `complete_overlap`; both a bare `-` ALT and a shorter explicit ALT satisfy
+/// it, and the tier-1 term is then the row's only term.
+#[test]
+fn concordance_deletion_covering_transcript_is_transcript_ablation() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    let bare = InputVariant::new(
+        "21".into(),
+        24_999_900,
+        25_006_100,
+        vec![b'A'; 6201],
+        b"-".to_vec(),
+    );
+    let tc = calculate_consequences(&bare, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["transcript_ablation"]);
+
+    let shorter = make_transcript_covering_variant(-6199);
+    assert_eq!(shorter.alt_allele().len(), 2);
+    let tc = calculate_consequences(&shorter, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["transcript_ablation"]);
+}
+
+/// A symbolic `<DEL>` is a `StructuralVariationFeature` whose `deletion` flag
+/// comes from its class term (`_bvf_preds`: `class_SO_term =~ /deletion|loss/`),
+/// so `feature_ablation` holds on a span covering the transcript regardless of
+/// allele lengths; the structural path keeps that verdict.
+#[test]
+fn concordance_symbolic_deletion_covering_transcript_is_transcript_ablation() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let mut variant = InputVariant::new(
+        "21".into(),
+        24_999_900,
+        25_006_100,
+        b"N".to_vec(),
+        b"<DEL>".to_vec(),
+    );
+    variant.variant_class = vep_core::variant::VariantClass::StructuralDeletion;
+    variant.is_structural = true;
+    variant.sv_end = Some(25_006_100);
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["transcript_ablation"]);
+}
+
+/// A same-length substitution covering the whole transcript is `snp`, not
+/// `deletion`, in Perl's pre-predicates, so `transcript_ablation` is never a
+/// candidate and the tier-3 predicates decide (Perl: `11:116830247-116836307`,
+/// a 6,061 bp inversion given as explicit alleles, on `ENST00000630701`).
+///
+/// Every base differs except intron 1's fifth base, so `_get_differing_regions`
+/// yields two regions and `_intron_effects` sets `donor_region_splice_site`
+/// from intron 1 and `fifth_base_splice_site` from intron 2 on the same
+/// transcript-wide hash: `splice_donor_region_variant` returns 0 whenever
+/// `splice_donor_5th_base_variant` holds, and `splice_region` returns 0 under a
+/// donor or acceptor hit. `splice_polypyrimidine_tract_variant` needs `exon =>
+/// 0`. Both UTR predicates hold by `_before_coding` / `_after_coding` overlap
+/// with `within_cdna`. The peptide is undefined (both `cds_coords` ends are
+/// gaps), so no coding term fires, and `coding_unknown` returns 0 on
+/// `complete_overlap_feature`, so there is no `coding_sequence_variant`;
+/// `coding_transcript_variant` holds instead. `within_feature` is 1, so the
+/// flank endpoints add no `upstream_gene_variant` / `downstream_gene_variant`.
+#[test]
+fn concordance_same_length_substitution_covering_transcript_takes_tier_three_terms() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let mut variant = make_transcript_covering_variant(0);
+    // Intron 1 is 25_000_300-25_001_999: its fifth base, 25_000_304, keeps the
+    // reference base, so intron 1 raises the donor region without the fifth base.
+    let fifth_base_offset = (25_000_304 - variant.start) as usize;
+    variant.alt_alleles[0][fifth_base_offset] = b'A';
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "3_prime_UTR_variant",
+            "5_prime_UTR_variant",
+            "coding_transcript_variant",
+            "intron_variant",
+            "splice_acceptor_variant",
+            "splice_donor_5th_base_variant",
+            "splice_donor_variant",
+        ],
+    );
+    assert_eq!(tc.distance, None);
+}
+
+/// The same span over a non-coding transcript: `non_coding_exon_variant`
+/// returns 0 on `complete_overlap_feature`, so `within_non_coding_gene` holds
+/// and the row carries `non_coding_transcript_variant` beside the intron and
+/// splice terms; the UTR predicates are not candidates without a coding
+/// region (`utr` is never set), and `coding_transcript_variant` needs biotype
+/// `protein_coding`.
+#[test]
+fn concordance_same_length_substitution_covering_non_coding_transcript() {
+    let tx = make_non_coding_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_transcript_covering_variant(0);
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "intron_variant",
+            "non_coding_transcript_variant",
+            "splice_acceptor_variant",
+            "splice_donor_5th_base_variant",
+            "splice_donor_variant",
+        ],
+    );
+}
+
+// `splice_polypyrimidine_tract_variant` on structural alleles.
+//
+// The term's `variant_feature_class` is `BaseVariationFeature`
+// (`Utils/Constants.pm:969-987`), so a structural allele is eligible; its
+// predicate (`Utils/VariationEffect.pm:607-614`) reads the flags that
+// `_intron_effects` (`BaseTranscriptVariationAllele.pm:155-161`) sets over the
+// whole span (`StructuralVariationOverlapAllele.pm:210-214`), and `_skip_oc`
+// (`BaseVariationFeatureOverlapAllele.pm:317-333`) drops the term under
+// `include => {exon => 0, intron => 1}` whenever the span overlaps an exon of
+// the transcript. On `make_test_transcript()` intron 1 is 25_000_300-25_001_999
+// and its tract window is 25_001_983-25_001_997; exon 2 starts at 25_002_000.
+//
+// Perl rows: `21:29079809-29085808 deletion ENST00000341618` and the same
+// span as `duplication` are `splice_polypyrimidine_tract_variant,intron_variant`
+// (intron 29077714-29085812, no exon overlap, `pre ... exon=0 ... intron=1`),
+// while the same deletion on `ENST00000399947` is
+// `feature_truncation,5_prime_UTR_variant,intron_variant`: the flag is set
+// (`polypyrimidine_splice_site=1`) but `exon=1` removes the term from the
+// predicate list before it runs.
+
+/// A structural allele of `class` spanning `start..=end`, dispatched through
+/// `calculate_consequences` like a parsed symbolic ALT.
+fn make_structural_span(
+    class: vep_core::variant::VariantClass,
+    start: u64,
+    end: u64,
+    alt: &[u8],
+) -> InputVariant {
+    let mut variant = InputVariant::new("21".into(), start, end, b"N".to_vec(), alt.to_vec());
+    variant.variant_class = class;
+    variant.is_structural = true;
+    variant.sv_end = Some(end);
+    variant
+}
+
+/// The `N.` allele of a symbolic `<BND>` carrying a span: one breakend, an interval
+/// from `start` to `end`, a mate id so the allele renders literally.
+fn make_bnd_single_breakend_span(start: u64, end: u64) -> InputVariant {
+    let mut variant = make_structural_span(
+        vep_core::variant::VariantClass::Translocation,
+        start,
+        end,
+        b"N.",
+    );
+    variant.is_single_breakend = true;
+    variant.mate_id = Some("bnd".into());
+    variant
+}
+
+/// The bracket allele of the same record, whose breakend is the coordinate inside the
+/// brackets (`mate_pos`) on the same chromosome.
+fn make_bnd_bracket_span(start: u64, end: u64, mate_pos: u64) -> InputVariant {
+    let mut variant = make_structural_span(
+        vep_core::variant::VariantClass::Translocation,
+        start,
+        end,
+        format!("N[21:{mate_pos}[").as_bytes(),
+    );
+    variant.is_single_breakend = false;
+    variant.mate_id = Some("bnd".into());
+    variant.mate_chr = Some("21".into());
+    variant.mate_pos = Some(mate_pos);
+    variant
+}
+
+/// A symbolic `<DEL>` inside intron 1 whose end reaches the tract window
+/// (Perl: `21:29079809-29085808 deletion ENST00000341618`).
+#[test]
+fn concordance_symbolic_deletion_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::StructuralDeletion,
+        25_000_400,
+        25_001_990,
+        b"<DEL>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["intron_variant", "splice_polypyrimidine_tract_variant"],
+    );
+}
+
+/// The same span crossing into exon 2 sets the flag but `exon=1` drops the term
+/// (Perl: `21:29079809-29085808 deletion ENST00000399947`).
+#[test]
+fn concordance_symbolic_deletion_crossing_exon_has_no_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::StructuralDeletion,
+        25_000_400,
+        25_002_100,
+        b"<DEL>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "coding_sequence_variant",
+            "intron_variant",
+        ],
+    );
+}
+
+/// A symbolic `<DUP>` inside intron 1 reaching the tract window
+/// (Perl: `21:29079809-29085808 duplication ENST00000341618`).
+#[test]
+fn concordance_symbolic_duplication_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::Duplication,
+        25_000_400,
+        25_001_990,
+        b"<DUP>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["intron_variant", "splice_polypyrimidine_tract_variant"],
+    );
+}
+
+/// The same duplication crossing into exon 2: `feature_elongation` on the
+/// contained cDNA overlap, the coding term, and no tract term
+/// (Perl: `21:29079809-29085808 duplication ENST00000399947` is
+/// `5_prime_UTR_variant,intron_variant` with the flag set and `exon=1`).
+#[test]
+fn concordance_symbolic_duplication_crossing_exon_has_no_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::Duplication,
+        25_000_400,
+        25_002_100,
+        b"<DUP>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_elongation",
+            "coding_sequence_variant",
+            "intron_variant",
+        ],
+    );
+}
+
+/// A ranged `<INS:ME:ALU>` inside intron 1 reaching the tract window
+/// (Perl: `21:10578057-10578336 Alu_insertion ENST00000427445` is
+/// `intron_variant,splice_polypyrimidine_tract_variant`).
+#[test]
+fn concordance_alu_insertion_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::MobileElementInsertion,
+        25_001_711,
+        25_001_990,
+        b"<INS:ME:ALU>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["intron_variant", "splice_polypyrimidine_tract_variant"],
+    );
+}
+
+/// The same insertion class crossing into exon 2 carries no tract term.
+#[test]
+fn concordance_alu_insertion_crossing_exon_has_no_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::MobileElementInsertion,
+        25_001_990,
+        25_002_010,
+        b"<INS:ME:ALU>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_elongation",
+            "coding_sequence_variant",
+            "intron_variant",
+        ],
+    );
+}
+
+/// The `N.` allele of a symbolic `<BND>` whose span lies in intron 1 and reaches
+/// the tract window: `feature_truncation` from `within_feature` against the whole
+/// feature, then the intron and tract terms
+/// (Perl: `21:25729803-25735486 N. ENST00000400090` is
+/// `feature_truncation,intron_variant,splice_polypyrimidine_tract_variant`).
+#[test]
+fn concordance_bnd_single_breakend_span_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_bnd_single_breakend_span(25_000_400, 25_001_990);
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "intron_variant",
+            "splice_polypyrimidine_tract_variant",
+        ],
+    );
+}
+
+/// The bracket allele of the same record, its breakend one base before the span
+/// inside the transcript, carries the same three terms
+/// (Perl: `21:25729803-25735486 N[21:25729802[ ENST00000400090`).
+#[test]
+fn concordance_bnd_bracket_span_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_bnd_bracket_span(25_000_400, 25_001_990, 25_000_399);
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "intron_variant",
+            "splice_polypyrimidine_tract_variant",
+        ],
+    );
+}
+
+/// The `N.` span crossing into exon 2: a `chromosome_breakpoint` keeps
+/// `coding_sequence_variant` where a deletion would read its length, and the
+/// exon overlap removes the tract term.
+#[test]
+fn concordance_bnd_single_breakend_span_crossing_exon_has_no_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_bnd_single_breakend_span(25_000_400, 25_002_100);
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "coding_sequence_variant",
+            "intron_variant",
+        ],
+    );
+}
+
+/// A `<NON_REF>` reference-confidence block yields no transcript row wherever it
+/// lies: over intron 1 reaching the tract window, over exon 2, or over the whole
+/// transcript. VEP loads no cache region for the record (it carries `vep_skip`)
+/// and writes it as one `intergenic_variant` row.
+#[test]
+fn concordance_reference_block_over_transcript_has_no_transcript_row() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    for (start, end) in [
+        (25_001_500, 25_001_990),
+        (25_001_900, 25_002_100),
+        (24_999_000, 25_007_000),
+    ] {
+        let variant = make_structural_span(
+            vep_core::variant::VariantClass::ReferenceBlock,
+            start,
+            end,
+            b"<NON_REF>",
+        );
+        assert!(
+            calculate_consequences(&variant, &tx, &config).is_none(),
+            "{start}-{end}: a reference block is annotated against no feature"
+        );
+    }
+}
+
+// Breakend alleles: which allele owns a transcript row, and the mate gate.
+//
+// `StructuralVariationOverlap::new` (`StructuralVariationOverlap.pm:76-88`) builds one
+// allele per entry of `($vf, @$breakends)` that passes `_close_to_feature`
+// (`:130-146`): same seq region, then `overlap` against the feature slice expanded
+// by `MAX_DISTANCE_FROM_TRANSCRIPT` (`Utils/VariationEffect.pm:60`). The `$vf` entry
+// is the local allele (`A.`, `N.`) and carries the local POS; a bracket entry's
+// coordinate is the mate alone (`StructuralVariationFeature::_parse_breakends`).
+// Every positional predicate then reads `$bvf`, the local variation feature, while
+// `feature_truncation` (`Utils/VariationEffect.pm:350-359`) reads the allele's own
+// breakend through `within_feature(..., $bvfoa->breakend, 1)`.
+
+/// The local (`A.`) allele of a point breakend record.
+fn make_point_local_allele(pos: u64) -> InputVariant {
+    let mut v = InputVariant::new("21".into(), pos, pos, b"A".to_vec(), b"A.".to_vec());
+    v.variant_class = vep_core::variant::VariantClass::Translocation;
+    v.is_structural = true;
+    v.is_single_breakend = true;
+    v.mate_id = Some("mate".into());
+    v.sv_end = Some(pos);
+    v
+}
+
+/// The bracket allele of a point breakend record whose mate is on chr21 at `mate_pos`.
+fn make_point_bracket_allele(pos: u64, mate_pos: u64) -> InputVariant {
+    let mut v = InputVariant::new(
+        "21".into(),
+        pos,
+        pos,
+        b"A".to_vec(),
+        format!("A[21:{mate_pos}[").into_bytes(),
+    );
+    v.variant_class = vep_core::variant::VariantClass::Translocation;
+    v.is_structural = true;
+    v.is_single_breakend = false;
+    v.mate_id = Some("mate".into());
+    v.mate_chr = Some("21".into());
+    v.mate_pos = Some(mate_pos);
+    v.sv_end = Some(pos);
+    v
+}
+
+/// The `N.` allele of a symbolic `<BND>` record spanning `start..=end`.
+fn make_ranged_local_allele(start: u64, end: u64) -> InputVariant {
+    let mut v = InputVariant::new("21".into(), start, end, b"N".to_vec(), b"N.".to_vec());
+    v.variant_class = vep_core::variant::VariantClass::Translocation;
+    v.is_structural = true;
+    v.is_single_breakend = true;
+    v.mate_id = Some("mate".into());
+    v.sv_end = Some(end);
+    v
+}
+
+/// The bracket allele of a symbolic `<BND>` record spanning `start..=end` whose
+/// `CHR2`/`END2` mate is on chr21 at `mate_pos`.
+fn make_ranged_bracket_allele(start: u64, end: u64, mate_pos: u64) -> InputVariant {
+    let mut v = InputVariant::new(
+        "21".into(),
+        start,
+        end,
+        b"N".to_vec(),
+        format!("N[21:{mate_pos}[").into_bytes(),
+    );
+    v.variant_class = vep_core::variant::VariantClass::Translocation;
+    v.is_structural = true;
+    v.is_single_breakend = false;
+    v.mate_id = Some("mate".into());
+    v.mate_chr = Some("21".into());
+    v.mate_pos = Some(mate_pos);
+    v.sv_end = Some(end);
+    v
+}
+
+/// A point breakend inside intron 1 whose mate lies 10 kb before the transcript:
+/// the local allele carries `feature_truncation,intron_variant` (its breakend is
+/// the variation feature itself, inside the transcript) and the bracket allele
+/// gets no row for the transcript, because `_close_to_feature` rejects a mate
+/// outside the 5 kb window (Perl: `21:27348903 A. ENST00000415997
+/// feature_truncation,intron_variant`, and no `A[21:27341780[` row on that
+/// transcript, whose start is 5,723 bp above the mate).
+#[test]
+fn concordance_point_breakend_with_mate_beyond_5kb_has_local_allele_row_only() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    let local = make_point_local_allele(25_001_000);
+    let tc = calculate_consequences(&local, &tx, &config).expect("local allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation", "intron_variant"]);
+
+    let bracket = make_point_bracket_allele(25_001_000, 24_990_000);
+    assert!(
+        calculate_consequences(&bracket, &tx, &config).is_none(),
+        "the mate is 10 kb outside the transcript, so no bracket allele exists for it"
+    );
+}
+
+/// The same record against a transcript both breakends fall inside: both alleles
+/// carry `feature_truncation,intron_variant` (Perl: the two `ENST00000346798`
+/// rows of `21:27348903`, one per allele).
+#[test]
+fn concordance_point_breakend_with_mate_inside_has_a_row_per_allele() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    let local = make_point_local_allele(25_001_000);
+    let tc = calculate_consequences(&local, &tx, &config).expect("local allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation", "intron_variant"]);
+
+    let bracket = make_point_bracket_allele(25_001_000, 25_003_000);
+    let tc = calculate_consequences(&bracket, &tx, &config).expect("bracket allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation", "intron_variant"]);
+}
+
+/// A transcript the local POS is 577 bp upstream of and the mate is inside: the
+/// local allele is `upstream_gene_variant`; the bracket allele adds
+/// `feature_truncation` from its breakend and keeps the upstream term, which is
+/// computed from the local variation feature (Perl: the two `ENST00000456209`
+/// rows of `21:27348903`, `upstream_gene_variant` and
+/// `feature_truncation,upstream_gene_variant`).
+#[test]
+fn concordance_point_breakend_upstream_with_mate_inside_adds_truncation_to_bracket_allele() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    let local = make_point_local_allele(24_999_423);
+    let tc = calculate_consequences(&local, &tx, &config).expect("local allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["upstream_gene_variant"]);
+    assert_eq!(tc.distance, Some(577));
+
+    let bracket = make_point_bracket_allele(24_999_423, 25_003_000);
+    let tc = calculate_consequences(&bracket, &tx, &config).expect("bracket allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["feature_truncation", "upstream_gene_variant"],
+    );
+    assert_eq!(tc.distance, Some(577));
+}
+
+/// A paired allele whose record sits on chromosome 1 and whose bracket names
+/// chromosome 21 at `mate_pos`: the shape of the mate-side rows of `09_breakends`
+/// (`1:14374334 ]21:33034355]A`) and gnomAD (`21:24372025 N[22:24372025[`).
+fn make_cross_chromosome_bracket_allele(mate_pos: u64) -> InputVariant {
+    let mut v = InputVariant::new(
+        "1".into(),
+        14_374_334,
+        14_374_334,
+        b"A".to_vec(),
+        format!("]21:{mate_pos}]A").into_bytes(),
+    );
+    v.variant_class = vep_core::variant::VariantClass::Translocation;
+    v.is_structural = true;
+    v.is_single_breakend = false;
+    v.mate_id = Some("mate".into());
+    v.mate_chr = Some("21".into());
+    v.mate_pos = Some(mate_pos);
+    v.sv_end = Some(14_374_334);
+    v
+}
+
+// The mate-side row describes the mate breakend at the mate coordinate. Ensembl's
+// `feature_truncation` (`Utils/VariationEffect.pm:358`) is the one predicate written
+// for the breakend, passing `$bvfoa->breakend` into `within_feature` with the
+// seq-region test on; every other predicate receives the local variation feature
+// (`BaseVariationFeatureOverlapAllele.pm:257,273`, `_bvfo_preds` `:454`, `upstream`
+// and `downstream` `Utils/VariationEffect.pm:443-457`) and so measures the local
+// coordinate against the mate chromosome's transcript. Where that coordinate lands
+// numerically inside or within 5 kb of the transcript VEP's row carries the terms
+// below (gnomAD's `21:24372025 N[22:24372025[`: `downstream_gene_variant` at
+// 4,108 bp on ENST00000248935, `21:15437971 N[Y:15437971[`:
+// `feature_truncation,intron_variant` on ENST00000329134); elsewhere it falls to
+// bare `feature_truncation` or the default `intergenic_variant`, which these rows
+// never carry.
+
+/// Mate inside intron 1 of a coding transcript.
+#[test]
+fn concordance_mate_side_row_inside_intron_is_truncation_and_intron_variant() {
+    let tx = make_test_transcript();
+    let v = make_cross_chromosome_bracket_allele(25_001_000);
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default())
+        .expect("mate inside the transcript annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation", "intron_variant"]);
+}
+
+/// Mate inside a CDS exon.
+#[test]
+fn concordance_mate_side_row_inside_cds_exon_is_truncation_and_coding_sequence() {
+    let tx = make_test_transcript();
+    let v = make_cross_chromosome_bracket_allele(25_002_100);
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default())
+        .expect("mate inside the transcript annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["feature_truncation", "coding_sequence_variant"],
+    );
+}
+
+/// Mate 577 bp past the 3' end of a forward-strand transcript.
+#[test]
+fn concordance_mate_side_row_577_bp_downstream_is_downstream_gene_variant() {
+    let tx = make_test_transcript();
+    let v = make_cross_chromosome_bracket_allele(25_006_577);
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default())
+        .expect("mate within 5 kb annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["downstream_gene_variant"]);
+    assert_eq!(tc.distance, Some(577));
+}
+
+/// Mate 3 kb before the 5' end of a forward-strand transcript.
+#[test]
+fn concordance_mate_side_row_upstream_within_5kb_is_upstream_gene_variant() {
+    let tx = make_test_transcript();
+    let v = make_cross_chromosome_bracket_allele(24_997_000);
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default())
+        .expect("mate within 5 kb annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["upstream_gene_variant"]);
+    assert_eq!(tc.distance, Some(3000));
+}
+
+/// Mate 10 kb from the transcript: no row.
+#[test]
+fn concordance_mate_side_row_beyond_5kb_is_absent() {
+    let tx = make_test_transcript();
+    let v = make_cross_chromosome_bracket_allele(24_990_000);
+    assert!(
+        crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default()).is_none()
+    );
+}
+
+/// Mate inside intron 1 of a non-coding transcript and of a nonsense-mediated-decay
+/// transcript: the biotype context term joins the region term (VEP:
+/// `21:31934729 N[22:31934729[ ENST00000382162
+/// feature_truncation,intron_variant,non_coding_transcript_variant`;
+/// `21:26037668 N[22:26037668[ ENST00000455558
+/// NMD_transcript_variant,feature_truncation,intron_variant`).
+#[test]
+fn concordance_mate_side_row_carries_the_biotype_context_term() {
+    let v = make_cross_chromosome_bracket_allele(25_001_000);
+
+    let tx = make_non_coding_transcript();
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default())
+        .expect("mate inside the transcript annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "intron_variant",
+            "non_coding_transcript_variant",
+        ],
+    );
+
+    let mut nmd = make_test_transcript();
+    nmd.biotype = "nonsense_mediated_decay".into();
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &nmd, &EffectsConfig::default())
+        .expect("mate inside the transcript annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "NMD_transcript_variant",
+            "feature_truncation",
+            "intron_variant",
+        ],
+    );
+}
+
+/// A symbolic `<BND>` whose span runs from intron 1 to a mate 594 kb away: the
+/// `N.` allele takes the region predicates over the span and the bracket allele
+/// gets no row for a transcript the mate is not within 5 kb of (Perl:
+/// `21:13424231-14075348 N. ENST00000451052` alone, no `N[21:14075348[` row).
+#[test]
+fn concordance_ranged_breakend_bracket_allele_needs_the_mate_within_5kb() {
+    let tx = make_non_coding_transcript();
+    let config = EffectsConfig::default();
+
+    let local = make_ranged_local_allele(25_001_000, 25_600_000);
+    let tc = calculate_consequences(&local, &tx, &config).expect("N. allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "intron_variant",
+            "non_coding_transcript_exon_variant",
+        ],
+    );
+
+    let bracket = make_ranged_bracket_allele(25_001_000, 25_600_000, 25_600_000);
+    assert!(
+        calculate_consequences(&bracket, &tx, &config).is_none(),
+        "the mate is 594 kb from the transcript, so no bracket allele exists for it"
+    );
+}
+
+/// A `<BND>` spanning more than `--max_sv_size` that covers exon 1, intron 1,
+/// exon 2 and part of intron 2 of a coding transcript. `coding_transcript_variant`
+/// requires `complete_overlap_feature` (`Utils/VariationEffect.pm:491-493`), which
+/// a partial overlap fails, so the row carries the region terms instead (Perl:
+/// `21:14604132-41770788 N. ENST00000647101
+/// 5_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant`).
+#[test]
+fn concordance_giant_breakend_partially_covering_coding_transcript_takes_region_terms() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    let local = make_ranged_local_allele(14_000_000, 25_003_000);
+    let tc = calculate_consequences(&local, &tx, &config).expect("N. allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_truncation",
+            "intron_variant",
+        ],
+    );
+}
+
+/// The same span over a nonsense-mediated-decay transcript adds
+/// `NMD_transcript_variant` (`within_nmd_transcript` needs only
+/// `within_transcript`) and still no `coding_transcript_variant` (Perl:
+/// `21:27067899-37764816 N. ENST00000460679
+/// 3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,feature_truncation,intron_variant`).
+#[test]
+fn concordance_giant_breakend_partially_covering_nmd_transcript_takes_region_terms() {
+    let mut tx = make_test_transcript();
+    tx.biotype = "nonsense_mediated_decay".into();
+    let config = EffectsConfig::default();
+
+    let local = make_ranged_local_allele(14_000_000, 25_003_000);
+    let tc = calculate_consequences(&local, &tx, &config).expect("N. allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "NMD_transcript_variant",
+            "coding_sequence_variant",
+            "feature_truncation",
+            "intron_variant",
+        ],
+    );
+}
+
+/// An engulfed `protein_coding` transcript keeps `coding_transcript_variant`
+/// beside `feature_truncation`, at any span (Perl:
+/// `21:9981164-15308075 N. ENST00000647101 feature_truncation,coding_transcript_variant`).
+#[test]
+fn concordance_breakend_engulfing_protein_coding_transcript_is_truncation_and_context() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    for end in [25_100_000u64, 45_000_000u64] {
+        let local = make_ranged_local_allele(24_000_000, end);
+        let tc = calculate_consequences(&local, &tx, &config).expect("N. allele annotates");
+        crate::test_helpers::assert_consequence_set_eq(
+            &tc,
+            &["coding_transcript_variant", "feature_truncation"],
+        );
+    }
+}
+
+/// An engulfed `IG_V_gene` transcript has a translation but not the biotype key
+/// `coding_transcript_variant` is gated on (`include => {protein_coding => 1,
+/// within_feature => 1}`, `Utils/Constants.pm:1218-1235`, tested against the
+/// biotype-keyed pre-predicate of `BaseVariationFeatureOverlapAllele.pm:449-451`),
+/// and `within_non_coding_gene` needs no translation, so the `N.` allele is
+/// `feature_truncation` alone at any span (Perl: `21:10411862-13374908 N.
+/// ENST00000622028 feature_truncation`; `21:10426692-31785945` likewise).
+#[test]
+fn concordance_breakend_engulfing_ig_v_gene_transcript_is_truncation_alone() {
+    let mut tx = make_test_transcript();
+    tx.biotype = "IG_V_gene".into();
+    let config = EffectsConfig::default();
+
+    for end in [25_100_000u64, 45_000_000u64] {
+        let local = make_ranged_local_allele(24_000_000, end);
+        let tc = calculate_consequences(&local, &tx, &config).expect("N. allele annotates");
+        crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation"]);
+    }
+}
+
+/// The bracket allele of that record against the engulfed `IG_V_gene` transcript:
+/// with the mate 4 kb before the transcript the allele exists, its breakend is
+/// outside the transcript so `feature_truncation` fails, no context term is a
+/// candidate, and VEP prints the default `intergenic_variant`; with the mate 10 kb
+/// away no allele exists.
+#[test]
+fn concordance_breakend_bracket_allele_over_engulfed_ig_v_gene_is_intergenic_or_absent() {
+    let mut tx = make_test_transcript();
+    tx.biotype = "IG_V_gene".into();
+    let config = EffectsConfig::default();
+
+    let near = make_ranged_bracket_allele(24_996_001, 25_100_000, 24_996_000);
+    let tc = calculate_consequences(&near, &tx, &config).expect("bracket allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["intergenic_variant"]);
+
+    let far = make_ranged_bracket_allele(24_990_001, 25_100_000, 24_990_000);
+    assert!(
+        calculate_consequences(&far, &tx, &config).is_none(),
+        "the mate is 10 kb from the transcript, so no bracket allele exists for it"
+    );
+}
+
+// Structural alleles engulfing a transcript: the biotype-gated context terms.
+//
+// For a complete overlap `_bvfo_preds` (BaseVariationFeatureOverlapAllele.pm:465-477)
+// returns only `complete_overlap`, `within_feature` and the transcript biotype, so the
+// `include` hashes in `Utils/Constants.pm` leave three tier-3 predicates to run:
+// `NMD_transcript_variant` (`nonsense_mediated_decay => 1`),
+// `non_coding_transcript_variant` (`protein_coding => 0`, needs no translation) and
+// `coding_transcript_variant` (`protein_coding => 1`, needs a translation). When none
+// holds the row carries `$DEFAULT_OVERLAP_CONSEQUENCE` (:285), `intergenic_variant`.
+
+/// `make_test_transcript()` relabelled with `biotype`, keeping its CDS and translation.
+fn make_translated_transcript_with_biotype(biotype: &str) -> Transcript {
+    let mut tx = make_test_transcript();
+    tx.biotype = biotype.into();
+    tx
+}
+
+/// A symbolic structural allele of `class` spanning 24_999_000-25_007_000, which
+/// engulfs the 25_000_000-25_006_000 test transcript.
+fn make_engulfing_sv(alt: &[u8], class: vep_core::variant::VariantClass) -> InputVariant {
+    let mut variant = InputVariant::new(
+        "21".into(),
+        24_999_000,
+        25_007_000,
+        b"N".to_vec(),
+        alt.to_vec(),
+    );
+    variant.variant_class = class;
+    variant.is_structural = true;
+    variant.sv_end = Some(25_007_000);
+    variant
+}
+
+/// An inversion engulfing a `nonsense_mediated_decay` transcript is
+/// `NMD_transcript_variant` alone (Perl: `21:20333756-29497356 inversion
+/// ENST00000460212`): `within_nmd_transcript` holds on the biotype, the
+/// `protein_coding => 1` include keeps `coding_transcript_variant` from running,
+/// and `within_non_coding_gene` fails on the transcript's translation.
+#[test]
+fn concordance_inversion_engulfing_nmd_transcript_is_nmd_transcript_variant() {
+    let tx = make_translated_transcript_with_biotype("nonsense_mediated_decay");
+    let config = EffectsConfig::default();
+    let variant = make_engulfing_sv(b"<INV>", vep_core::variant::VariantClass::Inversion);
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["NMD_transcript_variant"]);
+}
+
+/// A `<CPX>` allele engulfing the same NMD transcript takes the same path
+/// (Perl: `21:23636112-39413570 CPX ENST00000460212`).
+#[test]
+fn concordance_complex_sv_engulfing_nmd_transcript_is_nmd_transcript_variant() {
+    let tx = make_translated_transcript_with_biotype("nonsense_mediated_decay");
+    let config = EffectsConfig::default();
+    let variant = make_engulfing_sv(b"<CPX>", vep_core::variant::VariantClass::ComplexStructural);
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["NMD_transcript_variant"]);
+}
+
+/// A `<CNV>` engulfing a translated `IG_V_gene` transcript is `intergenic_variant`
+/// on the transcript row (Perl: `21:10481414-10650900 copy_number_variation
+/// ENST00000622028`, `IMPACT=MODIFIER;OverlapPC=100.00`): `coding_transcript_variant`
+/// is excluded by its `protein_coding => 1` include, `within_non_coding_gene`
+/// fails on the translation, and nothing else is a candidate.
+#[test]
+fn concordance_cnv_engulfing_translated_ig_v_gene_is_intergenic_variant() {
+    let tx = make_translated_transcript_with_biotype("IG_V_gene");
+    let config = EffectsConfig::default();
+    let variant = make_engulfing_sv(
+        b"<CNV>",
+        vep_core::variant::VariantClass::CopyNumberVariation,
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["intergenic_variant"]);
+    assert_eq!(&*tc.transcript_id, "ENST00000000001");
+}
+
+/// The `<CPX>` form of the same fallthrough (Perl: `21:5052509-44407133 CPX
+/// ENST00000622028`).
+#[test]
+fn concordance_complex_sv_engulfing_translated_ig_v_gene_is_intergenic_variant() {
+    let tx = make_translated_transcript_with_biotype("IG_V_gene");
+    let config = EffectsConfig::default();
+    let variant = make_engulfing_sv(b"<CPX>", vep_core::variant::VariantClass::ComplexStructural);
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["intergenic_variant"]);
+}
+
+/// The inversion arm reaches the same fallthrough for a translated non-`protein_coding`
+/// biotype.
+#[test]
+fn concordance_inversion_engulfing_translated_ig_v_gene_is_intergenic_variant() {
+    let tx = make_translated_transcript_with_biotype("IG_V_gene");
+    let config = EffectsConfig::default();
+    let variant = make_engulfing_sv(b"<INV>", vep_core::variant::VariantClass::Inversion);
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["intergenic_variant"]);
+}
+
+/// An engulfed `protein_coding` transcript keeps `coding_transcript_variant` on both
+/// arms: `coding_transcript_variant` (VariationEffect.pm:491-493) is
+/// `not coding_unknown and complete_overlap_feature and within_coding_gene`, and
+/// `coding_unknown` (:1507-1512) returns 0 on a complete overlap.
+#[test]
+fn concordance_engulfed_protein_coding_transcript_keeps_coding_transcript_variant() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    for (alt, class) in [
+        (&b"<INV>"[..], vep_core::variant::VariantClass::Inversion),
+        (
+            &b"<CNV>"[..],
+            vep_core::variant::VariantClass::CopyNumberVariation,
+        ),
+        (
+            &b"<CPX>"[..],
+            vep_core::variant::VariantClass::ComplexStructural,
+        ),
+    ] {
+        let variant = make_engulfing_sv(alt, class);
+        let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+        crate::test_helpers::assert_consequence_set_eq(&tc, &["coding_transcript_variant"]);
+    }
+}
+
+// Insertion-class structural alleles over the start codon.
+//
+// Perl's structural arm of `start_lost` (VariationEffect.pm:886-896) is a genomic
+// overlap with the three start-codon bases for every structural class, reached
+// through `_overlaps_start_codon` (:965-990), which needs both span ends in exons
+// and no `cds_start_NF`. `start_retained_variant` co-fires there because
+// `_ins_del_start_altered` returns 0 for a structural allele without reading
+// sequence; that term is Perl's and is not emitted.
+
+/// An 82 bp `<DUP>` inside exon 1 (25_000_000-25_000_299) covering the start
+/// codon at 25_000_050-25_000_052 is `5_prime_UTR_variant,coding_sequence_variant,
+/// feature_elongation,start_lost` (Perl: `21:30487315-30487396 duplication
+/// ENST00000334055`, less its `start_retained_variant`): `feature_elongation` from
+/// `within_cdna and complete_within_feature and copy_number_gain`, `utr` from the
+/// span starting before `coding_region_start`, `coding_sequence_variant` from
+/// `coding_unknown` (`within_cds` with `inframe_insertion` and `frameshift` both 0
+/// for a gain).
+#[test]
+fn concordance_duplication_over_start_codon_is_start_lost_without_start_retained() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::Duplication,
+        25_000_040,
+        25_000_121,
+        b"<DUP>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_elongation",
+            "start_lost",
+        ],
+    );
+}
+
+/// A ranged `<INS>` over the same bases carries the same set (Perl:
+/// `21:37420264-37526076 insertion ENST00000646548` is the intron-spanning form
+/// with `3_prime_UTR_variant` and `intron_variant` added).
+#[test]
+fn concordance_ranged_insertion_over_start_codon_is_start_lost_without_start_retained() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::StructuralInsertion,
+        25_000_040,
+        25_000_121,
+        b"<INS>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_elongation",
+            "start_lost",
+        ],
+    );
+}
+
+/// A ranged Alu insertion is the same predicate on the mobile-element class
+/// (Perl: `21:39660415-39660694 Alu_insertion ENST00000852645`). The span ends
+/// inside exon 1 (25_000_000-25_000_299); one that ran into intron 1 would lose
+/// `cdna_end` and with it `start_lost`.
+#[test]
+fn concordance_ranged_alu_insertion_over_start_codon_is_start_lost_without_start_retained() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::MobileElementInsertion,
+        25_000_040,
+        25_000_290,
+        b"<INS:ME:ALU>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_elongation",
+            "start_lost",
+        ],
+    );
+}
+
+/// A duplication whose far end lies in intron 1 covers the start codon but has no
+/// `cdna_end` (`cdna_start_unshifted`, BaseTranscriptVariation.pm:194-208, leaves it
+/// undefined when the last mapped segment is a Gap), so `_overlaps_start_codon`
+/// returns 0 and the set is the regional one.
+#[test]
+fn concordance_duplication_over_start_codon_ending_in_intron_has_no_start_lost() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::Duplication,
+        25_000_040,
+        25_001_000,
+        b"<DUP>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_elongation",
+            "intron_variant",
+        ],
+    );
+}
+
+/// `_overlaps_start_codon` returns 0 on a `cds_start_NF` transcript (:975), so a
+/// duplication over the annotated first codon of such a transcript has no `start_lost`.
+#[test]
+fn concordance_duplication_over_start_codon_of_cds_start_nf_transcript_has_no_start_lost() {
+    let tx = make_test_transcript_with_flags(&["cds_start_NF"]);
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::Duplication,
+        25_000_040,
+        25_000_121,
+        b"<DUP>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_elongation",
+        ],
+    );
 }

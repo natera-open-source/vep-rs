@@ -14,6 +14,105 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `duckdb` CLI on Debian 13, smoke-tested on the GRCh37 corpus before it is
   pushed, with a build-provenance attestation on the pushed digest
   (`.github/workflows/docker.yml`).
+- `docs/intended-divergences.md`: every class the adjusted concordance sets
+  aside, each with the record, both engines' rows, the mechanism in Ensembl
+  VEP's source, and a command that reproduces it.
+- Structural-variant comparator masks for the second side of two classes and
+  for three more: the `intergenic_variant` row vep-rs writes for a record
+  whose VEP tuples all name transcripts on another chromosome
+  (`filter_cross_chromosome_orphan_intergenic`); the mate allele of a
+  breakend above `--max_sv_size` that VEP never wrote, gated on the mate
+  lying within 5 kb of the transcript span
+  (`filter_giant_breakend_mate_divergences`); the SNP/indel registry's
+  excluding rules applied to structural pairs (`filter_registry_swap_pairs`);
+  VEP's batch-dependent Transcript tuples on a `<NON_REF>` record
+  (`filter_non_ref_batch_divergences`); and a mate-side row VEP evaluated at
+  the local coordinate (`filter_breakend_mate_local_read_pairs`), with
+  `scripts/validation/breakend_mate_context.py` deriving the mate-coordinate
+  and local-coordinate readings from the JSON cache. The transcript-selection
+  mask's unsupported-type scope names `<CPX>` and `<CTX>`.
+- The golden classifier names `breakend_mate_local_read`, computed by the
+  same derivation over the corpus's own pruned cache.
+- The comparators write the adjusted residual: `discordant_open.tsv` beside
+  `discordant.tsv` for the SNP and indel sets and `discordant_adjusted.tsv`
+  for the structural-variant sets, each the one-sided rows every mask leaves
+  in place. Per-class mode caches the per-term VEP totals of a reference
+  output (`--vep-totals-cache`).
+
+### Changed
+
+- JSON cache format: each transcript's `variation_effect_feature_cache`
+  carries `seq_edits`, the translation's `Bio::EnsEMBL::SeqEdit` list
+  (`start`, `end` and `alt_seq` in protein coordinates, with `code`, `name`
+  and `length_diff`), which `scripts/data/storable_to_json.pl` writes from
+  the Storable cache. vep-rs applies the edits overlapping a variant's
+  translation span to the reference allele's peptide, as
+  `TranscriptVariationAllele::peptide` does. A cache converted without the
+  key still loads: no edit is applied, and a variant at codon 1 of a
+  transcript with an alternative initiation codon is called from the cached
+  peptide. Convert such a cache again to get VEP's calls there.
+- The deletion-shaped evaluation of a same-chromosome breakend span borrows
+  the variant for each overlapping transcript instead of copying it with the
+  consequences accumulated so far, which grew with the square of the
+  transcript count. Output is unchanged.
+
+### Fixed
+
+Each entry names the Ensembl VEP mechanism vep-rs follows.
+
+- Start codon on an alternative initiation codon: with `seq_edits` in the
+  cache, an `initial_met` or `amino_acid_sub` edit over a non-ATG start
+  codon gives a reference `M` against the alternate allele's literal
+  residue, so the variant is `start_lost` rather than `synonymous_variant`
+  and `Amino_acids` prints the edited residue.
+- Splice terms across a frameshift intron: `_intron_effects` skips an intron
+  of twelve bases or fewer for every differing region that overlaps it, in
+  both of its loops, so a deletion running from one exon across such an
+  intron into the next carries no splice term; the coding predicates alone
+  decide the row. The exonic splice windows apply the same skip, so a donor
+  window that crosses such an intron yields no `splice_donor_5th_base_variant`.
+- `transcript_ablation` requires Perl's `deletion` pre-predicate (the
+  reference span longer than the ALT sequence) beside `complete_overlap`. A
+  same-length substitution or a longer ALT covering a whole transcript takes
+  the tier-3 predicates instead: the biotype's context term with the UTR,
+  intron and splice terms of the span.
+- `splice_polypyrimidine_tract_variant` on structural alleles: a structural
+  allele whose span reaches the 15 bp window inside an intron's acceptor end
+  carries the term unless the span touches an exon of the transcript, as
+  Ensembl's predicate does for every BaseVariationFeature. A `<CNV:TR>`
+  allele keeps its endpoint test.
+- A paired breakend's bracket allele gets a row for a transcript only when
+  the mate coordinate lies within `MAX_DISTANCE_FROM_TRANSCRIPT` (5 kb) of
+  it (`StructuralVariationOverlap::_close_to_feature`); the local POS is
+  carried by the single-breakend allele.
+- A single-breakend allele above `--max_sv_size` that partially covers a
+  coding transcript takes the region predicates like every other
+  same-chromosome span; VEP requires `complete_overlap_feature` for
+  `coding_transcript_variant` at any span.
+- The context term of a transcript a structural allele engulfs follows the
+  biotype, as VEP's include hashes do: `coding_transcript_variant` only for
+  `protein_coding`, `NMD_transcript_variant` only for
+  `nonsense_mediated_decay`, `non_coding_transcript_variant` only without a
+  translation, and `intergenic_variant` for a translated transcript of any
+  other biotype. One rule serves the inversion, copy-number, insertion and
+  breakend arms.
+- Structural insertions, mobile-element insertions and duplications whose
+  span covers a start-codon base with both ends in exons emit `start_lost`,
+  the genomic-overlap predicate the deletion arm applies.
+  `start_retained_variant`, which VEP co-emits there without reading
+  sequence, is not emitted.
+- The mate-side Transcript row of a paired breakend describes the mate
+  breakend at the mate coordinate: `feature_truncation` with the region term
+  when the mate lies inside the transcript, `upstream_gene_variant` or
+  `downstream_gene_variant` with the distance when it lies within the window
+  outside, and no row beyond it. VEP evaluates every predicate but
+  `feature_truncation` at the local coordinate there.
+- A gVCF `<NON_REF>` record is a reference-confidence block, not an
+  alternate allele. It is written as one `intergenic_variant` row spanning
+  POS+1 to END with the allele as written and `IMPACT=MODIFIER`, with a
+  warning per record; that is the row VEP writes when no other record in the
+  batch loads the region. A `<NON_REF>` carrying a supported `INFO/SVTYPE`
+  keeps that type.
 
 ## [0.2.0] - 2026-09-29
 

@@ -87,6 +87,21 @@ pub fn calculate(
         })
         .unwrap_or(false);
 
+    // Ensembl builds the bracket allele of a breakend for a feature only when the
+    // mate coordinate is close to that feature. `StructuralVariationOverlap::new`
+    // (`StructuralVariationOverlap.pm:76-88`) adds one allele per entry of
+    // `($vf, @$breakends)` that passes `_close_to_feature` (`:130-146`): the same
+    // seq region, then `overlap` against the feature slice expanded by
+    // `MAX_DISTANCE_FROM_TRANSCRIPT` (`Utils/VariationEffect.pm:60`). The local POS
+    // is carried by the `$vf` allele (`N.`, `.T`, `A.`), so a bracket allele whose
+    // mate is farther than that gets no row for this transcript however the local
+    // POS overlaps it. A cross-chromosome mate fails the same seq-region test; the
+    // callers apply that half by not annotating an inter-chromosomal paired allele
+    // against the local chromosome at all.
+    if is_paired_bnd && same_chr_mate && !mate_near_transcript {
+        return None;
+    }
+
     // A native single-breakend with sv_end and SVTYPE=DEL is a BND-format
     // deletion (gnomAD `N.` alleles with END set) and takes DEL-style
     // feature_truncation over its span.
@@ -247,7 +262,9 @@ pub fn calculate(
                 if dist_to_donor >= 2 && dist_to_acceptor >= 2 {
                     consequences.push(Consequence::IntronVariant);
                 }
-                add_bnd_splice_consequences(&mut consequences, dist_to_donor, dist_to_acceptor);
+                if super::overlaps_polypyrimidine_tract(transcript, bp, bp) {
+                    consequences.push(Consequence::SplicePolypyrimidineTractVariant);
+                }
                 if !is_coding && !transcript.is_nmd_transcript() {
                     consequences.push(Consequence::NonCodingTranscriptVariant);
                 }
@@ -348,153 +365,59 @@ pub fn calculate(
     })
 }
 
-/// Calculate consequences for the paired mate-side breakpoint annotation.
+/// The mate-side row of a paired breakend: `transcript` lies on the mate chromosome
+/// within the selection window of the mate coordinate, and the row describes the mate
+/// breakend at that coordinate as `calculate` describes a local one. `feature_truncation`
+/// when the mate lies inside the transcript, with the region term at that position
+/// (`intron_variant`, `coding_sequence_variant`, the UTR terms,
+/// `non_coding_transcript_exon_variant`, `non_coding_transcript_variant`,
+/// `NMD_transcript_variant`); `upstream_gene_variant` or `downstream_gene_variant` with
+/// the distance when it lies within the window outside; no row beyond it.
 ///
-/// Perl VEP emits a simpler consequence model for the remote mate breakpoint:
-/// when the mate position falls within a transcript body it reports only
-/// `feature_truncation`; upstream/downstream distance terms are preserved.
-///
-/// `local_span_is_ranged` says whether the original local variant span covers
-/// more than one base, i.e. `end > start` before the caller repointed the
-/// variant at the mate. It gates the context terms, and the asymmetry is Perl's:
-/// `feature_truncation` (`VariationEffect.pm:350-359`) passes
-/// `$bvfoa->breakend`, the mate coordinates, into `within_feature`, while every
-/// context predicate (`within_intron:629`, `within_cds:643`) takes the default
-/// `$bvf`, the local variation feature. A point breakend therefore satisfies
-/// none of them at the mate position and Perl reports bare
-/// `feature_truncation`. A fully ranged local span can satisfy them, which is
-/// why the gate is on ranged-ness rather than a blanket removal.
+/// Ensembl's `feature_truncation` (`Utils/VariationEffect.pm:358`) is the one predicate
+/// written for the breakend: it passes `$bvfoa->breakend`, the mate coordinate, into
+/// `within_feature` with the seq-region test on. Every other predicate receives the
+/// local variation feature (`BaseVariationFeatureOverlapAllele.pm:257,273`, `_bvfo_preds`
+/// `:454`, `upstream` and `downstream` `Utils/VariationEffect.pm:443-457`), so on a
+/// mate-side row Ensembl measures the local coordinate against the mate chromosome's
+/// transcript: a coordinate on another chromosome, or a same-chromosome coordinate far
+/// from the transcript, and the row falls to bare `feature_truncation` or to the default
+/// `intergenic_variant` on a Transcript row. The region and distance terms here are
+/// those of the mate coordinate instead, and so are the display columns (`EXON`,
+/// `INTRON`), which is why the row is built through `calculate_consequences`.
 pub fn calculate_paired_mate(
     variant: &InputVariant,
     transcript: &Transcript,
-    upstream_distance: u64,
-    downstream_distance: u64,
-    local_span_is_ranged: bool,
+    config: &crate::consequences::EffectsConfig,
 ) -> Option<TranscriptConsequence> {
-    let bp = variant.start;
+    let mate = mate_breakpoint(variant)?;
+    crate::consequences::calculate_consequences(&mate, transcript, config)
+}
 
-    if bp
-        < transcript
-            .start
-            .saturating_sub(upstream_distance.max(downstream_distance))
-        || bp > transcript.end + upstream_distance.max(downstream_distance)
-    {
+/// The mate breakend of a paired allele as a point breakend on its own chromosome: the
+/// bracket coordinate is both its position and its mate, so `calculate` reads the
+/// position for the region and distance terms and the mate for `feature_truncation`.
+fn mate_breakpoint(variant: &InputVariant) -> Option<InputVariant> {
+    if variant.is_single_breakend {
         return None;
     }
-
-    let mut consequences: ConsequenceList = SmallVec::new();
-    let distance: Option<u64> = None;
-
-    if bp >= transcript.start && bp <= transcript.end {
-        consequences.push(Consequence::FeatureTruncation);
-
-        // Context terms only for same-chromosome paired BNDs with a ranged local
-        // span: Perl's on-demand loading annotates fewer mate-side transcripts on
-        // an inter-chromosomal BND, and its context predicates read the local
-        // feature, not the mate (see the function doc).
-        let same_chr = variant
-            .mate_chr
-            .as_deref()
-            .is_some_and(|mc| mc == &*variant.chr);
-        if same_chr && local_span_is_ranged {
-            let is_coding = transcript.has_cds();
-            if is_coding {
-                if let (Some(cds_start), Some(cds_end)) =
-                    (transcript.coding_region_start, transcript.coding_region_end)
-                {
-                    if bp >= cds_start && bp <= cds_end {
-                        consequences.push(Consequence::CodingSequenceVariant);
-                    }
-                }
-                if super::overlaps_five_prime_utr(transcript, bp, bp) {
-                    consequences.push(Consequence::FivePrimeUtrVariant);
-                }
-                if super::overlaps_three_prime_utr(transcript, bp, bp) {
-                    consequences.push(Consequence::ThreePrimeUtrVariant);
-                }
-            } else if !transcript.is_nmd_transcript() {
-                if super::overlaps_any_exon(transcript, bp, bp) {
-                    consequences.push(Consequence::NonCodingTranscriptExonVariant);
-                } else {
-                    consequences.push(Consequence::NonCodingTranscriptVariant);
-                }
-            }
-            // Trimmed boundaries, as in the `BreakendPosition::Intron` arm above.
-            if super::overlaps_any_intron_trimmed(transcript, bp, bp) {
-                consequences.push(Consequence::IntronVariant);
-            }
-            if transcript.is_nmd_transcript() {
-                consequences.push(Consequence::NmdTranscriptVariant);
-            }
-        }
-    } else {
-        consequences.push(Consequence::IntergenicVariant);
-    }
-
-    if consequences.is_empty() {
-        return None;
-    }
-
-    let impact = consequences
-        .iter()
-        .map(|c| c.impact())
-        .min_by_key(|i| match i {
-            Impact::HIGH => 0,
-            Impact::MODERATE => 1,
-            Impact::LOW => 2,
-            Impact::MODIFIER => 3,
-        })
-        .unwrap_or(Impact::MODIFIER);
-    consequences.sort_by_key(|c| c.rank());
-
-    Some(TranscriptConsequence {
-        transcript_id: transcript.stable_id.clone(),
-        feature_start: transcript.start,
-        feature_end: transcript.end,
-        gene_id: transcript.gene_stable_id.clone(),
-        gene_symbol: transcript.gene_symbol.clone(),
-        gene_symbol_source: transcript.gene_symbol_source.clone(),
-        hgnc_id: transcript.hgnc_id.clone(),
-        consequences,
-        impact,
-        biotype: Some(transcript.biotype.clone()),
-        canonical: transcript.canonical,
-        cdna_position: None,
-        cds_position: None,
-        protein_position: None,
-        amino_acids: None,
-        codons: None,
-        protein_id: if transcript.is_protein_coding() {
-            transcript.protein_id.clone()
-        } else {
-            None
-        },
-        distance,
-        strand: match transcript.strand {
-            Strand::Forward => 1,
-            Strand::Reverse => -1,
-        },
-        exon: None,
-        intron: None,
-        hgvsc: None,
-        hgvsp: None,
-        hgvs_offset: None,
-        sift: None,
-        polyphen: None,
-        domains: vec![],
-        feature_type: FeatureType::Transcript,
-        flags: transcript.flags.clone(),
-        tsl: transcript.tsl,
-        mane_select: transcript.mane_select.clone(),
-        mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-        appris: transcript.appris.clone(),
-        ccds: transcript.ccds.clone(),
-        swissprot: transcript.swissprot.clone(),
-        trembl: transcript.trembl.clone(),
-        refseq: transcript.refseq.clone(),
-        plugin_data: indexmap::IndexMap::new(),
-        loftee_ctx: None,
-    })
+    let mate_chr = variant.mate_chr.clone()?;
+    let mate_pos = variant.mate_pos?;
+    let mut mate = InputVariant::new(
+        mate_chr.clone(),
+        mate_pos,
+        mate_pos,
+        variant.ref_allele.clone(),
+        variant.alt_alleles.first().cloned().unwrap_or_default(),
+    );
+    mate.variant_class = variant.variant_class;
+    mate.is_structural = variant.is_structural;
+    mate.is_single_breakend = false;
+    mate.mate_id = variant.mate_id.clone();
+    mate.mate_chr = Some(mate_chr);
+    mate.mate_pos = Some(mate_pos);
+    mate.sv_end = Some(mate_pos);
+    Some(mate)
 }
 
 /// Apply DEL-style feature_truncation for a native single-breakend with `sv_end`.
@@ -655,28 +578,10 @@ fn genomic_to_cdna(bp: u64, transcript: &Transcript) -> Option<u64> {
     None
 }
 
-/// Add splice-region consequences for a breakpoint in an intron.
-///
-/// Perl VEP uses a simplified splice model for structural variants:
-/// only `splice_polypyrimidine_tract_variant` is added when the breakpoint
-/// falls within the polypyrimidine tract (2-16 bases from acceptor).
-/// Detailed splice sub-terms (splice_region_variant, splice_donor_5th_base,
-/// splice_donor_region) are not added for SVs; those apply only to small
-/// variants in the main consequence engine.
-fn add_bnd_splice_consequences(
-    consequences: &mut ConsequenceList,
-    _dist_to_donor: u64,
-    dist_to_acceptor: u64,
-) {
-    // Polypyrimidine tract (positions 2..=16 from acceptor).
-    if (2..=16).contains(&dist_to_acceptor) {
-        consequences.push(Consequence::SplicePolypyrimidineTractVariant);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::consequences::EffectsConfig;
     use crate::test_helpers::make_test_transcript;
     use vep_core::variant::VariantClass;
 
@@ -1000,12 +905,13 @@ mod tests {
 
     #[test]
     fn test_bnd_no_feature_truncation_mate_outside_transcript() {
-        // Paired BND with mate outside the transcript → NO feature_truncation.
-        // Perl VEP parity: only positional consequence (intron_variant).
+        // Paired BND with mate outside the transcript body but within the 5 kb
+        // selection window → the bracket allele exists for the transcript and
+        // carries the local POS's positional term, with NO feature_truncation.
         let tx = make_test_transcript();
         let mut v = make_bnd(25_001_000); // Intron 1 (inside transcript)
         v.mate_chr = Some("21".into());
-        v.mate_pos = Some(24_990_000); // Outside transcript (before start)
+        v.mate_pos = Some(24_997_000); // 3 kb before the transcript start
         v.is_single_breakend = false;
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
         assert!(
@@ -1014,6 +920,35 @@ mod tests {
         );
         assert!(tc.consequences.contains(&Consequence::IntronVariant));
         assert_eq!(tc.impact, Impact::MODIFIER); // No HIGH impact without truncation
+    }
+
+    #[test]
+    fn test_bnd_bracket_allele_with_mate_beyond_5kb_is_not_built_for_the_transcript() {
+        // The local POS is inside the transcript (intron 1) and the mate is 10 kb
+        // before its start. `_close_to_feature` rejects the bracket entry, so
+        // Ensembl writes no row for this allele on this transcript; the `A.` allele
+        // carries the local intron_variant.
+        let tx = make_test_transcript();
+        let mut v = make_bnd(25_001_000);
+        v.mate_chr = Some("21".into());
+        v.mate_pos = Some(24_990_000);
+        v.is_single_breakend = false;
+        assert!(
+            calculate(&v, &tx, 5000, 5000).is_none(),
+            "mate 10 kb outside the transcript: no bracket allele for it"
+        );
+
+        // The window is inclusive at exactly MAX_DISTANCE_FROM_TRANSCRIPT.
+        v.mate_pos = Some(25_000_000 - 5000);
+        assert!(
+            calculate(&v, &tx, 5000, 5000).is_some(),
+            "mate exactly 5 kb before the transcript start is within the window"
+        );
+        v.mate_pos = Some(25_000_000 - 5001);
+        assert!(
+            calculate(&v, &tx, 5000, 5000).is_none(),
+            "mate 5,001 bp before the transcript start is outside the window"
+        );
     }
 
     #[test]
@@ -1186,76 +1121,98 @@ mod tests {
         assert_eq!(tc.impact, Impact::HIGH);
     }
 
-    #[test]
-    fn test_paired_mate_intron_is_feature_truncation_only() {
-        let tx = make_test_transcript();
-        let v = make_bnd(25_001_000);
-        let tc = calculate_paired_mate(&v, &tx, 5000, 5000, false).unwrap();
-        assert_eq!(
-            tc.consequences.to_vec(),
-            vec![Consequence::FeatureTruncation]
+    /// A paired allele whose record sits on chromosome 1 and whose bracket names
+    /// chromosome 21 at `mate_pos`: the shape of every mate-side row.
+    fn make_cross_chromosome_bnd(mate_pos: u64) -> InputVariant {
+        let mut v = InputVariant::new(
+            "1".into(),
+            14_374_334,
+            14_374_334,
+            b"A".to_vec(),
+            format!("]21:{mate_pos}]A").into_bytes(),
         );
-        assert_eq!(tc.impact, Impact::HIGH);
-        assert!(tc.cdna_position.is_none());
+        v.variant_class = VariantClass::Translocation;
+        v.is_structural = true;
+        v.is_single_breakend = false;
+        v.mate_id = Some("bnd_mate".into());
+        v.mate_chr = Some("21".into());
+        v.mate_pos = Some(mate_pos);
+        v.sv_end = Some(14_374_334);
+        v
     }
 
     #[test]
-    fn test_paired_mate_nearby_non_overlap_is_intergenic() {
+    fn test_paired_mate_inside_intron_is_truncation_and_intron_variant() {
         let tx = make_test_transcript();
-        let v = make_bnd(24_999_000);
-        let tc = calculate_paired_mate(&v, &tx, 5000, 5000, false).unwrap();
+        let v = make_cross_chromosome_bnd(25_001_000); // intron 1
+        let tc = calculate_paired_mate(&v, &tx, &EffectsConfig::default()).unwrap();
         assert_eq!(
             tc.consequences.to_vec(),
-            vec![Consequence::IntergenicVariant]
+            vec![Consequence::FeatureTruncation, Consequence::IntronVariant]
         );
-        assert_eq!(tc.impact, Impact::MODIFIER);
+        assert_eq!(tc.impact, Impact::HIGH);
         assert!(tc.distance.is_none());
     }
 
-    /// A point local breakend gets bare `feature_truncation` at the mate,
-    /// even when the mate lands mid-transcript on the same chromosome.
-    ///
-    /// Perl's `feature_truncation` (`VariationEffect.pm:350-359`) passes
-    /// `$bvfoa->breakend`, the mate coordinates, into `within_feature`. Every
-    /// context predicate (`within_intron:629`, `within_cds:643`) instead takes the
-    /// default `$bvf`, the local variation feature. A point local span satisfies
-    /// none of them, so Perl reports only `feature_truncation`.
     #[test]
-    fn test_paired_mate_point_local_span_gets_no_context_terms() {
+    fn test_paired_mate_inside_cds_exon_is_truncation_and_coding_sequence_variant() {
         let tx = make_test_transcript();
-        // Mate lands in intron 1 (25_000_300 - 25_001_999), same chromosome.
-        let mut v = make_bnd(25_001_000);
-        v.mate_chr = Some("21".into());
-        v.mate_pos = Some(25_001_000);
-        let tc = calculate_paired_mate(&v, &tx, 5000, 5000, false).unwrap();
+        let v = make_cross_chromosome_bnd(25_002_100); // exon 2, inside the CDS
+        let tc = calculate_paired_mate(&v, &tx, &EffectsConfig::default()).unwrap();
         assert_eq!(
             tc.consequences.to_vec(),
-            vec![Consequence::FeatureTruncation],
-            "Perl's context predicates read the LOCAL feature, which for a point \
-             breakend satisfies none of them"
+            vec![
+                Consequence::FeatureTruncation,
+                Consequence::CodingSequenceVariant
+            ]
         );
     }
 
-    /// Discriminator: a ranged local span does still get context terms.
-    ///
-    /// This is why the gate is on ranged-ness rather than removing the context
-    /// block: a ranged local span can satisfy Perl's context predicates.
     #[test]
-    fn test_paired_mate_ranged_local_span_keeps_context_terms() {
+    fn test_paired_mate_outside_within_window_is_distance_term_never_intergenic() {
+        let tx = make_test_transcript(); // forward strand, 25_000_000-25_006_000
+        let downstream = make_cross_chromosome_bnd(25_006_577);
+        let tc = calculate_paired_mate(&downstream, &tx, &EffectsConfig::default()).unwrap();
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::DownstreamGeneVariant]
+        );
+        assert_eq!(tc.distance, Some(577));
+        assert_eq!(tc.impact, Impact::MODIFIER);
+
+        let upstream = make_cross_chromosome_bnd(24_997_000);
+        let tc = calculate_paired_mate(&upstream, &tx, &EffectsConfig::default()).unwrap();
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::UpstreamGeneVariant]
+        );
+        assert_eq!(tc.distance, Some(3000));
+    }
+
+    #[test]
+    fn test_paired_mate_beyond_window_has_no_row() {
         let tx = make_test_transcript();
-        let mut v = make_bnd(25_001_000);
+        let v = make_cross_chromosome_bnd(24_990_000);
+        assert!(calculate_paired_mate(&v, &tx, &EffectsConfig::default()).is_none());
+        let single = make_native_single_breakend(25_001_000);
+        assert!(
+            calculate_paired_mate(&single, &tx, &EffectsConfig::default()).is_none(),
+            "a single-breakend allele has no mate side"
+        );
+    }
+
+    /// The local coordinate plays no part: the same mate on the same chromosome as
+    /// the record, 10 kb from it, gets the same row as the cross-chromosome shape.
+    #[test]
+    fn test_paired_mate_row_does_not_read_the_local_coordinate() {
+        let tx = make_test_transcript();
+        let mut v = make_bnd(25_016_000); // 10 kb beyond the transcript end
         v.mate_chr = Some("21".into());
         v.mate_pos = Some(25_001_000);
-        let tc = calculate_paired_mate(&v, &tx, 5000, 5000, true).unwrap();
-        assert!(
-            tc.consequences.contains(&Consequence::FeatureTruncation),
-            "got: {:?}",
-            tc.consequences
-        );
-        assert!(
-            tc.consequences.contains(&Consequence::IntronVariant),
-            "a ranged local span can satisfy Perl's within_intron; got: {:?}",
-            tc.consequences
+        let tc = calculate_paired_mate(&v, &tx, &EffectsConfig::default()).unwrap();
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::FeatureTruncation, Consequence::IntronVariant]
         );
     }
 

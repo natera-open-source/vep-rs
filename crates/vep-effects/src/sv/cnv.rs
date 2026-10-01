@@ -17,8 +17,9 @@
 //! (`Bio/EnsEMBL/Variation/...`, `Config.pm` being `Utils/Config.pm`).
 
 use super::{
-    is_mature_mirna_sv, overlaps_any_exon, overlaps_any_intron_trimmed, overlaps_cds_exon,
-    overlaps_five_prime_utr, overlaps_three_prime_utr, transcript_has_incomplete_cds,
+    engulfed_transcript_row_terms, is_mature_mirna_sv, overlaps_any_exon,
+    overlaps_any_intron_trimmed, overlaps_cds_exon, overlaps_five_prime_utr,
+    overlaps_polypyrimidine_tract, overlaps_three_prime_utr, transcript_has_incomplete_cds,
 };
 use smallvec::{smallvec, SmallVec};
 use vep_core::consequence::{
@@ -124,23 +125,15 @@ pub fn calculate(
         ));
     }
 
-    // For generic CNVs (CN1, CN3–CN9, <CNV>) that fully contain the transcript,
-    // Perl uses only the context term (coding_transcript_variant, etc.).
+    // For generic CNVs (CN1, CN3–CN9, <CNV>, <CPX>) that fully contain the
+    // transcript, Perl runs only the biotype-gated context predicates.
     if fully_contains {
-        let consequence = if transcript.is_nmd_transcript() {
-            Consequence::NmdTranscriptVariant
-        } else if transcript.has_cds() {
-            Consequence::CodingTranscriptVariant
-        } else {
-            Consequence::NonCodingTranscriptVariant
-        };
-        let impact = consequence.impact();
-        return Some(build_consequence(
-            transcript,
-            smallvec![consequence],
-            impact,
-            None,
-        ));
+        let consequences = engulfed_transcript_row_terms(transcript, sv_start, sv_end);
+        let impact = consequences
+            .first()
+            .map(|c| c.impact())
+            .unwrap_or(Impact::MODIFIER);
+        return Some(build_consequence(transcript, consequences, impact, None));
     }
 
     if sv_end < tx_start || sv_start > tx_end {
@@ -218,6 +211,9 @@ pub fn calculate(
     // invariant donor/acceptor bases gets no `intron_variant`.
     if overlaps_any_intron_trimmed(transcript, sv_start, sv_end) {
         consequences.push(Consequence::IntronVariant);
+    }
+    if overlaps_polypyrimidine_tract(transcript, sv_start, sv_end) {
+        consequences.push(Consequence::SplicePolypyrimidineTractVariant);
     }
 
     // Context terms for non-coding transcripts: always added alongside other consequences.
@@ -466,6 +462,22 @@ mod tests {
             "no mature-miRNA overlap => tier-3 non_coding_transcript_variant, got: {:?}",
             tc.consequences
         );
+    }
+
+    /// A generic `<CNV>` engulfing a translated `IG_V_gene` transcript lands on Perl's
+    /// `intergenic_variant` fallthrough; the transcript row is still written.
+    #[test]
+    fn test_generic_cnv_engulfing_translated_ig_v_gene_is_intergenic_variant() {
+        let mut tx = make_test_transcript();
+        tx.biotype = "IG_V_gene".into();
+        let v = make_cnv(b"<CNV>", 24_999_000, 25_007_000);
+        let tc = calculate(&v, &tx, 5000, 5000).expect("CNV must annotate the transcript");
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::IntergenicVariant]
+        );
+        assert_eq!(tc.impact, Impact::MODIFIER);
+        assert_eq!(&*tc.transcript_id, "ENST00000000001");
     }
 
     #[test]

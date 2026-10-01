@@ -14,8 +14,9 @@
 //! (`Bio/EnsEMBL/Variation/...`, `Config.pm` being `Utils/Config.pm`).
 
 use super::{
-    is_mature_mirna_sv, overlaps_any_exon, overlaps_any_intron_trimmed, overlaps_cds_exon,
-    overlaps_five_prime_utr, overlaps_three_prime_utr,
+    engulfed_transcript_row_terms, is_mature_mirna_sv, overlaps_any_exon,
+    overlaps_any_intron_trimmed, overlaps_cds_exon, overlaps_five_prime_utr,
+    overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
 };
 use smallvec::{smallvec, SmallVec};
 use vep_core::consequence::{
@@ -105,18 +106,18 @@ pub fn calculate(
     }
 
     if fully_contains {
-        if transcript.has_cds() {
-            consequences.push(Consequence::CodingTranscriptVariant);
-        } else if transcript.is_nmd_transcript() {
-            consequences.push(Consequence::NmdTranscriptVariant);
-        } else {
-            consequences.push(Consequence::NonCodingTranscriptVariant);
-        }
+        consequences = engulfed_transcript_row_terms(transcript, sv_start, sv_end);
     } else {
         if transcript.has_cds() {
             calculate_protein_coding_consequences(&mut consequences, transcript, sv_start, sv_end);
         } else {
             calculate_non_coding_consequences(&mut consequences, transcript, sv_start, sv_end);
+        }
+        if overlaps_polypyrimidine_tract(transcript, sv_start, sv_end) {
+            push_unique(
+                &mut consequences,
+                Consequence::SplicePolypyrimidineTractVariant,
+            );
         }
 
         // NMD context: always add alongside other consequences.
@@ -481,6 +482,40 @@ mod tests {
             !csq.consequences.contains(&Consequence::TranscriptAblation),
             "Inversions must not produce transcript_ablation"
         );
+    }
+
+    /// An INV engulfing a translated NMD transcript is `NMD_transcript_variant`
+    /// alone: `coding_transcript_variant` is gated on biotype `protein_coding`
+    /// (`engulfed_transcript_row_terms`), not on the CDS the NMD transcript carries.
+    #[test]
+    fn test_inv_spanning_entire_nmd_transcript_is_nmd_transcript_variant() {
+        let mut tx = make_test_transcript();
+        tx.biotype = "nonsense_mediated_decay".into();
+        let v = make_inversion(24_999_000, 25_007_000);
+        let csq = calculate(&v, &tx, 5000, 5000).expect("INV must annotate the transcript");
+        assert_eq!(
+            csq.consequences.to_vec(),
+            vec![Consequence::NmdTranscriptVariant],
+            "got: {:?}",
+            csq.consequences
+        );
+    }
+
+    /// An INV engulfing a translated transcript of a non-`protein_coding` biotype
+    /// matches no context predicate and carries Perl's `intergenic_variant` fallback.
+    #[test]
+    fn test_inv_spanning_entire_translated_ig_v_gene_is_intergenic_variant() {
+        let mut tx = make_test_transcript();
+        tx.biotype = "IG_V_gene".into();
+        let v = make_inversion(24_999_000, 25_007_000);
+        let csq = calculate(&v, &tx, 5000, 5000).expect("INV must annotate the transcript");
+        assert_eq!(
+            csq.consequences.to_vec(),
+            vec![Consequence::IntergenicVariant],
+            "got: {:?}",
+            csq.consequences
+        );
+        assert_eq!(csq.impact, Impact::MODIFIER);
     }
 
     #[test]

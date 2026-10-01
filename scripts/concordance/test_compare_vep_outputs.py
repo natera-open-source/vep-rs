@@ -1128,6 +1128,171 @@ class ClassifyWithoutExcludingTests(unittest.TestCase):
         )
 
 
+class OpenDiscordantTsvTests(unittest.TestCase):
+    """The open subset of a discordance report: every row no excluding rule removed.
+
+    Both rows of an open pair and every unpaired row survive; both rows of an excluded
+    pair go. The file is the adjusted residual enumerated, so its row count must equal
+    the one-sided total the adjusted F1 is computed on.
+    """
+
+    HEADER = (
+        "file_name\tsource\tlocation\tallele\tfeature\tfeature_type\tconsequence_set"
+    )
+
+    @staticmethod
+    def _row(source: str, loc: str, allele: str, feature: str, csq: str) -> str:
+        return "\t".join(("f", source, loc, allele, feature, "Transcript", _norm(csq)))
+
+    def _rows(self) -> list[str]:
+        return [
+            # Covered splice_region pair: excluded.
+            self._row("missing_in_rust", "21:100", "A", "ENST1", "missense_variant"),
+            self._row("extra_in_rust", "21:100", "A", "ENST1", "missense_variant,splice_region_variant"),
+            # Start co-emission pair: excluded.
+            self._row("missing_in_rust", "21:200", "-", "ENST2", "start_lost,start_retained_variant"),
+            self._row("extra_in_rust", "21:200", "-", "ENST2", "start_retained_variant"),
+            # PPT addition: classified, not excluded, so open.
+            self._row("missing_in_rust", "21:300", "T", "ENST3", "intron_variant"),
+            self._row("extra_in_rust", "21:300", "T", "ENST3", "intron_variant,splice_polypyrimidine_tract_variant"),
+            # Unpaired rows, one per side.
+            self._row("missing_in_rust", "21:400", "G", "ENST4", "downstream_gene_variant"),
+            self._row("extra_in_rust", "21:500", "C", "ENST5", "upstream_gene_variant"),
+        ]
+
+    def _run(self, rows: list[str], open_out: bool = True):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "discordant.tsv"
+            p.write_text(self.HEADER + "\n" + "".join(r + "\n" for r in rows), encoding="utf-8")
+            o = Path(d) / "discordant_open.tsv"
+            result = filter_snp_indel_intended_divergences(p, open_out=o if open_out else None)
+            return result, o.read_text(encoding="utf-8") if o.exists() else None
+
+    def test_open_rows_are_the_unexcluded_pairs_plus_the_unpaired_rows(self) -> None:
+        rows = self._rows()
+        (ep, er, _), text = self._run(rows)
+        self.assertEqual((ep, er), (2, 2))
+        assert text is not None
+        self.assertEqual(text.splitlines(), [self.HEADER] + rows[4:])
+
+    def test_row_count_is_the_adjusted_one_sided_total(self) -> None:
+        rows = self._rows()
+        (ep, er, _), text = self._run(rows)
+        assert text is not None
+        n_perl = sum("\tmissing_in_rust\t" in r for r in rows)
+        n_rust = sum("\textra_in_rust\t" in r for r in rows)
+        self.assertEqual(len(text.splitlines()) - 1, (n_perl - ep) + (n_rust - er))
+
+    def test_file_order_and_layout_follow_the_source_report(self) -> None:
+        """A row is written back byte for byte, in the position it had, so the open
+        file is a line-subset of the report and greps the same way."""
+        rows = self._rows()
+        rows.reverse()
+        _, text = self._run(rows)
+        assert text is not None
+        source_lines = [self.HEADER] + rows
+        positions = [source_lines.index(line) for line in text.splitlines()]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(len(positions), 5)
+
+    def test_nothing_is_written_without_a_path(self) -> None:
+        (ep, er, buckets), text = self._run(self._rows(), open_out=False)
+        self.assertIsNone(text)
+        self.assertEqual((ep, er), (2, 2))
+        self.assertEqual(sum(v["excluded"] for v in buckets.values()), 2)
+
+    def test_a_fully_masked_report_leaves_only_the_header(self) -> None:
+        _, text = self._run(self._rows()[:4])
+        self.assertEqual(text, self.HEADER + "\n")
+
+    def test_a_header_only_report_gives_a_header_only_open_file(self) -> None:
+        (ep, er, _), text = self._run([])
+        self.assertEqual((ep, er), (0, 0))
+        self.assertEqual(text, self.HEADER + "\n")
+
+
+class CompareModeOpenTsvEndToEndTests(unittest.TestCase):
+    """Compare mode writes ``discordant_open.tsv`` beside ``discordant.tsv`` and the
+    two agree with ``summary.json``: raw rows with the raw one-sided total, open
+    rows with the adjusted one."""
+
+    COLS = (
+        "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+    )
+
+    @staticmethod
+    def _line(loc: str, allele: str, feature: str, csq: str) -> str:
+        return f"v\t{loc}\t{allele}\tG\t{feature}\tTranscript\t{csq}\n"
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        for sub in ("perl", "rust", "report"):
+            (self.tmp / sub).mkdir()
+        shared = self._line("21:1", "A", "ENST0", "intron_variant")
+        (self.tmp / "perl" / "output.txt").write_text(
+            self.COLS
+            + shared
+            + self._line("21:100", "A", "ENST1", "missense_variant")
+            + self._line("21:300", "T", "ENST3", "intron_variant")
+            + self._line("21:400", "G", "ENST4", "downstream_gene_variant"),
+            encoding="utf-8",
+        )
+        (self.tmp / "rust" / "output.txt").write_text(
+            self.COLS
+            + shared
+            + self._line("21:100", "A", "ENST1", "missense_variant,splice_region_variant")
+            + self._line("21:300", "T", "ENST3", "intron_variant,splice_polypyrimidine_tract_variant"),
+            encoding="utf-8",
+        )
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _run(self, *extra: str) -> dict:
+        import json
+        import sys
+        from compare_vep_outputs import main
+
+        argv = sys.argv
+        sys.argv = [
+            "compare_vep_outputs.py",
+            "--perl-dir", str(self.tmp / "perl"),
+            "--rust-dir", str(self.tmp / "rust"),
+            "--report-dir", str(self.tmp / "report"),
+            "--assembly", "GRCh37",
+            *extra,
+        ]
+        try:
+            self.assertEqual(main(), 0)
+        finally:
+            sys.argv = argv
+        return json.loads((self.tmp / "report" / "summary.json").read_text(encoding="utf-8"))
+
+    def test_open_file_rows_equal_the_adjusted_one_sided_total(self) -> None:
+        adj = self._run()["aggregate"]["adjusted"]
+        raw_lines = (self.tmp / "report" / "discordant.tsv").read_text().splitlines()
+        open_lines = (self.tmp / "report" / "discordant_open.tsv").read_text().splitlines()
+        self.assertEqual(adj["excluded_perl_tuples"], 1)
+        self.assertEqual(len(raw_lines) - 1, 5)
+        self.assertEqual(
+            len(open_lines) - 1,
+            (adj["perl_tuple_count"] - adj["intersection_count"])
+            + (adj["rust_tuple_count"] - adj["intersection_count"]),
+        )
+        self.assertEqual(open_lines[0], raw_lines[0])
+        self.assertTrue(set(open_lines) <= set(raw_lines))
+        self.assertFalse(any("\t21:100\t" in line for line in open_lines))
+        self.assertEqual(sum("\t21:300\t" in line for line in open_lines), 2)
+        self.assertEqual(sum("\t21:400\t" in line for line in open_lines), 1)
+
+    def test_open_file_is_named_after_the_discordant_tsv_flag(self) -> None:
+        self._run("--discordant-tsv", "custom.tsv")
+        self.assertTrue((self.tmp / "report" / "custom.tsv").exists())
+        self.assertTrue((self.tmp / "report" / "custom_open.tsv").exists())
+        self.assertFalse((self.tmp / "report" / "discordant_open.tsv").exists())
+
+
 # Per-consequence-class F1
 
 
@@ -1675,6 +1840,132 @@ class PerClassCsvTests(unittest.TestCase):
             rows = list(csv.DictReader(path.open(encoding="utf-8")))
             self.assertEqual({(r["engine"], r["sweep_id"], r["binary_md5"]) for r in rows},
                              {("vep-rs", "sweep-20260101T000000Z", "deadbeef"), ("fastvep", "sweep-20260101T000000Z", "v0.0.0")})
+
+
+class VepTotalsCacheTests(unittest.TestCase):
+    """The per-term VEP totals cache: keyed on the reference files and the contig
+    filter, served only on an exact match, recomputed and rewritten otherwise."""
+
+    COLS = (
+        "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+    )
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        (self.tmp / "perl").mkdir()
+        self.gt = self.tmp / "perl" / "output.txt"
+        self.gt.write_text(
+            self.COLS
+            + "v\t21:100\tA\tG\tENST1\tTranscript\tmissense_variant\n"
+            + "v\t21:200\tT\tG\tENST2\tTranscript\tintron_variant,splice_region_variant\n"
+            + "v\tKI270728.1:5\tC\tG\tENST3\tTranscript\tintron_variant\n",
+            encoding="utf-8",
+        )
+        self.disc = self.tmp / "discordant.tsv"
+        self.disc.write_text(
+            "file_name\tsource\tlocation\tallele\tfeature\tfeature_type\tconsequence_set\n"
+            "output.txt\tmissing_in_rust\t21:100\tA\tENST1\tTranscript\tmissense_variant\n",
+            encoding="utf-8",
+        )
+        self.cache = self.tmp / "cache" / "s01.csv"
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _run(self, *extra: str) -> tuple[str, str]:
+        import contextlib
+        import io
+        import sys
+        from compare_vep_outputs import main
+
+        class_csv = self.tmp / "class.csv"
+        argv = sys.argv
+        sys.argv = [
+            "compare_vep_outputs.py", "--by-consequence-class",
+            "--perl-dir", str(self.tmp / "perl"), "--discordant-in", str(self.disc),
+            "--dataset", "s01", "--class-csv", str(class_csv),
+            "--sweep-id", "sweep-x", "--binary-md5", "abcd1234",
+            "--assembly", "GRCh37", "--vep-totals-cache", str(self.cache), *extra,
+        ]
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(main(), 0)
+        finally:
+            sys.argv = argv
+        return out.getvalue(), class_csv.read_text(encoding="utf-8")
+
+    def test_fingerprint_reads_name_size_mtime_and_contig_filter(self) -> None:
+        from compare_vep_outputs import CANONICAL_CONTIGS, vep_totals_fingerprint
+
+        fp = vep_totals_fingerprint([self.gt], CANONICAL_CONTIGS)
+        st = self.gt.stat()
+        self.assertIn(f"output.txt:{st.st_size}:{st.st_mtime_ns}", fp)
+        self.assertNotEqual(fp, vep_totals_fingerprint([self.gt], None))
+        os.utime(self.gt, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+        self.assertNotEqual(fp, vep_totals_fingerprint([self.gt], CANONICAL_CONTIGS))
+
+    def test_read_returns_none_on_missing_stale_or_corrupt_cache(self) -> None:
+        from compare_vep_outputs import read_vep_totals_cache, write_vep_totals_cache
+
+        self.assertIsNone(read_vep_totals_cache(self.cache, "fp"))
+        write_vep_totals_cache(self.cache, "fp", Counter({"missense_variant": 3}))
+        self.assertEqual(read_vep_totals_cache(self.cache, "fp"), Counter({"missense_variant": 3}))
+        self.assertIsNone(read_vep_totals_cache(self.cache, "other"))
+        self.cache.write_text("# vep_totals_fingerprint=fp\nterm,vep_tuples\nx,notanumber\n")
+        self.assertIsNone(read_vep_totals_cache(self.cache, "fp"))
+        self.assertFalse(self.cache.with_name("s01.csv.tmp").exists())
+
+    def test_second_run_is_served_from_the_cache_with_identical_output(self) -> None:
+        out1, csv1 = self._run()
+        self.assertIn("cache miss, wrote", out1)
+        self.assertTrue(self.cache.is_file())
+        cached = self.cache.read_text(encoding="utf-8")
+        # The alt-contig tuple is outside the canonical filter, so intron_variant is 1.
+        self.assertIn("intron_variant,1\n", cached)
+        self.assertIn("missense_variant,1\n", cached)
+        self.assertIn("splice_region_variant,1\n", cached)
+        out2, csv2 = self._run()
+        self.assertIn("cache hit", out2)
+        self.assertEqual(csv1, csv2)
+
+    def test_a_touched_reference_invalidates_the_cache(self) -> None:
+        self._run()
+        st = self.gt.stat()
+        os.utime(self.gt, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+        out, _ = self._run()
+        self.assertIn("cache miss", out)
+
+    def test_a_different_contig_filter_invalidates_the_cache(self) -> None:
+        """Totals counted without the filter carry the alt-contig tuple; serving
+        them to a filtered run would inflate every term's VEP total."""
+        self._run()
+        out, _ = self._run("--no-canonical-contigs")
+        self.assertIn("cache miss", out)
+        self.assertIn("intron_variant,2\n", self.cache.read_text(encoding="utf-8"))
+
+    def test_no_cache_flag_neither_reads_nor_writes(self) -> None:
+        import contextlib
+        import io
+        import sys
+        from compare_vep_outputs import main
+
+        argv = sys.argv
+        sys.argv = [
+            "compare_vep_outputs.py", "--by-consequence-class",
+            "--perl-dir", str(self.tmp / "perl"), "--discordant-in", str(self.disc),
+            "--dataset", "s01", "--class-csv", str(self.tmp / "class.csv"),
+            "--sweep-id", "sweep-x", "--binary-md5", "abcd1234", "--assembly", "GRCh37",
+        ]
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(main(), 0)
+        finally:
+            sys.argv = argv
+        self.assertNotIn("VEP per-term totals: cache", out.getvalue())
+        self.assertFalse(self.cache.exists())
 
 
 class PerClassAdjustedF1Tests(unittest.TestCase):

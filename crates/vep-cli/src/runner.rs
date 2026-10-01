@@ -1291,18 +1291,14 @@ fn lookup_predictions(
 /// Append the mate-side consequences of a paired BND, in place.
 ///
 /// The single implementation: `annotator.rs` calls this rather than carrying its
-/// own, because two implementations of one Perl behaviour diverge (dedup against
-/// locally annotated transcripts, `calculate_paired_mate` versus the generic
-/// `annotate_variant`, `local_span_is_ranged`).
+/// own, because two implementations of one behaviour diverge.
 pub(crate) fn append_bnd_mate_consequences(
     variant: &mut InputVariant,
     transcripts_by_chr: &LazyTranscriptIndexes,
     config: &vep_effects::EffectsConfig,
 ) {
-    // Perl VEP annotates BND alleles against transcripts at the mate position.
-    // This produces:
-    // - feature_truncation: when mate falls within a transcript body
-    // - intergenic_variant: when mate is near but outside a transcript
+    // One row per transcript within the selection window of the mate coordinate,
+    // describing the mate breakend at that coordinate (`calculate_paired_mate`).
     // Only applies to paired BND alleles (not single-breakend forms).
     if variant.variant_class != vep_core::variant::VariantClass::Translocation
         || variant.is_single_breakend
@@ -1329,38 +1325,15 @@ pub(crate) fn append_bnd_mate_consequences(
         None => return,
     };
 
-    // Create a temporary variant at the mate position for annotation.
-    // calculate_paired_mate uses variant.start as the breakpoint.
-    let orig_start = variant.start;
-    let orig_end = variant.end;
-    variant.start = mate_pos;
-    variant.end = mate_pos;
-
-    let upstream = config.upstream_distance;
-    let downstream = config.downstream_distance;
-
-    // Whether the original local span covered more than one base, captured
-    // before the overwrite above. Perl's mate-side context predicates read the
-    // local variation feature while `feature_truncation` reads the mate, so a
-    // point local span gets bare `feature_truncation`; see
-    // `calculate_paired_mate`.
-    let local_span_is_ranged = orig_end > orig_start;
-
     let mut mate_consequences = Vec::new();
+    let paired: &InputVariant = variant;
     chr_transcripts.for_each_overlapping(mate_pos, mate_pos, |transcript| {
-        if let Some(tc) = vep_effects::sv::breakend::calculate_paired_mate(
-            variant,
-            transcript,
-            upstream,
-            downstream,
-            local_span_is_ranged,
-        ) {
+        if let Some(tc) =
+            vep_effects::sv::breakend::calculate_paired_mate(paired, transcript, config)
+        {
             mate_consequences.push(tc);
         }
     });
-
-    variant.start = orig_start;
-    variant.end = orig_end;
 
     let mut appended = 0usize;
     for tc in mate_consequences {
@@ -2275,6 +2248,109 @@ mod tests {
             single.1.iter().any(|id| id == "ENSTDISTANT"),
             "the breakend is annotated against its own span's transcripts, not only its neighbours': {:?}",
             single.1
+        );
+    }
+
+    fn one_transcript_on_21(stable_id: &str, start: u64) -> Arc<LazyTranscriptIndexes> {
+        let tx = make_runner_test_transcript(stable_id, "ENSGTEST", "21", start);
+        let mut by_chr = HashMap::new();
+        by_chr.insert(
+            "21".to_string(),
+            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![tx], 5_000, 5_000),
+        );
+        Arc::new(LazyTranscriptIndexes::from_indexes(by_chr))
+    }
+
+    /// A `<NON_REF>` record spanning a transcript yields no transcript row and one
+    /// `intergenic_variant` row over the block, rendered exactly as VEP renders the
+    /// record when its batch loads no cache region for it (`vep_skip`): the span
+    /// from POS+1 to END, the allele as written, no feature, `IMPACT=MODIFIER`.
+    #[test]
+    fn test_annotate_batch_reference_block_over_transcript_is_one_intergenic_row() {
+        let resources = resources_over(one_transcript_on_21("ENSTBLOCK", 1_000));
+        let stats = zero_stats();
+        let mut batch =
+            parse_vcf_line("21\t1100\tblock\tA\t<NON_REF>\t.\t.\tEND=1900", true).unwrap();
+        let pool = build_thread_pool(1).unwrap();
+        annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+
+        assert_eq!(batch.len(), 1);
+        let block = &batch[0];
+        assert_eq!(block.variant_class, VariantClass::ReferenceBlock);
+        assert!(block.transcript_consequences.is_empty());
+        assert_eq!(
+            block.most_severe_consequence,
+            Some(Consequence::IntergenicVariant)
+        );
+
+        let plan = ExtraFieldsPlan::new(FieldOptions::default());
+        let mut out = Vec::new();
+        crate::pipeline::render_default_record(&mut out, &[block], &plan, &mut Vec::new()).unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "block\t21:1101-1900\t<NON_REF>\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
+        );
+    }
+
+    /// `<*>` is a different allele from `<NON_REF>`: VEP's structural-variant regex
+    /// excludes it, so it is a non-structural allele at POS (INFO/END is not a span)
+    /// annotated against every overlapping transcript, here a non-coding two-exon
+    /// transcript with a cDNA mapper: `intron_variant,non_coding_transcript_variant`
+    /// in its intron, `non_coding_transcript_exon_variant` in its exon.
+    #[test]
+    fn test_annotate_batch_star_allele_keeps_transcript_rows() {
+        use vep_core::transcript::{ExonCoordMapper, MapperPair, TranscriptMapper, TranscriptVEFC};
+        let mut tx = make_runner_test_transcript("ENSTSTAR", "ENSGSTAR", "21", 1_000);
+        tx.vefc = Some(TranscriptVEFC {
+            introns: tx.introns.clone(),
+            sorted_exons: tx.exons.clone(),
+            mapper: Some(TranscriptMapper {
+                start_phase: -1,
+                cdna_coding_start: 0,
+                cdna_coding_end: 0,
+                exon_coord_mapper: ExonCoordMapper::new(vec![
+                    MapperPair {
+                        from_start: 1,
+                        from_end: 200,
+                        to_start: 1_000,
+                        to_end: 1_199,
+                        ori: 1,
+                    },
+                    MapperPair {
+                        from_start: 201,
+                        from_end: 400,
+                        to_start: 1_800,
+                        to_end: 1_999,
+                        ori: 1,
+                    },
+                ]),
+            }),
+            ..Default::default()
+        });
+        let mut by_chr = HashMap::new();
+        by_chr.insert(
+            "21".to_string(),
+            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![tx], 5_000, 5_000),
+        );
+        let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
+
+        let in_intron = annotate_batch_for_test(
+            "21\t1500\tstar_intron\tA\t<*>\t.\t.\tEND=1600",
+            Arc::clone(&transcripts),
+        );
+        assert_eq!(
+            in_intron,
+            vec![vec![
+                "ENSTSTAR:intron_variant,non_coding_transcript_variant".to_string()
+            ]]
+        );
+        let in_exon =
+            annotate_batch_for_test("21\t1850\tstar_exon\tA\t<*>\t.\t.\tEND=1900", transcripts);
+        assert_eq!(
+            in_exon,
+            vec![vec![
+                "ENSTSTAR:non_coding_transcript_exon_variant".to_string()
+            ]]
         );
     }
 

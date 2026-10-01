@@ -1315,7 +1315,13 @@ pub fn get_codon_change(
         transcript.strand,
         codon_table_for(transcript),
     )?;
-    if let Some(pep_seq) = vefc.peptide.as_deref() {
+    if !vefc.seq_edits.is_empty() {
+        let mut ref_aa = vec![cc.ref_amino_acid];
+        let pos = cc.codon_number as i64;
+        if apply_seq_edits(&mut ref_aa, &vefc.seq_edits, pos, pos) {
+            cc.ref_amino_acid = ref_aa[0];
+        }
+    } else if let Some(pep_seq) = vefc.peptide.as_deref() {
         let mut ref_aa = [cc.ref_amino_acid];
         overlay_seq_edits(
             &mut ref_aa,
@@ -1670,7 +1676,7 @@ use std::borrow::Cow;
 
 use vep_core::consequence::Consequence;
 use vep_core::coordinate::Strand;
-use vep_core::transcript::ExonCoordMapper;
+use vep_core::transcript::{ExonCoordMapper, SeqEdit};
 
 /// One element of a `Bio::EnsEMBL::Mapper` result list, in transcript order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2045,8 +2051,8 @@ fn perl_is_start_codon(codon: &[u8], table: u8) -> bool {
 }
 
 /// `TranscriptVariationAllele::peptide` applies the translation's SeqEdits to the
-/// reference peptide only, so a selenocysteine `TGA` reads `U`, not `*`. The
-/// cache carries no `seq_edits`, but its `peptide` is `Transcript::translate`
+/// reference peptide only, so a selenocysteine `TGA` reads `U`, not `*`. A cache
+/// without `seq_edits` still has its `peptide`, which is `Transcript::translate`
 /// with the edits applied, so an edited residue is the cached residue wherever
 /// it differs from the codon's own translation. Two differences in that string
 /// have no SeqEdit behind them and are skipped: position 1, which `translate`
@@ -2070,10 +2076,12 @@ pub(crate) fn overlay_seq_edits(pep: &mut [u8], pep_seq: &[u8], tl_start: i64, c
 }
 
 /// The residue an `initial_met` SeqEdit writes over protein position 1 of the
-/// reference peptide, `Some(b'M')` when the edit is evident: the cached peptide
-/// starts with `M` although the first codon translates otherwise and is not a
-/// start codon `Transcript::translate` reads as `M` on its own. A forced start
-/// codon leaves the edit indistinguishable, so `None`.
+/// reference peptide, read from the cached peptide of a cache without
+/// `seq_edits`: `Some(b'M')` when that peptide starts with `M` although the
+/// first codon translates otherwise and is not a start codon of the table.
+/// `Transcript::translate` writes `M` over any start codon of the table, so
+/// there the edit cannot be told from that rewrite and the codon's own residue
+/// stands: `None`.
 pub(crate) fn initial_met_edit(cds: &[u8], pep_seq: &[u8], table: u8) -> Option<u8> {
     let first = cds.get(..3)?;
     if pep_seq.first() != Some(&b'M')
@@ -2085,12 +2093,74 @@ pub(crate) fn initial_met_edit(cds: &[u8], pep_seq: &[u8], table: u8) -> Option<
     Some(b'M')
 }
 
-/// A cached peptide as `Bio::EnsEMBL::Transcript::translate` writes it: position
-/// 1 is `M` whenever the first codon is a start codon of the table, whatever
-/// residue that codon translates to on its own. The JSON cache carries the codon's
-/// own residue there for a `CTG` or `TTG` start, and Perl's `_peptide` (the string
-/// `hgvs_protein` reads for surrounding, frameshift and deletion peptides) carries
-/// the `M`, so the rewrite is applied here. The per-codon translation of
+/// The SeqEdit loop of `TranscriptVariationAllele::peptide` over `pep`, the
+/// reference codon window's translation for protein positions
+/// `tv_start..=tv_end`: every edit overlapping the span writes its residues over
+/// the positions it covers. A position past the end of an edit's replacement
+/// (an edit that shortens the protein) makes the peptide undefined, `false`.
+pub(crate) fn apply_seq_edits(
+    pep: &mut Vec<u8>,
+    edits: &[SeqEdit],
+    tv_start: i64,
+    tv_end: i64,
+) -> bool {
+    for edit in edits {
+        let (se_start, se_end) = (edit.start as i64, edit.end as i64);
+        if !perl_overlap(tv_start, tv_end, se_start, se_end) {
+            continue;
+        }
+        let alt = edit.alt_seq.as_bytes();
+        for tv_pos in tv_start.max(se_start)..=tv_end.min(se_end) {
+            let from = (tv_pos - se_start) as usize;
+            if from >= alt.len() {
+                return false;
+            }
+            let at = (tv_pos - tv_start) as usize;
+            if at < pep.len() {
+                pep[at] = alt[from];
+            } else if at == pep.len() {
+                pep.push(alt[from]);
+            }
+        }
+    }
+    true
+}
+
+/// The reference-only SeqEdit step of `TranscriptVariationAllele::peptide`, over
+/// `pep` as [`apply_seq_edits`] takes it. With the transcript's `seq_edits` that
+/// is the loop itself; a cache without them reads the edits from its cached
+/// peptide `pep_seq` instead, [`overlay_seq_edits`] past position 1 and
+/// [`initial_met_edit`] at it, which can never leave the peptide undefined.
+pub(crate) fn edit_reference_peptide(
+    pep: &mut Vec<u8>,
+    seq_edits: &[SeqEdit],
+    pep_seq: &[u8],
+    cds: &[u8],
+    table: u8,
+    tv_start: i64,
+    tv_end: i64,
+) -> bool {
+    if !seq_edits.is_empty() {
+        return apply_seq_edits(pep, seq_edits, tv_start, tv_end);
+    }
+    if !pep.is_empty() {
+        overlay_seq_edits(pep, pep_seq, tv_start, cds.len());
+        if tv_start == 1 {
+            if let Some(m) = initial_met_edit(cds, pep_seq, table) {
+                pep[0] = m;
+            }
+        }
+    }
+    true
+}
+
+/// A cached peptide as `Bio::EnsEMBL::Transcript::translate` writes it from the
+/// release 114 core API on: position 1 is `M` whenever the first codon is a start
+/// codon of the table, whatever residue that codon translates to on its own. A
+/// cache dumped by an earlier API carries the codon's own residue there, and
+/// Perl's `_peptide` (the string `hgvs_protein` reads for surrounding, frameshift
+/// and deletion peptides) is whatever the cache holds; this rewrite reads every
+/// cache as the release 114 API and its successors write it. The per-codon translation of
 /// [`PerlCodingEval::peptide`] is untouched, as Perl's `peptide` is.
 fn with_initial_met<'a>(pep: &'a [u8], cds: &[u8], table: u8) -> Cow<'a, [u8]> {
     match (pep.first(), cds.get(..3)) {
@@ -2146,6 +2216,7 @@ pub fn is_perl_coding_term(c: Consequence) -> bool {
 struct PerlCodingEval<'a> {
     cds: &'a [u8],
     pep_seq: Cow<'a, [u8]>,
+    seq_edits: &'a [SeqEdit],
     utr5: Option<Vec<u8>>,
     utr3: Option<Vec<u8>>,
     table: u8,
@@ -2287,17 +2358,19 @@ impl<'a> PerlCodingEval<'a> {
         }
         let whole_len = codon.len() / 3 * 3;
         let mut pep = perl_translate(&codon[..whole_len], self.table);
-        // SeqEdits apply to the reference peptide only, before the partial-codon `X`:
-        // the residues the cached peptide carries over the codon translation, then
-        // the `initial_met` edit at protein position 1.
-        if is_ref && !pep.is_empty() {
+        // SeqEdits apply to the reference peptide only, before the partial-codon `X`.
+        if is_ref {
             if let (Some(a), Some(b)) = (self.span.tl_start, self.span.tl_end) {
-                let tv_lo = a.min(b);
-                overlay_seq_edits(&mut pep, &self.pep_seq, tv_lo, self.cds.len());
-                if tv_lo == 1 {
-                    if let Some(m) = self.initial_met_edit() {
-                        pep[0] = m;
-                    }
+                if !edit_reference_peptide(
+                    &mut pep,
+                    self.seq_edits,
+                    &self.pep_seq,
+                    self.cds,
+                    self.table,
+                    a.min(b),
+                    a.max(b),
+                ) {
+                    return None;
                 }
             }
         }
@@ -2309,11 +2382,6 @@ impl<'a> PerlCodingEval<'a> {
         }
         self.peptide_memo[slot] = Some(Some(pep.clone()));
         Some(pep)
-    }
-
-    /// `initial_met_edit` on this transcript's CDS, cached peptide and codon table.
-    fn initial_met_edit(&self) -> Option<u8> {
-        initial_met_edit(self.cds, &self.pep_seq, self.table)
     }
 
     /// `_get_peptide_alleles`: `None` is Perl's empty list.
@@ -3579,6 +3647,7 @@ impl<'a> PerlCodingEval<'a> {
         Some(Self {
             cds,
             pep_seq,
+            seq_edits: &vefc.seq_edits,
             utr5,
             utr3,
             table,

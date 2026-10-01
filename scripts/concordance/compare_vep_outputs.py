@@ -173,14 +173,22 @@ def _is_start_cooccurrence_swap(perl_csq: str, rust_csq: str, allele: str) -> bo
       * On a sequence variant, ``start_retained_variant`` fires when
         ``_ins_del_start_altered`` (VariationEffect.pm:1028-1075) returns FALSE,
         which it does only when the edited 5'UTR and CDS still begin ``ATG`` at
-        the CDS start or the CDS is unchanged; ``start_lost`` then fires anyway
-        through the codon-window peptide route (:872-881), which translates only
-        the codons the edit touches. The start codon is intact, so
+        the CDS start or the CDS is unchanged (:1073); ``start_lost`` then fires
+        anyway, on most pairs through ``_inv_start_altered`` (:906-944), which
+        reads the three bases at the OLD 5'UTR length after the edit (:940) and
+        so misses a codon the edit re-forms one base over, and on the rest
+        through the peptide route (:879-882), which compares the codon-window
+        peptides the edit touches. On either route the edited CDS begins ``ATG``,
+        re-formed byte-identically one base over (``_inv_start_altered``) or
+        standing at the old offset with the downstream frame shifted (the
+        peptide route). The start codon is intact, so
         ``start_lost`` is the erroneous member and vep-rs emits the set without it.
-      * On a structural allele, ``_ins_del_start_altered`` returns 0 without
-        reading the sequence (:1037), so ``start_retained_variant`` fires on a
-        deletion that does remove the start codon and is the erroneous member;
-        vep-rs emits the set without it.
+      * On a structural allele, ``start_lost`` fires from the overlap of the
+        span with the start codon (:884-893) and ``_ins_del_start_altered``
+        returns 0 without reading the sequence (:1037), so
+        ``start_retained_variant`` (:961) fires on every structural allele over
+        a start codon, a deletion that removes the codon included, and is the
+        erroneous member; vep-rs emits the set without it.
 
     Returns True when Perl has both start terms and vep-rs has the same
     consequence set minus the erroneous member for the allele kind.
@@ -513,6 +521,7 @@ EXCLUDING_RULES: tuple[ExclusionRule, ...] = tuple(
 
 def filter_snp_indel_intended_divergences(
     discordant_path: Path,
+    open_out: Path | None = None,
 ) -> tuple[int, int, dict[str, dict[str, int]]]:
     """Read discordant.tsv, classify intended-divergence swap pairs, and exclude
     the ones an Ensembl VEP self-contradiction accounts for.
@@ -523,6 +532,11 @@ def filter_snp_indel_intended_divergences(
     adjusted F1 removes}``. A swap pair is a
     ``(location, allele, feature, feature_type)`` present in BOTH
     ``missing_in_rust`` and ``extra_in_rust`` with different consequence sets.
+
+    With ``open_out`` set, the rows of ``discordant_path`` that no excluding rule
+    removed are written there in their original order and layout: both rows of
+    every open pair plus every unpaired row. Its row count is therefore the
+    adjusted one-sided total, ``(perl - excluded_perl) + (rust - excluded_rust)``.
 
     CLASSIFICATION AND EXCLUSION ARE SEPARATE, and that separation is the point.
     Every bucket below reports a divergence shape worth naming; only the shapes
@@ -570,14 +584,19 @@ def filter_snp_indel_intended_divergences(
     # The key carries feature_type because the SCORED tuple is (location, allele,
     # feature, feature_type, consequence_set): keyed without it, two rows differing
     # only by feature_type collapse onto one key and the nested loop counts their
-    # cross product.
-    perl_by_key: dict[tuple[str, str, str, str], list[str]] = defaultdict(list)
-    rust_by_key: dict[tuple[str, str, str, str], list[str]] = defaultdict(list)
+    # cross product. The bound assertion after the loop is the backstop.
+    #
+    # Each side holds row indices into `rows` rather than consequence sets, so the
+    # open rows can be written back in file order without a second pass.
+    perl_by_key: dict[tuple[str, str, str, str], list[int]] = defaultdict(list)
+    rust_by_key: dict[tuple[str, str, str, str], list[int]] = defaultdict(list)
+    rows: list[dict[str, str]] = []
     n_perl_rows = 0
     n_rust_rows = 0
 
     with discordant_path.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter="\t")
+        columns = list(reader.fieldnames or ())
         for row in reader:
             key = (
                 row["location"],
@@ -585,17 +604,19 @@ def filter_snp_indel_intended_divergences(
                 row["feature"],
                 row.get("feature_type", ""),
             )
-            csq = row["consequence_set"]
+            idx = len(rows)
+            rows.append(row)
             if row["source"] == "missing_in_rust":
-                perl_by_key[key].append(csq)
+                perl_by_key[key].append(idx)
                 n_perl_rows += 1
             elif row["source"] == "extra_in_rust":
-                rust_by_key[key].append(csq)
+                rust_by_key[key].append(idx)
                 n_rust_rows += 1
 
     matched_keys = perl_by_key.keys() & rust_by_key.keys()
     excluded_perl = 0
     excluded_rust = 0
+    masked_rows: set[int] = set()
     bucket_stats: dict[str, dict[str, int]] = {
         rule.bucket: {"count": 0, "excluded": 0} for rule in CLASSIFICATION_CHAIN
     }
@@ -603,8 +624,10 @@ def filter_snp_indel_intended_divergences(
     for key in matched_keys:
         # Each key has exactly 1 csq per side (unique 5-tuples from sorted-merge),
         # so the cross-product is 1x1.
-        for pcsq in perl_by_key[key]:
-            for rcsq in rust_by_key[key]:
+        for pi in perl_by_key[key]:
+            pcsq = rows[pi]["consequence_set"]
+            for ri in rust_by_key[key]:
+                rcsq = rows[ri]["consequence_set"]
                 bucket = next(
                     (
                         rule.bucket
@@ -631,6 +654,7 @@ def filter_snp_indel_intended_divergences(
                 if excluded:
                     excluded_perl += 1
                     excluded_rust += 1
+                    masked_rows.update((pi, ri))
 
     # Neither side's exclusion count can exceed the discordant rows available on
     # that side. Adjusted F1 subtracts these from the raw denominators, so an
@@ -653,6 +677,13 @@ def filter_snp_indel_intended_divergences(
             f"{excluded_perl} pairs were excluded; the mask is not "
             f"attributable to the buckets that report it"
         )
+
+    if open_out is not None:
+        with open_out.open("w", encoding="utf-8", newline="") as out:
+            out.write("\t".join(columns) + "\n")
+            for idx, row in enumerate(rows):
+                if idx not in masked_rows:
+                    out.write("\t".join(row[c] for c in columns) + "\n")
 
     return excluded_perl, excluded_rust, bucket_stats
 
@@ -753,6 +784,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "report was produced by, written into every row.",
     )
     parser.add_argument(
+        "--vep-totals-cache",
+        help="Per-class mode: a CSV caching the per-term VEP totals of --perl-dir. It is "
+        "read when it records the same source files (name, size, modification time) "
+        "and contig filter, otherwise recomputed and rewritten; those totals are the "
+        "one input that does not change between runs against one ground truth.",
+    )
+    parser.add_argument(
         "--pooled-csv",
         help="Pool mode: pooled per-(engine, term) CSV to write.",
     )
@@ -800,7 +838,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--discordant-tsv",
         default="discordant.tsv",
-        help="Discordant tuple TSV filename (inside --report-dir)",
+        help="Discordant tuple TSV filename (inside --report-dir). The rows no "
+        "excluding rule removes are also written beside it as <stem>_open<suffix> "
+        "(discordant_open.tsv by default).",
     )
     parser.add_argument(
         "--fail-below-f1",
@@ -1150,6 +1190,54 @@ def count_terms_in_sorted_keys(path: Path) -> Counter[str]:
                 if term:
                     counter[term] += 1
     return counter
+
+
+_VEP_TOTALS_CACHE_PREFIX = "# vep_totals_fingerprint="
+
+
+def vep_totals_fingerprint(
+    perl_files: list[Path], canonical_contigs: frozenset[str] | None
+) -> str:
+    """Identity of a per-term VEP total: the source files' names, sizes and
+    modification times plus the contig filter, the only inputs the count depends on."""
+    files = ";".join(
+        f"{p.name}:{p.stat().st_size}:{p.stat().st_mtime_ns}" for p in perl_files
+    )
+    contigs = ",".join(sorted(canonical_contigs)) if canonical_contigs is not None else "none"
+    return f"{files}|canonical={contigs}"
+
+
+def read_vep_totals_cache(path: Path, fingerprint: str) -> Counter[str] | None:
+    """The cached per-term VEP totals when ``path`` exists and records exactly
+    ``fingerprint``; None on a missing, stale or unreadable cache, which the caller
+    treats as a miss and recomputes."""
+    if not path.is_file():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            first = handle.readline().rstrip("\n")
+            if first != _VEP_TOTALS_CACHE_PREFIX + fingerprint:
+                return None
+            totals: Counter[str] = Counter()
+            for row in csv.DictReader(handle):
+                totals[row["term"]] = int(row["vep_tuples"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return totals
+
+
+def write_vep_totals_cache(path: Path, fingerprint: str, totals: Counter[str]) -> None:
+    """Write the cache for ``read_vep_totals_cache``, atomically, so a concurrent
+    reader sees the old file or the new one and never a partial one."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(_VEP_TOTALS_CACHE_PREFIX + fingerprint + "\n")
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(["term", "vep_tuples"])
+        for term in sorted(totals):
+            writer.writerow([term, totals[term]])
+    os.replace(tmp, path)
 
 
 def count_terms_in_discordance(path: Path) -> tuple[Counter[str], Counter[str]]:
@@ -1692,19 +1780,31 @@ def run_by_consequence_class(args: argparse.Namespace) -> int:
     if not perl_files:
         raise FileNotFoundError(f"No files found in {perl_dir} matching {args.glob}")
 
-    # Sort-unique first, then count. Counting the raw stream would double-count any
-    # duplicate line, and the aggregate F1 this measurement decomposes is scored on
-    # the deduplicated key set.
-    vep_totals: Counter[str] = Counter()
-    with tempfile.TemporaryDirectory(prefix="per_class_tmp_") as tmp:
-        for perl_file in perl_files:
-            sorted_keys = Path(tmp) / f"{perl_file.name}.perl.keys.sorted.txt"
-            _sort_unique_stream_to_file(
-                iter_vep_key_lines(perl_file, canonical_contigs=canonical_contigs),
-                sorted_keys,
-            )
-            vep_totals.update(count_terms_in_sorted_keys(sorted_keys))
-            sorted_keys.unlink(missing_ok=True)
+    # The VEP-side totals depend on the reference output alone, not on the run, so
+    # a cache keyed on the reference files serves every run against the same
+    # ground truth.
+    cache = Path(args.vep_totals_cache).resolve() if args.vep_totals_cache else None
+    fingerprint = vep_totals_fingerprint(perl_files, canonical_contigs)
+    vep_totals = read_vep_totals_cache(cache, fingerprint) if cache else None
+    if vep_totals is not None:
+        print(f"VEP per-term totals: cache hit {cache}")
+    else:
+        # Sort-unique first, then count. Counting the raw stream would double-count any
+        # duplicate line, and the aggregate F1 this measurement decomposes is scored on
+        # the deduplicated key set.
+        vep_totals = Counter()
+        with tempfile.TemporaryDirectory(prefix="per_class_tmp_") as tmp:
+            for perl_file in perl_files:
+                sorted_keys = Path(tmp) / f"{perl_file.name}.perl.keys.sorted.txt"
+                _sort_unique_stream_to_file(
+                    iter_vep_key_lines(perl_file, canonical_contigs=canonical_contigs),
+                    sorted_keys,
+                )
+                vep_totals.update(count_terms_in_sorted_keys(sorted_keys))
+                sorted_keys.unlink(missing_ok=True)
+        if cache:
+            write_vep_totals_cache(cache, fingerprint, vep_totals)
+            print(f"VEP per-term totals: cache miss, wrote {cache}")
 
     vep_only, engine_only = count_terms_in_discordance(discordant_in)
     counts = derive_per_class_counts(vep_totals, vep_only, engine_only)
@@ -1964,8 +2064,11 @@ def main() -> int:
     )
 
     # --- Adjusted F1: exclude intended divergences ---
+    open_path = discordant_path.with_name(
+        f"{discordant_path.stem}_open{discordant_path.suffix}"
+    )
     excl_perl, excl_rust, excl_cats = filter_snp_indel_intended_divergences(
-        discordant_path
+        discordant_path, open_out=open_path
     )
     adj_perl = perl_total - excl_perl
     adj_rust = rust_total - excl_rust
@@ -2029,6 +2132,7 @@ def main() -> int:
     print(f"wrote summary: {summary_json_path}")
     print(f"wrote markdown: {report_dir / args.summary_md}")
     print(f"wrote discordance: {discordant_path}")
+    print(f"wrote open discordance: {open_path}")
     print(
         "aggregate: "
         f"precision={aggregate_precision:.6f} "
