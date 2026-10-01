@@ -143,39 +143,39 @@ Wall time is the median of 20 independent machine measurements per cell, each on
 
 Across those cells vep-rs is faster than Perl VEP by a geometric mean of 176× (ARM) / 135× (x86) and faster than fastVEP by 9.07× (ARM) / 6.55× (x86). vep-rs was timed in one campaign and the comparators' SNP and indel cells in another, on the same instance types against the same dataset inventory, so every ratio in the table divides medians from separate machines and campaigns; the structural-variant cells of all three engines come from the vep-rs campaign. The structural-variant sets are annotated as 16 separate per-file invocations, so per-invocation start-up weighs far more there; vep-rs is faster than Perl VEP on those cells by 52.9× (GRCh37) and 23.1× (GRCh38) on ARM and 37.5× and 22.5× on x86 (0.61 s, 2.81 s, 0.79 s and 2.63 s against Perl's 32.28 s, 64.92 s, 29.62 s and 59.29 s). No fastVEP structural-variant speedup is given, because fastVEP emits 62% and 88% of Perl VEP's tuple volume on those sets and recovers only 12.5% and 12.7% of Perl VEP's tuples, so its wall time does not buy comparable annotations. Plugin output and HGVS notation are outside every F1 above.
 
-### Current release: v0.2.0
+### Current release: v0.3.0
 
-The tables above are the figures the paper reports and stay as published. Each released version is measured again with the same protocol and stated here beside them: concordance from one run of a build of the released version on the ten suites (F1 is deterministic per binary and independent of architecture), and wall time as the median of 20 independent machine measurements per cell on both architectures, each on a fresh instance after a discarded warmup, on the same sites-only inputs and instance types as the paper's cells. The one difference from the paper's protocol: the discarded warmup's output is flushed and deleted before the timed run, so the timed run starts with the memory the warmup had. Every value below is recorded in [`docs/concordance-provenance/2026-09-28-release-v0.2.0.json`](docs/concordance-provenance/2026-09-28-release-v0.2.0.json): the per-suite concordance, each cell's median and P5 to P95 with the wall time every one of the 20 machines reported, the compiler and build inputs of the measured binaries, and a same-day comparison against v0.1.0 under this protocol.
+The tables above are the figures the paper reports and stay as published. Each released version is measured again with the same protocol and stated here beside them: concordance from one run of a build of the released version on the ten suites (F1 is deterministic per binary and independent of architecture), and wall time as the median of 20 independent machine measurements per cell on both architectures, each on a fresh instance after a discarded warmup, on the same sites-only inputs and instance types as the paper's cells. The one difference from the paper's protocol: the discarded warmup's output is flushed and deleted before the timed run, so the timed run starts with the memory the warmup had. Adjusted F1 is 1.000000 on every dataset. Raw F1 on the two structural-variant sets is lower than v0.2.0's because the rows of classes 10 and 11 of [docs/intended-divergences.md](docs/intended-divergences.md) leave the raw intersection and no other row does: v0.3.0 writes a gVCF `<NON_REF>` block as one `intergenic_variant` row and describes a breakend's mate at the mate coordinate, where v0.2.0 reproduced Ensembl VEP's rows for both, and raw F1 sets nothing aside. Every value below is recorded in [`docs/concordance-provenance/2026-10-01-release-v0.3.0.json`](docs/concordance-provenance/2026-10-01-release-v0.3.0.json): the per-suite concordance, each cell's median and P5 to P95 with the wall time every one of the 20 machines reported, the compiler and build inputs of the measured binaries, and a same-day comparison against v0.2.0 under this protocol; the v0.2.0 columns are the concordance of [`docs/concordance-provenance/2026-09-28-release-v0.2.0.json`](docs/concordance-provenance/2026-09-28-release-v0.2.0.json).
 
-| Dataset | Assembly | v0.2.0 Raw F1 | v0.2.0 Adj F1 | v0.1.0 Raw F1 | v0.1.0 Adj F1 |
+| Dataset | Assembly | v0.3.0 Raw F1 | v0.3.0 Adj F1 | v0.2.0 Raw F1 | v0.2.0 Adj F1 |
 | --- | --- | --- | --- | --- | --- |
 | ClinVar full | GRCh37 | 0.999979 | 1.000000 | 0.999979 | 1.000000 |
 | ClinVar full | GRCh38 | 0.999974 | 1.000000 | 0.999974 | 1.000000 |
-| gnomAD v2.1.1 chr21 | GRCh37 | 0.999999 | 1.000000 | 0.999999 | 1.000000 |
+| gnomAD v2.1.1 chr21 | GRCh37 | 1.000000 | 1.000000 | 0.999999 | 1.000000 |
 | gnomAD v4.1 chr21 | GRCh38 | 0.999999 | 1.000000 | 0.999999 | 1.000000 |
 | 1KG Phase 3 chr21 | GRCh37 | 1.000000 | 1.000000 | 1.000000 | 1.000000 |
 | 1KG high-cov chr21 | GRCh38 | 1.000000 | 1.000000 | 1.000000 | 1.000000 |
-| SV per-VCF (16 files) | GRCh37 | 0.975395 | 0.998524 | 0.975395 | 0.998524 |
-| SV per-VCF (16 files) | GRCh38 | 0.909998 | 0.998031 | 0.909998 | 0.998031 |
+| SV per-VCF (16 files) | GRCh37 | 0.969197 | 1.000000 | 0.975395 | 0.998524 |
+| SV per-VCF (16 files) | GRCh38 | 0.902664 | 1.000000 | 0.909998 | 0.998031 |
 
-| Arch | Dataset | Assembly | v0.2.0 median (s) | P5 to P95 (s) |
+| Arch | Dataset | Assembly | v0.3.0 median (s) | P5 to P95 (s) |
 | --- | --- | --- | --- | --- |
-| ARM | ClinVar full | GRCh37 | 5.73 | 5.56 to 6.51 |
-| ARM | ClinVar full | GRCh38 | 11.71 | 11.43 to 12.74 |
-| ARM | gnomAD v2.1.1 chr21 | GRCh37 | 6.78 | 6.72 to 6.97 |
-| ARM | gnomAD v4.1 chr21 | GRCh38 | 13.08 | 12.49 to 14.90 |
-| ARM | 1KG Phase 3 chr21 | GRCh37 | 0.85 | 0.80 to 1.03 |
-| ARM | 1KG high-cov chr21 | GRCh38 | 1.23 | 1.16 to 1.40 |
-| ARM | SV per-VCF (16 files) | GRCh37 | 0.60 | 0.58 to 0.66 |
-| ARM | SV per-VCF (16 files) | GRCh38 | 2.75 | 2.66 to 2.95 |
-| x86 | ClinVar full | GRCh37 | 6.05 | 5.95 to 6.47 |
-| x86 | ClinVar full | GRCh38 | 12.22 | 11.97 to 12.83 |
-| x86 | gnomAD v2.1.1 chr21 | GRCh37 | 9.86 | 9.71 to 9.95 |
-| x86 | gnomAD v4.1 chr21 | GRCh38 | 16.74 | 16.38 to 17.46 |
-| x86 | 1KG Phase 3 chr21 | GRCh37 | 0.96 | 0.93 to 1.04 |
-| x86 | 1KG high-cov chr21 | GRCh38 | 1.42 | 1.36 to 1.49 |
-| x86 | SV per-VCF (16 files) | GRCh37 | 0.78 | 0.76 to 0.87 |
-| x86 | SV per-VCF (16 files) | GRCh38 | 2.62 | 2.57 to 2.78 |
+| ARM | ClinVar full | GRCh37 | 5.73 | 5.64 to 6.23 |
+| ARM | ClinVar full | GRCh38 | 11.84 | 11.66 to 12.64 |
+| ARM | gnomAD v2.1.1 chr21 | GRCh37 | 6.75 | 6.72 to 6.85 |
+| ARM | gnomAD v4.1 chr21 | GRCh38 | 12.87 | 12.64 to 14.15 |
+| ARM | 1KG Phase 3 chr21 | GRCh37 | 0.83 | 0.80 to 0.97 |
+| ARM | 1KG high-cov chr21 | GRCh38 | 1.20 | 1.18 to 1.32 |
+| ARM | SV per-VCF (16 files) | GRCh37 | 0.53 | 0.52 to 0.56 |
+| ARM | SV per-VCF (16 files) | GRCh38 | 1.28 | 1.27 to 1.33 |
+| x86 | ClinVar full | GRCh37 | 6.03 | 5.95 to 6.41 |
+| x86 | ClinVar full | GRCh38 | 12.23 | 12.01 to 12.77 |
+| x86 | gnomAD v2.1.1 chr21 | GRCh37 | 9.84 | 9.73 to 9.93 |
+| x86 | gnomAD v4.1 chr21 | GRCh38 | 16.61 | 16.45 to 17.19 |
+| x86 | 1KG Phase 3 chr21 | GRCh37 | 0.97 | 0.94 to 1.07 |
+| x86 | 1KG high-cov chr21 | GRCh38 | 1.41 | 1.36 to 1.44 |
+| x86 | SV per-VCF (16 files) | GRCh37 | 0.74 | 0.73 to 0.77 |
+| x86 | SV per-VCF (16 files) | GRCh38 | 1.57 | 1.54 to 1.63 |
 
 HGVS notation is outside every F1 above.
 
