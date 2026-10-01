@@ -12,6 +12,7 @@ Run:
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -517,6 +518,8 @@ class SvFilterSetTests(unittest.TestCase):
                 "filter_cross_chromosome_divergences",
                 "filter_cross_chromosome_orphan_intergenic",
                 "filter_registry_swap_pairs",
+                "filter_non_ref_batch_divergences",
+                "filter_breakend_mate_local_read_pairs",
             },
         )
 
@@ -758,8 +761,38 @@ class NormalizationTests(unittest.TestCase):
         self.assertEqual(C.classify_variant("N", "<CN=3>"), "Symbolic_CNV")
         self.assertEqual(C.classify_variant("N", "<INS:ME:ALU>"), "Mobile_Element")
         self.assertEqual(C.classify_variant("N", "N[21:100["), "BND")
+        self.assertEqual(C.classify_variant("N", "<BND>"), "BND")
         self.assertEqual(C.classify_variant("N", "<NON_REF>"), "NON_REF")
         self.assertEqual(C.classify_variant("A", "*"), "Spanning")
+
+    def test_per_type_table_keys_a_ranged_record_by_its_printed_location(self):
+        """A `<NON_REF>` record at POS 38589780 with END 38590008 prints as
+        `21:38589781-38590008`; keyed by `chrom:POS` alone its tuples reach no type row.
+        The join through the record ID puts them in the NON_REF row and types the
+        discordant rows."""
+        variants = [C.VcfVariant("21", 38589780, "synth_nonref_0188", "A", "<NON_REF>", "NON_REF", "21:38589780")]
+        loc = "21:38589781-38590008"
+        perl = {T(loc, "<NON_REF>", "ENST_A", "intron_variant")}
+        rust = {T(loc, "<NON_REF>", "-", "intergenic_variant", ftype="-")}
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "perl.txt"
+            write_vep(out, [("synth_nonref_0188", loc, "<NON_REF>", "-", "ENST_A", "Transcript", "intron_variant")])
+            types = C.location_types_from_outputs(variants, out)
+        self.assertEqual(types, {"21:38589780": "NON_REF", loc: "NON_REF"})
+        without = C.compute_per_type_metrics(variants, perl, {loc}, rust, {loc})["NON_REF"]
+        with_map = C.compute_per_type_metrics(variants, perl, {loc}, rust, {loc}, types)["NON_REF"]
+        self.assertEqual((without.perl_tuples, without.rust_tuples), (0, 0))
+        self.assertEqual((with_map.perl_tuples, with_map.rust_tuples, with_map.intersection), (1, 1, 0))
+        rows = C.collect_discordants("10_special_alleles", variants, perl, rust, types)
+        self.assertEqual({r.variant_type for r in rows}, {"NON_REF"})
+        self.assertEqual({r.variant_type for r in C.collect_discordants("10_special_alleles", variants, perl, rust)}, {"Unknown"})
+
+    def test_a_record_without_an_id_keeps_its_position_key(self):
+        variants = [C.VcfVariant("21", 100, ".", "A", "T", "SNV", "21:100")]
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "perl.txt"
+            write_vep(out, [(".", "21:100", "T", "-", "ENST_A", "Transcript", "missense_variant")])
+            self.assertEqual(C.location_types_from_outputs(variants, out), {"21:100": "SNV"})
 
 
 # Symmetry / invariance properties
@@ -1660,7 +1693,7 @@ class GiantBreakendMateAlleleTests(unittest.TestCase):
     }
 
     def spans(self):
-        return {tx: ("21", s, e) for tx, (s, e, _c) in {**self.NEAR, **self.FAR}.items()}
+        return {("21", tx): ("21", s, e) for tx, (s, e, _c) in {**self.NEAR, **self.FAR}.items()}
 
     def rust(self):
         return {T(self.LOC, self.MATE, tx, c) for tx, (_s, _e, c) in {**self.NEAR, **self.FAR}.items()}
@@ -1686,7 +1719,7 @@ class GiantBreakendMateAlleleTests(unittest.TestCase):
         loc = "21:25729803-25735486"
         rust = {T(loc, "N[chr21:25729802[", "ENST00000400090", "feature_truncation,intron_variant")}
         perl = {T(loc, "N.", "ENST00000400090", "feature_truncation,intron_variant")}
-        spans = {"ENST00000400090": ("21", 25725000, 25740000)}
+        spans = {("21", "ENST00000400090"): ("21", 25725000, 25740000)}
         self.assertEqual(C.filter_giant_breakend_mate_divergences(perl, rust, spans), set())
 
     def test_a_mate_on_another_chromosome_than_the_feature_is_out_of_scope(self) -> None:
@@ -1846,3 +1879,130 @@ class RegistrySwapPairTests(unittest.TestCase):
         p = T("21:1-2", "deletion", "ENST_A", "start_lost,start_retained_variant")
         r = T("21:1-2", "deletion", "ENST_B", "start_lost")
         self.assertEqual(C.filter_registry_swap_pairs({p}, {r})[:2], (set(), set()))
+
+
+# Perl's batch-derived transcript tuples on a gVCF reference block
+
+
+class NonRefBatchTests(unittest.TestCase):
+    """`<NON_REF>` records: vep-rs writes one intergenic row, Perl whatever its batch loaded.
+
+    The exemplar is `synth_nonref_0188` (`21:38589781-38590008 <NON_REF>`, GRCh37): alone,
+    Perl writes `intergenic_variant`; in its batch it writes transcript rows for the regions
+    its neighbours loaded.
+    """
+
+    LOC = "21:38589781-38590008"
+
+    def intergenic(self, loc=None):
+        return T(loc or self.LOC, "<NON_REF>", "-", "intergenic_variant", ftype="-")
+
+    def test_perl_transcript_tuples_and_the_displaced_intergenic_row_are_excluded(self) -> None:
+        perl = {T(self.LOC, "<NON_REF>", "ENST00000440629", "upstream_gene_variant"),
+                T(self.LOC, "<NON_REF>", "ENST00000454482", "intron_variant,non_coding_transcript_variant")}
+        rust = {self.intergenic()}
+        ex_rust, ex_perl = C.filter_non_ref_batch_divergences(perl, rust)
+        self.assertEqual(ex_perl, perl)
+        self.assertEqual(ex_rust, rust)
+
+    def test_a_matching_intergenic_row_stays_on_both_sides(self) -> None:
+        """Perl's batch loaded nothing: both engines wrote the intergenic row and it is
+        concordant; nothing to exclude."""
+        self.assertEqual(C.filter_non_ref_batch_divergences({self.intergenic()}, {self.intergenic()}), (set(), set()))
+
+    def test_a_vep_rs_transcript_tuple_on_a_non_ref_record_is_left_charged(self) -> None:
+        """vep-rs writing anything but the intergenic row is outside the shape whatever
+        the Perl side holds, so a synthetic vep-rs transcript tuple stays in both
+        denominators."""
+        perl = {T(self.LOC, "<NON_REF>", "ENST00000440629", "upstream_gene_variant")}
+        rust = {self.intergenic(), T(self.LOC, "<NON_REF>", "ENST00000440629", "intron_variant")}
+        self.assertEqual(C.filter_non_ref_batch_divergences(perl, rust), (set(), set()))
+        rust2 = {T(self.LOC, "<NON_REF>", "ENST00000440629", "upstream_gene_variant")}
+        self.assertEqual(C.filter_non_ref_batch_divergences(perl, rust2), (set(), set()))
+
+    def test_another_allele_is_never_touched(self) -> None:
+        perl = {T(self.LOC, "deletion", "ENST00000440629", "upstream_gene_variant")}
+        rust = {T(self.LOC, "deletion", "-", "intergenic_variant", ftype="-")}
+        self.assertEqual(C.filter_non_ref_batch_divergences(perl, rust), (set(), set()))
+
+    def test_a_record_perl_wrote_nothing_for_is_not_touched(self) -> None:
+        self.assertEqual(C.filter_non_ref_batch_divergences(set(), {self.intergenic()}), (set(), set()))
+
+
+# A point breakend's mate-side row, read by Perl at the local coordinate
+
+
+class BreakendMateLocalReadTests(unittest.TestCase):
+    """The exemplar is `1:14374334 ]21:33034355]A` on ENST00000270142 (GRCh37, chromosome
+    21 forward strand, CDS 33032083-33040891): the mate lies in intron 1 and the local
+    coordinate on chromosome 1 selects nothing, so Perl writes `feature_truncation` and
+    the mate breakend supports `feature_truncation,intron_variant`.
+    """
+
+    MODEL = C.TranscriptModel(
+        chrom="21", start=33031935, end=33041244, strand=1, biotype="protein_coding",
+        exons=((33031935, 33032154), (33036103, 33036199), (33038762, 33038831), (33039571, 33039688), (33040784, 33041244)),
+        cds=(33032083, 33040891), mirna_mature=(),
+    )
+    MODELS = {("21", "ENST00000270142"): MODEL}
+    LOC, ALLELE, TX = "1:14374334", "]21:33034355]A", "ENST00000270142"
+
+    def pair(self, perl_csq, rust_csq):
+        return {T(self.LOC, self.ALLELE, self.TX, perl_csq)}, {T(self.LOC, self.ALLELE, self.TX, rust_csq)}
+
+    def test_the_exemplar_pair_is_excluded_on_both_sides(self) -> None:
+        perl, rust = self.pair("feature_truncation", "feature_truncation,intron_variant")
+        ex_rust, ex_perl, kinds = C.filter_breakend_mate_local_read_pairs(perl, rust, self.MODELS)
+        self.assertEqual((ex_rust, ex_perl), (rust, perl))
+        self.assertEqual(kinds, {"cross_chromosome": 1, "same_chromosome": 0})
+
+    def test_a_vep_rs_over_annotation_is_left_charged(self) -> None:
+        perl, rust = self.pair("feature_truncation", "feature_truncation,intron_variant,splice_polypyrimidine_tract_variant")
+        self.assertEqual(C.filter_breakend_mate_local_read_pairs(perl, rust, self.MODELS)[:2], (set(), set()))
+
+    def test_a_vep_rs_under_annotation_is_left_charged(self) -> None:
+        perl, rust = self.pair("feature_truncation", "intron_variant")
+        self.assertEqual(C.filter_breakend_mate_local_read_pairs(perl, rust, self.MODELS)[:2], (set(), set()))
+
+    def test_a_perl_set_the_local_read_does_not_explain_is_left_charged(self) -> None:
+        perl, rust = self.pair("feature_truncation,coding_sequence_variant", "feature_truncation,intron_variant")
+        self.assertEqual(C.filter_breakend_mate_local_read_pairs(perl, rust, self.MODELS)[:2], (set(), set()))
+
+    def test_a_same_chromosome_mate_beyond_five_kb_of_the_local_breakend_counts_as_same_chromosome(self) -> None:
+        perl = {T("21:27348903", "A[21:33034355[", self.TX, "feature_truncation")}
+        rust = {T("21:27348903", "A[21:33034355[", self.TX, "feature_truncation,intron_variant")}
+        ex_rust, ex_perl, kinds = C.filter_breakend_mate_local_read_pairs(perl, rust, self.MODELS)
+        self.assertEqual((ex_rust, ex_perl), (rust, perl))
+        self.assertEqual(kinds["same_chromosome"], 1)
+
+    def test_a_row_the_local_coordinate_also_selects_is_not_a_mate_side_row(self) -> None:
+        perl = {T("21:33034000", "N[21:33034355[", self.TX, "feature_truncation")}
+        rust = {T("21:33034000", "N[21:33034355[", self.TX, "feature_truncation,intron_variant")}
+        self.assertEqual(C.filter_breakend_mate_local_read_pairs(perl, rust, self.MODELS)[:2], (set(), set()))
+
+    def test_coinciding_reads_are_not_a_pair_to_exclude(self) -> None:
+        """When the mate and the local coordinate derive the same set the two engines
+        agree; a divergence there is something else and stays charged."""
+        gstt1 = C.TranscriptModel(chrom="22", start=24376133, end=24384284, strand=-1, biotype="protein_coding",
+                                  exons=((24376133, 24376617), (24376822, 24376998), (24379361, 24379511), (24381700, 24381787), (24384120, 24384284)),
+                                  cds=(24376423, 24384231), mirna_mature=())
+        perl = {T("21:24372025", "N[22:24372025[", "ENST00000248935", "downstream_gene_variant")}
+        rust = {T("21:24372025", "N[22:24372025[", "ENST00000248935", "intergenic_variant")}
+        self.assertEqual(C.filter_breakend_mate_local_read_pairs(perl, rust, {("22", "ENST00000248935"): gstt1})[:2], (set(), set()))
+
+    def test_one_sided_rows_are_never_pairs(self) -> None:
+        perl = {T(self.LOC, self.ALLELE, self.TX, "feature_truncation")}
+        self.assertEqual(C.filter_breakend_mate_local_read_pairs(perl, set(), self.MODELS)[:2], (set(), set()))
+
+    def test_no_cache_excludes_nothing(self) -> None:
+        perl, rust = self.pair("feature_truncation", "feature_truncation,intron_variant")
+        self.assertEqual(C.filter_breakend_mate_local_read_pairs(perl, rust, {})[:2], (set(), set()))
+
+    def test_a_transcript_absent_from_the_cache_is_not_adjudicated(self) -> None:
+        perl, rust = self.pair("feature_truncation", "feature_truncation,intron_variant")
+        self.assertEqual(C.filter_breakend_mate_local_read_pairs(perl, rust, {("22", "ENST_OTHER"): self.MODEL})[:2], (set(), set()))
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
+

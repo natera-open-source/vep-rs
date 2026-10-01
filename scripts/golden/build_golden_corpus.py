@@ -505,12 +505,48 @@ def classify_pair(perl_csq: str, rust_csq: str, allele: str) -> str | None:
     return None
 
 
+def classify_mate_side_pair(
+    location: str, allele: str, feature: str, perl_csq: str, rust_csq: str, models: dict
+) -> str | None:
+    """`breakend_mate_local_read` when VEP's set is the local-coordinate read of a point
+    breakend's mate-side Transcript row and vep-rs's set is the mate-coordinate read, the
+    two differing; the derivation is the SV comparator's `breakend_mate_context`, over the
+    corpus's own cache."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "validation"))
+    import breakend_mate_context as bmc  # noqa: E402
+
+    mate = bmc.bracket_mate(allele)
+    if mate is None:
+        return None
+    model = models.get((mate[0], feature))
+    if model is None:
+        return None
+    derived = bmc.mate_side_derivation(location, allele, model)
+    if derived is None:
+        return None
+    mate_set, local_set = derived
+    if mate_set == local_set:
+        return None
+    if set(perl_csq.split(",")) == local_set and set(rust_csq.split(",")) == mate_set:
+        return "breakend_mate_local_read"
+    return None
+
+
+def load_corpus_models(corpus: Path) -> dict:
+    """The corpus's pruned cache as `breakend_mate_context` transcript models."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "validation"))
+    import breakend_mate_context as bmc  # noqa: E402
+
+    return bmc.load_transcript_models(corpus / "json_cache")
+
+
 def cmd_classify(args: argparse.Namespace) -> int:
     corpus = Path(args.corpus)
     manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
     perl, perl_names = load_tuples(Path(args.vep_default))
     rust, rust_names = load_tuples(Path(args.vep_rs_output))
     by_name = record_name_index(manifest["records"])
+    models = load_corpus_models(corpus)
 
     def records_for(key: tuple[str, str, str, str]) -> list[int]:
         found: set[int] = set()
@@ -524,7 +560,9 @@ def cmd_classify(args: argparse.Namespace) -> int:
         for cs in sorted(perl_sets - rust_sets):
             klass = None
             for rs in sorted(rust_sets):
-                klass = classify_pair(cs, rs, key[1])
+                klass = classify_pair(cs, rs, key[1]) or classify_mate_side_pair(
+                    key[0], key[1], key[2], cs, rs, models
+                )
                 if klass:
                     break
             if klass is None and not rust_sets:

@@ -9723,7 +9723,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:32127674-32127741",
@@ -9751,7 +9751,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33032855",
@@ -9765,7 +9765,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33032855",
@@ -9779,7 +9779,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33032855",
@@ -9793,7 +9793,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33032855",
@@ -9807,7 +9807,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant,non_coding_transcript_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33032855",
@@ -9821,7 +9821,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant,non_coding_transcript_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33032855",
@@ -9835,7 +9835,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant,non_coding_transcript_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33032855",
@@ -9849,7 +9849,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant,non_coding_transcript_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33032855",
@@ -9863,7 +9863,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant,non_coding_transcript_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33033233-33829982",
@@ -10309,7 +10309,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33041158",
@@ -10323,7 +10323,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:33041158",
@@ -10337,7 +10337,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "21:38456438-38463604",
@@ -10407,7 +10407,7 @@
    "vep_rs_consequence_sets": [
     "upstream_gene_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "2:36803309",
@@ -10421,7 +10421,7 @@
    "vep_rs_consequence_sets": [
     "upstream_gene_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "2:36803309",
@@ -10435,7 +10435,7 @@
    "vep_rs_consequence_sets": [
     "upstream_gene_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "3:132441198-132441199",
@@ -10603,7 +10603,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10617,7 +10617,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10631,7 +10631,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10645,7 +10645,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10659,7 +10659,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10673,7 +10673,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10687,7 +10687,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10701,7 +10701,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10715,7 +10715,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10729,7 +10729,7 @@
    "vep_rs_consequence_sets": [
     "upstream_gene_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10743,7 +10743,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant,non_coding_transcript_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "5:32368771",
@@ -10757,7 +10757,7 @@
    "vep_rs_consequence_sets": [
     "feature_truncation,intron_variant,non_coding_transcript_variant"
    ],
-   "expected_divergence": "unexplained_residual"
+   "expected_divergence": "breakend_mate_local_read"
   },
   {
    "location": "6:105307515-105307516",
@@ -11322,6 +11322,7 @@
   "start_cooccurrence_swap": 80,
   "splice_family_swap": 9,
   "vep_only_transcript": 41,
-  "unexplained_residual": 30
+  "unexplained_residual": 2,
+  "breakend_mate_local_read": 28
  }
 }

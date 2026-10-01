@@ -145,6 +145,50 @@ TAXONOMY = [
         },
     },
     {
+        # A `<NON_REF>` record (a gVCF reference block) has no Sequence Ontology term, so Perl
+        # keeps it with `vep_skip`, loads no cache region for it and annotates it against
+        # whatever regions its batch loaded; alone in a batch it writes one row,
+        # `intergenic_variant`. vep-rs writes that one row for every such record.
+        # `filter_non_ref_batch_divergences` excludes Perl's Transcript tuples on a record
+        # whose vep-rs set is exactly the intergenic row, and that row where Perl wrote
+        # Transcript tuples and no intergenic row. The count is
+        # `excluded_non_ref_batch_perl` + `excluded_non_ref_batch_rust`: 1,838 + 180 on
+        # GRCh37 (Perl also wrote the intergenic row on 20 of the 200 records, where the
+        # two engines agree) and 5,403 + 200 on GRCh38, all in `10_special_alleles`.
+        "class": "sv_non_ref_batch_annotation",
+        "category": "perl_defect_fixed",
+        "measured_binary": "0db781b4",
+        "perl_source": "ensembl-vep VEP/Parser/VCF.pm:create_StructuralVariationFeatures (477-481, vep_skip for a type without a Sequence Ontology term); VEP/AnnotationSource.pm:get_all_regions_by_InputBuffer (238)",
+        "rust_source": "vep-cli/src/vcf_parser.rs:classify_symbolic_alt (a reference block yields one intergenic_variant row); scripts/validation/compare_sv_concordance.py:filter_non_ref_batch_divergences",
+        "tuples_per_suite": {
+            "sv_grch37": 2018,
+            "sv_grch38": 5603,
+        },
+    },
+    {
+        # Perl builds a Transcript row for every transcript within 5 kb of a point
+        # breakend's mate on the mate chromosome and then evaluates every positional
+        # predicate on it with the LOCAL variation feature; only `feature_truncation` reads
+        # the mate. The row carries the region term the local coordinate lands on when
+        # applied numerically to the mate transcript, or `intergenic_variant` on a
+        # Transcript row when nothing fires. vep-rs evaluates the mate row at the mate
+        # coordinate. `filter_breakend_mate_local_read_pairs` derives both sets from the
+        # cache (`breakend_mate_context.py`) and excludes a pair only when Perl's set is the
+        # local read, vep-rs's the mate read, and the two differ; the count is pairs
+        # (`excluded_breakend_mate_local_read_perl`, equal on the vep-rs side): 1,181
+        # cross-chromosome + 226 same-chromosome on GRCh37, 6,840 + 418 on GRCh38, in
+        # `09_breakends`, `13_vcf45_features` and the gnomAD-SV file of GRCh38.
+        "class": "sv_breakend_mate_context_local_read",
+        "category": "perl_defect_fixed",
+        "measured_binary": "0db781b4",
+        "perl_source": "ensembl-variation BaseVariationFeatureOverlapAllele.pm:get_all_OverlapConsequences (257, 273: the local feature reaches every predicate); Utils/VariationEffect.pm:feature_truncation (358, the one breakend read); StructuralVariationOverlap.pm:new (73-87, the mate row)",
+        "rust_source": "vep-effects/src/sv/breakend.rs:calculate_paired_mate (the mate evaluated as a point breakend on its own chromosome); scripts/validation/breakend_mate_context.py:mate_side_derivation",
+        "tuples_per_suite": {
+            "sv_grch37": 1407,
+            "sv_grch38": 7258,
+        },
+    },
+    {
         # Perl expands a <CNV:TR> record into its literal repeat sequence, trims the
         # reference over the run, and reads a gain as a whole-unit insertion at the run's
         # end and a loss as a deletion ending at the run's last base, then runs its
@@ -195,7 +239,6 @@ TAXONOMY = [
         "tuples_per_suite": {
             "clinvar_grch37": 440,
             "clinvar_grch38": 1444,
-            "gnomad_grch37": 4,
             "sv_grch38": 10,
         },
         "masked_pairs_per_suite": {
