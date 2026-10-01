@@ -923,8 +923,8 @@ mod tests {
     /// Both paths call the runner's `append_bnd_mate_consequences`, so the assertion
     /// is not that two copies agree but that no second copy exists: a divergent copy
     /// (no dedup against locally annotated transcripts, mate annotation through the
-    /// generic `annotate_variant` rather than `calculate_paired_mate`, no
-    /// `local_span_is_ranged`) is what breaks this equality.
+    /// generic `annotate_variant` rather than `calculate_paired_mate`) is what breaks
+    /// this equality.
     ///
     /// The inter-chromosomal BND is the case that matters. The variant sits on chr1 and
     /// its mate on chr21, so every consequence in the result is mate-side, which means an

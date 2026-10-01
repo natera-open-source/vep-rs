@@ -9652,34 +9652,6 @@
    "expected_divergence": "vep_only_transcript"
   },
   {
-   "location": "21:26037668",
-   "allele": "N[22:26037668[",
-   "feature": "ENST00000324198",
-   "feature_type": "Transcript",
-   "record_indices": [
-    721
-   ],
-   "vep_consequence_set": "feature_truncation,intron_variant",
-   "vep_rs_consequence_sets": [
-    "feature_truncation"
-   ],
-   "expected_divergence": "unexplained_residual"
-  },
-  {
-   "location": "21:26037668",
-   "allele": "N[22:26037668[",
-   "feature": "ENST00000455558",
-   "feature_type": "Transcript",
-   "record_indices": [
-    721
-   ],
-   "vep_consequence_set": "NMD_transcript_variant,feature_truncation,intron_variant",
-   "vep_rs_consequence_sets": [
-    "feature_truncation"
-   ],
-   "expected_divergence": "unexplained_residual"
-  },
-  {
    "location": "21:26063269-26064692",
    "allele": "deletion",
    "feature": "ENST00000324198",
@@ -9740,6 +9712,20 @@
    "expected_divergence": "vep_only_transcript"
   },
   {
+   "location": "21:27341781",
+   "allele": "A[21:27348902[",
+   "feature": "ENST00000415997",
+   "feature_type": "Transcript",
+   "record_indices": [
+    742
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
    "location": "21:32127674-32127741",
    "allele": "deletion",
    "feature": "ENST00000335093",
@@ -9754,6 +9740,132 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "21:33032855",
+   "allele": "T]1:33576256]",
+   "feature": "ENST00000294517",
+   "feature_type": "Transcript",
+   "record_indices": [
+    768
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:33032855",
+   "allele": "T]1:33576256]",
+   "feature": "ENST00000373441",
+   "feature_type": "Transcript",
+   "record_indices": [
+    768
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:33032855",
+   "allele": "T]1:33576256]",
+   "feature": "ENST00000373443",
+   "feature_type": "Transcript",
+   "record_indices": [
+    768
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:33032855",
+   "allele": "T]1:33576256]",
+   "feature": "ENST00000398167",
+   "feature_type": "Transcript",
+   "record_indices": [
+    768
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:33032855",
+   "allele": "T]1:33576256]",
+   "feature": "ENST00000471119",
+   "feature_type": "Transcript",
+   "record_indices": [
+    768
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant,non_coding_transcript_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:33032855",
+   "allele": "T]1:33576256]",
+   "feature": "ENST00000475935",
+   "feature_type": "Transcript",
+   "record_indices": [
+    768
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant,non_coding_transcript_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:33032855",
+   "allele": "T]1:33576256]",
+   "feature": "ENST00000478204",
+   "feature_type": "Transcript",
+   "record_indices": [
+    768
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant,non_coding_transcript_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:33032855",
+   "allele": "T]1:33576256]",
+   "feature": "ENST00000481886",
+   "feature_type": "Transcript",
+   "record_indices": [
+    768
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant,non_coding_transcript_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:33032855",
+   "allele": "T]1:33576256]",
+   "feature": "ENST00000484656",
+   "feature_type": "Transcript",
+   "record_indices": [
+    768
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant,non_coding_transcript_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
    "location": "21:33033233-33829982",
    "allele": "deletion",
    "feature": "ENST00000294517",
@@ -10184,6 +10296,48 @@
    "vep_consequence_set": "transcript_ablation",
    "vep_rs_consequence_sets": [],
    "expected_divergence": "vep_only_transcript"
+  },
+  {
+   "location": "21:33041158",
+   "allele": "A[21:38350016[",
+   "feature": "ENST00000336648",
+   "feature_type": "Transcript",
+   "record_indices": [
+    783
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:33041158",
+   "allele": "A[21:38350016[",
+   "feature": "ENST00000427746",
+   "feature_type": "Transcript",
+   "record_indices": [
+    783
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "21:33041158",
+   "allele": "A[21:38350016[",
+   "feature": "ENST00000448340",
+   "feature_type": "Transcript",
+   "record_indices": [
+    783
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
   },
   {
    "location": "21:38456438-38463604",
@@ -10240,6 +10394,48 @@
     "inframe_deletion,start_retained_variant"
    ],
    "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "2:36803309",
+   "allele": "A[21:38365819[",
+   "feature": "ENST00000336648",
+   "feature_type": "Transcript",
+   "record_indices": [
+    39
+   ],
+   "vep_consequence_set": "intergenic_variant",
+   "vep_rs_consequence_sets": [
+    "upstream_gene_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "2:36803309",
+   "allele": "A[21:38365819[",
+   "feature": "ENST00000400819",
+   "feature_type": "Transcript",
+   "record_indices": [
+    39
+   ],
+   "vep_consequence_set": "intergenic_variant",
+   "vep_rs_consequence_sets": [
+    "upstream_gene_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "2:36803309",
+   "allele": "A[21:38365819[",
+   "feature": "ENST00000427746",
+   "feature_type": "Transcript",
+   "record_indices": [
+    39
+   ],
+   "vep_consequence_set": "intergenic_variant",
+   "vep_rs_consequence_sets": [
+    "upstream_gene_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
   },
   {
    "location": "3:132441198-132441199",
@@ -10394,6 +10590,174 @@
     "NMD_transcript_variant,inframe_deletion,start_retained_variant"
    ],
    "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000346798",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000348990",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000354192",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000357903",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000358918",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000359726",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000439274",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000440126",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000448388",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000448850",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "intergenic_variant",
+   "vep_rs_consequence_sets": [
+    "upstream_gene_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000462267",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant,non_coding_transcript_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
+  },
+  {
+   "location": "5:32368771",
+   "allele": "[21:27464596[A",
+   "feature": "ENST00000474136",
+   "feature_type": "Transcript",
+   "record_indices": [
+    163
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "feature_truncation,intron_variant,non_coding_transcript_variant"
+   ],
+   "expected_divergence": "unexplained_residual"
   },
   {
    "location": "6:105307515-105307516",
@@ -10958,6 +11322,6 @@
   "start_cooccurrence_swap": 80,
   "splice_family_swap": 9,
   "vep_only_transcript": 41,
-  "unexplained_residual": 4
+  "unexplained_residual": 30
  }
 }

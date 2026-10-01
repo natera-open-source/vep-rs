@@ -1291,18 +1291,14 @@ fn lookup_predictions(
 /// Append the mate-side consequences of a paired BND, in place.
 ///
 /// The single implementation: `annotator.rs` calls this rather than carrying its
-/// own, because two implementations of one Perl behaviour diverge (dedup against
-/// locally annotated transcripts, `calculate_paired_mate` versus the generic
-/// `annotate_variant`, `local_span_is_ranged`).
+/// own, because two implementations of one behaviour diverge.
 pub(crate) fn append_bnd_mate_consequences(
     variant: &mut InputVariant,
     transcripts_by_chr: &LazyTranscriptIndexes,
     config: &vep_effects::EffectsConfig,
 ) {
-    // Perl VEP annotates BND alleles against transcripts at the mate position.
-    // This produces:
-    // - feature_truncation: when mate falls within a transcript body
-    // - intergenic_variant: when mate is near but outside a transcript
+    // One row per transcript within the selection window of the mate coordinate,
+    // describing the mate breakend at that coordinate (`calculate_paired_mate`).
     // Only applies to paired BND alleles (not single-breakend forms).
     if variant.variant_class != vep_core::variant::VariantClass::Translocation
         || variant.is_single_breakend
@@ -1329,38 +1325,15 @@ pub(crate) fn append_bnd_mate_consequences(
         None => return,
     };
 
-    // Create a temporary variant at the mate position for annotation.
-    // calculate_paired_mate uses variant.start as the breakpoint.
-    let orig_start = variant.start;
-    let orig_end = variant.end;
-    variant.start = mate_pos;
-    variant.end = mate_pos;
-
-    let upstream = config.upstream_distance;
-    let downstream = config.downstream_distance;
-
-    // Whether the original local span covered more than one base, captured
-    // before the overwrite above. Perl's mate-side context predicates read the
-    // local variation feature while `feature_truncation` reads the mate, so a
-    // point local span gets bare `feature_truncation`; see
-    // `calculate_paired_mate`.
-    let local_span_is_ranged = orig_end > orig_start;
-
     let mut mate_consequences = Vec::new();
+    let paired: &InputVariant = variant;
     chr_transcripts.for_each_overlapping(mate_pos, mate_pos, |transcript| {
-        if let Some(tc) = vep_effects::sv::breakend::calculate_paired_mate(
-            variant,
-            transcript,
-            upstream,
-            downstream,
-            local_span_is_ranged,
-        ) {
+        if let Some(tc) =
+            vep_effects::sv::breakend::calculate_paired_mate(paired, transcript, config)
+        {
             mate_consequences.push(tc);
         }
     });
-
-    variant.start = orig_start;
-    variant.end = orig_end;
 
     let mut appended = 0usize;
     for tc in mate_consequences {

@@ -7882,30 +7882,130 @@ fn concordance_point_breakend_upstream_with_mate_inside_adds_truncation_to_brack
     assert_eq!(tc.distance, Some(577));
 }
 
-/// The mate-side row of a point breakend whose local POS is far from the
-/// transcript. The positional predicates read the local point and find nothing
-/// there, so a mate inside the transcript leaves `feature_truncation` alone, and
-/// a mate within 5 kb but outside it leaves nothing, which VEP prints as
-/// `$DEFAULT_OVERLAP_CONSEQUENCE`, `intergenic_variant`
-/// (`BaseVariationFeatureOverlapAllele.pm:285`).
+/// A paired allele whose record sits on chromosome 1 and whose bracket names
+/// chromosome 21 at `mate_pos`: the shape of the mate-side rows of `09_breakends`
+/// (`1:14374334 ]21:33034355]A`) and gnomAD (`21:24372025 N[22:24372025[`).
+fn make_cross_chromosome_bracket_allele(mate_pos: u64) -> InputVariant {
+    let mut v = InputVariant::new(
+        "1".into(),
+        14_374_334,
+        14_374_334,
+        b"A".to_vec(),
+        format!("]21:{mate_pos}]A").into_bytes(),
+    );
+    v.variant_class = vep_core::variant::VariantClass::Translocation;
+    v.is_structural = true;
+    v.is_single_breakend = false;
+    v.mate_id = Some("mate".into());
+    v.mate_chr = Some("21".into());
+    v.mate_pos = Some(mate_pos);
+    v.sv_end = Some(14_374_334);
+    v
+}
+
+// The mate-side row describes the mate breakend at the mate coordinate. Ensembl's
+// `feature_truncation` (`Utils/VariationEffect.pm:358`) is the one predicate written
+// for the breakend, passing `$bvfoa->breakend` into `within_feature` with the
+// seq-region test on; every other predicate receives the local variation feature
+// (`BaseVariationFeatureOverlapAllele.pm:257,273`, `_bvfo_preds` `:454`, `upstream`
+// and `downstream` `Utils/VariationEffect.pm:443-457`) and so measures the local
+// coordinate against the mate chromosome's transcript. Where that coordinate lands
+// numerically inside or within 5 kb of the transcript VEP's row carries the terms
+// below (gnomAD's `21:24372025 N[22:24372025[`: `downstream_gene_variant` at
+// 4,108 bp on ENST00000248935, `21:15437971 N[Y:15437971[`:
+// `feature_truncation,intron_variant` on ENST00000329134); elsewhere it falls to
+// bare `feature_truncation` or the default `intergenic_variant`, which these rows
+// never carry.
+
+/// Mate inside intron 1 of a coding transcript.
 #[test]
-fn concordance_point_breakend_mate_side_row_is_truncation_alone_or_intergenic() {
+fn concordance_mate_side_row_inside_intron_is_truncation_and_intron_variant() {
     let tx = make_test_transcript();
-
-    // The caller repoints the variant at the mate before asking for the mate-side row.
-    let mut inside = make_point_bracket_allele(30_000_000, 25_003_000);
-    inside.start = 25_003_000;
-    inside.end = 25_003_000;
-    let tc = crate::sv::breakend::calculate_paired_mate(&inside, &tx, 5000, 5000, false)
+    let v = make_cross_chromosome_bracket_allele(25_001_000);
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default())
         .expect("mate inside the transcript annotates");
-    crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation"]);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation", "intron_variant"]);
+}
 
-    let mut near = make_point_bracket_allele(30_000_000, 24_997_000);
-    near.start = 24_997_000;
-    near.end = 24_997_000;
-    let tc = crate::sv::breakend::calculate_paired_mate(&near, &tx, 5000, 5000, false)
+/// Mate inside a CDS exon.
+#[test]
+fn concordance_mate_side_row_inside_cds_exon_is_truncation_and_coding_sequence() {
+    let tx = make_test_transcript();
+    let v = make_cross_chromosome_bracket_allele(25_002_100);
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default())
+        .expect("mate inside the transcript annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["feature_truncation", "coding_sequence_variant"],
+    );
+}
+
+/// Mate 577 bp past the 3' end of a forward-strand transcript.
+#[test]
+fn concordance_mate_side_row_577_bp_downstream_is_downstream_gene_variant() {
+    let tx = make_test_transcript();
+    let v = make_cross_chromosome_bracket_allele(25_006_577);
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default())
         .expect("mate within 5 kb annotates");
-    crate::test_helpers::assert_consequence_set_eq(&tc, &["intergenic_variant"]);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["downstream_gene_variant"]);
+    assert_eq!(tc.distance, Some(577));
+}
+
+/// Mate 3 kb before the 5' end of a forward-strand transcript.
+#[test]
+fn concordance_mate_side_row_upstream_within_5kb_is_upstream_gene_variant() {
+    let tx = make_test_transcript();
+    let v = make_cross_chromosome_bracket_allele(24_997_000);
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default())
+        .expect("mate within 5 kb annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["upstream_gene_variant"]);
+    assert_eq!(tc.distance, Some(3000));
+}
+
+/// Mate 10 kb from the transcript: no row.
+#[test]
+fn concordance_mate_side_row_beyond_5kb_is_absent() {
+    let tx = make_test_transcript();
+    let v = make_cross_chromosome_bracket_allele(24_990_000);
+    assert!(
+        crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default()).is_none()
+    );
+}
+
+/// Mate inside intron 1 of a non-coding transcript and of a nonsense-mediated-decay
+/// transcript: the biotype context term joins the region term (VEP:
+/// `21:31934729 N[22:31934729[ ENST00000382162
+/// feature_truncation,intron_variant,non_coding_transcript_variant`;
+/// `21:26037668 N[22:26037668[ ENST00000455558
+/// NMD_transcript_variant,feature_truncation,intron_variant`).
+#[test]
+fn concordance_mate_side_row_carries_the_biotype_context_term() {
+    let v = make_cross_chromosome_bracket_allele(25_001_000);
+
+    let tx = make_non_coding_transcript();
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &tx, &EffectsConfig::default())
+        .expect("mate inside the transcript annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "intron_variant",
+            "non_coding_transcript_variant",
+        ],
+    );
+
+    let mut nmd = make_test_transcript();
+    nmd.biotype = "nonsense_mediated_decay".into();
+    let tc = crate::sv::breakend::calculate_paired_mate(&v, &nmd, &EffectsConfig::default())
+        .expect("mate inside the transcript annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "NMD_transcript_variant",
+            "feature_truncation",
+            "intron_variant",
+        ],
+    );
 }
 
 /// A symbolic `<BND>` whose span runs from intron 1 to a mate 594 kb away: the
