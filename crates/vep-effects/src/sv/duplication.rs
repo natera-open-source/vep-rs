@@ -20,7 +20,7 @@
 
 use super::{
     is_mature_mirna_sv, overlaps_any_exon, overlaps_any_intron_trimmed, overlaps_cds_exon,
-    overlaps_five_prime_utr, overlaps_three_prime_utr,
+    overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
 };
 use smallvec::SmallVec;
 use vep_core::consequence::{
@@ -177,6 +177,9 @@ fn add_regional_consequences(
     // invariant donor/acceptor bases gets no `intron_variant`.
     if overlaps_any_intron_trimmed(transcript, sv_lo, sv_hi) {
         push_unique(consequences, Consequence::IntronVariant);
+    }
+    if overlaps_polypyrimidine_tract(transcript, sv_lo, sv_hi) {
+        push_unique(consequences, Consequence::SplicePolypyrimidineTractVariant);
     }
 
     // Perl VEP: for non-coding transcripts, non_coding_transcript_variant is added

@@ -13,7 +13,7 @@
 use super::{
     bnd_breakend_within_transcript, is_mature_mirna_sv, overlaps_any_exon as sv_overlaps_any_exon,
     overlaps_any_intron_trimmed as sv_overlaps_any_intron_trimmed, overlaps_cds_exon,
-    overlaps_five_prime_utr, overlaps_three_prime_utr,
+    overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
 };
 use smallvec::SmallVec;
 use vep_core::consequence::{
@@ -308,9 +308,17 @@ pub fn calculate(
         push_unique(&mut consequences, Consequence::IntronVariant);
     }
 
-    // No splice_polypyrimidine_tract_variant for structural deletions: Perl adds
-    // PPT only for small-variant types, and a large deletion spanning an intron
-    // always overlaps the PPT window.
+    // A `<CNV:TR>` loss reaches this arm, but Ensembl reads a tandem repeat as a
+    // `VariationFeature` carrying the literal allele string (ensembl-vep
+    // `Parser/VCF.pm:530-543`), so the structural tract rule is not its rule.
+    if variant.variant_class != VariantClass::TandemRepeat
+        && overlaps_polypyrimidine_tract(transcript, del_start, del_end)
+    {
+        push_unique(
+            &mut consequences,
+            Consequence::SplicePolypyrimidineTractVariant,
+        );
+    }
 
     // Context terms for non-coding transcripts (excluding NMD, handled separately).
     // Perl's within_non_coding_gene: not translation and not mature_miRNA and not non_coding_exon_variant

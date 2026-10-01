@@ -15,7 +15,7 @@
 
 use super::{
     is_mature_mirna_sv, overlaps_any_exon, overlaps_any_intron_trimmed, overlaps_cds_exon,
-    overlaps_five_prime_utr, overlaps_three_prime_utr,
+    overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
 };
 use smallvec::{smallvec, SmallVec};
 use vep_core::consequence::{
@@ -117,6 +117,12 @@ pub fn calculate(
             calculate_protein_coding_consequences(&mut consequences, transcript, sv_start, sv_end);
         } else {
             calculate_non_coding_consequences(&mut consequences, transcript, sv_start, sv_end);
+        }
+        if overlaps_polypyrimidine_tract(transcript, sv_start, sv_end) {
+            push_unique(
+                &mut consequences,
+                Consequence::SplicePolypyrimidineTractVariant,
+            );
         }
 
         // NMD context: always add alongside other consequences.

@@ -175,15 +175,32 @@ pub(crate) fn overlaps_any_intron_trimmed(
     })
 }
 
-/// Check if an SV span overlaps the polypyrimidine tract of any intron.
+/// Whether Ensembl emits `splice_polypyrimidine_tract_variant` for a structural
+/// allele spanning `sv_start..=sv_end` on `transcript`.
 ///
-/// PPT window: positions -16 to -2 from the acceptor splice site (a 15bp window).
-/// On forward strand the acceptor is at the intron end, on reverse at the intron start.
-/// Coordinates use the same 1-based inclusive convention as intron boundaries.
+/// The term's `variant_feature_class` is `BaseVariationFeature`
+/// (`Utils/Constants.pm:969-987`), so it applies to a `StructuralVariationFeature`;
+/// the other splice terms are `VariationFeature`-only and never reach a structural
+/// allele. Its predicate (`Utils/VariationEffect.pm:607-614`) reads
+/// `polypyrimidine_splice_site` on a forward-strand transcript and
+/// `polypyrimidine_splice_site_reverse` on a reverse-strand one. `_intron_effects`
+/// (`BaseTranscriptVariationAllele.pm:155-161`) sets them for every overlapped
+/// intron with `overlap($start, $end, $intron_end - 16, $intron_end - 2)` and
+/// `overlap($start, $end, $intron_start + 2, $intron_start + 16)`, where the
+/// region is the whole span for a structural allele
+/// (`StructuralVariationOverlapAllele.pm:210-214`).
 ///
-/// Not called from the SV consequence paths: Perl adds no PPT term to structural
-/// deletions, and a large span always overlaps the window.
-#[allow(dead_code)]
+/// The predicate only runs when `_skip_oc` (`BaseVariationFeatureOverlapAllele.pm:317-333`)
+/// passes the term's `include => {exon => 0, intron => 1}`. The `exon`
+/// pre-predicate (`:511-516`) is `_overlapped_exons` over the span, stretched by
+/// 12 bases on each side when the transcript has a frameshift intron
+/// (`BaseTranscriptVariation.pm:848-869`), so a span that touches any exon of the
+/// transcript never carries the term. A span that engulfs the transcript gets
+/// neither key (`:465-477`) and is skipped as well; every caller returns before
+/// reaching this test in that case. The `intron` requirement adds nothing here:
+/// a tract window lies inside its intron's overlap region for any intron of 14 bp
+/// or more, and a shorter intron puts the window inside an exon, where the `exon`
+/// test already stops the term.
 pub(crate) fn overlaps_polypyrimidine_tract(
     transcript: &Transcript,
     sv_start: u64,
@@ -191,12 +208,21 @@ pub(crate) fn overlaps_polypyrimidine_tract(
 ) -> bool {
     let lo = sv_start.min(sv_end);
     let hi = sv_start.max(sv_end);
-    let introns = transcript_introns(transcript);
 
-    introns.iter().any(|intron| {
-        // PPT is near the acceptor end of the intron.
-        // Forward strand: acceptor at intron_end, PPT = [intron_end - 16, intron_end - 2]
-        // Reverse strand: acceptor at intron_start, PPT = [intron_start + 2, intron_start + 16]
+    let stretch = if transcript.facts().vefc_has_frameshift_intron {
+        12
+    } else {
+        0
+    };
+    if overlaps_any_exon(
+        transcript,
+        lo.saturating_sub(stretch),
+        hi.saturating_add(stretch),
+    ) {
+        return false;
+    }
+
+    transcript_introns(transcript).iter().any(|intron| {
         let (ppt_start, ppt_end) = match transcript.strand {
             Strand::Forward => (intron.end.saturating_sub(16), intron.end.saturating_sub(2)),
             Strand::Reverse => (
@@ -1703,6 +1729,66 @@ mod tests {
         let tx = crate::test_helpers::make_test_transcript();
         // PPT of intron 2 = [25_003_983, 25_003_997]
         assert!(overlaps_polypyrimidine_tract(&tx, 25_003_990, 25_003_995));
+    }
+
+    #[test]
+    fn test_ppt_helper_span_touching_an_exon_is_skipped() {
+        let tx = crate::test_helpers::make_test_transcript();
+        // Covers intron 1's window and the first bases of exon 2 (25_002_000):
+        // Perl's `exon` pre-predicate is 1 and `_skip_oc` drops the term.
+        assert!(!overlaps_polypyrimidine_tract(&tx, 25_001_990, 25_002_010));
+        // Exon 1's last bases and the whole of intron 1.
+        assert!(!overlaps_polypyrimidine_tract(&tx, 25_000_290, 25_001_999));
+    }
+
+    /// `make_test_transcript()` with exon 3 split by a 9 bp intron
+    /// (25_004_101-25_004_109), which Perl's `_has_frameshift_intron` reads as a
+    /// frameshift intron and which stretches every exon by 12 in the exon test.
+    fn make_frameshift_intron_transcript() -> Transcript {
+        let mut tx = crate::test_helpers::make_test_transcript();
+        let last = tx.exons.pop().expect("three exons");
+        tx.exons.push(vep_core::transcript::Exon {
+            stable_id: Some("ENSE00000000003".into()),
+            start: 25_004_000,
+            end: 25_004_100,
+            rank: 3,
+            phase: 0,
+            end_phase: 0,
+        });
+        tx.exons.push(vep_core::transcript::Exon {
+            stable_id: Some("ENSE00000000004".into()),
+            start: 25_004_110,
+            end: last.end,
+            rank: 4,
+            phase: 0,
+            end_phase: -1,
+        });
+        tx.introns.push(vep_core::transcript::Intron {
+            start: 25_004_101,
+            end: 25_004_109,
+            rank: 3,
+        });
+        let vefc = tx.vefc.as_mut().expect("test transcript has a vefc");
+        vefc.introns = tx.introns.clone();
+        vefc.sorted_exons = tx.exons.clone();
+        tx
+    }
+
+    #[test]
+    fn test_ppt_helper_frameshift_intron_stretches_exon_gate() {
+        let tx = make_frameshift_intron_transcript();
+        assert!(tx.facts().vefc_has_frameshift_intron);
+        // Stretched by 12, exon 2 begins at 25_001_988: a span ending at
+        // 25_001_990 touches it and loses the term ...
+        assert!(!overlaps_polypyrimidine_tract(&tx, 25_001_983, 25_001_990));
+        // ... while the same span on the unstretched transcript keeps it,
+        assert!(overlaps_polypyrimidine_tract(
+            &crate::test_helpers::make_test_transcript(),
+            25_001_983,
+            25_001_990
+        ));
+        // and a span ending at 25_001_986 stays clear of the stretched exon.
+        assert!(overlaps_polypyrimidine_tract(&tx, 25_001_983, 25_001_986));
     }
 
     // Non-coding exon variant tests for giant/small BND paths

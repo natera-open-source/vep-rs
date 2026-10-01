@@ -7470,3 +7470,276 @@ fn concordance_same_length_substitution_covering_non_coding_transcript() {
         ],
     );
 }
+
+// `splice_polypyrimidine_tract_variant` on structural alleles.
+//
+// The term's `variant_feature_class` is `BaseVariationFeature`
+// (`Utils/Constants.pm:969-987`), so a structural allele is eligible; its
+// predicate (`Utils/VariationEffect.pm:607-614`) reads the flags that
+// `_intron_effects` (`BaseTranscriptVariationAllele.pm:155-161`) sets over the
+// whole span (`StructuralVariationOverlapAllele.pm:210-214`), and `_skip_oc`
+// (`BaseVariationFeatureOverlapAllele.pm:317-333`) drops the term under
+// `include => {exon => 0, intron => 1}` whenever the span overlaps an exon of
+// the transcript. On `make_test_transcript()` intron 1 is 25_000_300-25_001_999
+// and its tract window is 25_001_983-25_001_997; exon 2 starts at 25_002_000.
+//
+// Perl rows: `21:29079809-29085808 deletion ENST00000341618` and the same
+// span as `duplication` are `splice_polypyrimidine_tract_variant,intron_variant`
+// (intron 29077714-29085812, no exon overlap, `pre ... exon=0 ... intron=1`),
+// while the same deletion on `ENST00000399947` is
+// `feature_truncation,5_prime_UTR_variant,intron_variant`: the flag is set
+// (`polypyrimidine_splice_site=1`) but `exon=1` removes the term from the
+// predicate list before it runs.
+
+/// A structural allele of `class` spanning `start..=end`, dispatched through
+/// `calculate_consequences` like a parsed symbolic ALT.
+fn make_structural_span(
+    class: vep_core::variant::VariantClass,
+    start: u64,
+    end: u64,
+    alt: &[u8],
+) -> InputVariant {
+    let mut variant = InputVariant::new("21".into(), start, end, b"N".to_vec(), alt.to_vec());
+    variant.variant_class = class;
+    variant.is_structural = true;
+    variant.sv_end = Some(end);
+    variant
+}
+
+/// The `N.` allele of a symbolic `<BND>` carrying a span: one breakend, an interval
+/// from `start` to `end`, a mate id so the allele renders literally.
+fn make_bnd_single_breakend_span(start: u64, end: u64) -> InputVariant {
+    let mut variant = make_structural_span(
+        vep_core::variant::VariantClass::Translocation,
+        start,
+        end,
+        b"N.",
+    );
+    variant.is_single_breakend = true;
+    variant.mate_id = Some("bnd".into());
+    variant
+}
+
+/// The bracket allele of the same record, whose breakend is the coordinate inside the
+/// brackets (`mate_pos`) on the same chromosome.
+fn make_bnd_bracket_span(start: u64, end: u64, mate_pos: u64) -> InputVariant {
+    let mut variant = make_structural_span(
+        vep_core::variant::VariantClass::Translocation,
+        start,
+        end,
+        format!("N[21:{mate_pos}[").as_bytes(),
+    );
+    variant.is_single_breakend = false;
+    variant.mate_id = Some("bnd".into());
+    variant.mate_chr = Some("21".into());
+    variant.mate_pos = Some(mate_pos);
+    variant
+}
+
+/// A symbolic `<DEL>` inside intron 1 whose end reaches the tract window
+/// (Perl: `21:29079809-29085808 deletion ENST00000341618`).
+#[test]
+fn concordance_symbolic_deletion_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::StructuralDeletion,
+        25_000_400,
+        25_001_990,
+        b"<DEL>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["intron_variant", "splice_polypyrimidine_tract_variant"],
+    );
+}
+
+/// The same span crossing into exon 2 sets the flag but `exon=1` drops the term
+/// (Perl: `21:29079809-29085808 deletion ENST00000399947`).
+#[test]
+fn concordance_symbolic_deletion_crossing_exon_has_no_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::StructuralDeletion,
+        25_000_400,
+        25_002_100,
+        b"<DEL>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "coding_sequence_variant",
+            "intron_variant",
+        ],
+    );
+}
+
+/// A symbolic `<DUP>` inside intron 1 reaching the tract window
+/// (Perl: `21:29079809-29085808 duplication ENST00000341618`).
+#[test]
+fn concordance_symbolic_duplication_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::Duplication,
+        25_000_400,
+        25_001_990,
+        b"<DUP>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["intron_variant", "splice_polypyrimidine_tract_variant"],
+    );
+}
+
+/// The same duplication crossing into exon 2: `feature_elongation` on the
+/// contained cDNA overlap, the coding term, and no tract term
+/// (Perl: `21:29079809-29085808 duplication ENST00000399947` is
+/// `5_prime_UTR_variant,intron_variant` with the flag set and `exon=1`).
+#[test]
+fn concordance_symbolic_duplication_crossing_exon_has_no_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::Duplication,
+        25_000_400,
+        25_002_100,
+        b"<DUP>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_elongation",
+            "coding_sequence_variant",
+            "intron_variant",
+        ],
+    );
+}
+
+/// A ranged `<INS:ME:ALU>` inside intron 1 reaching the tract window
+/// (Perl: `21:10578057-10578336 Alu_insertion ENST00000427445` is
+/// `intron_variant,splice_polypyrimidine_tract_variant`).
+#[test]
+fn concordance_alu_insertion_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::MobileElementInsertion,
+        25_001_711,
+        25_001_990,
+        b"<INS:ME:ALU>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["intron_variant", "splice_polypyrimidine_tract_variant"],
+    );
+}
+
+/// The same insertion class crossing into exon 2 carries no tract term.
+#[test]
+fn concordance_alu_insertion_crossing_exon_has_no_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::MobileElementInsertion,
+        25_001_990,
+        25_002_010,
+        b"<INS:ME:ALU>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_elongation",
+            "coding_sequence_variant",
+            "intron_variant",
+        ],
+    );
+}
+
+/// The `N.` allele of a symbolic `<BND>` whose span lies in intron 1 and reaches
+/// the tract window: `feature_truncation` from `within_feature` against the whole
+/// feature, then the intron and tract terms
+/// (Perl: `21:25729803-25735486 N. ENST00000400090` is
+/// `feature_truncation,intron_variant,splice_polypyrimidine_tract_variant`).
+#[test]
+fn concordance_bnd_single_breakend_span_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_bnd_single_breakend_span(25_000_400, 25_001_990);
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "intron_variant",
+            "splice_polypyrimidine_tract_variant",
+        ],
+    );
+}
+
+/// The bracket allele of the same record, its breakend one base before the span
+/// inside the transcript, carries the same three terms
+/// (Perl: `21:25729803-25735486 N[21:25729802[ ENST00000400090`).
+#[test]
+fn concordance_bnd_bracket_span_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_bnd_bracket_span(25_000_400, 25_001_990, 25_000_399);
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "intron_variant",
+            "splice_polypyrimidine_tract_variant",
+        ],
+    );
+}
+
+/// The `N.` span crossing into exon 2: a `chromosome_breakpoint` keeps
+/// `coding_sequence_variant` where a deletion would read its length, and the
+/// exon overlap removes the tract term.
+#[test]
+fn concordance_bnd_single_breakend_span_crossing_exon_has_no_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_bnd_single_breakend_span(25_000_400, 25_002_100);
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "coding_sequence_variant",
+            "intron_variant",
+        ],
+    );
+}
+
+/// A `<NON_REF>` span in intron 1 reaching the tract window takes the copy-number
+/// path and carries the term like every other structural class
+/// (Perl: `21:33035607-33036088 <NON_REF> ENST00000270142` is
+/// `intron_variant,splice_polypyrimidine_tract_variant`).
+#[test]
+fn concordance_non_ref_span_in_intron_reaching_tract_is_polypyrimidine() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_structural_span(
+        vep_core::variant::VariantClass::CopyNumberVariation,
+        25_001_500,
+        25_001_990,
+        b"<NON_REF>",
+    );
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["intron_variant", "splice_polypyrimidine_tract_variant"],
+    );
+}

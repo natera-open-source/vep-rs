@@ -247,7 +247,9 @@ pub fn calculate(
                 if dist_to_donor >= 2 && dist_to_acceptor >= 2 {
                     consequences.push(Consequence::IntronVariant);
                 }
-                add_bnd_splice_consequences(&mut consequences, dist_to_donor, dist_to_acceptor);
+                if super::overlaps_polypyrimidine_tract(transcript, bp, bp) {
+                    consequences.push(Consequence::SplicePolypyrimidineTractVariant);
+                }
                 if !is_coding && !transcript.is_nmd_transcript() {
                     consequences.push(Consequence::NonCodingTranscriptVariant);
                 }
@@ -653,25 +655,6 @@ fn genomic_to_cdna(bp: u64, transcript: &Transcript) -> Option<u64> {
         }
     }
     None
-}
-
-/// Add splice-region consequences for a breakpoint in an intron.
-///
-/// Perl VEP uses a simplified splice model for structural variants:
-/// only `splice_polypyrimidine_tract_variant` is added when the breakpoint
-/// falls within the polypyrimidine tract (2-16 bases from acceptor).
-/// Detailed splice sub-terms (splice_region_variant, splice_donor_5th_base,
-/// splice_donor_region) are not added for SVs; those apply only to small
-/// variants in the main consequence engine.
-fn add_bnd_splice_consequences(
-    consequences: &mut ConsequenceList,
-    _dist_to_donor: u64,
-    dist_to_acceptor: u64,
-) {
-    // Polypyrimidine tract (positions 2..=16 from acceptor).
-    if (2..=16).contains(&dist_to_acceptor) {
-        consequences.push(Consequence::SplicePolypyrimidineTractVariant);
-    }
 }
 
 #[cfg(test)]

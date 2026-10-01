@@ -10340,34 +10340,6 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
-   "location": "21:40801153-40812225",
-   "allele": "deletion",
-   "feature": "ENST00000434281",
-   "feature_type": "Transcript",
-   "record_indices": [
-    874
-   ],
-   "vep_consequence_set": "intron_variant,splice_polypyrimidine_tract_variant",
-   "vep_rs_consequence_sets": [
-    "intron_variant"
-   ],
-   "expected_divergence": "unexplained_residual"
-  },
-  {
-   "location": "21:40801153-40812225",
-   "allele": "deletion",
-   "feature": "ENST00000491625",
-   "feature_type": "Transcript",
-   "record_indices": [
-    874
-   ],
-   "vep_consequence_set": "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant",
-   "vep_rs_consequence_sets": [
-    "intron_variant,non_coding_transcript_variant"
-   ],
-   "expected_divergence": "unexplained_residual"
-  },
-  {
    "location": "2:211421460-211421462",
    "allele": "-",
    "feature": "ENST00000233072",
@@ -11438,6 +11410,6 @@
   "start_cooccurrence_swap": 80,
   "splice_family_swap": 9,
   "vep_only_transcript": 41,
-  "unexplained_residual": 16
+  "unexplained_residual": 14
  }
 }

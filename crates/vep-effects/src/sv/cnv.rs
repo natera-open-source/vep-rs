@@ -18,7 +18,8 @@
 
 use super::{
     is_mature_mirna_sv, overlaps_any_exon, overlaps_any_intron_trimmed, overlaps_cds_exon,
-    overlaps_five_prime_utr, overlaps_three_prime_utr, transcript_has_incomplete_cds,
+    overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
+    transcript_has_incomplete_cds,
 };
 use smallvec::{smallvec, SmallVec};
 use vep_core::consequence::{
@@ -218,6 +219,9 @@ pub fn calculate(
     // invariant donor/acceptor bases gets no `intron_variant`.
     if overlaps_any_intron_trimmed(transcript, sv_start, sv_end) {
         consequences.push(Consequence::IntronVariant);
+    }
+    if overlaps_polypyrimidine_tract(transcript, sv_start, sv_end) {
+        consequences.push(Consequence::SplicePolypyrimidineTractVariant);
     }
 
     // Context terms for non-coding transcripts: always added alongside other consequences.
