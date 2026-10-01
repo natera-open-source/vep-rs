@@ -8994,20 +8994,6 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
-   "location": "21:10567437-10717454",
-   "allele": "N.",
-   "feature": "ENST00000622028",
-   "feature_type": "Transcript",
-   "record_indices": [
-    513
-   ],
-   "vep_consequence_set": "feature_truncation",
-   "vep_rs_consequence_sets": [
-    "coding_transcript_variant,feature_truncation"
-   ],
-   "expected_divergence": "unexplained_residual"
-  },
-  {
    "location": "21:23858134-23861555",
    "allele": "duplication",
    "feature": "ENST00000255830",
@@ -9722,20 +9708,6 @@
     "5_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant,start_lost"
    ],
    "expected_divergence": "start_cooccurrence_swap"
-  },
-  {
-   "location": "21:7280042-10683218",
-   "allele": "N.",
-   "feature": "ENST00000622028",
-   "feature_type": "Transcript",
-   "record_indices": [
-    510
-   ],
-   "vep_consequence_set": "feature_truncation",
-   "vep_rs_consequence_sets": [
-    "coding_transcript_variant,feature_truncation"
-   ],
-   "expected_divergence": "unexplained_residual"
   },
   {
    "location": "2:86282170-86282171",
@@ -12398,108 +12370,11 @@
    "expected_divergence": "start_cooccurrence_swap"
   }
  ],
- "vep_rs_only_tuples": [
-  {
-   "location": "21:25928991",
-   "allele": "]21:25922683]G",
-   "feature": "ENST00000617755",
-   "feature_type": "Transcript",
-   "record_indices": [
-    545
-   ],
-   "vep_rs_consequence_sets": [
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "location": "21:33555083-33575779",
-   "allele": "N[chr21:33575779[",
-   "feature": "ENST00000300278",
-   "feature_type": "Transcript",
-   "record_indices": [
-    600
-   ],
-   "vep_rs_consequence_sets": [
-    "coding_sequence_variant"
-   ]
-  },
-  {
-   "location": "21:33555083-33575779",
-   "allele": "N[chr21:33575779[",
-   "feature": "ENST00000381679",
-   "feature_type": "Transcript",
-   "record_indices": [
-    600
-   ],
-   "vep_rs_consequence_sets": [
-    "coding_sequence_variant"
-   ]
-  },
-  {
-   "location": "21:33555083-33575779",
-   "allele": "N[chr21:33575779[",
-   "feature": "ENST00000421541",
-   "feature_type": "Transcript",
-   "record_indices": [
-    600
-   ],
-   "vep_rs_consequence_sets": [
-    "coding_sequence_variant"
-   ]
-  },
-  {
-   "location": "21:42077476-42936919",
-   "allele": "N[chr21:42936919[",
-   "feature": "ENST00000400424",
-   "feature_type": "Transcript",
-   "record_indices": [
-    670
-   ],
-   "vep_rs_consequence_sets": [
-    "intron_variant"
-   ]
-  },
-  {
-   "location": "21:42077476-42936919",
-   "allele": "N[chr21:42936919[",
-   "feature": "ENST00000400427",
-   "feature_type": "Transcript",
-   "record_indices": [
-    670
-   ],
-   "vep_rs_consequence_sets": [
-    "intron_variant"
-   ]
-  },
-  {
-   "location": "21:42077476-42936919",
-   "allele": "N[chr21:42936919[",
-   "feature": "ENST00000408910",
-   "feature_type": "Transcript",
-   "record_indices": [
-    670
-   ],
-   "vep_rs_consequence_sets": [
-    "intron_variant"
-   ]
-  },
-  {
-   "location": "21:42077476-42936919",
-   "allele": "N[chr21:42936919[",
-   "feature": "ENST00000408989",
-   "feature_type": "Transcript",
-   "record_indices": [
-    670
-   ],
-   "vep_rs_consequence_sets": [
-    "intron_variant"
-   ]
-  }
- ],
+ "vep_rs_only_tuples": [],
  "divergence_summary": {
   "start_cooccurrence_swap": 282,
   "splice_family_swap": 43,
-  "unexplained_residual": 7,
-  "vep_only_transcript": 41
+  "vep_only_transcript": 41,
+  "unexplained_residual": 5
  }
 }

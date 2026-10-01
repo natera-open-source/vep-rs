@@ -87,6 +87,21 @@ pub fn calculate(
         })
         .unwrap_or(false);
 
+    // Ensembl builds the bracket allele of a breakend for a feature only when the
+    // mate coordinate is close to that feature. `StructuralVariationOverlap::new`
+    // (`StructuralVariationOverlap.pm:76-88`) adds one allele per entry of
+    // `($vf, @$breakends)` that passes `_close_to_feature` (`:130-146`): the same
+    // seq region, then `overlap` against the feature slice expanded by
+    // `MAX_DISTANCE_FROM_TRANSCRIPT` (`Utils/VariationEffect.pm:60`). The local POS
+    // is carried by the `$vf` allele (`N.`, `.T`, `A.`), so a bracket allele whose
+    // mate is farther than that gets no row for this transcript however the local
+    // POS overlaps it. A cross-chromosome mate fails the same seq-region test; the
+    // callers apply that half by not annotating an inter-chromosomal paired allele
+    // against the local chromosome at all.
+    if is_paired_bnd && same_chr_mate && !mate_near_transcript {
+        return None;
+    }
+
     // A native single-breakend with sv_end and SVTYPE=DEL is a BND-format
     // deletion (gnomAD `N.` alleles with END set) and takes DEL-style
     // feature_truncation over its span.
@@ -983,12 +998,13 @@ mod tests {
 
     #[test]
     fn test_bnd_no_feature_truncation_mate_outside_transcript() {
-        // Paired BND with mate outside the transcript → NO feature_truncation.
-        // Perl VEP parity: only positional consequence (intron_variant).
+        // Paired BND with mate outside the transcript body but within the 5 kb
+        // selection window → the bracket allele exists for the transcript and
+        // carries the local POS's positional term, with NO feature_truncation.
         let tx = make_test_transcript();
         let mut v = make_bnd(25_001_000); // Intron 1 (inside transcript)
         v.mate_chr = Some("21".into());
-        v.mate_pos = Some(24_990_000); // Outside transcript (before start)
+        v.mate_pos = Some(24_997_000); // 3 kb before the transcript start
         v.is_single_breakend = false;
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
         assert!(
@@ -997,6 +1013,35 @@ mod tests {
         );
         assert!(tc.consequences.contains(&Consequence::IntronVariant));
         assert_eq!(tc.impact, Impact::MODIFIER); // No HIGH impact without truncation
+    }
+
+    #[test]
+    fn test_bnd_bracket_allele_with_mate_beyond_5kb_is_not_built_for_the_transcript() {
+        // The local POS is inside the transcript (intron 1) and the mate is 10 kb
+        // before its start. `_close_to_feature` rejects the bracket entry, so
+        // Ensembl writes no row for this allele on this transcript; the `A.` allele
+        // carries the local intron_variant.
+        let tx = make_test_transcript();
+        let mut v = make_bnd(25_001_000);
+        v.mate_chr = Some("21".into());
+        v.mate_pos = Some(24_990_000);
+        v.is_single_breakend = false;
+        assert!(
+            calculate(&v, &tx, 5000, 5000).is_none(),
+            "mate 10 kb outside the transcript: no bracket allele for it"
+        );
+
+        // The window is inclusive at exactly MAX_DISTANCE_FROM_TRANSCRIPT.
+        v.mate_pos = Some(25_000_000 - 5000);
+        assert!(
+            calculate(&v, &tx, 5000, 5000).is_some(),
+            "mate exactly 5 kb before the transcript start is within the window"
+        );
+        v.mate_pos = Some(25_000_000 - 5001);
+        assert!(
+            calculate(&v, &tx, 5000, 5000).is_none(),
+            "mate 5,001 bp before the transcript start is outside the window"
+        );
     }
 
     #[test]

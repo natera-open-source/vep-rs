@@ -17,16 +17,10 @@ pub mod duplication;
 pub mod insertion;
 pub mod inversion;
 
-use smallvec::SmallVec;
-use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
+use vep_core::consequence::{Consequence, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 use vep_core::variant::{InputVariant, VariantClass};
-
-/// Perl's default `--max_sv_size` threshold (10M). A single-breakend BND whose
-/// span exceeds it is routed to `calculate_derived_single_breakend`, which emits
-/// `feature_truncation`, a biotype context term and `intron_variant` from two interval tests.
-const PERL_DEFAULT_MAX_SV_SIZE: u64 = 10_000_000;
 
 /// Check whether an SV overlaps the mature miRNA subfeature of a miRNA transcript.
 ///
@@ -401,9 +395,9 @@ pub(crate) fn overlaps_three_prime_utr(
     }
 }
 
-/// A BND with a same-chromosome span (a derived single breakend up to `max_sv_size`,
-/// or a paired bracket BND of any span): full positional annotation via the deletion
-/// module, matching Perl's full StructuralVariationOverlap, which produces the richer
+/// A BND with a same-chromosome span (a derived single breakend or a paired bracket
+/// BND, of any span): full positional annotation via the deletion module, matching
+/// Perl's full StructuralVariationOverlap, which produces the richer
 /// (coding_sequence_variant, intron_variant, UTR).
 fn calculate_small_bnd_single_breakend(
     variant: &InputVariant,
@@ -458,24 +452,46 @@ fn calculate_small_bnd_single_breakend(
                 )
             });
             if !has_context {
-                if transcript.has_cds() {
-                    if transcript.is_nmd_transcript() {
-                        tc.consequences.push(Consequence::NmdTranscriptVariant);
-                    } else {
+                // The context term is selected by biotype, not by translation. Each
+                // term's `include` hash (`Utils/Constants.pm`) is tested against a
+                // pre-predicate hash keyed on the transcript biotype
+                // (`BaseVariationFeatureOverlapAllele.pm:449-451`):
+                // `coding_transcript_variant` carries
+                // `include => {protein_coding => 1, within_feature => 1}`
+                // (`Constants.pm:1218-1235`) and so runs only for biotype
+                // `protein_coding`; `NMD_transcript_variant` only for
+                // `nonsense_mediated_decay`; `non_coding_transcript_variant` runs for
+                // every other biotype and then needs no translation
+                // (`within_non_coding_gene`, `Utils/VariationEffect.pm:495-500`). A
+                // translated transcript of another biotype (`IG_V_gene`, `TR_V_gene`)
+                // therefore gets no context term at all.
+                if transcript.is_nmd_transcript() {
+                    tc.consequences.push(Consequence::NmdTranscriptVariant);
+                } else if transcript.is_protein_coding() {
+                    if transcript.has_cds() {
                         tc.consequences.push(Consequence::CodingTranscriptVariant);
                     }
-                } else if is_mature_mirna_sv(transcript, variant.start, variant.end) {
-                    tc.consequences.push(Consequence::MatureMirnaVariant);
-                } else {
-                    // Reached only when the variant engulfed the transcript (this block
-                    // is gated on transcript_ablation). Perl's `non_coding_exon_variant`
-                    // opens with `return 0 if complete_overlap_feature(@_)`
-                    // (Utils/VariationEffect.pm:502-519) and `within_non_coding_gene`
-                    // (`:495-500`) is its complement, so an engulfing variant receives
-                    // the generic term.
-                    tc.consequences
-                        .push(Consequence::NonCodingTranscriptVariant);
+                } else if !transcript.has_cds() {
+                    if is_mature_mirna_sv(transcript, variant.start, variant.end) {
+                        tc.consequences.push(Consequence::MatureMirnaVariant);
+                    } else {
+                        // Reached only when the variant engulfed the transcript (this
+                        // block is gated on transcript_ablation). Perl's
+                        // `non_coding_exon_variant` opens with
+                        // `return 0 if complete_overlap_feature(@_)`
+                        // (Utils/VariationEffect.pm:502-519) and `within_non_coding_gene`
+                        // (`:495-500`) is its complement, so an engulfing variant
+                        // receives the generic term.
+                        tc.consequences
+                            .push(Consequence::NonCodingTranscriptVariant);
+                    }
                 }
+            }
+            if tc.consequences.is_empty() {
+                // `$cons = [$DEFAULT_OVERLAP_CONSEQUENCE] unless @$cons`
+                // (`BaseVariationFeatureOverlapAllele.pm:285`): a bracket allele whose
+                // breakend is outside an engulfed transcript that earns no context term.
+                tc.consequences.push(Consequence::IntergenicVariant);
             }
             tc.consequences.sort_by_key(|c| c.rank());
         }
@@ -533,179 +549,6 @@ pub(crate) fn most_severe_impact(consequences: &[Consequence]) -> Impact {
         .unwrap_or(Impact::MODIFIER)
 }
 
-/// Lightweight consequence calculator for derived single-breakend (N.) forms
-/// from symbolic `<BND>` variants with SVLEN-based span.
-///
-/// For the N. allele this path emits `feature_truncation`, one biotype context term
-/// (or the exon term for a partially covered non-coding transcript) and
-/// `intron_variant`; it does not derive the deletion module's positional sub-terms
-/// (coding_sequence_variant, stop_lost, UTR terms, splice).
-///
-/// The Perl predicate for BND feature_truncation (VariationEffect.pm) has a
-/// special early-return: `if(chromosome_breakpoint(@_)) { return 1 if
-/// within_feature($bvfoa, $feat, $bvfo, $bvfoa->breakend, 1); }`, checking
-/// only that the breakend/span overlaps the transcript body.
-fn calculate_derived_single_breakend(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    upstream_distance: u64,
-    downstream_distance: u64,
-) -> Option<TranscriptConsequence> {
-    let sv_start = variant.start;
-    let sv_end = variant.sv_end.unwrap_or(variant.end);
-    let tx_start = transcript.start;
-    let tx_end = transcript.end;
-
-    let max_dist = upstream_distance.max(downstream_distance);
-    if sv_end < tx_start.saturating_sub(max_dist) || sv_start > tx_end + max_dist {
-        return None;
-    }
-
-    let overlaps_transcript = sv_end >= tx_start && sv_start <= tx_end;
-
-    if !overlaps_transcript {
-        let mut consequences: ConsequenceList = SmallVec::new();
-        let distance;
-        match transcript.strand {
-            Strand::Forward => {
-                if sv_end < tx_start {
-                    let dist = tx_start - sv_end;
-                    if dist <= upstream_distance {
-                        consequences.push(Consequence::UpstreamGeneVariant);
-                        distance = Some(dist);
-                    } else {
-                        return None;
-                    }
-                } else {
-                    let dist = sv_start - tx_end;
-                    if dist <= downstream_distance {
-                        consequences.push(Consequence::DownstreamGeneVariant);
-                        distance = Some(dist);
-                    } else {
-                        return None;
-                    }
-                }
-            }
-            Strand::Reverse => {
-                if sv_start > tx_end {
-                    let dist = sv_start - tx_end;
-                    if dist <= upstream_distance {
-                        consequences.push(Consequence::UpstreamGeneVariant);
-                        distance = Some(dist);
-                    } else {
-                        return None;
-                    }
-                } else {
-                    let dist = tx_start - sv_end;
-                    if dist <= downstream_distance {
-                        consequences.push(Consequence::DownstreamGeneVariant);
-                        distance = Some(dist);
-                    } else {
-                        return None;
-                    }
-                }
-            }
-        }
-
-        return Some(build_sv_consequence(transcript, consequences, distance));
-    }
-
-    // Perl's BND feature_truncation is within_feature(breakend), simple body
-    // overlap, then one context term by biotype. Ensembl short-circuits the
-    // specific sub-terms when the variant engulfs the transcript:
-    // `non_coding_exon_variant` opens `return 0 if complete_overlap_feature(@_)`,
-    // so an engulfing span gets the generic term and no positional sub-terms.
-    let engulfs_transcript = sv_start <= transcript.start && sv_end >= transcript.end;
-
-    let mut consequences: ConsequenceList = SmallVec::new();
-
-    // Mature miRNA first: Perl emits only mature_miRNA_variant, no
-    // feature_truncation alongside, for BND-format SVs.
-    if is_mature_mirna_sv(transcript, sv_start, sv_end) {
-        consequences.push(Consequence::MatureMirnaVariant);
-    } else {
-        // Body overlap is correct here and only here. This path serves the derived single
-        // breakend, whose tuple carries the `N.` allele, and that is Ensembl's `$vf` entry
-        // of `($vf, @{$vf->get_breakends})`: the allele is constructed with `-breakend => $_`,
-        // so for the `$vf` entry the "breakend" passed to `within_feature` IS the whole
-        // variation feature, spanning start to end. A paired bracket allele is the other
-        // case and is handled in `deletion.rs`, where the breakend is a single coordinate.
-        consequences.push(Consequence::FeatureTruncation);
-
-        if transcript.has_cds() {
-            if transcript.is_nmd_transcript() {
-                consequences.push(Consequence::NmdTranscriptVariant);
-            } else {
-                consequences.push(Consequence::CodingTranscriptVariant);
-            }
-        } else {
-            // The two non-coding forms are complements chosen by exon overlap, never
-            // a hierarchy: `within_non_coding_gene` is the complement of
-            // `non_coding_exon_variant` over `within_transcript`
-            // (`Utils/VariationEffect.pm`).
-            if !engulfs_transcript && overlaps_any_exon(transcript, sv_start, sv_end) {
-                consequences.push(Consequence::NonCodingTranscriptExonVariant);
-            } else {
-                consequences.push(Consequence::NonCodingTranscriptVariant);
-            }
-        }
-    }
-
-    // `intron_variant` is independent of the biotype context term and of the
-    // exon/generic choice above.
-    if !engulfs_transcript
-        && overlaps_any_intron_trimmed(transcript, sv_start, sv_end)
-        && !consequences.contains(&Consequence::IntronVariant)
-    {
-        consequences.push(Consequence::IntronVariant);
-    }
-
-    consequences.sort_by_key(|c| c.rank());
-
-    Some(build_sv_consequence(transcript, consequences, None))
-}
-
-/// Build a `TranscriptConsequence` for an SV.
-fn build_sv_consequence(
-    transcript: &Transcript,
-    consequences: ConsequenceList,
-    distance: Option<u64>,
-) -> TranscriptConsequence {
-    use vep_core::consequence::FeatureType;
-
-    let impact = consequences
-        .first()
-        .map(|c| c.impact())
-        .unwrap_or(Impact::MODIFIER);
-
-    TranscriptConsequence {
-        transcript_id: transcript.stable_id.clone(),
-        feature_start: transcript.start,
-        feature_end: transcript.end,
-        gene_id: transcript.gene_stable_id.clone(),
-        gene_symbol: transcript.gene_symbol.clone(),
-        gene_symbol_source: transcript.gene_symbol_source.clone(),
-        hgnc_id: transcript.hgnc_id.clone(),
-        consequences,
-        impact,
-        biotype: Some(transcript.biotype.clone()),
-        canonical: transcript.canonical,
-        strand: match transcript.strand {
-            Strand::Forward => 1,
-            Strand::Reverse => -1,
-        },
-        distance,
-        feature_type: FeatureType::Transcript,
-        flags: transcript.flags.clone(),
-        tsl: transcript.tsl,
-        ccds: transcript.ccds.clone(),
-        swissprot: transcript.swissprot.clone(),
-        trembl: transcript.trembl.clone(),
-        refseq: transcript.refseq.clone(),
-        ..TranscriptConsequence::default()
-    }
-}
-
 /// Calculate consequences for a structural variant against a transcript.
 ///
 /// Returns `None` if the SV doesn't overlap the transcript region at all
@@ -752,6 +595,12 @@ pub fn calculate_sv_consequences(
             // bracket BND has two breakends and no deleted interval between them, so
             // Ensembl selects only transcripts a breakend is close to; the span still
             // governs the terms.
+            //
+            // Ensembl's `--max_sv_size` decides whether an SV is annotated at all, never
+            // which terms it gets: `coding_transcript_variant` requires
+            // `complete_overlap_feature` (`Utils/VariationEffect.pm:491-493`) at any span,
+            // and a partially covered transcript takes the region predicates over the
+            // span, so one path serves every span.
             if variant.end > variant.start
                 && variant.mate_id.is_some()
                 && (variant.is_single_breakend
@@ -761,30 +610,12 @@ pub fn calculate_sv_consequences(
                         upstream_distance.max(downstream_distance),
                     ))
             {
-                // Ensembl's `--max_sv_size` decides whether an SV is annotated at all,
-                // never which terms it gets. The path below emits `feature_truncation`,
-                // a biotype context term and `intron_variant` from two interval tests,
-                // the set the full `deletion::calculate` path yields for an engulfing
-                // span or a non-coding transcript, without walking the span.
-                let sv_span = variant
-                    .sv_end
-                    .unwrap_or(variant.end)
-                    .saturating_sub(variant.start);
-                if sv_span > PERL_DEFAULT_MAX_SV_SIZE && variant.is_single_breakend {
-                    calculate_derived_single_breakend(
-                        variant,
-                        transcript,
-                        upstream_distance,
-                        downstream_distance,
-                    )
-                } else {
-                    calculate_small_bnd_single_breakend(
-                        variant,
-                        transcript,
-                        upstream_distance,
-                        downstream_distance,
-                    )
-                }
+                calculate_small_bnd_single_breakend(
+                    variant,
+                    transcript,
+                    upstream_distance,
+                    downstream_distance,
+                )
             } else {
                 breakend::calculate(variant, transcript, upstream_distance, downstream_distance)
             }
@@ -1235,7 +1066,8 @@ mod tests {
     }
 
     /// Helper: build a derived single-breakend variant for testing.
-    /// Giant BND: span > 10M, uses lightweight calculator.
+    /// Giant BND: span above VEP's default `--max_sv_size`, which decides nothing
+    /// about the terms here.
     fn make_giant_derived_sb(start: u64, sv_end: u64) -> InputVariant {
         let mut v = InputVariant::new("21".into(), start, sv_end, b"N".to_vec(), b"-".to_vec());
         v.variant_class = VariantClass::Translocation;

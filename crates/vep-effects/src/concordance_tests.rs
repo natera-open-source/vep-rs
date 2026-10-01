@@ -7743,3 +7743,303 @@ fn concordance_non_ref_span_in_intron_reaching_tract_is_polypyrimidine() {
         &["intron_variant", "splice_polypyrimidine_tract_variant"],
     );
 }
+
+// Breakend alleles: which allele owns a transcript row, and the mate gate.
+//
+// `StructuralVariationOverlap::new` (`StructuralVariationOverlap.pm:76-88`) builds one
+// allele per entry of `($vf, @$breakends)` that passes `_close_to_feature`
+// (`:130-146`): same seq region, then `overlap` against the feature slice expanded
+// by `MAX_DISTANCE_FROM_TRANSCRIPT` (`Utils/VariationEffect.pm:60`). The `$vf` entry
+// is the local allele (`A.`, `N.`) and carries the local POS; a bracket entry's
+// coordinate is the mate alone (`StructuralVariationFeature::_parse_breakends`).
+// Every positional predicate then reads `$bvf`, the local variation feature, while
+// `feature_truncation` (`Utils/VariationEffect.pm:350-359`) reads the allele's own
+// breakend through `within_feature(..., $bvfoa->breakend, 1)`.
+
+/// The local (`A.`) allele of a point breakend record.
+fn make_point_local_allele(pos: u64) -> InputVariant {
+    let mut v = InputVariant::new("21".into(), pos, pos, b"A".to_vec(), b"A.".to_vec());
+    v.variant_class = vep_core::variant::VariantClass::Translocation;
+    v.is_structural = true;
+    v.is_single_breakend = true;
+    v.mate_id = Some("mate".into());
+    v.sv_end = Some(pos);
+    v
+}
+
+/// The bracket allele of a point breakend record whose mate is on chr21 at `mate_pos`.
+fn make_point_bracket_allele(pos: u64, mate_pos: u64) -> InputVariant {
+    let mut v = InputVariant::new(
+        "21".into(),
+        pos,
+        pos,
+        b"A".to_vec(),
+        format!("A[21:{mate_pos}[").into_bytes(),
+    );
+    v.variant_class = vep_core::variant::VariantClass::Translocation;
+    v.is_structural = true;
+    v.is_single_breakend = false;
+    v.mate_id = Some("mate".into());
+    v.mate_chr = Some("21".into());
+    v.mate_pos = Some(mate_pos);
+    v.sv_end = Some(pos);
+    v
+}
+
+/// The `N.` allele of a symbolic `<BND>` record spanning `start..=end`.
+fn make_ranged_local_allele(start: u64, end: u64) -> InputVariant {
+    let mut v = InputVariant::new("21".into(), start, end, b"N".to_vec(), b"N.".to_vec());
+    v.variant_class = vep_core::variant::VariantClass::Translocation;
+    v.is_structural = true;
+    v.is_single_breakend = true;
+    v.mate_id = Some("mate".into());
+    v.sv_end = Some(end);
+    v
+}
+
+/// The bracket allele of a symbolic `<BND>` record spanning `start..=end` whose
+/// `CHR2`/`END2` mate is on chr21 at `mate_pos`.
+fn make_ranged_bracket_allele(start: u64, end: u64, mate_pos: u64) -> InputVariant {
+    let mut v = InputVariant::new(
+        "21".into(),
+        start,
+        end,
+        b"N".to_vec(),
+        format!("N[21:{mate_pos}[").into_bytes(),
+    );
+    v.variant_class = vep_core::variant::VariantClass::Translocation;
+    v.is_structural = true;
+    v.is_single_breakend = false;
+    v.mate_id = Some("mate".into());
+    v.mate_chr = Some("21".into());
+    v.mate_pos = Some(mate_pos);
+    v.sv_end = Some(end);
+    v
+}
+
+/// A point breakend inside intron 1 whose mate lies 10 kb before the transcript:
+/// the local allele carries `feature_truncation,intron_variant` (its breakend is
+/// the variation feature itself, inside the transcript) and the bracket allele
+/// gets no row for the transcript, because `_close_to_feature` rejects a mate
+/// outside the 5 kb window (Perl: `21:27348903 A. ENST00000415997
+/// feature_truncation,intron_variant`, and no `A[21:27341780[` row on that
+/// transcript, whose start is 5,723 bp above the mate).
+#[test]
+fn concordance_point_breakend_with_mate_beyond_5kb_has_local_allele_row_only() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    let local = make_point_local_allele(25_001_000);
+    let tc = calculate_consequences(&local, &tx, &config).expect("local allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation", "intron_variant"]);
+
+    let bracket = make_point_bracket_allele(25_001_000, 24_990_000);
+    assert!(
+        calculate_consequences(&bracket, &tx, &config).is_none(),
+        "the mate is 10 kb outside the transcript, so no bracket allele exists for it"
+    );
+}
+
+/// The same record against a transcript both breakends fall inside: both alleles
+/// carry `feature_truncation,intron_variant` (Perl: the two `ENST00000346798`
+/// rows of `21:27348903`, one per allele).
+#[test]
+fn concordance_point_breakend_with_mate_inside_has_a_row_per_allele() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    let local = make_point_local_allele(25_001_000);
+    let tc = calculate_consequences(&local, &tx, &config).expect("local allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation", "intron_variant"]);
+
+    let bracket = make_point_bracket_allele(25_001_000, 25_003_000);
+    let tc = calculate_consequences(&bracket, &tx, &config).expect("bracket allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation", "intron_variant"]);
+}
+
+/// A transcript the local POS is 577 bp upstream of and the mate is inside: the
+/// local allele is `upstream_gene_variant`; the bracket allele adds
+/// `feature_truncation` from its breakend and keeps the upstream term, which is
+/// computed from the local variation feature (Perl: the two `ENST00000456209`
+/// rows of `21:27348903`, `upstream_gene_variant` and
+/// `feature_truncation,upstream_gene_variant`).
+#[test]
+fn concordance_point_breakend_upstream_with_mate_inside_adds_truncation_to_bracket_allele() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    let local = make_point_local_allele(24_999_423);
+    let tc = calculate_consequences(&local, &tx, &config).expect("local allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["upstream_gene_variant"]);
+    assert_eq!(tc.distance, Some(577));
+
+    let bracket = make_point_bracket_allele(24_999_423, 25_003_000);
+    let tc = calculate_consequences(&bracket, &tx, &config).expect("bracket allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["feature_truncation", "upstream_gene_variant"],
+    );
+    assert_eq!(tc.distance, Some(577));
+}
+
+/// The mate-side row of a point breakend whose local POS is far from the
+/// transcript. The positional predicates read the local point and find nothing
+/// there, so a mate inside the transcript leaves `feature_truncation` alone, and
+/// a mate within 5 kb but outside it leaves nothing, which VEP prints as
+/// `$DEFAULT_OVERLAP_CONSEQUENCE`, `intergenic_variant`
+/// (`BaseVariationFeatureOverlapAllele.pm:285`).
+#[test]
+fn concordance_point_breakend_mate_side_row_is_truncation_alone_or_intergenic() {
+    let tx = make_test_transcript();
+
+    // The caller repoints the variant at the mate before asking for the mate-side row.
+    let mut inside = make_point_bracket_allele(30_000_000, 25_003_000);
+    inside.start = 25_003_000;
+    inside.end = 25_003_000;
+    let tc = crate::sv::breakend::calculate_paired_mate(&inside, &tx, 5000, 5000, false)
+        .expect("mate inside the transcript annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation"]);
+
+    let mut near = make_point_bracket_allele(30_000_000, 24_997_000);
+    near.start = 24_997_000;
+    near.end = 24_997_000;
+    let tc = crate::sv::breakend::calculate_paired_mate(&near, &tx, 5000, 5000, false)
+        .expect("mate within 5 kb annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["intergenic_variant"]);
+}
+
+/// A symbolic `<BND>` whose span runs from intron 1 to a mate 594 kb away: the
+/// `N.` allele takes the region predicates over the span and the bracket allele
+/// gets no row for a transcript the mate is not within 5 kb of (Perl:
+/// `21:13424231-14075348 N. ENST00000451052` alone, no `N[21:14075348[` row).
+#[test]
+fn concordance_ranged_breakend_bracket_allele_needs_the_mate_within_5kb() {
+    let tx = make_non_coding_transcript();
+    let config = EffectsConfig::default();
+
+    let local = make_ranged_local_allele(25_001_000, 25_600_000);
+    let tc = calculate_consequences(&local, &tx, &config).expect("N. allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "feature_truncation",
+            "intron_variant",
+            "non_coding_transcript_exon_variant",
+        ],
+    );
+
+    let bracket = make_ranged_bracket_allele(25_001_000, 25_600_000, 25_600_000);
+    assert!(
+        calculate_consequences(&bracket, &tx, &config).is_none(),
+        "the mate is 594 kb from the transcript, so no bracket allele exists for it"
+    );
+}
+
+/// A `<BND>` spanning more than `--max_sv_size` that covers exon 1, intron 1,
+/// exon 2 and part of intron 2 of a coding transcript. `coding_transcript_variant`
+/// requires `complete_overlap_feature` (`Utils/VariationEffect.pm:491-493`), which
+/// a partial overlap fails, so the row carries the region terms instead (Perl:
+/// `21:14604132-41770788 N. ENST00000647101
+/// 5_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant`).
+#[test]
+fn concordance_giant_breakend_partially_covering_coding_transcript_takes_region_terms() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    let local = make_ranged_local_allele(14_000_000, 25_003_000);
+    let tc = calculate_consequences(&local, &tx, &config).expect("N. allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "coding_sequence_variant",
+            "feature_truncation",
+            "intron_variant",
+        ],
+    );
+}
+
+/// The same span over a nonsense-mediated-decay transcript adds
+/// `NMD_transcript_variant` (`within_nmd_transcript` needs only
+/// `within_transcript`) and still no `coding_transcript_variant` (Perl:
+/// `21:27067899-37764816 N. ENST00000460679
+/// 3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,feature_truncation,intron_variant`).
+#[test]
+fn concordance_giant_breakend_partially_covering_nmd_transcript_takes_region_terms() {
+    let mut tx = make_test_transcript();
+    tx.biotype = "nonsense_mediated_decay".into();
+    let config = EffectsConfig::default();
+
+    let local = make_ranged_local_allele(14_000_000, 25_003_000);
+    let tc = calculate_consequences(&local, &tx, &config).expect("N. allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "5_prime_UTR_variant",
+            "NMD_transcript_variant",
+            "coding_sequence_variant",
+            "feature_truncation",
+            "intron_variant",
+        ],
+    );
+}
+
+/// An engulfed `protein_coding` transcript keeps `coding_transcript_variant`
+/// beside `feature_truncation`, at any span (Perl:
+/// `21:9981164-15308075 N. ENST00000647101 feature_truncation,coding_transcript_variant`).
+#[test]
+fn concordance_breakend_engulfing_protein_coding_transcript_is_truncation_and_context() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    for end in [25_100_000u64, 45_000_000u64] {
+        let local = make_ranged_local_allele(24_000_000, end);
+        let tc = calculate_consequences(&local, &tx, &config).expect("N. allele annotates");
+        crate::test_helpers::assert_consequence_set_eq(
+            &tc,
+            &["coding_transcript_variant", "feature_truncation"],
+        );
+    }
+}
+
+/// An engulfed `IG_V_gene` transcript has a translation but not the biotype key
+/// `coding_transcript_variant` is gated on (`include => {protein_coding => 1,
+/// within_feature => 1}`, `Utils/Constants.pm:1218-1235`, tested against the
+/// biotype-keyed pre-predicate of `BaseVariationFeatureOverlapAllele.pm:449-451`),
+/// and `within_non_coding_gene` needs no translation, so the `N.` allele is
+/// `feature_truncation` alone at any span (Perl: `21:10411862-13374908 N.
+/// ENST00000622028 feature_truncation`; `21:10426692-31785945` likewise).
+#[test]
+fn concordance_breakend_engulfing_ig_v_gene_transcript_is_truncation_alone() {
+    let mut tx = make_test_transcript();
+    tx.biotype = "IG_V_gene".into();
+    let config = EffectsConfig::default();
+
+    for end in [25_100_000u64, 45_000_000u64] {
+        let local = make_ranged_local_allele(24_000_000, end);
+        let tc = calculate_consequences(&local, &tx, &config).expect("N. allele annotates");
+        crate::test_helpers::assert_consequence_set_eq(&tc, &["feature_truncation"]);
+    }
+}
+
+/// The bracket allele of that record against the engulfed `IG_V_gene` transcript:
+/// with the mate 4 kb before the transcript the allele exists, its breakend is
+/// outside the transcript so `feature_truncation` fails, no context term is a
+/// candidate, and VEP prints the default `intergenic_variant`; with the mate 10 kb
+/// away no allele exists.
+#[test]
+fn concordance_breakend_bracket_allele_over_engulfed_ig_v_gene_is_intergenic_or_absent() {
+    let mut tx = make_test_transcript();
+    tx.biotype = "IG_V_gene".into();
+    let config = EffectsConfig::default();
+
+    let near = make_ranged_bracket_allele(24_996_001, 25_100_000, 24_996_000);
+    let tc = calculate_consequences(&near, &tx, &config).expect("bracket allele annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["intergenic_variant"]);
+
+    let far = make_ranged_bracket_allele(24_990_001, 25_100_000, 24_990_000);
+    assert!(
+        calculate_consequences(&far, &tx, &config).is_none(),
+        "the mate is 10 kb from the transcript, so no bracket allele exists for it"
+    );
+}
