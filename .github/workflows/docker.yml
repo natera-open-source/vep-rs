@@ -107,12 +107,11 @@ jobs:
           -v "$PWD/release-src/tests/golden/115/GRCh37:/corpus:ro"
           vep-rs:smoke bash /smoke/smoke_test.sh "${{ steps.meta.outputs.version }}"
 
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      - name: Log in to GHCR
         if: steps.meta.outputs.push == 'true'
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
+        env:
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
 
       - name: Push
         if: steps.meta.outputs.push == 'true'
