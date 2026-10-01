@@ -194,7 +194,7 @@ my @DROPPED = (
     [qr/^_vep_lazy_loaded$/,                   'runtime flag set by the Perl cache loader'],
     [qr/^translation\.(?:start|end)_exon(?:\.|$)/, 'translation exons: derivable from exons and the translation start and end'],
     [qr/^translation\.transcript$/,            'back-reference to the enclosing transcript'],
-    [qr/^_variation_effect_feature_cache\.seq_edits$/, 'seq_edits are not converted'],
+    [qr/^_variation_effect_feature_cache\.seq_edits$/, 'seq_edits: optional in the JSON cache; a cache without the key loads none and reads the reference peptide from the cached translation'],
     [qr/^_variation_effect_feature_cache\.mapper\.exon_coord_mapper(?:\.|$)/, 'exon coordinate mapper: replaced by mapper.pairs'],
     [qr/^_variation_effect_feature_cache\.protein_function_predictions\.\w+\.(?:matrix|matrix_compressed|translation_md5)$/,
         'prediction matrices are not converted: the converter reads predictions_data, which only the native cache builder writes'],

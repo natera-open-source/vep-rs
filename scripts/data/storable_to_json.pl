@@ -171,6 +171,27 @@ sub extract_prediction_matrix {
     return \%out;
 }
 
+sub extract_seq_edit {
+    # A Bio::EnsEMBL::SeqEdit is a blessed hash whose start, end and alt_seq
+    # were split out of the attribute value as strings; the class itself is not
+    # loaded here, so its fields are read directly and length_diff is computed
+    # as SeqEdit::length_diff does (0 when either coordinate is undefined).
+    my ($se) = @_;
+    return undef unless ref $se;
+    my %out;
+    for my $k (qw(code name)) {
+        $out{$k} = $se->{$k} if defined $se->{$k};
+    }
+    for my $k (qw(start end)) {
+        $out{$k} = $se->{$k} + 0 if defined $se->{$k};
+    }
+    $out{alt_seq} = defined $se->{alt_seq} ? "$se->{alt_seq}" : '';
+    $out{length_diff} = (defined $se->{start} && defined $se->{end})
+        ? length($out{alt_seq}) - ($out{end} - $out{start} + 1)
+        : 0;
+    return \%out;
+}
+
 sub extract_seq_string {
     # Extract a literal sequence string from a value that may be a plain string,
     # a blessed Bio::EnsEMBL::Slice (has ->seq method), a Bio::Seq, or a HASH
@@ -227,6 +248,16 @@ sub extract_vefc {
     }
     $out{translateable_seq} = $vefc->{translateable_seq} if defined $vefc->{translateable_seq};
     $out{peptide} = $vefc->{peptide} if defined $vefc->{peptide};
+    # The translation's SeqEdits (initial_met, _selenocysteine, amino_acid_sub,
+    # _stop_codon_rt), which VEP applies to the reference allele's peptide at
+    # runtime (TranscriptVariationAllele::peptide). The cached peptide has them
+    # applied already, and Transcript::translate writes M over any start codon
+    # of the table with or without an edit, so the peptide alone cannot say
+    # which residues are edited. Always an array: a translation with none, or
+    # no translation, gets [] as BaseTranscriptVariation::_seq_edits does.
+    $out{seq_edits} = ref $vefc->{seq_edits} eq 'ARRAY'
+        ? [map { extract_seq_edit($_) } grep { defined $_ && ref $_ } @{$vefc->{seq_edits}}]
+        : [];
 
     # introns
     if (ref $vefc->{introns} eq 'ARRAY') {
