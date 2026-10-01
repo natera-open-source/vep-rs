@@ -7340,3 +7340,133 @@ fn concordance_perl_coding_terms_gates_snvs_on_the_first_codon() {
     );
     assert!(snv(25_000_053, "G", "T").is_none());
 }
+
+/// A same-length or longer ALT over a span that covers the whole transcript,
+/// the shape the tests below share: `complete_overlap` holds and the allele
+/// pre-predicate is `snp` or `insertion`, never `deletion`.
+fn make_transcript_covering_variant(alt_len_delta: i64) -> InputVariant {
+    let (start, end) = (24_999_900u64, 25_006_100u64);
+    let ref_len = (end - start + 1) as usize;
+    let alt_len = (ref_len as i64 + alt_len_delta) as usize;
+    InputVariant::new(
+        "21".into(),
+        start,
+        end,
+        vec![b'A'; ref_len],
+        vec![b'C'; alt_len],
+    )
+}
+
+/// `transcript_ablation` needs the `deletion` pre-predicate, `ref_length >
+/// alt_length` with `ref_length` the reference span
+/// (`BaseVariationFeatureOverlapAllele::_pre_consequence_predicates`), beside
+/// `complete_overlap`; both a bare `-` ALT and a shorter explicit ALT satisfy
+/// it, and the tier-1 term is then the row's only term.
+#[test]
+fn concordance_deletion_covering_transcript_is_transcript_ablation() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+
+    let bare = InputVariant::new(
+        "21".into(),
+        24_999_900,
+        25_006_100,
+        vec![b'A'; 6201],
+        b"-".to_vec(),
+    );
+    let tc = calculate_consequences(&bare, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["transcript_ablation"]);
+
+    let shorter = make_transcript_covering_variant(-6199);
+    assert_eq!(shorter.alt_allele().len(), 2);
+    let tc = calculate_consequences(&shorter, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["transcript_ablation"]);
+}
+
+/// A symbolic `<DEL>` is a `StructuralVariationFeature` whose `deletion` flag
+/// comes from its class term (`_bvf_preds`: `class_SO_term =~ /deletion|loss/`),
+/// so `feature_ablation` holds on a span covering the transcript regardless of
+/// allele lengths; the structural path keeps that verdict.
+#[test]
+fn concordance_symbolic_deletion_covering_transcript_is_transcript_ablation() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let mut variant = InputVariant::new(
+        "21".into(),
+        24_999_900,
+        25_006_100,
+        b"N".to_vec(),
+        b"<DEL>".to_vec(),
+    );
+    variant.variant_class = vep_core::variant::VariantClass::StructuralDeletion;
+    variant.is_structural = true;
+    variant.sv_end = Some(25_006_100);
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["transcript_ablation"]);
+}
+
+/// A same-length substitution covering the whole transcript is `snp`, not
+/// `deletion`, in Perl's pre-predicates, so `transcript_ablation` is never a
+/// candidate and the tier-3 predicates decide (Perl: `11:116830247-116836307`,
+/// a 6,061 bp inversion given as explicit alleles, on `ENST00000630701`).
+///
+/// Every base differs except intron 1's fifth base, so `_get_differing_regions`
+/// yields two regions and `_intron_effects` sets `donor_region_splice_site`
+/// from intron 1 and `fifth_base_splice_site` from intron 2 on the same
+/// transcript-wide hash: `splice_donor_region_variant` returns 0 whenever
+/// `splice_donor_5th_base_variant` holds, and `splice_region` returns 0 under a
+/// donor or acceptor hit. `splice_polypyrimidine_tract_variant` needs `exon =>
+/// 0`. Both UTR predicates hold by `_before_coding` / `_after_coding` overlap
+/// with `within_cdna`. The peptide is undefined (both `cds_coords` ends are
+/// gaps), so no coding term fires, and `coding_unknown` returns 0 on
+/// `complete_overlap_feature`, so there is no `coding_sequence_variant`;
+/// `coding_transcript_variant` holds instead. `within_feature` is 1, so the
+/// flank endpoints add no `upstream_gene_variant` / `downstream_gene_variant`.
+#[test]
+fn concordance_same_length_substitution_covering_transcript_takes_tier_three_terms() {
+    let tx = make_test_transcript();
+    let config = EffectsConfig::default();
+    let mut variant = make_transcript_covering_variant(0);
+    // Intron 1 is 25_000_300-25_001_999: its fifth base, 25_000_304, keeps the
+    // reference base, so intron 1 raises the donor region without the fifth base.
+    let fifth_base_offset = (25_000_304 - variant.start) as usize;
+    variant.alt_alleles[0][fifth_base_offset] = b'A';
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "3_prime_UTR_variant",
+            "5_prime_UTR_variant",
+            "coding_transcript_variant",
+            "intron_variant",
+            "splice_acceptor_variant",
+            "splice_donor_5th_base_variant",
+            "splice_donor_variant",
+        ],
+    );
+    assert_eq!(tc.distance, None);
+}
+
+/// The same span over a non-coding transcript: `non_coding_exon_variant`
+/// returns 0 on `complete_overlap_feature`, so `within_non_coding_gene` holds
+/// and the row carries `non_coding_transcript_variant` beside the intron and
+/// splice terms; the UTR predicates are not candidates without a coding
+/// region (`utr` is never set), and `coding_transcript_variant` needs biotype
+/// `protein_coding`.
+#[test]
+fn concordance_same_length_substitution_covering_non_coding_transcript() {
+    let tx = make_non_coding_transcript();
+    let config = EffectsConfig::default();
+    let variant = make_transcript_covering_variant(0);
+    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &[
+            "intron_variant",
+            "non_coding_transcript_variant",
+            "splice_acceptor_variant",
+            "splice_donor_5th_base_variant",
+            "splice_donor_variant",
+        ],
+    );
+}

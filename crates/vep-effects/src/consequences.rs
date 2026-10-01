@@ -216,54 +216,61 @@ fn calculate_terms(
         }
     }
 
-    // Perl VEP: transcript_ablation, the sole term, when a deletion completely
-    // encompasses the transcript.
-    if !insertion {
-        let lo = variant.start.min(variant.end);
-        let hi = variant.start.max(variant.end);
-        if lo <= transcript.start && hi >= transcript.end {
-            return Some(TranscriptConsequence {
-                transcript_id: transcript.stable_id.clone(),
-                feature_start: transcript.start,
-                feature_end: transcript.end,
-                gene_id: transcript.gene_stable_id.clone(),
-                gene_symbol: transcript.gene_symbol.clone(),
-                gene_symbol_source: transcript.gene_symbol_source.clone(),
-                hgnc_id: transcript.hgnc_id.clone(),
-                consequences: smallvec![Consequence::TranscriptAblation],
-                impact: Impact::HIGH,
-                biotype: Some(transcript.biotype.clone()),
-                canonical: transcript.canonical,
-                cdna_position: None,
-                cds_position: None,
-                protein_position: None,
-                amino_acids: None,
-                codons: None,
-                protein_id: transcript.protein_id.clone(),
-                distance: None,
-                strand: transcript.strand.as_i8(),
-                exon: None,
-                intron: None,
-                hgvsc: None,
-                hgvsp: None,
-                hgvs_offset: None,
-                sift: None,
-                polyphen: None,
-                domains: Vec::new(),
-                feature_type: FeatureType::Transcript,
-                flags: transcript.flags.clone(),
-                tsl: transcript.tsl,
-                mane_select: transcript.mane_select.clone(),
-                mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-                appris: transcript.appris.clone(),
-                ccds: transcript.ccds.clone(),
-                swissprot: transcript.swissprot.clone(),
-                trembl: transcript.trembl.clone(),
-                refseq: transcript.refseq.clone(),
-                plugin_data: indexmap::IndexMap::new(),
-                loftee_ctx: None,
-            });
-        }
+    // Perl's `complete_overlap` pre-predicate
+    // (`BaseVariationFeatureOverlapAllele::_bvf_preds`): `vf.start <= tr.start
+    // && vf.end >= tr.end` on the raw coordinates, which an insertion
+    // (start = end + 1) cannot satisfy.
+    let complete_overlap =
+        !insertion && variant.start <= transcript.start && variant.end >= transcript.end;
+
+    // `transcript_ablation` is a candidate only under `include => {complete_overlap
+    // => 1, deletion => 1}` (Utils/Constants.pm), and it is the sole term because
+    // it is tier 1 (`get_all_OverlapConsequences` stops before tier 3 once a tier
+    // 1 or 2 term fires). A same-length substitution or a longer ALT covering the
+    // transcript is `snp` or `insertion` there, never `deletion`, so it takes the
+    // tier-3 predicates below.
+    if complete_overlap && perl_deletion_pre_predicate(variant) {
+        return Some(TranscriptConsequence {
+            transcript_id: transcript.stable_id.clone(),
+            feature_start: transcript.start,
+            feature_end: transcript.end,
+            gene_id: transcript.gene_stable_id.clone(),
+            gene_symbol: transcript.gene_symbol.clone(),
+            gene_symbol_source: transcript.gene_symbol_source.clone(),
+            hgnc_id: transcript.hgnc_id.clone(),
+            consequences: smallvec![Consequence::TranscriptAblation],
+            impact: Impact::HIGH,
+            biotype: Some(transcript.biotype.clone()),
+            canonical: transcript.canonical,
+            cdna_position: None,
+            cds_position: None,
+            protein_position: None,
+            amino_acids: None,
+            codons: None,
+            protein_id: transcript.protein_id.clone(),
+            distance: None,
+            strand: transcript.strand.as_i8(),
+            exon: None,
+            intron: None,
+            hgvsc: None,
+            hgvsp: None,
+            hgvs_offset: None,
+            sift: None,
+            polyphen: None,
+            domains: Vec::new(),
+            feature_type: FeatureType::Transcript,
+            flags: transcript.flags.clone(),
+            tsl: transcript.tsl,
+            mane_select: transcript.mane_select.clone(),
+            mane_plus_clinical: transcript.mane_plus_clinical.clone(),
+            appris: transcript.appris.clone(),
+            ccds: transcript.ccds.clone(),
+            swissprot: transcript.swissprot.clone(),
+            trembl: transcript.trembl.clone(),
+            refseq: transcript.refseq.clone(),
+            plugin_data: indexmap::IndexMap::new(),
+            loftee_ctx: None,
+        });
     }
 
     let shifted_variant_coords = if config.enable_indel_3prime_shift {
@@ -291,6 +298,20 @@ fn calculate_terms(
         None
     };
 
+    // `upstream_gene_variant` and `downstream_gene_variant` are candidates only
+    // for `within_feature => 0` (Utils/Constants.pm), and a span covering the
+    // transcript is within it, so its endpoints in the flanks contribute nothing:
+    // every term of such a span comes from the whole-span passes below, whichever
+    // side of the neighbourhood bound the endpoints fall on.
+    let (start_pos, end_pos) = if complete_overlap {
+        (
+            start_pos.filter(|p| !is_flanking_position(p)),
+            end_pos.filter(|p| !is_flanking_position(p)),
+        )
+    } else {
+        (start_pos, end_pos)
+    };
+
     let mut consequences: ConsequenceList = SmallVec::new();
     let mut fields = PositionFields::default();
     {
@@ -303,7 +324,11 @@ fn calculate_terms(
             reference_fasta: config.reference_fasta.as_deref(),
         };
         match (start_pos.as_ref(), end_pos.as_ref()) {
-            (None, None) => return None,
+            (None, None) => {
+                if !complete_overlap {
+                    return None;
+                }
+            }
             (Some(start_p), None) => {
                 apply_position(start_p, &mut ctx, None, true);
             }
@@ -466,6 +491,25 @@ fn calculate_terms(
         );
     }
 
+    // The predicates `VariationEffect` answers from `complete_overlap_feature`
+    // alone: `coding_unknown` returns 0 before its peptide tests, so no
+    // `coding_sequence_variant`; `non_coding_exon_variant` returns 0, so
+    // `within_non_coding_gene` yields the transcript-context term instead; and
+    // `coding_transcript_variant` is `!coding_unknown && complete_overlap_feature
+    // && within_coding_gene`, included for biotype `protein_coding` and true
+    // when the transcript has a translation. The splice, intron and UTR
+    // predicates read the whole-span windows above unchanged.
+    if complete_overlap {
+        remove_consequence(&mut consequences, Consequence::CodingSequenceVariant);
+        remove_consequence(
+            &mut consequences,
+            Consequence::NonCodingTranscriptExonVariant,
+        );
+        if transcript.is_protein_coding() && transcript.translation.is_some() {
+            push_unique(&mut consequences, Consequence::CodingTranscriptVariant);
+        }
+    }
+
     // Perl `within_feature`: `overlap(vf.start, vf.end, tr.start, tr.end)` on the
     // raw coordinates, so an insertion butting against a transcript edge
     // (end = tr.start - 1 or start = tr.end + 1) is outside.
@@ -551,6 +595,20 @@ struct ApplyPositionContext<'a> {
     fields: &'a mut PositionFields,
     shifted_variant_coords: Option<(u64, u64)>,
     reference_fasta: Option<&'a vep_fasta::IndexedFasta>,
+}
+
+/// Perl's `deletion` pre-predicate for a sequence variant
+/// (`BaseVariationFeatureOverlapAllele::_pre_consequence_predicates`): the
+/// reference span `vf.end - vf.start + 1` (`_bvf_preds` `ref_length`) is longer
+/// than the ALT sequence, `-` counting as empty. `snp` is the equal-length case
+/// and `insertion` the longer ALT. A symbolic `<DEL>` never reaches this test:
+/// it is a `StructuralVariationFeature`, whose `deletion` flag comes from its
+/// class term in `_bvf_preds`, and here it takes the structural path.
+fn perl_deletion_pre_predicate(variant: &InputVariant) -> bool {
+    let ref_length = (variant.end as i64 - variant.start as i64 + 1).max(0);
+    let alt = variant.alt_allele();
+    let alt_length = if alt == b"-" { 0 } else { alt.len() as i64 };
+    ref_length > alt_length
 }
 
 /// The smallest absolute gap between {variant start, variant end} and
