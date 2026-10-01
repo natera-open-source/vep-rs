@@ -1,0 +1,145 @@
+name: Docker
+
+# Packages a published release's attested x86_64 Linux binaries as
+# ghcr.io/natera-open-source/vep-rs. Publishing a release pushes X.Y.Z, plus X.Y
+# and latest when it is the newest (scripts/docker/image_tags.sh).
+# `workflow_dispatch` packages any published tag and pushes only when asked,
+# from main. A pull request touching the image builds and smoke-tests the
+# newest release and pushes nothing. The image pushed is the one the smoke
+# test ran.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag to package (vX.Y.Z)
+        required: true
+      push:
+        description: Push the image to GHCR
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - docker/**
+      - scripts/docker/**
+      - .github/workflows/docker.yml
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: docker-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+
+env:
+  IMAGE: ghcr.io/natera-open-source/vep-rs
+
+jobs:
+  image:
+    name: Build, smoke-test and publish
+    if: github.event_name != 'release' || !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint the Dockerfile
+        run: docker run --rm -i hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d < docker/Dockerfile
+
+      - name: Resolve the tag and whether to push
+        id: meta
+        env:
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_PUSH: ${{ inputs.push }}
+        run: |
+          case "$EVENT" in
+            release) tag="$RELEASE_TAG"; push=true ;;
+            workflow_dispatch) tag="$INPUT_TAG"; push="$INPUT_PUSH" ;;
+            *) tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"; push=false ;;
+          esac
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "ERROR: [docker] tag '$tag' is not vX.Y.Z" >&2; exit 1; }
+          if [[ "$push" == true && "$GITHUB_REF" != refs/heads/main && "$EVENT" == workflow_dispatch ]]; then
+            echo "ERROR: [docker] push=true is allowed only from main, not $GITHUB_REF" >&2; exit 1
+          fi
+          { echo "tag=$tag"; echo "version=${tag#v}"; echo "push=$push"; } >> "$GITHUB_OUTPUT"
+          echo "packaging $tag (push=$push)"
+
+      # The smoke test runs the release's own corpus, so an older binary is
+      # never handed a cache format newer than it reads.
+      - name: Check out the release's GRCh37 corpus
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+          path: release-src
+          sparse-checkout: tests/golden/115/GRCh37
+          persist-credentials: false
+
+      - name: Stage the verified release binaries
+        run: scripts/docker/stage_release.sh "${{ steps.meta.outputs.tag }}" "$RUNNER_TEMP/context"
+
+      - name: Build
+        run: >-
+          docker build --platform linux/amd64 --provenance=false --sbom=false
+          --file docker/Dockerfile
+          --build-arg VERSION="${{ steps.meta.outputs.version }}"
+          --tag vep-rs:smoke
+          "$RUNNER_TEMP/context"
+
+      - name: Smoke test
+        run: >-
+          docker run --rm
+          -v "$PWD/scripts/docker:/smoke:ro"
+          -v "$PWD/release-src/tests/golden/115/GRCh37:/corpus:ro"
+          vep-rs:smoke bash /smoke/smoke_test.sh "${{ steps.meta.outputs.version }}"
+
+      - name: Log in to GHCR
+        if: steps.meta.outputs.push == 'true'
+        env:
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+
+      - name: Push
+        if: steps.meta.outputs.push == 'true'
+        id: push
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
+            --limit 1000 --json tagName --jq '.[].tagName' > "$RUNNER_TEMP/published.txt"
+          scripts/docker/image_tags.sh "$IMAGE" "${{ steps.meta.outputs.tag }}" \
+            < "$RUNNER_TEMP/published.txt" > "$RUNNER_TEMP/tags.txt"
+          : > "$RUNNER_TEMP/digests.txt"
+          while read -r ref; do
+            docker tag vep-rs:smoke "$ref"
+            docker push "$ref" | tee "$RUNNER_TEMP/push.log"
+            grep -oE 'digest: sha256:[0-9a-f]{64}' "$RUNNER_TEMP/push.log" | cut -d' ' -f2 >> "$RUNNER_TEMP/digests.txt"
+          done < "$RUNNER_TEMP/tags.txt"
+          # Every tag must have reported one digest, and all the same one.
+          [[ "$(wc -l < "$RUNNER_TEMP/digests.txt")" -eq "$(wc -l < "$RUNNER_TEMP/tags.txt")" ]] ||
+            { echo "ERROR: [docker] a push reported no digest" >&2; exit 1; }
+          digest="$(sort -u "$RUNNER_TEMP/digests.txt")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] ||
+            { echo "ERROR: [docker] pushed tags reported different digests: $digest" >&2; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "pushed $(paste -sd' ' "$RUNNER_TEMP/tags.txt") at $digest"
+
+      - name: Attest the pushed image
+        if: steps.meta.outputs.push == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A container image, `ghcr.io/natera-open-source/vep-rs`, for each published
+  release from 0.2.0: the release's attested x86_64 Linux binaries and the
+  `duckdb` CLI on Debian 13, smoke-tested on the GRCh37 corpus before it is
+  pushed, with a build-provenance attestation on the pushed digest
+  (`.github/workflows/docker.yml`).
+- `docs/intended-divergences.md`: every class the adjusted concordance sets
+  aside, each with the record, both engines' rows, the mechanism in Ensembl
+  VEP's source, and a command that reproduces it.
+- Structural-variant comparator masks for the second side of two classes and
+  for three more: the `intergenic_variant` row vep-rs writes for a record
+  whose VEP tuples all name transcripts on another chromosome
+  (`filter_cross_chromosome_orphan_intergenic`); the mate allele of a
+  breakend above `--max_sv_size` that VEP never wrote, gated on the mate
+  lying within 5 kb of the transcript span
+  (`filter_giant_breakend_mate_divergences`); the SNP/indel registry's
+  excluding rules applied to structural pairs (`filter_registry_swap_pairs`);
+  VEP's batch-dependent Transcript tuples on a `<NON_REF>` record
+  (`filter_non_ref_batch_divergences`); and a mate-side row VEP evaluated at
+  the local coordinate (`filter_breakend_mate_local_read_pairs`), with
+  `scripts/validation/breakend_mate_context.py` deriving the mate-coordinate
+  and local-coordinate readings from the JSON cache. The transcript-selection
+  mask's unsupported-type scope names `<CPX>` and `<CTX>`.
+- The golden classifier names `breakend_mate_local_read`, computed by the
+  same derivation over the corpus's own pruned cache.
+- The comparators write the adjusted residual: `discordant_open.tsv` beside
+  `discordant.tsv` for the SNP and indel sets and `discordant_adjusted.tsv`
+  for the structural-variant sets, each the one-sided rows every mask leaves
+  in place. Per-class mode caches the per-term VEP totals of a reference
+  output (`--vep-totals-cache`).
+
 ### Changed
 
 - JSON cache format: each transcript's `variation_effect_feature_cache`
@@ -81,33 +113,6 @@ Each entry names the Ensembl VEP mechanism vep-rs follows.
   warning per record; that is the row VEP writes when no other record in the
   batch loads the region. A `<NON_REF>` carrying a supported `INFO/SVTYPE`
   keeps that type.
-
-### Added
-
-- `docs/intended-divergences.md`: every class the adjusted concordance sets
-  aside, each with the record, both engines' rows, the mechanism in Ensembl
-  VEP's source, and a command that reproduces it.
-- Structural-variant comparator masks for the second side of two classes and
-  for three more: the `intergenic_variant` row vep-rs writes for a record
-  whose VEP tuples all name transcripts on another chromosome
-  (`filter_cross_chromosome_orphan_intergenic`); the mate allele of a
-  breakend above `--max_sv_size` that VEP never wrote, gated on the mate
-  lying within 5 kb of the transcript span
-  (`filter_giant_breakend_mate_divergences`); the SNP/indel registry's
-  excluding rules applied to structural pairs (`filter_registry_swap_pairs`);
-  VEP's batch-dependent Transcript tuples on a `<NON_REF>` record
-  (`filter_non_ref_batch_divergences`); and a mate-side row VEP evaluated at
-  the local coordinate (`filter_breakend_mate_local_read_pairs`), with
-  `scripts/validation/breakend_mate_context.py` deriving the mate-coordinate
-  and local-coordinate readings from the JSON cache. The transcript-selection
-  mask's unsupported-type scope names `<CPX>` and `<CTX>`.
-- The golden classifier names `breakend_mate_local_read`, computed by the
-  same derivation over the corpus's own pruned cache.
-- The comparators write the adjusted residual: `discordant_open.tsv` beside
-  `discordant.tsv` for the SNP and indel sets and `discordant_adjusted.tsv`
-  for the structural-variant sets, each the one-sided rows every mask leaves
-  in place. Per-class mode caches the per-term VEP totals of a reference
-  output (`--vep-totals-cache`).
 
 ## [0.2.0] - 2026-09-29
 
