@@ -45,6 +45,9 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+# The SNP/indel comparator's exclusion registry lives beside this script's directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "concordance"))
+
 # Variant type classification
 
 _ACGT = set("ACGT")
@@ -618,20 +621,29 @@ def _span_exceeds_max_sv_size(loc: str) -> bool:
         return False
 
 
-def load_transcripts_by_chromosome(cache_dir: str | Path) -> dict[str, set[str]]:
-    """Map each chromosome to the transcript ids the vep-rs JSON cache holds for it.
+# Transcript span type: (chromosome, start, end) as the cache files it.
+TranscriptSpan = tuple[str, int, int]
 
-    The authority for "which chromosome is this transcript on". Both engines are run
-    against this one cache, so a transcript it files under chr21 is a chr21 transcript
-    and a transcript absent from chr21 is not one, whatever either engine's output says.
 
-    Returns an empty mapping when the directory is absent or unreadable, and the caller
-    treats that as "cannot judge" rather than "nothing to exclude".
+def load_transcript_index(
+    cache_dir: str | Path,
+) -> tuple[dict[str, set[str]], dict[str, TranscriptSpan]]:
+    """Read the vep-rs JSON cache once and return two views of it.
+
+    The first maps each chromosome to the transcript ids the cache holds for it; the
+    second maps each transcript id to its ``(chromosome, start, end)``. Both engines
+    are run against this one cache, so a transcript it files under chr21 is a chr21
+    transcript and its span is the span both engines annotated against, whatever
+    either engine's output says.
+
+    Returns two empty mappings when the directory is absent or unreadable, and the
+    callers treat that as "cannot judge" rather than "nothing to exclude".
     """
     root = Path(cache_dir) / "transcripts"
-    out: dict[str, set[str]] = {}
+    by_chr: dict[str, set[str]] = {}
+    spans: dict[str, TranscriptSpan] = {}
     if not root.is_dir():
-        return out
+        return by_chr, spans
     for chr_dir in sorted(root.iterdir()):
         if not chr_dir.is_dir():
             continue
@@ -647,11 +659,25 @@ def load_transcripts_by_chromosome(cache_dir: str | Path) -> dict[str, set[str]]
             if not isinstance(data, list):
                 continue
             for tx in data:
-                if isinstance(tx, dict) and tx.get("stable_id"):
-                    ids.add(tx["stable_id"])
+                if not (isinstance(tx, dict) and tx.get("stable_id")):
+                    continue
+                ids.add(tx["stable_id"])
+                try:
+                    spans[tx["stable_id"]] = (chr_dir.name, int(tx["start"]), int(tx["end"]))
+                except (KeyError, TypeError, ValueError):
+                    continue
         if ids:
-            out[chr_dir.name] = ids
-    return out
+            by_chr[chr_dir.name] = ids
+    return by_chr, spans
+
+
+def load_transcripts_by_chromosome(cache_dir: str | Path) -> dict[str, set[str]]:
+    """Map each chromosome to the transcript ids the vep-rs JSON cache holds for it.
+
+    The authority for "which chromosome is this transcript on"; see
+    `load_transcript_index`, whose first element this is.
+    """
+    return load_transcript_index(cache_dir)[0]
 
 
 def _chromosome_of_location(loc: str) -> str | None:
@@ -694,10 +720,16 @@ def filter_cross_chromosome_divergences(
     Ensembl's own GRCh37 GFF3 places them on chrX, chrY and chr22, the chromosomes
     following 21 in Ensembl's ordering.
 
-    THE MECHANISM IS NOT ESTABLISHED. The destinations suggest a lookup running past
-    chr21's cache slice, but that is a hypothesis; what is established is that the
-    contig-naming trigger cannot be the whole story, because the GRCh37 file's `CHR2=21`
-    matches its `CHROM` and the defect fires there anyway.
+    THE MECHANISM. A neighbouring inter-chromosomal breakend in the same batch loads the
+    cache regions around its mate on the other chromosome (ensembl-vep
+    AnnotationSource.pm:249-257); the batch's interval tree holds every record by numeric
+    coordinate with no chromosome test (InputBuffer.pm:345-366), so
+    `get_overlapping_vfs` (InputBuffer.pm:284-330) hands the other chromosome's
+    transcripts every record whose numbers overlap them; and a non-breakend record gets
+    its overlap allele without the breakend distance gate that compares chromosome
+    names (ensembl-variation StructuralVariationOverlap.pm:64-72 against :73-87). Alone
+    in a batch, the same record writes `intergenic_variant`. Contig naming plays no
+    part, which is why the GRCh37 file's `CHR2=21` fires it as readily as GRCh38's.
 
     Why this is masked rather than charged to vep-rs: vep-rs names exactly the transcripts
     its per-chromosome index holds for the variant's chromosome, which is correct, and
@@ -751,6 +783,86 @@ def filter_cross_chromosome_divergences(
     return set(), excluded_perl, unresolvable_scored
 
 
+_INTERGENIC_TUPLE_TAIL = ("-", "-", "intergenic_variant")
+
+
+def filter_cross_chromosome_orphan_intergenic(
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+    excluded_perl_cross_chromosome: set[AnnotTuple],
+) -> set[AnnotTuple]:
+    """The vep-rs side of the cross-chromosome mask: the ``intergenic_variant`` row
+    that stands where Perl's off-chromosome transcripts stood.
+
+    THE SHAPE. For a non-breakend structural variant Perl annotated ONLY against
+    transcripts on other chromosomes (every one of its tuples for the record is in
+    `excluded_perl_cross_chromosome`), and vep-rs, finding no transcript within 5 kb
+    on the record's own chromosome, wrote the single row
+    ``(location, allele, -, -, intergenic_variant)``. After the Perl-side mask the
+    record has no Perl tuple left, so the vep-rs row is charged as a one-sided
+    divergence although it is the row Perl itself writes for the record when no
+    other record loads an off-chromosome region: ensembl-variation
+    StructuralVariationFeature.pm:674-689 creates the intergenic overlap exactly when
+    the transcript overlap list is empty, and ensembl-vep AnnotationSource.pm:249-257
+    is where a neighbouring breakend's mate loads the other chromosome's regions that
+    InputBuffer.pm:284-330 then matches against this record by numeric position alone.
+
+    THE PREDICATE, on a vep-rs-only tuple: its feature is ``-`` and its consequence
+    ``intergenic_variant``; Perl has at least one tuple at the same Location and Allele;
+    every Perl tuple at that key is in `excluded_perl_cross_chromosome`; and vep-rs's
+    whole set at that key is this one tuple. A record with any surviving Perl tuple, a
+    record Perl wrote nothing for, or a vep-rs set with anything beside the intergenic
+    row is never touched: those stay charged where they fall.
+
+    Returns the vep-rs tuples to exclude. Perl-side only by construction of the inputs,
+    since `excluded_perl_cross_chromosome` is what `filter_cross_chromosome_divergences`
+    returned; with no cache that set is empty and this excludes nothing.
+    """
+    if not excluded_perl_cross_chromosome:
+        return set()
+    perl_by_variant: dict[tuple[str, str], set[AnnotTuple]] = defaultdict(set)
+    for t in perl_tuples:
+        perl_by_variant[(t[0], t[1])].add(t)
+    rust_by_variant: dict[tuple[str, str], set[AnnotTuple]] = defaultdict(set)
+    for t in rust_tuples:
+        rust_by_variant[(t[0], t[1])].add(t)
+    excluded: set[AnnotTuple] = set()
+    for t in rust_tuples - perl_tuples:
+        if t[2:] != _INTERGENIC_TUPLE_TAIL:
+            continue
+        key = (t[0], t[1])
+        perl_here = perl_by_variant.get(key)
+        if not perl_here or not perl_here <= excluded_perl_cross_chromosome:
+            continue
+        if rust_by_variant[key] != {t}:
+            continue
+        excluded.add(t)
+    return excluded
+
+
+# Perl VEP's unsupported symbolic types present in the corpora that vep-rs annotates as
+# spans. Parser/VCF.pm:477-481 keeps such a record with `vep_skip` set (get_SO_term
+# returns undef, the SVTYPE string stands in for the term and is written in the Allele
+# column), AnnotationSource.pm:238 then loads no cache region for it, and it is
+# annotated against whatever regions its batch loaded, at any span. `<NON_REF>` takes
+# the same route in Perl but is not listed: vep-rs writes no transcript tuple for a
+# gVCF reference block, so the transcript-selection arms have nothing to reach there.
+_VEP_SKIP_UNSUPPORTED_ALLELES = frozenset({"CPX", "CTX"})
+
+
+def _batch_dependent_annotation_scope(loc: str, allele: str) -> bool:
+    """True where Perl annotates a record only against its batch's loaded regions.
+
+    Two routes reach that state, both through the same `vep_skip` flag: a span above
+    --max_sv_size (Parser.pm:493-497) and a symbolic type without a Sequence Ontology
+    term (Parser/VCF.pm:477-481, `_VEP_SKIP_UNSUPPORTED_ALLELES`). Below the size limit
+    and with a supported type Perl loads every region the record overlaps
+    (AnnotationSource.pm:194-200), so a transcript-set difference there is not this
+    defect and stays charged.
+    """
+    return _span_exceeds_max_sv_size(loc) or allele in _VEP_SKIP_UNSUPPORTED_ALLELES
+
+
 def filter_intended_divergences(
     perl_tuples: set[AnnotTuple],
     rust_tuples: set[AnnotTuple],
@@ -802,11 +914,12 @@ def filter_intended_divergences(
     #     vep-rs FALSE POSITIVE: a transcript vep-rs named and Perl did not. The
     #     Perl-side arm below carries its mirror of this guard.
     #
-    # (b) SCOPE. The mechanism requires a span above Perl's --max_sv_size default
-    #     (10 Mb, ensembl-vep Config.pm:310). Below it Perl requests every region a
-    #     variant overlaps, so no batch dependence exists and nothing is masked: a
-    #     spurious transcript on a 100 bp deletion or a 1 bp point locus stays
-    #     charged to vep-rs.
+    # (b) SCOPE. The mechanism requires `vep_skip`: a span above Perl's
+    #     --max_sv_size default (10 Mb, ensembl-vep Config.pm:310) or an ALT type
+    #     Perl has no Sequence Ontology term for (`_VEP_SKIP_UNSUPPORTED_ALLELES`).
+    #     Otherwise Perl requests every region a variant overlaps, so no batch
+    #     dependence exists and nothing is masked: a spurious transcript on a
+    #     100 bp deletion or a 1 bp point locus stays charged to vep-rs.
     #
     # Known blind spot, deliberately left: a giant INTER-CHROMOSOMAL breakend
     # carries its mate coordinate in the Allele bracket, not the Location, so its
@@ -824,9 +937,10 @@ def filter_intended_divergences(
             # vep-rs did not name MORE transcripts here, so Perl under-annotation
             # is not the explanation. Leave it in both raw and adjusted F1.
             continue
-        if not _span_exceeds_max_sv_size(loc):
-            # Below --max_sv_size Perl loads every region it needs, so a
-            # transcript-set difference here is not the masked defect.
+        if not _batch_dependent_annotation_scope(loc, allele):
+            # Below --max_sv_size and with a supported ALT type Perl loads every
+            # region it needs, so a transcript-set difference here is not the
+            # masked defect.
             continue
         excluded_rust.add(t)
 
@@ -856,11 +970,125 @@ def filter_intended_divergences(
             # vep-rs under-annotated this variant relative to Perl: the opposite
             # of the masked defect. Leave it in both raw and adjusted F1.
             continue
-        if not _span_exceeds_max_sv_size(loc):
+        if not _batch_dependent_annotation_scope(loc, allele):
             continue
         excluded_perl.add(t)
 
     return excluded_rust, excluded_perl
+
+
+# Perl's breakend-to-feature distance gate (ensembl-variation StructuralVariationOverlap.pm
+# :130-146, MAX_DISTANCE_FROM_TRANSCRIPT in Utils/VariationEffect.pm:60).
+_BREAKEND_FEATURE_DISTANCE = 5000
+
+_BRACKET_MATE_RE = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
+
+
+def _bracket_mate(allele: str) -> tuple[str, int] | None:
+    """The mate ``(chromosome, position)`` a bracket-notation breakend allele names."""
+    m = _BRACKET_MATE_RE.search(allele)
+    if not m:
+        return None
+    chrom = m.group(1)
+    return (chrom[3:] if chrom.lower().startswith("chr") else chrom), int(m.group(2))
+
+
+def filter_giant_breakend_mate_divergences(
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+    transcript_spans: dict[str, TranscriptSpan],
+) -> set[AnnotTuple]:
+    """The mate-allele arm of the transcript-selection mask.
+
+    THE SHAPE. A breakend record whose Location span exceeds --max_sv_size carries two
+    alleles in the output: the local breakend (``N.``) and the mate (``N[chr:pos[``).
+    Perl flags the record `vep_skip` (Parser.pm:493-497) and loads no region for it,
+    neither for the span nor for the mate, because AnnotationSource.pm:238 skips the
+    record before the breakend loop at :249-257. Both alleles are then annotated only
+    against transcripts other records of the batch loaded. `filter_intended_divergences`
+    reaches the local allele, where Perl names some transcripts and vep-rs more; it
+    cannot reach the mate allele when Perl names none under it, because its arms key
+    on the (Location, Allele) pair and require the other engine to have annotated it.
+    Perl's own mate allele for such a record appears the moment another record of the
+    batch loads the mate's region, and it then carries exactly the transcripts within
+    `_BREAKEND_FEATURE_DISTANCE` of the mate (StructuralVariationOverlap.pm:73-87).
+
+    THE PREDICATE, on a vep-rs-only tuple: its Allele is bracket notation whose mate
+    the cache places on the same chromosome as its feature; the Location span exceeds
+    --max_sv_size; Perl has at least one tuple at the Location (it saw the record) and
+    none at the (Location, Allele); and the mate lies within
+    `_BREAKEND_FEATURE_DISTANCE` of the feature's cached span, so Perl's own gate would
+    have created the allele. A mate farther from the feature than that is a vep-rs
+    tuple Perl never writes and stays charged to vep-rs.
+
+    Returns the vep-rs tuples to exclude. With no `transcript_spans` (no cache) it
+    excludes nothing.
+    """
+    if not transcript_spans:
+        return set()
+    perl_alleles_by_location: dict[str, set[str]] = defaultdict(set)
+    for loc, allele, _f, _ft, _c in perl_tuples:
+        perl_alleles_by_location[loc].add(allele)
+    excluded: set[AnnotTuple] = set()
+    for t in rust_tuples - perl_tuples:
+        loc, allele, feature, _ft, _c = t
+        mate = _bracket_mate(allele)
+        if mate is None or not _span_exceeds_max_sv_size(loc):
+            continue
+        perl_alleles = perl_alleles_by_location.get(loc)
+        if not perl_alleles or allele in perl_alleles:
+            continue
+        span = transcript_spans.get(feature)
+        if span is None or span[0] != mate[0]:
+            continue
+        if not (span[1] - _BREAKEND_FEATURE_DISTANCE <= mate[1] <= span[2] + _BREAKEND_FEATURE_DISTANCE):
+            continue
+        excluded.add(t)
+    return excluded
+
+
+def filter_registry_swap_pairs(
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+) -> tuple[set[AnnotTuple], set[AnnotTuple], dict[str, int]]:
+    """Apply the SNP/indel comparator's excluding rules to this comparator's pairs.
+
+    A pair is a (Location, Allele, Feature, Feature_type) present on both sides with
+    different consequence sets; each side contributes exactly one tuple per key. The
+    rules are `EXCLUDING_RULES` of ``compare_vep_outputs.py``, imported so the two
+    comparators cannot drift: the start co-emission (VariationEffect.pm:884-893 fires
+    ``start_lost`` on any structural span over the start codon while :1037 makes
+    ``start_retained_variant`` fire on every structural allele without reading
+    sequence) and the covered splice-region shape (BaseTranscriptVariationAllele.pm:215).
+    Structural alleles reach the sequence-variant defects through the same predicates,
+    and a sequence allele in an SV corpus reaches them as it does in the SNP/indel one.
+
+    Returns (excluded_rust, excluded_perl, matches_by_bucket): both members of every
+    matching pair, and how many pairs each rule matched.
+    """
+    from compare_vep_outputs import EXCLUDING_RULES  # noqa: E402  (sibling script)
+
+    perl_by_key: dict[tuple[str, str, str, str], list[AnnotTuple]] = defaultdict(list)
+    rust_by_key: dict[tuple[str, str, str, str], list[AnnotTuple]] = defaultdict(list)
+    for t in perl_tuples - rust_tuples:
+        perl_by_key[t[:4]].append(t)
+    for t in rust_tuples - perl_tuples:
+        rust_by_key[t[:4]].append(t)
+    excluded_rust: set[AnnotTuple] = set()
+    excluded_perl: set[AnnotTuple] = set()
+    by_bucket: dict[str, int] = {rule.bucket: 0 for rule in EXCLUDING_RULES}
+    for key, perl_side in perl_by_key.items():
+        rust_side = rust_by_key.get(key)
+        if not rust_side or len(perl_side) != 1 or len(rust_side) != 1:
+            continue
+        (pt,), (rt,) = perl_side, rust_side
+        for rule in EXCLUDING_RULES:
+            if rule.matches(pt[4], rt[4], key[1]):
+                excluded_perl.add(pt)
+                excluded_rust.add(rt)
+                by_bucket[rule.bucket] += 1
+                break
+    return excluded_rust, excluded_perl, by_bucket
 
 
 # <CNV:TR> literal-versus-symbolic mask
@@ -1073,6 +1301,15 @@ def write_json_report(
     excluded_transcript_selection_perl_count: int = 0,
     excluded_transcript_selection_by_file: dict[str, dict[str, int]] | None = None,
     transcript_selection_cnvtr_overlap_rust: int = 0,
+    excluded_xchr_orphan_rust_count: int = 0,
+    excluded_xchr_orphan_rust_by_file: dict[str, int] | None = None,
+    excluded_mate_rust_count: int = 0,
+    excluded_mate_rust_by_file: dict[str, int] | None = None,
+    excluded_swap_rust_count: int = 0,
+    excluded_swap_perl_count: int = 0,
+    excluded_swap_by_bucket: dict[str, int] | None = None,
+    excluded_swap_by_file: dict[str, dict[str, int]] | None = None,
+    transcript_selection_xchr_overlap_perl: int = 0,
 ) -> None:
     """Write the JSON report.
 
@@ -1088,6 +1325,17 @@ def write_json_report(
     number of tuples both vep-rs-side layers claim as
     ``transcript_selection_cnvtr_overlap_rust``; the union equals the two layer sizes
     less that overlap.
+
+    Three further layers write their own sizes: ``excluded_cross_chromosome_rust`` (the
+    vep-rs intergenic row of a record whose Perl tuples the cross-chromosome mask
+    removed), ``excluded_transcript_selection_mate_rust`` (the mate allele of a
+    breakend above --max_sv_size that Perl never wrote), and
+    ``excluded_registry_swap_rust`` / ``_perl`` with ``excluded_registry_swap_by_bucket``
+    (both members of every pair an SNP/indel excluding rule matched). The
+    transcript-selection Perl arm and the cross-chromosome mask can claim one tuple
+    together; that count is ``transcript_selection_cross_chromosome_overlap_perl``.
+    ``cross_chromosome_check_ran`` also gates the mate-allele arm, since both read the
+    cache.
     """
     report = {
         "overall": metrics_to_dict(overall),
@@ -1112,6 +1360,14 @@ def write_json_report(
         adj_dict["cnvtr_swap_pairs_total_rust"] = cnvtr_swap_pairs_total_rust
         adj_dict["cnvtr_swap_pairs_total_perl"] = cnvtr_swap_pairs_total_perl
         adj_dict["excluded_cross_chromosome_perl"] = excluded_xchr_perl_count
+        adj_dict["excluded_cross_chromosome_rust"] = excluded_xchr_orphan_rust_count
+        adj_dict["excluded_transcript_selection_mate_rust"] = excluded_mate_rust_count
+        adj_dict["excluded_registry_swap_rust"] = excluded_swap_rust_count
+        adj_dict["excluded_registry_swap_perl"] = excluded_swap_perl_count
+        adj_dict["excluded_registry_swap_by_bucket"] = dict(excluded_swap_by_bucket or {})
+        adj_dict["transcript_selection_cross_chromosome_overlap_perl"] = (
+            transcript_selection_xchr_overlap_perl
+        )
         # Recorded so a report cannot be read as "no cross-chromosome tuples" when it
         # actually means "no cache was supplied to adjudicate them".
         adj_dict["cross_chromosome_check_ran"] = cross_chromosome_check_ran
@@ -1140,6 +1396,20 @@ def write_json_report(
             adj_dict["cnvtr_swap_pairs_total_by_file"] = {
                 k: v
                 for k, v in sorted(cnvtr_swap_pairs_total_by_file.items())
+                if v["rust"] or v["perl"]
+            }
+        if excluded_xchr_orphan_rust_by_file:
+            adj_dict["excluded_cross_chromosome_rust_by_file"] = {
+                k: v for k, v in sorted(excluded_xchr_orphan_rust_by_file.items()) if v
+            }
+        if excluded_mate_rust_by_file:
+            adj_dict["excluded_transcript_selection_mate_by_file"] = {
+                k: v for k, v in sorted(excluded_mate_rust_by_file.items()) if v
+            }
+        if excluded_swap_by_file:
+            adj_dict["excluded_registry_swap_by_file"] = {
+                k: v
+                for k, v in sorted(excluded_swap_by_file.items())
                 if v["rust"] or v["perl"]
             }
         report["adjusted"] = adj_dict
@@ -1364,8 +1634,9 @@ def main() -> None:
     # path that yields no chromosomes is a hard error rather than a silent skip: the mask
     # would then report zero exclusions, which is indistinguishable from a clean run.
     transcripts_by_chr: dict[str, set[str]] = {}
+    transcript_spans: dict[str, TranscriptSpan] = {}
     if args.vep_rs_cache:
-        transcripts_by_chr = load_transcripts_by_chromosome(args.vep_rs_cache)
+        transcripts_by_chr, transcript_spans = load_transcript_index(args.vep_rs_cache)
         if not transcripts_by_chr:
             print(
                 f"ERROR: [compare_sv_concordance] --vep-rs-cache "
@@ -1533,13 +1804,29 @@ def main() -> None:
     _, xchr_excluded_perl, xchr_unresolvable_scored = filter_cross_chromosome_divergences(
         all_perl_tuples, all_rust_tuples, transcripts_by_chr, args.scored_engine
     )
+    # Layer 4b: the vep-rs side of the cross-chromosome mask, the intergenic row that
+    # stands where Perl's off-chromosome transcripts stood. Reads layer 4's result.
+    xchr_orphan_rust = filter_cross_chromosome_orphan_intergenic(
+        all_perl_tuples, all_rust_tuples, xchr_excluded_perl
+    )
+    # Layer 1b: the mate-allele arm of the transcript-selection mask, on breakends whose
+    # span exceeds --max_sv_size and whose mate allele Perl never wrote.
+    mate_excluded_rust = filter_giant_breakend_mate_divergences(
+        all_perl_tuples, all_rust_tuples, transcript_spans
+    )
+    # Layer 5: the SNP/indel comparator's excluding rules applied to this comparator's
+    # pairs (start co-emission, covered splice region), both members of each pair.
+    swap_excluded_rust, swap_excluded_perl, swap_by_bucket = filter_registry_swap_pairs(
+        all_perl_tuples, all_rust_tuples
+    )
     # The transcript-selection layer's own size, kept before the union so the report
     # states the class exactly beside the union the adjusted denominators subtract.
     tsel_rust_count = len(excluded_rust_overall)
     tsel_perl_count = len(excluded_perl_overall)
     tsel_overlap_rust = len(excluded_rust_overall & cnvtr_excluded_rust)
-    excluded_rust_overall |= cnvtr_excluded_rust
-    excluded_perl_overall |= cnvtr_excluded_perl | xchr_excluded_perl
+    tsel_xchr_overlap_perl = len(excluded_perl_overall & xchr_excluded_perl)
+    excluded_rust_overall |= cnvtr_excluded_rust | xchr_orphan_rust | mate_excluded_rust | swap_excluded_rust
+    excluded_perl_overall |= cnvtr_excluded_perl | xchr_excluded_perl | swap_excluded_perl
     excluded_count = len(excluded_rust_overall)
     excluded_perl_count = len(excluded_perl_overall)
     adj_rust_tuples = all_rust_tuples - excluded_rust_overall
@@ -1558,6 +1845,9 @@ def main() -> None:
     cnvtr_perl_by_file: dict[str, int] = {}
     cnvtr_total_by_file: dict[str, dict[str, int]] = {}
     xchr_perl_by_file: dict[str, int] = {}
+    xchr_orphan_rust_by_file: dict[str, int] = {}
+    mate_rust_by_file: dict[str, int] = {}
+    swap_by_file: dict[str, dict[str, int]] = {}
     tsel_by_file: dict[str, dict[str, int]] = {}
     adj_perl_filesum = 0
     adj_rust_filesum = 0
@@ -1570,14 +1860,33 @@ def main() -> None:
         _, xchr_excl_perl_f, _ = filter_cross_chromosome_divergences(
             perl_t, rust_t, transcripts_by_chr, args.scored_engine
         )
+        xchr_orphan_rust_f = filter_cross_chromosome_orphan_intergenic(
+            perl_t, rust_t, xchr_excl_perl_f
+        )
+        mate_excl_rust_f = filter_giant_breakend_mate_divergences(
+            perl_t, rust_t, transcript_spans
+        )
+        swap_excl_rust_f, swap_excl_perl_f, swap_buckets_f = filter_registry_swap_pairs(
+            perl_t, rust_t
+        )
         cnvtr_rust_by_file[basename] = len(cnvtr_excl_rust_f)
         cnvtr_perl_by_file[basename] = len(cnvtr_excl_perl_f)
         tsel_by_file[basename] = {"rust": len(excluded_rust_f), "perl": len(excluded_perl_f)}
         tot_rust_f, tot_perl_f = count_cnv_tr_swap_population(perl_t, rust_t)
         cnvtr_total_by_file[basename] = {"rust": tot_rust_f, "perl": tot_perl_f}
         xchr_perl_by_file[basename] = len(xchr_excl_perl_f)
-        adj_rust_f = rust_t - excluded_rust_f - cnvtr_excl_rust_f
-        adj_perl_f = perl_t - excluded_perl_f - cnvtr_excl_perl_f - xchr_excl_perl_f
+        xchr_orphan_rust_by_file[basename] = len(xchr_orphan_rust_f)
+        mate_rust_by_file[basename] = len(mate_excl_rust_f)
+        swap_by_file[basename] = {
+            "rust": len(swap_excl_rust_f), "perl": len(swap_excl_perl_f), **swap_buckets_f
+        }
+        adj_rust_f = (
+            rust_t - excluded_rust_f - cnvtr_excl_rust_f - xchr_orphan_rust_f
+            - mate_excl_rust_f - swap_excl_rust_f
+        )
+        adj_perl_f = (
+            perl_t - excluded_perl_f - cnvtr_excl_perl_f - xchr_excl_perl_f - swap_excl_perl_f
+        )
         adjusted_file_metrics[basename] = compute_metrics(
             variants_f, adj_perl_f, perl_l, adj_rust_f, rust_l
         )
@@ -1639,6 +1948,15 @@ def main() -> None:
         cross_chromosome_check_ran=bool(transcripts_by_chr),
         scored_engine=args.scored_engine,
         scored_absent_from_cache=xchr_unresolvable_scored,
+        excluded_xchr_orphan_rust_count=len(xchr_orphan_rust),
+        excluded_xchr_orphan_rust_by_file=xchr_orphan_rust_by_file,
+        excluded_mate_rust_count=len(mate_excluded_rust),
+        excluded_mate_rust_by_file=mate_rust_by_file,
+        excluded_swap_rust_count=len(swap_excluded_rust),
+        excluded_swap_perl_count=len(swap_excluded_perl),
+        excluded_swap_by_bucket=swap_by_bucket,
+        excluded_swap_by_file=swap_by_file,
+        transcript_selection_xchr_overlap_perl=tsel_xchr_overlap_perl,
     )
     write_markdown_report(
         md_path,

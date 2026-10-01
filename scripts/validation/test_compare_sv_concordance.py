@@ -499,15 +499,24 @@ class SvFilterSetTests(unittest.TestCase):
     consequence-normalisation mask exists.
     """
 
-    def test_the_sv_filter_set_is_exactly_the_three_expected(self) -> None:
-        """Pinned as a set rather than a count, so adding or removing a filter fails
+    def test_the_sv_filter_set_is_exactly_the_expected_one(self) -> None:
+        """Two full masks (transcript selection, cross-chromosome annotation), each with
+        a second arm on the same class (the mate allele of a giant breakend; the vep-rs
+        intergenic row of a cross-chromosome record), one partial (<CNV:TR>), the pair
+        filter that applies the SNP/indel registry's excluding rules, the gVCF
+        reference-block filter, and the mate-side local-read pair filter.
+
+        Pinned as a set rather than a count, so adding or removing a filter fails
         here with its name, beside the taxonomy row it would need."""
         self.assertEqual(
-            {n for n in dir(C) if n.startswith("filter_") and n.endswith("_divergences")},
+            {n for n in dir(C) if n.startswith("filter_")},
             {
                 "filter_intended_divergences",
+                "filter_giant_breakend_mate_divergences",
                 "filter_cnv_tr_expansion_divergences",
                 "filter_cross_chromosome_divergences",
+                "filter_cross_chromosome_orphan_intergenic",
+                "filter_registry_swap_pairs",
             },
         )
 
@@ -1542,3 +1551,298 @@ class CnvTrTotalReportEndToEndTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# The vep-rs side of the cross-chromosome mask
+
+
+class CrossChromosomeOrphanIntergenicTests(unittest.TestCase):
+    """The intergenic row vep-rs writes for a record whose every Perl tuple the
+    cross-chromosome mask removed.
+
+    The exemplar is the gnomAD GRCh37 record `21:16155574-16155648 deletion`: Perl named
+    ENST00000380289, a chrX transcript numerically overlapping the record, because a
+    neighbouring breakend's mate loaded the chrX region; alone it writes
+    `intergenic_variant`, which is what vep-rs wrote.
+    """
+
+    TX_BY_CHR = {"21": {"ENST_21_A", "ENST_21_B"}, "X": {"ENST00000380289"}, "22": {"ENST_22_X"}}
+    LOC = "21:16155574-16155648"
+
+    def _xchr(self, perl, rust):
+        _, ex_perl, _ = C.filter_cross_chromosome_divergences(perl, rust, self.TX_BY_CHR)
+        return ex_perl
+
+    def test_the_orphan_intergenic_row_is_excluded(self) -> None:
+        perl = {T(self.LOC, "deletion", "ENST00000380289", "intron_variant")}
+        rust = {T(self.LOC, "deletion", "-", "intergenic_variant", ftype="-")}
+        ex = C.filter_cross_chromosome_orphan_intergenic(perl, rust, self._xchr(perl, rust))
+        self.assertEqual(ex, rust)
+
+    def test_every_perl_tuple_must_have_been_masked(self) -> None:
+        """One surviving on-chromosome Perl transcript makes the vep-rs intergenic row a
+        genuine divergence (vep-rs missed a chr21 transcript), so nothing is excluded."""
+        perl = {
+            T(self.LOC, "deletion", "ENST00000380289", "intron_variant"),
+            T(self.LOC, "deletion", "ENST_21_A", "intron_variant"),
+        }
+        rust = {T(self.LOC, "deletion", "-", "intergenic_variant", ftype="-")}
+        ex_perl = self._xchr(perl, rust)
+        self.assertEqual(len(ex_perl), 1, "only the chrX tuple is cross-chromosome")
+        self.assertEqual(C.filter_cross_chromosome_orphan_intergenic(perl, rust, ex_perl), set())
+
+    def test_a_record_perl_wrote_nothing_for_is_not_touched(self) -> None:
+        rust = {T(self.LOC, "deletion", "-", "intergenic_variant", ftype="-")}
+        self.assertEqual(C.filter_cross_chromosome_orphan_intergenic(set(), rust, set()), set())
+
+    def test_a_vep_rs_transcript_row_beside_the_intergenic_row_blocks_it(self) -> None:
+        """vep-rs's set must be exactly the intergenic row; anything else at the key is a
+        shape this arm does not describe and stays charged."""
+        perl = {T(self.LOC, "deletion", "ENST00000380289", "intron_variant")}
+        rust = {
+            T(self.LOC, "deletion", "-", "intergenic_variant", ftype="-"),
+            T(self.LOC, "deletion", "ENST_21_B", "intron_variant"),
+        }
+        self.assertEqual(C.filter_cross_chromosome_orphan_intergenic(perl, rust, self._xchr(perl, rust)), set())
+
+    def test_a_non_intergenic_vep_rs_only_tuple_is_never_excluded_here(self) -> None:
+        perl = {T(self.LOC, "deletion", "ENST00000380289", "intron_variant")}
+        rust = {T(self.LOC, "deletion", "ENST_21_B", "intron_variant")}
+        self.assertEqual(C.filter_cross_chromosome_orphan_intergenic(perl, rust, self._xchr(perl, rust)), set())
+
+    def test_no_cross_chromosome_exclusions_means_no_orphans(self) -> None:
+        perl = {T(self.LOC, "deletion", "ENST_21_A", "intron_variant")}
+        rust = {T(self.LOC, "deletion", "-", "intergenic_variant", ftype="-")}
+        self.assertEqual(C.filter_cross_chromosome_orphan_intergenic(perl, rust, set()), set())
+
+
+# The mate-allele arm of the transcript-selection mask
+
+
+class GiantBreakendMateAlleleTests(unittest.TestCase):
+    """The exemplar is `gnomAD-SV_v3_BND_chr21_3f3f16e7` (GRCh38): Location
+    `21:14604132-41770788`, mate `N[chr21:41770788[`. vep-rs writes 24 mate-allele rows;
+    Perl writes none under that allele, only rows under the local allele `N.`. With a
+    record loading the mate's region Perl writes exactly the 20 rows whose transcript lies
+    within 5 kb of the mate; the other 4 are transcripts near the LOCAL breakend, which
+    Perl's distance gate never admits on the mate allele.
+    """
+
+    LOC = "21:14604132-41770788"
+    MATE = "N[chr21:41770788["
+    NEAR = {  # transcript: (start, end, consequence set) within 5 kb of 41770788
+        "ENST00000332512": (41739373, 41767052, "coding_transcript_variant"),
+        "ENST00000352483": (41739369, 41767089, "coding_transcript_variant"),
+        "ENST00000686319": (41767163, 41770302, "non_coding_transcript_variant"),
+        "ENST00000700893": (41767163, 41774864, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000701256": (41767176, 41776073, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000701512": (41767167, 41770305, "non_coding_transcript_variant"),
+        "ENST00000827190": (41764826, 41776429, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827191": (41765005, 41776073, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827192": (41767164, 41776073, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827193": (41768372, 41776433, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827194": (41767173, 41775164, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827195": (41767815, 41776234, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827196": (41769001, 41776073, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827197": (41767926, 41774864, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827198": (41768819, 41774858, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827199": (41768990, 41774864, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827200": (41769079, 41774864, "feature_truncation,non_coding_transcript_exon_variant,intron_variant"),
+        "ENST00000827201": (41767163, 41770305, "non_coding_transcript_variant"),
+        "ENST00000827202": (41767816, 41770307, "non_coding_transcript_variant"),
+        "ENST00000827413": (41768671, 41769359, "non_coding_transcript_variant"),
+    }
+    FAR = {  # transcripts near the local breakend at 14.6 Mb: vep-rs rows Perl never writes
+        "ENST00000400562": (14593720, 14658821, "intron_variant,non_coding_transcript_variant"),
+        "ENST00000435732": (14591930, 14643133, "intron_variant,non_coding_transcript_variant"),
+        "ENST00000647101": (14485228, 14658821, "intron_variant"),
+        "ENST00000749056": (14585012, 14612700, "intron_variant,non_coding_transcript_variant"),
+    }
+
+    def spans(self):
+        return {tx: ("21", s, e) for tx, (s, e, _c) in {**self.NEAR, **self.FAR}.items()}
+
+    def rust(self):
+        return {T(self.LOC, self.MATE, tx, c) for tx, (_s, _e, c) in {**self.NEAR, **self.FAR}.items()}
+
+    def perl_local(self):
+        return {T(self.LOC, "N.", tx, "feature_truncation,non_coding_transcript_variant") for tx in ("ENST00000435315", "ENST00000448152")}
+
+    def test_exactly_the_transcripts_within_5kb_of_the_mate_are_excluded(self) -> None:
+        ex = C.filter_giant_breakend_mate_divergences(self.perl_local(), self.rust(), self.spans())
+        self.assertEqual({t[2] for t in ex}, set(self.NEAR))
+        self.assertEqual(len(ex), 20)
+
+    def test_a_perl_row_under_the_mate_allele_hands_the_record_to_the_transcript_selection_arm(self) -> None:
+        """Once Perl names any transcript under the mate allele the transcript-selection arms apply
+        and this one must stay out, or the two would double-claim."""
+        perl = self.perl_local() | {T(self.LOC, self.MATE, "ENST00000332512", "coding_transcript_variant")}
+        self.assertEqual(C.filter_giant_breakend_mate_divergences(perl, self.rust(), self.spans()), set())
+
+    def test_a_record_perl_never_saw_is_not_touched(self) -> None:
+        self.assertEqual(C.filter_giant_breakend_mate_divergences(set(), self.rust(), self.spans()), set())
+
+    def test_a_span_within_max_sv_size_is_out_of_scope(self) -> None:
+        loc = "21:25729803-25735486"
+        rust = {T(loc, "N[chr21:25729802[", "ENST00000400090", "feature_truncation,intron_variant")}
+        perl = {T(loc, "N.", "ENST00000400090", "feature_truncation,intron_variant")}
+        spans = {"ENST00000400090": ("21", 25725000, 25740000)}
+        self.assertEqual(C.filter_giant_breakend_mate_divergences(perl, rust, spans), set())
+
+    def test_a_mate_on_another_chromosome_than_the_feature_is_out_of_scope(self) -> None:
+        rust = {T(self.LOC, "N[chr22:41770788[", "ENST00000332512", "coding_transcript_variant")}
+        self.assertEqual(C.filter_giant_breakend_mate_divergences(self.perl_local(), rust, self.spans()), set())
+
+    def test_a_non_bracket_allele_is_out_of_scope(self) -> None:
+        rust = {T(self.LOC, "N.", "ENST00000332512", "coding_transcript_variant")}
+        self.assertEqual(C.filter_giant_breakend_mate_divergences(self.perl_local(), rust, self.spans()), set())
+
+    def test_no_cache_excludes_nothing(self) -> None:
+        self.assertEqual(C.filter_giant_breakend_mate_divergences(self.perl_local(), self.rust(), {}), set())
+
+    def test_bracket_mate_parsing(self) -> None:
+        self.assertEqual(C._bracket_mate("N[chr21:41770788["), ("21", 41770788))
+        self.assertEqual(C._bracket_mate("[5:37717217[A"), ("5", 37717217))
+        self.assertEqual(C._bracket_mate("]13:123456]T"), ("13", 123456))
+        self.assertIsNone(C._bracket_mate("N."))
+        self.assertIsNone(C._bracket_mate("deletion"))
+
+
+# The vep_skip ALT-type scope of the transcript-selection mask
+
+
+class VepSkipAlleleScopeTests(unittest.TestCase):
+    """`CPX` and `CTX` reach the transcript-selection arms at any span.
+
+    Perl flags both `vep_skip` for want of a Sequence Ontology term and loads no region
+    for them, so their annotation is whatever the batch loaded: alone, every such record
+    writes `intergenic_variant`, and with its regions loaded Perl writes exactly the set
+    vep-rs writes. The exemplar is the GRCh38 gnomAD record `21:14923959-16588080 CPX`,
+    on which vep-rs names more transcripts than Perl.
+    """
+
+    def test_a_vep_skip_allele_is_in_scope_at_any_span(self) -> None:
+        self.assertTrue(C._batch_dependent_annotation_scope("21:14923959-16588080", "CPX"))
+        self.assertTrue(C._batch_dependent_annotation_scope("21:39955356", "CTX"))
+        self.assertTrue(C._batch_dependent_annotation_scope("21:1-20000002", "deletion"))
+        self.assertFalse(C._batch_dependent_annotation_scope("21:38530770-38531198", "deletion"))
+        self.assertFalse(C._batch_dependent_annotation_scope("21:38530770-38531198", "<*>"))
+
+    def test_a_non_ref_allele_is_out_of_scope(self) -> None:
+        """A gVCF reference block gets no transcript tuple from vep-rs, so Perl's
+        batch-derived transcript tuples on it are not a transcript-set difference this
+        arm describes; they belong to a filter of their own."""
+        self.assertFalse(C._batch_dependent_annotation_scope("21:38530770-38531198", "<NON_REF>"))
+        loc = "21:38530770-38531198"
+        perl = {T(loc, "<NON_REF>", "ENST_A", "intron_variant")}
+        rust = {T(loc, "<NON_REF>", "-", "intergenic_variant", ftype="-")}
+        self.assertEqual(C.filter_intended_divergences(perl, rust), (set(), set()))
+
+    def test_perl_naming_fewer_transcripts_on_a_cpx_record_is_excluded(self) -> None:
+        loc = "21:14923959-16588080"
+        perl = {T(loc, "CPX", "ENST_A", "intron_variant")}
+        rust = {T(loc, "CPX", "ENST_A", "intron_variant"), T(loc, "CPX", "ENST_B", "non_coding_transcript_variant")}
+        ex_rust, ex_perl = C.filter_intended_divergences(perl, rust)
+        self.assertEqual(ex_rust, {T(loc, "CPX", "ENST_B", "non_coding_transcript_variant")})
+        self.assertEqual(ex_perl, set())
+
+    def test_perl_intergenic_beside_vep_rs_transcripts_on_a_cpx_record(self) -> None:
+        """Perl's batch loaded nothing for the record and it wrote the intergenic row;
+        vep-rs named the overlapping transcripts. Both sides are the masked shape."""
+        loc = "21:22678893-22680544"
+        perl = {T(loc, "CPX", "-", "intergenic_variant", ftype="-")}
+        rust = {T(loc, "CPX", "ENST_A", "intron_variant"), T(loc, "CPX", "ENST_B", "upstream_gene_variant")}
+        ex_rust, ex_perl = C.filter_intended_divergences(perl, rust)
+        self.assertEqual(ex_rust, rust)
+        self.assertEqual(ex_perl, perl)
+
+    def test_the_direction_guard_holds_for_a_vep_skip_allele(self) -> None:
+        """vep-rs naming FEWER transcripts than Perl on a CPX record is not the defect."""
+        loc = "21:14923959-16588080"
+        perl = {T(loc, "CPX", "ENST_A", "intron_variant"), T(loc, "CPX", "ENST_B", "intron_variant")}
+        rust = {T(loc, "CPX", "ENST_A", "intron_variant")}
+        self.assertEqual(C.filter_intended_divergences(perl, rust), (set(), set()))
+
+    def test_a_pair_on_a_vep_skip_record_is_left_alone(self) -> None:
+        """Same transcript, different terms: a consequence divergence, not a
+        transcript-selection one."""
+        loc = "21:37386786-37420291"
+        perl = {T(loc, "CPX", "ENST_A", "intron_variant,splice_polypyrimidine_tract_variant")}
+        rust = {T(loc, "CPX", "ENST_A", "intron_variant")}
+        self.assertEqual(C.filter_intended_divergences(perl, rust), (set(), set()))
+
+    def test_a_supported_small_allele_stays_out_of_scope(self) -> None:
+        loc = "21:23699593-23724683"
+        perl = {T(loc, "deletion", "ENST_A", "transcript_ablation")}
+        rust = {T(loc, "deletion", "ENST_A", "transcript_ablation"), T(loc, "deletion", "ENST_B", "transcript_ablation")}
+        self.assertEqual(C.filter_intended_divergences(perl, rust), (set(), set()))
+
+
+# The SNP/indel registry's excluding rules on this comparator's pairs
+
+
+class RegistrySwapPairTests(unittest.TestCase):
+    """Both members of a pair one of `compare_vep_outputs.EXCLUDING_RULES` matches.
+
+    Exemplars: `21:26965975-26966647 deletion ENST00000284987` (GRCh38 gnomAD), Perl
+    `5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant`
+    against vep-rs without `start_retained_variant`; `21:36265246 - ENST00000486278`
+    (GRCh37 ClinVar SV), Perl `frameshift_variant,start_lost,start_retained_variant`
+    against vep-rs without `start_lost`; and `21:31663791-31663794 CA ENST00000270142`
+    (GRCh38 `02_mnp_complex`), vep-rs adding `splice_region_variant` to Perl's
+    `frameshift_variant`.
+    """
+
+    def test_structural_start_co_emission_pair_is_excluded_both_sides(self) -> None:
+        loc = "21:26965975-26966647"
+        p = T(loc, "deletion", "ENST00000284987", "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant")
+        r = T(loc, "deletion", "ENST00000284987", "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost")
+        ex_rust, ex_perl, buckets = C.filter_registry_swap_pairs({p}, {r})
+        self.assertEqual((ex_rust, ex_perl), ({r}, {p}))
+        self.assertEqual(buckets["start_cooccurrence_swap"], 1)
+        self.assertEqual(buckets["covered_splice_region_swap"], 0)
+
+    def test_sequence_start_co_emission_pair_drops_the_other_member(self) -> None:
+        p = T("21:36265246", "-", "ENST00000486278", "frameshift_variant,start_lost,start_retained_variant")
+        r = T("21:36265246", "-", "ENST00000486278", "frameshift_variant,start_retained_variant")
+        ex_rust, ex_perl, _ = C.filter_registry_swap_pairs({p}, {r})
+        self.assertEqual((ex_rust, ex_perl), ({r}, {p}))
+
+    def test_the_wrong_member_for_the_allele_kind_is_not_excluded(self) -> None:
+        """A structural allele on which vep-rs dropped `start_lost` instead is a vep-rs
+        divergence, not the co-emission shape (`_is_start_cooccurrence_swap`)."""
+        loc = "21:26965975-26966647"
+        p = T(loc, "deletion", "ENST00000284987", "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant")
+        r = T(loc, "deletion", "ENST00000284987", "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_retained_variant")
+        self.assertEqual(C.filter_registry_swap_pairs({p}, {r})[:2], (set(), set()))
+
+    def test_both_start_terms_missing_on_vep_rs_is_not_the_shape(self) -> None:
+        loc = "21:39660415-39660694"
+        p = T(loc, "Alu_insertion", "ENST00000852645", "5_prime_UTR_variant,coding_sequence_variant,feature_elongation,start_lost,start_retained_variant")
+        r = T(loc, "Alu_insertion", "ENST00000852645", "5_prime_UTR_variant,coding_sequence_variant,feature_elongation")
+        self.assertEqual(C.filter_registry_swap_pairs({p}, {r})[:2], (set(), set()))
+
+    def test_covered_splice_region_pair_is_excluded_both_sides(self) -> None:
+        loc = "21:31663791-31663794"
+        p = T(loc, "CA", "ENST00000270142", "frameshift_variant")
+        r = T(loc, "CA", "ENST00000270142", "frameshift_variant,splice_region_variant")
+        ex_rust, ex_perl, buckets = C.filter_registry_swap_pairs({p}, {r})
+        self.assertEqual((ex_rust, ex_perl), ({r}, {p}))
+        self.assertEqual(buckets["covered_splice_region_swap"], 1)
+
+    def test_a_polypyrimidine_tract_pair_is_not_the_covered_shape(self) -> None:
+        loc = "21:29079809-29085808"
+        p = T(loc, "deletion", "ENST00000341618", "intron_variant,splice_polypyrimidine_tract_variant")
+        r = T(loc, "deletion", "ENST00000341618", "intron_variant")
+        self.assertEqual(C.filter_registry_swap_pairs({p}, {r})[:2], (set(), set()))
+
+    def test_an_extra_vep_rs_term_beside_the_co_emission_rejects_the_pair(self) -> None:
+        loc = "21:26965975-26966647"
+        p = T(loc, "deletion", "ENST00000284987", "feature_truncation,start_lost,start_retained_variant")
+        r = T(loc, "deletion", "ENST00000284987", "feature_truncation,start_lost,intron_variant")
+        self.assertEqual(C.filter_registry_swap_pairs({p}, {r})[:2], (set(), set()))
+
+    def test_one_sided_tuples_are_never_pairs(self) -> None:
+        p = T("21:1-2", "deletion", "ENST_A", "start_lost,start_retained_variant")
+        r = T("21:1-2", "deletion", "ENST_B", "start_lost")
+        self.assertEqual(C.filter_registry_swap_pairs({p}, {r})[:2], (set(), set()))

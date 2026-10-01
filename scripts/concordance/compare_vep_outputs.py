@@ -173,14 +173,22 @@ def _is_start_cooccurrence_swap(perl_csq: str, rust_csq: str, allele: str) -> bo
       * On a sequence variant, ``start_retained_variant`` fires when
         ``_ins_del_start_altered`` (VariationEffect.pm:1028-1075) returns FALSE,
         which it does only when the edited 5'UTR and CDS still begin ``ATG`` at
-        the CDS start or the CDS is unchanged; ``start_lost`` then fires anyway
-        through the codon-window peptide route (:872-881), which translates only
-        the codons the edit touches. The start codon is intact, so
+        the CDS start or the CDS is unchanged (:1073); ``start_lost`` then fires
+        anyway, on most pairs through ``_inv_start_altered`` (:906-944), which
+        reads the three bases at the OLD 5'UTR length after the edit (:940) and
+        so misses a codon the edit re-forms one base over, and on the rest
+        through the peptide route (:879-882), which compares the codon-window
+        peptides the edit touches. On either route the edited CDS begins ``ATG``,
+        re-formed byte-identically one base over (``_inv_start_altered``) or
+        standing at the old offset with the downstream frame shifted (the
+        peptide route). The start codon is intact, so
         ``start_lost`` is the erroneous member and vep-rs emits the set without it.
-      * On a structural allele, ``_ins_del_start_altered`` returns 0 without
-        reading the sequence (:1037), so ``start_retained_variant`` fires on a
-        deletion that does remove the start codon and is the erroneous member;
-        vep-rs emits the set without it.
+      * On a structural allele, ``start_lost`` fires from the overlap of the
+        span with the start codon (:884-893) and ``_ins_del_start_altered``
+        returns 0 without reading the sequence (:1037), so
+        ``start_retained_variant`` (:961) fires on every structural allele over
+        a start codon, a deletion that removes the codon included, and is the
+        erroneous member; vep-rs emits the set without it.
 
     Returns True when Perl has both start terms and vep-rs has the same
     consequence set minus the erroneous member for the allele kind.
