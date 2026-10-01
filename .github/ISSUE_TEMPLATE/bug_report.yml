@@ -20,6 +20,7 @@ body:
       label: How you installed it
       options:
         - Release binary
+        - Container image (ghcr.io)
         - Built from source
     validations:
       required: true

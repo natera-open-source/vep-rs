@@ -94,6 +94,7 @@ def test_body_follows_the_template(tmp_path: Path) -> None:
     assert "vep-rs-9.9.9.tar.gz` is `git archive --format=tar.gz --prefix=vep-rs-9.9.9/ v9.9.9`, sha256 `" + "d" * 64 + "`" in body
     assert "from tag `v9.9.9` (commit `0123abcd`) with Rust 1.97.1" in body
     assert "From source (Rust 1.88 or newer)" in body
+    assert "`docker pull ghcr.io/natera-open-source/vep-rs:9.9.9`" in body
     # no deposit of its own: the archived 0.1.0 deposit and the concept DOI are named
     assert "This version has no Zenodo deposit of its own; the archived version is 0.1.0, [10.5281/zenodo.22837897]" in body
     assert "Porter M, Borkowski R. vep-rs, version 9.9.9. 2031. doi:10.5281/zenodo.22837896." in body

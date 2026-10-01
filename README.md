@@ -33,6 +33,19 @@ cargo build --release
 
 **CPU floor.** `.cargo/config.toml` compiles every build for a fixed CPU baseline: `-C target-cpu=x86-64-v3` on x86_64 Linux (AVX2 required), `-C target-cpu=neoverse-v1` on aarch64 Linux and `-C target-cpu=apple-m1` on Apple-silicon macOS. Release binaries are built the same way, so they need AVX2 on x86_64. A binary built or downloaded this way aborts with an illegal-instruction fault on an older CPU rather than running slowly; to build for the machine you are on, override the flag for that build with `RUSTFLAGS="-C target-cpu=native" cargo build --release` (`RUSTFLAGS` replaces the file's setting, it does not add to it), or edit the `rustflags` line for your target in `.cargo/config.toml`.
 
+### Container image
+
+Each published release from 0.2.0 on is also an image on the GitHub Container Registry, holding the release's own x86_64 Linux binaries, `vep-cache-builder`, `vep-cache-converter`, and the `duckdb` CLI that Parquet output needs:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$PWD/tests/golden/115/GRCh37:/corpus:ro" -v "$PWD:/data" \
+  ghcr.io/natera-open-source/vep-rs:0.2.0 \
+  vep --json_cache /corpus/json_cache --assembly GRCh37 -i /corpus/variants.vcf -o /data/output.txt
+```
+
+Tags are `X.Y.Z`, `X.Y` (the newest patch of that line) and `latest`. The image is linux/amd64 only and has the same x86-64-v3 CPU floor as the release binary. On Apple silicon, run it with `--platform linux/amd64` under Rosetta. That works, but it is a translated binary, so don't use it for timing. Each image carries a build-provenance attestation: `gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:0.2.0 --repo natera-open-source/vep-rs`.
+
 ## Quick start
 
 Run it first on the bundled corpus, which needs no download:

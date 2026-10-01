@@ -26,6 +26,7 @@ These scripts read their data locations from environment variables, each with a 
 | `golden/`      | Build the per-release, per-assembly golden corpora under `tests/golden/`      | Python 3.10+; Ensembl VEP outputs and a JSON cache |
 | `adapters/`    | Convert vep-rs outputs between formats                                        | `duckdb` CLI                  |
 | `release/`     | Render the GitHub release body the release workflow publishes as a draft       | Python 3.10+                  |
+| `docker/`      | Stage, tag and smoke-test the container image `.github/workflows/docker.yml` publishes | `gh`, Docker            |
 
 ## Reproducing the published concordance
 
