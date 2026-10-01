@@ -6575,6 +6575,129 @@ fn concordance_snv_inside_one_bp_intron_of_non_coding_transcript_is_transcript_v
     crate::test_helpers::assert_consequence_set_eq(&tc, &["non_coding_transcript_variant"]);
 }
 
+// A deletion covering a frameshift intron from exon to exon.
+//
+// `_intron_effects` tests one differing region for such a deletion, the whole
+// reference span, and that region overlaps the intron, so both loops `next`
+// past it: no splice flag is written, `within_frameshift_intron` is the only
+// flag set, and the intronic donor window `[intron_end-4, intron_end-4]` (or
+// `[intron_start+4, intron_start+4]`), which for a 1 bp intron lies in the
+// flanking exon and inside the deletion, is never read. `within_intron` is
+// false as well. The coding predicates alone decide the row: `frameshift`
+// counts the CDS bases between `cds_start` and `cds_end`, which excludes the
+// intron base, so a deletion is in frame when its exonic bases number a
+// multiple of 3.
+
+/// Shrink intron 1 of `make_descending_reverse_strand_transcript()` to `len`
+/// bases, keeping exon 1 fixed and pulling exon 2 up to meet it; intron 2 ends
+/// where the moved exon 2 starts, and the coding region is unchanged because exons 1
+/// and 3 are.
+fn make_reverse_transcript_with_short_first_intron(len: u64) -> Transcript {
+    let mut tx = make_descending_reverse_strand_transcript();
+    let intron_end = 25_005_700;
+    let intron_start = intron_end + 1 - len;
+    let exon2_end = intron_start - 1;
+    let exon2_start = exon2_end - 299;
+
+    tx.exons[1].start = exon2_start;
+    tx.exons[1].end = exon2_end;
+    tx.introns[0].start = intron_start;
+    tx.introns[0].end = intron_end;
+    tx.introns[1].end = exon2_start - 1;
+
+    if let Some(vefc) = tx.vefc.as_mut() {
+        vefc.sorted_exons = tx.exons.clone();
+        vefc.sorted_exons.sort_by_key(|e| e.start);
+        vefc.introns = tx.introns.clone();
+        if let Some(mapper) = vefc.mapper.as_mut() {
+            let mut pairs = mapper.exon_coord_mapper.pairs.clone();
+            pairs[1].to_start = exon2_start;
+            pairs[1].to_end = exon2_end;
+            mapper.exon_coord_mapper = ExonCoordMapper::new(pairs);
+        }
+    }
+    tx
+}
+
+/// `21:47612435-47612549 -` on ENST00000594486 (reverse strand, GRCh37): a
+/// deletion from the exon before a 1 bp intron into the exon after it, 21 of
+/// whose 22 bases are CDS. Perl: `inframe_deletion` alone. The reverse-strand
+/// 5th-base position `intron_end - 4` is the fourth exonic base before the
+/// intron, inside the deletion; reading it would add
+/// `splice_donor_5th_base_variant`.
+#[test]
+fn concordance_inframe_deletion_covering_one_bp_intron_reverse_strand_has_no_splice_term() {
+    let tx = make_reverse_transcript_with_short_first_intron(1);
+    // Intron 1 is 25_005_700. Exon 2 (cDNA 310..301, CDS 260..251) supplies
+    // 25_005_690..25_005_699 and exon 1 (cDNA 300..290, CDS 250..240)
+    // 25_005_701..25_005_711: CDS 240..260, 21 bases, codon 80 base 3 through
+    // codon 87 base 2, so the alternate codon `GCT` is a prefix of the eight
+    // reference codons.
+    let variant = InputVariant::new(
+        "21".into(),
+        25_005_690,
+        25_005_711,
+        b"GCAGCAGCAGTCAGCAGCAGCA".to_vec(),
+        b"-".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["inframe_deletion"]);
+}
+
+/// `21:47612474-47612586 -` on the same transcript: 112 CDS bases, so
+/// `frameshift_variant` alone. Here the deletion removes CDS 241..260, 20
+/// bases.
+#[test]
+fn concordance_frameshift_deletion_covering_one_bp_intron_reverse_strand_has_no_splice_term() {
+    let tx = make_reverse_transcript_with_short_first_intron(1);
+    let variant = InputVariant::new(
+        "21".into(),
+        25_005_690,
+        25_005_710,
+        b"GCAGCAGCAGTCAGCAGCAGC".to_vec(),
+        b"-".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["frameshift_variant"]);
+}
+
+/// The forward-strand form: the 5th-base position `intron_start + 4` is the
+/// fourth exonic base after the intron, inside the deletion, and the exonic
+/// donor window `[intron_start-3, intron_start-1]` is covered too; neither is
+/// read. CDS 242..256, 15 bases, codon 81 base 2 through codon 86 base 1: the
+/// alternate codon `GCT` is a prefix of the six reference codons.
+#[test]
+fn concordance_inframe_deletion_covering_one_bp_intron_forward_strand_has_no_splice_term() {
+    let tx = make_transcript_with_short_first_intron(1);
+    // Intron 1 is 25_000_300; exon 1 ends 25_000_299 (cDNA 300) and exon 2
+    // starts 25_000_301 (cDNA 301).
+    let variant = InputVariant::new(
+        "21".into(),
+        25_000_291,
+        25_000_306,
+        b"CTGCTGCTGACTGCTG".to_vec(),
+        b"-".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["inframe_deletion"]);
+}
+
+/// One base shorter on the exon 2 side: CDS 242..255, 14 bases, so
+/// `frameshift_variant` alone.
+#[test]
+fn concordance_frameshift_deletion_covering_one_bp_intron_forward_strand_has_no_splice_term() {
+    let tx = make_transcript_with_short_first_intron(1);
+    let variant = InputVariant::new(
+        "21".into(),
+        25_000_291,
+        25_000_305,
+        b"CTGCTGCTGACTGCT".to_vec(),
+        b"-".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["frameshift_variant"]);
+}
+
 // CDS-boundary spans and the UTR terms.
 //
 // Perl's `VariationEffect::within_5_prime_utr` / `within_3_prime_utr`
