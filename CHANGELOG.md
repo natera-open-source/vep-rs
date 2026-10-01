@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A container image, `ghcr.io/natera-open-source/vep-rs`, for each published
+  release from 0.2.0: the release's attested x86_64 Linux binaries and the
+  `duckdb` CLI on Debian 13, smoke-tested on the GRCh37 corpus before it is
+  pushed, with a build-provenance attestation on the pushed digest
+  (`.github/workflows/docker.yml`).
+
 ## [0.2.0] - 2026-09-29
 
 ### Fixed
