@@ -117,6 +117,9 @@ jobs:
           }
           check scripts/concordance/test_run_clone_measurement.sh 60
           check scripts/concordance/test_generate_reference_output.sh 70
+          check scripts/docker/test_image_tags.sh 8
+          check scripts/docker/test_stage_release.sh 10
+          check scripts/docker/test_smoke_test.sh 11
 
   # A `cargo audit` advisory is a failure only when the advisory's crate is
   # reachable from the `vep` binary; scripts/check_advisory_reachability.sh makes
