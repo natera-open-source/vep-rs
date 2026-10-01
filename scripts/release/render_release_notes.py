@@ -29,12 +29,12 @@ SNP_INDEL = ("s01", "s02", "s03", "s04", "s05", "s06")
 TARGETS = (
     (
         "x86_64-unknown-linux-gnu",
-        "Linux x86_64 (glibc 2.17 or later)",
+        "Linux x86_64 (glibc 2.39 or later)",
         "x86-64-v3: AVX2, BMI2, FMA (Intel Haswell 2013 or later, AMD Zen or later)",
     ),
     (
         "aarch64-unknown-linux-gnu",
-        "Linux aarch64 (glibc 2.17 or later)",
+        "Linux aarch64 (glibc 2.39 or later)",
         "Armv8.4-A with SVE (Arm Neoverse V1 or later: AWS Graviton3 and later; not Graviton2, Ampere Altra or Raspberry Pi)",
     ),
     (
