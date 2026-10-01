@@ -326,6 +326,7 @@ def main() -> None:
     with out_path.open("w", newline="") as fh:
         writer = csv.DictWriter(
             fh,
+            lineterminator="\n",
             fieldnames=[
                 "class",
                 "category",
