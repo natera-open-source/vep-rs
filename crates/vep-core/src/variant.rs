@@ -42,6 +42,10 @@ pub enum VariantClass {
     TandemRepeat,
     /// `<CPX>` or other unrecognised symbolic SV types
     ComplexStructural,
+    /// `<NON_REF>`: a gVCF reference-confidence block. Not a variant allele, so it
+    /// is annotated against no feature and a record carrying it is written as one
+    /// `intergenic_variant` row spanning the block.
+    ReferenceBlock,
 }
 
 impl VariantClass {
@@ -68,6 +72,8 @@ impl VariantClass {
             VariantClass::Translocation => "chromosome_breakpoint",
             VariantClass::TandemRepeat => "tandem_repeat",
             VariantClass::ComplexStructural => "complex_structural_alteration",
+            // VEP's `class_SO_term` for a type its table lacks is the type as written.
+            VariantClass::ReferenceBlock => "<NON_REF>",
         }
     }
 
@@ -91,6 +97,7 @@ impl VariantClass {
                 | VariantClass::Translocation
                 | VariantClass::ComplexStructural
                 | VariantClass::TandemRepeat
+                | VariantClass::ReferenceBlock
         )
     }
 
@@ -109,6 +116,7 @@ impl VariantClass {
                 | VariantClass::Translocation
                 | VariantClass::TandemRepeat
                 | VariantClass::ComplexStructural
+                | VariantClass::ReferenceBlock
         )
     }
 }
@@ -427,8 +435,8 @@ impl InputVariant {
                     // Paired BNDs keep the literal allele string, as Perl VEP does.
                     raw
                 }
-            } else if raw.eq_ignore_ascii_case("<NON_REF>") {
-                // <NON_REF>: Perl VEP outputs the raw allele (no SO term mapping)
+            } else if self.variant_class == VariantClass::ReferenceBlock {
+                // Perl VEP outputs the allele as written (no SO term mapping).
                 raw
             } else if self.variant_class == VariantClass::ComplexStructural {
                 // <CPX>: Perl VEP strips angle brackets to get "CPX" as class_SO_term,
@@ -667,6 +675,8 @@ mod tests {
             VariantClass::ComplexStructural.so_term(),
             "complex_structural_alteration"
         );
+        // A type absent from `%SO_TERMS` keeps the type string as its class_SO_term.
+        assert_eq!(VariantClass::ReferenceBlock.so_term(), "<NON_REF>");
     }
 
     #[test]
@@ -683,9 +693,11 @@ mod tests {
             VariantClass::Translocation,
             VariantClass::TandemRepeat,
             VariantClass::ComplexStructural,
+            VariantClass::ReferenceBlock,
         ];
         for vc in sv_types {
             assert!(vc.is_structural(), "{vc:?} should be structural");
+            assert!(vc.is_span_type(), "{vc:?} starts at POS+1");
         }
     }
 

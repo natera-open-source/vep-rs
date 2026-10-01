@@ -51,10 +51,11 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
         .filter_map(|(i, alt)| {
             // Perl VEP skips `*` alleles (neither the indel nor the SV path fires)
             // and `.`. `<*>` is not filtered: Perl treats it as a non-SV allele at
-            // POS (its SV regex excludes `<*>`). `<NON_REF>` and `<CPX>` are not
-            // filtered either: absent from `%SO_TERMS`, they are still annotated in
-            // tab output because `vep_skip` is checked only by File-based
-            // annotation sources and VCF/JSON output.
+            // POS (its SV regex excludes `<*>`). `<CPX>` is not filtered either:
+            // absent from `%SO_TERMS`, it is still annotated in tab output because
+            // `vep_skip` is checked only by File-based annotation sources and
+            // VCF/JSON output. `<NON_REF>` is not filtered: the record is written
+            // as one intergenic row (`VariantClass::ReferenceBlock`).
             if *alt == "*" || *alt == "." {
                 None
             } else {
@@ -213,6 +214,15 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
         } else {
             classify_symbolic_alt(alt, svtype)
         };
+        if sv_class == vep_core::variant::VariantClass::ReferenceBlock {
+            tracing::warn!(
+                "{}:{} {}: NON_REF is not a supported structural variant type; \
+                 a reference-confidence block is written as one intergenic row",
+                chr,
+                pos,
+                alt
+            );
+        }
         // Perl VEP (ensembl-io BaseVCF4.pm get_end()) universally prioritises
         // SVLEN over INFO/END for all SV types:
         //   if(defined($info->{SVLEN})) { $end = $self->get_start + abs($svlen) - 1; }
@@ -474,12 +484,6 @@ pub(crate) fn classify_symbolic_alt(
     if upper.starts_with("<CPX") {
         return VariantClass::ComplexStructural;
     }
-    // <NON_REF> is a gVCF reference-confidence allele. Perl VEP treats it as an
-    // SV with class_SO_term "NON_REF" and overlap-only consequences (no
-    // feature_truncation/ablation), which CopyNumberVariation reproduces.
-    if upper == "<NON_REF>" {
-        return VariantClass::CopyNumberVariation;
-    }
     if alt.contains('[')
         || alt.contains(']')
         || (alt.len() > 1 && (alt.ends_with('.') || alt.starts_with('.')))
@@ -496,6 +500,12 @@ pub(crate) fn classify_symbolic_alt(
             "CNV" => return VariantClass::CopyNumberVariation,
             _ => {}
         }
+    }
+    // A `<NON_REF>` with a supported SVTYPE took that class above, as in VEP, where
+    // INFO/SVTYPE replaces an ALT outside the VCF 4.4 forms before the SO lookup
+    // (Parser/VCF.pm `create_StructuralVariationFeatures`).
+    if upper == "<NON_REF>" {
+        return VariantClass::ReferenceBlock;
     }
     VariantClass::ComplexStructural
 }
@@ -1217,18 +1227,55 @@ mod tests {
         );
     }
 
+    /// A `<NON_REF>` record is a reference-confidence block: one structural record
+    /// spanning POS+1..END that no consequence path annotates (VEP's own row for it
+    /// is `21:101-200 <NON_REF> - - - intergenic_variant`), and whose VCF and JSON
+    /// output VEP leaves without consequences (`vep_skip`).
     #[test]
-    fn test_parse_vcf_line_non_ref_is_annotated() {
-        // <NON_REF> is a gVCF reference-confidence allele that Perl VEP annotates
-        // as an SV with overlap-only consequences, hence CopyNumberVariation.
+    fn test_parse_vcf_line_non_ref_is_a_reference_block() {
         let line = "21\t100\t.\tA\t<NON_REF>\t.\t.\tEND=200";
         let variants = parse_vcf_line(line, true).unwrap();
         assert_eq!(variants.len(), 1);
         let v = &variants[0];
-        assert_eq!(v.variant_class, VariantClass::CopyNumberVariation);
+        assert_eq!(v.variant_class, VariantClass::ReferenceBlock);
         assert!(v.is_structural);
+        assert!(v.vep_skip);
+        assert_eq!((v.start, v.end), (101, 200));
         assert_eq!(v.sv_end, Some(200));
+        assert_eq!(v.location(), "21:101-200");
         assert_eq!(v.display_allele(), "<NON_REF>");
+    }
+
+    /// Only `<NON_REF>` (in any case) is the reference block; the other symbolic
+    /// alleles keep their classes.
+    #[test]
+    fn classify_symbolic_alt_reference_block() {
+        assert_eq!(
+            classify_symbolic_alt("<NON_REF>", None),
+            VariantClass::ReferenceBlock
+        );
+        assert_eq!(
+            classify_symbolic_alt("<non_ref>", None),
+            VariantClass::ReferenceBlock
+        );
+        assert_eq!(
+            classify_symbolic_alt("<NON_REF>", Some("NON_REF")),
+            VariantClass::ReferenceBlock
+        );
+        // A supported SVTYPE names the record's type (Parser/VCF.pm replaces an ALT
+        // outside the VCF 4.4 forms with INFO/SVTYPE before the SO lookup).
+        assert_eq!(
+            classify_symbolic_alt("<NON_REF>", Some("CNV")),
+            VariantClass::CopyNumberVariation
+        );
+        assert_eq!(
+            classify_symbolic_alt("<CNV>", None),
+            VariantClass::CopyNumberVariation
+        );
+        assert_eq!(
+            classify_symbolic_alt("<CPX>", Some("CPX")),
+            VariantClass::ComplexStructural
+        );
     }
 
     #[test]

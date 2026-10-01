@@ -7723,25 +7723,30 @@ fn concordance_bnd_single_breakend_span_crossing_exon_has_no_polypyrimidine() {
     );
 }
 
-/// A `<NON_REF>` span in intron 1 reaching the tract window takes the copy-number
-/// path and carries the term like every other structural class
-/// (Perl: `21:33035607-33036088 <NON_REF> ENST00000270142` is
-/// `intron_variant,splice_polypyrimidine_tract_variant`).
+/// A `<NON_REF>` reference-confidence block yields no transcript row wherever it
+/// lies: over intron 1 reaching the tract window, over exon 2, or over the whole
+/// transcript. VEP loads no cache region for the record (it carries `vep_skip`)
+/// and writes it as one `intergenic_variant` row.
 #[test]
-fn concordance_non_ref_span_in_intron_reaching_tract_is_polypyrimidine() {
+fn concordance_reference_block_over_transcript_has_no_transcript_row() {
     let tx = make_test_transcript();
     let config = EffectsConfig::default();
-    let variant = make_structural_span(
-        vep_core::variant::VariantClass::CopyNumberVariation,
-        25_001_500,
-        25_001_990,
-        b"<NON_REF>",
-    );
-    let tc = calculate_consequences(&variant, &tx, &config).unwrap();
-    crate::test_helpers::assert_consequence_set_eq(
-        &tc,
-        &["intron_variant", "splice_polypyrimidine_tract_variant"],
-    );
+    for (start, end) in [
+        (25_001_500, 25_001_990),
+        (25_001_900, 25_002_100),
+        (24_999_000, 25_007_000),
+    ] {
+        let variant = make_structural_span(
+            vep_core::variant::VariantClass::ReferenceBlock,
+            start,
+            end,
+            b"<NON_REF>",
+        );
+        assert!(
+            calculate_consequences(&variant, &tx, &config).is_none(),
+            "{start}-{end}: a reference block is annotated against no feature"
+        );
+    }
 }
 
 // Breakend alleles: which allele owns a transcript row, and the mate gate.

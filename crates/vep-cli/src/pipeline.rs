@@ -921,7 +921,7 @@ impl AlleleColumns {
 /// `core::fmt::Arguments` and routes each `Display::fmt` through
 /// `Formatter::pad`, per (variant x transcript consequence). The bytes are
 /// identical for `&str` with no width, precision or fill.
-fn render_default_record<'a>(
+pub(crate) fn render_default_record<'a>(
     out: &mut Vec<u8>,
     record: &[&'a InputVariant],
     plan: &ExtraFieldsPlan,

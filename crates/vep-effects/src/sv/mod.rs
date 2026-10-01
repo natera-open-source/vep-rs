@@ -691,6 +691,9 @@ pub fn calculate_sv_consequences(
                 ),
             }
         }
+        // A reference-confidence block is annotated against no feature; the record's
+        // one row is the intergenic fallback.
+        VariantClass::ReferenceBlock => None,
         // Non-structural variants should never reach here.
         _ => None,
     }
