@@ -602,8 +602,11 @@ mod tests {
         );
     }
 
+    /// As for a duplication: no 3' UTR exists when the coding region reaches the
+    /// transcript's first genomic base, and Perl's inverted `_before_coding`
+    /// window admits only a span that starts before the transcript.
     #[test]
-    fn test_inv_reverse_strand_cds_start_nf_adds_three_prime_utr() {
+    fn test_inv_reverse_strand_cds_start_nf_has_no_three_prime_utr() {
         let mut tx = make_test_transcript_with_flags(&["cds_start_NF", "cds_end_NF"]);
         tx.strand = Strand::Reverse;
         tx.coding_region_start = Some(tx.start);
@@ -614,10 +617,16 @@ mod tests {
         assert!(csq
             .consequences
             .contains(&Consequence::CodingSequenceVariant));
-        assert!(csq
+        assert!(!csq
             .consequences
             .contains(&Consequence::ThreePrimeUtrVariant));
         assert!(csq.consequences.contains(&Consequence::IntronVariant));
+
+        let v = make_inversion(tx.start - 1, 25_001_000);
+        let csq = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert!(csq
+            .consequences
+            .contains(&Consequence::ThreePrimeUtrVariant));
     }
 
     #[test]

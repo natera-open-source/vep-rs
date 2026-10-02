@@ -58,6 +58,11 @@ from breakend_mate_context import (  # noqa: E402
     mate_side_derivation,
     model_from_cache_record,
 )
+from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition for both comparators)
+    _batch_dependent_annotation_scope,
+    _location_span,
+    _span_exceeds_max_sv_size,
+)
 
 
 # Variant type classification
@@ -649,40 +654,6 @@ def compute_per_type_metrics(
 
 # Divergence masks
 
-# Perl VEP's --max_sv_size default (ensembl-vep Config.pm:310). A variant longer
-# than this is flagged `vep_skip` at parse time (Parser.pm:493-497), excluded from
-# cache-region loading (AnnotationSource.pm:238) but NOT from the annotation pass,
-# which is the whole mechanism the transcript-selection mask exists for. Below the
-# threshold Perl requests every region a variant overlaps, uncapped
-# (AnnotationSource.pm:194-200), so no batch dependence arises and nothing should
-# be masked.
-_MAX_SV_SIZE = 10_000_000
-
-
-def _span_exceeds_max_sv_size(loc: str) -> bool:
-    """True if ``loc``'s span exceeds Perl's --max_sv_size default.
-
-    ``loc`` is ``chrom:start-end`` for a ranged record or ``chrom:pos`` for a point
-    one. A point location yields a span of 0 and is therefore never in scope, which
-    is correct for everything except a giant inter-chromosomal breakend, whose mate
-    coordinate lives in the Allele bracket rather than the Location. That case is
-    documented at the call sites and left unmasked, the conservative direction.
-
-    VEP's insertion convention puts ``end`` before ``start``, so the magnitude is
-    taken rather than the signed difference.
-    """
-    parts = loc.split(":", 1)
-    if len(parts) < 2:
-        return False
-    coords = parts[1]
-    if "-" not in coords:
-        return False
-    start_s, _, end_s = coords.partition("-")
-    try:
-        return abs(int(end_s) - int(start_s)) > _MAX_SV_SIZE
-    except ValueError:
-        return False
-
 
 # Transcript span type: (chromosome, start, end) as the cache files it.
 TranscriptSpan = tuple[str, int, int]
@@ -900,27 +871,6 @@ def filter_cross_chromosome_orphan_intergenic(
     return excluded
 
 
-# Perl VEP's unsupported symbolic types present in the corpora that vep-rs annotates as
-# spans. Parser/VCF.pm:477-481 keeps such a record with `vep_skip` set (get_SO_term
-# returns undef, the SVTYPE string stands in for the term and is written in the Allele
-# column), AnnotationSource.pm:238 then loads no cache region for it, and it is
-# annotated against whatever regions its batch loaded, at any span. `<NON_REF>` takes
-# the same route in Perl but is not listed: vep-rs writes no transcript tuple for a
-# gVCF reference block, so the transcript-selection arms have nothing to reach there.
-_VEP_SKIP_UNSUPPORTED_ALLELES = frozenset({"CPX", "CTX"})
-
-
-def _batch_dependent_annotation_scope(loc: str, allele: str) -> bool:
-    """True where Perl annotates a record only against its batch's loaded regions.
-
-    Two routes reach that state, both through the same `vep_skip` flag: a span above
-    --max_sv_size (Parser.pm:493-497) and a symbolic type without a Sequence Ontology
-    term (Parser/VCF.pm:477-481, `_VEP_SKIP_UNSUPPORTED_ALLELES`). Below the size limit
-    and with a supported type Perl loads every region the record overlaps
-    (AnnotationSource.pm:194-200), so a transcript-set difference there is not this
-    defect and stays charged.
-    """
-    return _span_exceeds_max_sv_size(loc) or allele in _VEP_SKIP_UNSUPPORTED_ALLELES
 
 
 def filter_intended_divergences(
@@ -1294,15 +1244,6 @@ _CNV_TR_LITERAL_CODING_TERMS = {
     "loss": frozenset({"inframe_deletion", "frameshift_variant"}),
 }
 _CNV_TR_SYMBOLIC_CODING_TERM = "coding_sequence_variant"
-
-
-def _location_span(loc: str) -> tuple[str, int, int] | None:
-    """``chrom:start-end`` or ``chrom:pos`` as (chrom, start, end); None when unparseable."""
-    m = re.fullmatch(r"([^:]+):(\d+)(?:-(\d+))?", loc)
-    if not m:
-        return None
-    start = int(m.group(2))
-    return m.group(1), start, int(m.group(3)) if m.group(3) else start
 
 
 def _cnv_tr_pair_kind(perl_loc: str, perl_allele: str, rust_loc: str) -> str | None:

@@ -184,12 +184,6 @@ pub(crate) fn overlap_bp(a_start: u64, a_end: u64, b_start: u64, b_end: u64) -> 
     }
 }
 
-pub(crate) fn overlaps_point(start: u64, end: u64, point: u64) -> bool {
-    let lo = start.min(end);
-    let hi = start.max(end);
-    lo <= point && hi >= point
-}
-
 pub(crate) fn overlaps_any_exon(transcript: &Transcript, sv_start: u64, sv_end: u64) -> bool {
     transcript
         .exons
@@ -405,32 +399,15 @@ pub(crate) fn transcript_has_incomplete_cds(transcript: &Transcript) -> bool {
     facts.cds_start_nf || facts.cds_end_nf
 }
 
-pub(crate) fn overlaps_five_prime_utr(transcript: &Transcript, sv_start: u64, sv_end: u64) -> bool {
-    let Some((cds_start, cds_end)) = crate::consequences::genomic_coding_bounds(transcript) else {
-        return false;
-    };
-
-    let within_cdna = overlaps_any_exon(transcript, sv_start, sv_end);
-    if !within_cdna {
-        return false;
-    }
-
-    let before_coding = sv_end >= transcript.start && sv_start < cds_start;
-    let after_coding = sv_end > cds_end && sv_start <= transcript.end;
-    let start_boundary_is_nf = transcript.facts().cds_start_nf
-        && cds_start == transcript.start
-        && overlaps_point(sv_start, sv_end, transcript.start);
-    let end_boundary_is_nf = transcript.facts().cds_end_nf
-        && cds_end == transcript.end
-        && overlaps_point(sv_start, sv_end, transcript.end);
-
-    match transcript.strand {
-        Strand::Forward => before_coding || start_boundary_is_nf,
-        Strand::Reverse => after_coding || end_boundary_is_nf,
-    }
-}
-
-pub(crate) fn overlaps_three_prime_utr(
+/// Perl's `coding` pre-predicate for a structural span (`_bvfo_preds`,
+/// `BaseVariationFeatureOverlapAllele.pm`): the span overlaps the coding region and
+/// `_overlapped_exons` is non-empty, the exon bounds stretched by 12 bases on a
+/// transcript with a frameshift intron (`BaseTranscriptVariation.pm`). `stop_lost`,
+/// `start_lost` and the other coding terms carry `include {coding => 1}`
+/// (`Utils/Constants.pm`), so none of them is a candidate without it: a span inside
+/// an intron is `non_coding` even where a codon window drawn on genomic
+/// coordinates reaches it.
+pub(crate) fn perl_coding_pre_predicate(
     transcript: &Transcript,
     sv_start: u64,
     sv_end: u64,
@@ -438,25 +415,56 @@ pub(crate) fn overlaps_three_prime_utr(
     let Some((cds_start, cds_end)) = crate::consequences::genomic_coding_bounds(transcript) else {
         return false;
     };
-
-    let within_cdna = overlaps_any_exon(transcript, sv_start, sv_end);
-    if !within_cdna {
+    let lo = sv_start.min(sv_end);
+    let hi = sv_start.max(sv_end);
+    if overlap_bp(lo, hi, cds_start, cds_end) == 0 {
         return false;
     }
+    let stretch = if transcript.facts().vefc_has_frameshift_intron {
+        12
+    } else {
+        0
+    };
+    overlaps_any_exon(
+        transcript,
+        lo.saturating_sub(stretch),
+        hi.saturating_add(stretch),
+    )
+}
 
+/// The positional half of Perl's `within_5_prime_utr` and `within_3_prime_utr`
+/// (`Utils/VariationEffect.pm`) for a structural span, as (5' holds, 3' holds).
+/// `_before_coding` is `overlap(start, end, transcript start, coding_region_start - 1)`
+/// and `_after_coding` is `overlap(start, end, coding_region_end + 1, transcript end)`,
+/// both in genomic coordinates; the strand names the UTR. On a transcript whose
+/// coding region begins at its first base the `_before_coding` window is inverted
+/// and holds only for a span that starts before the transcript, so a span starting
+/// on that base carries no UTR term; `_after_coding` behaves the same at the last base.
+fn perl_utr_sides(transcript: &Transcript, sv_start: u64, sv_end: u64) -> (bool, bool) {
+    let Some((cds_start, cds_end)) = crate::consequences::genomic_coding_bounds(transcript) else {
+        return (false, false);
+    };
+    if !overlaps_any_exon(transcript, sv_start, sv_end) {
+        return (false, false);
+    }
     let before_coding = sv_end >= transcript.start && sv_start < cds_start;
     let after_coding = sv_end > cds_end && sv_start <= transcript.end;
-    let start_boundary_is_nf = transcript.facts().cds_start_nf
-        && cds_start == transcript.start
-        && overlaps_point(sv_start, sv_end, transcript.start);
-    let end_boundary_is_nf = transcript.facts().cds_end_nf
-        && cds_end == transcript.end
-        && overlaps_point(sv_start, sv_end, transcript.end);
-
     match transcript.strand {
-        Strand::Forward => after_coding || end_boundary_is_nf,
-        Strand::Reverse => before_coding || start_boundary_is_nf,
+        Strand::Forward => (before_coding, after_coding),
+        Strand::Reverse => (after_coding, before_coding),
     }
+}
+
+pub(crate) fn overlaps_five_prime_utr(transcript: &Transcript, sv_start: u64, sv_end: u64) -> bool {
+    perl_utr_sides(transcript, sv_start, sv_end).0
+}
+
+pub(crate) fn overlaps_three_prime_utr(
+    transcript: &Transcript,
+    sv_start: u64,
+    sv_end: u64,
+) -> bool {
+    perl_utr_sides(transcript, sv_start, sv_end).1
 }
 
 /// A BND with a same-chromosome span (a derived single breakend or a paired bracket
@@ -1653,6 +1661,50 @@ mod tests {
         ));
         // and a span ending at 25_001_986 stays clear of the stretched exon.
         assert!(overlaps_polypyrimidine_tract(&tx, 25_001_983, 25_001_986));
+    }
+
+    /// `3:180968051-180970157 deletion` on ENST00000482125 (FXR1, GRCh38,
+    /// `cds_start_NF`, coding region from the transcript's first base): no
+    /// `5_prime_UTR_variant` in Perl. `_before_coding` is
+    /// `overlap(start, end, transcript start, coding_region_start - 1)`, an
+    /// inverted window when the two bounds coincide, which holds only for a span
+    /// starting before the transcript; a span starting on its first base fails it.
+    #[test]
+    fn test_five_prime_utr_absent_when_cds_opens_the_transcript() {
+        let mut tx = crate::test_helpers::make_test_transcript_with_flags(&["cds_start_NF"]);
+        tx.cdna_coding_start = Some(1);
+        tx.coding_region_start = Some(tx.start);
+        if let Some(mapper) = tx.vefc.as_mut().and_then(|v| v.mapper.as_mut()) {
+            mapper.cdna_coding_start = 1;
+        }
+        assert!(!overlaps_five_prime_utr(&tx, tx.start, 25_001_500));
+        assert!(overlaps_five_prime_utr(&tx, tx.start - 1, 25_001_500));
+        // The same at the transcript's last base on a `cds_end_NF` transcript.
+        let mut tx = crate::test_helpers::make_test_transcript_with_flags(&["cds_end_NF"]);
+        tx.cdna_coding_end = Some(2601);
+        tx.coding_region_end = Some(tx.end);
+        if let Some(mapper) = tx.vefc.as_mut().and_then(|v| v.mapper.as_mut()) {
+            mapper.cdna_coding_end = 2601;
+        }
+        assert!(!overlaps_three_prime_utr(&tx, 25_004_500, tx.end));
+        assert!(overlaps_three_prime_utr(&tx, 25_004_500, tx.end + 1));
+    }
+
+    /// Perl's `coding` pre-predicate on a span: coding-region overlap and exon
+    /// overlap, the exon bounds stretched by 12 on a frameshift-intron transcript.
+    #[test]
+    fn test_perl_coding_pre_predicate() {
+        let tx = crate::test_helpers::make_test_transcript();
+        // Inside intron 2, within the coding region's genomic span: no exon.
+        assert!(!perl_coding_pre_predicate(&tx, 25_003_900, 25_003_999));
+        // Reaching exon 3's first base.
+        assert!(perl_coding_pre_predicate(&tx, 25_003_900, 25_004_000));
+        // Inside the 5' UTR exon: an exon but no coding region.
+        assert!(!perl_coding_pre_predicate(&tx, 25_000_010, 25_000_040));
+        // A frameshift-intron transcript stretches exon 2 down to 25_001_988.
+        let tx = make_frameshift_intron_transcript();
+        assert!(perl_coding_pre_predicate(&tx, 25_001_983, 25_001_990));
+        assert!(!perl_coding_pre_predicate(&tx, 25_001_983, 25_001_986));
     }
 
     // Non-coding exon variant tests for giant/small BND paths

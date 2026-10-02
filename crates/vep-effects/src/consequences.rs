@@ -748,6 +748,17 @@ fn apply_position(
             }
         }
         TranscriptPosition::Coding { cds_pos, .. } => {
+            if insertion {
+                // An insertion between the coding region's edge base and the base
+                // outside it is a UTR variant in Perl: `_before_coding` and
+                // `_after_coding` special-case an insertion whose start is the coding
+                // region start or whose end is the coding region end, `within_cdna`
+                // holds through the coding flank, and `_bvfo_preds` sets `exon` and
+                // `utr` on the sorted flank pair. When the outer flank is intronic
+                // this is the only apply_position call the allele gets.
+                push_perl_utr_terms(consequences, variant, transcript);
+            }
+
             // Perl VEP gives a variant spanning an intron boundary or extending
             // beyond the CDS (UTR, flanks) generic coding_sequence_variant instead
             // of codon analysis: one endpoint coding and the other intronic; both
@@ -1616,11 +1627,20 @@ fn apply_position(
                 if is_frameshift_intron(intron_start, intron_end) {
                     // Perl's _intron_effects sets within_frameshift_intron for a
                     // frameshift intron (<= 12 bp) and skips every intron and splice
-                    // term. `within_cds` then accepts the position on a coding
-                    // transcript (coding_sequence_variant; a paired exonic endpoint
-                    // adds the specific terms in its own apply_position call).
+                    // term. On a coding transcript `within_cds` then accepts the span
+                    // only where it overlaps the coding region
+                    // (coding_sequence_variant; a paired exonic endpoint adds the
+                    // specific terms in its own apply_position call). A frameshift
+                    // intron on the UTR side of the CDS gets the UTR term instead:
+                    // `_bvfo_preds` sets `utr` for a span clear of the coding region,
+                    // the 12 bp exon stretch satisfies `exon`, and `within_cdna`
+                    // accepts the intron through `within_transcript`.
                     if transcript.facts().has_coding_model {
-                        push_unique(consequences, Consequence::CodingSequenceVariant);
+                        if allele_overlaps_coding_bounds(variant, transcript) {
+                            push_unique(consequences, Consequence::CodingSequenceVariant);
+                        } else {
+                            push_perl_utr_terms(consequences, variant, transcript);
+                        }
                     } else {
                         // Non-coding transcript: `VariationEffect::non_coding_exon_variant`
                         // needs the raw span to overlap an exon, which a variant inside
@@ -1910,6 +1930,55 @@ fn allele_overlaps_coding_region(transcript: &Transcript, lo: u64, hi: u64) -> b
     let start = cs.min(ce);
     let end = cs.max(ce);
     hi >= start && lo <= end
+}
+
+/// Perl's `overlap` (`Utils/VariationEffect.pm`) on the allele's own coordinates,
+/// which for an insertion run `start == end + 1`: an insertion overlaps a region
+/// only when both flanks lie inside it, so one sitting on the region's edge does not.
+fn perl_overlap(f1_start: u64, f1_end: u64, f2_start: u64, f2_end: u64) -> bool {
+    f1_end >= f2_start && f1_start <= f2_end
+}
+
+/// Perl's `within_cds` frameshift-intron arm and the `coding` pre-predicate of
+/// `_bvfo_preds`: the allele overlaps the genomic coding region.
+fn allele_overlaps_coding_bounds(variant: &InputVariant, transcript: &Transcript) -> bool {
+    match genomic_coding_bounds(transcript) {
+        Some((cds_start, cds_end)) => perl_overlap(variant.start, variant.end, cds_start, cds_end),
+        None => false,
+    }
+}
+
+/// The positional half of Perl's `within_5_prime_utr` and `within_3_prime_utr`
+/// (`Utils/VariationEffect.pm`). `_before_coding` is an overlap with
+/// `[transcript start, coding_region_start - 1]`, or an insertion whose start is
+/// the coding region start; `_after_coding` is an overlap with
+/// `[coding_region_end + 1, transcript end]`, or an insertion whose end is the
+/// coding region end. Both read genomic coordinates, and the strand names the
+/// UTR. Pushes whichever terms hold; the caller has settled `within_cdna`.
+fn push_perl_utr_terms(
+    consequences: &mut ConsequenceList,
+    variant: &InputVariant,
+    transcript: &Transcript,
+) {
+    let Some((cds_start, cds_end)) = genomic_coding_bounds(transcript) else {
+        return;
+    };
+    let (s, e) = (variant.start, variant.end);
+    let insertion = s == e + 1;
+    let before_coding = (insertion && s == cds_start)
+        || perl_overlap(s, e, transcript.start, cds_start.saturating_sub(1));
+    let after_coding = (insertion && e == cds_end)
+        || perl_overlap(s, e, cds_end.saturating_add(1), transcript.end);
+    let (five_prime, three_prime) = match transcript.strand {
+        vep_core::coordinate::Strand::Forward => (before_coding, after_coding),
+        vep_core::coordinate::Strand::Reverse => (after_coding, before_coding),
+    };
+    if five_prime {
+        push_unique(consequences, Consequence::FivePrimeUtrVariant);
+    }
+    if three_prime {
+        push_unique(consequences, Consequence::ThreePrimeUtrVariant);
+    }
 }
 
 fn paired_intron_has_essential_splice(

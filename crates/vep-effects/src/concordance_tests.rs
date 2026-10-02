@@ -8410,3 +8410,262 @@ fn concordance_duplication_over_start_codon_of_cds_start_nf_transcript_has_no_st
         ],
     );
 }
+
+// UTR terms at the coding region's edges
+
+/// The genomic base a cDNA position maps to through the transcript's mapper pairs.
+fn cdna_to_genomic(tx: &Transcript, cdna_pos: u64) -> u64 {
+    let pairs = &tx
+        .vefc
+        .as_ref()
+        .and_then(|v| v.mapper.as_ref())
+        .expect("transcript with a mapper")
+        .exon_coord_mapper
+        .pairs;
+    let pair = pairs
+        .iter()
+        .find(|p| cdna_pos >= p.from_start && cdna_pos <= p.from_end)
+        .expect("cDNA position inside an exon");
+    let offset = cdna_pos - pair.from_start;
+    if pair.ori == 1 {
+        pair.to_start + offset
+    } else {
+        pair.to_end - offset
+    }
+}
+
+/// Move the coding region of a transcript to cDNA `[cds_start, cds_end]`, keeping the
+/// exons: the mapper, the transcript's own coding fields and the translateable
+/// sequence (a run of `GCT` codons after an `ATG`) all follow.
+fn with_cds_at_cdna(mut tx: Transcript, cds_start: u64, cds_end: u64) -> Transcript {
+    let g_start = cdna_to_genomic(&tx, cds_start);
+    let g_end = cdna_to_genomic(&tx, cds_end);
+    let mut cds = String::from("ATG");
+    while (cds.len() as u64) < cds_end - cds_start + 1 {
+        cds.push_str("GCT");
+    }
+    cds.truncate((cds_end - cds_start + 1) as usize);
+    if let Some(vefc) = tx.vefc.as_mut() {
+        vefc.translateable_seq = Some(cds);
+        if let Some(mapper) = vefc.mapper.as_mut() {
+            mapper.cdna_coding_start = cds_start;
+            mapper.cdna_coding_end = cds_end;
+        }
+    }
+    tx.cdna_coding_start = Some(cds_start);
+    tx.cdna_coding_end = Some(cds_end);
+    tx.coding_region_start = Some(g_start.min(g_end));
+    tx.coding_region_end = Some(g_start.max(g_end));
+    tx.translation_start = Some(g_start);
+    tx.translation_end = Some(g_end);
+    tx
+}
+
+/// `3:193255650-193255651 A` on ENST00000264735 (PLAAT1, forward strand, GRCh38):
+/// an insertion between the last base of intron 1 and the first base of the
+/// coding region, which opens exon 2. Perl: `5_prime_UTR_variant,splice_region_variant`.
+/// `_before_coding` (`Utils/VariationEffect.pm`) special-cases an insertion whose
+/// start is `coding_region_start`; `within_cdna` holds through the exonic flank;
+/// `_bvfo_preds` sets `exon` and `utr` on the sorted flank pair; `_intron_effects`
+/// gives an insertion between the acceptor site and the exon edge `splice_region`
+/// and no acceptor term. `within_cds` fails on the insert coordinate (`end` 0), so
+/// no coding term. The same row holds on the 19 PLAAT1 transcripts of the record,
+/// on `3:192973439-192973440 A` (ENST00000602513, GRCh37) and on
+/// `19:43833504-43833505 TTTT` / `TTTTT` (ENST00000618787, ZNF283).
+#[test]
+fn concordance_insertion_before_cds_start_at_acceptor_boundary_is_5_prime_utr() {
+    // Coding region from cDNA 301, the first base of exon 2 (25_002_000).
+    let tx = with_cds_at_cdna(make_test_transcript(), 301, 900);
+    assert_eq!(tx.coding_region_start, Some(25_002_000));
+    let variant = InputVariant::new(
+        "21".into(),
+        25_002_000,
+        25_001_999,
+        b"-".to_vec(),
+        b"A".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["5_prime_UTR_variant", "splice_region_variant"],
+    );
+}
+
+/// The reverse-strand form: `within_5_prime_utr` reads `_after_coding`, whose
+/// insertion special case is `end == coding_region_end`, the genomic high edge.
+#[test]
+fn concordance_insertion_before_cds_start_at_acceptor_boundary_is_5_prime_utr_reverse() {
+    // Coding region from cDNA 301: exon 2 is 25_003_701..25_004_000, read downward,
+    // so its first base is 25_004_000 and intron 1 begins at 25_004_001.
+    let tx = with_cds_at_cdna(make_descending_reverse_strand_transcript(), 301, 900);
+    assert_eq!(tx.coding_region_end, Some(25_004_000));
+    let variant = InputVariant::new(
+        "21".into(),
+        25_004_001,
+        25_004_000,
+        b"-".to_vec(),
+        b"A".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["5_prime_UTR_variant", "splice_region_variant"],
+    );
+}
+
+/// `15:20534258-20534259 CTAGTGTTCCTGCATCTTCTCCT` on ENST00000619213 (GOLGA6L6,
+/// reverse strand, GRCh38): an insertion between the coding region's last base,
+/// which closes its exon, and the first base of the intron that follows. Perl:
+/// `3_prime_UTR_variant,splice_region_variant`, through `_before_coding`'s
+/// insertion special case (`start == coding_region_start`, the genomic low edge),
+/// which `within_3_prime_utr` reads on the reverse strand.
+#[test]
+fn concordance_insertion_after_cds_end_at_donor_boundary_is_3_prime_utr_reverse() {
+    // Coding region to cDNA 600, the last base of exon 2 (25_003_701); intron 2 ends
+    // at 25_003_700.
+    let tx = with_cds_at_cdna(make_descending_reverse_strand_transcript(), 51, 600);
+    assert_eq!(tx.coding_region_start, Some(25_003_701));
+    let variant = InputVariant::new(
+        "21".into(),
+        25_003_701,
+        25_003_700,
+        b"-".to_vec(),
+        b"CTAGTGTTCCTGCATCTTCTCCT".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["3_prime_UTR_variant", "splice_region_variant"],
+    );
+}
+
+/// The forward-strand form of the donor-boundary insertion: `_after_coding`'s
+/// insertion special case is `end == coding_region_end`.
+#[test]
+fn concordance_insertion_after_cds_end_at_donor_boundary_is_3_prime_utr() {
+    // Coding region to cDNA 600, the last base of exon 2 (25_002_299); intron 2
+    // begins at 25_002_300.
+    let tx = with_cds_at_cdna(make_test_transcript(), 51, 600);
+    assert_eq!(tx.coding_region_end, Some(25_002_299));
+    let variant = InputVariant::new(
+        "21".into(),
+        25_002_300,
+        25_002_299,
+        b"-".to_vec(),
+        b"A".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["3_prime_UTR_variant", "splice_region_variant"],
+    );
+}
+
+/// Inside the coding region the special case is off: an insertion between coding
+/// bases 6 and 7 has `start != coding_region_start`, and
+/// `overlap(start, end, transcript start, coding_region_start - 1)` fails on the
+/// inverted insertion coordinates, so no UTR term; the single inserted base is a
+/// `frameshift_variant`, clear of the exonic splice-region window and of the start
+/// codon.
+#[test]
+fn concordance_insertion_inside_cds_has_no_utr_term() {
+    let tx = with_cds_at_cdna(make_test_transcript(), 301, 900);
+    let variant = InputVariant::new(
+        "21".into(),
+        25_002_006,
+        25_002_005,
+        b"-".to_vec(),
+        b"A".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["frameshift_variant"]);
+}
+
+/// `1:22890124 G` on ENST00000538803 (EPHA8, forward strand, GRCh37): an SNV in
+/// the 5 bp intron between the UTR exon 1 and exon 2, whose first base opens the
+/// coding region. Perl: `5_prime_UTR_variant` alone. `_intron_effects` marks the
+/// intron `within_frameshift_intron` and sets no intron or splice flag; `within_cds`
+/// then needs the span to overlap the coding region (`Utils/VariationEffect.pm`,
+/// its frameshift-intron arm), which lies past the intron, and `_bvfo_preds` sets
+/// `utr` for the same reason, with `exon` through the 12 bp stretch of
+/// `_overlapped_exons`; `within_5_prime_utr` is `_before_coding` and `within_cdna`,
+/// the latter through `within_transcript` for a frameshift intron. The same row
+/// holds for `1:22890125 A` and the one-base deletion `1:22890125 -`.
+#[test]
+fn concordance_snv_in_frameshift_intron_before_cds_is_5_prime_utr() {
+    // Intron 1 shrinks to 25_000_300..25_000_304 and exon 2 opens at 25_000_305,
+    // where the coding region (cDNA 301) begins.
+    let tx = with_cds_at_cdna(make_transcript_with_short_first_intron(5), 301, 900);
+    assert_eq!(tx.coding_region_start, Some(25_000_305));
+    for pos in [25_000_300, 25_000_304] {
+        let variant = InputVariant::new("21".into(), pos, pos, b"C".to_vec(), b"G".to_vec());
+        let tc = consequence_of(&variant, &tx);
+        crate::test_helpers::assert_consequence_set_eq(&tc, &["5_prime_UTR_variant"]);
+    }
+    let variant = InputVariant::new(
+        "21".into(),
+        25_000_301,
+        25_000_301,
+        b"C".to_vec(),
+        b"-".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["5_prime_UTR_variant"]);
+}
+
+/// `1:22890123-22890125 -` on the same transcript: the last base of the UTR exon
+/// and the first two bases of the frameshift intron. Perl: `5_prime_UTR_variant`
+/// alone, the exonic base giving the term and the intronic bases adding nothing,
+/// since the span still stops short of the coding region.
+#[test]
+fn concordance_deletion_from_utr_exon_into_frameshift_intron_before_cds_is_5_prime_utr() {
+    let tx = with_cds_at_cdna(make_transcript_with_short_first_intron(5), 301, 900);
+    let variant = InputVariant::new(
+        "21".into(),
+        25_000_299,
+        25_000_301,
+        b"CCG".to_vec(),
+        b"-".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["5_prime_UTR_variant"]);
+}
+
+/// The same 5 bp intron inside the coding region (the coding region of
+/// `make_test_transcript()` starts in exon 1) keeps `coding_sequence_variant`:
+/// `within_cds`'s frameshift-intron arm is the overlap of the span with the
+/// coding region, which holds here.
+#[test]
+fn concordance_snv_in_frameshift_intron_inside_cds_is_coding_sequence_variant() {
+    let tx = make_transcript_with_short_first_intron(5);
+    let variant = InputVariant::new(
+        "21".into(),
+        25_000_302,
+        25_000_302,
+        b"C".to_vec(),
+        b"G".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["coding_sequence_variant"]);
+}
+
+/// On the reverse strand the UTR before the coding region lies at higher genomic
+/// coordinates, so `within_5_prime_utr` reads `_after_coding`: the frameshift
+/// intron between exon 1 (cDNA 1..300) and the coding region opening exon 2 takes
+/// `5_prime_UTR_variant`.
+#[test]
+fn concordance_snv_in_frameshift_intron_before_cds_is_5_prime_utr_reverse() {
+    // Intron 1 is 25_005_696..25_005_700; exon 2 is read downward from 25_005_695,
+    // where the coding region (cDNA 301) begins.
+    let tx = with_cds_at_cdna(make_reverse_transcript_with_short_first_intron(5), 301, 900);
+    assert_eq!(tx.coding_region_end, Some(25_005_695));
+    let variant = InputVariant::new(
+        "21".into(),
+        25_005_698,
+        25_005_698,
+        b"C".to_vec(),
+        b"G".to_vec(),
+    );
+    let tc = consequence_of(&variant, &tx);
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["5_prime_UTR_variant"]);
+}

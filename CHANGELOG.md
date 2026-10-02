@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The SNP/indel comparator applies the transcript-selection class of
+  `docs/intended-divergences.md` (section 3) to the records of a whole-genome
+  input that Ensembl VEP marks skipped, under the structural-variant
+  comparator's two guards, and reports it as `sv_transcript_selection`; the
+  scope test is defined once and shared by the two comparators.
+
+### Fixed
+
+Each entry names the Ensembl VEP mechanism vep-rs follows.
+
+- UTR term on an insertion at the edge of the coding region: `_before_coding`
+  and `_after_coding` special-case an insertion whose start is the coding
+  region start or whose end is the coding region end, so an insertion between
+  the last base of an intron and the first base of a coding exon (or between
+  the coding region's last base and the intron after it) is `5_prime_UTR_variant` or
+  `3_prime_UTR_variant` by strand beside its splice term, where it carried the
+  splice term alone.
+- A frameshift intron on the UTR side of the coding region: `within_cds`
+  requires the span to overlap the coding region, and `_bvfo_preds` sets `utr`
+  rather than `coding` for a span that does not, so a variant inside an intron
+  of twelve bases or fewer that lies before the coding region is
+  `5_prime_UTR_variant` (or `3_prime_UTR_variant` after it) rather than
+  `coding_sequence_variant`.
+- Structural `stop_lost` behind the `coding` pre-predicate: the term carries
+  `include {coding => 1}`, and `_bvfo_preds` sets `coding` only for a span that
+  overlaps the coding region and an exon, so a deletion inside the intron that
+  splits a stop codon is `non_coding` and carries no `stop_lost`, although the
+  codon window drawn on genomic coordinates reaches into that intron.
+- No UTR term on a structural span that starts on the first base of a
+  transcript whose coding region starts there (`cds_start_NF`, and likewise at
+  the last base with `cds_end_NF`): `_before_coding` is
+  `overlap(start, end, transcript start, coding_region_start - 1)`, an inverted
+  window that admits only a span starting before the transcript.
+
 ## [0.3.0] - 2026-10-01
 
 ### Added
