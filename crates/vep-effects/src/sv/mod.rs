@@ -29,19 +29,21 @@ use vep_core::variant::{InputVariant, VariantClass};
 /// corresponding to the cDNA range in the transcript's `miRNA` attribute. This
 /// mirrors `within_mature_miRNA` in `StructuralVariationOverlapAllele.pm`.
 pub(crate) fn is_mature_mirna_sv(transcript: &Transcript, sv_start: u64, sv_end: u64) -> bool {
+    mature_mirna_genomic_ranges(transcript)
+        .iter()
+        .any(|&(lo, hi)| overlap_bp(sv_start, sv_end, lo, hi) > 0)
+}
+
+/// The genomic ranges of a miRNA transcript's mature products, from the cDNA ranges of
+/// its `miRNA` attributes through the mapper pairs; empty for any other transcript.
+pub(crate) fn mature_mirna_genomic_ranges(transcript: &Transcript) -> Vec<(u64, u64)> {
+    let mut ranges = Vec::new();
     if &*transcript.biotype != "miRNA" {
-        return false;
+        return ranges;
     }
-
-    let vefc = match transcript.vefc.as_ref() {
-        Some(v) => v,
-        None => return false,
+    let Some(mapper) = transcript.vefc.as_ref().and_then(|v| v.mapper.as_ref()) else {
+        return ranges;
     };
-    let mapper = match vefc.mapper.as_ref() {
-        Some(m) => m,
-        None => return false,
-    };
-
     for attr in &transcript.attributes {
         if attr.code != "miRNA" {
             continue;
@@ -66,14 +68,11 @@ pub(crate) fn is_mature_mirna_sv(transcript: &Transcript, sv_start: u64, sv_end:
                     let hi = pair.to_end - (clamped_cdna_lo - pair.from_start);
                     (lo, hi)
                 };
-
-                if overlap_bp(sv_start, sv_end, genomic_lo, genomic_hi) > 0 {
-                    return true;
-                }
+                ranges.push((genomic_lo, genomic_hi));
             }
         }
     }
-    false
+    ranges
 }
 
 /// Perl's context terms for a structural allele that engulfs a transcript, without
@@ -191,7 +190,7 @@ pub(crate) fn overlaps_any_exon(transcript: &Transcript, sv_start: u64, sv_end: 
         .any(|exon| overlap_bp(sv_start, sv_end, exon.start, exon.end) > 0)
 }
 
-fn transcript_introns(transcript: &Transcript) -> &[vep_core::transcript::Intron] {
+pub(crate) fn transcript_introns(transcript: &Transcript) -> &[vep_core::transcript::Intron] {
     if let Some(ref vefc) = transcript.vefc {
         if !vefc.introns.is_empty() {
             return &vefc.introns;
@@ -1719,7 +1718,7 @@ mod tests {
     /// Build a non-coding transcript with the standard 3-exon layout.
     /// Same genomic coordinates as `make_test_transcript()` but biotype=lncRNA,
     /// no CDS, no translation.
-    fn make_non_coding_transcript() -> Transcript {
+    pub(crate) fn make_non_coding_transcript() -> Transcript {
         use std::sync::Arc;
         use vep_core::transcript::{Exon, Intron};
 

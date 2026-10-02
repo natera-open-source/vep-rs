@@ -223,17 +223,6 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
                 alt
             );
         }
-        // Perl VEP (ensembl-io BaseVCF4.pm get_end()) universally prioritises
-        // SVLEN over INFO/END for all SV types:
-        //   if(defined($info->{SVLEN})) { $end = $self->get_start + abs($svlen) - 1; }
-        //   elsif(defined($info->{END})) { $end = $info->{END}; }
-        // Since get_start() = POS+1 for SVs, this is: end = POS + abs(SVLEN).
-        let mut sv_end_val = get_info_value(info_field, "SVLEN")
-            .and_then(|v| v.parse::<i64>().ok())
-            .map(|len| pos + len.unsigned_abs())
-            .or_else(|| get_info_value(info_field, "END").and_then(|v| v.parse::<u64>().ok()))
-            .unwrap_or(pos);
-
         // Perl VEP uses POS+1 for all SV types (the VCF POS is the anchor base;
         // the actual structural event starts at POS+1).
         let sv_start = if sv_class.is_span_type() {
@@ -241,6 +230,20 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
         } else {
             pos
         };
+
+        // Perl VEP (ensembl-io BaseVCF4.pm get_end()) universally prioritises
+        // SVLEN over INFO/END for all SV types, and a symbolic record with
+        // neither is the single base at get_start():
+        //   if(defined($info->{SVLEN})) { $end = $self->get_start + abs($svlen) - 1; }
+        //   elsif(defined($info->{END})) { $end = $info->{END}; }
+        //   elsif(SVTYPE or a symbolic ALT) { $end = $self->get_start; }
+        // Since get_start() = POS+1 for SVs, SVLEN gives end = POS + abs(SVLEN),
+        // and SVLEN=0 or END=POS gives end = POS, one base before the start.
+        let mut sv_end_val = get_info_value(info_field, "SVLEN")
+            .and_then(|v| v.parse::<i64>().ok())
+            .map(|len| pos + len.unsigned_abs())
+            .or_else(|| get_info_value(info_field, "END").and_then(|v| v.parse::<u64>().ok()))
+            .unwrap_or(sv_start);
 
         // Perl VEP uses SVLEN (not END) for tandem repeat end coordinates.
         // VCF.pm:502-512: $end = $start + max(@svlen) - 1 when $so_term =~ /tandem/
@@ -265,9 +268,21 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
             }
         }
 
-        // A point-type SV (BND, ME, INS) without END/SVLEN defaults to POS; the
-        // event starts at POS+1, so the clamp keeps it a single position.
-        let sv_end_val = sv_end_val.max(sv_start);
+        // An insertion whose END is its position or whose SVLEN is 0 stays the
+        // pair `start = POS + 1, end = POS` Perl carries: the insertion between
+        // the two bases, with the predicates of a sequence insertion and the
+        // Location of its two flanks. Every other class keeps a span of at least
+        // one base.
+        let is_insertion_pair = matches!(
+            sv_class,
+            vep_core::variant::VariantClass::StructuralInsertion
+                | vep_core::variant::VariantClass::MobileElementInsertion
+        ) && sv_end_val + 1 == sv_start;
+        let sv_end_val = if is_insertion_pair {
+            sv_end_val
+        } else {
+            sv_end_val.max(sv_start)
+        };
         let mut variant = InputVariant::new(
             chr.clone(),
             sv_start,
@@ -1094,6 +1109,39 @@ mod tests {
         assert_eq!(v.variant_class, VariantClass::Translocation);
         assert_eq!(v.start, 101); // POS+1
         assert_eq!(v.end, 101); // END clamped to max(sv_start)
+    }
+
+    /// ensembl-io `BaseVCF4::get_end`: SVLEN first (`start + |SVLEN| - 1`), then END,
+    /// then `get_start` for a symbolic record with neither. A symbolic insertion whose
+    /// END is its position (1000 Genomes `<INS:MT>`) or whose SVLEN is 0 (`<INS:ME:ALU>`)
+    /// is therefore the pair `start = POS + 1, end = POS`, printed as the two flanks;
+    /// one with neither field is the single base at POS + 1.
+    #[test]
+    fn test_parse_vcf_line_symbolic_insertion_end_at_pos_keeps_the_pair() {
+        let line = "11\t7309883\t.\tT\t<INS:MT>\t.\t.\tCIEND=-1,0;CIPOS=0,1;END=7309883;SVTYPE=INS;IMPRECISE";
+        let v = &parse_vcf_line(line, true).unwrap()[0];
+        assert_eq!(v.variant_class, VariantClass::StructuralInsertion);
+        assert_eq!(
+            (v.start, v.end, v.sv_end),
+            (7309884, 7309883, Some(7309883))
+        );
+        assert_eq!(v.location(), "11:7309883-7309884");
+
+        let line = "17\t78056052\t.\tG\t<INS:ME:ALU>\t.\t.\tMEINFO=AluY,0,0,-;SVLEN=0;SVTYPE=ALU;TSD=CAGGCGTG";
+        let v = &parse_vcf_line(line, true).unwrap()[0];
+        assert_eq!(v.variant_class, VariantClass::MobileElementInsertion);
+        assert_eq!((v.start, v.end), (78056053, 78056052));
+        assert_eq!(v.location(), "17:78056052-78056053");
+
+        let line = "21\t25880572\tsynth_ins_sva_0001\tT\t<INS:ME:SVA>\t.\tPASS\tSVTYPE=INS;MEINFO=SVA_E,64,2808,-";
+        let v = &parse_vcf_line(line, true).unwrap()[0];
+        assert_eq!((v.start, v.end), (25880573, 25880573));
+        assert_eq!(v.location(), "21:25880573");
+
+        // A ranged insertion: SVLEN gives end = POS + SVLEN.
+        let line = "21\t1000\t.\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=300";
+        let v = &parse_vcf_line(line, true).unwrap()[0];
+        assert_eq!((v.start, v.end), (1001, 1300));
     }
 
     #[test]
