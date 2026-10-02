@@ -471,8 +471,13 @@ mod tests {
         assert!(tc.consequences.contains(&Consequence::ThreePrimeUtrVariant));
     }
 
+    /// A reverse-strand transcript whose coding region reaches its first genomic
+    /// base has no 3' UTR, and a span starting on that base gets no UTR term:
+    /// Perl's `_before_coding` is `overlap(start, end, transcript start,
+    /// coding_region_start - 1)`, an inverted window that holds only for a span
+    /// starting before the transcript. A span one base further out does hold it.
     #[test]
-    fn test_dup_reverse_strand_cds_start_nf_adds_three_prime_utr() {
+    fn test_dup_reverse_strand_cds_start_nf_has_no_three_prime_utr() {
         let mut tx = make_test_transcript_with_flags(&["cds_start_NF", "cds_end_NF"]);
         tx.strand = Strand::Reverse;
         tx.coding_region_start = Some(tx.start);
@@ -483,8 +488,12 @@ mod tests {
         assert!(tc
             .consequences
             .contains(&Consequence::CodingSequenceVariant));
-        assert!(tc.consequences.contains(&Consequence::ThreePrimeUtrVariant));
+        assert!(!tc.consequences.contains(&Consequence::ThreePrimeUtrVariant));
         assert!(tc.consequences.contains(&Consequence::IntronVariant));
+
+        let v = make_dup(tx.start - 1, 25_001_000, VariantClass::Duplication);
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert!(tc.consequences.contains(&Consequence::ThreePrimeUtrVariant));
     }
 
     #[test]

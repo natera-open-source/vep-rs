@@ -19,7 +19,8 @@
 use super::{
     engulfed_transcript_row_terms, is_mature_mirna_sv, overlaps_any_exon,
     overlaps_any_intron_trimmed, overlaps_cds_exon, overlaps_five_prime_utr,
-    overlaps_polypyrimidine_tract, overlaps_three_prime_utr, transcript_has_incomplete_cds,
+    overlaps_polypyrimidine_tract, overlaps_three_prime_utr, perl_coding_pre_predicate,
+    transcript_has_incomplete_cds,
 };
 use smallvec::{smallvec, SmallVec};
 use vep_core::consequence::{
@@ -174,7 +175,15 @@ pub fn calculate(
                 Strand::Forward => (cds_end.saturating_sub(2), cds_end),
                 Strand::Reverse => (cds_start, cds_start + 2),
             };
-            if sv_start <= stop_end && sv_end >= stop_start && has_complete_cds {
+            // `stop_lost` carries `include {coding => 1}`, so the codon window is
+            // tested only for a span the `coding` pre-predicate admits: one that
+            // overlaps the coding region and an exon. A deletion inside an intron
+            // that splits the stop codon reaches the window but is `non_coding`.
+            if sv_start <= stop_end
+                && sv_end >= stop_start
+                && has_complete_cds
+                && perl_coding_pre_predicate(transcript, sv_start, sv_end)
+            {
                 consequences.push(Consequence::StopLost);
             }
         }
@@ -860,5 +869,41 @@ mod tests {
             vec![Consequence::DownstreamGeneVariant]
         );
         assert_eq!(tc.distance, Some(2000));
+    }
+
+    /// A `<CN0>` loss inside the intron that splits the stop codon (the coding
+    /// region moved to end on the first base of exon 3, cDNA 601): no `stop_lost`,
+    /// because the span overlaps no exon and Perl's `coding` pre-predicate, which
+    /// `stop_lost` requires, is unset; reaching the exonic codon base sets it.
+    #[test]
+    fn test_cn0_in_intron_splitting_stop_codon_has_no_stop_lost() {
+        let mut tx = make_test_transcript();
+        if let Some(vefc) = tx.vefc.as_mut() {
+            if let Some(seq) = vefc.translateable_seq.as_mut() {
+                seq.truncate(551);
+            }
+            if let Some(mapper) = vefc.mapper.as_mut() {
+                mapper.cdna_coding_end = 601;
+            }
+        }
+        tx.cdna_coding_end = Some(601);
+        tx.coding_region_end = Some(25_004_000);
+        tx.translation_end = Some(25_004_000);
+
+        let v = make_cnv(b"<CN0>", 25_003_900, 25_003_999);
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert!(
+            !tc.consequences.contains(&Consequence::StopLost),
+            "{:?}",
+            tc.consequences
+        );
+
+        let v = make_cnv(b"<CN0>", 25_003_900, 25_004_010);
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert!(
+            tc.consequences.contains(&Consequence::StopLost),
+            "{:?}",
+            tc.consequences
+        );
     }
 }

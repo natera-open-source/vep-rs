@@ -14,6 +14,7 @@ use super::{
     bnd_breakend_within_transcript, is_mature_mirna_sv, overlaps_any_exon as sv_overlaps_any_exon,
     overlaps_any_intron_trimmed as sv_overlaps_any_intron_trimmed, overlaps_cds_exon,
     overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
+    perl_coding_pre_predicate,
 };
 use smallvec::SmallVec;
 use vep_core::consequence::{
@@ -222,7 +223,11 @@ pub fn calculate(
             }
 
             // `stop_lost` (:1262-1274) and `start_lost` (:886-896) for a structural
-            // deletion are genomic overlaps with the three codon bases.
+            // deletion are genomic overlaps with the three codon bases, reached only
+            // behind the `coding` pre-predicate both terms carry in their `include`
+            // (`perl_coding_pre_predicate`): a stop codon split by an intron puts a
+            // codon base inside the window on the far side of that intron, and a
+            // deletion inside the intron is `non_coding`, so Perl never tests it.
             // `start_lost` also passes `_overlaps_start_codon` (:965-990), which
             // needs `cdna_start` and `cdna_end` defined: both ends of the deletion
             // in exons, and no `cds_start_NF`. Perl co-emits
@@ -236,7 +241,12 @@ pub fn calculate(
                 Strand::Forward => (cds_end.saturating_sub(2), cds_end, cds_start, cds_start + 2),
                 Strand::Reverse => (cds_start, cds_start + 2, cds_end.saturating_sub(2), cds_end),
             };
-            if !is_chromosome_breakpoint && del_end >= stop_lo && del_start <= stop_hi {
+            let perl_coding = perl_coding_pre_predicate(transcript, del_start, del_end);
+            if !is_chromosome_breakpoint
+                && perl_coding
+                && del_end >= stop_lo
+                && del_start <= stop_hi
+            {
                 push_unique(&mut consequences, Consequence::StopLost);
             }
             let ends_in_exons = |pos: u64| {
@@ -967,5 +977,67 @@ mod tests {
         assert!(!result
             .consequences
             .contains(&Consequence::CodingSequenceVariant));
+    }
+
+    /// Move the coding region's end to cDNA 601, the first base of exon 3, so the
+    /// stop codon is cDNA 599..601: the last two bases of exon 2 (25_002_298,
+    /// 25_002_299) and the first base of exon 3 (25_004_000), split by intron 2.
+    fn tx_with_stop_codon_split_by_intron_2() -> Transcript {
+        let mut tx = tx();
+        if let Some(vefc) = tx.vefc.as_mut() {
+            if let Some(seq) = vefc.translateable_seq.as_mut() {
+                seq.truncate(551);
+            }
+            if let Some(mapper) = vefc.mapper.as_mut() {
+                mapper.cdna_coding_end = 601;
+            }
+        }
+        tx.cdna_coding_end = Some(601);
+        tx.coding_region_end = Some(25_004_000);
+        tx.translation_end = Some(25_004_000);
+        tx
+    }
+
+    /// `13:21155152-21155692 deletion` on ENST00000314759 (SKA3, GRCh38) and the
+    /// seven other SKA3 transcripts: a deletion inside the intron that splits the
+    /// stop codon, ending two bases short of the exon that carries the codon's last
+    /// base. Perl: `intron_variant,splice_polypyrimidine_tract_variant`, no
+    /// `stop_lost`. Its structural `stop_lost` arm (`Utils/VariationEffect.pm`)
+    /// tests the span against `coding_region_end - 2 .. coding_region_end`, a
+    /// genomic window that here reaches two bases into the intron, but the term
+    /// carries `include {coding => 1}` and `_bvfo_preds` leaves `coding` unset for
+    /// a span that overlaps no exon, so the predicate never runs.
+    #[test]
+    fn test_deletion_in_intron_splitting_stop_codon_has_no_stop_lost() {
+        let tx = tx_with_stop_codon_split_by_intron_2();
+        let v = make_del("21", 25_003_900, 25_003_999);
+        let result = calculate(&v, &tx, 5000, 5000).unwrap();
+        crate::test_helpers::assert_consequence_set_eq(
+            &result,
+            &["intron_variant", "splice_polypyrimidine_tract_variant"],
+        );
+    }
+
+    /// The same window with the deletion reaching the codon's exonic base: the span
+    /// overlaps the coding region and exon 3, `coding` is set, and `stop_lost`
+    /// holds beside `feature_truncation` (an exonic span inside the transcript),
+    /// `coding_sequence_variant` (`coding_unknown`: inside no single exon),
+    /// `3_prime_UTR_variant` (`_after_coding`) and `intron_variant`;
+    /// `splice_polypyrimidine_tract_variant` needs `exon => 0` and is excluded.
+    #[test]
+    fn test_deletion_from_intron_into_split_stop_codon_has_stop_lost() {
+        let tx = tx_with_stop_codon_split_by_intron_2();
+        let v = make_del("21", 25_003_900, 25_004_010);
+        let result = calculate(&v, &tx, 5000, 5000).unwrap();
+        crate::test_helpers::assert_consequence_set_eq(
+            &result,
+            &[
+                "3_prime_UTR_variant",
+                "coding_sequence_variant",
+                "feature_truncation",
+                "intron_variant",
+                "stop_lost",
+            ],
+        );
     }
 }
