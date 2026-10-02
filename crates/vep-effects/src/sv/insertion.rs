@@ -14,8 +14,16 @@
 //!    treats the inserted material as occupying this range for overlap
 //!    purposes, even though no genomic bases are deleted.
 //!
-//! 2. **Point insertions** (mobile elements, tandem repeats without SVLEN):
-//!    `variant.start == variant.end` (single position). OverlapBP = 1.
+//! 2. **Point insertions** (a symbolic record with neither SVLEN nor END, which
+//!    ensembl-io reads as the single base at POS + 1): `variant.start == variant.end`.
+//!    OverlapBP = 1.
+//!
+//! 3. **Insertion pairs** (a record whose END is its position or whose SVLEN is 0):
+//!    `variant.start == variant.end + 1`, the insertion between the two bases, as
+//!    Ensembl VEP carries it. Its one differing region is the pair itself
+//!    (`StructuralVariationOverlapAllele::_get_differing_regions`), so every predicate
+//!    reads it as `_intron_effects` reads a sequence insertion; `calculate_insertion_pair`
+//!    below is that reading, and the row carries no OverlapBP (overlap length 0).
 //!
 //! ## Consequence assignment
 //!
@@ -71,6 +79,15 @@ pub fn calculate(
         || sv_start > tx_end + upstream_distance.max(downstream_distance)
     {
         return None;
+    }
+
+    if sv_start == sv_end + 1 {
+        return calculate_insertion_pair(
+            variant,
+            transcript,
+            upstream_distance,
+            downstream_distance,
+        );
     }
 
     let (up_boundary, down_boundary) = match transcript.strand {
@@ -269,6 +286,238 @@ pub fn calculate(
     tc.consequences = consequences;
     tc.impact = impact;
     Some(tc)
+}
+
+/// Perl's reading of a symbolic insertion carried as the pair `start = POS + 1, end = POS`.
+///
+/// `overlap(start, end, a, b)` on the pair holds only when both flanks lie inside
+/// `[a, b]`, so `within_feature`, `complete_within_feature`, the structural `start_lost`
+/// arm and the intronic test of `_intron_effects` (`BaseTranscriptVariationAllele.pm`,
+/// with its two insertion special cases, `start == intron_start + 2` and
+/// `end == intron_end - 2`) all read both flanks. The `exon`, `intron` and `utr`
+/// pre-predicates of `_bvfo_preds` read the sorted flank pair, the exon test stretched
+/// by 12 bases on a transcript with a frameshift intron. `within_cdna` holds whenever a
+/// flank is exonic: `Mapper::map_insert` turns the flank's coordinate into the insert
+/// coordinate and drops the gap of an intronic flank; inside a frameshift intron it
+/// holds through `within_transcript`. `within_cds` reads that insert coordinate, which
+/// is `(c + 1, c)` after an exonic 5' flank at CDS position `c` and `(c, c - 1)` before
+/// an exonic 3' flank at `c`, and needs `end > 0` and `start <= length`: the insertion
+/// right before the coding region's first base or right after its last is not within
+/// the CDS and takes the UTR term through `_before_coding` / `_after_coding`'s insertion
+/// special cases instead. `coding_unknown` is `within_cds` for a structural insertion
+/// (`inframe_insertion` returns 0 for every structural allele and `frameshift` needs a
+/// deletion), `feature_elongation` is `within_cdna and complete_within_feature`, and an
+/// empty term list takes Perl's default, `intergenic_variant`.
+fn calculate_insertion_pair(
+    variant: &InputVariant,
+    transcript: &Transcript,
+    upstream_distance: u64,
+    downstream_distance: u64,
+) -> Option<TranscriptConsequence> {
+    let s = variant.start;
+    let e = variant.sv_end.unwrap_or(variant.end);
+    debug_assert_eq!(s, e + 1);
+    let (lo, hi) = (e, s);
+    let tx_start = transcript.start;
+    let tx_end = transcript.end;
+
+    let (up_boundary, down_boundary) = match transcript.strand {
+        Strand::Forward => (
+            tx_start.saturating_sub(upstream_distance),
+            tx_end.saturating_add(downstream_distance),
+        ),
+        Strand::Reverse => (
+            tx_end.saturating_add(upstream_distance),
+            tx_start.saturating_sub(downstream_distance),
+        ),
+    };
+
+    let mut tc = TranscriptConsequence {
+        transcript_id: transcript.stable_id.clone(),
+        feature_start: transcript.start,
+        feature_end: transcript.end,
+        gene_id: transcript.gene_stable_id.clone(),
+        gene_symbol: transcript.gene_symbol.clone(),
+        gene_symbol_source: transcript.gene_symbol_source.clone(),
+        hgnc_id: transcript.hgnc_id.clone(),
+        biotype: Some(transcript.biotype.clone()),
+        canonical: transcript.canonical,
+        strand: match transcript.strand {
+            Strand::Forward => 1,
+            Strand::Reverse => -1,
+        },
+        feature_type: FeatureType::Transcript,
+        flags: transcript.flags.clone(),
+        tsl: transcript.tsl,
+        mane_select: transcript.mane_select.clone(),
+        mane_plus_clinical: transcript.mane_plus_clinical.clone(),
+        appris: transcript.appris.clone(),
+        ccds: transcript.ccds.clone(),
+        swissprot: transcript.swissprot.clone(),
+        trembl: transcript.trembl.clone(),
+        refseq: transcript.refseq.clone(),
+        ..TranscriptConsequence::default()
+    };
+
+    // `within_feature`: both flanks inside the transcript. Otherwise `_before_start`
+    // reads `end` and `_after_end` reads `start`, which is what
+    // `classify_upstream_downstream` does with the pair.
+    let within_feature = e >= tx_start && s <= tx_end;
+    if !within_feature {
+        let csq = classify_upstream_downstream(s, e, transcript, up_boundary, down_boundary);
+        if let Some((consequence, distance)) = csq {
+            tc.consequences = smallvec![consequence];
+            tc.impact = consequence.impact();
+            tc.distance = Some(distance);
+            return Some(tc);
+        }
+        return None;
+    }
+
+    let facts = transcript.facts();
+    let stretch = if facts.vefc_has_frameshift_intron {
+        12
+    } else {
+        0
+    };
+    let exon_pred = overlaps_any_exon(
+        transcript,
+        lo.saturating_sub(stretch),
+        hi.saturating_add(stretch),
+    );
+    let flank_exonic = overlaps_any_exon(transcript, lo, hi);
+    let introns = super::transcript_introns(transcript);
+    let in_frameshift_intron = introns
+        .iter()
+        .any(|i| i.end.saturating_sub(i.start) <= 12 && e >= i.start && s <= i.end);
+    let within_cdna = flank_exonic || in_frameshift_intron;
+    let intronic = introns.iter().any(|i| {
+        let frameshift = i.end.saturating_sub(i.start) <= 12;
+        if frameshift && e >= i.start && s <= i.end {
+            return false;
+        }
+        (e >= i.start + 2 && s + 2 <= i.end) || s == i.start + 2 || e + 2 == i.end
+    });
+
+    let mut consequences: ConsequenceList = SmallVec::new();
+
+    if transcript.has_cds() {
+        if let Some((cds_lo, cds_hi)) = crate::consequences::genomic_coding_bounds(transcript) {
+            // `_bvfo_preds`: `coding` for a sorted pair overlapping the coding region on an
+            // exon (`cds_coords` of such a pair is never empty); `utr` where the sorted pair
+            // reaches past either end of the coding region.
+            let coding_pred = hi >= cds_lo && lo <= cds_hi && exon_pred;
+            let utr_pred = exon_pred && (lo < cds_lo || hi > cds_hi);
+
+            if coding_pred && insert_within_cds(transcript, s, e) {
+                consequences.push(Consequence::CodingSequenceVariant);
+            }
+            if coding_pred && structural_start_lost(transcript, s, e) {
+                consequences.push(Consequence::StartLost);
+            }
+            if utr_pred && within_cdna {
+                let before_coding = s == cds_lo || (e >= tx_start && s < cds_lo);
+                let after_coding = e == cds_hi || (e > cds_hi && s <= tx_end);
+                let (five_prime, three_prime) = match transcript.strand {
+                    Strand::Forward => (before_coding, after_coding),
+                    Strand::Reverse => (after_coding, before_coding),
+                };
+                if five_prime {
+                    consequences.push(Consequence::FivePrimeUtrVariant);
+                }
+                if three_prime {
+                    consequences.push(Consequence::ThreePrimeUtrVariant);
+                }
+            }
+        }
+        if within_cdna {
+            consequences.push(Consequence::FeatureElongation);
+        }
+    } else {
+        if within_cdna {
+            consequences.push(Consequence::FeatureElongation);
+        }
+        let mirna = mature_mirna_contains_pair(transcript, s, e);
+        if mirna {
+            consequences.push(Consequence::MatureMirnaVariant);
+        }
+        // `non_coding_exon_variant`: both flanks inside one exon of the overlapped list.
+        let exon_variant = !mirna && transcript.exons.iter().any(|x| e >= x.start && s <= x.end);
+        if exon_variant {
+            consequences.push(Consequence::NonCodingTranscriptExonVariant);
+        } else if !mirna && !transcript.is_nmd_transcript() {
+            consequences.push(Consequence::NonCodingTranscriptVariant);
+        }
+    }
+
+    if intronic {
+        consequences.push(Consequence::IntronVariant);
+    }
+    if overlaps_polypyrimidine_tract(transcript, lo, hi) {
+        consequences.push(Consequence::SplicePolypyrimidineTractVariant);
+    }
+    if transcript.is_nmd_transcript() {
+        consequences.push(Consequence::NmdTranscriptVariant);
+    }
+    if consequences.is_empty() {
+        consequences.push(Consequence::IntergenicVariant);
+    }
+
+    consequences.sort_by_key(|c| c.rank());
+    consequences.dedup();
+    let impact = consequences
+        .first()
+        .map(|c| c.impact())
+        .unwrap_or(Impact::MODIFIER);
+    tc.consequences = consequences;
+    tc.impact = impact;
+    Some(tc)
+}
+
+/// `within_cds` on the insert coordinate of a pair: `(c + 1, c)` after an exonic 5'
+/// flank at CDS position `c`, `(c, c - 1)` before an exonic 3' flank at `c`, each
+/// needing `end > 0` and `start <= length`; one coordinate `(c + 1, c)` when both flanks
+/// share an exon. The 5' and 3' flanks follow the transcript's strand.
+fn insert_within_cds(transcript: &Transcript, s: u64, e: u64) -> bool {
+    let cds_len = transcript
+        .vefc
+        .as_ref()
+        .and_then(|v| v.translateable_seq.as_ref())
+        .map(|t| t.len() as u64)
+        .or_else(|| {
+            Some(
+                transcript
+                    .cdna_coding_end?
+                    .checked_sub(transcript.cdna_coding_start?)?
+                    + 1,
+            )
+        })
+        .unwrap_or(0);
+    if cds_len == 0 {
+        return false;
+    }
+    let cds_pos = |pos: u64| match crate::mapper::map_genomic_to_transcript(pos, transcript, 0, 0) {
+        Some(crate::mapper::TranscriptPosition::Coding { cds_pos, .. }) => Some(cds_pos),
+        _ => None,
+    };
+    let (five_flank, three_flank) = match transcript.strand {
+        Strand::Forward => (e, s),
+        Strand::Reverse => (s, e),
+    };
+    match (cds_pos(five_flank), cds_pos(three_flank)) {
+        (Some(_), Some(_)) => true,
+        (Some(c), None) => c < cds_len,
+        (None, Some(c)) => c >= 2,
+        (None, None) => false,
+    }
+}
+
+/// `within_mature_miRNA` on a pair: both flanks inside a genomic range of the
+/// transcript's `miRNA` attribute.
+fn mature_mirna_contains_pair(transcript: &Transcript, s: u64, e: u64) -> bool {
+    super::mature_mirna_genomic_ranges(transcript)
+        .iter()
+        .any(|&(lo, hi)| e >= lo && s <= hi)
 }
 
 /// Add `splice_polypyrimidine_tract_variant` for an insertion that overlaps an intron.
@@ -1209,5 +1458,241 @@ mod tests {
                 window[1].rank()
             );
         }
+    }
+
+    /// A symbolic insertion carried as the pair `start = POS + 1, end = POS` (a record
+    /// whose END is its position or whose SVLEN is 0, ensembl-io `get_end`).
+    fn make_pair_ins(pos: u64, class: vep_core::variant::VariantClass) -> InputVariant {
+        let mut v = InputVariant::new("21".into(), pos + 1, pos, b"N".to_vec(), b"<INS>".to_vec());
+        v.variant_class = class;
+        v.is_structural = true;
+        v.sv_end = Some(pos);
+        v
+    }
+
+    fn pair_set(pos: u64, tx: &Transcript) -> Vec<String> {
+        let v = make_pair_ins(pos, vep_core::variant::VariantClass::StructuralInsertion);
+        let tc = calculate(&v, tx, 5000, 5000).expect("the pair lies within the neighbourhood");
+        let mut got: Vec<String> = tc.consequences.iter().map(|c| c.to_string()).collect();
+        got.sort();
+        got
+    }
+
+    fn sorted(terms: &[&str]) -> Vec<String> {
+        let mut v: Vec<String> = terms.iter().map(|t| (*t).to_string()).collect();
+        v.sort();
+        v
+    }
+
+    // The pair model, position by position, each set derived from Perl's predicates on
+    // the pair (`overlap` holds only when both flanks lie inside the region; the `exon`
+    // and `utr` pre-predicates read the sorted flank pair; `within_cdna` holds whenever a
+    // flank is exonic). Layout as above; the intron 1 edges are 25_000_300 and
+    // 25_001_999, the coding region 25_000_050..25_004_299 (CDS length 850).
+
+    /// `11:7309883-7309884 insertion` on ENST00000318881 (1000 Genomes Phase 3, `<INS:MT>`
+    /// with `END=POS`): inside an intron, `intron_variant` alone. Both flanks lie inside
+    /// `[intron_start + 2, intron_end - 2]`, no flank is exonic, so no cDNA coordinate.
+    #[test]
+    fn test_pair_inside_intron_is_intron_variant() {
+        let tx = make_test_transcript();
+        assert_eq!(pair_set(25_000_500, &tx), sorted(&["intron_variant"]));
+    }
+
+    /// The pair between the intron's first and second bases: neither inside the trimmed
+    /// intron nor the special cases (`start == intron_start + 2` is false: start is
+    /// `intron_start + 1`), no exonic flank, so the term list is empty and the row takes
+    /// Perl's default, `intergenic_variant`.
+    #[test]
+    fn test_pair_between_intron_bases_one_and_two_is_the_default() {
+        let tx = make_test_transcript();
+        assert_eq!(pair_set(25_000_300, &tx), sorted(&["intergenic_variant"]));
+    }
+
+    /// One base further in, `start == intron_start + 2`: the insertion special case of
+    /// `_intron_effects` sets `intronic`.
+    #[test]
+    fn test_pair_at_intron_start_plus_two_is_intronic() {
+        let tx = make_test_transcript();
+        assert_eq!(pair_set(25_000_301, &tx), sorted(&["intron_variant"]));
+    }
+
+    /// `end == intron_end - 2`, the other special case; the pair `(intron_end - 2,
+    /// intron_end - 1)` also lies in the polypyrimidine window `[intron_end - 16,
+    /// intron_end - 2]` with no exonic flank.
+    #[test]
+    fn test_pair_at_intron_end_minus_two_is_intronic_with_polypyrimidine() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            pair_set(25_001_997, &tx),
+            sorted(&["intron_variant", "splice_polypyrimidine_tract_variant"])
+        );
+    }
+
+    /// Between the last base of exon 1 (CDS position 250) and the intron: the 5' flank is
+    /// exonic, so `within_cdna` holds and `feature_elongation` with it; the insert
+    /// coordinate is `(251, 250)`, within the CDS; neither intronic test holds.
+    #[test]
+    fn test_pair_at_donor_boundary_inside_cds_is_coding_and_elongation() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            pair_set(25_000_299, &tx),
+            sorted(&["coding_sequence_variant", "feature_elongation"])
+        );
+    }
+
+    /// Between the intron and the first base of exon 2 (CDS position 251): the 3' flank
+    /// is exonic and its insert coordinate `(251, 250)` is within the CDS.
+    #[test]
+    fn test_pair_at_acceptor_boundary_inside_cds_is_coding_and_elongation() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            pair_set(25_001_999, &tx),
+            sorted(&["coding_sequence_variant", "feature_elongation"])
+        );
+    }
+
+    /// Between the last UTR base and the first coding base of exon 1: `start ==
+    /// coding_region_start`, so `_before_coding` holds and the 5' UTR term with it; the
+    /// insert coordinate in CDS space is `(1, 0)`, whose `end` is 0, so not within the
+    /// CDS and no coding term.
+    #[test]
+    fn test_pair_before_first_coding_base_is_5_prime_utr_not_coding() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            pair_set(25_000_049, &tx),
+            sorted(&["5_prime_UTR_variant", "feature_elongation"])
+        );
+    }
+
+    /// After the last coding base of exon 3: `end == coding_region_end`, so
+    /// `_after_coding` holds; the insert coordinate `(851, 850)` has `start > length`.
+    #[test]
+    fn test_pair_after_last_coding_base_is_3_prime_utr_not_coding() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            pair_set(25_004_299, &tx),
+            sorted(&["3_prime_UTR_variant", "feature_elongation"])
+        );
+    }
+
+    /// Inside the 5' UTR: the UTR term and `feature_elongation`.
+    #[test]
+    fn test_pair_inside_utr() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            pair_set(25_000_010, &tx),
+            sorted(&["5_prime_UTR_variant", "feature_elongation"])
+        );
+    }
+
+    /// Between the first and second bases of the start codon: both flanks inside the
+    /// codon, so the structural `start_lost` arm holds beside `coding_sequence_variant`
+    /// (`coding_unknown` excludes no start term for a structural allele).
+    #[test]
+    fn test_pair_inside_start_codon_is_start_lost_and_coding() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            pair_set(25_000_050, &tx),
+            sorted(&[
+                "coding_sequence_variant",
+                "feature_elongation",
+                "start_lost"
+            ])
+        );
+    }
+
+    /// One base before the transcript: `end < transcript start`, so not within the
+    /// feature; `_before_start` reads `end`, distance 1.
+    #[test]
+    fn test_pair_before_transcript_start_is_upstream_at_distance_one() {
+        let tx = make_test_transcript();
+        let v = make_pair_ins(
+            24_999_999,
+            vep_core::variant::VariantClass::StructuralInsertion,
+        );
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::UpstreamGeneVariant]
+        );
+        assert_eq!(tc.distance, Some(1));
+    }
+
+    /// One base after the transcript: `start > transcript end`, `_after_end` reads
+    /// `start`, distance 1.
+    #[test]
+    fn test_pair_after_transcript_end_is_downstream_at_distance_one() {
+        let tx = make_test_transcript();
+        let v = make_pair_ins(
+            25_006_000,
+            vep_core::variant::VariantClass::StructuralInsertion,
+        );
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::DownstreamGeneVariant]
+        );
+        assert_eq!(tc.distance, Some(1));
+    }
+
+    /// `7:124879111-124879112 Alu_insertion` on ENST00000420224 (1000 Genomes Phase 3,
+    /// `<INS:ME:ALU>` with `SVLEN=0`): an intronic pair on a non-coding transcript is
+    /// `intron_variant,non_coding_transcript_variant` (`within_non_coding_gene` holds
+    /// through `within_transcript`), and in an exon `non_coding_transcript_exon_variant`
+    /// with `feature_elongation`.
+    #[test]
+    fn test_pair_on_non_coding_transcript() {
+        let tx = crate::sv::tests::make_non_coding_transcript();
+        let v = make_pair_ins(
+            25_000_500,
+            vep_core::variant::VariantClass::MobileElementInsertion,
+        );
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        let mut got: Vec<String> = tc.consequences.iter().map(|c| c.to_string()).collect();
+        got.sort();
+        assert_eq!(
+            got,
+            sorted(&["intron_variant", "non_coding_transcript_variant"])
+        );
+        let v = make_pair_ins(
+            25_000_100,
+            vep_core::variant::VariantClass::MobileElementInsertion,
+        );
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        let mut got: Vec<String> = tc.consequences.iter().map(|c| c.to_string()).collect();
+        got.sort();
+        assert_eq!(
+            got,
+            sorted(&["feature_elongation", "non_coding_transcript_exon_variant"])
+        );
+    }
+
+    /// The pair carries no overlap: VEP computes the overlap length from the allele's own
+    /// start and end, 0 for a pair, and writes neither OverlapBP nor OverlapPC.
+    #[test]
+    fn test_pair_has_no_feature_overlap() {
+        let tx = make_test_transcript();
+        let v = make_pair_ins(
+            25_000_500,
+            vep_core::variant::VariantClass::StructuralInsertion,
+        );
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert_eq!(tc.feature_overlap(v.start, v.end), None);
+    }
+
+    /// The single-base form stays what it was: a symbolic record with neither END nor
+    /// SVLEN is the base at POS + 1 in Perl too (`get_end` returns `get_start`), with
+    /// OverlapBP 1.
+    #[test]
+    fn test_point_insertion_unchanged_beside_the_pair() {
+        let tx = make_test_transcript();
+        let v = make_point_ins(25_000_500);
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert!(tc.consequences.contains(&Consequence::IntronVariant));
+        assert_eq!(
+            tc.feature_overlap(v.start, v.end).map(|(bp, _)| bp),
+            Some(1)
+        );
     }
 }

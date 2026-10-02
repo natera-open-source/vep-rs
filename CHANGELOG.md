@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Each entry names the Ensembl VEP mechanism vep-rs follows.
 
+- A symbolic insertion whose `END` is its position or whose `SVLEN` is 0 is the
+  insertion between the two bases, `start = POS + 1, end = POS`, as ensembl-io's
+  `get_end` reads it: its Location names both flanks, its predicates read the
+  pair as `_intron_effects` reads a sequence insertion (both flanks inside a
+  region, the two insertion special cases at the intron edges, the UTR special
+  cases at the coding region's edges, `within_cdna` through `map_insert`), and
+  the row carries no `OverlapBP` or `OverlapPC` (an overlap length of 0). A
+  symbolic record with neither field stays the single base at `POS + 1`, which
+  is also ensembl-io's reading.
 - UTR term on an insertion at the edge of the coding region: `_before_coding`
   and `_after_coding` special-case an insertion whose start is the coding
   region start or whose end is the coding region end, so an insertion between

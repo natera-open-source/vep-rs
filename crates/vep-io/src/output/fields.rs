@@ -873,10 +873,10 @@ fn sv_overlap(variant: &InputVariant, tc: Option<&TranscriptConsequence>) -> Opt
     if !variant.is_structural || variant.variant_class == VariantClass::Translocation {
         return None;
     }
-    tc?.feature_overlap(
-        variant.start.min(variant.end),
-        variant.start.max(variant.end),
-    )
+    // VEP reads the allele's own start and end (`OutputFactory.pm`,
+    // `StructuralVariationOverlapAllele_to_output_hash`), so an insertion pair
+    // (`start == end + 1`) has an overlap length of 0 and carries neither field.
+    tc?.feature_overlap(variant.start, variant.end)
 }
 
 /// The keys of a row's `Extra` column in VEP's order: the active flag fields
@@ -1074,6 +1074,37 @@ mod tests {
         assert_eq!(&f[..4], &["IMPACT", "DISTANCE", "STRAND", "FLAGS"]);
         assert_eq!(&f[4..7], &["SYMBOL", "SYMBOL_SOURCE", "HGNC_ID"]);
         assert_eq!(f.iter().filter(|x| **x == "AF").count(), 1);
+    }
+
+    /// VEP computes a structural row's overlap from the allele's own start and end:
+    /// a span inside the transcript carries OverlapBP and OverlapPC, an insertion pair
+    /// (`start == end + 1`, the record whose END is its position) has length 0 and
+    /// carries neither.
+    #[test]
+    fn insertion_pair_carries_no_overlap_fields() {
+        let tc = TranscriptConsequence {
+            transcript_id: std::sync::Arc::from("ENST1"),
+            feature_start: 1_000,
+            feature_end: 2_000,
+            ..Default::default()
+        };
+        let mut span =
+            InputVariant::new("21".into(), 1_500, 1_600, b"N".to_vec(), b"<INS>".to_vec());
+        span.is_structural = true;
+        span.variant_class = VariantClass::StructuralInsertion;
+        assert_eq!(
+            sv_overlap(&span, Some(&tc)),
+            Some((101, 101.0 * 100.0 / 1_001.0))
+        );
+        assert!(extra_keys(&span, Some(&tc), &FieldOptions::default()).contains(&"OverlapBP"));
+
+        let mut pair =
+            InputVariant::new("21".into(), 1_501, 1_500, b"N".to_vec(), b"<INS>".to_vec());
+        pair.is_structural = true;
+        pair.variant_class = VariantClass::StructuralInsertion;
+        assert_eq!(sv_overlap(&pair, Some(&tc)), None);
+        assert!(!extra_keys(&pair, Some(&tc), &FieldOptions::default()).contains(&"OverlapBP"));
+        assert_eq!(pair.location(), "21:1500-1501");
     }
 
     #[test]
