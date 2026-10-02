@@ -7,6 +7,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -421,6 +422,81 @@ def _is_covered_splice_region_swap(perl_csq: str, rust_csq: str) -> bool:
     return diff_r <= {"splice_region_variant", "intron_variant"}
 
 
+# Transcript selection on a record Perl marks `vep_skip`: the structural-variant
+# comparator's class, applied here because a whole-genome input carries such records.
+# Perl's --max_sv_size default is 10,000,000 (ensembl-vep Config.pm:310); a span above it
+# is marked skipped (Parser.pm:493-497), as is a symbolic ALT type without a Sequence
+# Ontology term (Parser/VCF.pm:477-481, `_VEP_SKIP_UNSUPPORTED_ALLELES`). A skipped
+# record loads no cache region of its own (AnnotationSource.pm:238) and is annotated
+# against whatever regions its batch loaded, so the transcripts Perl names for it are a
+# property of the neighbouring records, while vep-rs names every overlapping transcript.
+# `<NON_REF>` takes the same route but is not listed: vep-rs writes no transcript tuple
+# for a gVCF reference block, so the arms below have nothing to reach there.
+_MAX_SV_SIZE = 10_000_000
+_VEP_SKIP_UNSUPPORTED_ALLELES = frozenset({"CPX", "CTX"})
+SV_TRANSCRIPT_SELECTION_BUCKET = "sv_transcript_selection"
+
+
+def _location_span(loc: str) -> tuple[str, int, int] | None:
+    """``chrom:start-end`` or ``chrom:pos`` as (chrom, start, end); None when unparseable."""
+    m = re.fullmatch(r"([^:]+):(\d+)(?:-(\d+))?", loc)
+    if not m:
+        return None
+    start = int(m.group(2))
+    return m.group(1), start, int(m.group(3)) if m.group(3) else start
+
+
+def _span_exceeds_max_sv_size(loc: str) -> bool:
+    """True if ``loc``'s span exceeds Perl's --max_sv_size default.
+
+    ``loc`` is ``chrom:start-end`` for a ranged record or ``chrom:pos`` for a point
+    one. A point location yields a span of 0 and is therefore never in scope, which
+    is correct for everything except a giant inter-chromosomal breakend, whose mate
+    coordinate lives in the Allele bracket rather than the Location. That case is
+    documented at the call sites and left unmasked, the conservative direction.
+
+    VEP's insertion convention puts ``end`` before ``start``, so the magnitude is
+    taken rather than the signed difference.
+    """
+    parts = loc.split(":", 1)
+    if len(parts) < 2:
+        return False
+    coords = parts[1]
+    if "-" not in coords:
+        return False
+    start_s, _, end_s = coords.partition("-")
+    try:
+        return abs(int(end_s) - int(start_s)) > _MAX_SV_SIZE
+    except ValueError:
+        return False
+
+
+def _batch_dependent_annotation_scope(loc: str, allele: str) -> bool:
+    """True where Perl annotates a record only against its batch's loaded regions.
+
+    Two routes reach that state, both through the same `vep_skip` flag: a span above
+    --max_sv_size (Parser.pm:493-497) and a symbolic type without a Sequence Ontology
+    term (Parser/VCF.pm:477-481, `_VEP_SKIP_UNSUPPORTED_ALLELES`). Below the size limit
+    and with a supported type Perl loads every region the record overlaps
+    (AnnotationSource.pm:194-200), so a transcript-set difference there is not this
+    defect and stays charged.
+    """
+    return _span_exceeds_max_sv_size(loc) or allele in _VEP_SKIP_UNSUPPORTED_ALLELES
+
+
+# The features each engine named on every record in `_batch_dependent_annotation_scope`,
+# keyed on (location, allele) and collected during the sorted merge, where both engines'
+# complete tuple streams are read once.
+ScopeFeatures = dict[tuple[str, str], tuple[set[str], set[str]]]
+
+
+def _record_scope_feature(scope: ScopeFeatures, key_line: str, side: int) -> None:
+    """Add the feature of a key line to its record's set for one side (0 Perl, 1 vep-rs)."""
+    loc, allele, feature = key_line.split("\t", 3)[:3]
+    if _batch_dependent_annotation_scope(loc, allele):
+        scope.setdefault((loc, allele), (set(), set()))[side].add(feature)
+
+
 @dataclass(frozen=True)
 class ExclusionRule:
     """One divergence shape: its recogniser, its reporting name, whether the
@@ -522,9 +598,21 @@ EXCLUDING_RULES: tuple[ExclusionRule, ...] = tuple(
 def filter_snp_indel_intended_divergences(
     discordant_path: Path,
     open_out: Path | None = None,
+    scope_features: ScopeFeatures | None = None,
 ) -> tuple[int, int, dict[str, dict[str, int]]]:
     """Read discordant.tsv, classify intended-divergence swap pairs, and exclude
     the ones an Ensembl VEP self-contradiction accounts for.
+
+    With ``scope_features`` (from ``compare_sorted_key_files``) the one-sided rows of a
+    record Perl marks `vep_skip` take the structural-variant comparator's
+    transcript-selection class, under its two guards: a vep-rs-only row on a transcript
+    Perl did not name is set aside only when Perl named at least one transcript for the
+    record and vep-rs named more; a Perl-only row on a transcript vep-rs did not name is
+    set aside only when vep-rs named at least as many. A pair on a transcript both
+    engines named stays charged, and a record below --max_sv_size with a supported type
+    never enters the scope. The class is reported as ``sv_transcript_selection`` in the
+    bucket statistics: ``count`` is every one-sided row on a record in scope, ``excluded``
+    the rows set aside, ``perl`` and ``rust`` those rows per side.
 
     Returns ``(excluded_perl_count, excluded_rust_count, bucket_stats)`` where
     ``bucket_stats`` maps each classification bucket to
@@ -677,6 +765,39 @@ def filter_snp_indel_intended_divergences(
             f"{excluded_perl} pairs were excluded; the mask is not "
             f"attributable to the buckets that report it"
         )
+
+    if scope_features:
+        selection = {"count": 0, "excluded": 0, "perl": 0, "rust": 0}
+        for idx, row in enumerate(rows):
+            if idx in masked_rows:
+                continue
+            feats = scope_features.get((row["location"], row["allele"]))
+            if feats is None:
+                continue
+            perl_feats, rust_feats = feats
+            selection["count"] += 1
+            feature = row["feature"]
+            if row["source"] == "extra_in_rust":
+                # vep-rs named a transcript Perl did not: the class only where Perl
+                # annotated the record at all and named fewer transcripts, so a
+                # vep-rs false positive on a record Perl annotated in full stays charged.
+                if feature in perl_feats or not perl_feats or len(rust_feats) <= len(perl_feats):
+                    continue
+                excluded_rust += 1
+                selection["rust"] += 1
+            elif row["source"] == "missing_in_rust":
+                # Perl named a transcript vep-rs did not: Perl's batch loaded a region
+                # vep-rs's set does not reach only when vep-rs named at least as many,
+                # so a vep-rs under-annotation stays charged.
+                if feature in rust_feats or not rust_feats or len(rust_feats) < len(perl_feats):
+                    continue
+                excluded_perl += 1
+                selection["perl"] += 1
+            else:
+                continue
+            selection["excluded"] += 1
+            masked_rows.add(idx)
+        bucket_stats[SV_TRANSCRIPT_SELECTION_BUCKET] = selection
 
     if open_out is not None:
         with open_out.open("w", encoding="utf-8", newline="") as out:
@@ -1670,8 +1791,14 @@ def compare_sorted_key_files(
     file_name: str,
     discordant_out: TextIO | None,
     track_consequence_buckets: bool,
+    scope_features: ScopeFeatures | None = None,
 ) -> tuple[int, int, int, int, int, Counter[str], Counter[str]]:
     """Compare two sorted-unique key files (streaming merge).
+
+    With ``scope_features`` given, every key line on a record in
+    ``_batch_dependent_annotation_scope`` adds its feature to that record's set for its
+    side, matched and one-sided lines alike, so the exclusion pass can compare the two
+    engines' transcript sets for the record.
 
     Returns:
       perl_count, rust_count, intersection, missing, extra, missing_counter, extra_counter
@@ -1698,6 +1825,8 @@ def compare_sorted_key_files(
             if p is not None and (r is None or p < r):
                 perl_count += 1
                 missing += 1
+                if scope_features is not None:
+                    _record_scope_feature(scope_features, p, 0)
                 if track_consequence_buckets:
                     missing_counter[p.rsplit("\t", 1)[-1]] += 1
                 if discordant_out is not None:
@@ -1708,6 +1837,8 @@ def compare_sorted_key_files(
             if r is not None and (p is None or r < p):
                 rust_count += 1
                 extra += 1
+                if scope_features is not None:
+                    _record_scope_feature(scope_features, r, 1)
                 if track_consequence_buckets:
                     extra_counter[r.rsplit("\t", 1)[-1]] += 1
                 if extra_tmp is not None:
@@ -1720,6 +1851,9 @@ def compare_sorted_key_files(
             perl_count += 1
             rust_count += 1
             intersection += 1
+            if scope_features is not None:
+                _record_scope_feature(scope_features, p, 0)
+                _record_scope_feature(scope_features, p, 1)
             p = _next_line(perl_h)
             r = _next_line(rust_h)
 
@@ -1917,6 +2051,9 @@ def main() -> int:
     discordant_path = report_dir / args.discordant_tsv
     discordant_path.parent.mkdir(parents=True, exist_ok=True)
     discordant_out = discordant_path.open("w", encoding="utf-8", newline="")
+    # Every engine's transcripts on the records Perl marks `vep_skip`, across all files
+    # (a location names its chromosome, so files cannot collide).
+    scope_features: ScopeFeatures = {}
     discordant_out.write(
         "\t".join(
             [
@@ -1969,6 +2106,7 @@ def main() -> int:
                 file_name=perl_file.name,
                 discordant_out=discordant_out,
                 track_consequence_buckets=True,
+                scope_features=scope_features,
             )
 
             # Context-collapsed comparison keys (no discordant TSV, no bucket tracking)
@@ -2068,7 +2206,7 @@ def main() -> int:
         f"{discordant_path.stem}_open{discordant_path.suffix}"
     )
     excl_perl, excl_rust, excl_cats = filter_snp_indel_intended_divergences(
-        discordant_path, open_out=open_path
+        discordant_path, open_out=open_path, scope_features=scope_features
     )
     adj_perl = perl_total - excl_perl
     adj_rust = rust_total - excl_rust

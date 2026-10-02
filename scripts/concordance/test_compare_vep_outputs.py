@@ -2126,3 +2126,116 @@ class PerClassModeArgTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class SvTranscriptSelectionTests(unittest.TestCase):
+    """The structural-variant comparator's transcript-selection class on a whole-genome
+    input: a record above --max_sv_size that Perl marks skipped is annotated against
+    its batch's loaded regions alone, so the transcripts vep-rs names beyond Perl's are
+    set aside, under the two guards (Perl named at least one transcript; vep-rs named
+    more), and a Perl-only transcript is set aside only when vep-rs named at least as
+    many. The scope map is what the sorted merge collects: every transcript each engine
+    named on the record, matched rows included.
+    """
+
+    HEADER = (
+        "file_name\tsource\tlocation\tallele\tfeature\tfeature_type\tconsequence_set"
+    )
+    GIANT = "18:62909529-80261528"  # 17.35 Mb, the span of a 1000 Genomes <DEL>
+    SMALL = "18:62909529-62919528"  # 10 kb
+
+    def _run(
+        self,
+        rows: list[tuple[str, ...]],
+        scope: dict[tuple[str, str], tuple[set[str], set[str]]] | None,
+    ):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "discordant.tsv"
+            o = Path(d) / "discordant_open.tsv"
+            with p.open("w", encoding="utf-8") as f:
+                f.write(self.HEADER + "\n")
+                for r in rows:
+                    f.write("\t".join(r) + "\n")
+            result = filter_snp_indel_intended_divergences(p, open_out=o, scope_features=scope)
+            open_rows = o.read_text(encoding="utf-8").splitlines()[1:]
+            return result, open_rows
+
+    def _row(self, source: str, loc: str, feature: str, csq: str = "transcript_ablation") -> tuple[str, ...]:
+        return ("f", source, loc, "deletion", feature, "Transcript", _norm(csq))
+
+    def test_vep_rs_surplus_transcripts_on_a_giant_record_are_set_aside(self) -> None:
+        # Perl named 4 transcripts (all matched, so none is in discordant.tsv); vep-rs
+        # named those 4 plus 3 more.
+        scope = {(self.GIANT, "deletion"): ({"T1", "T2", "T3", "T4"}, {"T1", "T2", "T3", "T4", "T5", "T6", "T7"})}
+        rows = [self._row("extra_in_rust", self.GIANT, t) for t in ("T5", "T6", "T7")]
+        (ep, er, buckets), open_rows = self._run(rows, scope)
+        self.assertEqual((ep, er), (0, 3))
+        self.assertEqual(buckets["sv_transcript_selection"], {"count": 3, "excluded": 3, "perl": 0, "rust": 3})
+        self.assertEqual(open_rows, [], "every surplus row leaves the adjusted residual")
+
+    def test_a_pair_on_a_transcript_both_engines_named_stays_charged(self) -> None:
+        scope = {(self.GIANT, "deletion"): ({"T1", "T2"}, {"T1", "T2", "T3"})}
+        rows = [
+            self._row("missing_in_rust", self.GIANT, "T1", "intron_variant"),
+            self._row("extra_in_rust", self.GIANT, "T1", "intron_variant,stop_lost"),
+            self._row("extra_in_rust", self.GIANT, "T3"),
+        ]
+        (ep, er, buckets), open_rows = self._run(rows, scope)
+        self.assertEqual((ep, er), (0, 1), "T3 is set aside; the T1 pair is a consequence difference, not a selection one")
+        self.assertEqual(len(open_rows), 2)
+        self.assertEqual(buckets["sv_transcript_selection"], {"count": 3, "excluded": 1, "perl": 0, "rust": 1},
+                         "all three rows sit on the record in scope; one is the class")
+
+    def test_direction_guard_keeps_a_vep_rs_under_annotation_charged(self) -> None:
+        # Perl named 5 transcripts, vep-rs 2 of them: Perl's extra rows are not the class.
+        scope = {(self.GIANT, "deletion"): ({"T1", "T2", "T3", "T4", "T5"}, {"T1", "T2"})}
+        rows = [self._row("missing_in_rust", self.GIANT, t) for t in ("T3", "T4", "T5")]
+        (ep, er, buckets), open_rows = self._run(rows, scope)
+        self.assertEqual((ep, er), (0, 0))
+        self.assertEqual(len(open_rows), 3)
+        self.assertEqual(buckets["sv_transcript_selection"], {"count": 3, "excluded": 0, "perl": 0, "rust": 0})
+
+    def test_perl_only_transcripts_set_aside_when_vep_rs_named_at_least_as_many(self) -> None:
+        # Perl's batch loaded a region vep-rs's set does not reach, and vep-rs named as many.
+        scope = {(self.GIANT, "deletion"): ({"T1", "T2", "T9"}, {"T1", "T2", "T3"})}
+        rows = [self._row("missing_in_rust", self.GIANT, "T9"), self._row("extra_in_rust", self.GIANT, "T3")]
+        (ep, er, buckets), open_rows = self._run(rows, scope)
+        self.assertEqual((ep, er), (1, 0), "vep-rs named 3 against Perl's 3, so the Perl-only transcript is the class; vep-rs did not name MORE, so its own extra stays")
+        self.assertEqual(open_rows, ["\t".join(self._row("extra_in_rust", self.GIANT, "T3"))])
+
+    def test_a_record_perl_never_annotated_is_outside_the_class(self) -> None:
+        scope = {(self.GIANT, "deletion"): (set(), {"T1", "T2"})}
+        rows = [self._row("extra_in_rust", self.GIANT, t) for t in ("T1", "T2")]
+        (ep, er, buckets), open_rows = self._run(rows, scope)
+        self.assertEqual((ep, er), (0, 0))
+        self.assertEqual(len(open_rows), 2)
+
+    def test_a_record_below_max_sv_size_never_enters_the_scope(self) -> None:
+        # The merge records nothing for it, so the exclusion pass never sees it.
+        scope: dict = {}
+        rows = [self._row("extra_in_rust", self.SMALL, t) for t in ("T5", "T6")]
+        (ep, er, buckets), open_rows = self._run(rows, scope)
+        self.assertEqual((ep, er), (0, 0))
+        self.assertNotIn("sv_transcript_selection", buckets)
+        self.assertEqual(len(open_rows), 2)
+
+    def test_merge_collects_the_scope_from_both_streams(self) -> None:
+        from compare_vep_outputs import compare_sorted_key_files
+
+        def key(loc: str, allele: str, feat: str, csq: str) -> str:
+            return f"{loc}\t{allele}\t{feat}\tTranscript\t{csq}"
+
+        perl = sorted([key(self.GIANT, "deletion", "T1", "intron_variant"), key(self.GIANT, "deletion", "T2", "intron_variant"),
+                       key(self.SMALL, "deletion", "S1", "intron_variant"), key("18:100", "A", "TA", "missense_variant")])
+        rust = sorted([key(self.GIANT, "deletion", "T1", "intron_variant"), key(self.GIANT, "deletion", "T3", "transcript_ablation"),
+                       key(self.SMALL, "deletion", "S1", "intron_variant"), key("18:200-200", "CPX", "C1", "intron_variant")])
+        with tempfile.TemporaryDirectory() as d:
+            pp, rp = Path(d) / "p.txt", Path(d) / "r.txt"
+            pp.write_text("\n".join(perl) + "\n", encoding="utf-8")
+            rp.write_text("\n".join(rust) + "\n", encoding="utf-8")
+            scope: dict = {}
+            compare_sorted_key_files(pp, rp, file_name="f", discordant_out=None, track_consequence_buckets=False, scope_features=scope)
+        self.assertEqual(scope, {
+            (self.GIANT, "deletion"): ({"T1", "T2"}, {"T1", "T3"}),
+            ("18:200-200", "CPX"): (set(), {"C1"}),
+        }, "the giant record and the unsupported type are in scope, the 10 kb deletion and the SNV are not; the matched T1 counts on both sides")

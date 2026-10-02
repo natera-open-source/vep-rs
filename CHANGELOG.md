@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The SNP/indel comparator applies the transcript-selection class of
+  `docs/intended-divergences.md` (section 3) to the records of a whole-genome
+  input that Ensembl VEP marks skipped, under the structural-variant
+  comparator's two guards, and reports it as `sv_transcript_selection`; the
+  scope test is defined once and shared by the two comparators.
+
 ### Fixed
 
 Each entry names the Ensembl VEP mechanism vep-rs follows.
