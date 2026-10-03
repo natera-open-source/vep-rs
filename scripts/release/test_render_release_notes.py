@@ -14,7 +14,7 @@ SCRIPT = HERE / "render_release_notes.py"
 SUITES = ("s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08")
 
 
-def fixture_repo(tmp_path: Path, *, record: bool = True, cff_version_doi: bool = False) -> Path:
+def fixture_repo(tmp_path: Path, *, record: bool = True, cff_version_doi: bool = False, population: bool = False) -> Path:
     repo = tmp_path / "repo"
     (repo / "docs" / "concordance-provenance").mkdir(parents=True)
     (repo / ".github" / "release-notes").mkdir(parents=True)
@@ -41,9 +41,20 @@ def fixture_repo(tmp_path: Path, *, record: bool = True, cff_version_doi: bool =
             for arch in ("arm64", "x86_64")
             for i, s in enumerate(SUITES, start=1)
         ]
-        (repo / "docs" / "concordance-provenance" / "2031-01-01-release-v9.9.9.json").write_text(
-            json.dumps({"release": "v9.9.9", "concordance": conc, "per_cell_aggregates": cells})
-        )
+        rec = {"release": "v9.9.9", "concordance": conc, "per_cell_aggregates": cells}
+        if population:
+            row = lambda ds, label, asm, shards, variants, perl, rust, inter: {
+                "dataset": ds, "label": label, "assembly": asm, "shards": shards, "variants": variants, "perl_tuples": perl,
+                "vep_rs_tuples": rust, "intersection": inter, "raw_f1": 2 * inter / (perl + rust), "adjusted_f1": 1.0,
+            }
+            rec["population_concordance"] = {
+                "per_dataset": [
+                    row("set_a", "Set A, whole genome", "GRCh38", 24, 1000, 5000, 5000, 4999),
+                    row("set_b", "Set B, whole genome", "GRCh37", 25, 200, 800, 800, 800),
+                ],
+                "pooled": {"label": "All four", "shards": 49, "variants": 1200, "perl_tuples": 5800, "vep_rs_tuples": 5800, "intersection": 5799, "raw_f1": 2 * 5799 / 11600, "adjusted_f1": 1.0},
+            }
+        (repo / "docs" / "concordance-provenance" / "2031-01-01-release-v9.9.9.json").write_text(json.dumps(rec))
     (repo / ".github" / "release-notes" / "v9.9.9.md").write_text(
         "# vep-rs 9.9.9\n\nOne-sentence summary.\n\n## Upgrade notes\n\n- An upgrade note.\n\n## Known issues\n\n- A known issue.\n"
     )
@@ -130,3 +141,15 @@ def test_missing_record_summary_or_section_fail(tmp_path: Path) -> None:
 def test_install_table_lists_every_target(tmp_path: Path, name: str) -> None:
     body = render(fixture_repo(tmp_path)).stdout
     assert f"[{name}](https://github.com/natera-open-source/vep-rs/releases/download/v9.9.9/{name})" in body
+
+
+def test_population_table_renders_from_the_record(tmp_path: Path) -> None:
+    """A record with population_concordance adds the whole-genome table after the suite table: one
+    row per dataset in the record's order under the record's own labels, with thousands separators,
+    and the pooled row last; a record without the section renders no such table."""
+    body = render(fixture_repo(tmp_path, population=True)).stdout
+    assert "| Set A, whole genome | GRCh38 | 24 | 1,000 | 5,000 | 5,000 | 4,999 | 0.999800 | 1.000000 |" in body
+    assert "| Set B, whole genome | GRCh37 | 25 | 200 | 800 | 800 | 800 | 1.000000 | 1.000000 |" in body
+    assert "| All four | GRCh37 and GRCh38 | 49 | 1,200 | 5,800 | 5,800 | 5,799 | 0.999828 | 1.000000 |" in body
+    assert body.index("| ClinVar") < body.index("| Set A, whole genome") < body.index("Wall time, median of")
+    assert "whole genome" not in render(fixture_repo(tmp_path / "plain")).stdout
