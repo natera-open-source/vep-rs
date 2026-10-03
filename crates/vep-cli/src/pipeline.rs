@@ -745,7 +745,8 @@ fn coordinate(
         }
         let mut variants = variants;
         if fused {
-            // The render tasks freed the annotations; only the variants remain.
+            // The render tasks took and freed every variant; only empty
+            // placeholders remain.
             variants.clear();
         } else {
             drop_annotations(&mut variants, c.pool);
@@ -917,9 +918,10 @@ fn annotate_render_batch(
                         }
                     }
                 }
+                // Freed here, on the thread that annotated them, rather than
+                // by the coordinator between batches while the pool waits.
                 for variant in slice.iter_mut() {
-                    variant.transcript_consequences = Vec::new();
-                    variant.colocated_variants = Vec::new();
+                    drop(std::mem::take(variant));
                 }
                 Ok((out, csqs))
             })
