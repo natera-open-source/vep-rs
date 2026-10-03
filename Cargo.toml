@@ -49,6 +49,7 @@ parking_lot = "0.12"
 
 # Genomics
 noodles = { version = "0.109", features = ["vcf", "bgzf", "core", "fasta", "tabix", "csi"] }
+noodles-bgzf = { version = "0.46", features = ["libdeflate"] }
 # bigWig reader for the optional LoFTEE plugin's GERP-weighted END_TRUNC filter.
 # Only exercised when `--plugin LoFTEE,gerp_bigwig=...` is passed; the default
 # vep-rs run never touches it. MIT-licensed. Only the
