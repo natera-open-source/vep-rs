@@ -58,6 +58,16 @@ pub(crate) struct PipelineStats {
     consequences_calculated: AtomicU64,
 }
 
+impl PipelineStats {
+    /// Adds one batch's variant and consequence counts.
+    pub(crate) fn record(&self, variants: u64, consequences: u64) {
+        self.variants_processed
+            .fetch_add(variants, Ordering::Relaxed);
+        self.consequences_calculated
+            .fetch_add(consequences, Ordering::Relaxed);
+    }
+}
+
 /// Pipeline runner for VEP.
 pub struct Runner {
     config: Config,
@@ -934,6 +944,13 @@ pub(crate) struct AnnotationResources {
     prediction_config: PredictionConfig,
 }
 
+impl AnnotationResources {
+    /// Whether any plugin runs on a batch; plugins see a whole batch at once.
+    pub(crate) fn plugins_active(&self) -> bool {
+        !self.builtin_plugins.is_empty() || self.dylib_plugins.plugin_count() > 0
+    }
+}
+
 /// Whether HGVSc/HGVSp must be computed for this run: only under `--hgvs`.
 /// VEP fills the HGVS fields of every format, the VCF CSQ columns included, only
 /// when the flag is set, so without it the columns stay empty and the computation
@@ -988,6 +1005,102 @@ fn structural_variant_bounds(variant: &InputVariant) -> (u64, u64) {
 ///
 /// After consequence assignment, built-in plugins are invoked via `run_batch`
 /// to annotate the entire buffer in one pass (enabling batched tabix queries).
+/// Materializes every chromosome a batch touches before any pool work.
+///
+/// Three reasons this must not happen inside a parallel closure:
+///  1. `load_transcripts_for_chr` parses its shards with rayon. Calling it
+///     from a worker already inside `pool.install(...)` blocks that worker on
+///     a job that needs the pool it is occupying: a deadlock.
+///  2. Even without the deadlock, N workers racing the same cold chromosome
+///     each parse it and all but one discard the result.
+///  3. A parse failure has no error channel from inside the per-variant
+///     closure. Here it aborts the run. Otherwise a truncated shard would annotate every variant
+///     on that chromosome as `intergenic_variant` and still exit 0, because
+///     `contains_key` answers from the directory listing and so still reports
+///     the chromosome as present.
+///
+/// Pre-warming serially here means each chromosome is parsed exactly once,
+/// outside the pool, and every `get` in the annotation closure is a pure lookup.
+pub(crate) fn prewarm_batch(
+    batch: &[InputVariant],
+    resources: &AnnotationResources,
+) -> anyhow::Result<()> {
+    for variant in batch {
+        resources.transcripts.prewarm(&variant.chr)?;
+        if let Some(mate_chr) = variant.mate_chr.as_deref() {
+            resources.transcripts.prewarm(mate_chr)?;
+        }
+    }
+    Ok(())
+}
+
+/// Annotates one variant against the (already materialized) transcript cache
+/// and variation data; returns its transcript consequence count.
+pub(crate) fn annotate_one(variant: &mut InputVariant, resources: &AnnotationResources) -> u64 {
+    // Annotate with transcript consequences. Every variant, a breakend spanning
+    // more than VEP's 10 Mb `--max_sv_size` included, is annotated against the
+    // chromosome's complete transcript set, so the output of one record never
+    // depends on which other records share its batch. VEP marks such breakends
+    // skipped at cache-region load and then annotates them against whatever
+    // transcripts their batch-mates happened to load; that batch dependence is a
+    // VEP defect and is not reproduced here.
+    let is_paired_breakend = variant.variant_class == VariantClass::Translocation
+        && !variant.is_single_breakend
+        && variant.mate_chr.is_some()
+        && variant.mate_pos.is_some();
+    let is_interchrom_paired_breakend = is_paired_breakend
+        && variant
+            .mate_chr
+            .as_deref()
+            .map(|mate_chr| mate_chr != variant.chr)
+            .unwrap_or(false);
+    if !is_interchrom_paired_breakend {
+        if let Some(chr_transcripts) = resources.transcripts.get(&variant.chr) {
+            annotate_variant(
+                variant,
+                chr_transcripts,
+                &resources.effects_config,
+                &resources.prediction_config,
+            );
+        }
+    }
+
+    append_bnd_mate_consequences(
+        variant,
+        resources.transcripts.as_ref(),
+        &resources.effects_config,
+    );
+    let csq_count = variant.transcript_consequences.len() as u64;
+
+    if let Some(ref vd) = resources.variation_data {
+        if let Some(chr_vars) = vd.variations.get(&variant.chr) {
+            if let Some(chr_idx) = vd.position_index.get(&variant.chr) {
+                let colocated =
+                    variation_matcher::find_colocated_variants(variant, chr_vars, chr_idx);
+                for cv in &colocated {
+                    variant.existing_variation.push(cv.id.clone());
+                }
+                variant.colocated_variants = colocated;
+            }
+        }
+    }
+
+    // Intergenic only when the chromosome has transcripts in the cache: Perl
+    // VEP silently drops variants on chromosomes it never loaded. A BND never
+    // gets the intergenic fallback: Perl emits consequences only via local
+    // and mate annotation, never bare intergenic with Feature="-".
+    let is_bnd = variant.variant_class == VariantClass::Translocation;
+    if variant.transcript_consequences.is_empty()
+        && variant.most_severe_consequence.is_none()
+        && resources.transcripts.contains_key(&variant.chr)
+        && !is_bnd
+    {
+        variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
+    }
+
+    csq_count
+}
+
 pub(crate) fn annotate_batch(
     batch: &mut Vec<InputVariant>,
     resources: &AnnotationResources,
@@ -999,93 +1112,9 @@ pub(crate) fn annotate_batch(
     let batch_len = batch.len();
     let annotation_phase_start = Instant::now();
 
-    // Materialize every chromosome this batch touches before fanning out.
-    //
-    // Three reasons this must not happen inside the parallel closure:
-    //  1. `load_transcripts_for_chr` parses its shards with rayon. Calling it
-    //     from a worker already inside `pool.install(...)` blocks that worker on
-    //     a job that needs the pool it is occupying: a deadlock.
-    //  2. Even without the deadlock, N workers racing the same cold chromosome
-    //     each parse it and all but one discard the result.
-    //  3. A parse failure has no error channel from inside the per-variant
-    //     closure. Here it aborts the run. Otherwise a truncated shard would annotate every variant
-    //     on that chromosome as `intergenic_variant` and still exit 0, because
-    //     `contains_key` answers from the directory listing and so still reports
-    //     the chromosome as present.
-    //
-    // Pre-warming serially here means each chromosome is parsed exactly once,
-    // outside the pool, and every `get` in the closure below is a pure lookup.
-    for variant in batch.iter() {
-        resources.transcripts.prewarm(&variant.chr)?;
-        if let Some(mate_chr) = variant.mate_chr.as_deref() {
-            resources.transcripts.prewarm(mate_chr)?;
-        }
-    }
+    prewarm_batch(batch, resources)?;
 
-    let annotate_one = |variant: &mut InputVariant| -> u64 {
-        // Annotate with transcript consequences. Every variant, a breakend spanning
-        // more than VEP's 10 Mb `--max_sv_size` included, is annotated against the
-        // chromosome's complete transcript set, so the output of one record never
-        // depends on which other records share its batch. VEP marks such breakends
-        // skipped at cache-region load and then annotates them against whatever
-        // transcripts their batch-mates happened to load; that batch dependence is a
-        // VEP defect and is not reproduced here.
-        let is_paired_breakend = variant.variant_class == VariantClass::Translocation
-            && !variant.is_single_breakend
-            && variant.mate_chr.is_some()
-            && variant.mate_pos.is_some();
-        let is_interchrom_paired_breakend = is_paired_breakend
-            && variant
-                .mate_chr
-                .as_deref()
-                .map(|mate_chr| mate_chr != variant.chr)
-                .unwrap_or(false);
-        if !is_interchrom_paired_breakend {
-            if let Some(chr_transcripts) = resources.transcripts.get(&variant.chr) {
-                annotate_variant(
-                    variant,
-                    chr_transcripts,
-                    &resources.effects_config,
-                    &resources.prediction_config,
-                );
-            }
-        }
-
-        append_bnd_mate_consequences(
-            variant,
-            resources.transcripts.as_ref(),
-            &resources.effects_config,
-        );
-        let csq_count = variant.transcript_consequences.len() as u64;
-
-        if let Some(ref vd) = resources.variation_data {
-            if let Some(chr_vars) = vd.variations.get(&variant.chr) {
-                if let Some(chr_idx) = vd.position_index.get(&variant.chr) {
-                    let colocated =
-                        variation_matcher::find_colocated_variants(variant, chr_vars, chr_idx);
-                    for cv in &colocated {
-                        variant.existing_variation.push(cv.id.clone());
-                    }
-                    variant.colocated_variants = colocated;
-                }
-            }
-        }
-
-        // Intergenic only when the chromosome has transcripts in the cache: Perl
-        // VEP silently drops variants on chromosomes it never loaded. A BND never
-        // gets the intergenic fallback: Perl emits consequences only via local
-        // and mate annotation, never bare intergenic with Feature="-".
-        let is_bnd = variant.variant_class == VariantClass::Translocation;
-        if variant.transcript_consequences.is_empty()
-            && variant.most_severe_consequence.is_none()
-            && resources.transcripts.contains_key(&variant.chr)
-            && !is_bnd
-        {
-            variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
-        }
-
-        csq_count
-    };
+    let annotate_one = |variant: &mut InputVariant| -> u64 { annotate_one(variant, resources) };
 
     if use_parallel {
         if stats_enabled {

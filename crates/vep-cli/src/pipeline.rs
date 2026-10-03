@@ -34,7 +34,10 @@ use smallvec::SmallVec;
 use tracing::debug;
 
 use crate::pick::{self, FilterConfig};
-use crate::runner::{annotate_batch, mark_oversize_sv, AnnotationResources, PipelineStats};
+use crate::runner::{
+    annotate_batch, annotate_one, mark_oversize_sv, prewarm_batch, AnnotationResources,
+    PipelineStats,
+};
 use crate::transcript_index::LazyTranscriptIndexes;
 use crate::variation_matcher;
 use crate::vcf_parser::{parse_vcf_line, vcf_line_is_non_variant};
@@ -682,6 +685,9 @@ fn coordinate(
 ) -> anyhow::Result<u64> {
     let mut variant_count = 0u64;
     let mut spare = Spare::default();
+    // Plugins see a whole batch at once (batched tabix queries), so a run with
+    // plugins keeps the batch-wide annotate, render and free phases.
+    let fused = !c.resources.plugins_active();
     for input in rx {
         let parse_start = Instant::now();
         let mut batch = match input {
@@ -689,28 +695,37 @@ fn coordinate(
             InputBatch::Parsed(parsed) => parsed,
         };
         let parse_ms = parse_start.elapsed().as_millis() as u64;
-        if !batch.variants.is_empty() {
-            annotate_batch(
-                &mut batch.variants,
-                c.resources,
-                c.pool,
-                c.use_parallel,
-                c.stats,
-                c.stats_enabled,
-            )?;
-            if c.write_ctx.filters_active {
-                let filter_config = c.write_ctx.filter_config;
-                c.pool.install(|| {
-                    batch
-                        .variants
-                        .par_iter_mut()
-                        .for_each(|v| pick::apply_filters(v, filter_config));
-                });
+        let render_start;
+        let rendered = if fused {
+            if !batch.variants.is_empty() {
+                prewarm_batch(&batch.variants, c.resources)?;
             }
-        }
+            render_start = Instant::now();
+            annotate_render_batch(&mut batch, c, &mut spare)?
+        } else {
+            if !batch.variants.is_empty() {
+                annotate_batch(
+                    &mut batch.variants,
+                    c.resources,
+                    c.pool,
+                    c.use_parallel,
+                    c.stats,
+                    c.stats_enabled,
+                )?;
+                if c.write_ctx.filters_active {
+                    let filter_config = c.write_ctx.filter_config;
+                    c.pool.install(|| {
+                        batch
+                            .variants
+                            .par_iter_mut()
+                            .for_each(|v| pick::apply_filters(v, filter_config));
+                    });
+                }
+            }
+            render_start = Instant::now();
+            render_batch(&batch, c, &mut spare)?
+        };
         variant_count += batch.variants.len() as u64;
-        let render_start = Instant::now();
-        let rendered = render_batch(&batch, c, &mut spare)?;
         debug!(
             batch_size = batch.variants.len(),
             parse_ms,
@@ -729,7 +744,12 @@ fn coordinate(
             return Ok(variant_count);
         }
         let mut variants = variants;
-        drop_annotations(&mut variants, c.pool);
+        if fused {
+            // The render tasks freed the annotations; only the variants remain.
+            variants.clear();
+        } else {
+            drop_annotations(&mut variants, c.pool);
+        }
         if spare.variants.len() < 4 {
             spare.variants.push(variants);
         }
@@ -818,6 +838,104 @@ fn parse_lines(
         units,
         variants,
     })
+}
+
+/// Annotates, filters, renders and frees a batch in one pass over the pool,
+/// one task per [`RENDER_CHUNK_RECORDS`] units. A task's records are a
+/// contiguous range of `variants` because `parse_lines` lays the variants out
+/// in unit order, so the batch is split into one mutable slice per task. Each
+/// record's consequences are built, written and dropped by the same thread
+/// while they are still in cache, and the batch crosses the pool once rather
+/// than three times (annotate, render, free). Per-record output is unchanged:
+/// a record's rows never depend on its batch-mates.
+fn annotate_render_batch(
+    batch: &mut ParsedBatch,
+    c: &Coordinator<'_>,
+    spare: &mut Spare,
+) -> anyhow::Result<RenderedBatch> {
+    let ParsedBatch {
+        seq,
+        text,
+        units,
+        variants,
+        ..
+    } = batch;
+    let ctx = c.write_ctx;
+    let resources = c.resources;
+    let reserve = spare.chunk_reserve;
+    let filter = ctx.filters_active.then_some(ctx.filter_config);
+
+    let mut tasks: Vec<(&[Unit], &mut [InputVariant], usize)> =
+        Vec::with_capacity(units.len().div_ceil(RENDER_CHUNK_RECORDS.max(1)));
+    let mut rest: &mut [InputVariant] = variants.as_mut_slice();
+    let mut offset = 0usize;
+    for chunk in units.chunks(RENDER_CHUNK_RECORDS) {
+        let end = chunk
+            .iter()
+            .rev()
+            .find_map(|u| match u {
+                Unit::Record(r) => Some(r.end),
+                Unit::Text(_) => None,
+            })
+            .unwrap_or(offset);
+        let (head, tail) = std::mem::take(&mut rest).split_at_mut(end - offset);
+        tasks.push((chunk, head, offset));
+        rest = tail;
+        offset = end;
+    }
+    debug_assert!(rest.is_empty(), "every variant belongs to a unit chunk");
+
+    let text: &String = text;
+    let results: Vec<(Vec<u8>, u64)> = c.pool.install(|| {
+        tasks
+            .into_par_iter()
+            .map(|(chunk, slice, offset)| -> anyhow::Result<(Vec<u8>, u64)> {
+                let mut csqs = 0u64;
+                for variant in slice.iter_mut() {
+                    csqs += annotate_one(variant, resources);
+                    if let Some(filter_config) = filter {
+                        pick::apply_filters(variant, filter_config);
+                    }
+                }
+                let mut out: Vec<u8> = Vec::with_capacity(reserve);
+                {
+                    let slice: &[InputVariant] = slice;
+                    let mut rows: Vec<Row<'_>> = Vec::new();
+                    for unit in chunk {
+                        match unit {
+                            Unit::Text(span) => {
+                                out.extend_from_slice(text[span.clone()].as_bytes());
+                                out.push(b'\n');
+                            }
+                            Unit::Record(range) => {
+                                let record: SmallVec<[&InputVariant; 4]> = slice
+                                    [range.start - offset..range.end - offset]
+                                    .iter()
+                                    .collect();
+                                render_record(&mut out, &record, ctx, &mut rows)?;
+                            }
+                        }
+                    }
+                }
+                for variant in slice.iter_mut() {
+                    variant.transcript_consequences = Vec::new();
+                    variant.colocated_variants = Vec::new();
+                }
+                Ok((out, csqs))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()
+    })?;
+
+    if c.stats_enabled {
+        let csqs: u64 = results.iter().map(|(_, n)| *n).sum();
+        c.stats.record(variants.len() as u64, csqs);
+    }
+    let chunks: Vec<Vec<u8>> = results.into_iter().map(|(out, _)| out).collect();
+    if !chunks.is_empty() {
+        let mean = chunks.iter().map(Vec::len).sum::<usize>() / chunks.len();
+        spare.chunk_reserve = mean + mean / 4;
+    }
+    Ok(RenderedBatch { seq: *seq, chunks })
 }
 
 /// Renders a batch into one chunk per [`RENDER_CHUNK_RECORDS`] units.
