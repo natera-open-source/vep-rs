@@ -146,11 +146,39 @@ def load_release_measurements(repo: Path, version: str):
         sys.exit(
             f"ERROR: [render_release_notes] {record_path.name} lacks concordance rows for {missing}"
         )
-    return conc, walls, record_path.relative_to(repo).as_posix()
+    return conc, walls, record_path.relative_to(repo).as_posix(), record.get("population_concordance")
+
+
+def population_lines(pop: dict) -> list[str]:
+    """The whole-genome table: one row per population dataset in the record's order and the
+    pooled row, from the record's population_concordance section, whose rows carry their own
+    labels (variants are VCF records; tuples are output rows reduced to Location, Allele,
+    Feature, Feature_type and Consequence set)."""
+    lines = [
+        "",
+        "Whole-genome concordance of the released binary on four population datasets, one run per",
+        "chromosome on ARM Graviton4, against Ensembl VEP 115.2's output on the same inputs; a variant is",
+        "one VCF record, a tuple one output row reduced to its Location, Allele, Feature, Feature_type and",
+        "Consequence set, and F1 pools the chromosomes by summed counts:",
+        "",
+        "| Dataset | Assembly | Chromosomes | Variants | VEP tuples | vep-rs tuples | Matched | Raw F1 | Adjusted F1 |",
+        "| ------- | -------- | ----------- | -------- | ---------- | ------------- | ------- | ------ | ----------- |",
+    ]
+    for r in pop["per_dataset"]:
+        lines.append(
+            f"| {r['label']} | {r['assembly']} | {int(r['shards'])} | {int(r['variants']):,} | {int(r['perl_tuples']):,} | "
+            f"{int(r['vep_rs_tuples']):,} | {int(r['intersection']):,} | {float(r['raw_f1']):.6f} | {float(r['adjusted_f1']):.6f} |"
+        )
+    p = pop["pooled"]
+    lines.append(
+        f"| {p['label']} | GRCh37 and GRCh38 | {int(p['shards'])} | {int(p['variants']):,} | {int(p['perl_tuples']):,} | "
+        f"{int(p['vep_rs_tuples']):,} | {int(p['intersection']):,} | {float(p['raw_f1']):.6f} | {float(p['adjusted_f1']):.6f} |"
+    )
+    return lines
 
 
 def measurements_section(repo: Path, version: str, date: str) -> str:
-    conc, walls, record_rel = load_release_measurements(repo, version)
+    conc, walls, record_rel, pop = load_release_measurements(repo, version)
     record_dir = record_rel.rsplit("/", 1)[0]
     lines = [
         "## Concordance and wall time for this release",
@@ -179,6 +207,8 @@ def measurements_section(repo: Path, version: str, date: str) -> str:
                 f"{label} {half_up(walls[('arm64', s)][0], 2)} s ARM / "
                 f"{half_up(walls[('x86_64', s)][0], 2)} s x86"
             )
+    if pop:
+        lines += population_lines(pop)
     lines += [
         "",
         f"Wall time, median of {n} independent machines per cell, ARM Graviton4 (`r8gd.8xlarge`)",
