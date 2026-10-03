@@ -57,6 +57,18 @@ pub(crate) const PIPELINE_DEPTH: usize = 2;
 /// Input records rendered per rayon task.
 const RENDER_CHUNK_RECORDS: usize = 64;
 
+/// Smallest fused task, in units. A fused task carries a record's annotation as
+/// well as its rendering, so a batch is cut into enough tasks to keep every
+/// worker busy up to the batch barrier: about [`FUSED_TASKS_PER_WORKER`] per
+/// pool thread, never below this many units and never above
+/// [`RENDER_CHUNK_RECORDS`].
+const FUSED_CHUNK_MIN_RECORDS: usize = 8;
+
+/// Fused tasks per pool thread per batch; the tail a worker idles at the
+/// barrier is about one task long, so more tasks per worker means a shorter
+/// idle tail at the cost of smaller output buffers.
+const FUSED_TASKS_PER_WORKER: usize = 6;
+
 /// One line of a [`LineBatch`] as the reader classified it.
 enum Item {
     /// Written to the output as is: a VCF header block line or an
@@ -842,7 +854,9 @@ fn parse_lines(
 }
 
 /// Annotates, filters, renders and frees a batch in one pass over the pool,
-/// one task per [`RENDER_CHUNK_RECORDS`] units. A task's records are a
+/// one task per `chunk_units` units (about [`FUSED_TASKS_PER_WORKER`] tasks
+/// per pool thread, between [`FUSED_CHUNK_MIN_RECORDS`] and
+/// [`RENDER_CHUNK_RECORDS`] units each). A task's records are a
 /// contiguous range of `variants` because `parse_lines` lays the variants out
 /// in unit order, so the batch is split into one mutable slice per task. Each
 /// record's consequences are built, written and dropped by the same thread
@@ -866,11 +880,14 @@ fn annotate_render_batch(
     let reserve = spare.chunk_reserve;
     let filter = ctx.filters_active.then_some(ctx.filter_config);
 
+    let workers = c.pool.current_num_threads().max(1);
+    let chunk_units = (units.len() / (workers * FUSED_TASKS_PER_WORKER))
+        .clamp(FUSED_CHUNK_MIN_RECORDS, RENDER_CHUNK_RECORDS);
     let mut tasks: Vec<(&[Unit], &mut [InputVariant], usize)> =
-        Vec::with_capacity(units.len().div_ceil(RENDER_CHUNK_RECORDS.max(1)));
+        Vec::with_capacity(units.len().div_ceil(chunk_units));
     let mut rest: &mut [InputVariant] = variants.as_mut_slice();
     let mut offset = 0usize;
-    for chunk in units.chunks(RENDER_CHUNK_RECORDS) {
+    for chunk in units.chunks(chunk_units) {
         let end = chunk
             .iter()
             .rev()
