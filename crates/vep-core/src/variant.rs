@@ -260,6 +260,56 @@ pub struct InputVariant {
     pub record_allele_string_multi: Option<String>,
 }
 
+/// An empty placeholder: no allocation, every field at its zero value. Lets a
+/// worker take a finished variant out of a batch (`std::mem::take`) and drop it
+/// where it was annotated, instead of leaving the drop to another thread.
+impl Default for InputVariant {
+    fn default() -> Self {
+        Self {
+            chr: String::new(),
+            original_chr: String::new(),
+            start: 0,
+            end: 0,
+            strand: Strand::Forward,
+            ref_allele: Vec::new(),
+            alt_alleles: Vec::new(),
+            allele_string: String::new(),
+            allele_index: 0,
+            id: None,
+            variant_class: VariantClass::Snv,
+            transcript_consequences: Vec::new(),
+            most_severe_consequence: None,
+            colocated_variants: Vec::new(),
+            minimised: false,
+            original_allele_string: None,
+            original_start: None,
+            original_end: None,
+            raw_input: None,
+            existing_variation: Vec::new(),
+            plugin_data: indexmap::IndexMap::new(),
+            sv_end: None,
+            sv_type: None,
+            sv_len: None,
+            tr_alt_bases: None,
+            ci_pos: None,
+            ci_end: None,
+            is_structural: false,
+            mate_id: None,
+            mate_chr: None,
+            mate_pos: None,
+            is_single_breakend: false,
+            vep_skip: false,
+            oversize_sv: false,
+            annotation_chr: None,
+            annotation_start: None,
+            annotation_end: None,
+            input_record: 0,
+            uploaded_allele_string: None,
+            record_allele_string_multi: None,
+        }
+    }
+}
+
 impl InputVariant {
     /// Create a new input variant.
     ///

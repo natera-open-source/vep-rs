@@ -26,6 +26,7 @@ vep-plugin = { workspace = true }
 vep-builtins = { workspace = true }
 vep-fasta = { workspace = true }
 noodles = { workspace = true }
+noodles-bgzf = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -147,9 +147,10 @@ pub struct Args {
     pub max_sv_size: u64,
 
     /// Number of parallel annotation worker threads.
-    /// Default 0 = auto: uses the number of available logical CPUs. Set to 1
-    /// to force single-threaded annotation, or any positive value to pin the
-    /// worker count.
+    /// Default 0 = auto: uses the number of available logical CPUs, capped at
+    /// 32 (wall time stops improving past that and rises on wider hosts). Set
+    /// to 1 to force single-threaded annotation, or any positive value to pin
+    /// the worker count; user-supplied values are not capped.
     #[arg(long, visible_alias = "threads", default_value_t = 0)]
     pub fork: usize,
 

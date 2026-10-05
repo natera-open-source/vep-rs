@@ -362,9 +362,15 @@ impl Config {
 /// not capped; any positive integer pins the worker count.
 const DECOMPRESSION_THREADS_AUTO_CAP: usize = 10;
 
+/// Auto-detect cap for `--fork=0`. One reader thread parses and hands out the
+/// batches, so the wall time stops falling past about 32 workers and rises on
+/// wider hosts, where the extra workers wait at the batch barrier and contend
+/// for the allocator: gnomAD v4.1 chromosome 2 took 1.8 times longer at 192
+/// workers than at 32 on a 192-vCPU host. User-supplied values are not capped.
+const FORK_AUTO_CAP: usize = 32;
+
 /// Resolve the --fork value. `0` means "auto": use the number of available
-/// logical CPUs (no cap: annotation workers are CPU-bound and benefit from
-/// the full core count on large hosts). Any non-zero value is returned
+/// logical CPUs, capped at [`FORK_AUTO_CAP`]. Any non-zero value is returned
 /// as-is so users can still pin the worker count explicitly.
 ///
 /// Public so an embedding consumer of this crate can apply the same
@@ -375,7 +381,7 @@ pub fn resolve_fork(raw: usize) -> usize {
         return raw;
     }
     std::thread::available_parallelism()
-        .map(|n| n.get())
+        .map(|n| n.get().min(FORK_AUTO_CAP))
         .unwrap_or(1)
 }
 
@@ -435,6 +441,19 @@ mod tests {
     use super::*;
     use crate::args::Args;
     use clap::Parser;
+
+    /// The auto thread count never exceeds the cap, whatever the host offers; an
+    /// explicit value passes through uncapped.
+    #[test]
+    fn auto_fork_is_capped_and_explicit_fork_is_not() {
+        let auto = resolve_fork(0);
+        assert!(
+            (1..=FORK_AUTO_CAP).contains(&auto),
+            "auto fork {auto} outside 1..={FORK_AUTO_CAP}"
+        );
+        assert_eq!(resolve_fork(1), 1);
+        assert_eq!(resolve_fork(64), 64);
+    }
 
     #[test]
     fn test_everything_expands_flags() {
