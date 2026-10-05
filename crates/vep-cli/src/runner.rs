@@ -9,7 +9,7 @@
 //! in [`crate::pipeline`]; this module owns the setup and `annotate_batch`.
 //!
 //! Annotation of each batch is parallelised across the resolved `--fork` count
-//! (default: every logical CPU; `--fork 1` runs serially) using rayon's `par_iter_mut`.
+//! (default: every logical CPU up to 32; `--fork 1` runs serially) using rayon's `par_iter_mut`.
 //!
 //! Perl citations name modules of ensembl-vep release/115 (`Bio/EnsEMBL/VEP/...`).
 

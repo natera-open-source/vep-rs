@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `--fork 0` (the default) uses every logical CPU up to 32 instead of every
+  logical CPU: one reader feeds the worker pool, so the wall time stops falling
+  past about 32 workers and rises on wider hosts (gnomAD v4.1 chromosome 2 took
+  1.8 times longer at 192 workers than at 32 on a 192-vCPU host). An explicit
+  `--fork N` is never capped.
+
 ## [0.3.1] - 2026-10-02
 
 ### Added
