@@ -170,7 +170,7 @@ def population_wall_time_lines(population: dict) -> list[str]:
     wt = population["wall_time"]["vep_rs"]
     types = wt["instance_types"]
     n = int(wt["n_clones_per_cell"])
-    labels = {d["dataset"]: d["label"].replace(", whole genome", "") for d in population["datasets"]}
+    labels = {d["dataset"]: short_label(d["label"]) for d in population["datasets"]}
     sums = {(c["dataset"], c["arch"]): float(c["sum_of_cell_medians_sec"]) for c in wt["per_dataset"]}
     cells = [
         f"{labels[d['dataset']]} {int(round(sums[(d['dataset'], 'arm64')])):,} s ARM / "
@@ -185,11 +185,17 @@ def population_wall_time_lines(population: dict) -> list[str]:
     ]
 
 
+def short_label(label: str) -> str:
+    """A dataset label without its ', whole genome' suffix: the table's heading carries the scale."""
+    return label.replace(", whole genome", "")
+
+
 def population_lines(pop: dict) -> list[str]:
     """The whole-genome table: one row per population dataset in the record's order and the
     pooled row, from the record's population_concordance section, whose rows carry their own
-    labels (variants are VCF records; tuples are output rows reduced to Location, Allele,
-    Feature, Feature_type and Consequence set)."""
+    labels less the ', whole genome' suffix (variants are VCF records; tuples are output rows
+    reduced to Location, Allele, Feature, Feature_type and Consequence set); the two F1 columns
+    follow the chromosome count so they are read before the counts."""
     lines = [
         "",
         "Whole-genome concordance of the released binary on four population datasets, one run per",
@@ -197,18 +203,18 @@ def population_lines(pop: dict) -> list[str]:
         "one VCF record, a tuple one output row reduced to its Location, Allele, Feature, Feature_type and",
         "Consequence set, and F1 pools the chromosomes by summed counts:",
         "",
-        "| Dataset | Assembly | Chromosomes | Variants | VEP tuples | vep-rs tuples | Matched | Raw F1 | Adjusted F1 |",
-        "| ------- | -------- | ----------- | -------- | ---------- | ------------- | ------- | ------ | ----------- |",
+        "| Dataset | Assembly | Chromosomes | Raw F1 | Adjusted F1 | Variants | VEP tuples | vep-rs tuples | Matched |",
+        "| ------- | -------- | ----------- | ------ | ----------- | -------- | ---------- | ------------- | ------- |",
     ]
     for r in pop["per_dataset"]:
         lines.append(
-            f"| {r['label']} | {r['assembly']} | {int(r['shards'])} | {int(r['variants']):,} | {int(r['perl_tuples']):,} | "
-            f"{int(r['vep_rs_tuples']):,} | {int(r['intersection']):,} | {f1_9(r['intersection'], r['perl_tuples'], r['vep_rs_tuples'])} | {half_up(float(r['adjusted_f1']), 9)} |"
+            f"| {short_label(r['label'])} | {r['assembly']} | {int(r['shards'])} | {f1_9(r['intersection'], r['perl_tuples'], r['vep_rs_tuples'])} | "
+            f"{half_up(float(r['adjusted_f1']), 9)} | {int(r['variants']):,} | {int(r['perl_tuples']):,} | {int(r['vep_rs_tuples']):,} | {int(r['intersection']):,} |"
         )
     p = pop["pooled"]
     lines.append(
-        f"| {p['label']} | GRCh37 and GRCh38 | {int(p['shards'])} | {int(p['variants']):,} | {int(p['perl_tuples']):,} | "
-        f"{int(p['vep_rs_tuples']):,} | {int(p['intersection']):,} | {f1_9(p['intersection'], p['perl_tuples'], p['vep_rs_tuples'])} | {half_up(float(p['adjusted_f1']), 9)} |"
+        f"| {p['label']} | GRCh37 and GRCh38 | {int(p['shards'])} | {f1_9(p['intersection'], p['perl_tuples'], p['vep_rs_tuples'])} | "
+        f"{half_up(float(p['adjusted_f1']), 9)} | {int(p['variants']):,} | {int(p['perl_tuples']):,} | {int(p['vep_rs_tuples']):,} | {int(p['intersection']):,} |"
     )
     return lines
 

@@ -163,15 +163,17 @@ def test_install_table_lists_every_target(tmp_path: Path, name: str) -> None:
 
 def test_population_table_renders_from_the_record(tmp_path: Path) -> None:
     """A record with population_concordance puts the whole-genome table before the suite table: one
-    row per dataset in the record's order under the record's own labels, with thousands separators,
-    and the pooled row last, then the chromosome 21 heading; a record without the section renders
-    no such table and no heading."""
+    row per dataset in the record's order under the record's labels less their ', whole genome'
+    suffix, the two F1 columns right after the chromosome count and the counts after them, with
+    thousands separators, and the pooled row last, then the chromosome 21 heading; a record without
+    the section renders no such table and no heading."""
     body = render(fixture_repo(tmp_path, population=True)).stdout
-    assert "| Set A, whole genome | GRCh38 | 24 | 1,000 | 5,000 | 5,000 | 4,999 | 0.999800000 | 1.000000000 |" in body
-    assert "| Set B, whole genome | GRCh37 | 25 | 200 | 800 | 800 | 800 | 1.000000000 | 1.000000000 |" in body
-    assert "| All four | GRCh37 and GRCh38 | 49 | 1,200 | 5,800 | 5,800 | 5,799 | 0.999827586 | 1.000000000 |" in body
+    assert "| Set A | GRCh38 | 24 | 0.999800000 | 1.000000000 | 1,000 | 5,000 | 5,000 | 4,999 |" in body
+    assert "| Set B | GRCh37 | 25 | 1.000000000 | 1.000000000 | 200 | 800 | 800 | 800 |" in body
+    assert "| All four | GRCh37 and GRCh38 | 49 | 0.999827586 | 1.000000000 | 1,200 | 5,800 | 5,800 | 5,799 |" in body
+    assert "| Set A, whole genome" not in body
     assert (
-        body.index("| Set A, whole genome")
+        body.index("| Set A | GRCh38")
         < body.index("The chromosome 21 suites, the paper's cells measured on the released binary:")
         < body.index("| ClinVar")
         < body.index("Wall time, median of")
