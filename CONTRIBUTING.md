@@ -3,7 +3,7 @@
 ## Building and Testing
 
 ```bash
-# Run the full test suite (1,320 tests: 1,319 run, 1 #[ignore]d; the per-crate
+# Run the full test suite (1,321 tests: 1,320 run, 1 #[ignore]d; the per-crate
 # counts are in manuscript/data/code_metrics.csv)
 cargo test --workspace
 

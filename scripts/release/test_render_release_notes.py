@@ -14,7 +14,7 @@ SCRIPT = HERE / "render_release_notes.py"
 SUITES = ("s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08")
 
 
-def fixture_repo(tmp_path: Path, *, record: bool = True, cff_version_doi: bool = False, population: bool = False) -> Path:
+def fixture_repo(tmp_path: Path, *, record: bool = True, cff_version_doi: bool = False, population: bool = False, population_record: bool = False) -> Path:
     repo = tmp_path / "repo"
     (repo / "docs" / "concordance-provenance").mkdir(parents=True)
     (repo / ".github" / "release-notes").mkdir(parents=True)
@@ -55,6 +55,23 @@ def fixture_repo(tmp_path: Path, *, record: bool = True, cff_version_doi: bool =
                 "pooled": {"label": "All four", "shards": 49, "variants": 1200, "perl_tuples": 5800, "vep_rs_tuples": 5800, "intersection": 5799, "raw_f1": 2 * 5799 / 11600, "adjusted_f1": 1.0},
             }
         (repo / "docs" / "concordance-provenance" / "2031-01-01-release-v9.9.9.json").write_text(json.dumps(rec))
+        if population_record:
+            cell = lambda ds, arch, total: {"dataset": ds, "arch": arch, "sum_of_cell_medians_sec": total}
+            poprec = {
+                "release": "v9.9.9",
+                "datasets": [
+                    {"dataset": "set_a", "label": "Set A, whole genome", "assembly": "GRCh38", "variants": 1000},
+                    {"dataset": "set_b", "label": "Set B, whole genome", "assembly": "GRCh37", "variants": 200},
+                ],
+                "wall_time": {
+                    "vep_rs": {
+                        "n_clones_per_cell": 20,
+                        "instance_types": {"arm64": "c8gd.8xlarge", "x86_64": "c8id.8xlarge"},
+                        "per_dataset": [cell("set_a", "arm64", 974.37), cell("set_a", "x86_64", 1218.6), cell("set_b", "arm64", 70.2), cell("set_b", "x86_64", 73.9)],
+                    }
+                },
+            }
+            (repo / "docs" / "concordance-provenance" / "2031-01-02-population-v9.9.9.json").write_text(json.dumps(poprec))
     (repo / ".github" / "release-notes" / "v9.9.9.md").write_text(
         "# vep-rs 9.9.9\n\nOne-sentence summary.\n\n## Upgrade notes\n\n- An upgrade note.\n\n## Known issues\n\n- A known issue.\n"
     )
@@ -94,8 +111,9 @@ def test_body_follows_the_template(tmp_path: Path) -> None:
     assert "(https://github.com/natera-open-source/vep-rs/tree/v9.9.9/docs/concordance-provenance)" in body
     assert "2031-01-01-release-v9.9.9.json" not in body
     # eight concordance rows with grouped tuple counts
-    assert "| ClinVar full | GRCh37 | 0.999979 | 1.000000 | 1,000 | 1,000 | 999 |" in body
-    assert body.count("| 1.000000 |") == 8
+    # F1 is recomputed from the counts at nine places (2 x 999 / 2,000), not copied from the record's rounded field
+    assert "| ClinVar full | GRCh37 | 0.999000000 | 1.000000000 | 1,000 | 1,000 | 999 |" in body
+    assert body.count("| 1.000000000 |") == 8
     # wall time: the release's own medians, no ratio against the paper's Perl medians
     assert "Wall time, median of 20 independent machines per cell" in body
     assert "ClinVar GRCh37 1.00 s ARM / 1.00 s x86" in body
@@ -144,12 +162,34 @@ def test_install_table_lists_every_target(tmp_path: Path, name: str) -> None:
 
 
 def test_population_table_renders_from_the_record(tmp_path: Path) -> None:
-    """A record with population_concordance adds the whole-genome table after the suite table: one
+    """A record with population_concordance puts the whole-genome table before the suite table: one
     row per dataset in the record's order under the record's own labels, with thousands separators,
-    and the pooled row last; a record without the section renders no such table."""
+    and the pooled row last, then the chromosome 21 heading; a record without the section renders
+    no such table and no heading."""
     body = render(fixture_repo(tmp_path, population=True)).stdout
-    assert "| Set A, whole genome | GRCh38 | 24 | 1,000 | 5,000 | 5,000 | 4,999 | 0.999800 | 1.000000 |" in body
-    assert "| Set B, whole genome | GRCh37 | 25 | 200 | 800 | 800 | 800 | 1.000000 | 1.000000 |" in body
-    assert "| All four | GRCh37 and GRCh38 | 49 | 1,200 | 5,800 | 5,800 | 5,799 | 0.999828 | 1.000000 |" in body
-    assert body.index("| ClinVar") < body.index("| Set A, whole genome") < body.index("Wall time, median of")
-    assert "whole genome" not in render(fixture_repo(tmp_path / "plain")).stdout
+    assert "| Set A, whole genome | GRCh38 | 24 | 1,000 | 5,000 | 5,000 | 4,999 | 0.999800000 | 1.000000000 |" in body
+    assert "| Set B, whole genome | GRCh37 | 25 | 200 | 800 | 800 | 800 | 1.000000000 | 1.000000000 |" in body
+    assert "| All four | GRCh37 and GRCh38 | 49 | 1,200 | 5,800 | 5,800 | 5,799 | 0.999827586 | 1.000000000 |" in body
+    assert (
+        body.index("| Set A, whole genome")
+        < body.index("The chromosome 21 suites, the paper's cells measured on the released binary:")
+        < body.index("| ClinVar")
+        < body.index("Wall time, median of")
+    )
+    plain = render(fixture_repo(tmp_path / "plain")).stdout
+    assert "whole genome" not in plain and "chromosome 21 suites" not in plain
+
+
+def test_population_wall_time_line_renders_from_the_population_record(tmp_path: Path) -> None:
+    """A population record adds the whole-genome wall-time line between the whole-genome table and the
+    chromosome 21 heading: per dataset the rounded sum of the chromosome medians on each architecture,
+    the dataset label without its ', whole genome' suffix, the instance types the record names."""
+    body = render(fixture_repo(tmp_path, population=True, population_record=True)).stdout
+    line = (
+        "Whole-genome wall time as the sum of the per-chromosome medians, each the median of 20 independent\n"
+        "machines, ARM Graviton4 (`c8gd.8xlarge`) and x86 Intel (`c8id.8xlarge`), 16 threads, local NVMe,\n"
+        "sites-only inputs, the discarded warmup's output deleted before the timed run: Set A 974 s ARM / 1,219 s x86; Set B 70 s ARM / 74 s x86."
+    )
+    assert line in body
+    assert body.index("| All four") < body.index("Whole-genome wall time") < body.index("The chromosome 21 suites")
+    assert "Whole-genome wall time" not in render(fixture_repo(tmp_path / "norec", population=True)).stdout

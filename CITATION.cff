@@ -32,8 +32,8 @@ authors:
     affiliation: Natera, Inc.
 license: Apache-2.0
 repository-code: https://github.com/natera-open-source/vep-rs
-version: 0.3.1
-date-released: 2026-10-02
+version: 0.3.2
+date-released: 2026-10-06
 doi: 10.5281/zenodo.22837896
 identifiers:
   - type: doi

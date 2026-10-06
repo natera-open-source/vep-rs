@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-06
+
 ### Changed
 
 - `--fork 0` (the default) uses every logical CPU up to 32 instead of every
@@ -14,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   past about 32 workers and rises on wider hosts (gnomAD v4.1 chromosome 2 took
   1.8 times longer at 192 workers than at 32 on a 192-vCPU host). An explicit
   `--fork N` is never capped.
+- A batch is annotated, filtered, rendered and freed in one pass over the worker
+  pool, each finished variant freed by the thread that annotated it and the
+  task size following the pool's thread count, instead of five pool barriers per
+  batch with the coordinator freeing every variant serially between batches. The
+  output is byte-identical. Together with the libdeflate inflate below, measured
+  against 0.3.1 under the same whole-genome protocol (the median of 20 machines
+  per chromosome at 16 threads, summed over the chromosomes), the whole of gnomAD
+  v4.1 falls from 974 to 724 s on ARM Graviton4 and from 1,219 to 1,169 s on x86
+  and the whole of gnomAD v2.1.1 from 586 to 282 s and from 835 to 476 s, with
+  CPU time down 19 to 44 percent on those inputs and peak memory at most 2.4 GB
+  on any chromosome against 4.9 GB.
+- bgzip blocks inflate through libdeflate (`noodles-bgzf` with its `libdeflate`
+  feature), and the cache builder's MySQL client takes its Rust deflate backend
+  so that no crate of the workspace links C zlib: the single-inflater floor on
+  gnomAD v4.1 chromosome 21 falls from 73.8 s to 34.5 s.
 
 ## [0.3.1] - 2026-10-02
 
@@ -315,7 +332,8 @@ First public release.
   requests, and a release workflow that publishes Linux (x86_64, aarch64) and
   macOS (aarch64) tarballs with sha256 and md5 checksum files.
 
-[Unreleased]: https://github.com/natera-open-source/vep-rs/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/natera-open-source/vep-rs/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/natera-open-source/vep-rs/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/natera-open-source/vep-rs/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/natera-open-source/vep-rs/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/natera-open-source/vep-rs/compare/v0.1.0...v0.2.0
