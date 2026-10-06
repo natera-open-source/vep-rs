@@ -12,27 +12,27 @@ vep-rs reads a JSON transcript cache, built from Ensembl's release files by `vep
 
 |                    |                                                                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Performance**    | On the whole of gnomAD v4.1 (759,336,320 variants, 24 chromosomes) the current release's per-chromosome medians sum to 974 s on one ARM Graviton4 machine and 1,219 s on x86, against 13,437 s and 10,465 s for fastVEP v0.4.0 and 296,805 s and 251,614 s for Ensembl VEP 115.2 under the same protocol; peak RSS at most 4.9 GB on any chromosome ([Current release](#current-release-v031)) |
-| **Concordance**    | Adjusted F1 1.000000000 (raw F1 0.999998884) with Ensembl VEP 115.2 on every dataset: 1,179,639,224 variants, 9,281,654,995 annotation tuples, 9,281,650,663 matched ([Current release](#current-release-v031)). The tuples the adjusted figure sets aside are the documented cases in which Ensembl VEP's own output is wrong, or the two engines represent a record differently, each traced to the mechanism in Ensembl VEP's source and reproducible from the record ([docs/intended-divergences.md](docs/intended-divergences.md)); outside them every tuple is matched, so vep-rs's remaining disagreements with Ensembl VEP are deliberate, documented corrections rather than defects |
+| **Performance**    | On the whole of gnomAD v4.1 (759,336,320 variants, 24 chromosomes) the current release's per-chromosome medians sum to 724 s on one ARM Graviton4 machine and 1,169 s on x86, against 13,437 s and 10,465 s for fastVEP v0.4.0 and 296,805 s and 251,614 s for Ensembl VEP 115.2 under the same protocol; peak RSS at most 2.4 GB on any chromosome ([Current release](#current-release-v032)) |
+| **Concordance**    | Adjusted F1 1.000000000 (raw F1 0.999998884) with Ensembl VEP 115.2 on every dataset: 1,179,639,224 variants, 9,281,654,995 annotation tuples, 9,281,650,663 matched ([Current release](#current-release-v032)). The tuples the adjusted figure sets aside are the documented cases in which Ensembl VEP's own output is wrong, or the two engines represent a record differently, each traced to the mechanism in Ensembl VEP's source and reproducible from the record ([docs/intended-divergences.md](docs/intended-divergences.md)); outside them every tuple is matched, so vep-rs's remaining disagreements with Ensembl VEP are deliberate, documented corrections rather than defects |
 | **Plugins**        | 10 supported built-in databases: 8 on both GRCh37 and GRCh38 (CADD, REVEL, gnomADc, AlphaMissense, dbscSNV, LoFTEE, LoFtool, pLI) plus GWAS and SpliceAI on GRCh38, and C-ABI dynamic-library plugins loaded from `--dir_plugins`; see [docs/plugins.md](docs/plugins.md) |
 | **Output formats** | VEP default, VCF, JSON, Tab, Parquet (Parquet needs the `duckdb` CLI on PATH)                                                                                                                                                    |
 | **Threading**      | Parallel annotation via `--fork N`; the default uses every logical CPU up to 32                                                                                                                                                  |
 
 **What drop-in means here.** The same input files, the same flag names, the same output layouts. Two things differ from Perl VEP. The transcript cache is `--json_cache`, a directory built by `vep-cache-builder` or converted from a Perl VEP cache ([docs/cache-setup.md](docs/cache-setup.md)); `--cache`, `--offline`, `--dir_cache`, `--cache_version` and `--species` are accepted, but they do not locate a cache, and vep-rs never contacts a database. And some Perl VEP flags are accepted for compatibility without being implemented, among them `--regulatory`, `--custom`, `--refseq`, `--merged`, `--coding_only`, `--pick_order` and the statistics flags (vep-rs writes no summary file); [docs/cli-reference.md](docs/cli-reference.md) marks every such flag.
 
-## Current release: v0.3.1
+## Current release: v0.3.2
 
-The figures here are the released version's own, measured under the paper's protocol; the figures the paper reports, measured at the paper's pinned build, are in [docs/published-figures.md](docs/published-figures.md) and stay as published. Concordance is one run of a build of the released version per dataset (F1 is deterministic per binary and independent of architecture) against Ensembl VEP 115.2's output on the same inputs, with the same comparator, cache and reference FASTA; a variant is one VCF record, a tuple is one output row reduced to its Location, Allele, Feature, Feature_type and Consequence set, and F1 pools a dataset's chromosomes by summed counts. The tuples the adjusted figure sets aside are the documented classes of [docs/intended-divergences.md](docs/intended-divergences.md); every tuple outside those classes is matched. fastVEP v0.4.0 was scored on the same Ensembl VEP output with the same comparator, cache and reference, the same classes set aside; its rows state its own tuple counts, and its adjusted figure equals its raw one because the classes set aside are shapes it does not produce. Wall time is the median of 20 independent machine measurements per cell on both architectures, each on a fresh instance after a discarded warmup whose output is flushed and deleted before the timed run, `--fork 16`, on sites-only inputs. Every value below is recorded in [`docs/concordance-provenance/2026-10-02-release-v0.3.1.json`](docs/concordance-provenance/2026-10-02-release-v0.3.1.json) (the chromosome 21 cells, the per-column field agreement, the compiler and build inputs of the measured binaries, the same-day comparison against v0.3.0, the whole-genome concordance per chromosome) and [`docs/concordance-provenance/2026-10-04-population-v0.3.1.json`](docs/concordance-provenance/2026-10-04-population-v0.3.1.json) (every chromosome's wall-time median, P5 and P95 with the 20 wall times behind them, for both engines, and fastVEP's concordance per chromosome).
+The figures here are the released version's own, measured under the paper's protocol; the figures the paper reports, measured at the paper's pinned build, are in [docs/published-figures.md](docs/published-figures.md) and stay as published. Concordance is one run of a build of the released version per dataset (F1 is deterministic per binary and independent of architecture) against Ensembl VEP 115.2's output on the same inputs, with the same comparator, cache and reference FASTA; a variant is one VCF record, a tuple is one output row reduced to its Location, Allele, Feature, Feature_type and Consequence set, and F1 pools a dataset's chromosomes by summed counts. The tuples the adjusted figure sets aside are the documented classes of [docs/intended-divergences.md](docs/intended-divergences.md); every tuple outside those classes is matched. fastVEP v0.4.0 was scored on the same Ensembl VEP output with the same comparator, cache and reference, the same classes set aside; its rows state its own tuple counts, and its adjusted figure equals its raw one because the classes set aside are shapes it does not produce. Wall time is the median of 20 independent machine measurements per cell on both architectures, each on a fresh instance after a discarded warmup whose output is flushed and deleted before the timed run, `--fork 16`, on sites-only inputs. Every value below is recorded in [`docs/concordance-provenance/2026-10-06-release-v0.3.2.json`](docs/concordance-provenance/2026-10-06-release-v0.3.2.json) (the chromosome 21 cells, the per-column field agreement, the compiler and build inputs of the measured binaries, the same-day comparison against v0.3.1, the whole-genome concordance per chromosome) and [`docs/concordance-provenance/2026-10-06-population-v0.3.2.json`](docs/concordance-provenance/2026-10-06-population-v0.3.2.json) (every chromosome's wall-time median, P5 and P95 with the 20 wall times behind them, for both engines, and fastVEP's concordance per chromosome). vep-rs v0.3.1's whole-genome measurement is [`docs/concordance-provenance/2026-10-04-population-v0.3.1.json`](docs/concordance-provenance/2026-10-04-population-v0.3.1.json).
 
 Whole-genome concordance against Ensembl VEP 115.2 (the per-chromosome tables are in the records):
 
 | Engine | Dataset | Assembly | Chromosomes | Variants | Ensembl VEP tuples | Engine tuples | Matched | Raw F1 | Adjusted F1 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| vep-rs v0.3.1 | gnomAD v4.1, whole genome | GRCh38 | 24 | 759,336,320 | 7,409,818,550 | 7,409,818,550 | 7,409,815,011 | 0.999999522 | 1.000000000 |
-| vep-rs v0.3.1 | gnomAD v2.1.1, whole genome | GRCh37 | 23 | 261,942,336 | 885,664,902 | 885,664,902 | 885,664,478 | 0.999999521 | 1.000000000 |
-| vep-rs v0.3.1 | 1000 Genomes Phase 3, whole genome | GRCh37 | 25 | 84,805,772 | 286,649,478 | 286,649,478 | 286,649,396 | 0.999999714 | 1.000000000 |
-| vep-rs v0.3.1 | 1000 Genomes high-coverage, whole genome | GRCh38 | 23 | 73,554,796 | 699,522,065 | 699,534,118 | 699,521,778 | 0.999990975 | 1.000000000 |
-| vep-rs v0.3.1 | All four | GRCh37 and GRCh38 | 95 | 1,179,639,224 | 9,281,654,995 | 9,281,667,048 | 9,281,650,663 | 0.999998884 | 1.000000000 |
+| vep-rs v0.3.2 | gnomAD v4.1, whole genome | GRCh38 | 24 | 759,336,320 | 7,409,818,550 | 7,409,818,550 | 7,409,815,011 | 0.999999522 | 1.000000000 |
+| vep-rs v0.3.2 | gnomAD v2.1.1, whole genome | GRCh37 | 23 | 261,942,336 | 885,664,902 | 885,664,902 | 885,664,478 | 0.999999521 | 1.000000000 |
+| vep-rs v0.3.2 | 1000 Genomes Phase 3, whole genome | GRCh37 | 25 | 84,805,772 | 286,649,478 | 286,649,478 | 286,649,396 | 0.999999714 | 1.000000000 |
+| vep-rs v0.3.2 | 1000 Genomes high-coverage, whole genome | GRCh38 | 23 | 73,554,796 | 699,522,065 | 699,534,118 | 699,521,778 | 0.999990975 | 1.000000000 |
+| vep-rs v0.3.2 | All four | GRCh37 and GRCh38 | 95 | 1,179,639,224 | 9,281,654,995 | 9,281,667,048 | 9,281,650,663 | 0.999998884 | 1.000000000 |
 | fastVEP v0.4.0 | gnomAD v4.1, whole genome | GRCh38 | 24 | 759,336,320 | 7,409,818,550 | 7,454,247,630 | 6,866,191,040 | 0.923864433 | 0.923864433 |
 | fastVEP v0.4.0 | gnomAD v2.1.1, whole genome | GRCh37 | 23 | 261,942,336 | 885,664,902 | 889,340,923 | 833,926,589 | 0.939632510 | 0.939632510 |
 | fastVEP v0.4.0 | 1000 Genomes Phase 3, whole genome | GRCh37 | 25 | 84,805,772 | 286,649,478 | 287,933,154 | 280,853,534 | 0.977591449 | 0.977591449 |
@@ -41,20 +41,20 @@ Whole-genome concordance against Ensembl VEP 115.2 (the per-chromosome tables ar
 
 Whole-genome wall time, in seconds, as the sum of the per-chromosome medians; the largest chromosome's own median and P5 to P95 stand beside it. vep-rs and fastVEP ran on `c8gd.8xlarge` (ARM Graviton4) and `c8id.8xlarge` (x86 Intel), 32 vCPU with local NVMe; Ensembl VEP 115.2's figures are its reference run of the same inputs under the same protocol on `r8gd.8xlarge` and `r8id.8xlarge` (the same processors with 256 GiB), the run whose output the concordance tables compare against:
 
-| Dataset | Assembly | Variants | Arch | Ensembl VEP 115.2 (s) | fastVEP v0.4.0 (s) | vep-rs v0.3.1 (s) | vep-rs, chromosome 2 median (s) | P5 to P95 (s) |
+| Dataset | Assembly | Variants | Arch | Ensembl VEP 115.2 (s) | fastVEP v0.4.0 (s) | vep-rs v0.3.2 (s) | vep-rs, chromosome 2 median (s) | P5 to P95 (s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| gnomAD v4.1, whole genome | GRCh38 | 759,336,320 | ARM | 296,805 | 13,437 | 974 | 83.91 | 79.60 to 86.59 |
-| gnomAD v4.1, whole genome | GRCh38 | 759,336,320 | x86 | 251,614 | 10,465 | 1,219 | 103.58 | 100.23 to 103.94 |
-| gnomAD v2.1.1, whole genome | GRCh37 | 261,942,336 | ARM | 119,011 | 6,111 | 586 | 48.78 | 48.58 to 49.47 |
-| gnomAD v2.1.1, whole genome | GRCh37 | 261,942,336 | x86 | 104,430 | 5,037 | 835 | 69.56 | 69.03 to 69.82 |
-| 1000 Genomes Phase 3, whole genome | GRCh37 | 84,805,772 | ARM | 9,521 | 504 | 70 | 5.82 | 5.47 to 6.02 |
-| 1000 Genomes Phase 3, whole genome | GRCh37 | 84,805,772 | x86 | 7,287 | 396 | 74 | 6.11 | 5.96 to 6.45 |
-| 1000 Genomes high-coverage, whole genome | GRCh38 | 73,554,796 | ARM | 19,591 | 991 | 91 | 7.56 | 7.30 to 8.08 |
-| 1000 Genomes high-coverage, whole genome | GRCh38 | 73,554,796 | x86 | 15,840 | 752 | 97 | 8.25 | 8.05 to 8.53 |
+| gnomAD v4.1, whole genome | GRCh38 | 759,336,320 | ARM | 296,805 | 13,437 | 724 | 62.48 | 62.00 to 63.73 |
+| gnomAD v4.1, whole genome | GRCh38 | 759,336,320 | x86 | 251,614 | 10,465 | 1,169 | 99.34 | 97.59 to 100.30 |
+| gnomAD v2.1.1, whole genome | GRCh37 | 261,942,336 | ARM | 119,011 | 6,111 | 282 | 23.61 | 23.12 to 24.30 |
+| gnomAD v2.1.1, whole genome | GRCh37 | 261,942,336 | x86 | 104,430 | 5,037 | 476 | 39.65 | 38.83 to 40.19 |
+| 1000 Genomes Phase 3, whole genome | GRCh37 | 84,805,772 | ARM | 9,521 | 504 | 46 | 3.82 | 3.63 to 4.02 |
+| 1000 Genomes Phase 3, whole genome | GRCh37 | 84,805,772 | x86 | 7,287 | 396 | 74 | 6.17 | 6.03 to 6.49 |
+| 1000 Genomes high-coverage, whole genome | GRCh38 | 73,554,796 | ARM | 19,591 | 991 | 69 | 5.84 | 5.70 to 6.13 |
+| 1000 Genomes high-coverage, whole genome | GRCh38 | 73,554,796 | x86 | 15,840 | 752 | 99 | 8.38 | 8.09 to 8.63 |
 
-Chromosome 21 suites, the paper's cells measured on the released version (the v0.3.0 columns are the concordance of [`docs/concordance-provenance/2026-10-01-release-v0.3.0.json`](docs/concordance-provenance/2026-10-01-release-v0.3.0.json); raw F1 equals v0.3.0's on every suite because the records this version changes lie outside chromosome 21 and ClinVar):
+Chromosome 21 suites, the paper's cells measured on the released version (the v0.3.1 columns are the concordance of [`docs/concordance-provenance/2026-10-02-release-v0.3.1.json`](docs/concordance-provenance/2026-10-02-release-v0.3.1.json); raw F1 equals v0.3.1's on every suite because this version changes no annotation: its output is byte-identical to the previous release's on every gated input):
 
-| Dataset | Assembly | v0.3.1 Raw F1 | v0.3.1 Adj F1 | v0.3.0 Raw F1 | v0.3.0 Adj F1 |
+| Dataset | Assembly | v0.3.2 Raw F1 | v0.3.2 Adj F1 | v0.3.1 Raw F1 | v0.3.1 Adj F1 |
 | --- | --- | --- | --- | --- | --- |
 | ClinVar full | GRCh37 | 0.999979065 | 1.000000000 | 0.999979065 | 1.000000000 |
 | ClinVar full | GRCh38 | 0.999974091 | 1.000000000 | 0.999974091 | 1.000000000 |
@@ -67,24 +67,24 @@ Chromosome 21 suites, the paper's cells measured on the released version (the v0
 
 Chromosome 21 wall time of the released version on the paper's instance types (`r8gd.8xlarge`, `r8id.8xlarge`):
 
-| Arch | Dataset | Assembly | v0.3.1 median (s) | P5 to P95 (s) |
+| Arch | Dataset | Assembly | v0.3.2 median (s) | P5 to P95 (s) |
 | --- | --- | --- | --- | --- |
-| ARM | ClinVar full | GRCh37 | 5.75 | 5.60 to 6.13 |
-| ARM | ClinVar full | GRCh38 | 11.93 | 11.68 to 12.36 |
-| ARM | gnomAD v2.1.1 chr21 | GRCh37 | 6.77 | 6.73 to 6.84 |
-| ARM | gnomAD v4.1 chr21 | GRCh38 | 12.88 | 12.55 to 13.74 |
-| ARM | 1KG Phase 3 chr21 | GRCh37 | 0.83 | 0.79 to 0.88 |
-| ARM | 1KG high-cov chr21 | GRCh38 | 1.20 | 1.17 to 1.28 |
-| ARM | SV per-VCF (16 files) | GRCh37 | 0.53 | 0.52 to 0.55 |
-| ARM | SV per-VCF (16 files) | GRCh38 | 1.27 | 1.26 to 1.33 |
-| x86 | ClinVar full | GRCh37 | 6.02 | 5.89 to 6.10 |
-| x86 | ClinVar full | GRCh38 | 12.14 | 12.01 to 12.21 |
-| x86 | gnomAD v2.1.1 chr21 | GRCh37 | 9.84 | 9.72 to 10.04 |
-| x86 | gnomAD v4.1 chr21 | GRCh38 | 16.55 | 16.37 to 16.84 |
-| x86 | 1KG Phase 3 chr21 | GRCh37 | 0.97 | 0.93 to 1.08 |
-| x86 | 1KG high-cov chr21 | GRCh38 | 1.39 | 1.36 to 1.46 |
-| x86 | SV per-VCF (16 files) | GRCh37 | 0.74 | 0.73 to 0.75 |
-| x86 | SV per-VCF (16 files) | GRCh38 | 1.56 | 1.54 to 1.60 |
+| ARM | ClinVar full | GRCh37 | 4.31 | 4.18 to 4.40 |
+| ARM | ClinVar full | GRCh38 | 10.43 | 10.24 to 10.61 |
+| ARM | gnomAD v2.1.1 chr21 | GRCh37 | 3.32 | 3.27 to 3.40 |
+| ARM | gnomAD v4.1 chr21 | GRCh38 | 9.66 | 9.37 to 10.07 |
+| ARM | 1KG Phase 3 chr21 | GRCh37 | 0.56 | 0.54 to 0.60 |
+| ARM | 1KG high-cov chr21 | GRCh38 | 0.95 | 0.92 to 0.98 |
+| ARM | SV per-VCF (16 files) | GRCh37 | 0.53 | 0.52 to 0.53 |
+| ARM | SV per-VCF (16 files) | GRCh38 | 1.27 | 1.25 to 1.34 |
+| x86 | ClinVar full | GRCh37 | 5.64 | 5.50 to 5.74 |
+| x86 | ClinVar full | GRCh38 | 11.46 | 11.26 to 11.88 |
+| x86 | gnomAD v2.1.1 chr21 | GRCh37 | 5.86 | 5.55 to 6.15 |
+| x86 | gnomAD v4.1 chr21 | GRCh38 | 15.63 | 15.51 to 15.90 |
+| x86 | 1KG Phase 3 chr21 | GRCh37 | 0.97 | 0.95 to 1.04 |
+| x86 | 1KG high-cov chr21 | GRCh38 | 1.42 | 1.37 to 1.49 |
+| x86 | SV per-VCF (16 files) | GRCh37 | 0.72 | 0.70 to 0.78 |
+| x86 | SV per-VCF (16 files) | GRCh38 | 1.53 | 1.50 to 1.63 |
 
 HGVS notation is outside every F1 above. `scripts/concordance/run_clone_measurement.sh` re-measures the chromosome 21 cells on your own machines and `scripts/concordance/run_concordance.sh` times both engines on a directory of your own VCFs; [scripts/README.md](scripts/README.md#reproducing-the-published-concordance) is the runbook for reproducing the concordance numbers.
 
@@ -208,7 +208,7 @@ If you use vep-rs in published work, cite the paper:
 
 > Porter M, Borkowski R. _vep-rs: high-throughput Rust variant annotation with population-scale concordance to Ensembl VEP._ bioRxiv (2026). [doi:10.64898/2026.09.22.753614](https://doi.org/10.64898/2026.09.22.753614). The journal DOI will be added here on acceptance.
 
-The figures the paper reports are in [docs/published-figures.md](docs/published-figures.md); the current release's own measurements are in the [Current release](#current-release-v031) section.
+The figures the paper reports are in [docs/published-figures.md](docs/published-figures.md); the current release's own measurements are in the [Current release](#current-release-v032) section.
 
 The software itself is archived at Zenodo, and that archive is the citation for the code and the released data files:
 

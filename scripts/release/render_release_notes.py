@@ -56,6 +56,14 @@ def half_up(x: float, places: int) -> str:
     )
 
 
+def f1_9(intersection, a, b) -> str:
+    """F1 as 2I/(A+B) from the integer tuple counts at nine decimal places; an exact match reads 1.000000000.
+    Computed from the counts rather than copied from a record's rounded field, so the page never prints
+    a coarser rounding than the counts support."""
+    q = Decimal(2 * int(intersection)) / Decimal(int(a) + int(b))
+    return str(q.quantize(Decimal("0.000000001"), rounding=ROUND_HALF_UP))
+
+
 def changelog_section(text: str, name: str) -> tuple[str, str | None]:
     """Return (body, date) of the `## [name]` section, body without the heading."""
     pattern = re.compile(
@@ -149,6 +157,34 @@ def load_release_measurements(repo: Path, version: str):
     return conc, walls, record_path.relative_to(repo).as_posix(), record.get("population_concordance")
 
 
+def load_population_record(repo: Path, version: str) -> dict | None:
+    """The release's population record (docs/concordance-provenance/<date>-population-v<version>.json):
+    the whole-genome wall time per dataset and architecture. None when the release has none."""
+    records = sorted((repo / "docs" / "concordance-provenance").glob(f"*-population-v{version}.json"))
+    return json.loads(records[-1].read_text()) if records else None
+
+
+def population_wall_time_lines(population: dict) -> list[str]:
+    """The whole-genome wall-time line: per dataset, the sum of the per-chromosome medians on each
+    architecture, with the instance types the record names."""
+    wt = population["wall_time"]["vep_rs"]
+    types = wt["instance_types"]
+    n = int(wt["n_clones_per_cell"])
+    labels = {d["dataset"]: d["label"].replace(", whole genome", "") for d in population["datasets"]}
+    sums = {(c["dataset"], c["arch"]): float(c["sum_of_cell_medians_sec"]) for c in wt["per_dataset"]}
+    cells = [
+        f"{labels[d['dataset']]} {int(round(sums[(d['dataset'], 'arm64')])):,} s ARM / "
+        f"{int(round(sums[(d['dataset'], 'x86_64')])):,} s x86"
+        for d in population["datasets"]
+    ]
+    return [
+        "",
+        f"Whole-genome wall time as the sum of the per-chromosome medians, each the median of {n} independent",
+        f"machines, ARM Graviton4 (`{types['arm64']}`) and x86 Intel (`{types['x86_64']}`), 16 threads, local NVMe,",
+        "sites-only inputs, the discarded warmup's output deleted before the timed run: " + "; ".join(cells) + ".",
+    ]
+
+
 def population_lines(pop: dict) -> list[str]:
     """The whole-genome table: one row per population dataset in the record's order and the
     pooled row, from the record's population_concordance section, whose rows carry their own
@@ -167,25 +203,37 @@ def population_lines(pop: dict) -> list[str]:
     for r in pop["per_dataset"]:
         lines.append(
             f"| {r['label']} | {r['assembly']} | {int(r['shards'])} | {int(r['variants']):,} | {int(r['perl_tuples']):,} | "
-            f"{int(r['vep_rs_tuples']):,} | {int(r['intersection']):,} | {float(r['raw_f1']):.6f} | {float(r['adjusted_f1']):.6f} |"
+            f"{int(r['vep_rs_tuples']):,} | {int(r['intersection']):,} | {f1_9(r['intersection'], r['perl_tuples'], r['vep_rs_tuples'])} | {half_up(float(r['adjusted_f1']), 9)} |"
         )
     p = pop["pooled"]
     lines.append(
         f"| {p['label']} | GRCh37 and GRCh38 | {int(p['shards'])} | {int(p['variants']):,} | {int(p['perl_tuples']):,} | "
-        f"{int(p['vep_rs_tuples']):,} | {int(p['intersection']):,} | {float(p['raw_f1']):.6f} | {float(p['adjusted_f1']):.6f} |"
+        f"{int(p['vep_rs_tuples']):,} | {int(p['intersection']):,} | {f1_9(p['intersection'], p['perl_tuples'], p['vep_rs_tuples'])} | {half_up(float(p['adjusted_f1']), 9)} |"
     )
     return lines
 
 
 def measurements_section(repo: Path, version: str, date: str) -> str:
+    """The whole-genome concordance table and wall-time line first (the release record's
+    population_concordance and the population record), then the chromosome 21 suites: the eight-row
+    table and their wall-time line."""
     conc, walls, record_rel, pop = load_release_measurements(repo, version)
+    population = load_population_record(repo, version)
     record_dir = record_rel.rsplit("/", 1)[0]
     lines = [
         "## Concordance and wall time for this release",
         "",
         "The paper's published figures are unchanged; these are the released version's own, from the",
-        f"release's provenance record under [`{record_dir}/`]({REPO_URL}/tree/v{version}/{record_dir})",
+        f"release's provenance records under [`{record_dir}/`]({REPO_URL}/tree/v{version}/{record_dir})",
         "(method: `scripts/concordance/run_clone_measurement.sh`).",
+    ]
+    if pop:
+        lines += population_lines(pop)
+    if population:
+        lines += population_wall_time_lines(population)
+    if pop or population:
+        lines += ["", "The chromosome 21 suites, the paper's cells measured on the released binary:"]
+    lines += [
         "",
         "| Dataset | Assembly | Raw F1 | Adjusted F1 | VEP tuples | vep-rs tuples | Matched |",
         "| ------- | -------- | ------ | ----------- | ---------- | ------------- | ------- |",
@@ -194,7 +242,7 @@ def measurements_section(repo: Path, version: str, date: str) -> str:
         r = conc[s]
         dataset, assembly = SUITE_LABELS[s]
         lines.append(
-            f"| {dataset} | {assembly} | {float(r['raw_f1']):.6f} | {float(r['adj_f1']):.6f} | "
+            f"| {dataset} | {assembly} | {f1_9(r['intersection'], r['perl'], r['rust'])} | {half_up(float(r['adj_f1']), 9)} | "
             f"{int(r['perl']):,} | {int(r['rust']):,} | {int(r['intersection']):,} |"
         )
     n = next(iter(walls.values()))[1] if walls else 0
@@ -207,8 +255,6 @@ def measurements_section(repo: Path, version: str, date: str) -> str:
                 f"{label} {half_up(walls[('arm64', s)][0], 2)} s ARM / "
                 f"{half_up(walls[('x86_64', s)][0], 2)} s x86"
             )
-    if pop:
-        lines += population_lines(pop)
     lines += [
         "",
         f"Wall time, median of {n} independent machines per cell, ARM Graviton4 (`r8gd.8xlarge`)",
