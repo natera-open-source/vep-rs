@@ -1,0 +1,610 @@
+{
+  "arches": [
+    "arm64"
+  ],
+  "binary_md5": {
+    "arm64": "d6ad0ff10a58496d45e42bb094d84f08"
+  },
+  "binary_sha256": {
+    "arm64": "72362bf61d631490e7f51bbbd252e00fbc93c79724947634a46c5bfbb8705a16"
+  },
+  "cache_prefix": "caches/fastvep-v0.4.0",
+  "clone_manifest_note": "Instance ids are positional (clone-<arch>-<index>); every clone ran the sweep and binary this record pins.",
+  "clones": [
+    {
+      "arch": "arm64",
+      "binary_md5": "d6ad0ff10a58496d45e42bb094d84f08",
+      "clone": "clone-arm64-1",
+      "completed_at_utc": "2026-10-07T18:01:09Z",
+      "dataset_inventory_sha256": "5e2c8a624263b59244d8b0ba539b44863ea976d0907ba76d899aa5b19029c48e",
+      "engine": "fastvep",
+      "role": "comparator_concordance",
+      "source_sweep_id": "sweep-20261007T171234Z"
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "d6ad0ff10a58496d45e42bb094d84f08",
+      "clone": "clone-arm64-2",
+      "completed_at_utc": "2026-10-07T18:08:19Z",
+      "dataset_inventory_sha256": "5e2c8a624263b59244d8b0ba539b44863ea976d0907ba76d899aa5b19029c48e",
+      "engine": "fastvep",
+      "role": "comparator_concordance",
+      "source_sweep_id": "sweep-20261007T171234Z"
+    }
+  ],
+  "concordance": {
+    "s01": {
+      "adjusted": {
+        "engine_tuples": 33748452,
+        "excluded_categories": {
+          "frameshift_splice_cascade_swap": {
+            "count": 0,
+            "excluded": 0
+          },
+          "intronic_overcall_swap": {
+            "count": 2581,
+            "excluded": 0
+          },
+          "ppt_overcall_swap": {
+            "count": 206,
+            "excluded": 0
+          },
+          "splice_lastwrite_swap": {
+            "count": 0,
+            "excluded": 0
+          },
+          "start_cooccurrence_swap": {
+            "count": 0,
+            "excluded": 0
+          }
+        },
+        "excluded_engine": 0,
+        "excluded_perl": 0,
+        "f1": 0.97192519,
+        "intersection": 32672399,
+        "perl": 33483881
+      },
+      "assembly": "GRCh37",
+      "engine_tuples": 33748452,
+      "intersection": 32672399,
+      "perl": 33483881,
+      "raw_f1": 0.97192519,
+      "suite": "ClinVar full"
+    },
+    "s02": {
+      "adjusted": {
+        "engine_tuples": 92175395,
+        "excluded_categories": {
+          "frameshift_splice_cascade_swap": {
+            "count": 0,
+            "excluded": 0
+          },
+          "intronic_overcall_swap": {
+            "count": 433,
+            "excluded": 0
+          },
+          "ppt_overcall_swap": {
+            "count": 31,
+            "excluded": 0
+          },
+          "splice_lastwrite_swap": {
+            "count": 0,
+            "excluded": 0
+          },
+          "start_cooccurrence_swap": {
+            "count": 0,
+            "excluded": 0
+          }
+        },
+        "excluded_engine": 0,
+        "excluded_perl": 0,
+        "f1": 0.973008467,
+        "intersection": 89384551,
+        "perl": 91552813
+      },
+      "assembly": "GRCh38",
+      "engine_tuples": 92175395,
+      "intersection": 89384551,
+      "perl": 91552813,
+      "raw_f1": 0.973008467,
+      "suite": "ClinVar full"
+    },
+    "s07": {
+      "adjusted": {
+        "counted_not_excluded": {
+          "scored_engine_transcripts_absent_from_cache": 292
+        },
+        "engine_tuples": 301424,
+        "exclusions": {
+          "excluded_breakend_mate_local_read_engine": 0,
+          "excluded_breakend_mate_local_read_perl": 0,
+          "excluded_cnvtr_engine": 159,
+          "excluded_cnvtr_perl": 159,
+          "excluded_cross_chromosome_engine": 0,
+          "excluded_cross_chromosome_perl": 1838,
+          "excluded_divergences": 159,
+          "excluded_engine_extra": 159,
+          "excluded_non_ref_batch_engine": 0,
+          "excluded_non_ref_batch_perl": 0,
+          "excluded_perl_extra": 1997,
+          "excluded_registry_swap_engine": 0,
+          "excluded_registry_swap_perl": 0,
+          "excluded_transcript_selection_engine": 0,
+          "excluded_transcript_selection_mate_engine": 0,
+          "excluded_transcript_selection_perl": 0
+        },
+        "f1": 0.164480344,
+        "intersection": 51753,
+        "perl": 327867,
+        "scored_engine": "fastvep"
+      },
+      "aggregation_basis": "file_summed",
+      "assembly": "GRCh37",
+      "engine_tuples": 301583,
+      "input_records": 23992,
+      "intersection": 51753,
+      "per_file": {
+        "01_snv": {
+          "engine_tuples": 7488,
+          "f1": 0.99732906,
+          "intersection": 7468,
+          "perl_tuples": 7488
+        },
+        "02_mnp_complex": {
+          "engine_tuples": 19664,
+          "f1": 0.842656631,
+          "intersection": 16570,
+          "perl_tuples": 19664
+        },
+        "03_small_indels": {
+          "engine_tuples": 19763,
+          "f1": 0.514344988,
+          "intersection": 10165,
+          "perl_tuples": 19763
+        },
+        "04_large_explicit": {
+          "engine_tuples": 3985,
+          "f1": 0.528230866,
+          "intersection": 2105,
+          "perl_tuples": 3985
+        },
+        "05_symbolic_del_ins": {
+          "engine_tuples": 51740,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 73007
+        },
+        "06_symbolic_dup_inv": {
+          "engine_tuples": 66853,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 67036
+        },
+        "07_cnv_repeat": {
+          "engine_tuples": 21483,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 21483
+        },
+        "08_mobile_elements": {
+          "engine_tuples": 7607,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 7607
+        },
+        "09_breakends": {
+          "engine_tuples": 12683,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 24266
+        },
+        "10_special_alleles": {
+          "engine_tuples": 10089,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 2865
+        },
+        "11_multi_allelic": {
+          "engine_tuples": 17130,
+          "f1": 0.158552248,
+          "intersection": 2037,
+          "perl_tuples": 8565
+        },
+        "12_complex_imprecise": {
+          "engine_tuples": 6548,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 6548
+        },
+        "13_vcf45_features": {
+          "engine_tuples": 14398,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 8615
+        },
+        "1kg_sv_chr21": {
+          "engine_tuples": 3142,
+          "f1": 0.102597193,
+          "intersection": 318,
+          "perl_tuples": 3057
+        },
+        "clinvar_sv_chr21": {
+          "engine_tuples": 21028,
+          "f1": 0.6242102,
+          "intersection": 13090,
+          "perl_tuples": 20913
+        },
+        "gnomad_sv_v2.1_chr21": {
+          "engine_tuples": 17982,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 35002
+        }
+      },
+      "per_file_adjusted": {
+        "01_snv": {
+          "engine_tuples": 7488,
+          "f1": 0.99732906,
+          "intersection": 7468,
+          "perl_tuples": 7488
+        },
+        "02_mnp_complex": {
+          "engine_tuples": 19664,
+          "f1": 0.842656631,
+          "intersection": 16570,
+          "perl_tuples": 19664
+        },
+        "03_small_indels": {
+          "engine_tuples": 19763,
+          "f1": 0.514344988,
+          "intersection": 10165,
+          "perl_tuples": 19763
+        },
+        "04_large_explicit": {
+          "engine_tuples": 3985,
+          "f1": 0.528230866,
+          "intersection": 2105,
+          "perl_tuples": 3985
+        },
+        "05_symbolic_del_ins": {
+          "engine_tuples": 51740,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 73007
+        },
+        "06_symbolic_dup_inv": {
+          "engine_tuples": 66853,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 67036
+        },
+        "07_cnv_repeat": {
+          "engine_tuples": 21324,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 21324
+        },
+        "08_mobile_elements": {
+          "engine_tuples": 7607,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 7607
+        },
+        "09_breakends": {
+          "engine_tuples": 12683,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 24218
+        },
+        "10_special_alleles": {
+          "engine_tuples": 10089,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 2865
+        },
+        "11_multi_allelic": {
+          "engine_tuples": 17130,
+          "f1": 0.158552248,
+          "intersection": 2037,
+          "perl_tuples": 8565
+        },
+        "12_complex_imprecise": {
+          "engine_tuples": 6548,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 6548
+        },
+        "13_vcf45_features": {
+          "engine_tuples": 14398,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 8615
+        },
+        "1kg_sv_chr21": {
+          "engine_tuples": 3142,
+          "f1": 0.102597193,
+          "intersection": 318,
+          "perl_tuples": 3057
+        },
+        "clinvar_sv_chr21": {
+          "engine_tuples": 21028,
+          "f1": 0.6242102,
+          "intersection": 13090,
+          "perl_tuples": 20913
+        },
+        "gnomad_sv_v2.1_chr21": {
+          "engine_tuples": 17982,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 33212
+        }
+      },
+      "perl": 329864,
+      "raw_f1": 0.163918745,
+      "suite": "SV per-VCF (16 files)"
+    },
+    "s08": {
+      "adjusted": {
+        "counted_not_excluded": {
+          "scored_engine_transcripts_absent_from_cache": 3638
+        },
+        "engine_tuples": 982622,
+        "exclusions": {
+          "excluded_breakend_mate_local_read_engine": 0,
+          "excluded_breakend_mate_local_read_perl": 0,
+          "excluded_cnvtr_engine": 165,
+          "excluded_cnvtr_perl": 165,
+          "excluded_cross_chromosome_engine": 0,
+          "excluded_cross_chromosome_perl": 22481,
+          "excluded_divergences": 166,
+          "excluded_engine_extra": 166,
+          "excluded_non_ref_batch_engine": 0,
+          "excluded_non_ref_batch_perl": 0,
+          "excluded_perl_extra": 22647,
+          "excluded_registry_swap_engine": 1,
+          "excluded_registry_swap_perl": 1,
+          "excluded_transcript_selection_engine": 0,
+          "excluded_transcript_selection_mate_engine": 0,
+          "excluded_transcript_selection_perl": 0
+        },
+        "f1": 0.131981905,
+        "intersection": 137064,
+        "perl": 1094390,
+        "scored_engine": "fastvep"
+      },
+      "aggregation_basis": "file_summed",
+      "assembly": "GRCh38",
+      "engine_tuples": 982788,
+      "input_records": 53212,
+      "intersection": 137064,
+      "per_file": {
+        "01_snv": {
+          "engine_tuples": 15755,
+          "f1": 1.0,
+          "intersection": 15755,
+          "perl_tuples": 15755
+        },
+        "02_mnp_complex": {
+          "engine_tuples": 56171,
+          "f1": 0.848533941,
+          "intersection": 47663,
+          "perl_tuples": 56171
+        },
+        "03_small_indels": {
+          "engine_tuples": 54896,
+          "f1": 0.494844797,
+          "intersection": 27165,
+          "perl_tuples": 54896
+        },
+        "04_large_explicit": {
+          "engine_tuples": 10790,
+          "f1": 0.494995366,
+          "intersection": 5341,
+          "perl_tuples": 10790
+        },
+        "05_symbolic_del_ins": {
+          "engine_tuples": 96548,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 117575
+        },
+        "06_symbolic_dup_inv": {
+          "engine_tuples": 106014,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 106265
+        },
+        "07_cnv_repeat": {
+          "engine_tuples": 34500,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 34500
+        },
+        "08_mobile_elements": {
+          "engine_tuples": 22042,
+          "f1": 0.001497142,
+          "intersection": 33,
+          "perl_tuples": 22042
+        },
+        "09_breakends": {
+          "engine_tuples": 37143,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 71483
+        },
+        "10_special_alleles": {
+          "engine_tuples": 27593,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 7998
+        },
+        "11_multi_allelic": {
+          "engine_tuples": 43238,
+          "f1": 0.170714032,
+          "intersection": 5536,
+          "perl_tuples": 21619
+        },
+        "12_complex_imprecise": {
+          "engine_tuples": 13099,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 13099
+        },
+        "13_vcf45_features": {
+          "engine_tuples": 39445,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 22274
+        },
+        "1kg_sv_chr21": {
+          "engine_tuples": 30211,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 25183
+        },
+        "clinvar_sv_chr21": {
+          "engine_tuples": 56928,
+          "f1": 0.627933868,
+          "intersection": 35569,
+          "perl_tuples": 56361
+        },
+        "gnomad_sv_v4.1_chr21": {
+          "engine_tuples": 338415,
+          "f1": 4.881e-06,
+          "intersection": 2,
+          "perl_tuples": 481026
+        }
+      },
+      "per_file_adjusted": {
+        "01_snv": {
+          "engine_tuples": 15755,
+          "f1": 1.0,
+          "intersection": 15755,
+          "perl_tuples": 15755
+        },
+        "02_mnp_complex": {
+          "engine_tuples": 56171,
+          "f1": 0.848533941,
+          "intersection": 47663,
+          "perl_tuples": 56171
+        },
+        "03_small_indels": {
+          "engine_tuples": 54896,
+          "f1": 0.494844797,
+          "intersection": 27165,
+          "perl_tuples": 54896
+        },
+        "04_large_explicit": {
+          "engine_tuples": 10790,
+          "f1": 0.494995366,
+          "intersection": 5341,
+          "perl_tuples": 10790
+        },
+        "05_symbolic_del_ins": {
+          "engine_tuples": 96548,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 117575
+        },
+        "06_symbolic_dup_inv": {
+          "engine_tuples": 106014,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 106265
+        },
+        "07_cnv_repeat": {
+          "engine_tuples": 34335,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 34335
+        },
+        "08_mobile_elements": {
+          "engine_tuples": 22041,
+          "f1": 0.00149721,
+          "intersection": 33,
+          "perl_tuples": 22041
+        },
+        "09_breakends": {
+          "engine_tuples": 37143,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 71383
+        },
+        "10_special_alleles": {
+          "engine_tuples": 27593,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 7998
+        },
+        "11_multi_allelic": {
+          "engine_tuples": 43238,
+          "f1": 0.170714032,
+          "intersection": 5536,
+          "perl_tuples": 21619
+        },
+        "12_complex_imprecise": {
+          "engine_tuples": 13099,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 13099
+        },
+        "13_vcf45_features": {
+          "engine_tuples": 39445,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 22274
+        },
+        "1kg_sv_chr21": {
+          "engine_tuples": 30211,
+          "f1": 0.0,
+          "intersection": 0,
+          "perl_tuples": 25183
+        },
+        "clinvar_sv_chr21": {
+          "engine_tuples": 56928,
+          "f1": 0.627933868,
+          "intersection": 35569,
+          "perl_tuples": 56361
+        },
+        "gnomad_sv_v4.1_chr21": {
+          "engine_tuples": 338415,
+          "f1": 5.018e-06,
+          "intersection": 2,
+          "perl_tuples": 458645
+        }
+      },
+      "perl": 1117037,
+      "raw_f1": 0.130548022,
+      "suite": "SV per-VCF (16 files)"
+    }
+  },
+  "concordance_note": "Per suite: raw counts (perl, engine_tuples, intersection) and the adjusted counts after the documented classes are set aside; raw_f1 and adjusted.f1 are 2I/(A+B) from those integers at nine decimal places. The SV suites pool the 16 files' counts per assembly (aggregation_basis file_summed) and carry every file's counts under per_file and per_file_adjusted; the cross-chromosome shape is counted, not excluded, for an engine with its own annotation release (adjusted.counted_not_excluded).",
+  "dataset_inventory_sha256": "5e2c8a624263b59244d8b0ba539b44863ea976d0907ba76d899aa5b19029c48e",
+  "dataset_inventory_sha256_fastvep_arm64": "5e2c8a624263b59244d8b0ba539b44863ea976d0907ba76d899aa5b19029c48e",
+  "date": "2026-10-07",
+  "engine": "fastvep",
+  "engine_version": "v0.4.0",
+  "generated_at_utc": "2026-10-07T18:36:32.783623+00:00",
+  "ground_truth": {
+    "snp_indel": "ground_truth/perl/canonical_20260516",
+    "sv_per_vcf": "ground_truth/perl/sv_per_vcf_r115.2_c115_tr_regen_20260920"
+  },
+  "measurement_entrypoint": "scripts/concordance/run_clone_measurement.sh",
+  "methodology": "cross_instance_parallel_clone",
+  "methodology_note": "2 fresh clone(s) on the paper's ARM instance type booting the stock base image, each syncing the dataset to local NVMe and running scripts/concordance/run_clone_measurement.sh --engine fastvep on the suites below, the comparator scripts scoring the engine's output against the archived Ensembl VEP 115.2 ground truth with the same cache and reference FASTA. F1 is deterministic per binary and independent of architecture; every clone reported identical counts.",
+  "n_clones": 2,
+  "pool_arch": "arm64",
+  "record": "comparator-suites",
+  "scope": "fastvep v0.4.0 scored against Ensembl VEP 115.2's output on the cells the whole-genome campaign does not cover: ClinVar full and the structural-variant per-VCF sets, both assemblies. Concordance only; wall time is not measured here. Raw F1 counts every tuple; the adjusted figure sets aside the documented classes of docs/intended-divergences.md, the same comparator and classes the vep-rs figures use.",
+  "scored_with_release": {
+    "note": "The clones ran the concordance harness of vep-rs v0.3.2's release clones, so this engine and vep-rs v0.3.2 are scored by the same comparator on the same ground truth.",
+    "version": "v0.3.2"
+  },
+  "suites": [
+    "s01",
+    "s02",
+    "s07",
+    "s08"
+  ],
+  "sweep_id": "sweep-20261007T171234Z"
+}
