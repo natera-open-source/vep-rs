@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `docs/intended-divergences.md` is rewritten for readability and organised by
+  the five Ensembl VEP defects behind the classes the adjusted concordance sets
+  aside. Each defect's section states the defect in one sentence, why it is a
+  defect, what vep-rs does instead, where it is in the source and what
+  correcting it would change; each class opens with a summary and walks through
+  its record in short sections, with citations and counts as lists. Every
+  record, row, number, citation and command is kept. The `<CNV:TR>`
+  representation difference has a section of its own, the former class 9
+  (classes 1 and 2 on the structural-variant sets) is split into one class per
+  defect, and the classes are renumbered in page order: the former 1, 9 (splice
+  half), 2, 9 (start half), 3, 7, 8, 10, 4, 6, 11 and 5 are now 1 to 12. The
+  0.3.1 entry's "section 3" is section 5 of the reorganised page.
+
 ## [0.3.2] - 2026-10-06
 
 ### Changed

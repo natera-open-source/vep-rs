@@ -187,7 +187,7 @@ target/release/vep \
 | [Output Formats](docs/output-formats.md)     | VEP, VCF, JSON, Tab, and Parquet output specs                               |
 | [Plugins](docs/plugins.md)                   | Plugin support matrix, data files, preparation, development, concordance testing |
 | [Cache setup](docs/cache-setup.md)           | Building a JSON transcript cache natively or converting a Perl VEP cache; SIFT and PolyPhen matrices |
-| [Intended divergences](docs/intended-divergences.md) | Every class the adjusted concordance sets aside: the record, both engines' rows, the mechanism in Perl VEP's source, how to reproduce it |
+| [Intended divergences](docs/intended-divergences.md) | The five Perl VEP defects behind the classes the adjusted concordance sets aside, and the one representation difference: for each class the record, both engines' rows, the mechanism in Perl VEP's source, how to reproduce it |
 | [Published figures](docs/published-figures.md) | The paper's concordance and wall-time tables, as published, and the released data they re-derive from |
 | [Scripts](scripts/README.md)                 | Utility script index and the runbook for reproducing the published concordance |
 | [Released data](manuscript/data/README.md)   | The measurement CSVs every published figure re-derives from                 |
