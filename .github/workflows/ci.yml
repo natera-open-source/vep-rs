@@ -80,6 +80,7 @@ jobs:
           check scripts/concordance/test_compare_plugin_outputs.py 3
           check scripts/golden/test_golden_scripts.py 20
           check scripts/release/test_render_release_notes.py 17
+          check scripts/parity/test_check_parity_matrix.py 36
           [ "$fail" -eq 0 ]
           python3 -m pytest -q \
             scripts/validation/test_compare_sv_concordance.py \
@@ -89,7 +90,11 @@ jobs:
             scripts/concordance/test_compare_vep_fields.py \
             scripts/concordance/test_compare_plugin_outputs.py \
             scripts/golden/test_golden_scripts.py \
-            scripts/release/test_render_release_notes.py
+            scripts/release/test_render_release_notes.py \
+            scripts/parity/test_check_parity_matrix.py
+      # The parity matrix (tests/parity/matrix.tsv) must name every flag args.rs declares,
+      # and every landed row's tests must resolve in this tree.
+      - run: python3 scripts/parity/check_parity_matrix.py
       # Every plugin data path run_concordance.sh passes is a file setup_plugin_data.sh
       # stages; both read scripts/data/plugin_data_layout.sh, and this suite proves it.
       - run: |

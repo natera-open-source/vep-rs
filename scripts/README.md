@@ -27,6 +27,7 @@ These scripts read their data locations from environment variables, each with a 
 | `adapters/`    | Convert vep-rs outputs between formats                                        | `duckdb` CLI                  |
 | `release/`     | Render the GitHub release body the release workflow publishes as a draft       | Python 3.10+                  |
 | `docker/`      | Stage, tag and smoke-test the container image `.github/workflows/docker.yml` publishes | `gh`, Docker            |
+| `parity/`      | Hold `tests/parity/matrix.tsv` to the tree: every flag has a row and every landed row's tests resolve | Python 3.10+ |
 
 ## Reproducing the published concordance
 
@@ -194,3 +195,10 @@ initiation codons.
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `render_release_notes.py`       | Renders the release page from the repository's own files, every header `##`, about 60 lines and never more than 80: the opener and the optional Highlights and Upgrade notes of `.github/release-notes/vX.Y.Z.md` (the only hand-written lines), the version's `CHANGELOG.md` section with its kind headers at `##` and one line per bullet, the whole-genome and chromosome 21 concordance tables from the two provenance records under `docs/concordance-provenance/`, the Install bullets from `SHA256SUMS`, the build and the workspace `rust-version`, the Cite line from `CITATION.cff`, and the full-changelog footer. `.github/workflows/release.yml` runs it on every tag and on a `workflow_dispatch` dry run. |
 | `test_render_release_notes.py`  | Tests on the 0.3.2 inputs copied into a scratch repository: the whole page against its expected text, each section's rule (Highlights bounds, optional Upgrade notes, kind headers, one line per bullet, the two tables, the Install bullets, the Cite line, the footer, the line cap) and the failure modes |
+
+### parity/
+
+| Script                          | Description                                                                                                                                              |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check_parity_matrix.py`        | Holds `tests/parity/matrix.tsv` to the tree (CI job `Comparator Tests`): a flag in `crates/vep-cli/src/args.rs` without a row, a landed row without its tests, or a named test or corpus that does not resolve fails. `crates/vep-cli/tests/parity_matrix.rs` asks clap for the flag list and is the arbiter. |
+| `test_check_parity_matrix.py`   | Tests on a fixture tree: one per rule, every clap field shape the reader follows, the test-attribute rule, the header and vocabulary checks, the exit codes |
