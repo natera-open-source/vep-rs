@@ -6,7 +6,7 @@ A fast, memory-efficient variant effect predictor written in Rust: a from-scratc
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](#installation)
 
-vep-rs reads a JSON transcript cache, built from Ensembl's release files by `vep-cache-builder` or converted from an existing Perl VEP cache, and writes VEP's default, VCF, JSON and Tab formats plus Parquet. Throughout this README "Perl VEP" is the reference implementation, `ensemblorg/ensembl-vep` release 116.2 (a measured figure names the release it was scored against); the accompanying paper calls the same engine "VEP".
+vep-rs reads a JSON transcript cache, built from Ensembl's release files by `vep-cache-builder` or converted from an existing Perl VEP cache, and writes VEP's default, VCF, JSON and Tab formats plus Parquet. Throughout this README "Perl VEP" is the reference implementation, `ensemblorg/ensembl-vep` release 115.2; the accompanying paper calls the same engine "VEP".
 
 ## Why vep-rs instead of Ensembl VEP or fastVEP
 

@@ -13,7 +13,7 @@ abstract: >-
   genes, transcripts, and protein sequences, implementing the Ensembl Variant
   Effect Predictor (VEP) algorithm, reading a JSON transcript cache built from
   Ensembl release files or converted from a Perl VEP cache, and producing
-  compatible output. Its concordance with Ensembl VEP release 116.2 is measured
+  compatible output. Its concordance with Ensembl VEP release 115.2 is measured
   at population scale: over 260 million VEP consequence tuples from ClinVar,
   gnomAD and 1000 Genomes data on GRCh37 and GRCh38, reported per dataset and
   per Sequence Ontology term, with raw F1 above 0.9999 on each of the six SNP
