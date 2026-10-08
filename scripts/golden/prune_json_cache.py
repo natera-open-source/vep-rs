@@ -8,11 +8,14 @@ every transcript record of the source cache whose extended span overlaps any rec
 (symbolic alleles use END or SVLEN; breakend mates count as one-base spans on their own
 chromosome), and writes the survivors into shards named exactly as in the source so a
 transcript the source stores in two shards is kept in both. Chromosome directories with no
-surviving transcript are omitted. `--gzip` writes each shard as `<start>-<end>.json.gz`, and
-`--drop <key>` removes a `variation_effect_feature_cache` entry vep-rs can do without;
-`peptide` is not one of them (the reference peptide's sequence edits are read from it, so a
-cache without it prints a non-ATG start codon's residue as the codon translates rather than
-as VEP's edited `M`) and is refused.
+surviving transcript are omitted. The summary printed at the end counts, per chromosome,
+the transcripts kept and the spans searched: one span per record, one per breakend mate and
+one per same-chromosome breakend pair covering both ends, so a chromosome's spans outnumber
+its records whenever it carries breakends. `--gzip` writes each shard as
+`<start>-<end>.json.gz`, and `--drop <key>` removes a `variation_effect_feature_cache` entry
+vep-rs can do without; `peptide` is not one of them (the reference peptide's sequence edits
+are read from it, so a cache without it prints a non-ATG start codon's residue as the codon
+translates rather than as VEP's edited `M`) and is refused.
 
 `info.json` is the cache metadata vep-rs prints in its output headers. It is built from the
 Ensembl VEP cache's `info.txt` when `--perl-info` names one (every `source_<key>` line
@@ -229,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     rc = write_info(args.out, args)
     if rc:
         return rc
-    summary["records_by_chromosome"] = {c: len(v) for c, v in sorted(spans.items())}
+    summary["spans_by_chromosome"] = {c: len(v) for c, v in sorted(spans.items())}
     print(json.dumps(summary))
     return 0
 

@@ -428,7 +428,7 @@ def test_prune_keeps_reachable_transcripts_in_every_shard(tmp_path: Path):
     assert info["assembly"] == "GRCh37" and info["cache_version"] == 115
 
 
-def test_breakend_mate_positions_count_as_spans(tmp_path: Path):
+def test_breakend_mate_positions_count_as_spans(tmp_path: Path, capsys):
     vcf = tmp_path / "v.vcf"
     vcf.write_text(
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
@@ -440,6 +440,15 @@ def test_breakend_mate_positions_count_as_spans(tmp_path: Path):
     assert spans["13"] == [(5000, 5000)]
     assert spans["22"] == [(700, 701)]
     assert (300, 901) in spans["21"], "an intra-chromosomal pair keeps the span between the breakends"
+    # The summary counts those spans, not records: three records, one mate span each, plus
+    # the pair span of the same-chromosome breakend.
+    cache = tmp_path / "cache"
+    (cache / "transcripts" / "21").mkdir(parents=True)
+    (cache / "transcripts" / "21" / "1-1000000.json").write_text(json.dumps([{"stable_id": "ENST_A", "start": "150", "end": "250"}]))
+    assert pjc.main(["--cache", str(cache), "--out", str(tmp_path / "out"), "--vcf", str(vcf), "--assembly", "GRCh37", "--cache-version", "116"]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["spans_by_chromosome"] == {"13": 1, "21": 5, "22": 1}
+    assert summary["transcripts_per_chromosome"] == {"21": 1} and summary["shards"] == 1
 
 
 def test_info_json_from_perl_info_txt(tmp_path: Path):

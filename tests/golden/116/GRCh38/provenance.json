@@ -12,10 +12,9 @@
  },
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
- "json_cache_source": "json_cache_grch38_116",
  "fasta": "none on either side",
  "input": "exemplar records selected from the Ensembl VEP 116.2 reference outputs of the suites listed in manifest.json (ClinVar GRCh38, gnomAD v4.1 chromosome 21, 1000 Genomes high-coverage chromosome 21, the structural-variant set), two per consequence-set combination, with --cache ordering the candidates by the bytes their transcripts add to the pruned cache, cheapest first, and one exemplar of every variant class the references show",
- "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<input> (one per entry of the manifest's suites table) --k 2 --seed 1 --max-span 1000000 --multi-allelic-per-suite 4 --cache json_cache_grch38_116 --out tests/golden/116/GRCh38; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify",
+ "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<input> (one per entry of the manifest's suites table) --k 2 --seed 1 --max-span 1000000 --multi-allelic-per-suite 4 --cache <json cache> --out tests/golden/116/GRCh38; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify",
  "sha256": {
   "default.txt": "6547fea7308e66f223c429c7470eea8a6bb7a88a71a8841a799f6eeb36b96685",
   "tab.txt": "ebeb7957e78cd2e1ae3f984add9dcbc2ca26d874ce2e3c1ae6b4128ca3838046",
@@ -51,7 +50,7 @@
    "X": 786
   },
   "shards": 428,
-  "records_by_chromosome": {
+  "spans_by_chromosome": {
    "1": 49,
    "10": 20,
    "11": 55,

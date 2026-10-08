@@ -12,9 +12,8 @@
  },
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
- "json_cache_source": "json_cache_grch37_116",
  "fasta": "none on either side",
- "input": "the release-115 corpus's variants.vcf, unchanged",
+ "input": "variants.vcf: records from ClinVar GRCh37 (ID the ClinVar VariationID; every chromosome), 1000 Genomes phase 3 chromosome 21 (sequence and structural variants; rsID, ID-less, or the call set's SV ID), gnomAD v2.1.1 chromosome 21, gnomAD-SV v2.1 chromosome 21, and hand-built structural-variant records named synth_* (symbolic deletions, duplications, inversions, insertions and copy-number alleles, breakend pairs, multi-allelic and complex shapes); the manifest's records list carries every line",
  "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify",
  "sha256": {
   "default.txt": "08adac35bdb1dd7f51e450b0ffd7c59d8d081ac3ed2e4fb28f2b016647967039",
@@ -51,7 +50,7 @@
    "X": 417
   },
   "shards": 461,
-  "records_by_chromosome": {
+  "spans_by_chromosome": {
    "1": 33,
    "10": 17,
    "11": 59,

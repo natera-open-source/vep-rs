@@ -18,7 +18,6 @@
  },
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
- "json_cache_source": "json_cache_grch38_116",
  "fasta": "none on either side",
  "input": "hand-built records",
  "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify",
@@ -35,7 +34,7 @@
    "22": 90
   },
   "shards": 22,
-  "records_by_chromosome": {
+  "spans_by_chromosome": {
    "21": 46,
    "22": 2
   }

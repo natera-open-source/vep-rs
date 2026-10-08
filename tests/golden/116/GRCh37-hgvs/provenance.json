@@ -14,9 +14,8 @@
  },
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --hgvs --fasta reference.fa [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
- "json_cache_source": "json_cache_grch37_116",
  "fasta": "GRCh37 chromosome 21, complete, from Homo_sapiens.GRCh37.75.dna.primary_assembly.fa (reference.fa.gz beside this file, with the .fai of the plain file)",
- "input": "the release-115 corpus's variants.vcf, unchanged",
+ "input": "variants.vcf: chromosome 21 records from ClinVar GRCh37 (ID the ClinVar VariationID) and gnomAD v2.1.1, weighted towards the protein-level consequence terms the manifest's focus_terms name; the manifest's records list carries every line",
  "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify --field HGVSc --field HGVSp",
  "sha256": {
   "default.txt": "f582d9768b41457b858743d0b68a400f4409b010a78822f74b207ff8bf4c563e",
@@ -30,7 +29,7 @@
    "21": 839
   },
   "shards": 28,
-  "records_by_chromosome": {
+  "spans_by_chromosome": {
    "21": 293
   }
  }
