@@ -72,20 +72,22 @@ jobs:
               fail=1
             fi
           }
-          check scripts/concordance/test_compare_vep_outputs.py 155
-          check scripts/validation/test_compare_sv_concordance.py 157
+          check scripts/concordance/test_compare_vep_outputs.py 185
+          check scripts/validation/test_compare_sv_concordance.py 196
+          check scripts/concordance/test_reference_release.py 17
           check scripts/validation/test_breakend_mate_context.py 24
           check scripts/concordance/test_compare_output_formats.py 33
           check scripts/concordance/test_compare_vep_fields.py 6
           check scripts/concordance/test_compare_plugin_outputs.py 3
           check scripts/golden/test_golden_scripts.py 20
-          check scripts/release/test_render_release_notes.py 17
+          check scripts/release/test_render_release_notes.py 18
           check scripts/parity/test_check_parity_matrix.py 36
           [ "$fail" -eq 0 ]
           python3 -m pytest -q \
             scripts/validation/test_compare_sv_concordance.py \
             scripts/validation/test_breakend_mate_context.py \
             scripts/concordance/test_compare_vep_outputs.py \
+            scripts/concordance/test_reference_release.py \
             scripts/concordance/test_compare_output_formats.py \
             scripts/concordance/test_compare_vep_fields.py \
             scripts/concordance/test_compare_plugin_outputs.py \
@@ -122,7 +124,7 @@ jobs:
             echo "$1 reported $n ok lines (floor $2)"
             [ "$n" -ge "$2" ]
           }
-          check scripts/concordance/test_run_clone_measurement.sh 60
+          check scripts/concordance/test_run_clone_measurement.sh 78
           check scripts/concordance/test_generate_reference_output.sh 70
           check scripts/docker/test_image_tags.sh 8
           check scripts/docker/test_stage_release.sh 12

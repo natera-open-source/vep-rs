@@ -44,7 +44,7 @@ import json
 import re
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # The SNP/indel comparator's exclusion registry lives beside this script's directory;
@@ -59,9 +59,19 @@ from breakend_mate_context import (  # noqa: E402
     model_from_cache_record,
 )
 from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition for both comparators)
+    BND_OWN_ROWS_LOST_BUCKET,
+    BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
+    DEFAULT_REFERENCE_RELEASE,
+    FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
+    REFERENCE_116_2_ONE_SIDED_RULES,
+    REFERENCE_RELEASES,
+    REFERENCE_SKIPPED_RECORD_BUCKET,
+    _MAX_SV_SIZE,
     _batch_dependent_annotation_scope,
     _location_span,
     _span_exceeds_max_sv_size,
+    is_own_breakend_allele,
+    is_structural_allele,
 )
 
 
@@ -339,6 +349,7 @@ class VcfVariant:
     alt: str
     variant_type: str
     location: str  # "chrom:pos" for matching to VEP output
+    info: str = ""  # the INFO column as written, read by the skip-route cross-check
 
 
 def parse_vcf(path: Path) -> list[VcfVariant]:
@@ -371,7 +382,8 @@ def parse_vcf(path: Path) -> list[VcfVariant]:
             pos = int(pos_str)
             vtype = classify_variant(ref, alt)
             location = normalize_location(f"{chrom}:{pos}")
-            variants.append(VcfVariant(chrom, pos, vid, ref, alt, vtype, location))
+            info = parts[7] if len(parts) > 7 else ""
+            variants.append(VcfVariant(chrom, pos, vid, ref, alt, vtype, location, info))
     return variants
 
 
@@ -1376,6 +1388,619 @@ def count_cnv_tr_swap_population(
     return rust_total, perl_total
 
 
+# The reference release selector (Ensembl VEP 115.2 or 116.2)
+
+# The masks `apply_masks` runs against each reference release.
+MASKS_BY_RELEASE: dict[str, tuple[str, ...]] = {
+    "115.2": (
+        "filter_intended_divergences",
+        "filter_cnv_tr_expansion_divergences",
+        "filter_cross_chromosome_divergences",
+        "filter_cross_chromosome_orphan_intergenic",
+        "filter_giant_breakend_mate_divergences",
+        "filter_registry_swap_pairs",
+        "filter_non_ref_batch_divergences",
+        "filter_breakend_mate_local_read_pairs",
+    ),
+    "116.2": (
+        "filter_cnv_tr_expansion_divergences",
+        "filter_registry_swap_pairs",
+        "filter_breakend_mate_local_read_pairs",
+        "filter_reference_skipped_records",
+        "filter_bnd_own_rows_lost",
+        "filter_bnd_synonym_mate_rows",
+    ),
+}
+# Why each 115.2 mask is not applied against 116.2, for the report.
+MASKS_RETIRED_IN_116_2: dict[str, str] = {
+    "filter_intended_divergences": "116 drops a vep_skip record before the input buffer; the reference writes no row to compare transcript sets against",
+    "filter_giant_breakend_mate_divergences": "116 drops a breakend pair over --max_sv_size whole; its mate allele has no reference row",
+    "filter_non_ref_batch_divergences": "116 drops a <NON_REF> record before the input buffer",
+    "filter_cross_chromosome_divergences": "116.1's chromosome-aware overlap never pairs a record with a transcript on another chromosome",
+    "filter_cross_chromosome_orphan_intergenic": "with no off-chromosome rows to displace it, the reference writes the intergenic row itself",
+}
+
+
+def _tuples_by_location(tuples: set[AnnotTuple]) -> dict[str, set[AnnotTuple]]:
+    by_loc: dict[str, set[AnnotTuple]] = defaultdict(set)
+    for t in tuples:
+        by_loc[t[0]].add(t)
+    return by_loc
+
+
+# The reference's own skip routes, ported for the cross-check below. `_SO_TERMS` is
+# ensembl-variation Utils/Config.pm:1417-1438 at release 116; the abbreviation rules are
+# Parser.pm 116.2:663-726 (`get_SO_term`), the type derivation Parser/VCF.pm:468-481, the
+# routing of a record to the structural path Parser/VCF.pm:236-246, the coordinates
+# ensembl-io BaseVCF4.pm `get_start` / `get_end` (the base before the event is the
+# start; SVLEN sets the end before END does; a breakend's END is discarded).
+_SO_TERMS = {
+    "INS": "insertion", "INS_ME": "mobile_element_insertion", "INS_ALU": "Alu_insertion",
+    "INS_HERV": "HERV_insertion", "INS_LINE1": "LINE1_insertion", "INS_SVA": "SVA_insertion",
+    "DEL": "deletion", "DEL_ME": "mobile_element_deletion", "DEL_ALU": "Alu_deletion",
+    "DEL_HERV": "HERV_deletion", "DEL_LINE1": "LINE1_deletion", "DEL_SVA": "SVA_deletion",
+    "TREP": "tandem_repeat", "TDUP": "tandem_duplication", "DUP": "duplication",
+    "CNV": "copy_number_variation", "INV": "inversion", "BND": "chromosome_breakpoint",
+}
+_SV_ROUTED = re.compile(r"[<\[\]][^*]+[>\]\[]|^\.\w+|\w+\.$")
+_VCF44_SYMBOLIC = re.compile(r"^<?(DEL|INS|DUP|INV|CNV|CN=?[0-9]+)")
+
+
+def perl_so_abbrev(sv_type: str) -> str | None:
+    """The Sequence Ontology abbreviation `get_SO_term` derives for a type string, or None
+    when the reference has no term for it (the type is then `vep_skip`)."""
+    if re.search(r"[/,]", sv_type):
+        parts = re.split(r"[/,]", sv_type)
+        normalized = [re.sub(r"^<|>$", "", part.strip()).upper() for part in parts]
+        if normalized and all(n == normalized[0] for n in normalized):
+            sv_type = parts[0]
+    me = re.search(r"(INS|DEL):(ME):?([A-Z0-9]+)?", sv_type, re.I)
+    if me:
+        abbrev, subtype = me.group(1).upper(), me.group(2).upper()
+        element = me.group(3).upper() if me.group(3) else None
+        if element is not None:
+            element = "LINE1" if element == "L1" else element
+            if element in ("ALU", "HERV", "LINE1", "SVA"):
+                subtype = element
+        abbrev = f"{abbrev}_{subtype}"
+    elif re.search("DEL", sv_type, re.I) and re.search("DUP", sv_type, re.I):
+        abbrev = "CNV"
+    elif re.search("DUP:TANDEM", sv_type, re.I):
+        abbrev = "TDUP"
+    elif re.search("CNV:TR", sv_type, re.I):
+        abbrev = "TREP"
+    elif re.search(r"CN=?[0-9]", sv_type, re.I):
+        abbrev = "CNV"
+        if re.match(r"^<?CN=?0>?$", sv_type):
+            abbrev = "DEL"
+        if re.match(r"^<?CN=?2>?$", sv_type):
+            abbrev = "DUP"
+    elif re.search("CNV", sv_type, re.I):
+        abbrev = "CNV"
+    elif re.search(r"[\[\]]|^\.|\.$", sv_type):
+        abbrev = "BND"
+    elif re.search(r"^<|>$", sv_type):
+        abbrev = re.sub(r":.+", "", re.sub(r"<|>", "", sv_type))
+    else:
+        abbrev = sv_type
+    return abbrev if abbrev in _SO_TERMS else None
+
+
+def _info_fields(info: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for item in info.split(";"):
+        if item and item != ".":
+            key, _, value = item.partition("=")
+            out[key] = value
+    return out
+
+
+def perl_skip_route(v: VcfVariant, max_sv_size: int = _MAX_SV_SIZE) -> str | None:
+    """The route by which Ensembl VEP 116.2 drops a VCF record before its input buffer, or
+    None when it keeps the record: ``unsupported_type`` (Parser/VCF.pm:477-481),
+    ``incomplete_deletion`` (:555-557), ``oversize`` (Parser.pm:491-500 over the span
+    `get_end` derives: SVLEN first, else END, else the start; a breakend's END is discarded).
+    ``max_sv_size`` is the cap the reference ran with; -1 is no cap, as for the flag. A
+    record the parser routes to the sequence path is kept."""
+    alts = v.alt.split(",")
+    info = _info_fields(v.info)
+    if re.fullmatch(r"[ACGT]+", v.ref + "".join(alts)) or not (info.get("SVTYPE") or _SV_ROUTED.search(",".join(alts))):
+        return None
+    sv_type = "/".join(alts)
+    if info.get("SVTYPE") and not _VCF44_SYMBOLIC.match(sv_type):
+        sv_type = info["SVTYPE"]
+    abbrev = perl_so_abbrev(sv_type)
+    if abbrev is None:
+        return "unsupported_type"
+    start = v.pos + 1
+    svlen, end_field = info.get("SVLEN"), info.get("END")
+    if svlen not in (None, ""):
+        end = start + abs(int(svlen.split(",")[0])) - 1
+    elif end_field not in (None, "") and abbrev != "BND":
+        end = int(end_field)
+    else:
+        end = start
+    if "del" in _SO_TERMS[abbrev] and (start > end or (svlen in (None, "") and end_field in (None, ""))):
+        return "incomplete_deletion"
+    if max_sv_size != -1 and end - start > max_sv_size:
+        return "oversize"
+    return None
+
+
+_OWN_END_ALLELES = frozenset({"N.", ".N", "chromosome_breakpoint"})
+
+
+def record_alleles(v: VcfVariant) -> set[str]:
+    """Every Allele string either engine writes for a VCF record, normalised as the
+    comparator normalises them: the Sequence Ontology class of each symbolic ALT and of the
+    whole ALT list (`copy_number_variation` for a DEL beside a DUP), the raw abbreviation of
+    a type with no term as both engines spell it (`CPX`, `<NON_REF>`), each bracket breakend
+    string with `chr` stripped inside the brackets, the own-end strings of a breakend record
+    (`N.`, `.N`, `chromosome_breakpoint`, the REF base with the dot), the mate string a
+    `<BND>` record's CHR2/END2 give, and a sequence ALT as written."""
+    alleles: set[str] = set()
+    info = _info_fields(v.info)
+    alts = v.alt.split(",")
+    for alt in alts:
+        if alt.startswith("<") and alt.endswith(">"):
+            abbrev = perl_so_abbrev(alt)
+            if abbrev:
+                alleles.add(_SO_TERMS[abbrev])
+            else:
+                raw = re.sub(r":.+", "", alt[1:-1])
+                alleles.update({raw, f"<{raw}>", alt})
+        elif _BRACKET_MATE_RE.search(alt):
+            alleles.add(normalize_allele(alt))
+            alleles |= _OWN_END_ALLELES | {f"{v.ref}.", f".{v.ref}"}
+        elif re.fullmatch(r"\.?[A-Za-z]+\.?", alt) and (alt.startswith(".") or alt.endswith(".")):
+            alleles.update({alt, "chromosome_breakpoint"})
+        else:
+            alleles.add(alt)
+    whole = perl_so_abbrev(info["SVTYPE"] if info.get("SVTYPE") and not _VCF44_SYMBOLIC.match("/".join(alts)) else "/".join(alts))
+    if whole:
+        alleles.add(_SO_TERMS[whole])
+    if whole == "BND" or info.get("SVTYPE") == "BND":
+        alleles |= _OWN_END_ALLELES | {f"{v.ref}.", f".{v.ref}"}
+        chr2 = info.get("CHR2")
+        if chr2:
+            # The mate string the parser builds from INFO (Parser/VCF.pm:488-497): the mate
+            # position is END2 when present, else the record's END, which a breakend record
+            # from a caller that writes no END2 carries as its mate position.
+            chr2 = chr2[3:] if chr2.lower().startswith("chr") else chr2
+            for pos2 in (info.get("END2"), info.get("POS2"), info.get("END")):
+                if pos2:
+                    alleles.add(f"N[{chr2}:{pos2}[")
+    return alleles
+
+
+def record_location(v: VcfVariant) -> tuple[str, int, int]:
+    """The (chromosome, start, end) both engines write for a structural record: the base
+    after POS, and the end `get_end` derives (SVLEN first, else END, else the start; a
+    breakend's END discarded)."""
+    info = _info_fields(v.info)
+    chrom = v.location.split(":", 1)[0]
+    start = v.pos + 1
+    svlen, end_field = info.get("SVLEN"), info.get("END")
+    is_bnd = "[" in v.alt or "]" in v.alt or v.alt.startswith(".") or v.alt.endswith(".") or info.get("SVTYPE") == "BND"
+    if svlen not in (None, ""):
+        end = start + abs(int(svlen.split(",")[0])) - 1
+    elif end_field not in (None, "") and not is_bnd:
+        end = int(end_field)
+    else:
+        end = start
+    return chrom, start, end
+
+
+def skipped_record_rows(
+    input_variants: list[VcfVariant],
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+    max_sv_size: int = _MAX_SV_SIZE,
+) -> tuple[set[AnnotTuple], int, list[str]]:
+    """The records the 116 reference dropped as `vep_skip`, their vep-rs rows, and every
+    disagreement between the records and the outputs.
+
+    THE SHAPE. 116.2 writes at least one row for every record it keeps and no row in any
+    format for a record it marks `vep_skip`; vep-rs annotates all of them. A record is
+    named by the input: `perl_skip_route` over its ALT and INFO. It is CONFIRMED skipped
+    when the reference wrote no row under the record's own Location start and an allele the
+    record produces (`record_alleles`); a kept record sharing the start, or the whole
+    Location string, with a skipped one therefore never hides it and is never mistaken for
+    it. When two records at one start produce the same allele, the end of the Location
+    tells them apart.
+
+    SET ASIDE: every vep-rs tuple at a confirmed record's start under one of its alleles
+    (the same end rule applies). `<CNV:TR>` records are outside the class on both sides:
+    the reference keeps them and writes them at another Location
+    (`filter_cnv_tr_expansion_divergences`).
+
+    PROBLEMS, one line each, make the rule's blind spots loud: a skip-route record whose
+    own rows the reference wrote (a reference run under --dont_skip or another
+    --max_sv_size, declared with --reference-max-sv-size); a vep-rs structural row at a
+    Location the reference wrote nothing for that no skip-route record explains (a record
+    dropped on a route 116.2 shares with 115.2, `start > end+1`); two records at one start
+    whose alleles and Locations coincide, one skipped and one kept.
+
+    The SNP/indel comparator has no input VCF and applies the output-only rule
+    (`ReferenceRecordScope`): a Location with vep-rs structural rows and no reference row.
+
+    Returns (excluded_rust, records, problems).
+    """
+    def located(tuples: set[AnnotTuple]) -> dict[tuple[str, int], list[tuple[AnnotTuple, int]]]:
+        out: dict[tuple[str, int], list[tuple[AnnotTuple, int]]] = defaultdict(list)
+        for t in tuples:
+            span = _location_span(t[0])
+            if span is not None:
+                out[(span[0], span[1])].append((t, span[2]))
+        return out
+
+    perl_at = located(perl_tuples)
+    rust_at = located(rust_tuples)
+    records_at: dict[tuple[str, int], list[tuple[VcfVariant, str | None, set[str], int]]] = defaultdict(list)
+    for v in input_variants:
+        chrom, start, end = record_location(v)
+        records_at[(chrom, start)].append((v, perl_skip_route(v, max_sv_size), record_alleles(v), end))
+
+    def rows_of(bucket: list[tuple[AnnotTuple, int]], alleles: set[str], end: int, contested: bool) -> list[AnnotTuple]:
+        return [t for t, t_end in bucket if t[1] in alleles and (not contested or t_end == end)]
+
+    excluded: set[AnnotTuple] = set()
+    problems: list[str] = []
+    confirmed_starts: set[tuple[str, int]] = set()
+    confirmed = 0
+    for key, records in records_at.items():
+        for v, route, alleles, end in records:
+            if route is None:
+                continue
+            # A kept record at this start producing one of this record's alleles: the end
+            # decides whose rows are whose, and equal ends cannot be told apart.
+            rivals = [(rv, ra, re_) for rv, rr, ra, re_ in records if rv is not v and rr is None and ra & alleles]
+            contested = bool(rivals)
+            if any(re_ == end for _, _, re_ in rivals):
+                twin = next(rv for rv, _, re_ in rivals if re_ == end)
+                problems.append(
+                    f"{v.vid} {v.ref}>{v.alt} and {twin.vid} {twin.ref}>{twin.alt} share {key[0]}:{key[1]}-{end} and an allele; "
+                    "the skipped one cannot be told from the kept one"
+                )
+                continue
+            kept = rows_of(perl_at.get(key, []), alleles, end, contested)
+            if kept:
+                problems.append(
+                    f"{v.vid} {v.ref}>{v.alt} at {key[0]}:{key[1]} is on the {route} route, yet the reference wrote "
+                    f"{len(kept)} row(s) under its own allele(s) ({', '.join(sorted({t[1] for t in kept}))}): a reference run "
+                    "under --dont_skip or another --max_sv_size (pass --reference-max-sv-size)"
+                )
+                continue
+            confirmed_starts.add(key)
+            confirmed += 1
+            excluded.update(rows_of(rust_at.get(key, []), alleles, end, contested))
+    # The output-only rule's residue: a Location with vep-rs structural rows and no
+    # reference row that no confirmed record explains.
+    perl_locations = {t[0] for t in perl_tuples}
+    for t in rust_tuples:
+        span = _location_span(t[0])
+        if (t[0] not in perl_locations and is_structural_allele(t[1]) and t[1] != _CNV_TR_RUST_ALLELE
+                and span is not None and (span[0], span[1]) not in confirmed_starts):
+            problems.append(f"{t[0]} {t[1]}: the reference wrote nothing at this Location and no input record on a skip route starts there")
+    return excluded, confirmed, sorted(set(problems))
+
+
+def filter_reference_skipped_records(
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+    input_variants: list[VcfVariant],
+    max_sv_size: int = _MAX_SV_SIZE,
+) -> tuple[set[AnnotTuple], int]:
+    """The mask over `skipped_record_rows`: the vep-rs tuples of every record the reference
+    dropped as `vep_skip`, and the number of such records."""
+    excluded, records, _problems = skipped_record_rows(input_variants, perl_tuples, rust_tuples, max_sv_size)
+    return excluded, records
+
+
+def check_skip_routes(
+    input_variants: list[VcfVariant],
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+    max_sv_size: int = _MAX_SV_SIZE,
+) -> list[str]:
+    """The problems of `skipped_record_rows`; empty when the records and the outputs agree."""
+    return skipped_record_rows(input_variants, perl_tuples, rust_tuples, max_sv_size)[2]
+
+
+def _breakpoint_position(loc: str) -> int | None:
+    span = _location_span(loc)
+    return None if span is None else span[1]
+
+
+def filter_bnd_own_rows_lost(
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+    transcripts_by_chr: dict[str, set[str]],
+    transcript_spans: dict[tuple[str, str], TranscriptSpan],
+) -> set[AnnotTuple]:
+    """A bracket breakend whose own-end rows the reference lost to its mate chromosome.
+
+    THE SHAPE. A record's slice is named by the first transcript that reaches it
+    (AnnotationType/Transcript.pm 116.2:122, `$vf->{slice} ||= $tr->{slice}`), and the
+    transcripts of a region already in memory come first (AnnotationSource.pm
+    116.2:119-134). When a mate-chromosome region is in memory from the previous buffer
+    and the record's own region is not, a mate-chromosome transcript names the slice,
+    every own-chromosome transcript then fails the slice test (:128-139: neither the
+    record's slice nor any breakend's is on the transcript's chromosome) and the
+    reference writes nothing under the own-end allele while keeping the mate rows. The
+    result depends on the order of the input, which no annotation should.
+
+    THE PREDICATE, on a Location whose bracket allele names a mate on another
+    chromosome: the reference wrote a Transcript tuple under the bracket allele and no
+    tuple under any own-end allele; then every vep-rs-only Transcript tuple under an
+    own-end allele whose transcript the cache files on the Location's chromosome within
+    `_BREAKEND_FEATURE_DISTANCE` of the breakpoint, the reference's own admission rule
+    (StructuralVariationOverlap.pm 116:144-160), is excluded. A transcript farther away
+    than that, or on another chromosome, stays charged. With no cache it excludes
+    nothing.
+    """
+    if not transcripts_by_chr or not transcript_spans:
+        return set()
+    perl_by_loc = _tuples_by_location(perl_tuples)
+    excluded: set[AnnotTuple] = set()
+    for loc, rust_here in _tuples_by_location(rust_tuples - perl_tuples).items():
+        own = _chromosome_of_location(loc)
+        pos = _breakpoint_position(loc)
+        if own is None or pos is None:
+            continue
+        perl_here = perl_by_loc.get(loc, set())
+        mates = {m for t in perl_here | rust_here if (m := _bracket_mate(t[1])) is not None}
+        if not any(m[0] != own for m in mates):
+            continue
+        if any(is_own_breakend_allele(t[1]) for t in perl_here):
+            continue
+        if not any(_bracket_mate(t[1]) is not None and t[2] != "-" for t in perl_here):
+            continue
+        local = transcripts_by_chr.get(own, set())
+        for t in rust_here:
+            if not is_own_breakend_allele(t[1]) or t[2] == "-" or t[2] not in local:
+                continue
+            span = transcript_spans.get((own, t[2]))
+            if span is None:
+                continue
+            if span[1] - _BREAKEND_FEATURE_DISTANCE <= pos <= span[2] + _BREAKEND_FEATURE_DISTANCE:
+                excluded.add(t)
+    return excluded
+
+
+def filter_bnd_synonym_mate_rows(
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+    transcripts_by_chr: dict[str, set[str]],
+) -> set[AnnotTuple]:
+    """A bracket breakend whose mate is written with a chromosome synonym.
+
+    THE SHAPE. The overlap test resolves the mate's name through the synonym table
+    (InputBuffer.pm 116.2:348-358, `get_source_chr_name`), so a mate-chromosome
+    transcript receives the record; the slice test then compares the breakend's raw name,
+    `chr` stripped, with the cache's (AnnotationType/Transcript.pm 116.2:134), and
+    `NC_000002.12` is not `2`, so the reference writes nothing under the mate allele
+    while keeping the record's own rows.
+
+    THE PREDICATE, on a Location with a bracket allele whose mate name, `chr` stripped,
+    is not a chromosome the cache files: the reference wrote at least one tuple at the
+    Location and none under that bracket allele; then every vep-rs-only Transcript tuple
+    under that allele whose transcript the cache does not file on the Location's own
+    chromosome is excluded (an own-chromosome transcript under the mate allele is not
+    the shape). With no cache it excludes nothing.
+    """
+    if not transcripts_by_chr:
+        return set()
+    perl_by_loc = _tuples_by_location(perl_tuples)
+    excluded: set[AnnotTuple] = set()
+    for loc, rust_here in _tuples_by_location(rust_tuples - perl_tuples).items():
+        own = _chromosome_of_location(loc)
+        perl_here = perl_by_loc.get(loc)
+        if own is None or not perl_here:
+            continue
+        perl_alleles = {t[1] for t in perl_here}
+        local = transcripts_by_chr.get(own, set())
+        for t in rust_here:
+            mate = _bracket_mate(t[1])
+            if mate is None or mate[0] in transcripts_by_chr or t[1] in perl_alleles:
+                continue
+            if t[2] != "-" and t[2] not in local:
+                excluded.add(t)
+    return excluded
+
+
+def count_fasta_named_slice_intergenic(
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+) -> int:
+    """Records whose only reference row is `intergenic_variant` while vep-rs wrote
+    Transcript rows and no intergenic row: the shape of a slice named after a FASTA
+    whose sequence names differ from the cache's (Parser.pm 116.2:749 through
+    BaseVEP.pm `get_slice`, every transcript failing AnnotationType/Transcript.pm:141).
+    The condition is the run's configuration, so the count is reported and nothing is
+    set aside; a run that shows it is re-run with matching sequence names."""
+    perl_by_variant: dict[tuple[str, str], set[AnnotTuple]] = defaultdict(set)
+    for t in perl_tuples:
+        perl_by_variant[(t[0], t[1])].add(t)
+    rust_by_variant: dict[tuple[str, str], set[AnnotTuple]] = defaultdict(set)
+    for t in rust_tuples:
+        rust_by_variant[(t[0], t[1])].add(t)
+    n = 0
+    for key, perl_here in perl_by_variant.items():
+        rust_here = rust_by_variant.get(key)
+        if not rust_here:
+            continue
+        if perl_here == {key + _INTERGENIC_TUPLE_TAIL} and all(t[2] != "-" for t in rust_here):
+            n += 1
+    return n
+
+
+@dataclass
+class MaskResult:
+    """Every mask's exclusions on one pair of tuple sets, under one reference release.
+
+    A layer a release does not apply is an empty set here, so the arithmetic below
+    (the union of the vep-rs-side layers, the union of the reference-side layers) is
+    the same under both releases and the report states which layers were applied.
+    """
+
+    release: str
+    tsel_rust: set[AnnotTuple] = field(default_factory=set)
+    tsel_perl: set[AnnotTuple] = field(default_factory=set)
+    cnvtr_rust: set[AnnotTuple] = field(default_factory=set)
+    cnvtr_perl: set[AnnotTuple] = field(default_factory=set)
+    xchr_perl: set[AnnotTuple] = field(default_factory=set)
+    xchr_unresolvable_scored: int = 0
+    xchr_orphan_rust: set[AnnotTuple] = field(default_factory=set)
+    mate_rust: set[AnnotTuple] = field(default_factory=set)
+    swap_rust: set[AnnotTuple] = field(default_factory=set)
+    swap_perl: set[AnnotTuple] = field(default_factory=set)
+    swap_by_bucket: dict[str, int] = field(default_factory=dict)
+    non_ref_rust: set[AnnotTuple] = field(default_factory=set)
+    non_ref_perl: set[AnnotTuple] = field(default_factory=set)
+    mate_read_rust: set[AnnotTuple] = field(default_factory=set)
+    mate_read_perl: set[AnnotTuple] = field(default_factory=set)
+    mate_read_by_kind: dict[str, int] = field(default_factory=dict)
+    skipped_rust: set[AnnotTuple] = field(default_factory=set)
+    skipped_records: int = 0
+    skipped_problems: list[str] = field(default_factory=list)
+    bnd_own_rust: set[AnnotTuple] = field(default_factory=set)
+    bnd_synonym_rust: set[AnnotTuple] = field(default_factory=set)
+    fasta_intergenic_records: int = 0
+
+    def all_rust(self) -> set[AnnotTuple]:
+        return (
+            self.tsel_rust | self.cnvtr_rust | self.xchr_orphan_rust | self.mate_rust
+            | self.swap_rust | self.non_ref_rust | self.mate_read_rust
+            | self.skipped_rust | self.bnd_own_rust | self.bnd_synonym_rust
+        )
+
+    def all_perl(self) -> set[AnnotTuple]:
+        return (
+            self.tsel_perl | self.cnvtr_perl | self.xchr_perl | self.swap_perl
+            | self.non_ref_perl | self.mate_read_perl
+        )
+
+
+def apply_masks(
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+    reference_release: str,
+    transcripts_by_chr: dict[str, set[str]],
+    transcript_spans: dict[tuple[str, str], TranscriptSpan],
+    transcript_models: dict[tuple[str, str], TranscriptModel],
+    scored_engine: str,
+    input_variants: list[VcfVariant] | None = None,
+    max_sv_size: int = _MAX_SV_SIZE,
+) -> MaskResult:
+    """Run the masks of `MASKS_BY_RELEASE[reference_release]` on one pair of tuple sets.
+
+    The layers of the 115.2 release are the published comparator's, in its order;
+    `filter_cross_chromosome_orphan_intergenic` reads `filter_cross_chromosome_divergences`'
+    result. Under 116.2 the class-C arms and the class-D masks are not called at all, so a
+    reference that kept a `vep_skip` record (a run under --dont_skip) is scored as what it
+    is, and the 116.2 classes are applied instead; the skipped-record class reads the
+    input records (``input_variants``) and records its disagreements with the outputs in
+    ``skipped_problems`` for the caller to stop on.
+    """
+    if reference_release not in MASKS_BY_RELEASE:
+        raise ValueError(f"unknown reference release {reference_release!r}; one of {REFERENCE_RELEASES}")
+    r = MaskResult(release=reference_release)
+    masks = MASKS_BY_RELEASE[reference_release]
+    if "filter_intended_divergences" in masks:
+        r.tsel_rust, r.tsel_perl = filter_intended_divergences(perl_tuples, rust_tuples)
+    if "filter_cnv_tr_expansion_divergences" in masks:
+        r.cnvtr_rust, r.cnvtr_perl = filter_cnv_tr_expansion_divergences(perl_tuples, rust_tuples)
+    if "filter_cross_chromosome_divergences" in masks:
+        _, r.xchr_perl, r.xchr_unresolvable_scored = filter_cross_chromosome_divergences(
+            perl_tuples, rust_tuples, transcripts_by_chr, scored_engine
+        )
+    if "filter_cross_chromosome_orphan_intergenic" in masks:
+        r.xchr_orphan_rust = filter_cross_chromosome_orphan_intergenic(
+            perl_tuples, rust_tuples, r.xchr_perl
+        )
+    if "filter_giant_breakend_mate_divergences" in masks:
+        r.mate_rust = filter_giant_breakend_mate_divergences(perl_tuples, rust_tuples, transcript_spans)
+    if "filter_registry_swap_pairs" in masks:
+        r.swap_rust, r.swap_perl, r.swap_by_bucket = filter_registry_swap_pairs(perl_tuples, rust_tuples)
+    if "filter_non_ref_batch_divergences" in masks:
+        r.non_ref_rust, r.non_ref_perl = filter_non_ref_batch_divergences(perl_tuples, rust_tuples)
+    if "filter_breakend_mate_local_read_pairs" in masks:
+        r.mate_read_rust, r.mate_read_perl, r.mate_read_by_kind = filter_breakend_mate_local_read_pairs(
+            perl_tuples, rust_tuples, transcript_models
+        )
+    if "filter_reference_skipped_records" in masks:
+        if input_variants is None:
+            raise ValueError("the skipped-record mask reads the input records; pass input_variants")
+        r.skipped_rust, r.skipped_records, r.skipped_problems = skipped_record_rows(
+            input_variants, perl_tuples, rust_tuples, max_sv_size
+        )
+    if "filter_bnd_own_rows_lost" in masks:
+        r.bnd_own_rust = filter_bnd_own_rows_lost(
+            perl_tuples, rust_tuples, transcripts_by_chr, transcript_spans
+        )
+    if "filter_bnd_synonym_mate_rows" in masks:
+        r.bnd_synonym_rust = filter_bnd_synonym_mate_rows(perl_tuples, rust_tuples, transcripts_by_chr)
+    if reference_release == "116.2":
+        r.fasta_intergenic_records = count_fasta_named_slice_intergenic(perl_tuples, rust_tuples)
+    return r
+
+
+def release_report_block(
+    overall: MaskResult,
+    per_file: dict[str, MaskResult],
+    cache_supplied: bool,
+) -> dict:
+    """The 116.2 additions to the report's ``adjusted`` block: the release, the masks
+    applied and the 115.2 masks retired with the reason, each 116.2 class's exclusions
+    (overall and per file) and its definition, and whether the cache authority the two
+    breakend masks need was supplied."""
+    # The counts each class contributes, keyed by bucket; a rule without one is a rule this
+    # comparator has no mask for, which the report refuses to describe as applied.
+    excluded_by_bucket = {
+        REFERENCE_SKIPPED_RECORD_BUCKET: len(overall.skipped_rust),
+        BND_OWN_ROWS_LOST_BUCKET: len(overall.bnd_own_rust),
+        BND_SYNONYM_MATE_ROWS_LOST_BUCKET: len(overall.bnd_synonym_rust),
+        FASTA_NAMED_SLICE_INTERGENIC_BUCKET: 0,
+    }
+    missing = [r.bucket for r in REFERENCE_116_2_ONE_SIDED_RULES if r.bucket not in excluded_by_bucket]
+    if missing:
+        raise AssertionError(f"one-sided rule(s) without a mask in this comparator: {missing}")
+    return {
+        "reference_release": overall.release,
+        "masks_applied": list(MASKS_BY_RELEASE[overall.release]),
+        "masks_not_applied": dict(MASKS_RETIRED_IN_116_2),
+        "excluded_reference_skipped_rust": len(overall.skipped_rust),
+        "reference_skipped_records": overall.skipped_records,
+        "excluded_reference_skipped_by_file": {
+            k: {"rust": len(v.skipped_rust), "records": v.skipped_records}
+            for k, v in sorted(per_file.items())
+            if v.skipped_rust
+        },
+        "excluded_bnd_own_rows_lost_rust": len(overall.bnd_own_rust),
+        "excluded_bnd_own_rows_lost_by_file": {
+            k: len(v.bnd_own_rust) for k, v in sorted(per_file.items()) if v.bnd_own_rust
+        },
+        "excluded_bnd_synonym_mate_rows_rust": len(overall.bnd_synonym_rust),
+        "excluded_bnd_synonym_mate_rows_by_file": {
+            k: len(v.bnd_synonym_rust) for k, v in sorted(per_file.items()) if v.bnd_synonym_rust
+        },
+        "fasta_named_slice_intergenic_records": overall.fasta_intergenic_records,
+        "breakend_masks_check_ran": cache_supplied,
+        "divergence_classes": {
+            rule.bucket: {
+                "definition": rule.definition,
+                # This comparator's verdict is the rule's under a cache authority.
+                "excludes": rule.excludes_with_cache,
+                "excluded": excluded_by_bucket[rule.bucket],
+                "taxonomy_class": rule.taxonomy_class,
+                "perl_citation": rule.perl_citation,
+            }
+            for rule in REFERENCE_116_2_ONE_SIDED_RULES
+        },
+    }
+
+
 # Report generation
 
 
@@ -1445,6 +2070,7 @@ def write_json_report(
     excluded_mate_read_perl_count: int = 0,
     excluded_mate_read_by_kind: dict[str, int] | None = None,
     excluded_mate_read_by_file: dict[str, dict[str, int]] | None = None,
+    release_block: dict | None = None,
 ) -> None:
     """Write the JSON report.
 
@@ -1476,6 +2102,11 @@ def write_json_report(
     ``transcript_selection_cross_chromosome_overlap_perl``. ``cross_chromosome_check_ran``
     also gates the mate-allele arm and the mate-side local-read pairs, since all three
     read the cache.
+
+    ``release_block`` (116.2 and later): ``reference_release``, ``masks_applied``,
+    ``masks_not_applied`` with the reason each 115.2 mask is retired, the 116.2 classes'
+    exclusions overall and per file, ``breakend_masks_check_ran`` and every class's
+    definition under ``divergence_classes``. Absent from a 115.2 report.
     """
     report = {
         "overall": metrics_to_dict(overall),
@@ -1567,6 +2198,8 @@ def write_json_report(
                 for k, v in sorted(excluded_mate_read_by_file.items())
                 if v["rust"] or v["perl"]
             }
+        if release_block:
+            adj_dict.update(release_block)
         report["adjusted"] = adj_dict
     if adjusted_file_metrics is not None:
         report["per_file_adjusted"] = {
@@ -1590,6 +2223,9 @@ def write_markdown_report(
     excluded_cnvtr_by_file: dict[str, int] | None = None,
     assembly: str = "",
     cnvtr_swap_pairs_total_rust: int = 0,
+    reference_release: str | None = None,
+    masks_applied: tuple[str, ...] | None = None,
+    release_masks: MaskResult | None = None,
 ) -> None:
     lines: list[str] = []
     lines.append("# SV Concordance Report")
@@ -1598,6 +2234,21 @@ def write_markdown_report(
     # Overall summary
     lines.append("## Overall")
     lines.append("")
+    if reference_release is not None:
+        lines.append(
+            f"- **Reference**: Ensembl VEP {reference_release}; masks applied: "
+            + ", ".join(f"`{m}`" for m in (masks_applied or ()))
+        )
+    if release_masks is not None:
+        # The release's own classes, so the headline's "Rust-extra" total below reads
+        # beside the part of it that is skipped records.
+        lines.append(
+            f"- **{reference_release} classes**: `{REFERENCE_SKIPPED_RECORD_BUCKET}` "
+            f"{len(release_masks.skipped_rust):,} vep-rs rows on {release_masks.skipped_records:,} records set aside; "
+            f"`{BND_OWN_ROWS_LOST_BUCKET}` {len(release_masks.bnd_own_rust):,} set aside; "
+            f"`{BND_SYNONYM_MATE_ROWS_LOST_BUCKET}` {len(release_masks.bnd_synonym_rust):,} set aside; "
+            f"`{FASTA_NAMED_SLICE_INTERGENIC_BUCKET}` {release_masks.fasta_intergenic_records:,} records counted, none set aside"
+        )
     total_excluded = excluded_count + excluded_perl_count
     if adjusted_overall is not None and total_excluded > 0:
         lines.append(
@@ -1756,6 +2407,30 @@ def main() -> None:
             "Alu_insertion, deletion, ...), without which every symbolic-allele tuple on "
             "that arm is a guaranteed miss. The Perl side is never mapped. Pass the "
             "engine's name, e.g. fastvep, to score a non-vep-rs output."
+        ),
+    )
+    parser.add_argument(
+        "--reference-release",
+        choices=REFERENCE_RELEASES,
+        default=DEFAULT_REFERENCE_RELEASE,
+        help=(
+            "The Ensembl VEP release that produced --perl-dir, which selects the masks "
+            "(MASKS_BY_RELEASE). Under 115.2 they are the published comparator's; under "
+            "116.2 (default) the class-C arms and the two cross-chromosome masks are not "
+            "applied, a record the reference dropped as vep_skip is set aside whole, and the "
+            "two breakend shapes of 116.1's chromosome-aware overlap are set aside under "
+            "--vep-rs-cache. The report names the release and the masks it applied. "
+            "run_clone_measurement.sh derives the value from the reference set's provenance."
+        ),
+    )
+    parser.add_argument(
+        "--reference-max-sv-size",
+        type=int,
+        default=_MAX_SV_SIZE,
+        help=(
+            "The --max_sv_size the reference ran with (default 10000000, Ensembl VEP's own; -1 "
+            "when it disabled the cap). Read by the 116.2 skipped-record cross-check, which "
+            "refuses a reference that kept a record on a skip route or dropped one that is not."
         ),
     )
     args = parser.parse_args()
@@ -1952,53 +2627,44 @@ def main() -> None:
         all_location_types,
     )
 
-    # Adjusted metrics: three layers of divergence exclusion.
-    # Layer 1: Transcript-selection divergences (different transcripts for same variant)
-    excluded_rust_overall, excluded_perl_overall = filter_intended_divergences(
-        all_perl_tuples, all_rust_tuples
+    # Adjusted metrics: the masks of the selected reference release (`MASKS_BY_RELEASE`),
+    # run once on the union sets and once per file.
+    masks = apply_masks(
+        all_perl_tuples,
+        all_rust_tuples,
+        args.reference_release,
+        transcripts_by_chr,
+        transcript_spans,
+        transcript_models,
+        args.scored_engine,
+        all_input_variants,
+        args.reference_max_sv_size,
     )
-    # Layer 2: <CNV:TR> literal-expansion vs symbolic annotation. Perl materializes
-    # the symbolic tandem-repeat allele and re-runs point-variant splice predicates
-    # on the expanded bases; vep-rs keeps it symbolic as feature_elongation.
-    # 07_cnv_repeat only.
-    cnvtr_excluded_rust, cnvtr_excluded_perl = filter_cnv_tr_expansion_divergences(
-        all_perl_tuples, all_rust_tuples
-    )
+    if masks.skipped_problems:
+        # The skipped-record class against the input records: a disagreement is a
+        # reference run under other flags, a record dropped on a route the registry does
+        # not know, or two records the outputs cannot tell apart, and the comparison
+        # stops rather than scoring over it.
+        for line in masks.skipped_problems:
+            print(f"ERROR: [compare_sv_concordance] skipped-record cross-check: {line}", file=sys.stderr)
+        sys.exit(1)
+    excluded_rust_overall = masks.tsel_rust
+    excluded_perl_overall = masks.tsel_perl
+    cnvtr_excluded_rust, cnvtr_excluded_perl = masks.cnvtr_rust, masks.cnvtr_perl
     # The class TOTAL those two exclusions are a fraction of, measured on the same
     # union sets the mask ran on, so the reported "N of M" shares one basis.
     cnvtr_total_rust, cnvtr_total_perl = count_cnv_tr_swap_population(
         all_perl_tuples, all_rust_tuples
     )
-    # Layer 3: Perl naming transcripts that are not on the variant's chromosome.
-    # Perl-side only, and `filter_cross_chromosome_divergences` raises rather than
-    # excluding if vep-rs ever produces the shape.
-    _, xchr_excluded_perl, xchr_unresolvable_scored = filter_cross_chromosome_divergences(
-        all_perl_tuples, all_rust_tuples, transcripts_by_chr, args.scored_engine
+    xchr_excluded_perl, xchr_unresolvable_scored = masks.xchr_perl, masks.xchr_unresolvable_scored
+    xchr_orphan_rust = masks.xchr_orphan_rust
+    mate_excluded_rust = masks.mate_rust
+    swap_excluded_rust, swap_excluded_perl, swap_by_bucket = (
+        masks.swap_rust, masks.swap_perl, masks.swap_by_bucket
     )
-    # Layer 4b: the vep-rs side of the cross-chromosome mask, the intergenic row that
-    # stands where Perl's off-chromosome transcripts stood. Reads layer 4's result.
-    xchr_orphan_rust = filter_cross_chromosome_orphan_intergenic(
-        all_perl_tuples, all_rust_tuples, xchr_excluded_perl
-    )
-    # Layer 1b: the mate-allele arm of the transcript-selection mask, on breakends whose
-    # span exceeds --max_sv_size and whose mate allele Perl never wrote.
-    mate_excluded_rust = filter_giant_breakend_mate_divergences(
-        all_perl_tuples, all_rust_tuples, transcript_spans
-    )
-    # Layer 5: the SNP/indel comparator's excluding rules applied to this comparator's
-    # pairs (start co-emission, covered splice region), both members of each pair.
-    swap_excluded_rust, swap_excluded_perl, swap_by_bucket = filter_registry_swap_pairs(
-        all_perl_tuples, all_rust_tuples
-    )
-    # Layer 6: Perl's batch-derived transcript tuples on a gVCF reference block, beside
-    # the one intergenic row vep-rs writes for it.
-    non_ref_excluded_rust, non_ref_excluded_perl = filter_non_ref_batch_divergences(
-        all_perl_tuples, all_rust_tuples
-    )
-    # Layer 7: a point breakend's mate-side row read by Perl at the local coordinate,
-    # both members of each pair.
-    mate_read_rust, mate_read_perl, mate_read_by_kind = filter_breakend_mate_local_read_pairs(
-        all_perl_tuples, all_rust_tuples, transcript_models
+    non_ref_excluded_rust, non_ref_excluded_perl = masks.non_ref_rust, masks.non_ref_perl
+    mate_read_rust, mate_read_perl, mate_read_by_kind = (
+        masks.mate_read_rust, masks.mate_read_perl, masks.mate_read_by_kind
     )
     # The transcript-selection layer's own size, kept before the union so the report
     # states the class exactly beside the union the adjusted denominators subtract.
@@ -2006,14 +2672,8 @@ def main() -> None:
     tsel_perl_count = len(excluded_perl_overall)
     tsel_overlap_rust = len(excluded_rust_overall & cnvtr_excluded_rust)
     tsel_xchr_overlap_perl = len(excluded_perl_overall & xchr_excluded_perl)
-    excluded_rust_overall |= (
-        cnvtr_excluded_rust | xchr_orphan_rust | mate_excluded_rust | swap_excluded_rust
-        | non_ref_excluded_rust | mate_read_rust
-    )
-    excluded_perl_overall |= (
-        cnvtr_excluded_perl | xchr_excluded_perl | swap_excluded_perl
-        | non_ref_excluded_perl | mate_read_perl
-    )
+    excluded_rust_overall = masks.all_rust()
+    excluded_perl_overall = masks.all_perl()
     excluded_count = len(excluded_rust_overall)
     excluded_perl_count = len(excluded_perl_overall)
     adj_rust_tuples = all_rust_tuples - excluded_rust_overall
@@ -2041,53 +2701,40 @@ def main() -> None:
     non_ref_by_file: dict[str, dict[str, int]] = {}
     mate_read_by_file: dict[str, dict[str, int]] = {}
     tsel_by_file: dict[str, dict[str, int]] = {}
+    masks_by_file: dict[str, MaskResult] = {}
     adj_perl_filesum = 0
     adj_rust_filesum = 0
     adj_intersection_filesum = 0
     for basename, (variants_f, perl_t, perl_l, rust_t, rust_l, loc_types_f) in file_data.items():
-        excluded_rust_f, excluded_perl_f = filter_intended_divergences(perl_t, rust_t)
-        cnvtr_excl_rust_f, cnvtr_excl_perl_f = filter_cnv_tr_expansion_divergences(
-            perl_t, rust_t
+        masks_f = apply_masks(
+            perl_t,
+            rust_t,
+            args.reference_release,
+            transcripts_by_chr,
+            transcript_spans,
+            transcript_models,
+            args.scored_engine,
+            variants_f,
+            args.reference_max_sv_size,
         )
-        _, xchr_excl_perl_f, _ = filter_cross_chromosome_divergences(
-            perl_t, rust_t, transcripts_by_chr, args.scored_engine
-        )
-        xchr_orphan_rust_f = filter_cross_chromosome_orphan_intergenic(
-            perl_t, rust_t, xchr_excl_perl_f
-        )
-        mate_excl_rust_f = filter_giant_breakend_mate_divergences(
-            perl_t, rust_t, transcript_spans
-        )
-        swap_excl_rust_f, swap_excl_perl_f, swap_buckets_f = filter_registry_swap_pairs(
-            perl_t, rust_t
-        )
-        non_ref_rust_f, non_ref_perl_f = filter_non_ref_batch_divergences(perl_t, rust_t)
-        mate_read_rust_f, mate_read_perl_f, mate_read_kind_f = filter_breakend_mate_local_read_pairs(
-            perl_t, rust_t, transcript_models
-        )
-        cnvtr_rust_by_file[basename] = len(cnvtr_excl_rust_f)
-        cnvtr_perl_by_file[basename] = len(cnvtr_excl_perl_f)
-        tsel_by_file[basename] = {"rust": len(excluded_rust_f), "perl": len(excluded_perl_f)}
+        masks_by_file[basename] = masks_f
+        cnvtr_rust_by_file[basename] = len(masks_f.cnvtr_rust)
+        cnvtr_perl_by_file[basename] = len(masks_f.cnvtr_perl)
+        tsel_by_file[basename] = {"rust": len(masks_f.tsel_rust), "perl": len(masks_f.tsel_perl)}
         tot_rust_f, tot_perl_f = count_cnv_tr_swap_population(perl_t, rust_t)
         cnvtr_total_by_file[basename] = {"rust": tot_rust_f, "perl": tot_perl_f}
-        xchr_perl_by_file[basename] = len(xchr_excl_perl_f)
-        xchr_orphan_rust_by_file[basename] = len(xchr_orphan_rust_f)
-        mate_rust_by_file[basename] = len(mate_excl_rust_f)
+        xchr_perl_by_file[basename] = len(masks_f.xchr_perl)
+        xchr_orphan_rust_by_file[basename] = len(masks_f.xchr_orphan_rust)
+        mate_rust_by_file[basename] = len(masks_f.mate_rust)
         swap_by_file[basename] = {
-            "rust": len(swap_excl_rust_f), "perl": len(swap_excl_perl_f), **swap_buckets_f
+            "rust": len(masks_f.swap_rust), "perl": len(masks_f.swap_perl), **masks_f.swap_by_bucket
         }
-        non_ref_by_file[basename] = {"rust": len(non_ref_rust_f), "perl": len(non_ref_perl_f)}
+        non_ref_by_file[basename] = {"rust": len(masks_f.non_ref_rust), "perl": len(masks_f.non_ref_perl)}
         mate_read_by_file[basename] = {
-            "rust": len(mate_read_rust_f), "perl": len(mate_read_perl_f), **mate_read_kind_f
+            "rust": len(masks_f.mate_read_rust), "perl": len(masks_f.mate_read_perl), **masks_f.mate_read_by_kind
         }
-        adj_rust_f = (
-            rust_t - excluded_rust_f - cnvtr_excl_rust_f - xchr_orphan_rust_f
-            - mate_excl_rust_f - swap_excl_rust_f - non_ref_rust_f - mate_read_rust_f
-        )
-        adj_perl_f = (
-            perl_t - excluded_perl_f - cnvtr_excl_perl_f - xchr_excl_perl_f - swap_excl_perl_f
-            - non_ref_perl_f - mate_read_perl_f
-        )
+        adj_rust_f = rust_t - masks_f.all_rust()
+        adj_perl_f = perl_t - masks_f.all_perl()
         adjusted_file_metrics[basename] = compute_metrics(
             variants_f, adj_perl_f, perl_l, adj_rust_f, rust_l
         )
@@ -2129,6 +2776,12 @@ def main() -> None:
     tsv_path = output_dir / "discordant.tsv"
     adjusted_tsv_path = output_dir / "discordant_adjusted.tsv"
 
+    # The 115.2 report is the published comparator's and keeps its exact shape; a later
+    # release's report names itself, the masks it applied and the 116.2 classes.
+    release_reported = args.reference_release != "115.2"
+    release_block = (
+        release_report_block(masks, masks_by_file, bool(transcripts_by_chr)) if release_reported else None
+    )
     write_json_report(
         json_path,
         file_metrics,
@@ -2169,6 +2822,7 @@ def main() -> None:
         excluded_mate_read_perl_count=len(mate_read_perl),
         excluded_mate_read_by_kind=mate_read_by_kind,
         excluded_mate_read_by_file=mate_read_by_file,
+        release_block=release_block,
     )
     write_markdown_report(
         md_path,
@@ -2183,6 +2837,9 @@ def main() -> None:
         excluded_cnvtr_by_file=cnvtr_rust_by_file,
         assembly=asm,
         cnvtr_swap_pairs_total_rust=cnvtr_total_rust,
+        reference_release=args.reference_release if release_reported else None,
+        masks_applied=MASKS_BY_RELEASE[args.reference_release] if release_reported else None,
+        release_masks=masks if release_reported else None,
     )
     write_discordant_tsv(tsv_path, all_discordants)
     write_discordant_tsv(adjusted_tsv_path, adjusted_discordants)
@@ -2235,6 +2892,13 @@ def main() -> None:
                     f"(+{delta:.4f})"
                 )
         print()
+    if release_reported:
+        print(
+            f"Reference release {args.reference_release}: "
+            f"{len(masks.skipped_rust)} vep-rs tuple(s) on {masks.skipped_records} record(s) the reference skipped; "
+            f"{len(masks.bnd_own_rust)} own-end breakend row(s) and {len(masks.bnd_synonym_rust)} synonym-mate row(s) set aside; "
+            f"{masks.fasta_intergenic_records} FASTA-named-slice record(s) counted"
+        )
     print(f"Reports written to: {output_dir}/")
     print(f"  {json_path.name}")
     print(f"  {md_path.name}")

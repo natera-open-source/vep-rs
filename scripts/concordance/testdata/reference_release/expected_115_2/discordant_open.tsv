@@ -1,0 +1,9 @@
+file_name	source	location	allele	feature	feature_type	consequence_set
+output.txt	missing_in_rust	21:300	T	ENST3	Transcript	intron_variant
+output.txt	missing_in_rust	21:400	G	ENST4	Transcript	downstream_gene_variant
+output.txt	missing_in_rust	21:600-700	<NON_REF>	T9	Transcript	intron_variant
+output.txt	extra_in_rust	21:300	T	ENST3	Transcript	intron_variant,splice_polypyrimidine_tract_variant
+output.txt	extra_in_rust	21:600-700	<NON_REF>	-	-	intergenic_variant
+output.txt	extra_in_rust	21:800-900	CPX	C3	Transcript	intron_variant
+output.txt	extra_in_rust	21:800-900	CPX	C4	Transcript	coding_sequence_variant
+output.txt	extra_in_rust	21:900-950	tandem_repeat	T7	Transcript	feature_elongation

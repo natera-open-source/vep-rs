@@ -295,6 +295,63 @@ def test_captions_carry_the_comparator_protocol_memory_and_record_link(tmp_path:
     assert "peak memory at most 2.5 GB on any chromosome" in page(repo)
 
 
+def test_the_concordance_caption_reads_the_perl_reference_block_when_a_record_carries_one(tmp_path: Path) -> None:
+    """A release scored against a later Ensembl VEP names it in a `perl_reference` block (image, digest,
+    cache_version, prefix); the caption follows the block and prints no trace of the earlier release.
+    The wall-time columns stay the engine's own `engine_version`, so a comparator block carried forward
+    from an earlier record keeps its version there and nowhere else."""
+    repo = fixture_repo(tmp_path)
+    block = {
+        "image": "ensemblorg/ensembl-vep:release_116.2",
+        "digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+        "cache_version": 116,
+        "prefix": "population_r116.2_c116_20261020",
+    }
+
+    def name_the_reference(record: dict) -> None:
+        record["perl_reference"] = block
+
+    edit_record(repo, "release", name_the_reference)
+    body = page(repo)
+    assert "Whole genome against Ensembl VEP 116.2, one run per chromosome;" in body
+    assert "115.2" not in body
+    assert "5c57abdc" not in body and "population_r116.2" not in body
+
+    # The block under population_concordance, and in the population record, are read the same way;
+    # the block wins over the population record's ensembl_vep engine version.
+    def move_under_population_concordance(record: dict) -> None:
+        del record["perl_reference"]
+        record["population_concordance"]["perl_reference"] = dict(block, image="ensemblorg/ensembl-vep@sha256:abc")
+
+    edit_record(repo, "release", move_under_population_concordance)
+    assert "Whole genome against Ensembl VEP 116.2," in page(repo)
+
+    def prefix_only(record: dict) -> None:
+        record["population_concordance"]["perl_reference"] = {"prefix": "population_r116.2_c116_20261020", "cache_version": 116}
+
+    edit_record(repo, "release", prefix_only)
+    assert "Whole genome against Ensembl VEP 116.2," in page(repo)
+
+    def cache_version_only(record: dict) -> None:
+        record["population_concordance"]["perl_reference"] = {"cache_version": 116}
+
+    edit_record(repo, "release", cache_version_only)
+    assert "Whole genome against Ensembl VEP 116.2," in page(repo), "cache 116 is release 116.2, as the comparators read it"
+
+    def empty_block(record: dict) -> None:
+        record["population_concordance"]["perl_reference"] = {"digest": "sha256:abc"}
+
+    edit_record(repo, "release", empty_block)
+    assert "a perl_reference block names no release" in error(repo)
+
+    # Without any block the caption still follows the population record's engine version.
+    def drop_block(record: dict) -> None:
+        del record["population_concordance"]["perl_reference"]
+
+    edit_record(repo, "release", drop_block)
+    assert "Whole genome against Ensembl VEP 115.2," in page(repo)
+
+
 def test_the_opener_is_one_paragraph_of_two_sentences_within_fifty_words(tmp_path: Path) -> None:
     repo = fixture_repo(tmp_path)
     shutil.copy(ROOT / ".github" / "release-notes" / f"{TAG}.md", notes(repo))

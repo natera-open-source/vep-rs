@@ -1,0 +1,176 @@
+{
+  "overall": {
+    "total_input": 8,
+    "perl_variants": 0,
+    "rust_variants": 0,
+    "perl_tuples": 8,
+    "rust_tuples": 13,
+    "intersection": 6,
+    "only_perl": 2,
+    "only_rust": 7,
+    "precision": 0.461538,
+    "recall": 0.75,
+    "f1": 0.571429,
+    "perl_tuples_union": 8,
+    "rust_tuples_union": 13,
+    "intersection_union": 6,
+    "cross_file_duplicate_perl": 0,
+    "cross_file_duplicate_rust": 0
+  },
+  "per_file": {
+    "sv": {
+      "total_input": 8,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 8,
+      "rust_tuples": 13,
+      "intersection": 6,
+      "only_perl": 2,
+      "only_rust": 7,
+      "precision": 0.461538,
+      "recall": 0.75,
+      "f1": 0.571429
+    }
+  },
+  "per_variant_type": {
+    "BND": {
+      "total_input": 2,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 4,
+      "rust_tuples": 5,
+      "intersection": 4,
+      "only_perl": 0,
+      "only_rust": 1,
+      "precision": 0.8,
+      "recall": 1.0,
+      "f1": 0.888889
+    },
+    "Complex_SV": {
+      "total_input": 2,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 1,
+      "rust_tuples": 4,
+      "intersection": 1,
+      "only_perl": 0,
+      "only_rust": 3,
+      "precision": 0.25,
+      "recall": 1.0,
+      "f1": 0.4
+    },
+    "NON_REF": {
+      "total_input": 1,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 1,
+      "rust_tuples": 1,
+      "intersection": 0,
+      "only_perl": 1,
+      "only_rust": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "Symbolic_DEL": {
+      "total_input": 3,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 2,
+      "rust_tuples": 3,
+      "intersection": 1,
+      "only_perl": 1,
+      "only_rust": 2,
+      "precision": 0.333333,
+      "recall": 0.5,
+      "f1": 0.4
+    }
+  },
+  "adjusted": {
+    "total_input": 8,
+    "perl_variants": 0,
+    "rust_variants": 0,
+    "perl_tuples": 6,
+    "rust_tuples": 9,
+    "intersection": 6,
+    "only_perl": 0,
+    "only_rust": 3,
+    "precision": 0.666667,
+    "recall": 1.0,
+    "f1": 0.8,
+    "perl_tuples_union": 6,
+    "rust_tuples_union": 9,
+    "intersection_union": 6,
+    "cross_file_duplicate_perl": 0,
+    "cross_file_duplicate_rust": 0,
+    "excluded_divergences": 4,
+    "excluded_rust_extra": 4,
+    "excluded_perl_extra": 2,
+    "excluded_cnvtr_rust": 0,
+    "excluded_cnvtr_perl": 0,
+    "excluded_transcript_selection_rust": 2,
+    "excluded_transcript_selection_perl": 0,
+    "transcript_selection_cnvtr_overlap_rust": 0,
+    "cnvtr_swap_pairs_total_rust": 0,
+    "cnvtr_swap_pairs_total_perl": 0,
+    "excluded_cross_chromosome_perl": 1,
+    "excluded_cross_chromosome_rust": 1,
+    "excluded_transcript_selection_mate_rust": 0,
+    "excluded_registry_swap_rust": 0,
+    "excluded_registry_swap_perl": 0,
+    "excluded_registry_swap_by_bucket": {
+      "start_cooccurrence_swap": 0,
+      "covered_splice_region_swap": 0
+    },
+    "excluded_non_ref_batch_rust": 1,
+    "excluded_non_ref_batch_perl": 1,
+    "excluded_breakend_mate_local_read_rust": 0,
+    "excluded_breakend_mate_local_read_perl": 0,
+    "excluded_breakend_mate_local_read_by_kind": {
+      "cross_chromosome": 0,
+      "same_chromosome": 0
+    },
+    "transcript_selection_cross_chromosome_overlap_perl": 0,
+    "cross_chromosome_check_ran": true,
+    "scored_engine": "vep-rs",
+    "scored_engine_transcripts_absent_from_cache": 0,
+    "excluded_cross_chromosome_by_file": {
+      "sv": 1
+    },
+    "excluded_cnvtr_by_file": {},
+    "excluded_transcript_selection_by_file": {
+      "sv": {
+        "rust": 2,
+        "perl": 0
+      }
+    },
+    "cnvtr_swap_pairs_total_by_file": {},
+    "excluded_cross_chromosome_rust_by_file": {
+      "sv": 1
+    },
+    "excluded_transcript_selection_mate_by_file": {},
+    "excluded_registry_swap_by_file": {},
+    "excluded_non_ref_batch_by_file": {
+      "sv": {
+        "rust": 1,
+        "perl": 1
+      }
+    },
+    "excluded_breakend_mate_local_read_by_file": {}
+  },
+  "per_file_adjusted": {
+    "sv": {
+      "total_input": 8,
+      "perl_variants": 0,
+      "rust_variants": 0,
+      "perl_tuples": 6,
+      "rust_tuples": 9,
+      "intersection": 6,
+      "only_perl": 0,
+      "only_rust": 3,
+      "precision": 0.666667,
+      "recall": 1.0,
+      "f1": 0.8
+    }
+  }
+}

@@ -815,6 +815,171 @@ leftover=$(cat "$SUITE/perf/leftover_at_timed_start")
     bad "without the step the timed run found $leftover file(s), expected 3"
 
 echo
+echo "PERL-SV-CACHE-VERSION: the Perl SV cell's child shell must receive the cache version it passes to vep"
+
+# The fault: the per-VCF Perl loop runs in a single-quoted `bash -c` child under `set -u`.
+# A harness variable the parent never exported is unbound there, so a child that reads
+# `$PERL_CACHE_VERSION` aborts on its first record with "unbound variable", every Perl SV
+# cell records a non-zero exit, and the campaign has no Perl SV wall time. The value must
+# travel as a positional argument like the other nine.
+HARNESS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run_clone_measurement.sh"
+if [[ -f "$HARNESS" ]]; then
+    # The child body: the single-quoted `bash -c` block of the Perl branch of measure_sv,
+    # extracted from the shipped script so the test runs the code that ships.
+    perl_child=$(sed -n '/^measure_sv() {/,/^}/p' "$HARNESS" |
+        awk '/^[[:space:]]*perl\)$/ { p = 1 } p' |
+        sed -n "/bash -c '/,/^[[:space:]]*' _ \"\$PERL_IMAGE\"/p" |
+        sed '1d;$d')
+    if [[ -n "$perl_child" ]]; then
+        ok "the Perl SV child body was extracted from the harness ($(printf '%s\n' "$perl_child" | wc -l | tr -d ' ') lines)"
+    else
+        bad "the Perl SV child body could not be extracted from the harness"
+    fi
+
+    # Structural: the child names no harness-level variable, and the argument line hands
+    # it the cache version.
+    _unbound=$(printf '%s\n' "$perl_child" | grep -c 'PERL_CACHE_VERSION') || _unbound=0
+    [[ "$_unbound" -eq 0 ]] &&
+        ok "the child reads no \$PERL_CACHE_VERSION of its own" ||
+        bad "the child reads \$PERL_CACHE_VERSION on $_unbound line(s); unexported, it is unbound under set -u"
+    _perl_args=$(sed -n '/^measure_sv() {/,/^}/p' "$HARNESS" | sed -e :a -e '/\\$/N; s/\\\n[[:space:]]*/ /; ta' |
+        grep -e "' _ \"\$PERL_IMAGE\"")
+    printf '%s\n' "$_perl_args" | grep -q '"\$PERL_CACHE_VERSION"' &&
+        ok "the Perl SV subshell receives \$PERL_CACHE_VERSION in its argument list" ||
+        bad "the Perl SV subshell's argument list does not pass \$PERL_CACHE_VERSION"
+
+    # Behavioural: run the child under set -u with a stub docker, one input, and read the
+    # --cache_version the stub was handed.
+    STUBBIN="$TMP/stubbin"
+    mkdir -p "$STUBBIN" "$TMP/sv_in" "$TMP/sv_scratch"
+    cat >"$STUBBIN/docker" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"${STUB_DOCKER_LOG:?}"
+EOF
+    chmod +x "$STUBBIN/docker"
+    printf '##fileformat=VCFv4.2\n' | gzip -c >"$TMP/sv_in/one.vcf.gz"
+    : >"$TMP/sv_in/manifest.json"
+    (
+        unset PERL_CACHE_VERSION
+        export STUB_DOCKER_LOG="$TMP/docker_args.txt"
+        PATH="$STUBBIN:$PATH" bash -c "$perl_child" _ "ensemblorg/ensembl-vep:release_116.2" "$TMP/cache" "$TMP/ref.fa" \
+            GRCh37 "$TMP/sv_in" "$TMP/sv_scratch" "0:0" 5000 4 116
+    ) >"$TMP/perl_child.out" 2>"$TMP/perl_child.err"
+    rc_child=$?
+    [[ "$rc_child" -eq 0 ]] &&
+        ok "the child ran to completion under set -u (rc=0)" ||
+        bad "the child exited $rc_child under set -u: $(head -1 "$TMP/perl_child.err")"
+    grep -q 'unbound variable' "$TMP/perl_child.err" &&
+        bad "the child aborted on an unbound variable: $(grep 'unbound variable' "$TMP/perl_child.err" | head -1)" ||
+        ok "no unbound-variable abort"
+    if [[ -f "$TMP/docker_args.txt" ]]; then
+        _cv=$(grep -A 1 -x -- '--cache_version' "$TMP/docker_args.txt" | tail -1)
+        [[ "$_cv" == "116" ]] &&
+            ok "vep received --cache_version 116, the value passed as the tenth argument" ||
+            bad "vep received --cache_version '$_cv'; expected 116"
+    else
+        bad "the stub docker was never invoked"
+    fi
+fi
+
+echo
+echo "REFERENCE-RELEASE: every comparator call scores against the release the ground truth names"
+
+# The comparators default to the 116.2 registry. A cell scored against a 115.2 ground truth
+# under it, or the reverse, applies the wrong divergence classes and reports an adjusted F1
+# that means nothing. The release travels from the ground-truth directory's provenance (or
+# the run's --reference-release) into every comparator call, and a ground truth that names
+# neither an image tag nor a cache version fails the cell.
+if [[ -f "$HARNESS" ]]; then
+    _rr_src=$(awk '/^reference_release_for\(\) \{$/,/^}$/' "$HARNESS")
+    if [[ -n "$_rr_src" ]]; then
+        eval "$_rr_src"
+        ok "reference_release_for is defined in the harness"
+    else
+        bad "reference_release_for not found in run_clone_measurement.sh"
+    fi
+    SCRIPT_DIR="$(dirname "$HARNESS")"
+    GT116="$TMP/gt116"
+    GT115="$TMP/gt115"
+    GTNONE="$TMP/gtnone"
+    mkdir -p "$GT116" "$GT115" "$GTNONE"
+    printf '{"perl_image": "ensemblorg/ensembl-vep:release_116.2", "cache_version": 116}\n' >"$GT116/output.provenance.json"
+    printf '{"perl_image": "ensemblorg/ensembl-vep@sha256:0000", "cache_version": 115}\n' >"$GT115/provenance.json"
+    printf '{"fork": 4, "buffer_size": 5000}\n' >"$GTNONE/output.provenance.json"
+    if declare -f reference_release_for >/dev/null; then
+        REFERENCE_RELEASE=""
+        got=$(reference_release_for "$GT116" 2>/dev/null)
+        [[ "$got" == "116.2" ]] &&
+            ok "a ground truth whose sidecar names release_116.2 scores under 116.2" ||
+            bad "release_116.2 sidecar resolved to '$got'"
+        got=$(reference_release_for "$GT115" 2>/dev/null)
+        [[ "$got" == "115.2" ]] &&
+            ok "a digest-only image with cache_version 115 scores under 115.2" ||
+            bad "cache_version 115 resolved to '$got'"
+        if reference_release_for "$GTNONE" >"$TMP/rr_none.out" 2>"$TMP/rr_none.err"; then
+            bad "a ground truth naming no release passed; it would be scored under a guessed registry"
+        else
+            ok "a ground truth naming no release fails the cell"
+        fi
+        grep -q '^ERROR: \[run_clone_measurement\] no reference release for' "$TMP/rr_none.err" &&
+            ok "the failure names the ground-truth directory on stderr" ||
+            bad "the failure does not name the ground-truth directory: $(head -1 "$TMP/rr_none.err")"
+        REFERENCE_RELEASE="115.2"
+        got=$(reference_release_for "$GT116" 2>/dev/null)
+        [[ "$got" == "115.2" ]] &&
+            ok "--reference-release overrides the ground truth's own provenance" ||
+            bad "the override was ignored (got '$got')"
+        REFERENCE_RELEASE=""
+    fi
+    # The three layouts a reference set is written in: one record at the set root over
+    # suite directories that hold only outputs (the shape of the published SNP/indel set),
+    # a sidecar beside each output, and neither.
+    SET="$TMP/canonical_set"
+    mkdir -p "$SET/s01" "$SET/s03" "$TMP/bare_set/s01"
+    : >"$SET/s01/output.txt"
+    : >"$SET/s01/output.txt_warnings.txt"
+    : >"$SET/s03/output.txt"
+    : >"$TMP/bare_set/s01/output.txt"
+    printf '{"perl_image": "ensemblorg/ensembl-vep:release_115.2", "cache_version": 115}\n' >"$SET/provenance.json"
+    printf '{"perl_image": "ensemblorg/ensembl-vep:release_116.2", "cache_version": 116}\n' >"$SET/s03/output.provenance.json"
+    if declare -f reference_release_for >/dev/null; then
+        REFERENCE_RELEASE=""
+        got=$(reference_release_for "$SET/s01" 2>/dev/null)
+        [[ "$got" == "115.2" ]] &&
+            ok "layout 1, one record at the set root over output-only suite directories, resolves (115.2)" ||
+            bad "the set-root record did not resolve for s01 (got '$got')"
+        got=$(reference_release_for "$SET/s03" 2>/dev/null)
+        [[ "$got" == "116.2" ]] &&
+            ok "layout 2, a sidecar beside the suite's output, resolves and wins over the set record (116.2)" ||
+            bad "the suite sidecar did not win (got '$got')"
+        if reference_release_for "$TMP/bare_set/s01" >/dev/null 2>"$TMP/rr_bare.err"; then
+            bad "layout 3, neither record, resolved to a release"
+        else
+            ok "layout 3, neither a set record nor a sidecar, fails the cell"
+        fi
+    fi
+    _rr_calls=$(grep -c -e '--reference-release "\$reference_release"' "$HARNESS") || _rr_calls=0
+    [[ "$_rr_calls" -eq 4 ]] &&
+        ok "all four comparator calls pass --reference-release (4 of 4)" ||
+        bad "$_rr_calls of 4 comparator calls pass --reference-release; the others score under the default registry"
+    # The release is derived once per cell, BEFORE the warmup and timed runs, so a nameless
+    # ground truth costs no annotation time: one derivation in each measure_* function,
+    # each on a line before that function's first time_run call.
+    for fn in measure_p1 measure_sv; do
+        _fn_start=$(grep -n -e "^${fn}() {" "$HARNESS" | head -1 | cut -d: -f1)
+        _fn_body=$(sed -n "/^${fn}() {/,/^}/p" "$HARNESS")
+        _derive_rel=$(printf '%s\n' "$_fn_body" | grep -n -e 'reference_release=$(reference_release_for ' | cut -d: -f1)
+        _time_rel=$(printf '%s\n' "$_fn_body" | grep -n -e 'res=$(time_run ' | head -1 | cut -d: -f1)
+        _n_derive=$(printf '%s\n' "$_derive_rel" | grep -c .) || _n_derive=0
+        if [[ "$_n_derive" -eq 1 && -n "$_time_rel" && "$_derive_rel" -lt "$_time_rel" ]]; then
+            ok "$fn derives the release once, before its first timed run (line $((_fn_start + _derive_rel - 1)) < $((_fn_start + _time_rel - 1)))"
+        else
+            bad "$fn derives the release $_n_derive time(s) (relative line ${_derive_rel:-none}) against its first time_run at relative line ${_time_rel:-none}"
+        fi
+    done
+fi
+
+echo
 echo "----------------------------------------"
 echo "passed: $PASS   failed: $FAIL"
 [[ "$FAIL" -eq 0 ]] || exit 1

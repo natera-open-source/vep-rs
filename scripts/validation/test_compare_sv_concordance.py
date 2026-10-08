@@ -514,11 +514,13 @@ class SvFilterSetTests(unittest.TestCase):
         )
 
     def test_the_sv_filter_set_is_exactly_the_expected_one(self) -> None:
-        """Two full masks (transcript selection, cross-chromosome annotation), each with
-        a second arm on the same class (the mate allele of a giant breakend; the vep-rs
-        intergenic row of a cross-chromosome record), one partial (<CNV:TR>), the pair
-        filter that applies the SNP/indel registry's excluding rules, the gVCF
-        reference-block filter, and the mate-side local-read pair filter.
+        """The 115.2 masks: two full masks (transcript selection, cross-chromosome
+        annotation), each with a second arm on the same class (the mate allele of a giant
+        breakend; the vep-rs intergenic row of a cross-chromosome record), one partial
+        (<CNV:TR>), the pair filter that applies the SNP/indel registry's excluding rules,
+        the gVCF reference-block filter, and the mate-side local-read pair filter. The
+        116.2 masks: the record the reference skipped, and the two breakend shapes of the
+        chromosome-aware overlap.
 
         Pinned as a set rather than a count, so adding or removing a filter fails
         here with its name, beside the taxonomy row it would need."""
@@ -533,8 +535,59 @@ class SvFilterSetTests(unittest.TestCase):
                 "filter_registry_swap_pairs",
                 "filter_non_ref_batch_divergences",
                 "filter_breakend_mate_local_read_pairs",
+                "filter_reference_skipped_records",
+                "filter_bnd_own_rows_lost",
+                "filter_bnd_synonym_mate_rows",
             },
         )
+
+    def test_every_filter_belongs_to_a_release(self) -> None:
+        """Every `filter_*` mask is applied against at least one reference release, and
+        every name a release lists is a mask; the 115.2 list is the published
+        comparator's eight in its order, the 116.2 list drops the class-C arms and the
+        two class-D masks and adds the three 116.2 masks."""
+        filters = {n for n in dir(C) if n.startswith("filter_")}
+        listed = {m for masks in C.MASKS_BY_RELEASE.values() for m in masks}
+        self.assertEqual(listed, filters)
+        self.assertEqual(
+            C.MASKS_BY_RELEASE["115.2"],
+            (
+                "filter_intended_divergences",
+                "filter_cnv_tr_expansion_divergences",
+                "filter_cross_chromosome_divergences",
+                "filter_cross_chromosome_orphan_intergenic",
+                "filter_giant_breakend_mate_divergences",
+                "filter_registry_swap_pairs",
+                "filter_non_ref_batch_divergences",
+                "filter_breakend_mate_local_read_pairs",
+            ),
+        )
+        retired = set(C.MASKS_BY_RELEASE["115.2"]) - set(C.MASKS_BY_RELEASE["116.2"])
+        self.assertEqual(retired, set(C.MASKS_RETIRED_IN_116_2), "every retired mask carries its reason")
+        self.assertEqual(
+            set(C.MASKS_BY_RELEASE["116.2"]) - set(C.MASKS_BY_RELEASE["115.2"]),
+            {"filter_reference_skipped_records", "filter_bnd_own_rows_lost", "filter_bnd_synonym_mate_rows"},
+        )
+
+    def test_the_release_block_describes_every_116_2_rule_with_this_comparators_verdict(self) -> None:
+        """Every one-sided rule of the 116.2 registry has a count in this comparator's report
+        and carries its own cache-authority verdict; a rule added to the registry without a
+        mask here is refused at report time, by name."""
+        from unittest import mock
+
+        block = C.release_report_block(C.MaskResult(release="116.2"), {}, True)
+        classes = block["divergence_classes"]
+        self.assertEqual(list(classes), [r.bucket for r in C.REFERENCE_116_2_ONE_SIDED_RULES])
+        for rule in C.REFERENCE_116_2_ONE_SIDED_RULES:
+            self.assertEqual(classes[rule.bucket]["excludes"], rule.excludes_with_cache, rule.bucket)
+            self.assertIn("excluded", classes[rule.bucket])
+        self.assertEqual([c["excludes"] for c in classes.values()], [True, True, True, False])
+        fifth = C.REFERENCE_116_2_ONE_SIDED_RULES[0].__class__(
+            bucket="a_fifth_shape", definition="A shape.", excludes=False, taxonomy_class="x", perl_citation="X.pm:1"
+        )
+        with mock.patch.object(C, "REFERENCE_116_2_ONE_SIDED_RULES", C.REFERENCE_116_2_ONE_SIDED_RULES + (fifth,)):
+            with self.assertRaisesRegex(AssertionError, "a_fifth_shape"):
+                C.release_report_block(C.MaskResult(release="116.2"), {}, True)
 
 
 # Cross-file tuple collisions
@@ -646,6 +699,8 @@ class AggregateBasisEndToEndTests(unittest.TestCase):
         argv = sys.argv
         sys.argv = [
             "compare_sv_concordance.py",
+            "--reference-release",
+            "115.2",
             "--assembly",
             "grch37",
             "--input-dir",
@@ -1167,6 +1222,8 @@ class FastvepEngineEndToEndTests(unittest.TestCase):
         argv = sys.argv
         sys.argv = [
             "compare_sv_concordance.py",
+            "--reference-release",
+            "115.2",
             "--assembly",
             "grch38",
             "--input-dir",
@@ -1394,6 +1451,8 @@ class TranscriptSelectionOwnCountEndToEndTests(unittest.TestCase):
         argv = sys.argv
         sys.argv = [
             "compare_sv_concordance.py",
+            "--reference-release",
+            "115.2",
             "--assembly",
             "grch37",
             "--input-dir",
@@ -1445,6 +1504,8 @@ class TranscriptSelectionOwnCountEndToEndTests(unittest.TestCase):
         argv = sys.argv
         sys.argv = [
             "compare_sv_concordance.py",
+            "--reference-release",
+            "115.2",
             "--assembly",
             "grch37",
             "--input-dir",
@@ -1518,6 +1579,8 @@ class CnvTrTotalReportEndToEndTests(unittest.TestCase):
         argv = sys.argv
         sys.argv = [
             "compare_sv_concordance.py",
+            "--reference-release",
+            "115.2",
             "--assembly",
             "grch37",
             "--input-dir",
@@ -1570,6 +1633,8 @@ class CnvTrTotalReportEndToEndTests(unittest.TestCase):
         argv = sys.argv
         sys.argv = [
             "compare_sv_concordance.py",
+            "--reference-release",
+            "115.2",
             "--assembly",
             "grch37",
             "--input-dir",
@@ -1672,6 +1737,8 @@ class AdjustedDiscordantTsvEndToEndTests(unittest.TestCase):
         argv = sys.argv
         sys.argv = [
             "compare_sv_concordance.py",
+            "--reference-release",
+            "115.2",
             "--assembly",
             "grch37",
             "--input-dir",
@@ -1757,6 +1824,8 @@ class AdjustedDiscordantTsvEndToEndTests(unittest.TestCase):
         argv = sys.argv
         sys.argv = [
             "compare_sv_concordance.py",
+            "--reference-release",
+            "115.2",
             "--assembly",
             "grch37",
             "--input-dir",
@@ -2194,6 +2263,453 @@ class BreakendMateLocalReadTests(unittest.TestCase):
     def test_a_transcript_absent_from_the_cache_is_not_adjudicated(self) -> None:
         perl, rust = self.pair("feature_truncation", "feature_truncation,intron_variant")
         self.assertEqual(C.filter_breakend_mate_local_read_pairs(perl, rust, {("22", "ENST_OTHER"): self.MODEL})[:2], (set(), set()))
+
+
+# The reference release selector (Ensembl VEP 115.2 or 116.2)
+
+
+def INTERGENIC(loc: str, allele: str):
+    return T(loc, allele, "-", "intergenic_variant", ftype="-")
+
+
+def REC(pos: int, ref: str, alt: str, info: str, vid: str = "r", chrom: str = "21") -> "C.VcfVariant":
+    """An input record as parse_vcf builds it."""
+    return C.VcfVariant(chrom, pos, vid, ref, alt, C.classify_variant(ref, alt), f"{chrom}:{pos}", info)
+
+
+class ReferenceSkippedRecordTests(unittest.TestCase):
+    """116 drops a `vep_skip` record before the input buffer (Parser.pm 116.2:491-500,
+    821-826; Parser/VCF.pm 116.2:477-481, 555-557, 575) and writes no row for it; vep-rs
+    annotates it. The record is named by the input (`perl_skip_route`), confirmed by the
+    reference's absence under its own Location start and alleles (`record_alleles`), and its
+    vep-rs rows under those alleles are the class, whatever else shares the start."""
+
+    def test_every_vep_rs_row_of_a_skipped_record_is_excluded(self) -> None:
+        records = [REC(50000, "N", "<CPX>", "END=60000;SVTYPE=CPX", "cpx"),
+                   REC(30000000, "N", "<DEL>", "SVTYPE=DEL", "del_no_end"),
+                   REC(70000, "N", "<NON_REF>", "END=70100", "gvcf"),
+                   REC(1000, "N", "<DEL>", "END=2000;SVTYPE=DEL", "kept")]
+        rust = {
+            T("21:50001-60000", "CPX", "ENST_A", "intron_variant"),
+            T("21:50001-60000", "CPX", "ENST_B", "coding_sequence_variant"),
+            T("21:30000001", "deletion", "ENST_C", "feature_truncation"),
+            T("21:70001-70100", "<NON_REF>", "-", "intergenic_variant", ftype="-"),
+            T("21:1001-2000", "deletion", "ENST_D", "feature_truncation"),
+        }
+        perl = {T("21:1001-2000", "deletion", "ENST_D", "feature_truncation")}
+        excluded, records_n = C.filter_reference_skipped_records(perl, rust, records)
+        self.assertEqual(excluded, {t for t in rust if t[0] != "21:1001-2000"})
+        self.assertEqual(records_n, 3)
+        self.assertEqual(C.check_skip_routes(records, perl, rust), [])
+
+    def test_a_kept_record_at_the_same_start_neither_hides_nor_joins_a_skipped_one(self) -> None:
+        """A `<NON_REF>` block beside a kept multi-span record at one start (the shape of the
+        synthetic special-allele set), and a `<CPX>` sharing its whole Location string with a
+        kept deletion (gnomAD-SV): the kept record's reference rows are under its own alleles,
+        so the skipped record is confirmed, and only the skipped record's rows are set aside."""
+        records = [REC(27330442, "N", "<NON_REF>", "END=27330631", "nonref"),
+                   REC(27330442, "N", "<DEL>", "END=27330700;SVTYPE=DEL", "multi_span"),
+                   REC(16450356, "N", "<CPX>", "END=16456471;SVTYPE=CPX", "cpx"),
+                   REC(16450356, "N", "<DEL>", "END=16456471;SVTYPE=DEL", "del")]
+        perl = {T("21:27330443-27330700", "deletion", "ENST_M", "intron_variant"),
+                T("21:16450357-16456471", "deletion", "ENST_D", "feature_truncation")}
+        rust = perl | {T("21:27330443-27330631", "<NON_REF>", "-", "intergenic_variant", ftype="-"),
+                       T("21:16450357-16456471", "CPX", "ENST_D", "coding_sequence_variant"),
+                       T("21:16450357-16456471", "CPX", "ENST_E", "intron_variant")}
+        excluded, n = C.filter_reference_skipped_records(perl, rust, records)
+        self.assertEqual(excluded, rust - perl)
+        self.assertEqual(n, 2)
+        self.assertEqual(C.check_skip_routes(records, perl, rust), [])
+
+    def test_a_skipped_breakend_record_is_matched_by_its_own_end_and_mate_strings(self) -> None:
+        """A gnomAD-SV breakend over the cap: vep-rs writes the own end `N.` and the mate
+        string built from CHR2 and END2 (or END when a caller writes no END2); a kept
+        breakend at the same start with another mate stays."""
+        records = [REC(18457512, "N", "<BND>", "END=18457513;SVTYPE=BND;SVLEN=14027179;CHR2=21;POS2=32484691;END2=32484692", "giant"),
+                   REC(16316682, "N", "<BND>", "CHR2=chr21;END=16316682;SVLEN=15787275;SVTYPE=BND", "giant_no_end2"),
+                   REC(18457512, "N", "N[22:5000[", "SVTYPE=BND", "kept_bnd")]
+        perl = {T("21:18457513", "N[22:5000[", "ENST_K", "intron_variant")}
+        rust = perl | {T("21:18457513-32484691", "N.", "ENST_1", "intron_variant"),
+                       T("21:18457513-32484691", "N[21:32484692[", "ENST_2", "downstream_gene_variant"),
+                       T("21:16316683-32103957", "N.", "ENST_3", "intron_variant"),
+                       T("21:16316683-32103957", "N[21:16316682[", "ENST_4", "intron_variant")}
+        excluded, n = C.filter_reference_skipped_records(perl, rust, records)
+        self.assertEqual(excluded, rust - perl)
+        self.assertEqual(n, 2)
+        self.assertEqual(C.check_skip_routes(records, perl, rust), [])
+
+    def test_a_mixed_alt_list_is_set_aside_whole_including_its_sequence_allele_rows(self) -> None:
+        """`<DEL>,T` has no Sequence Ontology term, so the reference skips the line; vep-rs
+        writes a `deletion` row and a `T` row at the Location, and both are the class."""
+        records = [REC(30165800, "N", "<DEL>,T", "END=30166000", "mixed")]
+        rust = {T("21:30165801-30166000", "deletion", "ENST_1", "feature_truncation"),
+                T("21:30165801-30166000", "T", "ENST_1", "missense_variant")}
+        self.assertEqual(C.filter_reference_skipped_records(set(), rust, records), (rust, 1))
+
+    def test_a_record_the_reference_kept_is_never_touched(self) -> None:
+        """A `<DEL>,<DUP>` record is kept as `copy_number_variation`; vep-rs's `deletion` and
+        `duplication` rows at its Location are a naming divergence, not a skipped record, and a
+        record on no route with reference rows is likewise untouched."""
+        records = [REC(30165700, "N", "<DEL>,<DUP>", "END=30165900", "cnv"),
+                   REC(18457512, "N", "<BND>", "SVTYPE=BND;CHR2=21;END2=32484692", "bnd_in_cap")]
+        perl = {T("21:30165701-30165900", "copy_number_variation", "ENST_1", "3_prime_UTR_variant"),
+                T("21:18457513", "N.", "ENST_2", "intron_variant")}
+        rust = {T("21:30165701-30165900", "deletion", "ENST_1", "feature_truncation,3_prime_UTR_variant"),
+                T("21:30165701-30165900", "duplication", "ENST_1", "feature_elongation,3_prime_UTR_variant"),
+                T("21:18457513", "N.", "ENST_2", "intron_variant"),
+                T("21:18457513", "N.", "ENST_3", "transcript_ablation")}
+        self.assertEqual(C.filter_reference_skipped_records(perl, rust, records), (set(), 0))
+        self.assertEqual(C.check_skip_routes(records, perl, rust), [])
+
+    def test_a_tandem_repeat_record_is_outside_the_class(self) -> None:
+        """The reference keeps a <CNV:TR> and writes it at the run's 3' end, so its vep-rs
+        rows never share a Location with the reference's and belong to the <CNV:TR> class."""
+        records = [REC(899, "N", "<CNV:TR>", "END=950;SVLEN=51;RUS=AC;RUC=10", "tr")]
+        rust = {T("21:900-950", "tandem_repeat", "ENST_T", "feature_elongation")}
+        perl = {T("21:950-951", "ACG", "ENST_T", "inframe_insertion")}
+        self.assertEqual(C.filter_reference_skipped_records(perl, rust, records), (set(), 0))
+        self.assertEqual(C.check_skip_routes(records, perl, rust), [])
+
+    def test_the_mask_without_input_records_is_refused(self) -> None:
+        with self.assertRaisesRegex(ValueError, "input_variants"):
+            C.apply_masks(set(), set(), "116.2", {}, {}, {}, "vep-rs")
+
+
+class RecordAllelesTests(unittest.TestCase):
+    """`record_alleles` names every Allele string the engines write for a record."""
+
+    def test_symbolic_types_with_and_without_a_term(self) -> None:
+        self.assertEqual(C.record_alleles(REC(1000, "N", "<DEL>", "END=2000;SVTYPE=DEL")), {"deletion"})
+        self.assertEqual(C.record_alleles(REC(1000, "N", "<CPX>", "END=2000;SVTYPE=CPX")), {"CPX", "<CPX>"})
+        self.assertEqual(C.record_alleles(REC(1000, "N", "<NON_REF>", "END=1100")), {"NON_REF", "<NON_REF>"})
+        self.assertEqual(C.record_alleles(REC(1000, "N", "<DEL>,<DUP>", "END=2000")), {"deletion", "duplication", "copy_number_variation"})
+        self.assertEqual(C.record_alleles(REC(1000, "N", "<INS>,<DEL>", "END=2000")), {"insertion", "deletion"})
+        self.assertEqual(C.record_alleles(REC(1000, "N", "<DEL>,T", "END=2000")), {"deletion", "T"})
+        self.assertEqual(C.record_alleles(REC(1000, "N", "<INS:ME:ALU>", "SVLEN=300")), {"Alu_insertion"})
+
+    def test_breakend_records(self) -> None:
+        self.assertEqual(
+            C.record_alleles(REC(18457512, "N", "<BND>", "SVTYPE=BND;CHR2=21;POS2=32484691;END2=32484692;END=18457513")),
+            {"chromosome_breakpoint", "N.", ".N", "N[21:32484692[", "N[21:32484691[", "N[21:18457513["},
+        )
+        self.assertEqual(
+            C.record_alleles(REC(100, "A", "A[chr22:5000[", "SVTYPE=BND")),
+            {"A[22:5000[", "N.", ".N", "A.", ".A", "chromosome_breakpoint"},
+        )
+        self.assertEqual(C.record_alleles(REC(100, "T", ".T", "SVTYPE=BND")), {".T", "chromosome_breakpoint", "N.", ".N", "T."})
+
+
+class RecordLocationTests(unittest.TestCase):
+    def test_start_is_the_base_after_pos_and_end_follows_get_end(self) -> None:
+        self.assertEqual(C.record_location(REC(1000, "N", "<DEL>", "END=2000;SVTYPE=DEL")), ("21", 1001, 2000))
+        self.assertEqual(C.record_location(REC(1000, "N", "<DEL>", "END=2000;SVLEN=-500;SVTYPE=DEL")), ("21", 1001, 1500), "SVLEN before END")
+        self.assertEqual(C.record_location(REC(30165850, "N", "<DEL>", "SVTYPE=DEL")), ("21", 30165851, 30165851))
+        self.assertEqual(C.record_location(REC(18457512, "N", "<BND>", "END=18457513;SVLEN=14027179;CHR2=21;END2=32484692")), ("21", 18457513, 32484691))
+        self.assertEqual(C.record_location(REC(18457512, "N", "<BND>", "END=18457513;CHR2=21;END2=32484692")), ("21", 18457513, 18457513), "a breakend's END is discarded")
+
+
+class BndOwnRowsLostTests(unittest.TestCase):
+    """A bracket breakend whose mate is on another chromosome loses its own-end rows
+    when a mate-chromosome transcript names its slice first (AnnotationType/Transcript.pm
+    116.2:122-143 with AnnotationSource.pm 116.2:119-134)."""
+
+    LOC = "21:26037668"
+    MATE = "N[22:26037668["
+    TX_BY_CHR = {"21": {"ENST21_NEAR", "ENST21_FAR"}, "22": {"ENST22_M"}}
+    SPANS = {
+        ("21", "ENST21_NEAR"): ("21", 26030000, 26035000),   # 2,668 bases from the breakpoint
+        ("21", "ENST21_FAR"): ("21", 26000000, 26010000),    # 27,668 bases away
+        ("22", "ENST22_M"): ("22", 26036000, 26040000),
+    }
+
+    def rust(self, *own_features: str) -> set:
+        return {T(self.LOC, self.MATE, "ENST22_M", "intron_variant")} | {
+            T(self.LOC, "N.", f, "upstream_gene_variant") for f in own_features
+        }
+
+    def test_own_end_rows_within_the_admission_window_are_excluded(self) -> None:
+        perl = {T(self.LOC, self.MATE, "ENST22_M", "intron_variant")}
+        got = C.filter_bnd_own_rows_lost(perl, self.rust("ENST21_NEAR"), self.TX_BY_CHR, self.SPANS)
+        self.assertEqual(got, {T(self.LOC, "N.", "ENST21_NEAR", "upstream_gene_variant")})
+
+    def test_vep_rs_own_allele_string_may_be_the_class_term(self) -> None:
+        """vep-rs writes the local end of a bracket breakend as `chromosome_breakpoint`."""
+        perl = {T(self.LOC, self.MATE, "ENST22_M", "intron_variant")}
+        rust = {T(self.LOC, self.MATE, "ENST22_M", "intron_variant"),
+                T(self.LOC, "chromosome_breakpoint", "ENST21_NEAR", "upstream_gene_variant")}
+        self.assertEqual(len(C.filter_bnd_own_rows_lost(perl, rust, self.TX_BY_CHR, self.SPANS)), 1)
+
+    def test_a_transcript_beyond_the_window_stays_charged(self) -> None:
+        """The reference's own rule admits a breakend within 5,000 bases of the transcript
+        (StructuralVariationOverlap.pm 116:144-160); a farther row is vep-rs's alone."""
+        perl = {T(self.LOC, self.MATE, "ENST22_M", "intron_variant")}
+        got = C.filter_bnd_own_rows_lost(perl, self.rust("ENST21_NEAR", "ENST21_FAR"), self.TX_BY_CHR, self.SPANS)
+        self.assertEqual({t[2] for t in got}, {"ENST21_NEAR"})
+
+    def test_the_reference_keeping_any_own_end_row_is_not_the_shape(self) -> None:
+        perl = {T(self.LOC, self.MATE, "ENST22_M", "intron_variant"), INTERGENIC(self.LOC, "N.")}
+        self.assertEqual(C.filter_bnd_own_rows_lost(perl, self.rust("ENST21_NEAR"), self.TX_BY_CHR, self.SPANS), set())
+
+    def test_a_same_chromosome_mate_is_not_the_shape(self) -> None:
+        loc, mate = "21:24808769-35740566", "N[21:35740567["
+        perl = {T(loc, mate, "ENST21_NEAR", "intron_variant")}
+        rust = perl | {T(loc, "N.", "ENST21_NEAR", "intron_variant")}
+        self.assertEqual(C.filter_bnd_own_rows_lost(perl, rust, self.TX_BY_CHR, self.SPANS), set())
+
+    def test_the_reference_dropping_the_mate_rows_too_is_not_the_shape(self) -> None:
+        """No reference Transcript row under the bracket allele means the record was not
+        reached through its mate; that is the skipped-record class or a real divergence."""
+        perl = {INTERGENIC(self.LOC, self.MATE)}
+        self.assertEqual(C.filter_bnd_own_rows_lost(perl, self.rust("ENST21_NEAR"), self.TX_BY_CHR, self.SPANS), set())
+
+    def test_no_cache_excludes_nothing(self) -> None:
+        perl = {T(self.LOC, self.MATE, "ENST22_M", "intron_variant")}
+        self.assertEqual(C.filter_bnd_own_rows_lost(perl, self.rust("ENST21_NEAR"), {}, {}), set())
+
+
+class BndSynonymMateRowsTests(unittest.TestCase):
+    """A mate written with a chromosome synonym passes the overlap test (InputBuffer.pm
+    116.2:348-358) and fails the slice test (AnnotationType/Transcript.pm 116.2:134), so
+    the reference writes nothing under the mate allele."""
+
+    LOC = "21:26037668"
+    SYN = "N[NC_000022.11:26037668["
+    TX_BY_CHR = {"21": {"ENST21_OWN"}, "22": {"ENST22_M"}}
+
+    def test_mate_side_rows_under_a_synonym_named_mate_are_excluded(self) -> None:
+        perl = {T(self.LOC, "N.", "ENST21_OWN", "upstream_gene_variant")}
+        rust = perl | {T(self.LOC, self.SYN, "ENST22_M", "intron_variant")}
+        self.assertEqual(C.filter_bnd_synonym_mate_rows(perl, rust, self.TX_BY_CHR), {T(self.LOC, self.SYN, "ENST22_M", "intron_variant")})
+
+    def test_a_cache_named_mate_is_not_the_shape(self) -> None:
+        perl = {T(self.LOC, "N.", "ENST21_OWN", "upstream_gene_variant")}
+        rust = perl | {T(self.LOC, "N[22:26037668[", "ENST22_M", "intron_variant")}
+        self.assertEqual(C.filter_bnd_synonym_mate_rows(perl, rust, self.TX_BY_CHR), set())
+
+    def test_an_own_chromosome_transcript_under_the_mate_allele_stays_charged(self) -> None:
+        perl = {T(self.LOC, "N.", "ENST21_OWN", "upstream_gene_variant")}
+        rust = perl | {T(self.LOC, self.SYN, "ENST21_OWN", "intron_variant")}
+        self.assertEqual(C.filter_bnd_synonym_mate_rows(perl, rust, self.TX_BY_CHR), set())
+
+    def test_the_reference_writing_the_mate_allele_is_not_the_shape(self) -> None:
+        perl = {T(self.LOC, self.SYN, "ENST22_M", "intron_variant")}
+        rust = perl | {T(self.LOC, self.SYN, "ENST22_X", "downstream_gene_variant")}
+        self.assertEqual(C.filter_bnd_synonym_mate_rows(perl, rust, self.TX_BY_CHR), set())
+
+    def test_a_record_the_reference_wrote_nothing_for_is_the_skipped_class_not_this_one(self) -> None:
+        rust = {T(self.LOC, self.SYN, "ENST22_M", "intron_variant")}
+        self.assertEqual(C.filter_bnd_synonym_mate_rows(set(), rust, self.TX_BY_CHR), set())
+
+    def test_no_cache_excludes_nothing(self) -> None:
+        perl = {T(self.LOC, "N.", "ENST21_OWN", "upstream_gene_variant")}
+        rust = perl | {T(self.LOC, self.SYN, "ENST22_M", "intron_variant")}
+        self.assertEqual(C.filter_bnd_synonym_mate_rows(perl, rust, {}), set())
+
+
+class FastaNamedSliceIntergenicTests(unittest.TestCase):
+    def test_counts_records_whose_only_reference_row_is_intergenic_against_vep_rs_transcripts(self) -> None:
+        perl = {INTERGENIC("21:100", "A"), INTERGENIC("21:200", "T"), T("21:300", "G", "ENST_3", "intron_variant")}
+        rust = {T("21:100", "A", "ENST_1", "missense_variant"), T("21:100", "A", "ENST_1b", "intron_variant"),
+                INTERGENIC("21:200", "T"), T("21:300", "G", "ENST_3", "intron_variant")}
+        self.assertEqual(C.count_fasta_named_slice_intergenic(perl, rust), 1)
+
+    def test_a_vep_rs_intergenic_row_beside_its_transcripts_is_not_the_shape(self) -> None:
+        perl = {INTERGENIC("21:100", "A")}
+        rust = {INTERGENIC("21:100", "A"), T("21:100", "A", "ENST_1", "missense_variant")}
+        self.assertEqual(C.count_fasta_named_slice_intergenic(perl, rust), 0)
+
+
+class ReferenceReleaseFixtureTests(unittest.TestCase):
+    """The comparator on the committed fixture under each release.
+
+    `testdata/reference_release/perl/` is a 115.2-shaped reference (it carries batch rows
+    for a `<CPX>` and a `<NON_REF>` record); `expected_115_2/` is the report the 115.2
+    registry writes on it, and every output file must equal it byte for byte, so the
+    published figures reproduce. `perl_116/` is the same reference as 116.2 writes it, the
+    two skipped records dropped: under 116.2 the class-C arms and the class-D masks are not
+    applied and the records the reference skipped are set aside whole.
+    """
+
+    FIXTURE = Path(__file__).resolve().parent / "testdata" / "reference_release"
+    FILES = ("concordance_report.json", "concordance_report.md", "discordant.tsv", "discordant_adjusted.tsv")
+
+    def _run(self, release: str, perl: str = "perl") -> tuple[Path, int, str]:
+        import io
+        import shutil
+        import tempfile
+        from contextlib import redirect_stderr
+
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, True)
+        argv = sys.argv
+        sys.argv = [
+            "compare_sv_concordance.py", "--reference-release", release, "--assembly", "grch37",
+            "--input-dir", str(self.FIXTURE / "in"), "--perl-dir", str(self.FIXTURE / perl),
+            "--rust-dir", str(self.FIXTURE / "rust"), "--vep-rs-cache", str(self.FIXTURE / "cache"),
+            "--output-dir", str(out),
+        ]
+        rc, err = 0, io.StringIO()
+        try:
+            with redirect_stderr(err):
+                C.main()
+        except SystemExit as exc:
+            rc = exc.code or 0
+        finally:
+            sys.argv = argv
+        return out, rc, err.getvalue()
+
+    def test_115_2_reproduces_the_published_report_byte_for_byte(self) -> None:
+        out, rc, _ = self._run("115.2")
+        self.assertEqual(rc, 0)
+        for name in self.FILES:
+            with self.subTest(file=name):
+                self.assertEqual((out / name).read_bytes(), (self.FIXTURE / "expected_115_2" / name).read_bytes())
+
+    def test_116_2_sets_aside_the_skipped_records_whole_and_leaves_the_retired_classes_charged(self) -> None:
+        import json
+
+        out, rc, _ = self._run("116.2", perl="perl_116")
+        self.assertEqual(rc, 0)
+        adj = json.loads((out / "concordance_report.json").read_text())["adjusted"]
+        self.assertEqual(adj["reference_release"], "116.2")
+        self.assertEqual(adj["masks_applied"], list(C.MASKS_BY_RELEASE["116.2"]))
+        self.assertEqual(set(adj["masks_not_applied"]), set(C.MASKS_RETIRED_IN_116_2))
+        # The <CPX> the reference dropped (2 rows), the gVCF block (1), the <CPX> with no
+        # reference row (2) and the incomplete deletion (1): four records, six rows.
+        self.assertEqual((adj["excluded_reference_skipped_rust"], adj["reference_skipped_records"]), (6, 4))
+        self.assertEqual(adj["excluded_reference_skipped_by_file"], {"sv": {"rust": 6, "records": 4}})
+        for key in ("excluded_cross_chromosome_perl", "excluded_cross_chromosome_rust",
+                    "excluded_transcript_selection_rust", "excluded_non_ref_batch_perl"):
+            self.assertEqual(adj[key], 0, key)
+        self.assertTrue(adj["breakend_masks_check_ran"])
+        self.assertEqual(set(adj["divergence_classes"]), {
+            "reference_skipped_record", "bnd_own_chromosome_rows_lost",
+            "bnd_synonym_mate_rows_lost", "fasta_named_slice_intergenic",
+        })
+        surviving = (out / "discordant_adjusted.tsv").read_text().splitlines()[1:]
+        self.assertEqual(len(surviving), 3)
+        self.assertFalse(any("\t21:50001-60000\t" in l or "\t21:30000001\t" in l or "\t21:70001-70100\t" in l for l in surviving))
+        self.assertTrue(any("ENST22_X" in l for l in surviving), "the class-9 row is charged under 116.2")
+        self.assertTrue(any("ENST21_G3" in l for l in surviving), "the batch-class surplus on a kept record is charged")
+        md = (out / "concordance_report.md").read_text()
+        self.assertIn("- **Reference**: Ensembl VEP 116.2; masks applied: `filter_cnv_tr_expansion_divergences`", md)
+        self.assertIn("- **116.2 classes**: `reference_skipped_record` 6 vep-rs rows on 4 records set aside;", md)
+
+    def test_116_2_refuses_a_reference_that_kept_a_record_on_a_skip_route(self) -> None:
+        """The 115.2-shaped reference wrote batch rows for a `<CPX>` and a `<NON_REF>`: under
+        116.2 those records are on the unsupported-type route, so the cross-check names
+        them and the comparison stops instead of scoring over a reference that did not
+        skip what 116.2 skips (a run under --dont_skip, or an earlier release)."""
+        out, rc, err = self._run("116.2", perl="perl")
+        self.assertEqual(rc, 1)
+        self.assertIn("ERROR: [compare_sv_concordance] skipped-record cross-check: cpx_kept N><CPX> at 21:45716816 is on the unsupported_type route", err)
+        self.assertIn("gvcf_block N><NON_REF> at 21:70001 is on the unsupported_type route", err)
+        self.assertFalse((out / "concordance_report.json").exists(), "nothing is scored over a failed cross-check")
+
+    def test_the_115_2_report_carries_no_release_block(self) -> None:
+        import json
+
+        out, _, _ = self._run("115.2")
+        adj = json.loads((out / "concordance_report.json").read_text())["adjusted"]
+        self.assertNotIn("reference_release", adj)
+        self.assertNotIn("masks_applied", adj)
+        self.assertNotIn("Reference", (out / "concordance_report.md").read_text())
+
+    def test_the_default_release_is_116_2_and_an_unknown_one_is_refused(self) -> None:
+        self.assertEqual(C.DEFAULT_REFERENCE_RELEASE, "116.2")
+        self.assertEqual(C.REFERENCE_RELEASES, ("115.2", "116.2"))
+        with self.assertRaises(ValueError):
+            C.apply_masks(set(), set(), "117.0", {}, {}, {}, "vep-rs")
+
+
+class SkipRouteCrossCheckTests(unittest.TestCase):
+    """`perl_skip_route` is the reference's own drop logic on the input record (Parser/VCF.pm
+    116.2:236-246, 468-481, 555-557; Parser.pm:491-500, 663-726; ensembl-io BaseVCF4
+    get_start/get_end), and `check_skip_routes` holds the records and the outputs to each
+    other."""
+
+    @staticmethod
+    def rec(pos: int, ref: str, alt: str, info: str, vid: str = "r") -> "C.VcfVariant":
+        return C.VcfVariant("21", pos, vid, ref, alt, C.classify_variant(ref, alt), f"21:{pos}", info)
+
+    def test_the_four_skip_routes_and_the_kept_shapes(self) -> None:
+        R = self.rec
+        self.assertEqual(C.perl_skip_route(R(18457512, "N", "<BND>", "END=18457513;SVTYPE=BND;SVLEN=14027179;CHR2=21;END2=32484692")), "oversize")
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "<DEL>", "END=12000000;SVTYPE=DEL")), "oversize")
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "<DEL>", "END=10001001;SVTYPE=DEL")), None, "a span of exactly 10,000,000 is not over the cap")
+        self.assertEqual(C.perl_skip_route(R(45716815, "N", "<CPX>", "END=45730272;SVTYPE=CPX")), "unsupported_type")
+        self.assertEqual(C.perl_skip_route(R(70000, "N", "<NON_REF>", "END=70100")), "unsupported_type")
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "<CTX>", "SVTYPE=CTX")), "unsupported_type")
+        self.assertEqual(C.perl_skip_route(R(30165800, "N", "<INS>,<DEL>", "END=30166000")), "unsupported_type")
+        self.assertEqual(C.perl_skip_route(R(30165820, "N", "<INV>,<DUP>", "END=30166020")), "unsupported_type")
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "<DEL>,T", "END=2000")), "unsupported_type", "a mixed ALT list has no term")
+        self.assertEqual(C.perl_skip_route(R(30165850, "N", "<DEL>", "SVTYPE=DEL")), "incomplete_deletion")
+        self.assertEqual(C.perl_skip_route(R(2000, "N", "<DEL>", "END=1500;SVTYPE=DEL")), "incomplete_deletion")
+        for alt, info in (("<DEL>,<DUP>", "END=2000"), ("<DEL>", "END=2000;SVTYPE=DEL"), ("<CN0>", "END=2000"),
+                          ("<CN0>,<CN2>", "END=2000"), ("<INS:ME:ALU>", "SVLEN=300"), ("<DUP:TANDEM>", "END=5000"),
+                          ("<CNV:TR>", "END=1050;SVLEN=50;RUS=AC;RUC=10"), ("N[22:50000000[", "SVTYPE=BND"),
+                          ("N[21:50000000[", "SVTYPE=BND;END=50000000"), ("<INS>,<INS>", "SVLEN=300")):
+            with self.subTest(alt=alt):
+                self.assertIsNone(C.perl_skip_route(R(1000, "N", alt, info)))
+        self.assertIsNone(C.perl_skip_route(R(1000, "A", "T", "AF=0.1")), "a sequence variant takes the sequence path")
+        self.assertIsNone(C.perl_skip_route(R(1000, "AT", "A", ".")))
+
+    def test_so_abbreviations_follow_get_so_term(self) -> None:
+        for sv_type, abbrev in (("<INS:ME:L1>", "INS_LINE1"), ("<DEL:ME:SVA>", "DEL_SVA"), ("<INS:ME>", "INS_ME"),
+                                ("<DUP:TANDEM>", "TDUP"), ("<CNV:TR>", "TREP"), ("<CN3>", "CNV"), ("<CN0>", "DEL"),
+                                ("<CN2>", "DUP"), ("<CNV>", "CNV"), ("]13:123456]T", "BND"), (".N", "BND"),
+                                ("<INV>", "INV"), ("DUP", "DUP"), ("<INS>/<INS>", "INS"), ("<DEL>/<DUP:TANDEM>", "CNV"),
+                                ("<DUP:INT>", "DUP")):
+            with self.subTest(sv_type=sv_type):
+                self.assertEqual(C.perl_so_abbrev(sv_type), abbrev)
+        for sv_type in ("<CPX>", "<NON_REF>", "CTX", "<INS>/<DEL>", "<DEL>/T"):
+            with self.subTest(sv_type=sv_type):
+                self.assertIsNone(C.perl_so_abbrev(sv_type))
+
+    def test_an_absent_location_no_skip_route_record_explains_is_a_problem(self) -> None:
+        """vep-rs structural rows at a Location the reference wrote nothing for, with no
+        skip-route record starting there: a record dropped on a route the registry does not
+        know (`start > end+1`), or a record missing from the input."""
+        kept = self.rec(1000, "N", "<DEL>", "END=2000;SVTYPE=DEL", vid="kept")
+        rust = {T("21:1001-2000", "deletion", "ENST_D", "feature_truncation"), T("21:9999", "deletion", "ENST_X", "intron_variant")}
+        problems = C.check_skip_routes([kept], set(), rust)
+        self.assertEqual(len(problems), 2)
+        self.assertTrue(all("no input record on a skip route starts there" in p for p in problems))
+
+    def test_a_skip_route_record_with_reference_rows_under_its_own_allele_is_a_problem(self) -> None:
+        cpx = self.rec(45716815, "N", "<CPX>", "END=45730272;SVTYPE=CPX", vid="cpx")
+        perl = {T("21:45716816-45730272", "CPX", "ENST_C1", "intron_variant")}
+        problems = C.check_skip_routes([cpx], perl, set())
+        self.assertEqual(len(problems), 1)
+        self.assertIn("cpx N><CPX> at 21:45716816 is on the unsupported_type route, yet the reference wrote 1 row(s) under its own allele(s) (CPX)", problems[0])
+
+    def test_reference_rows_of_a_kept_record_at_the_same_start_are_not_the_skipped_records(self) -> None:
+        cpx = self.rec(16450356, "N", "<CPX>", "END=16456471;SVTYPE=CPX", vid="cpx")
+        dele = self.rec(16450356, "N", "<DEL>", "END=16456471;SVTYPE=DEL", vid="del")
+        perl = {T("21:16450357-16456471", "deletion", "ENST_D", "feature_truncation")}
+        self.assertEqual(C.check_skip_routes([cpx, dele], perl, perl), [])
+
+    def test_twins_sharing_start_end_and_allele_are_a_problem(self) -> None:
+        """A `<DEL>,T` record (no Sequence Ontology term, skipped) and a kept `<DEL>` at the
+        same start both produce a `deletion` row; the derived end tells them apart, and
+        when it cannot the comparison stops rather than guess whose rows are whose."""
+        mixed = self.rec(1000, "N", "<DEL>,T", "END=2000", vid="mixed")
+        kept_shorter = self.rec(1000, "N", "<DEL>", "END=2000;SVLEN=-500;SVTYPE=DEL", vid="kept_shorter")
+        perl = {T("21:1001-1500", "deletion", "ENST_D", "feature_truncation")}
+        rust = perl | {T("21:1001-2000", "deletion", "ENST_E", "transcript_ablation"), T("21:1001-2000", "T", "ENST_E", "missense_variant")}
+        self.assertEqual(C.check_skip_routes([mixed, kept_shorter], perl, rust), [])
+        self.assertEqual(C.filter_reference_skipped_records(perl, rust, [mixed, kept_shorter]), (rust - perl, 1))
+        twin = self.rec(1000, "N", "<DEL>", "END=2000;SVTYPE=DEL", vid="twin")
+        twin_perl = {T("21:1001-2000", "deletion", "ENST_D", "feature_truncation")}
+        problems = C.check_skip_routes([mixed, twin], twin_perl, twin_perl | {T("21:1001-2000", "T", "ENST_D", "missense_variant")})
+        self.assertEqual(problems, ["mixed N><DEL>,T and twin N><DEL> share 21:1001-2000 and an allele; the skipped one cannot be told from the kept one"])
+
+    def test_agreement_yields_no_problem(self) -> None:
+        cpx = self.rec(45716815, "N", "<CPX>", "END=45730272;SVTYPE=CPX", vid="cpx")
+        kept = self.rec(1000, "N", "<DEL>", "END=2000;SVTYPE=DEL", vid="kept")
+        perl = {T("21:1001-2000", "deletion", "ENST_D", "feature_truncation")}
+        rust = perl | {T("21:45716816-45730272", "CPX", "ENST_C", "intron_variant")}
+        self.assertEqual(C.check_skip_routes([cpx, kept], perl, rust), [])
 
 
 if __name__ == "__main__":

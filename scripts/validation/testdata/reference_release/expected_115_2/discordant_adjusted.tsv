@@ -1,0 +1,4 @@
+source_file	variant_type	direction	location	allele	feature	feature_type	consequence
+sv	Symbolic_DEL	only_rust	21:30000001	deletion	ENST21_NE	Transcript	feature_truncation
+sv	Complex_SV	only_rust	21:50001-60000	CPX	ENST21_A1	Transcript	intron_variant
+sv	Complex_SV	only_rust	21:50001-60000	CPX	ENST21_A2	Transcript	coding_sequence_variant

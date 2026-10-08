@@ -1,0 +1,15 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence
+v1	21:1	A	G	ENST0	Transcript	intron_variant
+v2	21:100	A	G	ENST1	Transcript	missense_variant,splice_region_variant
+v3	21:300	T	G	ENST3	Transcript	intron_variant,splice_polypyrimidine_tract_variant
+v5	21:500	G	G	ENST5	Transcript	5_prime_UTR_variant,start_retained_variant
+bnd	21:18457513-32484691	N.	G	T1	Transcript	intron_variant
+bnd	21:18457513-32484691	N.	G	T2	Transcript	intron_variant
+bnd	21:18457513-32484691	N.	G	T3	Transcript	transcript_ablation
+bnd	21:18457513-32484691	N.	G	T4	Transcript	transcript_ablation
+cpx	21:45716816-45730272	CPX	G	C1	Transcript	intron_variant
+cpx	21:45716816-45730272	CPX	G	C2	Transcript	intron_variant
+gvcf	21:600-700	<NON_REF>	-	-	-	intergenic_variant
+cpx2	21:800-900	CPX	G	C3	Transcript	intron_variant
+cpx2	21:800-900	CPX	G	C4	Transcript	coding_sequence_variant
+tr	21:900-950	tandem_repeat	G	T7	Transcript	feature_elongation

@@ -62,7 +62,7 @@
 #     --engine vep-rs --vep-binary /path/to/vep \
 #     --data-dir <data> --output-dir <data>/work \
 #     [--suites all|snp-indel|sv|"s01 s04"] [--walltime-only] [--skip-fields] [--fork 16] \
-#     [--run-id <id>] [--host-id <id>]
+#     [--reference-release 115.2|116.2] [--run-id <id>] [--host-id <id>]
 #
 #   scripts/concordance/run_clone_measurement.sh --engine fastvep \
 #     --fastvep-binary /path/to/fastvep --data-dir <data> --output-dir <data>/work
@@ -97,6 +97,11 @@ RUN_ID="manual"
 HOST_ID="local"
 REPLICATE=""
 CONTAINER_PROBE=0
+# The Ensembl VEP release of the ground truth, handed to both comparators as
+# --reference-release. Empty means derived per cell from the ground-truth directory's
+# provenance (provenance.json or <output>.provenance.json, reference_release.py); a
+# cell whose ground truth names no release fails rather than scoring under a guess.
+REFERENCE_RELEASE="${VEP_REFERENCE_RELEASE:-}"
 
 usage() {
 	cat <<'EOF'
@@ -124,6 +129,12 @@ Optional:
   --fork <N>             SNP/indel parallelism (default 16; fastVEP uses
                          RAYON_NUM_THREADS=N)
   --buffer-size <N>      Engine buffer size (default 5000)
+  --reference-release <115.2|116.2>
+                         The Ensembl VEP release the ground truth was produced with,
+                         passed to compare_vep_outputs.py and compare_sv_concordance.py
+                         as --reference-release. Default: read per cell from the
+                         ground-truth directory's provenance (the image tag, else the
+                         cache version); a cell with neither fails. Also VEP_REFERENCE_RELEASE.
   --run-id <id>          Provenance: identifier for this measurement campaign,
                          written to wall_times.csv
   --host-id <id>         Provenance: identifier for the machine running this
@@ -186,6 +197,10 @@ while [[ $# -gt 0 ]]; do
 		BUFFER_SIZE="$2"
 		shift 2
 		;;
+	--reference-release)
+		REFERENCE_RELEASE="$2"
+		shift 2
+		;;
 	--run-id)
 		RUN_ID="$2"
 		shift 2
@@ -211,6 +226,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate args
+case "$REFERENCE_RELEASE" in
+"" | 115.2 | 116.2) ;;
+*)
+	echo "ERROR: --reference-release must be 115.2 or 116.2 (got '$REFERENCE_RELEASE')" >&2
+	usage
+	;;
+esac
 [[ "$CONTAINER_PROBE" =~ ^[0-9]+$ ]] || {
 	echo "ERROR: --container-probe takes a non-negative integer (got '$CONTAINER_PROBE')" >&2
 	usage
@@ -541,6 +563,26 @@ ground_truth_ready() {
 	return 0
 }
 
+# reference_release_for <ground-truth dir>
+#
+# Prints the --reference-release for a cell: the --reference-release given to this run,
+# else the release named by the ground truth's provenance (reference_release.py reads the
+# directory's provenance.json, else the sidecar beside its output, else the set record in
+# the parent directory; the image tag first, else the cache version). Fails when nothing
+# names one, so a ground truth of unknown release is never scored under a guessed
+# registry; the caller records the cell as compare_failed before timing it.
+reference_release_for() {
+	local gt_dir="$1"
+	if [[ -n "$REFERENCE_RELEASE" ]]; then
+		printf '%s\n' "$REFERENCE_RELEASE"
+		return 0
+	fi
+	python3 "$SCRIPT_DIR/reference_release.py" --provenance-dir "$gt_dir" || {
+		echo "ERROR: [run_clone_measurement] no reference release for $gt_dir: its provenance names neither an Ensembl VEP image tag nor a cache version; pass --reference-release" >&2
+		return 1
+	}
+}
+
 # Per-engine SNP/indel measurement
 # measure_p1 covers the SNP/indel suites (suite type `snp_indel`).
 measure_p1() {
@@ -553,6 +595,18 @@ measure_p1() {
 	# ground_truth/perl/snp_indel/ Perl GT was generated from.
 	local vcf="$DATA_DIR/vcf/$(printf %s "$assembly" | tr "[:upper:]" "[:lower:]")/all_variants_canonical/${vcf_base}.canonical.vcf.gz"
 	local gt_dir="$SNP_INDEL_GT_DIR/$suite_id"
+	# The comparator's --reference-release, derived BEFORE the warmup and timed runs so a
+	# ground truth that names no release fails the cell before any annotation is timed.
+	# Only a cell that will compare derives it: the Perl engine has no comparator, a
+	# sample-scaling suite (`*m`) has no ground truth, and a ground truth that is absent
+	# altogether is reported by ground_truth_ready after the runs as before.
+	local reference_release=""
+	if [[ "$WALLTIME_ONLY" != "true" && "$ENGINE" != "perl" && "$suite_id" != *m && -f "$gt_dir/output.txt" ]]; then
+		reference_release=$(reference_release_for "$gt_dir") || {
+			csv_row "$suite_id" "$suite_name" "$assembly" "compare_failed" "" "1"
+			return 1
+		}
+	fi
 
 	case "$ENGINE" in
 	vep-rs)
@@ -581,6 +635,7 @@ measure_p1() {
 				--perl-dir "$suite_dir/perl" \
 				--rust-dir "$suite_dir/rust" \
 				--report-dir "$suite_dir/report" \
+				--reference-release "$reference_release" \
 				--assembly "$assembly" || {
 				echo "ERROR: [run_clone_measurement] $suite_id SNP/indel compare failed; the cell has no F1 and this run is incomplete" >&2
 				csv_row "$suite_id" "$suite_name" "$assembly" "compare_failed" "" "1"
@@ -648,6 +703,7 @@ measure_p1() {
 				--perl-dir "$suite_dir/perl" \
 				--rust-dir "$suite_dir/rust" \
 				--report-dir "$suite_dir/report" \
+				--reference-release "$reference_release" \
 				--assembly "$assembly" --glob 'output.txt' || {
 				echo "ERROR: [run_clone_measurement] $suite_id SNP/indel compare failed; the cell has no F1 and this run is incomplete" >&2
 				csv_row "$suite_id" "$suite_name" "$assembly" "compare_failed" "" "1"
@@ -927,6 +983,15 @@ measure_sv() {
 	fi
 	SV_DONE="${SV_DONE}:${asm_lc}=${suite_id}:"
 
+	# As in measure_p1: the ground truth's release is derived before the timed runs.
+	local reference_release=""
+	if [[ "$WALLTIME_ONLY" != "true" && "$ENGINE" != "perl" ]]; then
+		reference_release=$(reference_release_for "$sv_gt") || {
+			csv_row "$suite_id" "$suite_name" "$assembly" "compare_failed" "" "1"
+			return 1
+		}
+	fi
+
 	local fasta
 	fasta=$(fasta_for "$assembly")
 
@@ -1001,6 +1066,7 @@ measure_sv() {
 				--perl-dir "$sv_gt" \
 				--rust-dir "$suite_dir/rust" \
 				--vep-rs-cache "$cache" \
+				--reference-release "$reference_release" \
 				--output-dir "$suite_dir/report" || {
 				echo "ERROR: [run_clone_measurement] $suite_id SV compare failed; the cell has no F1 and this run is incomplete" >&2
 				csv_row "$suite_id" "$suite_name" "$assembly" "compare_failed" "" "1"
@@ -1090,6 +1156,7 @@ measure_sv() {
 					--rust-dir "$suite_dir/rust" \
 					--vep-rs-cache "$(veprs_cache_for "$assembly")" \
 					--scored-engine fastvep \
+					--reference-release "$reference_release" \
 					--output-dir "$suite_dir/report" || {
 					# A compare that RAN and failed is not the documented no-output case
 					# handled above: it means a missing input (the vep-rs cache the mask
@@ -1120,7 +1187,7 @@ measure_sv() {
 			res=$(time_run "${suite_id}_${run_kind}" "$perf_txt" -- \
 				bash -c '
 					set -uo pipefail
-					image="$1"; cache="$2"; fasta="$3"; asm="$4"; in_dir="$5"; scratch="$6"; uidgid="$7"; buf="$8"; fork="$9"
+					image="$1"; cache="$2"; fasta="$3"; asm="$4"; in_dir="$5"; scratch="$6"; uidgid="$7"; buf="$8"; fork="$9"; cache_version="${10}"
 					mkdir -p "$scratch"
 					shopt -s nullglob
 					failed=0
@@ -1141,7 +1208,7 @@ measure_sv() {
 							-v "$fasta.fai:/work/ref.fa.fai:ro" \
 							"$image" \
 							vep -i /work/input.vcf.gz -o "/work/perl_out/$b.txt" \
-							--offline --cache --dir_cache /work/cache --cache_version "$PERL_CACHE_VERSION" \
+							--offline --cache --dir_cache /work/cache --cache_version "$cache_version" \
 							--species homo_sapiens --assembly "$asm" \
 							--format vcf --buffer_size "$buf" --fork "$fork" \
 							--fasta /work/ref.fa \
@@ -1155,7 +1222,7 @@ measure_sv() {
 						exit "$failed"
 					}
 				' _ "$PERL_IMAGE" "$PERL_CACHE_DIR" "$fasta" "$assembly" \
-				"$sv_inputs" "$suite_dir/perl_scratch" "$(id -u):$(id -g)" "$BUFFER_SIZE" "$FORK")
+				"$sv_inputs" "$suite_dir/perl_scratch" "$(id -u):$(id -g)" "$BUFFER_SIZE" "$FORK" "$PERL_CACHE_VERSION")
 			wall="${res%%|*}"
 			rc="${res##*|}"
 			echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)]   $suite_id $run_kind wall=${wall}s rc=$rc"
