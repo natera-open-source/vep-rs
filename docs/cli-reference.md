@@ -120,7 +120,7 @@ inference would otherwise read `chrom=21` as a number.
 | `--offline`       | bool   | false             | Accepted for VEP compatibility; sets `--cache`, which has no effect. vep-rs always runs offline                                                          |
 | `--dir`           | String | `~/.vep`          | Accepted for VEP compatibility; nothing is loaded from it. Heads the cache path printed in the output header when `--dir_cache` and `--json_cache` are absent |
 | `--dir_cache`     | String | (same as `--dir`) | Accepted for VEP compatibility; nothing is loaded from it. Only names the cache path printed in the output header when `--json_cache` is absent          |
-| `--cache_version` | u32    | 115               | Accepted for VEP compatibility; selects no cache. Only the version in the header's cache path when `--json_cache` is absent (defaults to the VEP release) |
+| `--cache_version` | u32    | 116               | Accepted for VEP compatibility; selects no cache. Only the version in the header's cache path when `--json_cache` is absent (defaults to the VEP release) |
 | `--json_cache`    | String | --                | Path to the converted JSON cache directory: the only cache vep-rs reads. Without it no transcript is loaded and every variant is reported as `intergenic_variant` |
 | `--fasta`, `--fa` | String | --                | Indexed FASTA file (`.fa` + `.fai`) for reference sequences                                                                                              |
 | `--shift_3prime`  | bool   | false             | Enable 3' shifting of indels (requires `--fasta`)                                                                                                        |

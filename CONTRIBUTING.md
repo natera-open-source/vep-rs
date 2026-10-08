@@ -37,7 +37,7 @@ pre-commit install
 
 ## Concordance Testing
 
-Concordance testing compares Rust VEP output against Perl VEP (release 115) to verify semantic parity. Requires Docker and a Perl VEP cache.
+Concordance testing compares Rust VEP output against Perl VEP (release 116, the reference) to verify semantic parity. Requires Docker and a Perl VEP cache.
 
 ```bash
 scripts/concordance/run_concordance.sh --mode smoke --smoke-variants 5000 \
