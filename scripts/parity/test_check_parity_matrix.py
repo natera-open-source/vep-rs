@@ -104,6 +104,8 @@ FIELDS_RS = """
 // fn commented_out() {}
 /* fn in_a_block_comment() {} */
 const S: &str = "fn in_a_string";
+const OPENER: &str = "U/*";
+const QUOTE: char = '"';
 pub fn production_helper() -> u8 { 1 }
 
 #[cfg(test)]
@@ -122,6 +124,7 @@ mod tests {
     #[ignore]
     pub(crate) fn ignored_case() {}
 }
+const CLOSER: &str = r#"*/ and // inside a raw string"#;
 """
 
 HEADER = "\t".join(cpm.COLUMNS) + "\n"

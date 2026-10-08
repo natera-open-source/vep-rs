@@ -78,8 +78,7 @@ UNREAD_RE = re.compile(
 # A fn's leading keywords, matched backwards from the `fn` token.
 FN_KEYWORDS_RE = re.compile(r"(?:\b(?:pub(?:\([^)]*\))?|async|unsafe|const)\s*)+$")
 TEST_ATTR_RE = re.compile(r"^\s*(?:\w+::)*\w*test\w*\s*(?:\(|$)")
-LINE_COMMENT_RE = re.compile(r"//[^\n]*")
-BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+IDENT_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
 
 
 def line_of(text: str, index: int) -> int:
@@ -259,9 +258,65 @@ def attribute_spans(text: str) -> dict[int, tuple[int, str]]:
     return spans
 
 
+def strip_comments(text: str) -> str:
+    """The source without its line and (nested) block comments, every literal kept whole: a `/*`
+    inside a string (`"U/*"`, an amino-acid change) or a `//` inside one opens no comment, and a
+    `fn` inside a comment declares nothing."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if text.startswith("//", i):
+            end = text.find("\n", i)
+            i = n if end < 0 else end
+        elif text.startswith("/*", i):
+            depth, i = 1, i + 2
+            while i < n and depth:
+                if text.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif text.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+        elif c == "r" and (hashes := _raw_string_hashes(text, i)) is not None:
+            close = '"' + "#" * hashes
+            end = text.find(close, i + 1 + hashes + 1)
+            end = n if end < 0 else end + len(close)
+            out.append(text[i:end])
+            i = end
+        elif c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i : j + 1])
+            i = j + 1
+        elif c == "'" and i + 2 < n and (text[i + 1] == "\\" or text[i + 2] == "'"):
+            # A char literal (`'x'`, `'\''`, `'\u{1F600}'`); a lifetime (`'a`) falls through.
+            j = text.find("'", i + 3 if text[i + 1] == "\\" else i + 2)
+            j = n - 1 if j < 0 else j
+            out.append(text[i : j + 1])
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def _raw_string_hashes(text: str, i: int) -> int | None:
+    """The hash count of a raw string literal starting at `text[i] == "r"` (`r"…"`, `r#"…"#`,
+    `br"…"`), or None when the `r` is part of an identifier or no quote follows."""
+    before = text[i - 1] if i > 0 else ""
+    if before in IDENT_CHARS and not (before == "b" and (i < 2 or text[i - 2] not in IDENT_CHARS)):
+        return None
+    j = i + 1
+    while j < len(text) and text[j] == "#":
+        j += 1
+    return j - i - 1 if j < len(text) and text[j] == '"' else None
+
+
 def declares_test_fn(text: str, fn: str) -> bool:
     """Whether the source declares `fn <fn>` under a test attribute, comments stripped first."""
-    code = LINE_COMMENT_RE.sub("", BLOCK_COMMENT_RE.sub("", text))
+    code = strip_comments(text)
     spans = attribute_spans(code)
     for decl in re.finditer(r"\bfn\s+" + re.escape(fn) + r"\b", code):
         head = FN_KEYWORDS_RE.sub("", code[: decl.start()].rstrip()).rstrip()
