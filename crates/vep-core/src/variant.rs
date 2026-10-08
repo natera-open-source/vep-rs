@@ -258,6 +258,14 @@ pub struct InputVariant {
     /// JSON `allele_string` prints this while Uploaded_variation prints the raw one.
     #[serde(default)]
     pub record_allele_string_multi: Option<String>,
+    /// The name VEP builds from the input line for a record its ID column cannot
+    /// name (OutputFactory.pm `VariationFeature_to_output_hash`, the `_line`
+    /// branches): `CHROM_POS_REF/ALT1/ALT2` from a VCF line's own columns, POS
+    /// and alleles as written; `chr_start_alleles` from an Ensembl-format line,
+    /// start the lower of its two coordinates. `None` for an input format VEP
+    /// names from the variant itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_line_name: Option<String>,
 }
 
 /// An empty placeholder: no allocation, every field at its zero value. Lets a
@@ -306,6 +314,7 @@ impl Default for InputVariant {
             input_record: 0,
             uploaded_allele_string: None,
             record_allele_string_multi: None,
+            input_line_name: None,
         }
     }
 }
@@ -373,6 +382,7 @@ impl InputVariant {
             annotation_end: None,
             input_record: 0,
             uploaded_allele_string: None,
+            input_line_name: None,
         }
     }
 
@@ -402,13 +412,18 @@ impl InputVariant {
             .map(|id| id.split(';').next().unwrap_or(id))
     }
 
-    /// `Uploaded_variation` as VEP prints it: the input ID when there is one, else
-    /// `chr_start_alleles` where start is the anchor-trimmed start and the alleles
-    /// are [`Self::uploaded_allele_string`] (raw REF/ALT for a minimised bi-allelic
-    /// record, the record's full allele string otherwise), joined by `/`.
+    /// `Uploaded_variation` as VEP prints it (OutputFactory.pm
+    /// `VariationFeature_to_output_hash`): the input ID unless it is the
+    /// `chr_start_alleles` name VEP gives an ID-less record; else the name built
+    /// from the input line ([`Self::input_line_name`]); else, for an input format
+    /// VEP names from the variant, `chr_start_alleles` where start is the
+    /// anchor-trimmed start and the alleles are [`Self::uploaded_allele_string`].
     pub fn uploaded_variation(&self) -> String {
-        if let Some(id) = self.explicit_id() {
+        if let Some(id) = self.explicit_id().filter(|id| !self.is_generated_name(id)) {
             return id.to_string();
+        }
+        if let Some(name) = &self.input_line_name {
+            return name.clone();
         }
         let start = self.original_start.unwrap_or(self.start);
         let alleles = self
@@ -417,6 +432,21 @@ impl InputVariant {
             .or(self.original_allele_string.as_deref())
             .unwrap_or(&self.allele_string);
         format!("{}_{}_{}", self.original_chr, start, alleles)
+    }
+
+    /// Whether `id` is the `chr_start_alleles` name VEP gives a record whose ID
+    /// column is empty (Parser.pm `validate_vf`). The prefix test keeps an
+    /// identifier such as `rs123` from building the name on every row.
+    fn is_generated_name(&self, id: &str) -> bool {
+        if !id.starts_with(self.original_chr.as_str()) {
+            return false;
+        }
+        id == format!(
+            "{}_{}_{}",
+            self.original_chr,
+            self.start,
+            self.record_allele_string()
+        )
     }
 
     /// The allele string of the whole input record as VEP holds it: the symbolic

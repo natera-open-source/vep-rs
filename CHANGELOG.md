@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--protein_version` appends the translation version to the `ENSP` identifier (`ENSP00000286808.3`) when `--protein` prints it, as Ensembl VEP 116 does.
+- `--mask_header_cache_path` prints the cache directory as `[PATH]/<leaf>` in the default and `--tab` headers, the VCF `cache=` token and the Parquet footer.
+- `--regulatory_gff`, `--extended_promoters` and `--custom_suppress_filter` are refused with an error naming what each would do; regulatory and custom annotation are features of a later release.
 - `--reference-release {115.2,116.2}` on both comparators selects the Ensembl VEP release scored against (116.2 default, sets aside the records it skips); the runners derive it from the reference's provenance. (#N)
 
 ### Fixed
@@ -20,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stop-codon consequences follow Ensembl VEP release 116: an edit beginning inside the stop codon is `stop_lost` or `stop_retained_variant` without `frameshift_variant`, and `stop_retained_variant` for indels is decided on the genomic span.
 - `--hgvs` describes a deletion that runs over either end of a transcript over the bases inside it (`c.-49_77+1248del`), as Ensembl VEP 116 does, instead of omitting HGVSc. (#N)
 - `--hgvs` writes a frameshift whose first changed residue is the stop codon as an extension, `p.Ter124IleextTer14` (count excluding the replaced stop), as Ensembl VEP 116 does, not `p.Ter124IlefsTer15`. (#N)
+- `Uploaded_variation` of a record whose ID is `.` is built from the input line, `CHROM_POS_REF/ALT1/ALT2` as written, as Ensembl VEP 116 names it (`21_43512967_AT/ATT/A`, `21_33867341_C/<CN2>`).
+- JSON `cdna_end`, `cds_end` and `protein_end` are omitted for a position whose end is undefined (`445-?` writes `cdna_start` alone), as Ensembl VEP 116 writes them.
 - `docs/intended-divergences.md` is rewritten for readability and organised by
   the five Ensembl VEP defects behind the classes the adjusted concordance sets
   aside. Each defect's section states the defect in one sentence, why it is a

@@ -203,17 +203,12 @@ impl JsonOutputFormatter {
                 }
                 "cDNA_position" | "CDS_position" | "Protein_position" => {
                     let coord = name.trim_end_matches("_position").to_lowercase();
-                    let (s, e) = value.split_once('-').unwrap_or((&value, &value));
-                    if let Ok(n) = s.parse::<u64>() {
-                        obj.insert(format!("{coord}_start"), Value::Number(n.into()));
+                    let (start, end) = position_bounds(&value);
+                    if let Some(start) = start {
+                        obj.insert(format!("{coord}_start"), start);
                     }
-                    let e = if e.chars().all(|c| c.is_ascii_digit()) && !e.is_empty() {
-                        e
-                    } else {
-                        s
-                    };
-                    if let Ok(n) = e.parse::<u64>() {
-                        obj.insert(format!("{coord}_end"), Value::Number(n.into()));
+                    if let Some(end) = end {
+                        obj.insert(format!("{coord}_end"), end);
                     }
                 }
                 "SIFT" | "PolyPhen" => {
@@ -263,6 +258,38 @@ impl JsonOutputFormatter {
         }
         serde_json::Map::from_iter(obj)
     }
+}
+
+/// Splits a position column into the JSON `*_start` and `*_end` values as
+/// `OutputFactory/JSON.pm` `add_VariationFeatureOverlapAllele_info` does: `N`
+/// writes both, `N-M` one each, `N-?` the start alone, `?-N` the end alone. A
+/// `--total_length` suffix (`N/T`) stays a string and is written at both ends;
+/// the end of `N-M/T` falls back to `N`, `N-?/T` writes the start alone and
+/// `?-N/T` writes neither.
+fn position_bounds(value: &str) -> (Option<Value>, Option<Value>) {
+    let (start, end) = value.split_once('-').unwrap_or((value, value));
+    let end = if end.contains('?') || is_digits(end) {
+        end
+    } else {
+        start
+    };
+    (position_value(start), position_value(end))
+}
+
+/// A position literal, `N` or `N/T`, as a JSON number or string; `None` for
+/// anything else (`?`, empty).
+fn position_value(literal: &str) -> Option<Value> {
+    match literal.split_once('/') {
+        None if is_digits(literal) => literal.parse::<u64>().ok().map(Value::from),
+        Some((n, total)) if is_digits(n) && is_digits(total) => {
+            Some(Value::String(literal.to_string()))
+        }
+        _ => None,
+    }
+}
+
+fn is_digits(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
 }
 
 fn feature_type_key(tc: &TranscriptConsequence) -> String {
@@ -410,6 +437,7 @@ impl OutputFormatter for JsonOutputFormatter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use smallvec::smallvec;
     use vep_core::consequence::{Consequence, FeatureType, Impact, TranscriptConsequence};
 
@@ -550,14 +578,103 @@ mod tests {
         assert_eq!(tcs[1]["variant_allele"], "T");
     }
 
-    #[test]
-    fn unknown_coordinate_is_dropped() {
+    /// The consequence object of a variant whose three position columns read
+    /// `cdna`, `cds` and `protein`.
+    fn positions(cdna: &str, cds: &str, protein: &str) -> Value {
         let mut v = make_annotated_variant();
-        v.transcript_consequences[0].cds_position = Some("493-?".into());
-        let parsed = fmt(FieldOptions::default()).format_variant_value(&v);
-        let tc = &parsed["transcript_consequences"][0];
-        assert_eq!(tc["cds_start"], 493);
-        assert_eq!(tc["cds_end"], 493);
+        let tc = &mut v.transcript_consequences[0];
+        tc.cdna_position = Some(cdna.into());
+        tc.cds_position = Some(cds.into());
+        tc.protein_position = Some(protein.into());
+        fmt(FieldOptions::default()).format_variant_value(&v)["transcript_consequences"][0].clone()
+    }
+
+    /// Ensembl VEP 116.2 on the GRCh38 corpus, record `1331614` against
+    /// ENST00000632803: the columns `445-?`, `172-?`, `58-?` give `cdna_start`
+    /// 445, `cds_start` 172 and `protein_start` 58 with no `*_end` key.
+    #[test]
+    fn undefined_end_writes_the_start_alone() {
+        let tc = positions("445-?", "172-?", "58-?");
+        assert_eq!(tc["cdna_start"], 445);
+        assert_eq!(tc["cds_start"], 172);
+        assert_eq!(tc["protein_start"], 58);
+        for key in ["cdna_end", "cds_end", "protein_end"] {
+            assert!(
+                tc.get(key).is_none(),
+                "{key} is written for an undefined end"
+            );
+        }
+    }
+
+    /// Ensembl VEP 116.2 on the GRCh38 corpus, record `1331614` against
+    /// ENST00000633239: `?-13`, `?-13`, `?-5` give `cdna_end` 13, `cds_end` 13
+    /// and `protein_end` 5 with no `*_start` key.
+    #[test]
+    fn undefined_start_writes_the_end_alone() {
+        let tc = positions("?-13", "?-13", "?-5");
+        assert_eq!(tc["cdna_end"], 13);
+        assert_eq!(tc["cds_end"], 13);
+        assert_eq!(tc["protein_end"], 5);
+        for key in ["cdna_start", "cds_start", "protein_start"] {
+            assert!(
+                tc.get(key).is_none(),
+                "{key} is written for an undefined start"
+            );
+        }
+    }
+
+    /// `OutputFactory/JSON.pm`: a defined range writes both ends.
+    #[test]
+    fn defined_range_writes_both_ends() {
+        let tc = positions("1161-1162", "900-901", "300-301");
+        assert_eq!(
+            (&tc["cdna_start"], &tc["cdna_end"]),
+            (&json!(1161), &json!(1162))
+        );
+        assert_eq!(
+            (&tc["cds_start"], &tc["cds_end"]),
+            (&json!(900), &json!(901))
+        );
+        assert_eq!(
+            (&tc["protein_start"], &tc["protein_end"]),
+            (&json!(300), &json!(301))
+        );
+    }
+
+    /// `OutputFactory/JSON.pm`: a single position is both start and end.
+    #[test]
+    fn single_position_writes_both_ends() {
+        let tc = positions("428", "366", "122");
+        assert_eq!(
+            (&tc["cdna_start"], &tc["cdna_end"]),
+            (&json!(428), &json!(428))
+        );
+        assert_eq!(
+            (&tc["cds_start"], &tc["cds_end"]),
+            (&json!(366), &json!(366))
+        );
+        assert_eq!(
+            (&tc["protein_start"], &tc["protein_end"]),
+            (&json!(122), &json!(122))
+        );
+    }
+
+    /// `OutputFactory/JSON.pm` on the `--total_length` forms: `N/T` is kept as a
+    /// string at both ends (`numberify` leaves it alone); the end of `N-M/T` falls
+    /// back to the start `N`; `N-?/T` writes the start alone; `?-N/T` writes
+    /// neither.
+    #[test]
+    fn total_length_forms_follow_the_perl_split() {
+        assert_eq!(
+            position_bounds("428/1234"),
+            (Some(json!("428/1234")), Some(json!("428/1234")))
+        );
+        assert_eq!(
+            position_bounds("428-430/1234"),
+            (Some(json!(428)), Some(json!(428)))
+        );
+        assert_eq!(position_bounds("428-?/1234"), (Some(json!(428)), None));
+        assert_eq!(position_bounds("?-430/1234"), (None, None));
     }
 
     #[test]

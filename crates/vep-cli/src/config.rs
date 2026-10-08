@@ -29,6 +29,8 @@ pub struct Config {
     pub compress_output: Option<String>,
     pub force_overwrite: bool,
     pub no_headers: bool,
+    /// Print the cache directory in the output headers as `[PATH]/<leaf>`.
+    pub mask_header_cache_path: bool,
 
     pub cache: bool,
     pub offline: bool,
@@ -64,6 +66,8 @@ pub struct Config {
     pub appris: bool,
     pub ccds: bool,
     pub protein: bool,
+    /// Append the translation version to the ENSP identifier (`--protein_version`).
+    pub protein_version: bool,
     pub uniprot: bool,
     pub xref_refseq: bool,
     pub hgvs: bool,
@@ -255,6 +259,7 @@ impl Config {
             compress_output: args.compress_output,
             force_overwrite: args.force_overwrite,
             no_headers: args.no_headers,
+            mask_header_cache_path: args.mask_header_cache_path,
             cache,
             offline: args.offline,
             dir,
@@ -286,6 +291,7 @@ impl Config {
             appris,
             ccds,
             protein,
+            protein_version: args.protein_version,
             uniprot,
             xref_refseq: args.xref_refseq,
             hgvs,

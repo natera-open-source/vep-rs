@@ -508,6 +508,7 @@ uniparc-uniprot-isoform-columns	OutputFactory.pm	implemented	open
 uniprot	OutputFactory.pm	documented_subset	open			
 unsorted-input	InputBuffer.pm	accepted_noop	open			
 uploaded_allele	Config.pm	implemented	open			
+uploaded_variation_naming_116	OutputFactory.pm	implemented	open			
 use_given_ref	Config.pm	accepted_noop	open			
 use_transcript_ref	AnnotationType/Transcript.pm	documented_subset	open			
 user	Config.pm	error	open			

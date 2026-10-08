@@ -327,6 +327,32 @@ fn test_output_file_exists_without_force() {
     );
 }
 
+/// The three flags vep-rs declares but refuses exit with a usage error naming the
+/// feature they belong to, before any input is read.
+#[test]
+fn refused_flags_exit_with_their_message() {
+    for (flag, feature) in [
+        (
+            vec!["--regulatory_gff", "reg.gff3.gz"],
+            "regulatory annotation",
+        ),
+        (vec!["--extended_promoters"], "regulatory annotation"),
+        (vec!["--custom_suppress_filter"], "custom annotation"),
+    ] {
+        let result = vep_binary()
+            .args(&flag)
+            .args(["-i", "/nonexistent/file.vcf", "--quiet"])
+            .output()
+            .unwrap();
+        assert_eq!(result.status.code(), Some(2), "{flag:?}");
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert!(
+            stderr.contains(&format!("{} is not supported", flag[0])) && stderr.contains(feature),
+            "{flag:?}: {stderr}"
+        );
+    }
+}
+
 #[test]
 fn test_dont_skip_fails_on_invalid_vcf_line() {
     let output_dir = tempfile::tempdir().unwrap();

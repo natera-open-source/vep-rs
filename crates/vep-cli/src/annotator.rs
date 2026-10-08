@@ -228,6 +228,7 @@ impl Annotator {
             config.shift_3prime,
             crate::runner::needs_hgvs_computation(config),
             crate::runner::needs_exon_intron_numbers(config),
+            config.protein_version,
         );
         let LoadedPlugins { builtin, dylib } = load_plugins(
             &config.plugin,
@@ -477,6 +478,7 @@ pub fn build_effects_config(
     shift_3prime: bool,
     compute_hgvs: bool,
     compute_exon_intron_numbers: bool,
+    protein_version: bool,
 ) -> Arc<vep_effects::EffectsConfig> {
     Arc::new(vep_effects::EffectsConfig {
         upstream_distance: distance.0,
@@ -490,6 +492,7 @@ pub fn build_effects_config(
         populate_loftee_context: false,
         compute_hgvs,
         compute_exon_intron_numbers,
+        protein_version,
     })
 }
 

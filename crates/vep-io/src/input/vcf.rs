@@ -190,6 +190,14 @@ impl VcfParser {
 
         variants.sort_by_key(|v| v.allele_index);
 
+        // OutputFactory.pm `VariationFeature_to_output_hash`, the VCF `_line`
+        // branch: the ALT column as written, a filtered `*` allele included.
+        let alt_column: &str = alt_bases.as_ref();
+        let line_name = format!("{chrom}_{pos}_{vcf_ref}/{}", alt_column.replace(',', "/"));
+        for variant in &mut variants {
+            variant.input_line_name = Some(line_name.clone());
+        }
+
         Ok(variants)
     }
 }

@@ -417,6 +417,11 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
         }
     }
 
+    let line_name = input_line_name(&chr, pos, ref_allele, alt_field);
+    for variant in &mut variants {
+        variant.input_line_name = Some(line_name.clone());
+    }
+
     Ok(variants)
 }
 
@@ -433,6 +438,18 @@ fn mark_paired_breakend_record(variant: &mut InputVariant, chr: &str) {
             .clone()
             .unwrap_or_else(|| format!("{}:{}", chr, variant.start));
         variant.mate_id = Some(synthetic_id);
+    }
+}
+
+/// The name VEP gives a VCF record whose ID column cannot name it
+/// (OutputFactory.pm `VariationFeature_to_output_hash`, the VCF `_line` branch):
+/// CHROM, POS, REF and ALT as written, the ALT commas as `/`, REF alone when the
+/// ALT column is empty.
+fn input_line_name(chr: &str, pos: u64, ref_allele: &str, alt_field: &str) -> String {
+    if alt_field.is_empty() {
+        format!("{chr}_{pos}_{ref_allele}")
+    } else {
+        format!("{chr}_{pos}_{ref_allele}/{}", alt_field.replace(',', "/"))
     }
 }
 
@@ -1016,8 +1033,113 @@ mod tests {
         assert_eq!(variants[1].ref_allele, b"TTT");
         assert_eq!(variants[1].alt_allele(), b"TT");
         assert!(!variants[1].minimised);
-        assert_eq!(variants[1].uploaded_variation(), "1_101_CTTT/C/CTT");
+        assert_eq!(variants[1].uploaded_variation(), "1_100_CTTT/C/CTT");
         assert_eq!(variants[1].record_allele_string(), "TTT/-/TT");
+    }
+
+    /// `Uploaded_variation` of every allele parsed from `line`.
+    fn uploaded_variations(line: &str) -> Vec<String> {
+        parse_vcf_line(line, false)
+            .unwrap()
+            .iter()
+            .map(|v| v.uploaded_variation())
+            .collect()
+    }
+
+    /// OutputFactory.pm `VariationFeature_to_output_hash`: the ID column names
+    /// the record (the first of `;`-joined IDs, as Parser/VCF.pm takes it).
+    #[test]
+    fn uploaded_variation_is_the_id_when_the_record_carries_one() {
+        assert_eq!(
+            uploaded_variations("21\t9937918\trs867932594\tGGAGGGTCTGAATGTTTGTCCC\tG\t.\t.\t."),
+            ["rs867932594"]
+        );
+        assert_eq!(
+            uploaded_variations("21\t34971477\trs1;rs2\tC\tA\t.\t.\t."),
+            ["rs1"]
+        );
+    }
+
+    /// Ensembl VEP 116.2 on the GRCh37-hgvs corpus names `21 34971477 . C A`
+    /// `21_34971477_C/A`.
+    #[test]
+    fn dot_id_names_an_snv_by_its_line() {
+        assert_eq!(
+            uploaded_variations("21\t34971477\t.\tC\tA\t.\t.\t."),
+            ["21_34971477_C/A"]
+        );
+    }
+
+    /// Ensembl VEP 116.2 names `21 10463009 . T TG` (GRCh38 corpus)
+    /// `21_10463009_T/TG` and `21 30677516 . TCACA T` (GRCh37-hgvs corpus)
+    /// `21_30677516_TCACA/T`: the POS as written, not the anchor-trimmed start.
+    #[test]
+    fn dot_id_names_an_indel_by_its_line() {
+        let variants = parse_vcf_line("21\t10463009\t.\tT\tTG\t.\t.\t.", false).unwrap();
+        assert_eq!(variants[0].start, 10463010);
+        assert_eq!(variants[0].uploaded_variation(), "21_10463009_T/TG");
+        let variants = parse_vcf_line("21\t30677516\t.\tTCACA\tT\t.\t.\t.", false).unwrap();
+        assert_eq!(variants[0].start, 30677517);
+        assert_eq!(variants[0].allele_string, "CACA/-");
+        assert_eq!(variants[0].uploaded_variation(), "21_30677516_TCACA/T");
+    }
+
+    /// Parser.pm `minimise_alleles` copies the record's line onto the minimised
+    /// copy, so `21 100 . ATT AT`, minimised to `T/-` at 102, is named
+    /// `21_100_ATT/AT` by OutputFactory.pm (`21_102_ATT/AT` at release 115).
+    #[test]
+    fn minimised_copy_is_named_by_its_line() {
+        let variants = parse_vcf_line("21\t100\t.\tATT\tAT\t.\t.\t.", false).unwrap();
+        assert!(variants[0].minimised);
+        assert_eq!(variants[0].start, 102);
+        assert_eq!(variants[0].allele_string, "T/-");
+        assert_eq!(variants[0].uploaded_variation(), "21_100_ATT/AT");
+    }
+
+    /// Ensembl VEP 116.2 on the GRCh37 corpus names both alleles of
+    /// `21 9489854 . T TAA,TAC` `21_9489854_T/TAA/TAC`; the ALT column is taken
+    /// as written, a `*` allele included (OutputFactory.pm turns its commas to `/`).
+    #[test]
+    fn dot_id_names_a_multi_allelic_record_by_its_line() {
+        assert_eq!(
+            uploaded_variations("21\t9489854\t.\tT\tTAA,TAC\t.\t.\t."),
+            ["21_9489854_T/TAA/TAC", "21_9489854_T/TAA/TAC"]
+        );
+        assert_eq!(
+            uploaded_variations("21\t100\t.\tA\tG,*\t.\t.\t."),
+            ["21_100_A/G/*"]
+        );
+    }
+
+    /// Ensembl VEP 116.2 on the GRCh37 corpus names `21 33867341 . C <CN2>`
+    /// `21_33867341_C/<CN2>`: the REF base and the POS, where the structural
+    /// variant itself starts at 33867342.
+    #[test]
+    fn dot_id_names_a_symbolic_record_by_its_line() {
+        let variants =
+            parse_vcf_line("21\t33867341\t.\tC\t<CN2>\t.\t.\tEND=34000018", false).unwrap();
+        assert_eq!(variants[0].start, 33867342);
+        assert_eq!(variants[0].uploaded_variation(), "21_33867341_C/<CN2>");
+    }
+
+    /// OutputFactory.pm: an ID equal to the `chr_start_alleles` name Parser.pm
+    /// `validate_vf` generates for an empty ID column is not an identifier, so the
+    /// record is named by its line like an ID-less one.
+    #[test]
+    fn an_id_equal_to_the_generated_name_yields_the_line_name() {
+        assert_eq!(
+            uploaded_variations("21\t30677516\t21_30677517_CACA/-\tTCACA\tT\t.\t.\t."),
+            ["21_30677516_TCACA/T"]
+        );
+        assert_eq!(
+            uploaded_variations("21\t33867341\t21_33867342_<CN2>\tC\t<CN2>\t.\t.\tEND=34000018"),
+            ["21_33867341_C/<CN2>"]
+        );
+        // An ID that merely resembles the generated name is kept.
+        assert_eq!(
+            uploaded_variations("21\t30677516\t21_30677516_CACA/-\tTCACA\tT\t.\t.\t."),
+            ["21_30677516_CACA/-"]
+        );
     }
 
     #[test]

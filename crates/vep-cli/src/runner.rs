@@ -128,13 +128,19 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
     out
 }
 
-/// `[PATH]/<basename>` for each path in a value (`,`-separated lists included).
+/// `[PATH]/<basename>` for each path in a value (`,`-separated lists included),
+/// as Config.pm `mask_data_paths` masks it: everything up to the last `/` that
+/// has text before it and is not the final character becomes `[PATH]/`, so a
+/// trailing slash survives after the leaf and a root-level `/x` is left alone.
 fn collapse_paths(value: &str) -> String {
     value
         .split(',')
-        .map(|part| match part.rfind('/') {
-            Some(idx) if idx + 1 < part.len() => format!("[PATH]/{}", &part[idx + 1..]),
-            _ => part.to_string(),
+        .map(|part| {
+            let stem = part.strip_suffix('/').unwrap_or(part);
+            match stem.rfind('/').filter(|&i| i > 0) {
+                Some(i) => format!("[PATH]/{}", &part[i + 1..]),
+                None => part.to_string(),
+            }
         })
         .collect::<Vec<_>>()
         .join(",")
@@ -271,7 +277,7 @@ impl Runner {
                 "vep_api_version".to_string(),
                 vep_core::VEP_VERSION.to_string(),
             ),
-            ("cache".to_string(), self.config.cache_dir_path()),
+            ("cache".to_string(), self.header_cache_dir()),
             ("command_line".to_string(), self.command_line.clone()),
         ];
         if let Some(asm) = self.assembly_name() {
@@ -283,6 +289,18 @@ impl Runner {
             }
         }
         kv
+    }
+
+    /// The cache directory as the output headers print it: the path itself, or
+    /// `[PATH]/<leaf>` under `--mask_header_cache_path` (BaseRunner.pm
+    /// `get_output_header_info`).
+    fn header_cache_dir(&self) -> String {
+        let dir = self.config.cache_dir_path();
+        if self.config.mask_header_cache_path {
+            collapse_paths(&dir)
+        } else {
+            dir
+        }
     }
 
     fn assembly_name(&self) -> Option<String> {
@@ -353,6 +371,7 @@ impl Runner {
             populate_loftee_context: needs_loftee_context,
             compute_hgvs: needs_hgvs_computation(&self.config),
             compute_exon_intron_numbers: needs_exon_intron_numbers(&self.config),
+            protein_version: self.config.protein_version,
         });
 
         let LoadedPlugins { builtin, dylib } = self.load_plugins(plugin_fasta)?;
@@ -499,7 +518,7 @@ impl Runner {
                         plugin_fields,
                     )
                     .with_run_info(
-                        &self.config.cache_dir_path(),
+                        &self.header_cache_dir(),
                         self.cache_info.as_ref(),
                         &self.command_line,
                     ),
@@ -516,7 +535,7 @@ impl Runner {
                 let header = vep_io::output::fields::tab_header(
                     &options,
                     &plugin_fields,
-                    &self.config.cache_dir_path(),
+                    &self.header_cache_dir(),
                     self.cache_info.as_ref(),
                     &self.command_line,
                 );
@@ -744,7 +763,7 @@ impl Runner {
         let options = self.field_options();
         for line in vep_io::output::fields::default_format_header(
             &options,
-            &self.config.cache_dir_path(),
+            &self.header_cache_dir(),
             self.cache_info.as_ref(),
             &self.command_line,
         ) {
@@ -1664,6 +1683,60 @@ mod tests {
         }
         assert!(!needs_hgvs_computation(&config_from(&["--vcf"])));
         assert!(needs_hgvs_computation(&config_from(&["--hgvs"])));
+    }
+
+    /// OutputFactory.pm sets ENSP only under `--protein`, so `--protein_version`
+    /// alone prints no protein identifier; with both, the versioned identifier
+    /// is what the consequence carries.
+    #[test]
+    fn protein_version_prints_only_with_protein() {
+        use vep_io::output::fields::flag_fields;
+        let alone = Runner::new(config_from(&["--protein_version"]));
+        assert!(alone.config.protein_version);
+        assert!(!flag_fields(&alone.field_options()).contains(&"ENSP"));
+        let both = Runner::new(config_from(&["--protein", "--protein_version"]));
+        assert!(flag_fields(&both.field_options()).contains(&"ENSP"));
+    }
+
+    /// Config.pm `mask_data_paths`: a trailing slash keeps its place after the
+    /// leaf, and a root-level path has no leading run to mask.
+    #[test]
+    fn collapse_paths_follows_mask_data_paths() {
+        assert_eq!(collapse_paths("/caches/116_GRCh38"), "[PATH]/116_GRCh38");
+        assert_eq!(collapse_paths("/caches/116_GRCh38/"), "[PATH]/116_GRCh38/");
+        assert_eq!(collapse_paths("/x"), "/x");
+        assert_eq!(collapse_paths("116_GRCh38"), "116_GRCh38");
+        assert_eq!(
+            collapse_paths("/a/b.vcf,/c/d.bed"),
+            "[PATH]/b.vcf,[PATH]/d.bed"
+        );
+    }
+
+    /// Ensembl VEP 116.2 on the GRCh38-release116 corpus prints
+    /// `## Using cache in [PATH]/116_GRCh38` under `--mask_header_cache_path`
+    /// (BaseRunner.pm `get_output_header_info`): the default and tab headers,
+    /// the VCF `cache=` token and the Parquet footer all take the masked path.
+    #[test]
+    fn mask_header_cache_path_masks_every_header_surface() {
+        use vep_io::output::fields::{default_format_header, tab_header, vcf_vep_meta_line};
+        let plain = Runner::new(config_from(&["--json_cache", "/caches/116_GRCh38"]));
+        assert_eq!(plain.header_cache_dir(), "/caches/116_GRCh38");
+        let masked = Runner::new(config_from(&[
+            "--json_cache",
+            "/caches/116_GRCh38",
+            "--mask_header_cache_path",
+        ]));
+        let dir = masked.header_cache_dir();
+        assert_eq!(dir, "[PATH]/116_GRCh38");
+        let options = masked.field_options();
+        assert!(default_format_header(&options, &dir, None, "vep")
+            .contains(&"## Using cache in [PATH]/116_GRCh38".to_string()));
+        assert!(tab_header(&options, &[], &dir, None, "vep")
+            .contains(&"## Using cache in [PATH]/116_GRCh38".to_string()));
+        assert!(vcf_vep_meta_line(&dir, None).contains(" cache=\"[PATH]/116_GRCh38\""));
+        assert!(masked
+            .parquet_kv_metadata()
+            .contains(&("cache".to_string(), "[PATH]/116_GRCh38".to_string())));
     }
 
     /// The exon/intron ordinals reach the output only under `--numbers`; `--vcf`

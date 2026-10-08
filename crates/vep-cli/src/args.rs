@@ -97,6 +97,10 @@ pub struct Args {
     #[arg(long = "no_headers")]
     pub no_headers: bool,
 
+    /// Print the cache directory in the output headers as [PATH]/<leaf>
+    #[arg(long = "mask_header_cache_path")]
+    pub mask_header_cache_path: bool,
+
     /// Accepted for VEP compatibility; no effect (the annotation cache is --json_cache)
     #[arg(long)]
     pub cache: bool,
@@ -225,6 +229,10 @@ pub struct Args {
     #[arg(long)]
     pub protein: bool,
 
+    /// Add the translation version to the Ensembl protein ID (ENSP00000286808.3); needs --protein
+    #[arg(long = "protein_version")]
+    pub protein_version: bool,
+
     /// Add UniProt cross-references
     #[arg(long)]
     pub uniprot: bool,
@@ -260,6 +268,14 @@ pub struct Args {
     /// Accepted for VEP compatibility; regulatory-feature annotation is not implemented and the flag warns
     #[arg(long)]
     pub regulatory: bool,
+
+    /// Refused: would annotate regulatory features and motifs from a GFF3 file in place of the cache; regulatory annotation is not supported
+    #[arg(long = "regulatory_gff")]
+    pub regulatory_gff: Option<String>,
+
+    /// Refused: would widen the promoters read with --regulatory_gff to their extended bounds; regulatory annotation is not supported
+    #[arg(long = "extended_promoters")]
+    pub extended_promoters: bool,
 
     /// Add variant class from SO
     #[arg(long = "variant_class")]
@@ -393,6 +409,10 @@ pub struct Args {
     #[arg(long)]
     pub custom: Vec<String>,
 
+    /// Refused: would keep a --custom VCF source's FILTER column out of the output unless --fields names it; custom annotation is not supported
+    #[arg(long = "custom_suppress_filter")]
+    pub custom_suppress_filter: bool,
+
     /// Accepted for VEP compatibility; not implemented (the transcript set is the --json_cache contents)
     #[arg(long)]
     pub refseq: bool,
@@ -424,6 +444,29 @@ pub struct Args {
     /// Process non-variant lines in VCF (e.g., reference-only calls)
     #[arg(long = "allow_non_variant")]
     pub allow_non_variant: bool,
+}
+
+impl Args {
+    /// The refusal for a flag vep-rs declares but does not honour, naming what the
+    /// flag would do and the feature it belongs to; `None` when none was passed.
+    pub fn refused_flag(&self) -> Option<String> {
+        let message = if self.regulatory_gff.is_some() {
+            "--regulatory_gff is not supported: it would annotate regulatory features \
+             and motifs from a GFF3 file in place of the cache, and regulatory annotation \
+             is a feature of a later release"
+        } else if self.extended_promoters {
+            "--extended_promoters is not supported: it would widen the promoters read \
+             with --regulatory_gff to their extended bounds, and regulatory annotation is \
+             a feature of a later release"
+        } else if self.custom_suppress_filter {
+            "--custom_suppress_filter is not supported: it would keep a --custom VCF \
+             source's FILTER column out of the output unless --fields names it, and custom \
+             annotation is a feature of a later release"
+        } else {
+            return None;
+        };
+        Some(message.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -563,6 +606,56 @@ mod tests {
         assert!(args.check_existing);
         assert!(args.coding_only);
         assert!(args.no_intergenic);
+    }
+
+    #[test]
+    fn protein_version_and_mask_header_cache_path_parse() {
+        let args = Args::parse_from(["vep", "--protein_version", "--mask_header_cache_path"]);
+        assert!(args.protein_version);
+        assert!(args.mask_header_cache_path);
+        assert!(args.refused_flag().is_none());
+    }
+
+    /// `--regulatory_gff` is refused: regulatory annotation is not supported.
+    #[test]
+    fn regulatory_gff_is_refused() {
+        let args = Args::parse_from(["vep", "--regulatory_gff", "reg.gff3.gz"]);
+        assert_eq!(
+            args.refused_flag().as_deref(),
+            Some(
+                "--regulatory_gff is not supported: it would annotate regulatory features \
+                 and motifs from a GFF3 file in place of the cache, and regulatory annotation \
+                 is a feature of a later release"
+            )
+        );
+    }
+
+    /// `--extended_promoters` is refused: regulatory annotation is not supported.
+    #[test]
+    fn extended_promoters_is_refused() {
+        let args = Args::parse_from(["vep", "--extended_promoters"]);
+        assert_eq!(
+            args.refused_flag().as_deref(),
+            Some(
+                "--extended_promoters is not supported: it would widen the promoters read \
+                 with --regulatory_gff to their extended bounds, and regulatory annotation is \
+                 a feature of a later release"
+            )
+        );
+    }
+
+    /// `--custom_suppress_filter` is refused: custom annotation is not supported.
+    #[test]
+    fn custom_suppress_filter_is_refused() {
+        let args = Args::parse_from(["vep", "--custom_suppress_filter"]);
+        assert_eq!(
+            args.refused_flag().as_deref(),
+            Some(
+                "--custom_suppress_filter is not supported: it would keep a --custom VCF \
+                 source's FILTER column out of the output unless --fields names it, and custom \
+                 annotation is a feature of a later release"
+            )
+        );
     }
 
     #[test]

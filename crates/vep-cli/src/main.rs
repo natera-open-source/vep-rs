@@ -3,7 +3,7 @@
 
 //! Entry point for the VEP Rust CLI binary.
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 
 use vep_cli::args;
 use vep_cli::config;
@@ -17,6 +17,11 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() -> anyhow::Result<()> {
     let args = args::Args::parse();
+    if let Some(message) = args.refused_flag() {
+        args::Args::command()
+            .error(clap::error::ErrorKind::ValueValidation, message)
+            .exit();
+    }
 
     let level = if args.verbose {
         tracing::Level::DEBUG
