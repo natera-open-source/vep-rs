@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Parquet `alt` and the plugin-visible `alt_alleles` of a multi-allelic copy-number record carry each ALT as written (`<DEL>`, `<DUP>`, `<CN0>`), where every ALT read `<CNV>`. (#N)
 - The `## VEP command-line` header and the VCF `##VEP-command-line` line keep a negative value with its flag (`--max_sv_size -1`). (#N)
 - An ID equal to the generated breakend name yields the line name on the record's own `N.` row as on the mate row. (#N)
+- A `<CNV:TR>` contraction loses the run's tail and an expansion inserts after it, as Ensembl VEP's expansion places them, so the frame follows the unit change, not the run length. (#N)
+- A `<CNV:TR>` allele's length sums its RN repeat sequences, and each allele of a multi-allelic record takes its own RUS, RUC and RB entries. (#N)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#N)
 
 ## [0.3.2] - 2026-10-06

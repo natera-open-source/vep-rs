@@ -225,7 +225,7 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
             .collect(),
     };
 
-    for &(allele_idx, alt, sv_class) in &per_alt_classes {
+    for (k, &(allele_idx, alt, sv_class)) in per_alt_classes.iter().enumerate() {
         if sv_class == vep_core::variant::VariantClass::ReferenceBlock {
             tracing::warn!(
                 "{}:{} {}: NON_REF is not a supported structural variant type; \
@@ -311,7 +311,11 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
         variant.sv_type = svtype.map(|s| s.to_string());
         variant.sv_len = get_info_value(info_field, "SVLEN").and_then(|v| v.parse().ok());
         if sv_class == vep_core::variant::VariantClass::TandemRepeat {
-            variant.tr_alt_bases = tandem_repeat_alt_bases(info_field);
+            let ordinal = per_alt_classes[..k]
+                .iter()
+                .filter(|(_, a, _)| a.to_ascii_uppercase().starts_with("<CNV:TR"))
+                .count();
+            variant.tr_alt_bases = tandem_repeat_alt_bases(info_field, ordinal);
         }
         variant.ci_pos = parse_ci_field(get_info_value(info_field, "CIPOS"));
         variant.ci_end = parse_ci_field(get_info_value(info_field, "CIEND"));
@@ -674,21 +678,45 @@ pub(crate) fn sv_so_term_and_class(
 }
 
 /// Extract a value from the VCF INFO field by key.
-/// The alternate allele's length in bases for a `<CNV:TR>` record: INFO/RB, else RUC times
-/// the repeat unit's length (RUS's length, else RUL). The first value of each field is read,
-/// the record having one tandem-repeat allele; a fractional RUC is truncated the way Perl's
-/// `x` operator truncates its count (`Parser/VCF.pm`, `_expand_tandem_repeat_allele_string`).
-fn tandem_repeat_alt_bases(info: &str) -> Option<u64> {
-    let first = |key: &str| get_info_value(info, key).and_then(|v| v.split(',').next());
-    if let Some(rb) = first("RB").and_then(|v| v.parse::<f64>().ok()) {
-        return (rb >= 0.0).then_some(rb as u64);
-    }
-    let ruc = first("RUC")?.parse::<f64>().ok()?;
-    let unit_len = match first("RUS") {
-        Some(rus) if rus != "." => rus.len() as f64,
-        _ => first("RUL")?.parse::<f64>().ok()?,
+/// The alternate allele's length in bases for the `ordinal`th `<CNV:TR>` allele of a
+/// record, from the fields VEP's expansion reads (`Parser/VCF.pm`,
+/// `_expand_tandem_repeat_allele_string`): INFO/RN gives each tandem-repeat allele its
+/// number of repeat sequences (one each when absent), consumed in order from the RUS, RUC
+/// and RB lists, and the allele's length is the sum over its sequences of RB, else RUC
+/// times the unit's length (RUS's length, else RUL), a fractional RUC truncated the way
+/// Perl's `x` operator truncates its count. `None` when a field the allele needs is
+/// missing or `.`.
+fn tandem_repeat_alt_bases(info: &str, ordinal: usize) -> Option<u64> {
+    let list = |key: &str| -> Vec<&str> {
+        get_info_value(info, key)
+            .map(|v| v.split(',').collect())
+            .unwrap_or_default()
     };
-    (ruc >= 0.0).then_some((ruc.trunc() * unit_len) as u64)
+    let rn = list("RN");
+    let sequences = |allele: usize| -> Option<usize> {
+        match rn.get(allele) {
+            None => Some(1),
+            Some(n) => n.parse().ok(),
+        }
+    };
+    let first = (0..ordinal).try_fold(0usize, |sum, i| Some(sum + sequences(i)?))?;
+    let (rus, ruc, rb, rul) = (list("RUS"), list("RUC"), list("RB"), list("RUL"));
+    let mut bases = 0u64;
+    for j in first..first + sequences(ordinal)? {
+        let length = if rb.is_empty() {
+            let unit_len = match rus.get(j) {
+                Some(&unit) if unit != "." => unit.len() as f64,
+                _ => rul.get(j)?.parse::<f64>().ok()?,
+            };
+            let count: f64 = ruc.get(j)?.parse().ok()?;
+            (count >= 0.0).then_some((count.trunc() * unit_len) as u64)?
+        } else {
+            let total: f64 = rb.get(j)?.parse().ok()?;
+            (total >= 0.0).then_some(total as u64)?
+        };
+        bases += length;
+    }
+    Some(bases)
 }
 
 pub(crate) fn get_info_value<'a>(info: &'a str, key: &str) -> Option<&'a str> {
@@ -1983,27 +2011,64 @@ mod tests {
         // RB wins; without it RUC times the unit length, the unit read from RUS and from RUL
         // when RUS is missing; a fractional RUC truncates as Perl's `x` operator does.
         assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RB=42;RUC=7;RUS=CAG"),
+            tandem_repeat_alt_bases("SVTYPE=CNV;RB=42;RUC=7;RUS=CAG", 0),
             Some(42)
         );
         assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7;RUS=CAG"),
+            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7;RUS=CAG", 0),
             Some(21)
         );
         assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7.9;RUS=CAG"),
+            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7.9;RUS=CAG", 0),
             Some(21)
         );
         assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7;RUS=.;RUL=4"),
+            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7;RUS=.;RUL=4", 0),
             Some(28)
         );
         assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RB=42,60;RUS=CAG,AT"),
+            tandem_repeat_alt_bases("SVTYPE=CNV;RB=42,60;RUS=CAG,AT", 0),
             Some(42)
         );
-        assert_eq!(tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7"), None);
-        assert_eq!(tandem_repeat_alt_bases("SVTYPE=CNV;SVLEN=300"), None);
+        assert_eq!(tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7", 0), None);
+        assert_eq!(tandem_repeat_alt_bases("SVTYPE=CNV;SVLEN=300", 0), None);
+    }
+
+    /// `_expand_tandem_repeat_allele_string` (Parser/VCF.pm) builds one alternate
+    /// allele per RN entry (one per `<CNV:TR>` allele when RN is absent) by
+    /// concatenating that many RUS x RUC repeat sequences in order, so the allele's
+    /// length is their sum: `RN=2;RUS=CT,GA;RUC=2,1` expands to `CTCTGA`, 6 bases,
+    /// as does `RB=4,2`; with two `<CNV:TR>` alleles and `RUS=CT,CT;RUC=2,8` the
+    /// first allele is `CTCT` (4 bases) and the second `CT` x 8 (16 bases); a
+    /// second allele whose entries the lists lack has no length.
+    #[test]
+    fn tandem_repeat_alt_bases_sums_an_allele_s_repeat_sequences() {
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;SVLEN=10;RN=2;RUS=CT,GA;RUC=2,1", 0),
+            Some(6)
+        );
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;SVLEN=10;RN=2;RUS=CT,GA;RB=4,2", 0),
+            Some(6)
+        );
+        let two_alleles = "SVTYPE=CNV;SVLEN=10;RUS=CT,CT;RUC=2,8";
+        assert_eq!(tandem_repeat_alt_bases(two_alleles, 0), Some(4));
+        assert_eq!(tandem_repeat_alt_bases(two_alleles, 1), Some(16));
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;SVLEN=10;RN=1,2;RUS=CT,GA,TTA;RUC=2,1,2", 1),
+            Some(8)
+        );
+        assert_eq!(tandem_repeat_alt_bases("SVTYPE=CNV;RUS=CT;RUC=2", 1), None);
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;RN=.;RUS=CT;RUC=2", 0),
+            None
+        );
+
+        let line = "21\t25002099\tmulti_tr\tA\t<CNV:TR>,<CNV:TR>\t.\t.\tSVTYPE=CNV;END=25002109;SVLEN=10;RUS=CT,CT;RUC=2,8";
+        let variants = parse_vcf_line(line, true).unwrap();
+        assert_eq!(variants.len(), 2);
+        assert_eq!(variants[0].tr_alt_bases, Some(4));
+        assert_eq!(variants[1].tr_alt_bases, Some(16));
     }
 
     #[test]

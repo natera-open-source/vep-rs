@@ -37,8 +37,26 @@ pub fn calculate(
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
-    let del_start = variant.start;
-    let del_end = variant.sv_end.unwrap_or(variant.end);
+    calculate_span(
+        variant,
+        variant.start,
+        variant.sv_end.unwrap_or(variant.end),
+        transcript,
+        upstream_distance,
+        downstream_distance,
+    )
+}
+
+/// [`calculate`] over an explicit deleted span, for a record whose lost bases are a
+/// part of its own span: a `<CNV:TR>` contraction loses the run's tail, not the run.
+pub(super) fn calculate_span(
+    variant: &InputVariant,
+    del_start: u64,
+    del_end: u64,
+    transcript: &Transcript,
+    upstream_distance: u64,
+    downstream_distance: u64,
+) -> Option<TranscriptConsequence> {
     let tx_start = transcript.start;
     let tx_end = transcript.end;
 
