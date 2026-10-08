@@ -595,13 +595,411 @@ EXCLUDING_RULES: tuple[ExclusionRule, ...] = tuple(
 )
 
 
+# One sentence per pair bucket, the shape its predicate recognises, for the report.
+PAIR_RULE_DEFINITIONS: dict[str, str] = {
+    "intronic_overcall_swap": (
+        "Both sides are pure-intronic sets and vep-rs adds splice_region_variant or "
+        "splice_polypyrimidine_tract_variant, which the reference's last-written region drops."
+    ),
+    "ppt_overcall_swap": (
+        "Both sides carry intron_variant and vep-rs adds splice_polypyrimidine_tract_variant "
+        "or splice_region_variant to the same set."
+    ),
+    "frameshift_splice_cascade_swap": (
+        "An identical frameshift or in-frame coding backbone on both sides, vep-rs adding "
+        "splice sub-terms the reference's last-written region drops."
+    ),
+    "splice_lastwrite_swap": (
+        "vep-rs adds splice terms, and nothing else, to the reference's set: the reference "
+        "stores the splice verdict by assignment and a later differing region overwrote it."
+    ),
+    "start_cooccurrence_swap": (
+        "The reference writes start_lost and start_retained_variant together for one allele; "
+        "vep-rs writes the set without the member the allele kind cannot support."
+    ),
+    "covered_splice_region_swap": (
+        "The pairs of the splice family whose only difference is a splice_region_variant "
+        "the reference's assignment order dropped; the exclusion policy of that family."
+    ),
+}
+PAIR_RULE_CITATIONS: dict[str, str] = {
+    "splice_family_swap": "BaseTranscriptVariationAllele.pm:215; VariationEffect.pm:87-110",
+    "start_cooccurrence_swap": "VariationEffect.pm:851-963, 1028-1075",
+}
+
+
+_BRACKET_MATE_RE = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
+# The record's own breakend as the two engines write it: `N.` / `.N` (the reference's
+# string for the local end of a bracket breakend, and a single breakend's own VCF ALT)
+# or `chromosome_breakpoint` (the class term, written for a mateless single breakend by
+# the reference and for the local end of a bracket breakend by vep-rs).
+_OWN_BREAKEND_RE = re.compile(r"^(?:\.[ACGTN]+|[ACGTN]+\.|chromosome_breakpoint)$")
+# The one symbolic record both engines keep but write at different Locations: the
+# reference expands a `<CNV:TR>` to literal sequence at the run's 3' end (Parser/VCF.pm:
+# 382-431) while vep-rs writes the span under this allele, so its vep-rs rows never have a
+# reference row at their Location and are not a skipped record.
+_TANDEM_REPEAT_ALLELE = "tandem_repeat"
+_INTERGENIC_FEATURE = "-"
+
+
+def bracket_mate(allele: str) -> tuple[str, int] | None:
+    """The mate ``(chromosome, position)`` a bracket-notation breakend allele names, the
+    chromosome with any ``chr`` prefix removed as the reference removes it
+    (AnnotationType/Transcript.pm:134); None for any other allele."""
+    m = _BRACKET_MATE_RE.search(allele)
+    if not m:
+        return None
+    chrom = m.group(1)
+    return (chrom[3:] if chrom.lower().startswith("chr") else chrom), int(m.group(2))
+
+
+def is_own_breakend_allele(allele: str) -> bool:
+    """Whether the allele column names a breakend record's own end rather than a mate."""
+    return _OWN_BREAKEND_RE.match(allele) is not None
+
+
+@dataclass(frozen=True)
+class OneSidedRule:
+    """A divergence shape recognised on rows one engine wrote and the other did not.
+
+    Unlike an `ExclusionRule`, which judges a pair of consequence sets on one
+    transcript, a one-sided rule judges a record: what the reference wrote for it
+    (nothing, or rows under some alleles) against what vep-rs wrote. ``excludes`` says
+    whether this comparator's adjusted F1 removes the rows it recognises;
+    ``excludes_with_cache`` whether a comparator with a transcript-to-chromosome
+    authority (the structural-variant comparator under its cache) does. A rule that only
+    classifies reports a count so the shape is visible without being credited to vep-rs.
+    """
+
+    bucket: str
+    definition: str
+    excludes: bool
+    taxonomy_class: str
+    perl_citation: str
+    excludes_with_cache: bool = False
+
+
+REFERENCE_SKIPPED_RECORD_BUCKET = "reference_skipped_record"
+BND_OWN_ROWS_LOST_BUCKET = "bnd_own_chromosome_rows_lost"
+BND_SYNONYM_MATE_ROWS_LOST_BUCKET = "bnd_synonym_mate_rows_lost"
+FASTA_NAMED_SLICE_INTERGENIC_BUCKET = "fasta_named_slice_intergenic"
+
+# The three breakend shapes are counted, never set aside: deciding which of the rows the
+# reference would have written needs the cache's transcript-to-chromosome authority,
+# which this comparator does not read (the structural-variant comparator sets the first
+# two aside under it).
+REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
+    OneSidedRule(
+        bucket=REFERENCE_SKIPPED_RECORD_BUCKET,
+        definition=(
+            "A structural record the reference dropped before its input buffer, marked "
+            "vep_skip for a span over --max_sv_size (its SVLEN, else its END), "
+            "an ALT type with no Sequence Ontology term, an unsupported multi-allelic list or "
+            "a deletion with neither END nor SVLEN, so it has no reference row in any format; "
+            "vep-rs's rows for the record are set aside."
+        ),
+        excludes=True,
+        excludes_with_cache=True,
+        taxonomy_class="reference_skipped_record",
+        perl_citation="Parser.pm:491-500, 821-826; Parser/VCF.pm:477-481, 555-557, 575",
+    ),
+    OneSidedRule(
+        bucket=BND_OWN_ROWS_LOST_BUCKET,
+        definition=(
+            "A bracket breakend whose mate is on another chromosome loses the rows of its "
+            "own end when a mate-chromosome transcript, in memory from the previous buffer, "
+            "reaches it first and names its slice: the reference keeps the mate rows and "
+            "writes nothing under the own-end allele, an order-dependent result."
+        ),
+        excludes=False,
+        excludes_with_cache=True,
+        taxonomy_class="bnd_slice_claimed_by_mate_chromosome",
+        perl_citation="AnnotationSource.pm:119-134; AnnotationType/Transcript.pm:122-143",
+    ),
+    OneSidedRule(
+        bucket=BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
+        definition=(
+            "A bracket breakend whose mate is written with a chromosome synonym passes the "
+            "overlap test through the synonym table but fails the slice test, which "
+            "compares the raw name with the cache's, so the reference writes nothing under "
+            "the mate allele."
+        ),
+        excludes=False,
+        excludes_with_cache=True,
+        taxonomy_class="bnd_synonym_mate_slice_mismatch",
+        perl_citation="InputBuffer.pm:348-358; AnnotationType/Transcript.pm:134",
+    ),
+    OneSidedRule(
+        bucket=FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
+        definition=(
+            "Under --check_ref or --lookup_ref with a FASTA whose sequence names differ "
+            "from the cache's, the variant's slice is named after the FASTA and every "
+            "transcript fails the slice test, so the reference writes intergenic_variant "
+            "where vep-rs writes transcript rows; a property of the run, counted and never "
+            "set aside."
+        ),
+        excludes=False,
+        taxonomy_class="fasta_named_slice_intergenic",
+        perl_citation="Parser.pm:749; BaseVEP.pm get_slice; AnnotationType/Transcript.pm:141",
+    ),
+)
+
+
+@dataclass(frozen=True)
+class ReferenceRegistry:
+    """Every rule the comparator applies against one Ensembl VEP release: the pair rules
+    (classification and exclusion of consequence-set swaps) and the one-sided rules
+    (record-level classes). The 115.2 registry's one-sided class is the scope pass of
+    `filter_snp_indel_intended_divergences`, described here and implemented there, so the
+    published figures reproduce from the code that produced them."""
+
+    release: str
+    pair_rules: tuple[ExclusionRule, ...]
+    one_sided_rules: tuple[OneSidedRule, ...]
+
+
+# Both registries share the pair rules: the splice assignment and the start co-emission
+# they recognise are unchanged in 116 (VariationEffect.pm:851-1075 and
+# BaseTranscriptVariationAllele.pm:215).
+REFERENCE_REGISTRIES: dict[str, ReferenceRegistry] = {
+    "115.2": ReferenceRegistry(
+        release="115.2",
+        pair_rules=EXCLUSION_REGISTRY,
+        one_sided_rules=(
+            OneSidedRule(
+                bucket=SV_TRANSCRIPT_SELECTION_BUCKET,
+                definition=(
+                    "A record the reference marks vep_skip stays in its batch and is "
+                    "annotated against whatever regions its neighbours loaded; the "
+                    "transcripts vep-rs names beyond the reference's are set aside when "
+                    "the reference named at least one and vep-rs more, and the reverse "
+                    "when vep-rs named at least as many."
+                ),
+                excludes=True,
+                excludes_with_cache=True,
+                taxonomy_class="sv_transcript_selection",
+                perl_citation="Parser.pm:491-498; Parser/VCF.pm:477-481, 575; AnnotationSource.pm:238; InputBuffer.pm:284-330",
+            ),
+        ),
+    ),
+    "116.2": ReferenceRegistry(
+        release="116.2",
+        pair_rules=EXCLUSION_REGISTRY,
+        one_sided_rules=REFERENCE_116_2_ONE_SIDED_RULES,
+    ),
+}
+REFERENCE_RELEASES: tuple[str, ...] = tuple(REFERENCE_REGISTRIES)
+DEFAULT_REFERENCE_RELEASE = "116.2"
+
+
+def divergence_class_definitions(reference_release: str) -> dict[str, dict[str, object]]:
+    """Every class of a reference release's registry as the report states it: the
+    one-sentence definition, whether the adjusted F1 sets it aside and the Ensembl VEP
+    source it cites. Pair rules first, in classification order, then the one-sided rules."""
+    registry = REFERENCE_REGISTRIES[reference_release]
+    out: dict[str, dict[str, object]] = {}
+    for rule in registry.pair_rules:
+        out[rule.bucket] = {
+            "definition": PAIR_RULE_DEFINITIONS[rule.bucket],
+            "excludes": rule.excludes,
+            "taxonomy_class": rule.taxonomy_class,
+            "perl_citation": PAIR_RULE_CITATIONS[rule.taxonomy_class],
+        }
+    for one_sided in registry.one_sided_rules:
+        out[one_sided.bucket] = {
+            "definition": one_sided.definition,
+            "excludes": one_sided.excludes,
+            "taxonomy_class": one_sided.taxonomy_class,
+            "perl_citation": one_sided.perl_citation,
+        }
+    return out
+
+
+class ReferenceRecordScope:
+    """What the 116.2 one-sided pass needs from the sorted merge, collected in the one
+    read of both key streams.
+
+    ``absent``: the (file, Location) pairs at which vep-rs wrote a structural row and
+    the reference wrote nothing: a record the reference dropped as `vep_skip`, since
+    116.2 writes at least one row (an intergenic one when nothing is in range) for every
+    record it keeps and every route to `vep_skip` is structural; `tandem_repeat` is
+    outside the test (`_TANDEM_REPEAT_ALLELE`). Every vep-rs row at an absent Location is
+    then set aside whatever its allele, a sequence allele beside the symbolic one of a
+    mixed ALT list included, because the reference skips the line whole. This is the
+    output-only rule: this comparator reads no input VCF. The structural-variant
+    comparator reads the input and names the record from it (`skipped_record_rows`:
+    the reference's own skip routes over the ALT and INFO, confirmed by the reference's
+    absence under the record's own Location start and alleles), so a kept record
+    sharing a start or a Location string with a skipped one is told apart there. The
+    merge visits keys in sorted order and every key of one Location shares the prefix
+    ``Location<TAB>``, so a Location's rows from both streams are contiguous and the
+    group closes when the Location changes.
+
+    ``breakends``: for every (file, Location) at which either engine wrote a breakend
+    allele, the alleles each side wrote and the mate chromosomes its bracket alleles
+    name, for the two breakend classes.
+    """
+
+    def __init__(self) -> None:
+        self.absent: set[tuple[str, str]] = set()
+        self.breakends: dict[tuple[str, str], tuple[set[str], set[str], set[str]]] = {}
+        self._group: tuple[str, str] | None = None
+        self._reference_wrote = False
+        self._rust_wrote_structural = False
+
+    def observe(self, file_name: str, key_line: str, perl: bool, rust: bool) -> None:
+        loc, allele = key_line.split("\t", 2)[:2]
+        group = (file_name, loc)
+        if group != self._group:
+            self.close()
+            self._group = group
+        if perl:
+            self._reference_wrote = True
+        if rust and is_structural_allele(allele) and allele != _TANDEM_REPEAT_ALLELE:
+            self._rust_wrote_structural = True
+        mate = bracket_mate(allele)
+        if mate is not None or is_own_breakend_allele(allele):
+            perl_alleles, rust_alleles, mates = self.breakends.setdefault(
+                group, (set(), set(), set())
+            )
+            if perl:
+                perl_alleles.add(allele)
+            if rust:
+                rust_alleles.add(allele)
+            if mate is not None:
+                mates.add(mate[0])
+
+    def close(self) -> None:
+        """Close the open Location group; called by the merge when its file ends."""
+        if self._group is not None and self._rust_wrote_structural and not self._reference_wrote:
+            self.absent.add(self._group)
+        self._group = None
+        self._reference_wrote = False
+        self._rust_wrote_structural = False
+
+
+def _strip_chr(chrom: str) -> str:
+    """The reference's own normalisation of a breakend's chromosome name at the slice test
+    (AnnotationType/Transcript.pm:134): the ``chr`` prefix removed and nothing else, so
+    ``M`` stays ``M`` and is not the cache's ``MT``."""
+    return chrom[3:] if chrom.lower().startswith("chr") else chrom
+
+
+def apply_116_2_one_sided_rules(
+    rows: list[dict[str, str]],
+    masked_rows: set[int],
+    scope: ReferenceRecordScope,
+) -> dict[str, dict[str, int]]:
+    """The 116.2 one-sided pass over the rows no pair rule removed.
+
+    Marks the rows of `REFERENCE_SKIPPED_RECORD_BUCKET`, the one 116.2 class that
+    excludes and whose rows are all vep-rs's, in ``masked_rows``; counts the three
+    breakend shapes without masking them. Returns the per-bucket statistics: ``count``
+    rows recognised, ``excluded`` rows set aside, ``records`` distinct (file, Location)
+    pairs the bucket reached.
+    """
+    stats = {
+        rule.bucket: {"count": 0, "excluded": 0, "records": 0}
+        for rule in REFERENCE_116_2_ONE_SIDED_RULES
+    }
+    records: dict[str, set[tuple[str, str]]] = defaultdict(set)
+
+    def hit(bucket: str, idx: int, row: dict[str, str], exclude: bool) -> None:
+        stats[bucket]["count"] += 1
+        records[bucket].add((row["file_name"], row["location"]))
+        if exclude:
+            stats[bucket]["excluded"] += 1
+            masked_rows.add(idx)
+
+    # The one-sided rows of each side per (file, Location, allele), for the FASTA shape,
+    # which reads what the other side wrote under the same allele.
+    perl_keys: dict[tuple[str, str, str], list[int]] = defaultdict(list)
+    rust_keys: dict[tuple[str, str, str], list[int]] = defaultdict(list)
+    for idx, row in enumerate(rows):
+        if idx in masked_rows:
+            continue
+        key = (row["file_name"], row["location"], row["allele"])
+        if row["source"] == "missing_in_rust":
+            perl_keys[key].append(idx)
+        elif row["source"] == "extra_in_rust":
+            rust_keys[key].append(idx)
+
+    # The breakend records whose own-end rows the reference lost: it kept rows under a
+    # bracket allele naming a mate on another chromosome and wrote nothing under any
+    # own-end allele.
+    own_rows_lost: set[tuple[str, str]] = set()
+    for (file_name, loc), (perl_alleles, _rust_alleles, mates) in scope.breakends.items():
+        own = _strip_chr(loc.split(":", 1)[0])
+        if (
+            any(bracket_mate(a) is not None for a in perl_alleles)
+            and not any(is_own_breakend_allele(a) for a in perl_alleles)
+            and any(m != own for m in mates)
+        ):
+            own_rows_lost.add((file_name, loc))
+
+    for idx, row in enumerate(rows):
+        if idx in masked_rows or row["source"] != "extra_in_rust":
+            continue
+        group = (row["file_name"], row["location"])
+        allele = row["allele"]
+        if group in scope.absent:
+            # The reference wrote nothing at the Location; the merge admitted the group
+            # only on a structural vep-rs row, and every row of the record goes with it.
+            hit(REFERENCE_SKIPPED_RECORD_BUCKET, idx, row, exclude=True)
+            continue
+        breakend = scope.breakends.get(group)
+        if breakend is None or row["feature"] == _INTERGENIC_FEATURE:
+            continue
+        if is_own_breakend_allele(allele):
+            if group in own_rows_lost:
+                hit(BND_OWN_ROWS_LOST_BUCKET, idx, row, exclude=False)
+            continue
+        perl_alleles, _rust_alleles, _mates = breakend
+        mate = bracket_mate(allele)
+        # A synonym is any mate name that is not a name the cache files a chromosome under:
+        # the reference resolved it for the overlap and refused it at the slice test.
+        if (
+            mate is not None
+            and perl_alleles
+            and allele not in perl_alleles
+            and mate[0] not in CACHE_CONTIG_NAMES
+        ):
+            hit(BND_SYNONYM_MATE_ROWS_LOST_BUCKET, idx, row, exclude=False)
+
+    # The reference's only row at a key is its intergenic row while vep-rs wrote
+    # transcript rows there and no intergenic row: the shape of a slice named after a
+    # FASTA whose names differ from the cache's. Counted on the reference's row.
+    for key, perl_idx in perl_keys.items():
+        rust_idx = rust_keys.get(key)
+        if not rust_idx or len(perl_idx) != 1:
+            continue
+        perl_row = rows[perl_idx[0]]
+        if perl_row["feature"] == _INTERGENIC_FEATURE and all(
+            rows[i]["feature"] != _INTERGENIC_FEATURE for i in rust_idx
+        ):
+            hit(FASTA_NAMED_SLICE_INTERGENIC_BUCKET, perl_idx[0], perl_row, exclude=False)
+
+    for bucket in stats:
+        stats[bucket]["records"] = len(records[bucket])
+    return stats
+
+
 def filter_snp_indel_intended_divergences(
     discordant_path: Path,
     open_out: Path | None = None,
     scope_features: ScopeFeatures | None = None,
+    *,
+    reference_release: str,
+    record_scope: ReferenceRecordScope | None = None,
 ) -> tuple[int, int, dict[str, dict[str, int]]]:
     """Read discordant.tsv, classify intended-divergence swap pairs, and exclude
     the ones an Ensembl VEP self-contradiction accounts for.
+
+    ``reference_release`` selects the one-sided pass (`REFERENCE_REGISTRIES`); the pair
+    rules are the same under both. Under ``"115.2"`` the pass is the scope class below
+    and ``record_scope`` is refused; under ``"116.2"`` it is
+    `apply_116_2_one_sided_rules` over ``record_scope`` and ``scope_features`` is
+    refused, so a caller cannot run one release's reference against the other's class.
 
     With ``scope_features`` (from ``compare_sorted_key_files``) the one-sided rows of a
     record Perl marks `vep_skip` take the structural-variant comparator's
@@ -669,6 +1067,15 @@ def filter_snp_indel_intended_divergences(
     Utils/VariationEffect.pm:851-878, :947-963 and :1028-1075 in
     ensembl-variation release/115 (23c76f60).
     """
+    if reference_release not in REFERENCE_REGISTRIES:
+        raise ValueError(
+            f"unknown reference release {reference_release!r}; one of {REFERENCE_RELEASES}"
+        )
+    if reference_release == "115.2" and record_scope is not None:
+        raise ValueError("record_scope is the 116.2 collector; the 115.2 pass reads scope_features")
+    if reference_release == "116.2" and scope_features is not None:
+        raise ValueError("scope_features is the 115.2 collector; the 116.2 pass reads record_scope")
+
     # The key carries feature_type because the SCORED tuple is (location, allele,
     # feature, feature_type, consequence_set): keyed without it, two rows differing
     # only by feature_type collapse onto one key and the nested loop counts their
@@ -798,6 +1205,11 @@ def filter_snp_indel_intended_divergences(
             selection["excluded"] += 1
             masked_rows.add(idx)
         bucket_stats[SV_TRANSCRIPT_SELECTION_BUCKET] = selection
+
+    if record_scope is not None:
+        one_sided_stats = apply_116_2_one_sided_rules(rows, masked_rows, record_scope)
+        excluded_rust += one_sided_stats[REFERENCE_SKIPPED_RECORD_BUCKET]["excluded"]
+        bucket_stats.update(one_sided_stats)
 
     if open_out is not None:
         with open_out.open("w", encoding="utf-8", newline="") as out:
@@ -991,6 +1403,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_false",
         help="Opt out of defensive canonical-contigs filter (rare).",
     )
+    parser.add_argument(
+        "--reference-release",
+        choices=REFERENCE_RELEASES,
+        default=DEFAULT_REFERENCE_RELEASE,
+        help="The Ensembl VEP release that produced --perl-dir, which selects the "
+        "one-sided divergence classes of the adjusted F1 (REFERENCE_REGISTRIES). Under "
+        "115.2 the classes are the published ones; under 116.2 (default) a record the "
+        "reference dropped as vep_skip is set aside whole and the three breakend shapes "
+        "of 116.1's chromosome-aware overlap are counted. The pair rules are the same "
+        "under both. run_concordance.sh and run_clone_measurement.sh derive the value "
+        "from the reference set's provenance.",
+    )
     return parser.parse_args(argv)
 
 
@@ -1021,6 +1445,9 @@ def require_mode_args(args: argparse.Namespace) -> None:
 # outputs emit Ensembl-style Locations. This defensive output-side filter is
 # therefore an Ensembl-only membership test on engine output Locations.
 CANONICAL_CONTIGS = frozenset([str(i) for i in range(1, 23)] + ["X", "Y", "MT", "M"])
+# The names the Ensembl caches file chromosomes under, for the breakend synonym test: a
+# mate written `M` (or `chrM`) is a synonym of `MT` there, as any other name is.
+CACHE_CONTIG_NAMES = CANONICAL_CONTIGS - {"M"}
 
 
 def canonical_set_for_assembly(assembly: str | None) -> frozenset[str] | None:
@@ -1721,6 +2148,8 @@ def write_summary_markdown(path: Path, aggregate: dict, files: list[dict]) -> No
     lines.append(f"- F1: {aggregate['f1']:.6f}")
     adjusted = aggregate.get("adjusted", {})
     if adjusted:
+        if "reference_release" in adjusted:
+            lines.append(f"- Reference release: Ensembl VEP {adjusted['reference_release']}")
         # The bucket line reports CLASSIFICATION and so sits outside the exclusion
         # gate below: a bucket counts the pairs matching its shape whether or not
         # the mask removes them, and a suite can have buckets with zero exclusions.
@@ -1747,6 +2176,16 @@ def write_summary_markdown(path: Path, aggregate: dict, files: list[dict]) -> No
             f"- Context-collapsed F1: {collapsed.get('f1', 0.0):.6f} "
             f"(collapsed terms: {', '.join(collapsed.get('collapsed_terms', []))})"
         )
+    classes = adjusted.get("divergence_classes") if adjusted else None
+    if classes:
+        lines.append("")
+        lines.append("## Divergence classes")
+        lines.append("")
+        lines.append("| Class | Treatment | Definition | Ensembl VEP source |")
+        lines.append("|---|---|---|---|")
+        for name, c in classes.items():
+            verdict = "sets aside" if c["excludes"] else "counts only"
+            lines.append(f"| `{name}` | {verdict} | {c['definition']} | {c['perl_citation']} |")
     lines.append("")
     lines.append("## Per File")
     lines.append("")
@@ -1792,6 +2231,7 @@ def compare_sorted_key_files(
     discordant_out: TextIO | None,
     track_consequence_buckets: bool,
     scope_features: ScopeFeatures | None = None,
+    record_scope: ReferenceRecordScope | None = None,
 ) -> tuple[int, int, int, int, int, Counter[str], Counter[str]]:
     """Compare two sorted-unique key files (streaming merge).
 
@@ -1799,6 +2239,10 @@ def compare_sorted_key_files(
     ``_batch_dependent_annotation_scope`` adds its feature to that record's set for its
     side, matched and one-sided lines alike, so the exclusion pass can compare the two
     engines' transcript sets for the record.
+
+    With ``record_scope`` given (the 116.2 collector), every key line is observed with the
+    side or sides that wrote it, and the collector's open Location group is closed when
+    both streams are exhausted.
 
     Returns:
       perl_count, rust_count, intersection, missing, extra, missing_counter, extra_counter
@@ -1827,6 +2271,8 @@ def compare_sorted_key_files(
                 missing += 1
                 if scope_features is not None:
                     _record_scope_feature(scope_features, p, 0)
+                if record_scope is not None:
+                    record_scope.observe(file_name, p, perl=True, rust=False)
                 if track_consequence_buckets:
                     missing_counter[p.rsplit("\t", 1)[-1]] += 1
                 if discordant_out is not None:
@@ -1839,6 +2285,8 @@ def compare_sorted_key_files(
                 extra += 1
                 if scope_features is not None:
                     _record_scope_feature(scope_features, r, 1)
+                if record_scope is not None:
+                    record_scope.observe(file_name, r, perl=False, rust=True)
                 if track_consequence_buckets:
                     extra_counter[r.rsplit("\t", 1)[-1]] += 1
                 if extra_tmp is not None:
@@ -1854,8 +2302,13 @@ def compare_sorted_key_files(
             if scope_features is not None:
                 _record_scope_feature(scope_features, p, 0)
                 _record_scope_feature(scope_features, p, 1)
+            if record_scope is not None:
+                record_scope.observe(file_name, p, perl=True, rust=True)
             p = _next_line(perl_h)
             r = _next_line(rust_h)
+
+    if record_scope is not None:
+        record_scope.close()
 
     if extra_tmp is not None and discordant_out is not None:
         extra_tmp.seek(0)
@@ -2051,9 +2504,12 @@ def main() -> int:
     discordant_path = report_dir / args.discordant_tsv
     discordant_path.parent.mkdir(parents=True, exist_ok=True)
     discordant_out = discordant_path.open("w", encoding="utf-8", newline="")
-    # Every engine's transcripts on the records Perl marks `vep_skip`, across all files
-    # (a location names its chromosome, so files cannot collide).
-    scope_features: ScopeFeatures = {}
+    # The selected release's one-sided collector. The 115.2 one is keyed without the file:
+    # a location names its chromosome, so files cannot collide.
+    scope_features: ScopeFeatures | None = {} if args.reference_release == "115.2" else None
+    record_scope: ReferenceRecordScope | None = (
+        ReferenceRecordScope() if args.reference_release == "116.2" else None
+    )
     discordant_out.write(
         "\t".join(
             [
@@ -2107,6 +2563,7 @@ def main() -> int:
                 discordant_out=discordant_out,
                 track_consequence_buckets=True,
                 scope_features=scope_features,
+                record_scope=record_scope,
             )
 
             # Context-collapsed comparison keys (no discordant TSV, no bucket tracking)
@@ -2206,7 +2663,11 @@ def main() -> int:
         f"{discordant_path.stem}_open{discordant_path.suffix}"
     )
     excl_perl, excl_rust, excl_cats = filter_snp_indel_intended_divergences(
-        discordant_path, open_out=open_path, scope_features=scope_features
+        discordant_path,
+        open_out=open_path,
+        scope_features=scope_features,
+        reference_release=args.reference_release,
+        record_scope=record_scope,
     )
     adj_perl = perl_total - excl_perl
     adj_rust = rust_total - excl_rust
@@ -2244,6 +2705,13 @@ def main() -> int:
             "excluded_categories": excl_cats,
         },
     }
+    # The 115.2 report keeps the published shape; a later release's names its reference
+    # and defines every class it applied.
+    if args.reference_release != "115.2":
+        aggregate["adjusted"]["reference_release"] = args.reference_release
+        aggregate["adjusted"]["divergence_classes"] = divergence_class_definitions(
+            args.reference_release
+        )
 
     summary = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -2266,6 +2734,8 @@ def main() -> int:
     summary_json_path = report_dir / args.summary_json
     summary_json_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     write_summary_markdown(report_dir / args.summary_md, aggregate, per_file_results)
+    if args.reference_release != "115.2":
+        print(f"reference release: {args.reference_release}")
 
     print(f"wrote summary: {summary_json_path}")
     print(f"wrote markdown: {report_dir / args.summary_md}")

@@ -1348,6 +1348,10 @@ The class is fully masked:
 
 The counters are `excluded_cnvtr_rust` and `excluded_cnvtr_perl`, against the class sizes `cnvtr_swap_pairs_total_rust` and `cnvtr_swap_pairs_total_perl`.
 
+## Scoring against Ensembl VEP 116.2
+
+The classes on this page are the ones the comparators apply when the reference is Ensembl VEP 115.2 (`--reference-release 115.2`), the release the paper was measured against. Ensembl VEP 116 drops a record it marks skipped before its input buffer, so defect C's classes 5 to 8 have no reference row to compare against, and 116.1's chromosome-aware overlap removes defect D's classes 9 and 10 while dropping rows vep-rs writes in three breakend shapes of its own; defects A, B and E and the `<CNV:TR>` representation are unchanged. The classes the comparators apply against 116.2, the default, are documented in [docs/concordance-provenance/116.2-divergence-classes.md](concordance-provenance/116.2-divergence-classes.md); under 115.2 they write exactly the reports they wrote for the paper.
+
 ## Reproducing these examples
 
 Every example above is one or two VCF records from a public dataset run through both engines with their default consequence settings.

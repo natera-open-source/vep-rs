@@ -956,7 +956,7 @@ class ExclusionBoundTests(unittest.TestCase):
                 f.write(self.HEADER + "\n")
                 for r in rows:
                     f.write("\t".join(r) + "\n")
-            return filter_snp_indel_intended_divergences(p)
+            return filter_snp_indel_intended_divergences(p, reference_release="115.2")
 
     def test_two_feature_types_on_one_key_do_not_cross_multiply(self) -> None:
         loc, allele, feat = "21:100", "A", "ENST1"
@@ -1058,7 +1058,7 @@ class ClassifyWithoutExcludingTests(unittest.TestCase):
                         )
                         + "\n"
                     )
-            return filter_snp_indel_intended_divergences(p)
+            return filter_snp_indel_intended_divergences(p, reference_release="115.2")
 
     def _assert(self, perl_csq, rust_csq, bucket, excluded):
         ep, er, buckets = self._run(perl_csq, rust_csq)
@@ -1165,7 +1165,9 @@ class OpenDiscordantTsvTests(unittest.TestCase):
             p = Path(d) / "discordant.tsv"
             p.write_text(self.HEADER + "\n" + "".join(r + "\n" for r in rows), encoding="utf-8")
             o = Path(d) / "discordant_open.tsv"
-            result = filter_snp_indel_intended_divergences(p, open_out=o if open_out else None)
+            result = filter_snp_indel_intended_divergences(
+                p, open_out=o if open_out else None, reference_release="115.2"
+            )
             return result, o.read_text(encoding="utf-8") if o.exists() else None
 
     def test_open_rows_are_the_unexcluded_pairs_plus_the_unpaired_rows(self) -> None:
@@ -2156,7 +2158,9 @@ class SvTranscriptSelectionTests(unittest.TestCase):
                 f.write(self.HEADER + "\n")
                 for r in rows:
                     f.write("\t".join(r) + "\n")
-            result = filter_snp_indel_intended_divergences(p, open_out=o, scope_features=scope)
+            result = filter_snp_indel_intended_divergences(
+                p, open_out=o, scope_features=scope, reference_release="115.2"
+            )
             open_rows = o.read_text(encoding="utf-8").splitlines()[1:]
             return result, open_rows
 
@@ -2239,3 +2243,338 @@ class SvTranscriptSelectionTests(unittest.TestCase):
             (self.GIANT, "deletion"): ({"T1", "T2"}, {"T1", "T3"}),
             ("18:200-200", "CPX"): (set(), {"C1"}),
         }, "the giant record and the unsupported type are in scope, the 10 kb deletion and the SNV are not; the matched T1 counts on both sides")
+
+
+# The reference release selector (Ensembl VEP 115.2 or 116.2)
+
+
+class ReferenceRegistryTests(unittest.TestCase):
+    """`REFERENCE_REGISTRIES` carries one registry per Ensembl VEP release the comparator
+    scores against. Both share the pair rules (`EXCLUSION_REGISTRY`, the paper's, by
+    identity); they differ in the one-sided classes."""
+
+    def test_both_releases_share_the_paper_pair_rules_by_identity(self) -> None:
+        from compare_vep_outputs import REFERENCE_REGISTRIES, REFERENCE_RELEASES
+
+        self.assertEqual(tuple(REFERENCE_REGISTRIES), REFERENCE_RELEASES)
+        for release, registry in REFERENCE_REGISTRIES.items():
+            self.assertIs(registry.pair_rules, EXCLUSION_REGISTRY, release)
+            self.assertEqual(registry.release, release)
+
+    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_three_breakend_shapes(self) -> None:
+        from compare_vep_outputs import (
+            BND_OWN_ROWS_LOST_BUCKET,
+            BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
+            FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
+            REFERENCE_116_2_ONE_SIDED_RULES,
+            REFERENCE_REGISTRIES,
+            REFERENCE_SKIPPED_RECORD_BUCKET,
+        )
+
+        rules = REFERENCE_REGISTRIES["116.2"].one_sided_rules
+        self.assertIs(rules, REFERENCE_116_2_ONE_SIDED_RULES)
+        self.assertEqual(
+            [r.bucket for r in rules],
+            [REFERENCE_SKIPPED_RECORD_BUCKET, BND_OWN_ROWS_LOST_BUCKET,
+             BND_SYNONYM_MATE_ROWS_LOST_BUCKET, FASTA_NAMED_SLICE_INTERGENIC_BUCKET],
+        )
+        self.assertEqual([r.excludes for r in rules], [True, False, False, False],
+                         "this comparator has no transcript-to-chromosome authority, so only the skipped record is set aside")
+        self.assertEqual([r.excludes_with_cache for r in rules], [True, True, True, False],
+                         "under a cache authority the two breakend shapes are set aside too; the FASTA shape never")
+        for r in rules:
+            self.assertTrue(r.definition.endswith(".") and len(r.definition.split()) >= 12, r.bucket)
+            self.assertRegex(r.perl_citation, r"\.pm", r.bucket)
+        self.assertEqual(len({r.bucket for r in rules}), len(rules))
+        self.assertEqual(len({r.taxonomy_class for r in rules}), len(rules))
+
+    def test_the_115_2_registry_describes_the_scope_class_it_implements(self) -> None:
+        from compare_vep_outputs import REFERENCE_REGISTRIES, SV_TRANSCRIPT_SELECTION_BUCKET
+
+        (rule,) = REFERENCE_REGISTRIES["115.2"].one_sided_rules
+        self.assertEqual(rule.bucket, SV_TRANSCRIPT_SELECTION_BUCKET)
+        self.assertTrue(rule.excludes)
+
+    def test_every_class_of_a_release_has_a_definition_and_a_citation_in_the_report(self) -> None:
+        from compare_vep_outputs import REFERENCE_REGISTRIES, divergence_class_definitions
+
+        for release, registry in REFERENCE_REGISTRIES.items():
+            classes = divergence_class_definitions(release)
+            expected = [r.bucket for r in registry.pair_rules] + [r.bucket for r in registry.one_sided_rules]
+            self.assertEqual(list(classes), expected, release)
+            for bucket, c in classes.items():
+                self.assertTrue(c["definition"].endswith("."), bucket)
+                self.assertIn(".pm", c["perl_citation"], bucket)
+                self.assertIn(c["excludes"], (True, False))
+
+    def test_the_filter_refuses_the_other_releases_collector(self) -> None:
+        from compare_vep_outputs import ReferenceRecordScope
+
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "discordant.tsv"
+            p.write_text("file_name\tsource\tlocation\tallele\tfeature\tfeature_type\tconsequence_set\n")
+            with self.assertRaises(ValueError):
+                filter_snp_indel_intended_divergences(p, reference_release="115.2", record_scope=ReferenceRecordScope())
+            with self.assertRaises(ValueError):
+                filter_snp_indel_intended_divergences(p, reference_release="116.2", scope_features={})
+            with self.assertRaises(ValueError):
+                filter_snp_indel_intended_divergences(p, reference_release="117.0")
+
+    def test_the_taxonomy_page_names_every_class_of_both_registries(self) -> None:
+        """`docs/concordance-provenance/116.2-divergence-classes.md` is the 116.2 registry's
+        taxonomy: every bucket the comparator reports under either release is named on it,
+        so a class cannot be added here without its definition reaching the page."""
+        from compare_vep_outputs import REFERENCE_REGISTRIES
+
+        page = (Path(__file__).resolve().parents[2] / "docs" / "concordance-provenance"
+                / "116.2-divergence-classes.md").read_text(encoding="utf-8")
+        for registry in REFERENCE_REGISTRIES.values():
+            for rule in (*registry.pair_rules, *registry.one_sided_rules):
+                self.assertIn(f"`{rule.bucket}`", page, rule.bucket)
+        for release in REFERENCE_REGISTRIES:
+            self.assertIn(f"`{release}`", page)
+
+    def test_the_flag_defaults_to_116_2_and_names_its_choices(self) -> None:
+        from compare_vep_outputs import DEFAULT_REFERENCE_RELEASE
+
+        self.assertEqual(DEFAULT_REFERENCE_RELEASE, "116.2")
+        self.assertEqual(parse_args([]).reference_release, "116.2")
+        self.assertEqual(parse_args(["--reference-release", "115.2"]).reference_release, "115.2")
+        with self.assertRaises(SystemExit):
+            parse_args(["--reference-release", "116.1"])
+
+
+class ReferenceRecordScopeTests(unittest.TestCase):
+    """The 116.2 collector reads the sorted merge once: a Location whose rows are all
+    vep-rs's and structural is a record the reference dropped; a Location with any
+    reference row, under any allele, is not."""
+
+    @staticmethod
+    def key(loc: str, allele: str, feat: str, csq: str, ftype: str = "Transcript") -> str:
+        return f"{loc}\t{allele}\t{feat}\t{ftype}\t{csq}"
+
+    def merge(self, perl: list[str], rust: list[str]):
+        from compare_vep_outputs import ReferenceRecordScope, compare_sorted_key_files
+
+        scope = ReferenceRecordScope()
+        with tempfile.TemporaryDirectory() as d:
+            pp, rp = Path(d) / "p.txt", Path(d) / "r.txt"
+            pp.write_text("".join(k + "\n" for k in sorted(perl)), encoding="utf-8")
+            rp.write_text("".join(k + "\n" for k in sorted(rust)), encoding="utf-8")
+            compare_sorted_key_files(pp, rp, file_name="f", discordant_out=None,
+                                     track_consequence_buckets=False, record_scope=scope)
+        return scope
+
+    def test_a_structural_record_with_no_reference_row_is_absent(self) -> None:
+        rust = [self.key("21:800-900", "CPX", "C3", "intron_variant"),
+                self.key("21:800-900", "CPX", "C4", "coding_sequence_variant"),
+                self.key("21:30000001", "deletion", "TX_DEL", "feature_truncation"),
+                self.key("21:1", "A", "TX_SNV", "intron_variant")]
+        perl = [self.key("21:1", "A", "TX_SNV", "intron_variant")]
+        self.assertEqual(self.merge(perl, rust).absent, {("f", "21:800-900"), ("f", "21:30000001")})
+
+    def test_a_reference_row_under_another_allele_keeps_the_record_present(self) -> None:
+        """The same Location carries the reference's `copy_number_variation` rows and vep-rs's
+        `deletion` and `duplication` rows: a naming divergence, not a skipped record."""
+        perl = [self.key("21:30165801-30166000", "copy_number_variation", "TX_FIRST", "3_prime_UTR_variant")]
+        rust = [self.key("21:30165801-30166000", "deletion", "TX_FIRST", "feature_truncation,3_prime_UTR_variant"),
+                self.key("21:30165801-30166000", "duplication", "TX_FIRST", "feature_elongation,3_prime_UTR_variant")]
+        self.assertEqual(self.merge(perl, rust).absent, set())
+
+    def test_sequence_alleles_and_tandem_repeats_never_make_a_record_absent(self) -> None:
+        rust = [self.key("21:100", "A", "TX_FIRST", "missense_variant"),
+                self.key("21:900-950", "tandem_repeat", "T7", "feature_elongation")]
+        self.assertEqual(self.merge([], rust).absent, set())
+
+    def test_the_last_location_of_the_file_is_closed(self) -> None:
+        rust = [self.key("21:999999-1999999", "CPX", "C1", "intron_variant")]
+        perl = [self.key("21:1", "A", "TX_SNV", "intron_variant")]
+        self.assertEqual(self.merge(perl, rust).absent, {("f", "21:999999-1999999")})
+
+    def test_breakend_records_carry_each_sides_alleles_and_the_mate_chromosomes(self) -> None:
+        perl = [self.key("21:26037668", "N[22:26037668[", "M1", "intron_variant"),
+                self.key("21:11400001", "N.", "-", "intergenic_variant", "-"),
+                self.key("21:11400001", "N[22:14000000[", "-", "intergenic_variant", "-")]
+        rust = [self.key("21:26037668", "N[22:26037668[", "M1", "intron_variant"),
+                self.key("21:26037668", "chromosome_breakpoint", "O1", "upstream_gene_variant")]
+        scope = self.merge(perl, rust)
+        self.assertEqual(scope.breakends[("f", "21:26037668")],
+                         ({"N[22:26037668["}, {"N[22:26037668[", "chromosome_breakpoint"}, {"22"}))
+        self.assertEqual(scope.breakends[("f", "21:11400001")], ({"N.", "N[22:14000000["}, set(), {"22"}))
+        self.assertEqual(scope.absent, set(), "every breakend record here has a reference row")
+
+
+class Apply116OneSidedRulesTests(unittest.TestCase):
+    """The 116.2 one-sided pass over discordant rows: the skipped record is set aside, the
+    three breakend shapes are counted and left charged."""
+
+    HEADER = "file_name\tsource\tlocation\tallele\tfeature\tfeature_type\tconsequence_set"
+
+    def row(self, source: str, loc: str, allele: str, feature: str, csq: str) -> tuple[str, ...]:
+        ftype = "-" if feature == "-" else "Transcript"
+        return ("f", source, loc, allele, feature, ftype, _norm(csq))
+
+    def run_pass(self, rows, scope):
+        with tempfile.TemporaryDirectory() as d:
+            p, o = Path(d) / "discordant.tsv", Path(d) / "open.tsv"
+            p.write_text(self.HEADER + "\n" + "".join("\t".join(r) + "\n" for r in rows), encoding="utf-8")
+            result = filter_snp_indel_intended_divergences(p, open_out=o, reference_release="116.2", record_scope=scope)
+            return result, o.read_text(encoding="utf-8").splitlines()[1:]
+
+    def scope(self, absent=(), breakends=None):
+        from compare_vep_outputs import ReferenceRecordScope
+
+        s = ReferenceRecordScope()
+        s.absent = {("f", loc) for loc in absent}
+        s.breakends = breakends or {}
+        return s
+
+    def test_every_vep_rs_row_of_a_skipped_record_is_set_aside(self) -> None:
+        rows = [self.row("extra_in_rust", "21:800-900", "CPX", "C3", "intron_variant"),
+                self.row("extra_in_rust", "21:800-900", "CPX", "C4", "coding_sequence_variant"),
+                self.row("extra_in_rust", "21:30000001", "deletion", "TX_DEL", "feature_truncation"),
+                self.row("extra_in_rust", "21:600-700", "<NON_REF>", "-", "intergenic_variant"),
+                self.row("missing_in_rust", "21:400", "G", "TX_DOWN", "downstream_gene_variant")]
+        (ep, er, buckets), open_rows = self.run_pass(rows, self.scope(absent=["21:800-900", "21:30000001", "21:600-700"]))
+        self.assertEqual((ep, er), (0, 4))
+        self.assertEqual(buckets["reference_skipped_record"], {"count": 4, "excluded": 4, "records": 3})
+        self.assertEqual(len(open_rows), 1, "the reference-only row stays")
+
+    def test_a_record_the_reference_kept_is_not_set_aside_by_the_116_2_pass(self) -> None:
+        """The 115.2 batch class does not apply: surplus vep-rs transcripts on a record the
+        reference annotated stay charged, whatever the span."""
+        rows = [self.row("extra_in_rust", "21:18457513-32484691", "N.", "T3", "transcript_ablation")]
+        (ep, er, buckets), open_rows = self.run_pass(rows, self.scope())
+        self.assertEqual((ep, er, len(open_rows)), (0, 0, 1))
+        self.assertEqual(buckets["reference_skipped_record"], {"count": 0, "excluded": 0, "records": 0})
+        self.assertNotIn("sv_transcript_selection", buckets)
+
+    def test_own_end_rows_the_reference_lost_are_counted_not_set_aside(self) -> None:
+        loc = "21:26037668"
+        breakends = {("f", loc): ({"N[22:26037668["}, {"N[22:26037668[", "chromosome_breakpoint"}, {"22"})}
+        rows = [self.row("extra_in_rust", loc, "chromosome_breakpoint", "O1", "upstream_gene_variant"),
+                self.row("extra_in_rust", loc, "chromosome_breakpoint", "O2", "intron_variant")]
+        (ep, er, buckets), open_rows = self.run_pass(rows, self.scope(breakends=breakends))
+        self.assertEqual((ep, er), (0, 0))
+        self.assertEqual(buckets["bnd_own_chromosome_rows_lost"], {"count": 2, "excluded": 0, "records": 1})
+        self.assertEqual(len(open_rows), 2)
+
+    def test_own_end_rows_beside_a_reference_own_end_row_are_not_the_shape(self) -> None:
+        loc = "21:26037668"
+        breakends = {("f", loc): ({"N[22:26037668[", "N."}, {"N[22:26037668[", "N."}, {"22"})}
+        rows = [self.row("extra_in_rust", loc, "N.", "O2", "intron_variant")]
+        (_, _, buckets), _ = self.run_pass(rows, self.scope(breakends=breakends))
+        self.assertEqual(buckets["bnd_own_chromosome_rows_lost"]["count"], 0)
+
+    def test_a_same_chromosome_mate_is_not_the_own_end_shape(self) -> None:
+        loc = "21:24808769-35740566"
+        breakends = {("f", loc): ({"N[21:35740567["}, {"N[21:35740567[", "N."}, {"21"})}
+        rows = [self.row("extra_in_rust", loc, "N.", "O2", "intron_variant")]
+        (_, _, buckets), _ = self.run_pass(rows, self.scope(breakends=breakends))
+        self.assertEqual(buckets["bnd_own_chromosome_rows_lost"]["count"], 0)
+
+    def test_mate_rows_under_a_synonym_named_mate_are_counted(self) -> None:
+        loc = "21:26037668"
+        syn = "N[NC_000022.11:26037668["
+        breakends = {("f", loc): ({"N."}, {"N.", syn}, {"NC_000022.11"})}
+        rows = [self.row("extra_in_rust", loc, syn, "M1", "intron_variant")]
+        (_, _, buckets), open_rows = self.run_pass(rows, self.scope(breakends=breakends))
+        self.assertEqual(buckets["bnd_synonym_mate_rows_lost"], {"count": 1, "excluded": 0, "records": 1})
+        self.assertEqual(len(open_rows), 1)
+
+    def test_a_canonical_mate_name_is_not_the_synonym_shape(self) -> None:
+        loc = "21:26037668"
+        breakends = {("f", loc): ({"N."}, {"N.", "N[chr22:26037668["}, {"22"})}
+        rows = [self.row("extra_in_rust", loc, "N[chr22:26037668[", "M1", "intron_variant")]
+        (_, _, buckets), _ = self.run_pass(rows, self.scope(breakends=breakends))
+        self.assertEqual(buckets["bnd_synonym_mate_rows_lost"]["count"], 0)
+
+    def test_a_mitochondrial_mate_written_m_is_a_synonym_of_the_caches_mt(self) -> None:
+        """The slice test strips `chr` and nothing else, so `M` is not the cache's `MT`."""
+        loc = "21:26037668"
+        breakends = {("f", loc): ({"N."}, {"N.", "N[chrM:100["}, {"M"})}
+        rows = [self.row("extra_in_rust", loc, "N[chrM:100[", "MT_TX", "upstream_gene_variant")]
+        (_, _, buckets), _ = self.run_pass(rows, self.scope(breakends=breakends))
+        self.assertEqual(buckets["bnd_synonym_mate_rows_lost"]["count"], 1)
+        breakends = {("f", loc): ({"N."}, {"N.", "N[MT:100["}, {"MT"})}
+        rows = [self.row("extra_in_rust", loc, "N[MT:100[", "MT_TX", "upstream_gene_variant")]
+        (_, _, buckets), _ = self.run_pass(rows, self.scope(breakends=breakends))
+        self.assertEqual(buckets["bnd_synonym_mate_rows_lost"]["count"], 0)
+
+    def test_a_reference_intergenic_row_against_vep_rs_transcripts_is_counted(self) -> None:
+        rows = [self.row("missing_in_rust", "21:100", "A", "-", "intergenic_variant"),
+                self.row("extra_in_rust", "21:100", "A", "TX_FIRST", "missense_variant"),
+                self.row("extra_in_rust", "21:100", "A", "TX_SECOND", "intron_variant"),
+                self.row("missing_in_rust", "21:200", "T", "-", "intergenic_variant"),
+                self.row("extra_in_rust", "21:200", "T", "-", "intergenic_variant")]
+        (ep, er, buckets), open_rows = self.run_pass(rows, self.scope())
+        self.assertEqual((ep, er), (0, 0))
+        self.assertEqual(buckets["fasta_named_slice_intergenic"], {"count": 1, "excluded": 0, "records": 1})
+        self.assertEqual(len(open_rows), 5)
+
+
+class ReferenceReleaseFixtureTests(unittest.TestCase):
+    """Compare mode on the committed fixture under each release.
+
+    `testdata/reference_release/expected_115_2/` is the report the 115.2 registry writes on
+    this fixture, the published comparator's own output; under `--reference-release 115.2`
+    every report file must equal it byte for byte (summary.json after its run-specific
+    timestamp and paths), so the published figures reproduce. Under 116.2 the record the
+    reference wrote nothing for is set aside whole and the 115.2 scope class is not
+    applied.
+    """
+
+    FIXTURE = Path(__file__).resolve().parent / "testdata" / "reference_release"
+    VOLATILE = ("generated_at_utc", "perl_dir", "rust_dir", "report_dir")
+
+    def _run(self, release: str) -> Path:
+        import shutil
+        import sys
+        from compare_vep_outputs import main
+
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, True)
+        argv = sys.argv
+        sys.argv = ["compare_vep_outputs.py", "--perl-dir", str(self.FIXTURE / "perl"),
+                    "--rust-dir", str(self.FIXTURE / "rust"), "--report-dir", str(out),
+                    "--assembly", "GRCh37", "--reference-release", release]
+        try:
+            self.assertEqual(main(), 0)
+        finally:
+            sys.argv = argv
+        return out
+
+    def test_115_2_reproduces_the_published_report_byte_for_byte(self) -> None:
+        import json
+
+        out = self._run("115.2")
+        expected = self.FIXTURE / "expected_115_2"
+        for name in ("summary.md", "discordant.tsv", "discordant_open.tsv"):
+            with self.subTest(file=name):
+                self.assertEqual((out / name).read_bytes(), (expected / name).read_bytes())
+        got = json.loads((out / "summary.json").read_text())
+        want = json.loads((expected / "summary.json").read_text())
+        for k in self.VOLATILE:
+            got[k] = want[k]
+        self.assertEqual(got, want)
+        self.assertNotIn("reference_release", got["aggregate"]["adjusted"])
+
+    def test_116_2_sets_aside_the_skipped_record_and_not_the_batch_class(self) -> None:
+        import json
+
+        out = self._run("116.2")
+        adj = json.loads((out / "summary.json").read_text())["aggregate"]["adjusted"]
+        self.assertEqual(adj["reference_release"], "116.2")
+        self.assertEqual(adj["excluded_categories"]["reference_skipped_record"], {"count": 2, "excluded": 2, "records": 1})
+        self.assertNotIn("sv_transcript_selection", adj["excluded_categories"])
+        self.assertEqual((adj["excluded_perl_tuples"], adj["excluded_rust_tuples"]), (2, 4))
+        self.assertEqual(set(adj["divergence_classes"]) >= {"reference_skipped_record", "splice_lastwrite_swap"}, True)
+        open_rows = (out / "discordant_open.tsv").read_text().splitlines()[1:]
+        self.assertFalse(any("\t21:800-900\t" in r for r in open_rows), "the skipped <CPX> is set aside")
+        self.assertEqual(sum("\t21:18457513-32484691\t" in r for r in open_rows), 2,
+                         "the surplus transcripts on a record the reference kept stay charged")
+        self.assertTrue(any("\ttandem_repeat\t" in r for r in open_rows))
+        md = (out / "summary.md").read_text()
+        self.assertIn("- Reference release: Ensembl VEP 116.2", md)
+        self.assertIn("## Divergence classes", md)
+        self.assertIn("| `reference_skipped_record` | sets aside |", md)

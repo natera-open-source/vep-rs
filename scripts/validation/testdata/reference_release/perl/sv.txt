@@ -1,0 +1,9 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence
+del_small	21:1001-2000	deletion	G	ENST21_SMALL	Transcript	feature_truncation
+bnd_giant	21:18457513-32484691	N.	G	ENST21_G1	Transcript	intron_variant
+bnd_giant	21:18457513-32484691	N.	G	ENST21_G2	Transcript	intron_variant
+cpx_kept	21:45716816-45730272	CPX	G	ENST21_C1	Transcript	intron_variant
+gvcf_block	21:70001-70100	<NON_REF>	G	ENST21_NR	Transcript	intron_variant
+del_xchr	21:16155574-16155648	deletion	G	ENST22_X	Transcript	intron_variant
+bnd_cross	21:26037668	N[22:26037668[	G	ENST22_M	Transcript	intron_variant
+bnd_cross	21:26037668	N.	G	ENST21_OWN	Transcript	upstream_gene_variant
