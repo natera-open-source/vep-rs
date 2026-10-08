@@ -353,6 +353,124 @@ fn refused_flags_exit_with_their_message() {
     }
 }
 
+/// The release 116 golden corpus's own pruned cache, so a test can annotate
+/// chromosome 21 records without an environment variable.
+fn release116_corpus_cache() -> String {
+    format!(
+        "{}/../../tests/golden/116/GRCh38-release116/json_cache",
+        env!("CARGO_MANIFEST_DIR")
+    )
+}
+
+/// Annotates one VCF record against the release 116 corpus cache in the given
+/// format and returns the output's data lines.
+fn annotate_record(record: &str, format_flags: &[&str], extra: &[&str]) -> Vec<String> {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("in.vcf");
+    std::fs::write(
+        &input,
+        format!("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n{record}\n"),
+    )
+    .unwrap();
+    let output = dir.path().join("out");
+    let result = vep_binary()
+        .args([
+            "-i",
+            input.to_str().unwrap(),
+            "-o",
+            output.to_str().unwrap(),
+        ])
+        .args(["--json_cache", &release116_corpus_cache()])
+        .args([
+            "--offline",
+            "--assembly",
+            "GRCh38",
+            "--force_overwrite",
+            "--no_stats",
+            "--quiet",
+        ])
+        .args(format_flags)
+        .args(extra)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{format_flags:?} {extra:?}: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    std::fs::read_to_string(&output)
+        .unwrap()
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .map(str::to_string)
+        .collect()
+}
+
+/// A structural variant wider than `--max_sv_size` (the 10,600,000-base
+/// `del_10_6_mb` of `tests/golden/116/GRCh38-release116` under the default
+/// limit of 10,000,000) is annotated, not dropped: the default output lists its
+/// transcript rows, the VCF output carries its line without `CSQ`, and the JSON
+/// output omits it. Ensembl VEP 116.2 writes nothing for the record in any
+/// format (`Parser.pm` `validate_vf` returns 0 at the size test); this is the
+/// documented divergence of `--max_sv_size`. With `-1` the limit is lifted and
+/// every format annotates the record, as Ensembl VEP 116.2 does under `-1`
+/// (the corpus runs with it: 823 reference rows for the record).
+#[test]
+fn oversize_structural_variant_is_annotated_not_dropped() {
+    let record = "21\t17750000\tdel_10_6_mb\tN\t<DEL>\t.\t.\tEND=28350000;SVTYPE=DEL";
+
+    let default_rows = annotate_record(record, &[], &[]);
+    assert!(
+        default_rows.len() > 1 && default_rows.iter().all(|r| r.starts_with("del_10_6_mb\t")),
+        "default output rows: {}",
+        default_rows.len()
+    );
+    let vcf_lines = annotate_record(record, &["--vcf"], &[]);
+    assert_eq!(vcf_lines.len(), 1, "{vcf_lines:?}");
+    assert!(
+        vcf_lines[0].starts_with("21\t17750000\tdel_10_6_mb\tN\t<DEL>\t")
+            && !vcf_lines[0].contains("CSQ="),
+        "{}",
+        vcf_lines[0]
+    );
+    let json_lines = annotate_record(record, &["--json"], &[]);
+    assert!(json_lines.is_empty(), "{json_lines:?}");
+
+    let lifted = ["--max_sv_size", "-1"];
+    let vcf_lifted = annotate_record(record, &["--vcf"], &lifted);
+    assert!(
+        vcf_lifted.len() == 1 && vcf_lifted[0].contains("CSQ=deletion|"),
+        "{vcf_lifted:?}"
+    );
+    let json_lifted = annotate_record(record, &["--json"], &lifted);
+    assert!(
+        json_lifted.len() == 1 && json_lifted[0].contains("\"transcript_consequences\""),
+        "{json_lifted:?}"
+    );
+}
+
+/// The `--max_sv_size` row of `docs/cli-reference.md` states the documented
+/// exclusion: Ensembl VEP 116 drops an oversize record and vep-rs annotates it.
+#[test]
+fn max_sv_size_exclusion_is_documented() {
+    let page = std::fs::read_to_string(format!(
+        "{}/../../docs/cli-reference.md",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    let row = page
+        .lines()
+        .find(|l| l.starts_with("| `--max_sv_size`"))
+        .expect("docs/cli-reference.md has a --max_sv_size row");
+    for phrase in [
+        "Ensembl VEP 116 drops an oversize record before annotation and writes nothing for it in any format",
+        "vep-rs annotates it",
+        "intended-divergences.md",
+    ] {
+        assert!(row.contains(phrase), "the --max_sv_size row lacks {phrase:?}: {row}");
+    }
+}
+
 #[test]
 fn test_dont_skip_fails_on_invalid_vcf_line() {
     let output_dir = tempfile::tempdir().unwrap();

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A breakend record reaching no transcript at either breakend writes one `intergenic_variant` row per allele, and a bracket record's own breakend prints `N.` without a MATEID (Ensembl VEP 116). (#N)
 - A multi-allelic structural variant takes one class from its joined ALTs (`<INS>,<INS>` an insertion, any DEL beside DUP a `copy_number_variation`) and writes one row per ALT (Ensembl VEP 116). (#N)
 - `--max_sv_size -1` lifts the size limit, so a structural variant of any span is annotated in every output format. (#N)
+- Records Ensembl VEP 116 drops before annotation (oversize, an unsupported type or ALT list, a `<DEL>` without `END` or `SVLEN`) are annotated, a documented divergence the golden manifests class `reference_skipped_record`. (#N)
 - JSON `cdna_end`, `cds_end` and `protein_end` are omitted for a position whose end is undefined (`445-?` writes `cdna_start` alone), as Ensembl VEP 116 writes them. (#N)
 - `Uploaded_variation` of a record whose ID is `.` is built from the input line, `CHROM_POS_REF/ALT1/ALT2` as written, as Ensembl VEP 116 names it (`21_43512967_AT/ATT/A`, `21_33867341_C/<CN2>`). (#N)
 - `--hgvs` describes a deletion that runs over either end of a transcript over the bases inside it (`c.-49_77+1248del`), as Ensembl VEP 116 does, instead of omitting HGVSc. (#N)

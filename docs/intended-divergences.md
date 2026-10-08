@@ -423,10 +423,10 @@ Fully masked; the report counts them as `excluded_registry_swap_rust` and `exclu
 
 **Why this is a defect.** Ensembl VEP reports the skip in its warnings file, then annotates the record anyway. The output depends on things that have nothing to do with the record: which other records share its chunk, and so `--fork`, `--buffer_size` and the order of lines in the file. One record gets 51 transcripts, or 497, or 68, or none, depending on its neighbours, while the warnings file states that it was skipped. An annotation that changes with the rest of the file is not an annotation of the record, and a record declared skipped and then annotated in part is a self-contradiction.
 
-**What vep-rs does instead.** vep-rs's output for a record depends on the record's coordinates alone. In the default and tab outputs it annotates an oversize record against every transcript it overlaps, the same set from any file; in the VCF and JSON outputs it does what Ensembl VEP does there, carrying the line without consequences or omitting it. For a `<NON_REF>` reference block, which asserts the absence of a variant, vep-rs writes one `intergenic_variant` row, the row Ensembl VEP itself writes when the block is annotated alone.
+**What vep-rs does instead.** vep-rs's output for a record depends on the record's coordinates alone. In the default and tab outputs it annotates an oversize record against every transcript it overlaps, the same set from any file; in the VCF and JSON outputs it does what Ensembl VEP 115.2 does there, carrying the line without consequences or omitting it. For a `<NON_REF>` reference block, which asserts the absence of a variant, vep-rs writes one `intergenic_variant` row, the row Ensembl VEP itself writes when the block is annotated alone.
 
 **Where it is in Ensembl VEP's source** (`ensembl-vep`):
-- `Bio/EnsEMBL/VEP/Parser.pm`, lines 491-498: the size test writes the warning and sets `vep_skip`; the record is dropped only when VEP runs as a REST server. `Config.pm` line 310 holds the 10,000,000 default.
+- `Bio/EnsEMBL/VEP/Parser.pm`, lines 491-498: the size test writes the warning and sets `vep_skip`; in release 115.2 the record is dropped only when VEP runs as a REST server (release 116 drops it in every mode: the section below). `Config.pm` line 310 holds the 10,000,000 default.
 - `Parser/VCF.pm`, lines 477-481 and 575: an ALT type with no Sequence Ontology term gets the same mark.
 - `AnnotationSource.pm`, line 238: `next if $vf->{vep_skip}` when regions are collected, before the breakend-mate loop at lines 250-257; line 143, `filter_features_by_min_max`, then drops loaded transcripts outside the chunk's coordinate range.
 - `InputBuffer.pm`, lines 284-330: `get_overlapping_vfs` hands each loaded transcript every record of the buffer that overlaps it, skipped or not.
@@ -439,6 +439,12 @@ Fully masked; the report counts them as `excluded_registry_swap_rust` and `exclu
 - Class 6: the mate end of such a breakend, which Ensembl VEP writes only when a neighbour loaded the region (gnomAD-SV v2.1 and v4.1 chr21). Set aside: vep-rs's rows.
 - Class 7: `<CPX>`, an ALT type Ensembl VEP has no term for (gnomAD-SV v4.1 chr21). Set aside: vep-rs's rows.
 - Class 8: `<NON_REF>`, a reference block annotated as a variant (the synthetic special-allele set). Set aside: Ensembl VEP's transcript rows and vep-rs's `intergenic_variant` row.
+
+### Release 116: the record is dropped before annotation
+
+From Ensembl VEP release 116 the parser drops a record it marks skipped: `validate_svf` returns 0 for a `vep_skip` record and `validate_vf` returns 0 for an oversize one, so `next` discards the record unless `--dont_skip` is set (`ensembl-vep` tag `release/116.2`, `Bio/EnsEMBL/VEP/Parser.pm` lines 189-191, 491-499, 551 and 821-827; in release 115.2 `validate_svf` returned 1). The record then appears in no output format, and the batch dependence of classes 5 to 7 is gone: this is the correction described above. The records dropped this way are a structural variant spanning more than `--max_sv_size` bases, an ALT type with no Sequence Ontology term (`<CPX>`, `<NON_REF>`), a multi-allelic symbolic list with no type (`<INS>,<DEL>`, `<INV>,<DUP>`; `Parser.pm` lines 663-727 read one type from the ALTs joined by `/`) and a `<DEL>` with neither `END` nor `SVLEN`, or whose start exceeds its end (`Parser/VCF.pm` lines 555-558, "deletion looks incomplete").
+
+vep-rs annotates every one of them. In the default, tab and Parquet outputs an oversize or unsupported record is annotated against every transcript it overlaps, and a list with no type gets one row per ALT under each ALT's own class; in the VCF output the line of an oversize or unsupported record is carried without consequences; in the JSON output an unsupported record is an `input`-only object and an oversize one is omitted; a `<DEL>` with neither `END` nor `SVLEN` is read as a deletion of the base after POS and written in every format. Against release 116.2 the divergence is every row vep-rs writes for such a record, and the golden corpora record those rows in their manifests under the class `reference_skipped_record` (`tests/golden/116/GRCh37`: four `<BND>` records above `--max_sv_size` and two `<CPX>`; `tests/golden/116/GRCh38-release116`: `<INS>,<DEL>`, `<INV>,<DUP>` and a `<DEL>` without `END`).
 
 ### 5. Structural variants above `--max_sv_size` annotated against whichever transcripts the batch loaded
 
@@ -516,7 +522,7 @@ The record's coordinates alone determine which transcripts it reaches: every tra
 
 An annotation that changes with the rest of the file is not an annotation of the record. A record that is declared skipped and then annotated in part is a self-contradiction. Both point at the same defect.
 
-vep-rs takes `--max_sv_size` too, with the same default of 10,000,000. In the default and tab outputs it annotates an oversize record against every transcript it overlaps. In the VCF output it carries the record's line without consequences, and in the JSON output it omits the record, which is what Ensembl VEP does in those two formats.
+vep-rs takes `--max_sv_size` too, with the same default of 10,000,000. In the default and tab outputs it annotates an oversize record against every transcript it overlaps. In the VCF output it carries the record's line without consequences, and in the JSON output it omits the record, which is what Ensembl VEP 115.2 does in those two formats; release 116 writes nothing for the record in any format (the release 116 section of Defect C).
 
 Ensembl VEP's cap is a memory guard (its source comments "to avoid memory problems"), not a statement about the record. Skipping is therefore a legitimate output, and vep-rs's VCF and JSON outputs give it. What neither engine should write is a partial set that depends on the neighbouring lines; on the default and tab outputs vep-rs writes the complete set instead.
 

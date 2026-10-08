@@ -291,7 +291,7 @@ MaveDB	MaveDB.pm	error	open
 max-af-computation	OutputFactory.pm	implemented	open			
 max-af-over-frequency-columns	OutputFactory.pm	implemented	open			
 max_af	Config.pm	implemented	open			
-max_sv_size	Config.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/runner.rs::max_sv_size_minus_one_lifts_the_size_limit	tests/golden/116/GRCh38-release116	
+max_sv_size	Config.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/runner.rs::max_sv_size_minus_one_lifts_the_size_limit;crates/vep-cli/tests/integration_test.rs::oversize_structural_variant_is_annotated_not_dropped;crates/vep-cli/tests/integration_test.rs::max_sv_size_exclusion_is_documented	tests/golden/116/GRCh38-release116	
 MaxEntScan	MaxEntScan.pm	implemented	open			
 MechPredict	MechPredict.pm	error	open			
 memory_footprint_statement	-	documented_subset	open			
