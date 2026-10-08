@@ -10,7 +10,7 @@ vep-rs supports five output formats, selected via `--output_format` or the short
 
 ## Parity with Ensembl VEP
 
-With the default flag set and `--tab`, `--vcf` or `--json`, the default, `tab`, `vcf` and `json` outputs match what Ensembl VEP 115.2 writes field for field: every column of every row and, for JSON, every key of every object compared as text (VEP writes JSON keys in Perl hash order, so the JSON is not byte-identical and key order is not compared). Header lines that carry a time, a cache path or the command line are compared by shape, and VEP's Perl API component version lines have no counterpart. The contract is enforced by the golden corpora under `tests/golden/<release>/<assembly>/` (`crates/vep-cli/tests/golden.rs` and `format_parity.rs`): every consequence-set combination observed on the benchmark datasets, annotated with the corpus's own pruned cache and compared with VEP's committed output in all four formats, plus the Parquet round trip. Consequence terms themselves are governed by the concordance measurement ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)). The corpus manifest records the (Location, Allele, Feature) keys whose terms differ between the engines (160 of the 20,111 GRCh37 rows and 487 of the 29,252 GRCh38 rows; 2 and 0 of them are classified `unexplained_residual`) and the rows only one engine emits; for a recorded key the parity tests check only that the row's consequence set is one of the recorded sets, compare none of its other columns, and skip the record's `most_severe_consequence` in JSON. Outside the tested flag set there are known differences: `--regulatory` adds its (always empty) fields to the headers and columns and warns that regulatory annotation is not implemented, `--overlaps` does not exist, `--output_format vcf` switches on the same fields as `--vcf` (VEP ties them to the flag alone), and under `--check_existing` a row none of whose co-located variants is somatic or phenotype-linked prints `SOMATIC=0` and `PHENO=0` where VEP prints neither key.
+With the default flag set and `--tab`, `--vcf` or `--json`, the default, `tab`, `vcf` and `json` outputs match what Ensembl VEP 116.2 writes field for field: every column of every row and, for JSON, every key of every object compared as text (VEP writes JSON keys in Perl hash order, so the JSON is not byte-identical and key order is not compared). Header lines that carry a time, a cache path or the command line are compared by shape, and VEP's Perl API component version lines have no counterpart. The contract is enforced by the golden corpora under `tests/golden/<release>/<assembly>/` (`crates/vep-cli/tests/golden.rs` and `format_parity.rs`): every consequence-set combination observed on the benchmark datasets, annotated with the corpus's own pruned cache and compared with VEP's committed output in all four formats, plus the Parquet round trip. Consequence terms themselves are governed by the concordance measurement ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)). The corpus manifest records the (Location, Allele, Feature) keys whose terms differ between the engines (160 of the 20,111 GRCh37 rows and 487 of the 29,252 GRCh38 rows; 2 and 0 of them are classified `unexplained_residual`) and the rows only one engine emits; for a recorded key the parity tests check only that the row's consequence set is one of the recorded sets, compare none of its other columns, and skip the record's `most_severe_consequence` in JSON. Outside the tested flag set there are known differences: `--regulatory` adds its (always empty) fields to the headers and columns and warns that regulatory annotation is not implemented, `--overlaps` does not exist, `--output_format vcf` switches on the same fields as `--vcf` (VEP ties them to the flag alone), and under `--check_existing` a row none of whose co-located variants is somatic or phenotype-linked prints `SOMATIC=0` and `PHENO=0` where VEP prints neither key.
 
 The rules the formatters follow are VEP's own, cited to their Perl sources in `crates/vep-io/src/output/fields.rs` (the single field table shared by every format), `crates/vep-effects/src/display.rs` (positions, codons and peptides) and the formatters beside them. The ones a reader of the output most often needs:
 
@@ -32,10 +32,10 @@ One line per (allele, transcript) consequence, plus one intergenic line per alle
 ### Header
 
 ```
-## ENSEMBL VARIANT EFFECT PREDICTOR v115.2
+## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
 ## Output produced at [TIME]
-## Using cache in [PATH]/115
-## Using API version 115, DB version ?
+## Using cache in [PATH]/116
+## Using API version 116, DB version ?
 ## 1000genomes version phase3
 ## COSMIC version 98
 ## ClinVar version 202306
@@ -49,7 +49,7 @@ One line per (allele, transcript) consequence, plus one intergenic line per alle
 ## DISTANCE : Shortest distance from variant to transcript
 ## STRAND : Strand of the feature (1/-1)
 ## FLAGS : Transcript quality flags
-## VEP command-line: vep --assembly GRCh37 --force_overwrite --input_file [PATH]/input.vcf --json_cache [PATH]/115 --offline --output_file [PATH]/out.txt
+## VEP command-line: vep --assembly GRCh37 --force_overwrite --input_file [PATH]/input.vcf --json_cache [PATH]/116 --offline --output_file [PATH]/out.txt
 #Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
 ```
 
@@ -104,7 +104,7 @@ Selected with `--vcf` or `--output_format vcf`, either of which also switches on
 The input's meta lines are kept (minus any earlier CSQ definition or `##VEP` line), a `##fileformat` line is added when the input lacks one, then:
 
 ```
-##VEP="v115.2" API="v115" time="[TIME]" cache="[PATH]/115" 1000genomes="phase3" COSMIC="98" ...
+##VEP="v116.2" API="v116" time="[TIME]" cache="[PATH]/116" 1000genomes="phase3" COSMIC="98" ...
 ##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|DISTANCE|STRAND|FLAGS|SYMBOL_SOURCE|HGNC_ID">
 ##VEP-command-line='vep --assembly GRCh37 ...'
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO

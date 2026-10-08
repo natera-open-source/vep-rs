@@ -39,7 +39,7 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/json_cache
 
 For the golden-corpus flag set (`--offline --json_cache <dir> --species homo_sapiens
 --assembly <assembly> --buffer_size 5000 --no_stats --quiet` plus one format flag),
-the default, `--tab`, `--vcf` and `--json` data rows match Ensembl VEP 115.2 apart
+the default, `--tab`, `--vcf` and `--json` data rows match Ensembl VEP 116.2 apart
 from the consequence-term divergences the corpus manifests document; header lines
 that carry a time, a path, the command line or Perl API component versions match
 in shape. `--vcf` also switches on `--symbol`, `--biotype` and `--numbers`, as in

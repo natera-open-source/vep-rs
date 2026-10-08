@@ -78,7 +78,7 @@ scripts/concordance/generate_reference_output.sh --data-dir <data> --assembly GR
 
 What it needs, all local (it fetches nothing and uses no cloud credentials):
 
-- Docker and the `ensemblorg/ensembl-vep:release_115.2` image (`--perl-image` to override).
+- Docker and the `ensemblorg/ensembl-vep` release image the script pins (`--perl-image` to override).
 - The **full-genome** Ensembl VEP cache for each assembly, extracted under one directory so
   it holds `homo_sapiens/115_GRCh37/` and `homo_sapiens/115_GRCh38/` (`--perl-cache-dir`,
   default `<data>/caches/perl/vep-cache`). Ensembl FTP:
