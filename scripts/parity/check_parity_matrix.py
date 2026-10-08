@@ -259,10 +259,18 @@ def attribute_spans(text: str) -> dict[int, tuple[int, str]]:
 
 
 def strip_comments(text: str) -> str:
-    """The source without its line and (nested) block comments, every literal kept whole: a `/*`
-    inside a string (`"U/*"`, an amino-acid change) or a `//` inside one opens no comment, and a
-    `fn` inside a comment declares nothing."""
+    """The source without its line and (nested) block comments, every string, raw-string and
+    char literal reduced to its delimiters around blanks of the body's length: a `/*` inside a
+    string (`"U/*"`, an amino-acid change) or a `//` inside one opens no comment, and a `fn`
+    inside a comment or a literal declares nothing. A literal keeps its length and its newlines,
+    so the blanking moves nothing."""
     out: list[str] = []
+
+    def blanked(literal: str, open_len: int, close_len: int) -> str:
+        body = literal[open_len : len(literal) - close_len]
+        blanks = "".join("\n" if ch == "\n" else " " for ch in body)
+        return literal[:open_len] + blanks + literal[len(literal) - close_len :]
+
     i, n = 0, len(text)
     while i < n:
         c = text[i]
@@ -282,19 +290,19 @@ def strip_comments(text: str) -> str:
             close = '"' + "#" * hashes
             end = text.find(close, i + 1 + hashes + 1)
             end = n if end < 0 else end + len(close)
-            out.append(text[i:end])
+            out.append(blanked(text[i:end], 1 + hashes + 1, len(close) if text.endswith(close, 0, end) else 0))
             i = end
         elif c == '"':
             j = i + 1
             while j < n and text[j] != '"':
                 j += 2 if text[j] == "\\" else 1
-            out.append(text[i : j + 1])
+            out.append(blanked(text[i : j + 1], 1, 1 if j < n else 0))
             i = j + 1
         elif c == "'" and i + 2 < n and (text[i + 1] == "\\" or text[i + 2] == "'"):
             # A char literal (`'x'`, `'\''`, `'\u{1F600}'`); a lifetime (`'a`) falls through.
             j = text.find("'", i + 3 if text[i + 1] == "\\" else i + 2)
             j = n - 1 if j < 0 else j
-            out.append(text[i : j + 1])
+            out.append(blanked(text[i : j + 1], 1, 1))
             i = j + 1
         else:
             out.append(c)
