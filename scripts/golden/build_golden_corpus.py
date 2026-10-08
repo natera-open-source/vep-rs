@@ -626,11 +626,8 @@ def reference_skipped_records(
     """Ordinals of the records no VEP row names (VEP dropped them before annotation), and the
     records that contradict their `reference_warning`: a zero-row record without one (its name
     unresolved, or the reason unrecorded) and a warned record with rows."""
-    with_rows: set[int] = set()
-    for names in perl_names.values():
-        for n in names:
-            with_rows.update(by_name.get(n, []))
-    skipped = {i for i in range(len(records)) if i not in with_rows}
+    with_rows = {i for names in perl_names.values() for n in names for i in by_name.get(n, [])}
+    skipped = set(range(len(records))) - with_rows
     problems: list[str] = []
     for i, rec in enumerate(records):
         warned = isinstance(rec.get("reference_warning"), str)
@@ -702,9 +699,9 @@ def cmd_classify(args: argparse.Namespace) -> int:
     for i, rec in enumerate(manifest["records"]):
         rec.pop("reference_rows", None)
         if i in skipped:
-            warning = rec.pop("reference_warning")
+            # The two markers are the record's last two keys, in this order.
             rec["reference_rows"] = 0
-            rec["reference_warning"] = warning
+            rec["reference_warning"] = rec.pop("reference_warning")
     models = load_corpus_models(corpus)
 
     def records_for(key: tuple[str, str, str, str]) -> list[int]:
@@ -740,7 +737,7 @@ def cmd_classify(args: argparse.Namespace) -> int:
         extra_rust.append({
             "location": k[0], "allele": k[1], "feature": k[2], "feature_type": k[3],
             "record_indices": indices, "vep_rs_consequence_sets": sorted(v),
-            "expected_divergence": REFERENCE_SKIPPED if indices and all(i in skipped for i in indices) else UNEXPLAINED,
+            "expected_divergence": REFERENCE_SKIPPED if indices and skipped.issuperset(indices) else UNEXPLAINED,
         })
     # Classify's own keys are rewritten from scratch, in one order, so a key a previous run
     # wrote with other inputs (another `--field` list) does not survive this one.
@@ -835,13 +832,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="the transcript flank the pruner keeps around each record, in bases (its --flank)")
     add_run_options(s)
     s.set_defaults(fn=cmd_select)
-    c = sub.add_parser(
-        "classify",
-        help="record every consequence key VEP and vep-rs disagree on with its documented class; a record "
-             "no VEP row names (one VEP dropped before annotation, with its reason in the record's "
-             "`reference_warning`) gets `reference_rows` 0 and its vep-rs-only keys the class "
-             "`reference_skipped_record`; any other vep-rs-only key is `unexplained_residual`",
-    )
+    c = sub.add_parser("classify")
     c.add_argument("--corpus", required=True)
     c.add_argument("--vep-default", required=True, help="VEP default-format output for variants.vcf")
     c.add_argument("--vep-rs-output", required=True, help="vep-rs default-format output for variants.vcf")

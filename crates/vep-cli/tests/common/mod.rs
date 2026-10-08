@@ -499,8 +499,6 @@ pub struct Documented {
     fields_by_record: HashMap<(usize, String, String), BTreeMap<String, String>>,
     /// Records the reference dropped before annotation: those a
     /// `vep_rs_only_tuples` entry classed `reference_skipped_record` names.
-    /// The reference writes nothing for one, so the record-level VCF line and
-    /// JSON object vep-rs writes for it have no counterpart.
     skipped_records: BTreeSet<usize>,
 }
 

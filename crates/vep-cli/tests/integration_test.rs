@@ -353,17 +353,9 @@ fn refused_flags_exit_with_their_message() {
     }
 }
 
-/// The release 116 golden corpus's own pruned cache, so a test can annotate
-/// chromosome 21 records without an environment variable.
-fn release116_corpus_cache() -> String {
-    format!(
-        "{}/../../tests/golden/116/GRCh38-release116/json_cache",
-        env!("CARGO_MANIFEST_DIR")
-    )
-}
-
-/// Annotates one VCF record against the release 116 corpus cache in the given
-/// format and returns the output's data lines.
+/// Annotates one VCF record in the given format against the release 116 golden
+/// corpus's own pruned cache, which unlike `VEP_RS_TEST_CACHE` is always
+/// present, and returns the output's data lines.
 fn annotate_record(record: &str, format_flags: &[&str], extra: &[&str]) -> Vec<String> {
     let dir = tempfile::tempdir().unwrap();
     let input = dir.path().join("in.vcf");
@@ -373,22 +365,16 @@ fn annotate_record(record: &str, format_flags: &[&str], extra: &[&str]) -> Vec<S
     )
     .unwrap();
     let output = dir.path().join("out");
+    let cache = format!(
+        "{}/../../tests/golden/116/GRCh38-release116/json_cache",
+        env!("CARGO_MANIFEST_DIR")
+    );
     let result = vep_binary()
-        .args([
-            "-i",
-            input.to_str().unwrap(),
-            "-o",
-            output.to_str().unwrap(),
-        ])
-        .args(["--json_cache", &release116_corpus_cache()])
-        .args([
-            "--offline",
-            "--assembly",
-            "GRCh38",
-            "--force_overwrite",
-            "--no_stats",
-            "--quiet",
-        ])
+        .args(["-i", input.to_str().unwrap()])
+        .args(["-o", output.to_str().unwrap()])
+        .args(["--json_cache", &cache])
+        .args(["--offline", "--assembly", "GRCh38"])
+        .args(["--force_overwrite", "--no_stats", "--quiet"])
         .args(format_flags)
         .args(extra)
         .output()
@@ -406,15 +392,14 @@ fn annotate_record(record: &str, format_flags: &[&str], extra: &[&str]) -> Vec<S
         .collect()
 }
 
-/// A structural variant wider than `--max_sv_size` (the 10,600,000-base
-/// `del_10_6_mb` of `tests/golden/116/GRCh38-release116` under the default
-/// limit of 10,000,000) is annotated, not dropped: the default output lists its
-/// transcript rows, the VCF output carries its line without `CSQ`, and the JSON
-/// output omits it. Ensembl VEP 116.2 writes nothing for the record in any
-/// format (`Parser.pm` `validate_vf` returns 0 at the size test); this is the
-/// documented divergence of `--max_sv_size`. With `-1` the limit is lifted and
-/// every format annotates the record, as Ensembl VEP 116.2 does under `-1`
-/// (the corpus runs with it: 823 reference rows for the record).
+/// A structural variant wider than the default `--max_sv_size` (`del_10_6_mb`
+/// of `tests/golden/116/GRCh38-release116`) is annotated, not dropped: the
+/// default output lists its transcript rows, the VCF output carries its line
+/// without `CSQ`, and the JSON output omits it. Ensembl VEP 116.2 writes nothing
+/// for the record in any format (`Parser.pm` `validate_vf` returns 0 at the
+/// size test); this is the documented divergence of `--max_sv_size`. With `-1`
+/// the limit is lifted and every format annotates the record, as Ensembl VEP
+/// 116.2 does under `-1`.
 #[test]
 fn oversize_structural_variant_is_annotated_not_dropped() {
     let record = "21\t17750000\tdel_10_6_mb\tN\t<DEL>\t.\t.\tEND=28350000;SVTYPE=DEL";

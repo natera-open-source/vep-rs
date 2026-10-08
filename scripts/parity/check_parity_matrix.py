@@ -260,16 +260,14 @@ def attribute_spans(text: str) -> dict[int, tuple[int, str]]:
 
 def strip_comments(text: str) -> str:
     """The source without its line and (nested) block comments, every string, raw-string and
-    char literal reduced to its delimiters around blanks of the body's length: a `/*` inside a
-    string (`"U/*"`, an amino-acid change) or a `//` inside one opens no comment, and a `fn`
-    inside a comment or a literal declares nothing. A literal keeps its length and its newlines,
-    so the blanking moves nothing."""
+    char literal reduced to its delimiters around blanks of the body's length (newlines kept):
+    a `/*` inside a string (`"U/*"`, an amino-acid change) or a `//` inside one opens no
+    comment, and a `fn` inside a comment or a literal declares nothing."""
     out: list[str] = []
 
     def blanked(literal: str, open_len: int, close_len: int) -> str:
-        body = literal[open_len : len(literal) - close_len]
-        blanks = "".join("\n" if ch == "\n" else " " for ch in body)
-        return literal[:open_len] + blanks + literal[len(literal) - close_len :]
+        end = len(literal) - close_len
+        return literal[:open_len] + re.sub(r"[^\n]", " ", literal[open_len:end]) + literal[end:]
 
     i, n = 0, len(text)
     while i < n:
