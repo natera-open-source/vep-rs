@@ -17,7 +17,7 @@
 //! - **Upstream/downstream**: standard distance-based consequences.
 //! - **No overlap at all**: None (caller handles intergenic).
 //!
-//! Perl citations name modules of ensembl-variation release/115
+//! Perl citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`).
 
 use super::{is_mature_mirna_sv, overlaps_any_exon};
@@ -89,15 +89,16 @@ pub fn calculate(
 
     // Ensembl builds the bracket allele of a breakend for a feature only when the
     // mate coordinate is close to that feature. `StructuralVariationOverlap::new`
-    // (`StructuralVariationOverlap.pm:76-88`) adds one allele per entry of
-    // `($vf, @$breakends)` that passes `_close_to_feature` (`:130-146`): the same
-    // seq region, then `overlap` against the feature slice expanded by
-    // `MAX_DISTANCE_FROM_TRANSCRIPT` (`Utils/VariationEffect.pm:60`). The local POS
-    // is carried by the `$vf` allele (`N.`, `.T`, `A.`), so a bracket allele whose
-    // mate is farther than that gets no row for this transcript however the local
-    // POS overlaps it. A cross-chromosome mate fails the same seq-region test; the
-    // callers apply that half by not annotating an inter-chromosomal paired allele
-    // against the local chromosome at all.
+    // (`StructuralVariationOverlap.pm:90-102`) adds one allele per entry of
+    // `($vf, @$breakends)` that passes `_close_to_feature` (`:144-160`; an
+    // intergenic overlap takes every entry): the same seq region, then `overlap`
+    // against the feature slice expanded by `MAX_DISTANCE_FROM_TRANSCRIPT`
+    // (`Utils/VariationEffect.pm:60`). The local POS is carried by the `$vf` allele
+    // (`N.`, `.T`, `A.`), so a bracket allele whose mate is farther than that gets
+    // no row for this transcript however the local POS overlaps it. A
+    // cross-chromosome mate fails the same seq-region test; the callers apply that
+    // half by not annotating an inter-chromosomal paired allele against the local
+    // chromosome at all.
     if is_paired_bnd && same_chr_mate && !mate_near_transcript {
         return None;
     }
@@ -1699,12 +1700,14 @@ mod tests {
 
     /// The bracket allele of a breakend whose local position lies downstream of an
     /// NMD transcript while its mate lies inside it: `feature_truncation` for the mate
-    /// (`within_feature($bvfoa->breakend)`) and `downstream_gene_variant` for the
-    /// position, and no `NMD_transcript_variant`, because `within_nmd_transcript`
-    /// reads the local variation feature, which is outside the body. Ensembl VEP
-    /// 116.2 writes `feature_truncation,downstream_gene_variant` for the two NMD
-    /// transcripts of `synth_bnd_ins_0049_B` (`[21:31668499[TTGGGGGACAAAACAAG`) in
-    /// the GRCh38 golden corpus.
+    /// (`within_feature($bvfoa->breakend)`, `Utils/VariationEffect.pm:358`) and
+    /// `downstream_gene_variant` for the position, and no `NMD_transcript_variant`,
+    /// because `within_nmd_transcript` (`:477-482`) reads the local variation
+    /// feature, which is outside the body. The same rule with the position upstream
+    /// is in `tests/golden/116/GRCh38`: for `synth_bnd_rf_0076_A`
+    /// (`21 31659665 A ]21:31659730]A`), whose position lies 22 bases before the
+    /// `nonsense_mediated_decay` transcript ENST00000989287 while its mate lies
+    /// inside, Ensembl VEP 116.2 writes `feature_truncation,upstream_gene_variant`.
     #[test]
     fn mate_inside_an_nmd_transcript_earns_truncation_without_the_nmd_term() {
         let tx = make_nmd_transcript(); // 25_000_000 - 25_006_000, forward strand

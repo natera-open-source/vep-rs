@@ -589,9 +589,15 @@ mod tests {
         fmt(FieldOptions::default()).format_variant_value(&v)["transcript_consequences"][0].clone()
     }
 
-    /// Ensembl VEP 116.2 on the GRCh38 corpus, record `1331614` against
-    /// ENST00000632803: the columns `445-?`, `172-?`, `58-?` give `cdna_start`
-    /// 445, `cds_start` 172 and `protein_start` 58 with no `*_end` key.
+    /// An undefined end is left out: `445-?`, `172-?` and `58-?` give
+    /// `cdna_start` 445, `cds_start` 172 and `protein_start` 58 with no `*_end`
+    /// key. The value follows ensembl-vep `OutputFactory/JSON.pm:337-341`
+    /// (release 116.2), which keeps a `?` end as the end and then deletes any end
+    /// that is not a number, and the row of the same shape Ensembl VEP 116.2
+    /// writes for `tests/golden/116/GRCh38` record `2561884`
+    /// (`1 15443553 GGAGT G`) against ENST00000375949: `514-?`, `492-?` and
+    /// `164-?` give `cdna_start` 514, `cds_start` 492 and `protein_start` 164
+    /// alone.
     #[test]
     fn undefined_end_writes_the_start_alone() {
         let tc = positions("445-?", "172-?", "58-?");
@@ -606,9 +612,14 @@ mod tests {
         }
     }
 
-    /// Ensembl VEP 116.2 on the GRCh38 corpus, record `1331614` against
-    /// ENST00000633239: `?-13`, `?-13`, `?-5` give `cdna_end` 13, `cds_end` 13
-    /// and `protein_end` 5 with no `*_start` key.
+    /// An undefined start is left out: `?-13`, `?-13` and `?-5` give `cdna_end`
+    /// 13, `cds_end` 13 and `protein_end` 5 with no `*_start` key. The value
+    /// follows ensembl-vep `OutputFactory/JSON.pm:337-341` (release 116.2), which
+    /// deletes any start that is not a number, and the row of the same shape
+    /// Ensembl VEP 116.2 writes for `tests/golden/116/GRCh38` record `4287535`
+    /// (`1 10434655 AGAAAATTTTGCCAAAGACCTT A`) against ENST00000309048: `?-280`,
+    /// `?-195` and `?-65` give `cdna_end` 280, `cds_end` 195 and `protein_end` 65
+    /// alone.
     #[test]
     fn undefined_start_writes_the_end_alone() {
         let tc = positions("?-13", "?-13", "?-5");

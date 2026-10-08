@@ -8,8 +8,8 @@
 //! amino acids. Handles SNVs, inframe indels, and frameshifts, mirroring the Perl VEP
 //! `TranscriptVariationAllele` codon/peptide logic for concordance.
 //!
-//! Perl citations name modules of ensembl-variation release/115
-//! (`Bio/EnsEMBL/Variation/...`); `TranscriptMapper` is in ensembl core release/115.
+//! Perl citations name modules of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`); `TranscriptMapper` is in ensembl core release/116.
 //!
 //! Key functions:
 //! - [`get_codon_change`]: codon-level effect for a single variant
@@ -3098,21 +3098,21 @@ pub fn perl_codon_peptides(
 }
 
 /// Perl `TranscriptVariationAllele::hgvs_protein` (TranscriptVariationAllele.pm
-/// 1593), the text after `p.`.
+/// 1657), the text after `p.`.
 ///
 /// `variant` is the allele as annotated; `shifted`, when the caller moved an
 /// insertion or deletion to its most 3' position (Perl's `_return_3prime(1)`),
 /// is the shifted allele with its span. Perl reads the peptides, the translation
 /// coordinates and the alternate CDS from the shifted allele, but the `coding`
-/// pre-consequence predicate (1667) and the cached predicates `stop_lost`,
+/// pre-consequence predicate (1731) and the cached predicates `stop_lost`,
 /// `start_lost`, `partial_codon` and `stop_retained` were filled while the
 /// consequences were computed on the unshifted allele (`hgvs_transcript` clears
-/// that cache only under `--shift_3prime`, 1405), so those verdicts are taken
+/// that cache only under `--shift_3prime`, 1469), so those verdicts are taken
 /// from `variant` here whatever the shift. `frameshift` (VariationEffect.pm
-/// 1435) is not cached: its guards read the cache (`partial_codon`,
-/// `stop_retained`, and from release/116 a reference peptide starting with the
-/// stop, VariationEffect.pm 1554, so a frameshift that begins in the stop codon
-/// is typed by its peptides), but its length arithmetic runs on the CDS span the
+/// 1541) is not cached: its guards read the cache (`partial_codon`,
+/// `stop_retained`, and a reference peptide starting with the stop,
+/// VariationEffect.pm 1554, so a frameshift that begins in the stop codon is
+/// typed by its peptides), but its length arithmetic runs on the CDS span the
 /// transcript variation carries at that point, which is the shifted span, so an
 /// indel that shifts fully into the CDS is a frameshift there even where the
 /// annotated allele straddles an exon boundary.
@@ -3121,11 +3121,11 @@ pub fn perl_codon_peptides(
 /// coding sequence, the (shifted) span has no translation start or end, or its
 /// reference peptide is undefined. The alternate-CDS translations inside use
 /// codon table 1 whatever the transcript's table, as BioPerl's argument-less
-/// `translate()` does at 2263, 2380, 2422 and 2485; the transcript's own
+/// `translate()` does at 2333, 2450, 2492 and 2555; the transcript's own
 /// peptide keeps its table (Ensembl `Transcript::translate`).
 ///
 /// One intended divergence: Perl prints `Met1?` whenever its `start_lost`
-/// predicate holds (2091), including the start co-emission pairs on which this
+/// predicate holds (2161), including the start co-emission pairs on which this
 /// engine keeps `start_retained_variant` and drops `start_lost`; the port fires
 /// that short-circuit only when it emits `start_lost` itself.
 pub fn perl_hgvs_protein(
@@ -3249,7 +3249,7 @@ fn replace_xaa_with_ter(pep: &mut [u8]) {
     }
 }
 
-/// `_clip_alleles` (2118) with `numbering` `p`: trims the residues the alleles
+/// `_clip_alleles` (2188) with `numbering` `p`: trims the residues the alleles
 /// share from the front, then from the back, and records `original_ref` and
 /// `preseq`. Perl trims into local copies of `start` and `end` and writes them
 /// back only after both loops, so a leading stop on both sides, which returns
@@ -3312,7 +3312,7 @@ fn hgvsp_clip_alleles(n: &mut HgvsProteinNotation) {
     }
 }
 
-/// `_get_hgvs_protein_type` (1977): `fs` from the frameshift predicate; else the
+/// `_get_hgvs_protein_type` (2047): `fs` from the frameshift predicate; else the
 /// first stop of each peptide becomes `X` and the lengths decide; without both
 /// peptides the allele lengths less `-` decide.
 fn hgvsp_protein_type(
@@ -3362,7 +3362,7 @@ fn hgvsp_protein_type(
     }
 }
 
-/// `_get_hgvs_peptides` (2044) with three-letter conversion on. `None` where Perl
+/// `_get_hgvs_peptides` (2114) with three-letter conversion on. `None` where Perl
 /// returns `undef`: an insertion with no flanking residue to name.
 fn hgvsp_peptides(
     ev: &PerlCodingEval<'_>,
@@ -3427,7 +3427,7 @@ fn hgvsp_peptides(
     Some(())
 }
 
-/// `_get_fs_peptides` (2250): the first residue at which the table-1 translation
+/// `_get_fs_peptides` (2320): the first residue at which the table-1 translation
 /// of the alternate CDS (3' UTR appended) differs from the reference peptide plus
 /// its stop, from `translation_start`. `Del` when the alternate translation ends
 /// before that position; `Eq` when both sides reach a stop together.
@@ -3466,7 +3466,7 @@ fn hgvsp_fs_peptides(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> Op
     Some(())
 }
 
-/// `_get_surrounding_peptides` (2298): `length` residues of the reference peptide
+/// `_get_surrounding_peptides` (2368): `length` residues of the reference peptide
 /// (plus `original_ref` when it starts with a stop) from 1-based `ref_pos`, or to
 /// the end without a length; `None` when the peptide ends at or before `ref_pos`.
 /// `ref_pos == 0` reads Perl's `substr(..., -1)`, the final residue.
@@ -3497,7 +3497,7 @@ fn hgvsp_surrounding(
     Some(ref_trans[off..stop].to_vec())
 }
 
-/// `_check_for_peptide_duplication` (2372): an inserted peptide equal to the
+/// `_check_for_peptide_duplication` (2442): an inserted peptide equal to the
 /// residues just before it (the table-1 reference translation plus `preseq`)
 /// becomes a `Dup` of those residues, three-lettered here and not again.
 fn hgvsp_check_duplication(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) {
@@ -3517,7 +3517,7 @@ fn hgvsp_check_duplication(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation)
     }
 }
 
-/// `_stop_loss_extra_AA` (2407): residues from the variant to the first stop of
+/// `_stop_loss_extra_AA` (2477): residues from the variant to the first stop of
 /// the table-1 alternate translation; counted from `ref_var_pos` for a
 /// frameshift, else past the reference peptide's end. `None` unless positive.
 fn hgvsp_stop_loss_extra_aa(ev: &PerlCodingEval<'_>, ref_var_pos: i64, fs: bool) -> Option<i64> {
@@ -3535,7 +3535,7 @@ fn hgvsp_stop_loss_extra_aa(ev: &PerlCodingEval<'_>, ref_var_pos: i64, fs: bool)
     (extra > 0).then_some(extra)
 }
 
-/// `_get_del_peptides` (2474), Perl's path for a deletion whose reference peptide
+/// `_get_del_peptides` (2544), Perl's path for a deletion whose reference peptide
 /// window is empty: both peptides from `translation_start` to the end (the alternate
 /// side cut at its first stop), clipped, three-lettered.
 fn hgvsp_del_peptides(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> Option<()> {
@@ -3559,7 +3559,7 @@ fn hgvsp_del_peptides(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> O
     Some(())
 }
 
-/// `_check_peptides_post_var` (2503) plus `_shift_3prime` (2525): rotates an
+/// `_check_peptides_post_var` (2573) plus `_shift_3prime` (2595): rotates an
 /// inserted or deleted peptide along the residues after `end` while its first
 /// residue matches, moving `start` and `end` with it.
 fn hgvsp_post_var_shift(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) {
@@ -3587,7 +3587,7 @@ fn hgvsp_post_var_shift(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) {
     }
 }
 
-/// `_get_hgvs_protein_format` (1834) with three-letter conversion on and no
+/// `_get_hgvs_protein_format` (1898) with three-letter conversion on and no
 /// prediction parentheses.
 fn hgvsp_format(
     ev: &PerlCodingEval<'_>,
@@ -3657,8 +3657,8 @@ fn hgvsp_format(
             let aa_til_stop = hgvsp_stop_loss_extra_aa(ev, start - 1, true);
             if ref_pep == b"Ter" {
                 // A frameshift whose first changed residue is the stop codon is an
-                // extension (TranscriptVariationAllele.pm 2007, release/116), and
-                // the count to the new stop leaves out the replaced stop itself.
+                // extension (TranscriptVariationAllele.pm 2007-2010), and the count
+                // to the new stop leaves out the replaced stop itself.
                 let count = aa_til_stop.map_or("?".to_string(), |extra| (extra - 1).to_string());
                 format!("{}{start}{}extTer{count}", text(ref_pep), text(alt))
             } else {
@@ -4721,14 +4721,17 @@ mod tests {
         assert!(is_frameshift_cds_aware(&variant, &bounds));
     }
 
-    /// `stop_gained` returns 0 when `stop_lost` holds (VariationEffect.pm:1222).
-    /// No record of the release-116 corpora reaches the guard: the `X` branch of
-    /// `stop_lost` needs the stop codon inside the codon window, which puts `*`
-    /// into the reference peptide and fails `stop_gained`'s own test. A coding
-    /// sequence ending in a sense codon without `cds_end_NF` reaches it: `GCTAA`
-    /// inserted inside the last codon `AAA` reads `K/S*X`, the codon left at the
-    /// CDS end, `AGC`, makes `stop_lost` hold through `_ins_del_stop_altered`,
-    /// and `stop_gained` yields although its peptide test holds; the row prints
+    /// `stop_gained` returns 0 when `stop_lost` holds (VariationEffect.pm:1221-1222).
+    /// The expected value is read from the predicate itself at those lines, not
+    /// from an Ensembl VEP run: the guard is unobservable on a stop-terminated
+    /// CDS, because the `X` branch of `stop_lost` (:1262-1263,
+    /// `_ins_del_stop_altered`) needs the stop codon inside the codon window
+    /// (`_overlaps_stop_codon`, :1444), which puts `*` into the reference peptide
+    /// and fails `stop_gained`'s own test. A coding sequence ending in a sense
+    /// codon without `cds_end_NF` reaches it: `GCTAA` inserted inside the last
+    /// codon `AAA` reads `K/S*X`, the codon left at the CDS end, `AGC`, makes
+    /// `stop_lost` hold through `_ins_del_stop_altered`, and `stop_gained` yields
+    /// although its peptide test holds, so the row reads
     /// `frameshift_variant,stop_lost`.
     #[test]
     fn test_stop_gained_yields_to_stop_lost() {
