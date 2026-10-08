@@ -18,8 +18,8 @@ import prune_json_cache as pjc  # noqa: E402
 
 
 def test_auto_names_follow_vep_rules():
-    # The first name is release 116's, the raw line as CHR_POS_REF/ALTs; the rest are the
-    # earlier releases' minimised names.
+    # The first name is release 116's, the raw line as CHR_POS_REF/ALTs; the rest are
+    # release 115's minimised names.
     assert bgc.vep_auto_names("21", 100, "A", ["G"]) == ["21_100_A/G"]
     assert bgc.vep_auto_names("21", 100, "AT", ["A"]) == ["21_100_AT/A", "21_101_AT/A"]  # bi-allelic indel: raw alleles, trimmed start
     assert bgc.vep_auto_names("21", 100, "A", ["AC"]) == ["21_100_A/AC", "21_101_A/AC"]
@@ -103,32 +103,124 @@ def test_multi_allelic_strata():
     assert bgc.multi_allelic_stratum("CTTT", ["C", "CTT"]) == "multi_allelic_indel_trimmable"  # TTT/-/TT share T
 
 
+def _record(vcf: str, **extra) -> dict:
+    return {"suite": "s01", "vcf": vcf, "combinations": [], **extra}
+
+
+def _manifest(corpus: Path, records: list[dict]) -> None:
+    corpus.mkdir(exist_ok=True)
+    (corpus / "manifest.json").write_text(json.dumps({"records": records}), encoding="utf-8")
+
+
 def test_classify_marks_documented_and_unexplained_divergences(tmp_path: Path):
+    """Each divergence names the records its key resolves to; the ID-less indel resolves
+    only through release 116's raw-line name (`21_400_AT/A`, where release 115 wrote
+    `21_401_AT/A`); a key only vep-rs emits for a record VEP annotated is an
+    `unexplained_residual`."""
     corpus = tmp_path / "c"
-    corpus.mkdir()
-    (corpus / "manifest.json").write_text(json.dumps({"records": []}), encoding="utf-8")
+    _manifest(corpus, [
+        _record("21\t100\trs1\tA\tG\t.\tPASS\t."),
+        _record("21\t200\trs2\tA\tT\t.\tPASS\t."),
+        _record("21\t300\trs3\tA\tC\t.\tPASS\t."),
+        _record("21\t400\t.\tAT\tA\t.\tPASS\t."),
+    ])
     vep = tmp_path / "vep.txt"
     rs = tmp_path / "rs.txt"
     vep.write_text(
         _row("rs1", "21:100", "G", "ENST1", "missense_variant")
         + _row("rs2", "21:200", "T", "ENST2", "start_lost,start_retained_variant")
-        + _row("rs3", "21:300", "C", "ENST3", "intron_variant"),
+        + _row("rs3", "21:300", "C", "ENST3", "intron_variant")
+        + _row("21_400_AT/A", "21:401", "-", "ENST4", "frameshift_variant"),
         encoding="utf-8",
     )
     rs.write_text(
         _row("rs1", "21:100", "G", "ENST1", "missense_variant")
         + _row("rs2", "21:200", "T", "ENST2", "start_retained_variant")
-        + _row("rs3", "21:300", "C", "ENST3", "intron_variant,splice_region_variant"),
+        + _row("rs3", "21:300", "C", "ENST3", "intron_variant,splice_region_variant")
+        + _row("21_400_AT/A", "21:401", "-", "ENST4", "frameshift_variant")
+        + _row("21_400_AT/A", "21:401", "-", "ENST5", "intron_variant"),
         encoding="utf-8",
     )
     rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)])
     assert rc == 0
     m = json.loads((corpus / "manifest.json").read_text())
-    by_loc = {d["location"]: d["expected_divergence"] for d in m["divergences"]}
-    assert by_loc["21:200"] == "start_cooccurrence_swap"
-    assert by_loc["21:300"] == "splice_family_swap"
-    assert "21:100" not in by_loc
+    by_loc = {d["location"]: (d["expected_divergence"], d["record_indices"]) for d in m["divergences"]}
+    assert by_loc["21:200"] == ("start_cooccurrence_swap", [1])
+    assert by_loc["21:300"] == ("splice_family_swap", [2])
+    assert "21:100" not in by_loc and "21:401" not in by_loc
     assert m["divergence_summary"] == {"start_cooccurrence_swap": 1, "splice_family_swap": 1}
+    assert m["vep_rs_only_tuples"] == [{
+        "location": "21:401", "allele": "-", "feature": "ENST5", "feature_type": "Transcript",
+        "record_indices": [3], "vep_rs_consequence_sets": ["intron_variant"],
+        "expected_divergence": "unexplained_residual",
+    }]
+    assert m["vep_rs_only_summary"] == {"unexplained_residual": 1}
+    assert not any("reference_rows" in r for r in m["records"])
+
+
+def test_classify_marks_reference_skipped_records_and_their_tuples(tmp_path: Path):
+    """A record no VEP row names carries VEP's reason as `reference_warning`; classify writes
+    `reference_rows` 0 on it, classes every key only vep-rs emits for it
+    `reference_skipped_record`, and removes a `reference_rows` another run left on a record
+    that has rows."""
+    corpus = tmp_path / "c"
+    _manifest(corpus, [
+        _record("21\t100\trs1\tA\tG\t.\tPASS\t.", reference_rows=1),
+        _record("21\t500\tsv1\tN\t<CPX>\t.\tPASS\tSVTYPE=CPX;END=900",
+                reference_warning="CPX is not a supported structural variant type"),
+    ])
+    vep = tmp_path / "vep.txt"
+    rs = tmp_path / "rs.txt"
+    vep.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rs.write_text(
+        _row("rs1", "21:100", "G", "ENST1", "missense_variant")
+        + _row("sv1", "21:501-900", "CPX", "ENST2", "feature_truncation")
+        + _row("sv1", "21:501-900", "CPX", "ENST3", "feature_truncation,intron_variant"),
+        encoding="utf-8",
+    )
+    rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)])
+    assert rc == 0
+    m = json.loads((corpus / "manifest.json").read_text())
+    assert "reference_rows" not in m["records"][0]
+    assert list(m["records"][1].items())[-2:] == [
+        ("reference_rows", 0), ("reference_warning", "CPX is not a supported structural variant type"),
+    ]
+    assert [(t["feature"], t["record_indices"], t["expected_divergence"]) for t in m["vep_rs_only_tuples"]] == [
+        ("ENST2", [1], "reference_skipped_record"),
+        ("ENST3", [1], "reference_skipped_record"),
+    ]
+    assert m["vep_rs_only_summary"] == {"reference_skipped_record": 2}
+    assert m["divergences"] == [] and m["divergence_summary"] == {}
+
+
+def test_classify_refuses_a_zero_row_record_without_a_warning(tmp_path: Path, capsys):
+    """A record no VEP row names and no `reference_warning` explains is an error: its name
+    may be unresolved, or the corpus builder did not record VEP's reason."""
+    corpus = tmp_path / "c"
+    _manifest(corpus, [_record("21\t100\trs1\tA\tG\t.\tPASS\t."), _record("21\t150\trs9\tC\tT\t.\tPASS\t.")])
+    before = (corpus / "manifest.json").read_text()
+    vep = tmp_path / "vep.txt"
+    rs = tmp_path / "rs.txt"
+    vep.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rs.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)])
+    assert rc == 1
+    assert capsys.readouterr().err == "ERROR: [build_golden_corpus] record 1 (21 150 rs9 C T) has no VEP row and no reference_warning\n"
+    assert (corpus / "manifest.json").read_text() == before, "a refused run writes nothing"
+
+
+def test_classify_refuses_a_warned_record_that_has_rows(tmp_path: Path, capsys):
+    corpus = tmp_path / "c"
+    _manifest(corpus, [_record("21\t100\trs1\tA\tG\t.\tPASS\t.", reference_warning="deletion looks incomplete")])
+    vep = tmp_path / "vep.txt"
+    rs = tmp_path / "rs.txt"
+    vep.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rs.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)])
+    assert rc == 1
+    assert capsys.readouterr().err == (
+        "ERROR: [build_golden_corpus] record 0 (21 100 rs1 A G) has VEP rows and reference_warning 'deletion looks incomplete'\n"
+    )
 
 
 def test_classify_names_the_mate_side_local_read(tmp_path: Path):

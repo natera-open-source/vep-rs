@@ -3491,6 +3491,7 @@
  "divergence_summary": {
   "start_cooccurrence_swap": 4
  },
+ "vep_rs_only_summary": {},
  "fields_compared": [
   "HGVSc",
   "HGVSp"

@@ -486,7 +486,8 @@
    ],
    "vep_rs_consequence_sets": [
     "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
-   ]
+   ],
+   "expected_divergence": "reference_skipped_record"
   },
   {
    "location": "21:30165801-30166000",
@@ -498,7 +499,8 @@
    ],
    "vep_rs_consequence_sets": [
     "3_prime_UTR_variant,coding_sequence_variant,feature_elongation"
-   ]
+   ],
+   "expected_divergence": "reference_skipped_record"
   },
   {
    "location": "21:30165821-30166020",
@@ -510,7 +512,8 @@
    ],
    "vep_rs_consequence_sets": [
     "3_prime_UTR_variant,coding_sequence_variant,feature_elongation"
-   ]
+   ],
+   "expected_divergence": "reference_skipped_record"
   },
   {
    "location": "21:30165821-30166020",
@@ -522,7 +525,8 @@
    ],
    "vep_rs_consequence_sets": [
     "3_prime_UTR_variant,coding_sequence_variant"
-   ]
+   ],
+   "expected_divergence": "reference_skipped_record"
   },
   {
    "location": "21:30165851",
@@ -534,10 +538,14 @@
    ],
    "vep_rs_consequence_sets": [
     "3_prime_UTR_variant,feature_truncation"
-   ]
+   ],
+   "expected_divergence": "reference_skipped_record"
   }
  ],
  "divergence_summary": {
   "breakend_mate_local_read": 2
+ },
+ "vep_rs_only_summary": {
+  "reference_skipped_record": 5
  }
 }

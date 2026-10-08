@@ -19,7 +19,13 @@ Subcommands:
   classify  Compare a VEP default-format output for `variants.vcf` with a vep-rs output for
             the same file and record, per exemplar row VEP emits that vep-rs does not, the
             documented divergence class that explains it (or `unexplained_residual`), so the
-            golden test asserts the documented difference instead of equality.
+            golden test asserts the documented difference instead of equality. A record no
+            VEP row names is one VEP dropped before annotation: it must carry
+            `reference_warning` (VEP's reason, from its warnings file, recorded when the
+            corpus is built), it gets `reference_rows` 0, and every key only vep-rs emits
+            for it is classed `reference_skipped_record`; any other key only vep-rs emits is
+            `unexplained_residual`. A zero-row record without the warning, or a warned record
+            with rows, is an error.
   check     Recompute the observed combination space from the reference outputs and fail
             when a combination has no exemplar in the manifest.
 
@@ -341,10 +347,11 @@ def choose_exemplars(
 
 
 def vep_auto_names(chrom: str, pos: int, ref: str, alts: list[str]) -> list[str]:
-    """Reproduce VEP's auto-generated Uploaded_variation for an ID-less VCF record.
+    """Reproduce VEP's auto-generated Uploaded_variation for an ID-less VCF record, in the
+    two forms releases 116 and 115 write.
 
     Release 116 (ensembl-vep PR 1941) names the record from the raw line,
-    `CHR_POS_REF/ALT1/ALT2`, and that name comes first. The earlier releases' names
+    `CHR_POS_REF/ALT1/ALT2`, and that name comes first. Release 115's names
     follow: the alleles are the RAW REF and ALTs joined by `/` (VEP's
     `nontrimmed_allele_string`) and the start is the variant's after parsing: unchanged
     when no allele differs in length from REF; for a bi-allelic indel the first shared
@@ -609,6 +616,32 @@ def record_name_index(records: list[dict]) -> dict[str, list[int]]:
     return index
 
 
+REFERENCE_SKIPPED = "reference_skipped_record"
+UNEXPLAINED = "unexplained_residual"
+
+
+def reference_skipped_records(
+    records: list[dict], perl_names: dict[tuple[str, str, str, str], set[str]], by_name: dict[str, list[int]]
+) -> tuple[set[int], list[str]]:
+    """Ordinals of the records no VEP row names (VEP dropped them before annotation), and the
+    records that contradict their `reference_warning`: a zero-row record without one (its name
+    unresolved, or the reason unrecorded) and a warned record with rows."""
+    with_rows: set[int] = set()
+    for names in perl_names.values():
+        for n in names:
+            with_rows.update(by_name.get(n, []))
+    skipped = {i for i in range(len(records)) if i not in with_rows}
+    problems: list[str] = []
+    for i, rec in enumerate(records):
+        warned = isinstance(rec.get("reference_warning"), str)
+        label = " ".join(rec["vcf"].split("\t")[:5])
+        if i in skipped and not warned:
+            problems.append(f"record {i} ({label}) has no VEP row and no reference_warning")
+        elif warned and i not in skipped:
+            problems.append(f"record {i} ({label}) has VEP rows and reference_warning {rec['reference_warning']!r}")
+    return skipped, problems
+
+
 def classify_pair(perl_csq: str, rust_csq: str, allele: str) -> str | None:
     """First matching rule of the key comparator's registry, by taxonomy class."""
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "concordance"))
@@ -661,6 +694,17 @@ def cmd_classify(args: argparse.Namespace) -> int:
     perl, perl_names = load_tuples(Path(args.vep_default))
     rust, rust_names = load_tuples(Path(args.vep_rs_output))
     by_name = record_name_index(manifest["records"])
+    skipped, problems = reference_skipped_records(manifest["records"], perl_names, by_name)
+    if problems:
+        for p in problems:
+            print(f"ERROR: [build_golden_corpus] {p}", file=sys.stderr)
+        return 1
+    for i, rec in enumerate(manifest["records"]):
+        rec.pop("reference_rows", None)
+        if i in skipped:
+            warning = rec.pop("reference_warning")
+            rec["reference_rows"] = 0
+            rec["reference_warning"] = warning
     models = load_corpus_models(corpus)
 
     def records_for(key: tuple[str, str, str, str]) -> list[int]:
@@ -686,16 +730,27 @@ def cmd_classify(args: argparse.Namespace) -> int:
                 "location": key[0], "allele": key[1], "feature": key[2], "feature_type": key[3],
                 "record_indices": records_for(key),
                 "vep_consequence_set": cs, "vep_rs_consequence_sets": sorted(rust_sets),
-                "expected_divergence": klass or "unexplained_residual",
+                "expected_divergence": klass or UNEXPLAINED,
             })
-    extra_rust = [
-        {"location": k[0], "allele": k[1], "feature": k[2], "feature_type": k[3],
-         "record_indices": records_for(k), "vep_rs_consequence_sets": sorted(v)}
-        for k, v in sorted(rust.items()) if k not in perl
-    ]
+    extra_rust: list[dict] = []
+    for k, v in sorted(rust.items()):
+        if k in perl:
+            continue
+        indices = records_for(k)
+        extra_rust.append({
+            "location": k[0], "allele": k[1], "feature": k[2], "feature_type": k[3],
+            "record_indices": indices, "vep_rs_consequence_sets": sorted(v),
+            "expected_divergence": REFERENCE_SKIPPED if indices and all(i in skipped for i in indices) else UNEXPLAINED,
+        })
+    # Classify's own keys are rewritten from scratch, in one order, so a key a previous run
+    # wrote with other inputs (another `--field` list) does not survive this one.
+    for key in ("divergences", "vep_rs_only_tuples", "divergence_summary", "vep_rs_only_summary",
+                "fields_compared", "field_divergences", "field_divergence_summary"):
+        manifest.pop(key, None)
     manifest["divergences"] = divergences
     manifest["vep_rs_only_tuples"] = extra_rust
     manifest["divergence_summary"] = dict(Counter(d["expected_divergence"] for d in divergences))
+    manifest["vep_rs_only_summary"] = dict(Counter(t["expected_divergence"] for t in extra_rust))
     field_note = ""
     if args.field:
         # Field values are compared only on keys whose consequence sets agree; a key whose
@@ -717,7 +772,7 @@ def cmd_classify(args: argparse.Namespace) -> int:
                         "location": key[0], "allele": key[1], "feature": key[2], "feature_type": key[3],
                         "record_indices": records_for(key[:4]),
                         "consequence_set": key[4], "field": name, "vep": pvals[name], "vep_rs": rvals[name],
-                        "expected_divergence": "unexplained_residual",
+                        "expected_divergence": UNEXPLAINED,
                     })
         manifest["fields_compared"] = list(args.field)
         manifest["field_divergences"] = field_divergences
@@ -725,7 +780,9 @@ def cmd_classify(args: argparse.Namespace) -> int:
         field_note = f"; field divergences {len(field_divergences)} ({manifest['field_divergence_summary']})"
     manifest.update(run_options(args))
     (corpus / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
-    print(f"divergent VEP rows {len(divergences)} ({manifest['divergence_summary']}); vep-rs-only tuples {len(extra_rust)}{field_note}")
+    print(f"divergent VEP rows {len(divergences)} ({manifest['divergence_summary']}); "
+          f"vep-rs-only tuples {len(extra_rust)} ({manifest['vep_rs_only_summary']}); "
+          f"reference-skipped records {sorted(skipped)}{field_note}")
     return 0
 
 
@@ -778,7 +835,13 @@ def main(argv: list[str] | None = None) -> int:
                    help="the transcript flank the pruner keeps around each record, in bases (its --flank)")
     add_run_options(s)
     s.set_defaults(fn=cmd_select)
-    c = sub.add_parser("classify")
+    c = sub.add_parser(
+        "classify",
+        help="record every consequence key VEP and vep-rs disagree on with its documented class; a record "
+             "no VEP row names (one VEP dropped before annotation, with its reason in the record's "
+             "`reference_warning`) gets `reference_rows` 0 and its vep-rs-only keys the class "
+             "`reference_skipped_record`; any other vep-rs-only key is `unexplained_residual`",
+    )
     c.add_argument("--corpus", required=True)
     c.add_argument("--vep-default", required=True, help="VEP default-format output for variants.vcf")
     c.add_argument("--vep-rs-output", required=True, help="vep-rs default-format output for variants.vcf")

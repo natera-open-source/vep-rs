@@ -70,7 +70,12 @@ combination and the consequence keys whose terms are documented to differ.
 `cargo test -p vep-cli --test golden --test format_parity` annotates each corpus
 and compares every column of every format (the Parquet round trip needs the
 `duckdb` CLI; without it that one test skips). A failure lists every mismatch
-grouped by column and consequence set.
+grouped by column and consequence set. A record Ensembl VEP dropped before
+annotation carries `reference_warning` (VEP's reason, from its warnings file,
+recorded when the corpus is built); `classify` writes `reference_rows` 0 on it
+and classes the keys only vep-rs emits for it `reference_skipped_record`, the
+one class under which the harness accepts a record-level VCF line or JSON
+object with no reference counterpart.
 
 To add a release or assembly, run the generator where the VEP reference outputs,
 their inputs and the JSON cache are (`scripts/golden/build_golden_corpus.py

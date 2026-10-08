@@ -12449,5 +12449,6 @@
   "splice_family_swap": 31,
   "start_cooccurrence_swap": 213,
   "breakend_mate_local_read": 79
- }
+ },
+ "vep_rs_only_summary": {}
 }

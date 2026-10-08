@@ -15,12 +15,16 @@
 //! `divergences` list names the (Location, Allele, Feature) keys whose
 //! consequence terms are documented to differ between VEP and vep-rs (with the
 //! corpus record ordinals they belong to), and `vep_rs_only_tuples` the keys
-//! only vep-rs emits; both are compared against their documented shape rather
-//! than for equality. `field_divergences` names keys whose terms agree but whose
-//! named field (an HGVS string) is documented to differ, with the value vep-rs
-//! prints; every other field of such a key compares exactly. A record VEP
-//! skipped (`reference_rows` 0, or a `reference_warning`) has no reference
-//! output; whatever vep-rs writes for it is counted, not compared.
+//! only vep-rs emits, each classified; both are compared against their
+//! documented shape rather than for equality. The class
+//! `reference_skipped_record` names a record the reference dropped before
+//! annotation (its `reference_rows` is 0 and `reference_warning` quotes the
+//! reason): the reference writes nothing for it, so the record-level VCF line
+//! and JSON object vep-rs writes for it are counted, not compared, while every
+//! consequence entry on it must still be a documented vep-rs-only key.
+//! `field_divergences` names keys whose terms agree but whose named field (an
+//! HGVS string) is documented to differ, with the value vep-rs prints; every
+//! other field of such a key compares exactly.
 //!
 //! The VCF and JSON formats carry no `Location`, so their entries are keyed by
 //! the corpus record ordinal, found by matching each output record to its
@@ -493,10 +497,16 @@ pub struct Documented {
     /// documented to print where VEP prints another.
     fields_by_location: HashMap<(String, String, String), BTreeMap<String, String>>,
     fields_by_record: HashMap<(usize, String, String), BTreeMap<String, String>>,
-    /// Records VEP skipped (`reference_rows` 0, or a `reference_warning`): it
-    /// writes no output for one, so nothing vep-rs writes for it has a reference.
+    /// Records the reference dropped before annotation: those a
+    /// `vep_rs_only_tuples` entry classed `reference_skipped_record` names.
+    /// The reference writes nothing for one, so the record-level VCF line and
+    /// JSON object vep-rs writes for it have no counterpart.
     skipped_records: BTreeSet<usize>,
 }
+
+/// The class a `vep_rs_only_tuples` entry carries when every record it names
+/// is one the reference dropped before annotation.
+pub const REFERENCE_SKIPPED_RECORD: &str = "reference_skipped_record";
 
 impl Documented {
     pub fn from_manifest(manifest: &serde_json::Value) -> Self {
@@ -512,16 +522,6 @@ impl Documented {
         let s = |v: &serde_json::Value, k: &str| {
             v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string()
         };
-        for (i, rec) in manifest["records"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .enumerate()
-        {
-            if rec["reference_rows"].as_u64() == Some(0) || rec["reference_warning"].is_string() {
-                d.skipped_records.insert(i);
-            }
-        }
         for item in manifest["divergences"].as_array().into_iter().flatten() {
             let sets: Vec<String> = item["vep_rs_consequence_sets"]
                 .as_array()
@@ -552,10 +552,15 @@ impl Documented {
                 s(item, "allele"),
                 s(item, "feature"),
             ));
+            let reference_skipped =
+                item["expected_divergence"].as_str() == Some(REFERENCE_SKIPPED_RECORD);
             for r in item["record_indices"].as_array().into_iter().flatten() {
                 if let Some(r) = r.as_u64() {
                     d.extra_by_record
                         .insert((r as usize, s(item, "allele"), s(item, "feature")));
+                    if reference_skipped {
+                        d.skipped_records.insert(r as usize);
+                    }
                 }
             }
         }
@@ -662,8 +667,8 @@ impl Documented {
             || self.extra_by_record.iter().any(|(r, _, _)| *r == record)
     }
 
-    /// Whether the reference skipped the record, leaving nothing to compare
-    /// vep-rs's output for it against.
+    /// Whether the reference dropped the record before annotation, leaving no
+    /// record-level line or object to compare vep-rs's against.
     pub fn reference_skipped(&self, record: usize) -> bool {
         self.skipped_records.contains(&record)
     }
@@ -806,7 +811,10 @@ pub fn compare_entries(expected: &[Entry], actual: &[Entry], documented: &Docume
         if expected_by_key.contains_key(a.key.as_str()) || documented.extra(a) {
             continue;
         }
-        if a.record.is_some_and(|r| documented.reference_skipped(r)) {
+        // Only the record-level line or object is without a counterpart; a
+        // consequence entry on a skipped record is a vep-rs-only key, documented
+        // or unexpected like any other.
+        if a.key.ends_with("|record") && a.record.is_some_and(|r| documented.reference_skipped(r)) {
             annotated_without_reference += 1;
             continue;
         }
@@ -858,7 +866,7 @@ pub fn compare_entries(expected: &[Entry], actual: &[Entry], documented: &Docume
     );
     if annotated_without_reference > 0 {
         report.push_str(&format!(
-            "vep-rs annotated, reference skipped: {annotated_without_reference} entries\n"
+            "record-level entries on records the reference skipped: {annotated_without_reference}\n"
         ));
     }
     report.push_str(&order_note);
