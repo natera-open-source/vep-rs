@@ -22,7 +22,10 @@
  ],
  "fasta": "reference.fa.gz",
  "covers": [
-  "hgvs"
+  "hgvs",
+  "uploaded_variation_naming_116",
+  "hgvsc_clamp_116",
+  "hgvsp_extter_116"
  ],
  "suites": {
   "GRCh37-hgvs": {
