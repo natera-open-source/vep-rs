@@ -25,6 +25,9 @@ import sys
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "concordance"))
+from reference_release import release_from_provenance  # noqa: E402  (one reading of a reference's release for every script)
+
 REPO_URL = "https://github.com/natera-open-source/vep-rs"
 CONCEPT_DOI = "10.5281/zenodo.22837896"
 LINE_CAP = 80
@@ -216,8 +219,8 @@ def latest_record(repo: Path, kind: str, version: str) -> Path:
     return records[-1]
 
 
-def load_release_record(repo: Path, version: str) -> tuple[dict, dict, str]:
-    """The release record's per-suite concordance, its whole-genome concordance and the record directory's path."""
+def load_release_record(repo: Path, version: str) -> tuple[dict, dict, dict, str]:
+    """The release record, its per-suite concordance, its whole-genome concordance and the record directory's path."""
     record_path = latest_record(repo, "release", version)
     record = json.loads(record_path.read_text())
     conc = record.get("concordance") or {}
@@ -227,7 +230,7 @@ def load_release_record(repo: Path, version: str) -> tuple[dict, dict, str]:
     pop = record.get("population_concordance")
     if not pop:
         fail(f"{record_path.name} lacks population_concordance")
-    return conc, pop, record_path.relative_to(repo).parent.as_posix()
+    return record, conc, pop, record_path.relative_to(repo).parent.as_posix()
 
 
 def load_population_record(repo: Path, version: str) -> dict:
@@ -235,9 +238,20 @@ def load_population_record(repo: Path, version: str) -> dict:
     return json.loads(latest_record(repo, "population", version).read_text())
 
 
-def comparator_version(population: dict, pop: dict) -> str:
-    """The Ensembl VEP release the whole genome was scored against: the population record's
-    `ensembl_vep` engine version, else the release number in the release record's reference prefix."""
+def comparator_version(population: dict, pop: dict, release: dict | None = None) -> str:
+    """The Ensembl VEP release the whole genome's concordance was scored against: the `perl_reference`
+    block of the release record (top level or under `population_concordance`) or of the population
+    record when one is present, read as the comparators read a reference's provenance (the image tag,
+    else the archived prefix, else the cache version mapped to its release, so a block naming cache
+    116 alone renders 116.2); else the population record's `ensembl_vep` engine version, else the
+    release number in the release record's reference prefix. The wall-time table's version stays the
+    engine's own `engine_version`, which a carried-forward comparator block keeps."""
+    for block in ((release or {}).get("perl_reference"), pop.get("perl_reference"), population.get("perl_reference")):
+        if isinstance(block, dict):
+            try:
+                return release_from_provenance(block)
+            except ValueError as exc:
+                fail(f"a perl_reference block names no release: {exc}")
     engine = (population.get("wall_time") or {}).get("ensembl_vep") or {}
     m = re.search(r"(\d+(?:\.\d+)?)$", str(engine.get("engine_version", "")))
     if m:
@@ -282,13 +296,13 @@ def measurements_blocks(repo: Path, version: str) -> list[str]:
     from the release record's counts, wall time per architecture from the population record) under its
     caption, then the chromosome 21 table over the eight scored suites under its caption. A suite row's
     adjusted F1 is the record's `adj_f1`: the suite rows carry no excluded counts to derive it from."""
-    conc, pop, record_dir = load_release_record(repo, version)
+    release, conc, pop, record_dir = load_release_record(repo, version)
     population = load_population_record(repo, version)
     vep_rs = population["wall_time"]["vep_rs"]
     types = vep_rs["instance_types"]
     sums = wall_time_sums(population)
     caption = (
-        f"Whole genome against Ensembl VEP {comparator_version(population, pop)}, one run per chromosome; "
+        f"Whole genome against Ensembl VEP {comparator_version(population, pop, release)}, one run per chromosome; "
         f"wall time is the sum of the per-chromosome medians of {int(vep_rs['n_clones_per_cell'])} machines "
         f"at {int(population['fork'])} threads on `{types['arm64']}` (ARM) and `{types['x86_64']}` (x86); "
         f"peak memory at most {peak_rss_gb(population)} GB on any chromosome; tuple counts and "
