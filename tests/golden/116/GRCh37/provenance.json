@@ -5,8 +5,8 @@
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
-  "commit": "bb746e770ee9483383dca3814e4864f5e1a2eb67",
-  "binary_md5": "25f5f9400d736adb3d71773c0a370846",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "1f6363ff1e5d57c1ec7c40e625ec9e9f",
   "arch": "arm64",
   "flags_passed": []
  },
@@ -16,7 +16,6 @@
  "fasta": "none on either side",
  "input": "the release-115 corpus's variants.vcf, unchanged",
  "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify",
- "generated_at_utc": "2026-10-08T04:09:56Z",
  "sha256": {
   "default.txt": "08adac35bdb1dd7f51e450b0ffd7c59d8d081ac3ed2e4fb28f2b016647967039",
   "tab.txt": "c3c71ac3452a4f84f929ca9c2e3df4ad1523c06ec90f54bbed835edf7228a2a0",

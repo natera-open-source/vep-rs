@@ -5,8 +5,8 @@
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
-  "commit": "bb746e770ee9483383dca3814e4864f5e1a2eb67",
-  "binary_md5": "25f5f9400d736adb3d71773c0a370846",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "1f6363ff1e5d57c1ec7c40e625ec9e9f",
   "arch": "arm64",
   "flags_passed": [
    "--hgvs"
@@ -18,7 +18,6 @@
  "fasta": "GRCh37 chromosome 21, complete, from Homo_sapiens.GRCh37.75.dna.primary_assembly.fa (reference.fa.gz beside this file, with the .fai of the plain file)",
  "input": "the release-115 corpus's variants.vcf, unchanged",
  "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify --field HGVSc --field HGVSp",
- "generated_at_utc": "2026-10-08T04:12:49Z",
  "sha256": {
   "default.txt": "f582d9768b41457b858743d0b68a400f4409b010a78822f74b207ff8bf4c563e",
   "tab.txt": "104ed891705a2e2995abbb9b04cdc6d5c269d995fafb64ab36e9d86be20ed483",

@@ -5,13 +5,16 @@
  "cache_version": 116,
  "divergences_classified_against": {
   "engine": "vep-rs",
-  "commit": "bb746e770ee9483383dca3814e4864f5e1a2eb67",
-  "binary_md5": "25f5f9400d736adb3d71773c0a370846",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "1f6363ff1e5d57c1ec7c40e625ec9e9f",
   "arch": "arm64",
   "flags_passed": [
-   "--protein"
-  ],
-  "note": "the binary rejects --protein_version, --mask_header_cache_path and --max_sv_size -1; classified with --protein alone"
+   "--protein",
+   "--protein_version",
+   "--mask_header_cache_path",
+   "--max_sv_size",
+   "-1"
+  ]
  },
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
@@ -19,7 +22,6 @@
  "fasta": "none on either side",
  "input": "hand-built records",
  "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify",
- "generated_at_utc": "2026-10-08T04:08:53Z",
  "sha256": {
   "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
   "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
