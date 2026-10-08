@@ -26,6 +26,10 @@ PERL_VEP_MODE="docker"
 PERL_VEP_DOCKER_IMAGE="ensemblorg/ensembl-vep:release_115.2"
 FIXTURES_DIR=""
 RUST_RELEASE=0
+# The Ensembl VEP release the comparator scores against (its --reference-release).
+# Empty means derived: from the Docker image tag, from the fixtures directory's
+# provenance, or from a local checkout's Constants.pm (reference_release.py).
+REFERENCE_RELEASE=""
 
 PERL_CACHE_DIR=""
 JSON_CACHE_DIR=""
@@ -86,6 +90,12 @@ Optional:
                                    not committed; produce it with
                                    --perl-vep-mode docker first)
   --rust-release            Run vep-rs using a release build (cargo --release)
+  --reference-release <115.2|116.2>  The Ensembl VEP release the comparator's adjusted F1
+                            is scored against (compare_vep_outputs.py --reference-release).
+                            Default: derived from the Docker image tag, the fixtures
+                            directory's provenance.json, or the local checkout's
+                            Constants.pm; the run fails before comparing when none
+                            names a release.
   --perl-output-cache-dir <path>   Cache dir for perl VEP outputs (default: vep-rs/tmp/perl_output_cache)
   --no-perl-output-cache   Disable perl output caching (always rerun perl VEP)
   --refresh-perl-output-cache  Ignore cached perl outputs; rerun and update cache
@@ -161,6 +171,10 @@ while [[ $# -gt 0 ]]; do
     --rust-release)
         RUST_RELEASE=1
         shift 1
+        ;;
+    --reference-release)
+        REFERENCE_RELEASE="$2"
+        shift 2
         ;;
     --perl-output-cache-dir)
         PERL_OUTPUT_CACHE_DIR="$2"
@@ -271,6 +285,11 @@ fi
 
 if [[ "${PERL_VEP_MODE}" != "local" && "${PERL_VEP_MODE}" != "docker" && "${PERL_VEP_MODE}" != "fixtures" ]]; then
     echo "ERROR: --perl-vep-mode must be local, docker, or fixtures" >&2
+    exit 1
+fi
+
+if [[ -n "${REFERENCE_RELEASE}" && "${REFERENCE_RELEASE}" != "115.2" && "${REFERENCE_RELEASE}" != "116.2" ]]; then
+    echo "ERROR: --reference-release must be 115.2 or 116.2 (got ${REFERENCE_RELEASE})" >&2
     exit 1
 fi
 
@@ -758,9 +777,37 @@ print(version)
 PY
 )"
 
+# The comparator's --reference-release, derived from the reference's own identity when
+# not given: the image tag in docker mode, the fixtures directory's provenance in
+# fixtures mode, the checkout's Constants.pm in local mode. A reference whose release
+# cannot be named is not scored under a guessed registry.
+if [[ -z "${REFERENCE_RELEASE}" ]]; then
+    case "${PERL_VEP_MODE}" in
+    docker)
+        REFERENCE_RELEASE="$(python3 "${SCRIPT_DIR}/reference_release.py" --image "${PERL_VEP_DOCKER_IMAGE}")" || {
+            echo "ERROR: [run_concordance] cannot derive --reference-release from the image ${PERL_VEP_DOCKER_IMAGE}; pass --reference-release" >&2
+            exit 1
+        }
+        ;;
+    fixtures)
+        REFERENCE_RELEASE="$(python3 "${SCRIPT_DIR}/reference_release.py" --provenance-dir "${FIXTURES_DIR}")" || {
+            echo "ERROR: [run_concordance] cannot derive --reference-release from the provenance under ${FIXTURES_DIR}; pass --reference-release" >&2
+            exit 1
+        }
+        ;;
+    local)
+        REFERENCE_RELEASE="$(python3 "${SCRIPT_DIR}/reference_release.py" --vep-constants "${ENSEMBL_VEP_DIR}/modules/Bio/EnsEMBL/VEP/Constants.pm")" || {
+            echo "ERROR: [run_concordance] cannot derive --reference-release from ${ENSEMBL_VEP_DIR}; pass --reference-release" >&2
+            exit 1
+        }
+        ;;
+    esac
+fi
+
 echo "preflight:"
 echo "  rust vep version constant: ${RUST_VERSION}"
 echo "  perl cache version (from info.txt): ${PERL_CACHE_VERSION}"
+echo "  reference release (comparator registry): ${REFERENCE_RELEASE}"
 echo "  rust release build: ${RUST_RELEASE}"
 echo "  perl vep mode: ${PERL_VEP_MODE}"
 if [[ "${PERL_VEP_MODE}" == "docker" ]]; then
@@ -1420,6 +1467,7 @@ provenance = {
     "rust_version_constant": "${RUST_VERSION}",
     "rust_release": bool(int("${RUST_RELEASE}")),
     "perl_cache_version": "${PERL_CACHE_VERSION}",
+    "reference_release": "${REFERENCE_RELEASE}",
     "plugins": "${PLUGINS}" if "${PLUGINS}" else None,
     "plugin_data_dir": "${PLUGIN_DATA_DIR}" if "${PLUGIN_DATA_DIR}" else None,
     "plugin_tier": "${PLUGIN_TIER}" if "${PLUGINS}" else None,
@@ -1473,6 +1521,7 @@ COMPARE_ARGS=(
     --rust-dir "${WORK_DIR}/rust"
     --report-dir "${WORK_DIR}/reports"
     --assembly "${ASSEMBLY}"
+    --reference-release "${REFERENCE_RELEASE}"
 )
 if [[ "${CANONICAL_CONTIGS}" -eq 1 ]]; then
     COMPARE_ARGS+=(--canonical-contigs)
