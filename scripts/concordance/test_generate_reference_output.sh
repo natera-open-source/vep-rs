@@ -61,7 +61,7 @@ build_tree() {
     for asm in GRCh37 GRCh38; do
         asm_lc=$(printf %s "$asm" | tr '[:upper:]' '[:lower:]')
         for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT; do
-            mkdir -p "$CACHE/homo_sapiens/115_$asm/$c"
+            mkdir -p "$CACHE/homo_sapiens/116_$asm/$c"
         done
         mkdir -p "$DATA/reference/$asm_lc" "$DATA/vcf/$asm_lc/all_variants_canonical" "$SV_IN/$asm_lc"
         printf '>21\nACGT\n' >"$DATA/reference/$asm_lc/genome.fa"
@@ -114,8 +114,8 @@ n=$(grep -c -- '--fasta /work/ref.fa' "$TMP/dry.out") || n=0
 [[ "$n" -eq 10 ]] && ok "every command passes --fasta" || bad "$n of 10 commands pass --fasta"
 n=$(grep -c -- '--buffer_size 5000' "$TMP/dry.out") || n=0
 [[ "$n" -eq 10 ]] && ok "every command passes --buffer_size 5000" || bad "$n of 10 commands pass --buffer_size 5000"
-n=$(grep -c -- '--cache_version 115' "$TMP/dry.out") || n=0
-[[ "$n" -eq 10 ]] && ok "every command passes --cache_version 115" || bad "$n of 10 commands pass --cache_version 115"
+n=$(grep -c -- '--cache_version 116' "$TMP/dry.out") || n=0
+[[ "$n" -eq 10 ]] && ok "every command passes --cache_version 116" || bad "$n of 10 commands pass --cache_version 116"
 n=$(grep -c -- '--no_headers --no_stats --quiet --force_overwrite' "$TMP/dry.out") || n=0
 [[ "$n" -eq 10 ]] && ok "every command carries the harness's output flags" || bad "$n of 10 commands carry --no_headers --no_stats --quiet --force_overwrite"
 
@@ -194,7 +194,7 @@ rc=$?
 echo
 echo "CACHE-COMPLETE: a chromosome-subset cache fails before anything runs"
 build_tree
-rm -rf "$CACHE/homo_sapiens/115_GRCh37/5" "$CACHE/homo_sapiens/115_GRCh37/X"
+rm -rf "$CACHE/homo_sapiens/116_GRCh37/5" "$CACHE/homo_sapiens/116_GRCh37/X"
 run_gen --dry-run >"$TMP/c1.out" 2>"$TMP/c1.err"
 rc=$?
 [[ "$rc" -ne 0 ]] && ok "a cache missing primary contigs exits non-zero" || bad "a chromosome-subset cache exited 0"
@@ -207,7 +207,7 @@ n=$(count_docker_cmds "$TMP/c2.out")
 [[ "$rc" -eq 0 && "$n" -eq 5 ]] && ok "the intact GRCh38 slice still generates when GRCh37 is excluded (5 commands)" || bad "--assembly GRCh38 with a broken GRCh37 slice: rc=$rc commands=$n"
 
 build_tree
-rm -rf "$CACHE/homo_sapiens/115_GRCh38"
+rm -rf "$CACHE/homo_sapiens/116_GRCh38"
 run_gen --dry-run >/dev/null 2>"$TMP/c3.err"
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'Perl cache slice not found' "$TMP/c3.err" && ok "an absent cache slice exits non-zero and says so" || bad "an absent cache slice exited $rc"
@@ -215,7 +215,7 @@ rc=$?
 build_tree
 run_gen --dry-run --cache-version 114 >/dev/null 2>"$TMP/c4.err"
 rc=$?
-[[ "$rc" -ne 0 ]] && grep -q '114_GRCh37' "$TMP/c4.err" && ok "--cache-version selects the slice that is checked" || bad "--cache-version 114 against a 115 cache exited $rc"
+[[ "$rc" -ne 0 ]] && grep -q '114_GRCh37' "$TMP/c4.err" && ok "--cache-version selects the slice that is checked" || bad "--cache-version 114 against a 116 cache exited $rc"
 
 echo
 echo "FASTA: a missing FASTA or index fails the assembly"

@@ -7,7 +7,7 @@ set -euo pipefail
 
 # Defaults
 OUTPUT_DIR="${VEP_PERL_REF_DIR:-./.vep/perl_reference}"
-DOCKER_IMAGE="ensemblorg/ensembl-vep:release_115.2"
+DOCKER_IMAGE="ensemblorg/ensembl-vep:release_116.2"
 PERL_BASE="/opt/vep/src/ensembl-vep"
 
 usage() {
@@ -16,7 +16,7 @@ Extract five Perl VEP modules from the Docker image for reference and debugging.
 
 Optional:
   --output-dir <path>   Where to write extracted files (default: ${VEP_PERL_REF_DIR:-./.vep/perl_reference})
-  --image <ref>         Docker image (default: ensemblorg/ensembl-vep:release_115.2)
+  --image <ref>         Docker image (default: ensemblorg/ensembl-vep:release_116.2)
   -h, --help            Show this help
 EOF
     exit 1

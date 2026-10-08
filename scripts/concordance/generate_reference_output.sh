@@ -46,11 +46,11 @@
 # anything runs, the same check the harness's `assert_perl_cache_complete` makes.
 #
 # Obtaining the cache (about 24 GB per assembly, gzip tar), with <v> the Ensembl
-# release, 115:
+# release, 116:
 #   GRCh38: https://ftp.ensembl.org/pub/release-<v>/variation/indexed_vep_cache/homo_sapiens_vep_<v>_GRCh38.tar.gz
 #   GRCh37: https://ftp.ensembl.org/pub/grch37/release-<v>/variation/indexed_vep_cache/homo_sapiens_vep_<v>_GRCh37.tar.gz
 #   Extract both under ONE directory, so that it contains
-#   homo_sapiens/115_GRCh38/ and homo_sapiens/115_GRCh37/; that directory is
+#   homo_sapiens/116_GRCh38/ and homo_sapiens/116_GRCh37/; that directory is
 #   --perl-cache-dir (default <data>/caches/perl/vep-cache). VEP resolves
 #   homo_sapiens/<cache_version>_<assembly> beneath the --dir_cache mount from
 #   --cache_version and --assembly. Readiness is an artifact test, not a log line:
@@ -69,8 +69,8 @@
 # Usage:
 #   scripts/concordance/generate_reference_output.sh --data-dir <data> \
 #     [--assembly GRCh37|GRCh38|both] [--suites all|snp-indel|sv|"s01 s07"] \
-#     [--perl-image ensemblorg/ensembl-vep:release_115.2] \
-#     [--perl-cache-dir <dir>] [--cache-version 115] \
+#     [--perl-image ensemblorg/ensembl-vep:release_116.2] \
+#     [--perl-cache-dir <dir>] [--cache-version 116] \
 #     [--fasta <fa>] [--fasta-grch37 <fa>] [--fasta-grch38 <fa>] \
 #     [--fork 16] [--sv-fork 4] [--buffer-size 5000] \
 #     [--snp-indel-gt-dir <dir>] [--sv-gt-dir <dir>] [--sv-inputs-dir <dir>] \
@@ -87,9 +87,9 @@ set -euo pipefail
 DATA_DIR=""
 ASSEMBLY="both"
 SUITES_FILTER="all"
-PERL_IMAGE="ensemblorg/ensembl-vep:release_115.2"
+PERL_IMAGE="ensemblorg/ensembl-vep:release_116.2"
 PERL_CACHE_DIR="${VEP_PERL_CACHE_DIR:-}"
-PERL_CACHE_VERSION="${VEP_PERL_CACHE_VERSION:-115}"
+PERL_CACHE_VERSION="${VEP_PERL_CACHE_VERSION:-116}"
 FASTA_ANY=""
 FASTA_GRCH37="${VEP_FASTA_GRCH37:-}"
 FASTA_GRCH38="${VEP_FASTA_GRCH38:-}"
@@ -114,10 +114,10 @@ Optional:
   --suites <filter>        all (default) | snp-indel | sv | space-separated "s01 s07"
                            (s09/s10 are aliases of s07/s08: the real-world SV VCFs are
                            part of the 16-file per-assembly set)
-  --perl-image <ref>       Docker image (default ensemblorg/ensembl-vep:release_115.2)
+  --perl-image <ref>       Docker image (default ensemblorg/ensembl-vep:release_116.2)
   --perl-cache-dir <dir>   Directory holding homo_sapiens/<ver>_<asm>/
                            (default <data>/caches/perl/vep-cache)
-  --cache-version <N>      Ensembl cache release (default 115)
+  --cache-version <N>      Ensembl cache release (default 116)
   --fasta <fa>             Reference FASTA; valid only with a single --assembly
   --fasta-grch37 <fa>      Per-assembly FASTA overrides (defaults under
   --fasta-grch38 <fa>      <data>/reference/<asm>/)
