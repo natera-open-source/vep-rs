@@ -153,9 +153,9 @@ F1 is deterministic per binary and architecture-independent: a re-run on the sam
 | `plugin_data_layout.sh`            | The one table of staged plugin data file names, sourced by `setup_plugin_data.sh` and `concordance/run_concordance.sh`                                                        |
 | `test_plugin_data_layout.sh`       | Proves every plugin data path `run_concordance.sh` passes is a file `setup_plugin_data.sh` stages, on both assemblies                                                        |
 | `download_real_world_vcfs.sh`      | Idempotent seeder for the 14 real-world source VCFs (SV + all-variants, both assemblies, chr21 except the genome-wide ClinVar files). Checks local, then an optional S3 copy, then the upstream host; copies back to S3 when `$VEP_BENCHMARK_S3` or `$VEP_BENCHMARK_BUCKET` is set. Does not produce the canonical, sites-only or multi-sample derivatives (see its header). |
-| `compare_storable_cache_versions.pl` | Dump every transcript of a VEP Storable cache as `stable_id contig start end md5_full md5_content` (the content digest strips the run-specific fields), one line per transcript; runs inside `ensemblorg/ensembl-vep:release_115.2`. |
+| `compare_storable_cache_versions.pl` | Dump every transcript of a VEP Storable cache as `stable_id contig start end md5_full md5_content` (the content digest strips the run-specific fields), one line per transcript; runs inside `ensemblorg/ensembl-vep:release_116.2`. |
 | `compare_storable_cache_versions.py` | Join two such dumps: ids in one cache only, identical, identical after normalisation, differing; writes the id lists and a summary JSON, and with `--parity-csv` the `storable_113_*` columns of `manuscript/data/transcript_set_parity.csv`. |
-| `dump_storable_transcripts.pl`     | For a file of transcript ids, write one canonical dump per transcript from a VEP Storable cache (prediction matrices summarised as length and md5); runs inside `ensemblorg/ensembl-vep:release_115.2`. |
+| `dump_storable_transcripts.pl`     | For a file of transcript ids, write one canonical dump per transcript from a VEP Storable cache (prediction matrices summarised as length and md5); runs inside `ensemblorg/ensembl-vep:release_116.2`. |
 | `classify_storable_transcript_differences.py` | Read two such dumps for the same ids (optionally a vep-rs JSON cache, `.json` or `.json.gz` shards) and classify each transcript's difference (`peptide`, `predictions`, `protein_features`, `other`, `identical_after_normalisation`), writing `differing_<a>_<b>_classes.tsv` and a per-class summary JSON. |
 
 #### storable_to_json.pl Usage
@@ -170,13 +170,13 @@ mount that directory into the container.
 # Convert specific chromosomes (one comma-separated list)
 docker run --rm -v /path/to/cache:/input:ro -v /output/dir:/output \
   -v $(pwd)/scripts/data:/scripts:ro \
-  ensemblorg/ensembl-vep:release_115.2 \
+  ensemblorg/ensembl-vep:release_116.2 \
   perl /scripts/storable_to_json.pl /input /output 21,22
 
 # Convert all chromosomes
 docker run --rm -v /path/to/cache:/input:ro -v /output/dir:/output \
   -v $(pwd)/scripts/data:/scripts:ro \
-  ensemblorg/ensembl-vep:release_115.2 \
+  ensemblorg/ensembl-vep:release_116.2 \
   perl /scripts/storable_to_json.pl /input /output
 ```
 

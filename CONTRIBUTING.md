@@ -37,7 +37,7 @@ pre-commit install
 
 ## Concordance Testing
 
-Concordance testing compares Rust VEP output against Perl VEP, the `ensemblorg/ensembl-vep` release image `run_concordance.sh` pins (`release_115.2`; `--perl-vep-docker-image` selects another), to verify semantic parity. Requires Docker and a Perl VEP cache of that release.
+Concordance testing compares Rust VEP output against Perl VEP release 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the image `run_concordance.sh` pins; `--perl-vep-docker-image` selects another) to verify semantic parity. Requires Docker and a Perl VEP cache of that release.
 
 ```bash
 scripts/concordance/run_concordance.sh --mode smoke --smoke-variants 5000 \

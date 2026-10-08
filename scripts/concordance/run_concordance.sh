@@ -23,7 +23,7 @@ SMOKE_VARIANTS=5000
 SPECIES="homo_sapiens"
 ASSEMBLY="GRCh37"
 PERL_VEP_MODE="docker"
-PERL_VEP_DOCKER_IMAGE="ensemblorg/ensembl-vep:release_115.2"
+PERL_VEP_DOCKER_IMAGE="ensemblorg/ensembl-vep:release_116.2"
 FIXTURES_DIR=""
 RUST_RELEASE=0
 # The Ensembl VEP release the comparator scores against (its --reference-release).
@@ -84,7 +84,7 @@ Optional:
   --perl-vep-mode <local|docker|fixtures>  Perl VEP execution mode (default: docker)
                                     fixtures: use pre-existing Perl outputs from --fixtures-dir
                                               (skips Docker/Perl entirely)
-  --perl-vep-docker-image <image>  Docker image for perl VEP (default: ensemblorg/ensembl-vep:release_115.2)
+  --perl-vep-docker-image <image>  Docker image for perl VEP (default: ensemblorg/ensembl-vep:release_116.2)
   --fixtures-dir <path>            Cached Perl VEP outputs (default:
                                    tests/concordance_fixtures/sv_perl, which is
                                    not committed; produce it with
@@ -1042,7 +1042,7 @@ if [[ -z "${JSON_CACHE_DIR}" ]]; then
     JSON_CACHE_DIR="${WORK_DIR}/cache_json"
     echo "ERROR: --json-cache-dir is required; no JSON cache was given (for example ${JSON_CACHE_DIR})." >&2
     echo "  Build one with vep-cache-builder (no Perl required):" >&2
-    echo "    vep-cache-builder --release 115 --assembly GRCh38 \\" >&2
+    echo "    vep-cache-builder --release 116 --assembly GRCh38 \\" >&2
     echo "      --genome-fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa \\" >&2
     echo "      --include-predictions --output-dir ${JSON_CACHE_DIR}" >&2
     echo "  Or provide an existing cache with --json-cache-dir." >&2

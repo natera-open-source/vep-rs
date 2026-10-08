@@ -396,8 +396,8 @@ if [[ -f "$HARNESS" ]]; then
 
         # A chr21-only slice.
         PERL_CACHE_DIR="$TMP/cache_chr21only"
-        mkdir -p "$PERL_CACHE_DIR/homo_sapiens/115_GRCh37/21"
-        : >"$PERL_CACHE_DIR/homo_sapiens/115_GRCh37/info.txt"
+        mkdir -p "$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/21"
+        : >"$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/info.txt"
         if assert_perl_cache_complete GRCh37 >/dev/null 2>&1; then
             bad "a chr21-only GRCh37 cache PASSED the completeness guard"
         else
@@ -408,7 +408,7 @@ if [[ -f "$HARNESS" ]]; then
         # guard demanding all of them would fail this legitimately pruned cache.
         PERL_CACHE_DIR="$TMP/cache_primary"
         for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT; do
-            mkdir -p "$PERL_CACHE_DIR/homo_sapiens/115_GRCh37/$c"
+            mkdir -p "$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/$c"
         done
         if assert_perl_cache_complete GRCh37 >/dev/null 2>&1; then
             ok "a cache with all 25 primary contigs and no scaffolds passes"
@@ -418,7 +418,7 @@ if [[ -f "$HARNESS" ]]; then
 
         # One contig short is the interesting near-miss: 24 of 25 is what an incomplete
         # cache extraction looks like, and it must not pass.
-        rmdir "$PERL_CACHE_DIR/homo_sapiens/115_GRCh37/MT"
+        rmdir "$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/MT"
         if assert_perl_cache_complete GRCh37 >/dev/null 2>&1; then
             bad "a cache missing only MT PASSED the guard"
         else

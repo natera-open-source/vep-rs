@@ -61,9 +61,9 @@ documented in `tests/sv_validation/README.md`.
 ## Generating the Perl ground truth
 
 `run_clone_measurement.sh` only reads the ground-truth trees under `<data>/ground_truth/perl/`.
-`generate_reference_output.sh` writes them with the same `vep` flags the harness's Perl
-engine uses; run both scripts with the same `--perl-image` and cache version, so the reference
-and the timed runs come from one Perl VEP release:
+`generate_reference_output.sh` writes them with the same Docker image (`release_116.2`), cache
+version (116) and `vep` flags the harness's Perl engine uses, so the reference and the timed
+runs cannot diverge; `--perl-image` and `--cache-version` move both together:
 
 ```bash
 # Preflight everything and print the docker command for every output, running nothing.

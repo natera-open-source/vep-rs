@@ -14,7 +14,7 @@
 # that spans a shard boundary appears in two shards; it is written once, and the run
 # aborts if its two copies differ, since that would make the dump ambiguous.
 #
-# Runs inside ensemblorg/ensembl-vep:release_115.2, which carries Storable,
+# Runs inside ensemblorg/ensembl-vep:release_116.2, which carries Storable,
 # IO::Uncompress::Gunzip, Digest::MD5, Data::Dumper and the Bio::EnsEMBL classes the
 # shards are blessed into. `compare_storable_cache_versions.py` joins two of these dumps.
 #
