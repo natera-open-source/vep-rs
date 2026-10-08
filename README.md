@@ -122,7 +122,7 @@ Each published release from 0.2.0 on is also an image on the GitHub Container Re
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" \
-  -v "$PWD/tests/golden/115/GRCh37:/corpus:ro" -v "$PWD:/data" \
+  -v "$PWD/tests/golden/116/GRCh37:/corpus:ro" -v "$PWD:/data" \
   ghcr.io/natera-open-source/vep-rs:0.2.0 \
   vep --json_cache /corpus/json_cache --assembly GRCh37 -i /corpus/variants.vcf -o /data/output.txt
 ```
@@ -137,9 +137,9 @@ Run it first on the bundled corpus, which needs no download:
 # The bundled 1,008-record excerpt of the benchmark datasets against the pruned
 # GRCh37 cache that ships in tests/golden/
 target/release/vep \
-  --json_cache tests/golden/115/GRCh37/json_cache \
+  --json_cache tests/golden/116/GRCh37/json_cache \
   --assembly GRCh37 \
-  -i tests/golden/115/GRCh37/variants.vcf -o output.txt
+  -i tests/golden/116/GRCh37/variants.vcf -o output.txt
 ```
 
 For real data you need a JSON transcript cache. Build one natively with `vep-cache-builder` (GRCh38 shown; [docs/cache-setup.md](docs/cache-setup.md) explains each input and gives the GRCh37 command):

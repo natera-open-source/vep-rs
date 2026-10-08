@@ -5,7 +5,7 @@
 #
 # From the repository root:
 #   docker run --rm -v "$PWD/scripts/docker:/smoke:ro" \
-#     -v "$PWD/tests/golden/115/GRCh37:/corpus:ro" IMAGE bash /smoke/smoke_test.sh X.Y.Z
+#     -v "$PWD/tests/golden/116/GRCh37:/corpus:ro" IMAGE bash /smoke/smoke_test.sh X.Y.Z
 set -euo pipefail
 
 expected_version="${1:?usage: smoke_test.sh <expected version>}"

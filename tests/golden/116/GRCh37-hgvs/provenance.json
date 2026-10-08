@@ -1,0 +1,38 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "commit": "bb746e770ee9483383dca3814e4864f5e1a2eb67",
+  "binary_md5": "25f5f9400d736adb3d71773c0a370846",
+  "arch": "arm64",
+  "flags_passed": [
+   "--hgvs"
+  ]
+ },
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --hgvs --fasta reference.fa [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh37",
+ "json_cache_source": "json_cache_grch37_116",
+ "fasta": "GRCh37 chromosome 21, complete, from Homo_sapiens.GRCh37.75.dna.primary_assembly.fa (reference.fa.gz beside this file, with the .fai of the plain file)",
+ "input": "the release-115 corpus's variants.vcf, unchanged",
+ "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify --field HGVSc --field HGVSp",
+ "generated_at_utc": "2026-10-08T04:12:49Z",
+ "sha256": {
+  "default.txt": "f582d9768b41457b858743d0b68a400f4409b010a78822f74b207ff8bf4c563e",
+  "tab.txt": "104ed891705a2e2995abbb9b04cdc6d5c269d995fafb64ab36e9d86be20ed483",
+  "vcf.vcf": "3ce30bc1399fb7571486c4224eba3a3611022c9496140d37a2d031ea38e5cef4",
+  "json.jsonl": "54f63fc8c69e4fe45a13adf85ec594dd1e7ecbb117f6763ad86fa76e26c098cf"
+ },
+ "variants_vcf_sha256": "25486466cc68e72290d84b0e26a74869a3c57e3591d380a3360672d904865cde",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 839
+  },
+  "shards": 28,
+  "records_by_chromosome": {
+   "21": 293
+  }
+ }
+}

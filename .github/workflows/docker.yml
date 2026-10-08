@@ -86,7 +86,7 @@ jobs:
         with:
           ref: ${{ steps.meta.outputs.tag }}
           path: release-src
-          sparse-checkout: tests/golden/115/GRCh37
+          sparse-checkout: tests/golden/116/GRCh37
           persist-credentials: false
 
       - name: Stage the verified release binaries
@@ -104,7 +104,7 @@ jobs:
         run: >-
           docker run --rm
           -v "$PWD/scripts/docker:/smoke:ro"
-          -v "$PWD/release-src/tests/golden/115/GRCh37:/corpus:ro"
+          -v "$PWD/release-src/tests/golden/116/GRCh37:/corpus:ro"
           vep-rs:smoke bash /smoke/smoke_test.sh "${{ steps.meta.outputs.version }}"
 
       - name: Log in to GHCR

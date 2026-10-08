@@ -18,13 +18,13 @@ import prune_json_cache as pjc  # noqa: E402
 
 def test_auto_names_follow_vep_rules():
     assert bgc.vep_auto_names("21", 100, "A", ["G"]) == ["21_100_A/G"]
-    assert bgc.vep_auto_names("21", 100, "AT", ["A"]) == ["21_101_AT/A"]  # bi-allelic indel: raw alleles, trimmed start
-    assert bgc.vep_auto_names("21", 100, "A", ["AC"]) == ["21_101_A/AC"]
+    assert bgc.vep_auto_names("21", 100, "AT", ["A"]) == ["21_101_AT/A", "21_100_AT/A"]  # bi-allelic indel: raw alleles, trimmed start; then the release 116 line name
+    assert bgc.vep_auto_names("21", 100, "A", ["AC"]) == ["21_101_A/AC", "21_100_A/AC"]
     assert bgc.vep_auto_names("21", 100, "A", ["G", "T"]) == ["21_100_A/G/T"]  # multi-allelic SNV: no chop
-    assert bgc.vep_auto_names("21", 100, "TAG", ["TA", "T"]) == ["21_101_TAG/TA/T"]  # multi-allelic indel: raw alleles, chopped start
-    assert bgc.vep_auto_names("21", 100, "ATT", ["AT"]) == ["21_102_ATT/AT"]  # repeat: chop, then trim the shared T
+    assert bgc.vep_auto_names("21", 100, "TAG", ["TA", "T"]) == ["21_101_TAG/TA/T", "21_100_TAG/TA/T"]  # multi-allelic indel: raw alleles, chopped start
+    assert bgc.vep_auto_names("21", 100, "ATT", ["AT"]) == ["21_102_ATT/AT", "21_100_ATT/AT"]  # repeat: chop, then trim the shared T
     assert bgc.vep_auto_names("21", 100, "C", ["CT", "G"]) == ["21_100_C/CT/G"]  # mixed first bases: no chop
-    assert bgc.vep_auto_names("21", 100, "T", ["<CN0>"]) == ["21_100_<CN0>", "21_101_<CN0>"]
+    assert bgc.vep_auto_names("21", 100, "T", ["<CN0>"]) == ["21_100_<CN0>", "21_101_<CN0>", "21_100_T/<CN0>"]
     assert bgc.vep_auto_names("21", 100, "AT", ["TG"]) == ["21_100_AT/TG"]  # equal length: raw at POS
 
 

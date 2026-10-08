@@ -80,7 +80,7 @@ Keys appear in VEP's order: `IMPACT`, `DISTANCE`, `STRAND`, `FLAGS` (preceded by
 
 ### Example
 
-Two records of the GRCh37 golden corpus as Ensembl VEP 115.2 wrote them (`tests/golden/115/GRCh37/expected/default.txt.gz`): `1 213061271 806345 G C`, a missense change reported against four transcripts, and the ID-less multi-allelic site `21 10795228 . C G,T`, which overlaps no transcript:
+Two records of the GRCh37 golden corpus as Ensembl VEP 116.2 wrote them (`tests/golden/116/GRCh37/expected/default.txt.gz`): `1 213061271 806345 G C`, a missense change reported against four transcripts, and the ID-less multi-allelic site `21 10795228 . C G,T`, which overlaps no transcript:
 
 ```
 806345	1:213061271	C	ENSG00000162769	ENST00000366971	Transcript	missense_variant	1433	1235	412	G/A	gGa/gCa	-	IMPACT=MODERATE;STRAND=1
@@ -135,7 +135,7 @@ Selected with `--json` or `--output_format json`. JSON Lines, one object per inp
 
 ### Schema
 
-The two corpus records above as Ensembl VEP 115.2 wrote them (`expected/json.jsonl.gz`), pretty-printed with the keys in the order vep-rs emits them; VEP's key order is Perl hash order and varies from object to object. The `input` value is the record's own VCF line; the first one's INFO column is abridged here.
+The two corpus records above as Ensembl VEP 116.2 wrote them (`expected/json.jsonl.gz`), pretty-printed with the keys in the order vep-rs emits them; VEP's key order is Perl hash order and varies from object to object. The `input` value is the record's own VCF line; the first one's INFO column is abridged here.
 
 ```json
 {

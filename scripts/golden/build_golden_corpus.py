@@ -236,24 +236,27 @@ def choose_exemplars(
 
 
 def vep_auto_names(chrom: str, pos: int, ref: str, alts: list[str]) -> list[str]:
-    """Reproduce VEP's auto-generated Uploaded_variation for an ID-less VCF record.
+    """Reproduce VEP's auto-generated Uploaded_variation for an ID-less VCF record,
+    every form a release wrote.
 
-    The alleles are always the RAW REF and ALTs joined by `/` (VEP's
-    `nontrimmed_allele_string`). The start is the variant's after parsing: unchanged
-    when no allele differs in length from REF; for a bi-allelic indel the first shared
-    base is chopped and the alleles are then trimmed from both ends
-    (`trim_sequences`); for a multi-allelic indel the first base is chopped when every
-    allele (ignoring `*`) shares it. Symbolic and breakend alleles: `chr_start_<ALT...>`
-    with start POS or POS+1 (both are returned; which one VEP used depends on whether
-    the REF base was padding).
+    Release 116 names the record from its own line: `CHROM_POS_REF/ALT1/ALT2`, as
+    written, which is the last name returned. Release 115 named it from the parsed
+    variant: the RAW REF and ALTs joined by `/` (VEP's `nontrimmed_allele_string`)
+    after a start that is unchanged when no allele differs in length from REF; for a
+    bi-allelic indel the first shared base is chopped and the alleles are then
+    trimmed from both ends (`trim_sequences`); for a multi-allelic indel the first
+    base is chopped when every allele (ignoring `*`) shares it. Symbolic and breakend
+    alleles: `chr_start_<ALT...>` with start POS or POS+1 (both are returned; which
+    one VEP used depends on whether the REF base was padding).
     """
+    raw = "/".join([ref] + alts)
+    line_name = f"{chrom}_{pos}_{raw}"
     if any(a.startswith("<") or "[" in a or "]" in a for a in alts):
         joined = "/".join(alts)
-        return [f"{chrom}_{pos}_{joined}", f"{chrom}_{pos + 1}_{joined}"]
-    raw = "/".join([ref] + alts)
-    if not any(len(a) != len(ref) for a in alts):
-        return [f"{chrom}_{pos}_{raw}"]
-    if len(alts) == 1:
+        names = [f"{chrom}_{pos}_{joined}", f"{chrom}_{pos + 1}_{joined}"]
+    elif not any(len(a) != len(ref) for a in alts):
+        names = [line_name]
+    elif len(alts) == 1:
         r, a, start = ref, alts[0], pos
         if r[:1] == a[:1]:
             r, a, start = r[1:] or "-", a[1:] or "-", start + 1
@@ -261,10 +264,14 @@ def vep_auto_names(chrom: str, pos: int, ref: str, alts: list[str]) -> list[str]
             r, a, start = r[1:], a[1:], start + 1
         while r and a and r[-1] == a[-1]:
             r, a = r[:-1], a[:-1]
-        return [f"{chrom}_{start}_{raw}"]
-    firsts = {x[:1] for x in [ref] + alts if "*" not in x}
-    start = pos + 1 if len(firsts) == 1 else pos
-    return [f"{chrom}_{start}_{raw}"]
+        names = [f"{chrom}_{start}_{raw}"]
+    else:
+        firsts = {x[:1] for x in [ref] + alts if "*" not in x}
+        start = pos + 1 if len(firsts) == 1 else pos
+        names = [f"{chrom}_{start}_{raw}"]
+    if line_name not in names:
+        names.append(line_name)
+    return names
 
 
 MULTI_ALLELIC_STRATA = ("multi_allelic_snv", "multi_allelic_indel", "multi_allelic_indel_trimmable")

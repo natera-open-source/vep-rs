@@ -1,0 +1,41 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "commit": "bb746e770ee9483383dca3814e4864f5e1a2eb67",
+  "binary_md5": "25f5f9400d736adb3d71773c0a370846",
+  "arch": "arm64",
+  "flags_passed": [
+   "--protein"
+  ],
+  "note": "the binary rejects --protein_version, --mask_header_cache_path and --max_sv_size -1; classified with --protein alone"
+ },
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "json_cache_source": "json_cache_grch38_116",
+ "fasta": "none on either side",
+ "input": "hand-built records",
+ "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify",
+ "generated_at_utc": "2026-10-08T04:08:53Z",
+ "sha256": {
+  "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
+  "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
+  "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
+  "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+ },
+ "variants_vcf_sha256": "17ff2ad01af94ed03f556fa162b302132a223ca73101ab05919de760b59f8d9f",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 2741,
+   "22": 90
+  },
+  "shards": 22,
+  "records_by_chromosome": {
+   "21": 46,
+   "22": 2
+  }
+ }
+}
