@@ -45,7 +45,7 @@ body:
     attributes:
       label: Cache and reference
       description: Assembly and Ensembl release, whether the JSON cache came from `vep-cache-builder` or from converting a Perl VEP cache, and the `--fasta` file if you passed one.
-      placeholder: GRCh38, release 115, built with vep-cache-builder
+      placeholder: GRCh38, release 116, built with vep-cache-builder
     validations:
       required: true
   - type: textarea

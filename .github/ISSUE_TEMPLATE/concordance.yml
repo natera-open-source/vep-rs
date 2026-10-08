@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        vep-rs matches Perl VEP (`ensemblorg/ensembl-vep`, release 115) exactly, except for a small set of documented divergences, most of them Perl VEP defects that vep-rs deliberately does not reproduce. Before filing, check three things. The [Results](https://github.com/natera-open-source/vep-rs/blob/main/README.md#results) section of the README describes the documented divergence classes. [docs/cli-reference.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/cli-reference.md#compatibility-with-perl-vep) lists flags that are accepted but not implemented. Each `tests/golden/<release>/<assembly>/manifest.json` lists the consequence keys whose terms are documented to differ.
+        vep-rs matches Perl VEP (`ensemblorg/ensembl-vep`, release 116) exactly, except for a small set of documented divergences, most of them Perl VEP defects that vep-rs deliberately does not reproduce. Before filing, check three things. [docs/intended-divergences.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/intended-divergences.md) describes the documented divergence classes. [docs/cli-reference.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/cli-reference.md#compatibility-with-perl-vep) lists flags that are accepted but not implemented. Each `tests/golden/<release>/<assembly>/manifest.json` lists the consequence keys whose terms are documented to differ.
   - type: input
     id: version
     attributes:
@@ -18,7 +18,7 @@ body:
     attributes:
       label: Perl VEP version
       description: Release, or the Docker image tag or digest.
-      placeholder: ensemblorg/ensembl-vep:release_115.2
+      placeholder: ensemblorg/ensembl-vep:release_116.2
     validations:
       required: true
   - type: textarea

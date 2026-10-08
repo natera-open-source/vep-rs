@@ -452,7 +452,7 @@ Two data tiers share the layout of `scripts/data/plugin_data_layout.sh`. `quick`
 scripts/concordance/run_concordance.sh \
   --assembly GRCh38 \
   --perl-cache-dir /path/to/vep_cache \
-  --json-cache-dir ~/.vep/json_cache/homo_sapiens/115_GRCh38 \
+  --json-cache-dir ~/.vep/json_cache/homo_sapiens/116_GRCh38 \
   --fasta /path/to/Homo_sapiens.GRCh38.dna.primary_assembly.fa \
   --benchmark-dir .vep/vcf/grch38/all_variants \
   --plugins CADD,REVEL,gnomADc \
