@@ -42,12 +42,18 @@ enum CopyNumberClass {
     Generic,
 }
 
-/// Parse the copy number from the ALT allele string.
+/// The copy-number reading of a variant annotated as a copy number variation.
 ///
-/// Matches Perl VEP's `VCF.pm` classification:
-///   CN0 → Deletion, CN2 → Duplication, everything else → Generic.
+/// A variant that carries its record's SO term belongs to a `copy_number_variation`
+/// record, and Perl VEP's `deletion` and `duplication` predicates test that
+/// `class_SO_term` alone (VariationEffect.pm), so `<CN0>` beside `<CN2>` is neither
+/// a deletion nor a duplication. The ALT bytes decide only for a variant built
+/// without a record term: CN0 → Deletion, CN2 → Duplication, everything else → Generic.
 fn parse_copy_number(variant: &InputVariant) -> CopyNumberClass {
-    // Use the raw alt allele bytes (not display_allele() which returns the SO term for SVs).
+    if variant.record_so_term.is_some() {
+        return CopyNumberClass::Generic;
+    }
+    // The raw alt allele bytes, not display_allele(), which returns the SO term for SVs.
     let alt = String::from_utf8_lossy(variant.alt_allele());
     let upper = alt.to_ascii_uppercase();
 
@@ -523,6 +529,26 @@ mod tests {
     fn test_parse_copy_number_generic_cnv() {
         let v = make_cnv(b"<CNV>", 100, 200);
         assert_eq!(parse_copy_number(&v), CopyNumberClass::Generic);
+    }
+
+    /// A `<CN0>` allele of a `copy_number_variation` record keeps the record's
+    /// reading: Perl's `deletion` predicate tests the record's `class_SO_term`
+    /// alone (VariationEffect.pm `deletion`, `copy_number_loss`), so the allele's
+    /// own copy number never makes it a deletion. Ensembl VEP 116.2 writes
+    /// `coding_sequence_variant,3_prime_UTR_variant` and `IMPACT=MODIFIER` on both
+    /// rows of `21 30165840 multi_cn0_cn2 N <CN0>,<CN2>` against ENST00000286808 in
+    /// the GRCh38-release116 golden corpus, never `feature_truncation`.
+    #[test]
+    fn a_record_term_makes_every_allele_generic() {
+        let mut v = make_cnv(b"<CN0>", 24_999_000, 25_007_000);
+        v.record_so_term = Some("copy_number_variation".into());
+        assert_eq!(parse_copy_number(&v), CopyNumberClass::Generic);
+        let tc = calculate(&v, &make_test_transcript(), 5000, 5000).unwrap();
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::CodingTranscriptVariant]
+        );
+        assert_eq!(tc.impact, Impact::MODIFIER);
     }
 
     #[test]

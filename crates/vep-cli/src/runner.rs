@@ -106,7 +106,7 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
         .to_string();
         let value = match inline_value {
             Some(v) => Some(v),
-            None if i + 1 < args.len() && !args[i + 1].starts_with('-') => {
+            None if i + 1 < args.len() && is_option_value(&args[i + 1]) => {
                 i += 1;
                 Some(args[i].clone())
             }
@@ -126,6 +126,15 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
         }
     }
     out
+}
+
+/// Whether the token after a flag is its value: anything not opening with `-`,
+/// and a negative number (`--max_sv_size -1`), which no flag name resembles.
+fn is_option_value(token: &str) -> bool {
+    match token.strip_prefix('-') {
+        None => true,
+        Some(rest) => rest.starts_with(|c: char| c.is_ascii_digit()),
+    }
 }
 
 /// `[PATH]/<basename>` for each path in a value (`,`-separated lists included),
@@ -1631,6 +1640,24 @@ mod tests {
             vep_command_line(args.iter().map(|s| s.to_string())),
             "vep --force_overwrite --input_file [PATH]/sample.vcf --json_cache [PATH]/grch37 \
              --offline --output_file out.txt --species homo_sapiens"
+        );
+    }
+
+    /// Config.pm `full_command` prints every flag with its value, so Ensembl VEP
+    /// 116.2's header reads `--max_sv_size -1` for the unlimited span; the negative
+    /// number stays with its flag, while a flag followed by another flag stays bare
+    /// and an ordinary `--flag value` pair is unchanged.
+    #[test]
+    fn command_line_keeps_a_negative_value_with_its_flag() {
+        let args = ["--max_sv_size", "-1", "--distance", "5000", "--offline"];
+        assert_eq!(
+            vep_command_line(args.iter().map(|s| s.to_string())),
+            "vep --distance 5000 --max_sv_size -1 --offline"
+        );
+        let args = ["--offline", "--max_sv_size", "-1"];
+        assert_eq!(
+            vep_command_line(args.iter().map(|s| s.to_string())),
+            "vep --max_sv_size -1 --offline"
         );
     }
     use std::sync::Arc;
