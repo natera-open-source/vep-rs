@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import hashlib
 import gzip
+import random
 import sys
 from pathlib import Path
 
@@ -17,14 +18,16 @@ import prune_json_cache as pjc  # noqa: E402
 
 
 def test_auto_names_follow_vep_rules():
+    # The first name is release 116's, the raw line as CHR_POS_REF/ALTs; the rest are the
+    # earlier releases' minimised names.
     assert bgc.vep_auto_names("21", 100, "A", ["G"]) == ["21_100_A/G"]
-    assert bgc.vep_auto_names("21", 100, "AT", ["A"]) == ["21_101_AT/A", "21_100_AT/A"]  # bi-allelic indel: raw alleles, trimmed start; then the release 116 line name
-    assert bgc.vep_auto_names("21", 100, "A", ["AC"]) == ["21_101_A/AC", "21_100_A/AC"]
+    assert bgc.vep_auto_names("21", 100, "AT", ["A"]) == ["21_100_AT/A", "21_101_AT/A"]  # bi-allelic indel: raw alleles, trimmed start
+    assert bgc.vep_auto_names("21", 100, "A", ["AC"]) == ["21_100_A/AC", "21_101_A/AC"]
     assert bgc.vep_auto_names("21", 100, "A", ["G", "T"]) == ["21_100_A/G/T"]  # multi-allelic SNV: no chop
-    assert bgc.vep_auto_names("21", 100, "TAG", ["TA", "T"]) == ["21_101_TAG/TA/T", "21_100_TAG/TA/T"]  # multi-allelic indel: raw alleles, chopped start
-    assert bgc.vep_auto_names("21", 100, "ATT", ["AT"]) == ["21_102_ATT/AT", "21_100_ATT/AT"]  # repeat: chop, then trim the shared T
+    assert bgc.vep_auto_names("21", 100, "TAG", ["TA", "T"]) == ["21_100_TAG/TA/T", "21_101_TAG/TA/T"]  # multi-allelic indel: raw alleles, chopped start
+    assert bgc.vep_auto_names("21", 100, "ATT", ["AT"]) == ["21_100_ATT/AT", "21_102_ATT/AT"]  # repeat: chop, then trim the shared T
     assert bgc.vep_auto_names("21", 100, "C", ["CT", "G"]) == ["21_100_C/CT/G"]  # mixed first bases: no chop
-    assert bgc.vep_auto_names("21", 100, "T", ["<CN0>"]) == ["21_100_<CN0>", "21_101_<CN0>", "21_100_T/<CN0>"]
+    assert bgc.vep_auto_names("21", 100, "T", ["<CN0>"]) == ["21_100_T/<CN0>", "21_100_<CN0>", "21_101_<CN0>"]
     assert bgc.vep_auto_names("21", 100, "AT", ["TG"]) == ["21_100_AT/TG"]  # equal length: raw at POS
 
 
@@ -33,9 +36,14 @@ def test_variant_class_inference():
     assert bgc.variant_class("21:101", "-") == "deletion"
     assert bgc.variant_class("21:100-101", "C") == "insertion"
     assert bgc.variant_class("21:100-105", "-") == "deletion"
-    assert bgc.variant_class("21:100-105", "deletion") == "symbolic"
+    assert bgc.variant_class("21:100-105", "deletion") == "symbolic_deletion"
+    assert bgc.variant_class("21:100-105", "Alu_insertion") == "symbolic_Alu_insertion"
     assert bgc.variant_class("21:100-101", "TG") == "insertion"
     assert bgc.variant_class("21:100", "TG") == "mnv_or_complex"
+    assert bgc.variant_class("21:100", "A[21:200[") == "breakend"
+    assert bgc.variant_class("21:100", "]MT:200]G") == "breakend"  # the mate's contig name is not inserted sequence
+    assert bgc.variant_class("21:100", "[21:200[TTGA") == "breakend_insertion"
+    assert bgc.variant_class("21:100", ".G") == "single_breakend"
 
 
 def _row(uv, loc, allele, feat, cons, extra="IMPACT=MODIFIER;STRAND=1"):
@@ -185,6 +193,76 @@ def test_select_focus_terms_take_more_exemplars(tmp_path: Path):
     assert 4 <= len(m["records"]) <= 5
     # Without --flag or --fasta-name the manifest carries neither key.
     assert "flags" not in m and "fasta" not in m
+
+
+def test_select_with_a_cache_takes_the_exemplar_that_costs_the_fewest_bytes(tmp_path: Path):
+    """Two records show the same combination in the same stratum; with --cache the one whose
+    reachable transcripts deflate smaller is chosen, and the manifest records the flank."""
+    cache = tmp_path / "cache"
+    (cache / "transcripts" / "21").mkdir(parents=True)
+    heavy = {"stable_id": "ENST_HEAVY", "start": "100", "end": "900", "variation_effect_feature_cache": {"peptide": "MKV" * 4000}}
+    light = {"stable_id": "ENST_LIGHT", "start": "500100", "end": "500900"}
+    (cache / "transcripts" / "21" / "1-1000000.json").write_text(json.dumps([heavy, light]))
+    ref = tmp_path / "ref.txt"
+    ref.write_text(_row("rs_heavy", "21:500", "G", "ENST_HEAVY", "missense_variant") + _row("rs_light", "21:500500", "G", "ENST_LIGHT", "missense_variant"), encoding="utf-8")
+    vcf = tmp_path / "in.vcf"
+    vcf.write_text("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t500\trs_heavy\tA\tG\t.\tPASS\t.\n21\t500500\trs_light\tA\tG\t.\tPASS\t.\n", encoding="utf-8")
+    common = ["select", "--release", "116", "--assembly", "GRCh38", "--suite", f"sel={ref}={vcf}", "--k", "1", "--multi-allelic-per-suite", "0"]
+    picked = set()
+    for seed in range(1, 7):
+        out = tmp_path / f"plain{seed}"
+        assert bgc.main(common + ["--out", str(out), "--seed", str(seed)]) == 0
+        picked.add(json.loads((out / "manifest.json").read_text())["records"][0]["vcf"].split("\t")[2])
+        out = tmp_path / f"costed{seed}"
+        assert bgc.main(common + ["--out", str(out), "--seed", str(seed), "--cache", str(cache)]) == 0
+        m = json.loads((out / "manifest.json").read_text())
+        assert [r["vcf"].split("\t")[2] for r in m["records"]] == ["rs_light"]
+        assert m["cache_cost_flank"] == 5000
+    assert picked == {"rs_heavy", "rs_light"}, "without a cache the tie is broken by the seed"
+    cost = bgc.CacheCost(cache, 5000)
+    far = bgc.Row("sel", "x", "21:600000", "G", "ENST_LIGHT", "Transcript", "intron_variant", "1", "", ("-", "-", "-"))
+    assert cost.row_cost(far) == 0, "nothing within the flank"
+    mate = bgc.Row("sel", "x", "21:600000", "N[21:400[", "ENST_HEAVY", "Transcript", "feature_truncation", "1", "", ("-", "-", "-"))
+    assert cost.row_cost(mate) == cost.span_cost("21", 400, 600000) > cost.span_cost("21", 500500, 500500) > 0
+
+
+def test_select_keeps_an_exemplar_of_every_variant_class(tmp_path: Path):
+    """A class no chosen exemplar shows (here a breakend with inserted sequence, outranked by
+    a cheaper SNV for the same combination) still gets one record, and the manifest lists
+    the classes with their exemplar rows."""
+    ref = tmp_path / "ref.txt"
+    ref.write_text(
+        _row("rs1", "21:100", "G", "ENST1", "feature_truncation")
+        + _row("bnd1", "21:300000", "[21:300900[TTGC", "ENST2", "feature_truncation"),
+        encoding="utf-8",
+    )
+    vcf = tmp_path / "in.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "21\t100\trs1\tA\tG\t.\tPASS\t.\n"
+        "21\t300000\tbnd1\tC\t[21:300900[TTGC\t.\tPASS\tSVTYPE=BND\n",
+        encoding="utf-8",
+    )
+    cache = tmp_path / "cache"
+    (cache / "transcripts" / "21").mkdir(parents=True)
+    (cache / "transcripts" / "21" / "1-1000000.json").write_text(json.dumps([
+        {"stable_id": "ENST1", "start": "50", "end": "150"},
+        {"stable_id": "ENST2", "start": "299000", "end": "301000", "variation_effect_feature_cache": {"peptide": "MKV" * 400}},
+    ]))
+    out = tmp_path / "corpus"
+    rc = bgc.main(["select", "--release", "116", "--assembly", "GRCh38", "--suite", f"sel={ref}={vcf}", "--out", str(out),
+                   "--k", "1", "--seed", "1", "--multi-allelic-per-suite", "0", "--cache", str(cache)])
+    assert rc == 0
+    m = json.loads((out / "manifest.json").read_text())
+    by_id = {r["vcf"].split("\t")[2]: r for r in m["records"]}
+    assert by_id["rs1"]["combinations"] == ["feature_truncation"]
+    assert by_id["bnd1"]["combinations"] == ["feature_truncation"]
+    assert m["variant_classes"] == {"breakend_insertion": 1, "snv": 1}
+    assert m["combinations"]["feature_truncation"]["exemplar_records"] == 2
+    # Without the class guarantee the cheaper SNV alone would carry the combination.
+    rows = list(bgc.iter_rows(ref, "sel"))
+    chosen = bgc.choose_exemplars({"feature_truncation": rows}, 1, random.Random(1), 0, (), None, bgc.CacheCost(cache, 5000).row_cost)
+    assert [r.uploaded_variation for r in chosen["feature_truncation"]] == ["rs1"]
 
 
 def test_classify_records_field_divergences_on_agreeing_keys(tmp_path: Path):

@@ -10,10 +10,12 @@ Subcommands:
 
   select    Stream one or more VEP default-format reference outputs, enumerate the distinct
             consequence sets they contain, choose up to K exemplar records per set
-            (stratified by variant class and transcript strand, preferring records that
-            exercise transcript flags, coordinate ranges and unmappable ends), resolve each
-            exemplar back to its input VCF record, and write `variants.vcf` plus
-            `manifest.json`.
+            (stratified by variant class and transcript strand; when `--cache` names the
+            JSON cache the fixture is pruned from, the records whose transcripts cost the
+            fixture cache the fewest bytes come first, then the records that exercise
+            transcript flags, coordinate ranges and unmappable ends; every variant class
+            seen keeps at least one exemplar), resolve each exemplar back to its input VCF
+            record, and write `variants.vcf` plus `manifest.json`.
   classify  Compare a VEP default-format output for `variants.vcf` with a vep-rs output for
             the same file and record, per exemplar row VEP emits that vep-rs does not, the
             documented divergence class that explains it (or `unexplained_residual`), so the
@@ -36,19 +38,15 @@ import json
 import random
 import re
 import sys
+import zlib
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import IO, Iterable, Iterator
+from typing import Callable, Iterable, Iterator
 
 GENERATOR_VERSION = "2"
 RESERVOIR = 64
-SO_CLASS_WORDS = {
-    "deletion", "duplication", "inversion", "insertion", "copy_number_variation",
-    "tandem_duplication", "mobile_element_insertion", "tandem_repeat", "indel",
-    "sequence_alteration", "chromosome_breakpoint", "SNV", "substitution",
-    "copy_number_gain", "copy_number_loss", "translocation",
-}
+SEQUENCE_CLASSES = ("snv", "deletion", "insertion", "mnv_or_complex")
 DEFAULT_COLUMNS = (
     "Uploaded_variation", "Location", "Allele", "Gene", "Feature", "Feature_type",
     "Consequence", "cDNA_position", "CDS_position", "Protein_position", "Amino_acids",
@@ -78,9 +76,19 @@ def parse_extra(raw: str) -> dict[str, str]:
 
 
 def variant_class(location: str, allele: str) -> str:
-    """Infer VEP's variant shape from the Location and Allele columns of one row."""
-    if allele in SO_CLASS_WORDS or (allele and not re.fullmatch(r"[ACGTNacgtn*-]+", allele)):
-        return "symbolic"
+    """Infer VEP's variant shape from the Location and Allele columns of one row: one of
+    `SEQUENCE_CLASSES` for a sequence allele; `breakend`, or `breakend_insertion` when the
+    bracket allele carries inserted sequence (more than the anchor base outside the brackets);
+    `single_breakend`; and `symbolic_<word>` for the class word VEP prints for a symbolic
+    allele (`symbolic_deletion`, `symbolic_Alu_insertion`). Each is annotated by a path of its
+    own, so each is a stratum of its own."""
+    if "[" in allele or "]" in allele:
+        bases = re.sub(r"[\[\]][^\[\]]*[\[\]]", "", allele)
+        return "breakend_insertion" if len(bases) > 1 else "breakend"
+    if allele.startswith(".") or allele.endswith("."):
+        return "single_breakend"
+    if allele and not re.fullmatch(r"[ACGTNacgtn*-]+", allele):
+        return f"symbolic_{allele}"
     span = location.split(":", 1)[1] if ":" in location else location
     if allele == "-":
         return "deletion"
@@ -169,6 +177,70 @@ def parse_suite_arg(arg: str) -> tuple[str, Path, Path]:
     return parts[0], Path(parts[1]), Path(parts[2])
 
 
+BND_MATE = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
+SHARD_NAME = re.compile(r"^(\d+)-(\d+)\.json(\.gz)?$")
+
+
+class CacheCost:
+    """Compressed bytes a row adds to the fixture cache `prune_json_cache.py` cuts for it:
+    every transcript of the source cache whose span, extended by `flank`, overlaps the row's
+    location (and a bracket breakend's mate position), costed at its own deflate size. A
+    shard is read on first touch; the source stores a transcript in every shard it reaches,
+    so only the shards overlapping the flanked location are read."""
+
+    def __init__(self, cache: Path, flank: int) -> None:
+        self.flank = flank
+        self.shards: dict[str, list[tuple[int, int, Path]]] = {}
+        for chrom_dir in (cache / "transcripts").iterdir():
+            self.shards[chrom_dir.name] = sorted(
+                (int(m.group(1)), int(m.group(2)), shard)
+                for shard in chrom_dir.iterdir()
+                if (m := SHARD_NAME.match(shard.name))
+            )
+        self.loaded: dict[Path, list[tuple[int, int, int]]] = {}
+        self.memo: dict[tuple[str, int, int], int] = {}
+
+    def transcripts(self, shard: Path) -> list[tuple[int, int, int]]:
+        if shard not in self.loaded:
+            with opener(shard)(shard, "rt", encoding="utf-8") as handle:
+                records = json.load(handle)
+            self.loaded[shard] = [
+                (int(t["start"]), int(t["end"]),
+                 len(zlib.compress(json.dumps(t, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))))
+                for t in records
+            ]
+        return self.loaded[shard]
+
+    def span_cost(self, chrom: str, start: int, end: int) -> int:
+        key = (chrom, start, end)
+        if key not in self.memo:
+            lo, hi = start - self.flank, end + self.flank
+            total = 0
+            for shard_start, shard_end, shard in self.shards.get(chrom, ()):
+                if shard_start <= hi and shard_end >= lo:
+                    total += sum(b for t_start, t_end, b in self.transcripts(shard) if t_start <= hi and t_end >= lo)
+            self.memo[key] = total
+        return self.memo[key]
+
+    def row_cost(self, row: Row) -> int:
+        chrom, _, coords = row.location.partition(":")
+        a, _, b = coords.partition("-")
+        try:
+            start, end = int(a), int(b or a)
+        except ValueError:
+            return 0
+        start, end = min(start, end), max(start, end)
+        total = self.span_cost(chrom, start, end)
+        for m in BND_MATE.finditer(row.allele):
+            mate_chrom, mate_pos = m.group(1).removeprefix("chr"), int(m.group(2))
+            if mate_chrom == chrom:
+                # A same-chromosome mate is annotated over the whole breakend-pair span.
+                total = self.span_cost(chrom, min(start, mate_pos), max(end, mate_pos))
+            else:
+                total += self.span_cost(mate_chrom, mate_pos, mate_pos)
+        return total
+
+
 # ----------------------------------------------------------------------------- select
 def reservoir_pass(suites: list[tuple[str, Path, Path]], seed: int) -> tuple[dict[str, list[Row]], Counter[str], dict[str, Counter[str]]]:
     """One streaming pass: per consequence set, a bounded uniform sample of rows plus counts."""
@@ -191,6 +263,35 @@ def reservoir_pass(suites: list[tuple[str, Path, Path]], seed: int) -> tuple[dic
     return reservoir, seen, per_suite
 
 
+def exemplar_order(row: Row, max_span: int, cost: Callable[[Row], int] | None) -> tuple[int, int, int]:
+    """Sort key of a candidate row: no wider than `max_span` (when > 0) first, then the fewest
+    cache bytes under `cost`, then the highest preference."""
+    return (1 if max_span and row.span > max_span else 0, cost(row) if cost else 0, -row.preference())
+
+
+def ensure_class_exemplars(
+    chosen: dict[str, list[Row]],
+    reservoir: dict[str, list[Row]],
+    max_span: int,
+    cost: Callable[[Row], int] | None,
+) -> dict[str, list[Row]]:
+    """Every variant class the references show keeps an exemplar: a class no chosen row has
+    takes, from the whole reservoir, the row that sorts first in `exemplar_order`, added to the
+    combination it was sampled for."""
+    covered = {r.klass for rows in chosen.values() for r in rows}
+    best: dict[str, tuple[tuple[int, int, int], str, Row]] = {}
+    for combo, rows in reservoir.items():
+        for r in rows:
+            if r.klass in covered:
+                continue
+            key = exemplar_order(r, max_span, cost)
+            if r.klass not in best or key < best[r.klass][0]:
+                best[r.klass] = (key, combo, r)
+    for _key, combo, r in best.values():
+        chosen.setdefault(combo, []).append(r)
+    return chosen
+
+
 def choose_exemplars(
     reservoir: dict[str, list[Row]],
     k: int,
@@ -198,12 +299,16 @@ def choose_exemplars(
     max_span: int = 0,
     focus_terms: Iterable[str] = (),
     focus_k: int | None = None,
+    cost: Callable[[Row], int] | None = None,
 ) -> dict[str, list[Row]]:
-    """Up to K rows per combination, distinct (class, strand) first, higher preference first.
+    """Up to K rows per combination, distinct (class, strand) first, in `exemplar_order`.
 
     Rows wider than `max_span` bases (when > 0) come after every narrower row, so a
     combination takes a wide structural variant only when nothing narrower shows it:
-    each wide record pulls every transcript of its span into the fixture cache.
+    each wide record pulls every transcript of its span into the fixture cache. With
+    `cost` (bytes the row adds to the fixture cache, `CacheCost.row_cost`) the cheapest
+    rows come next, then the higher preference; without it the preference alone orders
+    the rows and ties fall in random order.
 
     A combination containing any of `focus_terms` takes up to `focus_k` rows instead of
     `k`, so a corpus can carry many exemplars of the consequence shapes it exists to test
@@ -215,7 +320,7 @@ def choose_exemplars(
         want = focus_k if focus_k is not None and focus & set(combo.split(",")) else k
         cands = list(reservoir[combo])
         rng.shuffle(cands)
-        cands.sort(key=lambda r: (1 if max_span and r.span > max_span else 0, -r.preference()))
+        cands.sort(key=lambda r: exemplar_order(r, max_span, cost))
         picked: list[Row] = []
         strata_seen: set[tuple[str, str]] = set()
         for r in cands:
@@ -236,42 +341,38 @@ def choose_exemplars(
 
 
 def vep_auto_names(chrom: str, pos: int, ref: str, alts: list[str]) -> list[str]:
-    """Reproduce VEP's auto-generated Uploaded_variation for an ID-less VCF record,
-    in every form a VEP release writes.
+    """Reproduce VEP's auto-generated Uploaded_variation for an ID-less VCF record.
 
-    Release 116 names the record from its own line, `CHROM_POS_REF/ALT1/ALT2`, the
-    last name returned. Release 115 names it from the parsed variant, with the raw
-    REF and ALTs joined by `/` (VEP's `nontrimmed_allele_string`) and the start
-    after parsing: unchanged when no allele differs in length from REF; for a
-    bi-allelic indel the first shared base is chopped and the alleles are then
-    trimmed from both ends (`trim_sequences`); for a multi-allelic indel the first
-    base is chopped when every allele (ignoring `*`) shares it. Symbolic and breakend
-    alleles: `chr_start_<ALT...>` with start POS or POS+1 (both are returned; which
-    one VEP uses depends on whether the REF base is padding).
+    Release 116 (ensembl-vep PR 1941) names the record from the raw line,
+    `CHR_POS_REF/ALT1/ALT2`, and that name comes first. The earlier releases' names
+    follow: the alleles are the RAW REF and ALTs joined by `/` (VEP's
+    `nontrimmed_allele_string`) and the start is the variant's after parsing: unchanged
+    when no allele differs in length from REF; for a bi-allelic indel the first shared
+    base is chopped and the start then advances over the shared leading bases
+    (`trim_sequences`, whose trailing trim moves only the end); for a multi-allelic
+    indel the first base is chopped when every allele (ignoring `*`) shares it. Symbolic
+    and breakend alleles: `chr_start_<ALT...>` with start POS or POS+1 (both are
+    returned; which one VEP used depends on whether the REF base was padding).
     """
-    raw = "/".join([ref] + alts)
-    line_name = f"{chrom}_{pos}_{raw}"
+    alleles = [ref] + alts
+    raw = "/".join(alleles)
+    names = [f"{chrom}_{pos}_{raw}"]
     if any(a.startswith("<") or "[" in a or "]" in a for a in alts):
         joined = "/".join(alts)
-        names = [f"{chrom}_{pos}_{joined}", f"{chrom}_{pos + 1}_{joined}"]
-    elif not any(len(a) != len(ref) for a in alts):
-        names = [line_name]
+        names += [f"{chrom}_{pos}_{joined}", f"{chrom}_{pos + 1}_{joined}"]
     elif len(alts) == 1:
         r, a, start = ref, alts[0], pos
-        if r[:1] == a[:1]:
-            r, a, start = r[1:] or "-", a[1:] or "-", start + 1
-        while r and a and r[0] == a[0]:
-            r, a, start = r[1:], a[1:], start + 1
-        while r and a and r[-1] == a[-1]:
-            r, a = r[:-1], a[:-1]
-        names = [f"{chrom}_{start}_{raw}"]
-    else:
-        firsts = {x[:1] for x in [ref] + alts if "*" not in x}
-        start = pos + 1 if len(firsts) == 1 else pos
-        names = [f"{chrom}_{start}_{raw}"]
-    if line_name not in names:
-        names.append(line_name)
-    return names
+        if len(r) != len(a):
+            if r[:1] == a[:1]:
+                r, a, start = r[1:] or "-", a[1:] or "-", start + 1
+            while r and a and r[0] == a[0]:
+                r, a, start = r[1:], a[1:], start + 1
+            names.append(f"{chrom}_{start}_{raw}")
+    elif any(len(a) != len(ref) for a in alts):
+        firsts = {x[:1] for x in alleles if "*" not in x}
+        if len(firsts) == 1:
+            names.append(f"{chrom}_{pos + 1}_{raw}")
+    return list(dict.fromkeys(names))
 
 
 MULTI_ALLELIC_STRATA = ("multi_allelic_snv", "multi_allelic_indel", "multi_allelic_indel_trimmable")
@@ -370,7 +471,9 @@ def cmd_select(args: argparse.Namespace) -> int:
     suites = [parse_suite_arg(s) for s in args.suite]
     rng = random.Random(args.seed)
     reservoir, seen, per_suite = reservoir_pass(suites, args.seed)
-    chosen = choose_exemplars(reservoir, args.k, rng, args.max_span, args.focus_term or (), args.focus_k)
+    cost = CacheCost(Path(args.cache), args.flank).row_cost if args.cache else None
+    chosen = choose_exemplars(reservoir, args.k, rng, args.max_span, args.focus_term or (), args.focus_k, cost)
+    chosen = ensure_class_exemplars(chosen, reservoir, args.max_span, cost)
     wanted: dict[str, set[str]] = defaultdict(set)
     for combo, rows in chosen.items():
         for r in rows:
@@ -440,11 +543,13 @@ def cmd_select(args: argparse.Namespace) -> int:
         "exemplars_per_combination": args.k,
         **({"focus_terms": sorted(args.focus_term), "focus_exemplars_per_combination": args.focus_k} if args.focus_term else {}),
         "max_span": args.max_span,
+        **({"cache_cost_flank": args.flank} if args.cache else {}),
         **run_options(args),
         # File names only: the directory each suite was staged in belongs to the build
         # host, not to the corpus, and the tests read neither field.
         "suites": {sid: {"reference": Path(ref).name, "input": Path(inp).name, "rows": sum(per_suite[sid].values()), "combinations": len(per_suite[sid])} for sid, ref, inp in suites},
         "combinations": {c: {"observed_rows": seen[c], "exemplar_records": sum(1 for _k, rec in ordered if c in rec["combinations"])} for c in sorted(seen)},
+        "variant_classes": dict(sorted(Counter(r.klass for rows in chosen.values() for r in rows).items())),
         "records": [
             {"suite": rec["suite"], "vcf": rec["vcf"], "combinations": sorted(rec["combinations"]), **({"strata": rec["strata"]} if rec.get("strata") else {})}
             for _k, rec in ordered
@@ -454,7 +559,10 @@ def cmd_select(args: argparse.Namespace) -> int:
         "unresolved_exemplars": missing,
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
-    print(f"combinations observed {len(seen)}, covered {len(covered)}, records {len(ordered)}, unresolved exemplars {len(missing)}")
+    classes = manifest["variant_classes"]
+    class_counts = ", ".join(f"{k} {v}" for k, v in classes.items())
+    print(f"combinations observed {len(seen)}, covered {len(covered)}, records {len(ordered)}, unresolved exemplars {len(missing)}, "
+          f"variant classes {len(classes)} ({class_counts})")
     return 0 if not missing and not manifest["uncovered_combinations"] else 1
 
 
@@ -573,7 +681,7 @@ def cmd_classify(args: argparse.Namespace) -> int:
                 if klass:
                     break
             if klass is None and not rust_sets:
-                klass = "vep_only_transcript" if variant_class(key[0], key[1]) == "symbolic" else None
+                klass = "vep_only_transcript" if variant_class(key[0], key[1]) not in SEQUENCE_CLASSES else None
             divergences.append({
                 "location": key[0], "allele": key[1], "feature": key[2], "feature_type": key[3],
                 "record_indices": records_for(key),
@@ -663,6 +771,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--focus-term", action="append",
                    help="a consequence term; combinations containing it take --focus-k exemplars")
     s.add_argument("--focus-k", type=int, default=None, help="exemplars per focus combination")
+    s.add_argument("--cache", default=None,
+                   help="the JSON cache the fixture cache is pruned from; exemplars whose transcripts add fewer "
+                        "bytes to it come first, ahead of the flag and position preferences")
+    s.add_argument("--flank", type=int, default=5000,
+                   help="the transcript flank the pruner keeps around each record, in bases (its --flank)")
     add_run_options(s)
     s.set_defaults(fn=cmd_select)
     c = sub.add_parser("classify")

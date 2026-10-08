@@ -81,7 +81,8 @@ pinned vep-rs binary), record the VEP image digest and the expected files'
 sha256 in `provenance.json`, and commit the new directory; older directories
 stay until their release is dropped. Each corpus must stay under 15 MB on
 disk (`each_corpus_fits_its_size_budget`); prefer narrower exemplars
-(`--max-span`) over a larger cache.
+(`--max-span`) and, with `select --cache <json cache>`, the exemplars whose
+transcripts add the fewest bytes to the pruned cache, over a larger cache.
 
 ## Parity matrix
 
