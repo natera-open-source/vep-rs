@@ -306,7 +306,9 @@ def _raw_string_hashes(text: str, i: int) -> int | None:
     """The hash count of a raw string literal starting at `text[i] == "r"` (`r"…"`, `r#"…"#`,
     `br"…"`), or None when the `r` is part of an identifier or no quote follows."""
     before = text[i - 1] if i > 0 else ""
-    if before in IDENT_CHARS and not (before == "b" and (i < 2 or text[i - 2] not in IDENT_CHARS)):
+    if before == "b":
+        before = text[i - 2] if i > 1 else ""
+    if before in IDENT_CHARS:
         return None
     j = i + 1
     while j < len(text) and text[j] == "#":

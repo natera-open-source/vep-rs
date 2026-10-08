@@ -237,17 +237,17 @@ def choose_exemplars(
 
 def vep_auto_names(chrom: str, pos: int, ref: str, alts: list[str]) -> list[str]:
     """Reproduce VEP's auto-generated Uploaded_variation for an ID-less VCF record,
-    every form a release wrote.
+    in every form a VEP release writes.
 
-    Release 116 names the record from its own line: `CHROM_POS_REF/ALT1/ALT2`, as
-    written, which is the last name returned. Release 115 named it from the parsed
-    variant: the RAW REF and ALTs joined by `/` (VEP's `nontrimmed_allele_string`)
-    after a start that is unchanged when no allele differs in length from REF; for a
+    Release 116 names the record from its own line, `CHROM_POS_REF/ALT1/ALT2`, the
+    last name returned. Release 115 names it from the parsed variant, with the raw
+    REF and ALTs joined by `/` (VEP's `nontrimmed_allele_string`) and the start
+    after parsing: unchanged when no allele differs in length from REF; for a
     bi-allelic indel the first shared base is chopped and the alleles are then
     trimmed from both ends (`trim_sequences`); for a multi-allelic indel the first
     base is chopped when every allele (ignoring `*`) shares it. Symbolic and breakend
     alleles: `chr_start_<ALT...>` with start POS or POS+1 (both are returned; which
-    one VEP used depends on whether the REF base was padding).
+    one VEP uses depends on whether the REF base is padding).
     """
     raw = "/".join([ref] + alts)
     line_name = f"{chrom}_{pos}_{raw}"

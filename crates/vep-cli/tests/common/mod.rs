@@ -19,7 +19,7 @@
 //! than for equality. `field_divergences` names keys whose terms agree but whose
 //! named field (an HGVS string) is documented to differ, with the value vep-rs
 //! prints; every other field of such a key compares exactly. A record VEP
-//! skipped (`reference_rows` 0 with a `reference_warning`) has no reference
+//! skipped (`reference_rows` 0, or a `reference_warning`) has no reference
 //! output; whatever vep-rs writes for it is counted, not compared.
 //!
 //! The VCF and JSON formats carry no `Location`, so their entries are keyed by
@@ -28,7 +28,7 @@
 
 #![allow(dead_code)]
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -279,30 +279,22 @@ pub fn parse_tab(text: &str) -> Vec<Entry> {
 /// where an output ordinal would not. Identical input lines are matched in
 /// order of appearance.
 struct InputIndex {
-    by_key: HashMap<String, Vec<usize>>,
-    used: HashMap<String, usize>,
+    unmatched: HashMap<String, VecDeque<usize>>,
 }
 
 impl InputIndex {
     /// `key` reduces an input line to the identity the output format carries.
     fn new(inputs: &[String], key: impl Fn(&str) -> String) -> Self {
-        let mut by_key: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut unmatched: HashMap<String, VecDeque<usize>> = HashMap::new();
         for (i, line) in inputs.iter().enumerate() {
-            by_key.entry(key(line)).or_default().push(i);
+            unmatched.entry(key(line)).or_default().push_back(i);
         }
-        InputIndex {
-            by_key,
-            used: HashMap::new(),
-        }
+        InputIndex { unmatched }
     }
 
     /// The ordinal of the next unmatched input record with this identity.
     fn record(&mut self, key: &str) -> Option<usize> {
-        let candidates = self.by_key.get(key)?;
-        let n = self.used.entry(key.to_string()).or_insert(0);
-        let r = candidates.get(*n).copied();
-        *n += 1;
-        r
+        self.unmatched.get_mut(key)?.pop_front()
     }
 }
 
@@ -501,8 +493,8 @@ pub struct Documented {
     /// documented to print where VEP prints another.
     fields_by_location: HashMap<(String, String, String), BTreeMap<String, String>>,
     fields_by_record: HashMap<(usize, String, String), BTreeMap<String, String>>,
-    /// Records VEP skipped with a warning (`reference_rows` 0): it wrote no
-    /// output for them, so nothing vep-rs writes for them has a reference.
+    /// Records VEP skipped (`reference_rows` 0, or a `reference_warning`): it
+    /// writes no output for one, so nothing vep-rs writes for it has a reference.
     skipped_records: BTreeSet<usize>,
 }
 
@@ -526,9 +518,7 @@ impl Documented {
             .flatten()
             .enumerate()
         {
-            let skipped = rec["reference_rows"].as_u64() == Some(0)
-                || rec.get("reference_warning").is_some_and(|w| w.is_string());
-            if skipped {
+            if rec["reference_rows"].as_u64() == Some(0) || rec["reference_warning"].is_string() {
                 d.skipped_records.insert(i);
             }
         }
@@ -591,6 +581,22 @@ impl Documented {
         d
     }
 
+    /// The documented field values on an entry's key: those under its Location
+    /// when it has one and that key is documented, else those under its record.
+    fn divergent_fields(&self, e: &Entry) -> Option<&BTreeMap<String, String>> {
+        let (allele, feature) = (dash(&e.allele), dash(&e.feature));
+        if let Some(loc) = &e.location {
+            if let Some(m) =
+                self.fields_by_location
+                    .get(&(loc.clone(), allele.clone(), feature.clone()))
+            {
+                return Some(m);
+            }
+        }
+        let record = e.record?;
+        self.fields_by_record.get(&(record, allele, feature))
+    }
+
     /// The documented vep-rs value of `field` for an entry, when the field is
     /// documented to differ on its key. `field` is matched as the format spells
     /// it: the manifest names the default-format key (`HGVSp`), the JSON format
@@ -603,21 +609,12 @@ impl Documented {
                     .map(|(_, v)| v)
             })
         }
-        let (allele, feature) = (dash(&e.allele), dash(&e.feature));
-        if let Some(loc) = &e.location {
-            if let Some(m) =
-                self.fields_by_location
-                    .get(&(loc.clone(), allele.clone(), feature.clone()))
-            {
-                return lookup(m, field);
-            }
-        }
-        if let Some(r) = e.record {
-            if let Some(m) = self.fields_by_record.get(&(r, allele, feature)) {
-                return lookup(m, field);
-            }
-        }
-        None
+        self.divergent_fields(e).and_then(|m| lookup(m, field))
+    }
+
+    /// Whether any field of the entry is documented to differ.
+    pub fn has_divergent_fields(&self, e: &Entry) -> bool {
+        self.divergent_fields(e).is_some()
     }
 
     /// Documented vep-rs consequence sets for an entry, if its key is documented.
@@ -669,17 +666,6 @@ impl Documented {
     /// vep-rs's output for it against.
     pub fn reference_skipped(&self, record: usize) -> bool {
         self.skipped_records.contains(&record)
-    }
-
-    /// Whether any field of the entry is documented to differ.
-    pub fn has_divergent_fields(&self, e: &Entry) -> bool {
-        let (allele, feature) = (dash(&e.allele), dash(&e.feature));
-        e.location.as_ref().is_some_and(|loc| {
-            self.fields_by_location
-                .contains_key(&(loc.clone(), allele.clone(), feature.clone()))
-        }) || e
-            .record
-            .is_some_and(|r| self.fields_by_record.contains_key(&(r, allele, feature)))
     }
 
     pub fn is_empty(&self) -> bool {
