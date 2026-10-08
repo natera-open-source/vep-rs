@@ -453,15 +453,15 @@ impl Args {
         let message = if self.regulatory_gff.is_some() {
             "--regulatory_gff is not supported: it would annotate regulatory features \
              and motifs from a GFF3 file in place of the cache, and regulatory annotation \
-             is a feature of a later release"
+             is not supported"
         } else if self.extended_promoters {
             "--extended_promoters is not supported: it would widen the promoters read \
              with --regulatory_gff to their extended bounds, and regulatory annotation is \
-             a feature of a later release"
+             not supported"
         } else if self.custom_suppress_filter {
             "--custom_suppress_filter is not supported: it would keep a --custom VCF \
              source's FILTER column out of the output unless --fields names it, and custom \
-             annotation is a feature of a later release"
+             annotation is not supported"
         } else {
             return None;
         };
@@ -625,7 +625,7 @@ mod tests {
             Some(
                 "--regulatory_gff is not supported: it would annotate regulatory features \
                  and motifs from a GFF3 file in place of the cache, and regulatory annotation \
-                 is a feature of a later release"
+                 is not supported"
             )
         );
     }
@@ -639,7 +639,7 @@ mod tests {
             Some(
                 "--extended_promoters is not supported: it would widen the promoters read \
                  with --regulatory_gff to their extended bounds, and regulatory annotation is \
-                 a feature of a later release"
+                 not supported"
             )
         );
     }
@@ -653,7 +653,7 @@ mod tests {
             Some(
                 "--custom_suppress_filter is not supported: it would keep a --custom VCF \
                  source's FILTER column out of the output unless --fields names it, and custom \
-                 annotation is a feature of a later release"
+                 annotation is not supported"
             )
         );
     }

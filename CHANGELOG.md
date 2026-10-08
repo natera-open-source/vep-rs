@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `--protein_version` appends the translation version to the `ENSP` identifier (`ENSP00000286808.3`) when `--protein` prints it, as Ensembl VEP 116 does. (#N)
 - `--mask_header_cache_path` prints the cache directory as `[PATH]/<leaf>` in the default and `--tab` headers, the VCF `cache=` token and the Parquet footer. (#N)
-- `--regulatory_gff`, `--extended_promoters` and `--custom_suppress_filter` are refused with an error naming what each would do; regulatory and custom annotation are features of a later release. (#N)
+- `--regulatory_gff`, `--extended_promoters` and `--custom_suppress_filter` are refused with an error naming what each would do; regulatory and custom annotation are not supported. (#N)
 - `--reference-release {115.2,116.2}` on both comparators selects the Ensembl VEP release scored against (116.2 default, sets aside the records it skips); the runners derive it from the reference's provenance. (#N)
 
 ### Changed

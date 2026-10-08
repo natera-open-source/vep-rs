@@ -270,7 +270,7 @@ What the flag tables above mark "Accepted for VEP compatibility" is the whole li
 
 **Input formats.** `--format` takes `vcf`, `ensembl` (the tab-delimited default format), `hgvs` and `region` (`chr:start-end/allele` and `chr:start-end:strand/allele`), or `guess`. HGVS input is genomic (`:g.`) only; `:c.`, `:n.`, `:p.` and `:r.` notation is rejected as not implemented. The `id`, `spdi` and `caid` formats are not read: Perl VEP resolves all three through its variation database and refuses them in `--offline` mode.
 
-**Refused flags.** Three Ensembl VEP 116 flags are declared so that the command line names them, and refused with an error that says what each would do: `--regulatory_gff` and `--extended_promoters` belong to regulatory annotation, `--custom_suppress_filter` to custom annotation, both features of a later release.
+**Refused flags.** Three Ensembl VEP 116 flags are declared so that the command line names them, and refused with an error that says what each would do: `--regulatory_gff` and `--extended_promoters` belong to regulatory annotation, `--custom_suppress_filter` to custom annotation; neither is supported.
 
 **No database mode.** vep-rs is offline-first and never contacts a database; `--database`, `--host`, `--port`, `--user` and `--password` do not exist and are rejected as unknown flags. The transcript set is the `--json_cache` contents ([cache-setup.md](cache-setup.md)), so `--refseq`, `--merged` and `--gencode_basic` select nothing.
 
