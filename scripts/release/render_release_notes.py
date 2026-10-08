@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """Render the GitHub release body for a vep-rs version from the repository's own files.
 
-Every line of the body except the hand-written summary, upgrade notes and known issues is derived:
-the CHANGELOG section for the version, the release's provenance record, SHA256SUMS, CITATION.cff's DOIs,
-the workspace rust-version and the build's commit and toolchain.
+The page, every header `##`, in this order: the hand-written opener, then `## Highlights` and
+`## Upgrade notes` when `.github/release-notes/vX.Y.Z.md` carries them (its lines are the only
+hand-written ones); the version's CHANGELOG.md section with each `###` kind header raised to `##`;
+`## Concordance and wall time` from the release and population provenance records; `## Install`
+from SHA256SUMS, the build and the workspace rust-version; `## Cite` from CITATION.cff; and the
+full-changelog footer. A page runs about 60 lines; one over 80 is refused.
 
 usage: render_release_notes.py --repo DIR --version X.Y.Z --previous vX.Y.Z --commit SHA
-                               --toolchain 1.97.1 [--sha256sums FILE] [--notes FILE]
+                               --toolchain 1.97.1 --sha256sums FILE [--notes FILE]
                                [--changelog-section NAME] [--date YYYY-MM-DD] [--out FILE]
 
-The release workflow runs it on a tag (the CHANGELOG section of the version, dated by the release
-commit) and on a dry run (`--changelog-section Unreleased --date <today>`).
+A dry run before the CHANGELOG has the version's dated section passes
+`--changelog-section Unreleased --date <today>`.
 """
 
 from __future__ import annotations
@@ -24,36 +27,40 @@ from pathlib import Path
 
 REPO_URL = "https://github.com/natera-open-source/vep-rs"
 CONCEPT_DOI = "10.5281/zenodo.22837896"
+LINE_CAP = 80
 SCORED = ("s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08")
-SNP_INDEL = ("s01", "s02", "s03", "s04", "s05", "s06")
-TARGETS = (
-    (
-        "x86_64-unknown-linux-gnu",
-        "Linux x86_64 (glibc 2.39 or later)",
-        "x86-64-v3: AVX2, BMI2, FMA (Intel Haswell 2013 or later, AMD Zen or later)",
+TARGETS = {
+    "x86_64-unknown-linux-gnu": (
+        "Linux x86_64, glibc 2.39 or later",
+        "x86-64-v3 (AVX2, BMI2, FMA: Intel Haswell 2013 or later, AMD Zen or later)",
     ),
-    (
-        "aarch64-unknown-linux-gnu",
-        "Linux aarch64 (glibc 2.39 or later)",
-        "Armv8.4-A with SVE (Arm Neoverse V1 or later: AWS Graviton3 and later; not Graviton2, Ampere Altra or Raspberry Pi)",
+    "aarch64-unknown-linux-gnu": (
+        "Linux aarch64, glibc 2.39 or later",
+        "Armv8.4-A with SVE (Arm Neoverse V1 or later: AWS Graviton3 and later, not Graviton2, Ampere Altra or Raspberry Pi)",
     ),
-    (
-        "aarch64-apple-darwin",
-        "macOS 11 or later on Apple silicon",
-        "any Apple M-series",
-    ),
-)
-ABOUT = (
-    "> vep-rs is a from-scratch Rust implementation of the Ensembl Variant Effect Predictor: the same\n"
-    "> inputs and flags, VEP's consequence vocabulary in VEP's output formats plus Parquet, measured for\n"
-    "> concordance against Ensembl VEP at population scale."
-)
+    "aarch64-apple-darwin": ("macOS 11 or later on Apple silicon", "any Apple M-series"),
+}
+SUITE_LABELS = {
+    "s01": ("ClinVar full", "GRCh37"),
+    "s02": ("ClinVar full", "GRCh38"),
+    "s03": ("gnomAD v2.1.1 chr21", "GRCh37"),
+    "s04": ("gnomAD v4.1 chr21", "GRCh38"),
+    "s05": ("1KG Phase 3 chr21", "GRCh37"),
+    "s06": ("1KG high-cov chr21", "GRCh38"),
+    "s07": ("SV per-VCF (16 files)", "GRCh37"),
+    "s08": ("SV per-VCF (16 files)", "GRCh38"),
+}
+LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+\.)\s")
+BULLET = re.compile(r"[-*] ")
+SENTENCE_END = re.compile(r"[.!?][\"'`)\]]*(?=\s|$)")
+
+
+def fail(message: str) -> None:
+    sys.exit(f"ERROR: [render_release_notes] {message}")
 
 
 def half_up(x: float, places: int) -> str:
-    return str(
-        Decimal(str(x)).quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
-    )
+    return str(Decimal(str(x)).quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP))
 
 
 def f1_9(intersection, a, b) -> str:
@@ -64,16 +71,16 @@ def f1_9(intersection, a, b) -> str:
     return str(q.quantize(Decimal("0.000000001"), rounding=ROUND_HALF_UP))
 
 
+def whole_seconds(x: Decimal) -> str:
+    return f"{int(x.quantize(Decimal(1), rounding=ROUND_HALF_UP)):,}"
+
+
 def changelog_section(text: str, name: str) -> tuple[str, str | None]:
     """Return (body, date) of the `## [name]` section, body without the heading."""
-    pattern = re.compile(
-        rf"^## \[{re.escape(name)}\](?: - (\d{{4}}-\d{{2}}-\d{{2}}))?[^\n]*\n", re.MULTILINE
-    )
+    pattern = re.compile(rf"^## \[{re.escape(name)}\](?: - (\d{{4}}-\d{{2}}-\d{{2}}))?[^\n]*\n", re.MULTILINE)
     m = pattern.search(text)
     if not m:
-        sys.exit(
-            f"ERROR: [render_release_notes] no '## [{name}]' section in CHANGELOG.md"
-        )
+        fail(f"no '## [{name}]' section in CHANGELOG.md")
     rest = text[m.end() :]
     nxt = re.search(r"^## \[", rest, re.MULTILINE)
     body = rest[: nxt.start()] if nxt else rest
@@ -81,25 +88,104 @@ def changelog_section(text: str, name: str) -> tuple[str, str | None]:
     return body, m.group(1)
 
 
-def hand_written(path: Path | None) -> dict[str, str]:
-    """The maintainer's lines: the first paragraph is the summary; optional '## Upgrade notes' and
-    '## Known issues' sections are copied through."""
-    out = {"summary": "", "upgrade": "", "known": ""}
-    if path is None or not path.exists():
+def unwrap_bullets(text: str) -> str:
+    """Join each list item's wrapped continuation lines (indented, not list items themselves, outside a
+    fenced block) into its line, so the page carries one physical line per bullet in the changelog's words."""
+    out: list[str] = []
+    fenced = False
+    for line in text.split("\n"):
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        elif (
+            not fenced
+            and out
+            and line.startswith("  ")
+            and line.strip()
+            and not LIST_ITEM.match(line)
+            and LIST_ITEM.match(out[-1])
+        ):
+            out[-1] = out[-1] + " " + line.strip()
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def kind_blocks(section: str) -> list[str]:
+    """The page blocks of a CHANGELOG section: text before the first kind header as it stands, then each
+    `### Kind` header as `## Kind` followed by its content; a kind with no content is dropped."""
+    groups: list[tuple[str | None, list[str]]] = [(None, [])]
+    for line in unwrap_bullets(section).split("\n"):
+        m = re.match(r"^### (.+)$", line)
+        if m:
+            groups.append((m.group(1).strip(), []))
+        else:
+            groups[-1][1].append(line)
+    blocks: list[str] = []
+    for kind, lines in groups:
+        content = "\n".join(lines).strip("\n")
+        if not content:
+            continue
+        if kind is not None:
+            blocks.append(f"## {kind}")
+        blocks.append(content)
+    return blocks
+
+
+def hand_written(path: Path) -> dict[str, str]:
+    """The maintainer's lines: the opener paragraph, then the optional `## Highlights` and
+    `## Upgrade notes` sections, each bullet on one line; any other section is an error."""
+    out = {"opener": "", "highlights": "", "upgrade": ""}
+    if not path.exists():
         return out
-    text = path.read_text()
-    text = re.sub(r"^# .*\n", "", text, count=1)
+    text = re.sub(r"^# .*\n", "", path.read_text(), count=1)
     parts = re.split(r"^## ", text, flags=re.MULTILINE)
-    out["summary"] = parts[0].strip()
+    out["opener"] = parts[0].strip()
     for part in parts[1:]:
         title, _, body = part.partition("\n")
-        key = {"Upgrade notes": "upgrade", "Known issues": "known"}.get(title.strip())
+        key = {"Highlights": "highlights", "Upgrade notes": "upgrade"}.get(title.strip())
         if key is None:
-            sys.exit(
-                f"ERROR: [render_release_notes] unknown section '## {title.strip()}' in {path}"
-            )
-        out[key] = body.strip()
+            fail(f"unknown section '## {title.strip()}' in {path}")
+        out[key] = unwrap_bullets(body.strip("\n")).strip()
     return out
+
+
+def bullets_only(name: str, body: str, notes: Path) -> list[str]:
+    lines = [line for line in body.splitlines() if line.strip()]
+    if any(not BULLET.match(line) for line in lines):
+        fail(f"'## {name}' in {notes} is bullets only")
+    return lines
+
+
+def check_hand_written(hand: dict[str, str], section: str, notes: Path) -> None:
+    """The opener is one paragraph of at most two sentences and 50 words; Highlights, when present, is two
+    to four bullets over a CHANGELOG section of at least three; Upgrade notes, when present, is one to five
+    bullets with every `**Breaking:**` bullet before the first that is not."""
+    opener = hand["opener"]
+    if not opener:
+        fail("the release-notes file needs an opener paragraph")
+    if "\n\n" in opener:
+        fail(f"the opener in {notes} is more than one paragraph")
+    words = len(opener.split())
+    if words > 50:
+        fail(f"the opener in {notes} is {words} words; at most 50")
+    sentences = len(SENTENCE_END.findall(opener))
+    if sentences > 2:
+        fail(f"the opener in {notes} is {sentences} sentences; at most two")
+    if hand["highlights"]:
+        lines = bullets_only("Highlights", hand["highlights"], notes)
+        if not 2 <= len(lines) <= 4:
+            fail(f"'## Highlights' in {notes} has {len(lines)} bullets; two to four")
+        changes = sum(1 for line in unwrap_bullets(section).splitlines() if BULLET.match(line))
+        if changes < 3:
+            fail(f"'## Highlights' needs at least three CHANGELOG bullets; the section has {changes}")
+    if hand["upgrade"]:
+        lines = bullets_only("Upgrade notes", hand["upgrade"], notes)
+        if not 1 <= len(lines) <= 5:
+            fail(f"'## Upgrade notes' in {notes} has {len(lines)} bullets; one to five")
+        breaking = [line[2:].startswith("**Breaking:**") for line in lines]
+        first_plain = breaking.index(False) if False in breaking else len(breaking)
+        if any(breaking[first_plain:]):
+            fail(f"'## Upgrade notes' in {notes} lists a **Breaking:** bullet after one that is not")
 
 
 def read_doi(cff: Path, version: str) -> str | None:
@@ -121,158 +207,123 @@ def read_doi(cff: Path, version: str) -> str | None:
     return None
 
 
-SUITE_LABELS = {
-    "s01": ("ClinVar full", "GRCh37"),
-    "s02": ("ClinVar full", "GRCh38"),
-    "s03": ("gnomAD v2.1.1 chr21", "GRCh37"),
-    "s04": ("gnomAD v4.1 chr21", "GRCh38"),
-    "s05": ("1KG Phase 3 chr21", "GRCh37"),
-    "s06": ("1KG high-cov chr21", "GRCh38"),
-    "s07": ("SV per-VCF (16 files)", "GRCh37"),
-    "s08": ("SV per-VCF (16 files)", "GRCh38"),
-}
-
-
-def load_release_measurements(repo: Path, version: str):
-    """The release's provenance record (docs/concordance-provenance/<date>-release-v<version>.json):
-    its per-suite concordance and per-cell wall-time aggregates. The record, not a file under
-    manuscript/data, carries a release's own measurements."""
-    records = sorted((repo / "docs" / "concordance-provenance").glob(f"*-release-v{version}.json"))
+def latest_record(repo: Path, kind: str, version: str) -> Path:
+    """The last docs/concordance-provenance/<date>-<kind>-v<version>.json by name, which is the latest date."""
+    pattern = f"*-{kind}-v{version}.json"
+    records = sorted((repo / "docs" / "concordance-provenance").glob(pattern))
     if not records:
-        sys.exit(
-            f"ERROR: [render_release_notes] no docs/concordance-provenance/*-release-v{version}.json"
-        )
-    record_path = records[-1]
+        fail(f"no docs/concordance-provenance/{pattern}")
+    return records[-1]
+
+
+def load_release_record(repo: Path, version: str) -> tuple[dict, dict, str]:
+    """The release record's per-suite concordance, its whole-genome concordance and the record directory's path."""
+    record_path = latest_record(repo, "release", version)
     record = json.loads(record_path.read_text())
     conc = record.get("concordance") or {}
-    walls = {
-        (cell["arch"], cell["suite_id"]): (float(cell["median_sec"]), int(cell["n_clones"]))
-        for cell in record.get("per_cell_aggregates") or []
-    }
     missing = [s for s in SCORED if s not in conc]
     if missing:
-        sys.exit(
-            f"ERROR: [render_release_notes] {record_path.name} lacks concordance rows for {missing}"
-        )
-    return conc, walls, record_path.relative_to(repo).as_posix(), record.get("population_concordance")
+        fail(f"{record_path.name} lacks concordance rows for {missing}")
+    pop = record.get("population_concordance")
+    if not pop:
+        fail(f"{record_path.name} lacks population_concordance")
+    return conc, pop, record_path.relative_to(repo).parent.as_posix()
 
 
-def load_population_record(repo: Path, version: str) -> dict | None:
-    """The release's population record (docs/concordance-provenance/<date>-population-v<version>.json):
-    the whole-genome wall time per dataset and architecture. None when the release has none."""
-    records = sorted((repo / "docs" / "concordance-provenance").glob(f"*-population-v{version}.json"))
-    return json.loads(records[-1].read_text()) if records else None
+def load_population_record(repo: Path, version: str) -> dict:
+    """The release's population record: the whole-genome wall time per chromosome and architecture."""
+    return json.loads(latest_record(repo, "population", version).read_text())
 
 
-def population_wall_time_lines(population: dict) -> list[str]:
-    """The whole-genome wall-time line: per dataset, the sum of the per-chromosome medians on each
-    architecture, with the instance types the record names."""
-    wt = population["wall_time"]["vep_rs"]
-    types = wt["instance_types"]
-    n = int(wt["n_clones_per_cell"])
-    labels = {d["dataset"]: short_label(d["label"]) for d in population["datasets"]}
-    sums = {(c["dataset"], c["arch"]): float(c["sum_of_cell_medians_sec"]) for c in wt["per_dataset"]}
-    cells = [
-        f"{labels[d['dataset']]} {int(round(sums[(d['dataset'], 'arm64')])):,} s ARM / "
-        f"{int(round(sums[(d['dataset'], 'x86_64')])):,} s x86"
-        for d in population["datasets"]
-    ]
-    return [
-        "",
-        f"Whole-genome wall time as the sum of the per-chromosome medians, each the median of {n} independent",
-        f"machines, ARM Graviton4 (`{types['arm64']}`) and x86 Intel (`{types['x86_64']}`), 16 threads, local NVMe,",
-        "sites-only inputs, the discarded warmup's output deleted before the timed run: " + "; ".join(cells) + ".",
-    ]
+def comparator_version(population: dict, pop: dict) -> str:
+    """The Ensembl VEP release the whole genome was scored against: the population record's
+    `ensembl_vep` engine version, else the release number in the release record's reference prefix."""
+    engine = (population.get("wall_time") or {}).get("ensembl_vep") or {}
+    m = re.search(r"(\d+(?:\.\d+)?)$", str(engine.get("engine_version", "")))
+    if m:
+        return m.group(1)
+    m = re.search(r"_r(\d+(?:\.\d+)?)_", str(pop.get("perl_reference_prefix", "")))
+    if m:
+        return m.group(1)
+    fail("neither record names the Ensembl VEP version")
+
+
+def wall_time_sums(population: dict) -> dict[tuple[str, str], Decimal]:
+    """Per (dataset, arch), the sum of the per-chromosome wall-time medians of the released binary."""
+    sums: dict[tuple[str, str], Decimal] = {}
+    for cell in population["wall_time"]["vep_rs"]["per_cell"]:
+        key = (cell["dataset"], cell["arch"])
+        sums[key] = sums.get(key, Decimal(0)) + Decimal(str(cell["median_sec"]))
+    return sums
+
+
+def peak_rss_gb(population: dict) -> str:
+    """The largest per-chromosome median peak RSS of the released binary, the record's MB over 1000 at one
+    decimal, the README's own reading of the same field."""
+    peak = max(float(c["peak_rss_mb_median"]) for c in population["wall_time"]["vep_rs"]["per_cell"])
+    return half_up(peak / 1000, 1)
 
 
 def short_label(label: str) -> str:
-    """A dataset label without its ', whole genome' suffix: the table's heading carries the scale."""
+    """A dataset label without its ', whole genome' suffix: the caption carries the scale."""
     return label.replace(", whole genome", "")
 
 
-def population_lines(pop: dict) -> list[str]:
-    """The whole-genome table: one row per population dataset in the record's order and the
-    pooled row, from the record's population_concordance section, whose rows carry their own
-    labels less the ', whole genome' suffix (variants are VCF records; tuples are output rows
-    reduced to Location, Allele, Feature, Feature_type and Consequence set); the two F1 columns
-    follow the chromosome count so they are read before the counts."""
-    lines = [
-        "",
-        "Whole-genome concordance of the released binary on four population datasets, one run per",
-        "chromosome on ARM Graviton4, against Ensembl VEP 115.2's output on the same inputs; a variant is",
-        "one VCF record, a tuple one output row reduced to its Location, Allele, Feature, Feature_type and",
-        "Consequence set, and F1 pools the chromosomes by summed counts:",
-        "",
-        "| Dataset | Assembly | Chromosomes | Raw F1 | Adjusted F1 | Variants | VEP tuples | vep-rs tuples | Matched |",
-        "| ------- | -------- | ----------- | ------ | ----------- | -------- | ---------- | ------------- | ------- |",
-    ]
-    for r in pop["per_dataset"]:
-        lines.append(
-            f"| {short_label(r['label'])} | {r['assembly']} | {int(r['shards'])} | {f1_9(r['intersection'], r['perl_tuples'], r['vep_rs_tuples'])} | "
-            f"{half_up(float(r['adjusted_f1']), 9)} | {int(r['variants']):,} | {int(r['perl_tuples']):,} | {int(r['vep_rs_tuples']):,} | {int(r['intersection']):,} |"
-        )
-    p = pop["pooled"]
-    lines.append(
-        f"| {p['label']} | GRCh37 and GRCh38 | {int(p['shards'])} | {f1_9(p['intersection'], p['perl_tuples'], p['vep_rs_tuples'])} | "
-        f"{half_up(float(p['adjusted_f1']), 9)} | {int(p['variants']):,} | {int(p['perl_tuples']):,} | {int(p['vep_rs_tuples']):,} | {int(p['intersection']):,} |"
-    )
-    return lines
+def whole_genome_row(label: str, entry: dict, arm: Decimal, x86: Decimal) -> str:
+    """A whole-genome row: raw F1 over every tuple and adjusted F1 over the tuples left after the excluded
+    counts, both from the integer counts, then the wall time per architecture."""
+    i, a, b = int(entry["intersection"]), int(entry["perl_tuples"]), int(entry["vep_rs_tuples"])
+    adjusted = f1_9(i, a - int(entry["excluded_perl"]), b - int(entry["excluded_rust"]))
+    return f"| {label} | {f1_9(i, a, b)} | {adjusted} | {whole_seconds(arm)} | {whole_seconds(x86)} |"
 
 
-def measurements_section(repo: Path, version: str, date: str) -> str:
-    """The whole-genome concordance table and wall-time line first (the release record's
-    population_concordance and the population record), then the chromosome 21 suites: the eight-row
-    table and their wall-time line."""
-    conc, walls, record_rel, pop = load_release_measurements(repo, version)
+def measurements_blocks(repo: Path, version: str) -> list[str]:
+    """The whole-genome table (one row per population dataset and the pooled row: raw and adjusted F1
+    from the release record's counts, wall time per architecture from the population record) under its
+    caption, then the chromosome 21 table over the eight scored suites under its caption. A suite row's
+    adjusted F1 is the record's `adj_f1`: the suite rows carry no excluded counts to derive it from."""
+    conc, pop, record_dir = load_release_record(repo, version)
     population = load_population_record(repo, version)
-    record_dir = record_rel.rsplit("/", 1)[0]
-    lines = [
-        "## Concordance and wall time for this release",
-        "",
-        "The paper's published figures are unchanged; these are the released version's own, from the",
-        f"release's provenance records under [`{record_dir}/`]({REPO_URL}/tree/v{version}/{record_dir})",
-        "(method: `scripts/concordance/run_clone_measurement.sh`).",
-    ]
-    if pop:
-        lines += population_lines(pop)
-    if population:
-        lines += population_wall_time_lines(population)
-    if pop or population:
-        lines += ["", "The chromosome 21 suites, the paper's cells measured on the released binary:"]
-    lines += [
-        "",
-        "| Dataset | Assembly | Raw F1 | Adjusted F1 | VEP tuples | vep-rs tuples | Matched |",
-        "| ------- | -------- | ------ | ----------- | ---------- | ------------- | ------- |",
-    ]
+    vep_rs = population["wall_time"]["vep_rs"]
+    types = vep_rs["instance_types"]
+    sums = wall_time_sums(population)
+    caption = (
+        f"Whole genome against Ensembl VEP {comparator_version(population, pop)}, one run per chromosome; "
+        f"wall time is the sum of the per-chromosome medians of {int(vep_rs['n_clones_per_cell'])} machines "
+        f"at {int(population['fork'])} threads on `{types['arm64']}` (ARM) and `{types['x86_64']}` (x86); "
+        f"peak memory at most {peak_rss_gb(population)} GB on any chromosome; tuple counts and "
+        f"per-chromosome rows are in the [provenance records]({REPO_URL}/tree/v{version}/{record_dir})."
+    )
+    rows = ["| Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) |", "| --- | --- | --- | --- | --- |"]
+    total = {"arm64": Decimal(0), "x86_64": Decimal(0)}
+    for r in pop["per_dataset"]:
+        dataset = r["dataset"]
+        if any((dataset, arch) not in sums for arch in total):
+            fail(f"the population record has no wall time for {dataset}")
+        for arch in total:
+            total[arch] += sums[(dataset, arch)]
+        rows.append(whole_genome_row(short_label(r["label"]), r, sums[(dataset, "arm64")], sums[(dataset, "x86_64")]))
+    p = pop["pooled"]
+    rows.append(whole_genome_row(p["label"], p, total["arm64"], total["x86_64"]))
+    chr21_caption = (
+        "The paper's chromosome 21 cells measured on the released binary; the paper's own figures stay as "
+        f"published in [docs/published-figures.md]({REPO_URL}/blob/v{version}/docs/published-figures.md)."
+    )
+    chr21 = ["| Dataset | Assembly | Raw F1 | Adjusted F1 |", "| --- | --- | --- | --- |"]
     for s in SCORED:
         r = conc[s]
         dataset, assembly = SUITE_LABELS[s]
-        lines.append(
-            f"| {dataset} | {assembly} | {f1_9(r['intersection'], r['perl'], r['rust'])} | {half_up(float(r['adj_f1']), 9)} | "
-            f"{int(r['perl']):,} | {int(r['rust']):,} | {int(r['intersection']):,} |"
+        chr21.append(
+            f"| {dataset} | {assembly} | {f1_9(r['intersection'], r['perl'], r['rust'])} | {half_up(float(r['adj_f1']), 9)} |"
         )
-    n = next(iter(walls.values()))[1] if walls else 0
-    cells = []
-    for s in SNP_INDEL:
-        if ("arm64", s) in walls and ("x86_64", s) in walls:
-            dataset, assembly = SUITE_LABELS[s]
-            label = dataset.replace(" full", f" {assembly}")
-            cells.append(
-                f"{label} {half_up(walls[('arm64', s)][0], 2)} s ARM / "
-                f"{half_up(walls[('x86_64', s)][0], 2)} s x86"
-            )
-    lines += [
-        "",
-        f"Wall time, median of {n} independent machines per cell, ARM Graviton4 (`r8gd.8xlarge`)",
-        "and x86 Intel (`r8id.8xlarge`), 16 threads, local NVMe, sites-only inputs, the discarded warmup's",
-        "output deleted before the timed run: " + "; ".join(cells) + ".",
-    ]
-    return "\n".join(lines)
+    return ["## Concordance and wall time", caption, "\n".join(rows), chr21_caption, "\n".join(chr21)]
 
-def read_sums(path: Path | None) -> dict[str, str]:
-    if path is None or not path.exists():
-        return {}
-    out = {}
+
+def read_sums(path: Path) -> dict[str, str]:
+    """SHA256SUMS as {file: digest}."""
+    if not path.exists():
+        fail(f"no SHA256SUMS at {path}")
+    out: dict[str, str] = {}
     for line in path.read_text().splitlines():
         parts = line.split()
         if len(parts) == 2:
@@ -280,16 +331,56 @@ def read_sums(path: Path | None) -> dict[str, str]:
     return out
 
 
+def install_bullets(
+    version: str, sums: dict[str, str], commit: str, toolchain: str, rust_version: str, version_doi: str | None
+) -> str:
+    """One bullet per binary archive in the order of TARGETS, then the archive contents and the source build,
+    the container image, the build and its attestation, and the source archive. Every target's archive and
+    the source archive must be in SHA256SUMS, and every binary archive there must be a known target."""
+    tag = f"v{version}"
+    dl = f"{REPO_URL}/releases/download/{tag}"
+    prefix, suffix = f"vep-{version}-", ".tar.gz"
+    missing = [t for t in TARGETS if f"{prefix}{t}{suffix}" not in sums]
+    if missing:
+        fail(f"SHA256SUMS lacks the archive for {missing}")
+    unknown = [
+        n for n in sums if n.startswith(prefix) and n.endswith(suffix) and n[len(prefix) : -len(suffix)] not in TARGETS
+    ]
+    if unknown:
+        fail(f"SHA256SUMS lists {unknown}, archives of no known target")
+    src = f"vep-rs-{version}.tar.gz"
+    if src not in sums:
+        fail(f"SHA256SUMS lacks {src}")
+    bullets = [
+        f"- [`{prefix}{triple}{suffix}`]({dl}/{prefix}{triple}{suffix}): {platform}, {floor}; "
+        f"sha256 `{sums[f'{prefix}{triple}{suffix}']}`"
+        for triple, (platform, floor) in TARGETS.items()
+    ]
+    doi = f"; version DOI [{version_doi}](https://doi.org/{version_doi})" if version_doi else ""
+    bullets += [
+        f"- Each archive unpacks to `vep-{version}-<target>/` holding `vep`, `vep-cache-builder` and "
+        "`vep-cache-converter`; a binary below its CPU floor aborts with an illegal-instruction fault, so on "
+        f"such a host build from source (Rust {rust_version} or later), which compiles for the machine it runs "
+        'on: `RUSTFLAGS="-C target-cpu=native" cargo build --release --locked`',
+        f"- Container image: `docker pull ghcr.io/natera-open-source/vep-rs:{version}` (linux/amd64: the x86_64 "
+        "binaries with the `duckdb` CLI that Parquet output needs)",
+        f"- Built by the [release workflow]({REPO_URL}/actions/workflows/release.yml) from tag `{tag}` "
+        f"(commit `{commit}`) with Rust {toolchain}; every file in [`SHA256SUMS`]({dl}/SHA256SUMS) carries a "
+        "GitHub build-provenance attestation: `gh attestation verify <file> --repo natera-open-source/vep-rs`",
+        f"- [`{src}`]({dl}/{src}) is `git archive --format=tar.gz --prefix=vep-rs-{version}/ {tag}`; "
+        f"sha256 `{sums[src]}`{doi}",
+    ]
+    return "\n".join(bullets)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", required=True, type=Path)
     ap.add_argument("--version", required=True)
-    ap.add_argument(
-        "--previous", required=True, help="previous release tag, e.g. v0.1.0"
-    )
+    ap.add_argument("--previous", required=True, help="previous release tag, e.g. v0.1.0")
     ap.add_argument("--commit", required=True)
     ap.add_argument("--toolchain", required=True)
-    ap.add_argument("--sha256sums", type=Path)
+    ap.add_argument("--sha256sums", required=True, type=Path)
     ap.add_argument("--notes", type=Path, help=".github/release-notes/vX.Y.Z.md")
     ap.add_argument("--changelog-section", help="defaults to the version")
     ap.add_argument("--date", help="release date; defaults to the CHANGELOG heading's")
@@ -298,106 +389,39 @@ def main() -> None:
 
     v, tag = a.version, f"v{a.version}"
     repo = a.repo
-    section, cl_date = changelog_section(
-        (repo / "CHANGELOG.md").read_text(), a.changelog_section or v
-    )
+    section, cl_date = changelog_section((repo / "CHANGELOG.md").read_text(), a.changelog_section or v)
     date = a.date or cl_date
     if not date:
-        sys.exit(
-            "ERROR: [render_release_notes] no date: pass --date or date the CHANGELOG heading"
-        )
-    rust_version = re.search(
-        r'^rust-version\s*=\s*"([^"]+)"', (repo / "Cargo.toml").read_text(), re.MULTILINE
-    )
+        fail("no date: pass --date or date the CHANGELOG heading")
+    rust_version = re.search(r'^rust-version\s*=\s*"([^"]+)"', (repo / "Cargo.toml").read_text(), re.MULTILINE)
     if not rust_version:
-        sys.exit("ERROR: [render_release_notes] no rust-version in Cargo.toml")
-    hand = hand_written(
-        a.notes if a.notes else repo / ".github" / "release-notes" / f"{tag}.md"
-    )
-    if not hand["summary"]:
-        sys.exit(
-            "ERROR: [render_release_notes] the release-notes file needs a summary paragraph"
-        )
+        fail("no rust-version in Cargo.toml")
+    notes = a.notes or repo / ".github" / "release-notes" / f"{tag}.md"
+    hand = hand_written(notes)
+    check_hand_written(hand, section, notes)
     sums = read_sums(a.sha256sums)
     version_doi = read_doi(repo / "CITATION.cff", v)
-    dl = f"{REPO_URL}/releases/download/{tag}"
-    ph = "`<sha256 from SHA256SUMS>`"
-
-    out = [hand["summary"], "", ABOUT, ""]
-    if hand["upgrade"]:
-        out += ["## Upgrade notes", "", hand["upgrade"], ""]
-    out += [
-        "## Changes",
-        "",
-        section,
-        "",
-        f"Full entry: [CHANGELOG.md]({REPO_URL}/blob/{tag}/CHANGELOG.md) (this version is its first section) ·",
-        f"**Full Changelog**: {REPO_URL}/compare/{a.previous}...{tag}",
-        "",
-        measurements_section(repo, v, date),
-        "",
-        "## Install",
-        "",
-        "| File | Platform | CPU floor | SHA256 |",
-        "| ---- | -------- | --------- | ------ |",
-    ]
-    for triple, platform, floor in TARGETS:
-        name = f"vep-{v}-{triple}.tar.gz"
-        digest = f"`{sums[name]}`" if name in sums else ph
-        out.append(f"| [{name}]({dl}/{name}) | {platform} | {floor} | {digest} |")
-    x86 = f"vep-{v}-x86_64-unknown-linux-gnu.tar.gz"
-    out += [
-        "",
-        f"Each archive unpacks to `vep-{v}-<target>/` holding `vep`, `vep-cache-builder` and",
-        "`vep-cache-converter`. A binary run on a CPU below its floor aborts with an illegal-instruction",
-        "fault rather than running slowly; on such a host build from source, which compiles for the machine",
-        'it runs on when `RUSTFLAGS="-C target-cpu=native"` is set.',
-        "",
-        "```sh",
-        f"curl -LO {dl}/{x86}",
-        f"curl -LO {dl}/SHA256SUMS",
-        "sha256sum -c --ignore-missing SHA256SUMS   # macOS: shasum -a 256 -c --ignore-missing SHA256SUMS",
-        f"tar xzf {x86}",
-        "```",
-        "",
-        f"Container image, pushed when this release is published: `docker pull ghcr.io/natera-open-source/vep-rs:{v}`",
-        "(linux/amd64: the x86_64 binaries above and the `duckdb` CLI that Parquet output needs).",
-        "",
-        f"From source (Rust {rust_version.group(1)} or newer): `cargo build --release --locked`. The README covers",
-        "the JSON transcript cache every run needs.",
-        "",
-        "## Verify",
-        "",
-        f"Built by the [release workflow]({REPO_URL}/actions/workflows/release.yml)",
-        f"from tag `{tag}` (commit `{a.commit}`) with Rust {a.toolchain} and `cargo build --release --locked`.",
-        "Every file in `SHA256SUMS` carries a GitHub build-provenance attestation:",
-        "",
-        "```sh",
-        f"gh attestation verify {x86} --repo natera-open-source/vep-rs",
-        "```",
-        "",
-        "## Source archive",
-        "",
-    ]
-    src = f"vep-rs-{v}.tar.gz"
-    src_digest = f"`{sums[src]}`" if src in sums else ph
-    out.append(
-        f"`{src}` is `git archive --format=tar.gz --prefix=vep-rs-{v}/ {tag}`, sha256 {src_digest}."
-    )
-    if version_doi:
-        out.append(f"Version DOI [{version_doi}](https://doi.org/{version_doi}).")
     cite_doi = version_doi or CONCEPT_DOI
-    out += [
-        "",
-        "## Citing",
-        "",
-        f"Porter M, Borkowski R. vep-rs, version {v}. {date[:4]}. doi:{cite_doi}.",
-        "`CITATION.cff` carries the citation in machine-readable form; the README's Citing section names the",
-        "accompanying paper.",
+
+    blocks = [hand["opener"]]
+    if hand["highlights"]:
+        blocks += ["## Highlights", hand["highlights"]]
+    if hand["upgrade"]:
+        blocks += ["## Upgrade notes", hand["upgrade"]]
+    blocks += kind_blocks(section)
+    blocks += measurements_blocks(repo, v)
+    blocks += [
+        "## Install",
+        install_bullets(v, sums, a.commit, a.toolchain, rust_version.group(1), version_doi),
+        "## Cite",
+        f"Porter M, Borkowski R. vep-rs, version {v}. {date[:4]}. doi:[{cite_doi}](https://doi.org/{cite_doi})",
+        f"**Full changelog**: [CHANGELOG]({REPO_URL}/blob/{tag}/CHANGELOG.md) · "
+        f"[`{a.previous}...{tag}`]({REPO_URL}/compare/{a.previous}...{tag})",
     ]
-    if hand["known"]:
-        out += ["", "## Known issues", "", hand["known"]]
-    body = "\n".join(out).rstrip("\n") + "\n"
+    body = "\n\n".join(blocks) + "\n"
+    lines = body.count("\n")
+    if lines > LINE_CAP:
+        fail(f"the page is {lines} lines; the cap is {LINE_CAP}")
     if a.out:
         a.out.write_text(body)
     else:

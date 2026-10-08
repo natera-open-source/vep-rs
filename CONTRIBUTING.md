@@ -89,6 +89,16 @@ disk (`each_corpus_fits_its_size_budget`); prefer narrower exemplars
 - Write commit messages in imperative mood, focusing on what and why ("Add CADD plugin support", not "Added some plugin stuff").
 - Keep the summary line under 72 characters.
 
+## Changelog entries
+
+`CHANGELOG.md` follows Keep a Changelog, and the release page copies the version's section word for
+word, so each entry is written for the page: one bullet per user-visible change, on one physical line;
+the subject first (the flag, format, input or behaviour, identifiers in backticks), then what it now
+does; one sentence, a second only for a consequence the user must act on; the measured effect inline
+where the change claims speed or memory; no type prefix, bold lead-in or author handle; a trailing
+`(#N)` naming the pull request; at most 30 words. Refactors, CI and dependency bumps appear only when
+behaviour changes.
+
 ## Sign your commits
 
 Every commit must carry a `Signed-off-by` trailer. Pass `-s` to `git commit`, which
