@@ -26,8 +26,8 @@ copied from the source cache, else written from `--species`, `--assembly` and
 Usage:
     prune_json_cache.py --cache <src-dir> --out <dst-dir> --vcf <a.vcf> [--vcf <b.vcf.gz>]
         [--flank 5000] [--gzip] [--drop sorted_exons ...] [--perl-info <cache>/info.txt]
-        [--species homo_sapiens --assembly GRCh37 --cache-version 115]
-    prune_json_cache.py --info-only --out <dst-dir> --perl-info <cache>/info.txt --cache-version 115
+        [--species homo_sapiens --assembly GRCh37 --cache-version 116]
+    prune_json_cache.py --info-only --out <dst-dir> --perl-info <cache>/info.txt --cache-version 116
 
 The source layout is `<dir>/transcripts/<chr>/<start>-<end>.json[.gz]`, each shard a JSON
 array of transcript objects with integer-like `start`/`end` strings.
