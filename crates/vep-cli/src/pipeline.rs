@@ -35,8 +35,8 @@ use tracing::debug;
 
 use crate::pick::{self, FilterConfig};
 use crate::runner::{
-    annotate_batch, annotate_one, mark_oversize_sv, prewarm_batch, AnnotationResources,
-    PipelineStats,
+    annotate_batch, annotate_one, apply_record_rules, mark_oversize_sv, prewarm_batch,
+    AnnotationResources, PipelineStats,
 };
 use crate::transcript_index::LazyTranscriptIndexes;
 use crate::variation_matcher;
@@ -192,7 +192,7 @@ pub(crate) struct ReaderConfig<'a> {
     pub capture_raw_input: bool,
     pub allow_non_variant: bool,
     pub dont_skip: bool,
-    pub max_sv_size: u64,
+    pub max_sv_size: Option<u64>,
     pub output_format: &'a str,
     pub no_headers: bool,
     /// The VCF writer, for the header block a VCF input's own header lines feed.
@@ -310,7 +310,7 @@ pub(crate) struct Coordinator<'a> {
     pub write_ctx: &'a WriteContext<'a>,
     pub capture_raw_input: bool,
     pub dont_skip: bool,
-    pub max_sv_size: u64,
+    pub max_sv_size: Option<u64>,
     pub batch_size: usize,
     /// `--quiet` off: progress goes to stderr every 10,000 variants.
     pub progress: bool,
@@ -915,6 +915,8 @@ fn annotate_render_batch(
                         pick::apply_filters(variant, filter_config);
                     }
                 }
+                // A task's slice is whole records (the chunk ends at a unit end).
+                apply_record_rules(slice, resources.transcripts());
                 let mut out: Vec<u8> = Vec::with_capacity(reserve);
                 {
                     let slice: &[InputVariant] = slice;
@@ -1405,7 +1407,7 @@ mod tests {
             capture_raw_input: false,
             allow_non_variant: false,
             dont_skip: false,
-            max_sv_size: 10_000_000,
+            max_sv_size: Some(10_000_000),
             output_format: "vep",
             no_headers: false,
             vcf_formatter: None,
@@ -1460,7 +1462,7 @@ mod tests {
             capture_raw_input: true,
             allow_non_variant: true,
             dont_skip: false,
-            max_sv_size: 10_000_000,
+            max_sv_size: Some(10_000_000),
             output_format: "vcf",
             no_headers: false,
             vcf_formatter: Some(&fmt),
@@ -1541,7 +1543,7 @@ mod tests {
             capture_raw_input: false,
             allow_non_variant: false,
             dont_skip: false,
-            max_sv_size: 10_000_000,
+            max_sv_size: Some(10_000_000),
             output_format: "vep",
             no_headers: false,
             vcf_formatter: None,

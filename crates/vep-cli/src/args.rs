@@ -142,9 +142,15 @@ pub struct Args {
     pub buffer_size: usize,
 
     /// Structural variants spanning more than this many bases are written to the
-    /// VCF output without consequences and omitted from the JSON output
-    #[arg(long = "max_sv_size", default_value_t = 10_000_000)]
-    pub max_sv_size: u64,
+    /// VCF output without consequences and omitted from the JSON output; -1 lifts
+    /// the limit
+    #[arg(
+        long = "max_sv_size",
+        default_value_t = 10_000_000,
+        allow_negative_numbers = true,
+        value_parser = clap::value_parser!(i64).range(-1..)
+    )]
+    pub max_sv_size: i64,
 
     /// Number of parallel annotation worker threads.
     /// Default 0 = auto: uses the number of available logical CPUs, capped at

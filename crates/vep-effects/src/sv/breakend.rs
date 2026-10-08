@@ -283,17 +283,17 @@ pub fn calculate(
         }
     }
 
-    // Perl's StructuralVariationOverlapAllele adds NMD_transcript_variant only
-    // when the variant overlaps the transcript body, not for upstream/downstream.
+    // `within_nmd_transcript` (`Utils/VariationEffect.pm`) is `within_transcript`
+    // on the local variation feature's own span and the transcript's biotype, so
+    // a mate breakend inside the transcript earns `feature_truncation` but never
+    // this term when the local breakend lies outside the body. The span runs
+    // from the breakend to the record's END when that lies past it.
+    let local_end = variant.sv_end.unwrap_or(variant.end).max(bp);
+    let local_within_transcript = bp <= transcript.end && local_end >= transcript.start;
     if transcript.is_nmd_transcript()
+        && local_within_transcript
         && !consequences.is_empty()
         && !consequences.contains(&Consequence::NmdTranscriptVariant)
-        && !consequences.iter().all(|c| {
-            matches!(
-                c,
-                Consequence::UpstreamGeneVariant | Consequence::DownstreamGeneVariant
-            )
-        })
     {
         consequences.push(Consequence::NmdTranscriptVariant);
     }
@@ -1695,5 +1695,45 @@ mod tests {
             "Downstream BND should not have NMD_transcript_variant, got: {:?}",
             tc.consequences
         );
+    }
+
+    /// The bracket allele of a breakend whose local position lies downstream of an
+    /// NMD transcript while its mate lies inside it: `feature_truncation` for the mate
+    /// (`within_feature($bvfoa->breakend)`) and `downstream_gene_variant` for the
+    /// position, and no `NMD_transcript_variant`, because `within_nmd_transcript`
+    /// reads the local variation feature, which is outside the body. Ensembl VEP
+    /// 116.2 writes `feature_truncation,downstream_gene_variant` for the two NMD
+    /// transcripts of `synth_bnd_ins_0049_B` (`[21:31668499[TTGGGGGACAAAACAAG`) in
+    /// the GRCh38 golden corpus.
+    #[test]
+    fn mate_inside_an_nmd_transcript_earns_truncation_without_the_nmd_term() {
+        let tx = make_nmd_transcript(); // 25_000_000 - 25_006_000, forward strand
+        let mut v = make_bnd(25_007_000);
+        v.alt_alleles = vec![b"[21:25001000[TTGG".to_vec()];
+        v.mate_chr = Some("21".into());
+        v.mate_pos = Some(25_001_000);
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![
+                Consequence::FeatureTruncation,
+                Consequence::DownstreamGeneVariant
+            ]
+        );
+        assert_eq!(tc.distance, Some(1000));
+    }
+
+    /// The same bracket allele with its local position inside the NMD transcript keeps
+    /// the term: `within_transcript` holds on the local feature.
+    #[test]
+    fn local_breakend_inside_an_nmd_transcript_keeps_the_nmd_term() {
+        let tx = make_nmd_transcript();
+        let mut v = make_bnd(25_001_000);
+        v.mate_chr = Some("21".into());
+        v.mate_pos = Some(25_001_500);
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert!(tc.consequences.contains(&Consequence::FeatureTruncation));
+        assert!(tc.consequences.contains(&Consequence::IntronVariant));
+        assert!(tc.consequences.contains(&Consequence::NmdTranscriptVariant));
     }
 }

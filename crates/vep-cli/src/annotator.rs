@@ -589,6 +589,7 @@ pub fn annotate_batch(
             }
         }
 
+        // A breakend's intergenic verdict is its record's: `apply_record_rules`.
         let is_bnd = variant.variant_class == VariantClass::Translocation;
         if variant.transcript_consequences.is_empty()
             && variant.most_severe_consequence.is_none()
@@ -620,6 +621,7 @@ pub fn annotate_batch(
         }
         stats
     };
+    crate::runner::apply_record_rules(batch, resources.transcripts.as_ref());
     let annotation_elapsed = annotation_phase_start.elapsed();
     debug!(
         batch_size = batch_len,
@@ -1113,5 +1115,51 @@ mod tests {
         assert_eq!(batch.len(), 2);
         assert_eq!(batch[0].chr, "21");
         assert_eq!(batch[1].chr, "X");
+    }
+
+    /// The annotator path reaches the same record-level breakend verdict as the CLI:
+    /// a breakend record with no transcript within range of either breakend is one
+    /// `intergenic_variant` per allele, and a record whose mate reaches a transcript
+    /// gets no intergenic row.
+    #[test]
+    fn annotator_applies_the_breakend_record_verdict() {
+        let dir = tmp_json_cache("bnd_record");
+        let lazy = Arc::new(
+            LazyTranscriptIndexes::new(
+                dir.path().to_str().unwrap(),
+                TranscriptIndexImpl::Bin,
+                5_000,
+                5_000,
+            )
+            .unwrap(),
+        );
+        lazy.prewarm("21").unwrap();
+        let annotator = annotator_over(lazy).unwrap();
+
+        // The one transcript of `tmp_json_cache` spans 21:100-200.
+        let mut intergenic = parse_vcf_line(
+            "21\t1000000\tbnd_a\tN\tN[21:1000500[\t.\t.\tSVTYPE=BND;MATEID=bnd_b",
+            true,
+        )
+        .unwrap();
+        let _ = annotator.annotate_batch(&mut intergenic);
+        assert_eq!(intergenic.len(), 2);
+        for allele in &intergenic {
+            assert!(allele.transcript_consequences.is_empty());
+            assert_eq!(
+                allele.most_severe_consequence,
+                Some(Consequence::IntergenicVariant)
+            );
+        }
+
+        let mut genic_mate = parse_vcf_line(
+            "21\t1000000\tbnd_a\tN\tN[21:150[\t.\t.\tSVTYPE=BND;MATEID=bnd_b",
+            true,
+        )
+        .unwrap();
+        let _ = annotator.annotate_batch(&mut genic_mate);
+        assert!(genic_mate[0].transcript_consequences.is_empty());
+        assert_eq!(genic_mate[0].most_severe_consequence, None);
+        assert_eq!(genic_mate[1].transcript_consequences.len(), 1);
     }
 }

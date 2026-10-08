@@ -7,9 +7,9 @@
 //! multi-allelic splitting, structural variant classification, BND
 //! notation parsing, and allele trimming/normalization.
 //!
-//! Perl citations name modules of ensembl-vep release/115 (`Bio/EnsEMBL/VEP/...`);
-//! `Sequence.pm` and `StructuralVariationOverlap.pm` are in ensembl-variation
-//! release/115 and `BaseVCF4.pm` is in ensembl-io release/115.
+//! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`);
+//! `Sequence.pm`, `StructuralVariationFeature.pm` and `StructuralVariationOverlap.pm`
+//! are in ensembl-variation release/116 and `BaseVCF4.pm` is in ensembl-io release/115.
 
 use anyhow::{bail, Context};
 
@@ -82,10 +82,11 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
     let mut variants = Vec::with_capacity(valid_alts.len());
     let is_mixed = !explicit_alts.is_empty() && !symbolic_alts.is_empty();
 
-    // In a mixed record (`C  G,<INV>`) Perl VEP processes only the symbolic
-    // allele: VCF.pm builds separate VariationFeature and
-    // StructuralVariationFeature objects from one line, and the explicit path
-    // fires only when no symbolic allele is present.
+    // A record with any symbolic allele is one structural variant (Parser/VCF.pm
+    // `create_VariationFeatures` routes the whole line to
+    // `create_StructuralVariationFeatures`), so the sequence path below fires
+    // only when no symbolic allele is present; a mixed record's sequence ALTs
+    // are alleles of the structural variant.
     if !explicit_alts.is_empty() && symbolic_alts.is_empty() {
         let trim_alts: Vec<&str> = explicit_alts.iter().map(|(_, alt)| *alt).collect();
         let (trimmed_ref, trimmed_alts, prefix_trimmed) =
@@ -181,39 +182,53 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
         }
     }
 
-    // Perl VEP (Parser.pm:get_SO_term) joins multi-allelic ALTs with "/": for
-    // "<CN0>,<CN2>" the joined "<CN0>/<CN2>" matches no single-allele regex and
-    // falls through to generic "copy_number_variation" as one SVF, so multiple
-    // CN-type alleles coalesce into a single CopyNumberVariation variant.
-    let coalesce_cn = symbolic_alts.len() > 1
-        && explicit_alts.is_empty()
-        && symbolic_alts.iter().all(|(_, alt)| {
-            let upper = alt.to_uppercase();
-            upper.starts_with("<CN") && !upper.starts_with("<CNV") && upper.ends_with('>')
-        });
-
-    let symbolic_alts_to_process: Vec<(usize, &str)> = if coalesce_cn {
-        // ALT becomes <CNV> so `parse_copy_number()` in cnv.rs returns Generic
-        // rather than the first allele's Deletion/Duplication.
-        vec![(symbolic_alts[0].0, "<CNV>")]
-    } else {
-        symbolic_alts.clone()
+    // VEP's allele string for a structural variant record is every ALT of the
+    // record joined by `/`, explicit alleles of a mixed record included, never
+    // the REF base (Parser/VCF.pm `create_StructuralVariationFeatures`).
+    let joined_alts = valid_alts
+        .iter()
+        .map(|(_, a)| *a)
+        .collect::<Vec<_>>()
+        .join("/");
+    let svtype = get_info_value(info_field, "SVTYPE");
+    // One structural variant record has one class, read from the joined ALTs
+    // (Parser.pm `get_SO_term`), and in a multi-allelic record that class labels
+    // the row of every ALT. A record whose joined type is in no SO table is
+    // parsed with each ALT's own class and the `vep_skip` mark; a breakend
+    // record keeps one variant per bracket ALT.
+    let record_class = sv_class_for_abbreviation(&sv_type_abbreviation(&joined_alts, svtype));
+    let per_alt_classes: Vec<(usize, &str, vep_core::variant::VariantClass)> = match record_class {
+        Some(class)
+            if !symbolic_alts.is_empty()
+                && class != vep_core::variant::VariantClass::Translocation
+                && valid_alts.len() > 1 =>
+        {
+            // The alt bytes of a copy-number record read `<CNV>` so
+            // `parse_copy_number()` in cnv.rs returns Generic for `<CN0>` and
+            // `<CN2>` alleles the record's class has subsumed.
+            let is_cnv = class == vep_core::variant::VariantClass::CopyNumberVariation;
+            valid_alts
+                .iter()
+                .map(|&(idx, alt)| (idx, if is_cnv { "<CNV>" } else { alt }, class))
+                .collect()
+        }
+        _ => symbolic_alts
+            .iter()
+            .map(|&(idx, alt)| {
+                let class = match svtype {
+                    // In a mixed record VEP reads the type from INFO/SVTYPE, since
+                    // the joined ALTs open with a sequence allele.
+                    Some(svtype) if is_mixed => {
+                        classify_symbolic_alt(&format!("<{svtype}>"), Some(svtype))
+                    }
+                    _ => classify_symbolic_alt(alt, svtype),
+                };
+                (idx, alt, class)
+            })
+            .collect(),
     };
 
-    for (allele_idx, alt) in &symbolic_alts_to_process {
-        let svtype = get_info_value(info_field, "SVTYPE");
-        let sv_class = if coalesce_cn {
-            vep_core::variant::VariantClass::CopyNumberVariation
-        } else if is_mixed {
-            if let Some(svtype) = svtype {
-                let fallback_alt = format!("<{svtype}>");
-                classify_symbolic_alt(&fallback_alt, Some(svtype))
-            } else {
-                classify_symbolic_alt(alt, svtype)
-            }
-        } else {
-            classify_symbolic_alt(alt, svtype)
-        };
+    for &(allele_idx, alt, sv_class) in &per_alt_classes {
         if sv_class == vep_core::variant::VariantClass::ReferenceBlock {
             tracing::warn!(
                 "{}:{} {}: NON_REF is not a supported structural variant type; \
@@ -292,19 +307,10 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
         );
         variant.variant_class = sv_class;
         variant.is_structural = true;
-        // VEP's allele string for a structural variant record is every ALT of
-        // the record joined by `/`, explicit alleles of a mixed record included,
-        // never the REF base.
-        let joined_alts = valid_alts
-            .iter()
-            .map(|(_, a)| *a)
-            .collect::<Vec<_>>()
-            .join("/");
-        variant.vep_skip =
-            !vep_supports_sv_type(&joined_alts, get_info_value(info_field, "SVTYPE"));
-        variant.uploaded_allele_string = Some(joined_alts);
+        variant.vep_skip = record_class.is_none();
+        variant.uploaded_allele_string = Some(joined_alts.clone());
         variant.sv_end = Some(sv_end_val);
-        variant.sv_type = get_info_value(info_field, "SVTYPE").map(|s| s.to_string());
+        variant.sv_type = svtype.map(|s| s.to_string());
         variant.sv_len = get_info_value(info_field, "SVLEN").and_then(|v| v.parse().ok());
         if sv_class == vep_core::variant::VariantClass::TandemRepeat {
             variant.tr_alt_bases = tandem_repeat_alt_bases(info_field);
@@ -320,7 +326,7 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
                 variant.mate_pos = Some(mate_pos);
             }
         }
-        variant.allele_index = *allele_idx;
+        variant.allele_index = allele_idx;
         if capture_raw_input {
             variant.raw_input = Some(line.to_string());
         }
@@ -374,15 +380,7 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
             variant.mate_chr = Some(mate_chr_val);
             variant.mate_pos = Some(mate_pos);
             variant.is_single_breakend = false;
-            // A set `mate_id` makes `display_allele()` render the literal allele
-            // string rather than the SO term; gnomAD <BND> records carry no MATEID.
-            if variant.mate_id.is_none() {
-                let synthetic_id = variant
-                    .id
-                    .clone()
-                    .unwrap_or_else(|| format!("{}:{}", chr, variant.start));
-                variant.mate_id = Some(synthetic_id);
-            }
+            mark_paired_breakend_record(&mut variant, &chr);
 
             let single_alt = format!("{}.", ref_str);
             let mut sb_variant = variant.clone();
@@ -405,6 +403,7 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
             } else {
                 format!("{}.", ref_str)
             };
+            mark_paired_breakend_record(&mut variant, &chr);
             let mut sb_variant = variant.clone();
             sb_variant.alt_alleles = vec![single_breakend_alt.as_bytes().to_vec()];
             sb_variant.allele_string = format!("{}/{}", ref_str, single_breakend_alt);
@@ -419,6 +418,22 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
     }
 
     Ok(variants)
+}
+
+/// Gives a breakend record that names a mate a `mate_id` when INFO carries no MATEID.
+/// A set `mate_id` is how `display_allele()` and the breakend predicates tell the
+/// record's own breakend, written `N.` or `.N` (`StructuralVariationFeature.pm`
+/// `_parse_breakends` names it from the bracket or synthesised mate allele alone),
+/// from a record whose only ALT is a single breakend, whose Allele is the bare
+/// class term `chromosome_breakpoint`. gnomAD `<BND>` records carry no MATEID.
+fn mark_paired_breakend_record(variant: &mut InputVariant, chr: &str) {
+    if variant.mate_id.is_none() {
+        let synthetic_id = variant
+            .id
+            .clone()
+            .unwrap_or_else(|| format!("{}:{}", chr, variant.start));
+        variant.mate_id = Some(synthetic_id);
+    }
 }
 
 pub(crate) fn is_paired_breakend_alt(alt: &str) -> bool {
@@ -525,32 +540,12 @@ pub(crate) fn classify_symbolic_alt(
     VariantClass::ComplexStructural
 }
 
-/// Whether VEP knows the structural variant type of a record: the port of
+/// The structural variant type abbreviation VEP derives for a record: the port of
 /// `Parser::get_SO_term` (ensembl-vep) applied to every ALT joined by `/`, with
-/// the abbreviation looked up in `%SO_TERMS` (ensembl-variation `Utils/Config.pm`).
-/// A record whose type is unknown is parsed and, in the default format,
-/// annotated, but VEP's VCF and JSON writers leave it without consequences.
-pub(crate) fn vep_supports_sv_type(joined_alts: &str, svtype: Option<&str>) -> bool {
-    const SO_TERMS: [&str; 18] = [
-        "INS",
-        "INS_ME",
-        "INS_ALU",
-        "INS_HERV",
-        "INS_LINE1",
-        "INS_SVA",
-        "DEL",
-        "DEL_ME",
-        "DEL_ALU",
-        "DEL_HERV",
-        "DEL_LINE1",
-        "DEL_SVA",
-        "TREP",
-        "TDUP",
-        "DUP",
-        "CNV",
-        "INV",
-        "BND",
-    ];
+/// INFO/SVTYPE replacing a joined string that opens outside the VCF 4.4 forms
+/// (`Parser/VCF.pm`). Identical parts collapse to one (`<INS>/<INS>` reads `INS`),
+/// and a string naming both DEL and DUP, `<DEL>/<DUP:TANDEM>` included, is `CNV`.
+pub(crate) fn sv_type_abbreviation(joined_alts: &str, svtype: Option<&str>) -> String {
     let upper = joined_alts.to_ascii_uppercase();
     let follows_vcf44 = {
         let t = upper.strip_prefix('<').unwrap_or(&upper);
@@ -563,11 +558,21 @@ pub(crate) fn vep_supports_sv_type(joined_alts: &str, svtype: Option<&str>) -> b
                     .unwrap_or(&t[2..])
                     .starts_with(|c: char| c.is_ascii_digit()))
     };
-    let kind = match svtype {
+    let mut kind = match svtype {
         Some(st) if !follows_vcf44 => st.to_ascii_uppercase(),
         _ => upper,
     };
-    let abbrev = if let Some(pos) = kind.find("INS:ME").or_else(|| kind.find("DEL:ME")) {
+    if kind.contains(['/', ',']) {
+        let parts: Vec<&str> = kind.split(['/', ',']).collect();
+        fn normalized(part: &str) -> &str {
+            part.trim().trim_start_matches('<').trim_end_matches('>')
+        }
+        let first = normalized(parts[0]);
+        if parts.iter().all(|p| normalized(p) == first) {
+            kind = parts[0].to_string();
+        }
+    }
+    if let Some(pos) = kind.find("INS:ME").or_else(|| kind.find("DEL:ME")) {
         let base = &kind[pos..pos + 3];
         let rest = kind[pos + 6..].trim_start_matches(':');
         let element: String = rest
@@ -585,16 +590,29 @@ pub(crate) fn vep_supports_sv_type(joined_alts: &str, svtype: Option<&str>) -> b
             "ME".to_string()
         };
         format!("{base}_{subtype}")
+    } else if kind.contains("DEL") && kind.contains("DUP") {
+        "CNV".to_string()
     } else if kind.contains("DUP:TANDEM") {
         "TDUP".to_string()
     } else if kind.contains("CNV:TR") {
         "TREP".to_string()
-    } else if kind.contains("CNV")
-        || kind.contains("CN=")
+    } else if kind.contains("CN=")
         || kind
             .find("CN")
             .is_some_and(|i| kind[i + 2..].starts_with(|c: char| c.is_ascii_digit()))
     {
+        // Perl's `/^<?CN=?0>?$/` and `/^<?CN=?2>?$/` match the whole string, so a
+        // list of copy numbers is `CNV`.
+        let bare = kind.trim_start_matches('<').trim_end_matches('>');
+        let copies = bare
+            .strip_prefix("CN")
+            .map(|c| c.strip_prefix('=').unwrap_or(c));
+        match copies {
+            Some("0") => "DEL".to_string(),
+            Some("2") => "DUP".to_string(),
+            _ => "CNV".to_string(),
+        }
+    } else if kind.contains("CNV") {
         "CNV".to_string()
     } else if kind.contains(['[', ']']) || kind.starts_with('.') || kind.ends_with('.') {
         "BND".to_string()
@@ -602,9 +620,34 @@ pub(crate) fn vep_supports_sv_type(joined_alts: &str, svtype: Option<&str>) -> b
         let stripped: String = kind.chars().filter(|c| *c != '<' && *c != '>').collect();
         stripped.split(':').next().unwrap_or("").to_string()
     } else {
-        kind.clone()
-    };
-    SO_TERMS.contains(&abbrev.as_str())
+        kind
+    }
+}
+
+/// The variant class of a record whose type abbreviation is one of VEP's
+/// `%SO_TERMS` keys (ensembl-variation `Utils/Config.pm`), `None` for an
+/// unsupported type. A record of unknown type is parsed and, in the default
+/// format, annotated, but VEP's VCF and JSON writers leave it without
+/// consequences.
+pub(crate) fn sv_class_for_abbreviation(abbrev: &str) -> Option<vep_core::variant::VariantClass> {
+    use vep_core::variant::VariantClass;
+    Some(match abbrev {
+        "INS" => VariantClass::StructuralInsertion,
+        "INS_ME" | "INS_ALU" | "INS_HERV" | "INS_LINE1" | "INS_SVA" => {
+            VariantClass::MobileElementInsertion
+        }
+        "DEL" => VariantClass::StructuralDeletion,
+        "DEL_ME" | "DEL_ALU" | "DEL_HERV" | "DEL_LINE1" | "DEL_SVA" => {
+            VariantClass::MobileElementDeletion
+        }
+        "TREP" => VariantClass::TandemRepeat,
+        "TDUP" => VariantClass::TandemDuplication,
+        "DUP" => VariantClass::Duplication,
+        "CNV" => VariantClass::CopyNumberVariation,
+        "INV" => VariantClass::Inversion,
+        "BND" => VariantClass::Translocation,
+        _ => return None,
+    })
 }
 
 /// Extract a value from the VCF INFO field by key.
@@ -1006,23 +1049,59 @@ mod tests {
         assert_eq!(variants[0].alt_allele(), b"-");
     }
 
+    /// A sequence ALT beside a symbolic one: VEP 116.2 reads the record's type from
+    /// INFO/SVTYPE (the joined ALTs open with a sequence allele) and writes one row
+    /// per ALT, each with the class term as its Allele (the `synth_multi_mix` records
+    /// of the GRCh37 and GRCh38 golden corpora, `deletion` twice per transcript).
     #[test]
     fn test_parse_vcf_line_mixed_symbolic_uses_svtype_override() {
         let line = "21\t1000\t.\tC\tG,<INV>\t.\t.\tSVTYPE=DEL;END=2000;SVLEN=-1000";
         let variants = parse_vcf_line(line, true).unwrap();
         assert_eq!(
             variants.len(),
-            1,
-            "mixed records should emit only the symbolic ALT"
+            2,
+            "one variant per ALT, the sequence ALT included"
         );
+        for (variant, idx, alt) in [
+            (&variants[0], 0, b"G" as &[u8]),
+            (&variants[1], 1, b"<INV>"),
+        ] {
+            assert_eq!(variant.allele_index, idx);
+            assert_eq!(variant.alt_allele(), alt);
+            assert_eq!(variant.variant_class, VariantClass::StructuralDeletion);
+            assert_eq!(variant.display_allele(), "deletion");
+            assert!(variant.is_structural);
+            assert!(!variant.vep_skip);
+            assert_eq!(variant.start, 1001);
+            assert_eq!(variant.sv_end, Some(2000));
+            assert_eq!(variant.uploaded_allele_string.as_deref(), Some("G/<INV>"));
+        }
+    }
 
-        let variant = &variants[0];
-        assert_eq!(variant.allele_index, 1);
-        assert_eq!(variant.alt_allele(), b"<INV>");
-        assert_eq!(variant.variant_class, VariantClass::StructuralDeletion);
-        assert!(variant.is_structural);
-        assert_eq!(variant.start, 1001);
-        assert_eq!(variant.sv_end, Some(2000));
+    /// A record whose ALTs are all sequence alleles is never a structural variant,
+    /// whatever INFO/SVTYPE says (Parser/VCF.pm `create_VariationFeatures` routes a
+    /// line to the structural path only on a symbolic or breakend ALT).
+    #[test]
+    fn all_sequence_multi_allelic_record_ignores_svtype() {
+        let line = "21\t1000\t.\tC\tG,T\t.\t.\tSVTYPE=DEL;END=2000";
+        let variants = parse_vcf_line(line, true).unwrap();
+        assert_eq!(variants.len(), 2);
+        for v in &variants {
+            assert_eq!(v.variant_class, VariantClass::Snv);
+            assert!(!v.is_structural);
+        }
+    }
+
+    /// A mixed record without INFO/SVTYPE has no type VEP knows (`G/<INV>` is in no
+    /// SO table), so the symbolic ALT alone is parsed, with the `vep_skip` mark.
+    #[test]
+    fn test_parse_vcf_line_mixed_symbolic_without_svtype_is_unsupported() {
+        let line = "21\t1000\t.\tC\tG,<INV>\t.\t.\tEND=2000";
+        let variants = parse_vcf_line(line, true).unwrap();
+        assert_eq!(variants.len(), 1);
+        assert_eq!(variants[0].alt_allele(), b"<INV>");
+        assert_eq!(variants[0].variant_class, VariantClass::Inversion);
+        assert!(variants[0].vep_skip);
     }
 
     #[test]
@@ -1060,6 +1139,28 @@ mod tests {
         assert!(variant.is_single_breakend);
         assert!(variant.mate_chr.is_none());
         assert!(variant.mate_pos.is_none());
+        // One allele, no bracket mate: VEP prints the class term as its Allele.
+        assert_eq!(variant.display_allele(), "chromosome_breakpoint");
+    }
+
+    /// A bracket breakend record names its own breakend `N.` or `.N` whether or not
+    /// INFO carries a MATEID (`StructuralVariationFeature.pm` `_parse_breakends`
+    /// builds the string from the bracket alleles alone): Ensembl VEP 116.2 writes
+    /// `N.` on both rows of `bnd_genic_with_intergenic_mate` (no MATEID) in the
+    /// GRCh38-release116 golden corpus.
+    #[test]
+    fn bracket_breakend_without_mateid_names_its_own_allele_n_dot() {
+        let line =
+            "21\t30425650\tbnd_genic_with_intergenic_mate\tN\tN[21:11600000[\t.\t.\tSVTYPE=BND";
+        let variants = parse_vcf_line(line, true).unwrap();
+        assert_eq!(variants.len(), 2);
+        assert!(variants[0].is_single_breakend);
+        assert_eq!(variants[0].display_allele(), "N.");
+        assert_eq!(variants[1].display_allele(), "N[21:11600000[");
+
+        let left =
+            parse_vcf_line("21\t11500000\t.\tN\t]21:11000000]N\t.\t.\tSVTYPE=BND", true).unwrap();
+        assert_eq!(left[0].display_allele(), ".N");
     }
 
     #[test]
@@ -1346,7 +1447,7 @@ mod tests {
             ("<TRA>", Some("TRA"), false),
         ] {
             assert_eq!(
-                vep_supports_sv_type(alts, svtype),
+                sv_class_for_abbreviation(&sv_type_abbreviation(alts, svtype)).is_some(),
                 supported,
                 "{alts} {svtype:?}"
             );
@@ -1390,41 +1491,136 @@ mod tests {
         assert_eq!(cn3.variant_class, VariantClass::CopyNumberVariation);
     }
 
+    /// `<CN0>,<CN2>` is one `copy_number_variation` record (Parser.pm `get_SO_term`:
+    /// the joined `<CN0>/<CN2>` is neither `<CN0>` nor `<CN2>` alone) written as one
+    /// row per ALT, both labelled `copy_number_variation` (record `multi_cn0_cn2` of the
+    /// GRCh38-release116 golden corpus: two rows identical except ALLELE_NUM).
     #[test]
-    fn test_parse_vcf_line_multi_allelic_cn_coalesced() {
-        // Perl VEP joins "<CN0>,<CN2>" into "<CN0>/<CN2>", which matches no
-        // single-allele regex and becomes one generic copy_number_variation SVF.
+    fn test_parse_vcf_line_multi_allelic_cn_one_variant_per_alt() {
         let line = "21\t14504804\tDUP_gs_CNV\tC\t<CN0>,<CN2>\t.\t.\tSVTYPE=CNV;END=14530597";
         let variants = parse_vcf_line(line, true).unwrap();
-        assert_eq!(
-            variants.len(),
-            1,
-            "multi-allelic CN should produce 1 variant, not 2"
-        );
-        let v = &variants[0];
-        assert_eq!(v.variant_class, VariantClass::CopyNumberVariation);
-        assert!(v.is_structural);
-        assert_eq!(v.display_allele(), "copy_number_variation");
-        // Alt allele must be <CNV> (not <CN0>) so cnv.rs parse_copy_number()
-        // returns Generic, avoiding transcript_ablation/feature_elongation overcalls.
-        assert_eq!(
-            std::str::from_utf8(v.alt_allele()).unwrap(),
-            "<CNV>",
-            "coalesced CN alt should be <CNV>, not the first allele"
-        );
+        assert_eq!(variants.len(), 2, "one variant per ALT");
+        for (idx, v) in variants.iter().enumerate() {
+            assert_eq!(v.allele_index, idx);
+            assert_eq!(v.variant_class, VariantClass::CopyNumberVariation);
+            assert!(v.is_structural);
+            assert!(!v.vep_skip);
+            assert_eq!(v.display_allele(), "copy_number_variation");
+            assert_eq!(std::str::from_utf8(v.alt_allele()).unwrap(), "<CNV>");
+            assert_eq!(v.uploaded_allele_string.as_deref(), Some("<CN0>/<CN2>"));
+            assert_eq!(v.start, 14504805);
+            assert_eq!(v.sv_end, Some(14530597));
+        }
     }
 
     #[test]
     fn test_parse_vcf_line_multi_allelic_cn_four_alleles() {
         let line = "21\t15244513\t.\tT\t<CN0>,<CN2>,<CN3>,<CN4>\t.\t.\tSVTYPE=CNV;END=15253042";
         let variants = parse_vcf_line(line, true).unwrap();
-        assert_eq!(variants.len(), 1);
-        assert_eq!(variants[0].variant_class, VariantClass::CopyNumberVariation);
-        assert_eq!(
-            std::str::from_utf8(variants[0].alt_allele()).unwrap(),
-            "<CNV>",
-            "coalesced 4-allele CN should have <CNV> alt"
-        );
+        assert_eq!(variants.len(), 4);
+        for v in &variants {
+            assert_eq!(v.variant_class, VariantClass::CopyNumberVariation);
+            assert_eq!(std::str::from_utf8(v.alt_allele()).unwrap(), "<CNV>");
+        }
+    }
+
+    /// Every multi-allelic symbolic shape of ensembl-vep PR 1998 with its type and
+    /// row count under 115.2 (the joined string looked up as written: one allele,
+    /// and unsupported unless it was a copy-number list) and under 116.2 (identical
+    /// parts collapse, DEL beside DUP is a copy-number variation, one allele per
+    /// ALT). The 116.2 column is the GRCh38-release116 golden corpus's `multi_*`
+    /// records; `<INS>,<DEL>` and `<INV>,<DUP>` are skipped by 116.2 and stay
+    /// annotated here with the `vep_skip` mark, as 115.2 left them.
+    #[test]
+    fn multi_allelic_symbolic_shapes_take_the_record_class() {
+        use VariantClass::*;
+        // (ALTs, 115.2 type and alleles, 116.2 classes per variant, supported)
+        let shapes = [
+            (
+                "<INS>,<INS>",
+                "unsupported INS/INS, 1 allele",
+                vec![StructuralInsertion; 2],
+                true,
+            ),
+            (
+                "<DEL>,<DEL>",
+                "unsupported DEL/DEL, 1 allele",
+                vec![StructuralDeletion; 2],
+                true,
+            ),
+            (
+                "<DEL>,<DUP>",
+                "unsupported DEL/DUP, 1 allele",
+                vec![CopyNumberVariation; 2],
+                true,
+            ),
+            (
+                "<DUP>,<DEL>",
+                "unsupported DUP/DEL, 1 allele",
+                vec![CopyNumberVariation; 2],
+                true,
+            ),
+            (
+                "<DEL>,<DUP:TANDEM>",
+                "tandem_duplication, 1 allele",
+                vec![CopyNumberVariation; 2],
+                true,
+            ),
+            (
+                "<CN0>,<CN2>",
+                "copy_number_variation, 1 allele",
+                vec![CopyNumberVariation; 2],
+                true,
+            ),
+            (
+                "<INS>,<DEL>",
+                "unsupported INS/DEL, 1 allele",
+                vec![StructuralInsertion, StructuralDeletion],
+                false,
+            ),
+            (
+                "<INV>,<DUP>",
+                "unsupported INV/DUP, 1 allele",
+                vec![Inversion, Duplication],
+                false,
+            ),
+            (
+                "G,<INV>",
+                "deletion, 1 allele",
+                vec![StructuralDeletion; 2],
+                true,
+            ),
+        ];
+        for (alts, release_115, classes, supported) in shapes {
+            let line = format!("21\t30165700\t.\tN\t{alts}\t.\t.\tSVTYPE=DEL;END=30165900");
+            let variants = parse_vcf_line(&line, true).unwrap();
+            let got: Vec<VariantClass> = variants.iter().map(|v| v.variant_class).collect();
+            assert_eq!(got, classes, "{alts} (115.2: {release_115})");
+            assert!(
+                variants.iter().all(|v| v.vep_skip != supported),
+                "{alts}: vep_skip must be {}",
+                !supported
+            );
+            let alleles: Vec<usize> = variants.iter().map(|v| v.allele_index).collect();
+            assert_eq!(alleles, (0..variants.len()).collect::<Vec<_>>(), "{alts}");
+            let shown: Vec<String> = variants.iter().map(|v| v.display_allele()).collect();
+            let expected_shown: Vec<&str> = classes.iter().map(|c| c.so_term()).collect();
+            assert_eq!(shown, expected_shown, "{alts}");
+        }
+    }
+
+    /// `<CN0>,<CN0>` collapses to `<CN0>`, a deletion, under 116.2's normalisation
+    /// (115.2 read the joined `<CN0>/<CN0>` as a copy-number variation).
+    #[test]
+    fn repeated_cn0_collapses_to_a_deletion() {
+        let variants =
+            parse_vcf_line("21\t100\t.\tA\t<CN0>,<CN0>\t.\t.\tSVTYPE=CNV;END=800", true).unwrap();
+        assert_eq!(variants.len(), 2);
+        for v in &variants {
+            assert_eq!(v.variant_class, VariantClass::StructuralDeletion);
+            assert_eq!(v.alt_allele(), b"<CN0>");
+            assert!(!v.vep_skip);
+        }
     }
 
     #[test]

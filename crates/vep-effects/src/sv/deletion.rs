@@ -403,6 +403,7 @@ fn build_consequence(
         mane_plus_clinical: transcript.mane_plus_clinical.clone(),
         appris: transcript.appris.clone(),
         ccds: transcript.ccds.clone(),
+        protein_id: transcript.protein_id.clone(),
         swissprot: transcript.swissprot.clone(),
         trembl: transcript.trembl.clone(),
         refseq: transcript.refseq.clone(),
@@ -1039,5 +1040,34 @@ mod tests {
                 "stop_lost",
             ],
         );
+    }
+
+    /// Under `--protein` the ENSP column is filled on every transcript row from the
+    /// transcript's protein id, a structural-variant row included (ensembl-vep
+    /// `OutputFactory.pm` `BaseTranscriptVariationAllele_to_output_hash`, which every
+    /// `TranscriptStructuralVariationAllele` passes through): a `transcript_ablation`
+    /// row carries the deleted transcript's ENSP, as Ensembl VEP 116.2 prints
+    /// `ENSP00000284881.4` on the `ENST00000284881` row of `del_10_6_mb` in the
+    /// GRCh38-release116 golden corpus.
+    #[test]
+    fn transcript_ablation_row_carries_the_protein_id() {
+        let transcript = tx(); // protein ENSP00000000001
+        let v = make_del("21", 24_000_000, 26_000_000);
+        let tc = calculate(&v, &transcript, 5000, 5000).unwrap();
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::TranscriptAblation]
+        );
+        assert_eq!(tc.protein_id.as_deref(), Some("ENSP00000000001"));
+    }
+
+    /// A transcript without a translation prints no ENSP on any row.
+    #[test]
+    fn non_coding_transcript_row_has_no_protein_id() {
+        let mut transcript = tx();
+        transcript.protein_id = None;
+        let v = make_del("21", 24_000_000, 26_000_000);
+        let tc = calculate(&v, &transcript, 5000, 5000).unwrap();
+        assert_eq!(tc.protein_id, None);
     }
 }

@@ -32,6 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defect, and the classes are renumbered in page order: the former 1, 9 (splice
   half), 2, 9 (start half), 3, 7, 8, 10, 4, 6, 11 and 5 are now 1 to 12. The
   0.3.1 entry's "section 3" is section 5 of the reorganised page.
+- A breakend record reaching no transcript at either breakend writes one `intergenic_variant` row per allele, and a bracket record's own breakend prints `N.` without a MATEID (Ensembl VEP 116).
+- A multi-allelic structural variant takes one class from its joined ALTs (`<INS>,<INS>` an insertion, any DEL beside DUP a `copy_number_variation`) and writes one row per ALT (Ensembl VEP 116).
+- `--max_sv_size -1` lifts the size limit, so a structural variant of any span is annotated in every output format.
+
+### Fixed
+
+- `--protein` fills ENSP on every structural-variant transcript row (`transcript_ablation`, `feature_truncation`, breakends) with a translation, where it printed `-`.
+- A breakend whose mate lies inside an NMD transcript while its own position lies outside carries `feature_truncation` without `NMD_transcript_variant`.
 
 ## [0.3.2] - 2026-10-06
 

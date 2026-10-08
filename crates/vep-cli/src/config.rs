@@ -44,8 +44,9 @@ pub struct Config {
 
     pub buffer_size: usize,
     /// Structural variants wider than this many bases keep their VCF line without
-    /// consequences and are dropped from the JSON output, as VEP's `--max_sv_size` does.
-    pub max_sv_size: u64,
+    /// consequences and are dropped from the JSON output, as VEP's `--max_sv_size`
+    /// does; `None` is the flag's `-1`, no limit.
+    pub max_sv_size: Option<u64>,
     pub fork: usize,
     /// BGZF decompression worker threads for gzipped VCF inputs (1 = single-threaded).
     pub decompression_threads: usize,
@@ -265,7 +266,7 @@ impl Config {
             species: args.species,
             assembly: args.assembly,
             buffer_size: args.buffer_size,
-            max_sv_size: args.max_sv_size,
+            max_sv_size: u64::try_from(args.max_sv_size).ok(),
             fork: resolve_fork(args.fork),
             decompression_threads: resolve_decompression_threads(args.decompression_threads),
             distance,

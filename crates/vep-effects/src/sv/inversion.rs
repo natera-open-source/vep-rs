@@ -290,6 +290,7 @@ fn build_transcript_consequence(
         mane_plus_clinical: transcript.mane_plus_clinical.clone(),
         appris: transcript.appris.clone(),
         ccds: transcript.ccds.clone(),
+        protein_id: transcript.protein_id.clone(),
         swissprot: transcript.swissprot.clone(),
         trembl: transcript.trembl.clone(),
         refseq: transcript.refseq.clone(),

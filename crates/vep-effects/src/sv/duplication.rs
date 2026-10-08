@@ -259,7 +259,7 @@ fn build_base_consequence(
     let mut sorted_csqs: ConsequenceList = SmallVec::from_slice(consequences);
     sorted_csqs.sort_by_key(|c| c.rank());
 
-    let mut tc = TranscriptConsequence {
+    TranscriptConsequence {
         transcript_id: transcript.stable_id.clone(),
         feature_start: transcript.start,
         feature_end: transcript.end,
@@ -282,17 +282,12 @@ fn build_base_consequence(
         mane_plus_clinical: transcript.mane_plus_clinical.clone(),
         appris: transcript.appris.clone(),
         ccds: transcript.ccds.clone(),
+        protein_id: transcript.protein_id.clone(),
         swissprot: transcript.swissprot.clone(),
         trembl: transcript.trembl.clone(),
         refseq: transcript.refseq.clone(),
         ..TranscriptConsequence::default()
-    };
-
-    if transcript.is_protein_coding() {
-        tc.protein_id = transcript.protein_id.clone();
     }
-
-    tc
 }
 
 /// Push a consequence if not already present.
