@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stop-codon consequences follow Ensembl VEP release 116: an edit beginning inside the stop codon is `stop_lost` or `stop_retained_variant` without `frameshift_variant`; indels decide `stop_retained_variant` on the genomic span. (#N)
 - A breakend record reaching no transcript at either breakend writes one `intergenic_variant` row per allele, and a bracket record's own breakend prints `N.` without a MATEID (Ensembl VEP 116). (#N)
 - A multi-allelic structural variant takes one class from its joined ALTs (`<INS>,<INS>` an insertion, any DEL beside DUP a `copy_number_variation`) and writes one row per ALT (Ensembl VEP 116). (#N)
+- A multi-allelic mobile-element record labels every row with the record's subtype term (`<INS:ME:ALU>,<INS>` prints `Alu_insertion` twice), as Ensembl VEP 116 does. (#N)
 - `--max_sv_size -1` lifts the size limit, so a structural variant of any span is annotated in every output format. (#N)
 - Records Ensembl VEP 116 drops before annotation (oversize, an unsupported type or ALT list, a `<DEL>` without `END` or `SVLEN`) are annotated, a documented divergence the golden manifests class `reference_skipped_record`. (#N)
 - JSON `cdna_end`, `cds_end` and `protein_end` are omitted when the end is undefined (`445-?` writes `cdna_start` alone), and `--total_length` positions are written as `N/T` strings, as Ensembl VEP 116 does. (#N)
@@ -47,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `--protein` fills ENSP on every structural-variant transcript row (`transcript_ablation`, `feature_truncation`, breakends) with a translation, where it printed `-`. (#N)
 - A breakend whose mate lies inside an NMD transcript while its own position lies outside carries `feature_truncation` without `NMD_transcript_variant`. (#N)
+- Parquet `alt` and the plugin-visible `alt_alleles` of a multi-allelic copy-number record carry each ALT as written (`<DEL>`, `<DUP>`, `<CN0>`), where every ALT read `<CNV>`. (#N)
+- The `## VEP command-line` header and the VCF `##VEP-command-line` line keep a negative value with its flag (`--max_sv_size -1`). (#N)
+- An ID equal to the generated breakend name yields the line name on the record's own `N.` row as on the mate row. (#N)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#N)
 
 ## [0.3.2] - 2026-10-06
