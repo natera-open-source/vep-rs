@@ -83,6 +83,16 @@ stay until their release is dropped. Each corpus must stay under 15 MB on
 disk (`each_corpus_fits_its_size_budget`); prefer narrower exemplars
 (`--max-span`) over a larger cache.
 
+## Parity matrix
+
+`tests/parity/matrix.tsv` lists every Ensembl VEP parameter, feature, plugin and cache field with the
+behaviour vep-rs targets for it and, once landed, the tests that prove it;
+[tests/parity/README.md](tests/parity/README.md) explains the columns and how a row closes. A pull
+request that adds a flag to `crates/vep-cli/src/args.rs` adds its row, and one that lands a row names
+its tests, because CI runs `python3 scripts/parity/check_parity_matrix.py` (a flag without a row, a
+landed row without its tests, or a named test or corpus that does not resolve fails) and
+`crates/vep-cli/tests/parity_matrix.rs` (every long flag clap reports has a row).
+
 ## Branch and Commit Conventions
 
 - Create feature branches off `main`.
