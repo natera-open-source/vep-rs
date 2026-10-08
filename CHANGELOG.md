@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Stop-codon consequences follow Ensembl VEP release 116: an edit beginning inside the stop codon is `stop_lost` or `stop_retained_variant` without `frameshift_variant`, and `stop_retained_variant` for indels is decided on the genomic span.
+- `--hgvs` describes a deletion that runs over either end of a transcript over the bases inside it (`c.-49_77+1248del`), as Ensembl VEP 116 does, instead of omitting HGVSc. (#N)
+- `--hgvs` writes a frameshift whose first changed residue is the stop codon as an extension, `p.Ter124IleextTer14` (count excluding the replaced stop), as Ensembl VEP 116 does, not `p.Ter124IlefsTer15`. (#N)
 - `docs/intended-divergences.md` is rewritten for readability and organised by
   the five Ensembl VEP defects behind the classes the adjusted concordance sets
   aside. Each defect's section states the defect in one sentence, why it is a

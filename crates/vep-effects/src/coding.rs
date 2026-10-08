@@ -3109,11 +3109,13 @@ pub fn perl_codon_peptides(
 /// consequences were computed on the unshifted allele (`hgvs_transcript` clears
 /// that cache only under `--shift_3prime`, 1405), so those verdicts are taken
 /// from `variant` here whatever the shift. `frameshift` (VariationEffect.pm
-/// 1435) is not cached: its two guards read the cache, but its length
-/// arithmetic runs on the CDS span the transcript variation carries at that
-/// point, which is the shifted span, so an indel that shifts fully into the
-/// CDS is a frameshift there even where the annotated allele straddles an
-/// exon boundary.
+/// 1435) is not cached: its guards read the cache (`partial_codon`,
+/// `stop_retained`, and from release/116 a reference peptide starting with the
+/// stop, VariationEffect.pm 1554, so a frameshift that begins in the stop codon
+/// is typed by its peptides), but its length arithmetic runs on the CDS span the
+/// transcript variation carries at that point, which is the shifted span, so an
+/// indel that shifts fully into the CDS is a frameshift there even where the
+/// annotated allele straddles an exon boundary.
 ///
 /// `None` where Perl returns `undef`: the annotated allele does not overlap the
 /// coding sequence, the (shifted) span has no translation start or end, or its
@@ -3652,11 +3654,17 @@ fn hgvsp_format(
         if alt == b"Ter" {
             format!("{}{start}{}", text(ref_pep), text(alt))
         } else {
-            let aa_til_stop = match hgvsp_stop_loss_extra_aa(ev, start - 1, true) {
-                Some(extra) => extra.to_string(),
-                None => "?".to_string(),
-            };
-            format!("{}{start}{}fsTer{aa_til_stop}", text(ref_pep), text(alt))
+            let aa_til_stop = hgvsp_stop_loss_extra_aa(ev, start - 1, true);
+            if ref_pep == b"Ter" {
+                // A frameshift whose first changed residue is the stop codon is an
+                // extension (TranscriptVariationAllele.pm 2007, release/116), and
+                // the count to the new stop leaves out the replaced stop itself.
+                let count = aa_til_stop.map_or("?".to_string(), |extra| (extra - 1).to_string());
+                format!("{}{start}{}extTer{count}", text(ref_pep), text(alt))
+            } else {
+                let count = aa_til_stop.map_or("?".to_string(), |extra| extra.to_string());
+                format!("{}{start}{}fsTer{count}", text(ref_pep), text(alt))
+            }
         }
     } else if kind == HgvspKind::Del {
         if ref_pep.len() > 3 {
