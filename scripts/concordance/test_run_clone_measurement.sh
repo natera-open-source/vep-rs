@@ -930,6 +930,18 @@ if [[ -f "$HARNESS" ]]; then
             ok "--reference-release overrides the ground truth's own provenance" ||
             bad "the override was ignored (got '$got')"
         REFERENCE_RELEASE=""
+        # A host without python3 cannot run the derivation (nor the comparators): the
+        # failure names the interpreter, not the ground truth's provenance. PATH is set
+        # as its own statement: a `PATH=... func` prefix leaves bash 3.2's hash table
+        # intact, so `command -v python3` still finds the interpreter this shell hashed.
+        mkdir -p "$TMP/nopython"
+        if (PATH="$TMP/nopython"; reference_release_for "$GT116") >"$TMP/rr_nopy.out" 2>"$TMP/rr_nopy.err"; then
+            bad "without python3 the derivation returned '$(cat "$TMP/rr_nopy.out")' instead of failing"
+        elif grep -q '^ERROR: \[run_clone_measurement\] python3 is not on PATH' "$TMP/rr_nopy.err"; then
+            ok "without python3 the cell fails naming the interpreter, not the provenance"
+        else
+            bad "without python3 the failure blames something else: $(head -1 "$TMP/rr_nopy.err")"
+        fi
     fi
     # The three layouts a reference set is written in: one record at the set root over
     # suite directories that hold only outputs (the shape of the published SNP/indel set),

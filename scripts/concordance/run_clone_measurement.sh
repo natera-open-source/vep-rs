@@ -577,6 +577,10 @@ reference_release_for() {
 		printf '%s\n' "$REFERENCE_RELEASE"
 		return 0
 	fi
+	command -v python3 >/dev/null 2>&1 || {
+		echo "ERROR: [run_clone_measurement] python3 is not on PATH: the reference release is derived by $SCRIPT_DIR/reference_release.py (the comparators need the interpreter too); install it or pass --reference-release" >&2
+		return 1
+	}
 	python3 "$SCRIPT_DIR/reference_release.py" --provenance-dir "$gt_dir" || {
 		echo "ERROR: [run_clone_measurement] no reference release for $gt_dir: its provenance names neither an Ensembl VEP image tag nor a cache version; pass --reference-release" >&2
 		return 1
