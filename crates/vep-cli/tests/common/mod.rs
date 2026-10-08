@@ -18,7 +18,13 @@
 //! only vep-rs emits; both are compared against their documented shape rather
 //! than for equality. `field_divergences` names keys whose terms agree but whose
 //! named field (an HGVS string) is documented to differ, with the value vep-rs
-//! prints; every other field of such a key compares exactly.
+//! prints; every other field of such a key compares exactly. A record VEP
+//! skipped (`reference_rows` 0 with a `reference_warning`) has no reference
+//! output; whatever vep-rs writes for it is counted, not compared.
+//!
+//! The VCF and JSON formats carry no `Location`, so their entries are keyed by
+//! the corpus record ordinal, found by matching each output record to its
+//! input line (the VCF's first five columns, the JSON object's `input`).
 
 #![allow(dead_code)]
 
@@ -188,9 +194,9 @@ pub fn input_records(corpus: &Corpus) -> Vec<String> {
 /// record-level object.
 #[derive(Debug, Clone)]
 pub struct Entry {
-    /// Stable identity within the format: the (Location or record ordinal,
-    /// Allele, Feature, Feature_type) comparison key plus an occurrence counter
-    /// for exact duplicates.
+    /// Stable identity within the format: the (Location or input record
+    /// ordinal, Allele, Feature, Feature_type) comparison key plus an occurrence
+    /// counter for exact duplicates.
     pub key: String,
     /// Corpus record ordinal when the format makes it known.
     pub record: Option<usize>,
@@ -267,13 +273,55 @@ pub fn parse_tab(text: &str) -> Vec<Entry> {
     parse_default(text)
 }
 
-/// Parses the VCF format: one entry per CSQ chunk, keyed by record ordinal,
+/// The corpus input records by identity, for mapping an output record back to
+/// its ordinal. Output formats that omit a skipped record (VEP writes no VCF
+/// line and no JSON object for one) keep every later record aligned this way,
+/// where an output ordinal would not. Identical input lines are matched in
+/// order of appearance.
+struct InputIndex {
+    by_key: HashMap<String, Vec<usize>>,
+    used: HashMap<String, usize>,
+}
+
+impl InputIndex {
+    /// `key` reduces an input line to the identity the output format carries.
+    fn new(inputs: &[String], key: impl Fn(&str) -> String) -> Self {
+        let mut by_key: HashMap<String, Vec<usize>> = HashMap::new();
+        for (i, line) in inputs.iter().enumerate() {
+            by_key.entry(key(line)).or_default().push(i);
+        }
+        InputIndex {
+            by_key,
+            used: HashMap::new(),
+        }
+    }
+
+    /// The ordinal of the next unmatched input record with this identity.
+    fn record(&mut self, key: &str) -> Option<usize> {
+        let candidates = self.by_key.get(key)?;
+        let n = self.used.entry(key.to_string()).or_insert(0);
+        let r = candidates.get(*n).copied();
+        *n += 1;
+        r
+    }
+}
+
+/// A VCF data line's identity: CHROM, POS, ID, REF and ALT, which VEP and
+/// vep-rs both write back unchanged.
+fn vcf_line_key(line: &str) -> String {
+    line.split('\t').take(5).collect::<Vec<_>>().join("\t")
+}
+
+/// Parses the VCF format: one entry per CSQ chunk, keyed by the input record
+/// ordinal (the line matched to `inputs` by CHROM, POS, ID, REF and ALT),
 /// `Allele` and `Feature`, plus one record-level entry per line carrying the
-/// eight fixed columns with the CSQ removed from INFO.
-pub fn parse_vcf(text: &str) -> Vec<Entry> {
+/// eight fixed columns with the CSQ removed from INFO. A line matching no input
+/// record is keyed by its output ordinal.
+pub fn parse_vcf(text: &str, inputs: &[String]) -> Vec<Entry> {
     let mut csq_fields: Vec<String> = Vec::new();
     let mut entries = Vec::new();
-    let mut record = 0usize;
+    let mut index = InputIndex::new(inputs, vcf_line_key);
+    let mut lines_seen = 0usize;
     for line in text.lines() {
         if line.starts_with("##INFO=<ID=CSQ") {
             let fmt = line.split("Format: ").nth(1).unwrap();
@@ -286,6 +334,11 @@ pub fn parse_vcf(text: &str) -> Vec<Entry> {
         }
         let cols: Vec<&str> = line.split('\t').collect();
         assert!(cols.len() >= 8, "VCF line has fewer than 8 columns: {line}");
+        let record = index.record(&vcf_line_key(line));
+        let rec_label = record
+            .map(|r| format!("rec{r}"))
+            .unwrap_or(format!("line{lines_seen}"));
+        lines_seen += 1;
         let mut info_rest = Vec::new();
         let mut csq = None;
         for kv in cols[7].split(';') {
@@ -308,8 +361,8 @@ pub fn parse_vcf(text: &str) -> Vec<Entry> {
             if csq.is_some() { "yes" } else { "no" }.to_string(),
         );
         entries.push(Entry {
-            key: format!("rec{record}|record"),
-            record: Some(record),
+            key: format!("{rec_label}|record"),
+            record,
             location: None,
             allele: String::new(),
             feature: String::new(),
@@ -322,7 +375,7 @@ pub fn parse_vcf(text: &str) -> Vec<Entry> {
                 assert_eq!(
                     vals.len(),
                     csq_fields.len(),
-                    "CSQ chunk width on record {record}: {chunk}"
+                    "CSQ chunk width on {rec_label}: {chunk}"
                 );
                 let fields: BTreeMap<String, String> = csq_fields
                     .iter()
@@ -332,12 +385,12 @@ pub fn parse_vcf(text: &str) -> Vec<Entry> {
                 let get = |c: &str| fields.get(c).cloned().unwrap_or_default();
                 entries.push(Entry {
                     key: format!(
-                        "rec{record}|{}|{}|{}",
+                        "{rec_label}|{}|{}|{}",
                         get("Allele"),
                         get("Feature"),
                         get("Feature_type")
                     ),
-                    record: Some(record),
+                    record,
                     location: None,
                     allele: get("Allele"),
                     feature: get("Feature"),
@@ -346,7 +399,6 @@ pub fn parse_vcf(text: &str) -> Vec<Entry> {
                 });
             }
         }
-        record += 1;
     }
     dedup_keys(&mut entries);
     entries
@@ -364,30 +416,18 @@ fn json_scalar(v: &serde_json::Value) -> String {
 
 /// Parses the JSON format: one record-level entry per object (top-level
 /// scalars, keyed by the corpus record the `input` line names) and one entry per
-/// `transcript_consequences` / `intergenic_consequences` element.
+/// `transcript_consequences` / `intergenic_consequences` element. An object
+/// whose `input` matches no record is keyed by its output ordinal.
 pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
-    let mut by_input: HashMap<&str, Vec<usize>> = HashMap::new();
-    for (i, line) in inputs.iter().enumerate() {
-        by_input.entry(line.as_str()).or_default().push(i);
-    }
-    let mut used: HashMap<String, usize> = HashMap::new();
+    let mut index = InputIndex::new(inputs, str::to_string);
     let mut entries = Vec::new();
     for (n, line) in text.lines().enumerate() {
         if line.trim().is_empty() {
             continue;
         }
         let obj: serde_json::Value = serde_json::from_str(line).unwrap();
-        let input = obj
-            .get("input")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let record = by_input.get(input.as_str()).and_then(|v| {
-            let k = used.entry(input.clone()).or_insert(0);
-            let r = v.get(*k).copied();
-            *k += 1;
-            r
-        });
+        let input = obj.get("input").and_then(|v| v.as_str()).unwrap_or("");
+        let record = index.record(input);
         let rec_label = record
             .map(|r| format!("rec{r}"))
             .unwrap_or(format!("obj{n}"));
@@ -447,7 +487,8 @@ pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
 // Documented divergences.
 
 /// The keys whose consequence terms are documented to differ, from the
-/// manifest, addressable by Location or by record ordinal.
+/// manifest, addressable by Location or by record ordinal, and the records the
+/// reference skipped.
 pub struct Documented {
     /// (Location, Allele, Feature) -> documented vep-rs consequence sets.
     by_location: HashMap<(String, String, String), Vec<String>>,
@@ -460,6 +501,9 @@ pub struct Documented {
     /// documented to print where VEP prints another.
     fields_by_location: HashMap<(String, String, String), BTreeMap<String, String>>,
     fields_by_record: HashMap<(usize, String, String), BTreeMap<String, String>>,
+    /// Records VEP skipped with a warning (`reference_rows` 0): it wrote no
+    /// output for them, so nothing vep-rs writes for them has a reference.
+    skipped_records: BTreeSet<usize>,
 }
 
 impl Documented {
@@ -471,10 +515,23 @@ impl Documented {
             extra_by_record: BTreeSet::new(),
             fields_by_location: HashMap::new(),
             fields_by_record: HashMap::new(),
+            skipped_records: BTreeSet::new(),
         };
         let s = |v: &serde_json::Value, k: &str| {
             v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string()
         };
+        for (i, rec) in manifest["records"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            let skipped = rec["reference_rows"].as_u64() == Some(0)
+                || rec.get("reference_warning").is_some_and(|w| w.is_string());
+            if skipped {
+                d.skipped_records.insert(i);
+            }
+        }
         for item in manifest["divergences"].as_array().into_iter().flatten() {
             let sets: Vec<String> = item["vep_rs_consequence_sets"]
                 .as_array()
@@ -608,6 +665,23 @@ impl Documented {
             || self.extra_by_record.iter().any(|(r, _, _)| *r == record)
     }
 
+    /// Whether the reference skipped the record, leaving nothing to compare
+    /// vep-rs's output for it against.
+    pub fn reference_skipped(&self, record: usize) -> bool {
+        self.skipped_records.contains(&record)
+    }
+
+    /// Whether any field of the entry is documented to differ.
+    pub fn has_divergent_fields(&self, e: &Entry) -> bool {
+        let (allele, feature) = (dash(&e.allele), dash(&e.feature));
+        e.location.as_ref().is_some_and(|loc| {
+            self.fields_by_location
+                .contains_key(&(loc.clone(), allele.clone(), feature.clone()))
+        }) || e
+            .record
+            .is_some_and(|r| self.fields_by_record.contains_key(&(r, allele, feature)))
+    }
+
     pub fn is_empty(&self) -> bool {
         self.by_location.is_empty() && self.by_record.is_empty()
     }
@@ -626,6 +700,20 @@ fn dash(s: &str) -> String {
         "-".to_string()
     } else {
         s.to_string()
+    }
+}
+
+/// The field value of an entry that lacks the field.
+const ABSENT: &str = "<absent>";
+
+/// A documented field value compares across formats on the default format's
+/// spelling of absence: `-`, an empty VCF value and a key the default or JSON
+/// format leaves out are one value.
+fn documented_form(s: &str) -> String {
+    if s == ABSENT {
+        "-".to_string()
+    } else {
+        dash(&decode_extra(s))
     }
 }
 
@@ -658,6 +746,7 @@ pub fn compare_entries(expected: &[Entry], actual: &[Entry], documented: &Docume
     let mut stale_divergences: Vec<String> = Vec::new();
     let mut compared = 0usize;
     let mut skipped_documented = 0usize;
+    let mut annotated_without_reference = 0usize;
 
     for e in expected {
         let a = actual_by_key.get(e.key.as_str()).copied();
@@ -690,17 +779,23 @@ pub fn compare_entries(expected: &[Entry], actual: &[Entry], documented: &Docume
         names.extend(a.fields.keys());
         let record_summary_differs =
             e.key.ends_with("|record") && e.record.is_some_and(|r| documented.record_divergent(r));
+        // The default format's `Extra` is the raw text of the fields compared
+        // one by one below, so it differs wherever one of them is documented to.
+        let extra_differs = documented.has_divergent_fields(e);
         for name in names {
             if record_summary_differs && name == "most_severe_consequence" {
                 continue;
             }
-            let ev = e.fields.get(name).map(String::as_str).unwrap_or("<absent>");
-            let av = a.fields.get(name).map(String::as_str).unwrap_or("<absent>");
+            if extra_differs && name == "Extra" {
+                continue;
+            }
+            let ev = e.fields.get(name).map(String::as_str).unwrap_or(ABSENT);
+            let av = a.fields.get(name).map(String::as_str).unwrap_or(ABSENT);
             if let Some(documented_value) = documented.divergent_field(e, name) {
                 // The field is documented to differ: vep-rs must print the documented
                 // value (compared after the Extra/CSQ percent-encoding of `=` and `;`
                 // is undone), or the documentation is stale.
-                if decode_extra(av) != decode_extra(documented_value) {
+                if documented_form(av) != documented_form(documented_value) {
                     stale_divergences.push(format!(
                         "{}: field {name} documented as {:?}, vep-rs now prints {:?} (VEP: {:?})",
                         e.key, documented_value, av, ev
@@ -723,6 +818,10 @@ pub fn compare_entries(expected: &[Entry], actual: &[Entry], documented: &Docume
     }
     for a in actual {
         if expected_by_key.contains_key(a.key.as_str()) || documented.extra(a) {
+            continue;
+        }
+        if a.record.is_some_and(|r| documented.reference_skipped(r)) {
+            annotated_without_reference += 1;
             continue;
         }
         unexpected.push(a);
@@ -771,6 +870,11 @@ pub fn compare_entries(expected: &[Entry], actual: &[Entry], documented: &Docume
         compared,
         skipped_documented
     );
+    if annotated_without_reference > 0 {
+        report.push_str(&format!(
+            "vep-rs annotated, reference skipped: {annotated_without_reference} entries\n"
+        ));
+    }
     report.push_str(&order_note);
     if !missing.is_empty() {
         report.push_str(&format!("MISSING in vep-rs: {} entries\n", missing.len()));
