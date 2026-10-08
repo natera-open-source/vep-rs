@@ -45,9 +45,11 @@ pub struct Config {
     pub assembly: Option<String>,
 
     pub buffer_size: usize,
-    /// Structural variants wider than this many bases keep their VCF line without
-    /// consequences and are dropped from the JSON output, as VEP's `--max_sv_size`
-    /// does; `None` is the flag's `-1`, no limit.
+    /// The `--max_sv_size` limit; `None` is the flag's `-1`, no limit. Ensembl VEP
+    /// 116 drops a wider structural variant before annotation and writes nothing
+    /// for it in any format (`Parser.pm` `validate_vf`); vep-rs annotates it in the
+    /// default, tab and Parquet outputs, carries its VCF line without consequences
+    /// and omits it from the JSON output (`docs/intended-divergences.md`).
     pub max_sv_size: Option<u64>,
     pub fork: usize,
     /// BGZF decompression worker threads for gzipped VCF inputs (1 = single-threaded).

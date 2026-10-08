@@ -9,7 +9,7 @@
 //!
 //! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`);
 //! `Sequence.pm`, `StructuralVariationFeature.pm` and `StructuralVariationOverlap.pm`
-//! are in ensembl-variation release/116 and `BaseVCF4.pm` is in ensembl-io release/115.
+//! are in ensembl-variation release/116 and `BaseVCF4.pm` is in ensembl-io release/116.
 
 use anyhow::{bail, Context};
 
@@ -641,9 +641,11 @@ pub(crate) fn sv_type_abbreviation(joined_alts: &str, svtype: Option<&str>) -> S
 
 /// VEP's `%SO_TERMS` (ensembl-variation `Utils/Config.pm`): the SO term of a
 /// record whose type abbreviation is one of its keys, with the class that
-/// annotates the term, `None` for an unsupported type. A record of unknown type
-/// is parsed and, in the default format, annotated, but VEP's VCF and JSON
-/// writers leave it without consequences.
+/// annotates the term, `None` for an unsupported type. Ensembl VEP 116 drops a
+/// record of unknown type before annotation (`Parser.pm` `validate_svf`) and
+/// writes nothing for it in any format; vep-rs parses and annotates it, carrying
+/// its VCF line without consequences and writing an `input`-only JSON object
+/// (`docs/intended-divergences.md`).
 pub(crate) fn sv_so_term_and_class(
     abbrev: &str,
 ) -> Option<(&'static str, vep_core::variant::VariantClass)> {
@@ -1074,7 +1076,7 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP 116.2 names `21 10463009 . T TG` (GRCh38 corpus)
+    /// Ensembl VEP 116.2 names `21 10463009 . T TG` (OutputFactory.pm, the line-name branch)
     /// `21_10463009_T/TG` and `21 30677516 . TCACA T` (GRCh37-hgvs corpus)
     /// `21_30677516_TCACA/T`: the POS as written, not the anchor-trimmed start.
     #[test]
@@ -1090,7 +1092,7 @@ mod tests {
 
     /// Parser.pm `minimise_alleles` copies the record's line onto the minimised
     /// copy, so `21 100 . ATT AT`, minimised to `T/-` at 102, is named
-    /// `21_100_ATT/AT` by OutputFactory.pm (`21_102_ATT/AT` at release 115).
+    /// `21_100_ATT/AT` by OutputFactory.pm.
     #[test]
     fn minimised_copy_is_named_by_its_line() {
         let variants = parse_vcf_line("21\t100\t.\tATT\tAT\t.\t.\t.", false).unwrap();
@@ -1210,7 +1212,7 @@ mod tests {
     /// A sequence ALT beside a symbolic one: VEP 116.2 reads the record's type from
     /// INFO/SVTYPE (the joined ALTs open with a sequence allele) and writes one row
     /// per ALT, each with the class term as its Allele (the `synth_multi_mix` records
-    /// of the GRCh37 and GRCh38 golden corpora, `deletion` twice per transcript).
+    /// of `tests/golden/116/GRCh37`, `deletion` twice per transcript).
     #[test]
     fn test_parse_vcf_line_mixed_symbolic_uses_svtype_override() {
         let line = "21\t1000\t.\tC\tG,<INV>\t.\t.\tSVTYPE=DEL;END=2000;SVLEN=-1000";
@@ -1914,7 +1916,7 @@ mod tests {
     }
 
     /// `<CN0>,<CN0>` collapses to `<CN0>`, a deletion, under 116.2's normalisation
-    /// (115.2 read the joined `<CN0>/<CN0>` as a copy-number variation).
+    /// (Parser.pm `get_SO_term`: identical parts reduce to one).
     #[test]
     fn repeated_cn0_collapses_to_a_deletion() {
         let variants =

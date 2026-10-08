@@ -11,7 +11,7 @@
 //! Annotation of each batch is parallelised across the resolved `--fork` count
 //! (default: every logical CPU up to 32; `--fork 1` runs serially) using rayon's `par_iter_mut`.
 //!
-//! Perl citations name modules of ensembl-vep release/115 (`Bio/EnsEMBL/VEP/...`).
+//! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`).
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
@@ -155,9 +155,12 @@ fn collapse_paths(value: &str) -> String {
         .join(",")
 }
 
-/// VEP's `--max_sv_size` check (Parser.pm `validate_vf`): a structural variant
-/// whose span exceeds the limit keeps its VCF line without consequences and
-/// is absent from the JSON output. `None` is the flag's `-1`: no limit.
+/// VEP's `--max_sv_size` check (Parser.pm `validate_vf`); `None` is the flag's
+/// `-1`, no limit. Ensembl VEP 116 drops a structural variant whose span exceeds
+/// the limit before annotation and writes nothing for it in any format; vep-rs
+/// annotates it in the default, tab and Parquet outputs, keeps its VCF line
+/// without consequences and omits it from the JSON output
+/// (`docs/intended-divergences.md`).
 pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: Option<u64>) {
     let Some(max_sv_size) = max_sv_size else {
         return;
