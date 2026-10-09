@@ -1293,7 +1293,7 @@ On the second record the two readings also name different terms: an in-frame ins
 
 #### 12.4 Why Ensembl VEP writes that
 
-Ensembl VEP builds the alternate allele as a literal sequence (it materialises the allele). It reads the reference bases of the run and builds the alternate as `RUS` repeated `RUC` times (or `RB / RUL` times when `RUC` is absent). It then hands the pair to its sequence-variant machinery, which trims the common prefix. What is left is a gain as an insertion of whole units after the run's last base, or a loss as a deletion of whole units ending at the run's last base.
+Ensembl VEP builds the alternate allele as a literal sequence (it materialises the allele). It reads the reference bases of the run and builds the alternate as `RUS` repeated `RUC` times (or `RB` divided by the unit's length, in whole units, when `RUC` is absent). It then hands the pair to its sequence-variant machinery, which trims the common prefix. What is left is a gain as an insertion of whole units after the run's last base, or a loss as a deletion of whole units ending at the run's last base.
 
 The materialisation is skipped when the alternate allele is longer than `--max_sv_size` bases (the same 10,000,000 default), and the record is then annotated symbolically.
 

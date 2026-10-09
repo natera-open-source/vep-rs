@@ -672,18 +672,18 @@ pub fn calculate_sv_consequences(
         VariantClass::ComplexStructural => {
             cnv::calculate(variant, transcript, upstream_distance, downstream_distance)
         }
-        // A `<CNV:TR>` record states its alternate allele's length (INFO/RB, or RUC times
-        // the unit length) against the reference run SVLEN spans. With the reference
-        // sequence to hand, Perl expands the record to `<run>/<RUS x RUC>` and
-        // `post_process_vfs` minimises the pair (`trim_sequences`, the common prefix
-        // first), so a contraction is a deletion of the run's last `run - alt` bases and
-        // an expansion an insertion between the run's last base and the next; the
-        // deletion and insertion-pair paths read those spans here, while the row keeps
-        // the run as its location. A record whose alternate allele is the run's length,
-        // or that states no length, reads as Perl's symbolic tandem repeat, a
+        // A `<CNV:TR>` record states its alternate allele's length (`tr_alt_bases`)
+        // against the reference run SVLEN spans. With the reference sequence to hand,
+        // Perl expands the record to `<run>/<RUS x RUC>` and `post_process_vfs`
+        // minimises the pair (`trim_sequences`, the common prefix first): for a run of
+        // one repeat unit a contraction is a deletion of the run's last `run - alt`
+        // bases and an expansion an insertion between the run's last base and the next.
+        // The deletion and insertion-pair paths read those spans here for every run,
+        // while the row keeps the run as its location. An alternate allele the run's
+        // length, or no stated length, reads as Perl's symbolic tandem repeat, a
         // copy-number gain (`copy_number_gain` in VariationEffect.pm) over the run:
-        // `feature_elongation`, and `transcript_amplification` when the run contains the
-        // transcript.
+        // `feature_elongation`, and `transcript_amplification` when the run contains
+        // the transcript.
         VariantClass::TandemRepeat => {
             let run_end = variant.sv_end.unwrap_or(variant.end);
             let run_bases = run_end.saturating_sub(variant.start).saturating_add(1);
@@ -722,6 +722,7 @@ pub fn calculate_sv_consequences(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
     use vep_core::transcript::{
         Attribute, ExonCoordMapper, MapperPair, TranscriptMapper, TranscriptVEFC,
     };
@@ -884,12 +885,8 @@ mod tests {
     }
 
     /// The row's terms as a set, so an expectation lists them in any order.
-    fn terms(tc: &TranscriptConsequence) -> std::collections::BTreeSet<Consequence> {
+    fn terms(tc: &TranscriptConsequence) -> BTreeSet<Consequence> {
         tc.consequences.iter().copied().collect()
-    }
-
-    fn set(terms: &[Consequence]) -> std::collections::BTreeSet<Consequence> {
-        terms.iter().copied().collect()
     }
 
     /// A contraction loses the run's tail. Ensembl VEP 116.2 expands
@@ -915,7 +912,7 @@ mod tests {
         .expect("the run lies in the second exon");
         assert_eq!(
             terms(&two_units),
-            set(&[Consequence::InframeDeletion, Consequence::FeatureTruncation])
+            BTreeSet::from([Consequence::InframeDeletion, Consequence::FeatureTruncation])
         );
         let three_units = calculate_sv_consequences(
             &make_tandem_repeat_run(25_002_100, 25_002_109, Some(6)),
@@ -926,7 +923,7 @@ mod tests {
         .expect("the run lies in the second exon");
         assert_eq!(
             terms(&three_units),
-            set(&[
+            BTreeSet::from([
                 Consequence::FrameshiftVariant,
                 Consequence::FeatureTruncation
             ])
@@ -953,14 +950,17 @@ mod tests {
         .expect("the run lies in the second exon");
         assert_eq!(
             terms(&in_cds),
-            set(&[
+            BTreeSet::from([
                 Consequence::CodingSequenceVariant,
                 Consequence::FeatureElongation
             ])
         );
         let in_intron = calculate_sv_consequences(&make_tandem_repeat(Some(360)), &tx, 5000, 5000)
             .expect("the run lies in the transcript");
-        assert_eq!(terms(&in_intron), set(&[Consequence::IntronVariant]));
+        assert_eq!(
+            terms(&in_intron),
+            BTreeSet::from([Consequence::IntronVariant])
+        );
     }
 
     /// A contraction whose lost bases lie in the first intron (the run's last 60
@@ -971,7 +971,7 @@ mod tests {
         let tx = crate::test_helpers::make_test_transcript();
         let tc = calculate_sv_consequences(&make_tandem_repeat(Some(240)), &tx, 5000, 5000)
             .expect("the run lies in the transcript");
-        assert_eq!(terms(&tc), set(&[Consequence::IntronVariant]));
+        assert_eq!(terms(&tc), BTreeSet::from([Consequence::IntronVariant]));
     }
 
     /// A record with two repeat sequences in one allele, `RN=2;RUS=CT,GA;RUC=2,1`
@@ -993,7 +993,7 @@ mod tests {
         .expect("the run lies in the second exon");
         assert_eq!(
             terms(&tc),
-            set(&[
+            BTreeSet::from([
                 Consequence::FrameshiftVariant,
                 Consequence::FeatureTruncation
             ])

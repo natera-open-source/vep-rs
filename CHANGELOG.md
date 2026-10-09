@@ -53,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An ID equal to the generated breakend name yields the line name on the record's own `N.` row as on the mate row. (#44)
 - A `<CNV:TR>` contraction loses the run's tail and an expansion inserts after it, as Ensembl VEP's expansion places them, so the frame follows the unit change, not the run length. (#44)
 - A `<CNV:TR>` allele's length sums its RN repeat sequences, and each allele of a multi-allelic record takes its own RUS, RUC and RB entries. (#44)
+- A `<CNV:TR>` allele's length reads RUC before RB, RB in whole units, a `.` unit as one base, as Ensembl VEP 116 does (`RB=42;RUC=7;RUS=CAG` is 21 bases). (#44)
+- A breakend record listing two bracket ALTs writes its own breakend once, three rows for two mates, as Ensembl VEP 116 does. (#44)
+- A record mixing a mobile-element deletion and insertion takes the leftmost ALT's term (`<DEL:ME:ALU>,<INS:ME:LINE1>` prints `Alu_deletion`), as Ensembl VEP 116 does. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
 
 ## [0.3.2] - 2026-10-06

@@ -190,9 +190,10 @@ pub struct InputVariant {
     /// For structural variants: SVLEN from VCF INFO field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sv_len: Option<i64>,
-    /// For a tandem repeat (`<CNV:TR>`): the alternate allele's length in bases, read from
-    /// INFO/RB, else RUC times the repeat unit's length. `None` when the record carries
-    /// neither, so the record describes no direction of change.
+    /// For a tandem repeat (`<CNV:TR>`): the alternate allele's length in bases, RUC
+    /// times the repeat unit's length when the record carries INFO/RUC, else INFO/RB
+    /// rounded down to whole units. `None` when the record states no length, so the
+    /// record describes no direction of change.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tr_alt_bases: Option<u64>,
     /// For imprecise SVs: CIPOS confidence interval (two i64 values).

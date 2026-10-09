@@ -434,6 +434,25 @@ fn oversize_structural_variant_is_annotated_not_dropped() {
     );
 }
 
+/// A breakend record listing two bracket ALTs writes three rows, the record's own
+/// breakend `N.` and one per mate: Ensembl VEP 116.2 annotates `($vf, @$breakends)`
+/// (`StructuralVariationOverlap.pm:90`), one `$vf` entry per record however many
+/// brackets the ALT column lists.
+#[test]
+fn two_bracket_breakend_alts_write_three_rows() {
+    let rows = annotate_record(
+        "21\t11000000\tmb2\tN\tN[21:11500000[,N]21:11600000]\t.\t.\tSVTYPE=BND",
+        &[],
+        &[],
+    );
+    let alleles: Vec<&str> = rows.iter().map(|r| r.split('\t').nth(2).unwrap()).collect();
+    assert_eq!(
+        alleles,
+        ["N.", "N[21:11500000[", "N]21:11600000]"],
+        "{rows:?}"
+    );
+}
+
 /// The `--max_sv_size` row of `docs/cli-reference.md` states the documented
 /// exclusion: Ensembl VEP 116 drops an oversize record and vep-rs annotates it.
 #[test]
