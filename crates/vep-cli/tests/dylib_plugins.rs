@@ -13,7 +13,7 @@ const SKIPPED_WARNING: &str =
     "plugin 'NoSuchPlugin' not found as a built-in or as a dylib under --dir_plugins; skipped";
 
 fn corpus_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/115/GRCh37")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh37")
 }
 
 /// Runs `vep` in the default output format on the corpus without `--quiet`, so

@@ -3,7 +3,7 @@
 # block per transcript (`### <stable_id>` then the dump), for a field-level comparison of
 # two cache builds. Prediction matrices are summarised as their byte length and
 # translation md5 so the dump stays readable; everything else is verbatim. Runs inside
-# ensemblorg/ensembl-vep:release_115.2 like compare_storable_cache_versions.pl, whose
+# ensemblorg/ensembl-vep:release_116.2 like compare_storable_cache_versions.pl, whose
 # `differing_*.tsv` id list is the usual input; `classify_storable_transcript_differences.py`
 # reads two of these dumps.
 #

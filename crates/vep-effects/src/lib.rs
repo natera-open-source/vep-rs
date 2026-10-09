@@ -22,8 +22,10 @@ pub use overlap::find_overlapping_transcripts;
 #[cfg(test)]
 pub(crate) mod test_helpers {
     use std::sync::Arc;
+    use vep_core::codon::reverse_complement;
     use vep_core::coordinate::Strand;
     use vep_core::transcript::*;
+    use vep_core::variant::InputVariant;
 
     /// Build a test transcript on chr21, forward strand, with 3 exons and 2 introns.
     ///
@@ -191,6 +193,166 @@ pub(crate) mod test_helpers {
             vefc: Some(vefc),
             derived: Default::default(),
         }
+    }
+
+    /// The 5' UTR length of [`make_single_exon_transcript`].
+    pub const SINGLE_EXON_UTR5: u64 = 30;
+
+    /// A single-exon coding transcript on chromosome 21: a 30-base 5' UTR, the
+    /// coding sequence `cds` (transcript orientation, ending in its stop codon) and
+    /// the 3' UTR `utr3`, on `strand`. The genomic span starts at 40,000,001; on the
+    /// reverse strand the transcript's first base is the span's last.
+    pub fn make_single_exon_transcript(strand: Strand, cds: &str, utr3: &str) -> Transcript {
+        const START: u64 = 40_000_001;
+        let cds_len = cds.len() as u64;
+        let cdna_len = SINGLE_EXON_UTR5 + cds_len + utr3.len() as u64;
+        let end = START + cdna_len - 1;
+        let (ori, crs, cre) = if strand == Strand::Reverse {
+            (
+                -1,
+                end - (SINGLE_EXON_UTR5 + cds_len - 1),
+                end - SINGLE_EXON_UTR5,
+            )
+        } else {
+            (
+                1,
+                START + SINGLE_EXON_UTR5,
+                START + SINGLE_EXON_UTR5 + cds_len - 1,
+            )
+        };
+        let exons = vec![Exon {
+            stable_id: Some("ENSE00000000001".into()),
+            start: START,
+            end,
+            rank: 1,
+            phase: -1,
+            end_phase: -1,
+        }];
+        let pairs = vec![MapperPair {
+            from_start: 1,
+            from_end: cdna_len,
+            to_start: START,
+            to_end: end,
+            ori,
+        }];
+        let vefc = TranscriptVEFC {
+            codon_table: 1,
+            five_prime_utr: None,
+            three_prime_utr: Some(utr3.to_string()),
+            translateable_seq: Some(cds.to_string()),
+            peptide: None,
+            introns: vec![],
+            sorted_exons: exons.clone(),
+            mapper: Some(TranscriptMapper {
+                start_phase: 0,
+                cdna_coding_start: SINGLE_EXON_UTR5 + 1,
+                cdna_coding_end: SINGLE_EXON_UTR5 + cds_len,
+                exon_coord_mapper: ExonCoordMapper::new(pairs),
+            }),
+            protein_features: vec![],
+            protein_function_predictions: None,
+            seq_edits: vec![],
+        };
+        Transcript {
+            stable_id: "ENST00000000001".into(),
+            version: Some(1),
+            db_id: None,
+            gene_stable_id: "ENSG00000000001".into(),
+            chr: "21".into(),
+            start: START,
+            end,
+            strand,
+            biotype: "protein_coding".into(),
+            source: "Ensembl".into(),
+            description: None,
+            gene_symbol: Some("TEST1".into()),
+            gene_symbol_source: Some("HGNC".into()),
+            hgnc_id: Some("HGNC:0001".into()),
+            gene_phenotype: None,
+            canonical: true,
+            mane_select: None,
+            mane_plus_clinical: None,
+            tsl: None,
+            appris: None,
+            ccds: None,
+            protein_id: Some("ENSP00000000001".into()),
+            refseq: None,
+            swissprot: None,
+            trembl: None,
+            uniparc: None,
+            exons,
+            introns: vec![],
+            cdna_coding_start: Some(SINGLE_EXON_UTR5 + 1),
+            cdna_coding_end: Some(SINGLE_EXON_UTR5 + cds_len),
+            coding_region_start: Some(crs),
+            coding_region_end: Some(cre),
+            translation_start: Some(crs),
+            translation_end: Some(cre),
+            translation: Some(Translation {
+                stable_id: "ENSP00000000001".into(),
+                version: Some(1),
+                db_id: None,
+                start: SINGLE_EXON_UTR5 + 1,
+                end: SINGLE_EXON_UTR5 + cds_len,
+                start_exon_index: 0,
+                end_exon_index: 0,
+                seq: None,
+            }),
+            cdna_sequence: None,
+            protein_sequence: None,
+            flags: Arc::from([]),
+            gencode_primary: false,
+            attributes: vec![],
+            vefc: Some(vefc),
+            derived: Default::default(),
+        }
+    }
+
+    /// A 69-base coding sequence: `ATG`, twenty `GCT`, then `penultimate` and `stop`,
+    /// so the stop codon is CDS 67..69 and the penultimate codon CDS 64..66.
+    pub fn cds_ending_in(penultimate: &str, stop: &str) -> String {
+        let mut cds = String::from("ATG");
+        cds.push_str(&"GCT".repeat(20));
+        cds.push_str(penultimate);
+        cds.push_str(stop);
+        cds
+    }
+
+    /// The genomic coordinate of CDS position `cds_pos` on a single-exon transcript.
+    pub fn genomic_of_cds(tx: &Transcript, cds_pos: u64) -> u64 {
+        let cdna = SINGLE_EXON_UTR5 + cds_pos;
+        if tx.strand == Strand::Reverse {
+            tx.end - (cdna - 1)
+        } else {
+            tx.start + cdna - 1
+        }
+    }
+
+    /// An insertion of `seq` (transcript orientation) between CDS positions `after`
+    /// and `after + 1`, as the input record carries it on the forward strand.
+    pub fn insertion_after_cds(tx: &Transcript, after: u64, seq: &str) -> InputVariant {
+        let a = genomic_of_cds(tx, after);
+        let b = genomic_of_cds(tx, after + 1);
+        let anchor = a.min(b);
+        let alt = if tx.strand == Strand::Reverse {
+            reverse_complement(seq.as_bytes())
+        } else {
+            seq.as_bytes().to_vec()
+        };
+        InputVariant::new("21".into(), anchor + 1, anchor, b"-".to_vec(), alt)
+    }
+
+    /// A deletion of CDS positions `from..=to` (transcript orientation; positions
+    /// past the CDS end run into the 3' UTR), `seq` being the deleted transcript bases.
+    pub fn deletion_of_cds(tx: &Transcript, from: u64, to: u64, seq: &str) -> InputVariant {
+        let a = genomic_of_cds(tx, from);
+        let b = genomic_of_cds(tx, to);
+        let r = if tx.strand == Strand::Reverse {
+            reverse_complement(seq.as_bytes())
+        } else {
+            seq.as_bytes().to_vec()
+        };
+        InputVariant::new("21".into(), a.min(b), a.max(b), r, b"-".to_vec())
     }
 
     /// Build the standard test transcript with transcript flags applied.

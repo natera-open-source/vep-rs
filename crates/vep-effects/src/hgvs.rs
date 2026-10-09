@@ -7,6 +7,9 @@
 //! the Human Genome Variation Society nomenclature conventions, matching Perl
 //! VEP's output.
 //!
+//! Perl citations name modules of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`).
+//!
 //! Reference: <https://varnomen.hgvs.org/>
 
 use vep_core::coordinate::Strand;
@@ -241,7 +244,7 @@ fn hgvs_variant_notation(
     Some(n)
 }
 
-/// `_clip_alleles` (TranscriptVariationAllele.pm 2118) as `hgvs_transcript`
+/// `_clip_alleles` (TranscriptVariationAllele.pm 2188) as `hgvs_transcript`
 /// calls it, before `numbering` is set: the shared residues are trimmed from the
 /// front and the back, moving `start` and `end`, and the type is re-read from
 /// what remains; the `=` and `dup` re-sets, which need `numbering`, never fire.
@@ -307,7 +310,7 @@ impl ExonSpan {
     }
 }
 
-/// `_get_cDNA_position` (TranscriptVariationAllele.pm 2683): the HGVS cDNA
+/// `_get_cDNA_position` (TranscriptVariationAllele.pm 2755): the HGVS cDNA
 /// coordinate of 1-based slice position `pos`, exonic as a plain coordinate,
 /// intronic as the nearest exon boundary with a `+` or `-` distance (the
 /// upstream exon on a tie), then made relative to the start codon (`-` before it)
@@ -441,7 +444,7 @@ fn format_hgvs_string(
 }
 
 /// The reference-sequence name of an HGVS string, `hgvs_transcript`
-/// (TranscriptVariationAllele.pm 1435) and `hgvs_protein` (1695): the stable id
+/// (TranscriptVariationAllele.pm 1499) and `hgvs_protein` (1759): the stable id
 /// with its version appended unless there is none, the id already ends in
 /// `.<digits>`, or the id is an LRG identifier.
 fn versioned_reference_name(stable_id: &str, version: Option<u32>) -> String {
@@ -497,19 +500,22 @@ pub fn generate_hgvs(
 }
 
 /// Generate HGVSc notation for a variant-transcript pair: Perl VEP's
-/// `hgvs_transcript` (TranscriptVariationAllele.pm 1311) for an Ensembl
+/// `hgvs_transcript` (TranscriptVariationAllele.pm 1375) for an Ensembl
 /// transcript.
 ///
 /// Returns `None` when the alternate allele carries a character outside
-/// `ACGT-` or equals the reference, when the variant lies outside the
+/// `ACGT-` or equals the reference, when the variant does not overlap the
 /// transcript's genomic span (so an upstream or downstream variant has no HGVSc),
 /// when the 3'-shifted span leaves it, or when the alleles agree at the shifted
-/// position. An insertion or deletion is described at its most 3' position on
-/// the transcript strand when a FASTA is present; the type and the displayed
-/// span follow `hgvs_variant_notation`, shared bases are clipped, an exonic
-/// single-base substitution inside the CDS takes its CDS coordinate and every
-/// other position goes through `_get_cDNA_position`. Without a FASTA the
-/// reference bases come from the variant and no duplication is detected.
+/// position. A variant that overlaps the span but runs over either edge is
+/// described over the bases inside it, each end clamped onto the transcript
+/// (`_var2transcript_slice_coords`, 2732-2733). An insertion or deletion is
+/// described at its most 3' position on the transcript strand when a FASTA is
+/// present; the type and the displayed span follow `hgvs_variant_notation`,
+/// shared bases are clipped, an exonic single-base substitution inside the CDS
+/// takes its CDS coordinate and every other position goes through
+/// `_get_cDNA_position`. Without a FASTA the reference bases come from the
+/// variant and no duplication is detected.
 pub fn generate_hgvsc(
     variant: &InputVariant,
     transcript: &Transcript,
@@ -565,6 +571,16 @@ fn hgvsc_at(
     });
     let fallback_ref = in_transcript_orientation(variant.ref_allele.clone());
 
+    // OutputFactory.pm asks for HGVS only `within_feature`, the raw overlap of the
+    // variant with the transcript, so an insertion butting against a transcript
+    // edge has no notation even though the clamp below would place it. This gate
+    // also covers the `return undef` of `_var2transcript_slice_coords`
+    // (TranscriptVariationAllele.pm 2729) for a span wholly before or wholly past
+    // the transcript.
+    if variant.end < transcript.start || variant.start > transcript.end {
+        return None;
+    }
+
     let slice = TranscriptSlice {
         chr: &variant.chr,
         tr_start: transcript.start as i64,
@@ -574,22 +590,35 @@ fn hgvsc_at(
     };
     let (vf_start, vf_end) = (variant.start as i64, variant.end as i64);
     // `_var2transcript_slice_coords`: on the reverse strand the ends swap.
-    let (slice_start, slice_end) = if reverse {
+    let (raw_start, raw_end) = if reverse {
         (slice.position(vf_end), slice.position(vf_start))
     } else {
         (slice.position(vf_start), slice.position(vf_end))
     };
+    // `_var2transcript_slice_coords` (TranscriptVariationAllele.pm 2732-2733): an
+    // end outside the slice is clamped onto its edge, so a deletion running over
+    // an edge is described over the bases inside the transcript. `clamp` panics on
+    // an empty slice, which Perl never checks.
     let tr_len = slice.len();
-    if slice_start < 1 || slice_end < 1 || slice_start > tr_len || slice_end > tr_len {
+    if tr_len < 1 {
         return None;
     }
+    let slice_start = raw_start.clamp(1, tr_len);
+    let slice_end = raw_end.clamp(1, tr_len);
     if tr_len < slice_end + offset {
         return None;
     }
+    // Without a FASTA the reference bases come from the variant: the bases the
+    // clamp cut off are dropped from that fallback too.
+    let front_cut = (slice_start - raw_start).max(0) as usize;
+    let back_cut = (raw_end - slice_end).max(0) as usize;
+    let fallback_ref = fallback_ref
+        .get(front_cut..fallback_ref.len().saturating_sub(back_cut))
+        .unwrap_or(&fallback_ref);
 
     let mut n = hgvs_variant_notation(
         &slice,
-        &fallback_ref,
+        fallback_ref,
         alt_seq,
         slice_start + offset,
         slice_end + offset,
@@ -1031,6 +1060,100 @@ mod tests {
         );
     }
 
+    /// A deletion of `start..=end` with a reference allele of the right length,
+    /// as the FASTA-less path reads it.
+    fn deletion(start: u64, end: u64) -> InputVariant {
+        InputVariant::new(
+            "21".into(),
+            start,
+            end,
+            vec![b'A'; (end - start + 1) as usize],
+            b"-".to_vec(),
+        )
+    }
+
+    /// `_var2transcript_slice_coords` (TranscriptVariationAllele.pm 2729-2733): a
+    /// deletion that begins ten bases before the transcript's first base has its
+    /// start clamped onto that base, so it is described from c.-50 (slice
+    /// position 1) to c.-41 (slice position 10). Rows of the same shape in
+    /// `tests/golden/116/GRCh37-hgvs`: `21:34914375-34916723 -` against
+    /// ENST00000290239, `ENST00000290239.6:c.-49_77+1248del`, and
+    /// `21:9937919-9937971 -` against ENST00000459307, `ENST00000459307.1:n.48_83del`.
+    #[test]
+    fn test_hgvsc_deletion_starting_before_transcript_is_clamped_to_first_base() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            generate_hgvsc(&deletion(24_999_990, 25_000_009), &tx, None).as_deref(),
+            Some("ENST00000000001.1:c.-50_-41del")
+        );
+    }
+
+    /// The same rule at the 3' end: a deletion running ten bases past the
+    /// transcript's last base (cDNA 2601, c.*1701) has its end clamped onto it,
+    /// and starts at cDNA 2592 (c.*1692). Row of the same shape in
+    /// `tests/golden/116/GRCh37-hgvs`: `21:34961913-34962053 -` against
+    /// ENST00000445393, `ENST00000445393.1:c.*44_*174del`.
+    #[test]
+    fn test_hgvsc_deletion_running_past_transcript_end_is_clamped_to_last_base() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            generate_hgvsc(&deletion(25_005_991, 25_006_010), &tx, None).as_deref(),
+            Some("ENST00000000001.1:c.*1692_*1701del")
+        );
+    }
+
+    /// Both ends before the transcript, or both past it, give no HGVSc: the
+    /// variant is not `within_feature`, and `_var2transcript_slice_coords`
+    /// (TranscriptVariationAllele.pm 2729) returns `undef` for the same shape.
+    #[test]
+    fn test_hgvsc_deletion_wholly_outside_transcript_has_no_notation() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            generate_hgvsc(&deletion(24_999_980, 24_999_999), &tx, None),
+            None
+        );
+        assert_eq!(
+            generate_hgvsc(&deletion(25_006_001, 25_006_020), &tx, None),
+            None
+        );
+    }
+
+    /// Both ends outside on opposite sides is not "wholly outside": the whole
+    /// transcript is described, c.-50 to c.*1701, when no 3' shift applies.
+    #[test]
+    fn test_hgvsc_deletion_covering_whole_transcript_is_described_end_to_end() {
+        let tx = make_test_transcript();
+        assert_eq!(
+            generate_hgvsc(&deletion(24_999_990, 25_006_010), &tx, None).as_deref(),
+            Some("ENST00000000001.1:c.-50_*1701del")
+        );
+    }
+
+    /// An insertion butting against either transcript edge (VEP's start = end + 1
+    /// convention, so one of its ends lies inside) is not `within_feature`
+    /// (OutputFactory.pm asks for HGVS only then), so the clamp never sees it and
+    /// it has no HGVSc.
+    #[test]
+    fn test_hgvsc_insertion_adjacent_to_transcript_edge_has_no_notation() {
+        let tx = make_test_transcript();
+        let before = InputVariant::new(
+            "21".into(),
+            25_000_000,
+            24_999_999,
+            b"-".to_vec(),
+            b"GG".to_vec(),
+        );
+        let after = InputVariant::new(
+            "21".into(),
+            25_006_001,
+            25_006_000,
+            b"-".to_vec(),
+            b"GG".to_vec(),
+        );
+        assert_eq!(generate_hgvsc(&before, &tx, None), None);
+        assert_eq!(generate_hgvsc(&after, &tx, None), None);
+    }
+
     /// A slice with no FASTA: `substr` reads nothing, so the reference comes from
     /// the caller and no duplication lookup can succeed.
     fn unreadable_slice() -> TranscriptSlice<'static> {
@@ -1254,5 +1377,113 @@ mod tests {
         );
         let hgvsp = generate_hgvsp(&variant, &tx, None);
         assert_eq!(hgvsp.as_deref(), Some("ENSP00000000001.1:p.Ala2LysfsTer?"));
+    }
+
+    /// The fixture transcript with an 849-base CDS ending in a stop codon: 282
+    /// residues (codons 7 to 282 are `GCT`, Ala) and `TAA` at CDS 847-849, genomic
+    /// 25_004_296..=25_004_298, followed by the given 3' UTR, which the alternate
+    /// CDS of a frameshift reads through.
+    fn terminal_stop_transcript(three_prime_utr: &str) -> Transcript {
+        let mut tx = make_test_transcript();
+        let mut cds = String::from("ATGGCTGGAAAATTCGAT");
+        while cds.len() < 846 {
+            cds.push_str("GCT");
+        }
+        cds.push_str("TAA");
+        let vefc = tx.vefc.as_mut().unwrap();
+        vefc.translateable_seq = Some(cds);
+        vefc.three_prime_utr = Some(three_prime_utr.to_string());
+        vefc.mapper.as_mut().unwrap().cdna_coding_end = 899;
+        tx.cdna_coding_end = Some(899);
+        tx.coding_region_end = Some(25_004_298);
+        tx.translation_end = Some(25_004_298);
+        tx.translation.as_mut().unwrap().end = 299;
+        tx
+    }
+
+    /// The `fs` branch of `_get_hgvs_protein_format` (TranscriptVariationAllele.pm
+    /// 2007-2010): deleting the last base of codon 282 and the first of the stop
+    /// leaves Ala282 as `GCA`, so the first changed residue is Ter283, read as
+    /// `AGC` (Ser); the new frame stops at residue 284 (`TAA` from the UTR),
+    /// `_stop_loss_extra_AA` counts 284 - 282 = 2, and the extension drops the
+    /// replaced stop from the count: `extTer1`. Rows of this shape in
+    /// `tests/golden/116/GRCh37-hgvs`: `21:35743146-35743147 -` against
+    /// ENST00000290310, `ENSP00000290310.2:p.Ter124IleextTer14`, and
+    /// `21:45210898 -` against ENST00000483896, `ENSP00000426898.1:p.Ter46AsnextTer78`.
+    #[test]
+    fn test_hgvsp_frameshift_starting_at_stop_codon_is_extension() {
+        let tx = terminal_stop_transcript("GCTAAGCATAA");
+        let variant = InputVariant::new(
+            "21".into(),
+            25_004_295,
+            25_004_296,
+            b"TT".to_vec(),
+            b"-".to_vec(),
+        );
+        assert_eq!(
+            generate_hgvsp(&variant, &tx, None).as_deref(),
+            Some("ENSP00000000001.1:p.Ter283SerextTer1")
+        );
+    }
+
+    /// The same deletion with no stop in the new frame: `_stop_loss_extra_AA`
+    /// returns `undef`, the count is `?`, and `?` is not decremented.
+    #[test]
+    fn test_hgvsp_frameshift_starting_at_stop_codon_without_new_stop_keeps_query() {
+        let tx = terminal_stop_transcript("GCAGCAGCA");
+        let variant = InputVariant::new(
+            "21".into(),
+            25_004_295,
+            25_004_296,
+            b"TT".to_vec(),
+            b"-".to_vec(),
+        );
+        assert_eq!(
+            generate_hgvsp(&variant, &tx, None).as_deref(),
+            Some("ENSP00000000001.1:p.Ter283SerextTer?")
+        );
+    }
+
+    /// A frameshift whose first changed residue is not the stop keeps `fsTer`
+    /// with the full count: deleting CDS 845-846 turns Ala282 into `GTA` (Val),
+    /// and the new frame stops at residue 284, so 284 - 281 = 3.
+    #[test]
+    fn test_hgvsp_frameshift_before_stop_codon_keeps_fs_ter_count() {
+        let tx = terminal_stop_transcript("GCTAAGCATAA");
+        let variant = InputVariant::new(
+            "21".into(),
+            25_004_294,
+            25_004_295,
+            b"CT".to_vec(),
+            b"-".to_vec(),
+        );
+        assert_eq!(
+            generate_hgvsp(&variant, &tx, None).as_deref(),
+            Some("ENSP00000000001.1:p.Ala282ValfsTer3")
+        );
+    }
+
+    /// `frameshift` (VariationEffect.pm 1554) returns 0 when the reference peptide
+    /// starts with the stop, so a one-base deletion inside the stop codon is typed
+    /// by its peptides: the two bases left of `TAA` translate to `X`,
+    /// three-lettered `Xaa` and rewritten `Ter`, equal to the reference `Ter`, so
+    /// the notation is `Ter283=`. Rows of this shape in
+    /// `tests/golden/116/GRCh37-hgvs`: `21:34955948 -` against ENST00000457359,
+    /// `ENSP00000415191.1:p.Ter211=`, and `21:35791518 -` against ENST00000450895,
+    /// `ENSP00000397039.1:p.Ter140=`.
+    #[test]
+    fn test_hgvsp_deletion_inside_stop_codon_is_not_a_frameshift() {
+        let tx = terminal_stop_transcript("CCAGCAGCA");
+        let variant = InputVariant::new(
+            "21".into(),
+            25_004_297,
+            25_004_297,
+            b"A".to_vec(),
+            b"-".to_vec(),
+        );
+        assert_eq!(
+            generate_hgvsp(&variant, &tx, None).as_deref(),
+            Some("ENSP00000000001.1:p.Ter283=")
+        );
     }
 }

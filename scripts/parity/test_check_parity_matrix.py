@@ -104,6 +104,8 @@ FIELDS_RS = """
 // fn commented_out() {}
 /* fn in_a_block_comment() {} */
 const S: &str = "fn in_a_string";
+const OPENER: &str = "U/*";
+const QUOTE: char = '"';
 pub fn production_helper() -> u8 { 1 }
 
 #[cfg(test)]
@@ -122,6 +124,7 @@ mod tests {
     #[ignore]
     pub(crate) fn ignored_case() {}
 }
+const CLOSER: &str = r#"*/ and // inside a raw string"#;
 """
 
 HEADER = "\t".join(cpm.COLUMNS) + "\n"
@@ -322,6 +325,34 @@ def test_test1_must_name_an_existing_function(tmp_path):
         "tests/parity/matrix.tsv:4: symbol: test1 docs/a.rs::y is not <path>.rs::<fn> under crates/",
         "tests/parity/matrix.tsv:4: symbol: test1 crates/../tests/parity/x.rs::outside has a `..` segment",
     ]
+
+
+# Every literal and comment shape the stripper must read: each line pairs a source with what
+# survives (comments gone, literal bodies blanked to their length, delimiters and code kept).
+STRIP_CASES = [
+    ('let s = "fn in_a_string";', 'let s = "              ";'),
+    ('let s = "a\\"b"; // tail', 'let s = "    "; '),
+    ('let s = r#"*/ and // "#; x', 'let s = r#"          "#; x'),
+    ('let s = r##"q"# fn ghost() {}"##;', 'let s = r##"                 "##;'),
+    ('let b = b"/* bytes */";', 'let b = b"           ";'),
+    ("let c = '\\''; let d = '\"'; let e = 'x';", "let c = '  '; let d = ' '; let e = ' ';"),
+    ("fn f<'a>(x: &'a str) {}", "fn f<'a>(x: &'a str) {}"),
+    ("a /* one /* two */ three */ b", "a  b"),
+    ("a // it's \"quoted\" /* open\nb", "a \nb"),
+    ('let s = "two\nlines";', 'let s = "   \n     ";'),
+]
+
+
+@pytest.mark.parametrize("source,stripped", STRIP_CASES)
+def test_strip_comments_blanks_literals_and_drops_comments(source, stripped):
+    assert cpm.strip_comments(source) == stripped
+
+
+def test_a_test_declaration_inside_a_literal_declares_nothing():
+    source = 'const T: &str = "#[test] fn ghost() {}";\nconst R: &str = r#"#[test]\nfn raw_ghost() {}"#;\n#[test]\nfn real() {}\n'
+    assert cpm.declares_test_fn(source, "real")
+    assert not cpm.declares_test_fn(source, "ghost")
+    assert not cpm.declares_test_fn(source, "raw_ghost")
 
 
 @pytest.mark.parametrize(

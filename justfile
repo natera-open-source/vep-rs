@@ -15,9 +15,9 @@ check:
 bench: build
     @echo "Benchmarking the 1,008-record GRCh37 golden corpus..."
     target/release/vep \
-        -i tests/golden/115/GRCh37/variants.vcf \
+        -i tests/golden/116/GRCh37/variants.vcf \
         -o /dev/null \
-        --offline --json_cache tests/golden/115/GRCh37/json_cache --assembly GRCh37 \
+        --offline --json_cache tests/golden/116/GRCh37/json_cache --assembly GRCh37 \
         --fork 1 --buffer_size 5000 --force --no_stats --quiet
 
 # Run smoke concordance test (5000 variants). The harness needs the Perl VEP cache

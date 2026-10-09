@@ -8,7 +8,7 @@
 #   4. Parses stderr TRACE lines into a structured predicate report
 #
 # Requires:
-#   - Docker with ensemblorg/ensembl-vep:release_115.2
+#   - Docker with ensemblorg/ensembl-vep:release_116.2
 #   - Reference Perl modules at --reference-dir (extracted by extract_perl_reference.sh)
 #   - Perl VEP cache at --cache-dir
 #
@@ -24,7 +24,7 @@ ASSEMBLY=""
 CACHE_DIR="${VEP_PERL_CACHE_DIR:-./.vep/cache}"
 REFERENCE_DIR="${VEP_PERL_REF_DIR:-./.vep/perl_reference}"
 WORK_DIR="${VEP_WORK_DIR:-./.vep/work}/perl_debug"
-DOCKER_IMAGE="ensemblorg/ensembl-vep:release_115.2"
+DOCKER_IMAGE="ensemblorg/ensembl-vep:release_116.2"
 
 VARIANT=""
 VCF_LINE=""
@@ -55,7 +55,7 @@ Optional:
                           --dir_cache (default: ${VEP_PERL_CACHE_DIR:-./.vep/cache})
   --reference-dir DIR     Unpatched Perl module directory (default: ${VEP_PERL_REF_DIR:-./.vep/perl_reference})
   --work-dir DIR          Working directory for temp files (default: ${VEP_WORK_DIR:-./.vep/work}/perl_debug)
-  --docker-image IMAGE    Docker image (default: ensemblorg/ensembl-vep:release_115.2)
+  --docker-image IMAGE    Docker image (default: ensemblorg/ensembl-vep:release_116.2)
   --keep-temp             Do not clean up temp files
   --help                  Print this help
 EOF
@@ -590,7 +590,7 @@ docker run --rm \
 	/opt/vep/src/ensembl-vep/vep \
 	-i /work/tmp/single_variant.vcf \
 	-o /work/tmp/output.txt \
-	--offline --dir_cache /opt/vep/.vep --cache_version 115 \
+	--offline --dir_cache /opt/vep/.vep --cache_version 116 \
 	--assembly "${ASSEMBLY}" \
 	--fork 1 --buffer_size 1 --force --no_stats \
 	2>"${STDERR_LOG}" || {

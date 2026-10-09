@@ -81,13 +81,26 @@ jobs:
 
       # The smoke test runs the release's own corpus, so an older binary is
       # never handed a cache format newer than it reads.
-      - name: Check out the release's GRCh37 corpus
+      - name: Check out the release's golden corpora
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.meta.outputs.tag }}
           path: release-src
-          sparse-checkout: tests/golden/115/GRCh37
+          sparse-checkout: tests/golden
           persist-credentials: false
+
+      # Release directories coexist while an older release is kept; the newest
+      # is the current corpus.
+      - name: Locate the release's GRCh37 corpus
+        id: corpus
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          corpus="$(find release-src/tests/golden -mindepth 2 -maxdepth 2 -type d -name GRCh37 | sort -V | tail -n 1)"
+          [[ -n "$corpus" && -f "$corpus/variants.vcf" ]] ||
+            { echo "ERROR: [docker] no tests/golden/<release>/GRCh37 corpus in the $TAG tree" >&2; exit 1; }
+          echo "path=$corpus" >> "$GITHUB_OUTPUT"
+          echo "smoke-test corpus $corpus"
 
       - name: Stage the verified release binaries
         run: scripts/docker/stage_release.sh "${{ steps.meta.outputs.tag }}" "$RUNNER_TEMP/context"
@@ -104,7 +117,7 @@ jobs:
         run: >-
           docker run --rm
           -v "$PWD/scripts/docker:/smoke:ro"
-          -v "$PWD/release-src/tests/golden/115/GRCh37:/corpus:ro"
+          -v "$PWD/${{ steps.corpus.outputs.path }}:/corpus:ro"
           vep-rs:smoke bash /smoke/smoke_test.sh "${{ steps.meta.outputs.version }}"
 
       - name: Log in to GHCR

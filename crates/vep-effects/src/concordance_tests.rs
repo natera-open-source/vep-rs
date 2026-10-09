@@ -10,11 +10,15 @@
 //! cargo test -p vep-effects -- --ignored
 //! ```
 //!
-//! Perl citations name modules of ensembl-variation release/115
-//! (`Bio/EnsEMBL/Variation/...`); `TranscriptMapper` is in ensembl core release/115.
+//! Perl citations name modules of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`); `TranscriptMapper` is in ensembl core
+//! release/116.
 
 use crate::consequences::{calculate_consequences, EffectsConfig};
-use crate::test_helpers::{make_test_transcript, make_test_transcript_with_flags};
+use crate::test_helpers::{
+    cds_ending_in, deletion_of_cds, insertion_after_cds, make_single_exon_transcript,
+    make_test_transcript, make_test_transcript_with_flags,
+};
 use tempfile::tempdir;
 use vep_core::consequence::Consequence;
 use vep_core::coordinate::Strand;
@@ -662,16 +666,17 @@ fn concordance_exon_boundary_codon_snv_is_stop_gained() {
     );
 }
 
-/// Stop-retained / inframe classification: Perl translates the alt CDS rather
-/// than reading position alone.
-///
-/// Expected (Perl): `inframe_insertion` + `stop_retained_variant`.
+/// A residue inserted in frame between the last sense codon and the stop codon
+/// (`-/A`) is `inframe_insertion` alone: `ref_eq_alt_sequence`
+/// (VariationEffect.pm:1356-1359) asks that the first residue past the unchanged
+/// protein be `*`, and it is `A`. Ensembl VEP 116.2 writes
+/// `inframe_insertion,NMD_transcript_variant` for `tests/golden/116/GRCh38`
+/// record `1353137` (`1:45013701-45013702 TAG`) against ENST00000460334, `L/LV`.
 #[test]
-fn concordance_inframe_insertion_near_stop_is_stop_retained() {
+fn concordance_inframe_insertion_near_stop_is_not_stop_retained() {
     let tx = make_transcript_with_terminal_stop();
     let config = EffectsConfig::default();
 
-    // 3bp inframe insertion at the penultimate codon (near CDS end).
     // CDS: cDNA 51-899 = 849bp. Last codon at cDNA 897-899 (genomic 25_004_296-25_004_298).
     // Penultimate codon: cDNA 894-896 (genomic 25_004_293-25_004_295).
     // Insert 3bp (inframe) at genomic 25_004_295.
@@ -683,31 +688,25 @@ fn concordance_inframe_insertion_near_stop_is_stop_retained() {
         b"GCT".to_vec(), // 3bp = inframe
     );
 
-    let result = calculate_consequences(&variant, &tx, &config);
-    assert!(result.is_some(), "Should produce consequences");
-    let tc = result.unwrap();
-
-    assert!(
-        tc.consequences.contains(&Consequence::InframeInsertion),
-        "should contain inframe_insertion, got: {:?}",
-        tc.consequences
-    );
-    assert!(
-        tc.consequences.contains(&Consequence::StopRetainedVariant),
-        "should contain stop_retained_variant \
-         (Perl translates alt CDS and confirms stop is preserved)"
-    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["inframe_insertion"]);
 }
 
-/// terminal stop-codon frameshift should keep
-/// `frameshift_variant` when Perl also reports `stop_lost`.
+/// Deleting one base of the terminal stop codon is `stop_lost` alone when the
+/// codon left at the CDS end is not a stop: `frameshift` (VariationEffect.pm:1554)
+/// returns 0 when the reference peptide begins with `*`, and `stop_lost` (:1259)
+/// reads that codon, the two remaining stop bases `TA` plus the first UTR base,
+/// through `_ins_del_stop_altered`. The fixture's UTR starts with `C`, so the
+/// codon is `TAC`; a UTR starting with `A` or `G` would complete a stop and make
+/// the same deletion `stop_retained_variant`. Ensembl VEP 116.2 writes `stop_lost`
+/// for `tests/golden/116/GRCh37` record `2008505` (`11:72004411 -`) against
+/// ENST00000294053, `*/X`, `taG/ta`.
 #[test]
-fn concordance_frameshift_stop_lost_keeps_frameshift() {
-    let tx = make_transcript_with_terminal_stop();
+fn concordance_frameshift_in_stop_codon_is_stop_lost_alone() {
+    let tx = make_transcript_with_terminal_stop_and_utr("CGCAGCAGCA");
     let config = EffectsConfig::default();
 
-    // Delete one base from the terminal stop codon (TAA at genomic
-    // 25_004_296-25_004_298). Perl reports frameshift_variant + stop_lost.
+    // Delete the middle base of the terminal TAA at genomic 25_004_296-25_004_298.
     let variant = InputVariant::new(
         "21".into(),
         25_004_297,
@@ -716,20 +715,8 @@ fn concordance_frameshift_stop_lost_keeps_frameshift() {
         b"-".to_vec(),
     );
 
-    let result = calculate_consequences(&variant, &tx, &config);
-    assert!(result.is_some(), "Should produce consequences");
-    let tc = result.unwrap();
-
-    assert!(
-        tc.consequences.contains(&Consequence::FrameshiftVariant),
-        "terminal stop frameshift should keep frameshift_variant, got: {:?}",
-        tc.consequences
-    );
-    assert!(
-        tc.consequences.contains(&Consequence::StopLost),
-        "terminal stop frameshift should also contain stop_lost, got: {:?}",
-        tc.consequences
-    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["stop_lost"]);
 }
 
 /// UTR term for spanning deletions, per Perl's `within_cdna`.
@@ -3549,18 +3536,16 @@ fn concordance_coding_seq_variant_fallback_for_complex_indel() {
     );
 }
 
-/// Frameshift-only insertion at stop-codon
-/// boundary must emit `inframe_insertion,stop_retained_variant` when Perl's
-/// `ref_eq_alt_sequence` condition 2 fires.
-///
-/// Perl classifies `inframe_insertion,stop_retained_variant` for a 2bp
-/// insertion at the stop-codon boundary (translation_start past ref peptide
-/// length, overflow=1 < 3, condition 2 holds), never `frameshift_variant`.
-///
-/// Reference shape: 11:5225600 A>AGT (HBB, reverse strand), a 2bp insertion just
-/// before the terminal TAA stop codon on the transcript.
+/// A 2 bp insertion between the last sense codon and the stop codon (alternate
+/// peptide `X`) is `frameshift_variant`: `stop_retained`
+/// (VariationEffect.pm:1313-1318) sends an `X` peptide to
+/// `_overlaps_stop_codon_cil`, which on the forward strand adds the inserted
+/// length to the variant start and finds no overlap with the stop codon, so
+/// nothing holds `frameshift` back. Ensembl VEP 116.2 writes `frameshift_variant`
+/// for `tests/golden/116/GRCh37` record `573980` (`15:65273307-65273308 C`)
+/// against ENST00000204566, `R/RX`.
 #[test]
-fn concordance_frameshift_insertion_at_stop_boundary_is_stop_retained() {
+fn concordance_frameshift_insertion_at_stop_boundary_is_frameshift() {
     let tx = make_transcript_with_terminal_stop();
     let config = EffectsConfig::default();
 
@@ -3577,34 +3562,8 @@ fn concordance_frameshift_insertion_at_stop_boundary_is_stop_retained() {
         b"AG".to_vec(), // 2bp net insertion (frameshift)
     );
 
-    let result = calculate_consequences(&variant, &tx, &config);
-    assert!(result.is_some(), "Should produce consequences");
-    let tc = result.unwrap();
-
-    assert!(
-        tc.consequences.contains(&Consequence::InframeInsertion),
-        "2bp insertion at stop boundary should classify as \
-         inframe_insertion via ref_eq_alt_sequence condition 2, got: {:?}",
-        tc.consequences
-    );
-    assert!(
-        tc.consequences.contains(&Consequence::StopRetainedVariant),
-        "stop_retained_variant must fire when ref_eq_alt_sequence \
-         condition 2 holds (overflow < 3), got: {:?}",
-        tc.consequences
-    );
-    assert!(
-        !tc.consequences.contains(&Consequence::FrameshiftVariant),
-        "frameshift must be suppressed when stop_retained holds \
-         (Perl's frameshift returns 0 when stop_retained is true), got: {:?}",
-        tc.consequences
-    );
-    assert!(
-        !tc.consequences.contains(&Consequence::StopLost),
-        "2bp insertion before stop codon should NOT emit stop_lost \
-         when the stop is preserved, got: {:?}",
-        tc.consequences
-    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["frameshift_variant"]);
 }
 
 /// Negative case: a 4bp frameshift insertion in the
@@ -4811,42 +4770,32 @@ fn concordance_inframe_delins_across_three_exons_is_protein_altering() {
     }
 }
 
-/// Guard against `[C, G, C]` emitting frameshift when the variant overlaps
-/// the stop codon: `is_stop_lost` owns that case, not the `spans_non_coding`
-/// else gate.
+/// A deletion that starts upstream of the stop codon and removes it co-emits
+/// `frameshift_variant` and `stop_lost`: `frameshift` (VariationEffect.pm:1554)
+/// stands down only when the reference peptide begins with `*`, and here it
+/// begins with the residues before the stop. The alternate peptide ends in `X`,
+/// so `stop_lost` (:1259) reads the codon left at the CDS end instead of the
+/// peptides, and finds no stop there. Ensembl VEP 116.2 writes
+/// `frameshift_variant,stop_lost` for `tests/golden/116/GRCh37` record
+/// `rs912989466` (`21 46916250 CAG C`, `21:46916251-46916252 -`) against
+/// ENST00000417954, `P*/PX`, `ccCTga/ccga`.
 #[test]
-fn concordance_deletion_to_stop_codon_never_emits_both_stop_lost_and_frameshift() {
-    let tx = make_test_transcript();
+fn concordance_deletion_through_stop_codon_from_upstream_is_frameshift_and_stop_lost() {
+    let tx = make_transcript_with_terminal_stop();
     let config = EffectsConfig::default();
 
-    // Deletion exon 2 CDS → exon 3 CDS (crosses intron 2), hitting the stop
-    // codon. Span: genomic 25_002_200..25_004_299 (CDS 451..850 → entire
-    // second half of CDS ending at stop codon).
-    let ref_len = (25_004_299u64 - 25_002_200u64 + 1) as usize;
-    let ref_bytes = vec![b'A'; ref_len];
+    // Delete the last base of codon 282 (GCT) and the first base of the
+    // terminal TAA at genomic 25_004_296-25_004_298: `gcTTaa/gcaa`, `A*/AX`.
     let variant = InputVariant::new(
         "21".into(),
-        25_002_200,
-        25_004_299,
-        ref_bytes,
+        25_004_295,
+        25_004_296,
+        b"TT".to_vec(),
         b"-".to_vec(),
     );
 
-    let result = calculate_consequences(&variant, &tx, &config);
-    // The stop_lost logic or the frameshift gate may fire, but never both
-    // stop_lost and frameshift_variant.
-    if let Some(result) = result {
-        let has_stop_lost = result.consequences.contains(&Consequence::StopLost);
-        let has_frameshift = result
-            .consequences
-            .contains(&Consequence::FrameshiftVariant);
-        assert!(
-            !(has_stop_lost && has_frameshift),
-            "stop-lost guard: must not emit both stop_lost AND \
-             frameshift_variant. got {:?}",
-            result.consequences
-        );
-    }
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["frameshift_variant", "stop_lost"]);
 }
 
 // Splice subterm overcall on small variants at an exon boundary
@@ -5022,33 +4971,24 @@ fn concordance_inframe_deletion_at_start_codon_emits_start_lost() {
     );
 }
 
-/// A coding-only deletion at the stop codon must co-emit
-/// `frameshift_variant` and `stop_lost`.
-///
-/// Perl emits `frameshift_variant,stop_lost` for a reverse-strand deletion
-/// with `cds=1415-1416, codons=tAA/t`. On a reverse-strand transcript whose
-/// deletion overlaps the last CDS positions, the start anchor `*cds_pos` is
-/// the higher CDS index of the span, `cds_len`; with `ref_len >= 2`,
-/// `compute_full_peptide_alleles_impl` evaluates
-/// `idx + nominal_ref_len > cds.len()` -> true and returns None, so the
-/// post-frameshift StopLost block in `consequences.rs` feeds
-/// `compute_peptide_alleles` the 5'-most CDS index of the span
-/// (`analysis_cds_pos_5prime`) instead.
-///
-/// This forward-strand test pins a 1bp deletion of the last CDS base of the
-/// test transcript's terminal stop codon.
-///
-/// Expected (Perl): `frameshift_variant + stop_lost`.
+/// A 1 bp deletion of the last base of the stop codon is `stop_lost` alone
+/// when the codon left at the CDS end is not a stop (here `TA` plus the first
+/// UTR base): the alternate peptide is `X`, so `stop_lost` (VariationEffect.pm
+/// :1259) reads that codon, and `frameshift` (:1554) returns 0 for a reference
+/// peptide beginning with `*`. The fixture's UTR starts with `C`, so the codon is
+/// `TAC`; a UTR starting with `A` or `G` would complete a stop and make the same
+/// deletion `stop_retained_variant`. Ensembl VEP 116.2 writes `stop_lost` for
+/// `tests/golden/116/GRCh37` record `2008505` (`11:72004411 -`) against
+/// ENST00000294053, `*/X`, `taG/ta`.
 #[test]
-fn concordance_deletion_at_stop_codon_emits_stop_lost() {
-    // Use the test-transcript variant ending with a real TAA stop codon at
-    // CDS positions 847-849 (genomic 25_004_296-25_004_298 forward strand).
-    let tx = make_transcript_with_terminal_stop();
+fn concordance_deletion_of_last_stop_base_is_stop_lost_alone() {
+    // The test transcript ending in a real TAA stop codon at CDS 847-849
+    // (genomic 25_004_296-25_004_298, forward strand), with a 3' UTR whose first
+    // base cannot complete a stop codon.
+    let tx = make_transcript_with_terminal_stop_and_utr("CGCAGCAGCA");
     let config = EffectsConfig::default();
 
-    // 1bp deletion of the third nucleotide of the TAA stop (cds 849, genomic
-    // 25_004_298). ref = "A", alt = "-". Deletion frameshifts and removes
-    // the terminal stop -> Perl: frameshift_variant + stop_lost.
+    // Delete the third base of the TAA (CDS 849, genomic 25_004_298).
     let variant = InputVariant::new(
         "21".into(),
         25_004_298,
@@ -5057,23 +4997,8 @@ fn concordance_deletion_at_stop_codon_emits_stop_lost() {
         b"-".to_vec(),
     );
 
-    let result = calculate_consequences(&variant, &tx, &config);
-    assert!(result.is_some(), "Should produce consequences");
-    let tc = result.unwrap();
-
-    assert!(
-        tc.consequences.contains(&Consequence::FrameshiftVariant),
-        "1bp deletion at stop codon must emit frameshift_variant, \
-         got: {:?}",
-        tc.consequences
-    );
-    assert!(
-        tc.consequences.contains(&Consequence::StopLost),
-        "1bp coding-only deletion at the last CDS base (stop \
-         codon) must co-emit stop_lost (Perl: frameshift_variant + \
-         stop_lost). got: {:?}",
-        tc.consequences
-    );
+    let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["stop_lost"]);
 }
 
 /// A 2bp deletion at the stop codon of a reverse-strand transcript must co-emit
@@ -5567,29 +5492,20 @@ fn make_transcript_with_cds_at_three_prime_edge() -> Transcript {
     tx
 }
 
-/// A deletion that starts in the CDS and extends past the transcript's
-/// 3' boundary must not emit `stop_lost`.
+/// A deletion that starts in the CDS and extends past the transcript's 3'
+/// boundary is `3_prime_UTR_variant,stop_retained_variant`, never `stop_lost`.
 ///
-/// Perl reaches `stop_lost` for such an allele only through
-/// `VariationEffect::_ins_del_stop_altered`, because
-/// `_get_peptide_alleles` is undef for a span that leaves the CDS so
-/// `stop_lost` delegates to it.
-/// `_ins_del_stop_altered` opens with
-/// `return 0 unless _overlaps_stop_codon(@_)`, and `_overlaps_stop_codon`
-/// has `return 0 unless $cdna_start && $cdna_end`. For a span that
-/// runs off the transcript, `cdna_coords`' last entry is a
-/// `Bio::EnsEMBL::Mapper::Gap`, so `BaseTranscriptVariation::cdna_end` is
-/// undef and that guard closes. With every stop predicate at 0,
-/// `coding_unknown` fires and Perl emits
-/// `3_prime_UTR_variant,coding_sequence_variant`.
-///
-/// The mapper snaps the out-of-transcript endpoint to the nearest exon
-/// boundary, so `cdna_hi` is defined and a gate that admitted
-/// `TranscriptPosition::Downstream` alongside `ThreePrimeUtr` would open. This
-/// is the 3' mirror of the `extends_upstream_of_transcript` exclusion on
-/// `is_start_lost`.
+/// `_get_peptide_alleles` is undef for a span that leaves the CDS, so
+/// `stop_lost` delegates to `_ins_del_stop_altered`, which opens with
+/// `return 0 unless _overlaps_stop_codon(@_)`; for a span that runs off the
+/// transcript, `cdna_coords`' last entry is a `Bio::EnsEMBL::Mapper::Gap`, so
+/// `BaseTranscriptVariation::cdna_end` is undef and that cDNA overlap closes.
+/// `stop_retained` (VariationEffect.pm:1318) reads the overlap in genomic
+/// coordinates instead (`_overlaps_stop_codon_cil`), which holds, and
+/// `_ins_del_stop_altered_cil` returns 0 on the same undefined `cdna_end`, so
+/// the stop counts as retained and `coding_unknown` stands down.
 #[test]
-fn concordance_cds_deletion_past_transcript_end_no_stop_lost() {
+fn concordance_cds_deletion_past_transcript_end_is_stop_retained_not_stop_lost() {
     let tx = make_transcript_with_cds_at_three_prime_edge();
     let config = EffectsConfig::default();
 
@@ -5607,20 +5523,9 @@ fn concordance_cds_deletion_past_transcript_end_no_stop_lost() {
 
     let tc = calculate_consequences(&variant, &tx, &config)
         .expect("CDS→past-transcript-end deletion must annotate");
-
-    assert!(
-        !tc.consequences.contains(&Consequence::StopLost),
-        "A deletion extending past the transcript 3' boundary leaves \
-         Perl's cdna_end undef, closing _overlaps_stop_codon and hence \
-         _ins_del_stop_altered, so stop_lost must NOT be emitted; got {:?}",
-        tc.consequences
-    );
-    assert!(
-        tc.consequences
-            .contains(&Consequence::CodingSequenceVariant),
-        "With every stop predicate at 0, Perl's coding_unknown emits \
-         coding_sequence_variant; got {:?}",
-        tc.consequences
+    crate::test_helpers::assert_consequence_set_eq(
+        &tc,
+        &["3_prime_UTR_variant", "stop_retained_variant"],
     );
 }
 
@@ -5993,14 +5898,18 @@ fn concordance_donor_boundary_frameshift_insertion_reads_stop_in_perl_window() {
     );
 }
 
-/// A 4 bp insertion between the last sense codon and the stop codon: the alt
-/// peptide `VX` appended after the whole reference protein leaves the protein
-/// unchanged with fewer than 3 residues past its end, so `ref_eq_alt_sequence`
-/// holds, `stop_retained` is 1, `frameshift` is therefore 0 and
-/// `inframe_insertion` passes on the empty ref peptide (Perl:
-/// `12:7031565-7031566 GTGA ENST00000229277`).
+/// A 4 bp insertion between the last sense codon and the stop codon (alternate
+/// peptide `VX`) is `frameshift_variant`: `stop_retained`
+/// (VariationEffect.pm:1313-1318) sends a peptide carrying `X` to the genomic
+/// overlap of `_overlaps_stop_codon_cil`, which on the forward strand adds the
+/// four inserted bases to the variant start and misses the stop codon, so
+/// `frameshift` runs on the empty reference peptide and `_get_codon_alleles`
+/// gives `inframe_insertion` nothing. Ensembl VEP 116.2 writes
+/// `frameshift_variant,NMD_transcript_variant` for `tests/golden/116/GRCh37`
+/// record `3035533` (`11:71850156-71850157 TATA`) against ENST00000325101,
+/// `-/YX`, four bases inserted between its last sense codon and its stop codon.
 #[test]
-fn concordance_insertion_before_stop_codon_is_inframe_insertion_stop_retained() {
+fn concordance_insertion_before_stop_codon_with_x_peptide_is_frameshift() {
     let tx = make_transcript_with_terminal_stop();
     let config = EffectsConfig::default();
     // CDS 846 | 847 (the TAA at 847..849): cDNA 896 | 897 = genomic 25_004_295 | 25_004_296.
@@ -6012,10 +5921,7 @@ fn concordance_insertion_before_stop_codon_is_inframe_insertion_stop_retained() 
         b"GTGA".to_vec(),
     );
     let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
-    crate::test_helpers::assert_consequence_set_eq(
-        &tc,
-        &["inframe_insertion", "stop_retained_variant"],
-    );
+    crate::test_helpers::assert_consequence_set_eq(&tc, &["frameshift_variant"]);
 }
 
 /// A delins replacing the first base of ATG with seven bases is `start_lost`
@@ -6752,12 +6658,17 @@ fn make_transcript_without_five_prime_utr() -> Transcript {
 }
 
 /// A deletion from the last CDS bases across the transcript's 3' end, on a
-/// transcript with no 3' UTR, is `3_prime_UTR_variant,coding_sequence_variant`
-/// (Perl: `15:25584272-25584286 - ENST00000397954`): the
-/// trailing mapper gap leaves `cds_end` and `cdna_end` undefined, so no
-/// frameshift or stop_lost, while `_after_coding` holds on the empty region.
+/// transcript with no 3' UTR, is `3_prime_UTR_variant,stop_retained_variant`:
+/// the trailing mapper gap leaves `cds_end` and `cdna_end` undefined, so no
+/// frameshift or stop_lost, `_after_coding` holds on the empty region, and
+/// `stop_retained` (VariationEffect.pm:1318) holds through the genomic overlap
+/// of `_overlaps_stop_codon_cil` with `_ins_del_stop_altered_cil` returning 0 on
+/// the undefined `cdna_end`. Ensembl VEP 116.2 writes
+/// `stop_retained_variant,3_prime_UTR_variant` for `tests/golden/116/GRCh37`
+/// record `2662328` (`1:27107246-27107256 -`) against ENST00000374152, whose
+/// last transcript base is the last base of its stop codon.
 #[test]
-fn concordance_deletion_crossing_transcript_end_without_utr_gets_three_prime_utr() {
+fn concordance_deletion_crossing_transcript_end_without_utr_is_stop_retained() {
     let tx = make_transcript_without_three_prime_utr();
     let config = EffectsConfig::default();
     let variant = InputVariant::new(
@@ -6770,7 +6681,7 @@ fn concordance_deletion_crossing_transcript_end_without_utr_gets_three_prime_utr
     let tc = calculate_consequences(&variant, &tx, &config).expect("annotates");
     crate::test_helpers::assert_consequence_set_eq(
         &tc,
-        &["3_prime_UTR_variant", "coding_sequence_variant"],
+        &["3_prime_UTR_variant", "stop_retained_variant"],
     );
 }
 
@@ -7751,12 +7662,13 @@ fn concordance_reference_block_over_transcript_has_no_transcript_row() {
 
 // Breakend alleles: which allele owns a transcript row, and the mate gate.
 //
-// `StructuralVariationOverlap::new` (`StructuralVariationOverlap.pm:76-88`) builds one
+// `StructuralVariationOverlap::new` (`StructuralVariationOverlap.pm:90-102`) builds one
 // allele per entry of `($vf, @$breakends)` that passes `_close_to_feature`
-// (`:130-146`): same seq region, then `overlap` against the feature slice expanded
-// by `MAX_DISTANCE_FROM_TRANSCRIPT` (`Utils/VariationEffect.pm:60`). The `$vf` entry
-// is the local allele (`A.`, `N.`) and carries the local POS; a bracket entry's
-// coordinate is the mate alone (`StructuralVariationFeature::_parse_breakends`).
+// (`:144-160`; an intergenic overlap takes every entry): same seq region, then
+// `overlap` against the feature slice expanded by `MAX_DISTANCE_FROM_TRANSCRIPT`
+// (`Utils/VariationEffect.pm:60`). The `$vf` entry is the local allele (`A.`, `N.`)
+// and carries the local POS; a bracket entry's coordinate is the mate alone
+// (`StructuralVariationFeature::_parse_breakends`).
 // Every positional predicate then reads `$bvf`, the local variation feature, while
 // `feature_truncation` (`Utils/VariationEffect.pm:350-359`) reads the allele's own
 // breakend through `within_feature(..., $bvfoa->breakend, 1)`.
@@ -8250,7 +8162,7 @@ fn concordance_inversion_engulfing_translated_ig_v_gene_is_intergenic_variant() 
 /// An engulfed `protein_coding` transcript keeps `coding_transcript_variant` on both
 /// arms: `coding_transcript_variant` (VariationEffect.pm:491-493) is
 /// `not coding_unknown and complete_overlap_feature and within_coding_gene`, and
-/// `coding_unknown` (:1507-1512) returns 0 on a complete overlap.
+/// `coding_unknown` (:1616-1621) returns 0 on a complete overlap.
 #[test]
 fn concordance_engulfed_protein_coding_transcript_keeps_coding_transcript_variant() {
     let tx = make_test_transcript();
@@ -8668,4 +8580,194 @@ fn concordance_snv_in_frameshift_intron_before_cds_is_5_prime_utr_reverse() {
     );
     let tc = consequence_of(&variant, &tx);
     crate::test_helpers::assert_consequence_set_eq(&tc, &["5_prime_UTR_variant"]);
+}
+
+// Release 116 stop-codon predicates (ensembl-variation `Utils/VariationEffect.pm`:
+// `inframe_insertion` :1121, `inframe_deletion` :1175, `stop_gained` :1221-1222,
+// `stop_lost` :1240 and :1259, `stop_retained` :1313-1318, `ref_eq_alt_sequence`
+// :1356-1359, `_overlaps_stop_codon_cil` :1389-1431, `_ins_del_stop_altered_cil`
+// :1488-1539, `frameshift` :1554). Each test rebuilds a record of
+// `tests/golden/116/GRCh38-release116` on a single-exon transcript carrying the
+// record's stop codon, penultimate codon and first 3' UTR bases, and asserts the
+// consequence string Ensembl VEP 116.2 prints for it.
+
+/// The Consequence column as the default output prints it.
+fn consequence_string(tc: &vep_core::consequence::TranscriptConsequence) -> String {
+    tc.consequences
+        .iter()
+        .map(|c| c.so_term())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// `stop_ins1_keep_fwd` (ENST00000330798, `tga/tAga`, `*`) and `stop_ins1_keep_rev`
+/// (ENST00000329621): one base inserted inside the stop codon that leaves a lone
+/// stop reads `stop_retained_variant`; `inframe_insertion` :1121 returns 0 when
+/// both peptides are `*`.
+#[test]
+fn release116_insertion_keeping_a_lone_stop_is_stop_retained_without_inframe_insertion() {
+    for strand in [Strand::Forward, Strand::Reverse] {
+        let tx = make_single_exon_transcript(strand, &cds_ending_in("TAC", "TGA"), "GAAGCAGCA");
+        let tc = consequence_of(&insertion_after_cds(&tx, 67, "A"), &tx);
+        assert_eq!(tc.amino_acids.as_deref(), Some("*"), "{strand:?}");
+        assert_eq!(
+            consequence_string(&tc),
+            "stop_retained_variant",
+            "{strand:?}"
+        );
+    }
+}
+
+/// `stop_del3_lost_fwd` (ENST00000355459, `TGA/-`, `*/-`) and `stop_del2_lost_fwd`
+/// (ENST00000382826, `TGa/a`, `*/X`): deleting the stop codon, whole or in part,
+/// is `stop_lost` alone; `inframe_deletion` :1175 returns 0 when the reference
+/// peptide is `*`, and for the 2-base deletion the frameshift guard of :1554 lets
+/// `_get_codon_alleles` read the codons, so :1175 is what keeps
+/// `inframe_deletion` out.
+#[test]
+fn release116_deleting_the_stop_codon_is_stop_lost_without_inframe_deletion() {
+    let tx =
+        make_single_exon_transcript(Strand::Forward, &cds_ending_in("TAT", "TGA"), "TCAGCAGCA");
+    let tc = consequence_of(&deletion_of_cds(&tx, 67, 69, "TGA"), &tx);
+    assert_eq!(tc.amino_acids.as_deref(), Some("*/-"));
+    assert_eq!(consequence_string(&tc), "stop_lost");
+
+    let tx =
+        make_single_exon_transcript(Strand::Forward, &cds_ending_in("ATT", "TGA"), "CTGGCAGCA");
+    let tc = consequence_of(&deletion_of_cds(&tx, 67, 68, "TG"), &tx);
+    assert_eq!(tc.amino_acids.as_deref(), Some("*/X"));
+    assert_eq!(consequence_string(&tc), "stop_lost");
+}
+
+/// `partial_codon_del3_fwd` (TANGO2 ENST00000450664, a 496-base CDS whose last
+/// codon is one base long, a 2-base 3' UTR, no `cds_end_NF`): deleting the last
+/// CDS base and the UTR is `incomplete_terminal_codon_variant,coding_sequence_variant,3_prime_UTR_variant`;
+/// `stop_lost` :1240 returns 0 on a partial codon ahead of its cache.
+#[test]
+fn release116_partial_codon_deletion_is_never_stop_lost() {
+    let mut cds = String::from("ATG");
+    cds.push_str(&"GCT".repeat(20));
+    cds.push_str("GGAGGAA");
+    let tx = make_single_exon_transcript(Strand::Forward, &cds, "AG");
+    let tc = consequence_of(&deletion_of_cds(&tx, 70, 72, "AAG"), &tx);
+    assert_eq!(
+        consequence_string(&tc),
+        "incomplete_terminal_codon_variant,coding_sequence_variant,3_prime_UTR_variant"
+    );
+}
+
+/// `stop_ins5_newstop_fwd` (ENST00000334068, `taa/tCCTAAaa`, `*/S*X`) and
+/// `stop_ins5_newstop_rev` (ENST00000335093): with an `X` in the alternate
+/// peptide `stop_lost` :1259 reads the edited stop codon, `TCC`, and holds.
+#[test]
+fn release116_stop_lost_with_an_x_peptide_reads_the_edited_stop_codon_as_lost() {
+    for strand in [Strand::Forward, Strand::Reverse] {
+        let tx = make_single_exon_transcript(strand, &cds_ending_in("TGC", "TAA"), "ATTGCAGCA");
+        let tc = consequence_of(&insertion_after_cds(&tx, 67, "CCTAA"), &tx);
+        assert_eq!(tc.amino_acids.as_deref(), Some("*/S*X"), "{strand:?}");
+        assert_eq!(
+            consequence_string(&tc),
+            "stop_lost,inframe_insertion",
+            "{strand:?}"
+        );
+    }
+}
+
+/// `stop_del1_kept_fwd` (ENST00000334680, `tGa/ta`, `*/X`) and `stop_del1_kept_rev`
+/// (ENST00000360542): with an `X` in the alternate peptide `stop_lost` :1259
+/// reads the edited stop codon, `TAG` from the UTR's first base, and does not
+/// hold; `stop_retained` :1318 then holds through the `_cil` helpers.
+#[test]
+fn release116_stop_lost_with_an_x_peptide_reads_the_edited_stop_codon_as_kept() {
+    let tx =
+        make_single_exon_transcript(Strand::Forward, &cds_ending_in("TTC", "TGA"), "GAAGCAGCA");
+    let tc = consequence_of(&deletion_of_cds(&tx, 68, 68, "G"), &tx);
+    assert_eq!(tc.amino_acids.as_deref(), Some("*/X"));
+    assert_eq!(consequence_string(&tc), "stop_retained_variant");
+
+    let tx =
+        make_single_exon_transcript(Strand::Reverse, &cds_ending_in("CTG", "TGA"), "AACGCAGCA");
+    let tc = consequence_of(&deletion_of_cds(&tx, 68, 68, "G"), &tx);
+    assert_eq!(tc.amino_acids.as_deref(), Some("*/X"));
+    assert_eq!(consequence_string(&tc), "stop_retained_variant");
+}
+
+/// `stop_ins4_twostops_fwd` (ENST00000391624, `tga/tAATAga`, `*/**X`): on the
+/// forward strand `_overlaps_stop_codon_cil` :1410 adds the four inserted bases
+/// to the variant start, the overlap with the stop codon fails and
+/// `stop_retained` is lost; `coding_unknown` fills in.
+#[test]
+fn release116_stop_retained_cil_forward_strand_drops_a_four_base_insertion() {
+    let tx =
+        make_single_exon_transcript(Strand::Forward, &cds_ending_in("TAT", "TGA"), "GGAGCAGCA");
+    let tc = consequence_of(&insertion_after_cds(&tx, 67, "AATA"), &tx);
+    assert_eq!(tc.amino_acids.as_deref(), Some("*/**X"));
+    assert_eq!(
+        consequence_string(&tc),
+        "inframe_insertion,coding_sequence_variant"
+    );
+}
+
+/// `stop_ins4_twostops_rev` (ENST00000340345, the same edit on the reverse
+/// strand): `_overlaps_stop_codon_cil` :1413 subtracts the four inserted bases
+/// from the variant start, the overlap holds and `stop_retained_variant` stays.
+/// The asymmetry against the forward strand is Ensembl's.
+#[test]
+fn release116_stop_retained_cil_reverse_strand_keeps_a_four_base_insertion() {
+    let tx =
+        make_single_exon_transcript(Strand::Reverse, &cds_ending_in("TAT", "TGA"), "CCAGCAGCA");
+    let tc = consequence_of(&insertion_after_cds(&tx, 67, "AATA"), &tx);
+    assert_eq!(tc.amino_acids.as_deref(), Some("*/**X"));
+    assert_eq!(
+        consequence_string(&tc),
+        "inframe_insertion,stop_retained_variant"
+    );
+}
+
+/// `stop_ins1_lost_fwd` (ENST00000334067, `taa/tCaa`, `*/SX`) and
+/// `stop_ins1_lost_rev` (ENST00000416044, `tga/tCga`): one base inserted inside
+/// the stop codon is `stop_lost` alone; `frameshift` :1554 returns 0 when the
+/// reference peptide begins with the stop.
+#[test]
+fn release116_frameshift_starting_at_the_stop_codon_is_not_a_frameshift() {
+    let tx =
+        make_single_exon_transcript(Strand::Forward, &cds_ending_in("TAC", "TAA"), "CCAGCAGCA");
+    let tc = consequence_of(&insertion_after_cds(&tx, 67, "C"), &tx);
+    assert_eq!(tc.amino_acids.as_deref(), Some("*/SX"));
+    assert_eq!(consequence_string(&tc), "stop_lost");
+
+    let tx =
+        make_single_exon_transcript(Strand::Reverse, &cds_ending_in("TGC", "TGA"), "ATTGCAGCA");
+    let tc = consequence_of(&insertion_after_cds(&tx, 67, "C"), &tx);
+    assert_eq!(tc.amino_acids.as_deref(), Some("*/SX"));
+    assert_eq!(consequence_string(&tc), "stop_lost");
+}
+
+/// `penult_ins6_newstop_fwd` (RIPPLY3 ENST00000329553, `aaa/aaACAGTAa`, `K/KQ*`)
+/// and `penult_ins6_newstop_rev` (ENST00000382835): a stop two residues after
+/// the penultimate codon is `stop_gained,inframe_insertion`: `ref_eq_alt_sequence`
+/// (:1356-1359) asks that the first residue past the unchanged protein be `*`, or
+/// that both peptides place their stop at the same index, and `Q` follows `K`
+/// here. `penult_ins3_stop_fwd` (CLIC6 ENST00000349499, `aaa/aaATAa`, `K/K*`)
+/// keeps `inframe_insertion,stop_retained_variant`.
+#[test]
+fn release116_ref_eq_alt_sequence_reads_the_first_residue_past_the_protein() {
+    for strand in [Strand::Forward, Strand::Reverse] {
+        let tx = make_single_exon_transcript(strand, &cds_ending_in("AAA", "TGA"), "ATCGCAGCA");
+        let tc = consequence_of(&insertion_after_cds(&tx, 65, "ACAGTA"), &tx);
+        assert_eq!(tc.amino_acids.as_deref(), Some("K/KQ*"), "{strand:?}");
+        assert_eq!(
+            consequence_string(&tc),
+            "stop_gained,inframe_insertion",
+            "{strand:?}"
+        );
+    }
+    let tx =
+        make_single_exon_transcript(Strand::Forward, &cds_ending_in("AAA", "TGA"), "AGCGCAGCA");
+    let tc = consequence_of(&insertion_after_cds(&tx, 65, "ATA"), &tx);
+    assert_eq!(tc.amino_acids.as_deref(), Some("K/K*"));
+    assert_eq!(
+        consequence_string(&tc),
+        "inframe_insertion,stop_retained_variant"
+    );
 }

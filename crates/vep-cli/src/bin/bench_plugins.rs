@@ -205,6 +205,7 @@ fn main() -> Result<()> {
         populate_loftee_context: false,
         compute_hgvs: false,
         compute_exon_intron_numbers: true,
+        protein_version: false,
     });
 
     let raw_transcripts = json_cache::load_all_transcripts(&args.json_cache)?;

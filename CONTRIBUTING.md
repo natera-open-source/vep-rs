@@ -37,7 +37,7 @@ pre-commit install
 
 ## Concordance Testing
 
-Concordance testing compares Rust VEP output against Perl VEP (release 115) to verify semantic parity. Requires Docker and a Perl VEP cache.
+Concordance testing compares Rust VEP output against Perl VEP release 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the image `run_concordance.sh` pins; `--perl-vep-docker-image` selects another) to verify semantic parity. Requires Docker and a Perl VEP cache of that release.
 
 ```bash
 scripts/concordance/run_concordance.sh --mode smoke --smoke-variants 5000 \
@@ -70,7 +70,12 @@ combination and the consequence keys whose terms are documented to differ.
 `cargo test -p vep-cli --test golden --test format_parity` annotates each corpus
 and compares every column of every format (the Parquet round trip needs the
 `duckdb` CLI; without it that one test skips). A failure lists every mismatch
-grouped by column and consequence set.
+grouped by column and consequence set. A record Ensembl VEP dropped before
+annotation carries `reference_warning` (VEP's reason, from its warnings file,
+recorded when the corpus is built); `classify` writes `reference_rows` 0 on it
+and classes the keys only vep-rs emits for it `reference_skipped_record`, the
+one class under which the harness accepts a record-level VCF line or JSON
+object with no reference counterpart.
 
 To add a release or assembly, run the generator where the VEP reference outputs,
 their inputs and the JSON cache are (`scripts/golden/build_golden_corpus.py
@@ -81,7 +86,8 @@ pinned vep-rs binary), record the VEP image digest and the expected files'
 sha256 in `provenance.json`, and commit the new directory; older directories
 stay until their release is dropped. Each corpus must stay under 15 MB on
 disk (`each_corpus_fits_its_size_budget`); prefer narrower exemplars
-(`--max-span`) over a larger cache.
+(`--max-span`) and, with `select --cache <json cache>`, the exemplars whose
+transcripts add the fewest bytes to the pruned cache, over a larger cache.
 
 ## Parity matrix
 

@@ -97,6 +97,10 @@ impl<R: BufRead> EnsemblParser<R> {
         let multi_allelic = alts.len() > 1;
 
         let mut variants = Vec::with_capacity(alts.len());
+        // OutputFactory.pm `VariationFeature_to_output_hash`, the ensembl `_line`
+        // branch: the lower coordinate, so an insertion written `100 99` is named
+        // at 99.
+        let line_name = format!("{chr}_{}_{allele_string}", start.min(end));
 
         for (i, alt) in alts.iter().enumerate() {
             let mut variant = InputVariant::new(
@@ -110,6 +114,7 @@ impl<R: BufRead> EnsemblParser<R> {
             variant.id = id.clone();
             variant.allele_index = i;
             variant.minimised = multi_allelic;
+            variant.input_line_name = Some(line_name.clone());
 
             variants.push(variant);
         }
@@ -187,6 +192,21 @@ mod tests {
         assert_eq!(v.id, None);
 
         assert!(parser.next_variant().is_none());
+    }
+
+    /// OutputFactory.pm `VariationFeature_to_output_hash`, the ensembl `_line`
+    /// branch: an ID-less line is named `chr_start_alleles` with the lower of its
+    /// two coordinates (99 for the insertion `100 99`) and the allele column as
+    /// written (`A/G/T` on every allele of a multi-allelic line); an ID names it.
+    #[test]
+    fn id_less_line_is_named_by_its_lower_coordinate_and_allele_column() {
+        let data = "21\t100\t99\t-/A\t1\n21\t200\t200\tA/G/T\t1\t.\n21\t300\t300\tC/T\t1\trs1\n";
+        let mut parser = EnsemblParser::new(Cursor::new(data.as_bytes()));
+        let mut names = Vec::new();
+        while let Some(v) = parser.next_variant() {
+            names.push(v.unwrap().uploaded_variation());
+        }
+        assert_eq!(names, ["21_99_-/A", "21_200_A/G/T", "21_200_A/G/T", "rs1"]);
     }
 
     #[test]

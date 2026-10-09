@@ -9,14 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `--reference-release {115.2,116.2}` on both comparators selects the Ensembl VEP release scored against (116.2 default, sets aside the records it skips); the runners derive it from the reference's provenance. (#N)
-
-### Fixed
-
-- `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#N)
+- `--protein_version` appends the translation version to the `ENSP` identifier (`ENSP00000286808.3`) when `--protein` prints it, as Ensembl VEP 116 does. (#44)
+- `--mask_header_cache_path` prints the cache directory as `[PATH]/<leaf>` in the default and `--tab` headers, the VCF `cache=` token and the Parquet footer. (#44)
+- The plugin-visible `InputVariant` JSON carries `input_line_name`, the `CHROM_POS_REF/ALT` name built from the record's own input line. (#44)
+- `--regulatory_gff`, `--extended_promoters` and `--custom_suppress_filter` are refused with an error naming what each would do; regulatory and custom annotation are not supported. (#44)
+- `--reference-release {115.2,116.2}` on both comparators selects the Ensembl VEP release scored against (116.2 default, sets aside the records it skips); the runners derive it from the reference's provenance. (#43)
 
 ### Changed
 
+- Ensembl VEP 116.2 is the reference release: the output headers and the banner read `v116.2`, and `--cache_version` defaults to 116 (it names only the header's cache path). (#44)
+- The golden corpora under `tests/golden/116/` carry Ensembl VEP 116.2's output and replace the release 115 corpora under `tests/golden/115/`. (#44)
+- Stop-codon consequences follow Ensembl VEP release 116: an edit beginning inside the stop codon is `stop_lost` or `stop_retained_variant` without `frameshift_variant`; indels decide `stop_retained_variant` on the genomic span. (#44)
+- A breakend record reaching no transcript at either breakend writes one `intergenic_variant` row per allele, and a bracket record's own breakend prints `N.` without a MATEID (Ensembl VEP 116). (#44)
+- A multi-allelic structural variant takes one class from its joined ALTs (`<INS>,<INS>` an insertion, any DEL beside DUP a `copy_number_variation`) and writes one row per ALT (Ensembl VEP 116). (#44)
+- A multi-allelic mobile-element record labels every row with the record's subtype term (`<INS:ME:ALU>,<INS>` prints `Alu_insertion` twice), as Ensembl VEP 116 does. (#44)
+- `--max_sv_size -1` lifts the size limit, so a structural variant of any span is annotated in every output format. (#44)
+- Records Ensembl VEP 116 drops before annotation (oversize, an unsupported type or ALT list, a `<DEL>` without `END` or `SVLEN`) are annotated, a documented divergence the golden manifests class `reference_skipped_record`. (#44)
+- JSON `cdna_end`, `cds_end` and `protein_end` are omitted when the end is undefined (`445-?` writes `cdna_start` alone), and `--total_length` positions are written as `N/T` strings, as Ensembl VEP 116 does. (#44)
+- `Uploaded_variation` of a record whose ID is `.` is built from the input line, `CHROM_POS_REF/ALT1/ALT2` as written, as Ensembl VEP 116 names it (`21_43512967_AT/ATT/A`, `21_33867341_C/<CN2>`). (#44)
+- An ID-less Ensembl-format input line is named `chr_start_alleles` from the lower of its two coordinates and its allele column as written, as Ensembl VEP 116 names it. (#44)
+- `--hgvs` describes a deletion that runs over either end of a transcript over the bases inside it (`c.-49_77+1248del`), as Ensembl VEP 116 does, instead of omitting HGVSc. (#44)
+- `--hgvs` writes a frameshift whose first changed residue is the stop codon as an extension, `p.Ter124IleextTer14` (count excluding the replaced stop), as Ensembl VEP 116 does, not `p.Ter124IlefsTer15`. (#44)
+- `--hgvs` types an indel inside the stop codon by its peptides (`p.Ter211=`, `p.Ter133delinsCysTer`) rather than as a frameshift, as Ensembl VEP 116 does. (#44)
 - `docs/intended-divergences.md` is rewritten for readability and organised by
   the five Ensembl VEP defects behind the classes the adjusted concordance sets
   aside. Each defect's section states the defect in one sentence, why it is a
@@ -29,6 +43,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defect, and the classes are renumbered in page order: the former 1, 9 (splice
   half), 2, 9 (start half), 3, 7, 8, 10, 4, 6, 11 and 5 are now 1 to 12. The
   0.3.1 entry's "section 3" is section 5 of the reorganised page.
+
+### Fixed
+
+- `--protein` fills ENSP on every structural-variant transcript row (`transcript_ablation`, `feature_truncation`, breakends) with a translation, where it printed `-`. (#44)
+- A breakend whose mate lies inside an NMD transcript while its own position lies outside carries `feature_truncation` without `NMD_transcript_variant`. (#44)
+- Parquet `alt` and the plugin-visible `alt_alleles` of a multi-allelic copy-number record carry each ALT as written (`<DEL>`, `<DUP>`, `<CN0>`), where every ALT read `<CNV>`. (#44)
+- The `## VEP command-line` header and the VCF `##VEP-command-line` line keep a negative value with its flag (`--max_sv_size -1`). (#44)
+- An ID equal to the generated breakend name yields the line name on the record's own `N.` row as on the mate row. (#44)
+- A `<CNV:TR>` contraction loses the run's tail and an expansion inserts after it, as Ensembl VEP's expansion places them, so the frame follows the unit change, not the run length. (#44)
+- A `<CNV:TR>` allele's length sums its RN repeat sequences, and each allele of a multi-allelic record takes its own RUS, RUC and RB entries. (#44)
+- `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
 
 ## [0.3.2] - 2026-10-06
 

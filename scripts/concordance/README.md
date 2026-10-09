@@ -61,8 +61,9 @@ documented in `tests/sv_validation/README.md`.
 ## Generating the Perl ground truth
 
 `run_clone_measurement.sh` only reads the ground-truth trees under `<data>/ground_truth/perl/`.
-`generate_reference_output.sh` writes them, with the same Docker image and the same `vep`
-flags the harness's Perl engine uses, so the reference and the timed runs cannot diverge:
+`generate_reference_output.sh` writes them with the same Docker image (`release_116.2`), cache
+version (116) and `vep` flags the harness's Perl engine uses, so the reference and the timed
+runs cannot diverge; `--perl-image` and `--cache-version` move both together:
 
 ```bash
 # Preflight everything and print the docker command for every output, running nothing.
@@ -78,12 +79,13 @@ scripts/concordance/generate_reference_output.sh --data-dir <data> --assembly GR
 
 What it needs, all local (it fetches nothing and uses no cloud credentials):
 
-- Docker and the `ensemblorg/ensembl-vep:release_115.2` image (`--perl-image` to override).
-- The **full-genome** Ensembl VEP cache for each assembly, extracted under one directory so
-  it holds `homo_sapiens/115_GRCh37/` and `homo_sapiens/115_GRCh38/` (`--perl-cache-dir`,
+- Docker and the `ensemblorg/ensembl-vep:release_116.2` image (`--perl-image` to override).
+- The **full-genome** Ensembl VEP cache for each assembly, of the release the image pins (cache
+  version 116; `--cache-version` to override), extracted under one directory so it holds
+  `homo_sapiens/116_GRCh37/` and `homo_sapiens/116_GRCh38/` (`--perl-cache-dir`,
   default `<data>/caches/perl/vep-cache`). Ensembl FTP:
-  `https://ftp.ensembl.org/pub/release-115/variation/indexed_vep_cache/homo_sapiens_vep_115_GRCh38.tar.gz`
-  and `https://ftp.ensembl.org/pub/grch37/release-115/variation/indexed_vep_cache/homo_sapiens_vep_115_GRCh37.tar.gz`
+  `https://ftp.ensembl.org/pub/release-116/variation/indexed_vep_cache/homo_sapiens_vep_116_GRCh38.tar.gz`
+  and `https://ftp.ensembl.org/pub/grch37/release-116/variation/indexed_vep_cache/homo_sapiens_vep_116_GRCh37.tar.gz`
   (about 24 GB each). A chromosome-subset cache is refused before anything runs: it does
   not fail a VEP run, it under-annotates and exits 0.
 - An indexed reference FASTA per assembly (`--fasta-grch37` / `--fasta-grch38`, or

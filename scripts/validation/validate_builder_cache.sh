@@ -16,7 +16,7 @@ VEP_RS_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # Defaults
 FIXTURE_MODE=0
 BASELINE_CACHE=""
-RELEASE=115
+RELEASE=116
 ASSEMBLY="GRCh37"
 SPECIES="homo_sapiens"
 REGION="21"
@@ -40,7 +40,7 @@ Modes (choose one):
   --baseline-cache <path>    Compare against a Perl-derived JSON cache
 
 Options:
-  --release <int>            Ensembl release number (default: 115)
+  --release <int>            Ensembl release number (default: 116)
   --assembly <name>          Assembly (default: GRCh37)
   --species <name>           Species (default: homo_sapiens)
   --region <chr[,chr...]>    Chromosome(s) to build, passed to the builder as

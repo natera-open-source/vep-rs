@@ -396,8 +396,8 @@ if [[ -f "$HARNESS" ]]; then
 
         # A chr21-only slice.
         PERL_CACHE_DIR="$TMP/cache_chr21only"
-        mkdir -p "$PERL_CACHE_DIR/homo_sapiens/115_GRCh37/21"
-        : >"$PERL_CACHE_DIR/homo_sapiens/115_GRCh37/info.txt"
+        mkdir -p "$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/21"
+        : >"$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/info.txt"
         if assert_perl_cache_complete GRCh37 >/dev/null 2>&1; then
             bad "a chr21-only GRCh37 cache PASSED the completeness guard"
         else
@@ -408,7 +408,7 @@ if [[ -f "$HARNESS" ]]; then
         # guard demanding all of them would fail this legitimately pruned cache.
         PERL_CACHE_DIR="$TMP/cache_primary"
         for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT; do
-            mkdir -p "$PERL_CACHE_DIR/homo_sapiens/115_GRCh37/$c"
+            mkdir -p "$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/$c"
         done
         if assert_perl_cache_complete GRCh37 >/dev/null 2>&1; then
             ok "a cache with all 25 primary contigs and no scaffolds passes"
@@ -418,7 +418,7 @@ if [[ -f "$HARNESS" ]]; then
 
         # One contig short is the interesting near-miss: 24 of 25 is what an incomplete
         # cache extraction looks like, and it must not pass.
-        rmdir "$PERL_CACHE_DIR/homo_sapiens/115_GRCh37/MT"
+        rmdir "$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/MT"
         if assert_perl_cache_complete GRCh37 >/dev/null 2>&1; then
             bad "a cache missing only MT PASSED the guard"
         else
@@ -930,6 +930,18 @@ if [[ -f "$HARNESS" ]]; then
             ok "--reference-release overrides the ground truth's own provenance" ||
             bad "the override was ignored (got '$got')"
         REFERENCE_RELEASE=""
+        # A host without python3 cannot run the derivation (nor the comparators): the
+        # failure names the interpreter, not the ground truth's provenance. PATH is set
+        # as its own statement: a `PATH=... func` prefix leaves bash 3.2's hash table
+        # intact, so `command -v python3` still finds the interpreter this shell hashed.
+        mkdir -p "$TMP/nopython"
+        if (PATH="$TMP/nopython"; reference_release_for "$GT116") >"$TMP/rr_nopy.out" 2>"$TMP/rr_nopy.err"; then
+            bad "without python3 the derivation returned '$(cat "$TMP/rr_nopy.out")' instead of failing"
+        elif grep -q '^ERROR: \[run_clone_measurement\] python3 is not on PATH' "$TMP/rr_nopy.err"; then
+            ok "without python3 the cell fails naming the interpreter, not the provenance"
+        else
+            bad "without python3 the failure blames something else: $(head -1 "$TMP/rr_nopy.err")"
+        fi
     fi
     # The three layouts a reference set is written in: one record at the set root over
     # suite directories that hold only outputs (the shape of the published SNP/indel set),

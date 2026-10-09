@@ -55,11 +55,16 @@ fn vcf_output_matches_vep_on_every_corpus() {
         let expected = read_expected(&corpus.dir, "vcf.vcf");
         let actual = run_vep(corpus, "vcf", tmp.path(), &[]);
         let documented = Documented::from_manifest(&corpus.manifest);
+        let inputs = input_records(corpus);
         check(
             corpus,
             "--vcf",
             compare_vcf_headers(&expected, &actual),
-            compare_entries(&parse_vcf(&expected), &parse_vcf(&actual), &documented),
+            compare_entries(
+                &parse_vcf(&expected, &inputs),
+                &parse_vcf(&actual, &inputs),
+                &documented,
+            ),
             &mut failures,
         );
     }

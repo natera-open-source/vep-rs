@@ -122,7 +122,7 @@ Each published release from 0.2.0 on is also an image on the GitHub Container Re
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" \
-  -v "$PWD/tests/golden/115/GRCh37:/corpus:ro" -v "$PWD:/data" \
+  -v "$PWD/tests/golden/116/GRCh37:/corpus:ro" -v "$PWD:/data" \
   ghcr.io/natera-open-source/vep-rs:0.2.0 \
   vep --json_cache /corpus/json_cache --assembly GRCh37 -i /corpus/variants.vcf -o /data/output.txt
 ```
@@ -137,33 +137,33 @@ Run it first on the bundled corpus, which needs no download:
 # The bundled 1,008-record excerpt of the benchmark datasets against the pruned
 # GRCh37 cache that ships in tests/golden/
 target/release/vep \
-  --json_cache tests/golden/115/GRCh37/json_cache \
+  --json_cache tests/golden/116/GRCh37/json_cache \
   --assembly GRCh37 \
-  -i tests/golden/115/GRCh37/variants.vcf -o output.txt
+  -i tests/golden/116/GRCh37/variants.vcf -o output.txt
 ```
 
 For real data you need a JSON transcript cache. Build one natively with `vep-cache-builder` (GRCh38 shown; [docs/cache-setup.md](docs/cache-setup.md) explains each input and gives the GRCh37 command):
 
 ```bash
-# Ensembl release 115, GRCh38
-wget https://ftp.ensembl.org/pub/release-115/gtf/homo_sapiens/Homo_sapiens.GRCh38.115.gtf.gz
-wget https://ftp.ensembl.org/pub/release-115/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+# Ensembl release 116, GRCh38
+wget https://ftp.ensembl.org/pub/release-116/gtf/homo_sapiens/Homo_sapiens.GRCh38.116.gtf.gz
+wget https://ftp.ensembl.org/pub/release-116/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 samtools faidx Homo_sapiens.GRCh38.dna.primary_assembly.fa
 
 cargo build --release -p vep-cache-builder
 target/release/vep-cache-builder \
-  --species homo_sapiens --assembly GRCh38 --release 115 \
-  --gtf Homo_sapiens.GRCh38.115.gtf.gz \
+  --species homo_sapiens --assembly GRCh38 --release 116 \
+  --gtf Homo_sapiens.GRCh38.116.gtf.gz \
   --genome-fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa \
-  --output-dir $HOME/.vep/json_cache/homo_sapiens/115_GRCh38
+  --output-dir $HOME/.vep/json_cache/homo_sapiens/116_GRCh38
 ```
 
-or convert an existing Perl VEP cache with `scripts/data/storable_to_json.pl` ([scripts/README.md](scripts/README.md)). Then run the same VEP command you run today, with `--json_cache` naming the cache directory (the one that holds `info.json` and `transcripts/`, so `115_GRCh38` itself, not its parent):
+or convert an existing Perl VEP cache with `scripts/data/storable_to_json.pl` ([scripts/README.md](scripts/README.md)). Then run the same VEP command you run today, with `--json_cache` naming the cache directory (the one that holds `info.json` and `transcripts/`, so `116_GRCh38` itself, not its parent):
 
 ```bash
 target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/115_GRCh38 \
+  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
   --assembly GRCh38 \
   -i input.vcf -o output.txt
 ```
@@ -173,7 +173,7 @@ target/release/vep \
 ```bash
 # With annotation plugins, on data staged by scripts/data/setup_plugin_data.sh
 target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/115_GRCh38 \
+  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
   --assembly GRCh38 \
   --plugin CADD,snv=$HOME/.vep/plugin_data/grch38/full/cadd/whole_genome_SNVs.tsv.gz \
   --plugin REVEL,file=$HOME/.vep/plugin_data/grch38/full/revel/revel.tsv.gz \
@@ -181,7 +181,7 @@ target/release/vep \
 
 # JSON output with HGVS notation
 target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/115_GRCh38 \
+  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
   --assembly GRCh38 --json \
   --fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa \
   --hgvs --everything \

@@ -1,0 +1,551 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "flags": [
+  "--protein",
+  "--protein_version",
+  "--mask_header_cache_path",
+  "--max_sv_size",
+  "-1"
+ ],
+ "covers": [
+  "stop_codon_predicates_116",
+  "bnd_intergenic_rows_116",
+  "sv_json_coordinates_116",
+  "protein_version",
+  "mask_header_cache_path",
+  "max_sv_size",
+  "symbolic-sv-classification",
+  "protein",
+  "breakends",
+  "incomplete-del",
+  "skipped-variant-semantics"
+ ],
+ "suites": {
+  "GRCh38-release116": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 977,
+   "combinations": 28
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 3
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 17,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,coding_sequence_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,feature_elongation": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,feature_truncation": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant,feature_truncation": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_deletion": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,feature_truncation": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,inframe_insertion": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 22,
+   "exemplar_records": 3
+  },
+  "feature_truncation": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "feature_truncation,intron_variant,non_coding_transcript_exon_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 1
+  },
+  "inframe_deletion": {
+   "observed_rows": 26,
+   "exemplar_records": 1
+  },
+  "inframe_insertion,stop_gained": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "inframe_insertion,stop_lost": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "inframe_insertion,stop_retained_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 2
+  },
+  "intergenic_variant": {
+   "observed_rows": 9,
+   "exemplar_records": 6
+  },
+  "intron_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 3
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 2
+  },
+  "stop_lost": {
+   "observed_rows": 7,
+   "exemplar_records": 7
+  },
+  "stop_retained_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 4
+  },
+  "transcript_ablation": {
+   "observed_rows": 812,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 9,
+   "exemplar_records": 9
+  }
+ },
+ "records": [
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t11000000\tbnd_intergenic_pair_a\tN\tN[21:11500000[\t.\t.\tSVTYPE=BND;MATEID=bnd_intergenic_pair_b",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t11200000\tbnd_intergenic_with_genic_mate\tN\tN[21:30425600[\t.\t.\tSVTYPE=BND",
+   "combinations": [
+    "feature_truncation",
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t11300000\tbnd_single_intergenic_left\tN\t.N\t.\t.\tSVTYPE=BND",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t11350000\tbnd_single_intergenic_right\tN\tN.\t.\t.\tSVTYPE=BND",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t11400000\tbnd_intergenic_cross_chromosome\tN\tN[22:14000000[\t.\t.\tSVTYPE=BND",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t11500000\tbnd_intergenic_pair_b\tN\t]21:11000000]N\t.\t.\tSVTYPE=BND;MATEID=bnd_intergenic_pair_a",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t17750000\tdel_10_6_mb\tN\t<DEL>\t.\t.\tEND=28350000;SVTYPE=DEL",
+   "combinations": [
+    "feature_truncation,intron_variant,non_coding_transcript_exon_variant",
+    "transcript_ablation"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30165700\tmulti_del_dup\tN\t<DEL>,<DUP>\t.\t.\tEND=30165900",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30165720\tmulti_dup_del\tN\t<DUP>,<DEL>\t.\t.\tEND=30165920",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30165740\tmulti_del_dup_tandem\tN\t<DEL>,<DUP:TANDEM>\t.\t.\tEND=30165940",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30165760\tmulti_del_del\tN\t<DEL>,<DEL>\t.\t.\tEND=30165960",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30165780\tmulti_ins_ins\tN\t<INS>,<INS>\t.\t.\tEND=30165780",
+   "combinations": [
+    "3_prime_UTR_variant,feature_elongation"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30165800\tmulti_ins_del\tN\t<INS>,<DEL>\t.\t.\tEND=30166000",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "INS/DEL is not a supported structural variant type"
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30165820\tmulti_inv_dup\tN\t<INV>,<DUP>\t.\t.\tEND=30166020",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "INV/DUP is not a supported structural variant type"
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30165840\tmulti_cn0_cn2\tN\t<CN0>,<CN2>\t.\t.\tEND=30166040",
+   "combinations": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30165850\tdel_without_end\tN\t<DEL>\t.\t.\tSVTYPE=DEL",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "deletion looks incomplete"
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30213500\tdel_from_before_transcript\tN\t<DEL>\t.\t.\tEND=30214300",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30215800\tdel_past_transcript_end\tN\t<DEL>\t.\t.\tEND=30216500",
+   "combinations": [
+    "5_prime_UTR_variant,coding_sequence_variant,feature_truncation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30215900\tdup_past_transcript_end\tN\t<DUP>\t.\t.\tEND=30216600",
+   "combinations": [
+    "5_prime_UTR_variant,coding_sequence_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30282169\tstop_ins4_twostops_rev\tC\tCTATT\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion,stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30289183\tstop_ins1_lost_rev\tC\tCG\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30319403\tstop_del1_kept_rev\tTC\tT\t.\t.\t.",
+   "combinations": [
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30337048\tpenult_ins6_newstop_rev\tC\tCTACTGC\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion,stop_gained"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30348409\tstop_del2_lost_rev\tCTA\tC\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30396602\tstop_del3_lost_fwd\tTTGA\tT\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30425650\tbnd_genic_with_intergenic_mate\tN\tN[21:11600000[\t.\t.\tSVTYPE=BND",
+   "combinations": [
+    "coding_sequence_variant,feature_truncation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30430756\tstop_ins5_newstop_fwd\tT\tTCCTAA\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion,stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30440739\tstop_ins1_lost_fwd\tT\tTC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30592776\tstop_ins4_twostops_fwd\tT\tTAATA\t.\t.\t.",
+   "combinations": [
+    "coding_sequence_variant,inframe_insertion",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30601265\tstop_del1_kept_fwd\tTG\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "stop_retained_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30620789\tstop_del3_utrstop_fwd\tGTAA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30635459\tstop_ins1_keep_fwd\tT\tTA\t.\t.\t.",
+   "combinations": [
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30643020\tstop_del2_lost_fwd\tTTG\tT\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30755140\tstop_ins5_newstop_rev\tT\tTTTAGG\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion,stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30813030\tstop_ins1_keep_rev\tC\tCT\t.\t.\t.",
+   "combinations": [
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t30881032\tstop_del3_lost_rev\tCTTA\tC\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t34716478\tpenult_ins3_stop_fwd\tA\tAATA\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion,stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "21\t37018203\tpenult_ins6_newstop_fwd\tA\tAACAGTA\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion,stop_gained",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-release116",
+   "vcf": "22\t20061573\tpartial_codon_del3_fwd\tGAAG\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant",
+    "NMD_transcript_variant,inframe_deletion",
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "inframe_deletion",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [
+  {
+   "location": "21:11200001",
+   "allele": "N[21:30425600[",
+   "feature": "ENST00000334068",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "vep_consequence_set": "intergenic_variant",
+   "vep_rs_consequence_sets": [
+    "upstream_gene_variant"
+   ],
+   "expected_divergence": "breakend_mate_local_read"
+  },
+  {
+   "location": "21:11200001",
+   "allele": "N[21:30425600[",
+   "feature": "ENST00000390690",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "vep_consequence_set": "feature_truncation",
+   "vep_rs_consequence_sets": [
+    "coding_sequence_variant,feature_truncation"
+   ],
+   "expected_divergence": "breakend_mate_local_read"
+  }
+ ],
+ "vep_rs_only_tuples": [
+  {
+   "location": "21:30165801-30166000",
+   "allele": "deletion",
+   "feature": "ENST00000286808",
+   "feature_type": "Transcript",
+   "record_indices": [
+    12
+   ],
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
+   ],
+   "expected_divergence": "reference_skipped_record"
+  },
+  {
+   "location": "21:30165801-30166000",
+   "allele": "insertion",
+   "feature": "ENST00000286808",
+   "feature_type": "Transcript",
+   "record_indices": [
+    12
+   ],
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant,feature_elongation"
+   ],
+   "expected_divergence": "reference_skipped_record"
+  },
+  {
+   "location": "21:30165821-30166020",
+   "allele": "duplication",
+   "feature": "ENST00000286808",
+   "feature_type": "Transcript",
+   "record_indices": [
+    13
+   ],
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant,feature_elongation"
+   ],
+   "expected_divergence": "reference_skipped_record"
+  },
+  {
+   "location": "21:30165821-30166020",
+   "allele": "inversion",
+   "feature": "ENST00000286808",
+   "feature_type": "Transcript",
+   "record_indices": [
+    13
+   ],
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "reference_skipped_record"
+  },
+  {
+   "location": "21:30165851",
+   "allele": "deletion",
+   "feature": "ENST00000286808",
+   "feature_type": "Transcript",
+   "record_indices": [
+    15
+   ],
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,feature_truncation"
+   ],
+   "expected_divergence": "reference_skipped_record"
+  }
+ ],
+ "divergence_summary": {
+  "breakend_mate_local_read": 2
+ },
+ "vep_rs_only_summary": {
+  "reference_skipped_record": 5
+ }
+}

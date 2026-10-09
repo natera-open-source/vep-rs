@@ -83,7 +83,8 @@ pub fn calculate(
 
     if sv_start == sv_end + 1 {
         return calculate_insertion_pair(
-            variant,
+            sv_start,
+            sv_end,
             transcript,
             upstream_distance,
             downstream_distance,
@@ -122,6 +123,7 @@ pub fn calculate(
         mane_plus_clinical: transcript.mane_plus_clinical.clone(),
         appris: transcript.appris.clone(),
         ccds: transcript.ccds.clone(),
+        protein_id: transcript.protein_id.clone(),
         swissprot: transcript.swissprot.clone(),
         trembl: transcript.trembl.clone(),
         refseq: transcript.refseq.clone(),
@@ -308,14 +310,13 @@ pub fn calculate(
 /// (`inframe_insertion` returns 0 for every structural allele and `frameshift` needs a
 /// deletion), `feature_elongation` is `within_cdna and complete_within_feature`, and an
 /// empty term list takes Perl's default, `intergenic_variant`.
-fn calculate_insertion_pair(
-    variant: &InputVariant,
+pub(super) fn calculate_insertion_pair(
+    s: u64,
+    e: u64,
     transcript: &Transcript,
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
-    let s = variant.start;
-    let e = variant.sv_end.unwrap_or(variant.end);
     debug_assert_eq!(s, e + 1);
     let (lo, hi) = (e, s);
     let tx_start = transcript.start;
@@ -353,6 +354,7 @@ fn calculate_insertion_pair(
         mane_plus_clinical: transcript.mane_plus_clinical.clone(),
         appris: transcript.appris.clone(),
         ccds: transcript.ccds.clone(),
+        protein_id: transcript.protein_id.clone(),
         swissprot: transcript.swissprot.clone(),
         trembl: transcript.trembl.clone(),
         refseq: transcript.refseq.clone(),

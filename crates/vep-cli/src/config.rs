@@ -29,6 +29,8 @@ pub struct Config {
     pub compress_output: Option<String>,
     pub force_overwrite: bool,
     pub no_headers: bool,
+    /// Print the cache directory in the output headers as `[PATH]/<leaf>`.
+    pub mask_header_cache_path: bool,
 
     pub cache: bool,
     pub offline: bool,
@@ -43,9 +45,12 @@ pub struct Config {
     pub assembly: Option<String>,
 
     pub buffer_size: usize,
-    /// Structural variants wider than this many bases keep their VCF line without
-    /// consequences and are dropped from the JSON output, as VEP's `--max_sv_size` does.
-    pub max_sv_size: u64,
+    /// The `--max_sv_size` limit; `None` is the flag's `-1`, no limit. Ensembl VEP
+    /// 116 drops a wider structural variant before annotation and writes nothing
+    /// for it in any format (`Parser.pm` `validate_vf`); vep-rs annotates it in the
+    /// default, tab and Parquet outputs, carries its VCF line without consequences
+    /// and omits it from the JSON output (`docs/intended-divergences.md`).
+    pub max_sv_size: Option<u64>,
     pub fork: usize,
     /// BGZF decompression worker threads for gzipped VCF inputs (1 = single-threaded).
     pub decompression_threads: usize,
@@ -63,6 +68,8 @@ pub struct Config {
     pub appris: bool,
     pub ccds: bool,
     pub protein: bool,
+    /// Append the translation version to the ENSP identifier (`--protein_version`).
+    pub protein_version: bool,
     pub uniprot: bool,
     pub xref_refseq: bool,
     pub hgvs: bool,
@@ -254,6 +261,7 @@ impl Config {
             compress_output: args.compress_output,
             force_overwrite: args.force_overwrite,
             no_headers: args.no_headers,
+            mask_header_cache_path: args.mask_header_cache_path,
             cache,
             offline: args.offline,
             dir,
@@ -265,7 +273,7 @@ impl Config {
             species: args.species,
             assembly: args.assembly,
             buffer_size: args.buffer_size,
-            max_sv_size: args.max_sv_size,
+            max_sv_size: u64::try_from(args.max_sv_size).ok(),
             fork: resolve_fork(args.fork),
             decompression_threads: resolve_decompression_threads(args.decompression_threads),
             distance,
@@ -285,6 +293,7 @@ impl Config {
             appris,
             ccds,
             protein,
+            protein_version: args.protein_version,
             uniprot,
             xref_refseq: args.xref_refseq,
             hgvs,

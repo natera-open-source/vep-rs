@@ -12,7 +12,7 @@ presence and lists every disagreement.
 Usage::
 
     python3 scripts/validation/compare_gtf_tags_to_cache.py \
-        --gtf Homo_sapiens.GRCh38.115.gtf.gz --cache <json_cache_dir> \
+        --gtf Homo_sapiens.GRCh38.116.gtf.gz --cache <json_cache_dir> \
         [--out report.json] [--max-mismatches 50]
 
 Exit status is 0 when every code agrees on every transcript present on both

@@ -11,7 +11,7 @@
 //! Annotation of each batch is parallelised across the resolved `--fork` count
 //! (default: every logical CPU up to 32; `--fork 1` runs serially) using rayon's `par_iter_mut`.
 //!
-//! Perl citations name modules of ensembl-vep release/115 (`Bio/EnsEMBL/VEP/...`).
+//! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`).
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
@@ -106,7 +106,7 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
         .to_string();
         let value = match inline_value {
             Some(v) => Some(v),
-            None if i + 1 < args.len() && !args[i + 1].starts_with('-') => {
+            None if i + 1 < args.len() && is_option_value(&args[i + 1]) => {
                 i += 1;
                 Some(args[i].clone())
             }
@@ -128,24 +128,86 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
     out
 }
 
-/// `[PATH]/<basename>` for each path in a value (`,`-separated lists included).
+/// Whether the token after a flag is its value: anything not opening with `-`,
+/// and a negative number (`--max_sv_size -1`), which no flag name resembles.
+fn is_option_value(token: &str) -> bool {
+    match token.strip_prefix('-') {
+        None => true,
+        Some(rest) => rest.starts_with(|c: char| c.is_ascii_digit()),
+    }
+}
+
+/// `[PATH]/<basename>` for each path in a value (`,`-separated lists included),
+/// as Config.pm `mask_data_paths` masks it: everything up to the last `/` that
+/// has text before it and is not the final character becomes `[PATH]/`, so a
+/// trailing slash survives after the leaf and a root-level `/x` is left alone.
 fn collapse_paths(value: &str) -> String {
     value
         .split(',')
-        .map(|part| match part.rfind('/') {
-            Some(idx) if idx + 1 < part.len() => format!("[PATH]/{}", &part[idx + 1..]),
-            _ => part.to_string(),
+        .map(|part| {
+            let stem = part.strip_suffix('/').unwrap_or(part);
+            match stem.rfind('/').filter(|&i| i > 0) {
+                Some(i) => format!("[PATH]/{}", &part[i + 1..]),
+                None => part.to_string(),
+            }
         })
         .collect::<Vec<_>>()
         .join(",")
 }
 
-/// VEP's `--max_sv_size` check (Parser.pm `validate_vf`): a structural variant
-/// whose span exceeds the limit keeps its VCF line without consequences and
-/// is absent from the JSON output.
-pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: u64) {
+/// VEP's `--max_sv_size` check (Parser.pm `validate_vf`); `None` is the flag's
+/// `-1`, no limit. Ensembl VEP 116 drops a structural variant whose span exceeds
+/// the limit before annotation and writes nothing for it in any format; vep-rs
+/// annotates it in the default, tab and Parquet outputs, keeps its VCF line
+/// without consequences and omits it from the JSON output
+/// (`docs/intended-divergences.md`).
+pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: Option<u64>) {
+    let Some(max_sv_size) = max_sv_size else {
+        return;
+    };
     if variant.is_structural && variant.end.saturating_sub(variant.start) > max_sv_size {
         variant.oversize_sv = true;
+    }
+}
+
+/// The rules decided over a whole input record once its alleles are annotated.
+/// `batch` is laid out in record order, every allele of a record adjacent to the
+/// others: the pipeline stamps each with the record's ordinal, and alleles that
+/// carry none (a batch built from `parse_vcf_line` alone) are one record when
+/// they share the line's identity.
+///
+/// A breakend record is intergenic when no allele of it, the record's own
+/// breakend or a bracket mate, lies within the transcript distance of any
+/// transcript, and then every allele gets one `intergenic_variant` row
+/// (`StructuralVariationFeature::get_IntergenicStructuralVariation`, and
+/// `StructuralVariationOverlap::new`, which admits every allele of an
+/// `IntergenicStructuralVariation`). An allele whose own breakend reached nothing
+/// while a mate's did gets no row, which is why the verdict is the record's and
+/// not the allele's. The same cache condition as the small-variant fallback
+/// applies: a chromosome with no transcripts yields no row at all.
+pub(crate) fn apply_record_rules(batch: &mut [InputVariant], transcripts: &LazyTranscriptIndexes) {
+    fn same_record(a: &InputVariant, b: &InputVariant) -> bool {
+        if a.input_record != 0 || b.input_record != 0 {
+            return a.input_record == b.input_record;
+        }
+        a.original_chr == b.original_chr
+            && a.start == b.start
+            && a.id == b.id
+            && a.ref_allele == b.ref_allele
+            && a.uploaded_allele_string == b.uploaded_allele_string
+    }
+    for alleles in batch.chunk_by_mut(same_record) {
+        let intergenic_breakend_record = alleles.iter().all(|v| {
+            v.variant_class == VariantClass::Translocation
+                && v.transcript_consequences.is_empty()
+                && v.most_severe_consequence.is_none()
+                && transcripts.contains_key(&v.chr)
+        });
+        if intergenic_breakend_record {
+            for v in alleles.iter_mut() {
+                v.most_severe_consequence = Some(Consequence::IntergenicVariant);
+            }
+        }
     }
 }
 
@@ -227,7 +289,7 @@ impl Runner {
                 "vep_api_version".to_string(),
                 vep_core::VEP_VERSION.to_string(),
             ),
-            ("cache".to_string(), self.config.cache_dir_path()),
+            ("cache".to_string(), self.header_cache_dir()),
             ("command_line".to_string(), self.command_line.clone()),
         ];
         if let Some(asm) = self.assembly_name() {
@@ -239,6 +301,18 @@ impl Runner {
             }
         }
         kv
+    }
+
+    /// The cache directory as the output headers print it: the path itself, or
+    /// `[PATH]/<leaf>` under `--mask_header_cache_path` (BaseRunner.pm
+    /// `get_output_header_info`).
+    fn header_cache_dir(&self) -> String {
+        let dir = self.config.cache_dir_path();
+        if self.config.mask_header_cache_path {
+            collapse_paths(&dir)
+        } else {
+            dir
+        }
     }
 
     fn assembly_name(&self) -> Option<String> {
@@ -309,6 +383,7 @@ impl Runner {
             populate_loftee_context: needs_loftee_context,
             compute_hgvs: needs_hgvs_computation(&self.config),
             compute_exon_intron_numbers: needs_exon_intron_numbers(&self.config),
+            protein_version: self.config.protein_version,
         });
 
         let LoadedPlugins { builtin, dylib } = self.load_plugins(plugin_fasta)?;
@@ -455,7 +530,7 @@ impl Runner {
                         plugin_fields,
                     )
                     .with_run_info(
-                        &self.config.cache_dir_path(),
+                        &self.header_cache_dir(),
                         self.cache_info.as_ref(),
                         &self.command_line,
                     ),
@@ -472,7 +547,7 @@ impl Runner {
                 let header = vep_io::output::fields::tab_header(
                     &options,
                     &plugin_fields,
-                    &self.config.cache_dir_path(),
+                    &self.header_cache_dir(),
                     self.cache_info.as_ref(),
                     &self.command_line,
                 );
@@ -700,7 +775,7 @@ impl Runner {
         let options = self.field_options();
         for line in vep_io::output::fields::default_format_header(
             &options,
-            &self.config.cache_dir_path(),
+            &self.header_cache_dir(),
             self.cache_info.as_ref(),
             &self.command_line,
         ) {
@@ -945,6 +1020,10 @@ pub(crate) struct AnnotationResources {
 }
 
 impl AnnotationResources {
+    pub(crate) fn transcripts(&self) -> &LazyTranscriptIndexes {
+        &self.transcripts
+    }
+
     /// Whether any plugin runs on a batch; plugins see a whole batch at once.
     pub(crate) fn plugins_active(&self) -> bool {
         !self.builtin_plugins.is_empty() || self.dylib_plugins.plugin_count() > 0
@@ -1086,9 +1165,8 @@ pub(crate) fn annotate_one(variant: &mut InputVariant, resources: &AnnotationRes
     }
 
     // Intergenic only when the chromosome has transcripts in the cache: Perl
-    // VEP silently drops variants on chromosomes it never loaded. A BND never
-    // gets the intergenic fallback: Perl emits consequences only via local
-    // and mate annotation, never bare intergenic with Feature="-".
+    // VEP silently drops variants on chromosomes it never loaded. A breakend's
+    // intergenic verdict is its record's: `apply_record_rules`.
     let is_bnd = variant.variant_class == VariantClass::Translocation;
     if variant.transcript_consequences.is_empty()
         && variant.most_severe_consequence.is_none()
@@ -1151,6 +1229,7 @@ pub(crate) fn annotate_batch(
             annotate_one(v);
         });
     }
+    apply_record_rules(batch, resources.transcripts.as_ref());
     let annotation_elapsed = annotation_phase_start.elapsed();
     debug!(
         batch_size = batch_len,
@@ -1566,6 +1645,24 @@ mod tests {
              --offline --output_file out.txt --species homo_sapiens"
         );
     }
+
+    /// Config.pm `full_command` prints every flag with its value, so Ensembl VEP
+    /// 116.2's header reads `--max_sv_size -1` for the unlimited span; the negative
+    /// number stays with its flag, while a flag followed by another flag stays bare
+    /// and an ordinary `--flag value` pair is unchanged.
+    #[test]
+    fn command_line_keeps_a_negative_value_with_its_flag() {
+        let args = ["--max_sv_size", "-1", "--distance", "5000", "--offline"];
+        assert_eq!(
+            vep_command_line(args.iter().map(|s| s.to_string())),
+            "vep --distance 5000 --max_sv_size -1 --offline"
+        );
+        let args = ["--offline", "--max_sv_size", "-1"];
+        assert_eq!(
+            vep_command_line(args.iter().map(|s| s.to_string())),
+            "vep --max_sv_size -1 --offline"
+        );
+    }
     use std::sync::Arc;
     use vep_core::variant::VariantClass;
 
@@ -1616,6 +1713,60 @@ mod tests {
         }
         assert!(!needs_hgvs_computation(&config_from(&["--vcf"])));
         assert!(needs_hgvs_computation(&config_from(&["--hgvs"])));
+    }
+
+    /// OutputFactory.pm sets ENSP only under `--protein`, so `--protein_version`
+    /// alone prints no protein identifier; with both, the versioned identifier
+    /// is what the consequence carries.
+    #[test]
+    fn protein_version_prints_only_with_protein() {
+        use vep_io::output::fields::flag_fields;
+        let alone = Runner::new(config_from(&["--protein_version"]));
+        assert!(alone.config.protein_version);
+        assert!(!flag_fields(&alone.field_options()).contains(&"ENSP"));
+        let both = Runner::new(config_from(&["--protein", "--protein_version"]));
+        assert!(flag_fields(&both.field_options()).contains(&"ENSP"));
+    }
+
+    /// Config.pm `mask_data_paths`: a trailing slash keeps its place after the
+    /// leaf, and a root-level path has no leading run to mask.
+    #[test]
+    fn collapse_paths_follows_mask_data_paths() {
+        assert_eq!(collapse_paths("/caches/116_GRCh38"), "[PATH]/116_GRCh38");
+        assert_eq!(collapse_paths("/caches/116_GRCh38/"), "[PATH]/116_GRCh38/");
+        assert_eq!(collapse_paths("/x"), "/x");
+        assert_eq!(collapse_paths("116_GRCh38"), "116_GRCh38");
+        assert_eq!(
+            collapse_paths("/a/b.vcf,/c/d.bed"),
+            "[PATH]/b.vcf,[PATH]/d.bed"
+        );
+    }
+
+    /// Ensembl VEP 116.2 on the GRCh38-release116 corpus prints
+    /// `## Using cache in [PATH]/116_GRCh38` under `--mask_header_cache_path`
+    /// (BaseRunner.pm `get_output_header_info`): the default and tab headers,
+    /// the VCF `cache=` token and the Parquet footer all take the masked path.
+    #[test]
+    fn mask_header_cache_path_masks_every_header_surface() {
+        use vep_io::output::fields::{default_format_header, tab_header, vcf_vep_meta_line};
+        let plain = Runner::new(config_from(&["--json_cache", "/caches/116_GRCh38"]));
+        assert_eq!(plain.header_cache_dir(), "/caches/116_GRCh38");
+        let masked = Runner::new(config_from(&[
+            "--json_cache",
+            "/caches/116_GRCh38",
+            "--mask_header_cache_path",
+        ]));
+        let dir = masked.header_cache_dir();
+        assert_eq!(dir, "[PATH]/116_GRCh38");
+        let options = masked.field_options();
+        assert!(default_format_header(&options, &dir, None, "vep")
+            .contains(&"## Using cache in [PATH]/116_GRCh38".to_string()));
+        assert!(tab_header(&options, &[], &dir, None, "vep")
+            .contains(&"## Using cache in [PATH]/116_GRCh38".to_string()));
+        assert!(vcf_vep_meta_line(&dir, None).contains(" cache=\"[PATH]/116_GRCh38\""));
+        assert!(masked
+            .parquet_kv_metadata()
+            .contains(&("cache".to_string(), "[PATH]/116_GRCh38".to_string())));
     }
 
     /// The exon/intron ordinals reach the output only under `--numbers`; `--vcf`
@@ -2431,5 +2582,181 @@ mod tests {
             !features.contains(&"ENST_EDGE"),
             "tx outside nominal range should not be annotated even with CIPOS"
         );
+    }
+
+    /// Renders one annotated record in the default format.
+    fn default_rows(record: &[InputVariant]) -> String {
+        let alleles: Vec<&InputVariant> = record.iter().collect();
+        let plan = ExtraFieldsPlan::new(FieldOptions::default());
+        let mut out = Vec::new();
+        crate::pipeline::render_default_record(&mut out, &alleles, &plan, &mut Vec::new()).unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
+    fn annotate_line(line: &str, transcripts: Arc<LazyTranscriptIndexes>) -> Vec<InputVariant> {
+        let resources = resources_over(transcripts);
+        let stats = zero_stats();
+        let mut batch = parse_vcf_line(line, true).unwrap();
+        let pool = build_thread_pool(1).unwrap();
+        annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+        batch
+    }
+
+    /// A breakend record neither of whose breakends lies within the transcript
+    /// distance of a transcript is intergenic: one `intergenic_variant` row per allele,
+    /// the record's own breakend as `N.` and the bracket mate as written, Feature `-`,
+    /// `IMPACT=MODIFIER` and no STRAND, the shape Ensembl VEP 116.2 writes for the
+    /// `bnd_intergenic_pair_a` record of the GRCh38-release116 golden corpus
+    /// (ensembl-variation `StructuralVariationOverlap::new`, every allele of an
+    /// `IntergenicStructuralVariation`).
+    #[test]
+    fn breakend_record_with_both_sides_intergenic_writes_two_intergenic_rows() {
+        let batch = annotate_line(
+            "21\t100\tbnd_a\tN\tN[21:500[\t.\t.\tSVTYPE=BND;MATEID=bnd_b",
+            one_transcript_on_21("ENSTFAR", 1_000_000),
+        );
+        assert_eq!(batch.len(), 2);
+        for allele in &batch {
+            assert!(allele.transcript_consequences.is_empty());
+            assert_eq!(
+                allele.most_severe_consequence,
+                Some(Consequence::IntergenicVariant)
+            );
+        }
+        assert_eq!(
+            default_rows(&batch),
+            "bnd_a\t21:101\tN.\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n\
+             bnd_a\t21:101\tN[21:500[\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
+        );
+    }
+
+    /// A breakend record whose own position reaches no transcript while its mate does
+    /// is not intergenic: the mate allele's transcript rows are the record's output
+    /// and the own breakend gets no row at all (`bnd_intergenic_with_genic_mate` of the
+    /// GRCh38-release116 golden corpus: two mate-allele rows, no `N.` row).
+    #[test]
+    fn breakend_record_whose_mate_is_genic_writes_no_intergenic_row() {
+        let batch = annotate_line(
+            "21\t100\tbnd_a\tN\tN[21:1000500[\t.\t.\tSVTYPE=BND;MATEID=bnd_b",
+            one_transcript_on_21("ENSTMATE", 1_000_000),
+        );
+        assert_eq!(batch.len(), 2);
+        let own = &batch[0];
+        assert!(own.is_single_breakend);
+        assert!(own.transcript_consequences.is_empty());
+        assert_eq!(own.most_severe_consequence, None);
+        let mate = &batch[1];
+        assert_eq!(mate.transcript_consequences.len(), 1);
+        assert_eq!(
+            mate.transcript_consequences[0].transcript_id.as_ref(),
+            "ENSTMATE"
+        );
+        let rows = default_rows(&batch);
+        assert_eq!(rows.lines().count(), 1);
+        assert!(rows.starts_with("bnd_a\t21:101\tN[21:1000500[\tENSGTEST\tENSTMATE\tTranscript\t"));
+        assert!(!rows.contains("intergenic_variant"));
+    }
+
+    /// A record whose only ALT is a single breakend (`.N`) has one allele, and when it
+    /// lies within the transcript distance of nothing that allele gets one intergenic
+    /// row labelled with the class term `chromosome_breakpoint`, as 116.2 writes
+    /// `bnd_single_intergenic_left` (ensembl-vep `OutputFactory.pm`
+    /// `BaseStructuralVariationOverlapAllele_to_output_hash`: an allele without a
+    /// breakend prints `class_SO_term`).
+    #[test]
+    fn single_breakend_record_with_no_transcript_writes_one_intergenic_row() {
+        let batch = annotate_line(
+            "21\t100\tbnd_s\tN\t.N\t.\t.\tSVTYPE=BND",
+            one_transcript_on_21("ENSTFAR", 1_000_000),
+        );
+        assert_eq!(batch.len(), 1);
+        assert_eq!(
+            default_rows(&batch),
+            "bnd_s\t21:101\tchromosome_breakpoint\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
+        );
+    }
+
+    /// A genic breakend record whose mate reaches nothing writes its transcript rows
+    /// under its own allele `N.` (never `chromosome_breakpoint`, which is reserved for
+    /// a record with no bracket ALT), with `feature_truncation` for the breakend inside
+    /// the transcript and the region term of the position, and nothing for the mate:
+    /// `bnd_genic_with_intergenic_mate` of the GRCh38-release116 golden corpus
+    /// (`N. / feature_truncation,coding_sequence_variant` on its coding transcript;
+    /// here a non-coding exon). The record carries no MATEID.
+    #[test]
+    fn genic_breakend_record_with_intergenic_mate_names_its_own_allele_n_dot() {
+        let batch = annotate_line(
+            "21\t1000100\tbnd_g\tN\tN[21:100[\t.\t.\tSVTYPE=BND",
+            one_transcript_on_21("ENSTGENIC", 1_000_000),
+        );
+        assert_eq!(batch.len(), 2);
+        let own = &batch[0];
+        assert_eq!(own.display_allele(), "N.");
+        assert_eq!(own.transcript_consequences.len(), 1);
+        let mate = &batch[1];
+        assert!(mate.transcript_consequences.is_empty());
+        assert_eq!(mate.most_severe_consequence, None);
+        let rows = default_rows(&batch);
+        assert_eq!(rows.lines().count(), 1);
+        assert!(rows.starts_with(
+            "bnd_g\t21:1000101\tN.\tENSGTEST\tENSTGENIC\tTranscript\tfeature_truncation,non_coding_transcript_exon_variant\t"
+        ), "{rows}");
+    }
+
+    /// Two breakend records in one batch are judged one at a time: an intergenic
+    /// record beside a genic one keeps its two intergenic rows.
+    #[test]
+    fn breakend_intergenic_verdict_is_per_record() {
+        let resources = resources_over(one_transcript_on_21("ENSTGENIC", 1_000_000));
+        let stats = zero_stats();
+        let mut batch = Vec::new();
+        for (n, line) in [
+            "21\t100\tbnd_a\tN\tN[21:500[\t.\t.\tSVTYPE=BND;MATEID=bnd_b",
+            "21\t1000100\tbnd_g\tN\tN[21:200[\t.\t.\tSVTYPE=BND",
+        ]
+        .iter()
+        .enumerate()
+        {
+            for mut v in parse_vcf_line(line, true).unwrap() {
+                v.input_record = n as u64 + 1;
+                batch.push(v);
+            }
+        }
+        let pool = build_thread_pool(1).unwrap();
+        annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+        let verdicts: Vec<Option<Consequence>> =
+            batch.iter().map(|v| v.most_severe_consequence).collect();
+        assert_eq!(
+            verdicts,
+            vec![
+                Some(Consequence::IntergenicVariant),
+                Some(Consequence::IntergenicVariant),
+                Some(Consequence::FeatureTruncation),
+                None,
+            ]
+        );
+    }
+
+    /// `--max_sv_size -1` lifts the size limit: the 10.6 Mb deletion of the
+    /// GRCh38-release116 golden corpus (`del_10_6_mb`, 21:17750001-28350000) is marked
+    /// oversize at the default of 10,000,000 and not at all without a limit
+    /// (ensembl-vep `Parser.pm` `validate_vf`: the size test runs only when
+    /// `max_sv_size != -1`).
+    #[test]
+    fn max_sv_size_minus_one_lifts_the_size_limit() {
+        let line = "21\t17750000\tdel_10_6_mb\tN\t<DEL>\t.\t.\tEND=28350000;SVTYPE=DEL";
+        let mut capped = parse_vcf_line(line, true).unwrap().remove(0);
+        mark_oversize_sv(&mut capped, Some(10_000_000));
+        assert!(capped.oversize_sv);
+        let mut unlimited = parse_vcf_line(line, true).unwrap().remove(0);
+        mark_oversize_sv(&mut unlimited, None);
+        assert!(!unlimited.oversize_sv);
+
+        assert_eq!(config_from(&["--max_sv_size", "-1"]).max_sv_size, None);
+        assert_eq!(
+            config_from(&["--max_sv_size", "500"]).max_sv_size,
+            Some(500)
+        );
+        assert_eq!(config_from(&[]).max_sv_size, Some(10_000_000));
     }
 }

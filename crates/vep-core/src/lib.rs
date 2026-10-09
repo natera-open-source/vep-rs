@@ -20,7 +20,7 @@ pub mod variant;
 pub mod variation;
 
 /// VEP version number (matches Perl VEP release).
-pub const VEP_VERSION: u32 = 115;
+pub const VEP_VERSION: u32 = 116;
 
 /// VEP sub-version number.
 pub const VEP_SUB_VERSION: u32 = 2;

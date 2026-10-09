@@ -68,7 +68,7 @@
 #     --fastvep-binary /path/to/fastvep --data-dir <data> --output-dir <data>/work
 #
 #   scripts/concordance/run_clone_measurement.sh --engine perl \
-#     --perl-image ensemblorg/ensembl-vep:release_115.2 \
+#     --perl-image ensemblorg/ensembl-vep:release_116.2 \
 #     --data-dir <data> --output-dir <data>/work
 set -euo pipefail
 
@@ -83,7 +83,7 @@ REPO_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ENGINE=""
 VEP_BINARY=""
 FASTVEP_BINARY=""
-PERL_IMAGE="ensemblorg/ensembl-vep:release_115.2"
+PERL_IMAGE="ensemblorg/ensembl-vep:release_116.2"
 DATA_DIR=""
 OUTPUT_DIR=""
 SUITES_FILTER="all"
@@ -116,7 +116,7 @@ Engine binary (one, matching --engine):
   --vep-binary <path>      vep-rs binary             (engine vep-rs)
   --fastvep-binary <path>  fastVEP binary            (engine fastvep)
   --perl-image <ref>       Perl VEP Docker image      (engine perl; default
-                           ensemblorg/ensembl-vep:release_115.2)
+                           ensemblorg/ensembl-vep:release_116.2)
 
 Optional:
   --suites <filter>      all (default) | snp-indel | sv | space-separated "s01 s04"
@@ -342,7 +342,7 @@ FASTVEP_NORMALIZE="$SCRIPT_DIR/fastvep_normalize.py"
 # fails any cell whose cache is a chromosome subset.
 PERL_CACHE_DIR="${VEP_PERL_CACHE_DIR:-$DATA_DIR/caches/perl/vep-cache}"
 # Perl VEP cache release. Must match the release the ground truth was built with.
-PERL_CACHE_VERSION="${VEP_PERL_CACHE_VERSION:-115}"
+PERL_CACHE_VERSION="${VEP_PERL_CACHE_VERSION:-116}"
 
 veprs_cache_for() { [[ "$1" == "GRCh37" ]] && echo "$VEPRS_CACHE_GRCH37" || echo "$VEPRS_CACHE_GRCH38"; }
 fastvep_cache_for() { [[ "$1" == "GRCh37" ]] && echo "$FASTVEP_CACHE_GRCH37" || echo "$FASTVEP_CACHE_GRCH38"; }
@@ -577,6 +577,10 @@ reference_release_for() {
 		printf '%s\n' "$REFERENCE_RELEASE"
 		return 0
 	fi
+	command -v python3 >/dev/null 2>&1 || {
+		echo "ERROR: [run_clone_measurement] python3 is not on PATH: the reference release is derived by $SCRIPT_DIR/reference_release.py (the comparators need the interpreter too); install it or pass --reference-release" >&2
+		return 1
+	}
 	python3 "$SCRIPT_DIR/reference_release.py" --provenance-dir "$gt_dir" || {
 		echo "ERROR: [run_clone_measurement] no reference release for $gt_dir: its provenance names neither an Ensembl VEP image tag nor a cache version; pass --reference-release" >&2
 		return 1
@@ -858,8 +862,8 @@ assert_perl_annotated() {
 
 # assert_perl_cache_complete <assembly>
 #
-# A chromosome-subset cache (a `115_GRCh37/` holding only `21/` against a genome-wide
-# `115_GRCh38/`) is a second way for Perl to annotate almost nothing and exit 0, independent
+# A chromosome-subset cache (a `116_GRCh37/` holding only `21/` against a genome-wide
+# `116_GRCh38/`) is a second way for Perl to annotate almost nothing and exit 0, independent
 # of the flag.
 #
 # `assert_perl_annotated` does NOT subsume this, which is the whole reason the function exists.
@@ -875,14 +879,14 @@ assert_perl_annotated() {
 # chromosome-subset cache, which is the defect class.
 assert_perl_cache_complete() {
 	local assembly="$1"
-	# `:-115` is load-bearing rather than defensive. The CACHE-COMPLETE gate in
+	# `:-116` is load-bearing rather than defensive. The CACHE-COMPLETE gate in
 	# test_run_clone_measurement.sh extracts this function out of the harness with awk and evals
 	# it, deliberately, so the gate exercises the shipped code instead of a reimplementation
 	# that can drift from it. In that context the harness's own
 	# `PERL_CACHE_VERSION` assignment has not run, and the test suite is `set -u`, so a bare
 	# reference here aborts the whole gate suite on an unbound variable -- exiting 1 with no
 	# failing assertion printed, which reads as a harness defect rather than a missing default.
-	local ver="${PERL_CACHE_VERSION:-115}"
+	local ver="${PERL_CACHE_VERSION:-116}"
 	local slice="$PERL_CACHE_DIR/homo_sapiens/${ver}_${assembly}"
 	local primaries="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT"
 	local c missing=""

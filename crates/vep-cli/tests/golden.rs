@@ -15,8 +15,8 @@ mod common;
 use std::collections::BTreeSet;
 
 use common::{
-    compare_entries, compare_tab_headers, corpora, parse_default, read_expected, run_vep,
-    Documented,
+    compare_entries, compare_tab_headers, corpora, parse_default, parse_json, parse_vcf,
+    read_expected, run_vep, Documented, REFERENCE_SKIPPED_RECORD,
 };
 
 #[test]
@@ -108,6 +108,72 @@ fn manifest_covers_every_combination_it_claims() {
             "{}/{}: the records' combinations and the combination table disagree",
             corpus.release, corpus.name
         );
+    }
+}
+
+/// The records the reference dropped before annotation are marked consistently
+/// with its committed output: `reference_rows` 0 and a `reference_warning`
+/// string go together; every `vep_rs_only_tuples` entry classed
+/// `reference_skipped_record` names only marked records; the reference wrote no
+/// VCF line and no JSON object for a marked record, and one of each for every
+/// other record (Ensembl VEP writes one per record it annotates).
+#[test]
+fn skipped_record_markers_match_the_reference_output() {
+    for corpus in corpora() {
+        let label = format!("{}/{}", corpus.release, corpus.name);
+        let m = &corpus.manifest;
+        let records = m["records"].as_array().unwrap();
+        let marked: BTreeSet<usize> = records
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| r["reference_rows"].as_u64() == Some(0))
+            .map(|(i, _)| i)
+            .collect();
+        for (i, rec) in records.iter().enumerate() {
+            assert_eq!(
+                marked.contains(&i),
+                rec["reference_warning"].is_string(),
+                "{label}: record {i} has one of reference_rows 0 and reference_warning without the other"
+            );
+        }
+        for item in m["vep_rs_only_tuples"].as_array().into_iter().flatten() {
+            if item["expected_divergence"].as_str() != Some(REFERENCE_SKIPPED_RECORD) {
+                continue;
+            }
+            for r in item["record_indices"].as_array().unwrap() {
+                let r = r.as_u64().unwrap() as usize;
+                assert!(
+                    marked.contains(&r),
+                    "{label}: a {REFERENCE_SKIPPED_RECORD} tuple names record {r}, which has reference rows"
+                );
+            }
+        }
+        let inputs = common::input_records(&corpus);
+        let vcf = parse_vcf(&read_expected(&corpus.dir, "vcf.vcf"), &inputs);
+        let json = parse_json(&read_expected(&corpus.dir, "json.jsonl"), &inputs);
+        for e in vcf.iter().chain(json.iter()) {
+            assert!(
+                e.record.is_some(),
+                "{label}: reference entry {} matches no input record",
+                e.key
+            );
+        }
+        let in_vcf: BTreeSet<usize> = vcf.iter().filter_map(|e| e.record).collect();
+        let in_json: BTreeSet<usize> = json.iter().filter_map(|e| e.record).collect();
+        for i in 0..records.len() {
+            let (vcf_line, json_object) = (in_vcf.contains(&i), in_json.contains(&i));
+            if marked.contains(&i) {
+                assert!(
+                    !vcf_line && !json_object,
+                    "{label}: record {i} is marked reference_rows 0 but the reference wrote a VCF line ({vcf_line}) or a JSON object ({json_object}) for it"
+                );
+            } else {
+                assert!(
+                    vcf_line && json_object,
+                    "{label}: record {i} is not marked reference_rows 0 but the reference wrote no VCF line ({vcf_line}) or no JSON object ({json_object}) for it"
+                );
+            }
+        }
     }
 }
 

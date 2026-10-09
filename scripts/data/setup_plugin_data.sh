@@ -482,11 +482,11 @@ stage_from_upstream() {
 			upstream_note "Unzip to a plain TSV: Perl's GWAS.pm needs it uncompressed, and the header row starts with 'DATE ADDED TO CATALOG'. GRCh38 coordinates only."
 			;;
 		LoFtool)
-			echo "    https://raw.githubusercontent.com/Ensembl/VEP_plugins/release/115/LoFtool_scores.txt"
+			echo "    https://raw.githubusercontent.com/Ensembl/VEP_plugins/release/116/LoFtool_scores.txt"
 			upstream_note "Fetched directly from GitHub, not from a VEP_plugins clone: vep-rs must not depend on the Perl plugin repo being checked out. Gene-symbol keyed, so it serves both assemblies."
 			;;
 		pLI)
-			echo "    https://raw.githubusercontent.com/Ensembl/VEP_plugins/release/115/pLI_values.txt"
+			echo "    https://raw.githubusercontent.com/Ensembl/VEP_plugins/release/116/pLI_values.txt"
 			upstream_note "Same GitHub-direct rationale as LoFtool. Gene keyed, serves both assemblies."
 			;;
 		LoFTEE)

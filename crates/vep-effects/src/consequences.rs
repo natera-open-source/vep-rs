@@ -68,6 +68,9 @@ pub struct EffectsConfig {
     /// receives the whole consequence as JSON. When off, both fields stay
     /// `None`.
     pub compute_exon_intron_numbers: bool,
+    /// Append the translation's version to the protein identifier
+    /// (`ENSP00000286808.3`), as `--protein_version` does.
+    pub protein_version: bool,
 }
 
 impl Default for EffectsConfig {
@@ -81,6 +84,7 @@ impl Default for EffectsConfig {
             populate_loftee_context: false,
             compute_hgvs: false,
             compute_exon_intron_numbers: false,
+            protein_version: false,
         }
     }
 }
@@ -175,7 +179,28 @@ pub fn calculate_consequences(
         transcript,
         config.compute_exon_intron_numbers,
     );
+    if config.protein_version {
+        append_translation_version(&mut tc, transcript);
+    }
     Some(tc)
+}
+
+/// `--protein_version` (OutputFactory.pm `BaseTranscriptVariationAllele_to_output_hash`):
+/// the protein identifier gains `.<translation version>` unless the translation
+/// has no version or the identifier already ends in `.<digits>`.
+fn append_translation_version(tc: &mut TranscriptConsequence, transcript: &Transcript) {
+    let Some(version) = transcript.translation.as_ref().and_then(|t| t.version) else {
+        return;
+    };
+    let Some(id) = tc.protein_id.as_deref() else {
+        return;
+    };
+    let versioned = id
+        .rsplit_once('.')
+        .is_some_and(|(_, tail)| !tail.is_empty() && tail.bytes().all(|b| b.is_ascii_digit()));
+    if !versioned {
+        tc.protein_id = Some(Arc::from(format!("{id}.{version}")));
+    }
 }
 
 /// Consequence terms and the fields the analysis derives alongside them.
@@ -4832,6 +4857,59 @@ mod tests {
         assert_eq!(tc.biotype.as_deref(), Some("protein_coding"));
         assert_eq!(tc.strand, 1);
         assert_eq!(tc.feature_type, FeatureType::Transcript);
+    }
+
+    /// Ensembl VEP 116.2 on the GRCh38-release116 corpus prints
+    /// `ENSP00000286808.3` for ENST00000286808 (translation version 3) under
+    /// `--protein --protein_version`, and `ENSP00000286808` without the flag.
+    #[test]
+    fn protein_version_appends_the_translation_version() {
+        let mut tx = make_test_transcript();
+        tx.protein_id = Some("ENSP00000286808".into());
+        tx.translation.as_mut().unwrap().version = Some(3);
+        let variant = InputVariant::new(
+            "21".into(),
+            25_000_054,
+            25_000_054,
+            b"C".to_vec(),
+            b"A".to_vec(),
+        );
+        let off = calculate_consequences(&variant, &tx, &EffectsConfig::default()).unwrap();
+        assert_eq!(off.protein_id.as_deref(), Some("ENSP00000286808"));
+        let on = EffectsConfig {
+            protein_version: true,
+            ..Default::default()
+        };
+        let tc = calculate_consequences(&variant, &tx, &on).unwrap();
+        assert_eq!(tc.protein_id.as_deref(), Some("ENSP00000286808.3"));
+        assert_eq!(off.consequences, tc.consequences);
+    }
+
+    /// OutputFactory.pm appends the version only when the identifier does not
+    /// already end in `.<digits>` and the translation has one.
+    #[test]
+    fn protein_version_leaves_a_versioned_or_unversioned_identifier_alone() {
+        let variant = InputVariant::new(
+            "21".into(),
+            25_000_054,
+            25_000_054,
+            b"C".to_vec(),
+            b"A".to_vec(),
+        );
+        let on = EffectsConfig {
+            protein_version: true,
+            ..Default::default()
+        };
+        let mut tx = make_test_transcript();
+        tx.protein_id = Some("NP_001234.2".into());
+        tx.translation.as_mut().unwrap().version = Some(3);
+        let tc = calculate_consequences(&variant, &tx, &on).unwrap();
+        assert_eq!(tc.protein_id.as_deref(), Some("NP_001234.2"));
+
+        let mut tx = make_test_transcript();
+        tx.translation.as_mut().unwrap().version = None;
+        let tc = calculate_consequences(&variant, &tx, &on).unwrap();
+        assert_eq!(tc.protein_id.as_deref(), Some("ENSP00000000001"));
     }
 
     #[test]
