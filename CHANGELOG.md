@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--protein_version` appends the translation version to the `ENSP` identifier (`ENSP00000286808.3`) when `--protein` prints it, as Ensembl VEP 116 does. (#44)
 - `--mask_header_cache_path` prints the cache directory as `[PATH]/<leaf>` in the default and `--tab` headers, the VCF `cache=` token and the Parquet footer. (#44)
 - The plugin-visible `InputVariant` JSON carries `input_line_name`, the `CHROM_POS_REF/ALT` name built from the record's own input line. (#44)
+- The plugin-visible `InputVariant` JSON carries `record_so_term`, the whole record's class term (`Alu_insertion`, `copy_number_variation`), on every structural variant whose type has one. (#44)
 - `--regulatory_gff`, `--extended_promoters` and `--custom_suppress_filter` are refused with an error naming what each would do; regulatory and custom annotation are not supported. (#44)
 - `--reference-release {115.2,116.2}` on both comparators selects the Ensembl VEP release scored against (116.2 default, sets aside the records it skips); the runners derive it from the reference's provenance. (#43)
 
@@ -50,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A breakend whose mate lies inside an NMD transcript while its own position lies outside carries `feature_truncation` without `NMD_transcript_variant`. (#44)
 - Parquet `alt` and the plugin-visible `alt_alleles` of a multi-allelic copy-number record carry each ALT as written (`<DEL>`, `<DUP>`, `<CN0>`), where every ALT read `<CNV>`. (#44)
 - The `## VEP command-line` header and the VCF `##VEP-command-line` line keep a negative value with its flag (`--max_sv_size -1`). (#44)
+- The `## VEP command-line` header keeps a `key=` prefix when it masks a path (`--custom snv=[PATH]/b.tsv.gz`), as Ensembl VEP's `mask_data_paths` does. (#44)
 - An ID equal to the generated breakend name yields the line name on the record's own `N.` row as on the mate row. (#44)
 - A `<CNV:TR>` contraction loses the run's tail and an expansion inserts after it, as Ensembl VEP's expansion places them, so the frame follows the unit change, not the run length. (#44)
 - A `<CNV:TR>` allele's length sums its RN repeat sequences, and each allele of a multi-allelic record takes its own RUS, RUC and RB entries. (#44)

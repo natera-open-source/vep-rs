@@ -116,7 +116,10 @@ Engine binary (one, matching --engine):
   --vep-binary <path>      vep-rs binary             (engine vep-rs)
   --fastvep-binary <path>  fastVEP binary            (engine fastvep)
   --perl-image <ref>       Perl VEP Docker image      (engine perl; default
-                           ensemblorg/ensembl-vep:release_116.2)
+                           ensemblorg/ensembl-vep:release_116.2). The cache
+                           release the Perl cells read, VEP_PERL_CACHE_VERSION
+                           (default 116), must match the image's release: a
+                           release_115.2 image needs VEP_PERL_CACHE_VERSION=115.
 
 Optional:
   --suites <filter>      all (default) | snp-indel | sv | space-separated "s01 s04"
@@ -879,13 +882,12 @@ assert_perl_annotated() {
 # chromosome-subset cache, which is the defect class.
 assert_perl_cache_complete() {
 	local assembly="$1"
-	# `:-116` is load-bearing rather than defensive. The CACHE-COMPLETE gate in
-	# test_run_clone_measurement.sh extracts this function out of the harness with awk and evals
-	# it, deliberately, so the gate exercises the shipped code instead of a reimplementation
-	# that can drift from it. In that context the harness's own
-	# `PERL_CACHE_VERSION` assignment has not run, and the test suite is `set -u`, so a bare
-	# reference here aborts the whole gate suite on an unbound variable -- exiting 1 with no
-	# failing assertion printed, which reads as a harness defect rather than a missing default.
+	# The default is load-bearing rather than defensive. The CACHE-COMPLETE gate in
+	# test_run_clone_measurement.sh extracts this function with awk and evals it, so the gate
+	# runs the shipped code and not a copy that can drift from it. Under that eval the harness's
+	# own `PERL_CACHE_VERSION` assignment has not run and the suite is `set -u`, so a bare
+	# reference would abort the whole gate suite on an unbound variable, exiting 1 with no
+	# failing assertion printed and reading as a harness defect rather than a missing default.
 	local ver="${PERL_CACHE_VERSION:-116}"
 	local slice="$PERL_CACHE_DIR/homo_sapiens/${ver}_${assembly}"
 	local primaries="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT"

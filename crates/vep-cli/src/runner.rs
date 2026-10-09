@@ -137,22 +137,34 @@ fn is_option_value(token: &str) -> bool {
     }
 }
 
-/// `[PATH]/<basename>` for each path in a value (`,`-separated lists included),
-/// as Config.pm `mask_data_paths` masks it: everything up to the last `/` that
-/// has text before it and is not the final character becomes `[PATH]/`, so a
-/// trailing slash survives after the leaf and a root-level `/x` is left alone.
+/// `[PATH]/<basename>` for each path in a value, as `mask_data_paths`
+/// (`Config.pm:796`, `s|[^,=]+$delim(?! )(?!,)(?!$)|[PATH]$delim|g`, `$delim`
+/// being `/` except on Windows) masks it: in each run of text between `,` and
+/// `=` delimiters, everything up to the last `/` that has text before it and is
+/// not followed by a space, a `,` or the end of the value becomes `[PATH]/`, so
+/// a `key=` prefix survives, as do a trailing slash and a root-level `/x`.
 fn collapse_paths(value: &str) -> String {
     value
-        .split(',')
-        .map(|part| {
-            let stem = part.strip_suffix('/').unwrap_or(part);
-            match stem.rfind('/').filter(|&i| i > 0) {
-                Some(i) => format!("[PATH]/{}", &part[i + 1..]),
-                None => part.to_string(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(",")
+        .split_inclusive([',', '='])
+        .map(mask_segment)
+        .collect()
+}
+
+/// Masks one segment of the `collapse_paths` split, a `[^,=]+` run with the `,`
+/// or `=` that ends it still attached, so the byte after a `/` is exactly what
+/// the regex's lookaheads see: `None` is the end of the value, `,` and a space
+/// are the two refused followers, and `=` passes like any other byte.
+fn mask_segment(segment: &str) -> String {
+    let admitted_after =
+        |i: usize| !matches!(segment.as_bytes().get(i + 1), None | Some(b' ' | b','));
+    let slash = segment
+        .rmatch_indices('/')
+        .map(|(i, _)| i)
+        .find(|&i| i > 0 && admitted_after(i));
+    match slash {
+        Some(i) => format!("[PATH]/{}", &segment[i + 1..]),
+        None => segment.to_string(),
+    }
 }
 
 /// VEP's `--max_sv_size` check (Parser.pm `validate_vf`); `None` is the flag's
@@ -1729,7 +1741,10 @@ mod tests {
     }
 
     /// Config.pm `mask_data_paths`: a trailing slash keeps its place after the
-    /// leaf, and a root-level path has no leading run to mask.
+    /// leaf, a root-level path has no leading run to mask, and the `[^,=]+` run
+    /// stops at `=` as at `,`, so a `--custom` or `--plugin` value keeps every
+    /// `key=`; after the `/`, a space, a `,` or the end of the value refuses the
+    /// mask and an `=` admits it.
     #[test]
     fn collapse_paths_follows_mask_data_paths() {
         assert_eq!(collapse_paths("/caches/116_GRCh38"), "[PATH]/116_GRCh38");
@@ -1740,6 +1755,21 @@ mod tests {
             collapse_paths("/a/b.vcf,/c/d.bed"),
             "[PATH]/b.vcf,[PATH]/d.bed"
         );
+        assert_eq!(collapse_paths("snv=/a/b.tsv.gz"), "snv=[PATH]/b.tsv.gz");
+        assert_eq!(
+            collapse_paths("CADD,snv=/data/cadd/whole_genome_SNVs.tsv.gz,indels=/data/cadd/gnomad.genomes.r4.0.indel.tsv.gz"),
+            "CADD,snv=[PATH]/whole_genome_SNVs.tsv.gz,indels=[PATH]/gnomad.genomes.r4.0.indel.tsv.gz"
+        );
+        assert_eq!(collapse_paths("key=/x"), "key=/x");
+        assert_eq!(collapse_paths("key=/a/b/"), "key=[PATH]/b/");
+        assert_eq!(collapse_paths("x/y=/c/d"), "[PATH]/y=[PATH]/d");
+        assert_eq!(collapse_paths("/a/=b"), "[PATH]/=b");
+        assert_eq!(collapse_paths("/a/ b"), "/a/ b");
+        assert_eq!(collapse_paths("/a/b/ c"), "[PATH]/b/ c");
+        assert_eq!(collapse_paths("/x/,/c/d"), "/x/,[PATH]/d");
+        assert_eq!(collapse_paths("a/b="), "[PATH]/b=");
+        assert_eq!(collapse_paths("/a/="), "[PATH]/=");
+        assert_eq!(collapse_paths("=/a/b"), "=[PATH]/b");
     }
 
     /// Ensembl VEP 116.2 on the GRCh38-release116 corpus prints
