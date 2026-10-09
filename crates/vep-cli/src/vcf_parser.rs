@@ -319,9 +319,6 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
         }
         variant.ci_pos = parse_ci_field(get_info_value(info_field, "CIPOS"));
         variant.ci_end = parse_ci_field(get_info_value(info_field, "CIEND"));
-        variant.mate_id = get_info_value(info_field, "MATEID")
-            .or_else(|| get_info_value(info_field, "PARID"))
-            .map(|s| s.to_string());
         if sv_class == vep_core::variant::VariantClass::Translocation {
             if let Some((mate_chr, mate_pos)) = parse_bnd_mate(alt) {
                 variant.mate_chr = Some(mate_chr);
@@ -382,7 +379,7 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
             variant.mate_chr = Some(mate_chr_val);
             variant.mate_pos = Some(mate_pos);
             variant.is_single_breakend = false;
-            mark_paired_breakend_record(&mut variant, &chr);
+            mark_paired_breakend_record(&mut variant, &chr, info_field);
 
             let single_alt = format!("{}.", ref_str);
             // The record's own breakend precedes its mates, as in Perl's
@@ -390,7 +387,7 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
             variants.push(own_breakend(&variant, ref_str, &single_alt));
             variants.push(variant);
         } else if is_bnd && is_paired_bnd {
-            mark_paired_breakend_record(&mut variant, &chr);
+            mark_paired_breakend_record(&mut variant, &chr, info_field);
             // One own breakend per record, ahead of its first mate: `_parse_breakends`
             // (`StructuralVariationFeature.pm:1274-1321`) names it once from every
             // bracket part of the allele string, `.t` when any mate is left-placed
@@ -437,20 +434,22 @@ fn own_breakend(variant: &InputVariant, ref_str: &str, single_alt: &str) -> Inpu
     own
 }
 
-/// Gives a breakend record that names a mate a `mate_id` when INFO carries no MATEID.
-/// A set `mate_id` is how `display_allele()` and the breakend predicates tell the
-/// record's own breakend, written `N.` or `.N` (`StructuralVariationFeature.pm`
+/// Names the mate of a breakend record that has one: INFO/MATEID, else PARID, else
+/// the record's ID or `chr:start` (gnomAD `<BND>` records carry no MATEID). A set
+/// `mate_id` is how `display_allele()` and the breakend predicates tell the record's
+/// own breakend, written `N.` or `.N` (`StructuralVariationFeature.pm`
 /// `_parse_breakends` names it from the bracket or synthesised mate allele alone),
-/// from a record whose only ALT is a single breakend, whose Allele is the bare
-/// class term `chromosome_breakpoint`. gnomAD `<BND>` records carry no MATEID.
-fn mark_paired_breakend_record(variant: &mut InputVariant, chr: &str) {
-    if variant.mate_id.is_none() {
-        let synthetic_id = variant
-            .id
-            .clone()
-            .unwrap_or_else(|| format!("{}:{}", chr, variant.start));
-        variant.mate_id = Some(synthetic_id);
-    }
+/// from a record whose only ALT is a single breakend, whose Allele is the bare class
+/// term `chromosome_breakpoint` (`OutputFactory.pm:2029`,
+/// `$vfoa->{breakend}->{string} || $svf->class_SO_term`). Ensembl VEP never reads
+/// MATEID, so one on a record without a bracket mate names nothing and is not kept.
+fn mark_paired_breakend_record(variant: &mut InputVariant, chr: &str, info: &str) {
+    let mate_id = get_info_value(info, "MATEID")
+        .or_else(|| get_info_value(info, "PARID"))
+        .map(str::to_string)
+        .or_else(|| variant.id.clone())
+        .unwrap_or_else(|| format!("{}:{}", chr, variant.start));
+    variant.mate_id = Some(mate_id);
 }
 
 /// The name VEP gives a VCF record whose ID column cannot name it
@@ -1353,6 +1352,23 @@ mod tests {
         assert!(variant.mate_pos.is_none());
         // One allele, no bracket mate: VEP prints the class term as its Allele.
         assert_eq!(variant.display_allele(), "chromosome_breakpoint");
+    }
+
+    /// INFO/MATEID on a record whose only ALT is a single breakend names no mate:
+    /// Ensembl VEP never reads MATEID, `_parse_breakends`
+    /// (`StructuralVariationFeature.pm:1279-1283`) finds no bracket in `.N`, and the
+    /// row's Allele falls to `class_SO_term` (`OutputFactory.pm:2029`),
+    /// `chromosome_breakpoint`, as for the record without MATEID.
+    #[test]
+    fn single_breakend_with_mateid_is_parsed_as_without() {
+        let with =
+            parse_vcf_line("21\t100\t.\tN\t.N\t.\t.\tSVTYPE=BND;MATEID=bnd_x", false).unwrap();
+        let without = parse_vcf_line("21\t100\t.\tN\t.N\t.\t.\tSVTYPE=BND", false).unwrap();
+        assert_eq!(format!("{with:?}"), format!("{without:?}"));
+        assert_eq!(with.len(), 1);
+        assert!(with[0].is_single_breakend);
+        assert_eq!(with[0].mate_id, None);
+        assert_eq!(with[0].display_allele(), "chromosome_breakpoint");
     }
 
     /// A bracket breakend record names its own breakend `N.` or `.N` whether or not

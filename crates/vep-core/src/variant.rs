@@ -206,7 +206,11 @@ pub struct InputVariant {
     /// Whether this is a structural variant (symbolic allele).
     #[serde(default)]
     pub is_structural: bool,
-    /// For BND: MATEID from VCF INFO field.
+    /// For BND: the mate's id, INFO/MATEID or PARID when the record carries one, else
+    /// a stand-in derived from the record. `Some` on every breakend of a record that
+    /// has a mate and `None` on a record whose only ALT is a single breakend, which is
+    /// how `display_allele()` and the breakend predicates tell the record's own
+    /// breakend (`N.`, `.N`) from one whose Allele is `chromosome_breakpoint`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mate_id: Option<String>,
     /// For BND: mate chromosome parsed from the BND ALT notation.

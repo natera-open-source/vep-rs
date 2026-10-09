@@ -434,6 +434,28 @@ fn oversize_structural_variant_is_annotated_not_dropped() {
     );
 }
 
+/// A record whose only ALT is a single breakend prints `chromosome_breakpoint` and
+/// takes no `feature_truncation` whether or not INFO carries MATEID: Ensembl VEP
+/// 116.2 never reads MATEID, `_parse_breakends` finds no bracket in `.N`
+/// (`StructuralVariationFeature.pm:1279-1283`), and the row's Allele falls to
+/// `class_SO_term` (`OutputFactory.pm:2029`).
+#[test]
+fn single_breakend_with_mateid_prints_the_class_term() {
+    let without = annotate_record("21\t30425650\tsb\tN\t.N\t.\t.\tSVTYPE=BND", &[], &[]);
+    let with = annotate_record(
+        "21\t30425650\tsb\tN\t.N\t.\t.\tSVTYPE=BND;MATEID=bnd_x",
+        &[],
+        &[],
+    );
+    assert_eq!(with, without);
+    assert!(!without.is_empty());
+    for row in &without {
+        let columns: Vec<&str> = row.split('\t').collect();
+        assert_eq!(columns[2], "chromosome_breakpoint", "{row}");
+        assert!(!columns[6].contains("feature_truncation"), "{row}");
+    }
+}
+
 /// A breakend record listing two bracket ALTs writes three rows, the record's own
 /// breakend `N.` and one per mate: Ensembl VEP 116.2 annotates `($vf, @$breakends)`
 /// (`StructuralVariationOverlap.pm:90`), one `$vf` entry per record however many
