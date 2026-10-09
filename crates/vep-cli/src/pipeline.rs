@@ -40,7 +40,7 @@ use crate::runner::{
 };
 use crate::transcript_index::LazyTranscriptIndexes;
 use crate::variation_matcher;
-use crate::vcf_parser::{parse_vcf_line, vcf_line_is_non_variant};
+use crate::vcf_parser::{parse_vcf_line_with_max_sv_size, vcf_line_is_non_variant};
 use vep_core::consequence::Consequence;
 use vep_core::coordinate::normalize_chromosome;
 use vep_core::variant::InputVariant;
@@ -809,11 +809,16 @@ fn parse_lines(
         mut items,
     } = lines;
     let capture = c.capture_raw_input;
+    let max_sv_size = c.max_sv_size;
     let parsed: Vec<ParsedLine> = c.pool.install(|| {
         items
             .par_iter()
             .map(|item| match item {
-                Item::Data { span, .. } => Some(parse_vcf_line(&text[span.clone()], capture)),
+                Item::Data { span, .. } => Some(parse_vcf_line_with_max_sv_size(
+                    &text[span.clone()],
+                    capture,
+                    max_sv_size,
+                )),
                 Item::Text(_) => None,
             })
             .collect()
@@ -1161,6 +1166,7 @@ fn write_stage(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vcf_parser::parse_vcf_line;
     use std::io::{BufReader, Cursor};
 
     fn scan_all(input: &[u8], fill: usize) -> Vec<Vec<u8>> {

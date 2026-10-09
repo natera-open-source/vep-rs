@@ -10,6 +10,11 @@
 
 use clap::Parser;
 
+/// Ensembl VEP's `--max_sv_size` default: the span above which a structural variant
+/// is oversize, and the repeat-sequence length above which a tandem repeat stays
+/// symbolic.
+pub const DEFAULT_MAX_SV_SIZE: i64 = 10_000_000;
+
 #[derive(Parser, Debug)]
 #[command(
     name = "vep",
@@ -147,10 +152,11 @@ pub struct Args {
 
     /// Structural variants spanning more than this many bases are written to the
     /// VCF output without consequences and omitted from the JSON output; -1 lifts
-    /// the limit
+    /// the limit. A <CNV:TR> record whose repeat sequence is longer than this stays
+    /// symbolic, as does every one under -1
     #[arg(
         long = "max_sv_size",
-        default_value_t = 10_000_000,
+        default_value_t = DEFAULT_MAX_SV_SIZE,
         allow_negative_numbers = true,
         value_parser = clap::value_parser!(i64).range(-1..)
     )]

@@ -690,19 +690,21 @@ pub fn calculate_sv_consequences(
             match variant.tr_alt_bases {
                 Some(alt_bases) if alt_bases < run_bases => deletion::calculate_span(
                     variant,
-                    run_end + 1 - (run_bases - alt_bases),
+                    run_end - (run_bases - alt_bases) + 1,
                     run_end,
                     transcript,
                     upstream_distance,
                     downstream_distance,
                 ),
-                Some(alt_bases) if alt_bases > run_bases => insertion::calculate_insertion_pair(
-                    run_end + 1,
-                    run_end,
-                    transcript,
-                    upstream_distance,
-                    downstream_distance,
-                ),
+                Some(alt_bases) if alt_bases > run_bases && run_end < u64::MAX => {
+                    insertion::calculate_insertion_pair(
+                        run_end + 1,
+                        run_end,
+                        transcript,
+                        upstream_distance,
+                        downstream_distance,
+                    )
+                }
                 _ => insertion::calculate(
                     variant,
                     transcript,

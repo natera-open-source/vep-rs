@@ -29,13 +29,31 @@ use vep_core::variant::InputVariant;
 /// coordinates and alleles. Capturing unconditionally would allocate one
 /// line-length `String` per variant only to drop it. Callers pass `true` only
 /// when the output format needs it; see `RAW_INPUT_OUTPUT_FORMATS` in `runner.rs`.
+///
+/// Tandem-repeat lengths are read under Ensembl VEP's default `--max_sv_size`;
+/// [`parse_vcf_line_with_max_sv_size`] takes the run's own limit.
 pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec<InputVariant>> {
+    parse_vcf_line_with_max_sv_size(
+        line,
+        capture_raw_input,
+        Some(crate::args::DEFAULT_MAX_SV_SIZE as u64),
+    )
+}
+
+/// [`parse_vcf_line`] under the run's `--max_sv_size` (`None` for `-1`), which
+/// decides whether a `<CNV:TR>` record's alternate allele is expanded to a length
+/// or kept symbolic, as `_expand_tandem_repeat_allele_string` (`Parser/VCF.pm`)
+/// decides under `max_sv_size`.
+pub fn parse_vcf_line_with_max_sv_size(
+    line: &str,
+    capture_raw_input: bool,
+    max_sv_size: Option<u64>,
+) -> anyhow::Result<Vec<InputVariant>> {
     let fields = split_fixed_fields(line)?;
 
     let chr = fields[0].to_string();
-    let pos: u64 = fields[1]
-        .parse()
-        .with_context(|| format!("Invalid POS: '{}'", fields[1]))?;
+    let pos =
+        parse_coordinate(fields[1]).with_context(|| format!("Invalid POS: '{}'", fields[1]))?;
     let id = fields[2];
     let ref_allele = fields[3];
     let alt_field = fields[4];
@@ -224,6 +242,12 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
             })
             .collect(),
     };
+    let tandem_repeat_alt_count = |alts: &[(usize, &str, vep_core::variant::VariantClass)]| {
+        alts.iter()
+            .filter(|(_, a, _)| a.to_ascii_uppercase().starts_with("<CNV:TR"))
+            .count()
+    };
+    let record_tandem_repeat_alts = tandem_repeat_alt_count(&per_alt_classes);
 
     for (k, &(allele_idx, alt, sv_class)) in per_alt_classes.iter().enumerate() {
         if sv_class == vep_core::variant::VariantClass::ReferenceBlock {
@@ -251,34 +275,18 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
         //   elsif(SVTYPE or a symbolic ALT) { $end = $self->get_start; }
         // Since get_start() = POS+1 for SVs, SVLEN gives end = POS + abs(SVLEN),
         // and SVLEN=0 or END=POS gives end = POS, one base before the start.
-        let mut sv_end_val = get_info_value(info_field, "SVLEN")
+        // Parser/VCF.pm:502-512 recomputes a tandem repeat's end from SVLEN,
+        // `$end = $start + max(@svlen) - 1`, the same value for one non-negative
+        // SVLEN; a `<BND>` record's INFO/END is usually POS+1, so its span comes
+        // from SVLEN.
+        let sv_end_val = get_info_value(info_field, "SVLEN")
             .and_then(|v| v.parse::<i64>().ok())
             .map(|len| pos + len.unsigned_abs())
-            .or_else(|| get_info_value(info_field, "END").and_then(|v| v.parse::<u64>().ok()))
+            .or_else(|| get_info_value(info_field, "END").and_then(parse_coordinate))
             .unwrap_or(sv_start);
 
-        // Perl VEP uses SVLEN (not END) for tandem repeat end coordinates.
-        // VCF.pm:502-512: $end = $start + max(@svlen) - 1 when $so_term =~ /tandem/
-        if sv_class == vep_core::variant::VariantClass::TandemRepeat {
-            if let Some(svlen_str) = get_info_value(info_field, "SVLEN") {
-                if let Ok(svlen) = svlen_str.parse::<i64>() {
-                    sv_end_val = sv_start + svlen.unsigned_abs() - 1;
-                }
-            }
-        }
-
-        // For a symbolic <BND> Perl VEP spans POS+1 to POS+1+SVLEN from SVLEN,
-        // not INFO/END (typically POS+1 on BND records), then synthesizes paired
-        // and single-breakend forms.
         let is_symbolic_bnd =
             sv_class == vep_core::variant::VariantClass::Translocation && alt.starts_with('<');
-        if is_symbolic_bnd {
-            if let Some(svlen_str) = get_info_value(info_field, "SVLEN") {
-                if let Ok(svlen) = svlen_str.parse::<i64>() {
-                    sv_end_val = sv_start + svlen.unsigned_abs() - 1;
-                }
-            }
-        }
 
         // An insertion whose END is its position or whose SVLEN is 0 stays the
         // pair `start = POS + 1, end = POS` Perl carries: the insertion between
@@ -289,7 +297,7 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
             sv_class,
             vep_core::variant::VariantClass::StructuralInsertion
                 | vep_core::variant::VariantClass::MobileElementInsertion
-        ) && sv_end_val + 1 == sv_start;
+        ) && sv_end_val.checked_add(1) == Some(sv_start);
         let sv_end_val = if is_insertion_pair {
             sv_end_val
         } else {
@@ -311,11 +319,12 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
         variant.sv_type = svtype.map(|s| s.to_string());
         variant.sv_len = get_info_value(info_field, "SVLEN").and_then(|v| v.parse().ok());
         if sv_class == vep_core::variant::VariantClass::TandemRepeat {
-            let ordinal = per_alt_classes[..k]
-                .iter()
-                .filter(|(_, a, _)| a.to_ascii_uppercase().starts_with("<CNV:TR"))
-                .count();
-            variant.tr_alt_bases = tandem_repeat_alt_bases(info_field, ordinal);
+            variant.tr_alt_bases = tandem_repeat_alt_bases(
+                info_field,
+                tandem_repeat_alt_count(&per_alt_classes[..k]),
+                record_tandem_repeat_alts,
+                max_sv_size,
+            );
         }
         variant.ci_pos = parse_ci_field(get_info_value(info_field, "CIPOS"));
         variant.ci_end = parse_ci_field(get_info_value(info_field, "CIEND"));
@@ -361,8 +370,8 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
                 .as_deref()
                 .map(vep_core::coordinate::normalize_chromosome);
             let end2 = get_info_value(info_field, "END2")
-                .and_then(|v| v.parse::<u64>().ok())
-                .or_else(|| get_info_value(info_field, "END").and_then(|v| v.parse::<u64>().ok()));
+                .and_then(parse_coordinate)
+                .or_else(|| get_info_value(info_field, "END").and_then(parse_coordinate));
 
             let (mate_chr_val, mate_chr_label, mate_pos) =
                 if let (Some(ref c2), Some(ref raw), Some(e2)) = (&chr2, &chr2_raw, end2) {
@@ -370,7 +379,7 @@ pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
                 } else {
                     // No CHR2: Perl leaves the allele symbolic, so the SVLEN-derived
                     // span end is the only available mate anchor.
-                    (chr.clone(), chr.clone(), variant.end + 1)
+                    (chr.clone(), chr.clone(), variant.end.saturating_add(1))
                 };
 
             let paired_alt = format!("{}[{}:{}[", ref_str, mate_chr_label, mate_pos);
@@ -692,16 +701,25 @@ pub(crate) fn sv_so_term_and_class(
 }
 
 /// The alternate allele's length in bases for the `ordinal`th `<CNV:TR>` allele of a
-/// record, the length of the allele `_expand_tandem_repeat_allele_string`
-/// (`Parser/VCF.pm:385-425`) builds: INFO/RN gives each tandem-repeat allele its number
-/// of repeat sequences (one each when absent, `:394-397`), consumed in order from the
-/// RUS, RUC and RB lists (`:412-414`); a `.` unit is the one base `N` (`:413`); each
-/// sequence's count is its RUC entry whenever the record carries RUC, else its RB entry
-/// divided by the unit's length (`:414`), and the count is truncated the way Perl's `x`
-/// operator truncates (`:419`). RUL is never read. `None` without RUS (`:385`), when
-/// an entry the allele needs is missing, or is `.` in RN, RUC or RB, and when the RN
-/// counts through the allele sum past `usize::MAX` or its length past `u64::MAX`.
-fn tandem_repeat_alt_bases(info: &str, ordinal: usize) -> Option<u64> {
+/// record carrying `alleles` of them: the length of the allele
+/// `_expand_tandem_repeat_allele_string` (`Parser/VCF.pm:385-428`) builds. INFO/RN gives
+/// each tandem-repeat allele its number of repeat sequences (one each when absent,
+/// `:394-397`), consumed in order from the RUS, RUC and RB lists (`:412-414`); a `.`
+/// unit is the one base `N` (`:413`); each sequence's count is its RUC entry whenever
+/// the record carries RUC, else its RB entry divided by the unit's length (`:414`), and
+/// the count is truncated the way Perl's `x` operator truncates (`:419`). RUL is never
+/// read. `None` without RUS (`:385`), when an entry the allele needs is missing, or is
+/// `.` in RN, RUC or RB, when the RN counts through the allele sum past `usize::MAX` or
+/// its length past `u64::MAX`, and for every allele of the record when any repeat
+/// sequence of the record is longer than `max_sv_size` (`:403`, `:417-418`, `:428`),
+/// which keeps the symbolic reading: under `None`, the flag's `-1`, no sequence is ever
+/// short enough.
+fn tandem_repeat_alt_bases(
+    info: &str,
+    ordinal: usize,
+    alleles: usize,
+    max_sv_size: Option<u64>,
+) -> Option<u64> {
     // Perl's `$info->{RUC} || ''` (`:394-400`): an empty or `0` value is no list.
     let list = |key: &str| -> Vec<&str> {
         get_info_value(info, key)
@@ -720,15 +738,10 @@ fn tandem_repeat_alt_bases(info: &str, ordinal: usize) -> Option<u64> {
             Some(n) => n.parse().ok(),
         }
     };
-    let mut first = 0usize;
-    for earlier in 0..ordinal {
-        first = first.checked_add(sequences(earlier)?)?;
-    }
-    let last = first.checked_add(sequences(ordinal)?)?;
     let ruc = list("RUC");
     let rb = list("RB");
-    let mut bases = 0u64;
-    for j in first..last {
+    // The `j`th repeat sequence's unit length and count, `(length($seq), $num)`.
+    let sequence = |j: usize| -> Option<(f64, f64)> {
         let unit_len = match *rus.get(j)? {
             "." => 1.0,
             unit => unit.len() as f64,
@@ -738,10 +751,44 @@ fn tandem_repeat_alt_bases(info: &str, ordinal: usize) -> Option<u64> {
         } else {
             ruc.get(j)?.parse().ok()?
         };
+        Some((unit_len, count))
+    };
+    // `$self->param('max_sv_size') || 5000` (`:403`): `-1` passes `||` unchanged, so
+    // every sequence is oversized under it, and `0` falls to 5000.
+    let cap = match max_sv_size {
+        None => return None,
+        Some(0) => 5000.0,
+        Some(n) => n as f64,
+    };
+    let record_alleles = if rn.is_empty() { alleles } else { rn.len() };
+    let mut total = 0usize;
+    for allele in 0..record_alleles {
+        total = total.checked_add(sequences(allele).unwrap_or(0))?;
+    }
+    for j in 0..total.min(rus.len()) {
+        if sequence(j).is_some_and(|(unit_len, count)| unit_len * count > cap) {
+            return None;
+        }
+    }
+    let mut first = 0usize;
+    for earlier in 0..ordinal {
+        first = first.checked_add(sequences(earlier)?)?;
+    }
+    let last = first.checked_add(sequences(ordinal)?)?;
+    let mut bases = 0u64;
+    for j in first..last {
+        let (unit_len, count) = sequence(j)?;
         let length = (count >= 0.0).then_some((count.trunc() * unit_len) as u64)?;
         bases = bases.checked_add(length)?;
     }
     Some(bases)
+}
+
+/// A VCF coordinate (POS, END, END2): a non-negative integer in the signed 64-bit
+/// range, so a coordinate plus a span or a flanking base stays representable
+/// everywhere the annotator adds to it; anything else is unparsed.
+fn parse_coordinate(text: &str) -> Option<u64> {
+    text.parse::<i64>().ok().and_then(|n| u64::try_from(n).ok())
 }
 
 /// The value of `key` in a VCF INFO column, `""` for a flag, `None` when absent.
@@ -914,6 +961,13 @@ fn vcf_to_vep_alleles(
 mod tests {
     use super::*;
     use vep_core::variant::VariantClass;
+
+    /// `tandem_repeat_alt_bases` for a record of `ordinal + 1` tandem-repeat alleles
+    /// under Ensembl VEP's default `--max_sv_size`.
+    fn alt_bases(info: &str, ordinal: usize) -> Option<u64> {
+        let limit = Some(crate::args::DEFAULT_MAX_SV_SIZE as u64);
+        tandem_repeat_alt_bases(info, ordinal, ordinal + 1, limit)
+    }
 
     #[test]
     fn test_vcf_to_vep_snv() {
@@ -1411,6 +1465,12 @@ mod tests {
         assert_eq!(variants[1].mate_pos, Some(11500000));
         assert_eq!(variants[2].mate_pos, Some(11600000));
         assert_eq!(variants[2].allele_index, 1);
+        // The record string of every variant is the whole record, REF and both ALTs,
+        // as `Parser/VCF.pm` joins the ALTs (`:469`) and prepends REF (`:499`); JSON
+        // `allele_string` prints it (`OutputFactory/JSON.pm:241`).
+        for v in &variants {
+            assert_eq!(v.record_allele_string(), "N/N[21:11500000[/N]21:11600000]");
+        }
 
         let mixed = "21\t11000000\tmb_mixed\tN\tN[21:11500000[,]21:11600000]N\t.\t.\tSVTYPE=BND";
         let variants = parse_vcf_line(mixed, true).unwrap();
@@ -1465,6 +1525,86 @@ mod tests {
         assert_eq!(v.variant_class, VariantClass::Translocation);
         assert_eq!(v.start, 101); // POS+1
         assert_eq!(v.end, 101); // END clamped to max(sv_start)
+    }
+
+    /// A coordinate is read in the signed 64-bit range: a POS past it fails the line,
+    /// an END past it is unparsed and the symbolic record is the single base at
+    /// POS + 1, and the largest representable END is kept. The widest span, the
+    /// last POS with SVLEN `i64::MIN`, ends at `u64::MAX` whatever the class, and a
+    /// `<BND>` of that span anchors its synthesised mate there too.
+    #[test]
+    fn coordinates_are_read_in_the_signed_64_bit_range() {
+        let err = parse_vcf_line("21\t18446744073709551615\t.\tA\tG\t.\t.\t.", true)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Invalid POS"), "{err}");
+        let unparsed = parse_vcf_line(
+            "21\t100\t.\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=18446744073709551615",
+            true,
+        )
+        .unwrap();
+        assert_eq!((unparsed[0].start, unparsed[0].end), (101, 101));
+        let kept = parse_vcf_line(
+            "21\t100\t.\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=9223372036854775807",
+            true,
+        )
+        .unwrap();
+        assert_eq!(kept[0].end, 9223372036854775807);
+        let widest = parse_vcf_line(
+            "21\t9223372036854775807\t.\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;SVLEN=-9223372036854775808;RUS=AT;RUC=1",
+            true,
+        )
+        .unwrap();
+        assert_eq!(widest[0].sv_end, Some(18446744073709551615));
+        let insertion = parse_vcf_line(
+            "21\t9223372036854775807\t.\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-9223372036854775808",
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            (insertion[0].start, insertion[0].end),
+            (9223372036854775808, 18446744073709551615)
+        );
+        let breakend = parse_vcf_line(
+            "21\t9223372036854775807\t.\tN\t<BND>\t.\t.\tSVTYPE=BND;SVLEN=-9223372036854775808",
+            true,
+        )
+        .unwrap();
+        assert_eq!(breakend.len(), 2);
+        assert_eq!(breakend[1].end, 18446744073709551615);
+        assert_eq!(breakend[1].mate_pos, Some(18446744073709551615));
+    }
+
+    /// A bare `<BND>`, with neither CHR2 nor a span, names no mate: `Parser/VCF.pm`
+    /// leaves the ALT as written without CHR2 (`:495`) and prepends REF (`:499`),
+    /// `_parse_breakends` finds no bracket in `N/<BND>`
+    /// (`StructuralVariationFeature.pm:1279-1283`), and the row's Allele falls to
+    /// `class_SO_term` (`OutputFactory.pm:2029`), `chromosome_breakpoint`, with or
+    /// without INFO/MATEID.
+    #[test]
+    fn bare_symbolic_bnd_prints_the_class_term() {
+        for info in [
+            "SVTYPE=BND",
+            "SVTYPE=BND;MATEID=bnd_x",
+            "SVTYPE=BND;END=101",
+        ] {
+            let line = format!("21\t100\tbare\tN\t<BND>\t.\t.\t{info}");
+            let variants = parse_vcf_line(&line, true).unwrap();
+            assert_eq!(variants.len(), 1, "{info}");
+            assert_eq!(variants[0].mate_id, None, "{info}");
+            assert_eq!(
+                variants[0].display_allele(),
+                "chromosome_breakpoint",
+                "{info}"
+            );
+        }
+        let with_mate = parse_vcf_line(
+            "21\t100\tpaired\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=500",
+            true,
+        )
+        .unwrap();
+        assert_eq!(with_mate[0].display_allele(), "N.");
+        assert_eq!(with_mate[1].display_allele(), "N[21:500[");
     }
 
     /// ensembl-io `BaseVCF4::get_end`: SVLEN first (`start + |SVLEN| - 1`), then END,
@@ -2120,49 +2260,22 @@ mod tests {
     /// RUS nothing expands (`:385`).
     #[test]
     fn tandem_repeat_alt_bases_reads_ruc_before_rb_and_never_rul() {
+        assert_eq!(alt_bases("SVTYPE=CNV;RB=42;RUC=7;RUS=CAG", 0), Some(21));
+        assert_eq!(alt_bases("SVTYPE=CNV;RUC=7;RUS=CAG", 0), Some(21));
+        assert_eq!(alt_bases("SVTYPE=CNV;RUC=7.9;RUS=CAG", 0), Some(21));
+        assert_eq!(alt_bases("SVTYPE=CNV;RB=42;RUS=CAG", 0), Some(42));
+        assert_eq!(alt_bases("SVTYPE=CNV;RB=307;RUS=AT", 0), Some(306));
         assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RB=42;RUC=7;RUS=CAG", 0),
-            Some(21)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7;RUS=CAG", 0),
-            Some(21)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7.9;RUS=CAG", 0),
-            Some(21)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RB=42;RUS=CAG", 0),
-            Some(42)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RB=307;RUS=AT", 0),
+            alt_bases("SVTYPE=CNV;RUC=153.9;RB=307;RUS=AT", 0),
             Some(306)
         );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=153.9;RB=307;RUS=AT", 0),
-            Some(306)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7;RUS=.;RUL=4", 0),
-            Some(7)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=;RB=42;RUS=CAG", 0),
-            Some(42)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUC=0;RB=42;RUS=CAG", 0),
-            Some(42)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RB=42,60;RUS=CAG,AT", 0),
-            Some(42)
-        );
-        assert_eq!(tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7;RUL=4", 0), None);
-        assert_eq!(tandem_repeat_alt_bases("SVTYPE=CNV;RUC=7", 0), None);
-        assert_eq!(tandem_repeat_alt_bases("SVTYPE=CNV;SVLEN=300", 0), None);
+        assert_eq!(alt_bases("SVTYPE=CNV;RUC=7;RUS=.;RUL=4", 0), Some(7));
+        assert_eq!(alt_bases("SVTYPE=CNV;RUC=;RB=42;RUS=CAG", 0), Some(42));
+        assert_eq!(alt_bases("SVTYPE=CNV;RUC=0;RB=42;RUS=CAG", 0), Some(42));
+        assert_eq!(alt_bases("SVTYPE=CNV;RB=42,60;RUS=CAG,AT", 0), Some(42));
+        assert_eq!(alt_bases("SVTYPE=CNV;RUC=7;RUL=4", 0), None);
+        assert_eq!(alt_bases("SVTYPE=CNV;RUC=7", 0), None);
+        assert_eq!(alt_bases("SVTYPE=CNV;SVLEN=300", 0), None);
     }
 
     /// `_expand_tandem_repeat_allele_string` (Parser/VCF.pm) builds one alternate
@@ -2175,25 +2288,22 @@ mod tests {
     #[test]
     fn tandem_repeat_alt_bases_sums_an_allele_s_repeat_sequences() {
         assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;SVLEN=10;RN=2;RUS=CT,GA;RUC=2,1", 0),
+            alt_bases("SVTYPE=CNV;SVLEN=10;RN=2;RUS=CT,GA;RUC=2,1", 0),
             Some(6)
         );
         assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;SVLEN=10;RN=2;RUS=CT,GA;RB=4,2", 0),
+            alt_bases("SVTYPE=CNV;SVLEN=10;RN=2;RUS=CT,GA;RB=4,2", 0),
             Some(6)
         );
         let two_alleles = "SVTYPE=CNV;SVLEN=10;RUS=CT,CT;RUC=2,8";
-        assert_eq!(tandem_repeat_alt_bases(two_alleles, 0), Some(4));
-        assert_eq!(tandem_repeat_alt_bases(two_alleles, 1), Some(16));
+        assert_eq!(alt_bases(two_alleles, 0), Some(4));
+        assert_eq!(alt_bases(two_alleles, 1), Some(16));
         assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;SVLEN=10;RN=1,2;RUS=CT,GA,TTA;RUC=2,1,2", 1),
+            alt_bases("SVTYPE=CNV;SVLEN=10;RN=1,2;RUS=CT,GA,TTA;RUC=2,1,2", 1),
             Some(8)
         );
-        assert_eq!(tandem_repeat_alt_bases("SVTYPE=CNV;RUS=CT;RUC=2", 1), None);
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RN=.;RUS=CT;RUC=2", 0),
-            None
-        );
+        assert_eq!(alt_bases("SVTYPE=CNV;RUS=CT;RUC=2", 1), None);
+        assert_eq!(alt_bases("SVTYPE=CNV;RN=.;RUS=CT;RUC=2", 0), None);
 
         let line = "21\t25002099\tmulti_tr\tA\t<CNV:TR>,<CNV:TR>\t.\t.\tSVTYPE=CNV;END=25002109;SVLEN=10;RUS=CT,CT;RUC=2,8";
         let variants = parse_vcf_line(line, true).unwrap();
@@ -2206,22 +2316,81 @@ mod tests {
     /// length for any allele: the first allele's `usize::MAX` sequences exhaust the
     /// two RUS entries, the second allele's one sequence takes the sum past
     /// `usize::MAX`, and a third allele's offset lies past it. Two sequences of
-    /// `1e19` bases sum past `u64::MAX` the same way.
+    /// `1e19` bases sum past `u64::MAX` the same way. An RN of `usize::MAX` on its own
+    /// sums without overflow: the oversize check reads only the one sequence RUS
+    /// lists, and the allele's second sequence finds no unit, so it states no length.
     #[test]
     fn tandem_repeat_alt_bases_refuses_an_rn_sum_past_the_machine_word() {
         let info = "SVTYPE=CNV;SVLEN=10;RN=18446744073709551615,1;RUS=AT,AT;RUC=100,100";
-        assert_eq!(tandem_repeat_alt_bases(info, 0), None);
-        assert_eq!(tandem_repeat_alt_bases(info, 1), None);
-        assert_eq!(tandem_repeat_alt_bases(info, 2), None);
+        assert_eq!(alt_bases(info, 0), None);
+        assert_eq!(alt_bases(info, 1), None);
+        assert_eq!(alt_bases(info, 2), None);
         let line = format!("21\t25002099\tmulti_tr\tA\t<CNV:TR>,<CNV:TR>\t.\t.\t{info}");
         let variants = parse_vcf_line(&line, true).unwrap();
         assert_eq!(variants.len(), 2);
         assert_eq!(variants[0].tr_alt_bases, None);
         assert_eq!(variants[1].tr_alt_bases, None);
+        assert_eq!(alt_bases("SVTYPE=CNV;RN=2;RUS=A,A;RUC=1e19,1e19", 0), None);
         assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RN=2;RUS=A,A;RUC=1e19,1e19", 0),
+            alt_bases("SVTYPE=CNV;RN=18446744073709551615;RUS=AT;RUC=100", 0),
             None
         );
+    }
+
+    /// `_expand_tandem_repeat_allele_string` keeps the symbolic reading when any repeat
+    /// sequence is longer than `max_sv_size` (`Parser/VCF.pm:417-418`, `:428`), read
+    /// as `$self->param('max_sv_size') || 5000` (`:403`), so `-1` passes `||` unchanged
+    /// and nothing expands under it: `RUS=AT;RUC=100` is 200 bases under the
+    /// 10,000,000 default and under a cap of 200, symbolic under 199 and under `-1`;
+    /// `RUS=CAG;RUC=4000000`, 12,000,000 bases, is symbolic under the default; one
+    /// oversized allele keeps every allele of its record symbolic; a cap of `0` is
+    /// Perl's 5000.
+    #[test]
+    fn tandem_repeat_expansion_stops_at_max_sv_size() {
+        let info = "SVTYPE=CNV;RUS=AT;RUC=100;RB=300";
+        assert_eq!(
+            tandem_repeat_alt_bases(info, 0, 1, Some(10_000_000)),
+            Some(200)
+        );
+        assert_eq!(tandem_repeat_alt_bases(info, 0, 1, Some(200)), Some(200));
+        assert_eq!(tandem_repeat_alt_bases(info, 0, 1, Some(199)), None);
+        assert_eq!(tandem_repeat_alt_bases(info, 0, 1, None), None);
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;RUS=AT;RUC=4000000", 0, 1, Some(10_000_000)),
+            Some(8_000_000)
+        );
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;RUS=CAG;RUC=4000000", 0, 1, Some(10_000_000)),
+            None
+        );
+        let two = "SVTYPE=CNV;RUS=AT,CAG;RUC=10,4000000";
+        assert_eq!(tandem_repeat_alt_bases(two, 0, 2, Some(10_000_000)), None);
+        assert_eq!(
+            tandem_repeat_alt_bases(two, 0, 2, Some(20_000_000)),
+            Some(20)
+        );
+        assert_eq!(
+            tandem_repeat_alt_bases(two, 1, 2, Some(20_000_000)),
+            Some(12_000_000)
+        );
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;RUS=AT;RUC=2600", 0, 1, Some(0)),
+            None
+        );
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;RUS=AT;RUC=2500", 0, 1, Some(0)),
+            Some(5000)
+        );
+
+        let line = "21\t27253937\ttr\tC\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=27254237;SVLEN=300;RUS=AT;RUC=100;RB=300";
+        assert_eq!(
+            parse_vcf_line(line, true).unwrap()[0].tr_alt_bases,
+            Some(200)
+        );
+        for limit in [None, Some(100)] {
+            let variants = parse_vcf_line_with_max_sv_size(line, true, limit).unwrap();
+            assert_eq!(variants[0].tr_alt_bases, None, "{limit:?}");
+        }
     }
 
     #[test]

@@ -192,8 +192,9 @@ pub struct InputVariant {
     pub sv_len: Option<i64>,
     /// For a tandem repeat (`<CNV:TR>`): the alternate allele's length in bases, RUC
     /// times the repeat unit's length when the record carries INFO/RUC, else INFO/RB
-    /// rounded down to whole units. `None` when the record states no length, so the
-    /// record describes no direction of change.
+    /// rounded down to whole units. `None` when the record states no length or any
+    /// repeat sequence of the record is longer than `--max_sv_size`: the record then
+    /// describes no direction of change and is read symbolically.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tr_alt_bases: Option<u64>,
     /// For imprecise SVs: CIPOS confidence interval (two i64 values).
@@ -471,19 +472,20 @@ impl InputVariant {
     /// multi-allelic record joined by `/`, or the minimised `allele_string` of a
     /// bi-allelic record.
     pub fn record_allele_string(&self) -> String {
-        // A breakend record's string is REF joined to the bracket ALTs
-        // (`N/N[21:100[`), one string for the record's own breakend and its mates,
-        // unless the ALT string opens or closes with `.`, a native single breakend
-        // VEP keeps bare (ensembl-vep `Parser/VCF.pm`
-        // `create_StructuralVariationFeatures`).
+        // A breakend record's string is REF joined to every bracket ALT
+        // (`N/N[21:100[/N]21:200]`), one string for the record's own breakend and
+        // each of its mates, unless the ALT string opens or closes with `.`, a
+        // native single breakend VEP keeps bare (ensembl-vep `Parser/VCF.pm`
+        // `create_StructuralVariationFeatures`, lines 469 and 499); a mate
+        // synthesised from a symbolic `<BND>` keeps the string built for it.
         if self.variant_class == VariantClass::Translocation {
-            if !self.is_single_breakend {
+            let uploaded = self.uploaded_allele_string.as_deref();
+            let bracket_record = uploaded.is_some_and(|alts| alts.contains(['[', ']']));
+            if !self.is_single_breakend && !bracket_record {
                 return self.allele_string.clone();
             }
-            if let Some(alts) = self
-                .uploaded_allele_string
-                .as_deref()
-                .filter(|alts| !alts.starts_with('.') && !alts.ends_with('.'))
+            if let Some(alts) =
+                uploaded.filter(|alts| !alts.starts_with('.') && !alts.ends_with('.'))
             {
                 return format!("{}/{}", String::from_utf8_lossy(&self.ref_allele), alts);
             }
@@ -530,8 +532,12 @@ impl InputVariant {
     /// For a structural variant, the record's SO term ([`Self::record_so_term`], the
     /// `class_SO_term` every row of the record prints in Perl VEP), or for a
     /// variant built without one the term of its class, read from its own ALT for
-    /// a mobile element. For BND/translocation variants, returns the raw allele
-    /// string (e.g., "A]21:33033339]") since Perl VEP outputs the literal breakend notation.
+    /// a mobile element. A bracket breakend prints its string as written
+    /// (`A]21:33033339]`), the own breakend of a record that names a mate its `A.`
+    /// or `.A`, and a translocation allele without a breakend string, a single
+    /// breakend on its own or a bare `<BND>`, the class term `chromosome_breakpoint`:
+    /// Perl VEP's `$vfoa->{breakend}->{string} || $svf->class_SO_term`
+    /// (`OutputFactory.pm:2029`).
     /// For `<NON_REF>` alleles, returns the raw allele string since Perl VEP outputs
     /// the literal `<NON_REF>` (it has no SO term mapping).
     /// For small variants, returns the actual allele bases.
@@ -539,11 +545,12 @@ impl InputVariant {
         if self.is_structural || self.variant_class.is_structural() {
             let raw = String::from_utf8_lossy(self.alt_allele()).to_string();
             if self.variant_class == VariantClass::Translocation {
-                if self.is_single_breakend && self.mate_id.is_none() {
-                    self.variant_class.so_term().to_string()
-                } else {
-                    // Paired BNDs keep the literal allele string, as Perl VEP does.
+                let has_breakend_string =
+                    raw.contains(['[', ']']) || (self.is_single_breakend && self.mate_id.is_some());
+                if has_breakend_string {
                     raw
+                } else {
+                    self.variant_class.so_term().to_string()
                 }
             } else if let Some(term) = &self.record_so_term {
                 term.clone()

@@ -459,18 +459,88 @@ fn single_breakend_with_mateid_prints_the_class_term() {
 /// A breakend record listing two bracket ALTs writes three rows, the record's own
 /// breakend `N.` and one per mate: Ensembl VEP 116.2 annotates `($vf, @$breakends)`
 /// (`StructuralVariationOverlap.pm:90`), one `$vf` entry per record however many
-/// brackets the ALT column lists.
+/// brackets the ALT column lists. Its JSON `allele_string` is the whole record, REF
+/// and both ALTs joined (`Parser/VCF.pm:469`, `:499`; `OutputFactory/JSON.pm:241`).
 #[test]
 fn two_bracket_breakend_alts_write_three_rows() {
-    let rows = annotate_record(
-        "21\t11000000\tmb2\tN\tN[21:11500000[,N]21:11600000]\t.\t.\tSVTYPE=BND",
-        &[],
-        &[],
-    );
+    let record = "21\t11000000\tmb2\tN\tN[21:11500000[,N]21:11600000]\t.\t.\tSVTYPE=BND";
+    let rows = annotate_record(record, &[], &[]);
     let alleles: Vec<&str> = rows.iter().map(|r| r.split('\t').nth(2).unwrap()).collect();
     assert_eq!(
         alleles,
         ["N.", "N[21:11500000[", "N]21:11600000]"],
+        "{rows:?}"
+    );
+    let json = annotate_record(record, &["--json"], &[]);
+    assert_eq!(json.len(), 1, "{json:?}");
+    assert!(
+        json[0].contains("\"allele_string\":\"N/N[21:11500000[/N]21:11600000]\""),
+        "{}",
+        json[0]
+    );
+}
+
+/// A bare `<BND>`, with neither CHR2 nor a span, prints `chromosome_breakpoint`:
+/// Ensembl VEP 116.2 keeps the ALT as written without CHR2 (`Parser/VCF.pm:495`),
+/// `_parse_breakends` finds no bracket, and the Allele falls to `class_SO_term`
+/// (`OutputFactory.pm:2029`), with or without INFO/MATEID.
+#[test]
+fn bare_symbolic_bnd_prints_the_class_term() {
+    for info in ["SVTYPE=BND", "SVTYPE=BND;MATEID=bnd_x"] {
+        let rows = annotate_record(
+            &format!("21\t30425650\tbare\tN\t<BND>\t.\t.\t{info}"),
+            &[],
+            &[],
+        );
+        assert!(!rows.is_empty(), "{info}");
+        for row in &rows {
+            assert_eq!(
+                row.split('\t').nth(2),
+                Some("chromosome_breakpoint"),
+                "{info}: {row}"
+            );
+        }
+    }
+}
+
+/// `--max_sv_size` governs a `<CNV:TR>` record's expansion as it does Ensembl VEP
+/// 116.2's (`Parser/VCF.pm:403`, `:417-418`, `:428`): under the default a 200-base
+/// allele against a 300-base run is a 100-base contraction, `frameshift_variant`; under
+/// `-1`, and under a limit the 200-base allele exceeds, the record keeps the symbolic
+/// reading, a gain over the run, `feature_elongation`.
+#[test]
+fn max_sv_size_governs_tandem_repeat_expansion() {
+    let record = "21\t30425600\ttr\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30425899;SVLEN=300;RUS=AT;RUC=100;RB=300";
+    let consequences = |extra: &[&str]| -> String {
+        annotate_record(record, &[], extra)
+            .iter()
+            .find(|row| row.contains("ENST00000390690"))
+            .map(|row| row.split('\t').nth(6).unwrap().to_string())
+            .expect("the run overlaps ENST00000390690")
+    };
+    assert_eq!(consequences(&[]), "frameshift_variant,feature_truncation");
+    for limit in ["-1", "100"] {
+        assert_eq!(
+            consequences(&["--max_sv_size", limit]),
+            "feature_elongation,coding_sequence_variant",
+            "--max_sv_size {limit}"
+        );
+    }
+}
+
+/// An END past the format's signed 64-bit range is unparsed, so the record is the
+/// single base at POS + 1 and every output format writes it without a panic.
+#[test]
+fn an_end_past_the_signed_64_bit_range_is_annotated_as_a_point() {
+    let record = "21\t30425600\tbig_end\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=18446744073709551615;RUS=AT;RUC=1";
+    for format in [&[][..], &["--json"], &["--vcf"], &["--tab"]] {
+        let rows = annotate_record(record, format, &["--max_sv_size", "-1"]);
+        assert!(!rows.is_empty(), "{format:?}");
+    }
+    let rows = annotate_record(record, &[], &[]);
+    assert!(
+        rows.iter()
+            .all(|row| row.split('\t').nth(1) == Some("21:30425601")),
         "{rows:?}"
     );
 }

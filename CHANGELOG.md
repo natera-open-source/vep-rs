@@ -60,6 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A breakend record listing two bracket ALTs writes its own breakend once, three rows for two mates, as Ensembl VEP 116 does. (#44)
 - A record mixing a mobile-element deletion and insertion takes the leftmost ALT's term (`<DEL:ME:ALU>,<INS:ME:LINE1>` prints `Alu_deletion`), as Ensembl VEP 116 does. (#44)
 - A record whose only ALT is a single breakend prints `chromosome_breakpoint` and takes no `feature_truncation` whether or not INFO carries MATEID, as Ensembl VEP 116 does. (#44)
+- `--max_sv_size` governs a `<CNV:TR>` record's expansion: a repeat sequence longer than the limit, and every one under `-1`, keeps the symbolic reading, as Ensembl VEP 116 does. (#44)
+- The JSON `allele_string` of a breakend record listing two bracket ALTs carries the whole record, REF and both ALTs, as Ensembl VEP 116 writes it. (#44)
+- A bare `<BND>` with neither CHR2 nor a span prints `chromosome_breakpoint` as its Allele, like every other symbolic class term, as Ensembl VEP 116 does. (#44)
+- A POS past the signed 64-bit range fails its line and an END past it is unparsed, so an absurd END annotates as a point, never a wrapped coordinate. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
 
 ## [0.3.2] - 2026-10-06

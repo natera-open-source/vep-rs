@@ -237,10 +237,26 @@ impl TranscriptBinIndex {
 // [beg, end); same constants as htslib. Reference:
 // https://genome.ucsc.edu/FAQ/FAQtracks.html#tracks1
 
+/// The largest coordinate the five-level scheme bins distinctly (its finest bins end
+/// at `4681 + (2^29 - 1 >> 14)`), above every human chromosome: a region or query
+/// reaching beyond it bins as if it ended here, so no level's bins collide with the
+/// next, the `u32` offsets never wrap, and a query over an absurd END enumerates a
+/// bounded set of bins.
+const MAX_BIN_COORD: u64 = (1 << 29) - 1;
+
+/// The closed interval `[beg, end]` of a half-open `[beg, end)` region, as htslib's
+/// `--end`, both ends clamped to `MAX_BIN_COORD`.
+#[inline]
+fn closed_bin_bounds(beg: u64, end: u64) -> (u64, u64) {
+    (
+        beg.min(MAX_BIN_COORD),
+        end.saturating_sub(1).min(MAX_BIN_COORD),
+    )
+}
+
 #[inline]
 fn reg2bin(beg: u64, end: u64) -> u32 {
-    // Convert half-open to closed as in htslib (--end).
-    let end = end.saturating_sub(1);
+    let (beg, end) = closed_bin_bounds(beg, end);
     if (beg >> 14) == (end >> 14) {
         return 4681 + (beg >> 14) as u32;
     }
@@ -261,7 +277,7 @@ fn reg2bin(beg: u64, end: u64) -> u32 {
 
 #[inline]
 fn for_each_reg2bin(beg: u64, end: u64, mut f: impl FnMut(u32)) {
-    let end = end.saturating_sub(1);
+    let (beg, end) = closed_bin_bounds(beg, end);
 
     f(0);
     for bin in (1 + (beg >> 26) as u32)..=(1 + (end >> 26) as u32) {
@@ -829,6 +845,36 @@ mod tests {
                 "stored bin {b} not found in query bins for [{beg},{end})"
             );
         }
+    }
+
+    /// A query whose END is the largest `u64` finds every transcript from its start
+    /// onward: both bin primitives clamp their coordinates to `MAX_BIN_COORD`, so the
+    /// `u32` bin offsets never wrap (unclamped, `1 + (end >> 26)` overflows `u32`) and
+    /// the enumeration is the scheme's 37,449 bins at most; a region stored beyond the
+    /// ceiling lands in the last finest bin, where such a query looks.
+    #[test]
+    fn a_query_to_the_largest_end_neither_panics_nor_misses() {
+        let idx = build_set(TranscriptIndexImpl::Bin);
+        assert_eq!(
+            collect_ids(&idx, 1_750, u64::MAX),
+            sorted_ids(vec![
+                "a_fwd".into(),
+                "b_rev".into(),
+                "c_fwd".into(),
+                "d_far".into(),
+                "e_contained_in_b".into(),
+                "f_abuts".into(),
+            ])
+        );
+        assert_eq!(
+            collect_ids(&idx, 100_000_050, u64::MAX),
+            vec!["d_far".to_string()]
+        );
+        let mut bins = Vec::new();
+        for_each_reg2bin(0, u64::MAX, |bin| bins.push(bin));
+        assert_eq!(bins.len(), 1 + 8 + 64 + 512 + 4096 + 32768);
+        assert_eq!(bins.last(), Some(&37448));
+        assert_eq!(reg2bin(u64::MAX - 1, u64::MAX), 37448);
     }
 
     #[test]
