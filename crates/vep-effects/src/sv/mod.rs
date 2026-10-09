@@ -1002,7 +1002,7 @@ mod tests {
 
     #[test]
     fn test_tandem_repeat_without_alt_length_or_equal_keeps_the_gain_path() {
-        // No RB, RUC or RUL, or an alternate allele the length of the run: no direction is
+        // Neither RUC nor RB, or an alternate allele the length of the run: no direction is
         // stated, and the record reads as Perl's symbolic tandem repeat, a gain over the run.
         let tx = crate::test_helpers::make_test_transcript();
         for alt in [None, Some(300)] {

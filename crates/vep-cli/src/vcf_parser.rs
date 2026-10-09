@@ -698,8 +698,9 @@ pub(crate) fn sv_so_term_and_class(
 /// RUS, RUC and RB lists (`:412-414`); a `.` unit is the one base `N` (`:413`); each
 /// sequence's count is its RUC entry whenever the record carries RUC, else its RB entry
 /// divided by the unit's length (`:414`), and the count is truncated the way Perl's `x`
-/// operator truncates (`:419`). RUL is never read. `None` without RUS (`:385`) and when
-/// an entry the allele needs is missing, or is `.` in RN, RUC or RB.
+/// operator truncates (`:419`). RUL is never read. `None` without RUS (`:385`), when
+/// an entry the allele needs is missing, or is `.` in RN, RUC or RB, and when the RN
+/// counts through the allele sum past `usize::MAX` or its length past `u64::MAX`.
 fn tandem_repeat_alt_bases(info: &str, ordinal: usize) -> Option<u64> {
     // Perl's `$info->{RUC} || ''` (`:394-400`): an empty or `0` value is no list.
     let list = |key: &str| -> Vec<&str> {
@@ -719,14 +720,15 @@ fn tandem_repeat_alt_bases(info: &str, ordinal: usize) -> Option<u64> {
             Some(n) => n.parse().ok(),
         }
     };
-    let mut first = 0;
+    let mut first = 0usize;
     for earlier in 0..ordinal {
-        first += sequences(earlier)?;
+        first = first.checked_add(sequences(earlier)?)?;
     }
+    let last = first.checked_add(sequences(ordinal)?)?;
     let ruc = list("RUC");
     let rb = list("RB");
     let mut bases = 0u64;
-    for j in first..first + sequences(ordinal)? {
+    for j in first..last {
         let unit_len = match *rus.get(j)? {
             "." => 1.0,
             unit => unit.len() as f64,
@@ -736,7 +738,8 @@ fn tandem_repeat_alt_bases(info: &str, ordinal: usize) -> Option<u64> {
         } else {
             ruc.get(j)?.parse().ok()?
         };
-        bases += (count >= 0.0).then_some((count.trunc() * unit_len) as u64)?;
+        let length = (count >= 0.0).then_some((count.trunc() * unit_len) as u64)?;
+        bases = bases.checked_add(length)?;
     }
     Some(bases)
 }
@@ -2197,6 +2200,28 @@ mod tests {
         assert_eq!(variants.len(), 2);
         assert_eq!(variants[0].tr_alt_bases, Some(4));
         assert_eq!(variants[1].tr_alt_bases, Some(16));
+    }
+
+    /// An RN count that pushes the running sum past the machine word states no
+    /// length for any allele: the first allele's `usize::MAX` sequences exhaust the
+    /// two RUS entries, the second allele's one sequence takes the sum past
+    /// `usize::MAX`, and a third allele's offset lies past it. Two sequences of
+    /// `1e19` bases sum past `u64::MAX` the same way.
+    #[test]
+    fn tandem_repeat_alt_bases_refuses_an_rn_sum_past_the_machine_word() {
+        let info = "SVTYPE=CNV;SVLEN=10;RN=18446744073709551615,1;RUS=AT,AT;RUC=100,100";
+        assert_eq!(tandem_repeat_alt_bases(info, 0), None);
+        assert_eq!(tandem_repeat_alt_bases(info, 1), None);
+        assert_eq!(tandem_repeat_alt_bases(info, 2), None);
+        let line = format!("21\t25002099\tmulti_tr\tA\t<CNV:TR>,<CNV:TR>\t.\t.\t{info}");
+        let variants = parse_vcf_line(&line, true).unwrap();
+        assert_eq!(variants.len(), 2);
+        assert_eq!(variants[0].tr_alt_bases, None);
+        assert_eq!(variants[1].tr_alt_bases, None);
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;RN=2;RUS=A,A;RUC=1e19,1e19", 0),
+            None
+        );
     }
 
     #[test]
