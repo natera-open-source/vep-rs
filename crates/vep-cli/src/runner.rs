@@ -26,7 +26,7 @@ use rayon::prelude::*;
 use rayon::ThreadPool;
 use tracing::{debug, info};
 
-use crate::annotator::{build_thread_pool, LoadedPlugins};
+use crate::annotator::{build_thread_pool, LoadedPlugins, PredictionConfig};
 use crate::config::Config;
 use crate::json_cache;
 use crate::pick::FilterConfig;
@@ -1271,26 +1271,10 @@ pub(crate) fn annotate_batch(
     Ok(())
 }
 
-/// Configuration for SIFT/PolyPhen prediction lookup.
-#[derive(Debug, Clone, Default)]
-pub struct PredictionConfig {
-    /// SIFT output mode: "p" (prediction), "s" (score), "b" (both), or None.
-    pub sift: Option<String>,
-    /// PolyPhen output mode: "p" (prediction), "s" (score), "b" (both), or None.
-    pub polyphen: Option<String>,
-}
-
-/// Annotate a variant with transcript consequences and optional SIFT/PolyPhen predictions.
-fn annotate_variant(
-    variant: &mut InputVariant,
-    transcripts: &TranscriptIndex,
-    config: &vep_effects::EffectsConfig,
-    prediction_config: &PredictionConfig,
-) {
-    annotate_variant_with_predictions(variant, transcripts, config, prediction_config);
-}
-
-fn annotate_variant_with_predictions(
+/// Annotate a variant with transcript consequences and optional SIFT/PolyPhen
+/// predictions: the one implementation, which the library path (`annotator.rs`)
+/// calls too, so the two paths cannot diverge on a record.
+pub(crate) fn annotate_variant(
     variant: &mut InputVariant,
     transcripts: &TranscriptIndex,
     config: &vep_effects::EffectsConfig,

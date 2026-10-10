@@ -1386,7 +1386,7 @@ class CnvTrSwapPopulationTests(unittest.TestCase):
         it: trimming a shared prefix moves the start forward, never back. An upper-case allele
         whose span begins before the run is another record's, whatever its letters: the raw
         abbreviation Ensembl VEP 115.2 writes for a `<CPX>` record (`CPX`) over a 22 kb span that
-        covers a 17-base run on the same transcript, or a sequence allele of an earlier run.
+        covers an 18-base run on the same transcript, or a sequence allele of an earlier run.
         Neither pairs with the run's symbolic row, and the mask leaves both sides charged."""
         run = "21:27268731-27268748"
         self.assertIsNone(C._cnv_tr_pair_kind("21:27254789-27276862", "CPX", run))
@@ -2931,7 +2931,10 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
         surviving = (out / "discordant_adjusted.tsv").read_text().splitlines()[1:]
         self.assertEqual(len(surviving), 3)
         self.assertFalse(any("\t21:50001-60000\t" in l or "\t21:30000001\t" in l or "\t21:70001-70100\t" in l for l in surviving))
-        self.assertTrue(any("ENST22_X" in l for l in surviving), "the class-9 row is charged under 116.2")
+        self.assertTrue(
+            any("ENST22_X" in l for l in surviving),
+            "an other-chromosome transcript row (filter_cross_chromosome_divergences, retired) is charged under 116.2",
+        )
         self.assertTrue(any("ENST21_G3" in l for l in surviving), "the batch-class surplus on a kept record is charged")
         md = (out / "concordance_report.md").read_text()
         self.assertIn("- **Reference**: Ensembl VEP 116.2; masks applied: `filter_cnv_tr_expansion_divergences`", md)
@@ -3252,13 +3255,15 @@ class NumifiedPosTests(unittest.TestCase):
     def test_the_reference_rows_of_a_numified_pos_are_set_aside_from_the_input(self) -> None:
         """Ensembl VEP 116.2 numifies a POS that is not a number: under --max_sv_size -1
         `21 . x N <DEL> . . SVTYPE=DEL;END=30425949` is annotated from base 1 (`21:1-30425949
-        deletion ENST00000262354 transcript_ablation`, 3,254 rows) and `21 30_425_949 x N <DEL>
+        deletion ENST00000262354 transcript_ablation` and a row for every other transcript the
+        span reaches, every reference row of the record set aside) and `21 30_425_949 x N <DEL>
         . . SVTYPE=DEL;END=30425949` from 31 (`21:31-30425949 deletion ...`); `21 -5 x N <DEL>
         . . SVTYPE=DEL;SVLEN=-300` is `21:-4-295 deletion - intergenic_variant`, `21 -2147483648
         x N <DEL> . . SVTYPE=DEL;SVLEN=-300` `21:-2147483647--2147483348 deletion -
         intergenic_variant` and the sequence record `21 -5 x A G` `21:-5 G - intergenic_variant`;
         vep-rs refuses every line. `21 0 x N <DEL> . . SVTYPE=DEL;SVLEN=-300` is `21:1-300` in
-        both engines and not the class, and a negative coordinate is an integer, not class 12."""
+        both engines and not the class, and a negative coordinate is an integer, outside
+        `non_integer_end_annotated`."""
         records = VCF(
             ("21", ".", "dot", "N", "<DEL>", ".", ".", "SVTYPE=DEL;END=30425949"),
             ("21", "30_425_949", "underscore", "N", "<DEL>", ".", ".", "SVTYPE=DEL;END=30425949"),
@@ -3515,8 +3520,9 @@ class BufferCoordinateOverflowTests(unittest.TestCase):
 class TandemRepeatReadingTests(unittest.TestCase):
     """The <CNV:TR> readings of Ensembl VEP 116.2 with a FASTA against vep-rs's symbolic row:
     each test is one record, its reference rows and its vep-rs rows, and every one-sided
-    tuple is set aside under class 12 (the literal-versus-symbolic pairing) or class 13 (the
-    empty or unchanged expansion)."""
+    tuple is set aside under `cnv_tr_expansion_divergences` (the literal-versus-symbolic
+    pairing), `cnv_tr_empty_expansion_dropped` (the empty or unchanged expansion) or, for a
+    fractional SVLEN, `non_integer_end_annotated`."""
 
     RUN_A = "21:30425588-30425596"
     RUN_B = "21:30425756-30425763"
@@ -3589,7 +3595,7 @@ class TandemRepeatReadingTests(unittest.TestCase):
         """`21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RUS=*;RUC=9`: Ensembl VEP
         116.2 writes `21:30425588-30425596 ********* ENST00000390690 coding_sequence_variant`;
         vep-rs `feature_elongation,coding_sequence_variant`; the rows pair, and the reference's
-        rows at the run keep class 13 from the record."""
+        rows at the run keep `cnv_tr_empty_expansion_dropped` from the record."""
         self._literal_pairs(REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=*;RUC=9"),
                             "*********", "coding_sequence_variant", "feature_elongation,coding_sequence_variant")
 
@@ -3676,8 +3682,9 @@ class TandemRepeatReadingTests(unittest.TestCase):
         the rest the reference run; with a FASTA Ensembl VEP 116.2 writes nothing. vep-rs
         writes the first allele's `21:30425756-30425763 tandem_repeat ENST00000390690
         coding_sequence_variant,feature_elongation` (with `ENST00000334068
-        upstream_gene_variant`) and the second's loss rows, all set aside under class 13; the
-        CT run (`21 30430409 x N <CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30430417;SVLEN=8;RN=2,0;RUS=CT,CT;RUC=2,2`)
+        upstream_gene_variant`) and the second's loss rows, all set aside under
+        `cnv_tr_empty_expansion_dropped`; the CT run
+        (`21 30430409 x N <CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30430417;SVLEN=8;RN=2,0;RUS=CT,CT;RUC=2,2`)
         is the same shape. An empty part before a non-empty one (`RN=0,2`) is the loss the
         reference keeps, and a second allele whose count the RUC list has run out of beside a
         twelve-base first allele (`RUS=AGC,AGC;RUC=4`) is a gain the reference keeps."""
@@ -3704,7 +3711,7 @@ class TandemRepeatReadingTests(unittest.TestCase):
         vep-rs reads 9.5 as 9 and NaN as 0 and writes `21:30425588-30425596 tandem_repeat
         ENST00000390690 coding_sequence_variant,feature_elongation` with `ENST00000334068
         upstream_gene_variant` (the pair `21:30425587-30425588 tandem_repeat` for NaN), set aside
-        under class 12 when the reference wrote nothing beside the run. Without a FASTA the
+        under `non_integer_end_annotated` when the reference wrote nothing beside the run. Without a FASTA the
         reference writes `21:30425588-30425596.5 tandem_repeat` and the text pairing holds; a
         `<DEL>` with `SVLEN=300.7` and no reference row is not the shape."""
         for text in ("9.5", "300.7", "-8.5", "NaN", "-Inf", "Infinity", "1e400"):
@@ -3770,8 +3777,8 @@ class RnZeroAlleleDroppedTests(unittest.TestCase):
         inframe_deletion` (and `- ENST00000334068 upstream_gene_variant`) and drops the
         twelve-base gain; vep-rs writes the loss of the run for the first allele
         (`feature_truncation,inframe_deletion`) and the gain for the second
-        (`feature_elongation,coding_sequence_variant`). The loss pairs under class 12; the gain is
-        the dropped allele's row, set aside."""
+        (`feature_elongation,coding_sequence_variant`). The loss pairs under
+        `cnv_tr_expansion_divergences`; the gain is the dropped allele's row, set aside."""
         record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=0,1;RUS=AGC;RUC=4")
         perl = {T(self.RUN, "-", "ENST00000334068", "upstream_gene_variant"), T(self.RUN, "-", "ENST00000390690", "inframe_deletion")}
         gain = T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_elongation,coding_sequence_variant")
@@ -3785,8 +3792,8 @@ class RnZeroAlleleDroppedTests(unittest.TestCase):
         Ensembl VEP 116.2 writes the gain only, `21:30425596-30425597 AGC ENST00000390690
         inframe_insertion` (and `AGC ENST00000334068 upstream_gene_variant`); vep-rs writes the
         gain for the first allele and the loss of the run for the second. The gain pairs under
-        class 12; the loss is the dropped allele's row, set aside. `RN=2,0;RUS=AGC,AGC;RUC=2,2`
-        is the same shape."""
+        `cnv_tr_expansion_divergences`; the loss is the dropped allele's row, set aside.
+        `RN=2,0;RUS=AGC,AGC;RUC=2,2` is the same shape."""
         loss = T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_truncation,inframe_deletion")
         perl = {T("21:30425596-30425597", "AGC", "ENST00000334068", "upstream_gene_variant"),
                 T("21:30425596-30425597", "AGC", "ENST00000390690", "inframe_insertion")}

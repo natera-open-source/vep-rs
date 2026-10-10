@@ -15,12 +15,12 @@ use tracing::{debug, info};
 use crate::config::Config;
 use crate::json_cache;
 use crate::transcript_index::{
-    LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndex, TranscriptIndexImpl,
+    LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl,
 };
 use crate::variation_matcher;
 use crate::vcf_parser::parse_vcf_line;
 use vep_builtins::BuiltinRegistry;
-use vep_core::consequence::{Consequence, Impact};
+use vep_core::consequence::Consequence;
 use vep_core::variant::{InputVariant, VariantClass};
 use vep_plugin::PluginRegistry;
 
@@ -527,15 +527,6 @@ pub fn load_variation_data(
     Ok(Arc::new(data))
 }
 
-fn structural_variant_bounds(variant: &InputVariant) -> (u64, u64) {
-    let variant_start = variant.start.min(variant.end);
-    let variant_end = variant
-        .sv_end
-        .unwrap_or(variant.end)
-        .max(variant.start.max(variant.end));
-    (variant_start, variant_end)
-}
-
 /// Annotate a batch of variants, optionally in parallel using rayon.
 pub fn annotate_batch(
     batch: &mut Vec<InputVariant>,
@@ -565,7 +556,7 @@ pub fn annotate_batch(
                 .unwrap_or(false);
         if !is_interchrom_paired_breakend {
             if let Some(chr_transcripts) = resources.transcripts.get(&variant.chr) {
-                annotate_variant(
+                crate::runner::annotate_variant(
                     variant,
                     chr_transcripts,
                     &resources.effects_config,
@@ -653,119 +644,6 @@ pub fn annotate_batch(
     }
 
     stats
-}
-
-fn annotate_variant(
-    variant: &mut InputVariant,
-    transcripts: &TranscriptIndex,
-    config: &vep_effects::EffectsConfig,
-    prediction_config: &PredictionConfig,
-) {
-    annotate_variant_with_predictions(variant, transcripts, config, prediction_config);
-}
-
-fn annotate_variant_with_predictions(
-    variant: &mut InputVariant,
-    transcripts: &TranscriptIndex,
-    config: &vep_effects::EffectsConfig,
-    prediction_config: &PredictionConfig,
-) {
-    let (variant_start, variant_end) = structural_variant_bounds(variant);
-    let has_predictions = prediction_config.sift.is_some() || prediction_config.polyphen.is_some();
-
-    transcripts.for_each_overlapping(variant_start, variant_end, |transcript| {
-        if let Some(mut tc) = vep_effects::calculate_consequences(variant, transcript, config) {
-            if has_predictions && tc.consequences.contains(&Consequence::MissenseVariant) {
-                lookup_predictions(&mut tc, transcript, prediction_config);
-            }
-            variant.transcript_consequences.push(tc);
-        }
-    });
-
-    if variant.alt_allele() == b"<*>" {
-        for tc in &mut variant.transcript_consequences {
-            if tc.consequences.contains(&Consequence::FrameshiftVariant) {
-                tc.consequences
-                    .retain(|c| *c != Consequence::FrameshiftVariant);
-                tc.consequences.push(Consequence::CodingSequenceVariant);
-                tc.consequences.sort_by_key(|c| c.rank());
-                tc.impact = tc
-                    .consequences
-                    .iter()
-                    .map(|c| c.impact())
-                    .min_by_key(|i| match i {
-                        Impact::HIGH => 0,
-                        Impact::MODERATE => 1,
-                        Impact::LOW => 2,
-                        Impact::MODIFIER => 3,
-                    })
-                    .unwrap_or(Impact::MODIFIER);
-            }
-        }
-    }
-
-    if let Some(most_severe) = variant
-        .transcript_consequences
-        .iter()
-        .flat_map(|tc| tc.consequences.iter())
-        .copied()
-        .min_by_key(|c| c.rank())
-    {
-        variant.most_severe_consequence = Some(most_severe);
-    }
-}
-
-fn lookup_predictions(
-    tc: &mut vep_core::consequence::TranscriptConsequence,
-    transcript: &vep_core::transcript::Transcript,
-    prediction_config: &PredictionConfig,
-) {
-    use vep_core::prediction::{format_prediction, AnalysisType};
-
-    let position: usize = tc
-        .protein_position
-        .as_deref()
-        .and_then(|s| s.split('-').next())
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
-    if position == 0 {
-        return;
-    }
-
-    let alt_aa: u8 = tc
-        .amino_acids
-        .as_deref()
-        .and_then(|s| s.split('/').nth(1))
-        .and_then(|s| s.as_bytes().first().copied())
-        .unwrap_or(0);
-    if alt_aa == 0 || alt_aa == b'-' {
-        return;
-    }
-
-    let predictions = match transcript
-        .vefc
-        .as_ref()
-        .and_then(|v| v.protein_function_predictions.as_ref())
-    {
-        Some(p) => p,
-        None => return,
-    };
-
-    if let Some(ref mode) = prediction_config.sift {
-        if let Some(ref matrix) = predictions.sift {
-            if let Some(pred) = matrix.lookup(position, alt_aa, AnalysisType::Sift) {
-                tc.sift = Some(format_prediction(&pred, mode));
-            }
-        }
-    }
-
-    if let Some(ref mode) = prediction_config.polyphen {
-        if let Some(ref matrix) = predictions.polyphen_humvar {
-            if let Some(pred) = matrix.lookup(position, alt_aa, AnalysisType::PolyPhenHumVar) {
-                tc.polyphen = Some(format_prediction(&pred, mode));
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -1121,6 +999,65 @@ mod tests {
         assert_eq!(batch.len(), 2);
         assert_eq!(batch[0].chr, "21");
         assert_eq!(batch[1].chr, "X");
+    }
+
+    /// The library and the command-line paths annotate through one function, so a
+    /// record whose rows depend on a path-specific step cannot differ between them:
+    /// a one-base `<*>` deletion with `SVTYPE=DEL` inside ENST00000390690's coding
+    /// sequence is `frameshift_variant, feature_truncation`, where the sequence-allele
+    /// reading of a bare `<*>` would write `coding_sequence_variant`; the `<DEL>`
+    /// record with the same INFO is the control. Both paths run the records against
+    /// the release 116 corpus cache.
+    #[test]
+    fn the_library_path_annotates_through_the_command_line_path() {
+        const EXPECTED_ROW: &str = "ENST00000390690:frameshift_variant,feature_truncation";
+        let cache = format!(
+            "{}/../../tests/golden/116/GRCh38-release116/json_cache",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let raw = crate::json_cache::load_all_transcripts(&cache).unwrap();
+        let transcripts = Arc::new(LazyTranscriptIndexes::from_loaded(
+            raw,
+            TranscriptIndexImpl::Bin,
+            5_000,
+            5_000,
+        ));
+        let annotator = annotator_over(Arc::clone(&transcripts)).unwrap();
+        let rows = |variant: &InputVariant| -> Vec<String> {
+            let mut ids: Vec<String> = variant
+                .transcript_consequences
+                .iter()
+                .map(|tc| {
+                    format!(
+                        "{}:{}",
+                        tc.transcript_id,
+                        tc.consequences
+                            .iter()
+                            .map(|c| c.so_term())
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    )
+                })
+                .collect();
+            ids.sort();
+            ids
+        };
+        for record in [
+            "21\t30425650\tstar_del1\tN\t<*>\t.\t.\tSVTYPE=DEL;END=30425651",
+            "21\t30425650\tdel1\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30425651",
+        ] {
+            let mut library_batch = parse_vcf_line(record, true).unwrap();
+            let _ = annotator.annotate_batch(&mut library_batch);
+            let library: Vec<Vec<String>> = library_batch.iter().map(rows).collect();
+            let command_line =
+                crate::runner::annotate_batch_for_test(record, Arc::clone(&transcripts));
+            assert_eq!(library, command_line, "{record}");
+            assert!(
+                library[0].iter().any(|row| row == EXPECTED_ROW),
+                "{record}: {:?}",
+                library[0]
+            );
+        }
     }
 
     /// The annotator path reaches the same record-level breakend verdict as the CLI:
