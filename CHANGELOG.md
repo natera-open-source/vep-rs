@@ -89,6 +89,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The JSON `allele_string` of a structural record carries every ALT as written, a `*` allele included (`*/<DEL>`). (#44)
 - The comparators read a Location's coordinates as numbers, so an END Ensembl VEP prints as written (`030425949`, `+30425949`) agrees with the span it names. (#44)
 - The structural-variant comparator's skip routes read SVLEN and END as Perl numifies them, so `SVLEN=abc`, `SVLEN=.` and `END=30425949.5` are routed, not errors. (#44)
+- A structural type is read through `get_SO_term`'s own regexes: `<CN=X>`, `<<DEL>>,<DEL>` and `<DEL:>` are unsupported types and `<INS:ME::ALU>` a `mobile_element_insertion`, as Ensembl VEP reads them. (#44)
+- An ALT list of `<NON_REF>` alone is a reference block, one intergenic row per allele, never an error. (#44)
+- Under a true INFO/SVTYPE a `<NON_REF>` beside another allele is an allele of the structural record, as Ensembl VEP reads it (`G,<NON_REF>` with `SVTYPE=DEL` is two deletions). (#44)
+- The vep-io VCF reader routes, types and classes a record as the command-line parser does, through one shared module. (#44)
+- Both comparators recognise a gVCF variant site by its shape: the SNP/indel comparator from the input VCFs (`--input-dir`, `--input-vcf`), the structural-variant comparator at the alleles vep-rs's parser writes. (#44)
+- The structural-variant comparator truncates a `<CNV:TR>` repeat count as Perl's `x` operator does and leaves a unit of no bases unjudged. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
 
 ## [0.3.2] - 2026-10-06

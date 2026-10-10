@@ -659,6 +659,62 @@ fn coordinates_past_the_ceiling_are_annotated_without_a_panic() {
         assert_eq!(location, "21:30425601-4611686018427387903", "{svlen}");
     }
 }
+
+/// The Allele Ensembl VEP 116.2 writes for the type shapes at the edges of
+/// `get_SO_term`'s regexes: `mobile_element_insertion` for `<INS:ME::ALU>` (one colon
+/// before the element), `copy_number_variation` for `<<CN0>>` (one bracket a side in the
+/// copy-number test) and `deletion` for `<<DEL>>` and `<DEL:X>`; and the reference block
+/// `<NON_REF>,<NON_REF>`, which Ensembl VEP skips as `NON_REF`, is one intergenic row per
+/// allele, never an error.
+#[test]
+fn the_type_and_the_block_rows_follow_ensembl_vep() {
+    let allele_of = |record: &str| -> Vec<String> {
+        annotate_record(record, &[], &[])
+            .iter()
+            .filter(|row| row.contains("ENST00000390690"))
+            .map(|row| row.split('\t').nth(2).unwrap().to_string())
+            .collect()
+    };
+    for (record, allele) in [
+        (
+            "21\t30425650\tme\tN\t<INS:ME::ALU>\t.\t.\tSVTYPE=INS",
+            "mobile_element_insertion",
+        ),
+        (
+            "21\t30425650\tcn0\tN\t<<CN0>>\t.\t.\tEND=30425949",
+            "copy_number_variation",
+        ),
+        (
+            "21\t30425650\tdel\tN\t<<DEL>>\t.\t.\tEND=30425949",
+            "deletion",
+        ),
+        (
+            "21\t30425650\tdelx\tN\t<DEL:X>\t.\t.\tEND=30425949",
+            "deletion",
+        ),
+    ] {
+        assert_eq!(allele_of(record), [allele], "{record}");
+    }
+    let blocks = annotate_record(
+        "21\t30425650\tblocks\tN\t<NON_REF>,<NON_REF>\t.\t.\tEND=30425700",
+        &[],
+        &[],
+    );
+    let block_rows: Vec<(String, String, String)> = blocks
+        .iter()
+        .filter(|row| !row.starts_with('#'))
+        .map(|row| {
+            let c: Vec<&str> = row.split('\t').collect();
+            (c[1].to_string(), c[2].to_string(), c[6].to_string())
+        })
+        .collect();
+    let block = (
+        "21:30425651-30425700".to_string(),
+        "<NON_REF>".to_string(),
+        "intergenic_variant".to_string(),
+    );
+    assert_eq!(block_rows, [block.clone(), block]);
+}
 /// The rows Ensembl VEP 116.2 writes on ENST00000390690 for the shapes the parser reads
 /// from INFO as Perl does: a mate named by CHR2 is `N[21:30425700[` beside the own `A.`
 /// of a record whose REF is `A`, and keeps `END2=00030425700` as written; `SVLEN=0` or

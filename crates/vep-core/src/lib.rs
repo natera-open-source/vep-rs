@@ -14,6 +14,7 @@ pub mod codon;
 pub mod consequence;
 pub mod coordinate;
 pub mod prediction;
+pub mod sv_routing;
 pub mod sv_span;
 pub mod synonyms;
 pub mod transcript;

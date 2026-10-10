@@ -1520,6 +1520,7 @@ COMPARE_ARGS=(
     --perl-dir "${WORK_DIR}/perl"
     --rust-dir "${WORK_DIR}/rust"
     --report-dir "${WORK_DIR}/reports"
+    --input-dir "${WORK_DIR}/inputs"
     --assembly "${ASSEMBLY}"
     --reference-release "${REFERENCE_RELEASE}"
 )

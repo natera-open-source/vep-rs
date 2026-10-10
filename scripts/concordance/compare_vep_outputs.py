@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import json
 import os
 import re
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
-from typing import Callable, Iterable, Iterator, TextIO
+from typing import Callable, Iterable, Iterator, Sequence, TextIO
 
 TupleKey = tuple[str, str, str, str, str]
 ContextTermSet = frozenset[str]
@@ -973,10 +974,11 @@ class ReferenceRecordScope:
     ``mate_overflow``: the (file, Location) pairs at which the reference wrote a bracket
     allele whose mate position is at least `BND_MATE_32_BIT_LIMIT`.
 
-    ``gvcf_sites``: the (file, Location) pairs of vep-rs rows whose record name carries
-    `<NON_REF>` beside another ALT (`gvcf_site_locations`, read from vep-rs's raw output
-    and handed in through `record_gvcf_sites`); such a Location the reference wrote
-    nothing for is ``gvcf_absent`` rather than ``absent``, whatever its allele.
+    ``gvcf_sites``: the (file, Location) pairs of vep-rs rows at a gVCF variant site, read
+    from the input VCF's shape (`gvcf_site_locations_from_vcf`) and from the generated name
+    of an ID-less record in vep-rs's output (`gvcf_site_locations`), handed in through
+    `record_gvcf_sites`; such a Location the reference wrote nothing for is
+    ``gvcf_absent`` rather than ``absent``, whatever its allele.
     """
 
     def __init__(self) -> None:
@@ -1086,8 +1088,8 @@ def gvcf_site_locations(path: Path, canonical_contigs: frozenset[str] | None = N
     """The Locations of the rows in vep-rs's output whose record is a gVCF variant site:
     an ID-less record is named `CHROM_POS_REF/ALT...` from its own line, so a name whose
     ALT list carries `<NON_REF>` beside another allele is the site (a record with an ID is
-    named by the ID and is recognised only by the structural-variant comparator, from the
-    input). A missing file yields the empty set."""
+    named by the ID and is recognised from the input VCF, `gvcf_site_locations_from_vcf`).
+    A missing file yields the empty set."""
     sites: set[str] = set()
     if not path.exists():
         return sites
@@ -1099,14 +1101,152 @@ def gvcf_site_locations(path: Path, canonical_contigs: frozenset[str] | None = N
             if len(fields) < 7:
                 continue
             name = _GENERATED_NAME_RE.match(fields[0])
-            alts = name.group(1).split("/")[1:] if name else []
-            if "<NON_REF>" not in alts or len(alts) < 2:
+            if name is None:
+                continue
+            if not is_gvcf_variant_site(name.group(1).split("/")[1:]):
                 continue
             location = canonical_location(fields[1].strip())
             if canonical_contigs is not None and location.split(":", 1)[0] not in canonical_contigs:
                 continue
             sites.add(location)
     return sites
+
+
+_NON_REF_BLOCK = "<NON_REF>"
+
+
+def _is_non_ref_block(alt: str) -> bool:
+    return alt.upper() == _NON_REF_BLOCK
+
+
+def _names_an_allele(alt: str) -> bool:
+    """Whether an ALT names a variant: not the `<NON_REF>` block, `*` or `.`."""
+    return not _is_non_ref_block(alt) and alt not in ("*", ".")
+
+
+def perl_true(value: str | None) -> bool:
+    """Whether Perl reads an INFO value as true: defined, not empty and not `0`."""
+    return value not in (None, "", "0")
+
+
+def _info_written(info: str, key: str) -> str | None:
+    """The value of `key=value` in an INFO column, Perl's `defined $info->{key}`: `None` for
+    an absent key or a bare flag, the last occurrence winning as in the hash Ensembl VEP's
+    parser builds (BaseVCF4.pm:581-583)."""
+    value = None
+    for item in info.split(";"):
+        name, sep, text = item.partition("=")
+        if name == key:
+            value = text if sep else None
+    return value
+
+
+# Parser/VCF.pm:241, the ALT forms that route a line to the structural path.
+_STRUCTURAL_ALT_LIST = re.compile(r"[<\[\]][^*]+[>\]\[]|^\.\w+|\w+\.$")
+
+
+def is_gvcf_variant_site(alts: Sequence[str], svtype: str | None = None) -> bool:
+    """Whether a record is a gVCF variant site vep-rs reads on its sequence path: `<NON_REF>`
+    beside alleles that name a variant, no true INFO/SVTYPE, and no remaining allele written
+    in a structural form (Parser/VCF.pm:237-245: without a true SVTYPE the remaining ALTs
+    alone decide the path, since a structural form is never a run of `ACGT`). A list of
+    `<NON_REF>` alone is a reference block; `*` or `.` beside the block names no allele; a
+    block beside a symbolic allele (`<DEL>,<NON_REF>`) is an unsupported structural list,
+    the skipped-record class; under a true SVTYPE every ALT, the block included, is an
+    allele of a structural record in both engines."""
+    real = [alt for alt in alts if _names_an_allele(alt)]
+    if not real or not any(map(_is_non_ref_block, alts)) or perl_true(svtype):
+        return False
+    return _STRUCTURAL_ALT_LIST.search(",".join(real)) is None
+
+
+def _minimised(ref: str, alt: str) -> tuple[str, str, int]:
+    """A bi-allelic indel minimised as vep-rs minimises it (`trim_alleles`): the shared
+    prefix is trimmed while both alleles have bases, then the shared suffix, and an emptied
+    allele reads `-`. Returns the two alleles and the bases trimmed in front, by which the
+    start moves."""
+    shared = 0
+    while shared < min(len(ref), len(alt)) and ref[shared].upper() == alt[shared].upper():
+        shared += 1
+    ref, alt = ref[shared:], alt[shared:]
+    while ref and alt and ref[-1].upper() == alt[-1].upper():
+        ref, alt = ref[:-1], alt[:-1]
+    return ref or "-", alt or "-", shared
+
+
+def gvcf_site_rows(pos: int, ref: str, alts: Sequence[str]) -> list[tuple[str, int, int]]:
+    """The (allele, start, end) vep-rs writes for each real allele of a gVCF variant site,
+    the sequence path of its parser: `<NON_REF>`, `*` and `.` name no allele; when an
+    allele's length differs from REF's, the first base every allele shares with REF is
+    trimmed and the start moves one base, an emptied allele reading `-`; a single remaining
+    allele whose length still differs from REF's is minimised, its shared prefix then its
+    shared suffix trimmed and the start moved by the prefix; an insertion's end is its start
+    minus one."""
+    real = [alt for alt in alts if _names_an_allele(alt)]
+    if not real:
+        return []
+    is_indel = any(len(alt) != len(ref) for alt in real)
+    anchored = bool(ref) and all(alt[:1].upper() == ref[:1].upper() for alt in real)
+    prefix = 1 if is_indel and anchored else 0
+    trimmed_ref = ref[prefix:] or "-"
+    rows: list[tuple[str, int, int]] = []
+    for alt in real:
+        allele = alt[prefix:] or "-"
+        start = pos + prefix
+        ref_part = trimmed_ref
+        if len(real) == 1 and "-" not in (ref_part, allele) and len(ref_part) != len(allele):
+            ref_part, allele, shared = _minimised(ref_part, allele)
+            start += shared
+        end = start - 1 if ref_part == "-" else start + len(ref_part) - 1
+        rows.append((allele, start, end))
+    return rows
+
+
+def sequence_location(chrom: str, start: int, end: int) -> str:
+    """The Location both engines print for a span: `chrom:start`, or `chrom:lo-hi` with an
+    insertion's `end = start - 1` written first (`21:30425650-30425651`)."""
+    lo, hi = min(start, end), max(start, end)
+    return f"{chrom}:{lo}" if lo == hi else f"{chrom}:{lo}-{hi}"
+
+
+def gvcf_site_locations_from_vcf(
+    path: Path, canonical_contigs: frozenset[str] | None = None
+) -> set[str]:
+    """The Locations vep-rs writes for every gVCF variant site of an input VCF (plain or
+    gzipped), recognised by the record's shape (`is_gvcf_variant_site`) whatever its ID."""
+    sites: set[str] = set()
+    opener = gzip.open if path.suffix in (".gz", ".bgz") else open
+    with opener(path, "rt", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if line.startswith("#"):
+                continue
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) < 5:
+                continue
+            chrom, pos, ref, alt = fields[0], fields[1], fields[3], fields[4]
+            alts = alt.split(",")
+            svtype = _info_written(fields[7], "SVTYPE") if len(fields) > 7 else None
+            if not pos.isdigit() or not is_gvcf_variant_site(alts, svtype):
+                continue
+            if canonical_contigs is not None and chrom not in canonical_contigs:
+                continue
+            for _allele, start, end in gvcf_site_rows(int(pos), ref, alts):
+                sites.add(canonical_location(sequence_location(chrom, start, end)))
+    return sites
+
+
+def input_vcf_for(output: Path, input_dir: Path | None, input_vcf: Path | None) -> Path | None:
+    """The input VCF behind an output file: `--input-vcf` when given, else the file in
+    `--input-dir` with the output's stem and a `.vcf`, `.vcf.gz` or `.vcf.bgz` suffix."""
+    if input_vcf is not None:
+        return input_vcf
+    if input_dir is None:
+        return None
+    for suffix in (".vcf", ".vcf.gz", ".vcf.bgz"):
+        candidate = input_dir / f"{output.stem}{suffix}"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _non_integer_end(location: str) -> bool:
@@ -1639,6 +1779,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--glob",
         default="*.txt",
         help="Filename glob for output pairing (default: *.txt)",
+    )
+    parser.add_argument(
+        "--input-dir",
+        help="Directory of the input VCFs (.vcf, .vcf.gz) the outputs were produced from, "
+        "paired with each output by stem. A gVCF variant site is then recognised by its "
+        "shape (<NON_REF> beside a real allele) whatever its ID; without an input only an "
+        "ID-less record's generated name reveals the site.",
+    )
+    parser.add_argument(
+        "--input-vcf",
+        help="The one input VCF every output pair was produced from (a single-input run); "
+        "takes precedence over --input-dir.",
     )
     parser.add_argument(
         "--summary-json",
@@ -2783,6 +2935,8 @@ def main() -> int:
     report_dir.mkdir(parents=True, exist_ok=True)
 
     canonical_contigs = resolve_canonical_contigs(args)
+    input_dir = Path(args.input_dir).resolve() if args.input_dir else None
+    input_vcf_path = Path(args.input_vcf).resolve() if args.input_vcf else None
 
     perl_files = sorted(perl_dir.glob(args.glob))
     if not perl_files:
@@ -2852,9 +3006,11 @@ def main() -> int:
                     perl_file.name,
                     count_bare_breakpoint_reference_rows(perl_file, canonical_contigs),
                 )
-                record_scope.record_gvcf_sites(
-                    perl_file.name, gvcf_site_locations(rust_file, canonical_contigs)
-                )
+                gvcf_sites = gvcf_site_locations(rust_file, canonical_contigs)
+                input_vcf = input_vcf_for(perl_file, input_dir, input_vcf_path)
+                if input_vcf is not None:
+                    gvcf_sites |= gvcf_site_locations_from_vcf(input_vcf, canonical_contigs)
+                record_scope.record_gvcf_sites(perl_file.name, gvcf_sites)
 
             (
                 perl_count,

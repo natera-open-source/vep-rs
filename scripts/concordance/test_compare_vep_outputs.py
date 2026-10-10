@@ -2639,6 +2639,115 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         self.assertEqual(buckets["reference_skipped_record"]["excluded"], 1)
         self.assertEqual([r.split("\t")[2] for r in open_rows], ["21:40000000"])
 
+    def test_a_gvcf_variant_site_is_recognised_by_its_shape_from_the_input(self) -> None:
+        """A record named by an ID shows no `<NON_REF>` in vep-rs's output, so the input VCF
+        names the site by its shape: `<NON_REF>` beside a real allele, whatever the ID. The
+        Locations vep-rs writes for the site follow its parser's sequence path
+        (`gvcf_site_rows`): `ATG AG` loses its anchor base and is minimised from both ends to
+        the deletion of `T` at POS + 1, so the ID'd row `rs1 21:30425651 -` is set aside under
+        the class once the input is read, and stays charged without it. A list of blocks
+        alone, or `*` beside a block, is no site."""
+        from compare_vep_outputs import (
+            ReferenceRecordScope,
+            _sort_unique_stream_to_file,
+            compare_sorted_key_files,
+            gvcf_site_locations,
+            gvcf_site_locations_from_vcf,
+            input_vcf_for,
+            is_gvcf_variant_site,
+            iter_vep_key_lines,
+        )
+
+        self.assertTrue(is_gvcf_variant_site(["G", "<NON_REF>"]))
+        self.assertTrue(is_gvcf_variant_site(["<non_ref>", "AT"]))
+        self.assertFalse(is_gvcf_variant_site(["<NON_REF>"]))
+        self.assertFalse(is_gvcf_variant_site(["<NON_REF>", "<NON_REF>"]))
+        self.assertFalse(is_gvcf_variant_site(["*", "<NON_REF>"]))
+        self.assertFalse(is_gvcf_variant_site(["G", "T"]))
+        # A block beside a symbolic allele is an unsupported structural list (the
+        # skipped-record class); under a true SVTYPE the block is an allele of a structural
+        # record in both engines (Ensembl VEP 116.2 writes two `deletion` rows per transcript
+        # for `G,<NON_REF>` with `SVTYPE=DEL`, as vep-rs does).
+        self.assertFalse(is_gvcf_variant_site(["<DEL>", "<NON_REF>"]))
+        self.assertFalse(is_gvcf_variant_site(["G", "<DEL>", "<NON_REF>"]))
+        self.assertFalse(is_gvcf_variant_site(["G", "<NON_REF>"], "DEL"))
+        self.assertTrue(is_gvcf_variant_site(["G", "<NON_REF>"], None))
+        self.assertTrue(is_gvcf_variant_site(["G", "<NON_REF>"], "0"))
+        header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+        named = "rs1\t21:30425651\t-\tG\tENST00000390690\tTranscript\tframeshift_variant\n"
+        blocks = "21_50000000_N/<NON_REF>/<NON_REF>\t21:50000001-50000100\t<NON_REF>\t-\t-\t-\tintergenic_variant\n"
+        vcf = ("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+               "21\t30425650\trs1\tATG\tAG,<NON_REF>\t.\t.\t.\n"
+               "21\t50000000\t.\tN\t<NON_REF>,<NON_REF>\t.\t.\tEND=50000100\n"
+               "21\t60000000\t.\tN\t<NON_REF>\t.\t.\tEND=60000100\n"
+               "chr22\t100\t.\tA\tG,<NON_REF>\t.\t.\t.\n")
+        with tempfile.TemporaryDirectory() as d:
+            perl, rust = Path(d) / "s.txt", Path(d) / "rust" / "s.txt"
+            rust.parent.mkdir()
+            perl.write_text(header, encoding="utf-8")
+            rust.write_text(header + named + blocks, encoding="utf-8")
+            inputs = Path(d) / "inputs"
+            inputs.mkdir()
+            (inputs / "s.vcf").write_text(vcf, encoding="utf-8")
+            import gzip
+
+            with gzip.open(inputs / "z.vcf.gz", "wt", encoding="utf-8") as handle:
+                handle.write(vcf)
+            self.assertEqual(gvcf_site_locations(rust), set(), "a block list and an ID'd row name no site")
+            for path in (inputs / "s.vcf", inputs / "z.vcf.gz"):
+                self.assertEqual(gvcf_site_locations_from_vcf(path), {"21:30425651", "chr22:100"}, path.name)
+            self.assertEqual(gvcf_site_locations_from_vcf(inputs / "s.vcf", frozenset({"21"})), {"21:30425651"})
+            self.assertEqual(input_vcf_for(perl, inputs, None), inputs / "s.vcf")
+            self.assertEqual(input_vcf_for(Path(d) / "z.txt", inputs, None), inputs / "z.vcf.gz")
+            self.assertIsNone(input_vcf_for(Path(d) / "none.txt", inputs, None))
+            self.assertEqual(input_vcf_for(perl, inputs, inputs / "z.vcf.gz"), inputs / "z.vcf.gz")
+            self.assertIsNone(input_vcf_for(perl, None, None))
+            ps, rs = Path(d) / "p.keys", Path(d) / "r.keys"
+            _sort_unique_stream_to_file(iter_vep_key_lines(perl), ps)
+            _sort_unique_stream_to_file(iter_vep_key_lines(rust), rs)
+            for with_input in (False, True):
+                scope = ReferenceRecordScope()
+                sites = gvcf_site_locations(rust)
+                if with_input:
+                    sites |= gvcf_site_locations_from_vcf(inputs / "s.vcf")
+                scope.record_gvcf_sites("f", sites)
+                compare_sorted_key_files(ps, rs, file_name="f", discordant_out=None,
+                                         track_consequence_buckets=False, record_scope=scope)
+                rows = [self.row("extra_in_rust", "21:30425651", "-", "ENST00000390690", "frameshift_variant"),
+                        self.row("extra_in_rust", "21:50000001-50000100", "<NON_REF>", "-", "intergenic_variant")]
+                (ep, er, buckets), open_rows = self.run_pass(rows, scope)
+                if with_input:
+                    self.assertEqual(scope.gvcf_absent, {("f", "21:30425651")})
+                    self.assertEqual((ep, er, open_rows), (0, 2, []))
+                    self.assertEqual(buckets["gvcf_variant_site_dropped"]["rust"], 1)
+                else:
+                    self.assertEqual(scope.gvcf_absent, set())
+                    self.assertEqual([r.split("\t")[2] for r in open_rows], ["21:30425651"])
+                self.assertEqual(buckets["reference_skipped_record"]["excluded"], 1, "the block list is a skipped record")
+        args = parse_args(["--perl-dir", "p", "--rust-dir", "r", "--report-dir", "o", "--input-dir", "i"])
+        self.assertEqual((args.input_dir, args.input_vcf), ("i", None))
+
+    def test_gvcf_site_rows_follow_the_parsers_sequence_path(self) -> None:
+        """vep-rs trims an indel record's anchor base across every real allele, then minimises
+        a lone allele from both ends (`-` for an emptied allele); an insertion ends one base
+        before its start; same-length alleles keep POS and their bases; a multi-allelic site
+        keeps its anchor-trimmed alleles."""
+        from compare_vep_outputs import gvcf_site_rows, sequence_location
+
+        self.assertEqual(gvcf_site_rows(100, "A", ["G", "<NON_REF>"]), [("G", 100, 100)])
+        self.assertEqual(gvcf_site_rows(100, "AT", ["GC", "<NON_REF>"]), [("GC", 100, 101)])
+        self.assertEqual(gvcf_site_rows(100, "A", ["AT", "<NON_REF>"]), [("T", 101, 100)])
+        self.assertEqual(gvcf_site_rows(100, "N", ["NA", "<NON_REF>"]), [("A", 101, 100)])
+        self.assertEqual(gvcf_site_rows(100, "ATG", ["A", "<NON_REF>"]), [("-", 101, 102)])
+        self.assertEqual(gvcf_site_rows(100, "ATG", ["AG", "<NON_REF>"]), [("-", 101, 101)])
+        self.assertEqual(gvcf_site_rows(100, "A", ["AT", "ATT", "<NON_REF>"]), [("T", 101, 100), ("TT", 101, 100)])
+        self.assertEqual(gvcf_site_rows(100, "A", ["G", "T", "<NON_REF>"]), [("G", 100, 100), ("T", 100, 100)])
+        self.assertEqual(gvcf_site_rows(100, "A", ["<NON_REF>", "<NON_REF>"]), [])
+        self.assertEqual(gvcf_site_rows(100, "A", ["*", "G", "<NON_REF>"]), [("G", 100, 100)])
+        self.assertEqual(sequence_location("21", 101, 100), "21:100-101")
+        self.assertEqual(sequence_location("21", 101, 102), "21:101-102")
+        self.assertEqual(sequence_location("chr21", 100, 100), "chr21:100")
+
     def test_a_dot_breakend_pair_and_a_non_integer_end_are_set_aside(self) -> None:
         """Ensembl VEP 116.2 writes `21:30425650-30425651 chromosome_breakpoint` for `N N.`
         without SVTYPE where vep-rs writes the point `21:30425651`: the two rows on one

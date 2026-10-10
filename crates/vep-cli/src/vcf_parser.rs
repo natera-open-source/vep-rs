@@ -15,6 +15,10 @@ use anyhow::{bail, Context};
 
 use vep_core::allele::trim_alleles;
 use vep_core::coordinate::{parse_coordinate, MAX_COORD};
+use vep_core::sv_routing::{
+    classify_symbolic_alt, is_symbolic_alt, perl_true, routes_to_structural, sv_so_term_and_class,
+    sv_type_abbreviation, variant_alts,
+};
 use vep_core::sv_span::{structural_end, svlen_values, SpanClass};
 use vep_core::variant::InputVariant;
 
@@ -69,15 +73,9 @@ pub fn parse_vcf_line_with_max_sv_size(
     // a value it reads as true, so `SVTYPE=`, `SVTYPE=0` and a bare flag name none.
     let svtype = get_info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
 
-    // A gVCF variant site lists `<NON_REF>` beside its real alleles. The block is the
-    // absence of a variant, so it names no allele of such a record, which is read as
-    // its other ALTs alone; a record whose only ALT is `<NON_REF>` is the one
-    // intergenic row of a reference block. Ensembl VEP drops the whole site as an
-    // unsupported type (`G/NON_REF`).
-    let mut alts: Vec<&str> = alt_field.split(',').collect();
-    if alts.len() > 1 {
-        alts.retain(|alt| !alt.eq_ignore_ascii_case("<NON_REF>"));
-    }
+    // A gVCF variant site is read as its real alleles (`variant_alts`); a record whose
+    // ALTs are `<NON_REF>` alone is a reference block, one intergenic row per ALT.
+    let alts = variant_alts(&alt_field.split(',').collect::<Vec<_>>(), svtype);
     // Perl VEP skips `*` alleles (neither the indel nor the SV path fires) and `.`;
     // both stay in the record's allele string, which Ensembl VEP builds from every
     // ALT (Parser/VCF.pm:469). `<*>` is not filtered: Perl treats it as a non-SV
@@ -96,18 +94,9 @@ pub fn parse_vcf_line_with_max_sv_size(
 
     let mut variants = Vec::with_capacity(valid_alts.len());
 
-    // Parser/VCF.pm:237-245 routes a line to `create_StructuralVariationFeatures` when
-    // REF and the ALTs together are not a run of `ACGT` and INFO/SVTYPE is true or an
-    // ALT is written in a structural form: `N G` with `SVTYPE=DEL` is a deletion, `<*>`
-    // with `SVTYPE=DEL` a deletion over its END, and `N G` alone a sequence variant.
-    let plain_acgt = ref_allele
-        .bytes()
-        .chain(alts.iter().flat_map(|alt| alt.bytes()))
-        .all(|b| matches!(b, b'A' | b'C' | b'G' | b'T'));
-    let routes_to_structural =
-        !plain_acgt && (svtype.is_some() || is_perl_structural_alt_list(&alts.join(",")));
+    let structural_record = routes_to_structural(ref_allele, &alts, svtype);
 
-    if !routes_to_structural {
+    if !structural_record {
         let trim_alts: Vec<&str> = valid_alts.iter().map(|(_, alt)| *alt).collect();
         let (trimmed_ref, trimmed_alts, prefix_trimmed) =
             trim_multi_alleles(ref_allele, &trim_alts);
@@ -219,7 +208,7 @@ pub fn parse_vcf_line_with_max_sv_size(
     let all_alts: Vec<(usize, &str)> = alts.iter().copied().enumerate().collect();
     let is_breakpoint_record = record_term
         .is_some_and(|(_, class)| class == vep_core::variant::VariantClass::Translocation);
-    let breakend_record = (routes_to_structural && is_breakpoint_record)
+    let breakend_record = (structural_record && is_breakpoint_record)
         .then(|| breakend_record(ref_allele, &all_alts, info_field));
     let symbolic_alts: Vec<(usize, &str)> = valid_alts
         .iter()
@@ -228,7 +217,7 @@ pub fn parse_vcf_line_with_max_sv_size(
         .collect();
     let is_mixed = !symbolic_alts.is_empty() && symbolic_alts.len() < valid_alts.len();
     let per_alt_classes: Vec<(usize, &str, vep_core::variant::VariantClass)> = match record_term {
-        _ if !routes_to_structural => Vec::new(),
+        _ if !structural_record => Vec::new(),
         Some((_, class)) => valid_alts
             .iter()
             .map(|&(idx, alt)| (idx, alt, class))
@@ -498,11 +487,6 @@ fn is_bare_bnd_alt(alt: &str) -> bool {
         .eq_ignore_ascii_case("BND")
 }
 
-/// Whether Perl reads an INFO value as true: anything but an empty string and `0`.
-fn perl_true(value: &str) -> bool {
-    !value.is_empty() && value != "0"
-}
-
 /// `_parse_breakends`' bracket match (StructuralVariationFeature.pm:1276):
 /// `[A-Za-z]*`, a bracket, a chromosome name of at least one character, `:`, a run of
 /// digits, a bracket, `[A-Za-z]*`; the chromosome is the longest name that leaves a
@@ -570,265 +554,6 @@ fn input_line_name(chr: &str, pos: u64, ref_allele: &str, alt_field: &str) -> St
     } else {
         format!("{chr}_{pos}_{ref_allele}/{}", alt_field.replace(',', "/"))
     }
-}
-
-pub(crate) fn is_paired_breakend_alt(alt: &str) -> bool {
-    alt.contains('[') || alt.contains(']')
-}
-
-pub(crate) fn is_native_single_breakend_alt(alt: &str) -> bool {
-    alt.len() > 1 && (alt.ends_with('.') || alt.starts_with('.')) && !is_paired_breakend_alt(alt)
-}
-
-/// Returns true if an ALT allele is a symbolic (structural variant) allele.
-pub(crate) fn is_symbolic_alt(alt: &str) -> bool {
-    if alt.is_empty() {
-        return false;
-    }
-    // Perl VEP's SV regex `[<\[\]][^\*]+[>\]\[]` excludes `<*>`: without INFO/SVTYPE
-    // it is a non-SV allele at POS.
-    if alt.starts_with('<') && alt.ends_with('>') && alt != "<*>" {
-        return true;
-    }
-    if is_paired_breakend_alt(alt) {
-        return true;
-    }
-    if is_native_single_breakend_alt(alt) {
-        return true;
-    }
-    false
-}
-
-/// Classify a symbolic ALT allele into a VariantClass, with optional SVTYPE fallback.
-pub(crate) fn classify_symbolic_alt(
-    alt: &str,
-    svtype: Option<&str>,
-) -> vep_core::variant::VariantClass {
-    use vep_core::variant::VariantClass;
-    let upper = alt.to_uppercase();
-
-    // Mobile elements must be checked before generic DEL/INS: <DEL:ME> starts with <DEL.
-    if upper.starts_with("<INS:ME") {
-        return VariantClass::MobileElementInsertion;
-    }
-    if upper.starts_with("<DEL:ME") {
-        return VariantClass::MobileElementDeletion;
-    }
-    if upper.starts_with("<DEL") {
-        return VariantClass::StructuralDeletion;
-    }
-    if upper.starts_with("<INS") {
-        return VariantClass::StructuralInsertion;
-    }
-    if upper.starts_with("<DUP:TANDEM") {
-        return VariantClass::TandemDuplication;
-    }
-    if upper.starts_with("<DUP") {
-        return VariantClass::Duplication;
-    }
-    if upper.starts_with("<INV") {
-        return VariantClass::Inversion;
-    }
-    if upper.starts_with("<CNV:TR") {
-        return VariantClass::TandemRepeat;
-    }
-    // Perl VEP maps CN0 -> DEL ("deletion"), CN2 -> DUP ("duplication")
-    if upper.starts_with("<CN") && !upper.starts_with("<CNV") {
-        let inner = &upper[3..upper.len().saturating_sub(1)]; // strip "<CN" and ">"
-        let num_str = inner.strip_prefix('=').unwrap_or(inner);
-        if let Ok(cn) = num_str.parse::<u32>() {
-            return match cn {
-                0 => VariantClass::StructuralDeletion,
-                2 => VariantClass::Duplication,
-                _ => VariantClass::CopyNumberVariation,
-            };
-        }
-    }
-    if upper.starts_with("<CNV") || upper.starts_with("<CN") {
-        return VariantClass::CopyNumberVariation;
-    }
-    if upper.starts_with("<CPX") {
-        return VariantClass::ComplexStructural;
-    }
-    if upper.starts_with("<BND") {
-        return VariantClass::Translocation;
-    }
-    if alt.contains('[')
-        || alt.contains(']')
-        || (alt.len() > 1 && (alt.ends_with('.') || alt.starts_with('.')))
-    {
-        return VariantClass::Translocation;
-    }
-    if let Some(svt) = svtype {
-        match svt.to_uppercase().as_str() {
-            "DEL" => return VariantClass::StructuralDeletion,
-            "INS" => return VariantClass::StructuralInsertion,
-            "DUP" => return VariantClass::Duplication,
-            "INV" => return VariantClass::Inversion,
-            "BND" => return VariantClass::Translocation,
-            "CNV" => return VariantClass::CopyNumberVariation,
-            _ => {}
-        }
-    }
-    // A `<NON_REF>` with a supported SVTYPE took that class above, as in VEP, where
-    // INFO/SVTYPE replaces an ALT outside the VCF 4.4 forms before the SO lookup
-    // (Parser/VCF.pm `create_StructuralVariationFeatures`).
-    if upper == "<NON_REF>" {
-        return VariantClass::ReferenceBlock;
-    }
-    VariantClass::ComplexStructural
-}
-
-/// The structural variant type abbreviation VEP derives for a record: the port of
-/// `Parser::get_SO_term` (ensembl-vep) applied to every ALT joined by `/`, with
-/// INFO/SVTYPE replacing a joined string that opens outside the VCF 4.4 forms
-/// (`Parser/VCF.pm`). Identical parts collapse to one (`<INS>/<INS>` reads `INS`),
-/// and a string naming both DEL and DUP, `<DEL>/<DUP:TANDEM>` included, is `CNV`.
-pub(crate) fn sv_type_abbreviation(joined_alts: &str, svtype: Option<&str>) -> String {
-    // Parser/VCF.pm:473, `/^<?(DEL|INS|DUP|INV|CNV|CN=?[0-9]+)/` without `/i`: a
-    // lowercase `<del>` is outside the VCF 4.4 forms, so SVTYPE names its type.
-    let follows_vcf44 = {
-        let t = joined_alts.strip_prefix('<').unwrap_or(joined_alts);
-        ["DEL", "INS", "DUP", "INV", "CNV"]
-            .iter()
-            .any(|p| t.starts_with(p))
-            || t.strip_prefix("CN")
-                .map(|c| c.strip_prefix('=').unwrap_or(c))
-                .is_some_and(|c| c.starts_with(|ch: char| ch.is_ascii_digit()))
-    };
-    let mut kind = match svtype {
-        Some(st) if !follows_vcf44 => st.to_string(),
-        _ => joined_alts.to_string(),
-    };
-    // Repeated parts collapse to the first as written (Parser.pm:668-679, compared
-    // without their angle brackets and in upper case).
-    if kind.contains(['/', ',']) {
-        let parts: Vec<&str> = kind.split(['/', ',']).collect();
-        let normalized = |part: &str| {
-            part.trim()
-                .trim_start_matches('<')
-                .trim_end_matches('>')
-                .to_ascii_uppercase()
-        };
-        let first = normalized(parts[0]);
-        if parts.iter().all(|p| normalized(p) == first) {
-            kind = parts[0].to_string();
-        }
-    }
-    // The pattern branches of `get_SO_term` (Parser.pm:685-709) match without case
-    // and name an upper-case abbreviation; the two fall-through branches (:712-717)
-    // keep the type as written, so `del` or `bnd` finds no `%SO_TERMS` key.
-    let upper = kind.to_ascii_uppercase();
-    let mobile_element = ["INS:ME", "DEL:ME"]
-        .into_iter()
-        .filter_map(|needle| upper.find(needle))
-        .min();
-    if let Some(pos) = mobile_element {
-        let base = &upper[pos..pos + 3];
-        let rest = upper[pos + 6..].trim_start_matches(':');
-        let element: String = rest
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric())
-            .collect();
-        let element = if element == "L1" {
-            "LINE1".to_string()
-        } else {
-            element
-        };
-        let subtype = if ["ALU", "HERV", "LINE1", "SVA"].contains(&element.as_str()) {
-            element
-        } else {
-            "ME".to_string()
-        };
-        format!("{base}_{subtype}")
-    } else if upper.contains("DEL") && upper.contains("DUP") {
-        "CNV".to_string()
-    } else if upper.contains("DUP:TANDEM") {
-        "TDUP".to_string()
-    } else if upper.contains("CNV:TR") {
-        "TREP".to_string()
-    } else if upper.contains("CN=")
-        || upper
-            .find("CN")
-            .is_some_and(|i| upper[i + 2..].starts_with(|c: char| c.is_ascii_digit()))
-    {
-        // Perl's `/^<?CN=?0>?$/` and `/^<?CN=?2>?$/` match the whole string, in upper
-        // case only, so a list of copy numbers or a `<cn0>` is `CNV`.
-        let bare = kind.trim_start_matches('<').trim_end_matches('>');
-        let copies = bare
-            .strip_prefix("CN")
-            .map(|c| c.strip_prefix('=').unwrap_or(c));
-        match copies {
-            Some("0") => "DEL".to_string(),
-            Some("2") => "DUP".to_string(),
-            _ => "CNV".to_string(),
-        }
-    } else if upper.contains("CNV") {
-        "CNV".to_string()
-    } else if kind.contains(['[', ']']) || kind.starts_with('.') || kind.ends_with('.') {
-        "BND".to_string()
-    } else if kind.starts_with('<') || kind.ends_with('>') {
-        let stripped: String = kind.chars().filter(|c| *c != '<' && *c != '>').collect();
-        stripped.split(':').next().unwrap_or("").to_string()
-    } else {
-        kind
-    }
-}
-
-/// Parser/VCF.pm:241, `[<\[\]][^\*]+[>\]\[]|^\.\w+|\w+\.$` over the ALTs joined by
-/// `,`: an angle or bracket token with at least one character and no `*` inside it
-/// anywhere in the list, or a dot-bounded breakend as the list's first or last ALT
-/// (`G,.N,T` is not routed; `.N,G` is). `<*>` and `*` are not structural forms.
-fn is_perl_structural_alt_list(alts: &str) -> bool {
-    // The token pattern cannot cross a `*`, so it matches when a `*`-free stretch holds
-    // an opening bracket and, at least one character later, a closing one.
-    let token = alts.split('*').any(|stretch| {
-        let open = stretch.find(['<', '[', ']']);
-        let close = stretch.rfind(['>', ']', '[']);
-        matches!((open, close), (Some(open), Some(close)) if close >= open + 2)
-    });
-    let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
-    let leading_dot = alts
-        .strip_prefix('.')
-        .is_some_and(|rest| rest.starts_with(word));
-    let trailing_dot = alts
-        .strip_suffix('.')
-        .is_some_and(|rest| rest.ends_with(word));
-    token || leading_dot || trailing_dot
-}
-
-/// VEP's `%SO_TERMS` (ensembl-variation `Utils/Config.pm`): the SO term of a
-/// record whose type abbreviation is one of its keys, with the class that
-/// annotates the term, `None` for an unsupported type. Ensembl VEP 116 drops a
-/// record of unknown type before annotation (`Parser.pm` `validate_svf`) and
-/// writes nothing for it in any format; vep-rs parses and annotates it, carrying
-/// its VCF line without consequences and writing an `input`-only JSON object
-/// (`docs/intended-divergences.md`).
-pub(crate) fn sv_so_term_and_class(
-    abbrev: &str,
-) -> Option<(&'static str, vep_core::variant::VariantClass)> {
-    use vep_core::variant::VariantClass::*;
-    Some(match abbrev {
-        "INS" => ("insertion", StructuralInsertion),
-        "INS_ME" => ("mobile_element_insertion", MobileElementInsertion),
-        "INS_ALU" => ("Alu_insertion", MobileElementInsertion),
-        "INS_HERV" => ("HERV_insertion", MobileElementInsertion),
-        "INS_LINE1" => ("LINE1_insertion", MobileElementInsertion),
-        "INS_SVA" => ("SVA_insertion", MobileElementInsertion),
-        "DEL" => ("deletion", StructuralDeletion),
-        "DEL_ME" => ("mobile_element_deletion", MobileElementDeletion),
-        "DEL_ALU" => ("Alu_deletion", MobileElementDeletion),
-        "DEL_HERV" => ("HERV_deletion", MobileElementDeletion),
-        "DEL_LINE1" => ("LINE1_deletion", MobileElementDeletion),
-        "DEL_SVA" => ("SVA_deletion", MobileElementDeletion),
-        "TREP" => ("tandem_repeat", TandemRepeat),
-        "TDUP" => ("tandem_duplication", TandemDuplication),
-        "DUP" => ("duplication", Duplication),
-        "CNV" => ("copy_number_variation", CopyNumberVariation),
-        "INV" => ("inversion", Inversion),
-        "BND" => ("chromosome_breakpoint", Translocation),
-        _ => return None,
-    })
 }
 
 /// The alternate allele's length in bases for the `ordinal`th `<CNV:TR>` allele of a
@@ -1072,6 +797,7 @@ fn vcf_to_vep_alleles(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vep_core::sv_routing::is_perl_structural_alt_list;
     use vep_core::variant::VariantClass;
 
     /// `tandem_repeat_alt_bases` for a record of `ordinal + 1` tandem-repeat alleles
@@ -2267,6 +1993,137 @@ mod tests {
             del.iter().map(|v| v.allele_num).collect::<Vec<_>>(),
             [None, None]
         );
+    }
+
+    /// `get_SO_term`'s regexes decide the type of a shape at their edges: `/CN=?[0-9]/i`
+    /// needs a digit, the list normalisation strips one bracket a side, the mobile-element
+    /// pattern takes one colon before the element, and `s/\:.+//g` needs a character after
+    /// the colon. Ensembl VEP 116.2 skips `<CN=X>`, `<<DEL>>,<DEL>` and `<DEL:>` as
+    /// unsupported types (`CN=X`, `DEL/DEL`, `DEL:`), writes `copy_number_variation` for
+    /// `<<CN0>>` and `mobile_element_insertion` for `<INS:ME::ALU>` with `SVTYPE=INS`, and
+    /// skips `<NON_REF>,<NON_REF>` as `NON_REF`, which vep-rs reads as a reference block
+    /// of two alleles, one intergenic row each; under `SVTYPE=DEL` it writes two `deletion`
+    /// rows per transcript for `G,<NON_REF>`, the block an allele of the record.
+    #[test]
+    fn the_type_follows_get_so_terms_regexes_at_their_edges() {
+        let parse = |alt: &str, info: &str| {
+            parse_vcf_line(&format!("21\t30425650\tx\tN\t{alt}\t.\t.\t{info}"), true).unwrap()
+        };
+        for (alt, info, abbrev) in [
+            ("<CN=X>", "END=30425949", "CN=X"),
+            ("<<DEL>>,<DEL>", "END=30425949", "DEL/DEL"),
+            ("<DEL:>", "END=30425949", "DEL:"),
+        ] {
+            let v = parse(alt, info);
+            assert!(v.iter().all(|v| v.vep_skip), "{alt}");
+            assert!(v.iter().all(|v| v.record_so_term.is_none()), "{alt}");
+            assert_eq!(sv_type_abbreviation(&alt.replace(',', "/"), None), abbrev);
+        }
+        for (alt, info, term) in [
+            ("<CN=X>", "SVTYPE=DEL;END=30425949", "deletion"),
+            ("<<DEL>>", "END=30425949", "deletion"),
+            ("<<CN0>>", "END=30425949", "copy_number_variation"),
+            ("<CN0>", "END=30425949", "deletion"),
+            ("<INS:ME::ALU>", "SVTYPE=INS", "mobile_element_insertion"),
+            ("<INS:ME:ALU>", "SVTYPE=INS", "Alu_insertion"),
+            ("<DEL:X>", "END=30425949", "deletion"),
+            ("<CNX>,<CN3>", "END=30425949", "copy_number_variation"),
+        ] {
+            let v = parse(alt, info);
+            assert!(
+                !v.is_empty() && v.iter().all(|v| !v.vep_skip),
+                "{alt} {info}"
+            );
+            assert!(
+                v.iter().all(|v| v.record_so_term.as_deref() == Some(term)),
+                "{alt} {info}: {:?}",
+                v[0].record_so_term
+            );
+        }
+        let site = parse("G,<NON_REF>", "SVTYPE=DEL;END=30425949");
+        assert_eq!(
+            site.len(),
+            2,
+            "a true SVTYPE keeps the block as a deletion allele"
+        );
+        for variant in &site {
+            assert_eq!(variant.record_so_term.as_deref(), Some("deletion"));
+            assert_eq!(variant.record_allele_string(), "G/<NON_REF>");
+        }
+        let blocks = parse("<NON_REF>,<NON_REF>", "END=30425700");
+        assert_eq!(blocks.len(), 2);
+        for (variant, index) in blocks.iter().zip(0..) {
+            assert_eq!(variant.variant_class, VariantClass::ReferenceBlock);
+            assert!(variant.vep_skip);
+            assert_eq!(variant.allele_index, index);
+            assert_eq!(variant.record_allele_string(), "<NON_REF>/<NON_REF>");
+        }
+    }
+
+    /// Both VCF readers route, type and class a record through `vep_core::sv_routing`, so
+    /// over the shapes that decide the path (an `N` reference base, `<*>`, a gVCF site, a
+    /// block list, a lowercase ALT, a mixed list, a breakpoint list, the type edges) every
+    /// variant's path, class, skip mark, term, span and allele index agree.
+    #[test]
+    fn the_vep_io_reader_routes_as_this_parser_does() {
+        use vep_io::input::vcf::VcfParser as Reader;
+        use vep_io::InputParser;
+        let header = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+        let summary = |v: &InputVariant| {
+            (
+                v.is_structural,
+                v.variant_class,
+                v.vep_skip,
+                v.record_so_term.clone(),
+                v.start,
+                v.end,
+                v.allele_index,
+            )
+        };
+        for record in [
+            "21\t1000\tx\tN\tG\t.\t.\tSVTYPE=DEL;END=1100",
+            "21\t1000\tx\tA\tG\t.\t.\tSVTYPE=DEL;END=1100",
+            "21\t1000\tx\tN\tG\t.\t.\t.",
+            "21\t1000\tx\tN\t<*>\t.\t.\t.",
+            "21\t1000\tx\tN\t<*>\t.\t.\tSVTYPE=DEL;END=1100",
+            "21\t1000\tx\tA\tG,<NON_REF>\t.\t.\t.",
+            "21\t1000\tx\tN\tG,<NON_REF>\t.\t.\tSVTYPE=DEL;END=1100",
+            "21\t1000\tx\tN\t<NON_REF>\t.\t.\tEND=1100",
+            "21\t1000\tx\tN\t<NON_REF>,<NON_REF>\t.\t.\tEND=1100",
+            "21\t1000\tx\tN\t<del>\t.\t.\tEND=1100",
+            "21\t1000\tx\tN\t<del>\t.\t.\tSVTYPE=DUP;END=1100",
+            "21\t1000\tx\tA\tG,<DEL>\t.\t.\tSVTYPE=DEL;END=1100",
+            "21\t1000\tx\tC\tG,<INV>\t.\t.\tSVTYPE=DEL;END=2000;SVLEN=-1000",
+            "21\t1000\tx\tN\t<BND>,<DEL>\t.\t.\tSVTYPE=BND;END=1100",
+            "21\t1000\tx\tN\t<INS>,<DEL>\t.\t.\tEND=1100",
+            "21\t1000\tx\tN\t<INS:ME::ALU>\t.\t.\tSVTYPE=INS",
+            "21\t1000\tx\tN\t<CN=X>\t.\t.\tEND=1100",
+            "21\t1000\tx\tN\t<<DEL>>,<DEL>\t.\t.\tEND=1100",
+            "21\t1000\tx\tN\t<DEL:>\t.\t.\tEND=1100",
+            "21\t1000\tx\tN\t<CNX>,<CN3>\t.\t.\tEND=1100",
+            "21\t1000\tx\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=1009;SVLEN=9;RUS=AGC;RUC=4",
+        ] {
+            let cli: Vec<_> = parse_vcf_line(record, false)
+                .unwrap()
+                .iter()
+                .map(summary)
+                .collect();
+            let data = format!("{header}{record}\n");
+            let mut reader =
+                Reader::new(Box::new(std::io::Cursor::new(data.into_bytes()))).unwrap();
+            let mut from_reader = Vec::new();
+            while let Some(v) = reader.next_variant() {
+                from_reader.push(summary(&v.unwrap()));
+            }
+            assert_eq!(from_reader, cli, "{record}");
+        }
+        // A record whose type has no term and whose ALTs are all sequence alleles is an
+        // error here and a skipped record there, both writing nothing.
+        let record = "21\t1000\tx\tN\tG\t.\t.\tSVTYPE=FOO;END=1100";
+        assert!(parse_vcf_line(record, false).is_err());
+        let data = format!("{header}{record}\n");
+        let mut reader = Reader::new(Box::new(std::io::Cursor::new(data.into_bytes()))).unwrap();
+        assert!(reader.next_variant().is_none());
     }
 
     /// A comma-separated SVLEN is read as its first value for the span

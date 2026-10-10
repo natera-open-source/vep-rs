@@ -643,6 +643,7 @@ measure_p1() {
 				--rust-dir "$suite_dir/rust" \
 				--report-dir "$suite_dir/report" \
 				--reference-release "$reference_release" \
+				--input-vcf "$vcf" \
 				--assembly "$assembly" || {
 				echo "ERROR: [run_clone_measurement] $suite_id SNP/indel compare failed; the cell has no F1 and this run is incomplete" >&2
 				csv_row "$suite_id" "$suite_name" "$assembly" "compare_failed" "" "1"
@@ -711,6 +712,7 @@ measure_p1() {
 				--rust-dir "$suite_dir/rust" \
 				--report-dir "$suite_dir/report" \
 				--reference-release "$reference_release" \
+				--input-vcf "$vcf" \
 				--assembly "$assembly" --glob 'output.txt' || {
 				echo "ERROR: [run_clone_measurement] $suite_id SNP/indel compare failed; the cell has no F1 and this run is incomplete" >&2
 				csv_row "$suite_id" "$suite_name" "$assembly" "compare_failed" "" "1"

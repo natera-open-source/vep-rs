@@ -1314,10 +1314,11 @@ fn annotate_variant_with_predictions(
         }
     });
 
-    // Post-process <*> (unspecified ALT) variants: Perl VEP treats <*> as a
-    // non-SV allele but assigns coding_sequence_variant instead of frameshift
-    // because the allele length is unknown. Replace frameshift→coding_sequence_variant.
-    if variant.alt_allele() == b"<*>" {
+    // `<*>` without INFO/SVTYPE is a sequence allele at POS (Perl's structural ALT regex
+    // `[<\[\]][^\*]+[>\]\[]` excludes it) whose length is unknown, so a frameshift the
+    // sequence predicates derive reads as coding_sequence_variant. With SVTYPE the record
+    // is structural and the allele takes the record's class, outside this step.
+    if !variant.is_structural && variant.alt_allele() == b"<*>" {
         for tc in &mut variant.transcript_consequences {
             if tc.consequences.contains(&Consequence::FrameshiftVariant) {
                 tc.consequences
@@ -2503,7 +2504,8 @@ mod tests {
     }
 
     /// `<*>` is a different allele from `<NON_REF>`: VEP's structural-variant regex
-    /// excludes it, so it is a non-structural allele at POS (INFO/END is not a span)
+    /// excludes it, so without INFO/SVTYPE it is a non-structural allele at POS (INFO/END
+    /// is not a span; with `SVTYPE=DEL` the record would be a deletion over END)
     /// annotated against every overlapping transcript, here a non-coding two-exon
     /// transcript with a cDNA mapper: `intron_variant,non_coding_transcript_variant`
     /// in its intron, `non_coding_transcript_exon_variant` in its exon.

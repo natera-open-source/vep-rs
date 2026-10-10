@@ -76,14 +76,20 @@ from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition
     REFERENCE_RELEASES,
     REFERENCE_SKIPPED_RECORD_BUCKET,
     _MAX_SV_SIZE,
+    _STRUCTURAL_ALT_LIST,
     _batch_dependent_annotation_scope,
+    _info_written,
     _location_span,
     _non_integer_end,
     _span_exceeds_max_sv_size,
     canonical_location,
     count_bare_breakpoint_reference_rows,
+    gvcf_site_rows,
+    is_gvcf_variant_site,
     is_own_breakend_allele,
     is_structural_allele,
+    perl_true,
+    sequence_location,
 )
 
 
@@ -166,9 +172,10 @@ def fastvep_symbolic_allele_to_so_class(allele: str) -> str:
     a guaranteed miss whatever its consequence set: ``<DEL>`` can never equal
     ``deletion``.
 
-    The rules below are vep-rs's own classification (`classify_symbolic_alt` in
-    crates/vep-cli/src/vcf_parser.rs, checked in this order) followed by its display
-    rule, so the mapping is identical to what the scored vep-rs arm already writes:
+    The rules below are vep-rs's own typing (`vep_core::sv_routing`: `sv_so_term_and_class`
+    over `sv_type_abbreviation` for a type with a Sequence Ontology term,
+    `classify_symbolic_alt` for one without) followed by its display rule, so the
+    mapping is identical to what the scored vep-rs arm already writes:
 
         token (case-insensitive)   vep-rs VariantClass       Allele written
         -------------------------  ------------------------  --------------------------
@@ -1496,7 +1503,6 @@ _SO_TERMS = {
     "TREP": "tandem_repeat", "TDUP": "tandem_duplication", "DUP": "duplication",
     "CNV": "copy_number_variation", "INV": "inversion", "BND": "chromosome_breakpoint",
 }
-_SV_ROUTED = re.compile(r"[<\[\]][^*]+[>\]\[]|^\.\w+|\w+\.$")
 _VCF44_SYMBOLIC = re.compile(r"^<?(DEL|INS|DUP|INV|CNV|CN=?[0-9]+)")
 
 
@@ -1552,22 +1558,6 @@ def _info_fields(info: str) -> dict[str, str]:
     return out
 
 
-def _info_written(info: str, key: str) -> str | None:
-    """The value of `key=value` in INFO, Perl's `defined $info->{key}`: `None` for an absent
-    key or a bare flag, the last occurrence winning."""
-    value = None
-    for item in info.split(";"):
-        k, sep, v = item.partition("=")
-        if k == key:
-            value = v if sep else None
-    return value
-
-
-def perl_true(value: str | None) -> bool:
-    """Whether Perl reads an INFO value as true: defined, not empty and not `0`."""
-    return value not in (None, "", "0")
-
-
 _PERL_NUMBER = re.compile(r"^\s*[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?")
 
 
@@ -1612,14 +1602,14 @@ def perl_skip_route(v: VcfVariant, max_sv_size: int = _MAX_SV_SIZE) -> str | Non
     is kept."""
     alts = v.alt.split(",")
     svtype = _info_written(v.info, "SVTYPE")
-    if re.fullmatch(r"[ACGT]+", v.ref + "".join(alts)) or not (perl_true(svtype) or _SV_ROUTED.search(v.alt)):
+    if re.fullmatch(r"[ACGT]+", v.ref + "".join(alts)) or not (perl_true(svtype) or _STRUCTURAL_ALT_LIST.search(v.alt)):
         return None
     sv_type = "/".join(alts)
     if perl_true(svtype) and not _VCF44_SYMBOLIC.match(sv_type):
         sv_type = svtype
     abbrev = perl_so_abbrev(sv_type)
     if abbrev is None:
-        if len(alts) > 1 and "<NON_REF>" in alts:
+        if is_gvcf_variant_site(alts, svtype):
             return "gvcf_variant_site"
         return "unsupported_type"
     start = v.pos + 1
@@ -1822,35 +1812,27 @@ def filter_gvcf_variant_sites(
 ) -> tuple[set[AnnotTuple], int]:
     """The vep-rs tuples of every gVCF variant site (`G,<NON_REF>`) the reference dropped
     as an unsupported type, and the number of such records. vep-rs reads the site as its
-    sequence alleles, so its tuples sit where a sequence variant sits (POS for an SNV or an
-    insertion pair, POS plus the shared prefix for a deletion) under the minimised allele
-    (`A` for `NA` against `N`); a site the reference wrote any row for is not set aside."""
-    rust_by_start: dict[tuple[str, int], list[AnnotTuple]] = defaultdict(list)
-    for t in rust_tuples:
-        span = _location_span(t[0])
-        if span is not None:
-            rust_by_start[(span[0], span[1])].append(t)
+    sequence alleles, placed and minimised as its parser places them (`gvcf_site_rows`: the
+    anchor base trimmed from an indel, a lone allele minimised from both ends), so the
+    tuples set aside are those at each allele's own Location under its own allele string;
+    a site the reference wrote any row for, from POS to the base after REF, is not set
+    aside."""
     perl_starts = {(s[0], s[1]) for t in perl_tuples if (s := _location_span(t[0])) is not None}
+    rust_by_key: dict[tuple[str, str], list[AnnotTuple]] = defaultdict(list)
+    for t in rust_tuples:
+        rust_by_key[(t[0], t[1])].append(t)
     excluded: set[AnnotTuple] = set()
     records = 0
     for v in input_variants:
         if perl_skip_route(v, max_sv_size) != "gvcf_variant_site":
             continue
         chrom = v.location.split(":", 1)[0]
-        starts = [(chrom, v.pos + offset) for offset in range(len(v.ref) + 1)]
-        if any(start in perl_starts for start in starts):
+        if any((chrom, v.pos + offset) in perl_starts for offset in range(len(v.ref) + 1)):
             continue
-        alleles: set[str] = set()
-        for alt in v.alt.split(","):
-            if alt == "<NON_REF>":
-                continue
-            shared = 0
-            while shared < min(len(v.ref), len(alt)) and v.ref[shared] == alt[shared]:
-                shared += 1
-            alleles.update({alt, alt[shared:] or "-"})
         records += 1
-        for start in starts:
-            excluded.update(t for t in rust_by_start.get(start, ()) if t[1] in alleles)
+        for allele, start, end in gvcf_site_rows(v.pos, v.ref, v.alt.split(",")):
+            location = normalize_location(sequence_location(chrom, start, end))
+            excluded.update(rust_by_key.get((location, allele), ()))
     return excluded, records
 
 
@@ -1901,29 +1883,43 @@ def filter_non_integer_end_rows(perl_tuples: set[AnnotTuple]) -> set[AnnotTuple]
 def cnv_tr_expansion_is_empty(v: VcfVariant) -> bool:
     """Whether `_expand_tandem_repeat_allele_string` (Parser/VCF.pm:382-431) builds no
     alternate allele, or one equal to the reference run, for a single-ALT `<CNV:TR>`: `RN=.`,
-    a RUC (RB when RUC is absent) that is not a positive number, or a RUC times the unit
-    length equal to SVLEN."""
+    every repeat sequence's count (RUC, or RB over the unit length when RUC is absent) at most
+    zero once truncated as Perl's `x` operator truncates it (`RUC=0.5` repeats nothing,
+    `RUC=3.5` three times), or, for a single repeat sequence, a count times the unit length
+    equal to SVLEN (the largest value, `:505-511`). A unit of no bases (`RUS=,AC`) divides by
+    zero in Perl when RB supplies the count, which ends the reference run, so such a record
+    is not judged under either count."""
     if v.alt.upper() != "<CNV:TR>":
         return False
     rus = _info_written(v.info, "RUS")
     ruc = _info_written(v.info, "RUC")
     rb = _info_written(v.info, "RB")
-    if not rus or not (perl_true(ruc) or perl_true(rb)):
+    if not perl_true(rus) or not (perl_true(ruc) or perl_true(rb)):
         return False
-    if _info_written(v.info, "RN") == ".":
+    rn = _info_written(v.info, "RN")
+    if rn == ".":
         return True
-    unit_len = len(rus.split(",")[0])
+    # `$info->{RN} ? split(/,/, $info->{RN}) : (1) x ...` (`:394-397`): an RN Perl reads
+    # as false (`0`, empty) is one repeat sequence, as an absent one is;
+    # `for ( 1 .. $records )` (`:411`) walks them, none for a negative count;
+    # `$seq = 'N' if $seq eq '.'` (`:413`).
+    sequences = max(int(perl_numeric_value(rn)), 0) if perl_true(rn) else 1
+    units = [1 if unit == "." else len(unit) for unit in rus.split(",")[:sequences]]
+    if len(units) < sequences or 0 in units:
+        return False
     # `$is_RUC_defined ? shift(@RUC) : shift(@RB) / length($seq)` behind `$info->{RUC} ||
-    # $info->{RB}`: a RUC Perl reads as false (`0`, empty) falls through to RB.
-    count = (
-        perl_numeric_value(ruc.split(",")[0])
-        if perl_true(ruc)
-        else perl_numeric_value((rb or "").split(",")[0]) / unit_len
-    )
-    if count <= 0:
+    # $info->{RB}` (`:385`, `:414`): a RUC Perl reads as false (`0`, empty) falls through to RB.
+    counts = (ruc if perl_true(ruc) else rb or "").split(",")
+    if len(counts) < sequences:
+        return False
+    bases = 0
+    for unit_len, count in zip(units, counts):
+        copies = perl_numeric_value(count) if perl_true(ruc) else perl_numeric_value(count) / unit_len
+        bases += unit_len * max(int(copies), 0)
+    if bases == 0:
         return True
     svlen = _info_written(v.info, "SVLEN")
-    return svlen is not None and perl_numeric_value(svlen.split(",")[0]) == count * unit_len
+    return sequences == 1 and svlen is not None and max(perl_numeric_value(x) for x in svlen.split(",")) == bases
 
 
 def filter_cnv_tr_empty_expansion(

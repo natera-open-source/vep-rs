@@ -2693,6 +2693,65 @@ class FastaNamedSliceIntergenicTests(unittest.TestCase):
         literal_reference = {T("21:30425596-30425597", "AGC", "ENST_1", "inframe_insertion")}
         self.assertEqual(C.filter_cnv_tr_empty_expansion(literal_reference, rust, [gain]), set())
 
+    def test_an_expansion_count_is_truncated_as_perls_repetition_truncates_it(self) -> None:
+        """`$seq x $num` (Parser/VCF.pm:419) repeats the unit an integer number of times, so
+        `RUC=3.5` on a three-unit `AGC` run rebuilds the run (empty) and `RUC=0.5` repeats
+        nothing (empty), while `RUC=4.5` is a gain; a `.` unit is one `N` base; with RN the
+        counts of every repeat sequence are summed, a two-sequence allele is never read as
+        the reference run, and a unit of no bases (`RUS=,AC` with RB) divides by zero in Perl,
+        so the record is not judged."""
+        run = "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;"
+        for info, empty in (
+            (run + "RUC=3.5", True),
+            (run + "RUC=3.9", True),
+            (run + "RUC=0.5", True),
+            (run + "RUC=4.5", False),
+            (run + "RUC=2.5", False),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RUS=.;RUC=9", True),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RUS=.;RUC=10", False),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RN=2;RUS=AGC,T;RUC=3,2", False),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RN=2;RUS=AGC,T;RUC=0,0.9", True),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RN=2;RUS=AGC;RUC=3,2", False),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RUS=,AC;RB=12", False),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RUS=,AC;RUC=0;RB=12", False),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;RUC=0;RB=10.5", True),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9,12;RUS=AGC;RUC=4", True),
+            # `$info->{RN} ?` and `$info->{RUS} &&` (`:385`, `:394`): a `0` or empty RN is one
+            # sequence, a `0` RUS no expansion.
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RN=0;RUS=AGC;RUC=4", False),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RN=;RUS=AGC;RUC=3", True),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RUS=0;RUC=3", False),
+            ("SVTYPE=CNV;END=30425596;SVLEN=9;RN=-1;RUS=AGC,T;RUC=3,2", True),
+        ):
+            with self.subTest(info=info):
+                self.assertEqual(C.cnv_tr_expansion_is_empty(REC(30425587, "N", "<CNV:TR>", info)), empty)
+
+    def test_a_gvcf_site_is_set_aside_at_the_alleles_the_parser_writes(self) -> None:
+        """vep-rs places a gVCF site's alleles as its parser does (`gvcf_site_rows`): `ATG AG`
+        is the deletion of `T` at POS + 1 (anchor trimmed, then minimised from both ends), an
+        insertion list keeps its anchor-trimmed alleles at the pair, and a block list is a
+        skipped record, not a site."""
+        records = [REC(30425650, "ATG", "AG,<NON_REF>", "."), REC(40000000, "A", "AT,ATT,<NON_REF>", "."),
+                   REC(50000000, "N", "<NON_REF>,<NON_REF>", "END=50000100")]
+        rust = {T("21:30425651", "-", "ENST_1", "frameshift_variant"), T("21:30425651", "G", "ENST_1", "missense_variant"),
+                T("21:40000000-40000001", "T", "ENST_2", "frameshift_variant"),
+                T("21:40000000-40000001", "TT", "ENST_2", "inframe_insertion"),
+                T("21:50000001-50000100", "<NON_REF>", "-", "intergenic_variant", "-")}
+        excluded, sites = C.filter_gvcf_variant_sites(set(), rust, records)
+        self.assertEqual(sites, 2)
+        self.assertEqual(excluded, {T("21:30425651", "-", "ENST_1", "frameshift_variant"),
+                                    T("21:40000000-40000001", "T", "ENST_2", "frameshift_variant"),
+                                    T("21:40000000-40000001", "TT", "ENST_2", "inframe_insertion")})
+        self.assertEqual(C.perl_skip_route(records[2]), "unsupported_type")
+        self.assertEqual(C.perl_skip_route(REC(1000, "N", "*,<NON_REF>", ".")), "unsupported_type")
+        self.assertEqual(C.perl_skip_route(REC(1000, "N", "<DEL>,<NON_REF>", "END=1100")), "unsupported_type")
+        # Under a true SVTYPE the block is a deletion allele in both engines: the record is kept.
+        self.assertIsNone(C.perl_skip_route(REC(1000, "N", "G,<NON_REF>", "SVTYPE=DEL;END=1100")))
+        self.assertEqual(C.perl_skip_route(REC(1000, "N", "G,<NON_REF>", "SVTYPE=FOO;END=1100")), "unsupported_type")
+        self.assertEqual(C.perl_skip_route(REC(1000, "N", "G,<NON_REF>", "SVTYPE=;END=1100")), "gvcf_variant_site")
+        skipped, n = C.filter_reference_skipped_records(set(), rust, records)
+        self.assertEqual((n, skipped), (1, {T("21:50000001-50000100", "<NON_REF>", "-", "intergenic_variant", "-")}))
+
     def test_perl_numification_and_the_structural_end(self) -> None:
         for text, value in (("300", 300), ("-300", -300), ("300abc", 300), (" 3e2", 300), ("abc", 0), ("", 0), (".", 0), ("300.7", 300.7)):
             self.assertEqual(C.perl_numeric_value(text), value, text)
