@@ -24,7 +24,7 @@ Grouped by the place in Ensembl VEP's source that produces them, the eleven defe
 | G | A breakend mate position that, with the `--distance` flank added, reaches 2^31 turns every record of the input buffer intergenic, the records loaded beside it included | `ensembl-vep`, `AnnotationSource.pm` line 190 (the flank added to the mate's position) with lines 251-254 and 306-309 | 14 | the buffer's records keep their transcript rows and the breakend its own-end rows, as vep-rs writes them |
 | H | A gVCF variant site, `A G,<NON_REF>`, is routed to the structural path by the `<NON_REF>` token and dropped whole as an unsupported type, the real allele with it | `ensembl-vep`, `Parser/VCF.pm` lines 237-245 and 469-481, `Parser.pm` lines 663-727 | 15 | the real allele is annotated, as vep-rs annotates it |
 | I | A dot-notation breakend without `SVTYPE` takes the sequence rules for its coordinates, so its start moves to POS + 1 while its end stays at POS and the row is a pair with the positions of an insertion | `ensembl-io`, `BaseVCF4.pm` lines 255-275 and 297-316 | 16 | the record is the single base at POS + 1, as it is with `SVTYPE=BND` and as vep-rs writes it |
-| J | The missing value `.` in the ALT column is annotated as an allele when `SVTYPE` routes the record to the structural path | `ensembl-io`, `BaseVCF4.pm` lines 486-490; `ensembl-vep`, `Parser/VCF.pm` lines 236-246, `Parser.pm` lines 710-711 | 17 | the record writes nothing, as it does without `SVTYPE` and as vep-rs writes |
+| J | The missing value `.` in the ALT column is annotated as an allele when `SVTYPE` routes the record to the structural path | `ensembl-io`, `BaseVCF4.pm` lines 486-490; `ensembl-vep`, `Parser/VCF.pm` lines 237-245, `Parser.pm` lines 710-711 | 17 | the record writes nothing, as it does without `SVTYPE` and as vep-rs writes |
 | K | An `INFO/END` that is not an integer is taken as written, passes `looks_like_number`, and the record is annotated with the text in its Location and a fractional distance | `ensembl-io`, `BaseVCF4.pm` lines 307-308; `ensembl-vep`, `Parser.pm` line 475 | 18 | the record is refused as vep-rs refuses it |
 | L | With a FASTA, a `<CNV:TR>` whose expansion yields no alternate allele, or one equal to the reference run, is dropped without a row or a warning | `ensembl-vep`, `Parser/VCF.pm` lines 382-431 and 516-543 | 19 | the record is annotated symbolically over its run, as it is without a FASTA and as vep-rs annotates it |
 
@@ -1536,7 +1536,7 @@ The same happens with a reference base of `N` (`N G,<NON_REF>`, where vep-rs wri
 
 #### 15.4 Why Ensembl VEP writes that
 
-`Parser/VCF.pm` lines 237-245 route a line to `create_StructuralVariationFeatures` when REF and the ALTs together are not a run of `ACGT` and an ALT matches `[<\[\]][^\*]+[>\]\[]`, which `<NON_REF>` does; lines 469-481 join the ALTs (`G/<NON_REF>`) and call `get_SO_term`, whose last branch (`Parser.pm` lines 710-717) strips the angle brackets and finds no `%SO_TERMS` entry for `G/NON_REF`, so the line is marked `vep_skip` and dropped before the input buffer (`Parser.pm` lines 821-826).
+`Parser/VCF.pm` lines 237-245 route a line to `create_StructuralVariationFeatures` when REF and the ALTs together are not a run of `ACGT` and an ALT matches `[<\[\]][^\*]+[>\]\[]`, which `<NON_REF>` does; lines 469-481 join the ALTs (`G/<NON_REF>`) and call `get_SO_term`, whose last branch (`Parser.pm` lines 712-717) strips the angle brackets and finds no `%SO_TERMS` entry for `G/NON_REF`, so the line is marked `vep_skip` and dropped before the input buffer (`Parser.pm` lines 821-826).
 
 #### 15.5 Why vep-rs's rows are the correct ones
 
@@ -1588,7 +1588,7 @@ ndot_nosvtype	21:30425651	chromosome_breakpoint	ENSG00000240432	ENST00000390690	
 
 #### 16.4 Why Ensembl VEP writes that
 
-`BaseVCF4.pm` `get_start` (lines 255-275) adds one to POS for a symbolic ALT or an ALT whose length differs from REF's, and `get_end` (lines 297-316) ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`; a dot breakend carries none, so the last branch gives POS plus the length of REF minus one. `Parser/VCF.pm` lines 236-246 still route the line to the structural path (`^\.\w+|\w+\.$`), and `get_SO_term` reads `BND` from the dot, so the record is a `chromosome_breakpoint` with an insertion's coordinates.
+`BaseVCF4.pm` `get_start` (lines 255-275) adds one to POS for a symbolic ALT or an ALT whose length differs from REF's, and `get_end` (lines 297-316) ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`; a dot breakend carries none, so the last branch gives POS plus the length of REF minus one. `Parser/VCF.pm` lines 237-245 still route the line to the structural path (`^\.\w+|\w+\.$`), and `get_SO_term` reads `BND` from the dot, so the record is a `chromosome_breakpoint` with an insertion's coordinates.
 
 #### 16.5 Why vep-rs's rows are the correct ones
 
@@ -1638,7 +1638,7 @@ vep-rs: no row for either, the line reported at warning level (`No alternate all
 
 #### 17.4 Why Ensembl VEP writes that
 
-`BaseVCF4.pm` `get_alternatives` (lines 486-490) returns `['.']` for the missing value; `Parser/VCF.pm` lines 236-246 route the line to the structural path when `SVTYPE` is set, since `N.` is not a run of `ACGT`; `get_SO_term` (`Parser.pm` lines 710-711) reads a breakend from `^\.`, and lines 472-475 of `Parser/VCF.pm` let `SVTYPE` name the type when the ALT is outside the VCF 4.4 forms.
+`BaseVCF4.pm` `get_alternatives` (lines 486-490) returns `['.']` for the missing value; `Parser/VCF.pm` lines 237-245 route the line to the structural path when `SVTYPE` is set, since `N.` is not a run of `ACGT`; `get_SO_term` (`Parser.pm` lines 710-711) reads a breakend from `^\.`, and lines 472-475 of `Parser/VCF.pm` let `SVTYPE` name the type when the ALT is outside the VCF 4.4 forms.
 
 #### 17.5 Why vep-rs's output is the correct one
 

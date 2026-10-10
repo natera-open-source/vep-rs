@@ -2874,7 +2874,7 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
 
 class SkipRouteCrossCheckTests(unittest.TestCase):
     """`perl_skip_route` is the reference's own drop logic on the input record (Parser/VCF.pm
-    116.2:236-246, 468-481, 555-557; Parser.pm:491-500, 663-726; ensembl-io BaseVCF4
+    116.2:237-245, 468-481, 555-557; Parser.pm:491-500, 663-726; ensembl-io BaseVCF4
     get_start/get_end), and `check_skip_routes` holds the records and the outputs to each
     other."""
 

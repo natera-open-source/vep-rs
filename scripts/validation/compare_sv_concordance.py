@@ -1485,7 +1485,7 @@ def _tuples_by_location(tuples: set[AnnotTuple]) -> dict[str, set[AnnotTuple]]:
 # The reference's own skip routes, ported for the cross-check below. `_SO_TERMS` is
 # ensembl-variation Utils/Config.pm:1417-1438 at release 116; the abbreviation rules are
 # Parser.pm 116.2:663-726 (`get_SO_term`), the type derivation Parser/VCF.pm:468-481, the
-# routing of a record to the structural path Parser/VCF.pm:236-246, the coordinates
+# routing of a record to the structural path Parser/VCF.pm:237-245, the coordinates
 # ensembl-io BaseVCF4.pm `get_start` / `get_end` (the base before the event is the
 # start; SVLEN sets the end before END does; a breakend's END is discarded).
 _SO_TERMS = {

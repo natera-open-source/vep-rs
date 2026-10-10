@@ -512,7 +512,7 @@ fn parser_columns(line: &[u8]) -> (&[u8], &'static [u8]) {
             None => return (line, b""),
         }
     }
-    // Parser/VCF.pm:236-246 routes a record to the structural path only when REF and
+    // Parser/VCF.pm:237-245 routes a record to the structural path only when REF and
     // the ALTs together are not a run of `ACGT`, so a symbolic or breakend ALT keeps
     // the column as an `N` reference base does.
     let reference = &line[tabs[2] + 1..tabs[3]];

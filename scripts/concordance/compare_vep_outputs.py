@@ -835,7 +835,7 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
         excludes=False,
         excludes_with_cache=True,
         taxonomy_class="missing_alt_annotated",
-        perl_citation="BaseVCF4.pm:486-490; Parser/VCF.pm:236-246; Parser.pm:710-711",
+        perl_citation="BaseVCF4.pm:486-490; Parser/VCF.pm:237-245; Parser.pm:710-711",
     ),
     OneSidedRule(
         bucket=NON_INTEGER_END_BUCKET,
