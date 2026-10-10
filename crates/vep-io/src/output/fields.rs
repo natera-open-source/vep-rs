@@ -676,7 +676,10 @@ pub fn field_value(
         "Amino_acids" => tc.and_then(|x| x.amino_acids.clone()).unwrap_or_default(),
         "Codons" => tc.and_then(|x| x.codons.clone()).unwrap_or_default(),
         "Existing_variation" => variant.existing_variation.join(list_sep),
-        "ALLELE_NUM" => (variant.allele_index + 1).to_string(),
+        "ALLELE_NUM" => variant
+            .allele_num
+            .unwrap_or(variant.allele_index as u32 + 1)
+            .to_string(),
         "REF_ALLELE" => String::from_utf8_lossy(&variant.ref_allele).to_string(),
         "UPLOADED_ALLELE" => variant
             .uploaded_allele_string

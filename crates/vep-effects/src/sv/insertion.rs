@@ -605,35 +605,26 @@ fn classify_upstream_downstream(
 ) -> Option<(Consequence, u64)> {
     let tx_start = transcript.start;
     let tx_end = transcript.end;
-
-    match transcript.strand {
-        Strand::Forward => {
-            if sv_end < tx_start {
-                // SV is entirely before the transcript on forward strand = upstream.
-                let distance = tx_start - sv_end;
-                Some((Consequence::UpstreamGeneVariant, distance))
-            } else if sv_start > tx_end {
-                // SV is entirely after the transcript on forward strand = downstream.
-                let distance = sv_start - tx_end;
-                Some((Consequence::DownstreamGeneVariant, distance))
-            } else {
-                None
-            }
+    let before = sv_end < tx_start;
+    let after = sv_start > tx_end;
+    let consequence = match (transcript.strand, before, after) {
+        (Strand::Forward, true, _) | (Strand::Reverse, _, true) => Consequence::UpstreamGeneVariant,
+        (Strand::Forward, _, true) | (Strand::Reverse, true, _) => {
+            Consequence::DownstreamGeneVariant
         }
-        Strand::Reverse => {
-            if sv_start > tx_end {
-                // SV is after the transcript on reverse strand = upstream.
-                let distance = sv_start - tx_end;
-                Some((Consequence::UpstreamGeneVariant, distance))
-            } else if sv_end < tx_start {
-                // SV is before the transcript on reverse strand = downstream.
-                let distance = tx_start - sv_end;
-                Some((Consequence::DownstreamGeneVariant, distance))
-            } else {
-                None
-            }
-        }
-    }
+        _ => return None,
+    };
+    // `distance_to_transcript` (BaseTranscriptVariation.pm:582-605): the smallest of
+    // the four gaps between the record's start or end and the transcript's start or
+    // end, so the pair `start = POS + 1, end = POS` measures from whichever flank is
+    // nearer (Ensembl VEP 116.2 writes 4569 for `<INS>` with `SVLEN=0` at 21:30425650
+    // against a transcript starting at 30430220, and 0 one base before it).
+    let distance = sv_start
+        .abs_diff(tx_start)
+        .min(sv_start.abs_diff(tx_end))
+        .min(sv_end.abs_diff(tx_start))
+        .min(sv_end.abs_diff(tx_end));
+    Some((consequence, distance))
 }
 
 /// Perl's structural-variant arm of `start_lost` (Utils/VariationEffect.pm:886-896):
@@ -1604,38 +1595,39 @@ mod tests {
         );
     }
 
-    /// One base before the transcript: `end < transcript start`, so not within the
-    /// feature; `_before_start` reads `end`, distance 1.
+    /// The pair whose start is the transcript's first base: `end < transcript start`,
+    /// so not within the feature and upstream; `distance_to_transcript` takes the
+    /// smallest gap over both flanks, 0 here and 1 one base further out, as Ensembl VEP
+    /// 116.2 writes `DISTANCE=0` for `<INS>` with `SVLEN=0` at the base before a
+    /// transcript's start and `DISTANCE=1` two bases before it.
     #[test]
-    fn test_pair_before_transcript_start_is_upstream_at_distance_one() {
+    fn test_pair_before_transcript_start_is_upstream_at_the_nearer_flank() {
         let tx = make_test_transcript();
-        let v = make_pair_ins(
-            24_999_999,
-            vep_core::variant::VariantClass::StructuralInsertion,
-        );
-        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        assert_eq!(
-            tc.consequences.to_vec(),
-            vec![Consequence::UpstreamGeneVariant]
-        );
-        assert_eq!(tc.distance, Some(1));
+        for (pos, distance) in [(24_999_999, 0), (24_999_998, 1)] {
+            let v = make_pair_ins(pos, vep_core::variant::VariantClass::StructuralInsertion);
+            let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+            assert_eq!(
+                tc.consequences.to_vec(),
+                vec![Consequence::UpstreamGeneVariant]
+            );
+            assert_eq!(tc.distance, Some(distance), "{pos}");
+        }
     }
 
-    /// One base after the transcript: `start > transcript end`, `_after_end` reads
-    /// `start`, distance 1.
+    /// The pair whose end is the transcript's last base: `start > transcript end`,
+    /// downstream, distance 0 from the end flank and 1 one base further out.
     #[test]
-    fn test_pair_after_transcript_end_is_downstream_at_distance_one() {
+    fn test_pair_after_transcript_end_is_downstream_at_the_nearer_flank() {
         let tx = make_test_transcript();
-        let v = make_pair_ins(
-            25_006_000,
-            vep_core::variant::VariantClass::StructuralInsertion,
-        );
-        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        assert_eq!(
-            tc.consequences.to_vec(),
-            vec![Consequence::DownstreamGeneVariant]
-        );
-        assert_eq!(tc.distance, Some(1));
+        for (pos, distance) in [(25_006_000, 0), (25_006_001, 1)] {
+            let v = make_pair_ins(pos, vep_core::variant::VariantClass::StructuralInsertion);
+            let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+            assert_eq!(
+                tc.consequences.to_vec(),
+                vec![Consequence::DownstreamGeneVariant]
+            );
+            assert_eq!(tc.distance, Some(distance), "{pos}");
+        }
     }
 
     /// `7:124879111-124879112 Alu_insertion` on ENST00000420224 (1000 Genomes Phase 3,

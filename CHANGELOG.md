@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--reference-release {115.2,116.2}` on both comparators selects the Ensembl VEP release scored against (116.2 default, sets aside the records it skips); the runners derive it from the reference's provenance. (#43)
 - The comparators' 116.2 registry gains `bnd_bare_reference_allele_row`, the duplicate row Ensembl VEP writes for the reference allele of a breakpoint without a mate, set aside and counted per file. (#44)
 - The comparators' 116.2 registry gains `bnd_mate_32bit_buffer_intergenic`, the buffer Ensembl VEP writes as intergenic for a breakend mate at or past 2,147,478,648, counted and left charged. (#44)
+- The comparators' 116.2 registry gains `gvcf_variant_site_dropped`, `dot_breakend_without_svtype_pair`, `missing_alt_annotated`, `non_integer_end_annotated` and `cnv_tr_empty_expansion_dropped`, five records Ensembl VEP drops, pairs or annotates where vep-rs does not. (#44)
 
 ### Changed
 
@@ -77,6 +78,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An END before POS, `END=0` or an empty END skips the record at warning level for every class, a breakpoint included, as Ensembl VEP 116 skips it. (#44)
 - A repeated INFO key reads its last value; a dot ALT beside a bracket ALT lends the own breakend its base and writes no row, as Ensembl VEP does. (#44)
 - The `vep-io` VCF reader derives a structural variant's span through the rules the command-line parser uses, starting at POS + 1. (#44)
+- A record whose REF and ALT are not plain `ACGT` is structural under INFO/SVTYPE, as Ensembl VEP routes it: `N G` with `SVTYPE=DEL;END` is a deletion over END. (#44)
+- A lowercase symbolic ALT is outside the VCF 4.4 forms, so INFO/SVTYPE names its type and without SVTYPE it is an unsupported type, as Ensembl VEP reads it. (#44)
+- A gVCF variant site (`A G,<NON_REF>`) is annotated as its real alleles; `<NON_REF>` beside another allele names no variant. (#44)
+- A sequence variant whose reference base is ambiguous (`N G`) is `coding_sequence_variant`, no peptide being read from the reference, as Ensembl VEP 116 writes it. (#44)
+- A `<CNV:TR>` gain is annotated over its run, so a run crossing a transcript's edge reads the region terms and the run's distance, as Ensembl VEP 116 does. (#44)
+- DISTANCE is the smallest gap between either end of the record and either end of the transcript, so a zero-length structural pair measures from its nearer flank. (#44)
+- A record with a parsed breakend is one breakpoint whatever its other ALTs (`<BND>,<DEL>` with `SVTYPE=BND`), every allele at the point. (#44)
+- ALLELE_NUM numbers a breakpoint record's own breakend 0 and its mates from 1, and counts a bare breakend record's reference base as part 1, as Ensembl VEP numbers them. (#44)
+- The JSON `allele_string` of a structural record carries every ALT as written, a `*` allele included (`*/<DEL>`). (#44)
+- The comparators read a Location's coordinates as numbers, so an END Ensembl VEP prints as written (`030425949`, `+30425949`) agrees with the span it names. (#44)
+- The structural-variant comparator's skip routes read SVLEN and END as Perl numifies them, so `SVLEN=abc`, `SVLEN=.` and `END=30425949.5` are routed, not errors. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
 
 ## [0.3.2] - 2026-10-06

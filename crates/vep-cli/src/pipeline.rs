@@ -492,7 +492,7 @@ fn as_str(bytes: &[u8]) -> anyhow::Result<&str> {
 
 /// The part of a data line the parser reads when no output format re-emits
 /// the line: the eight fixed columns, with INFO replaced by `.` for a record
-/// whose ALT holds no symbolic or breakend allele, since only the symbolic
+/// whose REF and ALTs are a run of `ACGT` together, since only the structural
 /// path reads INFO. Returned as `(head, tail)`, where `tail` is `\t.` for the
 /// placeholder and empty otherwise. A line with fewer than eight columns is
 /// returned whole, so the parser reports it as before.
@@ -512,8 +512,15 @@ fn parser_columns(line: &[u8]) -> (&[u8], &'static [u8]) {
             None => return (line, b""),
         }
     }
+    // Parser/VCF.pm:236-246 routes a record to the structural path only when REF and
+    // the ALTs together are not a run of `ACGT`, so a symbolic or breakend ALT keeps
+    // the column as an `N` reference base does.
+    let reference = &line[tabs[2] + 1..tabs[3]];
     let alt = &line[tabs[3] + 1..tabs[4]];
-    let info_needed = alt.iter().any(|&b| matches!(b, b'<' | b'[' | b']' | b'.'));
+    let info_needed = !reference
+        .iter()
+        .chain(alt.iter())
+        .all(|&b| matches!(b, b'A' | b'C' | b'G' | b'T' | b','));
     if info_needed {
         let info_start = tabs[6] + 1;
         let info_end = line[info_start..]
@@ -1271,6 +1278,21 @@ mod tests {
         );
         let short = b"21\t100\trs1\tA\tG\t50\tPASS";
         assert_eq!(parser_columns(short), (&short[..], &b""[..]));
+        // An `N` reference base lets INFO/SVTYPE route the record to the structural
+        // path, so INFO stays; a lowercase allele is outside `ACGT` to Perl as well.
+        let ambiguous = b"21\t100\t.\tN\tG\t50\tPASS\tSVTYPE=DEL;END=400\tGT";
+        assert_eq!(
+            parser_columns(ambiguous),
+            (
+                &b"21\t100\t.\tN\tG\t50\tPASS\tSVTYPE=DEL;END=400"[..],
+                &b""[..]
+            )
+        );
+        let lowercase = b"21\t100\t.\tA\tg\t50\tPASS\tSVTYPE=DEL\tGT";
+        assert_eq!(
+            parser_columns(lowercase),
+            (&b"21\t100\t.\tA\tg\t50\tPASS\tSVTYPE=DEL"[..], &b""[..])
+        );
     }
 
     /// The elided INFO column changes nothing the parser produces for an

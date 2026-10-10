@@ -528,6 +528,108 @@ fn max_sv_size_governs_tandem_repeat_expansion() {
         );
     }
 }
+/// The rows Ensembl VEP 116.2 writes on ENST00000390690 (strand -1, 30425380-30425926) and
+/// ENST00000334068 (4.5 kb upstream on +) for the record shapes the parser routes and
+/// classes as Perl does: an `N` reference base with `SVTYPE=DEL;END` is a deletion over
+/// END and alone a `coding_sequence_variant` SNV (no peptide from an ambiguous reference);
+/// `<*>` with `SVTYPE=DEL;END` is the same deletion; a lowercase `<ins:me:alu>` takes
+/// `SVTYPE=INS` as an `insertion` and `<del>` with `SVTYPE=DUP` is a `duplication`; a
+/// gVCF site `N G,<NON_REF>` is its `G` allele; `<BND>,<DEL>` with `SVTYPE=BND` puts both
+/// alleles at the point; a `<CNV:TR>` gain crossing the transcript's edge reads the
+/// region terms over its run; and the `<INS>` pair's DISTANCE is measured from its nearer
+/// flank (4569, not 4570).
+#[test]
+fn routing_class_and_distance_follow_ensembl_vep() {
+    let rows = |record: &str| annotate_record(record, &[], &[]);
+    let on = |rows: &[String], feature: &str| -> Vec<(String, String, String)> {
+        rows.iter()
+            .filter(|r| r.contains(feature))
+            .map(|r| {
+                let c: Vec<&str> = r.split('\t').collect();
+                (c[1].to_string(), c[2].to_string(), c[6].to_string())
+            })
+            .collect()
+    };
+    let row =
+        |loc: &str, allele: &str, csq: &str| (loc.to_string(), allele.to_string(), csq.to_string());
+    let deletion = row(
+        "21:30425651-30425949",
+        "deletion",
+        "feature_truncation,coding_sequence_variant,5_prime_UTR_variant",
+    );
+    for record in [
+        "21\t30425650\tnref\tN\tG\t.\t.\tSVTYPE=DEL;END=30425949",
+        "21\t30425650\tstar\tN\t<*>\t.\t.\tSVTYPE=DEL;END=30425949",
+        "21\t30425650\tdotalt\tN\t.N\t.\t.\tSVTYPE=DEL;END=30425949",
+    ] {
+        assert_eq!(
+            on(&rows(record), "ENST00000390690"),
+            std::slice::from_ref(&deletion),
+            "{record}"
+        );
+    }
+    assert_eq!(
+        on(
+            &rows("21\t30425650\tnref_snv\tN\tG\t.\t.\t."),
+            "ENST00000390690"
+        ),
+        [row("21:30425650", "G", "coding_sequence_variant")]
+    );
+    assert_eq!(
+        on(
+            &rows("21\t30425650\tgvcf\tN\tG,<NON_REF>\t.\t.\t."),
+            "ENST00000390690"
+        ),
+        [row("21:30425650", "G", "coding_sequence_variant")]
+    );
+    assert_eq!(
+        on(
+            &rows("21\t30425650\tlower_ins\tN\t<ins:me:alu>\t.\t.\tSVTYPE=INS"),
+            "ENST00000390690"
+        ),
+        [row(
+            "21:30425651",
+            "insertion",
+            "feature_elongation,coding_sequence_variant"
+        )]
+    );
+    assert_eq!(
+        on(
+            &rows("21\t30425650\tlower_del\tN\t<del>\t.\t.\tSVTYPE=DUP;END=30425949"),
+            "ENST00000390690"
+        ),
+        [row(
+            "21:30425651-30425949",
+            "duplication",
+            "coding_sequence_variant,5_prime_UTR_variant"
+        )]
+    );
+    let breakpoint = row(
+        "21:30425651",
+        "chromosome_breakpoint",
+        "coding_sequence_variant",
+    );
+    assert_eq!(
+        on(
+            &rows("21\t30425650\tbnd_del\tN\t<BND>,<DEL>\t.\t.\tSVTYPE=BND;END=30425949"),
+            "ENST00000390690"
+        ),
+        [breakpoint.clone(), breakpoint]
+    );
+    assert_eq!(
+        on(
+            &rows("21\t30425650\ttr_gain\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30425949;SVLEN=300;RUS=AT;RUC=200"),
+            "ENST00000390690"
+        ),
+        [row("21:30425651-30425950", "tandem_repeat", "coding_sequence_variant,5_prime_UTR_variant")]
+    );
+    let pair = rows("21\t30425650\tins_pair\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=0");
+    let upstream = pair
+        .iter()
+        .find(|r| r.contains("ENST00000334068"))
+        .expect("the upstream row");
+    assert!(upstream.contains("DISTANCE=4569"), "{upstream}");
+}
 
 /// A coordinate past the parser's ceiling (2^62 - 1): an END of `i64::MAX` or
 /// `u64::MAX` fails its record, which is skipped as Ensembl VEP skips an oversize or

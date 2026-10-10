@@ -150,6 +150,11 @@ pub struct InputVariant {
     /// The specific alternate allele this variant represents
     /// (for multi-allelic sites split into separate records).
     pub allele_index: usize,
+    /// The ALLELE_NUM Ensembl VEP prints when it is not `allele_index + 1`: the
+    /// position of the allele in a breakpoint record's allele string, whose reference
+    /// base is part 1 (`N/<BND>` prints 2), with 0 for the record's own breakend and
+    /// 1 upward for its mates (StructuralVariationOverlap.pm:89-101).
+    pub allele_num: Option<u32>,
     /// Original input identifier (e.g., VCF ID field, or "chr:pos:ref:alt").
     pub id: Option<String>,
     /// Variant class.
@@ -300,6 +305,7 @@ impl Default for InputVariant {
             alt_alleles: Vec::new(),
             allele_string: String::new(),
             allele_index: 0,
+            allele_num: None,
             id: None,
             variant_class: VariantClass::Snv,
             transcript_consequences: Vec::new(),
@@ -369,6 +375,7 @@ impl InputVariant {
             alt_alleles: vec![alt_allele],
             allele_string,
             allele_index: 0,
+            allele_num: None,
             id: None,
             variant_class,
             transcript_consequences: Vec::new(),

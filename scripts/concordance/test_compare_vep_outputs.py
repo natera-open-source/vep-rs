@@ -2261,13 +2261,18 @@ class ReferenceRegistryTests(unittest.TestCase):
             self.assertIs(registry.pair_rules, EXCLUSION_REGISTRY, release)
             self.assertEqual(registry.release, release)
 
-    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_five_breakend_shapes(self) -> None:
+    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_ten_record_shapes(self) -> None:
         from compare_vep_outputs import (
             BND_BARE_REFERENCE_ALLELE_ROW_BUCKET,
             BND_MATE_32_BIT_BUFFER_BUCKET,
             BND_OWN_ROWS_LOST_BUCKET,
             BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
+            CNV_TR_EMPTY_EXPANSION_BUCKET,
+            DOT_BREAKEND_PAIR_BUCKET,
             FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
+            GVCF_VARIANT_SITE_DROPPED_BUCKET,
+            MISSING_ALT_ANNOTATED_BUCKET,
+            NON_INTEGER_END_BUCKET,
             REFERENCE_116_2_ONE_SIDED_RULES,
             REFERENCE_REGISTRIES,
             REFERENCE_SKIPPED_RECORD_BUCKET,
@@ -2279,18 +2284,22 @@ class ReferenceRegistryTests(unittest.TestCase):
             [r.bucket for r in rules],
             [REFERENCE_SKIPPED_RECORD_BUCKET, BND_OWN_ROWS_LOST_BUCKET,
              BND_SYNONYM_MATE_ROWS_LOST_BUCKET, FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
-             BND_BARE_REFERENCE_ALLELE_ROW_BUCKET, BND_MATE_32_BIT_BUFFER_BUCKET],
+             BND_BARE_REFERENCE_ALLELE_ROW_BUCKET, BND_MATE_32_BIT_BUFFER_BUCKET,
+             GVCF_VARIANT_SITE_DROPPED_BUCKET, DOT_BREAKEND_PAIR_BUCKET, MISSING_ALT_ANNOTATED_BUCKET,
+             NON_INTEGER_END_BUCKET, CNV_TR_EMPTY_EXPANSION_BUCKET],
         )
-        self.assertEqual([r.excludes for r in rules], [True, False, False, False, True, False],
-                         "this comparator has no transcript-to-chromosome authority, so of the breakend shapes only "
-                         "the reference-allele row, a duplicate the key stream drops, is set aside beside the skipped record")
-        self.assertEqual([r.excludes_with_cache for r in rules], [True, True, True, False, True, False],
-                         "under a cache authority the two lost-row breakend shapes are set aside too; the FASTA shape "
-                         "and the buffer a mate position overflows never")
-        overflow = rules[-1]
+        self.assertEqual([r.excludes for r in rules],
+                         [True, False, False, False, True, False, True, True, False, True, False],
+                         "this comparator reads no input and no cache: the lost-row breakend shapes, the "
+                         "missing ALT and the empty expansion are judged only by the structural-variant comparator")
+        self.assertEqual([r.excludes_with_cache for r in rules],
+                         [True, True, True, False, True, False, True, True, True, True, True],
+                         "the structural-variant comparator sets every class aside but the FASTA shape and the "
+                         "buffer a mate position overflows")
+        overflow = rules[5]
         self.assertEqual(overflow.bucket, "bnd_mate_32bit_buffer_intergenic")
         self.assertIn("2147478648", overflow.definition)
-        bare = rules[-2]
+        bare = rules[4]
         self.assertEqual(bare.bucket, "bnd_bare_reference_allele_row")
         self.assertIn("StructuralVariationOverlap.pm:64-77", bare.perl_citation)
         self.assertIn("reference allele has no variant effect", bare.definition)
@@ -2468,7 +2477,7 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
                 self.row("missing_in_rust", "21:400", "G", "TX_DOWN", "downstream_gene_variant")]
         (ep, er, buckets), open_rows = self.run_pass(rows, self.scope(absent=["21:800-900", "21:30000001", "21:600-700"]))
         self.assertEqual((ep, er), (0, 4))
-        self.assertEqual(buckets["reference_skipped_record"], {"count": 4, "excluded": 4, "records": 3})
+        self.assertEqual(buckets["reference_skipped_record"], {"count": 4, "excluded": 4, "records": 3, "perl": 0, "rust": 4})
         self.assertEqual(len(open_rows), 1, "the reference-only row stays")
 
     def test_a_record_the_reference_kept_is_not_set_aside_by_the_116_2_pass(self) -> None:
@@ -2477,7 +2486,7 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         rows = [self.row("extra_in_rust", "21:18457513-32484691", "N.", "T3", "transcript_ablation")]
         (ep, er, buckets), open_rows = self.run_pass(rows, self.scope())
         self.assertEqual((ep, er, len(open_rows)), (0, 0, 1))
-        self.assertEqual(buckets["reference_skipped_record"], {"count": 0, "excluded": 0, "records": 0})
+        self.assertEqual(buckets["reference_skipped_record"], {"count": 0, "excluded": 0, "records": 0, "perl": 0, "rust": 0})
         self.assertNotIn("sv_transcript_selection", buckets)
 
     def test_own_end_rows_the_reference_lost_are_counted_not_set_aside(self) -> None:
@@ -2487,7 +2496,7 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
                 self.row("extra_in_rust", loc, "chromosome_breakpoint", "O2", "intron_variant")]
         (ep, er, buckets), open_rows = self.run_pass(rows, self.scope(breakends=breakends))
         self.assertEqual((ep, er), (0, 0))
-        self.assertEqual(buckets["bnd_own_chromosome_rows_lost"], {"count": 2, "excluded": 0, "records": 1})
+        self.assertEqual(buckets["bnd_own_chromosome_rows_lost"], {"count": 2, "excluded": 0, "records": 1, "perl": 0, "rust": 0})
         self.assertEqual(len(open_rows), 2)
 
     def test_own_end_rows_beside_a_reference_own_end_row_are_not_the_shape(self) -> None:
@@ -2510,7 +2519,7 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         breakends = {("f", loc): ({"N."}, {"N.", syn}, {"NC_000022.11"})}
         rows = [self.row("extra_in_rust", loc, syn, "M1", "intron_variant")]
         (_, _, buckets), open_rows = self.run_pass(rows, self.scope(breakends=breakends))
-        self.assertEqual(buckets["bnd_synonym_mate_rows_lost"], {"count": 1, "excluded": 0, "records": 1})
+        self.assertEqual(buckets["bnd_synonym_mate_rows_lost"], {"count": 1, "excluded": 0, "records": 1, "perl": 0, "rust": 0})
         self.assertEqual(len(open_rows), 1)
 
     def test_a_canonical_mate_name_is_not_the_synonym_shape(self) -> None:
@@ -2569,7 +2578,7 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
                          "the bracket record's duplicate mate rows are not the shape")
         (ep, er, buckets), open_rows = self.run_pass([], scope)
         self.assertEqual((ep, er, open_rows), (0, 0, []))
-        self.assertEqual(buckets["bnd_bare_reference_allele_row"], {"count": 2, "excluded": 2, "records": 1})
+        self.assertEqual(buckets["bnd_bare_reference_allele_row"], {"count": 2, "excluded": 2, "records": 1, "perl": 0, "rust": 0})
 
     def test_the_reference_rows_of_a_record_whose_mate_overflows_the_buffer_are_counted(self) -> None:
         """The reference's rows at the breakend record's Location are counted and stay
@@ -2583,7 +2592,95 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         scope.mate_overflow = {("f", "21:30425651")}
         (ep, er, buckets), open_rows = self.run_pass(rows, scope)
         self.assertEqual((ep, er, len(open_rows)), (0, 0, 4))
-        self.assertEqual(buckets["bnd_mate_32bit_buffer_intergenic"], {"count": 2, "excluded": 0, "records": 1})
+        self.assertEqual(buckets["bnd_mate_32bit_buffer_intergenic"], {"count": 2, "excluded": 0, "records": 1, "perl": 0, "rust": 0})
+
+    def test_a_gvcf_variant_site_the_reference_dropped_is_set_aside_from_its_own_name(self) -> None:
+        """Ensembl VEP 116.2 drops `21 30425650 . N G,<NON_REF>` whole (`G/NON_REF is not a
+        supported structural variant type`); vep-rs annotates the `G` allele, so its rows
+        carry a sequence allele at a Location the reference wrote nothing for. The record's
+        generated name, `21_30425650_N/G/<NON_REF>`, read from vep-rs's output, admits the
+        Location, and every row there is set aside under the class; a record named by an ID
+        gives no such signal here and is left to the structural-variant comparator."""
+        from compare_vep_outputs import (
+            ReferenceRecordScope,
+            _sort_unique_stream_to_file,
+            compare_sorted_key_files,
+            gvcf_site_locations,
+            iter_vep_key_lines,
+        )
+
+        header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+        site = ("21_30425650_N/G/<NON_REF>\t21:30425650\tG\tG\tENST00000390690\tTranscript\tcoding_sequence_variant\n"
+                "21_30425650_N/G/<NON_REF>\t21:30425650\tG\tG\tENST00000334068\tTranscript\tupstream_gene_variant\n")
+        named = "rs1\t21:40000000\tT\tG\tENST_X\tTranscript\tmissense_variant\n"
+        block = "21_50000000_N/<NON_REF>\t21:50000001-50000100\t<NON_REF>\t-\t-\t-\tintergenic_variant\n"
+        scope = ReferenceRecordScope()
+        with tempfile.TemporaryDirectory() as d:
+            perl, rust = Path(d) / "perl.txt", Path(d) / "rust.txt"
+            perl.write_text(header, encoding="utf-8")
+            rust.write_text(header + site + named + block, encoding="utf-8")
+            self.assertEqual(gvcf_site_locations(rust), {"21:30425650"})
+            self.assertEqual(gvcf_site_locations(Path(d) / "absent.txt"), set())
+            ps, rs = Path(d) / "p.keys", Path(d) / "r.keys"
+            _sort_unique_stream_to_file(iter_vep_key_lines(perl), ps)
+            _sort_unique_stream_to_file(iter_vep_key_lines(rust), rs)
+            scope.record_gvcf_sites("f", gvcf_site_locations(rust))
+            compare_sorted_key_files(ps, rs, file_name="f", discordant_out=None,
+                                     track_consequence_buckets=False, record_scope=scope)
+        self.assertEqual(scope.gvcf_absent, {("f", "21:30425650")})
+        self.assertEqual(scope.absent, {("f", "21:50000001-50000100")}, "the lone block is the skipped record")
+        rows = [self.row("extra_in_rust", "21:30425650", "G", "ENST00000390690", "coding_sequence_variant"),
+                self.row("extra_in_rust", "21:30425650", "G", "ENST00000334068", "upstream_gene_variant"),
+                self.row("extra_in_rust", "21:40000000", "G", "ENST_X", "missense_variant"),
+                self.row("extra_in_rust", "21:50000001-50000100", "<NON_REF>", "-", "intergenic_variant")]
+        (ep, er, buckets), open_rows = self.run_pass(rows, scope)
+        self.assertEqual((ep, er), (0, 3))
+        self.assertEqual(buckets["gvcf_variant_site_dropped"], {"count": 2, "excluded": 2, "records": 1, "perl": 0, "rust": 2})
+        self.assertEqual(buckets["reference_skipped_record"]["excluded"], 1)
+        self.assertEqual([r.split("\t")[2] for r in open_rows], ["21:40000000"])
+
+    def test_a_dot_breakend_pair_and_a_non_integer_end_are_set_aside(self) -> None:
+        """Ensembl VEP 116.2 writes `21:30425650-30425651 chromosome_breakpoint` for `N N.`
+        without SVTYPE where vep-rs writes the point `21:30425651`: the two rows on one
+        feature are a pair, both set aside; the reference's row on a feature vep-rs did not
+        name stays charged. A reference row whose Location carries `END=30425949.5` as
+        written is set aside on its own."""
+        rows = [self.row("missing_in_rust", "21:30425650-30425651", "chromosome_breakpoint", "T2", "coding_sequence_variant"),
+                self.row("extra_in_rust", "21:30425651", "chromosome_breakpoint", "T2", "coding_sequence_variant"),
+                self.row("missing_in_rust", "21:30425650-30425651", "chromosome_breakpoint", "T1", "upstream_gene_variant"),
+                self.row("missing_in_rust", "21:30425651-30425949.5", "deletion", "T2", "feature_truncation,coding_sequence_variant"),
+                self.row("missing_in_rust", "21:30425651-3.0425949e7", "deletion", "T1", "upstream_gene_variant"),
+                self.row("extra_in_rust", "21:30425651", "chromosome_breakpoint", "T3", "intron_variant")]
+        (ep, er, buckets), open_rows = self.run_pass(rows, self.scope())
+        self.assertEqual((ep, er), (3, 1))
+        self.assertEqual(buckets["dot_breakend_without_svtype_pair"], {"count": 2, "excluded": 2, "records": 2, "perl": 1, "rust": 1})
+        self.assertEqual(buckets["non_integer_end_annotated"], {"count": 2, "excluded": 2, "records": 2, "perl": 2, "rust": 0})
+        self.assertEqual(sorted(r.split("\t")[4] for r in open_rows), ["T1", "T3"])
+        # Two vep-rs point rows under one feature (two consequence sets) count the
+        # reference's pair row once.
+        rows = [self.row("missing_in_rust", "21:30425650-30425651", "chromosome_breakpoint", "T2", "coding_sequence_variant"),
+                self.row("extra_in_rust", "21:30425651", "chromosome_breakpoint", "T2", "coding_sequence_variant"),
+                self.row("extra_in_rust", "21:30425651", "chromosome_breakpoint", "T2", "coding_sequence_variant,feature_truncation")]
+        (ep, er, buckets), open_rows = self.run_pass(rows, self.scope())
+        self.assertEqual((ep, er, open_rows), (1, 2, []))
+        self.assertEqual(buckets["dot_breakend_without_svtype_pair"], {"count": 3, "excluded": 3, "records": 2, "perl": 1, "rust": 2})
+
+    def test_a_location_is_keyed_by_its_numbers(self) -> None:
+        """Ensembl VEP prints an INFO/END as written (`21:30425651-030425949`,
+        `21:30425651-+30425949`); the key stream carries the number, so the rows agree with
+        vep-rs's `21:30425651-30425949`. A fractional coordinate stays as written."""
+        from compare_vep_outputs import canonical_location, iter_vep_key_lines
+
+        for text, canonical in [("21:30425651-030425949", "21:30425651-30425949"),
+                                ("21:30425651-+30425949", "21:30425651-30425949"),
+                                ("21:+30425650", "21:30425650"),
+                                ("21:30425651-30425949.5", "21:30425651-30425949.5"),
+                                ("21:30425651", "21:30425651"), ("MT", "MT")]:
+            self.assertEqual(canonical_location(text), canonical, text)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "perl.txt"
+            path.write_text("x\t21:30425651-030425949\tdeletion\tG\tT1\tTranscript\tupstream_gene_variant\n", encoding="utf-8")
+            self.assertEqual(list(iter_vep_key_lines(path)), ["21:30425651-30425949\tdeletion\tT1\tTranscript\tupstream_gene_variant"])
 
     def test_a_reference_intergenic_row_against_vep_rs_transcripts_is_counted(self) -> None:
         rows = [self.row("missing_in_rust", "21:100", "A", "-", "intergenic_variant"),
@@ -2593,7 +2690,7 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
                 self.row("extra_in_rust", "21:200", "T", "-", "intergenic_variant")]
         (ep, er, buckets), open_rows = self.run_pass(rows, self.scope())
         self.assertEqual((ep, er), (0, 0))
-        self.assertEqual(buckets["fasta_named_slice_intergenic"], {"count": 1, "excluded": 0, "records": 1})
+        self.assertEqual(buckets["fasta_named_slice_intergenic"], {"count": 1, "excluded": 0, "records": 1, "perl": 0, "rust": 0})
         self.assertEqual(len(open_rows), 5)
 
 
@@ -2649,7 +2746,8 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
         out = self._run("116.2")
         adj = json.loads((out / "summary.json").read_text())["aggregate"]["adjusted"]
         self.assertEqual(adj["reference_release"], "116.2")
-        self.assertEqual(adj["excluded_categories"]["reference_skipped_record"], {"count": 2, "excluded": 2, "records": 1})
+        self.assertEqual(adj["excluded_categories"]["reference_skipped_record"],
+                         {"count": 2, "excluded": 2, "records": 1, "perl": 0, "rust": 2})
         self.assertNotIn("sv_transcript_selection", adj["excluded_categories"])
         self.assertEqual((adj["excluded_perl_tuples"], adj["excluded_rust_tuples"]), (2, 4))
         self.assertEqual(set(adj["divergence_classes"]) >= {"reference_skipped_record", "splice_lastwrite_swap"}, True)

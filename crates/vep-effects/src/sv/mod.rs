@@ -726,11 +726,10 @@ pub fn calculate_sv_consequences(
         // Perl expands the record to `<run>/<RUS x RUC>` and `post_process_vfs`
         // minimises the pair (`trim_sequences`, the common prefix first): for a run of
         // one repeat unit a contraction is a deletion of the run's last `run - alt`
-        // bases and an expansion an insertion between the run's last base and the next.
-        // The deletion and insertion-pair paths read those spans here for every run,
-        // while the row keeps the run as its location. An alternate allele the run's
-        // length, or no stated length, reads as Perl's symbolic tandem repeat, a
-        // copy-number gain (`copy_number_gain` in VariationEffect.pm) over the run:
+        // bases, which the deletion path reads here for every run while the row keeps
+        // the run as its location. An alternate allele the run's length or longer, or
+        // no stated length, reads as Perl's symbolic tandem repeat, a copy-number gain
+        // (`copy_number_gain` in VariationEffect.pm) over the run:
         // `feature_elongation`, and `transcript_amplification` when the run contains
         // the transcript.
         VariantClass::TandemRepeat => {
@@ -745,15 +744,12 @@ pub fn calculate_sv_consequences(
                     upstream_distance,
                     downstream_distance,
                 ),
-                Some(alt_bases) if alt_bases > run_bases && run_end < u64::MAX => {
-                    insertion::calculate_insertion_pair(
-                        run_end + 1,
-                        run_end,
-                        transcript,
-                        upstream_distance,
-                        downstream_distance,
-                    )
-                }
+                // A gain keeps the run: Ensembl VEP evaluates every positional term of a
+                // symbolic record on the record's own span (`$bvf->{start}` and
+                // `{end}`, Utils/VariationEffect.pm:126-178) and the distance from that
+                // span, so a run crossing a transcript edge reads
+                // `coding_sequence_variant,5_prime_UTR_variant` and never an upstream
+                // term with a distance measured from the inserted bases.
                 _ => insertion::calculate(
                     variant,
                     transcript,
@@ -981,16 +977,16 @@ mod tests {
         );
     }
 
-    /// An expansion inserts after the run's last base: Ensembl VEP's expansion of
-    /// `RUS=CT;RUC=8` over a ten-base `CT` run trims the whole run as the common
-    /// prefix and leaves `-/CTCTCT` between the run's last base and the next
-    /// (`trim_sequences`). Inside the second exon's coding sequence the insertion
-    /// pair reads `coding_sequence_variant` (the symbolic reading of the literal
-    /// `inframe_insertion`) with `feature_elongation`; after a run whose last base
-    /// lies in the first intron it reads `intron_variant` alone, as the literal
-    /// insertion does.
+    /// An expansion is read over the run it lengthens: Ensembl VEP evaluates the
+    /// positional terms of a symbolic tandem repeat on the record's own span
+    /// (Utils/VariationEffect.pm:126-178) and `copy_number_gain` on the class, so a
+    /// run inside the second exon's coding sequence reads `coding_sequence_variant`
+    /// with `feature_elongation`, and the 300-base run that opens in the first exon
+    /// and ends in the first intron reads the exon, the intron and the elongation
+    /// together (Ensembl VEP 116.2 writes `coding_sequence_variant,5_prime_UTR_variant`
+    /// for a 300-base gain crossing a transcript's edge, never an upstream term).
     #[test]
-    fn tandem_repeat_expansion_inserts_after_the_run() {
+    fn tandem_repeat_expansion_is_read_over_the_run() {
         let tx = crate::test_helpers::make_test_transcript();
         let in_cds = calculate_sv_consequences(
             &make_tandem_repeat_run(25_002_100, 25_002_109, Some(16)),
@@ -1006,12 +1002,19 @@ mod tests {
                 Consequence::FeatureElongation
             ])
         );
-        let in_intron = calculate_sv_consequences(&make_tandem_repeat(Some(360)), &tx, 5000, 5000)
+        let crossing = calculate_sv_consequences(&make_tandem_repeat(Some(360)), &tx, 5000, 5000)
             .expect("the run lies in the transcript");
         assert_eq!(
-            terms(&in_intron),
-            BTreeSet::from([Consequence::IntronVariant])
+            terms(&crossing),
+            BTreeSet::from([
+                Consequence::CodingSequenceVariant,
+                Consequence::FeatureElongation,
+                Consequence::IntronVariant
+            ])
         );
+        let symbolic = calculate_sv_consequences(&make_tandem_repeat(None), &tx, 5000, 5000)
+            .expect("the run lies in the transcript");
+        assert_eq!(terms(&crossing), terms(&symbolic));
     }
 
     /// A contraction whose lost bases lie in the first intron (the run's last 60

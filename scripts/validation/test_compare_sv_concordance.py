@@ -520,7 +520,9 @@ class SvFilterSetTests(unittest.TestCase):
         (<CNV:TR>), the pair filter that applies the SNP/indel registry's excluding rules,
         the gVCF reference-block filter, and the mate-side local-read pair filter. The
         116.2 masks: the record the reference skipped, the two breakend shapes of the
-        chromosome-aware overlap, and the reference-allele rows of a bare breakpoint.
+        chromosome-aware overlap, the reference-allele rows of a bare breakpoint, the gVCF
+        variant site, the dot-breakend pair, the annotated missing ALT, the non-integer
+        END and the empty tandem-repeat expansion.
 
         Pinned as a set rather than a count, so adding or removing a filter fails
         here with its name, beside the taxonomy row it would need."""
@@ -539,6 +541,11 @@ class SvFilterSetTests(unittest.TestCase):
                 "filter_bnd_own_rows_lost",
                 "filter_bnd_synonym_mate_rows",
                 "filter_bnd_bare_reference_allele_rows",
+                "filter_gvcf_variant_sites",
+                "filter_dot_breakend_pairs",
+                "filter_missing_alt_annotated",
+                "filter_non_integer_end_rows",
+                "filter_cnv_tr_empty_expansion",
             },
         )
 
@@ -546,7 +553,7 @@ class SvFilterSetTests(unittest.TestCase):
         """Every `filter_*` mask is applied against at least one reference release, and
         every name a release lists is a mask; the 115.2 list is the published
         comparator's eight in its order, the 116.2 list drops the class-C arms and the
-        two class-D masks and adds the four 116.2 masks."""
+        two class-D masks and adds the nine 116.2 masks."""
         filters = {n for n in dir(C) if n.startswith("filter_")}
         listed = {m for masks in C.MASKS_BY_RELEASE.values() for m in masks}
         self.assertEqual(listed, filters)
@@ -568,7 +575,8 @@ class SvFilterSetTests(unittest.TestCase):
         self.assertEqual(
             set(C.MASKS_BY_RELEASE["116.2"]) - set(C.MASKS_BY_RELEASE["115.2"]),
             {"filter_reference_skipped_records", "filter_bnd_own_rows_lost", "filter_bnd_synonym_mate_rows",
-             "filter_bnd_bare_reference_allele_rows"},
+             "filter_bnd_bare_reference_allele_rows", "filter_gvcf_variant_sites", "filter_dot_breakend_pairs",
+             "filter_missing_alt_annotated", "filter_non_integer_end_rows", "filter_cnv_tr_empty_expansion"},
         )
 
     def test_the_release_block_describes_every_116_2_rule_with_this_comparators_verdict(self) -> None:
@@ -583,9 +591,11 @@ class SvFilterSetTests(unittest.TestCase):
         for rule in C.REFERENCE_116_2_ONE_SIDED_RULES:
             self.assertEqual(classes[rule.bucket]["excludes"], rule.excludes_with_cache, rule.bucket)
             self.assertIn("excluded", classes[rule.bucket])
-        self.assertEqual([c["excludes"] for c in classes.values()], [True, True, True, False, True, False])
+        self.assertEqual([c["excludes"] for c in classes.values()],
+                         [True, True, True, False, True, False, True, True, True, True, True])
         self.assertEqual(block["bnd_bare_reference_allele_rows"], 0)
         self.assertEqual(block["bnd_mate_32bit_buffer_records"], 0)
+        self.assertEqual(block["excluded_gvcf_variant_site_rust"], 0)
         with_rows = C.release_report_block(C.MaskResult(release="116.2", bare_reference_rows=3), {}, True)
         self.assertEqual(with_rows["bnd_bare_reference_allele_rows"], 3)
         self.assertEqual(with_rows["divergence_classes"]["bnd_bare_reference_allele_row"]["excluded"], 3)
@@ -1346,11 +1356,22 @@ class CnvTrSwapPopulationTests(unittest.TestCase):
         run = "21:1001-1018"
         self.assertEqual(C._cnv_tr_pair_kind("21:1018-1019", "CACA", run), "gain")
         self.assertEqual(C._cnv_tr_pair_kind("21:1015-1018", "-", run), "loss")
-        # A deletion ending elsewhere, an insertion not at the run's end, or a
-        # symbolic allele is not this record's literal reading.
+        # A sequence allele elsewhere on the run, or right after it, is the literal
+        # reading of a record the expansion does not trim (a multi-allelic record, a
+        # unit that is not the reference's repeat, an `N` unit, a disagreeing SVLEN):
+        # the whole-run substitution, a partial one, and the units after the run.
+        self.assertEqual(C._cnv_tr_pair_kind("21:1010-1011", "CACA", run), "literal")
+        self.assertEqual(C._cnv_tr_pair_kind("21:1001-1018", "CACACACACACACACACACA", run), "literal")
+        self.assertEqual(C._cnv_tr_pair_kind("21:1019-1024", "CAC", run), "literal")
+        self.assertEqual(C._cnv_tr_pair_kind("21:1001-1018", "NNNN", run), "literal")
+        # The reference's own symbolic row at the run, written without a FASTA.
+        self.assertEqual(C._cnv_tr_pair_kind("21:1001-1018", "tandem_repeat", run), "unexpanded")
+        self.assertIsNone(C._cnv_tr_pair_kind("21:1001-1017", "tandem_repeat", run))
+        # A deletion ending elsewhere, a symbolic allele of another class, a sequence
+        # allele beyond the base after the run, or another chromosome is not a reading.
         self.assertIsNone(C._cnv_tr_pair_kind("21:1015-1017", "-", run))
-        self.assertIsNone(C._cnv_tr_pair_kind("21:1010-1011", "CACA", run))
         self.assertIsNone(C._cnv_tr_pair_kind("21:1001-1018", "deletion", run))
+        self.assertIsNone(C._cnv_tr_pair_kind("21:1020-1021", "CACA", run))
         self.assertIsNone(C._cnv_tr_pair_kind("22:1018-1019", "CACA", run))
 
     def test_representation_pairs_are_masked_and_consequence_disagreements_are_not(self):
@@ -1376,6 +1397,29 @@ class CnvTrSwapPopulationTests(unittest.TestCase):
             "splice_region_variant,intron_variant", "intron_variant,feature_elongation", "gain"))
         self.assertFalse(C._is_cnv_tr_representation_pair(
             "inframe_insertion", "feature_elongation", "gain"))
+        # A literal substitution reads any coding term where the symbolic reading names
+        # the region with either direction term (Ensembl VEP 116.2 with a FASTA writes
+        # `AGCAGCAGCAGC protein_altering_variant` and `AGCAGC inframe_deletion` for a
+        # two-ALT <CNV:TR>, `NNNN frameshift_variant` for `RUS=.`, and
+        # `5_prime_UTR_variant,coding_sequence_variant` for a 300-base unit substitution).
+        self.assertTrue(C._is_cnv_tr_representation_pair(
+            "protein_altering_variant", "coding_sequence_variant,feature_elongation", "literal"))
+        self.assertTrue(C._is_cnv_tr_representation_pair(
+            "missense_variant", "coding_sequence_variant,feature_truncation", "literal"))
+        self.assertTrue(C._is_cnv_tr_representation_pair(
+            "5_prime_UTR_variant,coding_sequence_variant", "5_prime_UTR_variant,coding_sequence_variant", "literal"))
+        self.assertFalse(C._is_cnv_tr_representation_pair(
+            "splice_region_variant,missense_variant", "coding_sequence_variant,feature_elongation", "literal"))
+        # Without a FASTA the reference's symbolic row labels every record a gain: a loss
+        # vep-rs reads as the deletion of the run's tail pairs with it on the direction and
+        # coding terms alone (Ensembl VEP 116.2 writes `feature_elongation,coding_sequence_variant`
+        # for `SVLEN=9;RUS=AGC;RUC=2` without `--fasta`).
+        self.assertTrue(C._is_cnv_tr_representation_pair(
+            "feature_elongation,coding_sequence_variant", "feature_truncation,inframe_deletion", "unexpanded"))
+        self.assertTrue(C._is_cnv_tr_representation_pair(
+            "feature_elongation,coding_sequence_variant", "feature_elongation,coding_sequence_variant", "unexpanded"))
+        self.assertFalse(C._is_cnv_tr_representation_pair(
+            "feature_elongation,coding_sequence_variant", "feature_truncation,intron_variant", "unexpanded"))
 
     def test_total_counts_every_class_tuple_not_only_the_masked_pairs(self):
         """Three pairs in the class; two differ only in representation and are masked,
@@ -2570,6 +2614,99 @@ class FastaNamedSliceIntergenicTests(unittest.TestCase):
         self.assertEqual(C.count_bnd_mate_over_32_bit(records, perl), (3, 2))
         self.assertEqual(C.count_bnd_mate_over_32_bit(records[3:], perl), (0, 0))
 
+    def test_a_gvcf_variant_site_is_its_own_class_apart_from_the_skipped_records(self) -> None:
+        """Ensembl VEP 116.2 drops `A G,<NON_REF>` as `G/NON_REF is not a supported structural
+        variant type`; vep-rs annotates the `G` allele at POS. The site's vep-rs tuples are set
+        aside under `gvcf_variant_site_dropped`, and the skipped-record mask, which names
+        every other route, leaves them alone."""
+        records = [REC(30425650, "A", "G,<NON_REF>", "."), REC(50000, "N", "<CPX>", "END=60000;SVTYPE=CPX")]
+        perl: set = set()
+        rust = {T("21:30425650", "G", "ENST_1", "missense_variant"), T("21:30425650", "G", "ENST_2", "upstream_gene_variant"),
+                T("21:50001-60000", "CPX", "ENST_3", "intron_variant")}
+        excluded, sites = C.filter_gvcf_variant_sites(perl, rust, records)
+        self.assertEqual((sites, excluded), (1, {t for t in rust if t[1] == "G"}))
+        skipped, records_n = C.filter_reference_skipped_records(perl, rust, records)
+        self.assertEqual((records_n, skipped), (1, {T("21:50001-60000", "CPX", "ENST_3", "intron_variant")}))
+        self.assertEqual(C.check_skip_routes(records, perl, rust), [])
+        masks = C.apply_masks(perl, rust, "116.2", {}, {}, {}, "vep-rs", records)
+        self.assertEqual((masks.skipped_records, masks.gvcf_records), (1, 1), "the mask run names the site once")
+
+    def test_a_dot_breakend_pair_is_set_aside_on_both_sides(self) -> None:
+        """`N N.` without SVTYPE: the reference's `21:30425650-30425651 chromosome_breakpoint`
+        row and vep-rs's `21:30425651` row on one feature are a pair; a reference row on a
+        feature vep-rs did not name, or a point vep-rs wrote under a bracket allele, is not."""
+        perl = {T("21:30425650-30425651", "chromosome_breakpoint", "ENST_1", "coding_sequence_variant"),
+                T("21:30425650-30425651", "chromosome_breakpoint", "ENST_2", "upstream_gene_variant")}
+        rust = {T("21:30425651", "chromosome_breakpoint", "ENST_1", "coding_sequence_variant"),
+                T("21:30425651", "N[21:30425700[", "ENST_2", "upstream_gene_variant")}
+        excluded_rust, excluded_perl = C.filter_dot_breakend_pairs(perl, rust)
+        self.assertEqual(excluded_rust, {T("21:30425651", "chromosome_breakpoint", "ENST_1", "coding_sequence_variant")})
+        self.assertEqual(excluded_perl, {T("21:30425650-30425651", "chromosome_breakpoint", "ENST_1", "coding_sequence_variant")})
+
+    def test_a_missing_alt_the_reference_annotated_is_set_aside_from_the_input(self) -> None:
+        """ALT `.` with `SVTYPE=BND` is a `chromosome_breakpoint` at POS + 1 and with
+        `SVTYPE=DEL;END` a deletion over END in Ensembl VEP 116.2; vep-rs writes nothing. The
+        reference's tuples at the record's Location are set aside; a `.` without SVTYPE
+        produced no reference row and names nothing."""
+        records = [REC(30425650, "N", ".", "SVTYPE=BND"), REC(40000000, "N", ".", "SVTYPE=DEL;END=40000100"),
+                   REC(50000000, "N", ".", ".")]
+        perl = {T("21:30425651", "chromosome_breakpoint", "ENST_1", "coding_sequence_variant"),
+                T("21:40000001-40000100", "deletion", "ENST_2", "intron_variant"),
+                T("21:50000001", "deletion", "ENST_3", "intron_variant")}
+        self.assertEqual(C.filter_missing_alt_annotated(perl, records), {
+            T("21:30425651", "chromosome_breakpoint", "ENST_1", "coding_sequence_variant"),
+            T("21:40000001-40000100", "deletion", "ENST_2", "intron_variant")})
+
+    def test_a_non_integer_end_row_is_set_aside_and_a_text_end_is_read_as_its_number(self) -> None:
+        """`END=30425949.5` and `END=3.0425949e7` are annotated and printed as written by
+        Ensembl VEP 116.2 (`21:30425651-30425949.5`), where vep-rs skips the record;
+        `END=030425949` and `END=+30425949` name the same span as `30425949` and are
+        normalised to it, so no row is set aside for them."""
+        perl = {T("21:30425651-30425949.5", "deletion", "ENST_1", "intron_variant"),
+                T("21:30425651-3.0425949e7", "deletion", "ENST_2", "intron_variant"),
+                T("21:30425651-30425949", "deletion", "ENST_3", "intron_variant")}
+        self.assertEqual(len(C.filter_non_integer_end_rows(perl)), 2)
+        for text in ("21:30425651-030425949", "21:30425651-+30425949", "chr21:30425651-30425949"):
+            self.assertEqual(C.normalize_location(text), "21:30425651-30425949", text)
+        self.assertEqual(C.normalize_location("21:30425651-30425949.5"), "21:30425651-30425949.5")
+
+    def test_an_empty_tandem_repeat_expansion_is_set_aside_only_when_the_reference_wrote_nothing(self) -> None:
+        """With a FASTA, Ensembl VEP 116.2 writes nothing for a `<CNV:TR>` whose expansion is
+        empty or unchanged (`RN=.`, `RUC=abc`, `RUC=-2`, `RUC=3` on a three-unit run) and no
+        warning; vep-rs writes the symbolic rows over the run. Without a FASTA the reference
+        writes the symbolic rows too, and nothing is set aside."""
+        run = "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;"
+        empties = [REC(30425587, "N", "<CNV:TR>", run + "RUC=3"), REC(30425587, "N", "<CNV:TR>", run + "RN=.;RUC=4"),
+                   REC(30425587, "N", "<CNV:TR>", run + "RUC=abc"), REC(30425587, "N", "<CNV:TR>", run + "RUC=-2")]
+        gain = REC(30425587, "N", "<CNV:TR>", run + "RUC=4")
+        for v in empties:
+            self.assertTrue(C.cnv_tr_expansion_is_empty(v), v.info)
+        self.assertFalse(C.cnv_tr_expansion_is_empty(gain))
+        self.assertFalse(C.cnv_tr_expansion_is_empty(REC(30425587, "N", "<CNV:TR>,<CNV:TR>", run + "RUC=3,3")))
+        # `$info->{RUC} || $info->{RB}`: a RUC Perl reads as false falls through to RB.
+        self.assertFalse(C.cnv_tr_expansion_is_empty(REC(30425587, "N", "<CNV:TR>", run + "RUC=0;RB=12")))
+        self.assertTrue(C.cnv_tr_expansion_is_empty(REC(30425587, "N", "<CNV:TR>", run + "RUC=0;RB=9")))
+        rust = {T("21:30425588-30425596", "tandem_repeat", "ENST_1", "feature_elongation,coding_sequence_variant")}
+        self.assertEqual(C.filter_cnv_tr_empty_expansion(set(), rust, empties[:1]), rust)
+        symbolic_reference = {T("21:30425588-30425596", "tandem_repeat", "ENST_1", "feature_elongation,coding_sequence_variant")}
+        self.assertEqual(C.filter_cnv_tr_empty_expansion(symbolic_reference, rust, empties[:1]), set())
+        literal_reference = {T("21:30425596-30425597", "AGC", "ENST_1", "inframe_insertion")}
+        self.assertEqual(C.filter_cnv_tr_empty_expansion(literal_reference, rust, [gain]), set())
+
+    def test_perl_numification_and_the_structural_end(self) -> None:
+        for text, value in (("300", 300), ("-300", -300), ("300abc", 300), (" 3e2", 300), ("abc", 0), ("", 0), (".", 0), ("300.7", 300.7)):
+            self.assertEqual(C.perl_numeric_value(text), value, text)
+        self.assertEqual(C.perl_structural_end(1000, "-300", "2000", False), 1300)
+        self.assertEqual(C.perl_structural_end(1000, "abc", "2000", False), 1000)
+        self.assertEqual(C.perl_structural_end(1000, None, "2000", False), 2000)
+        self.assertEqual(C.perl_structural_end(1000, None, "2000.5", False), 2000.5)
+        self.assertIsNone(C.perl_structural_end(1000, None, "abc", False))
+        self.assertIsNone(C.perl_structural_end(1000, None, "", False))
+        self.assertEqual(C.perl_structural_end(1000, None, "2000", True), 1001)
+        self.assertEqual(C.perl_structural_end(1000, None, "0", True), 0)
+        self.assertIsNone(C.perl_structural_end(1000, None, "", True))
+        self.assertEqual(C.perl_structural_end(1000, "100", "0", True), 1100)
+
     def test_a_vep_rs_intergenic_row_beside_its_transcripts_is_not_the_shape(self) -> None:
         perl = {INTERGENIC("21:100", "A")}
         rust = {INTERGENIC("21:100", "A"), T("21:100", "A", "ENST_1", "missense_variant")}
@@ -2643,6 +2780,8 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
             "reference_skipped_record", "bnd_own_chromosome_rows_lost",
             "bnd_synonym_mate_rows_lost", "fasta_named_slice_intergenic",
             "bnd_bare_reference_allele_row", "bnd_mate_32bit_buffer_intergenic",
+            "gvcf_variant_site_dropped", "dot_breakend_without_svtype_pair", "missing_alt_annotated",
+            "non_integer_end_annotated", "cnv_tr_empty_expansion_dropped",
         })
         self.assertEqual((adj["bnd_mate_32bit_buffer_records"], adj["bnd_mate_32bit_buffer_reference_tuples"]), (0, 0))
         self.assertEqual(adj["bnd_bare_reference_allele_rows"], 0)
@@ -2756,6 +2895,28 @@ class SkipRouteCrossCheckTests(unittest.TestCase):
         self.assertEqual(C.perl_skip_route(R(1000, "N", "<DEL>,T", "END=2000")), "unsupported_type", "a mixed ALT list has no term")
         self.assertEqual(C.perl_skip_route(R(30165850, "N", "<DEL>", "SVTYPE=DEL")), "incomplete_deletion")
         self.assertEqual(C.perl_skip_route(R(2000, "N", "<DEL>", "END=1500;SVTYPE=DEL")), "incomplete_deletion")
+        # Perl numifies SVLEN (`abs('abc')` is 0, `SVLEN=` and `SVLEN=.` are defined and 0), so
+        # a deletion with any of them ends before its start; a `<DUP>` with them is the pair
+        # and kept; an END that is not a number, or one before POS, is refused by
+        # `validate_vf` for every class (`invalid_span`), a deletion naming its own route
+        # first; a `G,<NON_REF>` site is its own route.
+        for info in ("SVTYPE=DEL;SVLEN=abc", "SVTYPE=DEL;SVLEN=", "SVTYPE=DEL;SVLEN=.;END=2000", "SVTYPE=DEL;SVLEN=0;END=2000"):
+            with self.subTest(info=info):
+                self.assertEqual(C.perl_skip_route(R(1000, "N", "<DEL>", info)), "incomplete_deletion")
+        for info in ("SVTYPE=DUP;SVLEN=abc", "SVTYPE=DUP;SVLEN=", "SVTYPE=DUP;SVLEN=.", "SVTYPE=DUP;END=1000"):
+            with self.subTest(info=info):
+                self.assertIsNone(C.perl_skip_route(R(1000, "N", "<DUP>", info)))
+        for alt, info in (("<DUP>", "SVTYPE=DUP;END=abc"), ("<DUP>", "SVTYPE=DUP;END=0"), ("<DUP>", "SVTYPE=DUP;END=900"),
+                          ("<BND>", "SVTYPE=BND;END=0"), ("<BND>", "SVTYPE=BND;END="), ("<DUP>", "SVTYPE=DUP;END=")):
+            with self.subTest(alt=alt, info=info):
+                self.assertEqual(C.perl_skip_route(R(1000, "N", alt, info)), "invalid_span")
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "<DEL>", "SVTYPE=DEL;END=abc")), "incomplete_deletion")
+        self.assertIsNone(C.perl_skip_route(R(1000, "N", "<DUP>", "SVTYPE=DUP;END=1500.5")), "a fractional END is annotated")
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "G,<NON_REF>", ".")), "gvcf_variant_site")
+        self.assertEqual(C.perl_skip_route(R(1000, "A", "G,<NON_REF>", ".")), "gvcf_variant_site")
+        self.assertIsNone(C.perl_skip_route(R(1000, "N", "G", "SVTYPE=DEL;END=2000")), "an N reference base routes the record to the structural path")
+        self.assertIsNone(C.perl_skip_route(R(1000, "N", "<del>", "SVTYPE=DUP;END=2000")), "a lowercase ALT is outside the VCF 4.4 forms, so SVTYPE names the type")
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "<del>", ".")), "unsupported_type")
         for alt, info in (("<DEL>,<DUP>", "END=2000"), ("<DEL>", "END=2000;SVTYPE=DEL"), ("<CN0>", "END=2000"),
                           ("<CN0>,<CN2>", "END=2000"), ("<INS:ME:ALU>", "SVLEN=300"), ("<DUP:TANDEM>", "END=5000"),
                           ("<CNV:TR>", "END=1050;SVLEN=50;RUS=AC;RUC=10"), ("N[22:50000000[", "SVTYPE=BND"),

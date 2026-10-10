@@ -2059,12 +2059,15 @@ fn assign_coding_consequence(
 
     // Perl's `TranscriptVariationAllele::peptide` returns undef when
     // `VariationFeatureOverlapAllele::seq_is_unambiguous_dna` is false (allele
-    // contains non-ACGT characters like N, R, Y). With undef peptide, only
-    // coding_unknown fires (coding_sequence_variant).
-    if !alt_allele.is_empty()
-        && alt_allele != b"-"
-        && !crate::coding::is_unambiguous_dna(alt_allele)
-    {
+    // contains non-ACGT characters like N, R, Y), and `_get_peptide_alleles` needs
+    // the reference allele's peptide as well as the alternate's
+    // (Utils/VariationEffect.pm:772-790), so a reference base of `N` leaves every
+    // peptide predicate false: Ensembl VEP 116.2 writes `coding_sequence_variant`
+    // for `N G` where `A G` at the same base is `missense_variant`.
+    let ambiguous = |allele: &[u8]| {
+        !allele.is_empty() && allele != b"-" && !crate::coding::is_unambiguous_dna(allele)
+    };
+    if ambiguous(alt_allele) || ambiguous(ref_allele) {
         push_unique(consequences, Consequence::CodingSequenceVariant);
         return;
     }
