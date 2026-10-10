@@ -545,6 +545,9 @@ pub fn annotate_batch(
     let batch_len = batch.len();
     let annotation_phase_start = Instant::now();
     let annotate_one = |variant: &mut InputVariant| {
+        if variant.no_allele {
+            return;
+        }
         // Every variant, a breakend spanning more than VEP's 10 Mb `--max_sv_size`
         // included, is annotated against the chromosome's complete transcript set, so
         // one record's output never depends on which records share its batch. This is

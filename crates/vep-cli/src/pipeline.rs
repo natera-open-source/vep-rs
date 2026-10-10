@@ -467,23 +467,21 @@ fn is_ascii_space(b: u8) -> bool {
     matches!(b, b'\t' | b'\n' | 0x0B | 0x0C | b'\r' | b' ')
 }
 
-/// `str::trim` of a line. A line whose outermost non-blank bytes are ASCII is
-/// trimmed as bytes; one with a non-ASCII byte at either end is validated and
-/// trimmed as a `str`, so Unicode blanks are handled as `str::trim` handles
-/// them.
+/// `str::trim_start` of a line. A line whose first non-blank byte is ASCII is
+/// trimmed as bytes; one opening with a non-ASCII byte is validated and trimmed as
+/// a `str`, so Unicode blanks are handled as `str::trim_start` handles them. The
+/// end of the line is kept as read, since Ensembl VEP's `chomp` removes the newline
+/// alone (ensembl-io ColumnBasedParser.pm:249): a blank after the last INFO value
+/// is part of that value, so `END2=30425949 ` names the mate `N[21:30425949 [`.
 fn trim_line(line: &[u8]) -> anyhow::Result<&[u8]> {
     let Some(start) = line.iter().position(|&b| !is_ascii_space(b)) else {
         return Ok(&line[..0]);
     };
-    let end = line
-        .iter()
-        .rposition(|&b| !is_ascii_space(b))
-        .expect("a non-blank byte exists");
-    if line[start].is_ascii() && line[end].is_ascii() {
-        return Ok(&line[start..=end]);
+    if line[start].is_ascii() {
+        return Ok(&line[start..]);
     }
     let text = std::str::from_utf8(line).context("Failed to read input line")?;
-    Ok(text.trim().as_bytes())
+    Ok(text.trim_start().as_bytes())
 }
 
 fn as_str(bytes: &[u8]) -> anyhow::Result<&str> {
@@ -1225,7 +1223,7 @@ mod tests {
     }
 
     #[test]
-    fn trim_line_matches_str_trim() {
+    fn trim_line_matches_str_trim_start() {
         for line in [
             "21\t100",
             "  21\t100  ",
@@ -1240,7 +1238,7 @@ mod tests {
         ] {
             assert_eq!(
                 trim_line(line.as_bytes()).unwrap(),
-                line.trim().as_bytes(),
+                line.trim_start().as_bytes(),
                 "line {line:?}"
             );
         }

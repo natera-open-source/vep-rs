@@ -13,11 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--mask_header_cache_path` prints the cache directory as `[PATH]/<leaf>` in the default and `--tab` headers, the VCF `cache=` token and the Parquet footer. (#44)
 - The plugin-visible `InputVariant` JSON carries `input_line_name`, the `CHROM_POS_REF/ALT` name built from the record's own input line. (#44)
 - The plugin-visible `InputVariant` JSON carries `record_so_term`, the whole record's class term (`Alu_insertion`, `copy_number_variation`), on every structural variant whose type has one. (#44)
+- The plugin-visible `InputVariant` JSON carries `allele_num`, the ALLELE_NUM a breakpoint record prints when it is not `allele_index + 1` (own breakend 0, mates from 1), absent otherwise. (#44)
 - `--regulatory_gff`, `--extended_promoters` and `--custom_suppress_filter` are refused with an error naming what each would do; regulatory and custom annotation are not supported. (#44)
 - `--reference-release {115.2,116.2}` on both comparators selects the Ensembl VEP release scored against (116.2 default, sets aside the records it skips); the runners derive it from the reference's provenance. (#43)
 - The comparators' 116.2 registry gains `bnd_bare_reference_allele_row`, the duplicate row Ensembl VEP writes for the reference allele of a breakpoint without a mate, set aside and counted per file. (#44)
-- The comparators' 116.2 registry gains `bnd_mate_32bit_buffer_intergenic`, the buffer Ensembl VEP writes as intergenic for a breakend mate at or past 2,147,478,648, counted and left charged. (#44)
+- The comparators' 116.2 registry gains `bnd_mate_32bit_buffer_intergenic`, the buffer Ensembl VEP writes as intergenic for a breakend mate at or past 2,147,478,648, counted and not set aside. (#44)
 - The comparators' 116.2 registry gains `gvcf_variant_site_dropped`, `dot_breakend_without_svtype_pair`, `missing_alt_annotated`, `non_integer_end_annotated` and `cnv_tr_empty_expansion_dropped`, five records Ensembl VEP drops, pairs or annotates where vep-rs does not. (#44)
+- The comparators' 116.2 registry gains `star_alone_svtype_annotated`, `non_numeric_pos_numified` and `cnv_tr_rn_zero_allele_dropped`, three records Ensembl VEP annotates from INFO alone or drops in part where vep-rs does not. (#44)
+- The comparators' 116.2 registry gains `coordinate_past_ceiling`, the reference's rows of a record whose POS is at or above 2^62 - 1, where vep-rs refuses the line; a vep-rs bound. (#44)
 
 ### Changed
 
@@ -29,25 +32,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A multi-allelic mobile-element record labels every row with the record's subtype term (`<INS:ME:ALU>,<INS>` prints `Alu_insertion` twice), as Ensembl VEP 116 does. (#44)
 - The plugin-visible `InputVariant` key `mate_id` appears only on a record that names a mate (a bracket or `<BND>` record: MATEID, PARID or a stand-in), never on a single breakend. (#44)
 - `--max_sv_size -1` lifts the size limit, so a structural variant of any span is annotated in every output format. (#44)
-- Records Ensembl VEP 116 drops before annotation (oversize, an unsupported type or ALT list, a `<DEL>` without `END` or `SVLEN`) are annotated, a documented divergence the golden manifests class `reference_skipped_record`. (#44)
+- Records Ensembl VEP 116 drops before annotation (oversize, an unsupported type or ALT list, a `<DEL>` without `END` or `SVLEN`) are annotated, the divergence the golden manifests class `reference_skipped_record`. (#44)
 - JSON `cdna_end`, `cds_end` and `protein_end` are omitted when the end is undefined (`445-?` writes `cdna_start` alone), and `--total_length` positions are written as `N/T` strings, as Ensembl VEP 116 does. (#44)
 - `Uploaded_variation` of a record whose ID is `.` is built from the input line, `CHROM_POS_REF/ALT1/ALT2` as written, as Ensembl VEP 116 names it (`21_43512967_AT/ATT/A`, `21_33867341_C/<CN2>`). (#44)
 - An ID-less Ensembl-format input line is named `chr_start_alleles` from the lower of its two coordinates and its allele column as written, as Ensembl VEP 116 names it. (#44)
 - `--hgvs` describes a deletion that runs over either end of a transcript over the bases inside it (`c.-49_77+1248del`), as Ensembl VEP 116 does, instead of omitting HGVSc. (#44)
 - `--hgvs` writes a frameshift whose first changed residue is the stop codon as an extension, `p.Ter124IleextTer14` (count excluding the replaced stop), as Ensembl VEP 116 does, not `p.Ter124IlefsTer15`. (#44)
 - `--hgvs` types an indel inside the stop codon by its peptides (`p.Ter211=`, `p.Ter133delinsCysTer`) rather than as a frameshift, as Ensembl VEP 116 does. (#44)
-- `docs/intended-divergences.md` is rewritten for readability and organised by
-  the five Ensembl VEP defects behind the classes the adjusted concordance sets
-  aside. Each defect's section states the defect in one sentence, why it is a
-  defect, what vep-rs does instead, where it is in the source and what
-  correcting it would change; each class opens with a summary and walks through
-  its record in short sections, with citations and counts as lists. Every
-  record, row, number, citation and command is kept. The `<CNV:TR>`
-  representation difference has a section of its own, the former class 9
-  (classes 1 and 2 on the structural-variant sets) is split into one class per
-  defect, and the classes are renumbered in page order: the former 1, 9 (splice
-  half), 2, 9 (start half), 3, 7, 8, 10, 4, 6, 11 and 5 are now 1 to 12. The
-  0.3.1 entry's "section 3" is section 5 of the reorganised page.
+- `docs/intended-divergences.md` is organised by Ensembl VEP defect: each section states the defect, why it is one, what vep-rs does instead and where it is in the source. (#44)
+- Each class on `docs/intended-divergences.md` opens with a summary and walks through its record in short sections, with citations and counts as lists. (#44)
+- Every record, row, number, citation and command of `docs/intended-divergences.md` is kept through its reorganisation. (#44)
+- The `<CNV:TR>` representation difference has its own section on `docs/intended-divergences.md`, and the former class 9 is split into one class per defect. (#44)
+- The classes of `docs/intended-divergences.md` are renumbered in page order: former 1, 9 (splice), 2, 9 (start), 3, 7, 8, 10, 4, 6, 11, 5 are 1 to 12. (#44)
+- The 0.3.1 entry's "section 3" of `docs/intended-divergences.md` is section 5 of the renumbered page. (#44)
 
 ### Fixed
 
@@ -57,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `## VEP command-line` header and the VCF `##VEP-command-line` line keep a negative value with its flag (`--max_sv_size -1`). (#44)
 - The `## VEP command-line` header keeps a `key=` prefix when it masks a path (`--custom snv=[PATH]/b.tsv.gz`), as Ensembl VEP's `mask_data_paths` does. (#44)
 - An ID equal to the generated breakend name yields the line name on the record's own `N.` row as on the mate row. (#44)
-- A `<CNV:TR>` contraction loses the run's tail and an expansion inserts after it, as Ensembl VEP's expansion places them, so the frame follows the unit change, not the run length. (#44)
+- A `<CNV:TR>` contraction loses the run's tail, where Ensembl VEP's expansion places the deletion, so the frame follows the unit change, not the run length. (#44)
 - A `<CNV:TR>` allele's length sums its RN repeat sequences, and each allele of a multi-allelic record takes its own RUS, RUC and RB entries. (#44)
 - A `<CNV:TR>` allele's length reads RUC before RB, RB in whole units, a `.` unit as one base, as Ensembl VEP 116 does (`RB=42;RUC=7;RUS=CAG` is 21 bases). (#44)
 - A breakend record listing two bracket ALTs writes its own breakend once, three rows for two mates, as Ensembl VEP 116 does. (#44)
@@ -76,7 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A mate named by INFO/CHR2 is written `N[CHR2:END2[` with both values as written, beside an own breakend of the record's reference base, as Ensembl VEP 116 writes them. (#44)
 - `SVLEN=0`, a non-numeric SVLEN or an END at POS keeps the pair before the start for every structural class, with the terms Ensembl VEP 116 writes for it. (#44)
 - An END before POS, `END=0` or an empty END skips the record at warning level for every class, a breakpoint included, as Ensembl VEP 116 skips it. (#44)
-- A repeated INFO key reads its last value; a dot ALT beside a bracket ALT lends the own breakend its base and writes no row, as Ensembl VEP does. (#44)
+- A repeated INFO key reads its last value, as Ensembl VEP's INFO hash keeps it. (#44)
+- A dot ALT beside a bracket ALT lends the own breakend its base and writes no row, as Ensembl VEP does. (#44)
 - The `vep-io` VCF reader derives a structural variant's span through the rules the command-line parser uses, starting at POS + 1. (#44)
 - A record whose REF and ALT are not plain `ACGT` is structural under INFO/SVTYPE, as Ensembl VEP routes it: `N G` with `SVTYPE=DEL;END` is a deletion over END. (#44)
 - A lowercase symbolic ALT is outside the VCF 4.4 forms, so INFO/SVTYPE names its type and without SVTYPE it is an unsupported type, as Ensembl VEP reads it. (#44)
@@ -92,9 +90,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A structural type is read through `get_SO_term`'s own regexes: `<CN=X>`, `<<DEL>>,<DEL>` and `<DEL:>` are unsupported types and `<INS:ME::ALU>` a `mobile_element_insertion`, as Ensembl VEP reads them. (#44)
 - An ALT list of `<NON_REF>` alone is a reference block, one intergenic row per allele, never an error. (#44)
 - Under a true INFO/SVTYPE a `<NON_REF>` beside another allele is an allele of the structural record, as Ensembl VEP reads it (`G,<NON_REF>` with `SVTYPE=DEL` is two deletions). (#44)
-- The vep-io VCF reader routes, types and classes a record as the command-line parser does, through one shared module. (#44)
+- The `vep-io` VCF reader routes, types and classes a record as the command-line parser does, through one shared module. (#44)
 - Both comparators recognise a gVCF variant site by its shape: the SNP/indel comparator from the input VCFs (`--input-dir`, `--input-vcf`), the structural-variant comparator at the alleles vep-rs's parser writes. (#44)
-- The structural-variant comparator truncates a `<CNV:TR>` repeat count as Perl's `x` operator does and leaves a unit of no bases unjudged. (#44)
+- The structural-variant comparator truncates a `<CNV:TR>` repeat count as Perl's `x` operator does and reads a unit of no bases under RUC as an empty expansion. (#44)
+- A trailing empty ALT field (`G,`, `<DEL>,`) names no allele and `SVTYPE=DEL/` reads as `DEL`, as Ensembl VEP's list-context `split` drops a trailing empty field. (#44)
+- A gVCF variant site whose `<NON_REF>` precedes the real allele (`<NON_REF>,G`) keeps the allele's written ALLELE_NUM, 2. (#44)
+- RN, RUC and RB are read as Perl numifies them (`RUC=2abc` repeats twice, `RN=1.9` walks one sequence); a `<CNV:TR>` allele of no bases is the run's loss. (#44)
+- The `vep-io` VCF reader bounds POS at 2^62 - 1 like every other reader, so a larger position fails its line instead of overflowing. (#44)
+- One INFO reader serves both VCF readers: a bare key written last leaves it undefined, a value ends at a second `=`, as Ensembl VEP's hash is built (`BaseVCF4.pm:581-583`). (#44)
+- A breakend mate is read through the whitespace Ensembl VEP's regex allows (`N[ 21 : 30425700 [`). (#44)
+- The `vep-io` VCF reader fills a breakend record's mate, own-breakend and allele-number fields as the command-line parser does, instead of copying INFO/MATEID. (#44)
+- A record's allele string and line name are held once per record and shared by its alleles, so memory grows linearly with the number of ALTs. (#44)
+- The structural-variant comparator reads an SVLEN or END past the double's range as Ensembl VEP's oversize skip, without an error. (#44)
+- `compare_vep_outputs.py` warns when `--input-dir` pairs no input with an output and refuses a missing `--input-vcf`. (#44)
+- A `<CNV:TR>` contraction read under the cap measures DISTANCE from the run, the smallest of the four gaps between the run's ends and the transcript's, as Ensembl VEP does. (#44)
+- A trailing blank on a VCF data line is kept in the last INFO value, so `END2=30425949 ` builds the mate `N[21:30425949 [`, as Ensembl VEP keeps it. (#44)
+- Lowercase alleles of a sequence record are upper-cased after the anchor chop (`a g` is Allele `G`, JSON `A/G`), as `validate_vf` does; the line name keeps its case. (#44)
+- A POS spelled as an exact integer in another notation (`3e7`, `30425949.0`, `30425949.`) is read as that integer on both paths, as Ensembl VEP's structural path numifies it. (#44)
+- A structural record whose first base, POS + 1, passes 2^62 - 1 fails its line, so no span is printed with an end below its start. (#44)
+- A record whose every ALT is `*` names no allele: no row, the VCF line carried without CSQ, a JSON object with `most_severe_consequence` `?`, as Ensembl VEP writes it. (#44)
+- The JSON `allele_string` of a sequence record keeps `*` at its written place (`N/*/G`), and a breakpoint's keeps a `<NON_REF>` beside a bracket ALT, as Ensembl VEP writes them. (#44)
+- `bnd_mate_32bit_buffer_intergenic` counts a span end or a record's own POS at or past 2^31 - 5000 as it counts a breakend mate, the rows counted and not set aside. (#44)
+- The `<CNV:TR>` pairing reads a unit that is not DNA, a loss read as a substitution with another coding term, and a multi-ALT record collapsing to one reference tuple. (#44)
+- `cnv_tr_empty_expansion_dropped` recognises an unchanged expansion over several repeat sequences and a count in fullwidth digits, which Perl numifies to 0. (#44)
+- The structural-variant comparator's `non_integer_end_annotated` sets aside vep-rs's rows at the number beside the reference's text rows (a fractional or `NaN` SVLEN, a POS spelling), instead of stopping. (#44)
+- `reference_skipped_record` locates the pair rows of a deletion whose start exceeds its end and the class-term Allele vep-rs prints for an unsupported ALT, instead of stopping or charging them. (#44)
+- `dot_breakend_without_svtype_pair` pairs a dot breakend whose INFO names a mate (`N.` with `CHR2` and `END2`) under its `N.` and bracket alleles, not only the bare `chromosome_breakpoint`. (#44)
+- `bnd_synonym_mate_rows_lost` sets aside vep-rs's mate rows when the mate is the record's own chromosome spelled with a prefix Ensembl VEP does not resolve (`N[Chr21:30425700[` on `21`). (#44)
+- The structural-variant comparator reads POS as Ensembl VEP numifies it (`3e7` is 30000000, a non-number 0), so a dataset carrying one such record is measured rather than refused. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
 
 ## [0.3.2] - 2026-10-06

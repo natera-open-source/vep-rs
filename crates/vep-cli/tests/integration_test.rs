@@ -392,6 +392,27 @@ fn annotate_record(record: &str, format_flags: &[&str], extra: &[&str]) -> Vec<S
         .collect()
 }
 
+/// The Location, Allele and Consequence columns of the default-format rows that
+/// contain `text`, a transcript ID or the record's own ID.
+fn rows_on(rows: &[String], text: &str) -> Vec<(String, String, String)> {
+    rows.iter()
+        .filter(|row| row.contains(text))
+        .map(|row| {
+            let c: Vec<&str> = row.split('\t').collect();
+            (c[1].to_string(), c[2].to_string(), c[6].to_string())
+        })
+        .collect()
+}
+
+/// A [`rows_on`] expectation.
+fn row(location: &str, allele: &str, consequence: &str) -> (String, String, String) {
+    (
+        location.to_string(),
+        allele.to_string(),
+        consequence.to_string(),
+    )
+}
+
 /// A structural variant wider than the default `--max_sv_size` (`del_10_6_mb`
 /// of `tests/golden/116/GRCh38-release116`) is annotated, not dropped: the
 /// default output lists its transcript rows, the VCF output carries its line
@@ -528,6 +549,7 @@ fn max_sv_size_governs_tandem_repeat_expansion() {
         );
     }
 }
+
 /// The rows Ensembl VEP 116.2 writes on ENST00000390690 (strand -1, 30425380-30425926) and
 /// ENST00000334068 (4.5 kb upstream on +) for the record shapes the parser routes and
 /// classes as Perl does: an `N` reference base with `SVTYPE=DEL;END` is a deletion over
@@ -541,17 +563,6 @@ fn max_sv_size_governs_tandem_repeat_expansion() {
 #[test]
 fn routing_class_and_distance_follow_ensembl_vep() {
     let rows = |record: &str| annotate_record(record, &[], &[]);
-    let on = |rows: &[String], feature: &str| -> Vec<(String, String, String)> {
-        rows.iter()
-            .filter(|r| r.contains(feature))
-            .map(|r| {
-                let c: Vec<&str> = r.split('\t').collect();
-                (c[1].to_string(), c[2].to_string(), c[6].to_string())
-            })
-            .collect()
-    };
-    let row =
-        |loc: &str, allele: &str, csq: &str| (loc.to_string(), allele.to_string(), csq.to_string());
     let deletion = row(
         "21:30425651-30425949",
         "deletion",
@@ -563,27 +574,27 @@ fn routing_class_and_distance_follow_ensembl_vep() {
         "21\t30425650\tdotalt\tN\t.N\t.\t.\tSVTYPE=DEL;END=30425949",
     ] {
         assert_eq!(
-            on(&rows(record), "ENST00000390690"),
+            rows_on(&rows(record), "ENST00000390690"),
             std::slice::from_ref(&deletion),
             "{record}"
         );
     }
     assert_eq!(
-        on(
+        rows_on(
             &rows("21\t30425650\tnref_snv\tN\tG\t.\t.\t."),
             "ENST00000390690"
         ),
         [row("21:30425650", "G", "coding_sequence_variant")]
     );
     assert_eq!(
-        on(
+        rows_on(
             &rows("21\t30425650\tgvcf\tN\tG,<NON_REF>\t.\t.\t."),
             "ENST00000390690"
         ),
         [row("21:30425650", "G", "coding_sequence_variant")]
     );
     assert_eq!(
-        on(
+        rows_on(
             &rows("21\t30425650\tlower_ins\tN\t<ins:me:alu>\t.\t.\tSVTYPE=INS"),
             "ENST00000390690"
         ),
@@ -594,7 +605,7 @@ fn routing_class_and_distance_follow_ensembl_vep() {
         )]
     );
     assert_eq!(
-        on(
+        rows_on(
             &rows("21\t30425650\tlower_del\tN\t<del>\t.\t.\tSVTYPE=DUP;END=30425949"),
             "ENST00000390690"
         ),
@@ -610,14 +621,14 @@ fn routing_class_and_distance_follow_ensembl_vep() {
         "coding_sequence_variant",
     );
     assert_eq!(
-        on(
+        rows_on(
             &rows("21\t30425650\tbnd_del\tN\t<BND>,<DEL>\t.\t.\tSVTYPE=BND;END=30425949"),
             "ENST00000390690"
         ),
         [breakpoint.clone(), breakpoint]
     );
     assert_eq!(
-        on(
+        rows_on(
             &rows("21\t30425650\ttr_gain\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30425949;SVLEN=300;RUS=AT;RUC=200"),
             "ENST00000390690"
         ),
@@ -700,21 +711,271 @@ fn the_type_and_the_block_rows_follow_ensembl_vep() {
         &[],
         &[],
     );
-    let block_rows: Vec<(String, String, String)> = blocks
-        .iter()
-        .filter(|row| !row.starts_with('#'))
-        .map(|row| {
-            let c: Vec<&str> = row.split('\t').collect();
-            (c[1].to_string(), c[2].to_string(), c[6].to_string())
-        })
-        .collect();
-    let block = (
-        "21:30425651-30425700".to_string(),
-        "<NON_REF>".to_string(),
-        "intergenic_variant".to_string(),
-    );
-    assert_eq!(block_rows, [block.clone(), block]);
+    let block = row("21:30425651-30425700", "<NON_REF>", "intergenic_variant");
+    assert_eq!(rows_on(&blocks, "blocks\t"), [block.clone(), block]);
 }
+
+/// The rows Ensembl VEP 116.2 writes on ENST00000390690 for the shapes Perl's `split` and
+/// breakend regex admit: `A G,` is the one allele `G` (`missense_variant`); `<DEL>,` with
+/// `SVTYPE=DEL` and `N.` with `SVTYPE=DEL/` are the deletion over END; `N[ 21 : 30425700 [`
+/// is the own breakend `N.` beside the mate `N[ 21 : 30425700 [` as written, both
+/// `feature_truncation,coding_sequence_variant`, as are `<BND>` with `CHR2= 21;END2=30425700`
+/// (mate `N[ 21:30425700[`) and with `END2=30425700=5` (mate `N[21:30425700[`). The
+/// gVCF site `<NON_REF>,G`, which Ensembl VEP drops, keeps `G`'s written ALLELE_NUM 2.
+#[test]
+fn trailing_fields_and_breakend_whitespace_follow_ensembl_vep() {
+    let on = |record: &str, extra: &[&str]| -> Vec<(String, String, String, String)> {
+        annotate_record(record, &[], extra)
+            .iter()
+            .filter(|row| row.contains("ENST00000390690"))
+            .map(|row| {
+                let c: Vec<&str> = row.split('\t').collect();
+                (
+                    c[1].to_string(),
+                    c[2].to_string(),
+                    c[6].to_string(),
+                    c[13].to_string(),
+                )
+            })
+            .collect()
+    };
+    let rows = on("21\t30425650\ttrailing\tA\tG,\t.\t.\t.", &[]);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        (rows[0].1.as_str(), rows[0].2.as_str()),
+        ("G", "missense_variant")
+    );
+    let deletion = row(
+        "21:30425651-30425949",
+        "deletion",
+        "feature_truncation,coding_sequence_variant,5_prime_UTR_variant",
+    );
+    for record in [
+        "21\t30425650\tdel_trailing\tN\t<DEL>,\t.\t.\tSVTYPE=DEL;END=30425949",
+        "21\t30425650\tsvtype_slash\tN\tN.\t.\t.\tSVTYPE=DEL/;END=30425949",
+    ] {
+        let rows = on(record, &[]);
+        assert_eq!(rows.len(), 1, "{record}");
+        assert_eq!(
+            (rows[0].0.clone(), rows[0].1.clone(), rows[0].2.clone()),
+            deletion,
+            "{record}"
+        );
+    }
+    for (record, mate) in [
+        (
+            "21\t30425650\tws_bracket\tN\tN[ 21 : 30425700 [\t.\t.\tSVTYPE=BND",
+            "N[ 21 : 30425700 [",
+        ),
+        (
+            "21\t30425650\tws_chr2\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2= 21;END2=30425700",
+            "N[ 21:30425700[",
+        ),
+        (
+            "21\t30425650\tend2_eq\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=30425700=5",
+            "N[21:30425700[",
+        ),
+    ] {
+        let rows = on(record, &["--allele_number"]);
+        let alleles: Vec<(&str, &str)> = rows
+            .iter()
+            .map(|(_, allele, csq, extra)| {
+                assert_eq!(
+                    csq, "feature_truncation,coding_sequence_variant",
+                    "{record}"
+                );
+                let num = extra
+                    .split(';')
+                    .find_map(|kv| kv.strip_prefix("ALLELE_NUM="))
+                    .unwrap_or("");
+                (allele.as_str(), num)
+            })
+            .collect();
+        assert_eq!(alleles, [("N.", "0"), (mate, "1")], "{record}");
+    }
+    let site = on(
+        "21\t30425650\tnonref_first\tA\t<NON_REF>,G\t.\t.\t.",
+        &["--allele_number"],
+    );
+    assert_eq!(site.len(), 1);
+    assert_eq!(site[0].1, "G");
+    assert!(site[0].3.contains("ALLELE_NUM=2"), "{}", site[0].3);
+}
+
+/// The rows Ensembl VEP 116.2 writes for the coordinate and allele spellings it numifies
+/// or upper-cases: a `<CNV:TR>` contraction's DISTANCE is the run's, 4484 for
+/// `21 30430409 x N <CNV:TR> . . SVTYPE=CNV;END=30430417;SVLEN=8;RUS=CT;RUC=3` on
+/// ENST00000390690 (30430410 - 30425926) and 75 for `21 30431100 x N <CNV:TR> . .
+/// SVTYPE=CNV;END=30431108;SVLEN=8;RUS=AG;RUC=2` on ENST00000334068, not the lost
+/// tail's 4490 and 79; a blank closing the data line stays in the last INFO value, so
+/// `END2=30425700 ` names the mate `N[21:30425700 [`; a lowercase `g` is the Allele `G`
+/// and `agc a` the JSON allele string `GC/-`; `3e7` is POS 30000000 (the deletion
+/// `21:30000001-30425949`) and `30425949.0` is 30425949 (`upstream_gene_variant
+/// DISTANCE=23` on ENST00000390690); a structural record at POS 2^62 - 1 fails its line;
+/// and the JSON allele string keeps `*` at its place (`N/*/G`) and a `<NON_REF>` beside a
+/// bracket ALT (`N/N[21:30425700[/<NON_REF>`).
+#[test]
+fn numified_and_upper_cased_spellings_follow_ensembl_vep() {
+    let field = |record: &str, feature: &str, column: usize, extra: &[&str]| -> String {
+        annotate_record(record, &[], extra)
+            .iter()
+            .find(|row| row.contains(feature))
+            .map(|row| row.split('\t').nth(column).unwrap().to_string())
+            .unwrap_or_else(|| panic!("{record}: no row on {feature}"))
+    };
+    let distance = |record: &str, feature: &str| -> String {
+        field(record, feature, 13, &[])
+            .split(';')
+            .find_map(|kv| kv.strip_prefix("DISTANCE="))
+            .unwrap_or_else(|| panic!("{record}: no DISTANCE on {feature}"))
+            .to_string()
+    };
+    assert_eq!(
+        distance(
+            "21\t30430409\tloss\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30430417;SVLEN=8;RUS=CT;RUC=3",
+            "ENST00000390690"
+        ),
+        "4484"
+    );
+    assert_eq!(
+        distance(
+            "21\t30431100\tloss\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30431108;SVLEN=8;RUS=AG;RUC=2",
+            "ENST00000334068"
+        ),
+        "75"
+    );
+    let blank = "21\t30425650\tblank\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=30425700 ";
+    let alleles: Vec<String> = annotate_record(blank, &[], &[])
+        .iter()
+        .filter(|row| row.contains("ENST00000390690"))
+        .map(|row| row.split('\t').nth(2).unwrap().to_string())
+        .collect();
+    assert_eq!(alleles, ["N.", "N[21:30425700 ["]);
+    let info = annotate_record(blank, &["--vcf"], &[])
+        .pop()
+        .map(|line| line.split('\t').nth(7).unwrap().to_string())
+        .unwrap();
+    assert!(
+        info.starts_with("SVTYPE=BND;CHR2=21;END2=30425700 ;CSQ="),
+        "{info}"
+    );
+    assert_eq!(
+        field(
+            "21\t30425650\tlower\tA\tg\t.\t.\t.",
+            "ENST00000390690",
+            2,
+            &[]
+        ),
+        "G"
+    );
+    let json_allele_string = |record: &str| -> String {
+        let line = annotate_record(record, &["--json"], &[]).pop().unwrap();
+        serde_json::from_str::<serde_json::Value>(&line).unwrap()["allele_string"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    assert_eq!(
+        json_allele_string("21\t30425650\tlower\tagc\ta\t.\t.\t."),
+        "GC/-"
+    );
+    assert_eq!(
+        field(
+            "21\t3e7\texp\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30425949",
+            "ENST00000390690",
+            1,
+            &["--max_sv_size", "-1"]
+        ),
+        "21:30000001-30425949"
+    );
+    let float = "21\t30425949.0\tfloat\tA\tG\t.\t.\t.";
+    assert_eq!(field(float, "ENST00000390690", 1, &[]), "21:30425949");
+    assert_eq!(distance(float, "ENST00000390690"), "23");
+    assert!(annotate_record(
+        "21\t4611686018427387903\tceiling\tN\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=-300",
+        &[],
+        &[]
+    )
+    .is_empty());
+    assert_eq!(
+        json_allele_string("21\t30425650\tstar\tN\t*,G\t.\t.\t."),
+        "N/*/G"
+    );
+    assert_eq!(
+        json_allele_string("21\t30425650\tblock\tN\tN[21:30425700[,<NON_REF>\t.\t.\t."),
+        "N/N[21:30425700[/<NON_REF>"
+    );
+}
+
+/// A record whose every ALT is `*` names no allele. Ensembl VEP 116.2 writes
+/// `21 30425650 x N * . . .` with no row in the default format, carries the VCF line
+/// without CSQ and writes a JSON object with `"allele_string":"N/*"`, start and end
+/// 30425650 and `"most_severe_consequence":"?"`; with `SVTYPE=DEL;END=30425949` it
+/// annotates a deletion from INFO alone, which vep-rs does not.
+#[test]
+fn a_star_only_record_is_carried_without_rows() {
+    for record in [
+        "21\t30425650\tstar\tN\t*\t.\t.\t.",
+        "21\t30425650\tstar\tN\t*\t.\t.\tSVTYPE=DEL;END=30425949",
+    ] {
+        assert!(annotate_record(record, &[], &[]).is_empty(), "{record}");
+        assert_eq!(
+            annotate_record(record, &["--vcf"], &[]),
+            [record],
+            "{record}"
+        );
+        let line = annotate_record(record, &["--json"], &[]).pop().unwrap();
+        let object: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(object["allele_string"], "N/*", "{record}");
+        assert_eq!(object["start"], 30425650, "{record}");
+        assert_eq!(object["end"], 30425650, "{record}");
+        assert_eq!(object["most_severe_consequence"], "?", "{record}");
+        assert_eq!(object["id"], "star", "{record}");
+        assert!(object.get("transcript_consequences").is_none(), "{record}");
+        assert!(object.get("intergenic_consequences").is_none(), "{record}");
+    }
+}
+
+/// With a FASTA, Ensembl VEP 116.2 reads `21 30425587 x N <CNV:TR>,<CNV:TR> . .
+/// SVTYPE=CNV;END=30425596;SVLEN=9;RN=0,1;RUS=AGC;RUC=4` as `AGCAGCAGC//AGCAGCAGCAGC`,
+/// keeps the first minimised allele alone and writes `21:30425588-30425596 -
+/// ENST00000390690 inframe_deletion ALLELE_NUM=1`: the RN=0 allele as the run's loss, the
+/// real allele dropped. Both alleles are written here, the RN=0 allele as the loss of
+/// the run and the four-unit allele as the gain.
+#[test]
+fn an_rn_zero_allele_is_the_loss_of_the_run_beside_its_sibling() {
+    let rows: Vec<(String, String)> = annotate_record(
+        "21\t30425587\trn0\tN\t<CNV:TR>,<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30425596;SVLEN=9;RN=0,1;RUS=AGC;RUC=4",
+        &[],
+        &["--allele_number"],
+    )
+    .iter()
+    .filter(|row| row.contains("ENST00000390690"))
+    .map(|row| {
+        let c: Vec<&str> = row.split('\t').collect();
+        let num = c[13]
+            .split(';')
+            .find_map(|kv| kv.strip_prefix("ALLELE_NUM="))
+            .unwrap()
+            .to_string();
+        (num, c[6].to_string())
+    })
+    .collect();
+    assert_eq!(
+        rows,
+        [
+            (
+                "1".to_string(),
+                "feature_truncation,inframe_deletion".to_string()
+            ),
+            (
+                "2".to_string(),
+                "feature_elongation,coding_sequence_variant".to_string()
+            ),
+        ]
+    );
+}
+
 /// The rows Ensembl VEP 116.2 writes on ENST00000390690 for the shapes the parser reads
 /// from INFO as Perl does: a mate named by CHR2 is `N[21:30425700[` beside the own `A.`
 /// of a record whose REF is `A`, and keeps `END2=00030425700` as written; `SVLEN=0` or
@@ -724,18 +985,7 @@ fn the_type_and_the_block_rows_follow_ensembl_vep() {
 /// own; a repeated SVLEN reads its last value.
 #[test]
 fn the_pair_and_the_mate_text_follow_ensembl_vep() {
-    let on_390690 = |record: &str| -> Vec<(String, String, String)> {
-        annotate_record(record, &[], &[])
-            .iter()
-            .filter(|r| r.contains("ENST00000390690"))
-            .map(|r| {
-                let c: Vec<&str> = r.split('\t').collect();
-                (c[1].to_string(), c[2].to_string(), c[6].to_string())
-            })
-            .collect()
-    };
-    let row =
-        |loc: &str, allele: &str, csq: &str| (loc.to_string(), allele.to_string(), csq.to_string());
+    let on_390690 = |record: &str| rows_on(&annotate_record(record, &[], &[]), "ENST00000390690");
     let truncating = "feature_truncation,coding_sequence_variant";
     assert_eq!(
         on_390690("21\t30425650\tref_a\tA\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=30425700"),
@@ -827,41 +1077,31 @@ fn breakend_rows_follow_what_the_record_names() {
             &[],
         )
     };
-    let on_390690 = |rows: &[String]| -> Vec<(String, String, String)> {
-        rows.iter()
-            .filter(|r| r.contains("ENST00000390690"))
-            .map(|r| {
-                let c: Vec<&str> = r.split('\t').collect();
-                (c[1].to_string(), c[2].to_string(), c[6].to_string())
-            })
-            .collect()
-    };
+    let on_390690 = |rows: &[String]| rows_on(rows, "ENST00000390690");
+    let point = row(
+        "21:30425651",
+        "chromosome_breakpoint",
+        "coding_sequence_variant",
+    );
     let span = rows_for("SVTYPE=BND;SVLEN=300");
     assert_eq!(
         on_390690(&span),
-        [(
-            "21:30425651-30425950".to_string(),
-            "chromosome_breakpoint".to_string(),
-            "coding_sequence_variant,5_prime_UTR_variant".to_string()
+        [row(
+            "21:30425651-30425950",
+            "chromosome_breakpoint",
+            "coding_sequence_variant,5_prime_UTR_variant"
         )]
     );
     let end_only = rows_for("SVTYPE=BND;END=30425750");
-    assert_eq!(
-        on_390690(&end_only),
-        [(
-            "21:30425651".to_string(),
-            "chromosome_breakpoint".to_string(),
-            "coding_sequence_variant".to_string()
-        )]
-    );
+    assert_eq!(on_390690(&end_only), std::slice::from_ref(&point));
     let far_mate = rows_for("SVTYPE=BND;CHR2=2;END=40000000");
     assert_eq!(far_mate.len(), 2, "{far_mate:?}");
     assert_eq!(
         on_390690(&far_mate),
-        [(
-            "21:30425651".to_string(),
-            "N.".to_string(),
-            "feature_truncation,coding_sequence_variant".to_string()
+        [row(
+            "21:30425651",
+            "N.",
+            "feature_truncation,coding_sequence_variant"
         )]
     );
     for info in [
@@ -870,11 +1110,7 @@ fn breakend_rows_follow_what_the_record_names() {
     ] {
         assert_eq!(
             on_390690(&rows_for(info)),
-            [(
-                "21:30425651".to_string(),
-                "chromosome_breakpoint".to_string(),
-                "coding_sequence_variant".to_string()
-            )],
+            std::slice::from_ref(&point),
             "{info}"
         );
     }
@@ -888,22 +1124,14 @@ fn breakend_rows_follow_what_the_record_names() {
 /// Locations Ensembl VEP 116.2 writes for `SVLEN=-300,400` and `SVLEN=300,400`.
 #[test]
 fn svtype_and_a_comma_separated_svlen_are_read_as_ensembl_vep_reads_them() {
-    let location_and_terms = |record: &str| -> Vec<(String, String, String)> {
-        annotate_record(record, &[], &[])
-            .iter()
-            .filter(|r| r.contains("ENST00000390690"))
-            .map(|r| {
-                let c: Vec<&str> = r.split('\t').collect();
-                (c[1].to_string(), c[2].to_string(), c[6].to_string())
-            })
-            .collect()
-    };
+    let location_and_terms =
+        |record: &str| rows_on(&annotate_record(record, &[], &[]), "ENST00000390690");
     assert_eq!(
         location_and_terms("21\t30425600\tgnomad_del\tN\tN.\t.\t.\tSVTYPE=DEL;END=30425899"),
-        [(
-            "21:30425601-30425899".to_string(),
-            "deletion".to_string(),
-            "frameshift_variant,feature_truncation".to_string()
+        [row(
+            "21:30425601-30425899",
+            "deletion",
+            "frameshift_variant,feature_truncation"
         )]
     );
     let cnv =

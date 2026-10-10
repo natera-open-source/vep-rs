@@ -4,15 +4,15 @@
 //! VCF input parser using noodles.
 
 use std::io::BufRead;
+use std::sync::Arc;
 
 use noodles::vcf;
 
-use vep_core::sv_routing::{
-    classify_symbolic_alt, is_symbolic_alt, perl_true, routes_to_structural, sv_so_term_and_class,
-    sv_type_abbreviation, variant_alts,
-};
-use vep_core::sv_span::{structural_end, svlen_values, SpanClass};
+use vep_core::coordinate::parse_pos;
+use vep_core::sv_record::{structural_variants, StructuralRecordError, DEFAULT_MAX_SV_SIZE};
+use vep_core::sv_routing::{perl_true, routes_to_structural, variant_alts, written_alts};
 use vep_core::variant::{InputVariant, VariantClass};
+use vep_core::vcf_info::info_value;
 
 use crate::error::IoError;
 
@@ -24,23 +24,31 @@ use super::InputParser;
 /// VCF coordinates are converted to VEP-style coordinates (trimming shared prefixes).
 pub struct VcfParser {
     reader: vcf::io::Reader<Box<dyn BufRead + Send>>,
-    header: vcf::Header,
     /// Buffer of variants from the current record (for multi-allelic sites).
     buffer: Vec<InputVariant>,
+    /// The `--max_sv_size` a `<CNV:TR>` allele is expanded under (`None` for no cap),
+    /// Ensembl VEP's default unless [`Self::with_max_sv_size`] sets it.
+    max_sv_size: Option<u64>,
 }
 
 impl VcfParser {
     /// Create a new VCF parser from a buffered reader.
     pub fn new(reader: Box<dyn BufRead + Send>) -> Result<Self, IoError> {
         let mut vcf_reader = vcf::io::Reader::new(reader);
-        let header = vcf_reader
+        vcf_reader
             .read_header()
             .map_err(|e| IoError::VcfParse(format!("failed to read VCF header: {e}")))?;
         Ok(Self {
             reader: vcf_reader,
-            header,
             buffer: Vec::new(),
+            max_sv_size: Some(DEFAULT_MAX_SV_SIZE),
         })
+    }
+
+    /// Sets the `--max_sv_size` a `<CNV:TR>` allele is expanded under (`None` for `-1`).
+    pub fn with_max_sv_size(mut self, max_sv_size: Option<u64>) -> Self {
+        self.max_sv_size = max_sv_size;
+        self
     }
 
     /// Create a new VCF parser from a file path (single-threaded decompression).
@@ -76,20 +84,28 @@ impl VcfParser {
 
     /// Parse a single VCF record into one or more InputVariants (one per ALT allele).
     ///
-    /// The record is routed, typed and classed as the command-line parser routes it
-    /// (`vep_core::sv_routing`): a gVCF site is its real alleles, a record whose REF and
-    /// ALTs are not a run of `ACGT` is structural under a true INFO/SVTYPE or a structural
-    /// ALT, one class covers every ALT of a supported record, and a record whose type has
-    /// no Sequence Ontology term keeps each symbolic ALT's own class under the `vep_skip`
-    /// mark or, with no symbolic ALT, is skipped at warning level as Ensembl VEP skips it.
-    fn parse_record(&self, record: &vcf::Record) -> Result<Vec<InputVariant>, IoError> {
+    /// The record is read as the command-line parser reads it: POS from its own text
+    /// (`pos_text`) as `parse_pos` reads it, INFO through `vep_core::vcf_info`, the ALT
+    /// list as Perl's `split` returns it with a gVCF site read as its real alleles
+    /// (`vep_core::sv_routing`), a record whose every ALT is `*` as the one allele-less
+    /// variant Ensembl VEP carries, and a structural record's alleles, spans, breakends
+    /// and numbering built by `vep_core::sv_record::structural_variants`; a structural
+    /// type with no Sequence Ontology term and no symbolic ALT is skipped at warning
+    /// level, as Ensembl VEP skips it. The sequence path trims the shared prefix of
+    /// every allele and never minimises a bi-allelic indel from both ends, which the
+    /// command-line parser does.
+    fn parse_record(
+        &self,
+        record: &vcf::Record,
+        pos_text: &str,
+    ) -> Result<Vec<InputVariant>, IoError> {
         let chrom = record.reference_sequence_name().to_string();
 
-        let pos: u64 = record
-            .variant_start()
-            .ok_or_else(|| IoError::VcfParse("missing POS".into()))?
-            .map_err(|e| IoError::VcfParse(format!("invalid POS: {e}")))?
-            .get() as u64;
+        // POS from the line's own text, as the command-line parser reads it: noodles
+        // reads `0` as no position, refuses a number past the machine word and never
+        // numifies a spelling such as `3e7`.
+        let pos = parse_pos(pos_text)
+            .ok_or_else(|| IoError::VcfParse(format!("Invalid POS: '{pos_text}'")))?;
 
         let vcf_ref = record.reference_bases();
 
@@ -102,22 +118,39 @@ impl VcfParser {
         };
 
         let alt_bases = record.alternate_bases();
-        use noodles::vcf::variant::record::AlternateBases;
-        let written_alts: Vec<&str> = alt_bases.iter().filter_map(|r| r.ok()).collect();
-        let info_fields = parse_info_fields(record, &self.header);
-        let svtype = info_fields.svtype.as_deref();
-        let alts = variant_alts(&written_alts, svtype);
+        let alt_column: &str = alt_bases.as_ref();
+        let info = record.info();
+        let info_raw: &str = info.as_ref();
+        let svtype = info_value(info_raw, "SVTYPE").filter(|v| perl_true(v));
+        let written = written_alts(alt_column);
+        let mut alts = written.clone();
+        variant_alts(&mut alts, svtype);
         // `*` and `.` name no allele; `<*>` is a sequence allele at POS unless INFO/SVTYPE
         // routes the record.
         let valid_alts: Vec<(usize, &str)> = alts
             .iter()
             .copied()
-            .enumerate()
             .filter(|(_, alt)| *alt != "*" && *alt != ".")
             .collect();
 
+        // OutputFactory.pm `VariationFeature_to_output_hash`, the VCF `_line`
+        // branch: the ALT column as written, a filtered `*` allele included.
+        let line_name: Arc<str> =
+            format!("{chrom}_{pos}_{vcf_ref}/{}", alt_column.replace(',', "/")).into();
+
         if valid_alts.is_empty() {
-            return Ok(Vec::new());
+            if written.is_empty() || written.iter().any(|(_, alt)| *alt != "*") {
+                return Ok(Vec::new());
+            }
+            let mut variant = InputVariant::without_allele(
+                chrom,
+                pos,
+                vcf_ref,
+                written.iter().map(|(_, alt)| *alt),
+            );
+            variant.id = id;
+            variant.input_line_name = Some(line_name);
+            return Ok(vec![variant]);
         }
 
         let multi = valid_alts.len() > 1;
@@ -129,8 +162,13 @@ impl VcfParser {
                 .map(|(_, alt)| alt.as_bytes().to_vec())
                 .collect();
             let vcf_ref_bytes = vcf_ref.as_bytes();
-            let (trimmed_ref, trimmed_alts, prefix_trimmed) =
+            let (mut trimmed_ref, mut trimmed_alts, prefix_trimmed) =
                 trim_multi_alleles(vcf_ref_bytes, &explicit_alts);
+            // `validate_vf` upper-cases the allele string (Parser.pm:554).
+            trimmed_ref.make_ascii_uppercase();
+            trimmed_alts
+                .iter_mut()
+                .for_each(|alt| alt.make_ascii_uppercase());
 
             for (local_idx, trimmed_alt) in trimmed_alts.into_iter().enumerate() {
                 let allele_idx = valid_alts[local_idx].0;
@@ -150,96 +188,39 @@ impl VcfParser {
                 variants.push(variant);
             }
         } else {
-            let joined_alts = alts.join("/");
-            let record_term = sv_so_term_and_class(&sv_type_abbreviation(&joined_alts, svtype));
-            let symbolic_alts: Vec<(usize, &str)> = valid_alts
-                .iter()
-                .copied()
-                .filter(|(_, alt)| is_symbolic_alt(alt))
-                .collect();
-            let is_mixed = !symbolic_alts.is_empty() && symbolic_alts.len() < valid_alts.len();
-            // A supported record's term labels every ALT; a record whose joined type is
-            // in no SO table keeps each symbolic ALT's own class under the `vep_skip` mark,
-            // INFO/SVTYPE naming the class of a mixed record whose joined ALTs open with
-            // a sequence allele.
-            let classes: Vec<(usize, &str, VariantClass)> = match record_term {
-                Some((_, class)) => valid_alts.iter().map(|&(i, alt)| (i, alt, class)).collect(),
-                None => symbolic_alts
-                    .iter()
-                    .map(|&(i, alt)| {
-                        let class = match svtype {
-                            Some(svtype) if is_mixed => {
-                                classify_symbolic_alt(&format!("<{svtype}>"), Some(svtype))
-                            }
-                            _ => classify_symbolic_alt(alt, svtype),
-                        };
-                        (i, alt, class)
-                    })
-                    .collect(),
+            variants = match structural_variants(
+                &chrom,
+                pos,
+                vcf_ref,
+                &written,
+                info_raw,
+                self.max_sv_size,
+                id.as_deref(),
+            ) {
+                Ok(variants) => variants,
+                Err(StructuralRecordError::Span(error)) => {
+                    return Err(IoError::VcfParse(error.to_string()));
+                }
+                Err(error @ StructuralRecordError::UnsupportedType(_)) => {
+                    tracing::warn!("{chrom}:{pos}: {error}");
+                    return Ok(Vec::new());
+                }
             };
-            if classes.is_empty() {
+            if variants
+                .iter()
+                .any(|v| v.variant_class == VariantClass::ReferenceBlock)
+            {
                 tracing::warn!(
-                    "{chrom}:{pos}: {} is not a supported structural variant type",
-                    sv_type_abbreviation(&joined_alts, svtype)
+                    "{chrom}:{pos} {alt_column}: NON_REF is not a supported structural variant \
+                     type; a reference-confidence block is written as one intergenic row"
                 );
-                return Ok(Vec::new());
             }
-
-            for (allele_idx, alt, sv_class) in classes {
-                // The span `vep_core::sv_span::structural_end` derives, the one the
-                // command-line parser reads: a symbolic record starts at POS + 1 and
-                // ends at POS + |SVLEN|, else at END, else at its start, and a record
-                // Ensembl VEP skips on its span fails the line.
-                let span_class = match sv_class {
-                    VariantClass::Translocation => SpanClass::Breakpoint,
-                    VariantClass::TandemRepeat | VariantClass::TandemDuplication => {
-                        SpanClass::Tandem
-                    }
-                    _ => SpanClass::Other,
-                };
-                let sv_start = if sv_class.is_span_type() {
-                    pos + 1
-                } else {
-                    pos
-                };
-                let sv_end = structural_end(
-                    pos,
-                    info_fields.svlen.as_deref(),
-                    info_fields.end.as_deref(),
-                    span_class,
-                )
-                .map_err(|e| IoError::VcfParse(e.to_string()))?;
-
-                let mut variant = InputVariant::new(
-                    chrom.clone(),
-                    sv_start,
-                    sv_end,
-                    vcf_ref.as_bytes().to_vec(),
-                    alt.as_bytes().to_vec(),
-                );
-                variant.variant_class = sv_class;
+            for variant in &mut variants {
                 variant.id = id.clone();
-                variant.allele_index = allele_idx;
                 variant.minimised = multi;
-                variant.is_structural = true;
-                variant.vep_skip = record_term.is_none();
-                variant.record_so_term = record_term.map(|(term, _)| term.to_string());
-                variant.uploaded_allele_string = Some(joined_alts.clone());
-                variant.sv_end = Some(sv_end);
-                variant.sv_type = svtype.map(str::to_string);
-                variant.sv_len = info_fields
-                    .svlen
-                    .as_deref()
-                    .and_then(|svlen| svlen_values(svlen).first().copied());
-                variant.mate_id = info_fields.mateid.clone();
-                variants.push(variant);
             }
         }
 
-        // OutputFactory.pm `VariationFeature_to_output_hash`, the VCF `_line`
-        // branch: the ALT column as written, a filtered `*` allele included.
-        let alt_column: &str = alt_bases.as_ref();
-        let line_name = format!("{chrom}_{pos}_{vcf_ref}/{}", alt_column.replace(',', "/"));
         for variant in &mut variants {
             variant.input_line_name = Some(line_name.clone());
         }
@@ -322,107 +303,42 @@ fn compute_vep_coords(
     }
 }
 
-/// Parsed INFO fields relevant to structural variants. END and SVLEN are kept as
-/// written, since `vep_core::sv_span::structural_end` reads them as Perl does
-/// (`SVLEN=abc` is 0, `END=` is refused); SVTYPE is kept when Perl reads it as true.
-struct SvInfoFields {
-    end: Option<String>,
-    svtype: Option<String>,
-    svlen: Option<String>,
-    mateid: Option<String>,
-}
-
-/// Parse structural-variant-relevant INFO fields from the record.
-///
-/// Uses the noodles header-aware API for MATEID when possible, with a fallback to
-/// raw string parsing for VCFs that lack INFO header definitions (common in minimal
-/// or synthetic test files); SVTYPE, END and SVLEN are read from the raw column.
-fn parse_info_fields(record: &vcf::Record, header: &vcf::Header) -> SvInfoFields {
-    let info = record.info();
-    let info_raw: &str = info.as_ref();
-
-    let end = get_raw_info_value(info_raw, "END").map(|s| s.to_string());
-
-    // INFO/SVTYPE as Perl tests it (`$info->{SVTYPE}`, Parser/VCF.pm:240 and :473): a
-    // value it reads as true, so `SVTYPE=`, `SVTYPE=0` and a bare flag name none.
-    let svtype = get_raw_info_value(info_raw, "SVTYPE")
-        .filter(|v| perl_true(v))
-        .map(str::to_string);
-
-    let svlen = get_raw_info_value(info_raw, "SVLEN").map(|s| s.to_string());
-
-    let mateid = get_info_string(record, header, "MATEID")
-        .or_else(|| get_raw_info_value(info_raw, "MATEID").map(|s| s.to_string()));
-
-    SvInfoFields {
-        end,
-        svtype,
-        svlen,
-        mateid,
-    }
-}
-
-/// Extract a string value from a VCF INFO field via the noodles typed API.
-fn get_info_string(record: &vcf::Record, header: &vcf::Header, key: &str) -> Option<String> {
-    use noodles::vcf::variant::record::info::field::Value;
-    record.info().get(header, key)?.ok()?.and_then(|v| match v {
-        Value::String(s) => Some(s.to_string()),
-        _ => None,
-    })
-}
-
-/// The value of `KEY=VALUE` in the raw semicolon-delimited INFO string (`KEY=` is
-/// `Some("")`), `None` for an absent key or a bare `KEY` flag with no `=`. The last
-/// `KEY=VALUE` of a repeated key wins, as in the hash Ensembl VEP's parser builds from
-/// the field (BaseVCF4.pm:581-583).
-fn get_raw_info_value<'a>(info_raw: &'a str, key: &str) -> Option<&'a str> {
-    if info_raw == "." || info_raw.is_empty() {
-        return None;
-    }
-    info_raw
-        .rsplit(';')
-        .filter_map(|field| field.split_once('='))
-        .find(|(k, _)| *k == key)
-        .map(|(_, v)| v)
-}
-
-/// Parse BND notation to extract the remote chromosome and position.
-///
-/// BND patterns (per VCF 4.3+ spec):
-/// - `N[chr:pos[`: forward to forward
-/// - `N]chr:pos]`: forward to reverse
-/// - `]chr:pos]N`: reverse to forward
-/// - `[chr:pos[N`: reverse to reverse
-///
-/// Returns `(remote_chr, remote_pos)` if parsing succeeds.
-pub fn parse_bnd_alt(alt: &str) -> Option<(String, u64)> {
-    if let Some(bracket_start) = alt.find(['[', ']']) {
-        let bracket_char = alt.as_bytes()[bracket_start] as char;
-        let after_bracket = &alt[bracket_start + 1..];
-        if let Some(close_pos) = after_bracket.find(bracket_char) {
-            let coords = &after_bracket[..close_pos];
-            if let Some((chr, pos_str)) = coords.split_once(':') {
-                if let Ok(pos) = pos_str.parse::<u64>() {
-                    return Some((chr.to_string(), pos));
-                }
-            }
-        }
-    }
-    None
-}
-
 impl InputParser for VcfParser {
     fn next_variant(&mut self) -> Option<Result<InputVariant, IoError>> {
         if let Some(variant) = self.buffer.pop() {
             return Some(Ok(variant));
         }
 
-        let mut record = vcf::Record::default();
+        let mut line = Vec::new();
         loop {
-            match self.reader.read_record(&mut record) {
+            line.clear();
+            match self.reader.get_mut().read_until(b'\n', &mut line) {
                 Ok(0) => return None,
                 Ok(_) => {
-                    match self.parse_record(&record) {
+                    // The line terminator alone is removed, as Perl's `chomp` removes it
+                    // (ensembl-io ColumnBasedParser.pm:249); a blank data line is skipped.
+                    if line.ends_with(b"\n") {
+                        line.pop();
+                        if line.ends_with(b"\r") {
+                            line.pop();
+                        }
+                    }
+                    if line.is_empty() {
+                        continue;
+                    }
+                    let record = match vcf::Record::try_from(&line[..]) {
+                        Ok(record) => record,
+                        Err(e) => {
+                            return Some(Err(IoError::VcfParse(format!(
+                                "error reading VCF record: {e}"
+                            ))))
+                        }
+                    };
+                    let pos_text = std::str::from_utf8(&line)
+                        .ok()
+                        .and_then(|text| text.split('\t').nth(1))
+                        .unwrap_or("");
+                    match self.parse_record(&record, pos_text) {
                         Ok(variants) => {
                             if variants.is_empty() {
                                 continue;
@@ -463,8 +379,8 @@ mod tests {
     /// Build a VCF carrying structural-variant records (END, SVTYPE, SVLEN,
     /// MATEID in INFO) under the same minimal header as `make_vcf_data`.
     ///
-    /// noodles needs no INFO header definitions to parse the records; the raw
-    /// INFO string fallback extracts the values.
+    /// noodles needs no INFO header definitions to parse the records; the reader
+    /// reads INFO from the raw column (`vep_core::vcf_info`).
     fn make_sv_vcf_data(records: &str) -> Vec<u8> {
         make_vcf_data(records)
     }
@@ -951,35 +867,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_bnd_alt_patterns() {
-        assert_eq!(parse_bnd_alt("A[21:100["), Some(("21".to_string(), 100)));
-        assert_eq!(parse_bnd_alt("A]21:200]"), Some(("21".to_string(), 200)));
-        assert_eq!(parse_bnd_alt("]13:300]A"), Some(("13".to_string(), 300)));
-        assert_eq!(parse_bnd_alt("[13:400[A"), Some(("13".to_string(), 400)));
-        assert_eq!(parse_bnd_alt("<DEL>"), None);
-        assert_eq!(parse_bnd_alt("A"), None);
-    }
-
-    #[test]
-    fn test_get_raw_info_value() {
-        assert_eq!(
-            get_raw_info_value("SVTYPE=DEL;END=1100", "SVTYPE"),
-            Some("DEL")
-        );
-        assert_eq!(
-            get_raw_info_value("SVTYPE=DEL;END=1100", "END"),
-            Some("1100")
-        );
-        assert_eq!(get_raw_info_value("SVTYPE=DEL;END=1100", "SVLEN"), None);
-        assert_eq!(get_raw_info_value(".", "SVTYPE"), None);
-        assert_eq!(get_raw_info_value("", "SVTYPE"), None);
-        assert_eq!(
-            get_raw_info_value("SVTYPE=BND;MATEID=bnd_2", "MATEID"),
-            Some("bnd_2")
-        );
-    }
-
-    #[test]
     fn test_parse_sv_del_with_negative_svlen() {
         // Deletions use negative SVLEN in many VCF callers
         let data = make_sv_vcf_data("21\t1000\t.\tA\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=-100\n");
@@ -1006,6 +893,30 @@ mod tests {
         assert_eq!((v.start, v.end), (100, 100));
         assert_eq!(v.alt_allele(), b"<*>");
         assert!(parser.next_variant().is_none());
+    }
+
+    /// The POS column is read from the line's own text, as Ensembl VEP numifies it
+    /// (`21 3e7 x N <DEL> . . SVTYPE=DEL;END=30425949` is the deletion from 30000001);
+    /// alleles are upper-cased after the anchor trim (Parser.pm:554: `agc a` is `GC/-`);
+    /// a record whose every ALT is `*` is the one allele-less feature Ensembl VEP
+    /// carries, over the reference bases; and a blank closing the line stays in the
+    /// last INFO value, so `END2=1700 ` names the mate `N[21:1700 [`.
+    #[test]
+    fn pos_spellings_case_star_only_records_and_line_ends_follow_the_command_line_parser() {
+        let deletion = read_record("21\t3e7\tx\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30425949");
+        assert_eq!((deletion[0].start, deletion[0].end), (30000001, 30425949));
+        let snv = read_record("21\t30425949.0\tx\tA\tG\t.\t.\t.");
+        assert_eq!((snv[0].start, snv[0].end), (30425949, 30425949));
+        let upper = read_record("21\t100\tx\tagc\ta\t.\t.\t.");
+        assert_eq!(upper[0].allele_string, "GC/-");
+        let star = read_record("21\t100\tx\tNAC\t*,*\t.\t.\t.");
+        assert_eq!(star.len(), 1);
+        assert!(star[0].no_allele);
+        assert_eq!(star[0].allele_string, "NAC/*/*");
+        assert_eq!((star[0].start, star[0].end), (100, 102));
+        let blank = read_record("21\t100\tx\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=1700 ");
+        assert_eq!(blank[1].alt_allele(), b"N[21:1700 [");
+        assert_eq!(blank[1].mate_pos, Some(1700));
     }
 
     #[test]

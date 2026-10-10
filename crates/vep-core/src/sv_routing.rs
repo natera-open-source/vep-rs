@@ -14,26 +14,44 @@
 
 use crate::variant::VariantClass;
 
-/// Whether Perl reads an INFO value as true: anything but an empty string and `0`.
+/// Whether Perl reads an INFO value as true: anything but an empty string and `0`, the
+/// test `$info->{SVTYPE}` passes at Parser/VCF.pm:240 and :473, so `SVTYPE=`, `SVTYPE=0`
+/// and a bare flag name no type.
 pub fn perl_true(value: &str) -> bool {
     !value.is_empty() && value != "0"
 }
 
-/// The ALTs a record names its variants by. A gVCF variant site lists `<NON_REF>`
+/// The fields of `text` as Perl's list-context `split` returns them (ensembl-io
+/// BaseVCF4.pm:489 `[split(',',$alt_allele)]`, Parser.pm:669 `split(/[\/,]/, $type)`):
+/// a trailing empty field is no field, a middle one is kept, so `<DEL>,` is one ALT and
+/// `G,,T` three.
+pub fn perl_split<'a>(text: &'a str, separators: &'a [char]) -> impl Iterator<Item = &'a str> + 'a {
+    let kept = text.trim_end_matches(separators);
+    (!kept.is_empty())
+        .then(|| kept.split(separators))
+        .into_iter()
+        .flatten()
+}
+
+/// The ALT column's fields with their written positions, read as Perl reads the list.
+pub fn written_alts(alt_field: &str) -> Vec<(usize, &str)> {
+    perl_split(alt_field, &[',']).enumerate().collect()
+}
+
+/// Keeps the ALTs a record names its variants by. A gVCF variant site lists `<NON_REF>`
 /// beside its real alleles; the block is the absence of a variant, so it names no
-/// allele of such a record, which is read as its other ALTs alone. A list of
-/// `<NON_REF>` alone is a reference block and is kept whole. Ensembl VEP drops both
-/// shapes as unsupported types (`G/NON_REF`, `NON_REF`). Under a true INFO/SVTYPE a
-/// record carrying the block is structural (Parser/VCF.pm:237-245) and every ALT is an
-/// allele of it (`:469`), the block included: Ensembl VEP 116.2 writes two `deletion`
-/// rows per transcript for `G,<NON_REF>` with `SVTYPE=DEL`.
-pub fn variant_alts<'a>(alts: &[&'a str], svtype: Option<&str>) -> Vec<&'a str> {
-    let is_block = |alt: &&str| alt.eq_ignore_ascii_case("<NON_REF>");
-    let structural = svtype.is_some_and(perl_true);
-    if !structural && alts.iter().any(is_block) && !alts.iter().all(is_block) {
-        alts.iter().copied().filter(|alt| !is_block(alt)).collect()
-    } else {
-        alts.to_vec()
+/// allele of such a record, which is read as its other ALTs alone, each keeping its
+/// written position. A list of `<NON_REF>` alone is a reference block and is kept
+/// whole. Ensembl VEP drops both shapes as unsupported types (`G/NON_REF`, `NON_REF`).
+/// Under a true INFO/SVTYPE a record carrying the block is structural
+/// (Parser/VCF.pm:237-245) and every ALT is an allele of it (`:469`), the block
+/// included: Ensembl VEP 116.2 writes two `deletion` rows per transcript for
+/// `G,<NON_REF>` with `SVTYPE=DEL`.
+pub fn variant_alts(alts: &mut Vec<(usize, &str)>, svtype: Option<&str>) {
+    let is_block = |alt: &str| alt.eq_ignore_ascii_case("<NON_REF>");
+    let blocks = alts.iter().filter(|(_, alt)| is_block(alt)).count();
+    if !svtype.is_some_and(perl_true) && blocks > 0 && blocks < alts.len() {
+        alts.retain(|(_, alt)| !is_block(alt));
     }
 }
 
@@ -41,19 +59,66 @@ pub fn variant_alts<'a>(alts: &[&'a str], svtype: Option<&str>) -> Vec<&'a str> 
 /// not a run of `ACGT` and INFO/SVTYPE is true or an ALT is written in a structural
 /// form, so `N G` with `SVTYPE=DEL` is a deletion, `<*>` with `SVTYPE=DEL` a deletion
 /// over its END, and `N G` alone a sequence variant.
-pub fn routes_to_structural(ref_allele: &str, alts: &[&str], svtype: Option<&str>) -> bool {
+pub fn routes_to_structural(
+    ref_allele: &str,
+    alts: &[(usize, &str)],
+    svtype: Option<&str>,
+) -> bool {
     let plain_acgt = ref_allele
         .bytes()
-        .chain(alts.iter().flat_map(|alt| alt.bytes()))
+        .chain(alts.iter().flat_map(|(_, alt)| alt.bytes()))
         .all(|b| matches!(b, b'A' | b'C' | b'G' | b'T'));
-    !plain_acgt && (svtype.is_some_and(perl_true) || is_perl_structural_alt_list(&alts.join(",")))
+    !plain_acgt
+        && (svtype.is_some_and(perl_true) || is_perl_structural_alt_list(&joined(alts, ",")))
+}
+
+/// The ALTs joined by `sep`, in their written order.
+pub fn joined(alts: &[(usize, &str)], sep: &str) -> String {
+    alts.iter()
+        .map(|(_, alt)| *alt)
+        .collect::<Vec<_>>()
+        .join(sep)
+}
+
+/// The class of every allele a structural record writes a row for, with the ALT's
+/// written position: under a type `%SO_TERMS` names, every ALT that names an allele
+/// takes the record's class (one StructuralVariationFeature carries the record,
+/// Parser/VCF.pm:560-574); under a type the table lacks, each symbolic ALT keeps its own
+/// class under the `vep_skip` mark, INFO/SVTYPE naming the class of a mixed record whose
+/// joined ALTs open with a sequence allele (`:472-475`). `valid_alts` excludes `*` and `.`.
+pub fn per_alt_classes<'a>(
+    valid_alts: &[(usize, &'a str)],
+    record_class: Option<VariantClass>,
+    svtype: Option<&str>,
+) -> Vec<(usize, &'a str, VariantClass)> {
+    if let Some(class) = record_class {
+        return valid_alts.iter().map(|&(i, alt)| (i, alt, class)).collect();
+    }
+    let symbolic: Vec<(usize, &str)> = valid_alts
+        .iter()
+        .copied()
+        .filter(|(_, alt)| is_symbolic_alt(alt))
+        .collect();
+    let mixed = !symbolic.is_empty() && symbolic.len() < valid_alts.len();
+    symbolic
+        .into_iter()
+        .map(|(i, alt)| {
+            let class = match svtype {
+                Some(svtype) if mixed => {
+                    classify_symbolic_alt(&format!("<{svtype}>"), Some(svtype))
+                }
+                _ => classify_symbolic_alt(alt, svtype),
+            };
+            (i, alt, class)
+        })
+        .collect()
 }
 
 /// Parser/VCF.pm:241, `[<\[\]][^\*]+[>\]\[]|^\.\w+|\w+\.$` over the ALTs joined by
 /// `,`: an angle or bracket token with at least one character and no `*` inside it
 /// anywhere in the list, or a dot-bounded breakend as the list's first or last ALT
 /// (`G,.N,T` is not routed; `.N,G` is). `<*>` and `*` are not structural forms.
-pub fn is_perl_structural_alt_list(alts: &str) -> bool {
+fn is_perl_structural_alt_list(alts: &str) -> bool {
     // The token pattern cannot cross a `*`, so it matches when a `*`-free stretch holds
     // an opening bracket and, at least one character later, a closing one.
     let token = alts.split('*').any(|stretch| {
@@ -190,18 +255,20 @@ pub fn sv_type_abbreviation(joined_alts: &str, svtype: Option<&str>) -> String {
     };
     // Repeated parts collapse to the first as written (Parser.pm:668-681): each part is
     // trimmed, loses one leading `<` and one trailing `>` (`s/^\<|\>$//g`) and is
-    // compared in upper case, so `<<DEL>>/<DEL>` stays a list.
+    // compared in upper case, so `<<DEL>>/<DEL>` stays a list; a trailing empty part is
+    // no part (`DEL/` is `DEL`).
     if kind.contains(['/', ',']) {
-        let parts: Vec<&str> = kind.split(['/', ',']).collect();
+        let parts: Vec<&str> = perl_split(&kind, &['/', ',']).collect();
         let normalized = |part: &str| {
             let part = part.trim();
             let part = part.strip_prefix('<').unwrap_or(part);
             let part = part.strip_suffix('>').unwrap_or(part);
             part.to_ascii_uppercase()
         };
-        let first = normalized(parts[0]);
-        if parts.iter().all(|p| normalized(p) == first) {
-            kind = parts[0].to_string();
+        if let Some(first) = parts.first().map(|p| normalized(p)) {
+            if parts.iter().all(|p| normalized(p) == first) {
+                kind = parts[0].to_string();
+            }
         }
     }
     // The pattern branches of `get_SO_term` (Parser.pm:685-709) match without case
@@ -394,36 +461,92 @@ mod tests {
     /// is a list with no block and any list under a true SVTYPE.
     #[test]
     fn a_non_ref_block_beside_an_allele_names_no_variant() {
-        assert_eq!(variant_alts(&["G", "<NON_REF>"], None), ["G"]);
-        assert_eq!(variant_alts(&["<non_ref>", "G", "T"], Some("")), ["G", "T"]);
-        assert_eq!(variant_alts(&["<NON_REF>"], None), ["<NON_REF>"]);
+        let kept = |alt_field: &str, svtype: Option<&str>| {
+            let mut alts = written_alts(alt_field);
+            variant_alts(&mut alts, svtype);
+            alts.iter()
+                .map(|(i, alt)| format!("{i}:{alt}"))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(kept("G,<NON_REF>", None), ["0:G"]);
+        assert_eq!(kept("<NON_REF>,G", None), ["1:G"]);
+        assert_eq!(kept("<non_ref>,G,T", Some("")), ["1:G", "2:T"]);
+        assert_eq!(kept("<NON_REF>", None), ["0:<NON_REF>"]);
         assert_eq!(
-            variant_alts(&["<NON_REF>", "<NON_REF>"], None),
-            ["<NON_REF>", "<NON_REF>"]
+            kept("<NON_REF>,<NON_REF>", None),
+            ["0:<NON_REF>", "1:<NON_REF>"]
         );
-        assert_eq!(variant_alts(&["G", "T"], None), ["G", "T"]);
-        assert_eq!(
-            variant_alts(&["G", "<NON_REF>"], Some("DEL")),
-            ["G", "<NON_REF>"]
-        );
+        assert_eq!(kept("G,T", None), ["0:G", "1:T"]);
+        assert_eq!(kept("G,<NON_REF>", Some("DEL")), ["0:G", "1:<NON_REF>"]);
         assert_eq!(term("<NON_REF>/<NON_REF>", None), None);
         assert_eq!(sv_type_abbreviation("<NON_REF>/<NON_REF>", None), "NON_REF");
+    }
+
+    /// Perl's list-context `split` drops trailing empty fields and keeps middle ones
+    /// (`split(",", "<DEL>,")` is one field, `"G,,T,,"` three): Ensembl VEP 116.2
+    /// annotates `<DEL>,` with `SVTYPE=DEL` as a deletion, writes the one allele `G` for
+    /// `A G,`, and reads `SVTYPE=DEL/` as `DEL` (Parser.pm:669).
+    #[test]
+    fn a_trailing_empty_field_is_no_field() {
+        assert_eq!(written_alts("<DEL>,"), [(0, "<DEL>")]);
+        assert_eq!(written_alts("G,,T,,"), [(0, "G"), (1, ""), (2, "T")]);
+        assert_eq!(written_alts(","), []);
+        assert_eq!(written_alts(""), []);
+        assert_eq!(perl_split("DEL/", &['/', ',']).collect::<Vec<_>>(), ["DEL"]);
+        assert_eq!(sv_type_abbreviation("DEL/", None), "DEL");
+        assert_eq!(term("<DEL>/", Some("DEL")), Some("deletion"));
+        assert_eq!(sv_type_abbreviation("/", None), "/");
     }
 
     /// Parser/VCF.pm:237-245 over REF, the ALTs and a true SVTYPE.
     #[test]
     fn routing_follows_the_reference_and_alleles_and_a_true_svtype() {
-        assert!(routes_to_structural("N", &["G"], Some("DEL")));
-        assert!(!routes_to_structural("A", &["G"], Some("DEL")));
-        assert!(!routes_to_structural("N", &["G"], None));
-        assert!(!routes_to_structural("N", &["G"], Some("")));
-        assert!(!routes_to_structural("N", &["G"], Some("0")));
-        assert!(routes_to_structural("N", &["<*>"], Some("DEL")));
-        assert!(!routes_to_structural("N", &["<*>"], None));
-        assert!(routes_to_structural("A", &["<DEL>"], None));
-        assert!(routes_to_structural("A", &["G", "<NON_REF>"], None));
-        assert!(routes_to_structural("A", &[".N", "G"], None));
-        assert!(!routes_to_structural("A", &["G", ".N", "T"], None));
-        assert!(routes_to_structural("A", &["g"], Some("DEL")));
+        let routes = |reference: &str, alt_field: &str, svtype: Option<&str>| {
+            routes_to_structural(reference, &written_alts(alt_field), svtype)
+        };
+        assert!(routes("N", "G", Some("DEL")));
+        assert!(!routes("A", "G", Some("DEL")));
+        assert!(!routes("N", "G", None));
+        assert!(!routes("N", "G", Some("")));
+        assert!(!routes("N", "G", Some("0")));
+        assert!(routes("N", "<*>", Some("DEL")));
+        assert!(!routes("N", "<*>", None));
+        assert!(routes("A", "<DEL>", None));
+        assert!(routes("A", "G,<NON_REF>", None));
+        assert!(routes("A", ".N,G", None));
+        assert!(!routes("A", "G,.N,T", None));
+        assert!(routes("A", "g", Some("DEL")));
+        // The dot forms bind to the joined list's ends (`^\.\w+|\w+\.$` over
+        // `join(",", @$alts)`), a token never crosses a `*`.
+        assert!(routes("A", "G,N.", None));
+        assert!(!routes("A", "<*>,G", None));
+        assert!(routes("A", "G,<DEL>", None) && routes("A", "N[21:100[,G", None));
+    }
+
+    /// One StructuralVariationFeature carries a supported record (Parser/VCF.pm:560-574),
+    /// so every allele takes its class; an unsupported list keeps each symbolic ALT's own
+    /// class, INFO/SVTYPE naming it for a mixed record (`:472-475`).
+    #[test]
+    fn every_allele_of_a_supported_record_takes_its_class() {
+        let alts = written_alts("G,<DEL>");
+        assert_eq!(
+            per_alt_classes(&alts, Some(VariantClass::StructuralDeletion), Some("DEL")),
+            [
+                (0, "G", VariantClass::StructuralDeletion),
+                (1, "<DEL>", VariantClass::StructuralDeletion)
+            ]
+        );
+        assert_eq!(
+            per_alt_classes(&written_alts("<INS>,<DEL>"), None, None),
+            [
+                (0, "<INS>", VariantClass::StructuralInsertion),
+                (1, "<DEL>", VariantClass::StructuralDeletion)
+            ]
+        );
+        assert_eq!(
+            per_alt_classes(&written_alts("G,<INV>"), None, Some("FOO")),
+            [(1, "<INV>", VariantClass::ComplexStructural)]
+        );
+        assert_eq!(per_alt_classes(&written_alts("G"), None, Some("FOO")), []);
     }
 }

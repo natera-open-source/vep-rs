@@ -522,7 +522,8 @@ class SvFilterSetTests(unittest.TestCase):
         116.2 masks: the record the reference skipped, the two breakend shapes of the
         chromosome-aware overlap, the reference-allele rows of a bare breakpoint, the gVCF
         variant site, the dot-breakend pair, the annotated missing ALT, the non-integer
-        END and the empty tandem-repeat expansion.
+        coordinate, the empty tandem-repeat expansion, the `*`-only ALT under a true SVTYPE,
+        the numified POS, the dropped `RN=0` allele and the coordinate past vep-rs's ceiling.
 
         Pinned as a set rather than a count, so adding or removing a filter fails
         here with its name, beside the taxonomy row it would need."""
@@ -546,6 +547,10 @@ class SvFilterSetTests(unittest.TestCase):
                 "filter_missing_alt_annotated",
                 "filter_non_integer_end_rows",
                 "filter_cnv_tr_empty_expansion",
+                "filter_star_alone_svtype_annotated",
+                "filter_non_numeric_pos_numified",
+                "filter_cnv_tr_rn_zero_allele_dropped",
+                "filter_coordinate_past_ceiling",
             },
         )
 
@@ -553,7 +558,7 @@ class SvFilterSetTests(unittest.TestCase):
         """Every `filter_*` mask is applied against at least one reference release, and
         every name a release lists is a mask; the 115.2 list is the published
         comparator's eight in its order, the 116.2 list drops the class-C arms and the
-        two class-D masks and adds the nine 116.2 masks."""
+        two class-D masks and adds the thirteen 116.2 masks."""
         filters = {n for n in dir(C) if n.startswith("filter_")}
         listed = {m for masks in C.MASKS_BY_RELEASE.values() for m in masks}
         self.assertEqual(listed, filters)
@@ -576,7 +581,9 @@ class SvFilterSetTests(unittest.TestCase):
             set(C.MASKS_BY_RELEASE["116.2"]) - set(C.MASKS_BY_RELEASE["115.2"]),
             {"filter_reference_skipped_records", "filter_bnd_own_rows_lost", "filter_bnd_synonym_mate_rows",
              "filter_bnd_bare_reference_allele_rows", "filter_gvcf_variant_sites", "filter_dot_breakend_pairs",
-             "filter_missing_alt_annotated", "filter_non_integer_end_rows", "filter_cnv_tr_empty_expansion"},
+             "filter_missing_alt_annotated", "filter_non_integer_end_rows", "filter_cnv_tr_empty_expansion",
+             "filter_star_alone_svtype_annotated", "filter_non_numeric_pos_numified",
+             "filter_cnv_tr_rn_zero_allele_dropped", "filter_coordinate_past_ceiling"},
         )
 
     def test_the_release_block_describes_every_116_2_rule_with_this_comparators_verdict(self) -> None:
@@ -592,7 +599,7 @@ class SvFilterSetTests(unittest.TestCase):
             self.assertEqual(classes[rule.bucket]["excludes"], rule.excludes_with_cache, rule.bucket)
             self.assertIn("excluded", classes[rule.bucket])
         self.assertEqual([c["excludes"] for c in classes.values()],
-                         [True, True, True, False, True, False, True, True, True, True, True])
+                         [True, True, True, False, True, False, True, True, True, True, True, True, True, True, True])
         self.assertEqual(block["bnd_bare_reference_allele_rows"], 0)
         self.assertEqual(block["bnd_mate_32bit_buffer_records"], 0)
         self.assertEqual(block["excluded_gvcf_variant_site_rust"], 0)
@@ -1373,6 +1380,22 @@ class CnvTrSwapPopulationTests(unittest.TestCase):
         self.assertIsNone(C._cnv_tr_pair_kind("21:1001-1018", "deletion", run))
         self.assertIsNone(C._cnv_tr_pair_kind("21:1020-1021", "CACA", run))
         self.assertIsNone(C._cnv_tr_pair_kind("22:1018-1019", "CACA", run))
+
+    def test_a_reading_never_starts_before_the_run(self):
+        """The reference's literal allele starts at the run (`$start` of the record) or after
+        it: trimming a shared prefix moves the start forward, never back. An upper-case allele
+        whose span begins before the run is another record's, whatever its letters: the raw
+        abbreviation Ensembl VEP 115.2 writes for a `<CPX>` record (`CPX`) over a 22 kb span that
+        covers a 17-base run on the same transcript, or a sequence allele of an earlier run.
+        Neither pairs with the run's symbolic row, and the mask leaves both sides charged."""
+        run = "21:27268731-27268748"
+        self.assertIsNone(C._cnv_tr_pair_kind("21:27254789-27276862", "CPX", run))
+        self.assertIsNone(C._cnv_tr_pair_kind("21:27268730-27268748", "CACACACACACACACACACA", run))
+        self.assertEqual(C._cnv_tr_pair_kind("21:27268731-27268748", "CACACACACACACACACACA", run), "literal")
+        perl = {T("21:27254789-27276862", "CPX", "ENST_A", "intron_variant")}
+        rust = {T(run, "tandem_repeat", "ENST_A", "feature_elongation,intron_variant")}
+        self.assertEqual(C.filter_cnv_tr_expansion_divergences(perl, rust), (set(), set()))
+        self.assertEqual(C.count_cnv_tr_swap_population(perl, rust), (1, 0))
 
     def test_representation_pairs_are_masked_and_consequence_disagreements_are_not(self):
         # Identical sets: pure location and allele difference.
@@ -2490,6 +2513,22 @@ class RecordLocationTests(unittest.TestCase):
         self.assertEqual(C.record_location(REC(18457512, "N", "<BND>", "END=18457513;SVLEN=14027179;CHR2=21;END2=32484692")), ("21", 18457513, 32484691))
         self.assertEqual(C.record_location(REC(18457512, "N", "<BND>", "END=18457513;CHR2=21;END2=32484692")), ("21", 18457513, 18457513), "a breakend's END is discarded")
 
+    def test_an_infinite_svlen_or_end_is_a_saturated_integer_end(self) -> None:
+        """Perl reads `1e400` as `Inf` (`abs("1e400")` is `Inf`) and Ensembl VEP 116.2 skips the
+        record as oversize (`variant size (Inf) is bigger than --max_sv_size`); the end derived
+        for the record is saturated at the machine word and stays an integer, so the record's
+        Location is computed, never an overflow that ends the comparison."""
+        saturated = 2**63 - 1
+        self.assertEqual(C.record_location(REC(1000, "N", "<DUP>", "SVTYPE=DUP;SVLEN=1e400")), ("21", 1001, 1000 + saturated))
+        self.assertEqual(C.record_location(REC(1000, "N", "<DUP>", "SVTYPE=DUP;END=1e400")), ("21", 1001, saturated))
+        self.assertEqual(C.record_location(REC(1000, "N", "<DUP>", "SVTYPE=DUP;END=-1e400")), ("21", 1001, -saturated))
+        for chrom, _start, end in (C.record_location(REC(1000, "N", "<DUP>", info)) for info in ("SVTYPE=DUP;SVLEN=1e400", "SVTYPE=DUP;END=1e400")):
+            self.assertIsInstance(end, int, chrom)
+        oversize = REC(1000, "N", "<DUP>", "SVTYPE=DUP;SVLEN=1e400")
+        rust = {T("21:1001-9223372036854775807", "duplication", "ENST_1", "intron_variant")}
+        self.assertEqual(C.filter_reference_skipped_records(set(), rust, [oversize]), (rust, 1))
+        self.assertEqual(C.check_skip_routes([oversize], set(), rust), [])
+
 
 class BndOwnRowsLostTests(unittest.TestCase):
     """A bracket breakend whose mate is on another chromosome loses its own-end rows
@@ -2665,7 +2704,7 @@ class FastaNamedSliceIntergenicTests(unittest.TestCase):
         perl = {T("21:30425651-30425949.5", "deletion", "ENST_1", "intron_variant"),
                 T("21:30425651-3.0425949e7", "deletion", "ENST_2", "intron_variant"),
                 T("21:30425651-30425949", "deletion", "ENST_3", "intron_variant")}
-        self.assertEqual(len(C.filter_non_integer_end_rows(perl)), 2)
+        self.assertEqual(C.filter_non_integer_end_rows(perl, set(), []), ({t for t in perl if t[2] != "ENST_3"}, set()))
         for text in ("21:30425651-030425949", "21:30425651-+30425949", "chr21:30425651-30425949"):
             self.assertEqual(C.normalize_location(text), "21:30425651-30425949", text)
         self.assertEqual(C.normalize_location("21:30425651-30425949.5"), "21:30425651-30425949.5")
@@ -2697,9 +2736,9 @@ class FastaNamedSliceIntergenicTests(unittest.TestCase):
         """`$seq x $num` (Parser/VCF.pm:419) repeats the unit an integer number of times, so
         `RUC=3.5` on a three-unit `AGC` run rebuilds the run (empty) and `RUC=0.5` repeats
         nothing (empty), while `RUC=4.5` is a gain; a `.` unit is one `N` base; with RN the
-        counts of every repeat sequence are summed, a two-sequence allele is never read as
-        the reference run, and a unit of no bases (`RUS=,AC` with RB) divides by zero in Perl,
-        so the record is not judged."""
+        bases of every repeat sequence are summed and a two-sequence allele of eleven bases
+        is not the nine-base run, and a unit of no bases (`RUS=,AC` with RB) divides by zero
+        in Perl, so the record is not judged."""
         run = "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;"
         for info, empty in (
             (run + "RUC=3.5", True),
@@ -2725,6 +2764,40 @@ class FastaNamedSliceIntergenicTests(unittest.TestCase):
         ):
             with self.subTest(info=info):
                 self.assertEqual(C.cnv_tr_expansion_is_empty(REC(30425587, "N", "<CNV:TR>", info)), empty)
+
+    def test_a_repeat_unit_of_no_bases_is_empty_under_ruc_and_unjudged_under_rb(self) -> None:
+        """`$repeat .= $seq x $num` (Parser/VCF.pm:419) with the empty unit of `RUS=,AGC` and
+        `RUC=5` is `"" x 5`, nothing, so with a FASTA Ensembl VEP 116.2 builds the allele string
+        `N/` and writes nothing for the record: an empty expansion. `RUS=,AC;RB=12` reaches
+        `shift(@RB) / length($seq)` (`:414`) with a length of zero and the reference run ends
+        (`Illegal division by zero`), so no reference output can hold the record and it is not
+        judged. With `RN=2;RUC=5,2` the second unit repeats `AGC` twice, so the allele is not
+        empty."""
+        run = "SVTYPE=CNV;END=30425596;SVLEN=9;"
+        for info, empty in (
+            (run + "RUS=,AGC;RUC=5", True),
+            (run + "RUS=,AC;RB=12", False),
+            (run + "RUS=,AGC;RN=2;RUC=5,2", False),
+            (run + "RUS=,AGC;RN=2;RUC=5,0", True),
+            (run + "RUS=,AC;RUC=0;RB=12", False),
+        ):
+            with self.subTest(info=info):
+                self.assertEqual(C.cnv_tr_expansion_is_empty(REC(30425587, "N", "<CNV:TR>", info)), empty)
+
+    def test_a_gvcf_site_allele_is_upper_cased_as_the_parser_writes_it(self) -> None:
+        """Ensembl VEP 116.2 drops `21 30425650 x A g,<NON_REF> . . .` and `21 30425650 x a
+        g,<non_ref> . . .` (`g/NON_REF is not a supported structural variant type`); vep-rs
+        writes the allele in upper case, `21:30425650 G ENST00000390690 missense_variant` and
+        `21:30425650 G ENST00000334068 upstream_gene_variant`, and the site's rows are set aside
+        under those spellings."""
+        rust = {T("21:30425650", "G", "ENST00000390690", "missense_variant"),
+                T("21:30425650", "G", "ENST00000334068", "upstream_gene_variant")}
+        for ref, alt in (("A", "g,<NON_REF>"), ("a", "g,<non_ref>")):
+            with self.subTest(ref=ref, alt=alt):
+                record = REC(30425650, ref, alt, ".")
+                self.assertEqual(C.perl_skip_route(record), "gvcf_variant_site")
+                self.assertEqual(C.filter_gvcf_variant_sites(set(), rust, [record]), (rust, 1))
+                self.assertEqual(ADJUSTED(set(), rust, [record])[:2], (set(), set()))
 
     def test_a_gvcf_site_is_set_aside_at_the_alleles_the_parser_writes(self) -> None:
         """vep-rs places a gVCF site's alleles as its parser does (`gvcf_site_rows`): `ATG AG`
@@ -2755,6 +2828,13 @@ class FastaNamedSliceIntergenicTests(unittest.TestCase):
     def test_perl_numification_and_the_structural_end(self) -> None:
         for text, value in (("300", 300), ("-300", -300), ("300abc", 300), (" 3e2", 300), ("abc", 0), ("", 0), (".", 0), ("300.7", 300.7)):
             self.assertEqual(C.perl_numeric_value(text), value, text)
+        # `abs("1e400")` is `Inf` to Perl; the reading saturates at the machine word with its
+        # sign, as vep-rs's does, so every later `int()` of a coordinate holds.
+        self.assertEqual(C.perl_numeric_value("1e400"), 2**63 - 1)
+        self.assertEqual(C.perl_numeric_value("-1e400"), -(2**63 - 1))
+        self.assertEqual(C.perl_numeric_value("1.7e308"), 1.7e308, "the largest finite reading is not saturated")
+        self.assertEqual(C.perl_structural_end(1000, "1e400", None, False), 1000 + 2**63 - 1)
+        self.assertEqual(C.perl_structural_end(1000, None, "1e400", False), 2**63 - 1)
         self.assertEqual(C.perl_structural_end(1000, "-300", "2000", False), 1300)
         self.assertEqual(C.perl_structural_end(1000, "abc", "2000", False), 1000)
         self.assertEqual(C.perl_structural_end(1000, None, "2000", False), 2000)
@@ -2840,8 +2920,12 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
             "bnd_synonym_mate_rows_lost", "fasta_named_slice_intergenic",
             "bnd_bare_reference_allele_row", "bnd_mate_32bit_buffer_intergenic",
             "gvcf_variant_site_dropped", "dot_breakend_without_svtype_pair", "missing_alt_annotated",
-            "non_integer_end_annotated", "cnv_tr_empty_expansion_dropped",
+            "non_integer_end_annotated", "cnv_tr_empty_expansion_dropped", "star_alone_svtype_annotated",
+            "non_numeric_pos_numified", "cnv_tr_rn_zero_allele_dropped", "coordinate_past_ceiling",
         })
+        for key in ("excluded_non_integer_end_rust", "excluded_star_alone_svtype_perl", "excluded_non_numeric_pos_perl",
+                    "excluded_cnv_tr_rn_zero_rust", "excluded_coordinate_past_ceiling_perl"):
+            self.assertEqual(adj[key], 0, key)
         self.assertEqual((adj["bnd_mate_32bit_buffer_records"], adj["bnd_mate_32bit_buffer_reference_tuples"]), (0, 0))
         self.assertEqual(adj["bnd_bare_reference_allele_rows"], 0)
         surviving = (out / "discordant_adjusted.tsv").read_text().splitlines()[1:]
@@ -2933,7 +3017,7 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
 
 class SkipRouteCrossCheckTests(unittest.TestCase):
     """`perl_skip_route` is the reference's own drop logic on the input record (Parser/VCF.pm
-    116.2:237-245, 468-481, 555-557; Parser.pm:491-500, 663-726; ensembl-io BaseVCF4
+    116.2:237-245, 468-481, 555-557; Parser.pm:491-500, 663-727; ensembl-io BaseVCF4
     get_start/get_end), and `check_skip_routes` holds the records and the outputs to each
     other."""
 
@@ -2946,6 +3030,9 @@ class SkipRouteCrossCheckTests(unittest.TestCase):
         self.assertEqual(C.perl_skip_route(R(18457512, "N", "<BND>", "END=18457513;SVTYPE=BND;SVLEN=14027179;CHR2=21;END2=32484692")), "oversize")
         self.assertEqual(C.perl_skip_route(R(1000, "N", "<DEL>", "END=12000000;SVTYPE=DEL")), "oversize")
         self.assertEqual(C.perl_skip_route(R(1000, "N", "<DEL>", "END=10001001;SVTYPE=DEL")), None, "a span of exactly 10,000,000 is not over the cap")
+        # `variant size (Inf) is bigger than --max_sv_size`: Perl reads `1e400` as `Inf`.
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "<DUP>", "SVTYPE=DUP;SVLEN=1e400")), "oversize")
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "<DUP>", "SVTYPE=DUP;END=1e400")), "oversize")
         self.assertEqual(C.perl_skip_route(R(45716815, "N", "<CPX>", "END=45730272;SVTYPE=CPX")), "unsupported_type")
         self.assertEqual(C.perl_skip_route(R(70000, "N", "<NON_REF>", "END=70100")), "unsupported_type")
         self.assertEqual(C.perl_skip_route(R(1000, "N", "<CTX>", "SVTYPE=CTX")), "unsupported_type")
@@ -2997,6 +3084,37 @@ class SkipRouteCrossCheckTests(unittest.TestCase):
             with self.subTest(sv_type=sv_type):
                 self.assertIsNone(C.perl_so_abbrev(sv_type))
 
+    def test_a_trailing_empty_alt_field_is_no_field(self) -> None:
+        """Ensembl VEP's parser splits the ALT column in list context (BaseVCF4.pm:489
+        `[split(',',$alt_allele)]`), which drops a trailing empty field: `N <DEL>,` with
+        `SVTYPE=DEL;END=1100` is the one allele `<DEL>`, a deletion the reference annotates.
+        `get_SO_term` normalises a repeated type over the same list-context split, on `/` or
+        `,` (Parser.pm:670), so `DEL/` is the one part `DEL` and `SVTYPE=DEL/` names a deletion.
+        Every reader of the ALT column sees the kept fields: `<DEL>,` is one symbolic deletion
+        to `classify_variant`, `record_alleles` and `record_location`, `N.,` a breakend whose
+        END is discarded, `<CNV:TR>,` a single-ALT tandem repeat, `AG,<NON_REF>,` the gVCF site
+        `AG,<NON_REF>` and a bracket mate list with a trailing field still names its mate."""
+        R = self.rec
+        self.assertIsNone(C.perl_skip_route(R(1000, "N", "<DEL>,", "SVTYPE=DEL;END=1100")))
+        self.assertIsNone(C.perl_skip_route(R(1000, "N", "N.", "SVTYPE=DEL/;END=1100")))
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "<DEL>,,", "END=1100")), None, "two trailing empty fields are none")
+        self.assertEqual(C.perl_skip_route(R(1000, "N", "<DEL>,,T", "END=1100")), "unsupported_type", "a middle empty field is kept")
+        self.assertEqual(C.perl_so_abbrev("<DEL>/"), "DEL")
+        self.assertEqual(C.perl_so_abbrev("DEL/"), "DEL")
+        self.assertEqual(C.perl_so_abbrev("<DEL>//<DUP>"), "CNV")
+        self.assertEqual(C.classify_variant("N", "<DEL>,"), "Symbolic_DEL")
+        self.assertEqual(C.classify_variant("N", "<DEL>,<DUP>"), "Multi_allelic")
+        self.assertEqual(C.record_alleles(R(1000, "N", "<DEL>,", "END=2000;SVTYPE=DEL")), {"deletion"})
+        self.assertEqual(C.record_location(R(1000, "N", "N.,", "END=2000")), ("21", 1001, 1001))
+        self.assertEqual(C.record_location(R(1000, "N", "<DEL>,", "END=2000")), ("21", 1001, 2000))
+        run = "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;RUC=3"
+        self.assertTrue(C.cnv_tr_expansion_is_empty(R(30425587, "N", "<CNV:TR>,", run)))
+        rust = {T("21:30425651", "-", "ENST_1", "frameshift_variant")}
+        self.assertEqual(C.filter_gvcf_variant_sites(set(), rust, [R(30425650, "ATG", "AG,<NON_REF>,", ".")]), (rust, 1))
+        self.assertEqual(C.filter_gvcf_variant_sites(set(), rust, [R(30425650, "ATG", "AG,", ".")]), (set(), 0))
+        records, rows = C.count_bnd_mate_over_32_bit([R(1000, "N", "N[21:2147483647[,", "SVTYPE=BND")], {T("21:1001", "N[21:2147483647[", "ENST_1", "intron_variant")})
+        self.assertEqual((records, rows), (1, 1))
+
     def test_an_absent_location_no_skip_route_record_explains_is_a_problem(self) -> None:
         """vep-rs structural rows at a Location the reference wrote nothing for, with no
         skip-route record starting there: a record dropped on a route the registry does not
@@ -3035,12 +3153,662 @@ class SkipRouteCrossCheckTests(unittest.TestCase):
         problems = C.check_skip_routes([mixed, twin], twin_perl, twin_perl | {T("21:1001-2000", "T", "ENST_D", "missense_variant")})
         self.assertEqual(problems, ["mixed N><DEL>,T and twin N><DEL> share 21:1001-2000 and an allele; the skipped one cannot be told from the kept one"])
 
+    def test_an_infinite_span_is_oversize_and_its_pair_rows_are_set_aside(self) -> None:
+        """Ensembl VEP 116.2 drops `21 30425650 x N <INS> . . SVTYPE=INS;SVLEN=Inf` as oversize
+        (`variant size (Inf) is bigger than --max_sv_size (10000000)`), as it drops
+        `21 30425650 x N <DUP:TANDEM> . . SVTYPE=DUP;SVLEN=Inf` and `21 30425587 x N <CNV:TR> . .
+        SVTYPE=CNV;SVLEN=Inf;RUS=AGC;RUC=4` in every run; vep-rs reads the length as 0 and writes
+        the pair `21:30425650-30425651 insertion ENST00000390690 coding_sequence_variant,feature_elongation`
+        with `21:30425650-30425651 insertion ENST00000334068 upstream_gene_variant`
+        (`tandem_duplication` for the second, the pair `21:30425587-30425588 tandem_repeat` for
+        the third), set aside under the class. `SVLEN=NaN` and `END=NaN` keep a record (every
+        comparison on NaN is false; the reference writes `21:30425651-NaN`), `END=Inf` is
+        oversize, and a breakend's `END=Inf` is discarded with its END."""
+        cases = [
+            (REC(30425650, "N", "<INS>", "SVTYPE=INS;SVLEN=Inf", "ins"),
+             {T("21:30425650-30425651", "insertion", "ENST00000390690", "coding_sequence_variant,feature_elongation"),
+              T("21:30425650-30425651", "insertion", "ENST00000334068", "upstream_gene_variant")}),
+            (REC(30425650, "N", "<DUP:TANDEM>", "SVTYPE=DUP;SVLEN=Inf", "tdup"),
+             {T("21:30425650-30425651", "tandem_duplication", "ENST00000390690", "coding_sequence_variant,feature_elongation"),
+              T("21:30425650-30425651", "tandem_duplication", "ENST00000334068", "upstream_gene_variant")}),
+            (REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;SVLEN=Inf;RUS=AGC;RUC=4", "tr"),
+             {T("21:30425587-30425588", "tandem_repeat", "ENST00000390690", "coding_sequence_variant,feature_elongation"),
+              T("21:30425587-30425588", "tandem_repeat", "ENST00000334068", "upstream_gene_variant")}),
+        ]
+        for record, rust in cases:
+            with self.subTest(alt=record.alt):
+                self.assertEqual(C.perl_skip_route(record), "oversize")
+                self.assertIsNone(C.perl_skip_route(record, -1), "without a cap the reference run dies on the span")
+                self.assertEqual(C.filter_reference_skipped_records(set(), rust, [record]), (rust, 1))
+                self.assertEqual(C.check_skip_routes([record], set(), rust), [])
+        self.assertIsNone(C.perl_skip_route(REC(30425650, "N", "<DEL>", "SVTYPE=DEL;SVLEN=NaN")))
+        self.assertIsNone(C.perl_skip_route(REC(30425650, "N", "<DEL>", "SVTYPE=DEL;END=NaN")))
+        self.assertEqual(C.perl_skip_route(REC(30425650, "N", "<DEL>", "SVTYPE=DEL;END=Inf")), "oversize")
+        self.assertEqual(C.perl_skip_route(REC(30425650, "N", "<DEL>", "SVTYPE=DEL;SVLEN=-Infinity")), "oversize")
+        self.assertIsNone(C.perl_skip_route(REC(30425650, "N", "<BND>", "SVTYPE=BND;END=Inf")))
+
     def test_agreement_yields_no_problem(self) -> None:
         cpx = self.rec(45716815, "N", "<CPX>", "END=45730272;SVTYPE=CPX", vid="cpx")
         kept = self.rec(1000, "N", "<DEL>", "END=2000;SVTYPE=DEL", vid="kept")
         perl = {T("21:1001-2000", "deletion", "ENST_D", "feature_truncation")}
         rust = perl | {T("21:45716816-45730272", "CPX", "ENST_C", "intron_variant")}
         self.assertEqual(C.check_skip_routes([cpx, kept], perl, rust), [])
+
+
+def VCF(*records: tuple[str, ...]) -> list[C.VcfVariant]:
+    """The records of a VCF written from its eight-column data lines, read as `parse_vcf` reads them."""
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "in.vcf"
+        path.write_text(
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+            + "".join("\t".join(record) + "\n" for record in records),
+            encoding="utf-8",
+        )
+        return C.parse_vcf(path)
+
+
+def ADJUSTED(perl: set, rust: set, records: list, max_sv_size: int = C._MAX_SV_SIZE) -> tuple[set, set, C.MaskResult]:
+    """The one-sided tuples every 116.2 mask leaves in place, each side, with the mask result."""
+    masks = C.apply_masks(perl, rust, "116.2", {}, {}, {}, "vep-rs", records, max_sv_size)
+    return (perl - rust) - masks.all_perl(), (rust - perl) - masks.all_rust(), masks
+
+
+class NumifiedPosTests(unittest.TestCase):
+    """`parse_vcf` reads POS as Ensembl VEP 116.2 numifies it (BaseVCF4.pm:263 `$start++` on
+    the structural path), and the two classes over a POS the reference annotated where vep-rs
+    refused the line."""
+
+    def test_a_pos_in_another_spelling_is_read_as_its_number(self) -> None:
+        """`21 3e7 x N <DEL> . . SVTYPE=DEL;END=30425949` is the record at 30000000 (Ensembl VEP
+        116.2 writes `21:30000001-30425949 deletion ENST00000286808 transcript_ablation`);
+        `30425949.0`, ` 30425949`, `30425949 `, `+30425949` and `030425949` are 30425949;
+        `abc`, `.` and fullwidth digits are 0; a digit string past 2^63 is exact."""
+        records = VCF(
+            ("21", "3e7", "exp", "N", "<DEL>", ".", ".", "SVTYPE=DEL;END=30425949"),
+            ("21", "30425949.0", "float0", "A", "G", ".", ".", "."),
+            ("21", " 30425949", "lead", "A", "G", ".", ".", "."),
+            ("21", "30425949 ", "trail", "A", "G", ".", ".", "."),
+            ("21", "+30425949", "plus", "N", "<DEL>", ".", ".", "SVTYPE=DEL;END=30425949"),
+            ("21", "030425949", "zeropad", "N", "<DEL>", ".", ".", "SVTYPE=DEL;END=30425949"),
+            ("21", "abc", "abc", "A", "G", ".", ".", "."),
+            ("21", ".", "dot", "N", "<DEL>", ".", ".", "SVTYPE=DEL;END=30425949"),
+            ("21", "３０４２５９４９", "fullwidth", "N", "<DEL>", ".", ".", "SVTYPE=DEL;END=30425949"),
+            ("21", "18446744073709551616", "huge", "N", "<DEL>", ".", ".", "SVTYPE=DEL;SVLEN=-300"),
+        )
+        self.assertEqual([v.pos for v in records], [30000000, 30425949, 30425949, 30425949, 30425949, 30425949, 0, 0, 0, 2**64])
+        self.assertEqual([v.pos_text for v in records[:3]], ["3e7", "30425949.0", " 30425949"])
+        self.assertEqual((records[0].location, records[0].variant_type), ("21:30000000", "Symbolic_DEL"))
+        for text, value in (("3e7", 30000000), ("30425949.", 30425949), ("3.0425949E7", 30425949), ("1e3", 1000),
+                            ("-5", -5), ("30_425_949", 30), ("0x1D04A1D", 0), ("NaN", 0), ("1e400", 2**63 - 1),
+                            ("4611686018427387904", 2**62)):
+            self.assertEqual(C.perl_pos(text), value, text)
+        for text in ("30425949", "+30425949", "030425949", "3e7", "30425949.0", "30425949.", " 30425949", "30425949 ",
+                     "3.0425949E7", "1e3", None):
+            self.assertTrue(C.perl_pos_is_a_number(text), text)
+        for text in (".", "", "0x1D04A1D", "３０４２５９４９", "30_425_949", "-5", "-2147483648", "NaN", "Inf", "e5",
+                     "30425949,30425950"):
+            self.assertFalse(C.perl_pos_is_a_number(text), text)
+
+    def test_the_reference_rows_of_a_numified_pos_are_set_aside_from_the_input(self) -> None:
+        """Ensembl VEP 116.2 numifies a POS that is not a number: under --max_sv_size -1
+        `21 . x N <DEL> . . SVTYPE=DEL;END=30425949` is annotated from base 1 (`21:1-30425949
+        deletion ENST00000262354 transcript_ablation`, 3,254 rows) and `21 30_425_949 x N <DEL>
+        . . SVTYPE=DEL;END=30425949` from 31 (`21:31-30425949 deletion ...`); `21 -5 x N <DEL>
+        . . SVTYPE=DEL;SVLEN=-300` is `21:-4-295 deletion - intergenic_variant`, `21 -2147483648
+        x N <DEL> . . SVTYPE=DEL;SVLEN=-300` `21:-2147483647--2147483348 deletion -
+        intergenic_variant` and the sequence record `21 -5 x A G` `21:-5 G - intergenic_variant`;
+        vep-rs refuses every line. `21 0 x N <DEL> . . SVTYPE=DEL;SVLEN=-300` is `21:1-300` in
+        both engines and not the class, and a negative coordinate is an integer, not class 12."""
+        records = VCF(
+            ("21", ".", "dot", "N", "<DEL>", ".", ".", "SVTYPE=DEL;END=30425949"),
+            ("21", "30_425_949", "underscore", "N", "<DEL>", ".", ".", "SVTYPE=DEL;END=30425949"),
+            ("21", "-5", "neg", "N", "<DEL>", ".", ".", "SVTYPE=DEL;SVLEN=-300"),
+            ("21", "-2147483648", "negbig", "N", "<DEL>", ".", ".", "SVTYPE=DEL;SVLEN=-300"),
+            ("21", "-5", "neg_snv", "A", "G", ".", ".", "."),
+            ("21", "0", "zero", "N", "<DEL>", ".", ".", "SVTYPE=DEL;SVLEN=-300"),
+        )
+        numified = {
+            T("21:1-30425949", "deletion", "ENST00000262354", "transcript_ablation"),
+            T("21:1-30425949", "deletion", "ENST00000282964", "transcript_ablation"),
+            T("21:31-30425949", "deletion", "ENST00000262354", "transcript_ablation"),
+            INTERGENIC("21:-4-295", "deletion"),
+            INTERGENIC("21:-2147483647--2147483348", "deletion"),
+            INTERGENIC("21:-5", "G"),
+        }
+        shared = {INTERGENIC("21:1-300", "deletion")}
+        self.assertEqual(C.filter_non_numeric_pos_numified(numified | shared, shared, records), numified)
+        self.assertEqual(C.filter_non_integer_end_rows(numified | shared, shared, records), (set(), set()))
+        perl_open, rust_open, masks = ADJUSTED(numified | shared, shared, records, -1)
+        self.assertEqual((perl_open, rust_open, masks.numified_pos_perl, masks.skipped_problems), (set(), set(), numified, []))
+
+    def test_the_reference_rows_of_a_pos_past_the_ceiling_are_set_aside_when_vep_rs_wrote_none(self) -> None:
+        """Ensembl VEP 116.2 writes `21:4611686018427387905-4611686018427388204 deletion -
+        intergenic_variant` for `21 4611686018427387904 x N <DEL> . . SVTYPE=DEL;SVLEN=-300`,
+        `21:4611686018427387904-4611686018427388203 ...` for POS 4611686018427387903,
+        `21:9223372036854775808 G - intergenic_variant` for `21 9223372036854775808 x A G` and
+        the single coordinate `21:18446744073709551617 deletion - intergenic_variant` for
+        `21 18446744073709551616 x N <DEL> . . SVTYPE=DEL;SVLEN=-300`; vep-rs fails each line
+        at 2^62 - 1. A row both engines wrote is not set aside."""
+        records = VCF(
+            ("21", "4611686018427387904", "two62", "N", "<DEL>", ".", ".", "SVTYPE=DEL;SVLEN=-300"),
+            ("21", "4611686018427387903", "ceiling", "N", "<DEL>", ".", ".", "SVTYPE=DEL;SVLEN=-300"),
+            ("21", "9223372036854775808", "two63", "A", "G", ".", ".", "."),
+            ("21", "18446744073709551616", "two64", "N", "<DEL>", ".", ".", "SVTYPE=DEL;SVLEN=-300"),
+            ("21", "4611686018427387903", "ceiling_snv", "A", "G", ".", ".", "."),
+        )
+        past = {
+            INTERGENIC("21:4611686018427387905-4611686018427388204", "deletion"),
+            INTERGENIC("21:4611686018427387904-4611686018427388203", "deletion"),
+            INTERGENIC("21:9223372036854775808", "G"),
+            INTERGENIC("21:18446744073709551617", "deletion"),
+        }
+        shared = {INTERGENIC("21:4611686018427387903", "G")}
+        self.assertEqual(C.VEP_RS_COORDINATE_CEILING, 4611686018427387903)
+        self.assertEqual(C.filter_coordinate_past_ceiling(past | shared, shared, records), past)
+        perl_open, rust_open, masks = ADJUSTED(past | shared, shared, records)
+        self.assertEqual((perl_open, rust_open, masks.ceiling_perl, masks.skipped_problems), (set(), set(), past, []))
+
+
+class StarAloneSvtypeTests(unittest.TestCase):
+    def test_the_reference_rows_of_a_star_only_alt_under_a_true_svtype_are_set_aside(self) -> None:
+        """Ensembl VEP 116.2 annotates `21 30425650 x N * . . SVTYPE=DEL;END=30425949` as
+        `21:30425651-30425949 deletion ENST00000334068 upstream_gene_variant` and
+        `21:30425651-30425949 deletion ENST00000390690 feature_truncation,coding_sequence_variant,
+        5_prime_UTR_variant`, `A *` the same, and `21 30425650 x N * . . SVTYPE=BND` as
+        `21:30425651 chromosome_breakpoint` on both transcripts (ALLELE_NUM 1 and 2, one tuple
+        each); vep-rs writes no row (`No alternate allele`). `21 30425650 x N * . . .` has no
+        reference row, and a record with a real ALT at the Location is not touched."""
+        records = [REC(30425650, "N", "*", "SVTYPE=DEL;END=30425949", "star"),
+                   REC(30425650, "A", "*", "SVTYPE=DEL;END=30425949", "star_a"),
+                   REC(30425650, "N", "*", "SVTYPE=BND", "star_bnd"),
+                   REC(30425650, "N", "*,*", "SVTYPE=DEL;END=30425949", "two_stars"),
+                   REC(30425650, "N", "*", ".", "bare"),
+                   REC(11000000, "N", "<DEL>", "SVTYPE=DEL;END=11000299", "kept")]
+        deletion = {T("21:30425651-30425949", "deletion", "ENST00000334068", "upstream_gene_variant"),
+                    T("21:30425651-30425949", "deletion", "ENST00000390690",
+                      "feature_truncation,coding_sequence_variant,5_prime_UTR_variant")}
+        breakpoint = {T("21:30425651", "chromosome_breakpoint", "ENST00000334068", "upstream_gene_variant"),
+                      T("21:30425651", "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant")}
+        kept = {INTERGENIC("21:11000001-11000299", "deletion")}
+        self.assertEqual(C.filter_star_alone_svtype_annotated(deletion | breakpoint | kept, records), deletion | breakpoint)
+        self.assertEqual(C.filter_star_alone_svtype_annotated(deletion, records[4:]), set())
+        perl_open, rust_open, masks = ADJUSTED(deletion | breakpoint | kept, kept, records)
+        self.assertEqual((perl_open, rust_open, masks.star_alone_perl), (set(), set(), deletion | breakpoint))
+
+
+class UnsupportedAltAlleleTests(unittest.TestCase):
+    """vep-rs annotates a symbolic ALT whose type Ensembl VEP 116.2 has no term for under the
+    ALT's own class (`classify_symbolic_alt`, `display_allele`); `record_alleles` names that
+    spelling so the record's rows are set aside under `reference_skipped_record`."""
+
+    def test_the_class_term_vep_rs_prints_for_an_unsupported_alt(self) -> None:
+        for alt, term in (("<del>", "deletion"), ("<Del>", "deletion"), ("<dEL>", "deletion"), ("<DEL:>", "deletion"),
+                          ("<DEL >", "deletion"), ("<DEL\u00a0>", "deletion"), ("<DEL\u200b>", "deletion"),
+                          ("<Ins>", "insertion"), ("<INS:>", "insertion"), ("<Bnd>", "chromosome_breakpoint"),
+                          ("<CN=X>", "copy_number_variation"), ("<CNX>", "copy_number_variation"),
+                          ("<CN>", "copy_number_variation"), ("<Dup>", "duplication"), ("<Inv>", "inversion"),
+                          ("<<DEL>>", "DEL"), ("<:DEL>", ""), ("<CPX>", "CPX"), ("<CPX:X>", "CPX"),
+                          ("<DÉL>", "DÉL"), ("<ＤＥＬ>", "ＤＥＬ"), ("< DEL >", " DEL ")):
+            self.assertEqual(C.vep_rs_unsupported_alt_allele(alt, None), term, alt)
+        self.assertEqual(C.vep_rs_unsupported_alt_allele("<FOO>", "DEL"), "deletion", "INFO/SVTYPE names the class of a type the ALT does not")
+        self.assertEqual(C.vep_rs_unsupported_alt_allele("<FOO>", "foo"), "FOO")
+        self.assertEqual(C.record_alleles(REC(30425650, "N", "<Del>", "END=30425949")), {"Del", "<Del>", "deletion"})
+        self.assertEqual(C.record_alleles(REC(30425650, "N", "<CN=X>", "END=30425949")), {"CN=X", "<CN=X>", "copy_number_variation"})
+        self.assertEqual(C.record_alleles(REC(30425650, "N", "<:DEL>", "END=30425949")), {"", "<>", "<:DEL>", "-"},
+                         "the tab format writes the empty Allele as `-`")
+        self.assertEqual(C.record_alleles(REC(30425650, "N", "<<DEL>>,<DEL>", "END=30425949")), {"deletion", "DEL"},
+                         "`<<DEL>>` alone is a DEL to the reference, the list `DEL/DEL` has no term, and vep-rs spells the doubled ALT `DEL`")
+        self.assertEqual(C.record_alleles(REC(30425650, "N", "<DEL>,T", "SVTYPE=INS;END=30425949")), {"deletion", "insertion", "T"},
+                         "a mixed list under a type the table lacks takes INFO/SVTYPE's class in vep-rs")
+        self.assertEqual(C.record_alleles(REC(1000, "N", "<CPX>", "END=2000;SVTYPE=CPX")), {"CPX", "<CPX>"}, "the raw spelling stays")
+
+    def test_the_rows_of_an_unsupported_alt_are_set_aside_under_the_class_term(self) -> None:
+        """`21 30425650 x N <Del> . . END=30425949` is skipped by Ensembl VEP 116.2 (`Del is not a
+        supported structural variant type`); vep-rs writes `21:30425651-30425949 deletion
+        ENST00000334068 upstream_gene_variant` and `21:30425651-30425949 deletion ENST00000390690
+        feature_truncation,coding_sequence_variant,5_prime_UTR_variant`, `<CN=X>` the same rows
+        under `copy_number_variation` (`coding_sequence_variant,5_prime_UTR_variant` on the
+        coding transcript), `<Bnd>` `21:30425651 chromosome_breakpoint` rows, `<<DEL>>,<DEL>`
+        a `DEL` row beside a `deletion` row per transcript, and `21 30425650 x N <:DEL> . .
+        END=30425949` an empty Allele in the default format and `-` in the tab format
+        (`21:30425651-30425949 - ENST00000390690 5_prime_UTR_variant,coding_sequence_variant`);
+        every row is set aside and the cross-check holds."""
+        span = "21:30425651-30425949"
+        cases = [
+            (REC(30425650, "N", "<:DEL>", "END=30425949", "colon_default"),
+             {T(span, "", "ENST00000334068", "upstream_gene_variant"),
+              T(span, "", "ENST00000390690", "coding_sequence_variant,5_prime_UTR_variant")}),
+            (REC(30425650, "N", "<:DEL>", "END=30425949", "colon_tab"),
+             {T(span, "-", "ENST00000334068", "upstream_gene_variant"),
+              T(span, "-", "ENST00000390690", "5_prime_UTR_variant,coding_sequence_variant")}),
+            (REC(30425650, "N", "<Del>", "END=30425949", "lower"),
+             {T(span, "deletion", "ENST00000334068", "upstream_gene_variant"),
+              T(span, "deletion", "ENST00000390690", "feature_truncation,coding_sequence_variant,5_prime_UTR_variant")}),
+            (REC(30425650, "N", "<DEL >", "SVTYPE=DEL;END=30425949", "blank"),
+             {T(span, "deletion", "ENST00000334068", "upstream_gene_variant"),
+              T(span, "deletion", "ENST00000390690", "feature_truncation,coding_sequence_variant,5_prime_UTR_variant")}),
+            (REC(30425650, "N", "<CN=X>", "END=30425949", "cn"),
+             {T(span, "copy_number_variation", "ENST00000334068", "upstream_gene_variant"),
+              T(span, "copy_number_variation", "ENST00000390690", "coding_sequence_variant,5_prime_UTR_variant")}),
+            (REC(30425650, "N", "<Bnd>", ".", "bnd"),
+             {T("21:30425651", "chromosome_breakpoint", "ENST00000334068", "upstream_gene_variant"),
+              T("21:30425651", "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant")}),
+            (REC(30425650, "N", "<<DEL>>,<DEL>", "END=30425949", "doubled"),
+             {T(span, "DEL", "ENST00000334068", "upstream_gene_variant"),
+              T(span, "deletion", "ENST00000334068", "upstream_gene_variant"),
+              T(span, "DEL", "ENST00000390690", "coding_sequence_variant,5_prime_UTR_variant"),
+              T(span, "deletion", "ENST00000390690", "feature_truncation,coding_sequence_variant,5_prime_UTR_variant")}),
+        ]
+        for record, rust in cases:
+            with self.subTest(alt=record.alt):
+                self.assertEqual(C.perl_skip_route(record), "unsupported_type")
+                perl_open, rust_open, masks = ADJUSTED(set(), rust, [record])
+                self.assertEqual((perl_open, rust_open, masks.skipped_rust, masks.skipped_records, masks.skipped_problems),
+                                 (set(), set(), rust, 1, []))
+
+
+class IncompleteDeletionPairTests(unittest.TestCase):
+    def test_an_incomplete_deletions_pair_rows_are_set_aside(self) -> None:
+        """Ensembl VEP 116.2 drops `21 30425650 x N <DEL> . . SVTYPE=DEL;END=30425650` (`deletion
+        looks incomplete`, Parser/VCF.pm:555-558), as it drops `SVLEN=0`, `SVLEN=abc`, `SVLEN=.`,
+        `SVLEN=`, `SVLEN=e5`, `SVLEN=0x1D04A1D` and each with `END=30425949` beside it; vep-rs
+        writes the pair `21:30425650-30425651 deletion ENST00000334068 upstream_gene_variant` and
+        `21:30425650-30425651 deletion ENST00000390690 coding_sequence_variant`, printed low end
+        first. `21 +30425949 x N <DEL> . . SVTYPE=DEL;END=30425949` is the same shape at
+        `21:30425949-30425950`."""
+        pair = {T("21:30425650-30425651", "deletion", "ENST00000334068", "upstream_gene_variant"),
+                T("21:30425650-30425651", "deletion", "ENST00000390690", "coding_sequence_variant")}
+        for info in ("SVTYPE=DEL;END=30425650", "SVTYPE=DEL;SVLEN=0", "SVTYPE=DEL;SVLEN=abc", "SVTYPE=DEL;SVLEN=.",
+                     "SVTYPE=DEL;SVLEN=", "SVTYPE=DEL;SVLEN=e5", "SVTYPE=DEL;SVLEN=0x1D04A1D", "SVTYPE=DEL;SVLEN=.;END=30425949",
+                     "SVTYPE=DEL;SVLEN=;END=30425949", "SVTYPE=DEL;SVLEN=abc;END=30425949"):
+            with self.subTest(info=info):
+                record = REC(30425650, "N", "<DEL>", info)
+                self.assertEqual(C.perl_skip_route(record), "incomplete_deletion")
+                self.assertEqual(C.filter_reference_skipped_records(set(), pair, [record]), (pair, 1))
+                self.assertEqual(C.check_skip_routes([record], set(), pair), [])
+        (plus,) = VCF(("21", "+30425949", "plus", "N", "<DEL>", ".", ".", "SVTYPE=DEL;END=30425949"))
+        plus_pair = {T("21:30425949-30425950", "deletion", "ENST00000334068", "upstream_gene_variant"),
+                     T("21:30425949-30425950", "deletion", "ENST00000390690", "upstream_gene_variant")}
+        self.assertEqual(C.filter_reference_skipped_records(set(), plus_pair, [plus]), (plus_pair, 1))
+        self.assertEqual(C.check_skip_routes([plus], set(), plus_pair), [])
+
+
+class DotBreakendInfoMateTests(unittest.TestCase):
+    def test_a_dot_breakend_with_an_info_mate_pairs_under_its_own_and_mate_alleles(self) -> None:
+        """`21 30425650 x N N. . . CHR2=21;END2=30425700`: Ensembl VEP 116.2 writes the pair
+        `21:30425650-30425651` under `N.` and under `N[21:30425700[` on ENST00000334068
+        (`upstream_gene_variant`) and ENST00000390690 (`feature_truncation,coding_sequence_variant`);
+        vep-rs writes the point `21:30425651` under the same alleles. The eight rows are set
+        aside as pairs and the skipped-record cross-check holds, as it does for the bare
+        `21 30425650 x N N. . . .` (`chromosome_breakpoint` on both sides)."""
+        perl = {T("21:30425650-30425651", allele, feature, csq)
+                for allele in ("N.", "N[21:30425700[")
+                for feature, csq in (("ENST00000334068", "upstream_gene_variant"),
+                                     ("ENST00000390690", "feature_truncation,coding_sequence_variant"))}
+        rust = {T("21:30425651", t[1], t[2], t[4]) for t in perl}
+        self.assertEqual(C.filter_dot_breakend_pairs(perl, rust), (rust, perl))
+        record = REC(30425650, "N", "N.", "CHR2=21;END2=30425700")
+        self.assertEqual(C.check_skip_routes([record], perl, rust), [])
+        perl_open, rust_open, masks = ADJUSTED(perl, rust, [record])
+        self.assertEqual((perl_open, rust_open, len(masks.dot_pair_perl), len(masks.dot_pair_rust)), (set(), set(), 4, 4))
+        bare_perl = {T("21:30425650-30425651", "chromosome_breakpoint", "ENST00000334068", "upstream_gene_variant"),
+                     T("21:30425650-30425651", "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant")}
+        bare_rust = {T("21:30425651", t[1], t[2], t[4]) for t in bare_perl}
+        self.assertEqual(C.check_skip_routes([REC(30425650, "N", "N.", ".")], bare_perl, bare_rust), [])
+        self.assertEqual(C.filter_dot_breakend_pairs(bare_perl, bare_rust), (bare_rust, bare_perl))
+        sequence = {T("21:30425650-30425651", "ACG", "ENST00000390690", "inframe_insertion")}
+        self.assertEqual(C.filter_dot_breakend_pairs(sequence, {T("21:30425651", "ACG", "ENST00000390690", "inframe_insertion")}), (set(), set()),
+                         "a sequence allele is not a breakend")
+
+
+class SynonymMatePrefixTests(unittest.TestCase):
+    def test_a_mate_prefix_the_reference_does_not_resolve_loses_the_mate_rows_on_the_own_chromosome(self) -> None:
+        """`21 30425650 x N N[Chr21:30425700[ . . SVTYPE=BND`: Ensembl VEP 116.2 writes the own end
+        only, `21:30425651 N. ENST00000334068 upstream_gene_variant` and `21:30425651 N.
+        ENST00000390690 feature_truncation,coding_sequence_variant`; vep-rs adds the mate rows
+        `21:30425651 N[Chr21:30425700[` on both transcripts, which are set aside. With
+        `N[chr21:30425700[` both engines write the four rows and nothing is set aside, and a
+        `N[NC_000022.11:...[` mate keeps its own-chromosome rule."""
+        tx = {"21": {"ENST00000334068", "ENST00000390690"}, "22": {"ENST22"}}
+        own = {T("21:30425651", "N.", "ENST00000334068", "upstream_gene_variant"),
+               T("21:30425651", "N.", "ENST00000390690", "feature_truncation,coding_sequence_variant")}
+        mate = {T("21:30425651", "N[Chr21:30425700[", "ENST00000334068", "upstream_gene_variant"),
+                T("21:30425651", "N[Chr21:30425700[", "ENST00000390690", "feature_truncation,coding_sequence_variant")}
+        self.assertEqual(C.reference_mate_chromosome("N[Chr21:30425700["), "Chr21")
+        self.assertEqual(C.reference_mate_chromosome("N[chr21:30425700["), "21")
+        self.assertEqual(C.filter_bnd_synonym_mate_rows(own, own | mate, tx), mate)
+        lower = {T(t[0], "N[chr21:30425700[", t[2], t[4]) for t in mate}
+        self.assertEqual(C.filter_bnd_synonym_mate_rows(own | lower, own | lower, tx), set())
+        synonym_own = {T("21:30425651", "N[NC_000022.11:26037668[", "ENST00000390690", "intron_variant")}
+        synonym_other = {T("21:30425651", "N[NC_000022.11:26037668[", "ENST22", "intron_variant")}
+        self.assertEqual(C.filter_bnd_synonym_mate_rows(own, own | synonym_own | synonym_other, tx), synonym_other)
+
+
+class BufferCoordinateOverflowTests(unittest.TestCase):
+    def test_a_span_end_or_own_position_past_the_buffers_32_bit_bound_is_counted(self) -> None:
+        """Under --max_sv_size -1, Ensembl VEP 116.2 writes one row, `21:30425651-2147483647
+        deletion - intergenic_variant`, for `21 30425650 x N <DEL> . . SVTYPE=DEL;END=2147483647`,
+        as for `SVLEN=2147483647` (`21:30425651-2177909297`) and `SVLEN=-2147483648`
+        (`21:30425651-2177909298`), where vep-rs writes every transcript from the record to the
+        chromosome's end; `21 2147483648 x N N[21:30425700[ . . SVTYPE=BND` is `21:2147483649 N.`
+        and `21:2147483649 N[21:30425700[`, both intergenic, as POS 2147483647 is at 2147483648.
+        The counter counts the records and the reference's rows at their Locations; under the
+        default cap the span records are skipped and not counted, and an end at 2147478647 is
+        below the bound."""
+        records = [REC(30425650, "N", "<DEL>", "SVTYPE=DEL;END=2147483647", "end"),
+                   REC(30425650, "N", "<DEL>", "SVTYPE=DEL;SVLEN=2147483647", "svlen"),
+                   REC(30425650, "N", "<DEL>", "SVTYPE=DEL;SVLEN=-2147483648", "negative"),
+                   REC(2147483648, "N", "N[21:30425700[", "SVTYPE=BND", "pos"),
+                   REC(2147483647, "N", "N[21:30425700[", "SVTYPE=BND", "pos_minus_one"),
+                   REC(30425650, "N", "<DEL>", "SVTYPE=DEL;END=2147478647", "below")]
+        perl = {INTERGENIC("21:30425651-2147483647", "deletion"), INTERGENIC("21:30425651-2177909297", "deletion"),
+                INTERGENIC("21:30425651-2177909298", "deletion"),
+                INTERGENIC("21:2147483649", "N."), INTERGENIC("21:2147483649", "N[21:30425700["),
+                INTERGENIC("21:2147483648", "N."), INTERGENIC("21:2147483648", "N[21:30425700["),
+                INTERGENIC("21:30425651-2147478647", "deletion")}
+        self.assertEqual(C.count_bnd_mate_over_32_bit(records, perl, -1), (5, 7))
+        self.assertEqual(C.count_bnd_mate_over_32_bit(records, perl), (2, 4))
+        masks = C.apply_masks(perl, set(), "116.2", {}, {}, {}, "vep-rs", records, -1)
+        self.assertEqual((masks.mate_overflow_records, masks.mate_overflow_perl_tuples), (5, 7))
+
+
+class TandemRepeatReadingTests(unittest.TestCase):
+    """The <CNV:TR> readings of Ensembl VEP 116.2 with a FASTA against vep-rs's symbolic row:
+    each test is one record, its reference rows and its vep-rs rows, and every one-sided
+    tuple is set aside under class 12 (the literal-versus-symbolic pairing) or class 13 (the
+    empty or unchanged expansion)."""
+
+    RUN_A = "21:30425588-30425596"
+    RUN_B = "21:30425756-30425763"
+    RUN_C = "21:30430410-30430417"
+
+    def rust_a(self, csq: str) -> set:
+        return {T(self.RUN_A, "tandem_repeat", "ENST00000334068", "upstream_gene_variant"),
+                T(self.RUN_A, "tandem_repeat", "ENST00000390690", csq)}
+
+    def test_an_unchanged_expansion_over_three_repeat_sequences_is_empty(self) -> None:
+        """`21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RN=3;RUS=AGC,AGC,AGC;RUC=1,1,1`
+        rebuilds the nine-base run: with a FASTA Ensembl VEP 116.2 writes nothing; vep-rs writes
+        `21:30425588-30425596 tandem_repeat ENST00000390690 feature_elongation,coding_sequence_variant`
+        and the upstream row, both set aside."""
+        record = REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RN=3;RUS=AGC,AGC,AGC;RUC=1,1,1")
+        rust = self.rust_a("feature_elongation,coding_sequence_variant")
+        self.assertTrue(C.cnv_tr_expansion_is_empty(record))
+        self.assertEqual(ADJUSTED(set(), rust, [record])[:2], (set(), set()))
+
+    def test_an_unchanged_expansion_whose_second_sequence_repeats_nothing_is_empty(self) -> None:
+        """`21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RN=2;RUS=AGC,AG;RUC=3,0`:
+        three `AGC` and no `AG` rebuild the run; Ensembl VEP 116.2 writes nothing with a FASTA,
+        vep-rs the symbolic gain rows, set aside."""
+        record = REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RN=2;RUS=AGC,AG;RUC=3,0")
+        self.assertTrue(C.cnv_tr_expansion_is_empty(record))
+        self.assertEqual(ADJUSTED(set(), self.rust_a("feature_elongation,coding_sequence_variant"), [record])[:2], (set(), set()))
+
+    def test_a_unit_of_no_bases_under_ruc_is_empty(self) -> None:
+        """`21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RUS=,AGC;RUC=4,4`: the one
+        repeat sequence (no RN) takes the empty unit, `"" x 4`; Ensembl VEP 116.2 writes nothing
+        with a FASTA, vep-rs `feature_truncation,inframe_deletion` with the upstream row, set
+        aside."""
+        record = REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=,AGC;RUC=4,4")
+        self.assertTrue(C.cnv_tr_expansion_is_empty(record))
+        self.assertEqual(ADJUSTED(set(), self.rust_a("feature_truncation,inframe_deletion"), [record])[:2], (set(), set()))
+
+    def test_a_fullwidth_count_repeats_nothing(self) -> None:
+        """`21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;RUC=４`: Perl
+        numifies the fullwidth digit to 0, so Ensembl VEP 116.2 writes nothing with a FASTA;
+        vep-rs reads the empty expansion as the loss of the run (`feature_truncation,inframe_deletion`),
+        set aside."""
+        record = REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;RUC=４")
+        self.assertEqual(C.perl_numeric_value("４"), 0)
+        self.assertTrue(C.cnv_tr_expansion_is_empty(record))
+        self.assertEqual(ADJUSTED(set(), self.rust_a("feature_truncation,inframe_deletion"), [record])[:2], (set(), set()))
+
+    def _literal_pairs(self, record: C.VcfVariant, perl_allele: str, perl_csq: str, rust_csq: str, run: str = RUN_A) -> None:
+        perl = {T(run, perl_allele, "ENST00000334068", "upstream_gene_variant"), T(run, perl_allele, "ENST00000390690", perl_csq)}
+        rust = {T(run, "tandem_repeat", "ENST00000334068", "upstream_gene_variant"), T(run, "tandem_repeat", "ENST00000390690", rust_csq)}
+        self.assertEqual(C._cnv_tr_pair_kind(run, perl_allele, run), "literal")
+        perl_open, rust_open, masks = ADJUSTED(perl, rust, [record])
+        self.assertEqual((perl_open, rust_open, masks.cnvtr_perl, masks.cnvtr_rust), (set(), set(), perl, rust))
+
+    def test_a_digit_unit_is_a_literal_reading(self) -> None:
+        """`21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RUS=123;RUC=4`: Ensembl VEP
+        116.2 writes `21:30425588-30425596 123123123123 ENST00000390690 coding_sequence_variant`
+        (and the upstream row) with a FASTA; vep-rs `tandem_repeat ...
+        feature_elongation,coding_sequence_variant`; the four rows pair."""
+        self._literal_pairs(REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=123;RUC=4"),
+                            "123123123123", "coding_sequence_variant", "feature_elongation,coding_sequence_variant")
+
+    def test_an_iupac_unit_is_a_literal_reading(self) -> None:
+        """`21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RUS=R;RUC=10`: Ensembl VEP
+        116.2 writes `21:30425588-30425596 RRRRRRRRRR ENST00000390690 frameshift_variant`; vep-rs
+        `feature_elongation,coding_sequence_variant`; the rows pair."""
+        self._literal_pairs(REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=R;RUC=10"),
+                            "RRRRRRRRRR", "frameshift_variant", "feature_elongation,coding_sequence_variant")
+
+    def test_a_star_unit_is_a_literal_reading(self) -> None:
+        """`21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RUS=*;RUC=9`: Ensembl VEP
+        116.2 writes `21:30425588-30425596 ********* ENST00000390690 coding_sequence_variant`;
+        vep-rs `feature_elongation,coding_sequence_variant`; the rows pair, and the reference's
+        rows at the run keep class 13 from the record."""
+        self._literal_pairs(REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=*;RUC=9"),
+                            "*********", "coding_sequence_variant", "feature_elongation,coding_sequence_variant")
+
+    def test_an_x_unit_is_a_literal_reading(self) -> None:
+        """`21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RUS=X;RUC=10`: Ensembl VEP
+        116.2 writes `21:30425588-30425596 XXXXXXXXXX ENST00000390690 frameshift_variant`; vep-rs
+        `feature_elongation,coding_sequence_variant`; the rows pair."""
+        self._literal_pairs(REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=X;RUC=10"),
+                            "XXXXXXXXXX", "frameshift_variant", "feature_elongation,coding_sequence_variant")
+
+    def test_a_loss_read_as_a_protein_altering_substitution_pairs(self) -> None:
+        """`21 30425755 x N <CNV:TR> . . SVTYPE=CNV;END=30425763;SVLEN=8;RN=3;RUS=AG,AG,C;RUC=1,1,1`:
+        `AGAGC` against the eight-base run trims to `21:30425760-30425763 C`, which Ensembl VEP
+        116.2 writes as `protein_altering_variant` on ENST00000390690 (and `upstream_gene_variant`
+        on ENST00000334068); vep-rs reads the loss, `21:30425756-30425763 tandem_repeat
+        feature_truncation,inframe_deletion`; the rows pair."""
+        record = REC(30425755, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425763;SVLEN=8;RN=3;RUS=AG,AG,C;RUC=1,1,1")
+        perl = {T("21:30425760-30425763", "C", "ENST00000334068", "upstream_gene_variant"),
+                T("21:30425760-30425763", "C", "ENST00000390690", "protein_altering_variant")}
+        rust = {T(self.RUN_B, "tandem_repeat", "ENST00000334068", "upstream_gene_variant"),
+                T(self.RUN_B, "tandem_repeat", "ENST00000390690", "feature_truncation,inframe_deletion")}
+        self.assertEqual(C._cnv_tr_pair_kind("21:30425760-30425763", "C", self.RUN_B), "literal")
+        self.assertEqual(ADJUSTED(perl, rust, [record])[:2], (set(), set()))
+
+    def test_a_loss_read_as_a_stop_gained_substitution_pairs(self) -> None:
+        """`21 30430409 x N <CNV:TR> . . SVTYPE=CNV;END=30430417;SVLEN=8;RN=3;RUS=CT,AG,C;RUC=1,1,1`:
+        Ensembl VEP 116.2 writes `21:30430412-30430417 AGC ENST00000334068 stop_gained` (and
+        `upstream_gene_variant` on ENST00000390690); vep-rs `21:30430410-30430417 tandem_repeat
+        feature_truncation,inframe_deletion`; the rows pair."""
+        record = REC(30430409, "N", "<CNV:TR>", "SVTYPE=CNV;END=30430417;SVLEN=8;RN=3;RUS=CT,AG,C;RUC=1,1,1")
+        perl = {T("21:30430412-30430417", "AGC", "ENST00000334068", "stop_gained"),
+                T("21:30430412-30430417", "AGC", "ENST00000390690", "upstream_gene_variant")}
+        rust = {T(self.RUN_C, "tandem_repeat", "ENST00000334068", "feature_truncation,inframe_deletion"),
+                T(self.RUN_C, "tandem_repeat", "ENST00000390690", "upstream_gene_variant")}
+        self.assertEqual(ADJUSTED(perl, rust, [record])[:2], (set(), set()))
+
+    def test_a_dot_unit_under_rb_pairs_as_n_bases(self) -> None:
+        """`21 30425755 x N <CNV:TR> . . SVTYPE=CNV;END=30425763;SVLEN=8;RUS=.;RB=5`: Ensembl VEP
+        116.2 writes `21:30425756-30425763 NNNNN ENST00000390690 coding_sequence_variant`; vep-rs
+        the loss `feature_truncation,inframe_deletion`; the rows pair."""
+        self._literal_pairs(REC(30425755, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425763;SVLEN=8;RUS=.;RB=5"),
+                            "NNNNN", "coding_sequence_variant", "feature_truncation,inframe_deletion", run=self.RUN_B)
+
+    def test_an_svlen_numified_to_thirty_pairs_as_a_literal_reading(self) -> None:
+        """`21 30425587 x N <CNV:TR> . . SVTYPE=CNV;SVLEN=30_425_949;RUS=AGC;RUC=4`: Perl reads the
+        SVLEN as 30, a thirty-base run to 30425617 whose prefix the twelve-base allele shares,
+        and Ensembl VEP 116.2 writes `21:30425597-30425617 AGC ENST00000390690
+        protein_altering_variant`; vep-rs `21:30425588-30425617 tandem_repeat
+        feature_truncation,inframe_deletion`; the rows pair."""
+        record = REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;SVLEN=30_425_949;RUS=AGC;RUC=4")
+        self.assertEqual(C.record_location(record), ("21", 30425588, 30425617))
+        perl = {T("21:30425597-30425617", "AGC", "ENST00000334068", "upstream_gene_variant"),
+                T("21:30425597-30425617", "AGC", "ENST00000390690", "protein_altering_variant")}
+        rust = {T("21:30425588-30425617", "tandem_repeat", "ENST00000334068", "upstream_gene_variant"),
+                T("21:30425588-30425617", "tandem_repeat", "ENST00000390690", "feature_truncation,inframe_deletion")}
+        self.assertEqual(ADJUSTED(perl, rust, [record])[:2], (set(), set()))
+
+    def test_a_loss_over_the_stop_codon_pairs_with_and_without_a_fasta(self) -> None:
+        """`21 30430409 x N <CNV:TR> . . SVTYPE=CNV;SVLEN=4000;RUS=CT;RUC=5`: with a FASTA Ensembl
+        VEP 116.2 writes `21:30430418-30434408 C ENST00000334068 stop_retained_variant,3_prime_UTR_variant`
+        (with `upstream_gene_variant` on ENST00000390690 and `downstream_gene_variant` on
+        ENST00000418755); without one `21:30430410-30434409 tandem_repeat ENST00000334068
+        coding_sequence_variant,3_prime_UTR_variant`; vep-rs writes `21:30430410-30434409
+        tandem_repeat ENST00000334068 stop_lost,feature_truncation,coding_sequence_variant,3_prime_UTR_variant`
+        in both runs. Every row pairs."""
+        record = REC(30430409, "N", "<CNV:TR>", "SVTYPE=CNV;SVLEN=4000;RUS=CT;RUC=5")
+        run = "21:30430410-30434409"
+        rust = {T(run, "tandem_repeat", "ENST00000334068", "stop_lost,feature_truncation,coding_sequence_variant,3_prime_UTR_variant"),
+                T(run, "tandem_repeat", "ENST00000390690", "upstream_gene_variant"),
+                T(run, "tandem_repeat", "ENST00000418755", "downstream_gene_variant")}
+        fasta = {T("21:30430418-30434408", "C", "ENST00000334068", "stop_retained_variant,3_prime_UTR_variant"),
+                 T("21:30430418-30434408", "C", "ENST00000390690", "upstream_gene_variant"),
+                 T("21:30430418-30434408", "C", "ENST00000418755", "downstream_gene_variant")}
+        self.assertEqual(ADJUSTED(fasta, rust, [record])[:2], (set(), set()))
+        symbolic = {T(run, "tandem_repeat", "ENST00000334068", "coding_sequence_variant,3_prime_UTR_variant"),
+                    T(run, "tandem_repeat", "ENST00000390690", "upstream_gene_variant"),
+                    T(run, "tandem_repeat", "ENST00000418755", "downstream_gene_variant")}
+        self.assertEqual(ADJUSTED(symbolic, rust, [record])[:2], (set(), set()))
+
+    def test_a_two_alt_record_whose_parts_are_the_run_and_nothing_is_empty(self) -> None:
+        """`21 30425756 x N <CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30425763;SVLEN=8;RN=2,0;RUS=AG,AG;RUC=2,2`:
+        the first allele's two sequences rebuild the eight-base run and the second expands to
+        nothing, so the allele string is `AGAGAGAG/AGAGAGAG/`, its trailing part dropped and
+        the rest the reference run; with a FASTA Ensembl VEP 116.2 writes nothing. vep-rs
+        writes the first allele's `21:30425756-30425763 tandem_repeat ENST00000390690
+        coding_sequence_variant,feature_elongation` (with `ENST00000334068
+        upstream_gene_variant`) and the second's loss rows, all set aside under class 13; the
+        CT run (`21 30430409 x N <CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30430417;SVLEN=8;RN=2,0;RUS=CT,CT;RUC=2,2`)
+        is the same shape. An empty part before a non-empty one (`RN=0,2`) is the loss the
+        reference keeps, and a second allele whose count the RUC list has run out of beside a
+        twelve-base first allele (`RUS=AGC,AGC;RUC=4`) is a gain the reference keeps."""
+        record = REC(30425755, "N", "<CNV:TR>,<CNV:TR>", "SVTYPE=CNV;END=30425763;SVLEN=8;RN=2,0;RUS=AG,AG;RUC=2,2")
+        rust = {T(self.RUN_B, "tandem_repeat", "ENST00000334068", "upstream_gene_variant"),
+                T(self.RUN_B, "tandem_repeat", "ENST00000390690", "coding_sequence_variant,feature_elongation"),
+                T(self.RUN_B, "tandem_repeat", "ENST00000390690", "frameshift_variant,feature_truncation")}
+        self.assertTrue(C.cnv_tr_expansion_is_empty(record))
+        self.assertTrue(C.cnv_tr_expansion_is_empty(
+            REC(30430409, "N", "<CNV:TR>,<CNV:TR>", "SVTYPE=CNV;END=30430417;SVLEN=8;RN=2,0;RUS=CT,CT;RUC=2,2")))
+        self.assertTrue(C.cnv_tr_expansion_is_empty(REC(30425587, "N", "<CNV:TR>,<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RN=.,1;RUS=AGC;RUC=3")))
+        self.assertFalse(C.cnv_tr_expansion_is_empty(
+            REC(30425755, "N", "<CNV:TR>,<CNV:TR>", "SVTYPE=CNV;END=30425763;SVLEN=8;RN=0,2;RUS=AG,AG;RUC=2,2")))
+        self.assertFalse(C.cnv_tr_expansion_is_empty(REC(30425587, "N", "<CNV:TR>,<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC,AGC;RUC=4")))
+        perl_open, rust_open, masks = ADJUSTED(set(), rust, [record])
+        self.assertEqual((perl_open, rust_open, masks.cnvtr_empty_rust), (set(), set(), rust))
+
+    def test_a_fractional_svlen_expanded_under_a_fasta_leaves_no_reference_row(self) -> None:
+        """With a FASTA, Ensembl VEP 116.2 skips `21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9.5;RUS=AGC;RUC=4`
+        (`Alleles look like an insertion (-/AGC) but coordinates are not start = end + 1
+        (START=30425597, END=30425596.5)`, Parser.pm:564-571), as it skips the AG run
+        (`21 30425756 x N <CNV:TR> . . SVTYPE=CNV;END=30425763;SVLEN=8.5;RUS=AG;RUC=5`), the CT run
+        (`SVLEN=8.5;RUS=CT;RUC=5` at 30430409) and `21 30425587 x N <CNV:TR> . . SVTYPE=CNV;SVLEN=NaN;RUS=AGC;RUC=4`;
+        vep-rs reads 9.5 as 9 and NaN as 0 and writes `21:30425588-30425596 tandem_repeat
+        ENST00000390690 coding_sequence_variant,feature_elongation` with `ENST00000334068
+        upstream_gene_variant` (the pair `21:30425587-30425588 tandem_repeat` for NaN), set aside
+        under class 12 when the reference wrote nothing beside the run. Without a FASTA the
+        reference writes `21:30425588-30425596.5 tandem_repeat` and the text pairing holds; a
+        `<DEL>` with `SVLEN=300.7` and no reference row is not the shape."""
+        for text in ("9.5", "300.7", "-8.5", "NaN", "-Inf", "Infinity", "1e400"):
+            self.assertTrue(C.perl_number_is_not_an_integer(text), text)
+        for text in ("9", "9.0", "3e2", "+30425949", "abc", ".", "", "４"):
+            self.assertFalse(C.perl_number_is_not_an_integer(text), text)
+        record = REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9.5;RUS=AGC;RUC=4")
+        rust = self.rust_a("coding_sequence_variant,feature_elongation")
+        self.assertEqual(C.filter_non_integer_end_rows(set(), rust, [record]), (set(), rust))
+        perl_open, rust_open, masks = ADJUSTED(set(), rust, [record])
+        self.assertEqual((perl_open, rust_open, masks.non_integer_end_rust), (set(), set(), rust))
+        for pos, info, run in ((30425755, "SVTYPE=CNV;END=30425763;SVLEN=8.5;RUS=AG;RUC=5", self.RUN_B),
+                               (30430409, "SVTYPE=CNV;END=30430417;SVLEN=8.5;RUS=CT;RUC=5", self.RUN_C)):
+            with self.subTest(info=info):
+                rows = {T(run, "tandem_repeat", "ENST00000390690", "coding_sequence_variant,feature_elongation")}
+                self.assertEqual(C.filter_non_integer_end_rows(set(), rows, [REC(pos, "N", "<CNV:TR>", info)]), (set(), rows))
+        symbolic = {T("21:30425588-30425596.5", "tandem_repeat", "ENST00000390690", "feature_elongation,coding_sequence_variant")}
+        self.assertEqual(C.filter_non_integer_end_rows(symbolic, rust, [record]), (symbolic, rust))
+        nan = REC(30425587, "N", "<CNV:TR>", "SVTYPE=CNV;SVLEN=NaN;RUS=AGC;RUC=4")
+        pair = {T("21:30425587-30425588", "tandem_repeat", "ENST00000390690", "coding_sequence_variant,feature_elongation"),
+                T("21:30425587-30425588", "tandem_repeat", "ENST00000334068", "upstream_gene_variant")}
+        self.assertIsNone(C.perl_skip_route(nan))
+        self.assertEqual(C.filter_non_integer_end_rows(set(), pair, [nan]), (set(), pair))
+        self.assertEqual(ADJUSTED(set(), pair, [nan])[:2], (set(), set()))
+        deletion = REC(30425650, "N", "<DEL>", "SVTYPE=DEL;SVLEN=300.7")
+        deletion_rows = {T("21:30425651-30425950", "deletion", "ENST00000390690", "feature_truncation,coding_sequence_variant,5_prime_UTR_variant")}
+        self.assertEqual(C.filter_non_integer_end_rows(set(), deletion_rows, [deletion]), (set(), set()))
+
+    def test_the_collapsed_symbolic_row_of_a_multi_alt_record_pairs_every_vep_rs_allele(self) -> None:
+        """`21 30425587 x N <CNV:TR>,<CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RN=1,1,1;RUS=AGC,AGC,AGC;RUC=4,2,3`
+        without a FASTA: Ensembl VEP 116.2 writes the symbolic `21:30425588-30425596 tandem_repeat
+        ENST00000390690 feature_elongation,coding_sequence_variant` for each of the three alleles,
+        one tuple; vep-rs writes the gain for the first and third and the loss
+        `feature_truncation,inframe_deletion` for the second, so the loss pairs with the tuple
+        both engines wrote and only the vep-rs side is set aside."""
+        record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>,<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RN=1,1,1;RUS=AGC,AGC,AGC;RUC=4,2,3")
+        perl = self.rust_a("feature_elongation,coding_sequence_variant")
+        loss = T(self.RUN_A, "tandem_repeat", "ENST00000390690", "feature_truncation,inframe_deletion")
+        rust = perl | {loss}
+        self.assertEqual(C.filter_cnv_tr_expansion_divergences(perl, rust), ({loss}, set()))
+        self.assertEqual(C.count_cnv_tr_swap_population(perl, rust), (1, 0))
+        perl_open, rust_open, masks = ADJUSTED(perl, rust, [record])
+        self.assertEqual((perl_open, rust_open, masks.cnvtr_rust, masks.cnvtr_perl), (set(), set(), {loss}, set()))
+        two = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC,AGC;RUC=4,2")
+        self.assertEqual(ADJUSTED(perl, rust, [two])[:2], (set(), set()))
+
+
+class RnZeroAlleleDroppedTests(unittest.TestCase):
+    """With a FASTA, Ensembl VEP 116.2 drops one allele of a two-ALT <CNV:TR> whose other allele
+    has `RN=0` (Parser/VCF.pm:411, 428; Parser.pm:881, 978); vep-rs writes both."""
+
+    RUN = "21:30425588-30425596"
+    INFO = "SVTYPE=CNV;END=30425596;SVLEN=9;"
+
+    def rust(self) -> set:
+        return {T(self.RUN, "tandem_repeat", "ENST00000334068", "upstream_gene_variant"),
+                T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_truncation,inframe_deletion"),
+                T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_elongation,coding_sequence_variant")}
+
+    def test_a_leading_rn_zero_drops_the_real_allele(self) -> None:
+        """`21 30425587 x N <CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RN=0,1;RUS=AGC;RUC=4`:
+        Ensembl VEP 116.2 keeps the empty allele as `21:30425588-30425596 - ENST00000390690
+        inframe_deletion` (and `- ENST00000334068 upstream_gene_variant`) and drops the
+        twelve-base gain; vep-rs writes the loss of the run for the first allele
+        (`feature_truncation,inframe_deletion`) and the gain for the second
+        (`feature_elongation,coding_sequence_variant`). The loss pairs under class 12; the gain is
+        the dropped allele's row, set aside."""
+        record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=0,1;RUS=AGC;RUC=4")
+        perl = {T(self.RUN, "-", "ENST00000334068", "upstream_gene_variant"), T(self.RUN, "-", "ENST00000390690", "inframe_deletion")}
+        gain = T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_elongation,coding_sequence_variant")
+        self.assertEqual(C.cnv_tr_rn_zero_dropped_direction(record), "gain")
+        self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(perl, self.rust(), [record]), {gain})
+        perl_open, rust_open, masks = ADJUSTED(perl, self.rust(), [record])
+        self.assertEqual((perl_open, rust_open, masks.rn_zero_rust), (set(), set(), {gain}))
+
+    def test_a_trailing_rn_zero_drops_the_rn_zero_allele(self) -> None:
+        """`21 30425587 x N <CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RN=1,0;RUS=AGC;RUC=4`:
+        Ensembl VEP 116.2 writes the gain only, `21:30425596-30425597 AGC ENST00000390690
+        inframe_insertion` (and `AGC ENST00000334068 upstream_gene_variant`); vep-rs writes the
+        gain for the first allele and the loss of the run for the second. The gain pairs under
+        class 12; the loss is the dropped allele's row, set aside. `RN=2,0;RUS=AGC,AGC;RUC=2,2`
+        is the same shape."""
+        loss = T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_truncation,inframe_deletion")
+        perl = {T("21:30425596-30425597", "AGC", "ENST00000334068", "upstream_gene_variant"),
+                T("21:30425596-30425597", "AGC", "ENST00000390690", "inframe_insertion")}
+        for info in ("RN=1,0;RUS=AGC;RUC=4", "RN=2,0;RUS=AGC,AGC;RUC=2,2"):
+            with self.subTest(info=info):
+                record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + info)
+                self.assertEqual(C.cnv_tr_rn_zero_dropped_direction(record), "loss")
+                perl_open, rust_open, masks = ADJUSTED(perl, self.rust(), [record])
+                self.assertEqual((perl_open, rust_open, masks.rn_zero_rust), (set(), set(), {loss}))
+
+    def test_shapes_outside_the_class_are_not_judged(self) -> None:
+        """A real allele that is a loss (`RN=0,1;RUS=AGC;RUC=2`) shares the direction term with
+        the `RN=0` allele; `RN=.,1` leaves no empty part (`:410`); a single-ALT record, an RN with
+        two empty parts, and a run without a FASTA (symbolic reference rows) are not the shape."""
+        for info in ("RN=0,1;RUS=AGC;RUC=2", "RN=.,1;RUS=AGC;RUC=4", "RN=0,0;RUS=AGC;RUC=4", "RN=1,1;RUS=AGC,AGC;RUC=4,2",
+                     "RUS=AGC;RUC=4"):
+            with self.subTest(info=info):
+                self.assertIsNone(C.cnv_tr_rn_zero_dropped_direction(REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + info)))
+        self.assertIsNone(C.cnv_tr_rn_zero_dropped_direction(REC(30425587, "N", "<CNV:TR>", self.INFO + "RN=0;RUS=AGC;RUC=4")))
+        record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=0,1;RUS=AGC;RUC=4")
+        symbolic = {T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_elongation,coding_sequence_variant")}
+        self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(symbolic, self.rust(), [record]), set())
 
 
 if __name__ == "__main__":

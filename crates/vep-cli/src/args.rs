@@ -13,7 +13,7 @@ use clap::Parser;
 /// Ensembl VEP's `--max_sv_size` default: the span above which a structural variant
 /// is oversize, and the repeat-sequence length above which a tandem repeat stays
 /// symbolic.
-pub const DEFAULT_MAX_SV_SIZE: i64 = 10_000_000;
+pub const DEFAULT_MAX_SV_SIZE: i64 = vep_core::sv_record::DEFAULT_MAX_SV_SIZE as i64;
 
 #[derive(Parser, Debug)]
 #[command(

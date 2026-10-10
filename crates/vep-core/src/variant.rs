@@ -3,8 +3,11 @@
 
 //! Variant types: input variants and co-located known variants.
 
+use std::sync::Arc;
+
 use crate::consequence::{Consequence, TranscriptConsequence};
 use crate::coordinate::{normalize_chromosome, Strand};
+use crate::sv_routing::{sv_so_term_and_class, sv_type_abbreviation};
 
 /// Classification of variant types based on Sequence Ontology (SO) variant classes.
 ///
@@ -152,8 +155,9 @@ pub struct InputVariant {
     pub allele_index: usize,
     /// The ALLELE_NUM Ensembl VEP prints when it is not `allele_index + 1`: the
     /// position of the allele in a breakpoint record's allele string, whose reference
-    /// base is part 1 (`N/<BND>` prints 2), with 0 for the record's own breakend and
-    /// 1 upward for its mates (StructuralVariationOverlap.pm:89-101).
+    /// base is part 1 (`N/<BND>` prints 2; StructuralVariationOverlap.pm:64-77), with 0
+    /// for the record's own breakend and 1 upward for its mates (`:89-101`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allele_num: Option<u32>,
     /// Original input identifier (e.g., VCF ID field, or "chr:pos:ref:alt").
     pub id: Option<String>,
@@ -175,8 +179,9 @@ pub struct InputVariant {
     pub original_start: Option<u64>,
     /// Original end coordinate before per-allele secondary minimisation.
     pub original_end: Option<u64>,
-    /// Raw input line (for passthrough in some output formats).
-    pub raw_input: Option<String>,
+    /// Raw input line (for passthrough in some output formats), one buffer shared by
+    /// every allele of the record.
+    pub raw_input: Option<Arc<str>>,
     /// Existing variation IDs (from co-located variants).
     pub existing_variation: Vec<String>,
     /// Plugin annotation data (variant-level).
@@ -238,6 +243,13 @@ pub struct InputVariant {
     /// sets the REST mode in which the parser skips it).
     #[serde(default)]
     pub oversize_sv: bool,
+    /// The record of a line whose every ALT is `*`, the VCF marker for a base an
+    /// upstream deletion covers: Ensembl VEP builds the feature over the reference
+    /// bases with the allele string `N/*` and no allele to annotate, writes no row in
+    /// the default and tab formats, carries the VCF line without CSQ and writes the
+    /// JSON object with `most_severe_consequence` `?`. Nothing annotates it.
+    #[serde(default)]
+    pub no_allele: bool,
     /// Optional annotation target chromosome override.
     ///
     /// Used for paired BND alleles, where the consequence should be calculated
@@ -262,22 +274,27 @@ pub struct InputVariant {
     /// minimises those and reports the untrimmed alleles), the anchor-trimmed
     /// alleles of every other record with all ALTs joined by `/`, or, for a
     /// structural variant, its ALTs joined by `/`, a breakpoint record's carrying the
-    /// mate INFO/CHR2 names (`N[21:100[`). `None` falls back to `allele_string`.
+    /// mate INFO/CHR2 names (`N[21:100[`). One buffer shared by every allele of the
+    /// record. `None` falls back to `allele_string`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub uploaded_allele_string: Option<String>,
-    /// The record's allele string as VEP works with it, for a multi-allelic
-    /// record: every allele with the shared first base chopped (`TT/T/-`). VEP's
-    /// JSON `allele_string` prints this while Uploaded_variation prints the raw one.
+    pub uploaded_allele_string: Option<Arc<str>>,
+    /// The record's allele string as VEP works with it, when it is not the allele's
+    /// own: for a multi-allelic record every allele with the shared first base chopped
+    /// (`TT/T/-`), for a breakpoint record the reference base joined to its ALT side
+    /// (`N/N[21:100[/N]21:200]`) unless that side opens or closes with `.`, a native
+    /// single breakend VEP keeps bare (Parser/VCF.pm:469 and 499). VEP's JSON
+    /// `allele_string` prints this while Uploaded_variation prints the raw one. One
+    /// buffer shared by every allele of the record.
     #[serde(default)]
-    pub record_allele_string_multi: Option<String>,
+    pub record_allele_string_multi: Option<Arc<str>>,
     /// The name VEP builds from the input line for a record its ID column cannot
     /// name (OutputFactory.pm `VariationFeature_to_output_hash`, the `_line`
     /// branches): `CHROM_POS_REF/ALT1/ALT2` from a VCF line's own columns, POS
     /// and alleles as written; `chr_start_alleles` from an Ensembl-format line,
     /// start the lower of its two coordinates. `None` for an input format VEP
-    /// names from the variant itself.
+    /// names from the variant itself. One buffer shared by every allele of the record.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub input_line_name: Option<String>,
+    pub input_line_name: Option<Arc<str>>,
     /// The SO term of the whole record's structural class, VEP's `class_SO_term`:
     /// the `%SO_TERMS` entry for the type abbreviation Parser.pm `get_SO_term`
     /// derives from every ALT joined by `/`, so a mobile-element record carries its
@@ -331,6 +348,7 @@ impl Default for InputVariant {
             is_single_breakend: false,
             vep_skip: false,
             oversize_sv: false,
+            no_allele: false,
             annotation_chr: None,
             annotation_start: None,
             annotation_end: None,
@@ -401,6 +419,7 @@ impl InputVariant {
             is_single_breakend: false,
             vep_skip: false,
             oversize_sv: false,
+            no_allele: false,
             record_allele_string_multi: None,
             annotation_chr: None,
             annotation_start: None,
@@ -410,6 +429,26 @@ impl InputVariant {
             input_line_name: None,
             record_so_term: None,
         }
+    }
+
+    /// The record of a line whose every ALT is `*` (`N *`, `N *,*`): the reference
+    /// bases from `pos`, the allele string REF and every ALT joined by `/`, and
+    /// [`Self::no_allele`] set, so nothing annotates it and every writer carries it as
+    /// Ensembl VEP carries its `N/*` feature.
+    pub fn without_allele<'a>(
+        chr: String,
+        pos: u64,
+        ref_allele: &'a str,
+        alts: impl IntoIterator<Item = &'a str>,
+    ) -> Self {
+        let end = pos + ref_allele.len().saturating_sub(1) as u64;
+        let mut variant = Self::new(chr, pos, end, ref_allele.as_bytes().to_vec(), b"*".to_vec());
+        variant.allele_string = std::iter::once(ref_allele)
+            .chain(alts)
+            .collect::<Vec<_>>()
+            .join("/");
+        variant.no_allele = true;
+        variant
     }
 
     /// Location string in VEP format ("chr:start" or "chr:start-end").
@@ -449,7 +488,7 @@ impl InputVariant {
             return id.to_string();
         }
         if let Some(name) = &self.input_line_name {
-            return name.clone();
+            return name.to_string();
         }
         let start = self.original_start.unwrap_or(self.start);
         let alleles = self
@@ -476,26 +515,12 @@ impl InputVariant {
     }
 
     /// The allele string of the whole input record as VEP holds it: the symbolic
-    /// ALT(s) of a structural variant, every anchor-trimmed allele of a
-    /// multi-allelic record joined by `/`, or the minimised `allele_string` of a
+    /// ALT(s) of a structural variant, [`Self::record_allele_string_multi`] for a
+    /// multi-allelic or breakpoint record, or the minimised `allele_string` of a
     /// bi-allelic record.
     pub fn record_allele_string(&self) -> String {
-        // A breakend record's string is REF joined to its ALT side, the mate INFO/CHR2
-        // names included (`N/N[21:100[/N]21:200]`), one string for the record's own
-        // breakend and each of its mates, unless that side opens or closes with `.`, a
-        // native single breakend VEP keeps bare (ensembl-vep `Parser/VCF.pm`
-        // `create_StructuralVariationFeatures`, lines 469 and 491-499).
-        if self.variant_class == VariantClass::Translocation {
-            if let Some(alts) = self
-                .uploaded_allele_string
-                .as_deref()
-                .filter(|alts| !alts.starts_with('.') && !alts.ends_with('.'))
-            {
-                return format!("{}/{}", String::from_utf8_lossy(&self.ref_allele), alts);
-            }
-        }
         if let Some(multi) = &self.record_allele_string_multi {
-            return multi.clone();
+            return multi.to_string();
         }
         match self.uploaded_allele_string.as_deref() {
             Some(s) if self.is_structural => s.to_string(),
@@ -571,10 +596,12 @@ impl InputVariant {
             } else if self.variant_class == VariantClass::MobileElementInsertion
                 || self.variant_class == VariantClass::MobileElementDeletion
             {
-                // Perl VEP outputs ME-subtype-specific alleles from the ALT field:
-                //   <INS:ME:ALU> → Alu_insertion, <DEL:ME:SVA> → SVA_deletion, etc.
-                me_display_allele(self.alt_allele())
-                    .unwrap_or_else(|| self.variant_class.so_term().to_string())
+                // The ALT's own type read as the record's would be (`<INS:ME:ALU>` is
+                // `Alu_insertion`, `<DEL:ME>` `mobile_element_deletion`).
+                sv_so_term_and_class(&sv_type_abbreviation(&raw, None)).map_or_else(
+                    || self.variant_class.so_term().to_string(),
+                    |(term, _)| term.to_string(),
+                )
             } else {
                 self.variant_class.so_term().to_string()
             }
@@ -608,43 +635,6 @@ pub fn classify_variant(ref_allele: &[u8], alt_allele: &[u8]) -> VariantClass {
     } else {
         VariantClass::Indel
     }
-}
-
-/// Extract a Perl VEP-style display allele for mobile element variants.
-///
-/// Perl VEP parses the ME subtype from the symbolic ALT allele and produces
-/// subtype-specific names:
-///   `<INS:ME:ALU>` → `Alu_insertion`
-///   `<DEL:ME:SVA>` → `SVA_deletion`
-///   `<INS:ME:LINE1>` → `LINE1_insertion`
-///   `<INS:ME>` → `mobile_element_insertion`
-fn me_display_allele(raw_alt: &[u8]) -> Option<String> {
-    let s = std::str::from_utf8(raw_alt).ok()?;
-    let inner = s.strip_prefix('<')?.strip_suffix('>')?;
-    let parts: Vec<&str> = inner.split(':').collect();
-    if parts.len() < 2 {
-        return None;
-    }
-    let operation = if parts[0].eq_ignore_ascii_case("DEL") {
-        "deletion"
-    } else {
-        "insertion"
-    };
-
-    if parts.len() >= 3 {
-        let element = parts[2].to_ascii_uppercase();
-        let canonical = match element.as_str() {
-            "ALU" => Some("Alu"),
-            "L1" | "LINE1" => Some("LINE1"),
-            "SVA" => Some("SVA"),
-            "HERV" => Some("HERV"),
-            _ => None,
-        };
-        if let Some(name) = canonical {
-            return Some(format!("{}_{}", name, operation));
-        }
-    }
-    Some(format!("mobile_element_{}", operation))
 }
 
 /// A known variant from the variation cache that co-locates with an input variant.
@@ -903,8 +893,9 @@ mod tests {
     /// Parser/VCF.pm `create_StructuralVariationFeatures` gives a bracket
     /// breakend record the one allele string `REF/ALT` (`N/N[21:9412900[`), which
     /// OutputFactory.pm `VariationFeature_to_output_hash` builds the record's
-    /// generated name from, so the record's own breakend (`N.`) answers with the
-    /// same string as its mate; a native single breakend (`.N`) stays bare.
+    /// generated name from; the parser stores it as `record_allele_string_multi`, so the
+    /// record's own breakend (`N.`) answers with the same string as its mate, and a
+    /// native single breakend (`.N`) stays bare.
     #[test]
     fn derived_own_breakend_shares_the_record_allele_string() {
         let mut own =
@@ -914,6 +905,7 @@ mod tests {
         own.is_single_breakend = true;
         own.mate_id = Some("21:9412501".into());
         own.uploaded_allele_string = Some("N[21:9412900[".into());
+        own.record_allele_string_multi = Some("N/N[21:9412900[".into());
         assert_eq!(own.record_allele_string(), "N/N[21:9412900[");
 
         let mut mate = own.clone();

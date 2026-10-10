@@ -14,12 +14,14 @@ pub mod codon;
 pub mod consequence;
 pub mod coordinate;
 pub mod prediction;
+pub mod sv_record;
 pub mod sv_routing;
 pub mod sv_span;
 pub mod synonyms;
 pub mod transcript;
 pub mod variant;
 pub mod variation;
+pub mod vcf_info;
 
 /// VEP version number (matches Perl VEP release).
 pub const VEP_VERSION: u32 = 116;

@@ -1028,6 +1028,39 @@ mod tests {
         assert_eq!(terms(&tc), BTreeSet::from([Consequence::IntronVariant]));
     }
 
+    /// A contraction's DISTANCE is the run's, not its lost tail's: Ensembl VEP 116.2
+    /// writes `21 30430409 x N <CNV:TR>` with `END=30430417;SVLEN=8;RUS=CT;RUC=3` as
+    /// `21:30430410-30430417 tandem_repeat ENST00000390690 upstream_gene_variant
+    /// DISTANCE=4484`, 30430410 - 30425926, the smallest of the four gaps between the run
+    /// and the transcript (BaseTranscriptVariation.pm:582-605), where the lost two bases
+    /// 30430416-30430417 lie 4490 away. Here a ten-base run 1,000 bases past the
+    /// transcript's end losing its last six bases is `downstream_gene_variant` at 1,000,
+    /// and a run opening exactly 5,000 bases past it is still inside the flank.
+    #[test]
+    fn tandem_repeat_contraction_measures_distance_from_the_run() {
+        let tx = crate::test_helpers::make_test_transcript();
+        let near = calculate_sv_consequences(
+            &make_tandem_repeat_run(25_007_000, 25_007_009, Some(4)),
+            &tx,
+            5000,
+            5000,
+        )
+        .expect("the run lies within the downstream flank");
+        assert_eq!(
+            terms(&near),
+            BTreeSet::from([Consequence::DownstreamGeneVariant])
+        );
+        assert_eq!(near.distance, Some(1000));
+        let at_the_flank = calculate_sv_consequences(
+            &make_tandem_repeat_run(25_011_000, 25_011_009, Some(4)),
+            &tx,
+            5000,
+            5000,
+        )
+        .expect("the run opens 5,000 bases past the transcript");
+        assert_eq!(at_the_flank.distance, Some(5000));
+    }
+
     /// A record with two repeat sequences in one allele, `RN=2;RUS=CT,GA;RUC=2,1`
     /// over the ten-base run `CTCTCTGAGA`, expands to `CTCTGA`, four bases fewer
     /// than the run: Ensembl VEP's minimised pair is a four-base deletion inside the

@@ -205,7 +205,7 @@ fn format_csq_entry(
 fn record_line(record: &[&InputVariant]) -> String {
     let first = record[0];
     if let Some(line) = &first.raw_input {
-        return line.clone();
+        return line.to_string();
     }
     let ref_str = String::from_utf8_lossy(&first.ref_allele);
     let alts = record
@@ -235,7 +235,10 @@ impl OutputFormatter for VcfOutputFormatter {
             return Ok(Vec::new());
         }
         let raw_line = record_line(record);
-        if record.iter().any(|v| v.vep_skip || v.oversize_sv) {
+        if record
+            .iter()
+            .any(|v| v.vep_skip || v.oversize_sv || v.no_allele)
+        {
             // VEP carries the line through without consequences.
             let mut cols: Vec<String> = raw_line.split('\t').map(str::to_string).collect();
             while cols.len() < 8 {
@@ -336,7 +339,7 @@ mod tests {
             b"A".to_vec(),
             b"G".to_vec(),
         );
-        variant.raw_input = Some("21\t25585733\trs123\tA\tG\t100\tPASS\t.".to_string());
+        variant.raw_input = Some("21\t25585733\trs123\tA\tG\t100\tPASS\t.".into());
         variant.id = Some("rs123".into());
         variant.transcript_consequences = vec![TranscriptConsequence {
             transcript_id: "ENST00000352957".into(),
@@ -383,7 +386,7 @@ mod tests {
             b"A".to_vec(),
             b"G".to_vec(),
         );
-        variant.raw_input = Some("21\t25585733\t.\tA\tG\t100\tPASS\t.".to_string());
+        variant.raw_input = Some("21\t25585733\t.\tA\tG\t100\tPASS\t.".into());
         variant.transcript_consequences = vec![
             TranscriptConsequence {
                 transcript_id: "ENST00000001".into(),
@@ -445,7 +448,7 @@ mod tests {
     fn multi_allelic_record_is_one_line_with_every_allele_in_csq() {
         let formatter = VcfOutputFormatter::default();
         let mut a = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        a.raw_input = Some("21\t100\t.\tA\tG,T\t.\t.\t.".to_string());
+        a.raw_input = Some("21\t100\t.\tA\tG,T\t.\t.\t.".into());
         a.allele_index = 0;
         a.transcript_consequences = vec![TranscriptConsequence {
             transcript_id: "ENST1".into(),
@@ -473,7 +476,7 @@ mod tests {
     fn an_existing_csq_entry_is_replaced() {
         let formatter = VcfOutputFormatter::default();
         let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        v.raw_input = Some("21\t100\t.\tA\tG\t.\t.\tDP=3;CSQ=old|stuff".to_string());
+        v.raw_input = Some("21\t100\t.\tA\tG\t.\t.\tDP=3;CSQ=old|stuff".into());
         v.most_severe_consequence = Some(Consequence::IntergenicVariant);
         let lines = formatter.format_record(&[&v]).unwrap();
         let info = lines[0].split('\t').nth(7).unwrap();
@@ -494,7 +497,7 @@ mod tests {
             b"A".to_vec(),
             b"G".to_vec(),
         );
-        variant.raw_input = Some("21\t25000100\t.\tA\tG\t.\t.\t.".to_string());
+        variant.raw_input = Some("21\t25000100\t.\tA\tG\t.\t.\t.".into());
 
         let lines = formatter.format_variant(&variant).unwrap();
         assert_eq!(lines.len(), 1);
@@ -516,7 +519,7 @@ mod tests {
             b"A".to_vec(),
             b"G".to_vec(),
         );
-        variant.raw_input = Some("21\t25000100\t.\tA\tG\t100\tPASS\tDP=50".to_string());
+        variant.raw_input = Some("21\t25000100\t.\tA\tG\t100\tPASS\tDP=50".into());
 
         let lines = formatter.format_variant(&variant).unwrap();
         let fields: Vec<&str> = lines[0].split('\t').collect();
@@ -545,7 +548,7 @@ mod tests {
             b"A".to_vec(),
             b"G".to_vec(),
         );
-        variant.raw_input = Some("21\t25000100\trs99\tA\tG\t99\tPASS\tDP=30".to_string());
+        variant.raw_input = Some("21\t25000100\trs99\tA\tG\t99\tPASS\tDP=30".into());
 
         let lines = formatter.format_variant(&variant).unwrap();
         let fields: Vec<&str> = lines[0].split('\t').collect();

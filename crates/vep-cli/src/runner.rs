@@ -1128,6 +1128,9 @@ pub(crate) fn prewarm_batch(
 /// Annotates one variant against the (already materialized) transcript cache
 /// and variation data; returns its transcript consequence count.
 pub(crate) fn annotate_one(variant: &mut InputVariant, resources: &AnnotationResources) -> u64 {
+    if variant.no_allele {
+        return 0;
+    }
     // Annotate with transcript consequences. Every variant, a breakend spanning
     // more than VEP's 10 Mb `--max_sv_size` included, is annotated against the
     // chromosome's complete transcript set, so the output of one record never

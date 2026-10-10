@@ -53,7 +53,7 @@ impl JsonOutputFormatter {
         if record.iter().any(|v| v.vep_skip) {
             // VEP emits the unannotated record as its input line alone.
             if let Some(raw) = &first.raw_input {
-                root.insert("input".to_string(), Value::String(raw.clone()));
+                root.insert("input".to_string(), Value::String(raw.to_string()));
             }
             return Value::Object(root.into_iter().collect());
         }
@@ -85,7 +85,7 @@ impl JsonOutputFormatter {
             root.insert("assembly_name".to_string(), Value::String(asm.clone()));
         }
         if let Some(raw) = &first.raw_input {
-            root.insert("input".to_string(), Value::String(raw.clone()));
+            root.insert("input".to_string(), Value::String(raw.to_string()));
         }
         if self.options.variant_class {
             root.insert(

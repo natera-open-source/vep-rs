@@ -3,24 +3,25 @@
 
 //! VCF line parsing and allele processing.
 //!
-//! Handles parsing of VCF data lines into `InputVariant`s, including
-//! multi-allelic splitting, structural variant classification, BND
-//! notation parsing, and allele trimming/normalization.
+//! Parses a VCF data line into `InputVariant`s: the line is routed through
+//! `vep_core::sv_routing`, a sequence record is split per ALT with its alleles
+//! trimmed and minimised here, and a structural record's alleles are built by
+//! `vep_core::sv_record::structural_variants`.
 //!
 //! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`);
 //! `Sequence.pm`, `StructuralVariationFeature.pm` and `StructuralVariationOverlap.pm`
 //! are in ensembl-variation release/116 and `BaseVCF4.pm` is in ensembl-io release/116.
 
+use std::sync::Arc;
+
 use anyhow::{bail, Context};
 
 use vep_core::allele::trim_alleles;
-use vep_core::coordinate::{parse_coordinate, MAX_COORD};
-use vep_core::sv_routing::{
-    classify_symbolic_alt, is_symbolic_alt, perl_true, routes_to_structural, sv_so_term_and_class,
-    sv_type_abbreviation, variant_alts,
-};
-use vep_core::sv_span::{structural_end, svlen_values, SpanClass};
-use vep_core::variant::InputVariant;
+use vep_core::coordinate::parse_pos;
+use vep_core::sv_record::{structural_variants, DEFAULT_MAX_SV_SIZE};
+use vep_core::sv_routing::{perl_true, routes_to_structural, variant_alts, written_alts};
+use vep_core::variant::{InputVariant, VariantClass};
+use vep_core::vcf_info::info_value;
 
 /// Parse a VCF data line into one or more `InputVariant`s.
 ///
@@ -39,11 +40,7 @@ use vep_core::variant::InputVariant;
 /// Tandem-repeat lengths are read under Ensembl VEP's default `--max_sv_size`;
 /// [`parse_vcf_line_with_max_sv_size`] takes the run's own limit.
 pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec<InputVariant>> {
-    parse_vcf_line_with_max_sv_size(
-        line,
-        capture_raw_input,
-        Some(crate::args::DEFAULT_MAX_SV_SIZE as u64),
-    )
+    parse_vcf_line_with_max_sv_size(line, capture_raw_input, Some(DEFAULT_MAX_SV_SIZE))
 }
 
 /// [`parse_vcf_line`] under the run's `--max_sv_size` (`None` for `-1`), which
@@ -58,24 +55,23 @@ pub fn parse_vcf_line_with_max_sv_size(
     let fields = split_fixed_fields(line)?;
 
     let chr = fields[0].to_string();
-    let pos =
-        parse_coordinate(fields[1]).with_context(|| format!("Invalid POS: '{}'", fields[1]))?;
+    let pos = parse_pos(fields[1]).with_context(|| format!("Invalid POS: '{}'", fields[1]))?;
     let id = fields[2];
     let ref_allele = fields[3];
     let alt_field = fields[4];
 
-    if alt_field == "." || alt_field == "*" {
+    if alt_field == "." {
         bail!("No alternate allele");
     }
 
     let info_field = fields[7];
-    // INFO/SVTYPE as Perl tests it (`$info->{SVTYPE}`, Parser/VCF.pm:240 and :473):
-    // a value it reads as true, so `SVTYPE=`, `SVTYPE=0` and a bare flag name none.
-    let svtype = get_info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
+    let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
 
-    // A gVCF variant site is read as its real alleles (`variant_alts`); a record whose
-    // ALTs are `<NON_REF>` alone is a reference block, one intergenic row per ALT.
-    let alts = variant_alts(&alt_field.split(',').collect::<Vec<_>>(), svtype);
+    // The ALT column as Perl's list-context `split` reads it, a gVCF variant site read
+    // as its real alleles (`variant_alts`), each ALT keeping its written position.
+    let written = written_alts(alt_field);
+    let mut alts = written.clone();
+    variant_alts(&mut alts, svtype);
     // Perl VEP skips `*` alleles (neither the indel nor the SV path fires) and `.`;
     // both stay in the record's allele string, which Ensembl VEP builds from every
     // ALT (Parser/VCF.pm:469). `<*>` is not filtered: Perl treats it as a non-SV
@@ -85,38 +81,63 @@ pub fn parse_vcf_line_with_max_sv_size(
     let valid_alts: Vec<(usize, &str)> = alts
         .iter()
         .copied()
-        .enumerate()
         .filter(|(_, alt)| *alt != "*" && *alt != ".")
         .collect();
+
+    let raw_input: Option<Arc<str>> = capture_raw_input.then(|| Arc::from(line));
+    let explicit_id = (id != "." && !id.is_empty()).then(|| id.to_string());
+    let line_name: Arc<str> = input_line_name(&chr, pos, ref_allele, alt_field).into();
+
     if valid_alts.is_empty() {
-        bail!("No alternate allele");
+        if written.is_empty() || written.iter().any(|(_, alt)| *alt != "*") {
+            bail!("No alternate allele");
+        }
+        let mut variant =
+            InputVariant::without_allele(chr, pos, ref_allele, written.iter().map(|(_, alt)| *alt));
+        // The record's raw string, as on the sequence path: a VCF record's JSON `id`
+        // keeps the ID column's `.` (`variation_name`), told by this field being set.
+        variant.uploaded_allele_string = Some(variant.allele_string.as_str().into());
+        variant.raw_input = raw_input;
+        variant.id = explicit_id;
+        variant.input_line_name = Some(line_name);
+        return Ok(vec![variant]);
     }
 
     let mut variants = Vec::with_capacity(valid_alts.len());
 
-    let structural_record = routes_to_structural(ref_allele, &alts, svtype);
-
-    if !structural_record {
+    if !routes_to_structural(ref_allele, &alts, svtype) {
         let trim_alts: Vec<&str> = valid_alts.iter().map(|(_, alt)| *alt).collect();
-        let (trimmed_ref, trimmed_alts, prefix_trimmed) =
+        let (mut trimmed_ref, mut trimmed_alts, prefix_trimmed) =
             trim_multi_alleles(ref_allele, &trim_alts);
+        // `validate_vf` upper-cases the allele string after the anchor chop and before
+        // `post_process_vfs` minimises it (Parser.pm:554, `tr/[a-z]/[A-Z]/`).
+        trimmed_ref.make_ascii_uppercase();
+        trimmed_alts
+            .iter_mut()
+            .for_each(|alt| alt.make_ascii_uppercase());
         let (vep_start, vep_end) =
             vep_coords_from_trimmed(pos, prefix_trimmed, trimmed_ref.as_bytes());
 
         // The allele string VEP names an ID-less record by: the raw REF and every
-        // ALT joined by `/`. VEP keeps the raw string as `nontrimmed_allele_string`
-        // and promotes it to `original_allele_string` for any record whose alleles
-        // differ in length; a record without an indel allele is never trimmed, so
-        // its raw and working strings coincide (Parser/VCF.pm, Parser.pm
-        // `post_process_vfs` and `minimise_alleles`, OutputFactory.pm).
-        let uploaded_alleles = {
-            let mut s = ref_allele.to_string();
-            for a in &trim_alts {
-                s.push('/');
-                s.push_str(a);
-            }
-            s
-        };
+        // ALT joined by `/`, `*` and `.` at their places. VEP keeps the raw string as
+        // `nontrimmed_allele_string` and promotes it to `original_allele_string` for
+        // any record whose alleles differ in length; a record without an indel allele
+        // is never trimmed, so its raw and working strings coincide (Parser/VCF.pm,
+        // Parser.pm `post_process_vfs` and `minimise_alleles`, OutputFactory.pm).
+        let uploaded_alleles = allele_string(ref_allele, alts.iter().map(|(_, alt)| *alt));
+        // Perl's working string of a record with several ALTs, `*` and `.` counted
+        // (`scalar @$alts > 1`, Parser/VCF.pm:301-322): every allele behind the chopped
+        // anchor, a string `minimise_alleles` leaves as it is.
+        let chopped = (alts.len() > 1).then(|| {
+            let mut trimmed = trimmed_alts.iter().map(String::as_str);
+            allele_string(
+                &trimmed_ref,
+                alts.iter().map(|(_, alt)| match *alt {
+                    "*" | "." => *alt,
+                    _ => trimmed.next().unwrap_or(*alt),
+                }),
+            )
+        });
 
         for (trim_idx, (allele_idx, _alt)) in valid_alts.iter().enumerate() {
             let vep_alt = trimmed_alts
@@ -173,208 +194,39 @@ pub fn parse_vcf_line_with_max_sv_size(
 
             variant.allele_index = *allele_idx;
             variant.uploaded_allele_string = Some(uploaded_alleles.clone());
-            if valid_alts.len() > 1 {
-                let mut chopped = trimmed_ref.clone();
-                for a in &trimmed_alts {
-                    chopped.push('/');
-                    chopped.push_str(a);
-                }
-                variant.record_allele_string_multi = Some(chopped);
-            }
-            if capture_raw_input {
-                variant.raw_input = Some(line.to_string());
-            }
-            if id != "." && !id.is_empty() {
-                variant.id = Some(id.to_string());
-            }
+            variant.record_allele_string_multi = chopped.clone();
+            variant.raw_input = raw_input.clone();
+            variant.id = explicit_id.clone();
             variants.push(variant);
         }
-    }
-
-    // VEP's allele string for a structural variant record is every ALT of the
-    // record joined by `/`, `*` and the sequence alleles of a mixed record included
-    // (Parser/VCF.pm:469); the REF base it prepends for a breakend record alone is
-    // added by `record_allele_string()`.
-    let joined_alts = alts.join("/");
-    // One structural variant record has one class and one SO term, read from the
-    // joined ALTs with INFO/SVTYPE standing in for a string outside the VCF 4.4 forms
-    // (Parser.pm `get_SO_term`, Parser/VCF.pm:472-475), so `N.` with `SVTYPE=DEL`
-    // is a deletion; the term labels the row of every ALT, each ALT keeping its own
-    // bytes, and the one StructuralVariationFeature Perl builds (`:560-574`) gives a
-    // `<DEL>` beside a `<BND>` the breakpoint's class and point. A record whose
-    // joined type is in no SO table is parsed with each symbolic ALT's own class and
-    // the `vep_skip` mark.
-    let record_term = sv_so_term_and_class(&sv_type_abbreviation(&joined_alts, svtype));
-    let all_alts: Vec<(usize, &str)> = alts.iter().copied().enumerate().collect();
-    let is_breakpoint_record = record_term
-        .is_some_and(|(_, class)| class == vep_core::variant::VariantClass::Translocation);
-    let breakend_record = (structural_record && is_breakpoint_record)
-        .then(|| breakend_record(ref_allele, &all_alts, info_field));
-    let symbolic_alts: Vec<(usize, &str)> = valid_alts
-        .iter()
-        .copied()
-        .filter(|(_, alt)| is_symbolic_alt(alt))
-        .collect();
-    let is_mixed = !symbolic_alts.is_empty() && symbolic_alts.len() < valid_alts.len();
-    let per_alt_classes: Vec<(usize, &str, vep_core::variant::VariantClass)> = match record_term {
-        _ if !structural_record => Vec::new(),
-        Some((_, class)) => valid_alts
+    } else {
+        variants = structural_variants(
+            &chr,
+            pos,
+            ref_allele,
+            &written,
+            info_field,
+            max_sv_size,
+            explicit_id.as_deref(),
+        )?;
+        if variants
             .iter()
-            .map(|&(idx, alt)| (idx, alt, class))
-            .collect(),
-        None => symbolic_alts
-            .iter()
-            .map(|&(idx, alt)| {
-                let class = match svtype {
-                    // In a mixed record VEP reads the type from INFO/SVTYPE, since
-                    // the joined ALTs open with a sequence allele.
-                    Some(svtype) if is_mixed => {
-                        classify_symbolic_alt(&format!("<{svtype}>"), Some(svtype))
-                    }
-                    _ => classify_symbolic_alt(alt, svtype),
-                };
-                (idx, alt, class)
-            })
-            .collect(),
-    };
-    let tandem_repeat_alt_count = |alts: &[(usize, &str, vep_core::variant::VariantClass)]| {
-        alts.iter()
-            .filter(|(_, a, _)| a.to_ascii_uppercase().starts_with("<CNV:TR"))
-            .count()
-    };
-    let record_tandem_repeat_alts = tandem_repeat_alt_count(&per_alt_classes);
-
-    for (k, &(allele_idx, alt, sv_class)) in per_alt_classes.iter().enumerate() {
-        if sv_class == vep_core::variant::VariantClass::ReferenceBlock {
+            .any(|v| v.variant_class == VariantClass::ReferenceBlock)
+        {
             tracing::warn!(
                 "{}:{} {}: NON_REF is not a supported structural variant type; \
                  a reference-confidence block is written as one intergenic row",
                 chr,
                 pos,
-                alt
+                alt_field
             );
         }
-        // Perl VEP uses POS+1 for all SV types (the VCF POS is the anchor base;
-        // the actual structural event starts at POS+1).
-        let sv_start = if sv_class.is_span_type() {
-            pos + 1
-        } else {
-            pos
-        };
-
-        let is_bnd = sv_class == vep_core::variant::VariantClass::Translocation;
-        let is_tandem_repeat = sv_class == vep_core::variant::VariantClass::TandemRepeat;
-        let span_class = if is_bnd {
-            SpanClass::Breakpoint
-        } else if is_tandem_repeat || sv_class == vep_core::variant::VariantClass::TandemDuplication
-        {
-            SpanClass::Tandem
-        } else {
-            SpanClass::Other
-        };
-        // SVLEN=0 or END=POS leaves the pair `start = POS + 1, end = POS` Perl carries for
-        // every class: the event between the two bases, read with the predicates of a
-        // sequence insertion.
-        // `get_end` tests SVLEN and END with `defined` (BaseVCF4.pm:302-307).
-        let svlen_text = info_value_written(info_field, "SVLEN");
-        let sv_end_val = structural_end(
-            pos,
-            svlen_text,
-            info_value_written(info_field, "END"),
-            span_class,
-        )?;
-
-        let mut variant = InputVariant::new(
-            chr.clone(),
-            sv_start,
-            sv_end_val,
-            ref_allele.as_bytes().to_vec(),
-            alt.as_bytes().to_vec(),
-        );
-        variant.variant_class = sv_class;
-        variant.is_structural = true;
-        variant.vep_skip = record_term.is_none();
-        variant.record_so_term = record_term.map(|(term, _)| term.to_string());
-        variant.uploaded_allele_string = Some(
-            breakend_record
-                .as_ref()
-                .map_or_else(|| joined_alts.clone(), |record| record.alts.clone()),
-        );
-        variant.sv_end = Some(sv_end_val);
-        variant.sv_type = svtype.map(|s| s.to_string());
-        variant.sv_len = svlen_text.and_then(|text| svlen_values(text).first().copied());
-        if is_tandem_repeat {
-            variant.tr_alt_bases = tandem_repeat_alt_bases(
-                info_field,
-                tandem_repeat_alt_count(&per_alt_classes[..k]),
-                record_tandem_repeat_alts,
-                max_sv_size,
-            );
-        }
-        variant.ci_pos = parse_ci_field(get_info_value(info_field, "CIPOS"));
-        variant.ci_end = parse_ci_field(get_info_value(info_field, "CIEND"));
-        variant.allele_index = allele_idx;
-        // ALLELE_NUM numbers the parts of Ensembl VEP's allele string from 1
-        // (StructuralVariationOverlap.pm:67-76), so a breakpoint record's reference
-        // base shifts its ALTs by one (`N/<BND>` prints 2 for the `<BND>`); a record
-        // with parsed breakends numbers its own breakend 0 and the mates from 1
-        // (`:89-101`).
-        variant.allele_num = breakend_record.as_ref().map(|record| {
-            let prefixed = !record.alts.starts_with('.') && !record.alts.ends_with('.');
-            allele_idx as u32 + 1 + u32::from(prefixed)
-        });
-        if capture_raw_input {
-            variant.raw_input = Some(line.to_string());
-        }
-        if id != "." && !id.is_empty() {
-            variant.id = Some(id.to_string());
-        }
-        // A translocation allele of a record with no parsed breakend is a single
-        // breakend: the native `N.` and `.N` forms, and a symbolic `<BND>` without a
-        // mate, which Perl holds as `N/<BND>` with no breakend string
-        // (Parser/VCF.pm:499, `StructuralVariationFeature.pm` `_parse_breakends`).
-        variant.is_single_breakend = is_bnd;
-        match breakend_record
-            .as_ref()
-            .filter(|record| !record.mates.is_empty())
-        {
-            // The breakends come from the record's whole allele string, so they are
-            // built once, at its first ALT: the own breakend ahead of the mates, as
-            // `StructuralVariationOverlap::new` annotates `($vf, @$breakends)`. An ALT
-            // that is not a bracket (`.N` beside `N[21:x[`) lends the own breakend its
-            // base and gets no allele of its own.
-            Some(record) => {
-                if k == 0 {
-                    mark_paired_breakend_record(&mut variant, &chr, info_field);
-                    let ref_str = std::str::from_utf8(ref_allele.as_bytes()).unwrap_or("N");
-                    variant.allele_num = Some(0);
-                    variants.push(own_breakend(&variant, ref_str, &record.own));
-                    for (number, mate) in (1..).zip(&record.mates) {
-                        let mut variant = variant.clone();
-                        variant.allele_num = Some(number);
-                        variant.alt_alleles = vec![mate.text.as_bytes().to_vec()];
-                        variant.allele_string = format!("{ref_str}/{}", mate.text);
-                        variant.mate_chr =
-                            Some(vep_core::coordinate::normalize_chromosome(&mate.chromosome));
-                        variant.mate_pos = Some(mate.position);
-                        variant.is_single_breakend = false;
-                        variant.allele_index = mate.allele_index.unwrap_or(allele_idx);
-                        variants.push(variant);
-                    }
-                }
-            }
-            None => variants.push(variant),
+        for variant in &mut variants {
+            variant.raw_input = raw_input.clone();
+            variant.id = explicit_id.clone();
         }
     }
 
-    if variants.is_empty() {
-        bail!(
-            "{} is not a supported structural variant type",
-            sv_type_abbreviation(&joined_alts, svtype)
-        );
-    }
-
-    let line_name = input_line_name(&chr, pos, ref_allele, alt_field);
     for variant in &mut variants {
         variant.input_line_name = Some(line_name.clone());
     }
@@ -382,166 +234,15 @@ pub fn parse_vcf_line_with_max_sv_size(
     Ok(variants)
 }
 
-/// The record's own breakend: a copy of `variant` whose only allele is `single_alt`
-/// (`t.` or `.t`) over `ref_str`, flagged single, with no mate coordinates.
-fn own_breakend(variant: &InputVariant, ref_str: &str, single_alt: &str) -> InputVariant {
-    let mut own = variant.clone();
-    own.alt_alleles = vec![single_alt.as_bytes().to_vec()];
-    own.allele_string = format!("{ref_str}/{single_alt}");
-    own.mate_chr = None;
-    own.mate_pos = None;
-    own.is_single_breakend = true;
-    own
-}
-
-/// One bracket part of a breakpoint record's allele string: the text Ensembl VEP
-/// prints as the Allele, the mate chromosome as written, the mate position, and the
-/// ALT the part came from (`None` for the part INFO/CHR2 appends).
-struct BreakendMate {
-    text: String,
-    chromosome: String,
-    position: u64,
-    allele_index: Option<usize>,
-}
-
-/// The allele string Ensembl VEP holds for a breakpoint record and what
-/// `_parse_breakends` reads from it (Parser/VCF.pm:484-499,
-/// StructuralVariationFeature.pm:1262-1323).
-struct BreakendRecord {
-    /// The ALT side of the string: the ALTs joined by `/`, and with INFO/CHR2 written
-    /// and END2 true (else END written), `N[CHR2:pos[` in place of a lone `<BND>` or
-    /// appended to anything else. It is the record's `allele_string` once the reference
-    /// base is prepended, unless it opens or closes with `.`.
-    alts: String,
-    /// The record's own breakend, `t.`, or `.t` when any mate is left-placed; `t` is
-    /// the base of the last part the bracket match refuses, the reference base
-    /// included, when that part is a bare or dot-bounded ACGTN run, and `N` otherwise.
-    own: String,
-    /// One per part the breakend regex matches, in order.
-    mates: Vec<BreakendMate>,
-}
-
-fn breakend_record(ref_allele: &str, alts: &[(usize, &str)], info: &str) -> BreakendRecord {
-    let mut parts: Vec<(Option<usize>, String)> = alts
-        .iter()
-        .map(|&(idx, alt)| (Some(idx), alt.to_string()))
-        .collect();
-    // Parser/VCF.pm:491-497: `defined $info->{CHR2}` holds for `CHR2=` (Perl's split
-    // keeps the empty field) and fails for a bare `CHR2`; the position is END2 when
-    // Perl reads it as true (not empty, not `0`), else END as written, empty or `0`
-    // included.
-    if let Some(chr2) = info_value_written(info, "CHR2") {
-        let mate_pos = get_info_value(info, "END2")
-            .filter(|end2| perl_true(end2))
-            .or_else(|| info_value_written(info, "END"));
-        if let Some(mate_pos) = mate_pos {
-            let (allele_index, lone_bnd) = match parts.as_slice() {
-                [(idx, alt)] if is_bare_bnd_alt(alt) => (*idx, true),
-                _ => (None, false),
-            };
-            if lone_bnd {
-                parts.clear();
-            }
-            parts.push((allele_index, format!("N[{chr2}:{mate_pos}[")));
-        }
+/// `REF/ALT1/ALT2`: the reference and every ALT joined by `/`, one buffer for every
+/// allele of the record.
+fn allele_string<'a>(reference: &str, alts: impl IntoIterator<Item = &'a str>) -> Arc<str> {
+    let mut s = reference.to_string();
+    for alt in alts {
+        s.push('/');
+        s.push_str(alt);
     }
-    let alts = parts
-        .iter()
-        .map(|(_, part)| part.as_str())
-        .collect::<Vec<_>>()
-        .join("/");
-    let reference_part =
-        (!alts.starts_with('.') && !alts.ends_with('.')).then(|| (None, ref_allele.to_string()));
-    let mut base: Option<&str> = None;
-    let mut any_left = false;
-    let mut mates = Vec::new();
-    for (allele_index, part) in reference_part.iter().chain(parts.iter()) {
-        match bracket_breakend(part) {
-            Some((chromosome, position)) => {
-                any_left |= part.starts_with(['[', ']']);
-                mates.push(BreakendMate {
-                    text: part.clone(),
-                    chromosome: chromosome.to_string(),
-                    position,
-                    allele_index: *allele_index,
-                });
-            }
-            None => base = single_breakend_base(part),
-        }
-    }
-    let base = base.unwrap_or("N");
-    let own = if any_left {
-        format!(".{base}")
-    } else {
-        format!("{base}.")
-    };
-    BreakendRecord { alts, own, mates }
-}
-
-/// Perl's `/^<?BND>?$/i` (Parser/VCF.pm:495).
-fn is_bare_bnd_alt(alt: &str) -> bool {
-    let inner = alt.strip_prefix('<').unwrap_or(alt);
-    inner
-        .strip_suffix('>')
-        .unwrap_or(inner)
-        .eq_ignore_ascii_case("BND")
-}
-
-/// `_parse_breakends`' bracket match (StructuralVariationFeature.pm:1276):
-/// `[A-Za-z]*`, a bracket, a chromosome name of at least one character, `:`, a run of
-/// digits, a bracket, `[A-Za-z]*`; the chromosome is the longest name that leaves a
-/// digit run before the second bracket. A position that is not digits alone (`-7`,
-/// `+5`, `abc`) or an empty chromosome (`N[:100[`) names no breakend. The position
-/// saturates at [`MAX_COORD`]: the text stays as written in the Allele.
-fn bracket_breakend(part: &str) -> Option<(&str, u64)> {
-    let open = part.find(['[', ']'])?;
-    let inner = &part[open + 1..];
-    let close = inner.find(['[', ']'])?;
-    let inner = &inner[..close];
-    let colon = inner.rmatch_indices(':').map(|(i, _)| i).find(|&i| {
-        let digits = &inner[i + 1..];
-        i > 0 && !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
-    })?;
-    let (chromosome, digits) = (&inner[..colon], &inner[colon + 1..]);
-    if chromosome.bytes().any(|b| b.is_ascii_whitespace()) {
-        return None;
-    }
-    let position = digits
-        .parse::<u64>()
-        .map_or(MAX_COORD, |p| p.min(MAX_COORD));
-    Some((chromosome, position))
-}
-
-/// `_parse_breakends`' reading of a part its bracket match refuses
-/// (StructuralVariationFeature.pm:1281, `^[\.]?([ACGTN]+)[\.]?$`): the ACGTN run of a
-/// bare base or a dot-bounded single breakend, and `None` for anything else, which
-/// Perl assigns as undef.
-fn single_breakend_base(part: &str) -> Option<&str> {
-    let run = part.strip_prefix('.').unwrap_or(part);
-    let run = run.strip_suffix('.').unwrap_or(run);
-    (!run.is_empty()
-        && run
-            .bytes()
-            .all(|b| matches!(b, b'A' | b'C' | b'G' | b'T' | b'N')))
-    .then_some(run)
-}
-
-/// Names the mate of a breakend record that has one: INFO/MATEID, else PARID, else
-/// the record's ID or `chr:start` (gnomAD `<BND>` records carry no MATEID). A set
-/// `mate_id` is how `display_allele()` and the breakend predicates tell the record's
-/// own breakend, written `N.` or `.N` (`StructuralVariationFeature.pm`
-/// `_parse_breakends` names it from the bracket or synthesised mate allele alone),
-/// from a record whose only ALT is a single breakend, whose Allele is the bare class
-/// term `chromosome_breakpoint` (`OutputFactory.pm:2029`,
-/// `$vfoa->{breakend}->{string} || $svf->class_SO_term`). Ensembl VEP never reads
-/// MATEID, so one on a record without a bracket mate names nothing and is not kept.
-fn mark_paired_breakend_record(variant: &mut InputVariant, chr: &str, info: &str) {
-    let mate_id = get_info_value(info, "MATEID")
-        .or_else(|| get_info_value(info, "PARID"))
-        .map(str::to_string)
-        .or_else(|| variant.id.clone())
-        .unwrap_or_else(|| format!("{}:{}", chr, variant.start));
-    variant.mate_id = Some(mate_id);
+    s.into()
 }
 
 /// The name VEP gives a VCF record whose ID column cannot name it
@@ -554,131 +255,6 @@ fn input_line_name(chr: &str, pos: u64, ref_allele: &str, alt_field: &str) -> St
     } else {
         format!("{chr}_{pos}_{ref_allele}/{}", alt_field.replace(',', "/"))
     }
-}
-
-/// The alternate allele's length in bases for the `ordinal`th `<CNV:TR>` allele of a
-/// record carrying `alleles` of them: the length of the allele
-/// `_expand_tandem_repeat_allele_string` (`Parser/VCF.pm:385-428`) builds. INFO/RN gives
-/// each tandem-repeat allele its number of repeat sequences (one each when absent,
-/// `:394-397`; an allele past the list's end has none, `:408`), consumed in order from
-/// the RUS, RUC and RB lists (`:412-414`); a `.` unit is the one base `N` (`:413`); each
-/// sequence's count is its RUC entry whenever the record carries RUC, else its RB entry
-/// divided by the unit's length (`:414`), and the count is truncated the way Perl's `x`
-/// operator truncates (`:419`). RUL is never read. `None` without RUS (`:385`), when an
-/// entry the allele needs is missing, or is `.` in RN, RUC or RB, when the RN counts
-/// through the allele sum past `usize::MAX` or its length past `u64::MAX`, and for every
-/// allele of the record when any repeat sequence of the record is longer than
-/// `max_sv_size` (`:403`, `:417-418`, `:428`), which keeps the symbolic reading: under
-/// `None`, the flag's `-1`, no sequence is ever short enough.
-fn tandem_repeat_alt_bases(
-    info: &str,
-    ordinal: usize,
-    alleles: usize,
-    max_sv_size: Option<u64>,
-) -> Option<u64> {
-    // Perl's `$info->{RUC} || ''` (`:394-400`): an empty or `0` value is no list.
-    let list = |key: &str| -> Vec<&str> {
-        get_info_value(info, key)
-            .filter(|v| !v.is_empty() && *v != "0")
-            .map(|v| v.split(',').collect())
-            .unwrap_or_default()
-    };
-    let rus = list("RUS");
-    if rus.is_empty() {
-        return None;
-    }
-    let rn = list("RN");
-    // One materialised allele per RN entry (`:408`): an allele past the list's end
-    // has no sequences, and every allele has one when RN is absent.
-    let sequences = |allele: usize| -> Option<usize> {
-        if rn.is_empty() {
-            Some(1)
-        } else {
-            rn.get(allele)?.parse().ok()
-        }
-    };
-    let ruc = list("RUC");
-    let rb = list("RB");
-    // The `j`th repeat sequence's unit length and count, `(length($seq), $num)`.
-    let sequence = |j: usize| -> Option<(f64, f64)> {
-        let unit_len = match *rus.get(j)? {
-            "." => 1.0,
-            unit => unit.len() as f64,
-        };
-        let count: f64 = if ruc.is_empty() {
-            rb.get(j)?.parse::<f64>().ok()? / unit_len
-        } else {
-            ruc.get(j)?.parse().ok()?
-        };
-        Some((unit_len, count))
-    };
-    // `$self->param('max_sv_size') || 5000` (`:403`): `-1` passes `||` unchanged, so
-    // every sequence is oversized under it, and `0` falls to 5000.
-    let cap = match max_sv_size {
-        None => return None,
-        Some(0) => 5000.0,
-        Some(n) => n as f64,
-    };
-    let record_alleles = if rn.is_empty() { alleles } else { rn.len() };
-    let mut total = 0usize;
-    for allele in 0..record_alleles {
-        total = total.checked_add(sequences(allele).unwrap_or(0))?;
-    }
-    for j in 0..total.min(rus.len()) {
-        if sequence(j).is_some_and(|(unit_len, count)| unit_len * count > cap) {
-            return None;
-        }
-    }
-    let mut first = 0usize;
-    for earlier in 0..ordinal {
-        first = first.checked_add(sequences(earlier)?)?;
-    }
-    let last = first.checked_add(sequences(ordinal)?)?;
-    let mut bases = 0u64;
-    for j in first..last {
-        let (unit_len, count) = sequence(j)?;
-        let length = (count >= 0.0).then_some((count.trunc() * unit_len) as u64)?;
-        bases = bases.checked_add(length)?;
-    }
-    Some(bases)
-}
-
-/// The value of `key` in a VCF INFO column, `""` for a flag, `None` when absent.
-/// The last occurrence of a repeated key wins, as in the hash Ensembl VEP's parser
-/// builds from the field (BaseVCF4.pm:581-583).
-pub(crate) fn get_info_value<'a>(info: &'a str, key: &str) -> Option<&'a str> {
-    info_field(info, key).map(|value| value.unwrap_or(""))
-}
-
-/// The value of INFO key `key` when it is written `key=value`, the empty value
-/// included: Perl's `defined $info->{KEY}`, which a bare `KEY` flag fails because its
-/// hash value is undef.
-fn info_value_written<'a>(info: &'a str, key: &str) -> Option<&'a str> {
-    info_field(info, key).flatten()
-}
-
-/// The last occurrence of `key` in the INFO column: `Some(Some(value))` for `key=value`,
-/// `Some(None)` for a bare flag, `None` when absent.
-fn info_field<'a>(info: &'a str, key: &str) -> Option<Option<&'a str>> {
-    if info == "." || info.is_empty() {
-        return None;
-    }
-    info.rsplit(';')
-        .find_map(|field| match field.split_once('=') {
-            Some((k, v)) if k == key => Some(Some(v)),
-            None if field == key => Some(None),
-            _ => None,
-        })
-}
-
-/// Parse a VCF confidence interval INFO field (CIPOS or CIEND).
-///
-/// Format: two comma-separated integers, e.g., "-100,50".
-/// Returns `Some((lo, hi))` on success, `None` if missing or malformed.
-pub(crate) fn parse_ci_field(value: Option<&str>) -> Option<(i64, i64)> {
-    let s = value?;
-    let (a, b) = s.split_once(',')?;
-    Some((a.parse().ok()?, b.parse().ok()?))
 }
 
 /// The eight fixed columns of a VCF data line (CHROM through INFO). The split
@@ -797,14 +373,15 @@ fn vcf_to_vep_alleles(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vep_core::sv_routing::is_perl_structural_alt_list;
+    use vep_core::coordinate::MAX_COORD;
+    use vep_core::sv_record::{parse_ci_field, tandem_repeat_alt_bases};
+    use vep_core::sv_routing::{classify_symbolic_alt, sv_so_term_and_class, sv_type_abbreviation};
     use vep_core::variant::VariantClass;
 
     /// `tandem_repeat_alt_bases` for a record of `ordinal + 1` tandem-repeat alleles
     /// under Ensembl VEP's default `--max_sv_size`.
     fn alt_bases(info: &str, ordinal: usize) -> Option<u64> {
-        let limit = Some(crate::args::DEFAULT_MAX_SV_SIZE as u64);
-        tandem_repeat_alt_bases(info, ordinal, ordinal + 1, limit)
+        tandem_repeat_alt_bases(info, ordinal, ordinal + 1, Some(DEFAULT_MAX_SV_SIZE))
     }
 
     #[test]
@@ -1072,6 +649,22 @@ mod tests {
             parse_vcf_line("21\t33867341\t.\tC\t<CN2>\t.\t.\tEND=34000018", false).unwrap();
         assert_eq!(variants[0].start, 33867342);
         assert_eq!(variants[0].uploaded_variation(), "21_33867341_C/<CN2>");
+    }
+
+    /// A `*`-only record is named like every other VCF record: Parser/VCF.pm:347 gives
+    /// its feature the ID column as written (`.` for a dot), the `id` of its JSON object
+    /// (OutputFactory/JSON.pm:236), and OutputFactory.pm's line branch names it
+    /// `CHROM_POS_REF/ALT`; the alleles that build that name are the record's own.
+    #[test]
+    fn dot_id_names_a_star_only_record_by_its_line() {
+        let variants = parse_vcf_line("21\t30425650\t.\tN\t*\t.\t.\t.", false).unwrap();
+        assert!(variants[0].no_allele);
+        assert_eq!(variants[0].variation_name(), ".");
+        assert_eq!(variants[0].uploaded_variation(), "21_30425650_N/*");
+        assert_eq!(variants[0].uploaded_allele_string.as_deref(), Some("N/*"));
+        let named = parse_vcf_line("21\t30425650\tstar\tN\t*,*\t.\t.\t.", false).unwrap();
+        assert_eq!(named[0].variation_name(), "star");
+        assert_eq!(named[0].uploaded_allele_string.as_deref(), Some("N/*/*"));
     }
 
     /// OutputFactory.pm: an ID equal to the `chr_start_alleles` name Parser.pm
@@ -1809,13 +1402,6 @@ mod tests {
             );
             assert_eq!(v[0].display_allele(), alt, "{reference} {alt} {info}");
         }
-        // The dot forms bind to the joined list's ends (`^\.\w+|\w+\.$` over
-        // `join(",", @$alts)`): `.N,G` routes, `G,.N,T` does not.
-        assert!(is_perl_structural_alt_list(".N,G") && is_perl_structural_alt_list("G,N."));
-        assert!(!is_perl_structural_alt_list("G,.N,T") && !is_perl_structural_alt_list("<*>,G"));
-        assert!(
-            is_perl_structural_alt_list("G,<DEL>") && is_perl_structural_alt_list("N[21:100[,G")
-        );
     }
 
     /// Parser/VCF.pm:473 tests the VCF 4.4 forms without `/i`, so a lowercase ALT is
@@ -1965,7 +1551,7 @@ mod tests {
     }
 
     /// ALLELE_NUM numbers the parts of Ensembl VEP's allele string from 1
-    /// (StructuralVariationOverlap.pm:89-101): a bare `<BND>` is `N/<BND>`, so its row
+    /// (StructuralVariationOverlap.pm:64-77): a bare `<BND>` is `N/<BND>`, so its row
     /// prints 2 (116.2 writes `ALLELE_NUM=2` beside the reference allele's 1); `.N` is
     /// not prefixed and prints 1; a record with parsed breakends prints 0 for its own
     /// breakend and 1 upward for its mates; every other class prints the ALT's position.
@@ -2060,10 +1646,194 @@ mod tests {
         }
     }
 
-    /// Both VCF readers route, type and class a record through `vep_core::sv_routing`, so
-    /// over the shapes that decide the path (an `N` reference base, `<*>`, a gVCF site, a
-    /// block list, a lowercase ALT, a mixed list, a breakpoint list, the type edges) every
-    /// variant's path, class, skip mark, term, span and allele index agree.
+    /// Perl's list-context `split` drops a trailing empty ALT field (BaseVCF4.pm:489) and a
+    /// trailing empty type part (Parser.pm:669): Ensembl VEP 116.2 writes the one allele `G`
+    /// for `A G,`, a `deletion` over END for `<DEL>,` with `SVTYPE=DEL`, and a `deletion`
+    /// for `N.` with `SVTYPE=DEL/`.
+    #[test]
+    fn a_trailing_empty_alt_field_names_no_allele() {
+        let seq = parse_vcf_line("21\t30425650\tx\tA\tG,\t.\t.\t.", true).unwrap();
+        assert_eq!(seq.len(), 1);
+        assert_eq!(
+            (seq[0].display_allele(), seq[0].allele_index),
+            ("G".to_string(), 0)
+        );
+        assert_eq!(seq[0].uploaded_allele_string.as_deref(), Some("A/G"));
+        for (alt, info) in [
+            ("<DEL>,", "SVTYPE=DEL;END=30425949"),
+            ("N.", "SVTYPE=DEL/;END=30425949"),
+        ] {
+            let v =
+                parse_vcf_line(&format!("21\t30425650\tx\tN\t{alt}\t.\t.\t{info}"), true).unwrap();
+            assert_eq!(v.len(), 1, "{alt} {info}");
+            assert_eq!(
+                v[0].record_so_term.as_deref(),
+                Some("deletion"),
+                "{alt} {info}"
+            );
+            assert!(!v[0].vep_skip, "{alt} {info}");
+            assert_eq!((v[0].start, v[0].end), (30425651, 30425949), "{alt} {info}");
+        }
+    }
+
+    /// A gVCF site's real allele keeps its written position whichever side of `<NON_REF>`
+    /// it stands on, so `<NON_REF>,G` prints ALLELE_NUM 2 for `G`, the number a genotype
+    /// `0/2` names.
+    #[test]
+    fn a_gvcf_sites_allele_keeps_its_written_position() {
+        let after = parse_vcf_line("21\t30425650\tx\tA\t<NON_REF>,G\t.\t.\t.", true).unwrap();
+        assert_eq!(after.len(), 1);
+        assert_eq!(
+            (after[0].display_allele(), after[0].allele_index),
+            ("G".to_string(), 1)
+        );
+        let before = parse_vcf_line("21\t30425650\tx\tA\tG,<NON_REF>\t.\t.\t.", true).unwrap();
+        assert_eq!(before[0].allele_index, 0);
+    }
+
+    /// BaseVCF4.pm:581-583 builds the INFO hash key by key as written (`$info_data{$key} =
+    /// $value`), the last occurrence winning: a bare `END` written last leaves END undef, and
+    /// `end=` or ` END=` is not `END`, so a deletion carrying only those has no end and is
+    /// Ensembl VEP's `deletion looks incomplete` (Parser/VCF.pm:555-558); vep-rs ends such a
+    /// record at its start.
+    #[test]
+    fn an_info_key_matches_exactly_and_a_bare_key_written_last_is_undef() {
+        let dup =
+            parse_vcf_line("21\t1000\tx\tN\t<DUP>\t.\t.\tSVTYPE=DUP;END=1100;END", true).unwrap();
+        assert_eq!((dup[0].start, dup[0].end), (1001, 1001));
+        for info in [
+            "svtype=DEL;end=30425949",
+            "SVTYPE=DEL; END=30425949",
+            "SVTYPE=DEL;END =30425949",
+        ] {
+            let v =
+                parse_vcf_line(&format!("21\t30425650\tx\tN\t<DEL>\t.\t.\t{info}"), true).unwrap();
+            assert_eq!((v[0].start, v[0].end), (30425651, 30425651), "{info}");
+            assert_eq!(v[0].record_so_term.as_deref(), Some("deletion"), "{info}");
+        }
+        let exact = parse_vcf_line(
+            "21\t30425650\tx\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30425949",
+            true,
+        )
+        .unwrap();
+        assert_eq!(exact[0].end, 30425949);
+    }
+
+    /// `_parse_breakends`' match tolerates whitespace around the brackets, the name and the
+    /// colon, and BaseVCF4.pm:582 cuts an INFO value at a second `=`: Ensembl VEP 116.2
+    /// writes the own breakend `N.` (ALLELE_NUM 0) and a mate row for `N[ 21 : 30425700 [`,
+    /// for `<BND>` with `CHR2= 21;END2=30425700` (Allele `N[ 21:30425700[`) and for `<BND>`
+    /// with `CHR2=21;END2=30425700=5` (Allele `N[21:30425700[`).
+    #[test]
+    fn a_breakend_mate_is_read_through_the_whitespace_perl_allows() {
+        for (alt, info, mate_text) in [
+            ("N[ 21 : 30425700 [", "SVTYPE=BND", "N[ 21 : 30425700 ["),
+            (
+                "<BND>",
+                "SVTYPE=BND;CHR2= 21;END2=30425700",
+                "N[ 21:30425700[",
+            ),
+            (
+                "<BND>",
+                "SVTYPE=BND;CHR2=21;END2=30425700=5",
+                "N[21:30425700[",
+            ),
+        ] {
+            let v =
+                parse_vcf_line(&format!("21\t30425650\tx\tN\t{alt}\t.\t.\t{info}"), true).unwrap();
+            assert_eq!(v.len(), 2, "{alt} {info}");
+            assert_eq!(
+                (v[0].display_allele(), v[0].allele_num),
+                ("N.".to_string(), Some(0)),
+                "{alt}"
+            );
+            assert_eq!(
+                (v[1].display_allele(), v[1].allele_num),
+                (mate_text.to_string(), Some(1)),
+                "{alt}"
+            );
+            assert_eq!(
+                (v[1].mate_chr.as_deref(), v[1].mate_pos),
+                (Some("21"), Some(30425700)),
+                "{alt}"
+            );
+        }
+    }
+
+    /// A unit of no bases under RUC is the empty allele (`'' x 5`, Parser/VCF.pm:419), no
+    /// bases and so the loss of the run; under RB it divides by zero (`:414`) and keeps the
+    /// symbolic reading; a count is read as Perl numifies it (`RUC=2abc` repeats twice, a
+    /// loss of three bases on a nine-base run).
+    #[test]
+    fn a_zero_length_repeat_unit_is_read_as_perl_expands_it() {
+        let run = "SVTYPE=CNV;END=30425949;SVLEN=300;";
+        for (info, bases) in [("RUS=,AC;RUC=5", Some(0)), ("RUS=,AC;RB=12", None)] {
+            let v = parse_vcf_line(
+                &format!("21\t30425650\tx\tN\t<CNV:TR>\t.\t.\t{run}{info}"),
+                true,
+            )
+            .unwrap();
+            assert_eq!(v[0].tr_alt_bases, bases, "{info}");
+        }
+        let numified = parse_vcf_line(
+            "21\t30425587\tx\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;RUC=2abc",
+            true,
+        )
+        .unwrap();
+        assert_eq!(numified[0].tr_alt_bases, Some(6));
+    }
+
+    /// The record-wide strings (the uploaded allele string, the record's working string,
+    /// the line name and the raw line) are one buffer per record shared by its alleles.
+    #[test]
+    fn the_record_strings_are_shared_by_its_alleles() {
+        let shared = |variants: &[InputVariant]| {
+            let first = &variants[0];
+            variants.iter().skip(1).all(|v| {
+                Arc::ptr_eq(
+                    v.uploaded_allele_string.as_ref().unwrap(),
+                    first.uploaded_allele_string.as_ref().unwrap(),
+                ) && Arc::ptr_eq(
+                    v.input_line_name.as_ref().unwrap(),
+                    first.input_line_name.as_ref().unwrap(),
+                ) && Arc::ptr_eq(
+                    v.raw_input.as_ref().unwrap(),
+                    first.raw_input.as_ref().unwrap(),
+                ) && match (
+                    &v.record_allele_string_multi,
+                    &first.record_allele_string_multi,
+                ) {
+                    (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                    (None, None) => true,
+                    _ => false,
+                }
+            })
+        };
+        let seq = parse_vcf_line("21\t1000\tx\tA\tG,T,C\t.\t.\t.", true).unwrap();
+        assert!(seq.len() == 3 && shared(&seq));
+        let sv = parse_vcf_line(
+            "21\t1000\tx\tN\t<DEL>,<DUP>\t.\t.\tSVTYPE=CNV;END=1100",
+            true,
+        )
+        .unwrap();
+        assert!(sv.len() == 2 && shared(&sv));
+        let bnd = parse_vcf_line(
+            "21\t1000\tx\tN\tN[21:1700[,N]22:100]\t.\t.\tSVTYPE=BND",
+            true,
+        )
+        .unwrap();
+        assert!(bnd.len() == 3 && shared(&bnd));
+    }
+
+    /// Both VCF readers read a record through the shared `vep_core` modules (INFO, the ALT
+    /// list, routing, the structural record), so over the shapes that decide the path and
+    /// the alleles (an `N` reference base, `<*>`, a gVCF site in either order, a block list,
+    /// a lowercase ALT, a mixed list, a breakpoint list, bracket and CHR2 mates, dot
+    /// breakends, a bare `<BND>` with MATEID, repeated and bare INFO keys, a trailing
+    /// empty ALT, POS 0, a POS spelled `3e7` or `1000.0`, a `*`-only record, `<CNV:TR>`
+    /// counts) every variant's path, class, skip mark, term, span, allele index and
+    /// number, Allele, mate, record string, allele-less mark and repeat length agree; a
+    /// POS past the ceiling, and a structural record's POS at it, are refused by both.
     #[test]
     fn the_vep_io_reader_routes_as_this_parser_does() {
         use vep_io::input::vcf::VcfParser as Reader;
@@ -2071,14 +1841,38 @@ mod tests {
         let header = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
         let summary = |v: &InputVariant| {
             (
-                v.is_structural,
-                v.variant_class,
-                v.vep_skip,
-                v.record_so_term.clone(),
-                v.start,
-                v.end,
-                v.allele_index,
+                (
+                    v.is_structural,
+                    v.variant_class,
+                    v.vep_skip,
+                    v.record_so_term.clone(),
+                ),
+                (v.start, v.end, v.allele_index, v.allele_num),
+                (
+                    v.display_allele(),
+                    v.mate_id.is_some(),
+                    v.is_single_breakend,
+                ),
+                (v.mate_chr.clone(), v.mate_pos, v.tr_alt_bases, v.no_allele),
+                // The record strings of the sequence path are the command-line parser's
+                // alone; the structural ones come from the shared record builder.
+                (
+                    v.is_structural
+                        .then(|| v.uploaded_allele_string.as_deref().map(str::to_string)),
+                    v.is_structural.then(|| v.record_allele_string()),
+                    v.input_line_name.as_deref().map(str::to_string),
+                ),
             )
+        };
+        let from_reader = |record: &str| {
+            let data = format!("{header}{record}\n");
+            let mut reader =
+                Reader::new(Box::new(std::io::Cursor::new(data.into_bytes()))).unwrap();
+            let mut variants = Vec::new();
+            while let Some(v) = reader.next_variant() {
+                variants.push(v.map(|v| summary(&v)).map_err(|e| e.to_string()));
+            }
+            variants
         };
         for record in [
             "21\t1000\tx\tN\tG\t.\t.\tSVTYPE=DEL;END=1100",
@@ -2087,6 +1881,7 @@ mod tests {
             "21\t1000\tx\tN\t<*>\t.\t.\t.",
             "21\t1000\tx\tN\t<*>\t.\t.\tSVTYPE=DEL;END=1100",
             "21\t1000\tx\tA\tG,<NON_REF>\t.\t.\t.",
+            "21\t1000\tx\tA\t<NON_REF>,G\t.\t.\t.",
             "21\t1000\tx\tN\tG,<NON_REF>\t.\t.\tSVTYPE=DEL;END=1100",
             "21\t1000\tx\tN\t<NON_REF>\t.\t.\tEND=1100",
             "21\t1000\tx\tN\t<NON_REF>,<NON_REF>\t.\t.\tEND=1100",
@@ -2102,28 +1897,61 @@ mod tests {
             "21\t1000\tx\tN\t<DEL:>\t.\t.\tEND=1100",
             "21\t1000\tx\tN\t<CNX>,<CN3>\t.\t.\tEND=1100",
             "21\t1000\tx\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=1009;SVLEN=9;RUS=AGC;RUC=4",
+            "21\t1000\tx\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=1009;SVLEN=9;RUS=AGC;RUC=2abc",
+            "21\t1000\tx\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=1009;SVLEN=9;RUS=,AC;RUC=5",
+            "21\t1000\tx\tN\tN[21:1700[,N]22:100]\t.\t.\tSVTYPE=BND",
+            "21\t1000\tx\tN\tN[ 21 : 1700 [\t.\t.\tSVTYPE=BND",
+            "21\t1000\tx\tA\t<BND>\t.\t.\tSVTYPE=BND;CHR2= 21;END2=1700=5",
+            "21\t1000\tx\tN\t<BND>\t.\t.\tSVTYPE=BND;MATEID=m1",
+            "21\t1000\tx\tN\t<BND>\t.\t.\tSVTYPE=BND;SVLEN=100",
+            "21\t1000\tx\tN\t.N\t.\t.\tSVTYPE=BND;MATEID=m1",
+            "21\t1000\tx\tN\tN.,N[21:1700[\t.\t.\tSVTYPE=BND",
+            "21\t1000\tx\tN\t*,<DEL>\t.\t.\tSVTYPE=DEL;END=1100",
+            "21\t1000\tx\tN\t<DUP>\t.\t.\tSVTYPE=DUP;END=1100;END",
+            "21\t1000\tx\tN\t<DUP>\t.\t.\tSVTYPE=DUP;END=1100;END=1200",
+            "21\t1000\tx\tN\t<DEL>\t.\t.\tsvtype=DEL;end=1100",
+            "21\t1000\tx\tA\tG,\t.\t.\t.",
+            "21\t1000\tx\tN\t<DEL>,\t.\t.\tSVTYPE=DEL;END=1100",
+            "21\t1000\tx\tN\tN.\t.\t.\tSVTYPE=DEL/;END=1100",
+            "21\t0\tx\tA\tAT\t.\t.\t.",
+            "21\t1e3\tx\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=1100",
+            "21\t1000.0\tx\tA\tG\t.\t.\t.",
+            "21\t1000\tx\tA\tg\t.\t.\t.",
+            "21\t1000\tx\tagc\ta\t.\t.\t.",
+            "21\t1000\tx\tN\t*\t.\t.\t.",
+            "21\t1000\tx\tNAC\t*,*\t.\t.\tSVTYPE=DEL;END=1100",
+            "21\t1000\tx\tN\tN[21:1700[,<NON_REF>\t.\t.\t.",
+            "21\t1000\tx\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=1700 ",
         ] {
-            let cli: Vec<_> = parse_vcf_line(record, false)
+            let cli: Vec<Result<_, String>> = parse_vcf_line(record, false)
                 .unwrap()
                 .iter()
-                .map(summary)
+                .map(|v| Ok(summary(v)))
                 .collect();
-            let data = format!("{header}{record}\n");
-            let mut reader =
-                Reader::new(Box::new(std::io::Cursor::new(data.into_bytes()))).unwrap();
-            let mut from_reader = Vec::new();
-            while let Some(v) = reader.next_variant() {
-                from_reader.push(summary(&v.unwrap()));
-            }
-            assert_eq!(from_reader, cli, "{record}");
+            assert_eq!(from_reader(record), cli, "{record}");
         }
         // A record whose type has no term and whose ALTs are all sequence alleles is an
         // error here and a skipped record there, both writing nothing.
         let record = "21\t1000\tx\tN\tG\t.\t.\tSVTYPE=FOO;END=1100";
         assert!(parse_vcf_line(record, false).is_err());
-        let data = format!("{header}{record}\n");
-        let mut reader = Reader::new(Box::new(std::io::Cursor::new(data.into_bytes()))).unwrap();
-        assert!(reader.next_variant().is_none());
+        assert!(from_reader(record).is_empty());
+        // A position past the ceiling is refused by both, as is a structural record's
+        // position at it.
+        for (pos, alt, info) in [
+            (MAX_COORD + 1, "G", "."),
+            (u64::MAX, "G", "."),
+            (MAX_COORD, "<DEL>", "SVTYPE=DEL;SVLEN=-300"),
+        ] {
+            let record = format!("21\t{pos}\tx\tA\t{alt}\t.\t.\t{info}");
+            assert!(parse_vcf_line(&record, false).is_err(), "{pos}");
+            let read = from_reader(&record);
+            assert!(read.len() == 1 && read[0].is_err(), "{pos}: {read:?}");
+        }
+        assert!(parse_vcf_line("21\t18446744073709551616\tx\tA\tG\t.\t.\t.", false).is_err());
+        assert_eq!(
+            from_reader("21\t18446744073709551616\tx\tA\tG\t.\t.\t.").len(),
+            1
+        );
     }
 
     /// A comma-separated SVLEN is read as its first value for the span
@@ -3411,11 +3239,39 @@ mod tests {
         assert_eq!(v.allele_string, "T/<*>");
     }
 
+    /// A line whose every ALT is `*` names no allele: Ensembl VEP 116.2 writes
+    /// `21 30425650 x N * . . .` and `N *,*` with no row, the VCF line without CSQ and a
+    /// JSON object (`"allele_string":"N/*"`, start and end 30425650,
+    /// `"most_severe_consequence":"?"`), with or without a true SVTYPE. The one variant
+    /// carries the record and is never annotated; a `*` beside an allele stays filtered.
     #[test]
-    fn test_parse_vcf_line_star_allele_still_filtered() {
-        // Plain * (spanning deletion) should still be filtered
-        let line = "21\t100\t.\tA\t*\t.\tPASS\t.";
-        assert!(parse_vcf_line(line, true).is_err());
+    fn a_star_only_record_is_carried_as_the_allele_less_feature() {
+        for (line, allele_string) in [
+            ("21\t100\t.\tA\t*\t.\tPASS\t.", "A/*"),
+            ("21\t100\t.\tNAC\t*,*\t.\tPASS\t.", "NAC/*/*"),
+            ("21\t100\t.\tN\t*\t.\tPASS\tSVTYPE=DEL;END=400", "N/*"),
+        ] {
+            let variants = parse_vcf_line(line, true).unwrap();
+            assert_eq!(variants.len(), 1, "{line}");
+            let v = &variants[0];
+            assert!(v.no_allele, "{line}");
+            assert_eq!(v.allele_string, allele_string, "{line}");
+            assert_eq!(
+                (v.start, v.end),
+                (100, 99 + v.ref_allele.len() as u64),
+                "{line}"
+            );
+            assert!(!v.is_structural && v.transcript_consequences.is_empty());
+            assert_eq!(v.record_allele_string(), allele_string, "{line}");
+        }
+        assert_eq!(
+            parse_vcf_line("21\t100\t.\tA\t*\t.\tPASS\t.", true).unwrap()[0].uploaded_variation(),
+            "21_100_A/*"
+        );
+        let beside = parse_vcf_line("21\t100\t.\tA\tG,*\t.\tPASS\t.", true).unwrap();
+        assert_eq!(beside.len(), 1);
+        assert!(!beside[0].no_allele);
+        assert_eq!(beside[0].alt_allele(), b"G");
     }
 
     #[test]

@@ -15,13 +15,21 @@
 use std::fmt;
 
 use crate::coordinate::{parse_coordinate, MAX_COORD};
+use crate::variant::VariantClass;
 
 /// Perl's numeric reading of an INFO value, as `abs($svlen)` and `max(@svlen)` apply
 /// it: leading whitespace, an optional sign, digits with an optional fraction and
 /// exponent, and nothing else counts, so `300abc` is 300, ` 300` and `3e2` are 300 and
-/// `abc`, `.` or an empty value is 0. The integer part is returned; a fractional SVLEN
-/// ends Ensembl VEP's span at a fraction no coordinate can carry.
-pub fn perl_numeric_value(text: &str) -> i64 {
+/// `abc`, `.` or an empty value is 0. The integer part is returned, saturating at the
+/// machine word (`1e400` is `Inf` to Perl); a fractional SVLEN ends Ensembl VEP's span
+/// at a fraction no coordinate can carry.
+pub(crate) fn perl_numeric_value(text: &str) -> i64 {
+    perl_numeric_f64(text).trunc() as i64
+}
+
+/// Perl's numeric reading of a value before any truncation, the number `x` and a range
+/// read before they truncate it (`2abc` is 2.0, `1.9` is 1.9, `abc` is 0.0).
+pub(crate) fn perl_numeric_f64(text: &str) -> f64 {
     let rest = text.trim_start();
     let bytes = rest.as_bytes();
     let mut i = 0;
@@ -46,7 +54,7 @@ pub fn perl_numeric_value(text: &str) -> i64 {
     if mantissa_end == digits_start
         || (mantissa_end == digits_start + 1 && bytes[digits_start] == b'.')
     {
-        return 0;
+        return 0.0;
     }
     let mut end = mantissa_end;
     if i < bytes.len() && (bytes[i] == b'e' || bytes[i] == b'E') {
@@ -62,10 +70,7 @@ pub fn perl_numeric_value(text: &str) -> i64 {
             end = j;
         }
     }
-    rest[..end]
-        .parse::<f64>()
-        .map(|v| v.trunc() as i64)
-        .unwrap_or(0)
+    rest[..end].parse::<f64>().unwrap_or(0.0)
 }
 
 /// Every comma-separated SVLEN value as Perl reads it (`split(',', $svlen)` then the
@@ -85,6 +90,28 @@ pub enum SpanClass {
     Other,
 }
 
+impl SpanClass {
+    /// The span rule a variant class reads under.
+    pub fn of(class: VariantClass) -> Self {
+        match class {
+            VariantClass::Translocation => SpanClass::Breakpoint,
+            VariantClass::TandemRepeat | VariantClass::TandemDuplication => SpanClass::Tandem,
+            _ => SpanClass::Other,
+        }
+    }
+}
+
+/// The first base of a structural record at VCF position `pos`: the base after the
+/// anchor for a class that spans bases (BaseVCF4.pm:260-264, `$start++`), `pos` itself
+/// for one that does not.
+pub fn structural_start(pos: u64, class: VariantClass) -> u64 {
+    if class.is_span_type() {
+        pos.saturating_add(1)
+    } else {
+        pos
+    }
+}
+
 /// Why Ensembl VEP skips a record on its span.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpanError {
@@ -94,6 +121,8 @@ pub enum SpanError {
     StartPastEnd { start: u64, end: u64 },
     /// A tandem class whose largest SVLEN is negative ends before its start.
     NegativeTandemLength(i64),
+    /// The record's first base, `pos + 1`, lies past [`MAX_COORD`].
+    StartPastCeiling(u64),
 }
 
 impl fmt::Display for SpanError {
@@ -107,6 +136,7 @@ impl fmt::Display for SpanError {
                 f,
                 "Invalid SVLEN for a tandem repeat or a tandem duplication: '{len}'"
             ),
+            SpanError::StartPastCeiling(pos) => write!(f, "Invalid POS: '{pos}'"),
         }
     }
 }
@@ -123,9 +153,9 @@ impl std::error::Error for SpanError {}
 /// Ensembl VEP carries for an insertion of unknown length. Without SVLEN a breakpoint
 /// ends at its start unless END is written empty or `0`, the two values Perl reads as
 /// false and so never replaces (the record is then skipped as Ensembl VEP skips it);
-/// every other class ends at END, refused when it is not a coordinate or lies more
-/// than one base before the start, and at the start when END is absent. The end
-/// saturates at [`MAX_COORD`].
+/// every other class ends at END, read with the blanks around it dropped, refused when
+/// it is not a coordinate or lies more than one base before the start, and at the start
+/// when END is absent. The end saturates at [`MAX_COORD`].
 pub fn structural_end(
     pos: u64,
     svlen: Option<&str>,
@@ -151,7 +181,8 @@ pub fn structural_end(
         (SpanClass::Breakpoint, Some("0")) => Err(SpanError::StartPastEnd { start, end: 0 }),
         (SpanClass::Breakpoint, _) | (_, None) => Ok(start),
         (_, Some(text)) => {
-            let end = parse_coordinate(text)
+            // `looks_like_number` (Parser.pm:475) admits blanks around the number.
+            let end = parse_coordinate(text.trim_ascii())
                 .ok_or_else(|| SpanError::EndNotACoordinate(text.to_string()))?;
             if end.saturating_add(1) < start {
                 return Err(SpanError::StartPastEnd { start, end });
@@ -187,9 +218,14 @@ mod tests {
             ("-", 0),
             ("1e", 1),
             ("99999999999999999999", i64::MAX),
+            ("1e400", i64::MAX),
+            ("-1e400", i64::MIN),
         ] {
             assert_eq!(perl_numeric_value(text), value, "{text:?}");
         }
+        assert_eq!(perl_numeric_f64("2abc"), 2.0);
+        assert_eq!(perl_numeric_f64("1.9"), 1.9);
+        assert_eq!(perl_numeric_f64("abc"), 0.0);
         assert_eq!(svlen_values(""), vec![0]);
         assert_eq!(svlen_values(",300"), vec![0, 300]);
         assert_eq!(svlen_values("-300,400"), vec![-300, 400]);

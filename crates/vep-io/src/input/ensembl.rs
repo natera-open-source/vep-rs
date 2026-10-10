@@ -14,6 +14,7 @@
 //! (e.g., "A/G/T") produce one `InputVariant` per ALT allele.
 
 use std::io::BufRead;
+use std::sync::Arc;
 
 use vep_core::coordinate::{parse_coordinate, Strand};
 use vep_core::variant::InputVariant;
@@ -98,7 +99,7 @@ impl<R: BufRead> EnsemblParser<R> {
         // OutputFactory.pm `VariationFeature_to_output_hash`, the ensembl `_line`
         // branch: the lower coordinate, so an insertion written `100 99` is named
         // at 99.
-        let line_name = format!("{chr}_{}_{allele_string}", start.min(end));
+        let line_name: Arc<str> = format!("{chr}_{}_{allele_string}", start.min(end)).into();
 
         for (i, alt) in alts.iter().enumerate() {
             let mut variant = InputVariant::new(

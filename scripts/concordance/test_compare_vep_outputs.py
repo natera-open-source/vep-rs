@@ -2122,6 +2122,22 @@ class PerClassModeArgTests(unittest.TestCase):
             parse_args(["--engine", "vep_rs"])
         self.assertEqual(parse_args(["--engine", "vep-rs"]).engine, "vep-rs")
 
+    def test_a_missing_input_vcf_or_input_dir_is_refused_before_any_pairing(self) -> None:
+        """A path given to `--input-vcf` that is not a file, or to `--input-dir` that is not a
+        directory, is a usage error (exit code 2) before any output is read, so a mistyped path
+        cannot run the comparison without the input it names."""
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as d:
+            for flag, path in (("--input-vcf", Path(d) / "absent.vcf"), ("--input-dir", Path(d) / "absent"),
+                               ("--input-vcf", Path(d)), ("--input-dir", Path(d) / "absent.vcf")):
+                if flag == "--input-dir" and path.name == "absent.vcf":
+                    path.write_text("", encoding="utf-8")
+                with self.subTest(flag=flag, path=path.name), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
+                    parse_args(["--perl-dir", "p", "--rust-dir", "r", "--report-dir", "o", flag, str(path)])
+                self.assertEqual(raised.exception.code, 2)
+
     def test_min_tuples_defaults_to_the_pre_committed_threshold(self) -> None:
         self.assertEqual(parse_args([]).min_tuples, PER_CLASS_MIN_TUPLES)
 
@@ -2261,21 +2277,25 @@ class ReferenceRegistryTests(unittest.TestCase):
             self.assertIs(registry.pair_rules, EXCLUSION_REGISTRY, release)
             self.assertEqual(registry.release, release)
 
-    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_ten_record_shapes(self) -> None:
+    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_fourteen_record_shapes(self) -> None:
         from compare_vep_outputs import (
             BND_BARE_REFERENCE_ALLELE_ROW_BUCKET,
             BND_MATE_32_BIT_BUFFER_BUCKET,
             BND_OWN_ROWS_LOST_BUCKET,
             BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
             CNV_TR_EMPTY_EXPANSION_BUCKET,
+            CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET,
+            COORDINATE_PAST_CEILING_BUCKET,
             DOT_BREAKEND_PAIR_BUCKET,
             FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
             GVCF_VARIANT_SITE_DROPPED_BUCKET,
             MISSING_ALT_ANNOTATED_BUCKET,
             NON_INTEGER_END_BUCKET,
+            NON_NUMERIC_POS_NUMIFIED_BUCKET,
             REFERENCE_116_2_ONE_SIDED_RULES,
             REFERENCE_REGISTRIES,
             REFERENCE_SKIPPED_RECORD_BUCKET,
+            STAR_ALONE_SVTYPE_ANNOTATED_BUCKET,
         )
 
         rules = REFERENCE_REGISTRIES["116.2"].one_sided_rules
@@ -2286,16 +2306,20 @@ class ReferenceRegistryTests(unittest.TestCase):
              BND_SYNONYM_MATE_ROWS_LOST_BUCKET, FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
              BND_BARE_REFERENCE_ALLELE_ROW_BUCKET, BND_MATE_32_BIT_BUFFER_BUCKET,
              GVCF_VARIANT_SITE_DROPPED_BUCKET, DOT_BREAKEND_PAIR_BUCKET, MISSING_ALT_ANNOTATED_BUCKET,
-             NON_INTEGER_END_BUCKET, CNV_TR_EMPTY_EXPANSION_BUCKET],
+             NON_INTEGER_END_BUCKET, CNV_TR_EMPTY_EXPANSION_BUCKET, STAR_ALONE_SVTYPE_ANNOTATED_BUCKET,
+             NON_NUMERIC_POS_NUMIFIED_BUCKET, CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET, COORDINATE_PAST_CEILING_BUCKET],
         )
         self.assertEqual([r.excludes for r in rules],
-                         [True, False, False, False, True, False, True, True, False, True, False],
+                         [True, False, False, False, True, False, True, True, False, True, False, False, True, False, True],
                          "this comparator reads no input and no cache: the lost-row breakend shapes, the "
-                         "missing ALT and the empty expansion are judged only by the structural-variant comparator")
+                         "missing ALT, the empty expansion, the `*`-only ALT and the dropped `RN=0` allele are "
+                         "judged only by the structural-variant comparator")
         self.assertEqual([r.excludes_with_cache for r in rules],
-                         [True, True, True, False, True, False, True, True, True, True, True],
+                         [True, True, True, False, True, False, True, True, True, True, True, True, True, True, True],
                          "the structural-variant comparator sets every class aside but the FASTA shape and the "
-                         "buffer a mate position overflows")
+                         "buffer a coordinate overflows")
+        for bucket in (NON_INTEGER_END_BUCKET, BND_MATE_32_BIT_BUFFER_BUCKET):
+            self.assertIn("SVLEN" if bucket == NON_INTEGER_END_BUCKET else "span's end", rules[[r.bucket for r in rules].index(bucket)].definition)
         overflow = rules[5]
         self.assertEqual(overflow.bucket, "bnd_mate_32bit_buffer_intergenic")
         self.assertIn("2147478648", overflow.definition)
@@ -2724,8 +2748,19 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
                     self.assertEqual(scope.gvcf_absent, set())
                     self.assertEqual([r.split("\t")[2] for r in open_rows], ["21:30425651"])
                 self.assertEqual(buckets["reference_skipped_record"]["excluded"], 1, "the block list is a skipped record")
-        args = parse_args(["--perl-dir", "p", "--rust-dir", "r", "--report-dir", "o", "--input-dir", "i"])
-        self.assertEqual((args.input_dir, args.input_vcf), ("i", None))
+            args = parse_args(["--perl-dir", "p", "--rust-dir", "r", "--report-dir", "o", "--input-dir", str(inputs)])
+            self.assertEqual((args.input_dir, args.input_vcf), (str(inputs), None))
+            args = parse_args(["--perl-dir", "p", "--rust-dir", "r", "--report-dir", "o", "--input-vcf", str(inputs / "s.vcf")])
+            self.assertEqual((args.input_dir, args.input_vcf), (None, str(inputs / "s.vcf")))
+
+    def test_a_gvcf_site_allele_is_written_in_upper_case(self) -> None:
+        """vep-rs writes `21 30425650 x A g,<NON_REF> . . .` and `21 30425650 x a g,<non_ref>
+        . . .` as `21:30425650 G`; the derived allele is upper-cased as the parser writes it."""
+        from compare_vep_outputs import gvcf_site_rows
+
+        self.assertEqual(gvcf_site_rows(30425650, "A", ["g", "<NON_REF>"]), [("G", 30425650, 30425650)])
+        self.assertEqual(gvcf_site_rows(30425650, "a", ["g", "<non_ref>"]), [("G", 30425650, 30425650)])
+        self.assertEqual(gvcf_site_rows(30425650, "atg", ["ag", "<NON_REF>"]), [("-", 30425651, 30425651)])
 
     def test_gvcf_site_rows_follow_the_parsers_sequence_path(self) -> None:
         """vep-rs trims an indel record's anchor base across every real allele, then minimises
@@ -2747,6 +2782,48 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         self.assertEqual(sequence_location("21", 101, 100), "21:100-101")
         self.assertEqual(sequence_location("21", 101, 102), "21:101-102")
         self.assertEqual(sequence_location("chr21", 100, 100), "chr21:100")
+
+    def test_a_trailing_empty_alt_field_is_no_field(self) -> None:
+        """Ensembl VEP's parser splits the ALT column in list context (BaseVCF4.pm:489
+        `[split(',',$alt_allele)]`), which drops trailing empty fields and keeps the middle
+        ones: `split(',', "<DEL>,")` has one field and `split(',', "G,,T,,")` is `G`, the empty
+        field, `T`. So `A G,` is a plain SNV, no site; `A G,<NON_REF>,` is the site `A G,<NON_REF>`
+        with the one row `G` at POS; `<NON_REF>,` is a block alone. The generated name of an
+        ID-less record carries the ALT fields after the REF, so a trailing `/` is the same empty
+        field."""
+        from compare_vep_outputs import (
+            gvcf_site_locations,
+            gvcf_site_locations_from_vcf,
+            gvcf_site_rows,
+            is_gvcf_variant_site,
+            perl_fields,
+            perl_split,
+        )
+
+        self.assertEqual(perl_split("<DEL>,", ","), ["<DEL>"])
+        self.assertEqual(perl_split("G,,T,,", ","), ["G", "", "T"])
+        self.assertEqual(perl_split("", ","), [])
+        self.assertEqual(perl_split(",", ","), [])
+        self.assertEqual(perl_split("N/G/<NON_REF>/", "/"), ["N", "G", "<NON_REF>"])
+        self.assertEqual(perl_fields(["G", "<NON_REF>", "", ""]), ["G", "<NON_REF>"])
+        self.assertFalse(is_gvcf_variant_site(["G", ""]))
+        self.assertTrue(is_gvcf_variant_site(["G", "<NON_REF>", ""]))
+        self.assertFalse(is_gvcf_variant_site(["<NON_REF>", ""]), "a block alone is no site")
+        self.assertEqual(gvcf_site_rows(100, "A", ["G", ""]), [("G", 100, 100)])
+        self.assertEqual(gvcf_site_rows(100, "A", ["G", "<NON_REF>", ""]), [("G", 100, 100)])
+        header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+        rows = ("21_30425650_A/G/<NON_REF>/\t21:30425650\tG\tG\tENST_1\tTranscript\tmissense_variant\n"
+                "21_40000000_A/G/\t21:40000000\tG\tG\tENST_2\tTranscript\tmissense_variant\n")
+        vcf = ("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+               "21\t30425650\trs1\tA\tG,<NON_REF>,\t.\t.\t.\n"
+               "21\t40000000\trs2\tA\tG,\t.\t.\t.\n"
+               "21\t50000000\trs3\tA\t<NON_REF>,\t.\t.\tEND=50000100\n")
+        with tempfile.TemporaryDirectory() as d:
+            rust, inputs = Path(d) / "s.txt", Path(d) / "s.vcf"
+            rust.write_text(header + rows, encoding="utf-8")
+            inputs.write_text(vcf, encoding="utf-8")
+            self.assertEqual(gvcf_site_locations(rust), {"21:30425650"})
+            self.assertEqual(gvcf_site_locations_from_vcf(inputs), {"21:30425650"})
 
     def test_a_dot_breakend_pair_and_a_non_integer_end_are_set_aside(self) -> None:
         """Ensembl VEP 116.2 writes `21:30425650-30425651 chromosome_breakpoint` for `N N.`
@@ -2803,6 +2880,159 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         self.assertEqual(len(open_rows), 5)
 
 
+    def reference_only_scope(self, *locations: str):
+        s = self.scope()
+        s.reference_only = {("f", loc) for loc in locations}
+        return s
+
+    def test_a_negative_first_coordinate_is_the_numified_pos_class(self) -> None:
+        """Ensembl VEP 116.2 writes `21:-4-295 deletion - intergenic_variant` for `21 -5 x N <DEL>
+        . . SVTYPE=DEL;SVLEN=-300`, `21:-2147483647--2147483348 deletion` for POS -2147483648
+        and `21:-5 G - intergenic_variant` for `21 -5 x A G`; vep-rs refuses each line, so the
+        rows are set aside. A reference-only row at a start of 1 (`21:1-30425949`, POS `.`
+        under --max_sv_size -1) is not told from a record at POS 0 and stays charged here."""
+        rows = [self.row("missing_in_rust", "21:-4-295", "deletion", "-", "intergenic_variant"),
+                self.row("missing_in_rust", "21:-2147483647--2147483348", "deletion", "-", "intergenic_variant"),
+                self.row("missing_in_rust", "21:-5", "G", "-", "intergenic_variant"),
+                self.row("missing_in_rust", "21:1-30425949", "deletion", "ENST00000262354", "transcript_ablation")]
+        scope = self.reference_only_scope("21:-4-295", "21:-2147483647--2147483348", "21:-5", "21:1-30425949")
+        (ep, er, buckets), open_rows = self.run_pass(rows, scope)
+        self.assertEqual((ep, er), (3, 0))
+        self.assertEqual(buckets["non_numeric_pos_numified"], {"count": 3, "excluded": 3, "records": 3, "perl": 3, "rust": 0})
+        self.assertEqual(buckets["non_integer_end_annotated"]["count"], 0, "a negative coordinate is an integer")
+        self.assertEqual([r.split("\t")[2] for r in open_rows], ["21:1-30425949"])
+
+    def test_a_first_coordinate_past_the_ceiling_is_set_aside_when_vep_rs_wrote_none(self) -> None:
+        """Ensembl VEP 116.2 writes `21:4611686018427387905-4611686018427388204 deletion -
+        intergenic_variant` for `21 4611686018427387904 x N <DEL> . . SVTYPE=DEL;SVLEN=-300`,
+        `21:4611686018427387904-4611686018427388203` for POS 4611686018427387903,
+        `21:9223372036854775808 G` for `21 9223372036854775808 x A G` and the single coordinate
+        `21:18446744073709551617 deletion` for POS 18446744073709551616; vep-rs fails each
+        line at 2^62 - 1. A reference row at such a Location vep-rs also wrote under another
+        consequence is a disagreement, not the class."""
+        from compare_vep_outputs import VEP_RS_COORDINATE_CEILING
+
+        self.assertEqual(VEP_RS_COORDINATE_CEILING, 2**62 - 1)
+        rows = [self.row("missing_in_rust", "21:4611686018427387905-4611686018427388204", "deletion", "-", "intergenic_variant"),
+                self.row("missing_in_rust", "21:4611686018427387904-4611686018427388203", "deletion", "-", "intergenic_variant"),
+                self.row("missing_in_rust", "21:9223372036854775808", "G", "-", "intergenic_variant"),
+                self.row("missing_in_rust", "21:18446744073709551617", "deletion", "-", "intergenic_variant"),
+                self.row("missing_in_rust", "21:4611686018427387903", "G", "T1", "intron_variant"),
+                self.row("extra_in_rust", "21:4611686018427387903", "G", "T1", "upstream_gene_variant")]
+        scope = self.reference_only_scope("21:4611686018427387905-4611686018427388204",
+                                          "21:4611686018427387904-4611686018427388203",
+                                          "21:9223372036854775808", "21:18446744073709551617")
+        (ep, er, buckets), open_rows = self.run_pass(rows, scope)
+        self.assertEqual((ep, er), (4, 0))
+        self.assertEqual(buckets["coordinate_past_ceiling"], {"count": 4, "excluded": 4, "records": 4, "perl": 4, "rust": 0})
+        self.assertEqual(len(open_rows), 2)
+
+    def test_the_dot_breakend_pair_covers_the_own_and_mate_alleles_of_an_info_mate(self) -> None:
+        """`21 30425650 x N N. . . CHR2=21;END2=30425700`: Ensembl VEP 116.2 writes the pair
+        `21:30425650-30425651` under `N.` and `N[21:30425700[` on ENST00000334068 and
+        ENST00000390690; vep-rs the point `21:30425651` under the same alleles. The eight rows
+        are four pairs; a point under a sequence allele pairs with nothing."""
+        pair, point = "21:30425650-30425651", "21:30425651"
+        rows = []
+        for allele in ("N.", "N[21:30425700["):
+            for feature, csq in (("ENST00000334068", "upstream_gene_variant"), ("ENST00000390690", "feature_truncation,coding_sequence_variant")):
+                rows.append(self.row("missing_in_rust", pair, allele, feature, csq))
+                rows.append(self.row("extra_in_rust", point, allele, feature, csq))
+        rows.append(self.row("missing_in_rust", pair, "ACG", "ENST00000390690", "inframe_insertion"))
+        rows.append(self.row("extra_in_rust", point, "ACG", "ENST00000390690", "inframe_insertion"))
+        (ep, er, buckets), open_rows = self.run_pass(rows, self.scope())
+        self.assertEqual((ep, er), (4, 4))
+        self.assertEqual(buckets["dot_breakend_without_svtype_pair"], {"count": 8, "excluded": 8, "records": 2, "perl": 4, "rust": 4})
+        self.assertEqual(sorted(r.split("\t")[3] for r in open_rows), ["ACG", "ACG"])
+
+    def test_a_mate_prefix_the_reference_does_not_resolve_is_the_synonym_shape(self) -> None:
+        """`N[Chr21:30425700[` on CHROM 21: Ensembl VEP 116.2 writes the own end only, vep-rs the
+        mate rows too (`21:30425651 N[Chr21:30425700[ ENST00000334068 upstream_gene_variant`),
+        counted under the synonym class; `N[chr21:30425700[` is resolved and both engines agree."""
+        loc = "21:30425651"
+        breakends = {("f", loc): ({"N."}, {"N.", "N[Chr21:30425700["}, {"21"})}
+        rows = [self.row("extra_in_rust", loc, "N[Chr21:30425700[", "ENST00000334068", "upstream_gene_variant"),
+                self.row("extra_in_rust", loc, "N[Chr21:30425700[", "ENST00000390690", "feature_truncation,coding_sequence_variant")]
+        (_, _, buckets), open_rows = self.run_pass(rows, self.scope(breakends=breakends))
+        self.assertEqual(buckets["bnd_synonym_mate_rows_lost"], {"count": 2, "excluded": 0, "records": 1, "perl": 0, "rust": 0})
+        self.assertEqual(len(open_rows), 2)
+        breakends = {("f", loc): ({"N.", "N[chr21:30425700["}, {"N.", "N[chr21:30425700["}, {"21"})}
+        rows = [self.row("extra_in_rust", loc, "N[chr21:30425700[", "ENST00000418755", "downstream_gene_variant")]
+        (_, _, buckets), _ = self.run_pass(rows, self.scope(breakends=breakends))
+        self.assertEqual(buckets["bnd_synonym_mate_rows_lost"]["count"], 0)
+
+
+class NumifiedCoordinateTests(unittest.TestCase):
+    """The reference's rows at a coordinate it numified from a POS vep-rs refused, recognised
+    without the input from the Location alone: a negative first coordinate
+    (`non_numeric_pos_numified`) or one at or past 2^62 - 1 (`coordinate_past_ceiling`), at a
+    Location vep-rs wrote nothing for."""
+
+    @staticmethod
+    def key(loc: str, allele: str, feat: str, csq: str, ftype: str = "Transcript") -> str:
+        return f"{loc}\t{allele}\t{feat}\t{ftype}\t{csq}"
+
+    def merge(self, perl: list[str], rust: list[str]):
+        from compare_vep_outputs import ReferenceRecordScope, compare_sorted_key_files
+
+        scope = ReferenceRecordScope()
+        with tempfile.TemporaryDirectory() as d:
+            pp, rp = Path(d) / "p.txt", Path(d) / "r.txt"
+            pp.write_text("".join(k + "\n" for k in sorted(perl)), encoding="utf-8")
+            rp.write_text("".join(k + "\n" for k in sorted(rust)), encoding="utf-8")
+            compare_sorted_key_files(pp, rp, file_name="f", discordant_out=None,
+                                     track_consequence_buckets=False, record_scope=scope)
+        return scope
+
+    def test_a_location_with_a_negative_coordinate_is_parsed_and_is_an_integer(self) -> None:
+        """Ensembl VEP 116.2 writes `21:-4-295` for `21 -5 x N <DEL> . . SVTYPE=DEL;SVLEN=-300`
+        and `21:-2147483647--2147483348` for POS -2147483648: integer coordinates, outside the
+        non-integer class, which keeps `21:30425651-NaN`, `21:30425949.0` and `21: 30425949`."""
+        from compare_vep_outputs import _location_span, _non_integer_end
+
+        self.assertEqual(_location_span("21:-4-295"), ("21", -4, 295))
+        self.assertEqual(_location_span("21:-2147483647--2147483348"), ("21", -2147483647, -2147483348))
+        self.assertEqual(_location_span("21:-5"), ("21", -5, -5))
+        self.assertEqual(_location_span("21:18446744073709551617"), ("21", 2**64 + 1, 2**64 + 1))
+        self.assertIsNone(_location_span("21:30425651-NaN"))
+        for loc in ("21:-4-295", "21:-2147483647--2147483348", "21:-5", "21:30425651-30425949", "21:30425651"):
+            self.assertFalse(_non_integer_end(loc), loc)
+        for loc in ("21:30425651-NaN", "21:30425949.0", "21: 30425949", "21:30425949 ", "21:3e7", "21:30425651-30425950.7"):
+            self.assertTrue(_non_integer_end(loc), loc)
+
+    def test_the_scope_records_the_locations_only_the_reference_wrote(self) -> None:
+        perl = [self.key("21:-4-295", "deletion", "-", "intergenic_variant", "-"),
+                self.key("21:100", "A", "T1", "missense_variant"),
+                self.key("21:200", "G", "T2", "intron_variant")]
+        rust = [self.key("21:100", "A", "T1", "missense_variant"),
+                self.key("21:200", "G", "T2", "upstream_gene_variant")]
+        scope = self.merge(perl, rust)
+        self.assertEqual(scope.reference_only, {("f", "21:-4-295")},
+                         "a Location vep-rs wrote under another consequence is not reference-only")
+
+    def test_a_reference_coordinate_past_the_buffers_32_bit_bound_is_an_overflow(self) -> None:
+        """`21:30425651-2147483647 deletion - intergenic_variant` (Ensembl VEP 116.2 for
+        `21 30425650 x N <DEL> . . SVTYPE=DEL;END=2147483647` under --max_sv_size -1) and
+        `21:2147483649 N.` (POS 2147483648) enter the buffer's bounds as a mate at 2147478648
+        does; a vep-rs-only Location there and an end at 2147478647 do not."""
+        perl = [self.key("21:30425651-2147483647", "deletion", "-", "intergenic_variant", "-"),
+                self.key("21:2147483649", "N.", "-", "intergenic_variant", "-"),
+                self.key("21:30425651-2147478647", "deletion", "-", "intergenic_variant", "-")]
+        rust = [self.key("21:2147483649", "N[21:30425700[", "T1", "upstream_gene_variant"),
+                self.key("21:40000001-2147483647", "deletion", "T2", "transcript_ablation")]
+        scope = self.merge(perl, rust)
+        self.assertEqual(scope.mate_overflow, {("f", "21:30425651-2147483647"), ("f", "21:2147483649")})
+
+    def test_the_mate_chromosome_as_the_reference_reads_it(self) -> None:
+        from compare_vep_outputs import reference_mate_chromosome
+
+        for allele, name in (("N[chr21:30425700[", "21"), ("N[Chr21:30425700[", "Chr21"), ("N[CHR21:30425700[", "CHR21"),
+                             ("N[21:30425700[", "21"), ("]NC_000022.11:26037668]N", "NC_000022.11"), ("N[chrM:100[", "M")):
+            self.assertEqual(reference_mate_chromosome(allele), name, allele)
+        self.assertIsNone(reference_mate_chromosome("N."))
+        self.assertIsNone(reference_mate_chromosome("deletion"))
+
+
 class ReferenceReleaseFixtureTests(unittest.TestCase):
     """Compare mode on the committed fixture under each release.
 
@@ -2833,6 +3063,35 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
         finally:
             sys.argv = argv
         return out
+
+    def test_an_output_without_an_input_vcf_under_input_dir_warns_once(self) -> None:
+        """`--input-dir` holding no VCF named after an output's stem writes one warning per such
+        stem to stderr and the comparison goes on, recognising a gVCF variant site from an
+        ID-less record's generated name alone."""
+        import contextlib
+        import io
+        import shutil
+        import sys
+
+        from compare_vep_outputs import main, no_input_vcf_warning
+
+        out, inputs = Path(tempfile.mkdtemp()), Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, True)
+        self.addCleanup(shutil.rmtree, inputs, True)
+        argv = sys.argv
+        sys.argv = ["compare_vep_outputs.py", "--perl-dir", str(self.FIXTURE / "perl"),
+                    "--rust-dir", str(self.FIXTURE / "rust"), "--report-dir", str(out),
+                    "--assembly", "GRCh37", "--input-dir", str(inputs)]
+        err = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(err):
+                self.assertEqual(main(), 0)
+        finally:
+            sys.argv = argv
+        self.assertEqual(err.getvalue().splitlines(), [no_input_vcf_warning("output", inputs.resolve())])
+        self.assertEqual(no_input_vcf_warning("s07", Path("in")),
+                         "WARNING: [compare_vep_outputs] no input VCF for s07 under in; "
+                         "gVCF variant sites are recognised from an ID-less record's generated name only")
 
     def test_115_2_reproduces_the_published_report_byte_for_byte(self) -> None:
         import json
@@ -2869,3 +3128,41 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
         self.assertIn("- Reference release: Ensembl VEP 116.2", md)
         self.assertIn("## Divergence classes", md)
         self.assertIn("| `reference_skipped_record` | sets aside |", md)
+
+
+class GvcfSiteRowsFixtureTests(unittest.TestCase):
+    """`scripts/parity/gvcf_site_rows_fixture.tsv` holds the (Location, Allele) rows vep-rs wrote
+    for 300 generated gVCF variant sites (`scripts/parity/make_gvcf_site_fixture.py`: a REF of 1
+    to 4 bases, 1 to 3 real ALTs of 1 to 5 bases, `<NON_REF>` anywhere in the list, the anchor
+    base shared in every second site). The comparator's prediction of those rows is held to the
+    binary's output site by site."""
+
+    FIXTURE = Path(__file__).resolve().parent.parent / "parity" / "gvcf_site_rows_fixture.tsv"
+
+    def test_gvcf_site_rows_predict_every_row_the_binary_wrote(self) -> None:
+        """For every site, `gvcf_site_rows` over the ALT column, placed by `sequence_location` and
+        read through `canonical_location`, is exactly the fixture's (Location, Allele) set: no
+        allele the binary wrote is missed and none is predicted that it did not write."""
+        from compare_vep_outputs import (
+            canonical_location,
+            gvcf_site_rows,
+            sequence_location,
+        )
+
+        written: dict[tuple[int, str, str], set[tuple[str, str]]] = {}
+        with self.FIXTURE.open(encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter="\t")
+            self.assertEqual(reader.fieldnames, ["pos", "ref", "alt_column", "allele", "location"])
+            for row in reader:
+                site = (int(row["pos"]), row["ref"], row["alt_column"])
+                written.setdefault(site, set()).add((row["location"], row["allele"]))
+        self.assertEqual(len(written), 300)
+        self.assertTrue(all(25_000_000 <= pos <= 46_000_000 for pos, _, _ in written))
+        self.assertTrue(all("<NON_REF>" in alt_column.split(",") for _, _, alt_column in written))
+        mismatches = []
+        for (pos, ref, alt_column), rows in sorted(written.items()):
+            predicted = {(canonical_location(sequence_location("21", start, end)), allele)
+                         for allele, start, end in gvcf_site_rows(pos, ref, alt_column.split(","))}
+            if predicted != rows:
+                mismatches.append((pos, ref, alt_column, sorted(predicted), sorted(rows)))
+        self.assertEqual(mismatches, [])

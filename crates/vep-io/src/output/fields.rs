@@ -683,8 +683,9 @@ pub fn field_value(
         "REF_ALLELE" => String::from_utf8_lossy(&variant.ref_allele).to_string(),
         "UPLOADED_ALLELE" => variant
             .uploaded_allele_string
-            .clone()
-            .unwrap_or_else(|| variant.allele_string.clone()),
+            .as_deref()
+            .unwrap_or(&variant.allele_string)
+            .to_string(),
         "DISTANCE" => tc
             .and_then(|x| x.distance.map(|d| d.to_string()))
             .unwrap_or_default(),

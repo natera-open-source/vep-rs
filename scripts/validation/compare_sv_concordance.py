@@ -66,15 +66,20 @@ from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition
     BND_OWN_ROWS_LOST_BUCKET,
     BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
     CNV_TR_EMPTY_EXPANSION_BUCKET,
+    CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET,
+    COORDINATE_PAST_CEILING_BUCKET,
     DEFAULT_REFERENCE_RELEASE,
     DOT_BREAKEND_PAIR_BUCKET,
     FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
     GVCF_VARIANT_SITE_DROPPED_BUCKET,
     MISSING_ALT_ANNOTATED_BUCKET,
     NON_INTEGER_END_BUCKET,
+    NON_NUMERIC_POS_NUMIFIED_BUCKET,
     REFERENCE_116_2_ONE_SIDED_RULES,
     REFERENCE_RELEASES,
     REFERENCE_SKIPPED_RECORD_BUCKET,
+    STAR_ALONE_SVTYPE_ANNOTATED_BUCKET,
+    VEP_RS_COORDINATE_CEILING,
     _MAX_SV_SIZE,
     _STRUCTURAL_ALT_LIST,
     _batch_dependent_annotation_scope,
@@ -85,10 +90,14 @@ from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition
     canonical_location,
     count_bare_breakpoint_reference_rows,
     gvcf_site_rows,
+    is_breakend_allele,
     is_gvcf_variant_site,
     is_own_breakend_allele,
     is_structural_allele,
+    perl_fields,
+    perl_split,
     perl_true,
+    reference_mate_chromosome,
     sequence_location,
 )
 
@@ -144,7 +153,7 @@ FASTVEP_ENGINE = "fastvep"
 
 # Mobile-element subtypes Perl VEP names in the Allele column, keyed by the
 # upper-cased third segment of `<INS:ME:...>` / `<DEL:ME:...>`. Mirrors
-# `me_display_allele` in crates/vep-core/src/variant.rs, which mirrors the
+# `sv_type_abbreviation` in crates/vep-core/src/sv_routing.rs, which mirrors the
 # `@mobile_elements` list and the `L1 -> LINE1` alias in Perl's
 # `Parser.pm::get_SO_term`. Any other subtype falls back to the generic
 # `mobile_element_<operation>`, as both engines do.
@@ -284,10 +293,13 @@ def normalize_allele(allele: str, engine: str = "vep-rs") -> str:
 
 def classify_variant(ref: str, alt: str) -> str:
     """Classify a VCF variant by REF/ALT into one of the defined types."""
-    # Multi-allelic (comma in ALT) -- check first since other rules assume
-    # a single ALT allele.
-    if "," in alt:
+    # Multi-allelic (more than one ALT field, a trailing empty one being none) -- check
+    # first since other rules assume a single ALT allele.
+    alts = perl_split(alt, ",")
+    if len(alts) > 1:
         return "Multi_allelic"
+    if alts:
+        alt = alts[0]
 
     # Spanning deletion
     if alt == "*":
@@ -372,10 +384,13 @@ class VcfVariant:
     variant_type: str
     location: str  # "chrom:pos" for matching to VEP output
     info: str = ""  # the INFO column as written, read by the skip-route cross-check
+    pos_text: str | None = None  # the POS column as written; None is the decimal spelling of `pos`
 
 
 def parse_vcf(path: Path) -> list[VcfVariant]:
-    """Parse a VCF file (plain or bgzipped) and return classified variants."""
+    """Parse a VCF file (plain or bgzipped) and return classified variants. POS is read as
+    Ensembl VEP numifies it (`perl_pos`), so a record whose POS is not an integer is
+    measured, never raised on."""
     variants: list[VcfVariant] = []
     if path.suffix == ".gz":
         # Use subprocess zcat for bgzip compatibility (Python gzip can't read bgzip multi-block)
@@ -401,11 +416,11 @@ def parse_vcf(path: Path) -> list[VcfVariant]:
                 parts[3],
                 parts[4],
             )
-            pos = int(pos_str)
+            pos = perl_pos(pos_str)
             vtype = classify_variant(ref, alt)
             location = normalize_location(f"{chrom}:{pos}")
             info = parts[7] if len(parts) > 7 else ""
-            variants.append(VcfVariant(chrom, pos, vid, ref, alt, vtype, location, info))
+            variants.append(VcfVariant(chrom, pos, vid, ref, alt, vtype, location, info, pos_str))
     return variants
 
 
@@ -1283,18 +1298,27 @@ _CNV_TR_LITERAL_CODING_TERMS = {
     "literal": frozenset({
         "inframe_insertion", "inframe_deletion", "frameshift_variant", "protein_altering_variant",
         "missense_variant", "synonymous_variant", "stop_gained", "stop_lost", "stop_retained_variant",
-        "start_lost", "start_retained_variant",
+        "start_lost", "start_retained_variant", "coding_sequence_variant",
     }),
 }
-_CNV_TR_SYMBOLIC_CODING_TERM = "coding_sequence_variant"
+# The coding terms the symbolic reading names inside the CDS: the region, the whole-unit
+# indel of a run whose length vep-rs knows, and the stop codon a deletion of the run's tail
+# removes.
+_CNV_TR_SYMBOLIC_CODING_TERMS = frozenset({
+    "coding_sequence_variant", "inframe_deletion", "inframe_insertion", "frameshift_variant", "stop_lost",
+})
 # Without a FASTA the reference never expands a <CNV:TR>: every record is a symbolic
 # `tandem_repeat` over the run, a copy-number gain to `copy_number_gain`, so a loss reads
 # `feature_elongation` with the region terms where vep-rs reads the deletion of the run's
 # tail (Parser/VCF.pm:516-527, Utils/VariationEffect.pm:246-256).
 _CNV_TR_UNEXPANDED_TERMS = frozenset({
     "feature_elongation", "feature_truncation", "coding_sequence_variant",
-    "inframe_deletion", "frameshift_variant", "inframe_insertion",
+    "inframe_deletion", "frameshift_variant", "inframe_insertion", "stop_lost",
 })
+# A literal reading's allele is written in upper case (Parser.pm:554): any string without a
+# lowercase letter, an underscore, a dot or a bracket, so `123123123123`, `RRRRRRRRRR` and
+# `*********` are literal where a Sequence Ontology class term or a breakend string is not.
+_CNV_TR_LITERAL_ALLELE = re.compile(r"[^a-z_.<>\[\]]+")
 
 
 def _cnv_tr_pair_kind(perl_loc: str, perl_allele: str, rust_loc: str) -> str | None:
@@ -1307,8 +1331,11 @@ def _cnv_tr_pair_kind(perl_loc: str, perl_allele: str, rust_loc: str) -> str | N
     whole units between the run's last base and the next (Location ``end-(end+1)``,
     Allele the inserted bases), a loss a deletion of whole units ending at the run's
     last base (Location inside the run, Allele ``-``). A ``literal`` reading is any
-    other sequence allele whose span touches the run or the base after it (a record
-    the expansion does not trim). An ``unexpanded`` reading is the reference's own
+    other literal allele (`_CNV_TR_LITERAL_ALLELE`: the bases, or a unit that is not DNA
+    such as `123123123123`) whose span starts at or inside the run and touches it or the
+    base after it (a record the expansion does not trim); the trim moves a start forward
+    only, so an allele whose span begins before the run is another record's (the `CPX` of
+    a complex record covering the run). An ``unexpanded`` reading is the reference's own
     symbolic `tandem_repeat` tuple at the run, written without a FASTA. vep-rs's tuple
     spans the run.
     """
@@ -1321,10 +1348,10 @@ def _cnv_tr_pair_kind(perl_loc: str, perl_allele: str, rust_loc: str) -> str | N
         return "unexpanded" if (p_start, p_end) == (run_start, run_end) else None
     if perl_allele == "-" and p_end == run_end and p_start >= run_start and p_start <= p_end:
         return "loss"
-    literal = bool(perl_allele) and all(c in _ACGT or c == "N" for c in perl_allele)
+    literal = perl_allele != "-" and _CNV_TR_LITERAL_ALLELE.fullmatch(perl_allele) is not None
     if literal and p_start == run_end and p_end == run_end + 1:
         return "gain"
-    if literal and p_start <= run_end + 1 and p_end >= run_start:
+    if literal and run_start <= p_start <= run_end + 1 and p_end >= run_start:
         return "literal"
     return None
 
@@ -1338,11 +1365,13 @@ def _is_cnv_tr_representation_pair(perl_csq: str, rust_csq: str, kind: str) -> b
     ``literal`` reading) is set aside, with one further correspondence inside the CDS:
     the literal reading names the coding effect of the sequence change
     (`inframe_insertion`, `inframe_deletion`, `frameshift_variant` for a unit indel; any
-    coding term for a ``literal`` substitution) where the symbolic reading names the
-    region (`coding_sequence_variant`). An ``unexpanded`` pair, the reference's symbolic
-    row written without a FASTA, may differ in the direction and coding terms alone.
-    Any other difference, a start or splice term one side carries and the other lacks,
-    is a consequence disagreement and stays charged.
+    coding term for a ``literal`` substitution, `protein_altering_variant`,
+    `stop_retained_variant` or `coding_sequence_variant` included) where the symbolic
+    reading names its own (`_CNV_TR_SYMBOLIC_CODING_TERMS`: the region, the whole-unit
+    indel, a `stop_lost`). An ``unexpanded`` pair, the reference's symbolic row written
+    without a FASTA, may differ in the direction and coding terms alone. Any other
+    difference, a start or splice term one side carries and the other lacks, is a
+    consequence disagreement and stays charged.
     """
     pset = {t for t in perl_csq.split(",") if t}
     rset = {t for t in rust_csq.split(",") if t}
@@ -1351,17 +1380,21 @@ def _is_cnv_tr_representation_pair(perl_csq: str, rust_csq: str, kind: str) -> b
     perl_extra = pset - rset
     direction = set(_CNV_TR_DIRECTION_TERM.values()) if kind == "literal" else {_CNV_TR_DIRECTION_TERM[kind]}
     rust_extra = rset - pset - direction
-    if rust_extra == {_CNV_TR_SYMBOLIC_CODING_TERM}:
-        return bool(perl_extra) and perl_extra <= _CNV_TR_LITERAL_CODING_TERMS[kind]
+    if rust_extra and perl_extra:
+        return rust_extra <= _CNV_TR_SYMBOLIC_CODING_TERMS and perl_extra <= _CNV_TR_LITERAL_CODING_TERMS[kind]
     return not rust_extra and not perl_extra
 
 
 def _cnv_tr_pairs(
-    perl_only: set[AnnotTuple], rust_only: set[AnnotTuple]
+    perl_only: set[AnnotTuple], rust_only: set[AnnotTuple], perl_shared: set[AnnotTuple] = frozenset()
 ) -> list[tuple[AnnotTuple, AnnotTuple, str]]:
     """Every (Perl tuple, vep-rs tuple, kind) pair of one tandem repeat on one feature:
     the vep-rs tuple carries the symbolic allele and the Perl tuple is its literal
-    reading by :func:`_cnv_tr_pair_kind`."""
+    reading by :func:`_cnv_tr_pair_kind`. ``perl_shared`` are the reference's
+    `tandem_repeat` tuples both engines write; without a FASTA the reference writes one
+    symbolic row per allele of a multi-ALT record, identical rows collapsing to one tuple,
+    so the tuple vep-rs matched for one allele is the ``unexpanded`` reading of the
+    record's other alleles too."""
     rust_by_key: dict[tuple[str, str, str], list[AnnotTuple]] = defaultdict(list)
     for t in rust_only:
         loc, allele, feature, ftype, _csq = t
@@ -1374,7 +1407,7 @@ def _cnv_tr_pairs(
     pairs: list[tuple[AnnotTuple, AnnotTuple, str]] = []
     if not rust_by_key:
         return pairs
-    for pt in perl_only:
+    for pt in perl_only | perl_shared:
         ploc, pallele, pfeature, pftype, _pcsq = pt
         span = _location_span(ploc)
         if span is None:
@@ -1395,18 +1428,22 @@ def filter_cnv_tr_expansion_divergences(
 
     A pair is a Perl tuple and a vep-rs tuple of one tandem repeat on one feature
     (:func:`_cnv_tr_pairs`); it is excluded when
-    :func:`_is_cnv_tr_representation_pair` holds for its consequence sets.
+    :func:`_is_cnv_tr_representation_pair` holds for its consequence sets. A reference
+    tuple both engines wrote (the collapsed symbolic row of a multi-ALT record) pairs the
+    record's other vep-rs tuples and stays on its side.
 
     Returns (excluded_rust_only, excluded_perl_only).
     """
     rust_only = rust_tuples - perl_tuples
     perl_only = perl_tuples - rust_tuples
+    perl_shared = {t for t in perl_tuples & rust_tuples if t[1] == _CNV_TR_RUST_ALLELE}
     excluded_rust: set[AnnotTuple] = set()
     excluded_perl: set[AnnotTuple] = set()
-    for pt, rt, kind in _cnv_tr_pairs(perl_only, rust_only):
+    for pt, rt, kind in _cnv_tr_pairs(perl_only, rust_only, perl_shared):
         if _is_cnv_tr_representation_pair(pt[4], rt[4], kind):
-            excluded_perl.add(pt)
             excluded_rust.add(rt)
+            if pt in perl_only:
+                excluded_perl.add(pt)
     return excluded_rust, excluded_perl
 
 
@@ -1470,6 +1507,10 @@ MASKS_BY_RELEASE: dict[str, tuple[str, ...]] = {
         "filter_missing_alt_annotated",
         "filter_non_integer_end_rows",
         "filter_cnv_tr_empty_expansion",
+        "filter_star_alone_svtype_annotated",
+        "filter_non_numeric_pos_numified",
+        "filter_cnv_tr_rn_zero_allele_dropped",
+        "filter_coordinate_past_ceiling",
     ),
 }
 # Why each 115.2 mask is not applied against 116.2, for the report.
@@ -1491,7 +1532,7 @@ def _tuples_by_location(tuples: set[AnnotTuple]) -> dict[str, set[AnnotTuple]]:
 
 # The reference's own skip routes, ported for the cross-check below. `_SO_TERMS` is
 # ensembl-variation Utils/Config.pm:1417-1438 at release 116; the abbreviation rules are
-# Parser.pm 116.2:663-726 (`get_SO_term`), the type derivation Parser/VCF.pm:468-481, the
+# Parser.pm 116.2:663-727 (`get_SO_term`), the type derivation Parser/VCF.pm:468-481, the
 # routing of a record to the structural path Parser/VCF.pm:237-245, the coordinates
 # ensembl-io BaseVCF4.pm `get_start` / `get_end` (the base before the event is the
 # start; SVLEN sets the end before END does; a breakend's END is discarded).
@@ -1510,7 +1551,7 @@ def perl_so_abbrev(sv_type: str) -> str | None:
     """The Sequence Ontology abbreviation `get_SO_term` derives for a type string, or None
     when the reference has no term for it (the type is then `vep_skip`)."""
     if re.search(r"[/,]", sv_type):
-        parts = re.split(r"[/,]", sv_type)
+        parts = perl_fields(re.split(r"[/,]", sv_type))
         normalized = [re.sub(r"^<|>$", "", part.strip()).upper() for part in parts]
         if normalized and all(n == normalized[0] for n in normalized):
             sv_type = parts[0]
@@ -1558,15 +1599,70 @@ def _info_fields(info: str) -> dict[str, str]:
     return out
 
 
-_PERL_NUMBER = re.compile(r"^\s*[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?")
+# ASCII digits only: Perl numifies a fullwidth digit (`４`) as no digit, where Python's `\d`
+# reads it as one.
+_DECIMAL = r"(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?"
+_PERL_NUMBER = re.compile(rf"^\s*[+-]?{_DECIMAL}", re.ASCII)
+# An infinite reading saturates to the machine word, as vep-rs's reading does; a span that
+# large is over every --max_sv_size, as Perl's `Inf` is.
+_SATURATED_MAGNITUDE = 2**63 - 1
+# A POS column `looks_like_number` accepts as a coordinate: ASCII digits with an optional
+# fraction and exponent, an optional `+`, blanks around.
+_POS_NUMBER = re.compile(rf"\s*\+?{_DECIMAL}\s*", re.ASCII)
+# The spellings `looks_like_number` admits beside a decimal: Perl's NaN and its infinity, with
+# an optional sign and blanks around.
+_PERL_NAN = re.compile(r"\s*[+-]?nan\s*", re.IGNORECASE)
+_PERL_INFINITY = re.compile(r"\s*[+-]?inf(?:inity)?\s*", re.IGNORECASE)
 
 
 def perl_numeric_value(text: str) -> float:
     """Perl's numeric reading of a string, as `abs($svlen)` and `max(@svlen)` apply it:
     leading whitespace, an optional sign, digits with an optional fraction and exponent;
-    anything else, `.` and the empty string included, is 0 (`300abc` is 300)."""
+    anything else, `.` and the empty string included, is 0 (`300abc` is 300). A reading
+    beyond a double (`1e400`, Perl's `Inf`) is saturated to `_SATURATED_MAGNITUDE` with its
+    sign, so it stays a number the coordinate arithmetic can hold. `NaN`, `Inf` and
+    `Infinity`, Perl's NaN and infinity, read as 0 here, the length vep-rs gives the
+    spellings, so a Location derived from them is the one vep-rs prints; `perl_skip_route`
+    reads the spellings themselves."""
     m = _PERL_NUMBER.match(text)
-    return float(m.group(0)) if m else 0.0
+    if not m:
+        return 0.0
+    value = float(m.group(0))
+    if value in (float("inf"), float("-inf")):
+        return _SATURATED_MAGNITUDE if value > 0 else -_SATURATED_MAGNITUDE
+    return value
+
+
+def perl_pos(text: str) -> int:
+    """The POS column as Ensembl VEP numifies it (BaseVCF4.pm:263 `$start++` on the structural
+    path): a decimal integer exactly (`4611686018427387904`), any other spelling by
+    `perl_numeric_value` with its fraction dropped (`3e7` is 30000000, `30425949.0` and
+    ` 30425949` are 30425949, `.`, `0x1D04A1D` and `３０４２５９４９` are 0, `-5` is -5)."""
+    stripped = text.strip()
+    if re.fullmatch(r"[+-]?\d+", stripped, re.ASCII):
+        return int(stripped)
+    return int(perl_numeric_value(text))
+
+
+def perl_pos_is_a_number(text: str | None) -> bool:
+    """Whether a POS column denotes a non-negative number (`30425949`, `+30425949`, `030425949`,
+    `3e7`, `30425949.0`, ` 30425949`); `.`, the empty string, `0x1D04A1D`, fullwidth digits,
+    `30_425_949`, `-5` and `NaN` do not, and Ensembl VEP numifies them (`perl_pos`) where
+    vep-rs refuses the line. None, the decimal spelling of a parsed integer, is a number."""
+    return text is None or _POS_NUMBER.fullmatch(text) is not None
+
+
+def perl_number_is_not_an_integer(text: str) -> bool:
+    """Whether Perl reads the text as a number that is not an integer: a fraction (`9.5`,
+    `300.7`), a value past a double (`1e400`), `NaN` or an infinity (`Inf`, `Infinity`), with an
+    optional sign and blanks around; `9`, `9.0`, `3e2` are integers, and `abc`, `.`, the empty
+    string and a fullwidth digit are 0."""
+    stripped = text.strip()
+    if _PERL_NAN.fullmatch(stripped) or _PERL_INFINITY.fullmatch(stripped):
+        return True
+    if not _PERL_NUMBER.fullmatch(stripped):
+        return False
+    return not float(stripped).is_integer()
 
 
 def perl_structural_end(pos: int, svlen: str | None, end: str | None, breakpoint: bool) -> float | None:
@@ -1590,6 +1686,23 @@ def perl_structural_end(pos: int, svlen: str | None, end: str | None, breakpoint
     return perl_numeric_value(end)
 
 
+def perl_sequence_path(v: VcfVariant) -> bool:
+    """Whether Parser/VCF.pm:237-245 routes the record to the sequence path: REF and every ALT
+    together a run of `ACGT`, or no true INFO/SVTYPE and no ALT written in a structural
+    form. A sequence record's Location starts at POS; a structural record's at POS + 1."""
+    alts = perl_split(v.alt, ",")
+    svtype = _info_written(v.info, "SVTYPE")
+    return bool(re.fullmatch(r"[ACGT]+", v.ref + "".join(alts))) or not (
+        perl_true(svtype) or _STRUCTURAL_ALT_LIST.search(",".join(alts))
+    )
+
+
+def reference_start(v: VcfVariant) -> tuple[str, int]:
+    """The (chromosome, start) the reference prints for a record: POS on the sequence path,
+    POS + 1 on the structural path (BaseVCF4.pm:263)."""
+    return v.location.split(":", 1)[0], v.pos if perl_sequence_path(v) else v.pos + 1
+
+
 def perl_skip_route(v: VcfVariant, max_sv_size: int = _MAX_SV_SIZE) -> str | None:
     """The route by which Ensembl VEP 116.2 drops a VCF record before its input buffer, or
     None when it keeps the record: ``unsupported_type`` (Parser/VCF.pm:477-481), or
@@ -1597,13 +1710,14 @@ def perl_skip_route(v: VcfVariant, max_sv_size: int = _MAX_SV_SIZE) -> str | Non
     ``incomplete_deletion`` (:555-557), ``invalid_span`` (Parser.pm:475-488: a start or
     end that is not a number, or a start past the end by more than one), ``oversize``
     (Parser.pm:491-500 over the span `get_end` derives: SVLEN first, else END, else the
-    start; a breakend's END is discarded). ``max_sv_size`` is the cap the reference ran
-    with; -1 is no cap, as for the flag. A record the parser routes to the sequence path
-    is kept."""
-    alts = v.alt.split(",")
-    svtype = _info_written(v.info, "SVTYPE")
-    if re.fullmatch(r"[ACGT]+", v.ref + "".join(alts)) or not (perl_true(svtype) or _STRUCTURAL_ALT_LIST.search(v.alt)):
+    start; a breakend's END is discarded). An SVLEN or END spelled `Inf` is ``oversize``
+    under a cap (Perl's `abs("Inf")`); one spelled `NaN` keeps the record, every comparison
+    on NaN being false. ``max_sv_size`` is the cap the reference ran with; -1 is no cap, as
+    for the flag. A record the parser routes to the sequence path is kept."""
+    if perl_sequence_path(v):
         return None
+    alts = perl_split(v.alt, ",")
+    svtype = _info_written(v.info, "SVTYPE")
     sv_type = "/".join(alts)
     if perl_true(svtype) and not _VCF44_SYMBOLIC.match(sv_type):
         sv_type = svtype
@@ -1615,6 +1729,14 @@ def perl_skip_route(v: VcfVariant, max_sv_size: int = _MAX_SV_SIZE) -> str | Non
     start = v.pos + 1
     svlen, end_field = _info_written(v.info, "SVLEN"), _info_written(v.info, "END")
     end = perl_structural_end(v.pos, svlen, end_field, abbrev == "BND")
+    # `abs("NaN")` and `abs("Inf")` are the values the spellings name. Every comparison on NaN
+    # is false (Parser/VCF.pm:555, Parser.pm:483, 491-494), so the record is kept and printed
+    # with the text; Inf is a span over any cap, and under no cap the reference run dies on it.
+    span_text = svlen.split(",")[0] if svlen is not None else ("" if abbrev == "BND" else end_field or "")
+    if _PERL_NAN.fullmatch(span_text):
+        return None
+    if _PERL_INFINITY.fullmatch(span_text):
+        return "oversize" if max_sv_size != -1 else None
     # Parser/VCF.pm:555-558 compares `$start > $end` before `validate_vf` runs, numifying
     # an END that is not a number to 0, so a deletion with `END=abc` is incomplete first.
     compared_end = end if end is not None else perl_numeric_value(end_field or "")
@@ -1628,19 +1750,58 @@ def perl_skip_route(v: VcfVariant, max_sv_size: int = _MAX_SV_SIZE) -> str | Non
 
 
 _OWN_END_ALLELES = frozenset({"N.", ".N", "chromosome_breakpoint"})
+# The class vep-rs gives a symbolic ALT by its own prefix, read without regard to case
+# (`classify_symbolic_alt` in crates/vep-core/src/sv_routing.rs), first match first; a
+# `<CN...>` with a copy number the table knows (`<CN0>`, `<CN2>`) is a supported type and
+# never reaches this list.
+_VEP_RS_ALT_PREFIX_TERMS = (
+    ("<INS:ME", "mobile_element_insertion"), ("<DEL:ME", "mobile_element_deletion"),
+    ("<DEL", "deletion"), ("<INS", "insertion"), ("<DUP:TANDEM", "tandem_duplication"),
+    ("<DUP", "duplication"), ("<INV", "inversion"), ("<CNV:TR", "tandem_repeat"),
+    ("<CNV", "copy_number_variation"), ("<CN", "copy_number_variation"), ("<BND", "chromosome_breakpoint"),
+)
+_VEP_RS_SVTYPE_TERMS = {
+    "DEL": "deletion", "INS": "insertion", "DUP": "duplication", "INV": "inversion",
+    "BND": "chromosome_breakpoint", "CNV": "copy_number_variation",
+}
+
+
+def vep_rs_unsupported_alt_allele(alt: str, svtype: str | None) -> str:
+    """The Allele vep-rs writes for a symbolic ALT whose type Ensembl VEP has no term for
+    (`classify_symbolic_alt` with `display_allele`): the class term of the ALT's own prefix
+    read without regard to case (`<del>`, `<DEL:>` and `<DEL >` are `deletion`, `<CN=X>` and
+    `<CN>` `copy_number_variation`, `<Bnd>` `chromosome_breakpoint`), else the class
+    INFO/SVTYPE names, else the text inside the brackets up to the first colon with every
+    bracket removed (`<<DEL>>` is `DEL`, `<:DEL>` the empty string, `<DÉL>` `DÉL`)."""
+    upper = alt.upper()
+    for prefix, term in _VEP_RS_ALT_PREFIX_TERMS:
+        if upper.startswith(prefix):
+            return term
+    if svtype is not None and svtype.upper() in _VEP_RS_SVTYPE_TERMS:
+        return _VEP_RS_SVTYPE_TERMS[svtype.upper()]
+    return alt.strip("<>").split(":", 1)[0]
 
 
 def record_alleles(v: VcfVariant) -> set[str]:
     """Every Allele string either engine writes for a VCF record, normalised as the
     comparator normalises them: the Sequence Ontology class of each symbolic ALT and of the
     whole ALT list (`copy_number_variation` for a DEL beside a DUP), the raw abbreviation of
-    a type with no term as both engines spell it (`CPX`, `<NON_REF>`), each bracket breakend
-    string with `chr` stripped inside the brackets, the own-end strings of a breakend record
-    (`N.`, `.N`, `chromosome_breakpoint`, the REF base with the dot), the mate string a
-    `<BND>` record's CHR2/END2 give, and a sequence ALT as written."""
+    a type with no term as both engines spell it (`CPX`, `<NON_REF>`) and the class term
+    vep-rs prints for it (`vep_rs_unsupported_alt_allele`: `deletion` for `<del>`), each
+    bracket breakend string with `chr` stripped inside the brackets, the own-end strings of
+    a breakend record (`N.`, `.N`, `chromosome_breakpoint`, the REF base with the dot), the
+    mate string a `<BND>` record's CHR2/END2 give, and a sequence ALT as written."""
     alleles: set[str] = set()
     info = _info_fields(v.info)
-    alts = v.alt.split(",")
+    alts = perl_split(v.alt, ",")
+    svtype = info.get("SVTYPE")
+    sv_type = "/".join(alts)
+    whole = perl_so_abbrev(svtype if svtype and not _VCF44_SYMBOLIC.match(sv_type) else sv_type)
+    # Under a type the table lacks, vep-rs keeps each symbolic ALT's own class, INFO/SVTYPE
+    # naming the class of a mixed list (a symbolic ALT beside a sequence allele).
+    mixed = any(alt.startswith("<") for alt in alts) and any(
+        not alt.startswith("<") and not _BRACKET_MATE_RE.search(alt) and alt not in ("*", ".") for alt in alts
+    )
     for alt in alts:
         if alt.startswith("<") and alt.endswith(">"):
             abbrev = perl_so_abbrev(alt)
@@ -1649,6 +1810,8 @@ def record_alleles(v: VcfVariant) -> set[str]:
             else:
                 raw = re.sub(r":.+", "", alt[1:-1])
                 alleles.update({raw, f"<{raw}>", alt})
+            if whole is None:
+                alleles.add(vep_rs_unsupported_alt_allele(f"<{svtype}>" if mixed and svtype else alt, svtype))
         elif _BRACKET_MATE_RE.search(alt):
             alleles.add(normalize_allele(alt))
             alleles |= _OWN_END_ALLELES | {f"{v.ref}.", f".{v.ref}"}
@@ -1656,10 +1819,12 @@ def record_alleles(v: VcfVariant) -> set[str]:
             alleles.update({alt, "chromosome_breakpoint"})
         else:
             alleles.add(alt)
-    whole = perl_so_abbrev(info["SVTYPE"] if info.get("SVTYPE") and not _VCF44_SYMBOLIC.match("/".join(alts)) else "/".join(alts))
     if whole:
         alleles.add(_SO_TERMS[whole])
-    if whole == "BND" or info.get("SVTYPE") == "BND":
+    if "" in alleles:
+        # The tab format writes an empty Allele as `-`.
+        alleles.add("-")
+    if whole == "BND" or svtype == "BND":
         alleles |= _OWN_END_ALLELES | {f"{v.ref}.", f".{v.ref}"}
         chr2 = info.get("CHR2")
         if chr2:
@@ -1680,7 +1845,8 @@ def record_location(v: VcfVariant) -> tuple[str, int, int]:
     chrom = v.location.split(":", 1)[0]
     start = v.pos + 1
     svlen, end_field = _info_written(v.info, "SVLEN"), _info_written(v.info, "END")
-    is_bnd = bool(re.search(r"[\[\]]|^\.\w|\w\.$", v.alt)) or _info_written(v.info, "SVTYPE") == "BND"
+    alt = "/".join(perl_split(v.alt, ","))
+    is_bnd = bool(re.search(r"[\[\]]|^\.\w|\w\.$", alt)) or _info_written(v.info, "SVTYPE") == "BND"
     end = perl_structural_end(v.pos, svlen, end_field, is_bnd)
     return chrom, start, int(end) if end is not None else start
 
@@ -1688,6 +1854,44 @@ def record_location(v: VcfVariant) -> tuple[str, int, int]:
 def _span_location(chrom: str, start: int, end: int) -> str:
     """The normalised Location of a span: `chrom:start` for a point, else `chrom:start-end`."""
     return normalize_location(f"{chrom}:{start}" if end == start else f"{chrom}:{start}-{end}")
+
+
+def _reference_row_beside(spans: list[tuple[str, int, int]], chrom: str, start: int, end: int) -> bool:
+    """Whether a reference row's span lies on ``chrom`` within one base of ``start``..``end``:
+    the reference wrote the record (a `<CNV:TR>` expanded to a literal allele sits at the
+    run's 3' end, one base past it)."""
+    return any(s[0] == chrom and s[1] <= end + 1 and s[2] >= start - 1 for s in spans)
+
+
+def vep_rs_record_rows(v: VcfVariant) -> set[tuple[str, str]]:
+    """The (Location, Allele) pairs vep-rs prints for a record: on the structural path the
+    span `record_location` derives, printed low end first (`21:30425650-30425651` for a
+    deletion whose end is before its start), under every allele of `record_alleles`; on the
+    sequence path each real allele at the place the parser gives it (`gvcf_site_rows`)."""
+    chrom = v.location.split(":", 1)[0]
+    if perl_sequence_path(v):
+        return {
+            (normalize_location(sequence_location(chrom, start, end)), allele)
+            for allele, start, end in gvcf_site_rows(v.pos, v.ref, perl_split(v.alt, ","))
+        }
+    _chrom, start, end = record_location(v)
+    location = normalize_location(sequence_location(chrom, start, end))
+    return {(location, allele) for allele in record_alleles(v)}
+
+
+def _reference_rows_starting_at(
+    v: VcfVariant, perl_tuples: set[AnnotTuple], rust_locations: set[str]
+) -> set[AnnotTuple]:
+    """The reference's tuples at the start it prints for a record (POS + 1 on the structural
+    path, POS on the sequence path) on the record's chromosome, at Locations vep-rs wrote
+    nothing for; the end is not matched, since the reference's arithmetic on a numified POS
+    (a double past 2^64, a negative) is not reproduced."""
+    chrom, start = reference_start(v)
+    return {
+        t for t in perl_tuples
+        if t[0] not in rust_locations
+        and (span := _location_span(t[0])) is not None and span[0] == chrom and span[1] == start
+    }
 
 
 def skipped_record_rows(
@@ -1709,15 +1913,19 @@ def skipped_record_rows(
     tells them apart.
 
     SET ASIDE: every vep-rs tuple at a confirmed record's start under one of its alleles
-    (the same end rule applies). `<CNV:TR>` records are outside the class on both sides:
+    (the same end rule applies). The start is the one vep-rs prints, the lower end of the
+    span: an incomplete deletion (`END=POS`, `SVLEN=0`, `SVLEN=abc`) is the pair
+    `POS-(POS+1)`, keyed at POS. `<CNV:TR>` records are outside the class on both sides:
     the reference keeps them and writes them at another Location
     (`filter_cnv_tr_expansion_divergences`).
 
     PROBLEMS, one line each, make the rule's blind spots loud: a skip-route record whose
     own rows the reference wrote (a reference run under --dont_skip or another
     --max_sv_size, declared with --reference-max-sv-size); a vep-rs structural row at a
-    Location the reference wrote nothing for that no skip-route record explains (a record
-    dropped on a route 116.2 shares with 115.2, `start > end+1`); two records at one start
+    Location the reference wrote nothing for that no skip-route record explains and no
+    other class pairs with a reference row elsewhere (the dot-breakend pair, the record
+    whose reference Location carries a non-integer coordinate), so a record dropped on a
+    route 116.2 shares with 115.2 (`start > end+1`) is reported; two records at one start
     whose alleles and Locations coincide, one skipped and one kept.
 
     The SNP/indel comparator has no input VCF and applies the output-only rule
@@ -1742,7 +1950,8 @@ def skipped_record_rows(
     records_at: dict[tuple[str, int], list[tuple[VcfVariant, str | None, set[str], int]]] = defaultdict(list)
     for v in input_variants:
         chrom, start, end = record_location(v)
-        records_at[(chrom, start)].append((v, perl_skip_route(v, max_sv_size), record_alleles(v), end))
+        lo, hi = min(start, end), max(start, end)
+        records_at[(chrom, lo)].append((v, perl_skip_route(v, max_sv_size), record_alleles(v), hi))
 
     def rows_of(bucket: list[tuple[AnnotTuple, int]], alleles: set[str], end: int, contested: bool) -> list[AnnotTuple]:
         return [t for t, t_end in bucket if t[1] in alleles and (not contested or t_end == end)]
@@ -1780,12 +1989,16 @@ def skipped_record_rows(
             confirmed += 1
             excluded.update(rows_of(rust_at.get(key, []), alleles, end, contested))
     # The output-only rule's residue: a Location with vep-rs structural rows and no
-    # reference row that no confirmed record explains.
+    # reference row that no confirmed record explains and no pair class reaches.
+    paired = filter_dot_breakend_pairs(perl_tuples, rust_tuples)[0] | filter_non_integer_end_rows(
+        perl_tuples, rust_tuples, input_variants, max_sv_size
+    )[1]
+    explained = confirmed_starts | {(s[0], s[1]) for t in paired if (s := _location_span(t[0])) is not None}
     perl_locations = {t[0] for t in perl_tuples}
     for t in rust_tuples:
         span = _location_span(t[0])
         if (t[0] not in perl_locations and is_structural_allele(t[1]) and t[1] != _CNV_TR_RUST_ALLELE
-                and span is not None and (span[0], span[1]) not in confirmed_starts):
+                and span is not None and (span[0], span[1]) not in explained):
             problems.append(f"{t[0]} {t[1]}: the reference wrote nothing at this Location and no input record on a skip route starts there")
     return excluded, confirmed, sorted(set(problems))
 
@@ -1830,7 +2043,7 @@ def filter_gvcf_variant_sites(
         if any((chrom, v.pos + offset) in perl_starts for offset in range(len(v.ref) + 1)):
             continue
         records += 1
-        for allele, start, end in gvcf_site_rows(v.pos, v.ref, v.alt.split(",")):
+        for allele, start, end in gvcf_site_rows(v.pos, v.ref, perl_split(v.alt, ",")):
             location = normalize_location(sequence_location(chrom, start, end))
             excluded.update(rust_by_key.get((location, allele), ()))
     return excluded, records
@@ -1839,21 +2052,23 @@ def filter_gvcf_variant_sites(
 def filter_dot_breakend_pairs(
     perl_tuples: set[AnnotTuple], rust_tuples: set[AnnotTuple]
 ) -> tuple[set[AnnotTuple], set[AnnotTuple]]:
-    """A dot-notation breakend without SVTYPE: the reference's `chromosome_breakpoint`
-    tuple at `c:P-(P+1)` and vep-rs's at `c:(P+1)` on the same feature, set aside as a
-    pair (`DOT_BREAKEND_PAIR_BUCKET`). Returns (excluded_rust, excluded_perl)."""
-    rust_points: dict[tuple[str, str, str], list[AnnotTuple]] = defaultdict(list)
+    """A dot-notation breakend without SVTYPE: the reference's tuple at `c:P-(P+1)` and
+    vep-rs's at `c:(P+1)` under the same breakend allele on the same feature, set aside as
+    a pair (`DOT_BREAKEND_PAIR_BUCKET`): `chromosome_breakpoint` for a bare `N.`, and the
+    `N.` and `N[21:30425700[` strings of one whose INFO names a mate through CHR2 and END2
+    (Parser/VCF.pm:491-497). Returns (excluded_rust, excluded_perl)."""
+    rust_points: dict[tuple[str, str, str, str], list[AnnotTuple]] = defaultdict(list)
     for t in rust_tuples - perl_tuples:
         span = _location_span(t[0])
-        if t[1] == "chromosome_breakpoint" and span is not None and span[1] == span[2]:
-            rust_points[(t[0], t[2], t[3])].append(t)
+        if is_breakend_allele(t[1]) and span is not None and span[1] == span[2]:
+            rust_points[(t[0], t[1], t[2], t[3])].append(t)
     excluded_rust: set[AnnotTuple] = set()
     excluded_perl: set[AnnotTuple] = set()
     for pt in perl_tuples - rust_tuples:
         span = _location_span(pt[0])
-        if pt[1] != "chromosome_breakpoint" or span is None or span[2] != span[1] + 1:
+        if not is_breakend_allele(pt[1]) or span is None or span[2] != span[1] + 1:
             continue
-        partners = rust_points.pop((f"{span[0]}:{span[2]}", pt[2], pt[3]), [])
+        partners = rust_points.pop((f"{span[0]}:{span[2]}", pt[1], pt[2], pt[3]), [])
         if partners:
             excluded_perl.add(pt)
             excluded_rust.update(partners)
@@ -1874,22 +2089,135 @@ def filter_missing_alt_annotated(
     return excluded
 
 
-def filter_non_integer_end_rows(perl_tuples: set[AnnotTuple]) -> set[AnnotTuple]:
+def filter_star_alone_svtype_annotated(
+    perl_tuples: set[AnnotTuple], input_variants: list[VcfVariant]
+) -> set[AnnotTuple]:
+    """The reference's tuples at the Location of a record whose every ALT is `*` and whose
+    true INFO/SVTYPE routes it to the structural path, where the type names the allele
+    (`SVTYPE=DEL` a deletion over END, `SVTYPE=BND` a `chromosome_breakpoint` at POS + 1;
+    Parser/VCF.pm:237-245, 469-475) (`STAR_ALONE_SVTYPE_ANNOTATED_BUCKET`); `*` names no
+    allele of the record to vep-rs, and without SVTYPE the reference writes nothing."""
+    by_loc = _tuples_by_location(perl_tuples)
+    excluded: set[AnnotTuple] = set()
+    for v in input_variants:
+        alts = perl_split(v.alt, ",")
+        if not alts or any(alt != "*" for alt in alts) or not perl_true(_info_written(v.info, "SVTYPE")):
+            continue
+        excluded.update(by_loc.get(_span_location(*record_location(v)), ()))
+    return excluded
+
+
+def filter_non_integer_end_rows(
+    perl_tuples: set[AnnotTuple], rust_tuples: set[AnnotTuple], input_variants: list[VcfVariant],
+    max_sv_size: int = _MAX_SV_SIZE,
+) -> tuple[set[AnnotTuple], set[AnnotTuple]]:
     """The reference's tuples whose Location carries a coordinate that is not an integer
-    (`21:30425651-30425949.5`), an INFO/END taken as written (`NON_INTEGER_END_BUCKET`)."""
-    return {t for t in perl_tuples if _non_integer_end(t[0])}
+    (`21:30425651-30425949.5`, `21:30425651-NaN`, `21:30425949.0`), an INFO/END, SVLEN or
+    POS taken as written, and vep-rs's tuples of the same input records, annotated at the
+    numified value (`SVLEN=300.7` ends at 30425950, `SVLEN=NaN` is 0 and the pair
+    `21:30425650-30425651`, POS `30425949.0` on `A G` is `21:30425949`)
+    (`NON_INTEGER_END_BUCKET`). A record is a reference row's when the row's start, read as
+    its number, is the start the reference prints for the record (POS + 1 on the structural
+    path, POS on the sequence path); the record's vep-rs tuples are the one-sided ones at
+    the Locations and under the alleles vep-rs prints for it (`vep_rs_record_rows`). With a
+    FASTA the reference expands a `<CNV:TR>` whose SVLEN or END is a number that is not an
+    integer (`SVLEN=9.5`, `SVLEN=NaN`) to a literal insertion whose coordinates fail
+    `start = end + 1` (Parser.pm:564-571) and writes nothing for the record; vep-rs's rows at
+    the numified run (`21:30425588-30425596`, the pair `21:30425587-30425588` for NaN) are
+    set aside when the record is on no skip route under ``max_sv_size`` and the reference
+    wrote nothing from the base before the span to the base after it.
+    Returns (excluded_perl, excluded_rust)."""
+    excluded_perl = {t for t in perl_tuples if _non_integer_end(t[0])}
+    starts: set[tuple[str, int]] = set()
+    for t in excluded_perl:
+        chrom, _sep, coords = t[0].partition(":")
+        starts.add((chrom, int(perl_numeric_value(coords.split("-")[0]))))
+    excluded_rust: set[AnnotTuple] = set()
+    rust_only = rust_tuples - perl_tuples
+    if starts:
+        for v in input_variants:
+            if reference_start(v) in starts:
+                rows = vep_rs_record_rows(v)
+                excluded_rust.update(t for t in rust_only if (t[0], t[1]) in rows)
+    perl_spans = [s for t in perl_tuples if (s := _location_span(t[0])) is not None]
+    for v in input_variants:
+        alts = perl_split(v.alt.upper(), ",")
+        if not alts or any(alt != "<CNV:TR>" for alt in alts) or perl_skip_route(v, max_sv_size) is not None:
+            continue
+        svlen, end_field = _info_written(v.info, "SVLEN"), _info_written(v.info, "END")
+        span_text = svlen.split(",")[0] if svlen is not None else end_field
+        if span_text is None or not perl_number_is_not_an_integer(span_text):
+            continue
+        chrom, start, end = record_location(v)
+        if _reference_row_beside(perl_spans, chrom, min(start, end), max(start, end)):
+            continue
+        rows = vep_rs_record_rows(v)
+        excluded_rust.update(t for t in rust_only if (t[0], t[1]) in rows)
+    return excluded_perl, excluded_rust
+
+
+def filter_non_numeric_pos_numified(
+    perl_tuples: set[AnnotTuple], rust_tuples: set[AnnotTuple], input_variants: list[VcfVariant]
+) -> set[AnnotTuple]:
+    """The reference's tuples of a record whose POS is not a non-negative number
+    (`perl_pos_is_a_number`: `.`, empty, `0x1D04A1D`, fullwidth digits, `30_425_949`, `-5`)
+    at Locations vep-rs wrote nothing for (`NON_NUMERIC_POS_NUMIFIED_BUCKET`): the reference
+    numifies the text (`$start++`, BaseVCF4.pm:263: `.` to 0 then 1, `30_425_949` to 30 then
+    31, `-5` to -4) and annotates the record from there, where vep-rs refuses the line. The
+    tuples are those at the start the reference prints for the record
+    (`_reference_rows_starting_at`); on the sequence path only a negative POS passes
+    `looks_like_number` (Parser.pm:475) and is annotated at POS."""
+    rust_locations = {t[0] for t in rust_tuples}
+    excluded: set[AnnotTuple] = set()
+    for v in input_variants:
+        if not perl_pos_is_a_number(v.pos_text):
+            excluded |= _reference_rows_starting_at(v, perl_tuples, rust_locations)
+    return excluded
+
+
+def filter_coordinate_past_ceiling(
+    perl_tuples: set[AnnotTuple], rust_tuples: set[AnnotTuple], input_variants: list[VcfVariant]
+) -> set[AnnotTuple]:
+    """The reference's tuples of a record whose POS is at or past `VEP_RS_COORDINATE_CEILING`
+    (2^62 - 1), at Locations vep-rs wrote nothing for (`COORDINATE_PAST_CEILING_BUCKET`): the
+    reference annotates the record at the numified position, an exact integer through the
+    string increment of a digit string (`21:4611686018427387905-4611686018427388204`,
+    `21:18446744073709551617`), where vep-rs fails the line. The tuples are those at the
+    start the reference prints for the record (`_reference_rows_starting_at`)."""
+    rust_locations = {t[0] for t in rust_tuples}
+    excluded: set[AnnotTuple] = set()
+    for v in input_variants:
+        if v.pos >= VEP_RS_COORDINATE_CEILING:
+            excluded |= _reference_rows_starting_at(v, perl_tuples, rust_locations)
+    return excluded
+
+
+def _repeat_bases(unit_len: int, count: str, by_ruc: bool) -> int:
+    """The bases one repeat sequence adds to a `<CNV:TR>` allele, `$seq x $num`
+    (Parser/VCF.pm:414, 419): the unit length times its count, RUC as written or RB over
+    the unit length, truncated as Perl's `x` operator truncates it and never below zero."""
+    copies = perl_numeric_value(count) if by_ruc else perl_numeric_value(count) / unit_len
+    return unit_len * max(int(copies), 0)
 
 
 def cnv_tr_expansion_is_empty(v: VcfVariant) -> bool:
-    """Whether `_expand_tandem_repeat_allele_string` (Parser/VCF.pm:382-431) builds no
-    alternate allele, or one equal to the reference run, for a single-ALT `<CNV:TR>`: `RN=.`,
-    every repeat sequence's count (RUC, or RB over the unit length when RUC is absent) at most
-    zero once truncated as Perl's `x` operator truncates it (`RUC=0.5` repeats nothing,
-    `RUC=3.5` three times), or, for a single repeat sequence, a count times the unit length
-    equal to SVLEN (the largest value, `:505-511`). A unit of no bases (`RUS=,AC`) divides by
-    zero in Perl when RB supplies the count, which ends the reference run, so such a record
-    is not judged under either count."""
-    if v.alt.upper() != "<CNV:TR>":
+    """Whether `_expand_tandem_repeat_allele_string` (Parser/VCF.pm:382-431) builds an allele
+    string the reference writes nothing for, on a `<CNV:TR>` record of one or several ALTs:
+    every part of the string is absent (`RN=.`, `:410`), empty (each count of the allele's
+    repeat sequences, RUC or RB over the unit length, at most zero once truncated as Perl's
+    `x` operator truncates it: `RUC=0.5` repeats nothing, `RUC=3.5` three times; a count the
+    RUC or RB list has run out of repeats nothing) or equal to the reference run (the
+    allele's bases, each unit length times its count, summing to SVLEN, the largest value,
+    `:505-511`: `RN=3;RUS=AGC,AGC,AGC;RUC=1,1,1` and `RN=2;RUS=AGC,AG;RUC=3,0` rebuild a
+    nine-base run); the split drops a trailing empty part (`AGAGAGAG/AGAGAGAG/` is the run
+    alone), while an empty part before another is kept as the loss of the run (Parser.pm:881)
+    and is not this shape. The repeat sequences consume RUS and RUC (or RB) in order across
+    the alleles (`shift`, `:412-414`). A fullwidth digit is no digit to Perl, so `RUC=４`
+    repeats nothing. A unit of no bases (`RUS=,AGC`) repeats nothing under RUC (`"" x 5`,
+    `:419`); under RB the same unit divides by zero (`:414`), which ends the reference run,
+    so such a record is not judged, as is one whose repeat sequences outrun the RUS list."""
+    alts = perl_split(v.alt.upper(), ",")
+    if not alts or any(alt != "<CNV:TR>" for alt in alts):
         return False
     rus = _info_written(v.info, "RUS")
     ruc = _info_written(v.info, "RUC")
@@ -1897,29 +2225,38 @@ def cnv_tr_expansion_is_empty(v: VcfVariant) -> bool:
     if not perl_true(rus) or not (perl_true(ruc) or perl_true(rb)):
         return False
     rn = _info_written(v.info, "RN")
-    if rn == ".":
-        return True
     # `$info->{RN} ? split(/,/, $info->{RN}) : (1) x ...` (`:394-397`): an RN Perl reads
-    # as false (`0`, empty) is one repeat sequence, as an absent one is;
+    # as false (`0`, empty) is one repeat sequence per allele, as an absent one is;
     # `for ( 1 .. $records )` (`:411`) walks them, none for a negative count;
     # `$seq = 'N' if $seq eq '.'` (`:413`).
-    sequences = max(int(perl_numeric_value(rn)), 0) if perl_true(rn) else 1
-    units = [1 if unit == "." else len(unit) for unit in rus.split(",")[:sequences]]
-    if len(units) < sequences or 0 in units:
-        return False
+    rn_parts = perl_split(rn, ",") if perl_true(rn) else ["1"] * len(alts)
+    units = iter(rus.split(","))
     # `$is_RUC_defined ? shift(@RUC) : shift(@RB) / length($seq)` behind `$info->{RUC} ||
     # $info->{RB}` (`:385`, `:414`): a RUC Perl reads as false (`0`, empty) falls through to RB.
-    counts = (ruc if perl_true(ruc) else rb or "").split(",")
-    if len(counts) < sequences:
-        return False
-    bases = 0
-    for unit_len, count in zip(units, counts):
-        copies = perl_numeric_value(count) if perl_true(ruc) else perl_numeric_value(count) / unit_len
-        bases += unit_len * max(int(copies), 0)
-    if bases == 0:
-        return True
+    by_ruc = perl_true(ruc)
+    counts = iter((ruc if by_ruc else rb or "").split(","))
     svlen = _info_written(v.info, "SVLEN")
-    return sequences == 1 and svlen is not None and max(perl_numeric_value(x) for x in svlen.split(",")) == bases
+    run = max(perl_numeric_value(x) for x in svlen.split(",")) if svlen is not None else None
+    parts: list[int] = []
+    for records in rn_parts:
+        if records == ".":
+            continue
+        bases = 0
+        for _ in range(max(int(perl_numeric_value(records)), 0)):
+            unit = next(units, None)
+            if unit is None:
+                return False
+            unit_len = 1 if unit == "." else len(unit)
+            count = next(counts, None)
+            if count is None:
+                continue
+            if unit_len == 0 and not by_ruc:
+                return False
+            bases += _repeat_bases(unit_len, count, by_ruc)
+        parts.append(bases)
+    while parts and parts[-1] == 0:
+        parts.pop()
+    return all(run is not None and bases == run for bases in parts)
 
 
 def filter_cnv_tr_empty_expansion(
@@ -1937,10 +2274,75 @@ def filter_cnv_tr_empty_expansion(
         if not cnv_tr_expansion_is_empty(v):
             continue
         chrom, start, end = record_location(v)
-        if any(s[0] == chrom and s[1] <= end + 1 and s[2] >= start - 1 for s in perl_spans):
+        if _reference_row_beside(perl_spans, chrom, start, end):
             continue
         location = _span_location(chrom, start, end)
         excluded.update(t for t in rust_tuples if t[0] == location and t[1] == _CNV_TR_RUST_ALLELE)
+    return excluded
+
+
+def cnv_tr_rn_zero_dropped_direction(v: VcfVariant) -> str | None:
+    """The direction, ``"gain"`` or ``"loss"``, of the allele Ensembl VEP drops from a two-ALT
+    `<CNV:TR>,<CNV:TR>` record of which one allele's RN is a count `for (1 .. $records)`
+    (Parser/VCF.pm:411) runs no iteration for (0 or negative; an RN of `.` is skipped at
+    `:410` and leaves no part): that allele's expansion is an empty part of the allele
+    string (`:428`), which Parser.pm:978 does not read as multi-allelic, so when the empty
+    part leads `:881` keeps the first minimised allele alone and the real allele is dropped,
+    and when it trails the split drops the empty part and the `RN=0` allele is dropped.
+    The real allele's bases are its RN repeat sequences' units times their counts, read
+    from the start of RUS and RUC (or RB), the empty allele having consumed none. None when
+    the record is not that shape, or when the real allele is not a gain over the run: a
+    real allele that is a loss or unchanged shares its direction term with the `RN=0`
+    allele's rows and the two are not told apart."""
+    if perl_split(v.alt.upper(), ",") != ["<CNV:TR>", "<CNV:TR>"]:
+        return None
+    rus, ruc, rb, rn = (_info_written(v.info, key) for key in ("RUS", "RUC", "RB", "RN"))
+    if not perl_true(rus) or not (perl_true(ruc) or perl_true(rb)) or not perl_true(rn):
+        return None
+    counts_rn = perl_split(rn, ",")
+    if len(counts_rn) != 2 or "." in counts_rn:
+        return None
+    empty = [i for i, count in enumerate(counts_rn) if int(perl_numeric_value(count)) <= 0]
+    if len(empty) != 1:
+        return None
+    sequences = int(perl_numeric_value(counts_rn[1 - empty[0]]))
+    units = [1 if unit == "." else len(unit) for unit in rus.split(",")[:sequences]]
+    by_ruc = perl_true(ruc)
+    counts = (ruc if by_ruc else rb or "").split(",")
+    if len(units) < sequences or len(counts) < sequences or (0 in units and not by_ruc):
+        return None
+    bases = sum(_repeat_bases(unit_len, count, by_ruc) for unit_len, count in zip(units, counts))
+    _chrom, start, end = record_location(v)
+    if bases <= end - start + 1:
+        return None
+    return "gain" if empty[0] == 0 else "loss"
+
+
+def filter_cnv_tr_rn_zero_allele_dropped(
+    perl_tuples: set[AnnotTuple], rust_tuples: set[AnnotTuple], input_variants: list[VcfVariant]
+) -> set[AnnotTuple]:
+    """vep-rs's `tandem_repeat` tuples of the allele the reference dropped from a two-ALT
+    `<CNV:TR>` record of which one allele has `RN=0` (`cnv_tr_rn_zero_dropped_direction`),
+    the tuples carrying the dropped allele's direction term at the run, when the reference
+    expanded the record: a row at or beside the run under an allele other than
+    `tandem_repeat`, which only a run with a FASTA writes
+    (`CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET`). Without a FASTA both alleles are symbolic rows
+    on both sides and nothing is set aside."""
+    excluded: set[AnnotTuple] = set()
+    expanded = [s for t in perl_tuples if t[1] != _CNV_TR_RUST_ALLELE and (s := _location_span(t[0])) is not None]
+    for v in input_variants:
+        dropped = cnv_tr_rn_zero_dropped_direction(v)
+        if dropped is None:
+            continue
+        chrom, start, end = record_location(v)
+        if not _reference_row_beside(expanded, chrom, start, end):
+            continue
+        location = _span_location(chrom, start, end)
+        term = _CNV_TR_DIRECTION_TERM[dropped]
+        excluded.update(
+            t for t in rust_tuples - perl_tuples
+            if t[0] == location and t[1] == _CNV_TR_RUST_ALLELE and term in t[4].split(",")
+        )
     return excluded
 
 
@@ -2029,12 +2431,16 @@ def filter_bnd_synonym_mate_rows(
     `NC_000002.12` is not `2`, so the reference writes nothing under the mate allele
     while keeping the record's own rows.
 
-    THE PREDICATE, on a Location with a bracket allele whose mate name, `chr` stripped,
-    is not a chromosome the cache files: the reference wrote at least one tuple at the
-    Location and none under that bracket allele; then every vep-rs-only Transcript tuple
-    under that allele whose transcript the cache does not file on the Location's own
-    chromosome is excluded (an own-chromosome transcript under the mate allele is not
-    the shape). With no cache it excludes nothing.
+    THE PREDICATE, on a Location with a bracket allele whose mate name, read as the
+    reference reads it (`reference_mate_chromosome`: `chr` as written stripped, any other
+    spelling kept), is not a chromosome the cache files: the reference wrote at least one
+    tuple at the Location and none under that bracket allele; then every vep-rs-only
+    Transcript tuple under that allele is excluded when its transcript is one the cache
+    files on the chromosome vep-rs resolved the name to (`N[Chr21:30425700[` on CHROM 21:
+    the mate rows on the record's own chromosome, which the reference lost to the spelling
+    alone), or, for a name the cache files no chromosome under (`NC_000022.11`), when its
+    transcript is not on the Location's own chromosome (an own-chromosome transcript under
+    such a mate allele is not the shape). With no cache it excludes nothing.
     """
     if not transcripts_by_chr:
         return set()
@@ -2049,9 +2455,11 @@ def filter_bnd_synonym_mate_rows(
         local = transcripts_by_chr.get(own, set())
         for t in rust_here:
             mate = _bracket_mate(t[1])
-            if mate is None or mate[0] in transcripts_by_chr or t[1] in perl_alleles:
+            if mate is None or reference_mate_chromosome(t[1]) in transcripts_by_chr or t[1] in perl_alleles or t[2] == "-":
                 continue
-            if t[2] != "-" and t[2] not in local:
+            resolved = transcripts_by_chr.get(mate[0])
+            lost = t[2] in resolved if resolved is not None else t[2] not in local
+            if lost:
                 excluded.add(t)
     return excluded
 
@@ -2083,24 +2491,30 @@ def count_fasta_named_slice_intergenic(
 
 
 def count_bnd_mate_over_32_bit(
-    input_variants: list[VcfVariant], perl_tuples: set[AnnotTuple]
+    input_variants: list[VcfVariant], perl_tuples: set[AnnotTuple], max_sv_size: int = _MAX_SV_SIZE
 ) -> tuple[int, int]:
-    """The input records naming a breakend mate at or past `BND_MATE_32_BIT_LIMIT`, in a
-    bracket ALT or through CHR2 with END2 (else END), and the reference's tuples at
-    those records' Locations: the reference writes every record of the buffer holding
-    such a mate as intergenic_variant, so the count names the shape and sets no row
-    aside: the rows reach the buffer's other records, and the outputs do not say which
-    records shared the buffer."""
+    """The input records with a coordinate at or past `BND_MATE_32_BIT_LIMIT`: a breakend
+    mate in a bracket ALT or through CHR2 with END2 (else END), or, for a record the
+    reference keeps under ``max_sv_size`` (`perl_skip_route`), the record's own start or the
+    end its span derives (`21 30425650 x N <DEL> SVTYPE=DEL;END=2147483647` under
+    --max_sv_size -1, `21 2147483648 x N N[21:30425700[ SVTYPE=BND`); and the reference's
+    tuples at those records' Locations. The reference writes every record of the buffer
+    holding such a coordinate as intergenic_variant, so the count names the shape and sets
+    no row aside: the rows reach the buffer's other records, and the outputs do not say
+    which records shared the buffer."""
     by_loc = _tuples_by_location(perl_tuples)
     records = 0
     locations: set[str] = set()
     for v in input_variants:
         info = _info_fields(v.info)
-        positions = [int(m.group(2)) for alt in v.alt.split(",") if (m := _BRACKET_MATE_RE.search(alt))]
+        positions = [int(m.group(2)) for alt in perl_split(v.alt, ",") if (m := _BRACKET_MATE_RE.search(alt))]
         if "CHR2" in info:
             mate = info.get("END2") or info.get("END")
             if mate is not None and mate.isdigit():
                 positions.append(int(mate))
+        _chrom, start, end = record_location(v)
+        if perl_skip_route(v, max_sv_size) is None:
+            positions.extend((start, end))
         if not any(p >= BND_MATE_32_BIT_LIMIT for p in positions):
             continue
         records += 1
@@ -2161,14 +2575,20 @@ class MaskResult:
     dot_pair_perl: set[AnnotTuple] = field(default_factory=set)
     missing_alt_perl: set[AnnotTuple] = field(default_factory=set)
     non_integer_end_perl: set[AnnotTuple] = field(default_factory=set)
+    non_integer_end_rust: set[AnnotTuple] = field(default_factory=set)
     cnvtr_empty_rust: set[AnnotTuple] = field(default_factory=set)
+    star_alone_perl: set[AnnotTuple] = field(default_factory=set)
+    numified_pos_perl: set[AnnotTuple] = field(default_factory=set)
+    rn_zero_rust: set[AnnotTuple] = field(default_factory=set)
+    ceiling_perl: set[AnnotTuple] = field(default_factory=set)
 
     def all_rust(self) -> set[AnnotTuple]:
         return (
             self.tsel_rust | self.cnvtr_rust | self.xchr_orphan_rust | self.mate_rust
             | self.swap_rust | self.non_ref_rust | self.mate_read_rust
             | self.skipped_rust | self.bnd_own_rust | self.bnd_synonym_rust
-            | self.gvcf_rust | self.dot_pair_rust | self.cnvtr_empty_rust
+            | self.gvcf_rust | self.dot_pair_rust | self.non_integer_end_rust
+            | self.cnvtr_empty_rust | self.rn_zero_rust
         )
 
     def all_perl(self) -> set[AnnotTuple]:
@@ -2176,6 +2596,7 @@ class MaskResult:
             self.tsel_perl | self.cnvtr_perl | self.xchr_perl | self.swap_perl
             | self.non_ref_perl | self.mate_read_perl
             | self.dot_pair_perl | self.missing_alt_perl | self.non_integer_end_perl
+            | self.star_alone_perl | self.numified_pos_perl | self.ceiling_perl
         )
 
 
@@ -2251,13 +2672,23 @@ def apply_masks(
     if "filter_missing_alt_annotated" in masks:
         r.missing_alt_perl = filter_missing_alt_annotated(perl_tuples, input_variants or [])
     if "filter_non_integer_end_rows" in masks:
-        r.non_integer_end_perl = filter_non_integer_end_rows(perl_tuples)
+        r.non_integer_end_perl, r.non_integer_end_rust = filter_non_integer_end_rows(
+            perl_tuples, rust_tuples, input_variants or [], max_sv_size
+        )
     if "filter_cnv_tr_empty_expansion" in masks:
         r.cnvtr_empty_rust = filter_cnv_tr_empty_expansion(perl_tuples, rust_tuples, input_variants or [])
+    if "filter_star_alone_svtype_annotated" in masks:
+        r.star_alone_perl = filter_star_alone_svtype_annotated(perl_tuples, input_variants or [])
+    if "filter_non_numeric_pos_numified" in masks:
+        r.numified_pos_perl = filter_non_numeric_pos_numified(perl_tuples, rust_tuples, input_variants or [])
+    if "filter_cnv_tr_rn_zero_allele_dropped" in masks:
+        r.rn_zero_rust = filter_cnv_tr_rn_zero_allele_dropped(perl_tuples, rust_tuples, input_variants or [])
+    if "filter_coordinate_past_ceiling" in masks:
+        r.ceiling_perl = filter_coordinate_past_ceiling(perl_tuples, rust_tuples, input_variants or [])
     if reference_release == "116.2":
         r.fasta_intergenic_records = count_fasta_named_slice_intergenic(perl_tuples, rust_tuples)
         r.mate_overflow_records, r.mate_overflow_perl_tuples = count_bnd_mate_over_32_bit(
-            input_variants or [], perl_tuples
+            input_variants or [], perl_tuples, max_sv_size
         )
     return r
 
@@ -2283,8 +2714,12 @@ def release_report_block(
         GVCF_VARIANT_SITE_DROPPED_BUCKET: len(overall.gvcf_rust),
         DOT_BREAKEND_PAIR_BUCKET: len(overall.dot_pair_rust) + len(overall.dot_pair_perl),
         MISSING_ALT_ANNOTATED_BUCKET: len(overall.missing_alt_perl),
-        NON_INTEGER_END_BUCKET: len(overall.non_integer_end_perl),
+        NON_INTEGER_END_BUCKET: len(overall.non_integer_end_perl) + len(overall.non_integer_end_rust),
         CNV_TR_EMPTY_EXPANSION_BUCKET: len(overall.cnvtr_empty_rust),
+        STAR_ALONE_SVTYPE_ANNOTATED_BUCKET: len(overall.star_alone_perl),
+        NON_NUMERIC_POS_NUMIFIED_BUCKET: len(overall.numified_pos_perl),
+        CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET: len(overall.rn_zero_rust),
+        COORDINATE_PAST_CEILING_BUCKET: len(overall.ceiling_perl),
     }
     missing = [r.bucket for r in REFERENCE_116_2_ONE_SIDED_RULES if r.bucket not in excluded_by_bucket]
     if missing:
@@ -2321,7 +2756,12 @@ def release_report_block(
         "excluded_dot_breakend_pair_perl": len(overall.dot_pair_perl),
         "excluded_missing_alt_annotated_perl": len(overall.missing_alt_perl),
         "excluded_non_integer_end_perl": len(overall.non_integer_end_perl),
+        "excluded_non_integer_end_rust": len(overall.non_integer_end_rust),
         "excluded_cnv_tr_empty_expansion_rust": len(overall.cnvtr_empty_rust),
+        "excluded_star_alone_svtype_perl": len(overall.star_alone_perl),
+        "excluded_non_numeric_pos_perl": len(overall.numified_pos_perl),
+        "excluded_cnv_tr_rn_zero_rust": len(overall.rn_zero_rust),
+        "excluded_coordinate_past_ceiling_perl": len(overall.ceiling_perl),
         "breakend_masks_check_ran": cache_supplied,
         "divergence_classes": {
             rule.bucket: {
@@ -2589,8 +3029,13 @@ def write_markdown_report(
             f"`{GVCF_VARIANT_SITE_DROPPED_BUCKET}` {len(release_masks.gvcf_rust):,} vep-rs rows on {release_masks.gvcf_records:,} sites set aside; "
             f"`{DOT_BREAKEND_PAIR_BUCKET}` {len(release_masks.dot_pair_perl):,} reference and {len(release_masks.dot_pair_rust):,} vep-rs rows set aside; "
             f"`{MISSING_ALT_ANNOTATED_BUCKET}` {len(release_masks.missing_alt_perl):,} reference rows set aside; "
-            f"`{NON_INTEGER_END_BUCKET}` {len(release_masks.non_integer_end_perl):,} reference rows set aside; "
-            f"`{CNV_TR_EMPTY_EXPANSION_BUCKET}` {len(release_masks.cnvtr_empty_rust):,} vep-rs rows set aside"
+            f"`{NON_INTEGER_END_BUCKET}` {len(release_masks.non_integer_end_perl):,} reference and "
+            f"{len(release_masks.non_integer_end_rust):,} vep-rs rows set aside; "
+            f"`{CNV_TR_EMPTY_EXPANSION_BUCKET}` {len(release_masks.cnvtr_empty_rust):,} vep-rs rows set aside; "
+            f"`{STAR_ALONE_SVTYPE_ANNOTATED_BUCKET}` {len(release_masks.star_alone_perl):,} reference rows set aside; "
+            f"`{NON_NUMERIC_POS_NUMIFIED_BUCKET}` {len(release_masks.numified_pos_perl):,} reference rows set aside; "
+            f"`{CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET}` {len(release_masks.rn_zero_rust):,} vep-rs rows set aside; "
+            f"`{COORDINATE_PAST_CEILING_BUCKET}` {len(release_masks.ceiling_perl):,} reference rows set aside"
         )
     total_excluded = excluded_count + excluded_perl_count
     if adjusted_overall is not None and total_excluded > 0:
@@ -3247,8 +3692,11 @@ def main() -> None:
             f"{masks.bare_reference_rows} bare-breakpoint reference-allele row(s) set aside; "
             f"{masks.mate_overflow_records} record(s) with a mate past the buffer's 32-bit bound counted; "
             f"{len(masks.gvcf_rust)} gVCF-site row(s), {len(masks.dot_pair_rust) + len(masks.dot_pair_perl)} dot-breakend pair row(s), "
-            f"{len(masks.missing_alt_perl)} missing-ALT row(s), {len(masks.non_integer_end_perl)} non-integer-END row(s) and "
-            f"{len(masks.cnvtr_empty_rust)} empty-expansion row(s) set aside"
+            f"{len(masks.missing_alt_perl)} missing-ALT row(s), "
+            f"{len(masks.non_integer_end_perl) + len(masks.non_integer_end_rust)} non-integer-coordinate row(s), "
+            f"{len(masks.cnvtr_empty_rust)} empty-expansion row(s), {len(masks.star_alone_perl)} star-alone row(s), "
+            f"{len(masks.numified_pos_perl)} numified-POS row(s), {len(masks.rn_zero_rust)} dropped-allele row(s) and "
+            f"{len(masks.ceiling_perl)} past-ceiling row(s) set aside"
         )
     print(f"Reports written to: {output_dir}/")
     print(f"  {json_path.name}")
