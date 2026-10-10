@@ -4,7 +4,7 @@ This page documents every disagreement between vep-rs and Ensembl VEP that the a
 
 vep-rs 0.3.0 reports two concordance figures against Ensembl VEP release 115.2. **Raw concordance** keeps every tuple both engines write: a tuple is one output row reduced to its Location, Allele, Feature, Feature_type and Consequence set, and raw F1 counts the tuples the two engines share against the tuples each writes alone, with nothing set aside. **Adjusted concordance** sets aside the tuples of the divergence classes documented on this page and nothing else.
 
-A class is one shape of disagreement. Each class on this page has been traced to a specific mechanism in one engine's source, reproduced on a public record with a command a reader can run, and judged. Eleven of the twelve classes are the output of five defects in Ensembl VEP's source that vep-rs does not reproduce (classes 8 and 11 are also changes in vep-rs's own behaviour between 0.2.0 and 0.3.0). The twelfth, `<CNV:TR>`, is a difference of representation in which neither engine is wrong. A disagreement that is not one of these classes is charged to vep-rs in both figures, whatever its cause.
+A class is one shape of disagreement. Each class on this page has been traced to a specific mechanism in one engine's source, reproduced on a public record with a command a reader can run, and judged. Thirteen of the fourteen classes are the output of seven defects in Ensembl VEP's source that vep-rs does not reproduce (classes 8 and 11 are also changes in vep-rs's own behaviour between 0.2.0 and 0.3.0). The twelfth, `<CNV:TR>`, is a difference of representation in which neither engine is wrong. A disagreement that is not one of these classes is charged to vep-rs in both figures, whatever its cause.
 
 The page is organised by defect. Each defect's section opens with the defect in one sentence, why it is a defect, what vep-rs does instead, where it is in Ensembl VEP's source and what correcting it would change. The classes it produces follow.
 
@@ -21,6 +21,7 @@ Grouped by the place in Ensembl VEP's source that produces them, the eleven defe
 | E | A mate-side row is created from the mate's coordinate, but every predicate except `feature_truncation` is evaluated at the record's own coordinate | `ensembl-variation`, `BaseVariationFeatureOverlapAllele.pm` lines 257 and 273 | 11 | the class vanishes: a mate-side row carries the terms the mate breakpoint supports |
 | none | A `<CNV:TR>` allele is expanded to literal sequence and annotated as an insertion or deletion, where vep-rs keeps it symbolic; neither reading is wrong | `ensembl-vep`, `Parser/VCF.pm` lines 382-431 | 12 | nothing to correct; the comparator pairs the two readings |
 | F | A breakpoint record without a bracket mate is split on `/` into one allele per part, the reference base included, so the reference allele gets a consequence row of its own | `ensembl-variation`, `StructuralVariationOverlap.pm` lines 64-77 | 13 | the reference-allele row disappears and every row is written once, as vep-rs writes it |
+| G | A breakend mate position that, with the `--distance` flank added, reaches 2^31 turns every record of the input buffer intergenic, the records loaded beside it included | `ensembl-vep`, `AnnotationSource.pm` line 190 (the flank added to the mate's position) with lines 251-254 and 306-309 | 14 | the buffer's records keep their transcript rows and the breakend its own-end rows, as vep-rs writes them |
 
 Source citations name the Ensembl repository, module and line at release 115 (the `release/115` branch of `ensembl-variation` and of `ensembl-vep`). The comparator scripts of this repository are `scripts/concordance/compare_vep_outputs.py` for the SNP/indel datasets and `scripts/validation/compare_sv_concordance.py` for the structural-variant sets. Every row on this page is in Ensembl VEP's default tab output, whose columns are:
 
@@ -30,7 +31,7 @@ Source citations name the Ensembl repository, module and line at release 115 (th
 
 Coordinates follow VEP's output conventions: a symbolic deletion's Location starts one base after the VCF POS (the padding base), a breakend's Location is the base after the breakpoint, and an insertion's Location names the two flanking bases.
 
-The twelve classes, with the defect each belongs to:
+The fourteen classes, with the defect each belongs to:
 
 | # | Class | Defect | Kind | Datasets affected | Side set aside | Count |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -46,7 +47,8 @@ The twelve classes, with the defect each belongs to:
 | 10 | The orphaned `intergenic_variant` on the other side of class 9 | D | Ensembl VEP defect | gnomAD-SV v2.1 chr21, gnomAD-SV v4.1 chr21 | vep-rs | 155 (GRCh37), 518 (GRCh38) rows |
 | 11 | Breakend mate rows read from the other chromosome's coordinate | E | Ensembl VEP defect; vep-rs 0.3.0 behaviour change | synthetic `09_breakends` and `13_vcf45_features`, gnomAD-SV v4.1 chr21 | both members of each pair | 1,407 (GRCh37), 7,258 (GRCh38) pairs |
 | 12 | `<CNV:TR>` read symbolically, not expanded | none | representation difference | synthetic tandem-repeat set (`07_cnv_repeat`), both assemblies | both members of each pair | 1,368 (GRCh37), 2,644 (GRCh38) pairs |
-| 13 | The reference-allele row of a bare breakpoint | F | Ensembl VEP defect | none of the measured sets (every gnomAD-SV `<BND>` names its mate through `CHR2`) | nothing: the duplicate tuple never enters the diff | 0 |
+| 13 | The reference-allele row of a bare breakpoint | F | Ensembl VEP defect | none of the measured sets (every gnomAD-SV `<BND>` names its mate through `CHR2`) | the reference-allele rows are set aside: `bnd_bare_reference_allele_row` in both comparators | 0 |
+| 14 | A breakend mate at or past 2,147,478,648 turns the reference's buffer intergenic | G | Ensembl VEP defect | none of the measured sets (no chromosome reaches the position) | nothing: counted as `bnd_mate_32bit_buffer_intergenic` in both comparators and left charged | 0 |
 
 How to read the counts:
 
@@ -1414,7 +1416,78 @@ vep -i bare.vcf -o bare.vep-rs.txt --offline --json_cache tests/golden/116/GRCh3
 
 #### 13.7 How the comparator treats this class
 
-Both comparators compare unique tuples of (Location, Allele, Feature, Feature_type, Consequence), so the reference-allele row, identical in every column to the ALT row, never enters the diff and the adjusted figure is untouched. The structural-variant comparator counts the reference's duplicate rows under `chromosome_breakpoint` (`bnd_bare_reference_allele_rows` in its report) so the shape stays visible; the class is `bnd_bare_reference_allele_row` in the 116.2 registry of both comparators, counted and never set aside. None of the measured sets carries the shape: every gnomAD-SV `<BND>` on chromosome 21 names its mate through `CHR2` with `END` or `END2`, and the synthetic sets write their breakends in bracket and dot notation.
+The class is `bnd_bare_reference_allele_row` in the 116.2 registry of both comparators, and both set the reference-allele rows aside. Each comparator compares unique tuples of (Location, Allele, Feature, Feature_type, Consequence), and the reference-allele row is identical in every column to the ALT row, so the set-aside happens where the tuples are built: the duplicate row is dropped before the raw and the adjusted figure, neither of which ever carries a tuple for it, and each comparator reads the reference's raw rows to count the rows it set aside (`bnd_bare_reference_allele_rows` in the structural-variant report, `bnd_bare_reference_allele_row` with its `excluded` count in the SNP/indel report, both per file). The class therefore moves no tuple between the raw and the adjusted figure; it names and counts what the construction excluded. None of the measured sets carries the shape: every gnomAD-SV `<BND>` on chromosome 21 names its mate through `CHR2` with `END` or `END2`, and the synthetic sets write their breakends in bracket and dot notation.
+
+## Defect G: a breakend mate position past the 32-bit bound turns the buffer intergenic
+
+### 14. The buffer a breakend mate position overflows
+
+#### 14.1 What a reader needs to know first
+
+Ensembl VEP annotates its input in buffers of 5,000 records. For each buffer it works out the span of coordinates the records cover, adds the `--distance` flank (5,000 bases by default) at both ends, and loads the transcripts of the cache regions inside that span; a breakend's mate position is part of the span. When a mate position plus the flank reaches 2^31 (2,147,483,648), every record of the buffer is written as `intergenic_variant`: the breakend record itself, under both its alleles, and every other record loaded with it, whatever transcripts they overlap. The boundary follows the flank exactly: with the default flank the first position that does this is 2,147,478,648 and 2,147,478,647 annotates normally; under `--distance 1` the first such position is 2,147,483,647 and 2,147,483,646 annotates normally. No human chromosome reaches these positions, so the shape appears only in a malformed or synthetic record, and when it does the records it damages are its neighbours in the buffer, which the output does not identify.
+
+#### 14.2 The record
+
+```
+21	30425650	control_dup	N	<DUP>	.	.	SVTYPE=DUP;END=30425899
+21	30425650	end2_2147478648	N	<BND>	.	.	SVTYPE=BND;CHR2=21;END2=2147478648
+```
+
+Executed with Ensembl VEP 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
+
+#### 14.3 What each engine writes
+
+Ensembl VEP 116.2, three rows, every one intergenic:
+
+```
+control_dup	21:30425651-30425899	duplication	-	-	-	intergenic_variant	ALLELE_NUM=1;IMPACT=MODIFIER
+end2_2147478648	21:30425651	N.	-	-	-	intergenic_variant	ALLELE_NUM=0;IMPACT=MODIFIER
+end2_2147478648	21:30425651	N[21:2147478648[	-	-	-	intergenic_variant	ALLELE_NUM=1;IMPACT=MODIFIER
+```
+
+The same file with `END2=2147478646`, four rows:
+
+```
+control_dup	21:30425651-30425899	duplication	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant	ALLELE_NUM=1;IMPACT=MODIFIER;STRAND=1
+control_dup	21:30425651-30425899	duplication	ENSG00000240432	ENST00000390690	Transcript	feature_elongation,coding_sequence_variant	ALLELE_NUM=1;IMPACT=HIGH;STRAND=-1
+end2_2147478646	21:30425651	N.	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant	ALLELE_NUM=0;IMPACT=MODIFIER;STRAND=1
+end2_2147478646	21:30425651	N.	ENSG00000240432	ENST00000390690	Transcript	feature_truncation,coding_sequence_variant	ALLELE_NUM=0;IMPACT=HIGH;STRAND=-1
+```
+
+vep-rs, for the first file, four rows: the same four as Ensembl VEP's second file, under `end2_2147478648`:
+
+```
+control_dup	21:30425651-30425899	duplication	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant
+control_dup	21:30425651-30425899	duplication	ENSG00000240432	ENST00000390690	Transcript	feature_elongation,coding_sequence_variant
+end2_2147478648	21:30425651	N.	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant
+end2_2147478648	21:30425651	N.	ENSG00000240432	ENST00000390690	Transcript	feature_truncation,coding_sequence_variant
+```
+
+Both engines write no row under the mate allele for a mate this far from any transcript, at 2,147,478,646 as at 46,709,983 or 1,000,000,000; the difference is the transcript rows of the whole buffer.
+
+#### 14.4 Why Ensembl VEP writes that
+
+`AnnotationSource.pm` `get_regions_from_coords` (line 190) adds the `--distance` flank to each coordinate it is given when it chooses the cache regions and the buffer's bounds, and `get_all_regions_by_InputBuffer` hands it every breakend's mate position (lines 251-254); `_check_overlap` (lines 306-309) then keeps a transcript only when it overlaps the bounds with the flank added again. The buffer's largest coordinate plus the flank is where the behaviour turns: the measurements of 14.1 place the turn at 2^31 for both flank sizes, the bound of a signed 32-bit integer, and past it every record of the buffer is written as intergenic.
+
+#### 14.5 Why vep-rs's rows are the correct ones
+
+A record's annotation depends on its own coordinates and the transcripts it overlaps, not on the other records read with it. vep-rs holds the mate position in a 64-bit coordinate, writes the breakend's own-end rows against the transcripts at its own position, writes nothing under the mate allele when no transcript lies at the mate, and annotates the other records of the batch as if the breakend were absent, which is what Ensembl VEP itself writes for the same records at any mate position below the bound.
+
+#### 14.6 Try it yourself
+
+```bash
+printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t30425650\tcontrol_dup\tN\t<DUP>\t.\t.\tSVTYPE=DUP;END=30425899\n21\t30425650\tend2_2147478648\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=2147478648\n' > overflow.vcf
+docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
+  vep -i /work/overflow.vcf -o /work/overflow.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
+  --assembly GRCh38 --species homo_sapiens --allele_number --no_stats
+vep -i overflow.vcf -o overflow.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --no_stats
+```
+
+Changing `END2` to `2147478646` restores the transcript rows in Ensembl VEP's output; adding `--distance 1` moves the turn to `END2=2147483647`.
+
+#### 14.7 How the comparator treats this class
+
+The class is `bnd_mate_32bit_buffer_intergenic` in the 116.2 registry of both comparators, counted and never set aside: the records it damages beyond the breakend's own are its neighbours in a buffer whose boundaries the outputs do not record, so no tuple can be attributed to it with certainty, and crediting vep-rs for an unattributable row is not done. The SNP/indel comparator counts the reference's rows at the Location of a record whose bracket allele names a mate at or past 2,147,478,648; the structural-variant comparator counts such records from the input (a bracket ALT, or `CHR2` with `END2`, else `END`) and the reference's tuples at their Locations (`bnd_mate_32bit_buffer_records`, `bnd_mate_32bit_buffer_reference_tuples`). None of the measured sets carries the shape.
 
 ## Scoring against Ensembl VEP 116.2
 

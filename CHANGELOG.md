@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The plugin-visible `InputVariant` JSON carries `record_so_term`, the whole record's class term (`Alu_insertion`, `copy_number_variation`), on every structural variant whose type has one. (#44)
 - `--regulatory_gff`, `--extended_promoters` and `--custom_suppress_filter` are refused with an error naming what each would do; regulatory and custom annotation are not supported. (#44)
 - `--reference-release {115.2,116.2}` on both comparators selects the Ensembl VEP release scored against (116.2 default, sets aside the records it skips); the runners derive it from the reference's provenance. (#43)
-- The comparators' 116.2 registry gains `bnd_bare_reference_allele_row`, the duplicate row Ensembl VEP writes for the reference allele of a breakpoint without a mate, counted and never set aside. (#44)
+- The comparators' 116.2 registry gains `bnd_bare_reference_allele_row`, the duplicate row Ensembl VEP writes for the reference allele of a breakpoint without a mate, set aside and counted per file. (#44)
+- The comparators' 116.2 registry gains `bnd_mate_32bit_buffer_intergenic`, the buffer Ensembl VEP writes as intergenic for a breakend mate at or past 2,147,478,648, counted and left charged. (#44)
 
 ### Changed
 
@@ -71,6 +72,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A comma-separated SVLEN reads its first value, and the largest for a tandem repeat or a tandem duplication, as Ensembl VEP 116 does. (#44)
 - INFO/SVTYPE names the class of an ALT outside the VCF 4.4 forms, so `N.` with `SVTYPE=DEL` is a `deletion`, and a `<BND>` without SVTYPE a breakpoint. (#44)
 - A record whose END is not a coordinate is skipped, and a skipped record is reported at warning level, not annotated as a one-base deletion. (#44)
+- A mate named by INFO/CHR2 is written `N[CHR2:END2[` with both values as written, beside an own breakend of the record's reference base, as Ensembl VEP 116 writes them. (#44)
+- `SVLEN=0`, a non-numeric SVLEN or an END at POS keeps the pair before the start for every structural class, with the terms Ensembl VEP 116 writes for it. (#44)
+- An END before POS, `END=0` or an empty END skips the record at warning level for every class, a breakpoint included, as Ensembl VEP 116 skips it. (#44)
+- A repeated INFO key reads its last value; a dot ALT beside a bracket ALT lends the own breakend its base and writes no row, as Ensembl VEP does. (#44)
+- The `vep-io` VCF reader derives a structural variant's span through the rules the command-line parser uses, starting at POS + 1. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
 
 ## [0.3.2] - 2026-10-06

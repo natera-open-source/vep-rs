@@ -44,6 +44,7 @@ import json
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -60,6 +61,8 @@ from breakend_mate_context import (  # noqa: E402
 )
 from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition for both comparators)
     BND_BARE_REFERENCE_ALLELE_ROW_BUCKET,
+    BND_MATE_32_BIT_BUFFER_BUCKET,
+    BND_MATE_32_BIT_LIMIT,
     BND_OWN_ROWS_LOST_BUCKET,
     BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
     DEFAULT_REFERENCE_RELEASE,
@@ -71,6 +74,7 @@ from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition
     _batch_dependent_annotation_scope,
     _location_span,
     _span_exceeds_max_sv_size,
+    count_bare_breakpoint_reference_rows,
     is_own_breakend_allele,
     is_structural_allele,
 )
@@ -1410,6 +1414,7 @@ MASKS_BY_RELEASE: dict[str, tuple[str, ...]] = {
         "filter_reference_skipped_records",
         "filter_bnd_own_rows_lost",
         "filter_bnd_synonym_mate_rows",
+        "filter_bnd_bare_reference_allele_rows",
     ),
 }
 # Why each 115.2 mask is not applied against 116.2, for the report.
@@ -1836,31 +1841,41 @@ def count_fasta_named_slice_intergenic(
     return n
 
 
-def count_bare_breakpoint_reference_rows(path: Path) -> int:
-    """The reference's duplicate rows under `chromosome_breakpoint`: a breakpoint record
-    that names no mate is held as `N/<BND>` and, with no breakend parsed, gets one allele
-    per slash-separated part, the reference base `N` included
-    (StructuralVariationOverlap.pm 116:64-77), so every row is written twice, the second
-    for the reference allele. The tuple set absorbs the duplicate, so the count is
-    reported and nothing is set aside; a missing file counts zero."""
-    if not path.exists():
-        return 0
-    seen: set[AnnotTuple] = set()
-    duplicates = 0
-    with open(path) as fh:
-        for line in fh:
-            line = line.rstrip("\n")
-            if not line or line.startswith("#"):
-                continue
-            cols = line.split("\t")
-            if len(cols) < 7 or cols[2] != "chromosome_breakpoint":
-                continue
-            key = (normalize_location(cols[1]), cols[2], cols[4], cols[5], normalize_consequence_set(cols[6]))
-            if key in seen:
-                duplicates += 1
-            else:
-                seen.add(key)
-    return duplicates
+def count_bnd_mate_over_32_bit(
+    input_variants: list[VcfVariant], perl_tuples: set[AnnotTuple]
+) -> tuple[int, int]:
+    """The input records naming a breakend mate at or past `BND_MATE_32_BIT_LIMIT`, in a
+    bracket ALT or through CHR2 with END2 (else END), and the reference's tuples at
+    those records' Locations: the reference writes every record of the buffer holding
+    such a mate as intergenic_variant, so the count names the shape and sets no row
+    aside: the rows reach the buffer's other records, and the outputs do not say which
+    records shared the buffer."""
+    by_loc = _tuples_by_location(perl_tuples)
+    records = 0
+    locations: set[str] = set()
+    for v in input_variants:
+        info = _info_fields(v.info)
+        positions = [int(m.group(2)) for alt in v.alt.split(",") if (m := _BRACKET_MATE_RE.search(alt))]
+        if "CHR2" in info:
+            mate = info.get("END2") or info.get("END")
+            if mate is not None and mate.isdigit():
+                positions.append(int(mate))
+        if not any(p >= BND_MATE_32_BIT_LIMIT for p in positions):
+            continue
+        records += 1
+        chrom, start, end = record_location(v)
+        locations.add(normalize_location(f"{chrom}:{start}" if end == start else f"{chrom}:{start}-{end}"))
+    return records, sum(len(by_loc.get(loc, ())) for loc in locations)
+
+
+def filter_bnd_bare_reference_allele_rows(perl_paths: Iterable[Path]) -> int:
+    """The reference-allele rows of bare breakpoint records in the reference outputs
+    ``perl_paths``, set aside: the rows `count_bare_breakpoint_reference_rows` counts,
+    summed over the files. The mask reads the raw rows because `parse_vep_output` has
+    already dropped each duplicate from the tuple set, so the rows it returns are
+    outside both the raw and the adjusted figure and the count is what the report states
+    as set aside; a missing file counts zero."""
+    return sum(count_bare_breakpoint_reference_rows(path).total() for path in perl_paths)
 
 
 @dataclass
@@ -1895,7 +1910,11 @@ class MaskResult:
     bnd_own_rust: set[AnnotTuple] = field(default_factory=set)
     bnd_synonym_rust: set[AnnotTuple] = field(default_factory=set)
     fasta_intergenic_records: int = 0
+    # Rows, not tuples: the reference-allele duplicates `parse_vep_output` dropped, so they
+    # are outside `all_perl()` and already outside both figures.
     bare_reference_rows: int = 0
+    mate_overflow_records: int = 0
+    mate_overflow_perl_tuples: int = 0
 
     def all_rust(self) -> set[AnnotTuple]:
         return (
@@ -1921,6 +1940,7 @@ def apply_masks(
     scored_engine: str,
     input_variants: list[VcfVariant] | None = None,
     max_sv_size: int = _MAX_SV_SIZE,
+    perl_paths: Iterable[Path] = (),
 ) -> MaskResult:
     """Run the masks of `MASKS_BY_RELEASE[reference_release]` on one pair of tuple sets.
 
@@ -1930,7 +1950,8 @@ def apply_masks(
     reference that kept a `vep_skip` record (a run under --dont_skip) is scored as what it
     is, and the 116.2 classes are applied instead; the skipped-record class reads the
     input records (``input_variants``) and records its disagreements with the outputs in
-    ``skipped_problems`` for the caller to stop on.
+    ``skipped_problems`` for the caller to stop on; the bare-breakpoint class reads the
+    reference's raw outputs (``perl_paths``), the one place its duplicate rows survive.
     """
     if reference_release not in MASKS_BY_RELEASE:
         raise ValueError(f"unknown reference release {reference_release!r}; one of {REFERENCE_RELEASES}")
@@ -1970,8 +1991,13 @@ def apply_masks(
         )
     if "filter_bnd_synonym_mate_rows" in masks:
         r.bnd_synonym_rust = filter_bnd_synonym_mate_rows(perl_tuples, rust_tuples, transcripts_by_chr)
+    if "filter_bnd_bare_reference_allele_rows" in masks:
+        r.bare_reference_rows = filter_bnd_bare_reference_allele_rows(perl_paths)
     if reference_release == "116.2":
         r.fasta_intergenic_records = count_fasta_named_slice_intergenic(perl_tuples, rust_tuples)
+        r.mate_overflow_records, r.mate_overflow_perl_tuples = count_bnd_mate_over_32_bit(
+            input_variants or [], perl_tuples
+        )
     return r
 
 
@@ -1991,7 +2017,8 @@ def release_report_block(
         BND_OWN_ROWS_LOST_BUCKET: len(overall.bnd_own_rust),
         BND_SYNONYM_MATE_ROWS_LOST_BUCKET: len(overall.bnd_synonym_rust),
         FASTA_NAMED_SLICE_INTERGENIC_BUCKET: 0,
-        BND_BARE_REFERENCE_ALLELE_ROW_BUCKET: 0,
+        BND_BARE_REFERENCE_ALLELE_ROW_BUCKET: overall.bare_reference_rows,
+        BND_MATE_32_BIT_BUFFER_BUCKET: 0,
     }
     missing = [r.bucket for r in REFERENCE_116_2_ONE_SIDED_RULES if r.bucket not in excluded_by_bucket]
     if missing:
@@ -2020,6 +2047,8 @@ def release_report_block(
         "bnd_bare_reference_allele_rows_by_file": {
             k: v.bare_reference_rows for k, v in sorted(per_file.items()) if v.bare_reference_rows
         },
+        "bnd_mate_32bit_buffer_records": overall.mate_overflow_records,
+        "bnd_mate_32bit_buffer_reference_tuples": overall.mate_overflow_perl_tuples,
         "breakend_masks_check_ran": cache_supplied,
         "divergence_classes": {
             rule.bucket: {
@@ -2282,7 +2311,8 @@ def write_markdown_report(
             f"`{BND_OWN_ROWS_LOST_BUCKET}` {len(release_masks.bnd_own_rust):,} set aside; "
             f"`{BND_SYNONYM_MATE_ROWS_LOST_BUCKET}` {len(release_masks.bnd_synonym_rust):,} set aside; "
             f"`{FASTA_NAMED_SLICE_INTERGENIC_BUCKET}` {release_masks.fasta_intergenic_records:,} records counted, none set aside; "
-            f"`{BND_BARE_REFERENCE_ALLELE_ROW_BUCKET}` {release_masks.bare_reference_rows:,} reference rows counted, none set aside"
+            f"`{BND_BARE_REFERENCE_ALLELE_ROW_BUCKET}` {release_masks.bare_reference_rows:,} reference-allele rows set aside; "
+            f"`{BND_MATE_32_BIT_BUFFER_BUCKET}` {release_masks.mate_overflow_records:,} records counted, none set aside"
         )
     total_excluded = excluded_count + excluded_perl_count
     if adjusted_overall is not None and total_excluded > 0:
@@ -2554,7 +2584,7 @@ def main() -> None:
         ],
     ] = {}
     all_location_types: dict[str, str] = {}
-    bare_reference_rows_by_file: dict[str, int] = {}
+    perl_paths_by_file: dict[str, Path] = {}
 
     for vcf_path in vcf_files:
         basename = vcf_basename(vcf_path)
@@ -2571,7 +2601,7 @@ def main() -> None:
         # symbolic-allele mapping can only ever touch the scored side.
         perl_tuples, perl_locs = parse_vep_output(perl_path)
         rust_tuples, rust_locs = parse_vep_output(rust_path, engine=args.scored_engine)
-        bare_reference_rows_by_file[basename] = count_bare_breakpoint_reference_rows(perl_path)
+        perl_paths_by_file[basename] = perl_path
 
         if not perl_path.exists():
             print(f"    WARNING: Perl output missing: {perl_path}")
@@ -2675,8 +2705,8 @@ def main() -> None:
         args.scored_engine,
         all_input_variants,
         args.reference_max_sv_size,
+        perl_paths_by_file.values(),
     )
-    masks.bare_reference_rows = sum(bare_reference_rows_by_file.values())
     if masks.skipped_problems:
         # The skipped-record class against the input records: a disagreement is a
         # reference run under other flags, a record dropped on a route the registry does
@@ -2753,8 +2783,8 @@ def main() -> None:
             args.scored_engine,
             variants_f,
             args.reference_max_sv_size,
+            [perl_paths_by_file[basename]],
         )
-        masks_f.bare_reference_rows = bare_reference_rows_by_file[basename]
         masks_by_file[basename] = masks_f
         cnvtr_rust_by_file[basename] = len(masks_f.cnvtr_rust)
         cnvtr_perl_by_file[basename] = len(masks_f.cnvtr_perl)
@@ -2936,7 +2966,8 @@ def main() -> None:
             f"{len(masks.skipped_rust)} vep-rs tuple(s) on {masks.skipped_records} record(s) the reference skipped; "
             f"{len(masks.bnd_own_rust)} own-end breakend row(s) and {len(masks.bnd_synonym_rust)} synonym-mate row(s) set aside; "
             f"{masks.fasta_intergenic_records} FASTA-named-slice record(s) counted; "
-            f"{masks.bare_reference_rows} bare-breakpoint reference-allele row(s) counted"
+            f"{masks.bare_reference_rows} bare-breakpoint reference-allele row(s) set aside; "
+            f"{masks.mate_overflow_records} record(s) with a mate past the buffer's 32-bit bound counted"
         )
     print(f"Reports written to: {output_dir}/")
     print(f"  {json_path.name}")

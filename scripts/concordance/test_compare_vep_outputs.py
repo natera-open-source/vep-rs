@@ -2261,9 +2261,10 @@ class ReferenceRegistryTests(unittest.TestCase):
             self.assertIs(registry.pair_rules, EXCLUSION_REGISTRY, release)
             self.assertEqual(registry.release, release)
 
-    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_four_breakend_shapes(self) -> None:
+    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_five_breakend_shapes(self) -> None:
         from compare_vep_outputs import (
             BND_BARE_REFERENCE_ALLELE_ROW_BUCKET,
+            BND_MATE_32_BIT_BUFFER_BUCKET,
             BND_OWN_ROWS_LOST_BUCKET,
             BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
             FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
@@ -2278,17 +2279,22 @@ class ReferenceRegistryTests(unittest.TestCase):
             [r.bucket for r in rules],
             [REFERENCE_SKIPPED_RECORD_BUCKET, BND_OWN_ROWS_LOST_BUCKET,
              BND_SYNONYM_MATE_ROWS_LOST_BUCKET, FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
-             BND_BARE_REFERENCE_ALLELE_ROW_BUCKET],
+             BND_BARE_REFERENCE_ALLELE_ROW_BUCKET, BND_MATE_32_BIT_BUFFER_BUCKET],
         )
-        self.assertEqual([r.excludes for r in rules], [True, False, False, False, False],
-                         "this comparator has no transcript-to-chromosome authority, so only the skipped record is set aside")
-        self.assertEqual([r.excludes_with_cache for r in rules], [True, True, True, False, False],
-                         "under a cache authority the two breakend shapes are set aside too; the FASTA shape and the "
-                         "reference-allele duplicate never")
-        bare = rules[-1]
+        self.assertEqual([r.excludes for r in rules], [True, False, False, False, True, False],
+                         "this comparator has no transcript-to-chromosome authority, so of the breakend shapes only "
+                         "the reference-allele row, a duplicate the key stream drops, is set aside beside the skipped record")
+        self.assertEqual([r.excludes_with_cache for r in rules], [True, True, True, False, True, False],
+                         "under a cache authority the two lost-row breakend shapes are set aside too; the FASTA shape "
+                         "and the buffer a mate position overflows never")
+        overflow = rules[-1]
+        self.assertEqual(overflow.bucket, "bnd_mate_32bit_buffer_intergenic")
+        self.assertIn("2147478648", overflow.definition)
+        bare = rules[-2]
         self.assertEqual(bare.bucket, "bnd_bare_reference_allele_row")
         self.assertIn("StructuralVariationOverlap.pm:64-77", bare.perl_citation)
         self.assertIn("reference allele has no variant effect", bare.definition)
+        self.assertIn("set aside", bare.definition)
         for r in rules:
             self.assertTrue(r.definition.endswith(".") and len(r.definition.split()) >= 12, r.bucket)
             self.assertRegex(r.perl_citation, r"\.pm", r.bucket)
@@ -2393,6 +2399,22 @@ class ReferenceRecordScopeTests(unittest.TestCase):
                 self.key("21:900-950", "tandem_repeat", "T7", "feature_elongation")]
         self.assertEqual(self.merge([], rust).absent, set())
 
+    def test_a_mate_position_that_overflows_the_buffer_is_recorded_from_the_reference_side(self) -> None:
+        """Ensembl VEP 116.2 writes `N[21:2147478648[` beside an intergenic `N.` and turns the
+        buffer's other records intergenic; the position is at `BND_MATE_32_BIT_LIMIT`
+        (2^31 - 5000), while 2147478647 and a vep-rs-only bracket at the limit are not the
+        shape."""
+        from compare_vep_outputs import BND_MATE_32_BIT_LIMIT
+
+        self.assertEqual(BND_MATE_32_BIT_LIMIT, 2147478648)
+        perl = [self.key("21:30425651", "N.", "-", "intergenic_variant", "-"),
+                self.key("21:30425651", "N[21:2147478648[", "-", "intergenic_variant", "-"),
+                self.key("21:40000001", "N[21:2147478647[", "T1", "intron_variant")]
+        rust = [self.key("21:30425651", "N.", "T2", "upstream_gene_variant"),
+                self.key("21:50000001", "N[21:2147478648[", "T3", "intron_variant")]
+        scope = self.merge(perl, rust)
+        self.assertEqual(scope.mate_overflow, {("f", "21:30425651")})
+
     def test_the_last_location_of_the_file_is_closed(self) -> None:
         rust = [self.key("21:999999-1999999", "CPX", "C1", "intron_variant")]
         perl = [self.key("21:1", "A", "TX_SNV", "intron_variant")]
@@ -2413,7 +2435,9 @@ class ReferenceRecordScopeTests(unittest.TestCase):
 
 class Apply116OneSidedRulesTests(unittest.TestCase):
     """The 116.2 one-sided pass over discordant rows: the skipped record is set aside, the
-    three breakend shapes are counted and left charged."""
+    two lost-row breakend shapes and the FASTA shape are counted and left charged, and the
+    reference-allele rows of a bare breakpoint, set aside by the key stream before the pass,
+    are reported from the scope's count."""
 
     HEADER = "file_name\tsource\tlocation\tallele\tfeature\tfeature_type\tconsequence_set"
 
@@ -2507,6 +2531,59 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         rows = [self.row("extra_in_rust", loc, "N[MT:100[", "MT_TX", "upstream_gene_variant")]
         (_, _, buckets), _ = self.run_pass(rows, self.scope(breakends=breakends))
         self.assertEqual(buckets["bnd_synonym_mate_rows_lost"]["count"], 0)
+
+    def test_the_reference_allele_rows_of_a_bare_breakpoint_are_set_aside_and_counted(self) -> None:
+        """Ensembl VEP 116.2 writes a bare `<BND>`'s rows twice, ALLELE_NUM 1 for the reference
+        allele N of `N/<BND>` and 2 for the ALT (StructuralVariationOverlap.pm:64-77); vep-rs
+        writes each once. The key stream carries each tuple once per side, so the merge counts
+        2 reference tuples, 2 vep-rs tuples and 2 in the intersection (the reference-allele rows
+        enter neither figure), the scope counts the 2 rows the stream dropped, and the one-sided
+        pass reports them under the class, all excluded, with nothing subtracted from the
+        reference's tuple count."""
+        from compare_vep_outputs import (
+            ReferenceRecordScope,
+            _sort_unique_stream_to_file,
+            compare_sorted_key_files,
+            count_bare_breakpoint_reference_rows,
+            iter_vep_key_lines,
+        )
+
+        header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+        own = "bare_bnd\t21:30425651\tchromosome_breakpoint\tG\tENST00000390690\tTranscript\tcoding_sequence_variant\n"
+        up = "bare_bnd\t21:30425651\tchromosome_breakpoint\tG\tENST00000334068\tTranscript\tupstream_gene_variant\n"
+        mate = "paired\t21:30425651\tN[21:30425700[\tG\tENST00000390690\tTranscript\tcoding_sequence_variant\n"
+        scope = ReferenceRecordScope()
+        with tempfile.TemporaryDirectory() as d:
+            perl, rust = Path(d) / "perl.txt", Path(d) / "rust.txt"
+            perl.write_text(header + own + own + up + up + mate + mate, encoding="utf-8")
+            rust.write_text(header + own + up + mate, encoding="utf-8")
+            ps, rs = Path(d) / "p.keys", Path(d) / "r.keys"
+            _sort_unique_stream_to_file(iter_vep_key_lines(perl), ps)
+            _sort_unique_stream_to_file(iter_vep_key_lines(rust), rs)
+            perl_count, rust_count, intersection, missing, extra, _, _ = compare_sorted_key_files(
+                ps, rs, file_name="f", discordant_out=None, track_consequence_buckets=False, record_scope=scope
+            )
+            scope.record_bare_reference_rows("f", count_bare_breakpoint_reference_rows(perl))
+        self.assertEqual((perl_count, rust_count, intersection, missing, extra), (3, 3, 3, 0, 0))
+        self.assertEqual(scope.bare_reference_rows, {("f", "21:30425651"): 2},
+                         "the bracket record's duplicate mate rows are not the shape")
+        (ep, er, buckets), open_rows = self.run_pass([], scope)
+        self.assertEqual((ep, er, open_rows), (0, 0, []))
+        self.assertEqual(buckets["bnd_bare_reference_allele_row"], {"count": 2, "excluded": 2, "records": 1})
+
+    def test_the_reference_rows_of_a_record_whose_mate_overflows_the_buffer_are_counted(self) -> None:
+        """The reference's rows at the breakend record's Location are counted and stay
+        charged; vep-rs's rows there and the reference's rows at the buffer's other records
+        are not the shape, since the outputs do not tell which records shared the buffer."""
+        rows = [self.row("missing_in_rust", "21:30425651", "N.", "-", "intergenic_variant"),
+                self.row("missing_in_rust", "21:30425651", "N[21:2147478648[", "-", "intergenic_variant"),
+                self.row("extra_in_rust", "21:30425651", "N.", "T2", "feature_truncation,coding_sequence_variant"),
+                self.row("missing_in_rust", "21:30425651-30425899", "duplication", "-", "intergenic_variant")]
+        scope = self.scope()
+        scope.mate_overflow = {("f", "21:30425651")}
+        (ep, er, buckets), open_rows = self.run_pass(rows, scope)
+        self.assertEqual((ep, er, len(open_rows)), (0, 0, 4))
+        self.assertEqual(buckets["bnd_mate_32bit_buffer_intergenic"], {"count": 2, "excluded": 0, "records": 1})
 
     def test_a_reference_intergenic_row_against_vep_rs_transcripts_is_counted(self) -> None:
         rows = [self.row("missing_in_rust", "21:100", "A", "-", "intergenic_variant"),

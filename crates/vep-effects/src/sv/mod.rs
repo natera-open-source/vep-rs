@@ -600,6 +600,51 @@ pub fn calculate_sv_consequences(
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
+    // The pair `start = POS + 1, end = POS` of a record whose SVLEN is 0 or not a
+    // number, or whose END is its POS: Ensembl VEP's positional predicates read it as the
+    // flanks of a sequence insertion for every class, and `feature_elongation` holds only
+    // for a duplication or an insertion (`Utils/VariationEffect.pm:337-347`,
+    // `copy_number_gain(@_) or insertion(@_)`), so Ensembl VEP 116.2 writes
+    // `feature_elongation,coding_sequence_variant` for `<DUP>` and `<INS:ME:ALU>` with
+    // `SVLEN=0` inside a coding exon and `coding_sequence_variant` alone for `<INV>`,
+    // `<CNV>` and a mate-less `<BND>`. The insertion classes read the pair in
+    // `insertion::calculate` and a tandem repeat in its arm below; a paired breakend
+    // keeps the breakend module, whose `feature_truncation` reads the allele's breakend
+    // (`Utils/VariationEffect.pm:357-358`), and a reference block is annotated against
+    // no feature.
+    let sv_end = variant.sv_end.unwrap_or(variant.end);
+    let pair_class = variant.start == sv_end.saturating_add(1)
+        && !matches!(
+            variant.variant_class,
+            VariantClass::StructuralInsertion
+                | VariantClass::MobileElementInsertion
+                | VariantClass::TandemRepeat
+                | VariantClass::ReferenceBlock
+        )
+        && (variant.variant_class != VariantClass::Translocation || variant.mate_id.is_none());
+    if pair_class {
+        let mut tc = insertion::calculate_insertion_pair(
+            variant.start,
+            sv_end,
+            transcript,
+            upstream_distance,
+            downstream_distance,
+        )?;
+        let elongates = matches!(
+            variant.variant_class,
+            VariantClass::Duplication | VariantClass::TandemDuplication
+        ) || (variant.variant_class == VariantClass::CopyNumberVariation
+            && cnv::is_copy_number_gain(variant));
+        if !elongates && tc.consequences.contains(&Consequence::FeatureElongation) {
+            tc.consequences
+                .retain(|c| *c != Consequence::FeatureElongation);
+            if tc.consequences.is_empty() {
+                tc.consequences.push(Consequence::IntergenicVariant);
+            }
+            tc.impact = most_severe_impact(&tc.consequences);
+        }
+        return Some(tc);
+    }
     match variant.variant_class {
         VariantClass::StructuralDeletion => {
             deletion::calculate(variant, transcript, upstream_distance, downstream_distance)

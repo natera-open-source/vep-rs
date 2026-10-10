@@ -15,6 +15,7 @@ use anyhow::{bail, Context};
 
 use vep_core::allele::trim_alleles;
 use vep_core::coordinate::{parse_coordinate, MAX_COORD};
+use vep_core::sv_span::{structural_end, svlen_values, SpanClass};
 use vep_core::variant::InputVariant;
 
 /// Parse a VCF data line into one or more `InputVariant`s.
@@ -219,6 +220,12 @@ pub fn parse_vcf_line_with_max_sv_size(
     // own class and the `vep_skip` mark; a breakend record keeps one variant per
     // bracket ALT.
     let record_term = sv_so_term_and_class(&sv_type_abbreviation(&joined_alts, svtype));
+    let breakend_record = (record_term.map(|(_, class)| class)
+        == Some(vep_core::variant::VariantClass::Translocation))
+    .then(|| breakend_record(ref_allele, &valid_alts, info_field));
+    let record_has_mates = breakend_record
+        .as_ref()
+        .is_some_and(|record| !record.mates.is_empty());
     let per_alt_classes: Vec<(usize, &str, vep_core::variant::VariantClass)> = match record_term {
         Some((_, class))
             if !symbolic_alts.is_empty()
@@ -229,6 +236,13 @@ pub fn parse_vcf_line_with_max_sv_size(
                 .map(|&(idx, alt)| (idx, alt, class))
                 .collect()
         }
+        // A record with parsed breakends is one breakpoint whatever its other ALTs
+        // (`<DEL>,N[21:x[`), as the one StructuralVariationFeature Perl builds for it
+        // (Parser/VCF.pm:560-574).
+        Some((_, class)) if record_has_mates => symbolic_alts
+            .iter()
+            .map(|&(idx, alt)| (idx, alt, class))
+            .collect(),
         _ => symbolic_alts
             .iter()
             .map(|&(idx, alt)| {
@@ -269,82 +283,28 @@ pub fn parse_vcf_line_with_max_sv_size(
             pos
         };
 
-        // Perl VEP (ensembl-io BaseVCF4.pm get_end()) universally prioritises
-        // SVLEN over INFO/END for all SV types, and a symbolic record with
-        // neither is the single base at get_start():
-        //   if(defined($info->{SVLEN})) { $end = $self->get_start + abs($svlen) - 1; }
-        //   elsif(defined($info->{END})) { $end = $info->{END}; }
-        //   elsif(SVTYPE or a symbolic ALT) { $end = $self->get_start; }
-        // Since get_start() = POS+1 for SVs, SVLEN gives end = POS + abs(SVLEN),
-        // and SVLEN=0 or END=POS gives end = POS, one base before the start. A
-        // comma-separated SVLEN is read as its first value (BaseVCF4.pm:304,
-        // `(split(',',$info->{SVLEN}))[0]`); a tandem repeat or a tandem duplication
-        // (`$so_term =~ /tandem/`, Parser/VCF.pm:502) takes the largest
-        // (`:505-511`, `$end = $start + max(@svlen) - 1`), signed.
-        let svlen_values: Vec<i64> = get_info_value(info_field, "SVLEN")
-            .map(|v| v.split(',').filter_map(|s| s.parse().ok()).collect())
-            .unwrap_or_default();
         let is_bnd = sv_class == vep_core::variant::VariantClass::Translocation;
         let is_tandem_repeat = sv_class == vep_core::variant::VariantClass::TandemRepeat;
-        let is_tandem =
-            is_tandem_repeat || sv_class == vep_core::variant::VariantClass::TandemDuplication;
-        let svlen_span = if is_tandem {
-            svlen_values
-                .iter()
-                .max()
-                .map(|&len| pos.saturating_add(len.unsigned_abs()).min(MAX_COORD))
+        let span_class = if is_bnd {
+            SpanClass::Breakpoint
+        } else if is_tandem_repeat || sv_class == vep_core::variant::VariantClass::TandemDuplication
+        {
+            SpanClass::Tandem
         } else {
-            svlen_values
-                .first()
-                .map(|&len| pos.saturating_add(len.unsigned_abs()).min(MAX_COORD))
+            SpanClass::Other
         };
-        let info_end = get_info_value(info_field, "END");
-        // A breakpoint record's INFO/END never ends its span: Parser/VCF.pm:487-489
-        // deletes it and reads the end again, so a `<BND>` spans POS+1 to the SVLEN
-        // end or is the single base at POS+1; the deleted END serves only as the
-        // mate position below. Every other class reads END only without SVLEN
-        // (BaseVCF4.pm:302-308), and an END it reads that is not a coordinate fails
-        // the record, as Ensembl VEP skips it (Parser.pm `validate_vf`: `start >
-        // end+1` for a negative END, the size test for one past the limit, "Invalid
-        // start or end coordinate" for text). A tandem repeat or a tandem duplication
-        // whose largest SVLEN is negative ends before its start and is skipped the
-        // same way.
-        let largest_svlen = svlen_values.iter().max().copied();
-        let sv_end_val = if is_bnd {
-            svlen_span.unwrap_or(sv_start)
-        } else if is_tandem && largest_svlen.is_some_and(|len| len < 0) {
-            bail!(
-                "Invalid SVLEN for a tandem repeat or a tandem duplication: '{}'",
-                largest_svlen.unwrap_or_default()
-            );
-        } else if let Some(span) = svlen_span {
-            span
-        } else {
-            match info_end {
-                Some(text) => {
-                    parse_coordinate(text).with_context(|| format!("Invalid END: '{text}'"))?
-                }
-                None => sv_start,
-            }
-        };
+        // SVLEN=0 or END=POS leaves the pair `start = POS + 1, end = POS` Perl carries for
+        // every class: the event between the two bases, read with the predicates of a
+        // sequence insertion.
+        // `get_end` tests SVLEN and END with `defined` (BaseVCF4.pm:302-307).
+        let svlen_text = info_value_written(info_field, "SVLEN");
+        let sv_end_val = structural_end(
+            pos,
+            svlen_text,
+            info_value_written(info_field, "END"),
+            span_class,
+        )?;
 
-        let is_symbolic_bnd = is_bnd && alt.starts_with('<');
-
-        // An insertion whose END is its position or whose SVLEN is 0 stays the
-        // pair `start = POS + 1, end = POS` Perl carries: the insertion between
-        // the two bases, with the predicates of a sequence insertion and the
-        // Location of its two flanks. Every other class keeps a span of at least
-        // one base.
-        let is_insertion_pair = matches!(
-            sv_class,
-            vep_core::variant::VariantClass::StructuralInsertion
-                | vep_core::variant::VariantClass::MobileElementInsertion
-        ) && sv_end_val.checked_add(1) == Some(sv_start);
-        let sv_end_val = if is_insertion_pair {
-            sv_end_val
-        } else {
-            sv_end_val.max(sv_start)
-        };
         let mut variant = InputVariant::new(
             chr.clone(),
             sv_start,
@@ -356,10 +316,14 @@ pub fn parse_vcf_line_with_max_sv_size(
         variant.is_structural = true;
         variant.vep_skip = record_term.is_none();
         variant.record_so_term = record_term.map(|(term, _)| term.to_string());
-        variant.uploaded_allele_string = Some(joined_alts.clone());
+        variant.uploaded_allele_string = Some(
+            breakend_record
+                .as_ref()
+                .map_or_else(|| joined_alts.clone(), |record| record.alts.clone()),
+        );
         variant.sv_end = Some(sv_end_val);
         variant.sv_type = svtype.map(|s| s.to_string());
-        variant.sv_len = svlen_values.first().copied();
+        variant.sv_len = svlen_text.and_then(|text| svlen_values(text).first().copied());
         if is_tandem_repeat {
             variant.tr_alt_bases = tandem_repeat_alt_bases(
                 info_field,
@@ -370,12 +334,6 @@ pub fn parse_vcf_line_with_max_sv_size(
         }
         variant.ci_pos = parse_ci_field(get_info_value(info_field, "CIPOS"));
         variant.ci_end = parse_ci_field(get_info_value(info_field, "CIEND"));
-        if is_bnd {
-            if let Some((mate_chr, mate_pos)) = parse_bnd_mate(alt) {
-                variant.mate_chr = Some(mate_chr);
-                variant.mate_pos = Some(mate_pos);
-            }
-        }
         variant.allele_index = allele_idx;
         if capture_raw_input {
             variant.raw_input = Some(line.to_string());
@@ -383,87 +341,39 @@ pub fn parse_vcf_line_with_max_sv_size(
         if id != "." && !id.is_empty() {
             variant.id = Some(id.to_string());
         }
-        let is_paired_bnd = is_paired_breakend_alt(alt);
-        // A translocation allele that names no mate is a single breakend: the native
-        // `N.` and `.N` forms, and a symbolic `<BND>` without a mate, which Perl
-        // holds as `N/<BND>` with no breakend string (Parser/VCF.pm:499,
-        // `StructuralVariationFeature.pm` `_parse_breakends`).
-        variant.is_single_breakend =
-            is_bnd && (is_native_single_breakend_alt(alt) || is_symbolic_bnd);
-        // Perl VEP creates two allele entries per BND record, the paired notation
-        // ("T[21:33033339[") and the single-breakend form ("T." or ".T"), each
-        // annotated independently against all overlapping transcripts.
-        //
-        // A symbolic `<BND>` names a mate only through INFO/CHR2 with END2, else the
-        // deleted INFO/END (Parser/VCF.pm:491-497, `$info->{END2} || $incorrect_end`,
-        // a Manta and gnomAD habit VCF 4.4 does not sanction); POS2 is never read,
-        // and a span alone names none. The allele string keeps CHR2 as the input
-        // spells it (`chr21`): VEP builds `N[chr21:pos[` from the INFO value verbatim,
-        // while the mate lookup below uses the cache's chromosome name.
-        let symbolic_mate = if is_symbolic_bnd {
-            // Perl's `||` reads END only for an END2 that is absent, empty or `0`;
-            // any other END2 is the mate position, and one that is not a coordinate
-            // names no mate (`StructuralVariationFeature.pm:1276` matches `[0-9]+`,
-            // so a signed `+5`, which `u64::from_str` accepts, names none), END or
-            // not. A `CHR2=` or a bare `CHR2` names none either: `get_info`
-            // (BaseVCF4.pm:582) leaves its value undef, so `defined $info->{CHR2}`
-            // (Parser/VCF.pm:491) is false.
-            let bracket_pos = |text: &str| {
-                text.bytes()
-                    .all(|b| b.is_ascii_digit())
-                    .then(|| parse_coordinate(text))
-                    .flatten()
-            };
-            let mate_pos = match get_info_value(info_field, "END2") {
-                Some(end2) if !end2.is_empty() && end2 != "0" => bracket_pos(end2),
-                _ => info_end.and_then(bracket_pos),
-            };
-            get_info_value(info_field, "CHR2")
-                .filter(|chr2| !chr2.is_empty())
-                .zip(mate_pos)
-        } else {
-            None
-        };
-        if let Some((chr2_raw, mate_pos)) = symbolic_mate {
-            let ref_str = std::str::from_utf8(ref_allele.as_bytes()).unwrap_or("N");
-            let paired_alt = format!("{}[{}:{}[", ref_str, chr2_raw, mate_pos);
-            variant.alt_alleles = vec![paired_alt.as_bytes().to_vec()];
-            variant.allele_string = format!("{}/{}", ref_str, paired_alt);
-            variant.mate_chr = Some(vep_core::coordinate::normalize_chromosome(chr2_raw));
-            variant.mate_pos = Some(mate_pos);
-            variant.is_single_breakend = false;
-            mark_paired_breakend_record(&mut variant, &chr, info_field);
-
-            let single_alt = format!("{}.", ref_str);
-            // The record's own breakend precedes its mates, as in Perl's
-            // StructuralVariationOverlap.pm (`for ($vf, @$breakends)`).
-            variants.push(own_breakend(&variant, ref_str, &single_alt));
-            variants.push(variant);
-        } else if is_bnd && is_paired_bnd {
-            mark_paired_breakend_record(&mut variant, &chr, info_field);
-            // One own breakend per record, ahead of its first mate: `_parse_breakends`
-            // (`StructuralVariationFeature.pm:1274-1321`) names it once from every
-            // bracket part of the allele string, `.t` when any mate is left-placed
-            // (`]p]t`, `[p[t`) and `t.` otherwise, and `StructuralVariationOverlap::new`
-            // annotates `($vf, @$breakends)`: that breakend, then one entry per bracket.
-            let first_bracket_alt = !per_alt_classes[..k]
-                .iter()
-                .any(|(_, earlier, _)| is_paired_breakend_alt(earlier));
-            if first_bracket_alt {
-                let ref_str = std::str::from_utf8(ref_allele.as_bytes()).unwrap_or("N");
-                let any_left_breakend = valid_alts
-                    .iter()
-                    .any(|(_, a)| a.starts_with('[') || a.starts_with(']'));
-                let single_breakend_alt = if any_left_breakend {
-                    format!(".{}", ref_str)
-                } else {
-                    format!("{}.", ref_str)
-                };
-                variants.push(own_breakend(&variant, ref_str, &single_breakend_alt));
+        // A translocation allele of a record with no parsed breakend is a single
+        // breakend: the native `N.` and `.N` forms, and a symbolic `<BND>` without a
+        // mate, which Perl holds as `N/<BND>` with no breakend string
+        // (Parser/VCF.pm:499, `StructuralVariationFeature.pm` `_parse_breakends`).
+        variant.is_single_breakend = is_bnd;
+        match breakend_record
+            .as_ref()
+            .filter(|record| !record.mates.is_empty())
+        {
+            // The breakends come from the record's whole allele string, so they are
+            // built once, at its first ALT: the own breakend ahead of the mates, as
+            // `StructuralVariationOverlap::new` annotates `($vf, @$breakends)`. An ALT
+            // that is not a bracket (`.N` beside `N[21:x[`) lends the own breakend its
+            // base and gets no allele of its own.
+            Some(record) => {
+                if k == 0 {
+                    mark_paired_breakend_record(&mut variant, &chr, info_field);
+                    let ref_str = std::str::from_utf8(ref_allele.as_bytes()).unwrap_or("N");
+                    variants.push(own_breakend(&variant, ref_str, &record.own));
+                    for mate in &record.mates {
+                        let mut variant = variant.clone();
+                        variant.alt_alleles = vec![mate.text.as_bytes().to_vec()];
+                        variant.allele_string = format!("{ref_str}/{}", mate.text);
+                        variant.mate_chr =
+                            Some(vep_core::coordinate::normalize_chromosome(&mate.chromosome));
+                        variant.mate_pos = Some(mate.position);
+                        variant.is_single_breakend = false;
+                        variant.allele_index = mate.allele_index.unwrap_or(allele_idx);
+                        variants.push(variant);
+                    }
+                }
             }
-            variants.push(variant);
-        } else {
-            variants.push(variant);
+            None => variants.push(variant),
         }
     }
 
@@ -475,8 +385,8 @@ pub fn parse_vcf_line_with_max_sv_size(
     Ok(variants)
 }
 
-/// The record's own breakend: a copy of its mate `variant` whose only allele is
-/// `single_alt` (`t.` or `.t`) over `ref_str`, flagged single, with no mate coordinates.
+/// The record's own breakend: a copy of `variant` whose only allele is `single_alt`
+/// (`t.` or `.t`) over `ref_str`, flagged single, with no mate coordinates.
 fn own_breakend(variant: &InputVariant, ref_str: &str, single_alt: &str) -> InputVariant {
     let mut own = variant.clone();
     own.alt_alleles = vec![single_alt.as_bytes().to_vec()];
@@ -485,6 +395,143 @@ fn own_breakend(variant: &InputVariant, ref_str: &str, single_alt: &str) -> Inpu
     own.mate_pos = None;
     own.is_single_breakend = true;
     own
+}
+
+/// One bracket part of a breakpoint record's allele string: the text Ensembl VEP
+/// prints as the Allele, the mate chromosome as written, the mate position, and the
+/// ALT the part came from (`None` for the part INFO/CHR2 appends).
+struct BreakendMate {
+    text: String,
+    chromosome: String,
+    position: u64,
+    allele_index: Option<usize>,
+}
+
+/// The allele string Ensembl VEP holds for a breakpoint record and what
+/// `_parse_breakends` reads from it (Parser/VCF.pm:484-499,
+/// StructuralVariationFeature.pm:1262-1323).
+struct BreakendRecord {
+    /// The ALT side of the string: the ALTs joined by `/`, and with INFO/CHR2 written
+    /// and END2 true (else END written), `N[CHR2:pos[` in place of a lone `<BND>` or
+    /// appended to anything else. It is the record's `allele_string` once the reference
+    /// base is prepended, unless it opens or closes with `.`.
+    alts: String,
+    /// The record's own breakend, `t.`, or `.t` when any mate is left-placed; `t` is
+    /// the base of the last part the bracket match refuses, the reference base
+    /// included, when that part is a bare or dot-bounded ACGTN run, and `N` otherwise.
+    own: String,
+    /// One per part the breakend regex matches, in order.
+    mates: Vec<BreakendMate>,
+}
+
+fn breakend_record(ref_allele: &str, alts: &[(usize, &str)], info: &str) -> BreakendRecord {
+    let mut parts: Vec<(Option<usize>, String)> = alts
+        .iter()
+        .map(|&(idx, alt)| (Some(idx), alt.to_string()))
+        .collect();
+    // Parser/VCF.pm:491-497: `defined $info->{CHR2}` holds for `CHR2=` (Perl's split
+    // keeps the empty field) and fails for a bare `CHR2`; the position is END2 when
+    // Perl reads it as true (not empty, not `0`), else END as written, empty or `0`
+    // included.
+    if let Some(chr2) = info_value_written(info, "CHR2") {
+        let mate_pos = get_info_value(info, "END2")
+            .filter(|end2| perl_true(end2))
+            .or_else(|| info_value_written(info, "END"));
+        if let Some(mate_pos) = mate_pos {
+            let (allele_index, lone_bnd) = match parts.as_slice() {
+                [(idx, alt)] if is_bare_bnd_alt(alt) => (*idx, true),
+                _ => (None, false),
+            };
+            if lone_bnd {
+                parts.clear();
+            }
+            parts.push((allele_index, format!("N[{chr2}:{mate_pos}[")));
+        }
+    }
+    let alts = parts
+        .iter()
+        .map(|(_, part)| part.as_str())
+        .collect::<Vec<_>>()
+        .join("/");
+    let reference_part =
+        (!alts.starts_with('.') && !alts.ends_with('.')).then(|| (None, ref_allele.to_string()));
+    let mut base: Option<&str> = None;
+    let mut any_left = false;
+    let mut mates = Vec::new();
+    for (allele_index, part) in reference_part.iter().chain(parts.iter()) {
+        match bracket_breakend(part) {
+            Some((chromosome, position)) => {
+                any_left |= part.starts_with(['[', ']']);
+                mates.push(BreakendMate {
+                    text: part.clone(),
+                    chromosome: chromosome.to_string(),
+                    position,
+                    allele_index: *allele_index,
+                });
+            }
+            None => base = single_breakend_base(part),
+        }
+    }
+    let base = base.unwrap_or("N");
+    let own = if any_left {
+        format!(".{base}")
+    } else {
+        format!("{base}.")
+    };
+    BreakendRecord { alts, own, mates }
+}
+
+/// Perl's `/^<?BND>?$/i` (Parser/VCF.pm:495).
+fn is_bare_bnd_alt(alt: &str) -> bool {
+    let inner = alt.strip_prefix('<').unwrap_or(alt);
+    inner
+        .strip_suffix('>')
+        .unwrap_or(inner)
+        .eq_ignore_ascii_case("BND")
+}
+
+/// Whether Perl reads an INFO value as true: anything but an empty string and `0`.
+fn perl_true(value: &str) -> bool {
+    !value.is_empty() && value != "0"
+}
+
+/// `_parse_breakends`' bracket match (StructuralVariationFeature.pm:1276):
+/// `[A-Za-z]*`, a bracket, a chromosome name of at least one character, `:`, a run of
+/// digits, a bracket, `[A-Za-z]*`; the chromosome is the longest name that leaves a
+/// digit run before the second bracket. A position that is not digits alone (`-7`,
+/// `+5`, `abc`) or an empty chromosome (`N[:100[`) names no breakend. The position
+/// saturates at [`MAX_COORD`]: the text stays as written in the Allele.
+fn bracket_breakend(part: &str) -> Option<(&str, u64)> {
+    let open = part.find(['[', ']'])?;
+    let inner = &part[open + 1..];
+    let close = inner.find(['[', ']'])?;
+    let inner = &inner[..close];
+    let colon = inner.rmatch_indices(':').map(|(i, _)| i).find(|&i| {
+        let digits = &inner[i + 1..];
+        i > 0 && !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
+    })?;
+    let (chromosome, digits) = (&inner[..colon], &inner[colon + 1..]);
+    if chromosome.bytes().any(|b| b.is_ascii_whitespace()) {
+        return None;
+    }
+    let position = digits
+        .parse::<u64>()
+        .map_or(MAX_COORD, |p| p.min(MAX_COORD));
+    Some((chromosome, position))
+}
+
+/// `_parse_breakends`' reading of a part its bracket match refuses
+/// (StructuralVariationFeature.pm:1281, `^[\.]?([ACGTN]+)[\.]?$`): the ACGTN run of a
+/// bare base or a dot-bounded single breakend, and `None` for anything else, which
+/// Perl assigns as undef.
+fn single_breakend_base(part: &str) -> Option<&str> {
+    let run = part.strip_prefix('.').unwrap_or(part);
+    let run = run.strip_suffix('.').unwrap_or(run);
+    (!run.is_empty()
+        && run
+            .bytes()
+            .all(|b| matches!(b, b'A' | b'C' | b'G' | b'T' | b'N')))
+    .then_some(run)
 }
 
 /// Names the mate of a breakend record that has one: INFO/MATEID, else PARID, else
@@ -835,20 +882,31 @@ fn tandem_repeat_alt_bases(
 }
 
 /// The value of `key` in a VCF INFO column, `""` for a flag, `None` when absent.
+/// The last occurrence of a repeated key wins, as in the hash Ensembl VEP's parser
+/// builds from the field (BaseVCF4.pm:581-583).
 pub(crate) fn get_info_value<'a>(info: &'a str, key: &str) -> Option<&'a str> {
+    info_field(info, key).map(|value| value.unwrap_or(""))
+}
+
+/// The value of INFO key `key` when it is written `key=value`, the empty value
+/// included: Perl's `defined $info->{KEY}`, which a bare `KEY` flag fails because its
+/// hash value is undef.
+fn info_value_written<'a>(info: &'a str, key: &str) -> Option<&'a str> {
+    info_field(info, key).flatten()
+}
+
+/// The last occurrence of `key` in the INFO column: `Some(Some(value))` for `key=value`,
+/// `Some(None)` for a bare flag, `None` when absent.
+fn info_field<'a>(info: &'a str, key: &str) -> Option<Option<&'a str>> {
     if info == "." || info.is_empty() {
         return None;
     }
-    for field in info.split(';') {
-        if let Some((k, v)) = field.split_once('=') {
-            if k == key {
-                return Some(v);
-            }
-        } else if field == key {
-            return Some("");
-        }
-    }
-    None
+    info.rsplit(';')
+        .find_map(|field| match field.split_once('=') {
+            Some((k, v)) if k == key => Some(Some(v)),
+            None if field == key => Some(None),
+            _ => None,
+        })
 }
 
 /// Parse a VCF confidence interval INFO field (CIPOS or CIEND).
@@ -859,32 +917,6 @@ pub(crate) fn parse_ci_field(value: Option<&str>) -> Option<(i64, i64)> {
     let s = value?;
     let (a, b) = s.split_once(',')?;
     Some((a.parse().ok()?, b.parse().ok()?))
-}
-
-/// Parse the mate chromosome and position from a BND ALT notation.
-///
-/// VCF BND notation encodes the mate position in the ALT field:
-/// - `N[chr:pos[`: forward to forward join
-/// - `]chr:pos]N`: reverse to forward join
-/// - `N]chr:pos]`: forward to reverse join
-/// - `[chr:pos[N`: reverse to reverse join
-///
-/// Returns `(chromosome, position)` with the chromosome normalized (no `chr` prefix).
-pub(crate) fn parse_bnd_mate(alt: &str) -> Option<(String, u64)> {
-    // Find the chr:pos portion inside brackets. A BND ALT delimits it with a
-    // matched pair of either `[` or `]`; `[` wins when both appear, and a single
-    // unmatched delimiter is not a BND.
-    let delim = if alt.contains('[') { '[' } else { ']' };
-    let start = alt.find(delim)?;
-    let end = alt[start + 1..].find(delim).map(|e| start + 1 + e)?;
-    let bracket_content = &alt[start + 1..end];
-
-    let (chr_raw, pos_str) = bracket_content.split_once(':')?;
-    let pos: u64 = pos_str.parse().ok()?;
-
-    let chr = vep_core::coordinate::normalize_chromosome(chr_raw);
-
-    Some((chr, pos))
 }
 
 /// The eight fixed columns of a VCF data line (CHROM through INFO). The split
@@ -1632,6 +1664,338 @@ mod tests {
         assert_eq!(zero_end2[1].mate_pos, Some(30425700));
     }
 
+    /// The mate INFO/CHR2 names is written `N[CHR2:pos[` whatever the reference base
+    /// (Parser/VCF.pm:495-496, `"N"` for a lone `<BND>`), and the own breakend takes the
+    /// reference base (`_parse_breakends`, the `A` part of `A/N[21:30425700[`): Ensembl
+    /// VEP 116.2 writes `A.` and `N[21:30425700[` with ALLELE_NUM 0 and 1 for REF `A`,
+    /// allele string `A/N[21:30425700[`, over the SVLEN span when there is one. A
+    /// `<BND:X>` keeps its part (`N/<BND:X>/N[21:30425700[`) and `<BND>,<BND>` both of
+    /// its (`N/<BND>/<BND>/N[21:30425700[`), each with one own breakend and one mate.
+    #[test]
+    fn a_synthesised_mate_is_a_literal_n_and_the_own_breakend_the_reference_base() {
+        let variants = parse_vcf_line(
+            "21\t30425650\tx\tA\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=30425700",
+            true,
+        )
+        .unwrap();
+        assert_eq!(variants.len(), 2);
+        assert_eq!(variants[0].display_allele(), "A.");
+        assert_eq!(variants[1].display_allele(), "N[21:30425700[");
+        assert_eq!(variants[1].mate_pos, Some(30425700));
+        assert_eq!(variants[1].mate_chr.as_deref(), Some("21"));
+        for v in &variants {
+            assert_eq!(v.record_allele_string(), "A/N[21:30425700[");
+            assert_eq!((v.start, v.end), (30425651, 30425651));
+        }
+        let spanned = parse_vcf_line(
+            "21\t30425650\tx\tA\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=30425700;SVLEN=100",
+            true,
+        )
+        .unwrap();
+        assert_eq!(spanned.len(), 2);
+        assert!(spanned
+            .iter()
+            .all(|v| (v.start, v.end) == (30425651, 30425750)));
+        for (alt, record) in [
+            ("<BND:X>", "N/<BND:X>/N[21:30425700["),
+            ("<BND>,<BND>", "N/<BND>/<BND>/N[21:30425700["),
+        ] {
+            let variants = parse_vcf_line(
+                &format!("21\t30425650\tx\tN\t{alt}\t.\t.\tSVTYPE=BND;CHR2=21;END2=30425700"),
+                true,
+            )
+            .unwrap();
+            assert_eq!(variants.len(), 2, "{alt}");
+            assert_eq!(variants[0].display_allele(), "N.", "{alt}");
+            assert_eq!(variants[1].display_allele(), "N[21:30425700[", "{alt}");
+            assert_eq!(variants[0].record_allele_string(), record, "{alt}");
+        }
+    }
+
+    /// The bracket text keeps INFO's values as written and the record's string carries
+    /// the text whether or not a mate is parsed from it: Ensembl VEP 116.2 writes the
+    /// Allele `N[21:00030425700[` for `END2=00030425700` (the mate at 30425700), the
+    /// allele string `N/N[21:-7[`, `N/N[21:+30425700[` and `N/N[21:abc[` with
+    /// `chromosome_breakpoint` rows for an END2 the regex refuses, `N/N[:30425800[` for
+    /// `CHR2=` (defined and empty, Perl's split keeps the field), and `N/<BND>` for a bare
+    /// `CHR2` flag or an END2 written empty with no END.
+    #[test]
+    fn a_mate_text_follows_the_info_values_as_written() {
+        let padded = parse_vcf_line(
+            "21\t30425650\tx\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=00030425700",
+            true,
+        )
+        .unwrap();
+        assert_eq!(padded.len(), 2);
+        assert_eq!(padded[1].display_allele(), "N[21:00030425700[");
+        assert_eq!(padded[1].mate_pos, Some(30425700));
+        assert_eq!(padded[0].record_allele_string(), "N/N[21:00030425700[");
+        for (info, record) in [
+            ("SVTYPE=BND;CHR2=21;END2=-7", "N/N[21:-7["),
+            ("SVTYPE=BND;CHR2=21;END2=+30425700", "N/N[21:+30425700["),
+            ("SVTYPE=BND;CHR2=21;END2=abc", "N/N[21:abc["),
+            ("SVTYPE=BND;CHR2=;END2=30425800", "N/N[:30425800["),
+            ("SVTYPE=BND;CHR2;END2=30425800", "N/<BND>"),
+            ("SVTYPE=BND;CHR2=21;END2=", "N/<BND>"),
+        ] {
+            let variants =
+                parse_vcf_line(&format!("21\t30425650\tx\tN\t<BND>\t.\t.\t{info}"), true).unwrap();
+            assert_eq!(variants.len(), 1, "{info}");
+            assert_eq!(
+                variants[0].display_allele(),
+                "chromosome_breakpoint",
+                "{info}"
+            );
+            assert_eq!(variants[0].record_allele_string(), record, "{info}");
+            assert!(
+                variants[0].is_single_breakend && variants[0].mate_id.is_none(),
+                "{info}"
+            );
+        }
+    }
+
+    /// A dot-bounded ALT beside a bracket ALT lends the own breakend its base and gets no
+    /// allele of its own (`_parse_breakends`, StructuralVariationFeature.pm:1280-1283
+    /// against :1322): Ensembl VEP 116.2 writes `N.` and `N[21:30425700[` for
+    /// `.N,N[21:30425700[` with REF `N` or `A`, and `.N` and `]21:30425700]N` for
+    /// `N.,]21:30425700]N` (left-placed mate), whose string is `N/N./]21:30425700]N`.
+    #[test]
+    fn a_dot_alt_beside_a_bracket_alt_lends_the_own_breakend_its_base() {
+        for reference in ["N", "A"] {
+            let variants = parse_vcf_line(
+                &format!("21\t30425650\tx\t{reference}\t.N,N[21:30425700[\t.\t.\tSVTYPE=BND"),
+                true,
+            )
+            .unwrap();
+            assert_eq!(variants.len(), 2, "{reference}");
+            assert_eq!(variants[0].display_allele(), "N.", "{reference}");
+            assert_eq!(
+                variants[1].display_allele(),
+                "N[21:30425700[",
+                "{reference}"
+            );
+            assert_eq!(
+                variants[0].record_allele_string(),
+                ".N/N[21:30425700[",
+                "{reference}"
+            );
+        }
+        let left = parse_vcf_line(
+            "21\t30425650\tx\tN\tN.,]21:30425700]N\t.\t.\tSVTYPE=BND",
+            true,
+        )
+        .unwrap();
+        assert_eq!(left.len(), 2);
+        assert_eq!(left[0].display_allele(), ".N");
+        assert_eq!(left[1].display_allele(), "]21:30425700]N");
+        assert_eq!(left[0].record_allele_string(), "N/N./]21:30425700]N");
+        assert_eq!(left[1].mate_pos, Some(30425700));
+    }
+
+    /// SVLEN is read as Perl's `abs()` numifies it (BaseVCF4.pm:304-305): Ensembl VEP
+    /// 116.2 writes the pair `21:30425650-30425651` for `<DUP>`, `<INV>`, `<CNV>`, `<INS>`,
+    /// `<BND>` and `<INS:ME:ALU>` with `SVLEN=0`, `SVLEN=abc` or `SVLEN=` (an END beside
+    /// them unread), and `21:30425651-30425950` for `SVLEN=300abc`, `SVLEN= 300` and
+    /// `SVLEN=3e2`. A `<DEL>` with the pair is a record Ensembl VEP skips ("deletion looks
+    /// incomplete"), parsed here as the pair.
+    #[test]
+    fn svlen_is_read_as_perl_numifies_it() {
+        for alt in [
+            "<DUP>",
+            "<INV>",
+            "<CNV>",
+            "<INS>",
+            "<BND>",
+            "<INS:ME:ALU>",
+            "<DEL>",
+        ] {
+            for svlen in ["0", "abc", ""] {
+                let variants = parse_vcf_line(
+                    &format!("21\t30425650\tx\tN\t{alt}\t.\t.\tSVLEN={svlen};END=30425899"),
+                    true,
+                )
+                .unwrap();
+                assert_eq!(variants.len(), 1, "{alt} {svlen:?}");
+                assert_eq!(
+                    (variants[0].start, variants[0].end),
+                    (30425651, 30425650),
+                    "{alt} {svlen:?}"
+                );
+                assert_eq!(variants[0].sv_len, Some(0), "{alt} {svlen:?}");
+            }
+        }
+        for svlen in ["300abc", " 300", "3e2", "+300", "-300"] {
+            let variants = parse_vcf_line(
+                &format!("21\t30425650\tx\tN\t<DUP>\t.\t.\tSVTYPE=DUP;SVLEN={svlen}"),
+                true,
+            )
+            .unwrap();
+            assert_eq!(
+                (variants[0].start, variants[0].end),
+                (30425651, 30425950),
+                "{svlen:?}"
+            );
+        }
+    }
+
+    /// `validate_vf` (Parser.pm:483-488) skips a record whose end lies more than one base
+    /// before its start, and Ensembl VEP 116.2 does so for `END=0` and `END=30425000` at
+    /// POS 30425650 for every class, a `<BND>` included, whose deleted END is re-read only
+    /// when Perl reads it as true (Parser/VCF.pm:489), so `END=0` keeps the 0 and `END=`
+    /// the empty string ("Invalid start or end coordinate"). `END=30425650` is the pair
+    /// and `END=30425651` the single base at POS + 1.
+    #[test]
+    fn an_end_before_pos_is_refused_and_an_end_at_pos_is_the_pair() {
+        for (alt, info) in [
+            ("<DUP>", "SVTYPE=DUP;END=0"),
+            ("<DUP>", "SVTYPE=DUP;END=30425000"),
+            ("<DEL>", "SVTYPE=DEL;END=0"),
+            ("<BND>", "SVTYPE=BND;CHR2=21;END=0"),
+            ("<BND>", "SVTYPE=BND;END=0"),
+        ] {
+            let err = parse_vcf_line(&format!("21\t30425650\tx\tN\t{alt}\t.\t.\t{info}"), true)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("start > end+1"), "{alt} {info}: {err}");
+        }
+        for (alt, info) in [("<BND>", "SVTYPE=BND;END="), ("<DUP>", "SVTYPE=DUP;END=")] {
+            let err = parse_vcf_line(&format!("21\t30425650\tx\tN\t{alt}\t.\t.\t{info}"), true)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("Invalid END: ''"), "{alt} {info}: {err}");
+        }
+        let pair = parse_vcf_line(
+            "21\t30425650\tx\tN\t<DUP>\t.\t.\tSVTYPE=DUP;END=30425650",
+            true,
+        )
+        .unwrap();
+        assert_eq!((pair[0].start, pair[0].end), (30425651, 30425650));
+        let point = parse_vcf_line(
+            "21\t30425650\tx\tN\t<DUP>\t.\t.\tSVTYPE=DUP;END=30425651",
+            true,
+        )
+        .unwrap();
+        assert_eq!((point[0].start, point[0].end), (30425651, 30425651));
+        let kept_bnd = parse_vcf_line(
+            "21\t30425650\tx\tN\t<BND>\t.\t.\tSVTYPE=BND;SVLEN=100;END=0",
+            true,
+        )
+        .unwrap();
+        assert_eq!((kept_bnd[0].start, kept_bnd[0].end), (30425651, 30425750));
+    }
+
+    /// A repeated INFO key reads its last value, as the hash Ensembl VEP's parser builds
+    /// does (BaseVCF4.pm:581-583): Ensembl VEP 116.2 writes `21:30425651-30425950` for
+    /// `SVLEN=-100;SVLEN=-300`, `21:30425651-30425900` for `END=30425700;END=30425900`,
+    /// the mate `N[21:30425800[` for `END2=30425700;END2=30425800` and for
+    /// `CHR2=2;CHR2=21`, and `duplication` for `N.` with `SVTYPE=DEL;SVTYPE=DUP`. A bare
+    /// key written last is undef, so `CHR2=21;CHR2` names no mate.
+    #[test]
+    fn a_repeated_info_key_reads_its_last_value() {
+        let svlen = parse_vcf_line(
+            "21\t30425650\tx\tN\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=-100;SVLEN=-300",
+            true,
+        )
+        .unwrap();
+        assert_eq!((svlen[0].start, svlen[0].end), (30425651, 30425950));
+        let end = parse_vcf_line(
+            "21\t30425650\tx\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30425700;END=30425900",
+            true,
+        )
+        .unwrap();
+        assert_eq!(end[0].end, 30425900);
+        for info in [
+            "SVTYPE=BND;CHR2=21;END2=30425700;END2=30425800",
+            "SVTYPE=BND;CHR2=2;CHR2=21;END2=30425800",
+        ] {
+            let variants =
+                parse_vcf_line(&format!("21\t30425650\tx\tN\t<BND>\t.\t.\t{info}"), true).unwrap();
+            assert_eq!(variants.len(), 2, "{info}");
+            assert_eq!(variants[1].display_allele(), "N[21:30425800[", "{info}");
+            assert_eq!(variants[1].mate_chr.as_deref(), Some("21"), "{info}");
+        }
+        let svtype = parse_vcf_line(
+            "21\t30425650\tx\tN\tN.\t.\t.\tSVTYPE=DEL;SVTYPE=DUP;END=30425899",
+            true,
+        )
+        .unwrap();
+        assert_eq!(svtype[0].variant_class, VariantClass::Duplication);
+        let bare_last = parse_vcf_line(
+            "21\t30425650\tx\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;CHR2;END2=30425800",
+            true,
+        )
+        .unwrap();
+        assert_eq!(bare_last.len(), 1);
+        assert_eq!(bare_last[0].record_allele_string(), "N/<BND>");
+    }
+
+    /// A signed coordinate is a number to Perl (`looks_like_number`, Parser.pm:475;
+    /// `$start++` on the raw POS): Ensembl VEP 116.2 annotates `END=+30425899` as the end
+    /// 30425899 and `SVLEN=+300` as 300, as a POS `+30425650` is 30425650; the sign it
+    /// prints inside the Location (`21:30425651-+30425899`) is not reproduced.
+    #[test]
+    fn a_signed_coordinate_reads_as_its_number() {
+        let end = parse_vcf_line(
+            "21\t30425650\tx\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=+30425899",
+            true,
+        )
+        .unwrap();
+        assert_eq!((end[0].start, end[0].end), (30425651, 30425899));
+        let pos = parse_vcf_line(
+            "21\t+30425650\tx\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30425899",
+            true,
+        )
+        .unwrap();
+        assert_eq!((pos[0].start, pos[0].end), (30425651, 30425899));
+        let svlen = parse_vcf_line(
+            "21\t30425650\tx\tN\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=+300",
+            true,
+        )
+        .unwrap();
+        assert_eq!(svlen[0].end, 30425950);
+    }
+
+    /// A record with a parsed breakend is one breakpoint whatever its other ALTs: Ensembl
+    /// VEP 116.2 writes `N.` and `N[21:30425700[` at the point `21:30425651` for
+    /// `<DEL>,N[21:30425700[` with `SVTYPE=BND;END=30425899`, the `<DEL>` part lending
+    /// nothing (`_parse_breakends` reads no base from it) and the END unread.
+    #[test]
+    fn a_record_with_a_parsed_breakend_is_one_breakpoint_whatever_its_other_alts() {
+        let mixed = parse_vcf_line(
+            "21\t30425650\tx\tN\t<DEL>,N[21:30425700[\t.\t.\tSVTYPE=BND;END=30425899",
+            true,
+        )
+        .unwrap();
+        assert_eq!(mixed.len(), 2);
+        for v in &mixed {
+            assert_eq!(v.variant_class, VariantClass::Translocation);
+            assert_eq!((v.start, v.end), (30425651, 30425651));
+            assert_eq!(v.record_allele_string(), "N/<DEL>/N[21:30425700[");
+        }
+        assert_eq!(mixed[0].display_allele(), "N.");
+        assert_eq!(mixed[1].display_allele(), "N[21:30425700[");
+    }
+
+    /// A bare `SVLEN` or `END` flag is undef to Perl (`get_end` tests both with `defined`,
+    /// BaseVCF4.pm:302-307), so `<DUP>` with a bare `SVLEN` beside `END=30425899` ends at
+    /// 30425899 and one with a bare `END` alone is the single base at POS + 1.
+    #[test]
+    fn a_bare_svlen_or_end_flag_is_undef() {
+        let svlen_flag = parse_vcf_line(
+            "21\t30425650\tx\tN\t<DUP>\t.\t.\tSVTYPE=DUP;SVLEN;END=30425899",
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            (svlen_flag[0].start, svlen_flag[0].end),
+            (30425651, 30425899)
+        );
+        assert_eq!(svlen_flag[0].sv_len, None);
+        let end_flag =
+            parse_vcf_line("21\t30425650\tx\tN\t<DUP>\t.\t.\tSVTYPE=DUP;END", true).unwrap();
+        assert_eq!((end_flag[0].start, end_flag[0].end), (30425651, 30425651));
+    }
+
     /// A comma-separated SVLEN is read as its first value for the span
     /// (BaseVCF4.pm:304, `(split(',',$info->{SVLEN}))[0]`, so `-300,400` ends at
     /// POS+300) and as its largest for a tandem repeat (Parser/VCF.pm:505-511,
@@ -1756,8 +2120,11 @@ mod tests {
     /// END (BaseVCF4.pm:302-308); a tandem repeat whose SVLEN is negative ends before
     /// its start and fails the line as Ensembl VEP skips it; and a span from SVLEN
     /// saturates at the ceiling, so a POS just below it with SVLEN `i64::MIN` ends
-    /// there whatever the class, and a `<BND>` with CHR2 and such an END2 anchors its
-    /// mate there.
+    /// there whatever the class. A breakpoint's deleted END names its mate with CHR2
+    /// (Parser/VCF.pm:493): a run of digits past the ceiling is a mate whose text keeps
+    /// the digits (Ensembl VEP 116.2 writes `N[21:18446744073709551615[`) and whose
+    /// position saturates at the ceiling; `-5` or `abc` names none and the record's
+    /// string is `N/N[21:-5[`.
     #[test]
     fn coordinates_are_read_up_to_the_ceiling() {
         let past = [MAX_COORD + 1, i64::MAX as u64, u64::MAX];
@@ -1784,17 +2151,29 @@ mod tests {
                 true,
             )
             .unwrap();
-            assert_eq!(breakpoint.len(), 1, "{end}");
+            let digits = end.bytes().all(|b| b.is_ascii_digit());
+            assert_eq!(breakpoint.len(), if digits { 2 } else { 1 }, "{end}");
             assert_eq!(
                 (breakpoint[0].start, breakpoint[0].end),
                 (101, 101),
                 "{end}"
             );
             assert_eq!(
-                breakpoint[0].display_allele(),
-                "chromosome_breakpoint",
+                breakpoint[0].record_allele_string(),
+                format!("N/N[21:{end}["),
                 "{end}"
             );
+            if digits {
+                assert_eq!(breakpoint[0].display_allele(), "N.", "{end}");
+                assert_eq!(breakpoint[1].display_allele(), format!("N[21:{end}["));
+                assert_eq!(breakpoint[1].mate_pos, Some(MAX_COORD), "{end}");
+            } else {
+                assert_eq!(
+                    breakpoint[0].display_allele(),
+                    "chromosome_breakpoint",
+                    "{end}"
+                );
+            }
             let with_svlen = parse_vcf_line(
                 &format!("21\t100\t.\tN\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=100;END={end}"),
                 true,

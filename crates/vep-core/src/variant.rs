@@ -255,8 +255,9 @@ pub struct InputVariant {
     /// The allele string VEP prints in `Uploaded_variation` for an ID-less record:
     /// the raw REF/ALT of a bi-allelic record whose alleles differ in length (VEP
     /// minimises those and reports the untrimmed alleles), the anchor-trimmed
-    /// alleles of every other record with all ALTs joined by `/`, or the symbolic
-    /// ALT alone for a structural variant. `None` falls back to `allele_string`.
+    /// alleles of every other record with all ALTs joined by `/`, or, for a
+    /// structural variant, its ALTs joined by `/`, a breakpoint record's carrying the
+    /// mate INFO/CHR2 names (`N[21:100[`). `None` falls back to `allele_string`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uploaded_allele_string: Option<String>,
     /// The record's allele string as VEP works with it, for a multi-allelic
@@ -472,20 +473,16 @@ impl InputVariant {
     /// multi-allelic record joined by `/`, or the minimised `allele_string` of a
     /// bi-allelic record.
     pub fn record_allele_string(&self) -> String {
-        // A breakend record's string is REF joined to every bracket ALT
-        // (`N/N[21:100[/N]21:200]`), one string for the record's own breakend and
-        // each of its mates, unless the ALT string opens or closes with `.`, a
+        // A breakend record's string is REF joined to its ALT side, the mate INFO/CHR2
+        // names included (`N/N[21:100[/N]21:200]`), one string for the record's own
+        // breakend and each of its mates, unless that side opens or closes with `.`, a
         // native single breakend VEP keeps bare (ensembl-vep `Parser/VCF.pm`
-        // `create_StructuralVariationFeatures`, lines 469 and 499); a mate
-        // synthesised from a symbolic `<BND>` keeps the string built for it.
+        // `create_StructuralVariationFeatures`, lines 469 and 491-499).
         if self.variant_class == VariantClass::Translocation {
-            let uploaded = self.uploaded_allele_string.as_deref();
-            let bracket_record = uploaded.is_some_and(|alts| alts.contains(['[', ']']));
-            if !self.is_single_breakend && !bracket_record {
-                return self.allele_string.clone();
-            }
-            if let Some(alts) =
-                uploaded.filter(|alts| !alts.starts_with('.') && !alts.ends_with('.'))
+            if let Some(alts) = self
+                .uploaded_allele_string
+                .as_deref()
+                .filter(|alts| !alts.starts_with('.') && !alts.ends_with('.'))
             {
                 return format!("{}/{}", String::from_utf8_lossy(&self.ref_allele), alts);
             }
@@ -545,9 +542,7 @@ impl InputVariant {
         if self.is_structural || self.variant_class.is_structural() {
             let raw = String::from_utf8_lossy(self.alt_allele()).to_string();
             if self.variant_class == VariantClass::Translocation {
-                let has_breakend_string =
-                    raw.contains(['[', ']']) || (self.is_single_breakend && self.mate_id.is_some());
-                if has_breakend_string {
+                if self.mate_id.is_some() {
                     raw
                 } else {
                     self.variant_class.so_term().to_string()
@@ -872,13 +867,22 @@ mod tests {
         assert_eq!(v.display_allele(), "chromosome_breakpoint");
     }
 
+    /// An allele of a record with parsed breakends carries `mate_id` and prints its text;
+    /// a bracket Perl's regex refuses (`N[21:abc[`) leaves the record without breakends,
+    /// and Ensembl VEP 116.2 prints `chromosome_breakpoint` for it.
     #[test]
     fn test_display_allele_paired_breakend_variants_keep_raw_allele() {
         let mut paired =
             InputVariant::new("1".into(), 100, 100, b"N".to_vec(), b"A[21:200[".to_vec());
         paired.variant_class = VariantClass::Translocation;
         paired.is_structural = true;
+        paired.mate_id = Some("bnd_1".into());
         assert_eq!(paired.display_allele(), "A[21:200[");
+        let mut refused = paired.clone();
+        refused.alt_alleles = vec![b"N[21:abc[".to_vec()];
+        refused.mate_id = None;
+        refused.is_single_breakend = true;
+        assert_eq!(refused.display_allele(), "chromosome_breakpoint");
 
         let mut derived_single =
             InputVariant::new("1".into(), 100, 100, b"N".to_vec(), b"A.".to_vec());

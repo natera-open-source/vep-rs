@@ -557,6 +557,99 @@ fn coordinates_past_the_ceiling_are_annotated_without_a_panic() {
         assert_eq!(location, "21:30425601-4611686018427387903", "{svlen}");
     }
 }
+/// The rows Ensembl VEP 116.2 writes on ENST00000390690 for the shapes the parser reads
+/// from INFO as Perl does: a mate named by CHR2 is `N[21:30425700[` beside the own `A.`
+/// of a record whose REF is `A`, and keeps `END2=00030425700` as written; `SVLEN=0` or
+/// `SVLEN=abc` is the pair `21:30425650-30425651`, `feature_elongation` for a
+/// duplication and the region term alone for an inversion or a mate-less breakpoint;
+/// `.N` beside `N[21:30425700[` lends the own breakend its base and writes no row of its
+/// own; a repeated SVLEN reads its last value.
+#[test]
+fn the_pair_and_the_mate_text_follow_ensembl_vep() {
+    let on_390690 = |record: &str| -> Vec<(String, String, String)> {
+        annotate_record(record, &[], &[])
+            .iter()
+            .filter(|r| r.contains("ENST00000390690"))
+            .map(|r| {
+                let c: Vec<&str> = r.split('\t').collect();
+                (c[1].to_string(), c[2].to_string(), c[6].to_string())
+            })
+            .collect()
+    };
+    let row =
+        |loc: &str, allele: &str, csq: &str| (loc.to_string(), allele.to_string(), csq.to_string());
+    let truncating = "feature_truncation,coding_sequence_variant";
+    assert_eq!(
+        on_390690("21\t30425650\tref_a\tA\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=30425700"),
+        [
+            row("21:30425651", "A.", truncating),
+            row("21:30425651", "N[21:30425700[", truncating)
+        ]
+    );
+    assert_eq!(
+        on_390690("21\t30425650\tpadded\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=00030425700"),
+        [
+            row("21:30425651", "N.", truncating),
+            row("21:30425651", "N[21:00030425700[", truncating)
+        ]
+    );
+    assert_eq!(
+        on_390690("21\t30425650\tmixed\tN\t.N,N[21:30425700[\t.\t.\tSVTYPE=BND"),
+        [
+            row("21:30425651", "N.", truncating),
+            row("21:30425651", "N[21:30425700[", truncating)
+        ]
+    );
+    for (alt, svlen, allele, csq) in [
+        (
+            "<DUP>",
+            "0",
+            "duplication",
+            "feature_elongation,coding_sequence_variant",
+        ),
+        (
+            "<DUP>",
+            "abc",
+            "duplication",
+            "feature_elongation,coding_sequence_variant",
+        ),
+        (
+            "<INS:ME:ALU>",
+            "0",
+            "Alu_insertion",
+            "feature_elongation,coding_sequence_variant",
+        ),
+        ("<INV>", "0", "inversion", "coding_sequence_variant"),
+        (
+            "<CNV>",
+            "abc",
+            "copy_number_variation",
+            "coding_sequence_variant",
+        ),
+        (
+            "<BND>",
+            "0",
+            "chromosome_breakpoint",
+            "coding_sequence_variant",
+        ),
+    ] {
+        assert_eq!(
+            on_390690(&format!(
+                "21\t30425650\tpair\tN\t{alt}\t.\t.\tSVLEN={svlen}"
+            )),
+            [row("21:30425650-30425651", allele, csq)],
+            "{alt} SVLEN={svlen}"
+        );
+    }
+    assert_eq!(
+        on_390690("21\t30425650\trepeated\tN\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=-100;SVLEN=-300"),
+        [row(
+            "21:30425651-30425950",
+            "deletion",
+            "feature_truncation,coding_sequence_variant,5_prime_UTR_variant"
+        )]
+    );
+}
 
 /// The rows of a breakend record follow what it names, as Ensembl VEP 116.2 writes
 /// them (`Parser/VCF.pm:484-499`): a `<BND>` with SVLEN and no CHR2 is one allele

@@ -7,6 +7,7 @@ use std::io::BufRead;
 
 use noodles::vcf;
 
+use vep_core::sv_span::{structural_end, svlen_values, SpanClass};
 use vep_core::variant::{InputVariant, VariantClass};
 
 use crate::error::IoError;
@@ -163,18 +164,34 @@ impl VcfParser {
                     classify_symbolic_allele(alt_str, info_fields.svtype.as_deref())
                 };
 
-                // End coordinate precedence: INFO/END, then POS + abs(SVLEN), then POS.
-                let sv_end = info_fields.end.unwrap_or_else(|| {
-                    info_fields
-                        .svlen
-                        .map(|l| pos + l.unsigned_abs())
-                        .unwrap_or(pos)
-                });
+                // The span `vep_core::sv_span::structural_end` derives, the one the
+                // command-line parser reads: a symbolic record starts at POS + 1 and
+                // ends at POS + |SVLEN|, else at END, else at its start, and a record
+                // Ensembl VEP skips on its span fails the line.
+                let span_class = match sv_class {
+                    VariantClass::Translocation => SpanClass::Breakpoint,
+                    VariantClass::TandemRepeat | VariantClass::TandemDuplication => {
+                        SpanClass::Tandem
+                    }
+                    _ => SpanClass::Other,
+                };
+                let sv_start = if sv_class.is_span_type() {
+                    pos + 1
+                } else {
+                    pos
+                };
+                let sv_end = structural_end(
+                    pos,
+                    info_fields.svlen.as_deref(),
+                    info_fields.end.as_deref(),
+                    span_class,
+                )
+                .map_err(|e| IoError::VcfParse(e.to_string()))?;
 
                 let ref_bytes = vcf_ref.as_bytes().to_vec();
 
                 let mut variant =
-                    InputVariant::new(chrom.clone(), pos, sv_end, ref_bytes, alt.clone());
+                    InputVariant::new(chrom.clone(), sv_start, sv_end, ref_bytes, alt.clone());
                 variant.variant_class = sv_class;
                 variant.id = id.clone();
                 variant.allele_index = allele_idx;
@@ -182,7 +199,10 @@ impl VcfParser {
                 variant.is_structural = true;
                 variant.sv_end = Some(sv_end);
                 variant.sv_type = info_fields.svtype.clone();
-                variant.sv_len = info_fields.svlen;
+                variant.sv_len = info_fields
+                    .svlen
+                    .as_deref()
+                    .and_then(|svlen| svlen_values(svlen).first().copied());
                 variant.mate_id = info_fields.mateid.clone();
                 variants.push(variant);
             }
@@ -298,33 +318,31 @@ fn is_symbolic_allele(alt: &[u8]) -> bool {
     false
 }
 
-/// Parsed INFO fields relevant to structural variants.
+/// Parsed INFO fields relevant to structural variants. END and SVLEN are kept as
+/// written, since `vep_core::sv_span::structural_end` reads them as Perl does
+/// (`SVLEN=abc` is 0, `END=` is refused).
 struct SvInfoFields {
-    end: Option<u64>,
+    end: Option<String>,
     svtype: Option<String>,
-    svlen: Option<i64>,
+    svlen: Option<String>,
     mateid: Option<String>,
 }
 
 /// Parse structural-variant-relevant INFO fields from the record.
 ///
-/// Uses the noodles header-aware API when possible, with a fallback to raw
-/// string parsing for VCFs that lack INFO header definitions (common in
-/// minimal or synthetic test files).
+/// Uses the noodles header-aware API for SVTYPE and MATEID when possible, with a
+/// fallback to raw string parsing for VCFs that lack INFO header definitions
+/// (common in minimal or synthetic test files).
 fn parse_info_fields(record: &vcf::Record, header: &vcf::Header) -> SvInfoFields {
     let info = record.info();
     let info_raw: &str = info.as_ref();
 
-    let end = get_info_integer(record, header, "END")
-        .map(|v| v as u64)
-        .or_else(|| get_raw_info_value(info_raw, "END").and_then(|s| s.parse::<u64>().ok()));
+    let end = get_raw_info_value(info_raw, "END").map(|s| s.to_string());
 
     let svtype = get_info_string(record, header, "SVTYPE")
         .or_else(|| get_raw_info_value(info_raw, "SVTYPE").map(|s| s.to_string()));
 
-    let svlen = get_info_integer(record, header, "SVLEN")
-        .map(|v| v as i64)
-        .or_else(|| get_raw_info_value(info_raw, "SVLEN").and_then(|s| s.parse::<i64>().ok()));
+    let svlen = get_raw_info_value(info_raw, "SVLEN").map(|s| s.to_string());
 
     let mateid = get_info_string(record, header, "MATEID")
         .or_else(|| get_raw_info_value(info_raw, "MATEID").map(|s| s.to_string()));
@@ -337,15 +355,6 @@ fn parse_info_fields(record: &vcf::Record, header: &vcf::Header) -> SvInfoFields
     }
 }
 
-/// Extract an integer value from a VCF INFO field via the noodles typed API.
-fn get_info_integer(record: &vcf::Record, header: &vcf::Header, key: &str) -> Option<i32> {
-    use noodles::vcf::variant::record::info::field::Value;
-    record.info().get(header, key)?.ok()?.and_then(|v| match v {
-        Value::Integer(n) => Some(n),
-        _ => None,
-    })
-}
-
 /// Extract a string value from a VCF INFO field via the noodles typed API.
 fn get_info_string(record: &vcf::Record, header: &vcf::Header, key: &str) -> Option<String> {
     use noodles::vcf::variant::record::info::field::Value;
@@ -355,21 +364,19 @@ fn get_info_string(record: &vcf::Record, header: &vcf::Header, key: &str) -> Opt
     })
 }
 
-/// Fallback: parse a single INFO field value from the raw semicolon-delimited
-/// INFO string. Returns the value portion of `KEY=VALUE`, or `None` if the
-/// key is not found.
+/// The value of `KEY=VALUE` in the raw semicolon-delimited INFO string (`KEY=` is
+/// `Some("")`), `None` for an absent key or a bare `KEY` flag with no `=`. The last
+/// `KEY=VALUE` of a repeated key wins, as in the hash Ensembl VEP's parser builds from
+/// the field (BaseVCF4.pm:581-583).
 fn get_raw_info_value<'a>(info_raw: &'a str, key: &str) -> Option<&'a str> {
     if info_raw == "." || info_raw.is_empty() {
         return None;
     }
-    for field in info_raw.split(';') {
-        if let Some((k, v)) = field.split_once('=') {
-            if k == key {
-                return Some(v);
-            }
-        }
-    }
-    None
+    info_raw
+        .rsplit(';')
+        .filter_map(|field| field.split_once('='))
+        .find(|(k, _)| *k == key)
+        .map(|(_, v)| v)
 }
 
 /// Classify a symbolic ALT allele string into a `VariantClass`.
@@ -736,7 +743,8 @@ mod tests {
 
         let v = parser.next_variant().unwrap().unwrap();
         assert_eq!(v.variant_class, VariantClass::StructuralDeletion);
-        assert_eq!(v.start, 1000);
+        // The base before the event is the anchor (BaseVCF4.pm get_start).
+        assert_eq!(v.start, 1001);
         assert_eq!(v.end, 1100);
         assert_eq!(v.sv_end, Some(1100));
         assert_eq!(v.sv_type, Some("DEL".into()));
@@ -756,9 +764,72 @@ mod tests {
         let v = parser.next_variant().unwrap().unwrap();
         assert_eq!(v.variant_class, VariantClass::StructuralInsertion);
         assert!(v.is_structural);
-        assert_eq!(v.start, 500);
-        // No END or SVLEN -> end = POS
-        assert_eq!(v.end, 500);
+        assert_eq!(v.start, 501);
+        // No END or SVLEN -> the single base at POS + 1
+        assert_eq!(v.end, 501);
+    }
+
+    /// The reader shares `vep_core::sv_span::structural_end` with the command-line
+    /// parser: SVLEN first, by its first value as Perl numifies it (`abc` is 0, the pair
+    /// `start = POS + 1, end = POS`), else END, else the start; a repeated key reads its
+    /// last value; an END before POS or not a coordinate fails the line as Ensembl VEP
+    /// skips the record.
+    #[test]
+    fn the_reader_reads_the_span_as_the_command_line_parser_does() {
+        let span = |info: &str| {
+            let data = make_sv_vcf_data(&format!("21\t1000\t.\tA\t<DUP>\t.\t.\t{info}\n"));
+            let reader: Box<dyn BufRead + Send> = Box::new(std::io::Cursor::new(data));
+            let mut parser = VcfParser::new(reader).unwrap();
+            parser
+                .next_variant()
+                .unwrap()
+                .map(|v| (v.start, v.end, v.sv_len))
+        };
+        assert_eq!(
+            span("SVTYPE=DUP;SVLEN=-300;END=1100").unwrap(),
+            (1001, 1300, Some(-300))
+        );
+        assert_eq!(
+            span("SVTYPE=DUP;SVLEN=abc;END=1100").unwrap(),
+            (1001, 1000, Some(0))
+        );
+        assert_eq!(
+            span("SVTYPE=DUP;SVLEN=300abc").unwrap(),
+            (1001, 1300, Some(300))
+        );
+        assert_eq!(
+            span("SVTYPE=DUP;SVLEN=-100;SVLEN=-300").unwrap(),
+            (1001, 1300, Some(-300))
+        );
+        assert_eq!(
+            span("SVTYPE=DUP;END=1100;END=1200").unwrap(),
+            (1001, 1200, None)
+        );
+        assert_eq!(span("SVTYPE=DUP;END=1000").unwrap(), (1001, 1000, None));
+        for info in [
+            "SVTYPE=DUP;END=0",
+            "SVTYPE=DUP;END=900",
+            "SVTYPE=DUP;END=abc",
+            "SVTYPE=DUP;END=",
+        ] {
+            let err = span(info).unwrap_err().to_string();
+            assert!(
+                err.contains("start > end+1") || err.contains("Invalid END"),
+                "{info}: {err}"
+            );
+        }
+        let bnd = make_sv_vcf_data("21\t1000\t.\tA\t<BND>\t.\t.\tSVTYPE=BND;END=1100\n");
+        let reader: Box<dyn BufRead + Send> = Box::new(std::io::Cursor::new(bnd));
+        let v = VcfParser::new(reader)
+            .unwrap()
+            .next_variant()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (v.start, v.end),
+            (1001, 1001),
+            "a breakpoint never reads END for its span"
+        );
     }
 
     #[test]
@@ -784,7 +855,7 @@ mod tests {
         assert_eq!(v.variant_class, VariantClass::Inversion);
         assert!(v.is_structural);
         assert_eq!(v.sv_len, Some(500));
-        // No END -> fallback to POS + abs(SVLEN)
+        // SVLEN gives the end, POS + abs(SVLEN)
         assert_eq!(v.end, 1500);
         assert_eq!(v.sv_end, Some(1500));
     }
@@ -896,7 +967,7 @@ mod tests {
         let v = parser.next_variant().unwrap().unwrap();
         assert_eq!(v.ref_allele, b"A");
         assert_eq!(v.alt_allele(), b"<DEL>");
-        assert_eq!(v.start, 100);
+        assert_eq!(v.start, 101);
         assert_eq!(v.end, 200);
     }
 

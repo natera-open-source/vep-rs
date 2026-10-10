@@ -42,6 +42,13 @@ enum CopyNumberClass {
     Generic,
 }
 
+/// Whether the record's copy number is the duplication shape (`<CN2>`), the one
+/// copy-number allele this module reads as a `copy_number_gain`
+/// (`Utils/VariationEffect.pm:246-256`).
+pub(super) fn is_copy_number_gain(variant: &InputVariant) -> bool {
+    parse_copy_number(variant) == CopyNumberClass::Duplication
+}
+
 /// The copy-number reading of a variant annotated as a copy number variation.
 ///
 /// A variant that carries its record's SO term belongs to a `copy_number_variation`

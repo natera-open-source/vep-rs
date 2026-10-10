@@ -684,12 +684,16 @@ BND_OWN_ROWS_LOST_BUCKET = "bnd_own_chromosome_rows_lost"
 BND_SYNONYM_MATE_ROWS_LOST_BUCKET = "bnd_synonym_mate_rows_lost"
 FASTA_NAMED_SLICE_INTERGENIC_BUCKET = "fasta_named_slice_intergenic"
 BND_BARE_REFERENCE_ALLELE_ROW_BUCKET = "bnd_bare_reference_allele_row"
+BND_MATE_32_BIT_BUFFER_BUCKET = "bnd_mate_32bit_buffer_intergenic"
+# The smallest breakend mate position at which Ensembl VEP 116.2 annotates every record
+# of the input buffer as intergenic_variant: the position plus the default --distance
+# flank reaches 2^31, so the bound moves with the flank.
+BND_MATE_32_BIT_LIMIT = 2**31 - 5000
 
-# The breakend shapes are counted, never set aside, by this comparator: deciding which
-# of the rows the reference would have written needs the cache's transcript-to-chromosome
-# authority, which this comparator does not read (the structural-variant comparator sets
-# the first two aside under it), and the reference-allele row of a bare breakpoint is a
-# duplicate tuple that neither comparator's unique-tuple diff ever sees.
+# The two lost-row breakend shapes are counted, never set aside, by this comparator:
+# deciding which of the rows the reference would have written needs the cache's
+# transcript-to-chromosome authority, which this comparator does not read (the
+# structural-variant comparator sets them aside under it).
 REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
     OneSidedRule(
         bucket=REFERENCE_SKIPPED_RECORD_BUCKET,
@@ -752,13 +756,32 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
             "parsed, one allele is built per slash-separated part, the reference base N "
             "included, so the reference writes every row twice under chromosome_breakpoint, "
             "ALLELE_NUM 1 for the reference allele and 2 for the ALT; a reference allele has "
-            "no variant effect, so vep-rs writes the ALT row once. The duplicate is an "
-            "identical tuple, which the unique-tuple diff of both comparators absorbs; the "
-            "structural-variant comparator counts the reference's duplicate rows."
+            "no variant effect, so vep-rs writes the ALT row once and the reference-allele "
+            "rows are set aside: each duplicates the ALT row's tuple, so the unique-tuple "
+            "key stream drops it before the raw and the adjusted figure, and both "
+            "comparators count the rows so set aside per record."
         ),
-        excludes=False,
+        excludes=True,
+        excludes_with_cache=True,
         taxonomy_class="bnd_bare_reference_allele_row",
         perl_citation="Parser/VCF.pm:499; StructuralVariationOverlap.pm:64-77; OutputFactory.pm:2029",
+    ),
+    OneSidedRule(
+        bucket=BND_MATE_32_BIT_BUFFER_BUCKET,
+        definition=(
+            "A breakend whose mate position plus the --distance flank reaches 2^31 turns "
+            "every record of the reference's input buffer intergenic, the breakend record "
+            "and the records loaded with it (the first such position is 2147478648 under "
+            "the default flank of 5000 and 2147483647 under --distance 1); the mate's "
+            "position enters the buffer's coordinate bounds with the flank added when the "
+            "cache regions are chosen. vep-rs annotates the buffer's records against their "
+            "transcripts and the mate at its coordinate. Counted on the reference's rows at "
+            "the breakend record's Location and never set aside, since the records it "
+            "reaches beyond that one depend on the buffer boundaries."
+        ),
+        excludes=False,
+        taxonomy_class="bnd_mate_32bit_buffer_intergenic",
+        perl_citation="AnnotationSource.pm:190, 251-254, 306-309; InputBuffer.pm:386-389",
     ),
 )
 
@@ -856,11 +879,21 @@ class ReferenceRecordScope:
     ``breakends``: for every (file, Location) at which either engine wrote a breakend
     allele, the alleles each side wrote and the mate chromosomes its bracket alleles
     name, for the two breakend classes.
+
+    ``bare_reference_rows``: per (file, Location), the reference-allele rows of a bare
+    breakpoint record the unique-tuple key stream dropped, counted on the reference's
+    raw output by `count_bare_breakpoint_reference_rows` and handed in through
+    `record_bare_reference_rows`, since the merge never sees a duplicate row.
+
+    ``mate_overflow``: the (file, Location) pairs at which the reference wrote a bracket
+    allele whose mate position is at least `BND_MATE_32_BIT_LIMIT`.
     """
 
     def __init__(self) -> None:
         self.absent: set[tuple[str, str]] = set()
         self.breakends: dict[tuple[str, str], tuple[set[str], set[str], set[str]]] = {}
+        self.bare_reference_rows: dict[tuple[str, str], int] = {}
+        self.mate_overflow: set[tuple[str, str]] = set()
         self._group: tuple[str, str] | None = None
         self._reference_wrote = False
         self._rust_wrote_structural = False
@@ -886,6 +919,8 @@ class ReferenceRecordScope:
                 rust_alleles.add(allele)
             if mate is not None:
                 mates.add(mate[0])
+                if perl and mate[1] >= BND_MATE_32_BIT_LIMIT:
+                    self.mate_overflow.add(group)
 
     def close(self) -> None:
         """Close the open Location group; called by the merge when its file ends."""
@@ -895,12 +930,46 @@ class ReferenceRecordScope:
         self._reference_wrote = False
         self._rust_wrote_structural = False
 
+    def record_bare_reference_rows(self, file_name: str, rows_by_location: Counter[str]) -> None:
+        """Record one file's reference-allele rows of bare breakpoints, per Location."""
+        for loc, rows in rows_by_location.items():
+            if rows:
+                self.bare_reference_rows[(file_name, loc)] = rows
+
 
 def _strip_chr(chrom: str) -> str:
     """The reference's own normalisation of a breakend's chromosome name at the slice test
     (AnnotationType/Transcript.pm:134): the ``chr`` prefix removed and nothing else, so
     ``M`` stays ``M`` and is not the cache's ``MT``."""
     return chrom[3:] if chrom.lower().startswith("chr") else chrom
+
+
+def count_bare_breakpoint_reference_rows(
+    path: Path, canonical_contigs: frozenset[str] | None = None
+) -> Counter[str]:
+    """The reference's duplicate rows under `chromosome_breakpoint`, per Location.
+
+    A breakpoint record that names no mate is held as `N/<BND>` and, with no breakend
+    parsed, gets one allele per slash-separated part, the reference base `N` included
+    (StructuralVariationOverlap.pm:64-77), so every row is written twice, the second
+    for the reference allele, under the same key. The second and later rows of a key are
+    counted here, read through `iter_vep_key_lines` so that they are the rows the
+    unique-tuple key stream drops; a row that function skips, a contig outside
+    ``canonical_contigs`` included, counts nothing, as does a missing file.
+    """
+    rows_by_location: Counter[str] = Counter()
+    if not path.exists():
+        return rows_by_location
+    seen: set[str] = set()
+    for key in iter_vep_key_lines(path, canonical_contigs=canonical_contigs):
+        location, allele, _ = key.split("\t", 2)
+        if allele != "chromosome_breakpoint":
+            continue
+        if key in seen:
+            rows_by_location[location] += 1
+        else:
+            seen.add(key)
+    return rows_by_location
 
 
 def apply_116_2_one_sided_rules(
@@ -910,19 +979,25 @@ def apply_116_2_one_sided_rules(
 ) -> dict[str, dict[str, int]]:
     """The 116.2 one-sided pass over the rows no pair rule removed.
 
-    Marks the rows of `REFERENCE_SKIPPED_RECORD_BUCKET`, the one 116.2 class that
-    excludes and whose rows are all vep-rs's, in ``masked_rows``; counts the three
-    one-sided breakend shapes without masking them. The reference-allele row of a bare
-    breakpoint (`BND_BARE_REFERENCE_ALLELE_ROW_BUCKET`) is an identical tuple the
-    sorted-unique keys never carry, so its count here is zero by construction. Returns
-    the per-bucket statistics: ``count`` rows recognised, ``excluded`` rows set aside,
-    ``records`` distinct (file, Location) pairs the bucket reached.
+    Marks the rows of `REFERENCE_SKIPPED_RECORD_BUCKET`, the 116.2 class whose set-aside
+    rows are all vep-rs's and present in ``rows``, in ``masked_rows``; counts, without
+    masking them, the two lost-row breakend shapes, the FASTA-named slice shape and the
+    reference's rows at a breakend record whose mate position overflows the buffer
+    (`BND_MATE_32_BIT_BUFFER_BUCKET`). The reference-allele rows of a bare breakpoint
+    (`BND_BARE_REFERENCE_ALLELE_ROW_BUCKET`) never reach ``rows``, the unique-tuple key
+    stream having dropped them as duplicates, so the class reports the rows the scope
+    counted on the reference's raw output, all of them excluded, and nothing is masked
+    for it. Returns the per-bucket statistics: ``count`` rows recognised, ``excluded``
+    rows set aside, ``records`` distinct (file, Location) pairs the bucket reached.
     """
     stats = {
         rule.bucket: {"count": 0, "excluded": 0, "records": 0}
         for rule in REFERENCE_116_2_ONE_SIDED_RULES
     }
     records: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    bare_rows = sum(scope.bare_reference_rows.values())
+    stats[BND_BARE_REFERENCE_ALLELE_ROW_BUCKET].update({"count": bare_rows, "excluded": bare_rows})
+    records[BND_BARE_REFERENCE_ALLELE_ROW_BUCKET].update(scope.bare_reference_rows)
 
     def hit(bucket: str, idx: int, row: dict[str, str], exclude: bool) -> None:
         stats[bucket]["count"] += 1
@@ -958,9 +1033,15 @@ def apply_116_2_one_sided_rules(
             own_rows_lost.add((file_name, loc))
 
     for idx, row in enumerate(rows):
-        if idx in masked_rows or row["source"] != "extra_in_rust":
+        if idx in masked_rows:
             continue
         group = (row["file_name"], row["location"])
+        if row["source"] == "missing_in_rust":
+            if group in scope.mate_overflow:
+                hit(BND_MATE_32_BIT_BUFFER_BUCKET, idx, row, exclude=False)
+            continue
+        if row["source"] != "extra_in_rust":
+            continue
         allele = row["allele"]
         if group in scope.absent:
             # The reference wrote nothing at the Location; the merge admitted the group
@@ -2568,6 +2649,11 @@ def main() -> int:
                 iter_vep_key_lines(rust_file, canonical_contigs=canonical_contigs),
                 rust_sorted,
             )
+            if record_scope is not None:
+                record_scope.record_bare_reference_rows(
+                    perl_file.name,
+                    count_bare_breakpoint_reference_rows(perl_file, canonical_contigs),
+                )
 
             (
                 perl_count,

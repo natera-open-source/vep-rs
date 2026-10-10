@@ -519,8 +519,8 @@ class SvFilterSetTests(unittest.TestCase):
         breakend; the vep-rs intergenic row of a cross-chromosome record), one partial
         (<CNV:TR>), the pair filter that applies the SNP/indel registry's excluding rules,
         the gVCF reference-block filter, and the mate-side local-read pair filter. The
-        116.2 masks: the record the reference skipped, and the two breakend shapes of the
-        chromosome-aware overlap.
+        116.2 masks: the record the reference skipped, the two breakend shapes of the
+        chromosome-aware overlap, and the reference-allele rows of a bare breakpoint.
 
         Pinned as a set rather than a count, so adding or removing a filter fails
         here with its name, beside the taxonomy row it would need."""
@@ -538,6 +538,7 @@ class SvFilterSetTests(unittest.TestCase):
                 "filter_reference_skipped_records",
                 "filter_bnd_own_rows_lost",
                 "filter_bnd_synonym_mate_rows",
+                "filter_bnd_bare_reference_allele_rows",
             },
         )
 
@@ -545,7 +546,7 @@ class SvFilterSetTests(unittest.TestCase):
         """Every `filter_*` mask is applied against at least one reference release, and
         every name a release lists is a mask; the 115.2 list is the published
         comparator's eight in its order, the 116.2 list drops the class-C arms and the
-        two class-D masks and adds the three 116.2 masks."""
+        two class-D masks and adds the four 116.2 masks."""
         filters = {n for n in dir(C) if n.startswith("filter_")}
         listed = {m for masks in C.MASKS_BY_RELEASE.values() for m in masks}
         self.assertEqual(listed, filters)
@@ -566,7 +567,8 @@ class SvFilterSetTests(unittest.TestCase):
         self.assertEqual(retired, set(C.MASKS_RETIRED_IN_116_2), "every retired mask carries its reason")
         self.assertEqual(
             set(C.MASKS_BY_RELEASE["116.2"]) - set(C.MASKS_BY_RELEASE["115.2"]),
-            {"filter_reference_skipped_records", "filter_bnd_own_rows_lost", "filter_bnd_synonym_mate_rows"},
+            {"filter_reference_skipped_records", "filter_bnd_own_rows_lost", "filter_bnd_synonym_mate_rows",
+             "filter_bnd_bare_reference_allele_rows"},
         )
 
     def test_the_release_block_describes_every_116_2_rule_with_this_comparators_verdict(self) -> None:
@@ -581,8 +583,12 @@ class SvFilterSetTests(unittest.TestCase):
         for rule in C.REFERENCE_116_2_ONE_SIDED_RULES:
             self.assertEqual(classes[rule.bucket]["excludes"], rule.excludes_with_cache, rule.bucket)
             self.assertIn("excluded", classes[rule.bucket])
-        self.assertEqual([c["excludes"] for c in classes.values()], [True, True, True, False, False])
+        self.assertEqual([c["excludes"] for c in classes.values()], [True, True, True, False, True, False])
         self.assertEqual(block["bnd_bare_reference_allele_rows"], 0)
+        self.assertEqual(block["bnd_mate_32bit_buffer_records"], 0)
+        with_rows = C.release_report_block(C.MaskResult(release="116.2", bare_reference_rows=3), {}, True)
+        self.assertEqual(with_rows["bnd_bare_reference_allele_rows"], 3)
+        self.assertEqual(with_rows["divergence_classes"]["bnd_bare_reference_allele_row"]["excluded"], 3)
         sixth = C.REFERENCE_116_2_ONE_SIDED_RULES[0].__class__(
             bucket="a_sixth_shape", definition="A shape.", excludes=False, taxonomy_class="x", perl_citation="X.pm:1"
         )
@@ -590,12 +596,13 @@ class SvFilterSetTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "a_sixth_shape"):
                 C.release_report_block(C.MaskResult(release="116.2"), {}, True)
 
-    def test_the_bare_breakpoint_reference_allele_rows_are_counted_and_never_set_aside(self) -> None:
+    def test_the_bare_breakpoint_reference_allele_rows_are_set_aside_and_counted(self) -> None:
         """Ensembl VEP 116.2 writes a bare `<BND>`'s rows twice, ALLELE_NUM 1 for the reference
-        allele N of `N/<BND>` and 2 for the ALT (StructuralVariationOverlap.pm:64-77); the tuple
-        set absorbs the duplicate, so the comparator counts the reference's second row per
-        feature and sets nothing aside, and a bracket record's own and mate rows, which differ
-        in Allele, count nothing."""
+        allele N of `N/<BND>` and 2 for the ALT (StructuralVariationOverlap.pm:64-77). The
+        mask reads the raw rows and returns the reference's second row per feature, the rows
+        `parse_vep_output` dropped from the tuple set, so the set-aside count is 2 while the
+        tuple set carries 3 `chromosome_breakpoint` tuples; a bracket record's own and mate
+        rows, which differ in Allele, count nothing, and a missing file counts zero."""
         import tempfile
         from pathlib import Path
 
@@ -612,10 +619,14 @@ class SvFilterSetTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "perl.txt"
             path.write_text("\n".join(rows) + "\n")
-            self.assertEqual(C.count_bare_breakpoint_reference_rows(path), 2)
+            self.assertEqual(C.filter_bnd_bare_reference_allele_rows([path]), 2)
             tuples, _ = C.parse_vep_output(path)
             self.assertEqual(len([t for t in tuples if t[1] == "chromosome_breakpoint"]), 3)
-            self.assertEqual(C.count_bare_breakpoint_reference_rows(Path(d) / "absent.txt"), 0)
+            self.assertEqual(C.filter_bnd_bare_reference_allele_rows([Path(d) / "absent.txt"]), 0)
+            self.assertEqual(C.filter_bnd_bare_reference_allele_rows([path, path]), 4)
+            masks = C.apply_masks(tuples, tuples, "116.2", {}, {}, {}, "vep-rs", [], perl_paths=[path])
+            self.assertEqual(masks.bare_reference_rows, 2)
+            self.assertEqual(masks.all_perl(), set(), "rows, not tuples: nothing leaves the tuple arithmetic")
 
 
 # Cross-file tuple collisions
@@ -2541,6 +2552,24 @@ class FastaNamedSliceIntergenicTests(unittest.TestCase):
                 INTERGENIC("21:200", "T"), T("21:300", "G", "ENST_3", "intron_variant")}
         self.assertEqual(C.count_fasta_named_slice_intergenic(perl, rust), 1)
 
+    def test_a_mate_past_the_buffers_32_bit_bound_is_counted_from_the_input_record(self) -> None:
+        """Ensembl VEP 116.2 turns the buffer intergenic for a mate at 2147478648 named by
+        a bracket ALT or by CHR2 with END2 (else END); 2147478647 and a mate on another
+        route are not the shape. The reference's tuples at the record's Location are
+        counted with it."""
+        V = C.VcfVariant
+        records = [
+            V("21", 30425650, "bracket", "N", "N[21:2147478648[", "BND", "21:30425650", "SVTYPE=BND"),
+            V("21", 30425650, "chr2_end2", "N", "<BND>", "BND", "21:30425650", "SVTYPE=BND;CHR2=21;END2=2147478648"),
+            V("21", 30425650, "chr2_end", "N", "<BND>", "BND", "21:30425650", "SVTYPE=BND;CHR2=21;END=2147478648"),
+            V("21", 30425650, "below", "N", "<BND>", "BND", "21:30425650", "SVTYPE=BND;CHR2=21;END2=2147478647"),
+            V("21", 30425650, "pos2", "N", "<BND>", "BND", "21:30425650", "SVTYPE=BND;CHR2=21;POS2=2147478648"),
+        ]
+        perl = {INTERGENIC("21:30425651", "N."), INTERGENIC("21:30425651", "N[21:2147478648["),
+                T("21:40000001", "N.", "ENST_1", "intron_variant")}
+        self.assertEqual(C.count_bnd_mate_over_32_bit(records, perl), (3, 2))
+        self.assertEqual(C.count_bnd_mate_over_32_bit(records[3:], perl), (0, 0))
+
     def test_a_vep_rs_intergenic_row_beside_its_transcripts_is_not_the_shape(self) -> None:
         perl = {INTERGENIC("21:100", "A")}
         rust = {INTERGENIC("21:100", "A"), T("21:100", "A", "ENST_1", "missense_variant")}
@@ -2613,8 +2642,9 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
         self.assertEqual(set(adj["divergence_classes"]), {
             "reference_skipped_record", "bnd_own_chromosome_rows_lost",
             "bnd_synonym_mate_rows_lost", "fasta_named_slice_intergenic",
-            "bnd_bare_reference_allele_row",
+            "bnd_bare_reference_allele_row", "bnd_mate_32bit_buffer_intergenic",
         })
+        self.assertEqual((adj["bnd_mate_32bit_buffer_records"], adj["bnd_mate_32bit_buffer_reference_tuples"]), (0, 0))
         self.assertEqual(adj["bnd_bare_reference_allele_rows"], 0)
         surviving = (out / "discordant_adjusted.tsv").read_text().splitlines()[1:]
         self.assertEqual(len(surviving), 3)
@@ -2635,6 +2665,57 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
         self.assertIn("ERROR: [compare_sv_concordance] skipped-record cross-check: cpx_kept N><CPX> at 21:45716816 is on the unsupported_type route", err)
         self.assertIn("gvcf_block N><NON_REF> at 21:70001 is on the unsupported_type route", err)
         self.assertFalse((out / "concordance_report.json").exists(), "nothing is scored over a failed cross-check")
+
+    def test_116_2_sets_aside_the_reference_allele_rows_of_a_bare_breakpoint(self) -> None:
+        """A bare `<BND>` the reference wrote twice per feature (ALLELE_NUM 1, the reference
+        allele N of `N/<BND>`, and 2) and vep-rs once: the two reference-allele rows are set
+        aside under `bnd_bare_reference_allele_row`, the tuple sets agree (raw F1 1.0, adjusted
+        1.0), and the report names the rows set aside, per file and overall."""
+        import json
+        import shutil
+        import tempfile
+
+        fixture = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, fixture, True)
+        for sub in ("in", "perl", "rust"):
+            (fixture / sub).mkdir()
+        shutil.copytree(self.FIXTURE / "cache", fixture / "cache")
+        (fixture / "in" / "bare.vcf").write_text(
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+            "21\t26032000\tbare_bnd\tN\t<BND>\t.\tPASS\tSVTYPE=BND\n"
+        )
+        header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+        own = "bare_bnd\t21:26032001\tchromosome_breakpoint\tG\tENST21_OWN\tTranscript\tintron_variant\n"
+        near = "bare_bnd\t21:26032001\tchromosome_breakpoint\tG\tENST21_G3\tTranscript\tupstream_gene_variant\n"
+        (fixture / "perl" / "bare.txt").write_text(header + own + own + near + near)
+        (fixture / "rust" / "bare.txt").write_text(header + own + near)
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, True)
+        argv = sys.argv
+        sys.argv = [
+            "compare_sv_concordance.py", "--reference-release", "116.2", "--assembly", "grch37",
+            "--input-dir", str(fixture / "in"), "--perl-dir", str(fixture / "perl"),
+            "--rust-dir", str(fixture / "rust"), "--vep-rs-cache", str(fixture / "cache"),
+            "--output-dir", str(out),
+        ]
+        try:
+            C.main()
+        finally:
+            sys.argv = argv
+        report = json.loads((out / "concordance_report.json").read_text())
+        self.assertEqual((report["overall"]["perl_tuples"], report["overall"]["rust_tuples"]), (2, 2))
+        self.assertEqual(report["overall"]["f1"], 1.0)
+        adj = report["adjusted"]
+        self.assertEqual(adj["f1"], 1.0)
+        self.assertEqual(adj["bnd_bare_reference_allele_rows"], 2)
+        self.assertEqual(adj["bnd_bare_reference_allele_rows_by_file"], {"bare": 2})
+        self.assertIn("filter_bnd_bare_reference_allele_rows", adj["masks_applied"])
+        cls = adj["divergence_classes"]["bnd_bare_reference_allele_row"]
+        self.assertEqual((cls["excludes"], cls["excluded"]), (True, 2))
+        self.assertEqual(adj["excluded_perl_extra"], 0, "the rows left the tuple sets before either figure")
+        self.assertEqual((adj["perl_tuples"], adj["intersection"]), (2, 2))
+        md = (out / "concordance_report.md").read_text()
+        self.assertIn("`bnd_bare_reference_allele_row` 2 reference-allele rows set aside", md)
 
     def test_the_115_2_report_carries_no_release_block(self) -> None:
         import json
