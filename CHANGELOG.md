@@ -63,7 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--max_sv_size` governs a `<CNV:TR>` record's expansion: a repeat sequence longer than the limit, and every one under `-1`, keeps the symbolic reading, as Ensembl VEP 116 does. (#44)
 - The JSON `allele_string` of a breakend record listing two bracket ALTs carries the whole record, REF and both ALTs, as Ensembl VEP 116 writes it. (#44)
 - A bare `<BND>` with neither CHR2 nor a span prints `chromosome_breakpoint` as its Allele, like every other symbolic class term, as Ensembl VEP 116 does. (#44)
-- A POS past the signed 64-bit range fails its line and an END past it is unparsed, so an absurd END annotates as a point, never a wrapped coordinate. (#44)
+- A coordinate above 2^62 - 1 fails its line in every input format, a VCF END above it is unparsed and a SVLEN span saturates there: no coordinate wraps. (#44)
+- A `<CNV:TR>` ALT past a short INFO/RN list states no length, as Ensembl VEP 116 builds one allele per RN entry. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
 
 ## [0.3.2] - 2026-10-06

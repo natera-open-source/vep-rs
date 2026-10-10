@@ -15,7 +15,7 @@
 
 use std::io::BufRead;
 
-use vep_core::coordinate::Strand;
+use vep_core::coordinate::{parse_coordinate, Strand};
 use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
@@ -60,12 +60,10 @@ impl<R: BufRead> EnsemblParser<R> {
         }
 
         let chr = parts[0].to_string();
-        let start: u64 = parts[1]
-            .parse()
-            .map_err(|_| IoError::VcfParse(format!("Invalid start position: '{}'", parts[1])))?;
-        let end: u64 = parts[2]
-            .parse()
-            .map_err(|_| IoError::VcfParse(format!("Invalid end position: '{}'", parts[2])))?;
+        let start = parse_coordinate(parts[1])
+            .ok_or_else(|| IoError::VcfParse(format!("Invalid start position: '{}'", parts[1])))?;
+        let end = parse_coordinate(parts[2])
+            .ok_or_else(|| IoError::VcfParse(format!("Invalid end position: '{}'", parts[2])))?;
         let allele_string = parts[3];
         let strand_val: i8 = parts[4]
             .parse()
@@ -158,6 +156,7 @@ impl<R: BufRead + Send> InputParser for EnsemblParser<R> {
 mod tests {
     use super::*;
     use std::io::Cursor;
+    use vep_core::coordinate::MAX_COORD;
 
     #[test]
     fn test_parse_snv() {
@@ -226,6 +225,25 @@ mod tests {
         assert!(v2.minimised);
 
         assert!(parser.next_variant().is_none());
+    }
+
+    /// A coordinate is read up to `MAX_COORD`; a start or end past it fails the line.
+    #[test]
+    fn coordinates_past_the_ceiling_fail_the_line() {
+        let past = MAX_COORD + 1;
+        let data = format!(
+            "21\t{MAX_COORD}\t{MAX_COORD}\tA/G\t1\n\
+             21\t{past}\t{past}\tA/G\t1\n\
+             21\t100\t{}\tA/G\t1\n",
+            i64::MAX
+        );
+        let mut parser = EnsemblParser::new(Cursor::new(data.as_bytes()));
+        let kept = parser.next_variant().unwrap().unwrap();
+        assert_eq!((kept.start, kept.end), (MAX_COORD, MAX_COORD));
+        let start_err = parser.next_variant().unwrap().unwrap_err().to_string();
+        assert!(start_err.contains("Invalid start position"), "{start_err}");
+        let end_err = parser.next_variant().unwrap().unwrap_err().to_string();
+        assert!(end_err.contains("Invalid end position"), "{end_err}");
     }
 
     #[test]

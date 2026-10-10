@@ -9,6 +9,18 @@
 
 use std::fmt;
 
+/// The largest coordinate an input reader accepts, 2^62 - 1: above every chromosome,
+/// and below `i64::MAX` by enough that a coordinate plus a span, a flanking base or a
+/// distance stays representable in `u64` and in the `i64` the effects layer converts
+/// to.
+pub const MAX_COORD: u64 = (1 << 62) - 1;
+
+/// Reads a coordinate column: a non-negative integer no larger than [`MAX_COORD`],
+/// `None` for anything else.
+pub fn parse_coordinate(text: &str) -> Option<u64> {
+    text.parse::<u64>().ok().filter(|&n| n <= MAX_COORD)
+}
+
 /// Strand orientation of a genomic feature (forward/+1 or reverse/-1).
 ///
 /// Affects how upstream/downstream distances are computed and how alternate
@@ -140,6 +152,19 @@ pub fn normalize_chromosome(chr: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `MAX_COORD` is read and one past it is not; a negative number, `-0` included,
+    /// and a non-integer are not coordinates.
+    #[test]
+    fn parse_coordinate_reads_up_to_the_ceiling() {
+        assert_eq!(parse_coordinate("0"), Some(0));
+        assert_eq!(parse_coordinate(&MAX_COORD.to_string()), Some(MAX_COORD));
+        assert_eq!(parse_coordinate(&(MAX_COORD + 1).to_string()), None);
+        assert_eq!(parse_coordinate(&u64::MAX.to_string()), None);
+        for text in ["-1", "-0", "1e3", "", "."] {
+            assert_eq!(parse_coordinate(text), None, "{text:?}");
+        }
+    }
 
     #[test]
     fn test_range_display() {

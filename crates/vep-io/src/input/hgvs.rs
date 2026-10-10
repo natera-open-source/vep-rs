@@ -16,6 +16,7 @@
 
 use std::io::BufRead;
 
+use vep_core::coordinate::parse_coordinate;
 use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
@@ -93,9 +94,8 @@ impl<R: BufRead> HgvsParser<R> {
         let pos_str = &before_gt[..pos_end];
         let ref_allele = &before_gt[pos_end..];
 
-        let pos: u64 = pos_str
-            .parse()
-            .map_err(|_| IoError::VcfParse(format!("Invalid position: '{}'", pos_str)))?;
+        let pos = parse_coordinate(pos_str)
+            .ok_or_else(|| IoError::VcfParse(format!("Invalid position: '{}'", pos_str)))?;
 
         if ref_allele.is_empty() || alt.is_empty() {
             return Err(IoError::VcfParse(format!(
@@ -232,17 +232,15 @@ impl<R: BufRead> HgvsParser<R> {
     /// Handles both "123" and "123_456".
     fn parse_position_range(&self, s: &str) -> Result<(u64, u64), IoError> {
         if let Some((start_str, end_str)) = s.split_once('_') {
-            let start: u64 = start_str.parse().map_err(|_| {
+            let start = parse_coordinate(start_str).ok_or_else(|| {
                 IoError::VcfParse(format!("Invalid start position: '{}'", start_str))
             })?;
-            let end: u64 = end_str
-                .parse()
-                .map_err(|_| IoError::VcfParse(format!("Invalid end position: '{}'", end_str)))?;
+            let end = parse_coordinate(end_str)
+                .ok_or_else(|| IoError::VcfParse(format!("Invalid end position: '{}'", end_str)))?;
             Ok((start, end))
         } else {
-            let pos: u64 = s
-                .parse()
-                .map_err(|_| IoError::VcfParse(format!("Invalid position: '{}'", s)))?;
+            let pos = parse_coordinate(s)
+                .ok_or_else(|| IoError::VcfParse(format!("Invalid position: '{}'", s)))?;
             Ok((pos, pos))
         }
     }
@@ -269,6 +267,22 @@ impl<R: BufRead + Send> InputParser for HgvsParser<R> {
 mod tests {
     use super::*;
     use std::io::Cursor;
+    use vep_core::coordinate::MAX_COORD;
+
+    /// A coordinate is read up to `MAX_COORD`; a position past it fails the line.
+    #[test]
+    fn coordinates_past_the_ceiling_fail_the_line() {
+        let data = "21:g.4611686018427387903A>G\n\
+                    21:g.4611686018427387904A>G\n\
+                    21:g.100_18446744073709551615del\n";
+        let mut parser = HgvsParser::new(Cursor::new(data.as_bytes()));
+        let kept = parser.next_variant().unwrap().unwrap();
+        assert_eq!(kept.start, MAX_COORD);
+        for expected in ["Invalid position", "Invalid end position"] {
+            let err = parser.next_variant().unwrap().unwrap_err().to_string();
+            assert!(err.contains(expected), "{err}");
+        }
+    }
 
     #[test]
     fn test_parse_substitution() {

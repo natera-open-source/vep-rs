@@ -481,9 +481,10 @@ fn two_bracket_breakend_alts_write_three_rows() {
 }
 
 /// A bare `<BND>`, with neither CHR2 nor a span, prints `chromosome_breakpoint`:
-/// Ensembl VEP 116.2 keeps the ALT as written without CHR2 (`Parser/VCF.pm:495`),
-/// `_parse_breakends` finds no bracket, and the Allele falls to `class_SO_term`
-/// (`OutputFactory.pm:2029`), with or without INFO/MATEID.
+/// Ensembl VEP 116.2 keeps the ALT as written without CHR2 (the rewrite at
+/// `Parser/VCF.pm:491-498` is skipped), `_parse_breakends` finds no bracket, and the
+/// Allele falls to `class_SO_term` (`OutputFactory.pm:2029`), with or without
+/// INFO/MATEID.
 #[test]
 fn bare_symbolic_bnd_prints_the_class_term() {
     for info in ["SVTYPE=BND", "SVTYPE=BND;MATEID=bnd_x"] {
@@ -528,21 +529,32 @@ fn max_sv_size_governs_tandem_repeat_expansion() {
     }
 }
 
-/// An END past the format's signed 64-bit range is unparsed, so the record is the
-/// single base at POS + 1 and every output format writes it without a panic.
+/// A coordinate past the parser's ceiling (2^62 - 1) is unparsed and a span from
+/// SVLEN saturates at it, so an END of `i64::MAX` or `u64::MAX` annotates the record
+/// as the single base at POS + 1, SVLEN at either extreme annotates a span to the
+/// ceiling, and every output format writes each without a panic: the effects layer
+/// adds one to the end in `i64` on a partial transcript overlap.
 #[test]
-fn an_end_past_the_signed_64_bit_range_is_annotated_as_a_point() {
-    let record = "21\t30425600\tbig_end\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=18446744073709551615;RUS=AT;RUC=1";
-    for format in [&[][..], &["--json"], &["--vcf"], &["--tab"]] {
-        let rows = annotate_record(record, format, &["--max_sv_size", "-1"]);
-        assert!(!rows.is_empty(), "{format:?}");
+fn coordinates_past_the_ceiling_are_annotated_without_a_panic() {
+    let point = "21:30425601";
+    let span = "21:30425601-4611686018427387903";
+    for (info, location) in [
+        ("END=9223372036854775807", point),
+        ("END=18446744073709551615", point),
+        ("SVLEN=-9223372036854775808", span),
+        ("SVLEN=9223372036854775807", span),
+    ] {
+        let record = format!("21\t30425600\tdel\tN\t<DEL>\t.\t.\tSVTYPE=DEL;{info}");
+        for format in [&[][..], &["--json"], &["--vcf"], &["--tab"]] {
+            let rows = annotate_record(&record, format, &["--max_sv_size", "-1"]);
+            assert!(!rows.is_empty(), "{info} {format:?}");
+        }
+        let row = annotate_record(&record, &[], &["--max_sv_size", "-1"])
+            .into_iter()
+            .find(|row| row.contains("ENST00000390690"))
+            .expect("ENST00000390690 overlaps POS + 1");
+        assert_eq!(row.split('\t').nth(1), Some(location), "{info}");
     }
-    let rows = annotate_record(record, &[], &[]);
-    assert!(
-        rows.iter()
-            .all(|row| row.split('\t').nth(1) == Some("21:30425601")),
-        "{rows:?}"
-    );
 }
 
 /// The `--max_sv_size` row of `docs/cli-reference.md` states the documented

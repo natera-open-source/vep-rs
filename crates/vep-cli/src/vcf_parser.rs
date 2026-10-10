@@ -14,6 +14,7 @@
 use anyhow::{bail, Context};
 
 use vep_core::allele::trim_alleles;
+use vep_core::coordinate::{parse_coordinate, MAX_COORD};
 use vep_core::variant::InputVariant;
 
 /// Parse a VCF data line into one or more `InputVariant`s.
@@ -281,7 +282,7 @@ pub fn parse_vcf_line_with_max_sv_size(
         // from SVLEN.
         let sv_end_val = get_info_value(info_field, "SVLEN")
             .and_then(|v| v.parse::<i64>().ok())
-            .map(|len| pos + len.unsigned_abs())
+            .map(|len| pos.saturating_add(len.unsigned_abs()).min(MAX_COORD))
             .or_else(|| get_info_value(info_field, "END").and_then(parse_coordinate))
             .unwrap_or(sv_start);
 
@@ -704,16 +705,16 @@ pub(crate) fn sv_so_term_and_class(
 /// record carrying `alleles` of them: the length of the allele
 /// `_expand_tandem_repeat_allele_string` (`Parser/VCF.pm:385-428`) builds. INFO/RN gives
 /// each tandem-repeat allele its number of repeat sequences (one each when absent,
-/// `:394-397`), consumed in order from the RUS, RUC and RB lists (`:412-414`); a `.`
-/// unit is the one base `N` (`:413`); each sequence's count is its RUC entry whenever
-/// the record carries RUC, else its RB entry divided by the unit's length (`:414`), and
-/// the count is truncated the way Perl's `x` operator truncates (`:419`). RUL is never
-/// read. `None` without RUS (`:385`), when an entry the allele needs is missing, or is
-/// `.` in RN, RUC or RB, when the RN counts through the allele sum past `usize::MAX` or
-/// its length past `u64::MAX`, and for every allele of the record when any repeat
-/// sequence of the record is longer than `max_sv_size` (`:403`, `:417-418`, `:428`),
-/// which keeps the symbolic reading: under `None`, the flag's `-1`, no sequence is ever
-/// short enough.
+/// `:394-397`; an allele past the list's end has none, `:408`), consumed in order from
+/// the RUS, RUC and RB lists (`:412-414`); a `.` unit is the one base `N` (`:413`); each
+/// sequence's count is its RUC entry whenever the record carries RUC, else its RB entry
+/// divided by the unit's length (`:414`), and the count is truncated the way Perl's `x`
+/// operator truncates (`:419`). RUL is never read. `None` without RUS (`:385`), when an
+/// entry the allele needs is missing, or is `.` in RN, RUC or RB, when the RN counts
+/// through the allele sum past `usize::MAX` or its length past `u64::MAX`, and for every
+/// allele of the record when any repeat sequence of the record is longer than
+/// `max_sv_size` (`:403`, `:417-418`, `:428`), which keeps the symbolic reading: under
+/// `None`, the flag's `-1`, no sequence is ever short enough.
 fn tandem_repeat_alt_bases(
     info: &str,
     ordinal: usize,
@@ -732,10 +733,13 @@ fn tandem_repeat_alt_bases(
         return None;
     }
     let rn = list("RN");
+    // One materialised allele per RN entry (`:408`): an allele past the list's end
+    // has no sequences, and every allele has one when RN is absent.
     let sequences = |allele: usize| -> Option<usize> {
-        match rn.get(allele) {
-            None => Some(1),
-            Some(n) => n.parse().ok(),
+        if rn.is_empty() {
+            Some(1)
+        } else {
+            rn.get(allele)?.parse().ok()
         }
     };
     let ruc = list("RUC");
@@ -782,13 +786,6 @@ fn tandem_repeat_alt_bases(
         bases = bases.checked_add(length)?;
     }
     Some(bases)
-}
-
-/// A VCF coordinate (POS, END, END2): a non-negative integer in the signed 64-bit
-/// range, so a coordinate plus a span or a flanking base stays representable
-/// everywhere the annotator adds to it; anything else is unparsed.
-fn parse_coordinate(text: &str) -> Option<u64> {
-    text.parse::<i64>().ok().and_then(|n| u64::try_from(n).ok())
 }
 
 /// The value of `key` in a VCF INFO column, `""` for a flag, `None` when absent.
@@ -1527,60 +1524,71 @@ mod tests {
         assert_eq!(v.end, 101); // END clamped to max(sv_start)
     }
 
-    /// A coordinate is read in the signed 64-bit range: a POS past it fails the line,
-    /// an END past it is unparsed and the symbolic record is the single base at
-    /// POS + 1, and the largest representable END is kept. The widest span, the
-    /// last POS with SVLEN `i64::MIN`, ends at `u64::MAX` whatever the class, and a
-    /// `<BND>` of that span anchors its synthesised mate there too.
+    /// A coordinate is read up to `MAX_COORD`, 2^62 - 1: a POS past it fails the line,
+    /// as does a negative POS, `-0` included; an END past it (`i64::MAX` included) is
+    /// unparsed and the symbolic record is the single base at POS + 1; and a span from
+    /// SVLEN saturates at the ceiling, so a POS just below it with SVLEN `i64::MIN` ends
+    /// there whatever the class, and a `<BND>` spanning to it anchors its synthesised
+    /// mate one past it.
     #[test]
-    fn coordinates_are_read_in_the_signed_64_bit_range() {
-        let err = parse_vcf_line("21\t18446744073709551615\t.\tA\tG\t.\t.\t.", true)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("Invalid POS"), "{err}");
-        let unparsed = parse_vcf_line(
-            "21\t100\t.\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=18446744073709551615",
-            true,
-        )
-        .unwrap();
-        assert_eq!((unparsed[0].start, unparsed[0].end), (101, 101));
+    fn coordinates_are_read_up_to_the_ceiling() {
+        let past = [MAX_COORD + 1, i64::MAX as u64, u64::MAX];
+        for pos in past.iter().map(|n| n.to_string()).chain(["-0".to_string()]) {
+            let err = parse_vcf_line(&format!("21\t{pos}\t.\tA\tG\t.\t.\t."), true)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("Invalid POS"), "{pos}: {err}");
+        }
+        for end in past {
+            let unparsed = parse_vcf_line(
+                &format!("21\t100\t.\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END={end}"),
+                true,
+            )
+            .unwrap();
+            assert_eq!((unparsed[0].start, unparsed[0].end), (101, 101), "{end}");
+        }
         let kept = parse_vcf_line(
-            "21\t100\t.\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=9223372036854775807",
+            &format!("21\t100\t.\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END={MAX_COORD}"),
             true,
         )
         .unwrap();
-        assert_eq!(kept[0].end, 9223372036854775807);
+        assert_eq!(kept[0].end, MAX_COORD);
+        let svlen = format!("SVLEN={}", i64::MIN);
+        let below = MAX_COORD - 1;
         let widest = parse_vcf_line(
-            "21\t9223372036854775807\t.\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;SVLEN=-9223372036854775808;RUS=AT;RUC=1",
+            &format!("21\t{below}\t.\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;{svlen};RUS=AT;RUC=1"),
             true,
         )
         .unwrap();
-        assert_eq!(widest[0].sv_end, Some(18446744073709551615));
+        assert_eq!(widest[0].sv_end, Some(MAX_COORD));
         let insertion = parse_vcf_line(
-            "21\t9223372036854775807\t.\tN\t<INS>\t.\t.\tSVTYPE=INS;SVLEN=-9223372036854775808",
+            &format!("21\t{below}\t.\tN\t<INS>\t.\t.\tSVTYPE=INS;{svlen}"),
             true,
         )
         .unwrap();
         assert_eq!(
             (insertion[0].start, insertion[0].end),
-            (9223372036854775808, 18446744073709551615)
+            (MAX_COORD, MAX_COORD)
         );
         let breakend = parse_vcf_line(
-            "21\t9223372036854775807\t.\tN\t<BND>\t.\t.\tSVTYPE=BND;SVLEN=-9223372036854775808",
+            &format!(
+                "21\t{}\t.\tN\t<BND>\t.\t.\tSVTYPE=BND;{svlen}",
+                MAX_COORD - 2
+            ),
             true,
         )
         .unwrap();
         assert_eq!(breakend.len(), 2);
-        assert_eq!(breakend[1].end, 18446744073709551615);
-        assert_eq!(breakend[1].mate_pos, Some(18446744073709551615));
+        assert_eq!(breakend[1].end, MAX_COORD);
+        assert_eq!(breakend[1].mate_pos, Some(MAX_COORD + 1));
     }
 
     /// A bare `<BND>`, with neither CHR2 nor a span, names no mate: `Parser/VCF.pm`
-    /// leaves the ALT as written without CHR2 (`:495`) and prepends REF (`:499`),
-    /// `_parse_breakends` finds no bracket in `N/<BND>`
-    /// (`StructuralVariationFeature.pm:1279-1283`), and the row's Allele falls to
-    /// `class_SO_term` (`OutputFactory.pm:2029`), `chromosome_breakpoint`, with or
-    /// without INFO/MATEID.
+    /// leaves the ALT as written without CHR2 (the `:491-498` block that rewrites it
+    /// is skipped) and prepends REF (`:499`), `_parse_breakends` finds no bracket in
+    /// `N/<BND>` (`StructuralVariationFeature.pm:1279-1283`), and the row's Allele
+    /// falls to `class_SO_term` (`OutputFactory.pm:2029`), `chromosome_breakpoint`,
+    /// with or without INFO/MATEID.
     #[test]
     fn bare_symbolic_bnd_prints_the_class_term() {
         for info in [
@@ -2315,10 +2323,11 @@ mod tests {
     /// An RN count that pushes the running sum past the machine word states no
     /// length for any allele: the first allele's `usize::MAX` sequences exhaust the
     /// two RUS entries, the second allele's one sequence takes the sum past
-    /// `usize::MAX`, and a third allele's offset lies past it. Two sequences of
-    /// `1e19` bases sum past `u64::MAX` the same way. An RN of `usize::MAX` on its own
-    /// sums without overflow: the oversize check reads only the one sequence RUS
-    /// lists, and the allele's second sequence finds no unit, so it states no length.
+    /// `usize::MAX`, and a third allele's offset lies past it. An RN of `usize::MAX`
+    /// on its own sums without overflow: the oversize check reads only the one
+    /// sequence RUS lists, and the allele's second sequence finds no unit, so it
+    /// states no length. Under a limit of `u64::MAX`, which admits a `1e19`-base
+    /// sequence, one such sequence is its length and two sum past `u64::MAX`.
     #[test]
     fn tandem_repeat_alt_bases_refuses_an_rn_sum_past_the_machine_word() {
         let info = "SVTYPE=CNV;SVLEN=10;RN=18446744073709551615,1;RUS=AT,AT;RUC=100,100";
@@ -2330,9 +2339,17 @@ mod tests {
         assert_eq!(variants.len(), 2);
         assert_eq!(variants[0].tr_alt_bases, None);
         assert_eq!(variants[1].tr_alt_bases, None);
-        assert_eq!(alt_bases("SVTYPE=CNV;RN=2;RUS=A,A;RUC=1e19,1e19", 0), None);
         assert_eq!(
             alt_bases("SVTYPE=CNV;RN=18446744073709551615;RUS=AT;RUC=100", 0),
+            None
+        );
+        let unlimited = Some(u64::MAX);
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;RUS=A;RUC=1e19", 0, 1, unlimited),
+            Some(10_000_000_000_000_000_000)
+        );
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;RN=2;RUS=A,A;RUC=1e19,1e19", 0, 1, unlimited),
             None
         );
     }
@@ -2391,6 +2408,43 @@ mod tests {
             let variants = parse_vcf_line_with_max_sv_size(line, true, limit).unwrap();
             assert_eq!(variants[0].tr_alt_bases, None, "{limit:?}");
         }
+    }
+
+    /// `_expand_tandem_repeat_allele_string` builds one allele per RN entry (`:408`,
+    /// `for my $records (@RN)`), so a `<CNV:TR>` ALT past a short RN list has no
+    /// materialised allele and states no length, and the oversize scan covers only the
+    /// sequences the list materialises: `RN=1;RUS=AT,CAGA;RUC=10,4000000` on two ALTs
+    /// is 20 bases for the first and nothing for the second, whose 16,000,000-base
+    /// sequence is never built; `RN=1;RUS=AT,AT;RUC=10,10` likewise leaves the second
+    /// ALT without a length, where `RN=1,1` gives both 20.
+    #[test]
+    fn an_alt_past_the_rn_list_states_no_length() {
+        let limit = Some(10_000_000);
+        let record = |info: &str| {
+            let line = format!("21\t30425600\tx\tN\t<CNV:TR>,<CNV:TR>\t.\t.\tEND=30425899;{info}");
+            let variants = parse_vcf_line_with_max_sv_size(&line, true, limit).unwrap();
+            (variants[0].tr_alt_bases, variants[1].tr_alt_bases)
+        };
+        assert_eq!(
+            record("SVTYPE=CNV;RN=1;RUS=AT,CAGA;RUC=10,4000000"),
+            (Some(20), None)
+        );
+        assert_eq!(
+            record("SVTYPE=CNV;RN=1;RUS=AT,AT;RUC=10,10"),
+            (Some(20), None)
+        );
+        assert_eq!(
+            record("SVTYPE=CNV;RN=1,1;RUS=AT,AT;RUC=10,10"),
+            (Some(20), Some(20))
+        );
+        assert_eq!(
+            record("SVTYPE=CNV;RUS=AT,AT;RUC=10,10"),
+            (Some(20), Some(20))
+        );
+        assert_eq!(
+            tandem_repeat_alt_bases("SVTYPE=CNV;RN=1;RUS=AT,CAGA;RUC=10,4000000", 1, 2, limit),
+            None
+        );
     }
 
     #[test]

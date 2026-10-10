@@ -18,7 +18,7 @@
 
 use std::io::BufRead;
 
-use vep_core::coordinate::Strand;
+use vep_core::coordinate::{parse_coordinate, Strand};
 use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
@@ -73,17 +73,14 @@ impl<R: BufRead> RegionParser<R> {
 
         let range_part = parts[1];
         let (start, end) = if let Some((s, e)) = range_part.split_once('-') {
-            let start: u64 = s
-                .parse()
-                .map_err(|_| IoError::VcfParse(format!("Invalid start position: '{}'", s)))?;
-            let end: u64 = e
-                .parse()
-                .map_err(|_| IoError::VcfParse(format!("Invalid end position: '{}'", e)))?;
+            let start = parse_coordinate(s)
+                .ok_or_else(|| IoError::VcfParse(format!("Invalid start position: '{}'", s)))?;
+            let end = parse_coordinate(e)
+                .ok_or_else(|| IoError::VcfParse(format!("Invalid end position: '{}'", e)))?;
             (start, end)
         } else {
-            let pos: u64 = range_part
-                .parse()
-                .map_err(|_| IoError::VcfParse(format!("Invalid position: '{}'", range_part)))?;
+            let pos = parse_coordinate(range_part)
+                .ok_or_else(|| IoError::VcfParse(format!("Invalid position: '{}'", range_part)))?;
             (pos, pos)
         };
 
@@ -126,6 +123,7 @@ impl<R: BufRead + Send> InputParser for RegionParser<R> {
 mod tests {
     use super::*;
     use std::io::Cursor;
+    use vep_core::coordinate::MAX_COORD;
 
     #[test]
     fn test_parse_with_strand() {
@@ -139,6 +137,27 @@ mod tests {
         assert_eq!(v.end, 25585733);
         assert_eq!(v.alt_allele(), b"G");
         assert_eq!(v.strand, Strand::Forward);
+    }
+
+    /// A coordinate is read up to `MAX_COORD`; a start, end or position past it
+    /// fails the line.
+    #[test]
+    fn coordinates_past_the_ceiling_fail_the_line() {
+        let data = "21:4611686018427387903-4611686018427387903:1/G\n\
+                    21:4611686018427387904-4611686018427387904:1/G\n\
+                    21:100-18446744073709551615:1/G\n\
+                    21:9223372036854775807:1/G\n";
+        let mut parser = RegionParser::new(Cursor::new(data.as_bytes()));
+        let kept = parser.next_variant().unwrap().unwrap();
+        assert_eq!((kept.start, kept.end), (MAX_COORD, MAX_COORD));
+        for expected in [
+            "Invalid start position",
+            "Invalid end position",
+            "Invalid position",
+        ] {
+            let err = parser.next_variant().unwrap().unwrap_err().to_string();
+            assert!(err.contains(expected), "{err}");
+        }
     }
 
     #[test]
