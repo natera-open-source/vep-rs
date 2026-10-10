@@ -581,13 +581,41 @@ class SvFilterSetTests(unittest.TestCase):
         for rule in C.REFERENCE_116_2_ONE_SIDED_RULES:
             self.assertEqual(classes[rule.bucket]["excludes"], rule.excludes_with_cache, rule.bucket)
             self.assertIn("excluded", classes[rule.bucket])
-        self.assertEqual([c["excludes"] for c in classes.values()], [True, True, True, False])
-        fifth = C.REFERENCE_116_2_ONE_SIDED_RULES[0].__class__(
-            bucket="a_fifth_shape", definition="A shape.", excludes=False, taxonomy_class="x", perl_citation="X.pm:1"
+        self.assertEqual([c["excludes"] for c in classes.values()], [True, True, True, False, False])
+        self.assertEqual(block["bnd_bare_reference_allele_rows"], 0)
+        sixth = C.REFERENCE_116_2_ONE_SIDED_RULES[0].__class__(
+            bucket="a_sixth_shape", definition="A shape.", excludes=False, taxonomy_class="x", perl_citation="X.pm:1"
         )
-        with mock.patch.object(C, "REFERENCE_116_2_ONE_SIDED_RULES", C.REFERENCE_116_2_ONE_SIDED_RULES + (fifth,)):
-            with self.assertRaisesRegex(AssertionError, "a_fifth_shape"):
+        with mock.patch.object(C, "REFERENCE_116_2_ONE_SIDED_RULES", C.REFERENCE_116_2_ONE_SIDED_RULES + (sixth,)):
+            with self.assertRaisesRegex(AssertionError, "a_sixth_shape"):
                 C.release_report_block(C.MaskResult(release="116.2"), {}, True)
+
+    def test_the_bare_breakpoint_reference_allele_rows_are_counted_and_never_set_aside(self) -> None:
+        """Ensembl VEP 116.2 writes a bare `<BND>`'s rows twice, ALLELE_NUM 1 for the reference
+        allele N of `N/<BND>` and 2 for the ALT (StructuralVariationOverlap.pm:64-77); the tuple
+        set absorbs the duplicate, so the comparator counts the reference's second row per
+        feature and sets nothing aside, and a bracket record's own and mate rows, which differ
+        in Allele, count nothing."""
+        import tempfile
+        from pathlib import Path
+
+        rows = [
+            "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence",
+            "bare\t21:30425651\tchromosome_breakpoint\tG1\tENST1\tTranscript\tcoding_sequence_variant",
+            "bare\t21:30425651\tchromosome_breakpoint\tG1\tENST1\tTranscript\tcoding_sequence_variant",
+            "bare\t21:30425651\tchromosome_breakpoint\tG2\tENST2\tTranscript\tupstream_gene_variant",
+            "bare\t21:30425651\tchromosome_breakpoint\tG2\tENST2\tTranscript\tupstream_gene_variant",
+            "paired\t21:30425651\tN.\tG1\tENST1\tTranscript\tfeature_truncation,coding_sequence_variant",
+            "paired\t21:30425651\tN[21:30425700[\tG1\tENST1\tTranscript\tfeature_truncation,coding_sequence_variant",
+            "single\t21:30425651\tchromosome_breakpoint\tG3\tENST3\tTranscript\tintron_variant",
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "perl.txt"
+            path.write_text("\n".join(rows) + "\n")
+            self.assertEqual(C.count_bare_breakpoint_reference_rows(path), 2)
+            tuples, _ = C.parse_vep_output(path)
+            self.assertEqual(len([t for t in tuples if t[1] == "chromosome_breakpoint"]), 3)
+            self.assertEqual(C.count_bare_breakpoint_reference_rows(Path(d) / "absent.txt"), 0)
 
 
 # Cross-file tuple collisions
@@ -2585,7 +2613,9 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
         self.assertEqual(set(adj["divergence_classes"]), {
             "reference_skipped_record", "bnd_own_chromosome_rows_lost",
             "bnd_synonym_mate_rows_lost", "fasta_named_slice_intergenic",
+            "bnd_bare_reference_allele_row",
         })
+        self.assertEqual(adj["bnd_bare_reference_allele_rows"], 0)
         surviving = (out / "discordant_adjusted.tsv").read_text().splitlines()[1:]
         self.assertEqual(len(surviving), 3)
         self.assertFalse(any("\t21:50001-60000\t" in l or "\t21:30000001\t" in l or "\t21:70001-70100\t" in l for l in surviving))

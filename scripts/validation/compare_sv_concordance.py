@@ -59,6 +59,7 @@ from breakend_mate_context import (  # noqa: E402
     model_from_cache_record,
 )
 from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition for both comparators)
+    BND_BARE_REFERENCE_ALLELE_ROW_BUCKET,
     BND_OWN_ROWS_LOST_BUCKET,
     BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
     DEFAULT_REFERENCE_RELEASE,
@@ -1835,6 +1836,33 @@ def count_fasta_named_slice_intergenic(
     return n
 
 
+def count_bare_breakpoint_reference_rows(path: Path) -> int:
+    """The reference's duplicate rows under `chromosome_breakpoint`: a breakpoint record
+    that names no mate is held as `N/<BND>` and, with no breakend parsed, gets one allele
+    per slash-separated part, the reference base `N` included
+    (StructuralVariationOverlap.pm 116:64-77), so every row is written twice, the second
+    for the reference allele. The tuple set absorbs the duplicate, so the count is
+    reported and nothing is set aside; a missing file counts zero."""
+    if not path.exists():
+        return 0
+    seen: set[AnnotTuple] = set()
+    duplicates = 0
+    with open(path) as fh:
+        for line in fh:
+            line = line.rstrip("\n")
+            if not line or line.startswith("#"):
+                continue
+            cols = line.split("\t")
+            if len(cols) < 7 or cols[2] != "chromosome_breakpoint":
+                continue
+            key = (normalize_location(cols[1]), cols[2], cols[4], cols[5], normalize_consequence_set(cols[6]))
+            if key in seen:
+                duplicates += 1
+            else:
+                seen.add(key)
+    return duplicates
+
+
 @dataclass
 class MaskResult:
     """Every mask's exclusions on one pair of tuple sets, under one reference release.
@@ -1867,6 +1895,7 @@ class MaskResult:
     bnd_own_rust: set[AnnotTuple] = field(default_factory=set)
     bnd_synonym_rust: set[AnnotTuple] = field(default_factory=set)
     fasta_intergenic_records: int = 0
+    bare_reference_rows: int = 0
 
     def all_rust(self) -> set[AnnotTuple]:
         return (
@@ -1962,6 +1991,7 @@ def release_report_block(
         BND_OWN_ROWS_LOST_BUCKET: len(overall.bnd_own_rust),
         BND_SYNONYM_MATE_ROWS_LOST_BUCKET: len(overall.bnd_synonym_rust),
         FASTA_NAMED_SLICE_INTERGENIC_BUCKET: 0,
+        BND_BARE_REFERENCE_ALLELE_ROW_BUCKET: 0,
     }
     missing = [r.bucket for r in REFERENCE_116_2_ONE_SIDED_RULES if r.bucket not in excluded_by_bucket]
     if missing:
@@ -1986,6 +2016,10 @@ def release_report_block(
             k: len(v.bnd_synonym_rust) for k, v in sorted(per_file.items()) if v.bnd_synonym_rust
         },
         "fasta_named_slice_intergenic_records": overall.fasta_intergenic_records,
+        "bnd_bare_reference_allele_rows": overall.bare_reference_rows,
+        "bnd_bare_reference_allele_rows_by_file": {
+            k: v.bare_reference_rows for k, v in sorted(per_file.items()) if v.bare_reference_rows
+        },
         "breakend_masks_check_ran": cache_supplied,
         "divergence_classes": {
             rule.bucket: {
@@ -2247,7 +2281,8 @@ def write_markdown_report(
             f"{len(release_masks.skipped_rust):,} vep-rs rows on {release_masks.skipped_records:,} records set aside; "
             f"`{BND_OWN_ROWS_LOST_BUCKET}` {len(release_masks.bnd_own_rust):,} set aside; "
             f"`{BND_SYNONYM_MATE_ROWS_LOST_BUCKET}` {len(release_masks.bnd_synonym_rust):,} set aside; "
-            f"`{FASTA_NAMED_SLICE_INTERGENIC_BUCKET}` {release_masks.fasta_intergenic_records:,} records counted, none set aside"
+            f"`{FASTA_NAMED_SLICE_INTERGENIC_BUCKET}` {release_masks.fasta_intergenic_records:,} records counted, none set aside; "
+            f"`{BND_BARE_REFERENCE_ALLELE_ROW_BUCKET}` {release_masks.bare_reference_rows:,} reference rows counted, none set aside"
         )
     total_excluded = excluded_count + excluded_perl_count
     if adjusted_overall is not None and total_excluded > 0:
@@ -2519,7 +2554,7 @@ def main() -> None:
         ],
     ] = {}
     all_location_types: dict[str, str] = {}
-
+    bare_reference_rows_by_file: dict[str, int] = {}
 
     for vcf_path in vcf_files:
         basename = vcf_basename(vcf_path)
@@ -2536,6 +2571,7 @@ def main() -> None:
         # symbolic-allele mapping can only ever touch the scored side.
         perl_tuples, perl_locs = parse_vep_output(perl_path)
         rust_tuples, rust_locs = parse_vep_output(rust_path, engine=args.scored_engine)
+        bare_reference_rows_by_file[basename] = count_bare_breakpoint_reference_rows(perl_path)
 
         if not perl_path.exists():
             print(f"    WARNING: Perl output missing: {perl_path}")
@@ -2640,6 +2676,7 @@ def main() -> None:
         all_input_variants,
         args.reference_max_sv_size,
     )
+    masks.bare_reference_rows = sum(bare_reference_rows_by_file.values())
     if masks.skipped_problems:
         # The skipped-record class against the input records: a disagreement is a
         # reference run under other flags, a record dropped on a route the registry does
@@ -2717,6 +2754,7 @@ def main() -> None:
             variants_f,
             args.reference_max_sv_size,
         )
+        masks_f.bare_reference_rows = bare_reference_rows_by_file[basename]
         masks_by_file[basename] = masks_f
         cnvtr_rust_by_file[basename] = len(masks_f.cnvtr_rust)
         cnvtr_perl_by_file[basename] = len(masks_f.cnvtr_perl)
@@ -2897,7 +2935,8 @@ def main() -> None:
             f"Reference release {args.reference_release}: "
             f"{len(masks.skipped_rust)} vep-rs tuple(s) on {masks.skipped_records} record(s) the reference skipped; "
             f"{len(masks.bnd_own_rust)} own-end breakend row(s) and {len(masks.bnd_synonym_rust)} synonym-mate row(s) set aside; "
-            f"{masks.fasta_intergenic_records} FASTA-named-slice record(s) counted"
+            f"{masks.fasta_intergenic_records} FASTA-named-slice record(s) counted; "
+            f"{masks.bare_reference_rows} bare-breakpoint reference-allele row(s) counted"
         )
     print(f"Reports written to: {output_dir}/")
     print(f"  {json_path.name}")

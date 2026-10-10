@@ -683,11 +683,13 @@ REFERENCE_SKIPPED_RECORD_BUCKET = "reference_skipped_record"
 BND_OWN_ROWS_LOST_BUCKET = "bnd_own_chromosome_rows_lost"
 BND_SYNONYM_MATE_ROWS_LOST_BUCKET = "bnd_synonym_mate_rows_lost"
 FASTA_NAMED_SLICE_INTERGENIC_BUCKET = "fasta_named_slice_intergenic"
+BND_BARE_REFERENCE_ALLELE_ROW_BUCKET = "bnd_bare_reference_allele_row"
 
-# The three breakend shapes are counted, never set aside: deciding which of the rows the
-# reference would have written needs the cache's transcript-to-chromosome authority,
-# which this comparator does not read (the structural-variant comparator sets the first
-# two aside under it).
+# The breakend shapes are counted, never set aside, by this comparator: deciding which
+# of the rows the reference would have written needs the cache's transcript-to-chromosome
+# authority, which this comparator does not read (the structural-variant comparator sets
+# the first two aside under it), and the reference-allele row of a bare breakpoint is a
+# duplicate tuple that neither comparator's unique-tuple diff ever sees.
 REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
     OneSidedRule(
         bucket=REFERENCE_SKIPPED_RECORD_BUCKET,
@@ -741,6 +743,22 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
         excludes=False,
         taxonomy_class="fasta_named_slice_intergenic",
         perl_citation="Parser.pm:749; BaseVEP.pm get_slice; AnnotationType/Transcript.pm:141",
+    ),
+    OneSidedRule(
+        bucket=BND_BARE_REFERENCE_ALLELE_ROW_BUCKET,
+        definition=(
+            "A breakpoint record that names no mate (a bare <BND>, or one with SVLEN, POS2 or "
+            "an unreadable END2 and no bracket) is held as N/<BND> and, with no breakend "
+            "parsed, one allele is built per slash-separated part, the reference base N "
+            "included, so the reference writes every row twice under chromosome_breakpoint, "
+            "ALLELE_NUM 1 for the reference allele and 2 for the ALT; a reference allele has "
+            "no variant effect, so vep-rs writes the ALT row once. The duplicate is an "
+            "identical tuple, which the unique-tuple diff of both comparators absorbs; the "
+            "structural-variant comparator counts the reference's duplicate rows."
+        ),
+        excludes=False,
+        taxonomy_class="bnd_bare_reference_allele_row",
+        perl_citation="Parser/VCF.pm:499; StructuralVariationOverlap.pm:64-77; OutputFactory.pm:2029",
     ),
 )
 
@@ -894,9 +912,11 @@ def apply_116_2_one_sided_rules(
 
     Marks the rows of `REFERENCE_SKIPPED_RECORD_BUCKET`, the one 116.2 class that
     excludes and whose rows are all vep-rs's, in ``masked_rows``; counts the three
-    breakend shapes without masking them. Returns the per-bucket statistics: ``count``
-    rows recognised, ``excluded`` rows set aside, ``records`` distinct (file, Location)
-    pairs the bucket reached.
+    one-sided breakend shapes without masking them. The reference-allele row of a bare
+    breakpoint (`BND_BARE_REFERENCE_ALLELE_ROW_BUCKET`) is an identical tuple the
+    sorted-unique keys never carry, so its count here is zero by construction. Returns
+    the per-bucket statistics: ``count`` rows recognised, ``excluded`` rows set aside,
+    ``records`` distinct (file, Location) pairs the bucket reached.
     """
     stats = {
         rule.bucket: {"count": 0, "excluded": 0, "records": 0}
@@ -1411,7 +1431,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "one-sided divergence classes of the adjusted F1 (REFERENCE_REGISTRIES). Under "
         "115.2 the classes are the published ones; under 116.2 (default) a record the "
         "reference dropped as vep_skip is set aside whole and the three breakend shapes "
-        "of 116.1's chromosome-aware overlap are counted. The pair rules are the same "
+        "of 116.1's chromosome-aware overlap are counted, as is the reference-allele row "
+        "of a bare breakpoint. The pair rules are the same "
         "under both. run_concordance.sh and run_clone_measurement.sh derive the value "
         "from the reference set's provenance.",
     )

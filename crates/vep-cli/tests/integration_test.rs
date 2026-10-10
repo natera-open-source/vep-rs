@@ -529,32 +529,199 @@ fn max_sv_size_governs_tandem_repeat_expansion() {
     }
 }
 
-/// A coordinate past the parser's ceiling (2^62 - 1) is unparsed and a span from
-/// SVLEN saturates at it, so an END of `i64::MAX` or `u64::MAX` annotates the record
-/// as the single base at POS + 1, SVLEN at either extreme annotates a span to the
-/// ceiling, and every output format writes each without a panic: the effects layer
-/// adds one to the end in `i64` on a partial transcript overlap.
+/// A coordinate past the parser's ceiling (2^62 - 1): an END of `i64::MAX` or
+/// `u64::MAX` fails its record, which is skipped as Ensembl VEP skips an oversize or
+/// invalid one, and a span from SVLEN saturates at the ceiling, so SVLEN at either
+/// extreme annotates a span to it in every output format without a panic (the
+/// effects layer adds one to the end in `i64` on a partial transcript overlap).
 #[test]
 fn coordinates_past_the_ceiling_are_annotated_without_a_panic() {
-    let point = "21:30425601";
-    let span = "21:30425601-4611686018427387903";
-    for (info, location) in [
-        ("END=9223372036854775807", point),
-        ("END=18446744073709551615", point),
-        ("SVLEN=-9223372036854775808", span),
-        ("SVLEN=9223372036854775807", span),
-    ] {
-        let record = format!("21\t30425600\tdel\tN\t<DEL>\t.\t.\tSVTYPE=DEL;{info}");
+    for end in ["END=9223372036854775807", "END=18446744073709551615"] {
+        let record = format!("21\t30425600\tdel\tN\t<DEL>\t.\t.\tSVTYPE=DEL;{end}");
         for format in [&[][..], &["--json"], &["--vcf"], &["--tab"]] {
             let rows = annotate_record(&record, format, &["--max_sv_size", "-1"]);
-            assert!(!rows.is_empty(), "{info} {format:?}");
+            assert!(rows.is_empty(), "{end} {format:?}: {rows:?}");
         }
-        let row = annotate_record(&record, &[], &["--max_sv_size", "-1"])
-            .into_iter()
-            .find(|row| row.contains("ENST00000390690"))
-            .expect("ENST00000390690 overlaps POS + 1");
-        assert_eq!(row.split('\t').nth(1), Some(location), "{info}");
     }
+    for svlen in ["SVLEN=-9223372036854775808", "SVLEN=9223372036854775807"] {
+        let record = format!("21\t30425600\tdel\tN\t<DEL>\t.\t.\tSVTYPE=DEL;{svlen}");
+        for format in [&[][..], &["--json"], &["--vcf"], &["--tab"]] {
+            let rows = annotate_record(&record, format, &["--max_sv_size", "-1"]);
+            assert!(!rows.is_empty(), "{svlen} {format:?}");
+        }
+        let location = annotate_record(&record, &[], &["--max_sv_size", "-1"])
+            .iter()
+            .find(|row| row.contains("ENST00000390690"))
+            .map(|row| row.split('\t').nth(1).unwrap().to_string())
+            .expect("ENST00000390690 overlaps POS + 1");
+        assert_eq!(location, "21:30425601-4611686018427387903", "{svlen}");
+    }
+}
+
+/// The rows of a breakend record follow what it names, as Ensembl VEP 116.2 writes
+/// them (`Parser/VCF.pm:484-499`): a `<BND>` with SVLEN and no CHR2 is one allele
+/// over its span, Allele `chromosome_breakpoint`, `coding_sequence_variant,
+/// 5_prime_UTR_variant` on ENST00000390690 and no `feature_truncation`; an INFO/END
+/// never ends a breakpoint's span (`:487-489`), so `END=30425750` is the point
+/// `21:30425651` and `CHR2=2;END=40000000` the point with its mate on chromosome 2
+/// (two local rows, not every transcript to 40 Mb); POS2 and an END2 that is not a
+/// coordinate name no mate (`:493`), so those records print `chromosome_breakpoint`
+/// alone.
+#[test]
+fn breakend_rows_follow_what_the_record_names() {
+    let rows_for = |info: &str| {
+        annotate_record(
+            &format!("21\t30425650\tbnd\tN\t<BND>\t.\t.\t{info}"),
+            &[],
+            &[],
+        )
+    };
+    let on_390690 = |rows: &[String]| -> Vec<(String, String, String)> {
+        rows.iter()
+            .filter(|r| r.contains("ENST00000390690"))
+            .map(|r| {
+                let c: Vec<&str> = r.split('\t').collect();
+                (c[1].to_string(), c[2].to_string(), c[6].to_string())
+            })
+            .collect()
+    };
+    let span = rows_for("SVTYPE=BND;SVLEN=300");
+    assert_eq!(
+        on_390690(&span),
+        [(
+            "21:30425651-30425950".to_string(),
+            "chromosome_breakpoint".to_string(),
+            "coding_sequence_variant,5_prime_UTR_variant".to_string()
+        )]
+    );
+    let end_only = rows_for("SVTYPE=BND;END=30425750");
+    assert_eq!(
+        on_390690(&end_only),
+        [(
+            "21:30425651".to_string(),
+            "chromosome_breakpoint".to_string(),
+            "coding_sequence_variant".to_string()
+        )]
+    );
+    let far_mate = rows_for("SVTYPE=BND;CHR2=2;END=40000000");
+    assert_eq!(far_mate.len(), 2, "{far_mate:?}");
+    assert_eq!(
+        on_390690(&far_mate),
+        [(
+            "21:30425651".to_string(),
+            "N.".to_string(),
+            "feature_truncation,coding_sequence_variant".to_string()
+        )]
+    );
+    for info in [
+        "SVTYPE=BND;CHR2=2;POS2=40000000",
+        "SVTYPE=BND;CHR2=21;END2=-7",
+    ] {
+        assert_eq!(
+            on_390690(&rows_for(info)),
+            [(
+                "21:30425651".to_string(),
+                "chromosome_breakpoint".to_string(),
+                "coding_sequence_variant".to_string()
+            )],
+            "{info}"
+        );
+    }
+}
+
+/// INFO/SVTYPE names the class of an ALT outside the VCF 4.4 forms
+/// (`Parser/VCF.pm:472-475`): `N.` with `SVTYPE=DEL` and END is a deletion over its
+/// span, `deletion` with `frameshift_variant,feature_truncation` on ENST00000390690,
+/// as Ensembl VEP 116.2 writes it. A comma-separated SVLEN reads its first value
+/// (BaseVCF4.pm:304) and a tandem repeat its largest (`Parser/VCF.pm:505-511`), the
+/// Locations Ensembl VEP 116.2 writes for `SVLEN=-300,400` and `SVLEN=300,400`.
+#[test]
+fn svtype_and_a_comma_separated_svlen_are_read_as_ensembl_vep_reads_them() {
+    let location_and_terms = |record: &str| -> Vec<(String, String, String)> {
+        annotate_record(record, &[], &[])
+            .iter()
+            .filter(|r| r.contains("ENST00000390690"))
+            .map(|r| {
+                let c: Vec<&str> = r.split('\t').collect();
+                (c[1].to_string(), c[2].to_string(), c[6].to_string())
+            })
+            .collect()
+    };
+    assert_eq!(
+        location_and_terms("21\t30425600\tgnomad_del\tN\tN.\t.\t.\tSVTYPE=DEL;END=30425899"),
+        [(
+            "21:30425601-30425899".to_string(),
+            "deletion".to_string(),
+            "frameshift_variant,feature_truncation".to_string()
+        )]
+    );
+    let cnv =
+        location_and_terms("21\t30425600\tcnv\tN\t<DEL>,<DUP>\t.\t.\tSVTYPE=CNV;SVLEN=-300,400");
+    assert_eq!(cnv.len(), 2);
+    assert!(
+        cnv.iter()
+            .all(|(location, _, _)| location == "21:30425601-30425900"),
+        "{cnv:?}"
+    );
+    let repeat = location_and_terms(
+        "21\t30425600\ttr\tN\t<CNV:TR>,<CNV:TR>\t.\t.\tSVTYPE=CNV;SVLEN=300,400;RUS=AT,AT;RUC=100,50",
+    );
+    assert_eq!(repeat.len(), 2);
+    assert!(
+        repeat
+            .iter()
+            .all(|(location, _, _)| location == "21:30425601-30426000"),
+        "{repeat:?}"
+    );
+}
+
+/// A record the parser refuses is skipped with a warning the user sees, as Ensembl
+/// VEP's `skipped_variant_msg` reports one, and the rest of the file is annotated.
+#[test]
+fn a_refused_record_is_skipped_with_a_visible_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("in.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t30425600\tbad_end\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=-5\n\
+         21\t-1\tbad_pos\tA\tG\t.\t.\t.\n\
+         21\t30425600\tkept\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30425899\n",
+    )
+    .unwrap();
+    let output = dir.path().join("out");
+    let cache = format!(
+        "{}/../../tests/golden/116/GRCh38-release116/json_cache",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let result = vep_binary()
+        .args([
+            "-i",
+            input.to_str().unwrap(),
+            "-o",
+            output.to_str().unwrap(),
+        ])
+        .args(["--json_cache", &cache, "--offline", "--assembly", "GRCh38"])
+        .args(["--force_overwrite", "--no_stats"])
+        .output()
+        .unwrap();
+    assert!(result.status.success());
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        stderr.contains("WARN") && stderr.contains("Invalid END: '-5'"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("Invalid POS: '-1'"), "{stderr}");
+    let rows: Vec<String> = std::fs::read_to_string(&output)
+        .unwrap()
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .map(str::to_string)
+        .collect();
+    assert!(
+        rows.iter().all(|r| r.starts_with("kept\t")) && rows.len() == 2,
+        "{rows:?}"
+    );
 }
 
 /// The `--max_sv_size` row of `docs/cli-reference.md` states the documented

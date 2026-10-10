@@ -2261,8 +2261,9 @@ class ReferenceRegistryTests(unittest.TestCase):
             self.assertIs(registry.pair_rules, EXCLUSION_REGISTRY, release)
             self.assertEqual(registry.release, release)
 
-    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_three_breakend_shapes(self) -> None:
+    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_four_breakend_shapes(self) -> None:
         from compare_vep_outputs import (
+            BND_BARE_REFERENCE_ALLELE_ROW_BUCKET,
             BND_OWN_ROWS_LOST_BUCKET,
             BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
             FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
@@ -2276,12 +2277,18 @@ class ReferenceRegistryTests(unittest.TestCase):
         self.assertEqual(
             [r.bucket for r in rules],
             [REFERENCE_SKIPPED_RECORD_BUCKET, BND_OWN_ROWS_LOST_BUCKET,
-             BND_SYNONYM_MATE_ROWS_LOST_BUCKET, FASTA_NAMED_SLICE_INTERGENIC_BUCKET],
+             BND_SYNONYM_MATE_ROWS_LOST_BUCKET, FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
+             BND_BARE_REFERENCE_ALLELE_ROW_BUCKET],
         )
-        self.assertEqual([r.excludes for r in rules], [True, False, False, False],
+        self.assertEqual([r.excludes for r in rules], [True, False, False, False, False],
                          "this comparator has no transcript-to-chromosome authority, so only the skipped record is set aside")
-        self.assertEqual([r.excludes_with_cache for r in rules], [True, True, True, False],
-                         "under a cache authority the two breakend shapes are set aside too; the FASTA shape never")
+        self.assertEqual([r.excludes_with_cache for r in rules], [True, True, True, False, False],
+                         "under a cache authority the two breakend shapes are set aside too; the FASTA shape and the "
+                         "reference-allele duplicate never")
+        bare = rules[-1]
+        self.assertEqual(bare.bucket, "bnd_bare_reference_allele_row")
+        self.assertIn("StructuralVariationOverlap.pm:64-77", bare.perl_citation)
+        self.assertIn("reference allele has no variant effect", bare.definition)
         for r in rules:
             self.assertTrue(r.definition.endswith(".") and len(r.definition.split()) >= 12, r.bucket)
             self.assertRegex(r.perl_citation, r"\.pm", r.bucket)

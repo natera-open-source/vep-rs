@@ -20,6 +20,7 @@ Grouped by the place in Ensembl VEP's source that produces them, the eleven defe
 | D | Transcripts are matched to records by coordinate alone, with no chromosome, and a record without a parsed mate is never chromosome-checked | `ensembl-vep`, `InputBuffer.pm` lines 345-366; `ensembl-variation`, `StructuralVariationOverlap.pm` lines 64-71 | 9, 10 | both classes vanish: a record is matched only to transcripts on its own chromosome, and its `intergenic_variant` row is written when there are none |
 | E | A mate-side row is created from the mate's coordinate, but every predicate except `feature_truncation` is evaluated at the record's own coordinate | `ensembl-variation`, `BaseVariationFeatureOverlapAllele.pm` lines 257 and 273 | 11 | the class vanishes: a mate-side row carries the terms the mate breakpoint supports |
 | none | A `<CNV:TR>` allele is expanded to literal sequence and annotated as an insertion or deletion, where vep-rs keeps it symbolic; neither reading is wrong | `ensembl-vep`, `Parser/VCF.pm` lines 382-431 | 12 | nothing to correct; the comparator pairs the two readings |
+| F | A breakpoint record without a bracket mate is split on `/` into one allele per part, the reference base included, so the reference allele gets a consequence row of its own | `ensembl-variation`, `StructuralVariationOverlap.pm` lines 64-77 | 13 | the reference-allele row disappears and every row is written once, as vep-rs writes it |
 
 Source citations name the Ensembl repository, module and line at release 115 (the `release/115` branch of `ensembl-variation` and of `ensembl-vep`). The comparator scripts of this repository are `scripts/concordance/compare_vep_outputs.py` for the SNP/indel datasets and `scripts/validation/compare_sv_concordance.py` for the structural-variant sets. Every row on this page is in Ensembl VEP's default tab output, whose columns are:
 
@@ -45,6 +46,7 @@ The twelve classes, with the defect each belongs to:
 | 10 | The orphaned `intergenic_variant` on the other side of class 9 | D | Ensembl VEP defect | gnomAD-SV v2.1 chr21, gnomAD-SV v4.1 chr21 | vep-rs | 155 (GRCh37), 518 (GRCh38) rows |
 | 11 | Breakend mate rows read from the other chromosome's coordinate | E | Ensembl VEP defect; vep-rs 0.3.0 behaviour change | synthetic `09_breakends` and `13_vcf45_features`, gnomAD-SV v4.1 chr21 | both members of each pair | 1,407 (GRCh37), 7,258 (GRCh38) pairs |
 | 12 | `<CNV:TR>` read symbolically, not expanded | none | representation difference | synthetic tandem-repeat set (`07_cnv_repeat`), both assemblies | both members of each pair | 1,368 (GRCh37), 2,644 (GRCh38) pairs |
+| 13 | The reference-allele row of a bare breakpoint | F | Ensembl VEP defect | none of the measured sets (every gnomAD-SV `<BND>` names its mate through `CHR2`) | nothing: the duplicate tuple never enters the diff | 0 |
 
 How to read the counts:
 
@@ -1353,6 +1355,66 @@ The class is fully masked:
 - GRCh38 set: 2,644 of 2,644 pairs.
 
 The counters are `excluded_cnvtr_rust` and `excluded_cnvtr_perl`, against the class sizes `cnvtr_swap_pairs_total_rust` and `cnvtr_swap_pairs_total_perl`.
+
+## Defect F: a breakpoint record without a mate gives its reference allele a row
+
+### 13. The reference-allele row of a bare breakpoint
+
+#### 13.1 What a reader needs to know first
+
+A VCF breakend that names no mate (`<BND>` with no `CHR2`, or with `CHR2` but neither `END2` nor `END`, or with a `POS2` Ensembl VEP never reads) is held by Ensembl VEP as the allele string `N/<BND>`: the reference base, a slash, the symbolic ALT. The string parses to no breakend, so the overlap object builds its alleles by splitting the string on `/`, one allele per part, and the first part is the reference base. Both alleles print the class term `chromosome_breakpoint`, so every row of the record appears twice, distinguished only by `ALLELE_NUM`.
+
+#### 13.2 The record
+
+```
+21	30425650	bare_bnd	N	<BND>	.	.	SVTYPE=BND
+```
+
+Executed with Ensembl VEP 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
+
+#### 13.3 What each engine writes
+
+Ensembl VEP 116.2, four rows for two transcripts:
+
+```
+bare_bnd	21:30425651	chromosome_breakpoint	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant	ALLELE_NUM=1;IMPACT=MODIFIER;DISTANCE=4569;STRAND=1
+bare_bnd	21:30425651	chromosome_breakpoint	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant	ALLELE_NUM=2;IMPACT=MODIFIER;DISTANCE=4569;STRAND=1
+bare_bnd	21:30425651	chromosome_breakpoint	ENSG00000240432	ENST00000390690	Transcript	coding_sequence_variant	ALLELE_NUM=1;IMPACT=MODIFIER;STRAND=-1
+bare_bnd	21:30425651	chromosome_breakpoint	ENSG00000240432	ENST00000390690	Transcript	coding_sequence_variant	ALLELE_NUM=2;IMPACT=MODIFIER;STRAND=-1
+```
+
+vep-rs, two rows:
+
+```
+bare_bnd	21:30425651	chromosome_breakpoint	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant
+bare_bnd	21:30425651	chromosome_breakpoint	ENSG00000240432	ENST00000390690	Transcript	coding_sequence_variant
+```
+
+The same doubling appears for a `<BND>` with `SVLEN` and no `CHR2` (over its span), for `CHR2` with `POS2` alone, for `CHR2` with an `END2` that is not a coordinate, for a `<BND>` without `SVTYPE`, and for a `<BND>` with `MATEID`; a native single breakend (`.N`, `N.`) is held without the reference base and writes each row once, and a bracket record's own breakend and mate are two different alleles, written once each.
+
+The rows carry no `feature_truncation` under `--no_stats`, the flag the reference protocol runs with: `OutputFactory.pm` line 2029 reads `$vfoa->{breakend}->{string}` before the terms are computed at line 2034, which autovivifies an empty breakend whose chromosome matches no feature's, so the predicate's live arm (`VariationEffect.pm` lines 357-358) fails. With statistics on, `Stats.pm` line 241 computes the terms first, `within_feature` falls back to the whole feature, and the same rows carry `feature_truncation`. vep-rs follows the reference protocol's rows.
+
+#### 13.4 Why Ensembl VEP writes that
+
+`Parser/VCF.pm` builds a bracket mate only under `defined $info->{CHR2}` with `END2 || END` (lines 491-497) and prepends the reference base to the allele string unless it opens or closes with `.` (line 499), so the record's string is `N/<BND>`. `StructuralVariationFeature.pm` `_parse_breakends` (lines 1274-1283) finds no bracket in it. `StructuralVariationOverlap.pm` lines 64-77 then run `if (!@$breakends) { foreach (split(/\//, $vf->{allele_string})) { add_StructuralVariationOverlapAllele(...) } }`, numbering the parts from 1: the reference base `N` is allele 1 and `<BND>` allele 2. Neither allele carries a breakend string, so `OutputFactory.pm` line 2029 (`$vfoa->{breakend}->{string} || $svf->class_SO_term`) prints `chromosome_breakpoint` for both.
+
+#### 13.5 Why vep-rs's row is the correct one
+
+A reference allele has no variant effect; a consequence row describes what an alternate allele does to a feature. The second row restates the first under a number that points at the reference base, and nothing in it is information about the variant. vep-rs holds the record as one single breakend, prints the class term and the terms of the span or the point once, and takes no `feature_truncation` for it, as Ensembl VEP's own ALT row does not.
+
+#### 13.6 Try it yourself
+
+```bash
+printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t30425650\tbare_bnd\tN\t<BND>\t.\t.\tSVTYPE=BND\n' > bare.vcf
+docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
+  vep -i /work/bare.vcf -o /work/bare.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
+  --assembly GRCh38 --species homo_sapiens --allele_number --no_stats
+vep -i bare.vcf -o bare.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --no_stats
+```
+
+#### 13.7 How the comparator treats this class
+
+Both comparators compare unique tuples of (Location, Allele, Feature, Feature_type, Consequence), so the reference-allele row, identical in every column to the ALT row, never enters the diff and the adjusted figure is untouched. The structural-variant comparator counts the reference's duplicate rows under `chromosome_breakpoint` (`bnd_bare_reference_allele_rows` in its report) so the shape stays visible; the class is `bnd_bare_reference_allele_row` in the 116.2 registry of both comparators, counted and never set aside. None of the measured sets carries the shape: every gnomAD-SV `<BND>` on chromosome 21 names its mate through `CHR2` with `END` or `END2`, and the synthetic sets write their breakends in bracket and dot notation.
 
 ## Scoring against Ensembl VEP 116.2
 

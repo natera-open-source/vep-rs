@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The plugin-visible `InputVariant` JSON carries `record_so_term`, the whole record's class term (`Alu_insertion`, `copy_number_variation`), on every structural variant whose type has one. (#44)
 - `--regulatory_gff`, `--extended_promoters` and `--custom_suppress_filter` are refused with an error naming what each would do; regulatory and custom annotation are not supported. (#44)
 - `--reference-release {115.2,116.2}` on both comparators selects the Ensembl VEP release scored against (116.2 default, sets aside the records it skips); the runners derive it from the reference's provenance. (#43)
+- The comparators' 116.2 registry gains `bnd_bare_reference_allele_row`, the duplicate row Ensembl VEP writes for the reference allele of a breakpoint without a mate, counted and never set aside. (#44)
 
 ### Changed
 
@@ -65,6 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A bare `<BND>` with neither CHR2 nor a span prints `chromosome_breakpoint` as its Allele, like every other symbolic class term, as Ensembl VEP 116 does. (#44)
 - A coordinate above 2^62 - 1 fails its line in every input format, a VCF END above it is unparsed and a SVLEN span saturates there: no coordinate wraps. (#44)
 - A `<CNV:TR>` ALT past a short INFO/RN list states no length, as Ensembl VEP 116 builds one allele per RN entry. (#44)
+- A `<BND>` with SVLEN and no CHR2 is one `chromosome_breakpoint` allele over its span, with its region terms and no `feature_truncation`, as Ensembl VEP 116 holds `N/<BND>`. (#44)
+- A breakpoint record's INFO/END never ends its span, and a `<BND>` names a mate only through CHR2 with END2 or END, as Ensembl VEP 116 reads them. (#44)
+- A comma-separated SVLEN reads its first value, and the largest for a tandem repeat or a tandem duplication, as Ensembl VEP 116 does. (#44)
+- INFO/SVTYPE names the class of an ALT outside the VCF 4.4 forms, so `N.` with `SVTYPE=DEL` is a `deletion`, and a `<BND>` without SVTYPE a breakpoint. (#44)
+- A record whose END is not a coordinate is skipped, and a skipped record is reported at warning level, not annotated as a one-base deletion. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
 
 ## [0.3.2] - 2026-10-06

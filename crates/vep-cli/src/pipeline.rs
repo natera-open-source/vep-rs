@@ -31,7 +31,7 @@ use noodles::csi::binning_index::BinningIndex;
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use smallvec::SmallVec;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::pick::{self, FilterConfig};
 use crate::runner::{
@@ -665,7 +665,9 @@ fn read_parsed(
                 if cfg.dont_skip {
                     bail!("parse error: {}", e);
                 }
-                debug!("skipping variant: {}", e);
+                // A skipped record is reported the way Ensembl VEP's parser reports
+                // one it drops (`skipped_variant_msg`), where the user sees it.
+                warn!("skipping variant: {}", e);
             }
             None => break,
         }
@@ -844,7 +846,7 @@ fn parse_lines(
                 if c.dont_skip {
                     bail!("line {}: parse error: {}", line_number, e);
                 }
-                debug!("line {}: skipping variant: {}", line_number, e);
+                warn!("line {}: skipping variant: {}", line_number, e);
             }
             (Item::Data { .. }, None) => unreachable!("every data item is parsed"),
         }

@@ -480,29 +480,37 @@ fn calculate_small_bnd_single_breakend(
 
     if let Some(ref mut tc) = tc {
         // Perl's StructuralVariationOverlap assigns no stop_lost or start_lost to a
-        // BND-format SV; the deletion module adds them for structural deletions.
+        // BND-format SV; the deletion module adds them for structural deletions, and
+        // its feature_truncation for a record that names no mate.
         tc.consequences.retain(|c| {
             !matches!(
                 c,
                 Consequence::StopLost | Consequence::StartLost | Consequence::StartRetainedVariant
-            )
+            ) && (variant.mate_id.is_some() || *c != Consequence::FeatureTruncation)
         });
+
+        // Ensembl builds one allele per entry of `($vf, @{$vf->get_breakends})`,
+        // each with `-breakend => $_`, and `feature_truncation`'s only live arm for
+        // a `chromosome_breakpoint` is `within_feature($bvfoa->breakend)`. For the
+        // `$vf` entry (`N.`) the breakend is the whole feature, so an engulfing
+        // span passes; for a bracket entry it is one coordinate, so an engulfing
+        // span with both endpoints outside the transcript fails and Ensembl emits
+        // the context term alone. An allele of a record that names no mate is built
+        // without a breakend (`StructuralVariationOverlap.pm:64-77`), and ensembl-vep's
+        // `OutputFactory.pm:2029` reads `$vfoa->{breakend}->{string}` before the terms
+        // are computed at `:2034`, autovivifying an empty breakend whose chromosome
+        // matches no feature's, so the arm fails and Ensembl VEP 116.2 under
+        // `--no_stats` writes the region terms alone (with statistics on,
+        // `Stats.pm:241` computes the terms before that read, `within_feature` falls
+        // back to the whole feature, and the row carries `feature_truncation`).
+        let truncation_arm_passes = variant.mate_id.is_some()
+            && (variant.is_single_breakend || bnd_breakend_within_transcript(variant, transcript));
 
         // Post-process: Perl uses feature_truncation (not transcript_ablation) for BND-format SVs.
         if tc.consequences.contains(&Consequence::TranscriptAblation) {
             tc.consequences
                 .retain(|c| *c != Consequence::TranscriptAblation);
-            // Ensembl builds one allele per entry of `($vf, @{$vf->get_breakends})`,
-            // each with `-breakend => $_`, and `feature_truncation`'s only live arm for
-            // a `chromosome_breakpoint` is `within_feature($bvfoa->breakend)`. For the
-            // `$vf` entry (`N.`) the breakend is the whole feature, so an engulfing
-            // span passes; for a bracket entry it is one coordinate, so an engulfing
-            // span with both endpoints outside the transcript fails and Ensembl emits
-            // the context term alone.
-            //
-            let paired_breakend_outside =
-                !variant.is_single_breakend && !bnd_breakend_within_transcript(variant, transcript);
-            if !paired_breakend_outside {
+            if truncation_arm_passes {
                 tc.consequences.push(Consequence::FeatureTruncation);
             }
             let has_context = tc.consequences.iter().any(|c| {
@@ -549,17 +557,13 @@ fn calculate_small_bnd_single_breakend(
                 Consequence::UpstreamGeneVariant | Consequence::DownstreamGeneVariant
             )
         });
-        // The same breakend condition as the ablation conversion above: for a
-        // bracket allele Ensembl's only live `feature_truncation` arm is
-        // `within_feature($bvfoa->breakend)` against that single coordinate, and
-        // without it this push would undo the suppression above.
-        let paired_breakend_outside_body =
-            !variant.is_single_breakend && !bnd_breakend_within_transcript(variant, transcript);
+        // The same breakend condition as the ablation conversion above: without it
+        // this push would undo the suppression there.
         if !tc.consequences.contains(&Consequence::FeatureTruncation)
             && !tc.consequences.contains(&Consequence::TranscriptAblation)
             && !is_upstream_downstream_only
             && !tc.consequences.contains(&Consequence::MatureMirnaVariant)
-            && !paired_breakend_outside_body
+            && truncation_arm_passes
         {
             tc.consequences.push(Consequence::FeatureTruncation);
             tc.consequences.sort_by_key(|c| c.rank());
@@ -638,8 +642,8 @@ pub fn calculate_sv_consequences(
             // and a partially covered transcript takes the region predicates over the
             // span, so one path serves every span.
             if variant.end > variant.start
-                && variant.mate_id.is_some()
-                && (variant.is_single_breakend
+                && (variant.mate_id.is_none()
+                    || variant.is_single_breakend
                     || bnd_breakend_close_to_transcript(
                         variant,
                         transcript,
@@ -1220,6 +1224,44 @@ mod tests {
         v.sv_end = Some(sv_end);
         v.mate_id = Some("mate_001".into());
         v
+    }
+
+    /// A `<BND>` with a SVLEN span and no mate is one single breakend evaluated over
+    /// its span with no `feature_truncation`: its allele is built without a breakend,
+    /// and the empty one ensembl-vep's `OutputFactory.pm:2029` autovivifies before the
+    /// terms are computed matches no feature's chromosome, so the predicate's live arm
+    /// (`Utils/VariationEffect.pm:357-358`) fails.
+    /// Ensembl VEP 116.2 writes `coding_sequence_variant,5_prime_UTR_variant` for a
+    /// `<BND>` span opening in a 5' UTR and running into the CDS; the same span under
+    /// a record that names a mate adds `feature_truncation` on its own breakend.
+    #[test]
+    fn a_mate_less_bnd_span_takes_its_region_terms_without_truncation() {
+        let tx = crate::test_helpers::make_test_transcript();
+        let mut v = InputVariant::new(
+            "21".into(),
+            25_000_020,
+            25_000_200,
+            b"N".to_vec(),
+            b"<BND>".to_vec(),
+        );
+        v.variant_class = VariantClass::Translocation;
+        v.is_structural = true;
+        v.is_single_breakend = true;
+        v.sv_end = Some(25_000_200);
+        let tc = calculate_sv_consequences(&v, &tx, 5000, 5000).expect("the span overlaps exon 1");
+        assert_eq!(
+            terms(&tc),
+            BTreeSet::from([
+                Consequence::CodingSequenceVariant,
+                Consequence::FivePrimeUtrVariant
+            ])
+        );
+        let mut own = v.clone();
+        own.alt_alleles = vec![b"N.".to_vec()];
+        own.mate_id = Some("mate".into());
+        let tc =
+            calculate_sv_consequences(&own, &tx, 5000, 5000).expect("the span overlaps exon 1");
+        assert!(tc.consequences.contains(&Consequence::FeatureTruncation));
     }
 
     #[test]

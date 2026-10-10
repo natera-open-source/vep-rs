@@ -10,17 +10,18 @@
 //!
 //! Consequence logic (mirrors Perl VEP `StructuralVariationOverlapAllele`):
 //!
-//! - **Within transcript body (exon, intron, or UTR)**: always
-//!   `feature_truncation` (the breakpoint disrupts the transcript), combined
-//!   with the positional consequence (coding_sequence_variant, intron_variant,
-//!   5_prime_UTR_variant, 3_prime_UTR_variant, etc.).
+//! - **Within transcript body (exon, intron, or UTR)**: `feature_truncation`
+//!   when the allele's own breakend lies in the body (never for a single
+//!   breakend that names no mate), combined with the positional consequence
+//!   (coding_sequence_variant, intron_variant, 5_prime_UTR_variant,
+//!   3_prime_UTR_variant, etc.).
 //! - **Upstream/downstream**: standard distance-based consequences.
 //! - **No overlap at all**: None (caller handles intergenic).
 //!
 //! Perl citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`).
 
-use super::{is_mature_mirna_sv, overlaps_any_exon};
+use super::is_mature_mirna_sv;
 use smallvec::SmallVec;
 use vep_core::consequence::{
     Consequence, ConsequenceList, FeatureType, Impact, TranscriptConsequence,
@@ -103,40 +104,8 @@ pub fn calculate(
         return None;
     }
 
-    // A native single-breakend with sv_end and SVTYPE=DEL is a BND-format
-    // deletion (gnomAD `N.` alleles with END set) and takes DEL-style
-    // feature_truncation over its span.
-    let is_bnd_format_deletion = is_native_single_breakend
-        && variant.sv_end.is_some()
-        && variant
-            .sv_type
-            .as_deref()
-            .is_some_and(|st| st.eq_ignore_ascii_case("DEL"));
-
-    // A single-breakend derived from a symbolic <BND> with an SVLEN span (end >
-    // start, mate_id set) also takes span-based feature_truncation.
-    let is_symbolic_bnd_span =
-        !is_native_single_breakend && variant.is_single_breakend && variant.end > variant.start;
-
-    let has_span_for_truncation = is_bnd_format_deletion || is_symbolic_bnd_span;
-    let bnd_span_overlaps_transcript = if has_span_for_truncation {
-        variant.sv_end.map(|sv_end| {
-            let sv_start = variant.start;
-            let tx_start = transcript.start;
-            let tx_end = transcript.end;
-            sv_end >= tx_start && sv_start <= tx_end
-        })
-    } else {
-        None
-    };
-
     if !overlaps_transcript && bp < transcript.start {
         let dist = transcript.start - bp;
-
-        // A native single-breakend whose sv_end spans the transcript truncates.
-        if bnd_span_overlaps_transcript == Some(true) {
-            add_bnd_span_feature_truncation(variant, transcript, is_coding, &mut consequences);
-        }
 
         match transcript.strand {
             Strand::Forward => {
@@ -165,10 +134,6 @@ pub fn calculate(
     } else if !overlaps_transcript && bp > transcript.end {
         let dist = bp - transcript.end;
 
-        if bnd_span_overlaps_transcript == Some(true) {
-            add_bnd_span_feature_truncation(variant, transcript, is_coding, &mut consequences);
-        }
-
         match transcript.strand {
             Strand::Forward => {
                 if dist <= downstream_distance {
@@ -194,17 +159,16 @@ pub fn calculate(
             }
         }
     } else {
-        // feature_truncation logic (Perl VEP parity):
-        // - Native single-breakend without sv_end: NO feature_truncation
-        // - Native single-breakend with sv_end (BND-format DEL): DEL-style feature_truncation
-        // - Paired BND with mate inside the same transcript: yes feature_truncation
-        // - Paired BND with mate outside the transcript (or on different chr): NO feature_truncation
-        // - Derived single-breakend from paired BND: feature_truncation unless in a mature miRNA
-        let add_truncation = if is_native_single_breakend && !is_bnd_format_deletion {
-            // No SVTYPE=DEL: no feature_truncation.
-            false
-        } else if has_span_for_truncation {
-            // Span-based truncation is added below by add_bnd_span_feature_truncation.
+        // feature_truncation (`Utils/VariationEffect.pm:350-359`): for a
+        // `chromosome_breakpoint` the live arm is `within_feature` on the allele's
+        // own breakend entry, the variation feature's own span for the record's own
+        // breakend and the mate coordinate for a bracket allele; an allele without
+        // a breakend string (a single breakend on its own, a `<BND>` that names no
+        // mate) is built without one, and the empty breakend ensembl-vep's
+        // `OutputFactory.pm:2029` autovivifies before the terms are computed matches
+        // no feature's chromosome, so it never truncates (`truncation_arm_passes` in
+        // `sv/mod.rs` states how that order depends on statistics).
+        let add_truncation = if is_native_single_breakend {
             false
         } else if variant.is_single_breakend {
             // Perl emits only mature_miRNA_variant, no feature_truncation, when the
@@ -223,10 +187,6 @@ pub fn calculate(
         };
         if add_truncation {
             consequences.push(Consequence::FeatureTruncation);
-        }
-
-        if has_span_for_truncation {
-            add_bnd_span_feature_truncation(variant, transcript, is_coding, &mut consequences);
         }
 
         let positional = classify_position_in_transcript(bp, transcript, is_coding);
@@ -419,55 +379,6 @@ fn mate_breakpoint(variant: &InputVariant) -> Option<InputVariant> {
     mate.mate_pos = Some(mate_pos);
     mate.sv_end = Some(mate_pos);
     Some(mate)
-}
-
-/// Apply DEL-style feature_truncation for a native single-breakend with `sv_end`.
-///
-/// BND-format deletions in gnomAD use single-breakend `N.` notation with SVTYPE=DEL
-/// and END set. The SV span is `(variant.start, sv_end)`. This function mirrors the
-/// deletion.rs feature_truncation predicate using that span.
-fn add_bnd_span_feature_truncation(
-    variant: &InputVariant,
-    transcript: &Transcript,
-    is_coding: bool,
-    consequences: &mut ConsequenceList,
-) {
-    let sv_end = match variant.sv_end {
-        Some(e) => e,
-        None => return,
-    };
-    let sv_start = variant.start;
-    let tx_start = transcript.start;
-    let tx_end = transcript.end;
-
-    if sv_end < tx_start || sv_start > tx_end {
-        return;
-    }
-
-    let extends_beyond = sv_start < tx_start || sv_end > tx_end;
-    let complete_within = sv_start >= tx_start && sv_end <= tx_end;
-
-    let has_exon_overlap = overlaps_any_exon(transcript, sv_start, sv_end);
-    let within_cdna = if variant.is_structural && extends_beyond {
-        true
-    } else {
-        has_exon_overlap
-    };
-
-    if within_cdna && (extends_beyond || complete_within) {
-        consequences.push(Consequence::FeatureTruncation);
-        // Intron-only overlap gets the context term; an NMD transcript gets
-        // NMD_transcript_variant, not coding_transcript_variant.
-        if !has_exon_overlap {
-            if transcript.is_nmd_transcript() {
-                consequences.push(Consequence::NmdTranscriptVariant);
-            } else if is_coding {
-                consequences.push(Consequence::CodingTranscriptVariant);
-            } else {
-                consequences.push(Consequence::NonCodingTranscriptVariant);
-            }
-        }
-    }
 }
 
 /// Position classification for a breakpoint within a transcript body.
@@ -1257,79 +1168,23 @@ mod tests {
         }
     }
 
-    /// Helper: build a native single-breakend with sv_end and SVTYPE=DEL (BND-format deletion).
-    fn make_native_single_breakend_with_sv_end(pos: u64, sv_end: u64) -> InputVariant {
-        let mut v = make_native_single_breakend(pos);
-        v.sv_end = Some(sv_end);
-        v.is_structural = true;
-        v.sv_type = Some("DEL".into()); // Required: marks this as a BND-format deletion
-        v
-    }
-
+    /// A `<BND>` that names no mate is a single breakend without a breakend string,
+    /// so `feature_truncation`'s live arm (`Utils/VariationEffect.pm:357-358`,
+    /// `within_feature` on `$bvfoa->breakend`) tests the empty breakend ensembl-vep's
+    /// `OutputFactory.pm:2029` autovivifies before the terms are computed, whose
+    /// chromosome matches no feature's, and the row keeps the region term alone:
+    /// Ensembl VEP 116.2 writes `coding_sequence_variant` for a bare `<BND>` inside a
+    /// coding exon, as for a native `N.`.
     #[test]
-    fn test_native_single_breakend_with_sv_end_extending_beyond_transcript() {
-        // SV span extends beyond both transcript boundaries → feature_truncation.
-        // Breakpoint upstream (within 5000bp distance), sv_end downstream of transcript.
-        let tx = make_test_transcript(); // 25_000_000 - 25_006_000
-        let v = make_native_single_breakend_with_sv_end(24_998_000, 25_010_000);
-        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        assert!(
-            tc.consequences.contains(&Consequence::FeatureTruncation),
-            "BND-format DEL spanning beyond transcript should have feature_truncation"
-        );
-        assert_eq!(tc.impact, Impact::HIGH);
-    }
-
-    #[test]
-    fn test_native_single_breakend_with_sv_end_within_transcript() {
-        // SV span entirely within transcript → feature_truncation (complete_within).
-        // Breakpoint at exon 1, sv_end in exon 2 → has exon overlap.
+    fn a_bnd_that_names_no_mate_takes_no_feature_truncation() {
         let tx = make_test_transcript();
-        let v = make_native_single_breakend_with_sv_end(25_000_100, 25_002_200);
+        let mut v = make_native_single_breakend(25_000_100);
+        v.alt_alleles = vec![b"<BND>".to_vec()];
+        v.allele_string = "N/<BND>".into();
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        assert!(
-            tc.consequences.contains(&Consequence::FeatureTruncation),
-            "BND-format DEL within transcript (exon overlap) should have feature_truncation"
-        );
-        assert_eq!(tc.impact, Impact::HIGH);
-    }
-
-    #[test]
-    fn test_native_single_breakend_with_sv_end_upstream_spanning_into_transcript() {
-        // Breakpoint upstream (outside transcript), sv_end inside transcript body.
-        // The SV span overlaps the transcript and extends beyond its start.
-        let tx = make_test_transcript(); // 25_000_000 - 25_006_000
-        let v = make_native_single_breakend_with_sv_end(24_998_000, 25_002_000);
-        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        assert!(
-            tc.consequences.contains(&Consequence::FeatureTruncation),
-            "BND-format DEL from upstream into transcript should have feature_truncation"
-        );
-        assert!(
-            tc.consequences.contains(&Consequence::UpstreamGeneVariant),
-            "Breakpoint is upstream so upstream_gene_variant should be present"
-        );
-        assert_eq!(tc.impact, Impact::HIGH);
-    }
-
-    #[test]
-    fn test_native_single_breakend_with_sv_end_crossing_one_boundary_truncates() {
-        // A span that crosses one transcript boundary and closes inside the body
-        // gets feature_truncation whichever end it crosses. The first span opens
-        // upstream and closes in intron 1 (covering exon 1); the second opens in
-        // intron 1 and runs past the transcript end (covering exons 2 and 3).
-        let tx = make_test_transcript(); // coding
-        let v = make_native_single_breakend_with_sv_end(24_999_000, 25_000_500);
-        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        assert!(
-            tc.consequences.contains(&Consequence::FeatureTruncation),
-            "BND-format DEL opening upstream of the transcript should have feature_truncation"
-        );
-        let v2 = make_native_single_breakend_with_sv_end(25_000_500, 25_010_000);
-        let tc2 = calculate(&v2, &tx, 5000, 5000).unwrap();
-        assert!(
-            tc2.consequences.contains(&Consequence::FeatureTruncation),
-            "BND-format DEL running past the transcript end should have feature_truncation"
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::CodingSequenceVariant]
         );
     }
 
@@ -1345,44 +1200,6 @@ mod tests {
             "Native single-breakend without sv_end should not have feature_truncation"
         );
         assert_eq!(tc.consequences.to_vec(), vec![Consequence::IntronVariant]);
-    }
-
-    #[test]
-    fn test_native_single_breakend_with_sv_end_non_coding_context_term() {
-        // Non-coding transcript: intron-only overlap should get
-        // non_coding_transcript_variant as context term.
-        let mut tx = make_test_transcript();
-        tx.biotype = "lncRNA".into();
-        tx.coding_region_start = None;
-        tx.coding_region_end = None;
-        tx.cdna_coding_start = None;
-        tx.cdna_coding_end = None;
-        tx.translation = None;
-        tx.protein_id = None;
-
-        // The span from 25_000_500 (intron 1) past the transcript end also overlaps
-        // exon 2, so this asserts only that feature_truncation is added for a
-        // non-coding span overlap.
-        let v = make_native_single_breakend_with_sv_end(24_998_000, 25_010_000);
-        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        assert!(
-            tc.consequences.contains(&Consequence::FeatureTruncation),
-            "BND-format DEL on non-coding transcript should have feature_truncation"
-        );
-        assert_eq!(tc.impact, Impact::HIGH);
-    }
-
-    #[test]
-    fn test_native_single_breakend_with_sv_end_no_transcript_overlap() {
-        // SV span does not overlap transcript at all → no feature_truncation.
-        let tx = make_test_transcript(); // 25_000_000 - 25_006_000
-        let v = make_native_single_breakend_with_sv_end(24_990_000, 24_995_000);
-        let tc = calculate(&v, &tx, 5000, 5000);
-        // Breakpoint at 24_990_000 is beyond the 5000bp upstream distance, so None.
-        assert!(
-            tc.is_none(),
-            "BND-format DEL far from transcript should return None"
-        );
     }
 
     /// Build a miRNA transcript matching the one in mod.rs tests.
@@ -1626,34 +1443,6 @@ mod tests {
         assert!(
             tc.consequences.contains(&Consequence::IntronVariant),
             "Should have intron_variant, got: {:?}",
-            tc.consequences
-        );
-    }
-
-    #[test]
-    fn test_bnd_span_feature_truncation_nmd_gets_nmd_context() {
-        // BND-format DEL spanning NMD transcript with intron-only overlap.
-        // Should get feature_truncation + NMD_transcript_variant (not non_coding).
-        let tx = make_nmd_transcript();
-        // SV span extends beyond transcript with intron-only overlap
-        let mut v = make_native_single_breakend(24_999_000);
-        v.sv_end = Some(25_001_500); // Spans into intron 1 only (no exon overlap)
-        v.sv_type = Some("DEL".into());
-        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        assert!(
-            tc.consequences.contains(&Consequence::FeatureTruncation),
-            "Should have feature_truncation, got: {:?}",
-            tc.consequences
-        );
-        assert!(
-            tc.consequences.contains(&Consequence::NmdTranscriptVariant),
-            "NMD BND-format DEL should have NMD_transcript_variant, got: {:?}",
-            tc.consequences
-        );
-        assert!(
-            !tc.consequences
-                .contains(&Consequence::NonCodingTranscriptVariant),
-            "NMD should not have non_coding_transcript_variant, got: {:?}",
             tc.consequences
         );
     }
