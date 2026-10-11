@@ -1349,27 +1349,37 @@ def _minimised(ref: str, alt: str) -> tuple[str, str, int]:
 
 def gvcf_site_rows(pos: int, ref: str, alts: Sequence[str]) -> list[tuple[str, int, int]]:
     """The (allele, start, end) vep-rs writes for each real allele of a gVCF variant site,
-    the sequence path of its parser: `<NON_REF>`, `*` and `.` name no allele; when an
-    allele's length differs from REF's, the first base every allele shares with REF is
-    trimmed and the start moves one base, an emptied allele reading `-`; a single remaining
-    allele whose length still differs from REF's is minimised, its shared prefix then its
-    shared suffix trimmed and the start moved by the prefix; an insertion's end is its start
-    minus one; the allele is written in upper case (`a g,<non_ref>` is `G`, as Parser.pm:554
-    writes it). The minimisation needs the one ALT beside the block to name the allele: a `*`
-    or `.` beside the indel keeps the anchor-trimmed alleles, as Ensembl VEP's
-    `minimise_alleles` leaves a string of three parts as it is (Parser.pm:978-984). A trailing
-    empty field of the ALT list is no field (`perl_fields`)."""
+    the sequence path of its parser: `<NON_REF>`, `*` and `.` name no allele; when any ALT's
+    length differs from REF's, a `*` of one base counted (Parser/VCF.pm:296-298), the first
+    base REF shares with every ALT is trimmed and the start moves one base, an emptied allele
+    reading `-`, an ALT carrying a `*` (`<*>`) kept whole and, beside other ALTs, left out of
+    the comparison (:306-316 with several ALTs, :328 with one; a `.` counts and never shares
+    the base); a single remaining allele whose length still differs from REF's is minimised,
+    its shared prefix then its shared suffix trimmed and the start moved by the prefix; an
+    insertion's end is its start minus one; the allele is written in upper case (`a g,<non_ref>`
+    is `G`, as Parser.pm:554 writes it). The minimisation needs the one ALT beside the block to
+    name the allele: a `*` or `.` beside the indel keeps the anchor-trimmed alleles, as Ensembl
+    VEP's `minimise_alleles` leaves a string of three parts as it is (Parser.pm:978-984). A
+    trailing empty field of the ALT list is no field (`perl_fields`)."""
     named = [alt for alt in perl_fields(alts) if not _is_non_ref_block(alt)]
     real = [alt for alt in named if _names_an_allele(alt)]
     if not real:
         return []
-    is_indel = any(len(alt) != len(ref) for alt in real)
-    anchored = bool(ref) and all(alt[:1].upper() == ref[:1].upper() for alt in real)
+    is_indel = any(len(alt) != len(ref) for alt in named)
+    # With one ALT its own first base decides (:328): a lone `<*>` filtered out would leave
+    # nothing to compare, and `all` of nothing anchors. With several, the alleles carrying a
+    # `*` are left out of the comparison (:306).
+    if len(named) == 1:
+        compared = named
+    else:
+        compared = [alt for alt in named if "*" not in alt]
+    anchored = bool(ref) and all(alt[:1].upper() == ref[:1].upper() for alt in compared)
     prefix = 1 if is_indel and anchored else 0
     trimmed_ref = ref[prefix:] or "-"
     rows: list[tuple[str, int, int]] = []
     for alt in real:
-        allele = alt[prefix:] or "-"
+        # An allele carrying a `*` (`<*>`) is kept as written (:315).
+        allele = alt if "*" in alt else (alt[prefix:] or "-")
         start = pos + prefix
         ref_part = trimmed_ref
         if len(named) == 1 and "-" not in (ref_part, allele) and len(ref_part) != len(allele):

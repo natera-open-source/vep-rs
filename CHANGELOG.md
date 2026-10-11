@@ -111,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A record whose every ALT is `*` names no allele: no row, the VCF line carried without CSQ, a JSON object with `most_severe_consequence` `?`, as Ensembl VEP writes it. (#44)
 - The JSON `allele_string` of a sequence record keeps `*` at its written place (`N/*/G`), and a breakpoint's keeps a `<NON_REF>` beside a bracket ALT, as Ensembl VEP writes them. (#44)
 - A `*` beside an indel keeps the anchor-chopped alleles (`ATT AT,*` is `21:30425651-30425652 T`), as `minimise_alleles` leaves a three-part string; only a bi-allelic record is minimised. (#44)
+- The anchor chop counts a `*` as a one-base allele (`AG AC,*` is `21:30425651 C`) and a `.` as one that blocks it (`A AT,.` stays `21:30425650 AT`). (#44)
 - `dot_breakend_without_svtype_pair` pairs vep-rs's point with the reference's span at its start or the base after it, so `NAC NA.` (`21:30425650-30425652` against `21:30425651`) is set aside. (#44)
 - `bnd_mate_32bit_buffer_intergenic` counts a span end or a record's own POS at or past 2^31 - 5000 as it counts a breakend mate, the rows counted and not set aside. (#44)
 - The `<CNV:TR>` pairing reads a unit that is not DNA, a loss read as a substitution with another coding term, and a multi-ALT record collapsing to one reference tuple. (#44)

@@ -2797,17 +2797,53 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         `AT ATT,*,<NON_REF>` `21:30425651 TT` and for `ATTG ATC,*,<NON_REF>` `21:30425651-30425653
         TC`, the anchor-trimmed alleles Ensembl VEP 116.2 writes for the same records without the
         block (`minimise_alleles` leaves the three-part string as it is, Parser.pm:978-984); a `.`
-        beside the indel counts the same, and without either the allele is minimised from both
-        ends (`21:30425652 -`, `21:30425651-30425652 T`, `21:30425652-30425653 C`)."""
+        beside the indel is compared and never shares REF's first base, so `ATT AT,.,<NON_REF>`
+        keeps its anchor (`21:30425650-30425652 AT`, as Ensembl VEP 116.2 writes `ATT AT,.`); and
+        without either the allele is minimised from both ends (`21:30425652 -`,
+        `21:30425651-30425652 T`, `21:30425652-30425653 C`)."""
         from compare_vep_outputs import gvcf_site_rows
 
         self.assertEqual(gvcf_site_rows(30425650, "ATT", ["AT", "*", "<NON_REF>"]), [("T", 30425651, 30425652)])
         self.assertEqual(gvcf_site_rows(30425650, "AT", ["ATT", "*", "<NON_REF>"]), [("TT", 30425651, 30425651)])
         self.assertEqual(gvcf_site_rows(30425650, "ATTG", ["ATC", "*", "<NON_REF>"]), [("TC", 30425651, 30425653)])
-        self.assertEqual(gvcf_site_rows(30425650, "ATT", ["AT", ".", "<NON_REF>"]), [("T", 30425651, 30425652)])
+        self.assertEqual(gvcf_site_rows(30425650, "ATT", ["AT", ".", "<NON_REF>"]), [("AT", 30425650, 30425652)])
         self.assertEqual(gvcf_site_rows(30425650, "ATT", ["AT", "<NON_REF>"]), [("-", 30425652, 30425652)])
         self.assertEqual(gvcf_site_rows(30425650, "AT", ["ATT", "<NON_REF>"]), [("T", 30425652, 30425651)])
         self.assertEqual(gvcf_site_rows(30425650, "ATTG", ["ATC", "<NON_REF>"]), [("C", 30425652, 30425653)])
+
+    def test_a_star_counts_as_an_allele_of_one_base_in_a_gvcf_sites_anchor_trim(self) -> None:
+        """The anchor trim counts a `*` as an allele of one base and leaves it out of the first-base
+        comparison (Parser/VCF.pm:296-306), so vep-rs writes `21 30425650 x AG AC,*,<NON_REF> . . .`
+        at `21:30425651 C`, `AGC ATT,*,<NON_REF>` at `21:30425651-30425652 TT`, `AG *,AC,<NON_REF>` at
+        `21:30425651 C` and `AG AC,AT,*,<NON_REF>` at `21:30425651 C` and `T`, the rows Ensembl VEP
+        116.2 writes for the records without the block; the trim needs the shared base (`AG TC,*`
+        stays at `21:30425650-30425651 TC`), a one-base REF has nothing to trim (`A G,*`, `A *,G`,
+        `A G,T,*` stay at 30425650), without the `*` the same-length record is no indel
+        (`AG AC,AT` stays `21:30425650-30425651`), a `.` is compared and never shares the base
+        (`AG AC,.` and `AGC ATT,.` keep their anchors), and a `<*>` beside an indel allele is left
+        out of the comparison and kept whole (`A AG,<*>` is `G` and `<*>` at `21:30425650-30425651`,
+        as the binary writes them)."""
+        from compare_vep_outputs import gvcf_site_rows, sequence_location
+
+        def rows(ref: str, alts: str) -> list[tuple[str, str]]:
+            return sorted((sequence_location("21", start, end), allele)
+                          for allele, start, end in gvcf_site_rows(30425650, ref, alts.split(",")))
+
+        self.assertEqual(rows("A", "G,*,<NON_REF>"), [("21:30425650", "G")])
+        self.assertEqual(rows("AG", "AC,*,<NON_REF>"), [("21:30425651", "C")])
+        self.assertEqual(rows("AG", "TC,*,<NON_REF>"), [("21:30425650-30425651", "TC")])
+        self.assertEqual(rows("AGC", "ATT,*,<NON_REF>"), [("21:30425651-30425652", "TT")])
+        self.assertEqual(rows("AG", "A,*,<NON_REF>"), [("21:30425651", "-")])
+        self.assertEqual(rows("A", "AG,*,<NON_REF>"), [("21:30425650-30425651", "G")])
+        self.assertEqual(rows("AG", "*,AC,<NON_REF>"), [("21:30425651", "C")])
+        self.assertEqual(rows("AG", "AC,AT,*,<NON_REF>"), [("21:30425651", "C"), ("21:30425651", "T")])
+        self.assertEqual(rows("A", "*,G,<NON_REF>"), [("21:30425650", "G")])
+        self.assertEqual(rows("AG", "*,A,<NON_REF>"), [("21:30425651", "-")])
+        self.assertEqual(rows("A", "G,T,*,<NON_REF>"), [("21:30425650", "G"), ("21:30425650", "T")])
+        self.assertEqual(rows("AG", "AC,AT,<NON_REF>"), [("21:30425650-30425651", "AC"), ("21:30425650-30425651", "AT")])
+        self.assertEqual(rows("AG", "AC,.,<NON_REF>"), [("21:30425650-30425651", "AC")])
+        self.assertEqual(rows("AGC", "ATT,.,<NON_REF>"), [("21:30425650-30425652", "ATT")])
+        self.assertEqual(rows("A", "AG,<*>,<NON_REF>"), [("21:30425650-30425651", "<*>"), ("21:30425650-30425651", "G")])
 
     def test_gvcf_site_rows_follow_the_parsers_sequence_path(self) -> None:
         """vep-rs trims an indel record's anchor base across every real allele, then minimises

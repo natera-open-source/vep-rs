@@ -107,9 +107,9 @@ pub fn parse_vcf_line_with_max_sv_size(
     let mut variants = Vec::with_capacity(valid_alts.len());
 
     if !routes_to_structural(ref_allele, &alts, svtype) {
-        let trim_alts: Vec<&str> = valid_alts.iter().map(|(_, alt)| *alt).collect();
+        let alt_strings: Vec<&str> = alts.iter().map(|(_, alt)| *alt).collect();
         let (mut trimmed_ref, mut trimmed_alts, prefix_trimmed) =
-            trim_multi_alleles(ref_allele, &trim_alts);
+            trim_multi_alleles(ref_allele, &alt_strings);
         // `validate_vf` upper-cases the allele string after the anchor chop and before
         // `post_process_vfs` minimises it (Parser.pm:554, `tr/[a-z]/[A-Z]/`).
         trimmed_ref.make_ascii_uppercase();
@@ -129,22 +129,13 @@ pub fn parse_vcf_line_with_max_sv_size(
         // Perl's working string of a record with several ALTs, `*` and `.` counted
         // (`scalar @$alts > 1`, Parser/VCF.pm:301-322): every allele behind the chopped
         // anchor, a string `minimise_alleles` leaves as it is.
-        let chopped = (alts.len() > 1).then(|| {
-            let mut trimmed = trimmed_alts.iter().map(String::as_str);
-            allele_string(
-                &trimmed_ref,
-                alts.iter().map(|(_, alt)| match *alt {
-                    "*" | "." => *alt,
-                    _ => trimmed.next().unwrap_or(*alt),
-                }),
-            )
-        });
+        let chopped = (alts.len() > 1)
+            .then(|| allele_string(&trimmed_ref, trimmed_alts.iter().map(String::as_str)));
 
-        for (trim_idx, (allele_idx, _alt)) in valid_alts.iter().enumerate() {
-            let vep_alt = trimmed_alts
-                .get(trim_idx)
-                .with_context(|| format!("missing normalized ALT for trim index {trim_idx}"))?;
-
+        for ((allele_idx, alt), vep_alt) in alts.iter().zip(&trimmed_alts) {
+            if *alt == "*" || *alt == "." {
+                continue;
+            }
             let mut variant = InputVariant::new(
                 chr.clone(),
                 vep_start,
@@ -300,59 +291,53 @@ pub(crate) fn vep_coords_from_trimmed(
     (start, end)
 }
 
-/// Trim shared prefix/suffix across REF and all ALT alleles together.
-///
-/// This matches Perl VEP behavior for multi-allelic records where all ALT
-/// alleles share a common normalized coordinate window.
+/// The anchor chop of Parser/VCF.pm:294-335 over every written ALT, `*` and `.` included:
+/// the record is an indel when any ALT's length differs from REF's (a `*` of one base
+/// against a two-base REF counts, so `AG AC,*` is chopped where `AG AC` is not, :296-298),
+/// and the first base is chopped when REF and every ALT other than `*` share it (:306-308
+/// with several ALTs, :328 with one), `*` kept as written and an emptied allele reading
+/// `-` (:315-316). Same-length alleles are never trimmed; the secondary minimisation of a
+/// bi-allelic indel is `parse_vcf_line`'s (Parser.pm:860-881). Returns the trimmed REF, the
+/// trimmed ALTs in their written order and the number of bases chopped.
 pub(crate) fn trim_multi_alleles(
     ref_allele: &str,
     alt_alleles: &[&str],
 ) -> (String, Vec<String>, usize) {
     let ref_bytes = ref_allele.as_bytes();
-    let alt_bytes: Vec<&[u8]> = alt_alleles.iter().map(|a| a.as_bytes()).collect();
-
-    // Perl VEP behavior (Parser/VCF.pm lines 294-336):
-    // 1. Check if any ALT has a different length from REF ($is_indel flag)
-    // 2. For same-length substitutions (MNPs): no trimming at all
-    // 3. For indels: trim only the shared first base (no suffix trimming)
-    let is_indel = alt_bytes.iter().any(|a| a.len() != ref_bytes.len());
-
-    if !is_indel {
-        let trimmed_alts = alt_alleles.iter().map(|a| a.to_string()).collect();
-        return (ref_allele.to_string(), trimmed_alts, 0);
-    }
-
-    // Indel: only the shared first base is trimmed across all alleles; per-allele
-    // suffix trimming is the secondary step in parse_vcf_line() (Parser.pm:860-881).
-    let mut prefix_len = 0usize;
-    if !ref_bytes.is_empty() {
-        let first = ref_bytes[0].to_ascii_uppercase();
-        if alt_bytes
-            .iter()
-            .all(|a| !a.is_empty() && a[0].to_ascii_uppercase() == first)
-        {
-            prefix_len = 1;
-        }
-    }
-
-    let ref_after = &ref_bytes[prefix_len..];
-    let trimmed_ref = if ref_after.is_empty() {
-        "-".to_string()
-    } else {
-        String::from_utf8_lossy(ref_after).to_string()
+    let is_indel = alt_alleles.iter().any(|a| a.len() != ref_bytes.len());
+    let shares_first_base = |allele: &&str| {
+        allele
+            .as_bytes()
+            .first()
+            .is_some_and(|b| b.eq_ignore_ascii_case(&ref_bytes[0]))
     };
-
-    let mut trimmed_alts = Vec::with_capacity(alt_bytes.len());
-    for alt in &alt_bytes {
-        let alt_after = &alt[prefix_len..];
-        trimmed_alts.push(if alt_after.is_empty() {
-            "-".to_string()
-        } else {
-            String::from_utf8_lossy(alt_after).to_string()
-        });
-    }
-
-    (trimmed_ref, trimmed_alts, prefix_len)
+    // With one ALT its own first base decides (`<*>` against `N` is not chopped); with
+    // several, the alleles carrying a `*` are left out of the comparison.
+    let anchored = is_indel
+        && !ref_bytes.is_empty()
+        && match alt_alleles {
+            [single] => shares_first_base(single),
+            _ => alt_alleles
+                .iter()
+                .filter(|a| !a.contains('*'))
+                .all(shares_first_base),
+        };
+    let prefix_len = usize::from(anchored);
+    let chop = |allele: &str| match &allele.as_bytes()[prefix_len..] {
+        [] => "-".to_string(),
+        rest => String::from_utf8_lossy(rest).into_owned(),
+    };
+    let trimmed_alts = alt_alleles
+        .iter()
+        .map(|alt| {
+            if alt.contains('*') {
+                alt.to_string()
+            } else {
+                chop(alt)
+            }
+        })
+        .collect();
+    (chop(ref_allele), trimmed_alts, prefix_len)
 }
 
 /// Convert VCF padded alleles to VEP minimal representation.
@@ -1832,7 +1817,8 @@ mod tests {
     /// the alleles (an `N` reference base, `<*>`, a gVCF site in either order, a block list,
     /// a lowercase ALT, a mixed list, a breakpoint list, bracket and CHR2 mates, dot
     /// breakends, a bare `<BND>` with MATEID, repeated and bare INFO keys, a trailing
-    /// empty ALT, POS 0, a POS spelled `1e3` or `1000.0`, a `*`-only record, `<CNV:TR>`
+    /// empty ALT, POS 0, a POS spelled `1e3` or `1000.0`, a `*`-only record, a `*` beside
+    /// sequence alleles in either order, `<CNV:TR>`
     /// counts) every variant's path, class, skip mark, term, span, allele index and
     /// number, Allele, mate, record string, allele-less mark and repeat length agree; a
     /// POS past the ceiling, and a structural record's POS at it, are refused by both.
@@ -1924,6 +1910,17 @@ mod tests {
             "21\t1000\tx\tNAC\t*,*\t.\t.\tSVTYPE=DEL;END=1100",
             "21\t1000\tx\tN\tN[21:1700[,<NON_REF>\t.\t.\t.",
             "21\t1000\tx\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=1700 ",
+            "21\t30425650\tx\tA\tG,*\t.\t.\t.",
+            "21\t30425650\tx\tAG\tAC,*\t.\t.\t.",
+            "21\t30425650\tx\tAG\tTC,*\t.\t.\t.",
+            "21\t30425650\tx\tAGC\tATT,*\t.\t.\t.",
+            "21\t30425650\tx\tAG\tA,*\t.\t.\t.",
+            "21\t30425650\tx\tA\tAG,*\t.\t.\t.",
+            "21\t30425650\tx\tAG\t*,AC\t.\t.\t.",
+            "21\t30425650\tx\tAG\tAC,AT,*\t.\t.\t.",
+            "21\t30425650\tx\tA\t*,G\t.\t.\t.",
+            "21\t30425650\tx\tAG\t*,A\t.\t.\t.",
+            "21\t30425650\tx\tA\tG,T,*\t.\t.\t.",
         ] {
             let cli: Vec<Result<_, String>> = parse_vcf_line(record, false)
                 .unwrap()
@@ -3239,6 +3236,92 @@ mod tests {
         assert!(!v.is_structural, "<*> should not be structural");
         assert_eq!(v.alt_allele(), b"<*>");
         assert_eq!(v.allele_string, "T/<*>");
+    }
+
+    /// The anchor chop counts a `*` as an allele of one base (Parser/VCF.pm:296-298) and
+    /// leaves it out of the first-base comparison (:306), so Ensembl VEP 116.2 chops the
+    /// shared first base of a record whose other alleles have the REF's length: at 30425650
+    /// it writes `AG AC,*` as `21:30425651 C` (allele string `G/C/*`), `AGC ATT,*` as
+    /// `21:30425651-30425652 TT` (`GC/TT/*`), `AG *,AC` as `21:30425651 C` (ALLELE_NUM 2,
+    /// `G/*/C`) and `AG AC,AT,*` as `21:30425651 C` and `T` (`G/C/T/*`); the chop needs the
+    /// shared base (`AG TC,*` stays `21:30425650-30425651 TC`), a one-base REF has nothing
+    /// to chop (`A G,*`, `A *,G`, `A G,T,*` stay at 30425650) and without the `*` the
+    /// same-length record is not an indel (`AG AC,AT` stays `21:30425650-30425651`); an
+    /// indel beside a `*` is chopped as before (`AG A,*` `21:30425651 -`, `A AG,*`
+    /// `21:30425650-30425651 G`, `AG *,A` `21:30425651 -` with ALLELE_NUM 2). A `.` beside the
+    /// alleles is compared and never shares the base, so `A AT,.` keeps its anchor
+    /// (`21:30425650 AT`, as Ensembl VEP 116.2 writes it beside its own rows under `.`).
+    #[test]
+    fn a_star_counts_as_an_allele_of_one_base_in_the_anchor_chop() {
+        for (reference, alts, allele_string, rows) in [
+            ("A", "AT,.", "A/AT/.", vec![("21:30425650", "AT", 0)]),
+            (
+                "ATT",
+                "AT,.",
+                "ATT/AT/.",
+                vec![("21:30425650-30425652", "AT", 0)],
+            ),
+            ("A", "G,*", "A/G/*", vec![("21:30425650", "G", 0)]),
+            ("AG", "AC,*", "G/C/*", vec![("21:30425651", "C", 0)]),
+            (
+                "AG",
+                "TC,*",
+                "AG/TC/*",
+                vec![("21:30425650-30425651", "TC", 0)],
+            ),
+            (
+                "AGC",
+                "ATT,*",
+                "GC/TT/*",
+                vec![("21:30425651-30425652", "TT", 0)],
+            ),
+            ("AG", "A,*", "G/-/*", vec![("21:30425651", "-", 0)]),
+            ("A", "AG,*", "-/G/*", vec![("21:30425650-30425651", "G", 0)]),
+            ("AG", "*,AC", "G/*/C", vec![("21:30425651", "C", 1)]),
+            (
+                "AG",
+                "AC,AT,*",
+                "G/C/T/*",
+                vec![("21:30425651", "C", 0), ("21:30425651", "T", 1)],
+            ),
+            ("A", "*,G", "A/*/G", vec![("21:30425650", "G", 1)]),
+            ("AG", "*,A", "G/*/-", vec![("21:30425651", "-", 1)]),
+            (
+                "A",
+                "G,T,*",
+                "A/G/T/*",
+                vec![("21:30425650", "G", 0), ("21:30425650", "T", 1)],
+            ),
+            (
+                "AG",
+                "AC,AT",
+                "AG/AC/AT",
+                vec![
+                    ("21:30425650-30425651", "AC", 0),
+                    ("21:30425650-30425651", "AT", 1),
+                ],
+            ),
+        ] {
+            let record = format!("21\t30425650\t.\t{reference}\t{alts}\t.\t.\t.");
+            let variants = parse_vcf_line(&record, false).unwrap();
+            let read: Vec<(String, String, usize)> = variants
+                .iter()
+                .map(|v| (v.location(), v.display_allele(), v.allele_index))
+                .collect();
+            let expected: Vec<(String, String, usize)> = rows
+                .iter()
+                .map(|(location, allele, index)| (location.to_string(), allele.to_string(), *index))
+                .collect();
+            assert_eq!(read, expected, "{reference} {alts}");
+            for v in &variants {
+                assert_eq!(
+                    v.record_allele_string(),
+                    allele_string,
+                    "{reference} {alts}"
+                );
+                assert!(!v.minimised, "{reference} {alts}");
+            }
+        }
     }
 
     /// A `*` beside an indel keeps the record multi-allelic: `minimise_alleles`
