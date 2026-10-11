@@ -2825,6 +2825,31 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
             self.assertEqual(gvcf_site_locations(rust), {"21:30425650"})
             self.assertEqual(gvcf_site_locations_from_vcf(inputs), {"21:30425650"})
 
+    def test_an_info_value_is_read_to_a_second_equals_sign(self) -> None:
+        """`my ($key,$value) = split('=',$info)` (BaseVCF4.pm:582) is a two-element list
+        assignment, so a value ends at a second `=`: both engines write the SNV rows of
+        `21 30425650 x N G . . SVTYPE==DEL;END=30425949` at `21:30425650` (the SVTYPE is the empty
+        value, false, and the record takes the sequence path) and the mate of
+        `21 30425650 x N <BND> . . SVTYPE=BND;CHR2=21;END2=30425700=5` as `N[21:30425700[`. A
+        `G,<NON_REF>` site under `SVTYPE==DEL` is a gVCF variant site."""
+        from compare_vep_outputs import (
+            _info_written,
+            gvcf_site_locations_from_vcf,
+            is_gvcf_variant_site,
+        )
+
+        self.assertEqual(_info_written("SVTYPE==DEL;END=30425949", "SVTYPE"), "")
+        self.assertEqual(_info_written("SVTYPE==DEL;END=30425949", "END"), "30425949")
+        self.assertEqual(_info_written("SVTYPE=BND;CHR2=21;END2=30425700=5", "END2"), "30425700")
+        self.assertEqual(_info_written("END2=30425700=5=7", "END2"), "30425700")
+        self.assertIsNone(_info_written("SVTYPE==DEL;END", "END"))
+        self.assertTrue(is_gvcf_variant_site(["G", "<NON_REF>"], _info_written("SVTYPE==DEL", "SVTYPE")))
+        with tempfile.TemporaryDirectory() as d:
+            vcf = Path(d) / "s.vcf"
+            vcf.write_text("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+                           "21\t30425650\trs1\tA\tG,<NON_REF>\t.\t.\tSVTYPE==DEL;END=30425949\n", encoding="utf-8")
+            self.assertEqual(gvcf_site_locations_from_vcf(vcf), {"21:30425650"})
+
     def test_a_dot_breakend_pair_and_a_non_integer_end_are_set_aside(self) -> None:
         """Ensembl VEP 116.2 writes `21:30425650-30425651 chromosome_breakpoint` for `N N.`
         without SVTYPE where vep-rs writes the point `21:30425651`: the two rows on one
@@ -2945,6 +2970,34 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         self.assertEqual(buckets["dot_breakend_without_svtype_pair"], {"count": 8, "excluded": 8, "records": 2, "perl": 4, "rust": 4})
         self.assertEqual(sorted(r.split("\t")[3] for r in open_rows), ["ACG", "ACG"])
 
+    def test_the_dot_breakend_pair_takes_the_point_at_the_spans_start_for_a_longer_ref(self) -> None:
+        """`21 30425650 x NAC .N . . .`: the ALT's length differs from the REF's, so the reference's
+        start moves to POS + 1 and its end is POS + len(REF) - 1 (BaseVCF4.pm:264-275, 297-316);
+        Ensembl VEP 116.2 writes `21:30425651-30425652 chromosome_breakpoint` on ENST00000334068
+        (`upstream_gene_variant`) and ENST00000390690 (`coding_sequence_variant`), and
+        `21 30425650 x NACG .N . . .` the same rows at `21:30425651-30425653`; vep-rs writes the
+        point `21:30425651 chromosome_breakpoint` on both for each. The point is the span's start,
+        and each pair is set aside. A point at the end of a span wider than one base is no pair:
+        no REF length produces that shape."""
+        from compare_vep_outputs import dot_breakend_points
+
+        self.assertEqual(dot_breakend_points(("21", 30425650, 30425651)), ["21:30425651", "21:30425650"])
+        self.assertEqual(dot_breakend_points(("21", 30425651, 30425653)), ["21:30425651"])
+        for span in ("21:30425651-30425652", "21:30425651-30425653"):
+            with self.subTest(span=span):
+                rows = [self.row("missing_in_rust", span, "chromosome_breakpoint", "ENST00000334068", "upstream_gene_variant"),
+                        self.row("missing_in_rust", span, "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant"),
+                        self.row("extra_in_rust", "21:30425651", "chromosome_breakpoint", "ENST00000334068", "upstream_gene_variant"),
+                        self.row("extra_in_rust", "21:30425651", "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant")]
+                (ep, er, buckets), open_rows = self.run_pass(rows, self.scope())
+                self.assertEqual((ep, er, open_rows), (2, 2, []))
+                self.assertEqual(buckets["dot_breakend_without_svtype_pair"], {"count": 4, "excluded": 4, "records": 2, "perl": 2, "rust": 2})
+        rows = [self.row("missing_in_rust", "21:30425649-30425651", "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant"),
+                self.row("extra_in_rust", "21:30425651", "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant")]
+        (ep, er, buckets), open_rows = self.run_pass(rows, self.scope())
+        self.assertEqual((ep, er, len(open_rows)), (0, 0, 2))
+        self.assertEqual(buckets["dot_breakend_without_svtype_pair"]["count"], 0)
+
     def test_a_mate_prefix_the_reference_does_not_resolve_is_the_synonym_shape(self) -> None:
         """`N[Chr21:30425700[` on CHROM 21: Ensembl VEP 116.2 writes the own end only, vep-rs the
         mate rows too (`21:30425651 N[Chr21:30425700[ ENST00000334068 upstream_gene_variant`),
@@ -3022,6 +3075,26 @@ class NumifiedCoordinateTests(unittest.TestCase):
                 self.key("21:40000001-2147483647", "deletion", "T2", "transcript_ablation")]
         scope = self.merge(perl, rust)
         self.assertEqual(scope.mate_overflow, {("f", "21:30425651-2147483647"), ("f", "21:2147483649")})
+
+    def test_a_reference_coordinate_at_the_buffers_bound_is_counted_through_the_digit_guard(self) -> None:
+        """A coordinate reaches `BND_MATE_32_BIT_LIMIT` (2147478648, ten digits) only with ten or more
+        digits, so a reference Location is parsed for the bound only when one of its coordinates has
+        that many. The bound itself is counted as a point (`21:2147478648`) and as a span's end
+        (`21:30425651-2147478648`, `2:5-2147478648`); one below it (`21:2147478647`), a nine-digit
+        coordinate (`21:30425651-999999999`) and a ten-digit negative one
+        (`21:-2147483647--2147483348`) are not."""
+        from compare_vep_outputs import BND_MATE_32_BIT_LIMIT
+
+        self.assertEqual(len(str(BND_MATE_32_BIT_LIMIT)), 10)
+        perl = [self.key("21:2147478648", "N.", "-", "intergenic_variant", "-"),
+                self.key("21:30425651-2147478648", "deletion", "-", "intergenic_variant", "-"),
+                self.key("2:5-2147478648", "deletion", "-", "intergenic_variant", "-"),
+                self.key("21:2147478647", "N.", "-", "intergenic_variant", "-"),
+                self.key("21:30425651-999999999", "deletion", "-", "intergenic_variant", "-"),
+                self.key("21:-2147483647--2147483348", "deletion", "-", "intergenic_variant", "-")]
+        scope = self.merge(perl, [])
+        self.assertEqual(scope.mate_overflow,
+                         {("f", "21:2147478648"), ("f", "21:30425651-2147478648"), ("f", "2:5-2147478648")})
 
     def test_the_mate_chromosome_as_the_reference_reads_it(self) -> None:
         from compare_vep_outputs import reference_mate_chromosome

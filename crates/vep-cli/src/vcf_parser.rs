@@ -72,11 +72,12 @@ pub fn parse_vcf_line_with_max_sv_size(
     let written = written_alts(alt_field);
     let mut alts = written.clone();
     variant_alts(&mut alts, svtype);
-    // Perl VEP skips `*` alleles (neither the indel nor the SV path fires) and `.`;
-    // both stay in the record's allele string, which Ensembl VEP builds from every
-    // ALT (Parser/VCF.pm:469). `<*>` is not filtered: Perl treats it as a non-SV
-    // allele at POS unless INFO/SVTYPE routes the record. `<CPX>` is not filtered:
-    // absent from `%SO_TERMS`, it is parsed with the `vep_skip` mark
+    // `*` and `.` are written as no allele here; both stay in the record's allele
+    // string, which Ensembl VEP builds from every ALT (Parser/VCF.pm:469). Ensembl VEP
+    // writes no row for `*` (neither the indel nor the SV path fires) and reads a `.`
+    // beside another ALT as an allele of its own. `<*>` is not filtered: Perl treats
+    // it as a non-SV allele at POS unless INFO/SVTYPE routes the record. `<CPX>` is
+    // not filtered: absent from `%SO_TERMS`, it is parsed with the `vep_skip` mark
     // (`sv_so_term_and_class`).
     let valid_alts: Vec<(usize, &str)> = alts
         .iter()

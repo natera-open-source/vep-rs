@@ -2505,6 +2505,40 @@ class RecordAllelesTests(unittest.TestCase):
         self.assertEqual(C.record_alleles(REC(100, "T", ".T", "SVTYPE=BND")), {".T", "chromosome_breakpoint", "N.", ".N", "T."})
 
 
+class InfoValueTests(unittest.TestCase):
+    def test_an_info_value_is_read_to_a_second_equals_sign(self) -> None:
+        """`my ($key,$value) = split('=',$info)` (BaseVCF4.pm:582) is a two-element list
+        assignment, so a value ends at a second `=`. `21 30425650 x N G . . SVTYPE==DEL;END=30425949`
+        has the empty SVTYPE, false, and takes the sequence path: both engines write
+        `21:30425650 G ENST00000390690 coding_sequence_variant` and `21:30425650 G ENST00000334068
+        upstream_gene_variant`, the rows of `21 30425650 x A G . . SVTYPE=DEL;END=30425949`
+        (`missense_variant` on ENST00000390690) beside them, and neither record is on a skip route.
+        The mate both engines write for `21 30425650 x N <BND> . . SVTYPE=BND;CHR2=21;END2=30425700=5`
+        is `N[21:30425700[` (`21:30425651 N.` and `21:30425651 N[21:30425700[` on both transcripts),
+        the string `record_alleles` names."""
+        self.assertEqual(C._info_fields("SVTYPE==DEL;END=30425949"), {"SVTYPE": "", "END": "30425949"})
+        self.assertEqual(C._info_fields("SVTYPE=BND;CHR2=21;END2=30425700=5")["END2"], "30425700")
+        self.assertEqual(C._info_fields("END2=30425700=5=7;CHR2"), {"END2": "30425700", "CHR2": ""})
+        eq_eq = REC(30425650, "N", "G", "SVTYPE==DEL;END=30425949", "eq_eq")
+        seq = REC(30425650, "A", "G", "SVTYPE=DEL;END=30425949", "seq")
+        self.assertTrue(C.perl_sequence_path(eq_eq))
+        self.assertIsNone(C.perl_skip_route(eq_eq))
+        self.assertEqual(C.vep_rs_record_rows(eq_eq), {("21:30425650", "G")})
+        rows = {T("21:30425650", "G", "ENST00000390690", "coding_sequence_variant"),
+                T("21:30425650", "G", "ENST00000334068", "upstream_gene_variant"),
+                T("21:30425650", "G", "ENST00000390690", "missense_variant")}
+        self.assertEqual(C.check_skip_routes([eq_eq, seq], rows, rows), [])
+        self.assertEqual(C.filter_reference_skipped_records(rows, rows, [eq_eq, seq]), (set(), 0))
+        bnd = REC(30425650, "N", "<BND>", "SVTYPE=BND;CHR2=21;END2=30425700=5", "bnd")
+        self.assertEqual(C.record_alleles(bnd), {"chromosome_breakpoint", "N.", ".N", "N[21:30425700["})
+        mate_rows = {T("21:30425651", allele, feature, csq)
+                     for allele in ("N.", "N[21:30425700[")
+                     for feature, csq in (("ENST00000334068", "upstream_gene_variant"),
+                                          ("ENST00000390690", "feature_truncation,coding_sequence_variant"))}
+        self.assertEqual(C.check_skip_routes([bnd], mate_rows, mate_rows), [])
+        self.assertEqual(ADJUSTED(mate_rows, mate_rows, [bnd])[:2], (set(), set()))
+
+
 class RecordLocationTests(unittest.TestCase):
     def test_start_is_the_base_after_pos_and_end_follows_get_end(self) -> None:
         self.assertEqual(C.record_location(REC(1000, "N", "<DEL>", "END=2000;SVTYPE=DEL")), ("21", 1001, 2000))
@@ -3156,6 +3190,43 @@ class SkipRouteCrossCheckTests(unittest.TestCase):
         problems = C.check_skip_routes([mixed, twin], twin_perl, twin_perl | {T("21:1001-2000", "T", "ENST_D", "missense_variant")})
         self.assertEqual(problems, ["mixed N><DEL>,T and twin N><DEL> share 21:1001-2000 and an allele; the skipped one cannot be told from the kept one"])
 
+    def test_a_kept_sequence_record_carrying_svtype_and_end_is_not_the_twin_of_a_skipped_record(self) -> None:
+        """`21 30425650 x A G . . SVTYPE=DEL;END=30425949` is a sequence record to both engines (REF
+        and ALT a run of `ACGT`), written by both at `21:30425650 G ENST00000390690 missense_variant`
+        and `21:30425650 G ENST00000334068 upstream_gene_variant`; `21 30425650 x N G . .
+        SVTYPE=DEL ;END=30425949` is skipped by both (`DEL  is not a supported structural variant
+        type`). The sequence record is keyed at POS under its own allele, not at the span
+        `21:30425651-30425949` its INFO would give a structural record, so the skipped record is
+        confirmed and the cross-check holds, beside the kept `21 30425650 x N <DEL> . .
+        SVTYPE=DEL;END=30425949` (`21:30425651-30425949 deletion` on both transcripts) as well.
+        A sequence record still contests a skipped record at its own start with its own end: a
+        kept `A T` at 1001 beside a skipped `<DEL>,T` over 1001-2000 is told apart by the end,
+        and beside one whose END is 1001 the two cannot be."""
+        kept = REC(30425650, "A", "G", "SVTYPE=DEL;END=30425949", "seq")
+        skipped = REC(30425650, "N", "G", "SVTYPE=DEL ;END=30425949", "space")
+        control = REC(30425650, "N", "<DEL>", "SVTYPE=DEL;END=30425949", "del")
+        rows = {T("21:30425650", "G", "ENST00000390690", "missense_variant"),
+                T("21:30425650", "G", "ENST00000334068", "upstream_gene_variant"),
+                T("21:30425651-30425949", "deletion", "ENST00000334068", "upstream_gene_variant"),
+                T("21:30425651-30425949", "deletion", "ENST00000390690",
+                  "feature_truncation,coding_sequence_variant,5_prime_UTR_variant")}
+        self.assertTrue(C.perl_sequence_path(kept))
+        self.assertFalse(C.perl_sequence_path(skipped))
+        self.assertEqual(C.perl_skip_route(skipped), "unsupported_type")
+        self.assertEqual(C.check_skip_routes([kept, skipped, control], rows, rows), [])
+        self.assertEqual(C.filter_reference_skipped_records(rows, rows, [kept, skipped, control]), (set(), 1))
+        perl_open, rust_open, masks = ADJUSTED(rows, rows, [kept, skipped, control])
+        self.assertEqual((perl_open, rust_open, masks.skipped_records, masks.skipped_problems), (set(), set(), 1, []))
+        snv = REC(1001, "A", "T", ".", "snv")
+        mixed = REC(1000, "N", "<DEL>,T", "END=2000", "mixed")
+        shared = {T("21:1001", "T", "ENST_D", "missense_variant")}
+        mixed_rows = {T("21:1001-2000", "deletion", "ENST_E", "transcript_ablation"), T("21:1001-2000", "T", "ENST_E", "missense_variant")}
+        self.assertEqual(C.check_skip_routes([snv, mixed], shared, shared | mixed_rows), [])
+        self.assertEqual(C.filter_reference_skipped_records(shared, shared | mixed_rows, [snv, mixed]), (mixed_rows, 1))
+        twin = REC(1000, "N", "<DEL>,T", "END=1001", "twin")
+        self.assertEqual(C.check_skip_routes([snv, twin], shared, shared | {T("21:1001", "deletion", "ENST_D", "feature_truncation")}),
+                         ["twin N><DEL>,T and snv A>T share 21:1001-1001 and an allele; the skipped one cannot be told from the kept one"])
+
     def test_an_infinite_span_is_oversize_and_its_pair_rows_are_set_aside(self) -> None:
         """Ensembl VEP 116.2 drops `21 30425650 x N <INS> . . SVTYPE=INS;SVLEN=Inf` as oversize
         (`variant size (Inf) is bigger than --max_sv_size (10000000)`), as it drops
@@ -3464,6 +3535,33 @@ class DotBreakendInfoMateTests(unittest.TestCase):
         sequence = {T("21:30425650-30425651", "ACG", "ENST00000390690", "inframe_insertion")}
         self.assertEqual(C.filter_dot_breakend_pairs(sequence, {T("21:30425651", "ACG", "ENST00000390690", "inframe_insertion")}), (set(), set()),
                          "a sequence allele is not a breakend")
+
+    def test_a_dot_breakend_on_a_ref_of_three_or_more_bases_pairs_at_the_spans_start(self) -> None:
+        """`21 30425650 x NAC .N . . .`: the ALT's length differs from the REF's, so the reference's
+        start moves to POS + 1 and its end is POS + len(REF) - 1 (BaseVCF4.pm:264-275, 297-316);
+        Ensembl VEP 116.2 writes `21:30425651-30425652 chromosome_breakpoint ENST00000334068
+        upstream_gene_variant` and `21:30425651-30425652 chromosome_breakpoint ENST00000390690
+        coding_sequence_variant`, `21 30425650 x NACG .N . . .` the same rows at
+        `21:30425651-30425653` and `21 30425650 x NACGT N. . . .` at `21:30425651-30425654`;
+        vep-rs writes the point `21:30425651 chromosome_breakpoint` on both transcripts for each.
+        The point is the span's start, the rows pair and the skipped-record cross-check holds. A
+        REF of one or two bases (`21 30425650 x N N. . . .`, `21 30425650 x NA N. . . .`) is
+        written at `21:30425650-30425651`, the point its end. A point at the end of a span wider
+        than one base pairs with nothing: no REF length produces that shape."""
+        rust = {T("21:30425651", "chromosome_breakpoint", "ENST00000334068", "upstream_gene_variant"),
+                T("21:30425651", "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant")}
+        for ref, alt, span in (("NAC", ".N", "21:30425651-30425652"), ("NACG", ".N", "21:30425651-30425653"),
+                               ("NACGT", "N.", "21:30425651-30425654"), ("N", "N.", "21:30425650-30425651"),
+                               ("NA", "N.", "21:30425650-30425651")):
+            with self.subTest(ref=ref, alt=alt):
+                record = REC(30425650, ref, alt, ".")
+                perl = {T(span, t[1], t[2], t[4]) for t in rust}
+                self.assertEqual(C.filter_dot_breakend_pairs(perl, rust), (rust, perl))
+                self.assertEqual(C.check_skip_routes([record], perl, rust), [])
+                perl_open, rust_open, masks = ADJUSTED(perl, rust, [record])
+                self.assertEqual((perl_open, rust_open, len(masks.dot_pair_perl), len(masks.dot_pair_rust)), (set(), set(), 2, 2))
+        wide_end = {T("21:30425649-30425651", t[1], t[2], t[4]) for t in rust}
+        self.assertEqual(C.filter_dot_breakend_pairs(wide_end, rust), (set(), set()))
 
 
 class SynonymMatePrefixTests(unittest.TestCase):
@@ -3787,6 +3885,25 @@ class RnZeroAlleleDroppedTests(unittest.TestCase):
         perl_open, rust_open, masks = ADJUSTED(perl, self.rust(), [record])
         self.assertEqual((perl_open, rust_open, masks.rn_zero_rust), (set(), set(), {gain}))
 
+    def test_a_leading_rn_zero_beside_an_unchanged_real_allele_drops_the_allele_vep_rs_reads_as_a_gain(self) -> None:
+        """`21 30425587 x N <CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RN=0,1;RUS=AGC;RUC=3`:
+        the real allele rebuilds the nine-base run (`AGCAGCAGC/-` is the allele string), so
+        Ensembl VEP 116.2 keeps the empty allele, `21:30425588-30425596 - ENST00000390690
+        inframe_deletion` and `- ENST00000334068 upstream_gene_variant`, and drops the unchanged
+        one; vep-rs writes the loss of the run for the first allele (`tandem_repeat ENST00000390690
+        feature_truncation,inframe_deletion`, pairing with the `-` rows under
+        `cnv_tr_expansion_divergences`) and reads the unchanged second allele as a gain
+        (`tandem_repeat ENST00000390690 feature_elongation,coding_sequence_variant`, the upstream
+        row collapsing with the first allele's), whose row is the dropped allele's, set aside."""
+        record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=0,1;RUS=AGC;RUC=3")
+        perl = {T(self.RUN, "-", "ENST00000334068", "upstream_gene_variant"), T(self.RUN, "-", "ENST00000390690", "inframe_deletion")}
+        gain = T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_elongation,coding_sequence_variant")
+        self.assertFalse(C.cnv_tr_expansion_is_empty(record))
+        self.assertEqual(C.cnv_tr_rn_zero_dropped_direction(record), "gain")
+        self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(perl, self.rust(), [record]), {gain})
+        perl_open, rust_open, masks = ADJUSTED(perl, self.rust(), [record])
+        self.assertEqual((perl_open, rust_open, masks.rn_zero_rust), (set(), set(), {gain}))
+
     def test_a_trailing_rn_zero_drops_the_rn_zero_allele(self) -> None:
         """`21 30425587 x N <CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RN=1,0;RUS=AGC;RUC=4`:
         Ensembl VEP 116.2 writes the gain only, `21:30425596-30425597 AGC ENST00000390690
@@ -3806,12 +3923,21 @@ class RnZeroAlleleDroppedTests(unittest.TestCase):
 
     def test_shapes_outside_the_class_are_not_judged(self) -> None:
         """A real allele that is a loss (`RN=0,1;RUS=AGC;RUC=2`) shares the direction term with
-        the `RN=0` allele; `RN=.,1` leaves no empty part (`:410`); a single-ALT record, an RN with
-        two empty parts, and a run without a FASTA (symbolic reference rows) are not the shape."""
-        for info in ("RN=0,1;RUS=AGC;RUC=2", "RN=.,1;RUS=AGC;RUC=4", "RN=0,0;RUS=AGC;RUC=4", "RN=1,1;RUS=AGC,AGC;RUC=4,2",
-                     "RUS=AGC;RUC=4"):
+        the `RN=0` allele; an unchanged real allele beside a trailing empty part
+        (`21 30425587 x N <CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RN=1,0;RUS=AGC;RUC=3`,
+        the allele string `AGCAGCAGC/AGCAGCAGC/`) has no reference row at all with a FASTA and both
+        vep-rs rows (`feature_elongation,coding_sequence_variant` for the first allele,
+        `feature_truncation,inframe_deletion` for the second) are `cnv_tr_empty_expansion_dropped`;
+        `RN=.,1` leaves no empty part (`:410`); a single-ALT record, an RN with two empty parts, and
+        a run without a FASTA (symbolic reference rows) are not the shape."""
+        for info in ("RN=0,1;RUS=AGC;RUC=2", "RN=1,0;RUS=AGC;RUC=3", "RN=.,1;RUS=AGC;RUC=4", "RN=0,0;RUS=AGC;RUC=4",
+                     "RN=1,1;RUS=AGC,AGC;RUC=4,2", "RUS=AGC;RUC=4"):
             with self.subTest(info=info):
                 self.assertIsNone(C.cnv_tr_rn_zero_dropped_direction(REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + info)))
+        trailing = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=1,0;RUS=AGC;RUC=3")
+        self.assertTrue(C.cnv_tr_expansion_is_empty(trailing))
+        perl_open, rust_open, masks = ADJUSTED(set(), self.rust(), [trailing])
+        self.assertEqual((perl_open, rust_open, masks.cnvtr_empty_rust, masks.rn_zero_rust), (set(), set(), self.rust(), set()))
         self.assertIsNone(C.cnv_tr_rn_zero_dropped_direction(REC(30425587, "N", "<CNV:TR>", self.INFO + "RN=0;RUS=AGC;RUC=4")))
         record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=0,1;RUS=AGC;RUC=4")
         symbolic = {T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_elongation,coding_sequence_variant")}

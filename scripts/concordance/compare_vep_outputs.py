@@ -666,6 +666,20 @@ def is_breakend_allele(allele: str) -> bool:
     return is_own_breakend_allele(allele) or bracket_mate(allele) is not None
 
 
+def dot_breakend_points(span: tuple[str, int, int]) -> list[str]:
+    """The Locations at which vep-rs writes the point of a dot-notation breakend without
+    SVTYPE whose reference row spans ``span`` (chromosome, start, end). The reference takes
+    the sequence rules for the coordinates (BaseVCF4.pm:264-275, 297-316): the start moves to
+    POS + 1 when the ALT's length differs from the REF's and the end is POS + len(REF) - 1, so a
+    REF of one or two bases gives `c:P-(P+1)` and vep-rs's point `c:(P+1)` is the span's end,
+    and a REF of three or more bases gives `c:(P+1)-(P+len(REF)-1)` and the point is its start.
+    A span wider than one base has the second shape alone."""
+    chrom, start, end = span
+    if end == start + 1:
+        return [f"{chrom}:{end}", f"{chrom}:{start}"]
+    return [f"{chrom}:{start}"]
+
+
 def reference_mate_chromosome(allele: str) -> str | None:
     """The mate chromosome of a bracket-notation breakend allele as the reference resolves it:
     a ``chr`` prefix as written is removed and any other spelling is kept, so `N[chr21:...[`
@@ -716,6 +730,8 @@ COORDINATE_PAST_CEILING_BUCKET = "coordinate_past_ceiling"
 # buffer as intergenic_variant: the coordinate plus the default --distance flank reaches
 # 2^31, so the bound moves with the flank.
 BND_MATE_32_BIT_LIMIT = 2**31 - 5000
+# A coordinate with fewer digits than the bound cannot reach it.
+_BND_MATE_32_BIT_LIMIT_DIGITS = len(str(BND_MATE_32_BIT_LIMIT))
 # The largest coordinate vep-rs holds; a POS at or past it fails its line in every input
 # format, where the reference numifies the text and annotates the record.
 VEP_RS_COORDINATE_CEILING = 2**62 - 1
@@ -835,12 +851,14 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
         bucket=DOT_BREAKEND_PAIR_BUCKET,
         definition=(
             "A dot-notation breakend without INFO/SVTYPE (`N.`, `.N`) takes the sequence "
-            "rules for its coordinates: the ALT is one base longer than REF, so the start "
-            "moves to POS + 1, while the end stays at POS, and the reference writes the "
-            "pair `POS-(POS+1)` with the positions of an insertion; with `SVTYPE=BND` it "
-            "writes the single base at POS + 1, as vep-rs writes it for both. The "
-            "reference's pair row and vep-rs's point row on the same feature are set "
-            "aside together."
+            "rules for its coordinates: the start moves to POS + 1 when the ALT's length "
+            "differs from the REF's and the end is POS + len(REF) - 1, so the reference "
+            "writes the pair `POS-(POS+1)` with the positions of an insertion for a REF of "
+            "one or two bases and the span `(POS+1)-(POS+len(REF)-1)` for a longer one; "
+            "with `SVTYPE=BND` it writes the single base at POS + 1, as vep-rs writes it "
+            "for every REF. The reference's span row and vep-rs's point row at the span's "
+            "end (a REF of one or two bases) or start (a longer REF) on the same feature "
+            "are set aside together."
         ),
         excludes=True,
         excludes_with_cache=True,
@@ -937,8 +955,9 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
             "not read as multi-allelic, so the first allele alone is kept when the empty "
             "part leads and the trailing empty part is dropped by the split; vep-rs writes "
             "both alleles, and its rows of the dropped allele, told by their direction term "
-            "when the real allele is a gain, are set aside by the structural-variant "
-            "comparator."
+            "when the real allele is a gain, or when it is unchanged beside a leading empty "
+            "part (vep-rs reads an unchanged allele as a gain), are set aside by the "
+            "structural-variant comparator."
         ),
         excludes=False,
         excludes_with_cache=True,
@@ -1098,9 +1117,14 @@ class ReferenceRecordScope:
             self._group = group
         if perl:
             self._reference_wrote = True
-            span = _location_span(loc)
-            if span is not None and max(span[1], span[2]) >= BND_MATE_32_BIT_LIMIT:
-                self.mate_overflow.add(group)
+            coords = loc.partition(":")[2]
+            if (
+                len(coords) >= _BND_MATE_32_BIT_LIMIT_DIGITS
+                and max(map(len, coords.split("-"))) >= _BND_MATE_32_BIT_LIMIT_DIGITS
+            ):
+                span = _location_span(loc)
+                if span is not None and max(span[1], span[2]) >= BND_MATE_32_BIT_LIMIT:
+                    self.mate_overflow.add(group)
         if rust:
             self._rust_wrote = True
         if rust and (
@@ -1254,12 +1278,14 @@ def perl_split(text: str, sep: str) -> list[str]:
 def _info_written(info: str, key: str) -> str | None:
     """The value of `key=value` in an INFO column, Perl's `defined $info->{key}`: `None` for
     an absent key or a bare flag, the last occurrence winning as in the hash Ensembl VEP's
-    parser builds (BaseVCF4.pm:581-583)."""
+    parser builds (BaseVCF4.pm:581-583), whose two-element list assignment
+    `my ($key,$value) = split('=',$info)` keeps the text up to a second `=`
+    (`END2=30425700=5` is `30425700`, `SVTYPE==DEL` the empty value)."""
     value = None
     for item in info.split(";"):
         name, sep, text = item.partition("=")
         if name == key:
-            value = text if sep else None
+            value = text.partition("=")[0] if sep else None
     return value
 
 
@@ -1439,12 +1465,12 @@ def apply_116_2_one_sided_rules(
             stats[bucket]["perl" if row["source"] == "missing_in_rust" else "rust"] += 1
             masked_rows.add(idx)
 
-    # The dot-breakend pair: the reference's row at `c:P-(P+1)` beside vep-rs's at `c:(P+1)`
-    # under one breakend allele (`chromosome_breakpoint` for a bare `N.`, the `N.` and
-    # bracket strings of one whose INFO names a mate) on the same feature; the reference's
-    # rows whose Location carries a coordinate that is not an integer; and its rows at a
-    # Location vep-rs wrote nothing for whose start the reference numified past vep-rs's
-    # ceiling or below zero.
+    # The dot-breakend pair: the reference's span row beside vep-rs's point at the span's end
+    # or start (`dot_breakend_points`) under one breakend allele (`chromosome_breakpoint` for
+    # a bare `N.`, the `N.` and bracket strings of one whose INFO names a mate) on the same
+    # feature; the reference's rows whose Location carries a coordinate that is not an
+    # integer; and its rows at a Location vep-rs wrote nothing for whose start the reference
+    # numified past vep-rs's ceiling or below zero.
     point_rows: dict[tuple[str, str, str, str], list[int]] = defaultdict(list)
     for idx, row in enumerate(rows):
         if idx in masked_rows or row["source"] != "extra_in_rust" or not is_breakend_allele(row["allele"]):
@@ -1468,14 +1494,15 @@ def apply_116_2_one_sided_rules(
                 continue
         if not is_breakend_allele(row["allele"]):
             continue
-        if span is None or span[2] != span[1] + 1:
+        if span is None or span[1] >= span[2]:
             continue
-        point = f"{span[0]}:{span[2]}"
-        partners = point_rows.pop((row["file_name"], point, row["allele"], row["feature"]), ())
-        if partners:
-            hit(DOT_BREAKEND_PAIR_BUCKET, idx, row, exclude=True)
-        for rust_idx in partners:
-            hit(DOT_BREAKEND_PAIR_BUCKET, rust_idx, rows[rust_idx], exclude=True)
+        for point in dot_breakend_points(span):
+            partners = point_rows.pop((row["file_name"], point, row["allele"], row["feature"]), ())
+            if partners:
+                hit(DOT_BREAKEND_PAIR_BUCKET, idx, row, exclude=True)
+                for rust_idx in partners:
+                    hit(DOT_BREAKEND_PAIR_BUCKET, rust_idx, rows[rust_idx], exclude=True)
+                break
 
     # The one-sided rows of each side per (file, Location, allele), for the FASTA shape,
     # which reads what the other side wrote under the same allele.

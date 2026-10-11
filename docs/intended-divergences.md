@@ -23,7 +23,7 @@ Grouped by the place in Ensembl VEP's source that produces them, the twenty-one 
 | F | A breakpoint record without a bracket mate is split on `/` into one allele per part, the reference base included, so the reference allele gets a consequence row of its own | `ensembl-variation`, `StructuralVariationOverlap.pm` lines 64-77 | 13 | the reference-allele row disappears and every row is written once, as vep-rs writes it |
 | G | Any coordinate of the input buffer that, with the `--distance` flank added, reaches 2^31 (a breakend mate position, a span's end or a record's own position) turns every record of the buffer intergenic, the records loaded beside it included | `ensembl-vep`, `AnnotationSource.pm` line 190 (the flank added to each coordinate) with lines 251-254 and 306-309 | 14 | the buffer's records keep their transcript rows and the breakend its own-end rows, as vep-rs writes them |
 | H | A gVCF variant site, `A G,<NON_REF>`, is routed to the structural path by the `<NON_REF>` token and dropped whole as an unsupported type, the real allele with it | `ensembl-vep`, `Parser/VCF.pm` lines 237-245 and 469-481, `Parser.pm` lines 663-727 | 15 | the real allele is annotated, as vep-rs annotates it |
-| I | A dot-notation breakend without `SVTYPE` takes the sequence rules for its coordinates, so its start moves to POS + 1 while its end stays at POS and the row is a pair with the positions of an insertion | `ensembl-io`, `BaseVCF4.pm` lines 255-275 and 297-316 | 16 | the record is the single base at POS + 1, as it is with `SVTYPE=BND` and as vep-rs writes it |
+| I | A dot-notation breakend without `SVTYPE` takes the sequence rules for its coordinates, so its start is POS + 1 when the ALT's length differs from REF's and POS when it does not, its end is POS plus the length of REF minus one, and the row is a span rather than the point (`POS-(POS+1)` with the positions of an insertion for a REF of one or two bases) | `ensembl-io`, `BaseVCF4.pm` lines 255-275 and 297-316 | 16 | the record is the single base at POS + 1, as it is with `SVTYPE=BND` and as vep-rs writes it |
 | J | The missing value `.` in the ALT column is annotated as an allele when `SVTYPE` routes the record to the structural path | `ensembl-io`, `BaseVCF4.pm` lines 486-490; `ensembl-vep`, `Parser/VCF.pm` lines 237-245, `Parser.pm` lines 710-711 | 17 | the record writes nothing, as it does without `SVTYPE` and as vep-rs writes |
 | K | An `INFO/END` or `SVLEN` that is not an integer, or a POS in a non-integer spelling on the sequence path, is taken as written, passes `looks_like_number`, and the record is annotated with the text in its Location and a fractional distance | `ensembl-io`, `BaseVCF4.pm` lines 302-308; `ensembl-vep`, `Parser.pm` line 475 | 18 | the record is refused, as vep-rs refuses a non-integer `END`, or read at the number its text denotes, as vep-rs reads `SVLEN` and POS |
 | L | With a FASTA, a `<CNV:TR>` whose expansion yields no alternate allele, or one equal to the reference run, is dropped without a row or a warning | `ensembl-vep`, `Parser/VCF.pm` lines 382-431 and 516-543 | 19 | the record is annotated symbolically over its run, as it is without a FASTA and as vep-rs annotates it |
@@ -1637,16 +1637,16 @@ The class is `gvcf_variant_site_dropped` in the 116.2 registry of both comparato
 
 ## Defect I: a dot-notation breakend without `SVTYPE` is written as a pair
 
-**The defect in one sentence.** A dot-notation single breakend (`N.`, `.N`) whose INFO carries no `SVTYPE` takes Ensembl VEP's sequence rules for its coordinates, so its start moves to POS + 1 as for an insertion while its end stays at POS, and the record is written as the pair `POS-(POS+1)` with the cDNA, CDS and protein positions of an insertion.
+**The defect in one sentence.** A dot-notation single breakend (`N.`, `.N`) whose INFO carries no `SVTYPE` takes Ensembl VEP's sequence rules for its coordinates, so its start is POS + 1 when the ALT's length differs from REF's and POS when it does not, its end is POS plus the length of REF minus one, and the record is written as a span rather than the point: the pair `POS-(POS+1)` with the cDNA, CDS and protein positions of an insertion for a REF of one or two bases, a span beginning at POS + 1 for a REF of three or more.
 
 **Why this is a defect.** The dot is the breakend's notation, and a single breakend is a point, the base after POS. The same record with `SVTYPE=BND` is that point in Ensembl VEP itself, so the pair follows from which INFO key is present, not from what the record says.
 
 **What vep-rs does instead.** vep-rs reads every breakpoint record's span by the breakpoint rule, `SVTYPE` or not: the single base at POS + 1 unless `SVLEN` gives a span. When INFO names a mate through `CHR2` and `END2`, the `N.` row and the bracket row are both written at the point.
 
 **Where it is in Ensembl VEP's source** (`ensembl-io` and `ensembl-vep`):
-- `ensembl-io`, `BaseVCF4.pm`, `get_start`, lines 255-275: adds one to POS for a symbolic ALT or an ALT whose length differs from REF's.
-- `ensembl-io`, `BaseVCF4.pm`, `get_end`, lines 297-316: ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`; a dot breakend carries none, so the last branch gives POS plus the length of REF minus one, that is POS.
-- `ensembl-vep`, `Bio/EnsEMBL/VEP/Parser/VCF.pm`, lines 237-245: the line is still routed to the structural path (`^\.\w+|\w+\.$`), and `get_SO_term` reads `BND` from the dot, so the record is a `chromosome_breakpoint` with an insertion's coordinates.
+- `ensembl-io`, `BaseVCF4.pm`, `get_start`, lines 255-275: adds one to POS for a symbolic ALT or an ALT whose length differs from REF's, and leaves POS alone when the lengths are equal, as a two-base REF's is against `N.`.
+- `ensembl-io`, `BaseVCF4.pm`, `get_end`, lines 297-316: ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`; a dot breakend carries none, so the last branch gives POS plus the length of REF minus one: POS for a one-base REF, POS + 1 for two bases, POS + 2 for three.
+- `ensembl-vep`, `Bio/EnsEMBL/VEP/Parser/VCF.pm`, lines 237-245: the line is still routed to the structural path (`^\.\w+|\w+\.$`), and `get_SO_term` reads `BND` from the dot, so the record is a `chromosome_breakpoint` with a sequence record's coordinates.
 
 **What correcting it would change.** The record would be the single base at POS + 1, as it is with `SVTYPE=BND` and as vep-rs writes it; class 16 would vanish.
 
@@ -1654,13 +1654,14 @@ The class is `gvcf_variant_site_dropped` in the 116.2 registry of both comparato
 
 #### 16.1 What a reader needs to know first
 
-A single breakend in VCF 4.4 dot notation (`N.`, `.N`) is a point: the base after POS, where one side of the break is known and the other is not. Ensembl VEP reads it as a point when INFO carries `SVTYPE=BND`. Without `SVTYPE` the same ALT falls through the parser's sequence rules for its coordinates: the ALT is one base longer than REF, so the start moves to POS + 1 as for an insertion, while the end, with no `SVLEN`, no `END` and no `SVTYPE` in the raw INFO and no bracket in the ALT, is POS plus the length of REF minus one, that is POS. The record is written as the pair `POS-(POS+1)` with the cDNA, CDS and protein positions of an insertion. When INFO names a mate through `CHR2` and `END2`, still without `SVTYPE`, the mate is appended as a bracket allele and both the `N.` row and the `N[21:30425700[` row carry the pair.
+A single breakend in VCF 4.4 dot notation (`N.`, `.N`) is a point: the base after POS, where one side of the break is known and the other is not. Ensembl VEP reads it as a point when INFO carries `SVTYPE=BND`. Without `SVTYPE` the same ALT falls through the parser's sequence rules for its coordinates, and the length of REF sets the span it gets: the start moves to POS + 1 when the ALT's length differs from REF's and stays at POS when the two are equal, while the end, with no `SVLEN`, no `END` and no `SVTYPE` in the raw INFO and no bracket in the ALT, is POS plus the length of REF minus one. With a one-base REF (`N` against `N.`) the start is POS + 1 and the end POS; with a two-base REF (`NA` against `N.`) the lengths are equal, the start stays at POS and the end is POS + 1; either way the record is written as the pair `POS-(POS+1)` with the cDNA, CDS and protein positions of an insertion. With a REF of three or more bases (`NAC` against `.N`) the start is POS + 1 and the end POS plus the length of REF minus one, `(POS+1)-(POS+2)` for three bases, a span that begins at the point. When INFO names a mate through `CHR2` and `END2`, still without `SVTYPE`, the mate is appended as a bracket allele and both the `N.` row and the `N[21:30425700[` row carry the pair.
 
 #### 16.2 The record
 
 ```
 21	30425650	ndot_nosvtype	N	N.	.	.	.
 21	30425650	ndot_nosvtype_mate	N	N.	.	.	CHR2=21;END2=30425700
+21	30425650	ndot_nosvtype_ref3	NAC	.N	.	.	.
 ```
 
 Executed with Ensembl VEP 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
@@ -1692,9 +1693,18 @@ ndot_nosvtype_mate	21:30425650-30425651	N[21:30425700[	ENSG00000240432	ENST00000
 
 and vep-rs the same four alleles at the point, `21:30425651`, with the positions `276`, `262` and `88`.
 
+For the third record, whose REF is three bases, Ensembl VEP 116.2 writes the span that begins at the point:
+
+```
+ndot_nosvtype_ref3	21:30425651-30425652	chromosome_breakpoint	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant
+ndot_nosvtype_ref3	21:30425651-30425652	chromosome_breakpoint	ENSG00000240432	ENST00000390690	Transcript	coding_sequence_variant
+```
+
+and vep-rs the point, `21:30425651`, under the same allele on both features.
+
 #### 16.4 Why Ensembl VEP writes that
 
-`BaseVCF4.pm` `get_start` (lines 255-275) adds one to POS for a symbolic ALT or an ALT whose length differs from REF's, and `get_end` (lines 297-316) ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`; a dot breakend carries none, so the last branch gives POS plus the length of REF minus one. `Parser/VCF.pm` lines 237-245 still route the line to the structural path (`^\.\w+|\w+\.$`), and `get_SO_term` reads `BND` from the dot, so the record is a `chromosome_breakpoint` with an insertion's coordinates.
+`BaseVCF4.pm` `get_start` (lines 255-275) adds one to POS for a symbolic ALT or an ALT whose length differs from REF's and leaves POS alone when the lengths are equal, and `get_end` (lines 297-316) ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`; a dot breakend carries none, so the last branch gives POS plus the length of REF minus one. The length of REF therefore sets the span: against the two-character ALT a one-base REF starts at POS + 1 and ends at POS, a two-base REF starts at POS and ends at POS + 1, and both are written as the pair `POS-(POS+1)`; a REF of three or more bases starts at POS + 1 and ends at POS plus the length of REF minus one, `21:30425651-30425652` for `NAC` at 30425650. `Parser/VCF.pm` lines 237-245 still route the line to the structural path (`^\.\w+|\w+\.$`), and `get_SO_term` reads `BND` from the dot, so the record is a `chromosome_breakpoint` with a sequence record's coordinates, an insertion's for a REF of one or two bases.
 
 #### 16.5 Why vep-rs's rows are the correct ones
 
@@ -1712,7 +1722,7 @@ vep -i dot.vcf -o dot.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-
 
 #### 16.7 How the comparator treats this class
 
-The class is `dot_breakend_without_svtype_pair` in the 116.2 registry of both comparators, set aside: the reference's row at `chr:P-(P+1)` and vep-rs's at `chr:(P+1)` on the same feature and under the same allele are a pair and both leave the adjusted figure, whatever their consequence sets; the allele is the bare `chromosome_breakpoint` of a record without a mate, or the `N.` and `N[21:30425700[` alleles of one whose INFO names a mate. A reference row on a feature vep-rs did not name stays charged.
+The class is `dot_breakend_without_svtype_pair` in the 116.2 registry of both comparators, set aside: the reference's row at a two-coordinate span and vep-rs's row at the point `chr:(P+1)` at either end of it, the end of `chr:P-(P+1)` for a REF of one or two bases and the start of the span for a REF of three or more (`21:30425651-30425652` against `21:30425651` for the REF `NAC`), on the same feature and under the same allele are a pair and both leave the adjusted figure, whatever their consequence sets; the allele is the bare `chromosome_breakpoint` of a record without a mate, or the `N.` and `N[21:30425700[` alleles of one whose INFO names a mate. A reference row on a feature vep-rs did not name stays charged.
 
 ## Defect J: the missing ALT value is annotated as an allele
 
@@ -2108,13 +2118,14 @@ A multi-allelic `<CNV:TR>` record gives `RN` per ALT, the number of repeat seque
 21	30425587	rn_0_1	N	<CNV:TR>,<CNV:TR>	.	.	SVTYPE=CNV;END=30425596;SVLEN=9;RN=0,1;RUS=AGC;RUC=4
 21	30425587	rn_1_0	N	<CNV:TR>,<CNV:TR>	.	.	SVTYPE=CNV;END=30425596;SVLEN=9;RN=1,0;RUS=AGC;RUC=4
 21	30425587	rn_2_0	N	<CNV:TR>,<CNV:TR>	.	.	SVTYPE=CNV;END=30425596;SVLEN=9;RN=2,0;RUS=AGC,AGC;RUC=2,2
+21	30425587	rn_0_1_ruc3	N	<CNV:TR>,<CNV:TR>	.	.	SVTYPE=CNV;END=30425596;SVLEN=9;RN=0,1;RUS=AGC;RUC=3
 ```
 
-The run at 30425588-30425596 is three copies of `AGC` in the GRCh38 sequence (19.2). Executed with `--fasta` (Ensembl's chromosome 21 of release 116) on Ensembl VEP 116.2.
+The run at 30425588-30425596 is three copies of `AGC` in the GRCh38 sequence (19.2), so the fourth record's real allele, three units, is the run unchanged. Executed with `--fasta` (Ensembl's chromosome 21 of release 116) on Ensembl VEP 116.2.
 
 #### 22.3 What each engine writes
 
-Ensembl VEP 116.2 with `--fasta`, for the first record two rows under the empty allele alone (JSON `"allele_string":"AGCAGCAGC/-"`), the four-unit allele gone:
+Ensembl VEP 116.2 with `--fasta`, for the first record two rows under the empty allele alone (JSON `"allele_string":"AGCAGCAGC/-"`), the four-unit allele gone, and for the fourth record the same two rows under its own ID, the unchanged allele gone:
 
 ```
 rn_0_1	21:30425588-30425596	-	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant	ALLELE_NUM=1;IMPACT=MODIFIER;DISTANCE=4624;STRAND=1
@@ -2128,14 +2139,14 @@ rn_1_0	21:30425596-30425597	AGC	ENSG00000186971	ENST00000334068	Transcript	upstr
 rn_1_0	21:30425596-30425597	AGC	ENSG00000240432	ENST00000390690	Transcript	inframe_insertion	ALLELE_NUM=1;IMPACT=MODERATE;STRAND=-1
 ```
 
-vep-rs, for each record, both alleles at the run, the `RN=0` allele as the loss of the run and the other as its gain; for the first record on ENST00000390690:
+vep-rs, for each record, both alleles at the run, the `RN=0` allele as the loss of the run and the other as its gain, an unchanged allele read as a gain; for the first record, and for the fourth under its own ID, on ENST00000390690:
 
 ```
 rn_0_1	21:30425588-30425596	tandem_repeat	ENSG00000240432	ENST00000390690	Transcript	feature_truncation,inframe_deletion	ALLELE_NUM=1
 rn_0_1	21:30425588-30425596	tandem_repeat	ENSG00000240432	ENST00000390690	Transcript	feature_elongation,coding_sequence_variant	ALLELE_NUM=2
 ```
 
-The loss row is the symbolic reading of Ensembl VEP's `inframe_deletion` row and pairs with it under class 12 (12.7); the gain row has no partner. For the second and third records the gain row pairs with Ensembl VEP's `inframe_insertion` row and the loss row has none. Without a FASTA both engines write the symbolic rows for both alleles and agree.
+The loss row is the symbolic reading of Ensembl VEP's `inframe_deletion` row and pairs with it under class 12 (12.7); the gain row has no partner, for the fourth record as for the first. For the second and third records the gain row pairs with Ensembl VEP's `inframe_insertion` row and the loss row has none. Without a FASTA both engines write the symbolic rows for both alleles and agree.
 
 #### 22.4 Why Ensembl VEP writes that
 
@@ -2159,7 +2170,7 @@ Swapping the two `RN` values (`RN=1,0`) loses the other allele.
 
 #### 22.7 How the comparator treats this class
 
-The class is `cnv_tr_rn_zero_allele_dropped` in the 116.2 registry. The structural-variant comparator reads the input record, a two-ALT `<CNV:TR>,<CNV:TR>` whose `RN` list has exactly one entry Perl's loop runs no iteration for (0 or negative; `.` is skipped at line 410 and leaves no part, so it is not the shape), when the reference expanded the record (a row at or beside the run under an allele other than `tandem_repeat`, a FASTA run) and the real allele is a gain. It sets aside vep-rs's `tandem_repeat` rows at the run that carry the dropped allele's direction term: `feature_elongation` for the real gain when the `RN=0` allele comes first, `feature_truncation` for the `RN=0` loss when it comes last. A real allele that is a loss or unchanged shares its direction term with the `RN=0` allele and is not judged. The allele the reference kept pairs under class 12 as every expanded `<CNV:TR>` does. The SNP/indel comparator reads no input and does not judge the class.
+The class is `cnv_tr_rn_zero_allele_dropped` in the 116.2 registry. The structural-variant comparator reads the input record, a two-ALT `<CNV:TR>,<CNV:TR>` whose `RN` list has exactly one entry Perl's loop runs no iteration for (0 or negative; `.` is skipped at line 410 and leaves no part, so it is not the shape), when the reference ran with a FASTA and expanded the record (a row at or beside the run under an allele other than `tandem_repeat`). It sets aside vep-rs's `tandem_repeat` rows at the run whose tuple is the dropped allele's alone: the `feature_elongation` rows when the `RN=0` allele comes first and the real allele is a gain or unchanged, which vep-rs reads as a gain, the reference having kept the `RN=0` deletion (the first and fourth records); the `feature_truncation` rows when the `RN=0` allele comes last and the real allele is a gain, the reference having kept the gain (the second and third). A real allele that is a loss (`RUC=2` over the three-unit run) shares the `feature_truncation` tuple with the `RN=0` allele, so the reference's row pairs with that one tuple under class 12 and nothing is left for this class to judge; an unchanged real allele before a trailing `RN=0` (`RN=1,0;RUC=3`) leaves the reference an allele string with no alternate and no row, which is class 19, not this one. The allele the reference kept pairs under class 12 as every expanded `<CNV:TR>` does. Without a FASTA both engines write the symbolic rows for both alleles and nothing is set aside. The SNP/indel comparator reads no input and does not judge the class.
 
 ## A bound of vep-rs, not a defect: a coordinate past 2^62 - 1
 

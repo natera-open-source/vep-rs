@@ -89,6 +89,7 @@ from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition
     _span_exceeds_max_sv_size,
     canonical_location,
     count_bare_breakpoint_reference_rows,
+    dot_breakend_points,
     gvcf_site_rows,
     is_breakend_allele,
     is_gvcf_variant_site,
@@ -1590,12 +1591,14 @@ def perl_so_abbrev(sv_type: str) -> str | None:
 def _info_fields(info: str) -> dict[str, str]:
     """The INFO column as the hash Ensembl VEP's parser builds (BaseVCF4.pm:581-583): exact
     keys, the last occurrence of a repeated key, `KEY=` as the empty value, a bare `KEY` as
-    the empty value too (Perl's undef; callers that test `defined` use `_info_written`)."""
+    the empty value too (Perl's undef; callers that test `defined` use `_info_written`), and
+    the text up to a second `=` as the value, as the two-element list assignment
+    `my ($key,$value) = split('=',$info)` keeps it (`END2=30425700=5` is `30425700`)."""
     out: dict[str, str] = {}
     for item in info.split(";"):
         if item and item != ".":
             key, _, value = item.partition("=")
-            out[key] = value
+            out[key] = value.partition("=")[0]
     return out
 
 
@@ -1910,7 +1913,9 @@ def skipped_record_rows(
     record produces (`record_alleles`); a kept record sharing the start, or the whole
     Location string, with a skipped one therefore never hides it and is never mistaken for
     it. When two records at one start produce the same allele, the end of the Location
-    tells them apart.
+    tells them apart. A record on the sequence path is placed at POS under its sequence
+    alleles (`gvcf_site_rows`), whatever INFO it carries: an SNV with SVTYPE and END is not
+    at the structural span those would give.
 
     SET ASIDE: every vep-rs tuple at a confirmed record's start under one of its alleles
     (the same end rule applies). The start is the one vep-rs prints, the lower end of the
@@ -1949,9 +1954,19 @@ def skipped_record_rows(
     rust_at = located(rust_tuples)
     records_at: dict[tuple[str, int], list[tuple[VcfVariant, str | None, set[str], int]]] = defaultdict(list)
     for v in input_variants:
-        chrom, start, end = record_location(v)
-        lo, hi = min(start, end), max(start, end)
-        records_at[(chrom, lo)].append((v, perl_skip_route(v, max_sv_size), record_alleles(v), hi))
+        chrom = v.location.split(":", 1)[0]
+        if perl_sequence_path(v):
+            placed = gvcf_site_rows(v.pos, v.ref, perl_split(v.alt, ","))
+            if not placed:
+                continue
+            alleles = {allele for allele, _start, _end in placed}
+            lo = min(min(start, end) for _allele, start, end in placed)
+            hi = max(max(start, end) for _allele, start, end in placed)
+        else:
+            _chrom, start, end = record_location(v)
+            alleles = record_alleles(v)
+            lo, hi = min(start, end), max(start, end)
+        records_at[(chrom, lo)].append((v, perl_skip_route(v, max_sv_size), alleles, hi))
 
     def rows_of(bucket: list[tuple[AnnotTuple, int]], alleles: set[str], end: int, contested: bool) -> list[AnnotTuple]:
         return [t for t, t_end in bucket if t[1] in alleles and (not contested or t_end == end)]
@@ -2052,11 +2067,14 @@ def filter_gvcf_variant_sites(
 def filter_dot_breakend_pairs(
     perl_tuples: set[AnnotTuple], rust_tuples: set[AnnotTuple]
 ) -> tuple[set[AnnotTuple], set[AnnotTuple]]:
-    """A dot-notation breakend without SVTYPE: the reference's tuple at `c:P-(P+1)` and
-    vep-rs's at `c:(P+1)` under the same breakend allele on the same feature, set aside as
-    a pair (`DOT_BREAKEND_PAIR_BUCKET`): `chromosome_breakpoint` for a bare `N.`, and the
-    `N.` and `N[21:30425700[` strings of one whose INFO names a mate through CHR2 and END2
-    (Parser/VCF.pm:491-497). Returns (excluded_rust, excluded_perl)."""
+    """A dot-notation breakend without SVTYPE: the reference's two-coordinate tuple and
+    vep-rs's point under the same breakend allele on the same feature, set aside as a pair
+    (`DOT_BREAKEND_PAIR_BUCKET`). The point is the span's end for a REF of one or two bases
+    (`c:P-(P+1)` against `c:(P+1)`) and its start for a longer REF
+    (`c:(P+1)-(P+len(REF)-1)` against `c:(P+1)`; `dot_breakend_points`). The allele is
+    `chromosome_breakpoint` for a bare `N.`, and the `N.` and `N[21:30425700[` strings of one
+    whose INFO names a mate through CHR2 and END2 (Parser/VCF.pm:491-497). Returns
+    (excluded_rust, excluded_perl)."""
     rust_points: dict[tuple[str, str, str, str], list[AnnotTuple]] = defaultdict(list)
     for t in rust_tuples - perl_tuples:
         span = _location_span(t[0])
@@ -2066,12 +2084,14 @@ def filter_dot_breakend_pairs(
     excluded_perl: set[AnnotTuple] = set()
     for pt in perl_tuples - rust_tuples:
         span = _location_span(pt[0])
-        if not is_breakend_allele(pt[1]) or span is None or span[2] != span[1] + 1:
+        if not is_breakend_allele(pt[1]) or span is None or span[1] >= span[2]:
             continue
-        partners = rust_points.pop((f"{span[0]}:{span[2]}", pt[1], pt[2], pt[3]), [])
-        if partners:
-            excluded_perl.add(pt)
-            excluded_rust.update(partners)
+        for point in dot_breakend_points(span):
+            partners = rust_points.pop((point, pt[1], pt[2], pt[3]), [])
+            if partners:
+                excluded_perl.add(pt)
+                excluded_rust.update(partners)
+                break
     return excluded_rust, excluded_perl
 
 
@@ -2291,9 +2311,12 @@ def cnv_tr_rn_zero_dropped_direction(v: VcfVariant) -> str | None:
     and when it trails the split drops the empty part and the `RN=0` allele is dropped.
     The real allele's bases are its RN repeat sequences' units times their counts, read
     from the start of RUS and RUC (or RB), the empty allele having consumed none. None when
-    the record is not that shape, or when the real allele is not a gain over the run: a
-    real allele that is a loss or unchanged shares its direction term with the `RN=0`
-    allele's rows and the two are not told apart."""
+    the record is not that shape, or when the dropped allele's rows cannot be told apart: a
+    real allele that is a loss shares its direction term with the `RN=0` allele's rows; an
+    unchanged real allele is read as a gain by vep-rs (crates/vep-effects/src/sv/mod.rs takes
+    the deletion path only below the run's length) and is the dropped allele when the empty
+    part leads, while with the empty part trailing the reference writes nothing for the
+    record (`cnv_tr_expansion_is_empty`)."""
     if perl_split(v.alt.upper(), ",") != ["<CNV:TR>", "<CNV:TR>"]:
         return None
     rus, ruc, rb, rn = (_info_written(v.info, key) for key in ("RUS", "RUC", "RB", "RN"))
@@ -2313,9 +2336,12 @@ def cnv_tr_rn_zero_dropped_direction(v: VcfVariant) -> str | None:
         return None
     bases = sum(_repeat_bases(unit_len, count, by_ruc) for unit_len, count in zip(units, counts))
     _chrom, start, end = record_location(v)
-    if bases <= end - start + 1:
+    run = end - start + 1
+    if bases < run:
         return None
-    return "gain" if empty[0] == 0 else "loss"
+    if empty[0] == 0:
+        return "gain"
+    return "loss" if bases > run else None
 
 
 def filter_cnv_tr_rn_zero_allele_dropped(

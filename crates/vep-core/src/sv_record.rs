@@ -77,9 +77,9 @@ pub fn structural_variants(
     let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
     let mut alts = written.to_vec();
     variant_alts(&mut alts, svtype);
-    // Perl VEP skips `*` alleles (neither the indel nor the SV path fires) and `.`;
-    // both stay in the record's allele string, which Ensembl VEP builds from every
-    // ALT (Parser/VCF.pm:469).
+    // `*` and `.` are written as no allele here; both stay in the record's allele
+    // string, which Ensembl VEP builds from every ALT (Parser/VCF.pm:469). Ensembl VEP
+    // writes no row for `*` and reads a `.` beside another ALT as an allele of its own.
     let valid_alts: Vec<(usize, &str)> = alts
         .iter()
         .copied()
