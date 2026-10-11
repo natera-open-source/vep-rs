@@ -1831,7 +1831,7 @@ mod tests {
     /// the alleles (an `N` reference base, `<*>`, a gVCF site in either order, a block list,
     /// a lowercase ALT, a mixed list, a breakpoint list, bracket and CHR2 mates, dot
     /// breakends, a bare `<BND>` with MATEID, repeated and bare INFO keys, a trailing
-    /// empty ALT, POS 0, a POS spelled `3e7` or `1000.0`, a `*`-only record, `<CNV:TR>`
+    /// empty ALT, POS 0, a POS spelled `1e3` or `1000.0`, a `*`-only record, `<CNV:TR>`
     /// counts) every variant's path, class, skip mark, term, span, allele index and
     /// number, Allele, mate, record string, allele-less mark and repeat length agree; a
     /// POS past the ceiling, and a structural record's POS at it, are refused by both.

@@ -2569,7 +2569,7 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         """Ensembl VEP 116.2 writes a bare `<BND>`'s rows twice, ALLELE_NUM 1 for the reference
         allele N of `N/<BND>` and 2 for the ALT (StructuralVariationOverlap.pm:64-77); vep-rs
         writes each once. The key stream carries each tuple once per side, so the merge counts
-        2 reference tuples, 2 vep-rs tuples and 2 in the intersection (the reference-allele rows
+        3 reference tuples, 3 vep-rs tuples and 3 in the intersection (the reference-allele rows
         enter neither figure), the scope counts the 2 rows the stream dropped, and the one-sided
         pass reports them under the class, all excluded, with nothing subtracted from the
         reference's tuple count."""
