@@ -3036,6 +3036,63 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
         md = (out / "concordance_report.md").read_text()
         self.assertIn("`bnd_bare_reference_allele_row` 2 reference-allele rows set aside", md)
 
+    def test_116_2_exits_0_on_a_dot_breakend_whose_point_lies_inside_the_reference_span(self) -> None:
+        """`21 30425650 d3eq_trail NAC NA. . . .`, `21 30425650 d3eq_lead NAC .AC . . .` and
+        `21 30425650 d4eq_trail NACG NAC. . . .`: Ensembl VEP 116.2 writes the first two at
+        `21:30425650-30425652` and the third at `21:30425650-30425653`, vep-rs each at `21:30425651`,
+        as `chromosome_breakpoint` on ENST00000334068 (`upstream_gene_variant`) and ENST00000390690
+        (`coding_sequence_variant`). Each record in its own file, the two rows a side of each pair
+        under `dot_breakend_without_svtype_pair`, the skipped-record cross-check passes, the
+        comparator exits 0 and no one-sided row survives the masks."""
+        import json
+        import shutil
+        import tempfile
+
+        fixture = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, fixture, True)
+        for sub in ("in", "perl", "rust"):
+            (fixture / sub).mkdir()
+        shutil.copytree(self.FIXTURE / "cache", fixture / "cache")
+        header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+        features = (("ENSG00000186971", "ENST00000334068", "upstream_gene_variant"),
+                    ("ENSG00000240432", "ENST00000390690", "coding_sequence_variant"))
+        for vid, ref, alt, span in (("d3eq_trail", "NAC", "NA.", "21:30425650-30425652"),
+                                    ("d3eq_lead", "NAC", ".AC", "21:30425650-30425652"),
+                                    ("d4eq_trail", "NACG", "NAC.", "21:30425650-30425653")):
+            (fixture / "in" / f"{vid}.vcf").write_text(
+                f"##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t30425650\t{vid}\t{ref}\t{alt}\t.\t.\t.\n"
+            )
+            for side, location in (("perl", span), ("rust", "21:30425651")):
+                (fixture / side / f"{vid}.txt").write_text(header + "".join(
+                    f"{vid}\t{location}\tchromosome_breakpoint\t{gene}\t{feature}\tTranscript\t{csq}\n"
+                    for gene, feature, csq in features))
+        out = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, True)
+        argv = sys.argv
+        sys.argv = [
+            "compare_sv_concordance.py", "--reference-release", "116.2", "--assembly", "grch38",
+            "--input-dir", str(fixture / "in"), "--perl-dir", str(fixture / "perl"),
+            "--rust-dir", str(fixture / "rust"), "--vep-rs-cache", str(fixture / "cache"),
+            "--output-dir", str(out),
+        ]
+        rc = 0
+        try:
+            C.main()
+        except SystemExit as exc:
+            rc = exc.code or 0
+        finally:
+            sys.argv = argv
+        self.assertEqual(rc, 0)
+        report = json.loads((out / "concordance_report.json").read_text())
+        self.assertEqual((report["overall"]["perl_tuples"], report["overall"]["rust_tuples"], report["overall"]["intersection"]), (6, 6, 0))
+        for name, per_file in report["per_file"].items():
+            with self.subTest(file=name):
+                self.assertEqual((per_file["perl_tuples"], per_file["rust_tuples"], per_file["intersection"]), (2, 2, 0))
+        self.assertIn("filter_dot_breakend_pairs", report["adjusted"]["masks_applied"])
+        self.assertTrue(report["adjusted"]["divergence_classes"]["dot_breakend_without_svtype_pair"]["excludes"])
+        self.assertEqual((out / "discordant.tsv").read_text().count("\n"), 13, "the header and the twelve one-sided rows")
+        self.assertEqual((out / "discordant_adjusted.tsv").read_text().count("\n"), 1, "the header alone: every row paired")
+
     def test_the_115_2_report_carries_no_release_block(self) -> None:
         import json
 
@@ -3536,23 +3593,26 @@ class DotBreakendInfoMateTests(unittest.TestCase):
         self.assertEqual(C.filter_dot_breakend_pairs(sequence, {T("21:30425651", "ACG", "ENST00000390690", "inframe_insertion")}), (set(), set()),
                          "a sequence allele is not a breakend")
 
-    def test_a_dot_breakend_on_a_ref_of_three_or_more_bases_pairs_at_the_spans_start(self) -> None:
-        """`21 30425650 x NAC .N . . .`: the ALT's length differs from the REF's, so the reference's
-        start moves to POS + 1 and its end is POS + len(REF) - 1 (BaseVCF4.pm:264-275, 297-316);
-        Ensembl VEP 116.2 writes `21:30425651-30425652 chromosome_breakpoint ENST00000334068
-        upstream_gene_variant` and `21:30425651-30425652 chromosome_breakpoint ENST00000390690
-        coding_sequence_variant`, `21 30425650 x NACG .N . . .` the same rows at
-        `21:30425651-30425653` and `21 30425650 x NACGT N. . . .` at `21:30425651-30425654`;
-        vep-rs writes the point `21:30425651 chromosome_breakpoint` on both transcripts for each.
-        The point is the span's start, the rows pair and the skipped-record cross-check holds. A
-        REF of one or two bases (`21 30425650 x N N. . . .`, `21 30425650 x NA N. . . .`) is
-        written at `21:30425650-30425651`, the point its end. A point at the end of a span wider
-        than one base pairs with nothing: no REF length produces that shape."""
+    def test_a_dot_breakend_pairs_at_the_spans_start_or_the_base_after_it(self) -> None:
+        """The reference's start is POS + 1 when the ALT's length differs from the REF's and POS
+        when it does not, its end POS + len(REF) - 1 (BaseVCF4.pm:264-275, 297-316); vep-rs writes
+        the point `21:30425651 chromosome_breakpoint` on both transcripts for every shape. Ensembl
+        VEP 116.2 writes `21 30425650 x NAC .N . . .` as `21:30425651-30425652 chromosome_breakpoint
+        ENST00000334068 upstream_gene_variant` and `21:30425651-30425652 chromosome_breakpoint
+        ENST00000390690 coding_sequence_variant`, `21 30425650 x NACG .N . . .` the same rows at
+        `21:30425651-30425653` and `21 30425650 x NACGT N. . . .` at `21:30425651-30425654`, the
+        point each span's start; `21 30425650 x NAC NA. . . .` and `21 30425650 x NAC .AC . . .` at
+        `21:30425650-30425652` and `21 30425650 x NACG NAC. . . .` at `21:30425650-30425653`, the
+        point the base after each span's start; `21 30425650 x N N. . . .` and `21 30425650 x NA N.
+        . . .` at `21:30425650-30425651`, the point its end. Each pairs and the skipped-record
+        cross-check holds. A point two or more bases past the span's start pairs with nothing: no
+        REF length produces that shape."""
         rust = {T("21:30425651", "chromosome_breakpoint", "ENST00000334068", "upstream_gene_variant"),
                 T("21:30425651", "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant")}
         for ref, alt, span in (("NAC", ".N", "21:30425651-30425652"), ("NACG", ".N", "21:30425651-30425653"),
-                               ("NACGT", "N.", "21:30425651-30425654"), ("N", "N.", "21:30425650-30425651"),
-                               ("NA", "N.", "21:30425650-30425651")):
+                               ("NACGT", "N.", "21:30425651-30425654"), ("NAC", "NA.", "21:30425650-30425652"),
+                               ("NAC", ".AC", "21:30425650-30425652"), ("NACG", "NAC.", "21:30425650-30425653"),
+                               ("N", "N.", "21:30425650-30425651"), ("NA", "N.", "21:30425650-30425651")):
             with self.subTest(ref=ref, alt=alt):
                 record = REC(30425650, ref, alt, ".")
                 perl = {T(span, t[1], t[2], t[4]) for t in rust}

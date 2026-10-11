@@ -2142,10 +2142,6 @@ class PerClassModeArgTests(unittest.TestCase):
         self.assertEqual(parse_args([]).min_tuples, PER_CLASS_MIN_TUPLES)
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class SvTranscriptSelectionTests(unittest.TestCase):
     """The structural-variant comparator's transcript-selection class on a whole-genome
     input: a record above --max_sv_size that Perl marks skipped is annotated against
@@ -2753,6 +2749,39 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
             args = parse_args(["--perl-dir", "p", "--rust-dir", "r", "--report-dir", "o", "--input-vcf", str(inputs / "s.vcf")])
             self.assertEqual((args.input_dir, args.input_vcf), (None, str(inputs / "s.vcf")))
 
+    def test_a_gvcf_site_is_read_at_the_pos_vep_rs_numifies(self) -> None:
+        """vep-rs reads a POS in any spelling of an exact integer that Rust's `f64` parser
+        accepts (`3.042565e7`, `30425650.0`, `+30425650`, `30425650.`, ` 30425650 `), so the gVCF
+        site `ATG AG,<NON_REF>` at each is the deletion at `21:30425651`; it fails the line for
+        `30_425_650`, `-30425650`, `abc`, fullwidth digits, `0x1D04A1A`, `inf` and `1e400`
+        (`Invalid POS`), so those records name no site. Only the unpadded digit string is read
+        exactly (`parse_coordinate`); a padded one goes through the double, so ` 72057594037927937 `
+        is 72057594037927936 and the ceiling with blanks around it is refused."""
+        from compare_vep_outputs import VEP_RS_COORDINATE_CEILING, gvcf_site_locations_from_vcf, vep_rs_pos
+
+        for text in ("30425650", "3.042565e7", "30425650.0", "+30425650", "30425650.", " 30425650 ", "030425650"):
+            self.assertEqual(vep_rs_pos(text), 30425650, repr(text))
+        self.assertEqual(vep_rs_pos("3e7"), 30000000)
+        self.assertEqual(vep_rs_pos(str(VEP_RS_COORDINATE_CEILING)), VEP_RS_COORDINATE_CEILING)
+        self.assertEqual(vep_rs_pos(str(2**56 + 1)), 2**56 + 1)
+        self.assertEqual(vep_rs_pos(f" {2**56 + 1} "), 2**56)
+        for text in (".", "", "abc", "-30425650", "30_425_650", "３０４２５６５０", "0x1D04A1A", "inf", "nan", "1e400",
+                     "30425650.5", "++30425650", str(VEP_RS_COORDINATE_CEILING + 1), f" {VEP_RS_COORDINATE_CEILING} "):
+            self.assertIsNone(vep_rs_pos(text), repr(text))
+        read = ("3.042565e7", "30425650.0", "+30425650", "30425650.", " 30425650 ")
+        refused = ("30_425_650", "-30425650", "abc", "３０４２５６５０", "0x1D04A1A", "inf", "1e400")
+        header = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+
+        def site(pos: str, vid: str) -> str:
+            return f"21\t{pos}\t{vid}\tATG\tAG,<NON_REF>\t.\t.\t.\n"
+
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "pos.vcf"
+            path.write_text(header + "".join(site(pos, f"p{i}") for i, pos in enumerate(read + refused)), encoding="utf-8")
+            self.assertEqual(gvcf_site_locations_from_vcf(path), {"21:30425651"})
+            path.write_text(header + "".join(site(pos, f"r{i}") for i, pos in enumerate(refused)), encoding="utf-8")
+            self.assertEqual(gvcf_site_locations_from_vcf(path), set())
+
     def test_a_gvcf_site_allele_is_written_in_upper_case(self) -> None:
         """vep-rs writes `21 30425650 x A g,<NON_REF> . . .` and `21 30425650 x a g,<non_ref>
         . . .` as `21:30425650 G`; the derived allele is upper-cased as the parser writes it."""
@@ -2761,6 +2790,24 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         self.assertEqual(gvcf_site_rows(30425650, "A", ["g", "<NON_REF>"]), [("G", 30425650, 30425650)])
         self.assertEqual(gvcf_site_rows(30425650, "a", ["g", "<non_ref>"]), [("G", 30425650, 30425650)])
         self.assertEqual(gvcf_site_rows(30425650, "atg", ["ag", "<NON_REF>"]), [("-", 30425651, 30425651)])
+
+    def test_a_star_beside_a_gvcf_sites_indel_keeps_the_anchor_trimmed_alleles(self) -> None:
+        """vep-rs minimises the one allele beside the block only when it is the one ALT there: for
+        `21 30425650 x ATT AT,*,<NON_REF> . . .` it writes `21:30425651-30425652 T`, for
+        `AT ATT,*,<NON_REF>` `21:30425651 TT` and for `ATTG ATC,*,<NON_REF>` `21:30425651-30425653
+        TC`, the anchor-trimmed alleles Ensembl VEP 116.2 writes for the same records without the
+        block (`minimise_alleles` leaves the three-part string as it is, Parser.pm:978-984); a `.`
+        beside the indel counts the same, and without either the allele is minimised from both
+        ends (`21:30425652 -`, `21:30425651-30425652 T`, `21:30425652-30425653 C`)."""
+        from compare_vep_outputs import gvcf_site_rows
+
+        self.assertEqual(gvcf_site_rows(30425650, "ATT", ["AT", "*", "<NON_REF>"]), [("T", 30425651, 30425652)])
+        self.assertEqual(gvcf_site_rows(30425650, "AT", ["ATT", "*", "<NON_REF>"]), [("TT", 30425651, 30425651)])
+        self.assertEqual(gvcf_site_rows(30425650, "ATTG", ["ATC", "*", "<NON_REF>"]), [("TC", 30425651, 30425653)])
+        self.assertEqual(gvcf_site_rows(30425650, "ATT", ["AT", ".", "<NON_REF>"]), [("T", 30425651, 30425652)])
+        self.assertEqual(gvcf_site_rows(30425650, "ATT", ["AT", "<NON_REF>"]), [("-", 30425652, 30425652)])
+        self.assertEqual(gvcf_site_rows(30425650, "AT", ["ATT", "<NON_REF>"]), [("T", 30425652, 30425651)])
+        self.assertEqual(gvcf_site_rows(30425650, "ATTG", ["ATC", "<NON_REF>"]), [("C", 30425652, 30425653)])
 
     def test_gvcf_site_rows_follow_the_parsers_sequence_path(self) -> None:
         """vep-rs trims an indel record's anchor base across every real allele, then minimises
@@ -2970,20 +3017,24 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         self.assertEqual(buckets["dot_breakend_without_svtype_pair"], {"count": 8, "excluded": 8, "records": 2, "perl": 4, "rust": 4})
         self.assertEqual(sorted(r.split("\t")[3] for r in open_rows), ["ACG", "ACG"])
 
-    def test_the_dot_breakend_pair_takes_the_point_at_the_spans_start_for_a_longer_ref(self) -> None:
-        """`21 30425650 x NAC .N . . .`: the ALT's length differs from the REF's, so the reference's
-        start moves to POS + 1 and its end is POS + len(REF) - 1 (BaseVCF4.pm:264-275, 297-316);
-        Ensembl VEP 116.2 writes `21:30425651-30425652 chromosome_breakpoint` on ENST00000334068
-        (`upstream_gene_variant`) and ENST00000390690 (`coding_sequence_variant`), and
-        `21 30425650 x NACG .N . . .` the same rows at `21:30425651-30425653`; vep-rs writes the
-        point `21:30425651 chromosome_breakpoint` on both for each. The point is the span's start,
-        and each pair is set aside. A point at the end of a span wider than one base is no pair:
-        no REF length produces that shape."""
+    def test_the_dot_breakend_pair_takes_the_spans_start_or_the_base_after_it(self) -> None:
+        """The reference's start is POS + 1 when the ALT's length differs from the REF's and POS
+        when it does not, its end POS + len(REF) - 1 (BaseVCF4.pm:264-275, 297-316), and vep-rs
+        writes the point POS + 1 for every shape. Ensembl VEP 116.2 writes `21 30425650 x NAC .N
+        . . .` at `21:30425651-30425652` and `21 30425650 x NACG .N . . .` at `21:30425651-30425653`
+        (the point is the span's start), `21 30425650 x NAC NA. . . .` and `21 30425650 x NAC .AC
+        . . .` at `21:30425650-30425652` and `21 30425650 x NACG NAC. . . .` at
+        `21:30425650-30425653` (the point is the base after the start), each as
+        `chromosome_breakpoint` on ENST00000334068 (`upstream_gene_variant`) and ENST00000390690
+        (`coding_sequence_variant`); vep-rs writes `21:30425651 chromosome_breakpoint` on both for
+        each, and each pair is set aside. A point two or more bases past the span's start is no
+        pair: no REF length produces that shape."""
         from compare_vep_outputs import dot_breakend_points
 
-        self.assertEqual(dot_breakend_points(("21", 30425650, 30425651)), ["21:30425651", "21:30425650"])
-        self.assertEqual(dot_breakend_points(("21", 30425651, 30425653)), ["21:30425651"])
-        for span in ("21:30425651-30425652", "21:30425651-30425653"):
+        self.assertEqual(dot_breakend_points(("21", 30425650, 30425651)), ["21:30425650", "21:30425651"])
+        self.assertEqual(dot_breakend_points(("21", 30425651, 30425653)), ["21:30425651", "21:30425652"])
+        self.assertEqual(dot_breakend_points(("21", 30425650, 30425653)), ["21:30425650", "21:30425651"])
+        for span in ("21:30425651-30425652", "21:30425651-30425653", "21:30425650-30425652", "21:30425650-30425653"):
             with self.subTest(span=span):
                 rows = [self.row("missing_in_rust", span, "chromosome_breakpoint", "ENST00000334068", "upstream_gene_variant"),
                         self.row("missing_in_rust", span, "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant"),
@@ -3239,3 +3290,7 @@ class GvcfSiteRowsFixtureTests(unittest.TestCase):
             if predicted != rows:
                 mismatches.append((pos, ref, alt_column, sorted(predicted), sorted(rows)))
         self.assertEqual(mismatches, [])
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

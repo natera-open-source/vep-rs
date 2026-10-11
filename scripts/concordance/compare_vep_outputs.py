@@ -667,17 +667,17 @@ def is_breakend_allele(allele: str) -> bool:
 
 
 def dot_breakend_points(span: tuple[str, int, int]) -> list[str]:
-    """The Locations at which vep-rs writes the point of a dot-notation breakend without
-    SVTYPE whose reference row spans ``span`` (chromosome, start, end). The reference takes
-    the sequence rules for the coordinates (BaseVCF4.pm:264-275, 297-316): the start moves to
-    POS + 1 when the ALT's length differs from the REF's and the end is POS + len(REF) - 1, so a
-    REF of one or two bases gives `c:P-(P+1)` and vep-rs's point `c:(P+1)` is the span's end,
-    and a REF of three or more bases gives `c:(P+1)-(P+len(REF)-1)` and the point is its start.
-    A span wider than one base has the second shape alone."""
-    chrom, start, end = span
-    if end == start + 1:
-        return [f"{chrom}:{end}", f"{chrom}:{start}"]
-    return [f"{chrom}:{start}"]
+    """The Locations at which vep-rs can write the point `c:(P+1)` of a dot-notation breakend
+    without SVTYPE whose reference row spans ``span`` (chromosome, low, high): the span's start
+    and the base after it. The reference takes the sequence rules for the coordinates
+    (BaseVCF4.pm:264-275, 297-316): the start is P + 1 when the ALT's length differs from the
+    REF's and P when it does not, the end P + len(REF) - 1, the two written low first. A REF of
+    one base (`N N.`) gives `c:P-(P+1)` and the point is the base after the start; a REF of
+    three or more bases beside an ALT of another length (`NAC .N`) gives `c:(P+1)-(P+len(REF)-1)`
+    and the point is the start; an ALT of the REF's length (`NA N.`, `NAC NA.`, `NACG NAC.`)
+    gives `c:P-(P+len(REF)-1)` and the point is the base after the start."""
+    chrom, start, _end = span
+    return [f"{chrom}:{start}", f"{chrom}:{start + 1}"]
 
 
 def reference_mate_chromosome(allele: str) -> str | None:
@@ -735,6 +735,28 @@ _BND_MATE_32_BIT_LIMIT_DIGITS = len(str(BND_MATE_32_BIT_LIMIT))
 # The largest coordinate vep-rs holds; a POS at or past it fails its line in every input
 # format, where the reference numifies the text and annotates the record.
 VEP_RS_COORDINATE_CEILING = 2**62 - 1
+# The POS spellings vep-rs reads besides a decimal integer: what Rust's `f64` parser accepts,
+# ASCII digits with an optional fraction and exponent and an optional `+`, blanks around.
+_VEP_RS_POS_NUMBER = re.compile(r"\+?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?", re.ASCII)
+
+
+def vep_rs_pos(text: str) -> int | None:
+    """The POS column as vep-rs's parsers read it: an unpadded decimal integer up to
+    `VEP_RS_COORDINATE_CEILING` exactly, or another spelling of an exact non-negative integer
+    below the ceiling that Rust's `f64` parser accepts, blanks around it ignored (`3e7`,
+    `30425650.0`, `30425650.`, `+30425650`, ` 30425650 `), read as the double it names
+    (` 72057594037927937 ` is 72057594037927936); None where vep-rs fails the line (`.`, `abc`,
+    `-5`, `0x1D04A1A`, `30_425_650`, fullwidth digits, `inf`, `1e400`, `30425650.5`)."""
+    stripped = text.strip(" \t\n\r\x0c")
+    if _VEP_RS_POS_NUMBER.fullmatch(stripped) is None:
+        return None
+    if text.removeprefix("+").isdigit():
+        value = int(text)
+        return value if value <= VEP_RS_COORDINATE_CEILING else None
+    # `VEP_RS_COORDINATE_CEILING` rounds up to 2^62 as a double, so the bound is strict.
+    number = float(stripped)
+    return int(number) if number.is_integer() and number < 2.0**62 else None
+
 
 # The two lost-row breakend shapes are counted, never set aside, by this comparator:
 # deciding which of the rows the reference would have written needs the cache's
@@ -851,14 +873,15 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
         bucket=DOT_BREAKEND_PAIR_BUCKET,
         definition=(
             "A dot-notation breakend without INFO/SVTYPE (`N.`, `.N`) takes the sequence "
-            "rules for its coordinates: the start moves to POS + 1 when the ALT's length "
-            "differs from the REF's and the end is POS + len(REF) - 1, so the reference "
-            "writes the pair `POS-(POS+1)` with the positions of an insertion for a REF of "
-            "one or two bases and the span `(POS+1)-(POS+len(REF)-1)` for a longer one; "
-            "with `SVTYPE=BND` it writes the single base at POS + 1, as vep-rs writes it "
-            "for every REF. The reference's span row and vep-rs's point row at the span's "
-            "end (a REF of one or two bases) or start (a longer REF) on the same feature "
-            "are set aside together."
+            "rules for its coordinates: the start is POS + 1 when the ALT's length differs "
+            "from the REF's and POS when it does not, the end is POS + len(REF) - 1, so the "
+            "reference writes the pair `POS-(POS+1)` with the positions of an insertion for "
+            "a one-base REF, the span `(POS+1)-(POS+len(REF)-1)` for a longer REF beside an "
+            "ALT of another length and `POS-(POS+len(REF)-1)` beside an ALT of its own "
+            "length; with `SVTYPE=BND` it writes the single base at POS + 1, as vep-rs "
+            "writes it for every REF. The reference's span row and vep-rs's point row at "
+            "the span's start or the base after it on the same feature are set aside "
+            "together."
         ),
         excludes=True,
         excludes_with_cache=True,
@@ -1332,8 +1355,12 @@ def gvcf_site_rows(pos: int, ref: str, alts: Sequence[str]) -> list[tuple[str, i
     allele whose length still differs from REF's is minimised, its shared prefix then its
     shared suffix trimmed and the start moved by the prefix; an insertion's end is its start
     minus one; the allele is written in upper case (`a g,<non_ref>` is `G`, as Parser.pm:554
-    writes it). A trailing empty field of the ALT list is no field (`perl_fields`)."""
-    real = [alt for alt in perl_fields(alts) if _names_an_allele(alt)]
+    writes it). The minimisation needs the one ALT beside the block to name the allele: a `*`
+    or `.` beside the indel keeps the anchor-trimmed alleles, as Ensembl VEP's
+    `minimise_alleles` leaves a string of three parts as it is (Parser.pm:978-984). A trailing
+    empty field of the ALT list is no field (`perl_fields`)."""
+    named = [alt for alt in perl_fields(alts) if not _is_non_ref_block(alt)]
+    real = [alt for alt in named if _names_an_allele(alt)]
     if not real:
         return []
     is_indel = any(len(alt) != len(ref) for alt in real)
@@ -1345,7 +1372,7 @@ def gvcf_site_rows(pos: int, ref: str, alts: Sequence[str]) -> list[tuple[str, i
         allele = alt[prefix:] or "-"
         start = pos + prefix
         ref_part = trimmed_ref
-        if len(real) == 1 and "-" not in (ref_part, allele) and len(ref_part) != len(allele):
+        if len(named) == 1 and "-" not in (ref_part, allele) and len(ref_part) != len(allele):
             ref_part, allele, shared = _minimised(ref_part, allele)
             start += shared
         end = start - 1 if ref_part == "-" else start + len(ref_part) - 1
@@ -1364,7 +1391,8 @@ def gvcf_site_locations_from_vcf(
     path: Path, canonical_contigs: frozenset[str] | None = None
 ) -> set[str]:
     """The Locations vep-rs writes for every gVCF variant site of an input VCF (plain or
-    gzipped), recognised by the record's shape (`is_gvcf_variant_site`) whatever its ID."""
+    gzipped), recognised by the record's shape (`is_gvcf_variant_site`) whatever its ID, at the
+    POS as vep-rs reads it (`vep_rs_pos`); a record whose POS vep-rs refuses has no rows."""
     sites: set[str] = set()
     opener = gzip.open if path.suffix in (".gz", ".bgz") else open
     with opener(path, "rt", encoding="utf-8", errors="replace") as handle:
@@ -1374,14 +1402,15 @@ def gvcf_site_locations_from_vcf(
             fields = line.rstrip("\n").split("\t")
             if len(fields) < 5:
                 continue
-            chrom, pos, ref, alt = fields[0], fields[1], fields[3], fields[4]
+            chrom, ref, alt = fields[0], fields[3], fields[4]
+            pos = vep_rs_pos(fields[1])
             alts = perl_split(alt, ",")
             svtype = _info_written(fields[7], "SVTYPE") if len(fields) > 7 else None
-            if not pos.isdigit() or not is_gvcf_variant_site(alts, svtype):
+            if pos is None or not is_gvcf_variant_site(alts, svtype):
                 continue
             if canonical_contigs is not None and chrom not in canonical_contigs:
                 continue
-            for _allele, start, end in gvcf_site_rows(int(pos), ref, alts):
+            for _allele, start, end in gvcf_site_rows(pos, ref, alts):
                 sites.add(canonical_location(sequence_location(chrom, start, end)))
     return sites
 
@@ -1465,12 +1494,12 @@ def apply_116_2_one_sided_rules(
             stats[bucket]["perl" if row["source"] == "missing_in_rust" else "rust"] += 1
             masked_rows.add(idx)
 
-    # The dot-breakend pair: the reference's span row beside vep-rs's point at the span's end
-    # or start (`dot_breakend_points`) under one breakend allele (`chromosome_breakpoint` for
-    # a bare `N.`, the `N.` and bracket strings of one whose INFO names a mate) on the same
-    # feature; the reference's rows whose Location carries a coordinate that is not an
-    # integer; and its rows at a Location vep-rs wrote nothing for whose start the reference
-    # numified past vep-rs's ceiling or below zero.
+    # The dot-breakend pair: the reference's span row beside vep-rs's point at the span's start
+    # or the base after it (`dot_breakend_points`) under one breakend allele
+    # (`chromosome_breakpoint` for a bare `N.`, the `N.` and bracket strings of one whose INFO
+    # names a mate) on the same feature; the reference's rows whose Location carries a
+    # coordinate that is not an integer; and its rows at a Location vep-rs wrote nothing for
+    # whose start the reference numified past vep-rs's ceiling or below zero.
     point_rows: dict[tuple[str, str, str, str], list[int]] = defaultdict(list)
     for idx, row in enumerate(rows):
         if idx in masked_rows or row["source"] != "extra_in_rust" or not is_breakend_allele(row["allele"]):

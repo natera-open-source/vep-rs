@@ -159,10 +159,11 @@ pub fn parse_vcf_line_with_max_sv_size(
             // (Sequence.pm) trims from the left while both alleles are non-empty,
             // then from the right, and maps an emptied allele to `-`, so `T/TT`
             // at pos P becomes `-/T` at P+1. `minimise_alleles` returns a
-            // multi-allelic string (`.+/.+/.+`) unchanged: without `--minimal` a
-            // multi-allelic record keeps its anchor-chopped alleles, and every
-            // position, codon and distance is computed on that representation.
-            if valid_alts.len() == 1
+            // multi-allelic string (`.+/.+/.+`) unchanged, a `*` part counted
+            // (Parser.pm:978-984): without `--minimal` a multi-allelic record keeps
+            // its anchor-chopped alleles, and every position, codon and distance is
+            // computed on that representation.
+            if alts.len() == 1
                 && variant.ref_allele != b"-"
                 && variant.alt_alleles[0] != b"-"
                 && variant.ref_allele.len() != variant.alt_alleles[0].len()
@@ -3238,6 +3239,71 @@ mod tests {
         assert!(!v.is_structural, "<*> should not be structural");
         assert_eq!(v.alt_allele(), b"<*>");
         assert_eq!(v.allele_string, "T/<*>");
+    }
+
+    /// A `*` beside an indel keeps the record multi-allelic: `minimise_alleles`
+    /// (Parser.pm:978-984) leaves a three-part string as it is, so Ensembl VEP 116.2 writes
+    /// `21 30425650 x ATT AT,*` at `21:30425651-30425652` with the Allele `T` (the
+    /// anchor-chopped `TT/T/*`), `AT ATT,*` at `21:30425651` with `TT`, and `ATTG ATC,*` at
+    /// `21:30425651-30425653` with `TC`; without the `*` the bi-allelic indel is minimised
+    /// from both ends (`21:30425652 -`, `21:30425651-30425652 T`, `21:30425652-30425653 C`).
+    #[test]
+    fn a_star_beside_an_indel_keeps_the_anchor_chopped_alleles() {
+        let read = |record: &str| {
+            let v = parse_vcf_line(record, false).unwrap();
+            assert_eq!(v.len(), 1, "{record}");
+            (
+                v[0].location(),
+                v[0].display_allele(),
+                v[0].record_allele_string(),
+                v[0].minimised,
+            )
+        };
+        for (record, location, allele, string) in [
+            (
+                "21\t30425650\tx\tATT\tAT,*\t.\t.\t.",
+                "21:30425651-30425652",
+                "T",
+                "TT/T/*",
+            ),
+            (
+                "21\t30425650\tx\tAT\tATT,*\t.\t.\t.",
+                "21:30425651",
+                "TT",
+                "T/TT/*",
+            ),
+            (
+                "21\t30425650\tx\tATTG\tATC,*\t.\t.\t.",
+                "21:30425651-30425653",
+                "TC",
+                "TTG/TC/*",
+            ),
+        ] {
+            let (loc, al, st, minimised) = read(record);
+            assert_eq!(
+                (loc.as_str(), al.as_str(), st.as_str()),
+                (location, allele, string),
+                "{record}"
+            );
+            assert!(!minimised, "{record}");
+        }
+        for (record, location, allele) in [
+            ("21\t30425650\tx\tATT\tAT\t.\t.\t.", "21:30425652", "-"),
+            (
+                "21\t30425650\tx\tAT\tATT\t.\t.\t.",
+                "21:30425651-30425652",
+                "T",
+            ),
+            (
+                "21\t30425650\tx\tATTG\tATC\t.\t.\t.",
+                "21:30425652-30425653",
+                "C",
+            ),
+        ] {
+            let (loc, al, _, minimised) = read(record);
+            assert_eq!((loc.as_str(), al.as_str()), (location, allele), "{record}");
+            assert!(minimised, "{record}");
+        }
     }
 
     /// A line whose every ALT is `*` names no allele: Ensembl VEP 116.2 writes

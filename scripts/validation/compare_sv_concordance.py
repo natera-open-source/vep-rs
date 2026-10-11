@@ -2069,9 +2069,10 @@ def filter_dot_breakend_pairs(
 ) -> tuple[set[AnnotTuple], set[AnnotTuple]]:
     """A dot-notation breakend without SVTYPE: the reference's two-coordinate tuple and
     vep-rs's point under the same breakend allele on the same feature, set aside as a pair
-    (`DOT_BREAKEND_PAIR_BUCKET`). The point is the span's end for a REF of one or two bases
-    (`c:P-(P+1)` against `c:(P+1)`) and its start for a longer REF
-    (`c:(P+1)-(P+len(REF)-1)` against `c:(P+1)`; `dot_breakend_points`). The allele is
+    (`DOT_BREAKEND_PAIR_BUCKET`). The point `c:(P+1)` is the span's start or the base after
+    it: the end of `c:P-(P+1)` for a one-base REF, the start of `c:(P+1)-(P+len(REF)-1)` for
+    a longer REF beside an ALT of another length, the second base of `c:P-(P+len(REF)-1)`
+    beside an ALT of the REF's length (`dot_breakend_points`). The allele is
     `chromosome_breakpoint` for a bare `N.`, and the `N.` and `N[21:30425700[` strings of one
     whose INFO names a mate through CHR2 and END2 (Parser/VCF.pm:491-497). Returns
     (excluded_rust, excluded_perl)."""
