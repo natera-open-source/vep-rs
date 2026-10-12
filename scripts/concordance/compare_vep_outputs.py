@@ -725,15 +725,14 @@ CNV_TR_EMPTY_EXPANSION_BUCKET = "cnv_tr_empty_expansion_dropped"
 STAR_ALONE_SVTYPE_ANNOTATED_BUCKET = "star_alone_svtype_annotated"
 NON_NUMERIC_POS_NUMIFIED_BUCKET = "non_numeric_pos_numified"
 CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET = "cnv_tr_rn_zero_allele_dropped"
-COORDINATE_PAST_CEILING_BUCKET = "coordinate_past_ceiling"
 # The smallest coordinate at which Ensembl VEP 116.2 annotates every record of the input
 # buffer as intergenic_variant: the coordinate plus the default --distance flank reaches
 # 2^31, so the bound moves with the flank.
 BND_MATE_32_BIT_LIMIT = 2**31 - 5000
 # A coordinate with fewer digits than the bound cannot reach it.
 _BND_MATE_32_BIT_LIMIT_DIGITS = len(str(BND_MATE_32_BIT_LIMIT))
-# The largest coordinate vep-rs holds; a POS at or past it fails its line in every input
-# format, where the reference numifies the text and annotates the record.
+# The largest coordinate vep-rs holds; a POS past it fails its line in every input format,
+# where the reference numifies the text and annotates the record.
 VEP_RS_COORDINATE_CEILING = 2**62 - 1
 # The POS spellings vep-rs reads besides a decimal integer: what Rust's `f64` parser accepts,
 # ASCII digits with an optional fraction and exponent and an optional `+`, blanks around.
@@ -987,21 +986,6 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
         taxonomy_class="cnv_tr_rn_zero_allele_dropped",
         perl_citation="Parser/VCF.pm:411, 428; Parser.pm:881, 978",
     ),
-    OneSidedRule(
-        bucket=COORDINATE_PAST_CEILING_BUCKET,
-        definition=(
-            "A POS at or past 2^62 - 1 is numified and annotated by the reference, with "
-            "exact integers through the string increment of a digit string, where vep-rs "
-            "fails the line at its coordinate ceiling; the reference's rows at the record's "
-            "start are set aside when vep-rs wrote nothing at the Location, by the "
-            "structural-variant comparator from the input and by the SNP/indel comparator "
-            "from the Location's first coordinate."
-        ),
-        excludes=True,
-        excludes_with_cache=True,
-        taxonomy_class="coordinate_past_ceiling",
-        perl_citation="BaseVCF4.pm:263; Parser.pm:475-488",
-    ),
 )
 
 
@@ -1109,7 +1093,7 @@ class ReferenceRecordScope:
     start or end is.
 
     ``reference_only``: the (file, Location) pairs at which the reference wrote and vep-rs
-    nothing, under any allele, read by the two classes that recognise a numified POS from
+    nothing, under any allele, read by the class that recognises a numified POS from
     the reference's coordinate alone.
 
     ``gvcf_sites``: the (file, Location) pairs of vep-rs rows at a gVCF variant site, read
@@ -1466,11 +1450,10 @@ def apply_116_2_one_sided_rules(
 
     Marks the set-aside rows in ``masked_rows``: vep-rs's rows of
     `REFERENCE_SKIPPED_RECORD_BUCKET` and `GVCF_VARIANT_SITE_DROPPED_BUCKET`, the
-    reference's rows of `NON_INTEGER_END_BUCKET`, of `COORDINATE_PAST_CEILING_BUCKET` (a
-    first coordinate at or past `VEP_RS_COORDINATE_CEILING` at a Location vep-rs wrote
-    nothing for) and of `NON_NUMERIC_POS_NUMIFIED_BUCKET` (a negative first coordinate at
-    such a Location, the one spelling of a numified POS no written POS reaches without the
-    input; a POS numified to 0 prints the start 1, as POS 0 does in both engines, and
+    reference's rows of `NON_INTEGER_END_BUCKET` and of `NON_NUMERIC_POS_NUMIFIED_BUCKET` (a
+    negative first coordinate at a Location vep-rs wrote nothing for, the one spelling of a
+    numified POS no written POS reaches without the input; a POS numified to 0 prints the
+    start 1, as POS 0 does in both engines, and
     `30_425_949` prints 31, so those are the structural-variant comparator's), and both
     rows of a `DOT_BREAKEND_PAIR_BUCKET` pair; counts, without masking them, the two
     lost-row breakend shapes, the FASTA-named slice shape and the reference's rows at a
@@ -1509,7 +1492,7 @@ def apply_116_2_one_sided_rules(
     # (`chromosome_breakpoint` for a bare `N.`, the `N.` and bracket strings of one whose INFO
     # names a mate) on the same feature; the reference's rows whose Location carries a
     # coordinate that is not an integer; and its rows at a Location vep-rs wrote nothing for
-    # whose start the reference numified past vep-rs's ceiling or below zero.
+    # whose start the reference numified below zero.
     point_rows: dict[tuple[str, str, str, str], list[int]] = defaultdict(list)
     for idx, row in enumerate(rows):
         if idx in masked_rows or row["source"] != "extra_in_rust" or not is_breakend_allele(row["allele"]):
@@ -1524,13 +1507,13 @@ def apply_116_2_one_sided_rules(
             hit(NON_INTEGER_END_BUCKET, idx, row, exclude=True)
             continue
         span = _location_span(row["location"])
-        if span is not None and (row["file_name"], row["location"]) in scope.reference_only:
-            if span[1] >= VEP_RS_COORDINATE_CEILING:
-                hit(COORDINATE_PAST_CEILING_BUCKET, idx, row, exclude=True)
-                continue
-            if span[1] < 0:
-                hit(NON_NUMERIC_POS_NUMIFIED_BUCKET, idx, row, exclude=True)
-                continue
+        if (
+            span is not None
+            and (row["file_name"], row["location"]) in scope.reference_only
+            and span[1] < 0
+        ):
+            hit(NON_NUMERIC_POS_NUMIFIED_BUCKET, idx, row, exclude=True)
+            continue
         if not is_breakend_allele(row["allele"]):
             continue
         if span is None or span[1] >= span[2]:

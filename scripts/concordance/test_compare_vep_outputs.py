@@ -2273,7 +2273,7 @@ class ReferenceRegistryTests(unittest.TestCase):
             self.assertIs(registry.pair_rules, EXCLUSION_REGISTRY, release)
             self.assertEqual(registry.release, release)
 
-    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_fourteen_record_shapes(self) -> None:
+    def test_the_116_2_one_sided_rules_are_the_skipped_record_and_the_thirteen_record_shapes(self) -> None:
         from compare_vep_outputs import (
             BND_BARE_REFERENCE_ALLELE_ROW_BUCKET,
             BND_MATE_32_BIT_BUFFER_BUCKET,
@@ -2281,7 +2281,6 @@ class ReferenceRegistryTests(unittest.TestCase):
             BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
             CNV_TR_EMPTY_EXPANSION_BUCKET,
             CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET,
-            COORDINATE_PAST_CEILING_BUCKET,
             DOT_BREAKEND_PAIR_BUCKET,
             FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
             GVCF_VARIANT_SITE_DROPPED_BUCKET,
@@ -2303,15 +2302,15 @@ class ReferenceRegistryTests(unittest.TestCase):
              BND_BARE_REFERENCE_ALLELE_ROW_BUCKET, BND_MATE_32_BIT_BUFFER_BUCKET,
              GVCF_VARIANT_SITE_DROPPED_BUCKET, DOT_BREAKEND_PAIR_BUCKET, MISSING_ALT_ANNOTATED_BUCKET,
              NON_INTEGER_END_BUCKET, CNV_TR_EMPTY_EXPANSION_BUCKET, STAR_ALONE_SVTYPE_ANNOTATED_BUCKET,
-             NON_NUMERIC_POS_NUMIFIED_BUCKET, CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET, COORDINATE_PAST_CEILING_BUCKET],
+             NON_NUMERIC_POS_NUMIFIED_BUCKET, CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET],
         )
         self.assertEqual([r.excludes for r in rules],
-                         [True, False, False, False, True, False, True, True, False, True, False, False, True, False, True],
+                         [True, False, False, False, True, False, True, True, False, True, False, False, True, False],
                          "this comparator reads no input and no cache: the lost-row breakend shapes, the "
                          "missing ALT, the empty expansion, the `*`-only ALT and the dropped `RN=0` allele are "
                          "judged only by the structural-variant comparator")
         self.assertEqual([r.excludes_with_cache for r in rules],
-                         [True, True, True, False, True, False, True, True, True, True, True, True, True, True, True],
+                         [True, True, True, False, True, False, True, True, True, True, True, True, True, True],
                          "the structural-variant comparator sets every class aside but the FASTA shape and the "
                          "buffer a coordinate overflows")
         for bucket in (NON_INTEGER_END_BUCKET, BND_MATE_32_BIT_BUFFER_BUCKET):
@@ -2762,6 +2761,7 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         for text in ("30425650", "3.042565e7", "30425650.0", "+30425650", "30425650.", " 30425650 ", "030425650"):
             self.assertEqual(vep_rs_pos(text), 30425650, repr(text))
         self.assertEqual(vep_rs_pos("3e7"), 30000000)
+        self.assertEqual(VEP_RS_COORDINATE_CEILING, 2**62 - 1)
         self.assertEqual(vep_rs_pos(str(VEP_RS_COORDINATE_CEILING)), VEP_RS_COORDINATE_CEILING)
         self.assertEqual(vep_rs_pos(str(2**56 + 1)), 2**56 + 1)
         self.assertEqual(vep_rs_pos(f" {2**56 + 1} "), 2**56)
@@ -3010,31 +3010,6 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         self.assertEqual(buckets["non_integer_end_annotated"]["count"], 0, "a negative coordinate is an integer")
         self.assertEqual([r.split("\t")[2] for r in open_rows], ["21:1-30425949"])
 
-    def test_a_first_coordinate_past_the_ceiling_is_set_aside_when_vep_rs_wrote_none(self) -> None:
-        """Ensembl VEP 116.2 writes `21:4611686018427387905-4611686018427388204 deletion -
-        intergenic_variant` for `21 4611686018427387904 x N <DEL> . . SVTYPE=DEL;SVLEN=-300`,
-        `21:4611686018427387904-4611686018427388203` for POS 4611686018427387903,
-        `21:9223372036854775808 G` for `21 9223372036854775808 x A G` and the single coordinate
-        `21:18446744073709551617 deletion` for POS 18446744073709551616; vep-rs fails each
-        line at 2^62 - 1. A reference row at such a Location vep-rs also wrote under another
-        consequence is a disagreement, not the class."""
-        from compare_vep_outputs import VEP_RS_COORDINATE_CEILING
-
-        self.assertEqual(VEP_RS_COORDINATE_CEILING, 2**62 - 1)
-        rows = [self.row("missing_in_rust", "21:4611686018427387905-4611686018427388204", "deletion", "-", "intergenic_variant"),
-                self.row("missing_in_rust", "21:4611686018427387904-4611686018427388203", "deletion", "-", "intergenic_variant"),
-                self.row("missing_in_rust", "21:9223372036854775808", "G", "-", "intergenic_variant"),
-                self.row("missing_in_rust", "21:18446744073709551617", "deletion", "-", "intergenic_variant"),
-                self.row("missing_in_rust", "21:4611686018427387903", "G", "T1", "intron_variant"),
-                self.row("extra_in_rust", "21:4611686018427387903", "G", "T1", "upstream_gene_variant")]
-        scope = self.reference_only_scope("21:4611686018427387905-4611686018427388204",
-                                          "21:4611686018427387904-4611686018427388203",
-                                          "21:9223372036854775808", "21:18446744073709551617")
-        (ep, er, buckets), open_rows = self.run_pass(rows, scope)
-        self.assertEqual((ep, er), (4, 0))
-        self.assertEqual(buckets["coordinate_past_ceiling"], {"count": 4, "excluded": 4, "records": 4, "perl": 4, "rust": 0})
-        self.assertEqual(len(open_rows), 2)
-
     def test_the_dot_breakend_pair_covers_the_own_and_mate_alleles_of_an_info_mate(self) -> None:
         """`21 30425650 x N N. . . CHR2=21;END2=30425700`: Ensembl VEP 116.2 writes the pair
         `21:30425650-30425651` under `N.` and `N[21:30425700[` on ENST00000334068 and
@@ -3105,8 +3080,7 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
 class NumifiedCoordinateTests(unittest.TestCase):
     """The reference's rows at a coordinate it numified from a POS vep-rs refused, recognised
     without the input from the Location alone: a negative first coordinate
-    (`non_numeric_pos_numified`) or one at or past 2^62 - 1 (`coordinate_past_ceiling`), at a
-    Location vep-rs wrote nothing for."""
+    (`non_numeric_pos_numified`) at a Location vep-rs wrote nothing for."""
 
     @staticmethod
     def key(loc: str, allele: str, feat: str, csq: str, ftype: str = "Transcript") -> str:

@@ -67,7 +67,6 @@ from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition
     BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
     CNV_TR_EMPTY_EXPANSION_BUCKET,
     CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET,
-    COORDINATE_PAST_CEILING_BUCKET,
     DEFAULT_REFERENCE_RELEASE,
     DOT_BREAKEND_PAIR_BUCKET,
     FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
@@ -79,7 +78,6 @@ from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition
     REFERENCE_RELEASES,
     REFERENCE_SKIPPED_RECORD_BUCKET,
     STAR_ALONE_SVTYPE_ANNOTATED_BUCKET,
-    VEP_RS_COORDINATE_CEILING,
     _MAX_SV_SIZE,
     _STRUCTURAL_ALT_LIST,
     _batch_dependent_annotation_scope,
@@ -1511,7 +1509,6 @@ MASKS_BY_RELEASE: dict[str, tuple[str, ...]] = {
         "filter_star_alone_svtype_annotated",
         "filter_non_numeric_pos_numified",
         "filter_cnv_tr_rn_zero_allele_dropped",
-        "filter_coordinate_past_ceiling",
     ),
 }
 # Why each 115.2 mask is not applied against 116.2, for the report.
@@ -1888,7 +1885,7 @@ def _reference_rows_starting_at(
     """The reference's tuples at the start it prints for a record (POS + 1 on the structural
     path, POS on the sequence path) on the record's chromosome, at Locations vep-rs wrote
     nothing for; the end is not matched, since the reference's arithmetic on a numified POS
-    (a double past 2^64, a negative) is not reproduced."""
+    (a negative start) is not reproduced."""
     chrom, start = reference_start(v)
     return {
         t for t in perl_tuples
@@ -2192,23 +2189,6 @@ def filter_non_numeric_pos_numified(
     excluded: set[AnnotTuple] = set()
     for v in input_variants:
         if not perl_pos_is_a_number(v.pos_text):
-            excluded |= _reference_rows_starting_at(v, perl_tuples, rust_locations)
-    return excluded
-
-
-def filter_coordinate_past_ceiling(
-    perl_tuples: set[AnnotTuple], rust_tuples: set[AnnotTuple], input_variants: list[VcfVariant]
-) -> set[AnnotTuple]:
-    """The reference's tuples of a record whose POS is at or past `VEP_RS_COORDINATE_CEILING`
-    (2^62 - 1), at Locations vep-rs wrote nothing for (`COORDINATE_PAST_CEILING_BUCKET`): the
-    reference annotates the record at the numified position, an exact integer through the
-    string increment of a digit string (`21:4611686018427387905-4611686018427388204`,
-    `21:18446744073709551617`), where vep-rs fails the line. The tuples are those at the
-    start the reference prints for the record (`_reference_rows_starting_at`)."""
-    rust_locations = {t[0] for t in rust_tuples}
-    excluded: set[AnnotTuple] = set()
-    for v in input_variants:
-        if v.pos >= VEP_RS_COORDINATE_CEILING:
             excluded |= _reference_rows_starting_at(v, perl_tuples, rust_locations)
     return excluded
 
@@ -2607,7 +2587,6 @@ class MaskResult:
     star_alone_perl: set[AnnotTuple] = field(default_factory=set)
     numified_pos_perl: set[AnnotTuple] = field(default_factory=set)
     rn_zero_rust: set[AnnotTuple] = field(default_factory=set)
-    ceiling_perl: set[AnnotTuple] = field(default_factory=set)
 
     def all_rust(self) -> set[AnnotTuple]:
         return (
@@ -2623,7 +2602,7 @@ class MaskResult:
             self.tsel_perl | self.cnvtr_perl | self.xchr_perl | self.swap_perl
             | self.non_ref_perl | self.mate_read_perl
             | self.dot_pair_perl | self.missing_alt_perl | self.non_integer_end_perl
-            | self.star_alone_perl | self.numified_pos_perl | self.ceiling_perl
+            | self.star_alone_perl | self.numified_pos_perl
         )
 
 
@@ -2710,8 +2689,6 @@ def apply_masks(
         r.numified_pos_perl = filter_non_numeric_pos_numified(perl_tuples, rust_tuples, input_variants or [])
     if "filter_cnv_tr_rn_zero_allele_dropped" in masks:
         r.rn_zero_rust = filter_cnv_tr_rn_zero_allele_dropped(perl_tuples, rust_tuples, input_variants or [])
-    if "filter_coordinate_past_ceiling" in masks:
-        r.ceiling_perl = filter_coordinate_past_ceiling(perl_tuples, rust_tuples, input_variants or [])
     if reference_release == "116.2":
         r.fasta_intergenic_records = count_fasta_named_slice_intergenic(perl_tuples, rust_tuples)
         r.mate_overflow_records, r.mate_overflow_perl_tuples = count_bnd_mate_over_32_bit(
@@ -2746,7 +2723,6 @@ def release_report_block(
         STAR_ALONE_SVTYPE_ANNOTATED_BUCKET: len(overall.star_alone_perl),
         NON_NUMERIC_POS_NUMIFIED_BUCKET: len(overall.numified_pos_perl),
         CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET: len(overall.rn_zero_rust),
-        COORDINATE_PAST_CEILING_BUCKET: len(overall.ceiling_perl),
     }
     missing = [r.bucket for r in REFERENCE_116_2_ONE_SIDED_RULES if r.bucket not in excluded_by_bucket]
     if missing:
@@ -2788,7 +2764,6 @@ def release_report_block(
         "excluded_star_alone_svtype_perl": len(overall.star_alone_perl),
         "excluded_non_numeric_pos_perl": len(overall.numified_pos_perl),
         "excluded_cnv_tr_rn_zero_rust": len(overall.rn_zero_rust),
-        "excluded_coordinate_past_ceiling_perl": len(overall.ceiling_perl),
         "breakend_masks_check_ran": cache_supplied,
         "divergence_classes": {
             rule.bucket: {
@@ -3061,8 +3036,7 @@ def write_markdown_report(
             f"`{CNV_TR_EMPTY_EXPANSION_BUCKET}` {len(release_masks.cnvtr_empty_rust):,} vep-rs rows set aside; "
             f"`{STAR_ALONE_SVTYPE_ANNOTATED_BUCKET}` {len(release_masks.star_alone_perl):,} reference rows set aside; "
             f"`{NON_NUMERIC_POS_NUMIFIED_BUCKET}` {len(release_masks.numified_pos_perl):,} reference rows set aside; "
-            f"`{CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET}` {len(release_masks.rn_zero_rust):,} vep-rs rows set aside; "
-            f"`{COORDINATE_PAST_CEILING_BUCKET}` {len(release_masks.ceiling_perl):,} reference rows set aside"
+            f"`{CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET}` {len(release_masks.rn_zero_rust):,} vep-rs rows set aside"
         )
     total_excluded = excluded_count + excluded_perl_count
     if adjusted_overall is not None and total_excluded > 0:
@@ -3722,8 +3696,7 @@ def main() -> None:
             f"{len(masks.missing_alt_perl)} missing-ALT row(s), "
             f"{len(masks.non_integer_end_perl) + len(masks.non_integer_end_rust)} non-integer-coordinate row(s), "
             f"{len(masks.cnvtr_empty_rust)} empty-expansion row(s), {len(masks.star_alone_perl)} star-alone row(s), "
-            f"{len(masks.numified_pos_perl)} numified-POS row(s), {len(masks.rn_zero_rust)} dropped-allele row(s) and "
-            f"{len(masks.ceiling_perl)} past-ceiling row(s) set aside"
+            f"{len(masks.numified_pos_perl)} numified-POS row(s) and {len(masks.rn_zero_rust)} dropped-allele row(s) set aside"
         )
     print(f"Reports written to: {output_dir}/")
     print(f"  {json_path.name}")

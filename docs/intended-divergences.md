@@ -4,7 +4,7 @@ This page documents every disagreement between vep-rs and Ensembl VEP that the a
 
 vep-rs 0.3.0 reports two concordance figures against Ensembl VEP release 115.2. **Raw concordance** keeps every tuple both engines write: a tuple is one output row reduced to its Location, Allele, Feature, Feature_type and Consequence set, and raw F1 counts the tuples the two engines share against the tuples each writes alone, with nothing set aside. **Adjusted concordance** sets aside the tuples of the divergence classes documented on this page and nothing else.
 
-A class is one shape of disagreement. Each class on this page has been traced to a specific mechanism in one engine's source, reproduced with a command a reader can run, on a public record or on a hand-written record printed in full on the page, and judged. Twenty-one of the twenty-three classes are the output of fifteen defects in Ensembl VEP's source that vep-rs does not reproduce (classes 8 and 11 are also changes in vep-rs's own behaviour between 0.2.0 and 0.3.0). Class 12, `<CNV:TR>`, is a difference of representation in which neither engine is wrong. Class 23 is a bound of vep-rs's own, a coordinate past 2^62 - 1 that Ensembl VEP prints and vep-rs refuses: neither an Ensembl VEP defect nor a representation difference. A disagreement that is not one of these classes is charged to vep-rs in both figures, whatever its cause.
+A class is one shape of disagreement. Each class on this page has been traced to a specific mechanism in one engine's source, reproduced with a command a reader can run, on a public record or on a hand-written record printed in full on the page, and judged. Twenty-one of the twenty-two classes are the output of fifteen defects in Ensembl VEP's source that vep-rs does not reproduce (classes 8 and 11 are also changes in vep-rs's own behaviour between 0.2.0 and 0.3.0). Class 12, `<CNV:TR>`, is a difference of representation in which neither engine is wrong. A disagreement that is not one of these classes is charged to vep-rs in both figures, whatever its cause.
 
 The page is organised by defect. Each defect's section opens with the defect in one sentence, why it is a defect, what vep-rs does instead, where it is in Ensembl VEP's source and what correcting it would change. The classes it produces follow.
 
@@ -30,9 +30,8 @@ Grouped by the place in Ensembl VEP's source that produces them, the twenty-one 
 | M | `*` as the only ALT names no allele, but a true `SVTYPE` routes the record to the structural path, where it is annotated from INFO alone: a deletion over `END`, or a breakpoint under two alleles | `ensembl-vep`, `Parser/VCF.pm` lines 237-245, 469 and 472-475; `ensembl-variation`, `StructuralVariationOverlap.pm` lines 64-77 | 20 | the record writes nothing, as it does without `SVTYPE` and as vep-rs writes |
 | N | A POS that is not a number is numified by the structural path's `$start++` (`.` to 1, `30_425_949` to 31, `-5` to -4) and the record is annotated at a position its line never named | `ensembl-io`, `BaseVCF4.pm` lines 255-264; `ensembl-vep`, `Parser.pm` lines 475-488 | 21 | the record is refused, as Ensembl VEP's own sequence path refuses it and as vep-rs refuses every form |
 | O | With a FASTA, a multi-allelic `<CNV:TR>` whose `RN` is 0 for one allele expands that allele to an empty part of the joined allele string, and the other allele is lost: an empty middle part hides the multi-allelic shape, an empty last part is dropped by `split` | `ensembl-vep`, `Parser/VCF.pm` lines 411 and 428, `Parser.pm` lines 881 and 978 | 22 | both alleles are annotated, as vep-rs annotates them |
-| none | A POS at or above 2^62 - 1 is printed exactly by Ensembl VEP, whose increment has no bound there, where vep-rs refuses the line as past its coordinate ceiling; a vep-rs bound, not a defect | `ensembl-io`, `BaseVCF4.pm` line 263 (`$start++` on the POS text) | 23 | nothing to correct; the comparators set the reference's rows aside when vep-rs wrote none |
 
-Source citations name the Ensembl repository, module and line at release 115 (the `release/115` branch of `ensembl-variation` and of `ensembl-vep`, the paper's release) for defects A to E and class 12, and at release 116.2 (the `release/116.2` tag of `ensembl-vep`, the `release/116` branch of `ensembl-variation` and of `ensembl-io`) for defects F to O, the bound of class 23 and their classes 13 to 23, whose worked examples run on `ensemblorg/ensembl-vep:release_116.2`. The comparator scripts of this repository are `scripts/concordance/compare_vep_outputs.py` for the SNP/indel datasets and `scripts/validation/compare_sv_concordance.py` for the structural-variant sets. Every row on this page is in Ensembl VEP's default tab output, whose columns are:
+Source citations name the Ensembl repository, module and line at release 115 (the `release/115` branch of `ensembl-variation` and of `ensembl-vep`, the paper's release) for defects A to E and class 12, and at release 116.2 (the `release/116.2` tag of `ensembl-vep`, the `release/116` branch of `ensembl-variation` and of `ensembl-io`) for defects F to O and their classes 13 to 22, whose worked examples run on `ensemblorg/ensembl-vep:release_116.2`. The comparator scripts of this repository are `scripts/concordance/compare_vep_outputs.py` for the SNP/indel datasets and `scripts/validation/compare_sv_concordance.py` for the structural-variant sets. Every row on this page is in Ensembl VEP's default tab output, whose columns are:
 
 ```
 #Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
@@ -40,7 +39,7 @@ Source citations name the Ensembl repository, module and line at release 115 (th
 
 Coordinates follow VEP's output conventions: a symbolic deletion's Location starts one base after the VCF POS (the padding base), a breakend's Location is the base after the breakpoint, and an insertion's Location names the two flanking bases.
 
-The twenty-three classes, with the defect each belongs to:
+The twenty-two classes, with the defect each belongs to:
 
 | # | Class | Defect | Kind | Datasets affected | Side set aside | Count |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -66,7 +65,6 @@ The twenty-three classes, with the defect each belongs to:
 | 20 | `*` alone under a true `SVTYPE` annotated as the type's class | M | Ensembl VEP defect | none of the measured sets | the reference's rows: `star_alone_svtype_annotated` in the structural-variant comparator | 0 |
 | 21 | A non-numeric POS numified by the structural path's increment | N | Ensembl VEP defect | none of the measured sets | the reference's rows: `non_numeric_pos_numified` in both comparators (the SNP/indel comparator the negative Locations alone) | 0 |
 | 22 | A real `<CNV:TR>` allele dropped beside an `RN=0` allele | O | Ensembl VEP defect | none of the measured sets (the protocol runs without a FASTA) | vep-rs's rows under the dropped allele's direction term: `cnv_tr_rn_zero_allele_dropped` in the structural-variant comparator | 0 |
-| 23 | A coordinate past 2^62 - 1 printed by Ensembl VEP and refused by vep-rs | none | vep-rs bound | none of the measured sets (no chromosome reaches the position) | the reference's rows when vep-rs wrote none: `coordinate_past_ceiling` in both comparators | 0 |
 
 How to read the counts:
 
@@ -2089,7 +2087,7 @@ Replacing `-5` with `.` and `SVLEN=-300` with `END=30425949`, and adding `--max_
 
 #### 21.7 How the comparator treats this class
 
-The class is `non_numeric_pos_numified` in the 116.2 registry of both comparators, set aside: the reference's rows of a record whose POS is not a non-negative number (not digits with an optional fraction, exponent, leading `+` or surrounding blanks: `.`, an empty column, `0x1D04A1D`, fullwidth digits, `30_425_949`, `-5`), at Locations vep-rs wrote nothing for; a fractional POS is class 18 and a POS at or past 2^62 - 1 class 23. The structural-variant comparator reads the input and matches the reference's rows by the start the reference prints for the record, POS + 1 on the structural path and POS on the sequence path (`21:-5 G - intergenic_variant`, the one form a sequence record reaches). The SNP/indel comparator reads no input and sets aside a reference-only Location whose first coordinate is negative, the one trace no written POS leaves; a POS numified to 0 prints a start of 1, which a record at POS 0 prints in both engines, and `30_425_949` prints 31, so those are recognised by the structural-variant comparator alone.
+The class is `non_numeric_pos_numified` in the 116.2 registry of both comparators, set aside: the reference's rows of a record whose POS is not a non-negative number (not digits with an optional fraction, exponent, leading `+` or surrounding blanks: `.`, an empty column, `0x1D04A1D`, fullwidth digits, `30_425_949`, `-5`), at Locations vep-rs wrote nothing for; a fractional POS is class 18, and a POS above 2^62 - 1, or at it for a structural record whose first base is POS + 1, is a number and not this class: vep-rs refuses the line as past its coordinate bound and the reference's rows stay charged. The structural-variant comparator reads the input and matches the reference's rows by the start the reference prints for the record, POS + 1 on the structural path and POS on the sequence path (`21:-5 G - intergenic_variant`, the one form a sequence record reaches). The SNP/indel comparator reads no input and sets aside a reference-only Location whose first coordinate is negative, the one trace no written POS leaves; a POS numified to 0 prints a start of 1, which a record at POS 0 prints in both engines, and `30_425_949` prints 31, so those are recognised by the structural-variant comparator alone.
 
 ## Defect O: a `<CNV:TR>` allele with `RN=0` drops a real allele of the record
 
@@ -2172,77 +2170,6 @@ Swapping the two `RN` values (`RN=1,0`) loses the other allele.
 
 The class is `cnv_tr_rn_zero_allele_dropped` in the 116.2 registry. The structural-variant comparator reads the input record, a two-ALT `<CNV:TR>,<CNV:TR>` whose `RN` list has exactly one entry Perl's loop runs no iteration for (0 or negative; `.` is skipped at line 410 and leaves no part, so it is not the shape), when the reference ran with a FASTA and expanded the record (a row at or beside the run under an allele other than `tandem_repeat`). It sets aside vep-rs's `tandem_repeat` rows at the run whose tuple is the dropped allele's alone: the `feature_elongation` rows when the `RN=0` allele comes first and the real allele is a gain or unchanged, which vep-rs reads as a gain, the reference having kept the `RN=0` deletion (the first and fourth records); the `feature_truncation` rows when the `RN=0` allele comes last and the real allele is a gain, the reference having kept the gain (the second and third). A real allele that is a loss (`RUC=2` over the three-unit run) shares the `feature_truncation` tuple with the `RN=0` allele, so the reference's row pairs with that one tuple under class 12 and nothing is left for this class to judge; an unchanged real allele before a trailing `RN=0` (`RN=1,0;RUC=3`) leaves the reference an allele string with no alternate and no row, which is class 19, not this one. The allele the reference kept pairs under class 12 as every expanded `<CNV:TR>` does. Without a FASTA both engines write the symbolic rows for both alleles and nothing is set aside. The SNP/indel comparator reads no input and does not judge the class.
 
-## A bound of vep-rs, not a defect: a coordinate past 2^62 - 1
-
-**In one sentence.** vep-rs bounds every coordinate it reads at 2^62 - 1 so that nothing derived from one, a span's end, a flank or a mate position, can overflow a 64-bit signed integer; Ensembl VEP has no such bound and prints a position of any size exactly.
-
-**Why it is neither a defect nor a representation difference.** No chromosome of any assembly reaches 2^31, so a POS at or above 2^62 - 1 names no base, and neither engine's row describes the genome: Ensembl VEP's row is a deletion at a position no reference has, vep-rs's refusal says so. The class exists so that the reference's row is not charged to vep-rs as an annotation it missed; it corrects nothing in Ensembl VEP, whose increment is exact where it prints an integer.
-
-**Where the bound is** (vep-rs): the coordinate readers of every input format; Ensembl VEP's side is `ensembl-io`, `BaseVCF4.pm` line 263, `$start++` on the POS text.
-
-**The class.**
-- Class 23: a record whose POS is at or above 2^62 - 1. Set aside: the reference's rows, when vep-rs wrote none.
-
-### 23. A coordinate past 2^62 - 1 printed by Ensembl VEP and refused by vep-rs
-
-#### 23.1 What a reader needs to know first
-
-vep-rs bounds every coordinate it reads at 2^62 - 1 (4,611,686,018,427,387,903): a POS above the bound fails its line in every input format, and a structural record at exactly the bound, whose first base POS + 1 lies past it, fails its line too; an `END` past the bound is refused as not a coordinate, and a `SVLEN` span saturates at the bound. Ensembl VEP has no bound: `$start++` on the POS text yields its exact decimal successor at any size (Perl's string increment on a digit string), so the start is printed exactly; the end of a `SVLEN` span is integer arithmetic while it fits 64 bits and a double beyond, where the 299 bases of the span fall below the spacing of representable values and the end equals the start. The transcript lookup finds nothing at any of these positions, so every row is `intergenic_variant`. No chromosome reaches 2^31, so only a malformed record has the shape.
-
-#### 23.2 The record
-
-```
-21	4611686018427387904	pos_2e62_del	N	<DEL>	.	.	SVTYPE=DEL;SVLEN=-300
-21	9223372036854775808	pos_2e63_del	N	<DEL>	.	.	SVTYPE=DEL;SVLEN=-300
-21	18446744073709551615	pos_2e64m1_del	N	<DEL>	.	.	SVTYPE=DEL;SVLEN=-300
-21	18446744073709551616	pos_2e64_del	N	<DEL>	.	.	SVTYPE=DEL;SVLEN=-300
-21	4611686018427387903	pos_2e62m1_del	N	<DEL>	.	.	SVTYPE=DEL;SVLEN=-300
-```
-
-POS 2^62, 2^63, 2^64 - 1 and 2^64, then 2^62 - 1, the bound itself.
-
-Executed with Ensembl VEP 116.2 (`ensemblorg/ensembl-vep:release_116.2`, the 116 GRCh38 cache, `--offline --cache --allele_number`).
-
-#### 23.3 What each engine writes
-
-Ensembl VEP 116.2, one row per record:
-
-```
-pos_2e62_del	21:4611686018427387905-4611686018427388204	deletion	-	-	-	intergenic_variant	ALLELE_NUM=1;IMPACT=MODIFIER
-pos_2e63_del	21:9223372036854775809-9223372036854776108	deletion	-	-	-	intergenic_variant	ALLELE_NUM=1;IMPACT=MODIFIER
-pos_2e64m1_del	21:18446744073709551616	deletion	-	-	-	intergenic_variant	ALLELE_NUM=1;IMPACT=MODIFIER
-pos_2e64_del	21:18446744073709551617	deletion	-	-	-	intergenic_variant	ALLELE_NUM=1;IMPACT=MODIFIER
-pos_2e62m1_del	21:4611686018427387904-4611686018427388203	deletion	-	-	-	intergenic_variant	ALLELE_NUM=1;IMPACT=MODIFIER
-```
-
-The first two Locations are exact 300-base spans; the third and fourth are one coordinate, the start the exact successor of POS and the end a double equal to it. An SNV at the same positions is written at POS itself (`21:9223372036854775808 G - intergenic_variant` for `21 9223372036854775808 x A G`), a `<BND>` or a bracket breakend at POS + 1 under both its alleles.
-
-vep-rs: no row for any of the five, each line reported at warning level (`Invalid POS: '4611686018427387904'`; for the fifth, the first base past the bound). An SNV at 2^62 - 1 is read, its one base being POS itself, and both engines write `21:4611686018427387903 G - intergenic_variant` for it.
-
-#### 23.4 Why Ensembl VEP writes that
-
-`BaseVCF4.pm` `get_start` (lines 255-264) runs `$start++` on the POS text (line 263): Perl's string increment carries through a digit string of any length, so `18446744073709551616` becomes `18446744073709551617`. `get_end` (lines 302-305) adds `abs(SVLEN) - 1` to the start as a number, exact while the sum fits 64 bits and a double past 2^64, where 299 is below the spacing of representable values and the end equals the start, so the Location prints one coordinate. `Parser.pm` `validate_vf` (lines 475-488) finds two numbers with `start` at most `end + 1`, the cache lookup finds no transcript, and the record gets the unconditional intergenic allele (5.1).
-
-#### 23.5 Why vep-rs refuses the record
-
-A coordinate is a base of a chromosome, and the longest human chromosome has 248,956,422 bases; a POS at or above 2^62 - 1 names no base of any assembly. The bound keeps every coordinate vep-rs derives from a position, the end of a span, a `--distance` flank, a mate position, inside a signed 64-bit integer without a wrap, and refusing the line with a warning states that the position is outside what the engine computes with. Ensembl VEP's row states a 300-base deletion at a position no reference has, and past 2^64 a Location of one base for a 300-base span. Neither row is an annotation of the genome; the class records where vep-rs's reading stops, and charges neither engine.
-
-#### 23.6 Try it yourself
-
-```bash
-printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t4611686018427387904\tpos_2e62_del\tN\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=-300\n' > ceiling.vcf
-docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
-  vep -i /work/ceiling.vcf -o /work/ceiling.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
-  --assembly GRCh38 --species homo_sapiens --allele_number --no_stats
-vep -i ceiling.vcf -o ceiling.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --no_stats
-```
-
-Any POS a chromosome reaches gives the same rows from both engines; the shape is the position alone.
-
-#### 23.7 How the comparator treats this class
-
-The class is `coordinate_past_ceiling` in the 116.2 registry of both comparators, set aside: the reference's rows of a record whose POS is at or above 2^62 - 1 when vep-rs wrote none for it. The structural-variant comparator reads the POS from the input; the SNP/indel comparator reads the Location, whose first coordinate is at or above the bound for every such record, Ensembl VEP printing POS or POS + 1. A record at the bound that vep-rs reads, an SNV at 2^62 - 1, has rows on both sides and nothing is set aside.
-
 ## Records Ensembl VEP 116.2 cannot process
 
 Two shapes end an Ensembl VEP 116.2 run with no output for any record of the file. Nothing is set aside for them: the reference wrote no output for the run, so there is no row to compare against and no class. They are listed because vep-rs reads the same files to completion, with exit code 0 and every other record annotated.
@@ -2253,7 +2180,7 @@ Two shapes end an Ensembl VEP 116.2 run with no output for any record of the fil
 ERROR: Forked process(es) died: read-through of cross-process communication detected
 ```
 
-(`Runner.pm` line 583, `_forked_buffer_to_output`). Under the default `--max_sv_size` the spans are oversize and dropped with the usual warning (`variant size (4611686018396962253) is bigger than --max_sv_size (10000000)`), and the run completes. vep-rs refuses the record whose `END` or POS is past 2^62 - 1 at warning level (`Invalid END: '4611686018427387904'`, `Invalid POS`), saturates a `SVLEN` span at 2^62 - 1 (class 23's bound; under `--max_sv_size -1` that record is annotated against every transcript from POS to the end of the chromosome), and annotates the rest of the file.
+(`Runner.pm` line 583, `_forked_buffer_to_output`). Under the default `--max_sv_size` the spans are oversize and dropped with the usual warning (`variant size (4611686018396962253) is bigger than --max_sv_size (10000000)`), and the run completes. vep-rs refuses the record whose `END` or POS is past 2^62 - 1 at warning level (`Invalid END: '4611686018427387904'`, `Invalid POS`), saturates a `SVLEN` span at 2^62 - 1 (its coordinate bound; under `--max_sv_size -1` that record is annotated against every transcript from POS to the end of the chromosome), and annotates the rest of the file.
 
 **A `<CNV:TR>` repeat unit of no bases under `RB`, with a FASTA.** `21 30425587 x N <CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RUS=,AGC;RB=3,12`: the expansion divides each allele's `RB` by its unit's length (`Parser/VCF.pm` line 414, `shift(@RB) / length($seq)`), and the length of an empty unit is 0, so Perl dies with exit code 255 and no output file:
 
@@ -2265,7 +2192,7 @@ Without a FASTA the record is not expanded and the run completes. vep-rs reads t
 
 ## Scoring against Ensembl VEP 116.2
 
-Classes 1 to 12 are the ones the comparators apply when the reference is Ensembl VEP 115.2 (`--reference-release 115.2`), the release the paper was measured against. Ensembl VEP 116 drops a record it marks skipped before its input buffer, so defect C's classes 5 to 8 have no reference row to compare against, and 116.1's chromosome-aware overlap removes defect D's classes 9 and 10 while dropping rows vep-rs writes in three breakend shapes of its own; defects A, B and E and the `<CNV:TR>` representation are unchanged. Classes 13 to 23 are applied under 116.2 only. Every class the comparators apply against 116.2, the default, is listed with its treatment in [docs/concordance-provenance/116.2-divergence-classes.md](concordance-provenance/116.2-divergence-classes.md); under 115.2 the comparators write exactly the reports they wrote for the paper.
+Classes 1 to 12 are the ones the comparators apply when the reference is Ensembl VEP 115.2 (`--reference-release 115.2`), the release the paper was measured against. Ensembl VEP 116 drops a record it marks skipped before its input buffer, so defect C's classes 5 to 8 have no reference row to compare against, and 116.1's chromosome-aware overlap removes defect D's classes 9 and 10 while dropping rows vep-rs writes in three breakend shapes of its own; defects A, B and E and the `<CNV:TR>` representation are unchanged. Classes 13 to 22 are applied under 116.2 only. Every class the comparators apply against 116.2, the default, is listed with its treatment in [docs/concordance-provenance/116.2-divergence-classes.md](concordance-provenance/116.2-divergence-classes.md); under 115.2 the comparators write exactly the reports they wrote for the paper.
 
 ## Reproducing these examples
 

@@ -523,7 +523,7 @@ class SvFilterSetTests(unittest.TestCase):
         chromosome-aware overlap, the reference-allele rows of a bare breakpoint, the gVCF
         variant site, the dot-breakend pair, the annotated missing ALT, the non-integer
         coordinate, the empty tandem-repeat expansion, the `*`-only ALT under a true SVTYPE,
-        the numified POS, the dropped `RN=0` allele and the coordinate past vep-rs's ceiling.
+        the numified POS and the dropped `RN=0` allele.
 
         Pinned as a set rather than a count, so adding or removing a filter fails
         here with its name, beside the taxonomy row it would need."""
@@ -550,7 +550,6 @@ class SvFilterSetTests(unittest.TestCase):
                 "filter_star_alone_svtype_annotated",
                 "filter_non_numeric_pos_numified",
                 "filter_cnv_tr_rn_zero_allele_dropped",
-                "filter_coordinate_past_ceiling",
             },
         )
 
@@ -558,7 +557,7 @@ class SvFilterSetTests(unittest.TestCase):
         """Every `filter_*` mask is applied against at least one reference release, and
         every name a release lists is a mask; the 115.2 list is the published
         comparator's eight in its order, the 116.2 list drops the class-C arms and the
-        two class-D masks and adds the thirteen 116.2 masks."""
+        two class-D masks and adds the 116.2 masks."""
         filters = {n for n in dir(C) if n.startswith("filter_")}
         listed = {m for masks in C.MASKS_BY_RELEASE.values() for m in masks}
         self.assertEqual(listed, filters)
@@ -583,7 +582,7 @@ class SvFilterSetTests(unittest.TestCase):
              "filter_bnd_bare_reference_allele_rows", "filter_gvcf_variant_sites", "filter_dot_breakend_pairs",
              "filter_missing_alt_annotated", "filter_non_integer_end_rows", "filter_cnv_tr_empty_expansion",
              "filter_star_alone_svtype_annotated", "filter_non_numeric_pos_numified",
-             "filter_cnv_tr_rn_zero_allele_dropped", "filter_coordinate_past_ceiling"},
+             "filter_cnv_tr_rn_zero_allele_dropped"},
         )
 
     def test_the_release_block_describes_every_116_2_rule_with_this_comparators_verdict(self) -> None:
@@ -599,7 +598,7 @@ class SvFilterSetTests(unittest.TestCase):
             self.assertEqual(classes[rule.bucket]["excludes"], rule.excludes_with_cache, rule.bucket)
             self.assertIn("excluded", classes[rule.bucket])
         self.assertEqual([c["excludes"] for c in classes.values()],
-                         [True, True, True, False, True, False, True, True, True, True, True, True, True, True, True])
+                         [True, True, True, False, True, False, True, True, True, True, True, True, True, True])
         self.assertEqual(block["bnd_bare_reference_allele_rows"], 0)
         self.assertEqual(block["bnd_mate_32bit_buffer_records"], 0)
         self.assertEqual(block["excluded_gvcf_variant_site_rust"], 0)
@@ -2955,10 +2954,10 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
             "bnd_bare_reference_allele_row", "bnd_mate_32bit_buffer_intergenic",
             "gvcf_variant_site_dropped", "dot_breakend_without_svtype_pair", "missing_alt_annotated",
             "non_integer_end_annotated", "cnv_tr_empty_expansion_dropped", "star_alone_svtype_annotated",
-            "non_numeric_pos_numified", "cnv_tr_rn_zero_allele_dropped", "coordinate_past_ceiling",
+            "non_numeric_pos_numified", "cnv_tr_rn_zero_allele_dropped",
         })
         for key in ("excluded_non_integer_end_rust", "excluded_star_alone_svtype_perl", "excluded_non_numeric_pos_perl",
-                    "excluded_cnv_tr_rn_zero_rust", "excluded_coordinate_past_ceiling_perl"):
+                    "excluded_cnv_tr_rn_zero_rust"):
             self.assertEqual(adj[key], 0, key)
         self.assertEqual((adj["bnd_mate_32bit_buffer_records"], adj["bnd_mate_32bit_buffer_reference_tuples"]), (0, 0))
         self.assertEqual(adj["bnd_bare_reference_allele_rows"], 0)
@@ -3346,7 +3345,7 @@ def ADJUSTED(perl: set, rust: set, records: list, max_sv_size: int = C._MAX_SV_S
 
 class NumifiedPosTests(unittest.TestCase):
     """`parse_vcf` reads POS as Ensembl VEP 116.2 numifies it (BaseVCF4.pm:263 `$start++` on
-    the structural path), and the two classes over a POS the reference annotated where vep-rs
+    the structural path), and the class over a POS the reference annotated where vep-rs
     refused the line."""
 
     def test_a_pos_in_another_spelling_is_read_as_its_number(self) -> None:
@@ -3413,33 +3412,6 @@ class NumifiedPosTests(unittest.TestCase):
         self.assertEqual(C.filter_non_integer_end_rows(numified | shared, shared, records), (set(), set()))
         perl_open, rust_open, masks = ADJUSTED(numified | shared, shared, records, -1)
         self.assertEqual((perl_open, rust_open, masks.numified_pos_perl, masks.skipped_problems), (set(), set(), numified, []))
-
-    def test_the_reference_rows_of_a_pos_past_the_ceiling_are_set_aside_when_vep_rs_wrote_none(self) -> None:
-        """Ensembl VEP 116.2 writes `21:4611686018427387905-4611686018427388204 deletion -
-        intergenic_variant` for `21 4611686018427387904 x N <DEL> . . SVTYPE=DEL;SVLEN=-300`,
-        `21:4611686018427387904-4611686018427388203 ...` for POS 4611686018427387903,
-        `21:9223372036854775808 G - intergenic_variant` for `21 9223372036854775808 x A G` and
-        the single coordinate `21:18446744073709551617 deletion - intergenic_variant` for
-        `21 18446744073709551616 x N <DEL> . . SVTYPE=DEL;SVLEN=-300`; vep-rs fails each line
-        at 2^62 - 1. A row both engines wrote is not set aside."""
-        records = VCF(
-            ("21", "4611686018427387904", "two62", "N", "<DEL>", ".", ".", "SVTYPE=DEL;SVLEN=-300"),
-            ("21", "4611686018427387903", "ceiling", "N", "<DEL>", ".", ".", "SVTYPE=DEL;SVLEN=-300"),
-            ("21", "9223372036854775808", "two63", "A", "G", ".", ".", "."),
-            ("21", "18446744073709551616", "two64", "N", "<DEL>", ".", ".", "SVTYPE=DEL;SVLEN=-300"),
-            ("21", "4611686018427387903", "ceiling_snv", "A", "G", ".", ".", "."),
-        )
-        past = {
-            INTERGENIC("21:4611686018427387905-4611686018427388204", "deletion"),
-            INTERGENIC("21:4611686018427387904-4611686018427388203", "deletion"),
-            INTERGENIC("21:9223372036854775808", "G"),
-            INTERGENIC("21:18446744073709551617", "deletion"),
-        }
-        shared = {INTERGENIC("21:4611686018427387903", "G")}
-        self.assertEqual(C.VEP_RS_COORDINATE_CEILING, 4611686018427387903)
-        self.assertEqual(C.filter_coordinate_past_ceiling(past | shared, shared, records), past)
-        perl_open, rust_open, masks = ADJUSTED(past | shared, shared, records)
-        self.assertEqual((perl_open, rust_open, masks.ceiling_perl, masks.skipped_problems), (set(), set(), past, []))
 
 
 class StarAloneSvtypeTests(unittest.TestCase):
