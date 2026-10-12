@@ -2,27 +2,30 @@
 
 This page documents every disagreement between vep-rs and Ensembl VEP that the adjusted concordance figure sets aside, and shows for each one why it is set aside.
 
-vep-rs 0.3.0 reports two concordance figures against Ensembl VEP release 115.2. **Raw concordance** keeps every tuple both engines write: a tuple is one output row reduced to its Location, Allele, Feature, Feature_type and Consequence set, and raw F1 counts the tuples the two engines share against the tuples each writes alone, with nothing set aside. **Adjusted concordance** sets aside the tuples of the divergence classes documented on this page and nothing else.
+vep-rs reports two concordance figures against Ensembl VEP release 116.2. **Raw concordance** keeps every tuple both engines write: a tuple is one output row reduced to its Location, Allele, Feature, Feature_type and Consequence set, and raw F1 counts the tuples the two engines share against the tuples each writes alone, with nothing set aside. **Adjusted concordance** sets aside the tuples of the divergence classes documented on this page and nothing else.
 
-A class is one shape of disagreement. Each class on this page has been traced to a specific mechanism in one engine's source, reproduced with a command a reader can run, on a public record or on a hand-written record printed in full on the page, and judged. Twenty-one of the twenty-two classes are the output of fifteen defects in Ensembl VEP's source that vep-rs does not reproduce (classes 8 and 11 are also changes in vep-rs's own behaviour between 0.2.0 and 0.3.0). Class 12, `<CNV:TR>`, is a difference of representation in which neither engine is wrong. A disagreement that is not one of these classes is charged to vep-rs in both figures, whatever its cause.
+A class is one shape of disagreement. Each class on this page has been traced to a specific mechanism in one engine's source, reproduced with a command a reader can run, on a public record or on a hand-written record printed in full on the page, and judged. Seventeen of the nineteen classes are the output of fourteen defects in Ensembl VEP's source that vep-rs does not reproduce. Class 5 is the records Ensembl VEP 116 drops before annotation: it writes no row for them in any output format, vep-rs annotates them, and with no Ensembl VEP row to judge, vep-rs's rows are set aside. Class 12, `<CNV:TR>`, is a difference of representation in which neither engine is wrong. A disagreement that is not one of these classes is charged to vep-rs in both figures, whatever its cause.
 
 The page is organised by defect. Each defect's section opens with the defect in one sentence, why it is a defect, what vep-rs does instead, where it is in Ensembl VEP's source and what correcting it would change. The classes it produces follow.
 
-Each class is a walkthrough of one record, from a public dataset or hand-written and printed in full on the page. It gives the background a reader needs, the record, both engines' rows, why Ensembl VEP writes what it writes, why vep-rs's row is the correct one, what a reader can reproduce, and how the comparator scripts recognise the class. The accompanying paper's supplement documents five classes at the paper's pinned build, four of them defects: they correspond to defects A to D and the representation difference. The two classes vep-rs 0.3.0 stopped reproducing, 8 and 11, are, of classes 1 to 12, the two the paper does not document.
+Each class is a walkthrough of one record, from a public dataset or hand-written and printed in full on the page. It gives the background a reader needs, the record, both engines' rows, why Ensembl VEP writes what it writes, why vep-rs's row is the correct one, what a reader can reproduce, and how the comparator scripts recognise the class.
 
-Grouped by the place in Ensembl VEP's source that produces them, the twenty-one defect classes are fifteen defects. Two classes belong to one defect when the same wrong lines produce both, so that correcting those lines changes both.
+**The paper's classes.** The accompanying paper measured vep-rs against Ensembl VEP release 115.2, and its supplement documents five classes at the paper's pinned build, four of them defects: defects A to D below and the representation difference. Against release 115.2 those five produced twelve classes, 1 to 12, and release 116 changed the behaviour behind two of the defects. Defect C, a record marked skipped but annotated against whatever its batch had loaded, is corrected in release 116 by dropping the record before annotation: its classes 5 to 8 compared the two engines' transcript sets on such a record, and against 116.2 there is no Ensembl VEP row to compare, so class 5 now names the dropped records themselves and classes 6 to 8 are retired. Defect D, transcripts matched to records by coordinate alone, is corrected in release 116.1 by a chromosome-aware overlap: its classes 9 and 10 have no rows against it and are retired, and the same overlap introduces two shapes of its own, classes 23 and 24. Defects A, B and E and the `<CNV:TR>` representation are unchanged. Class numbers are identifiers and are kept as the paper's and the comparators' reports use them: 6 to 10 are retired, and 23 and 24 are placed with the mechanism that produces them.
+
+Grouped by the place in Ensembl VEP's source that produces them, the seventeen defect classes are fourteen defects. Two classes belong to one defect when the same wrong lines produce both, so that correcting those lines changes both.
 
 | Defect | What goes wrong in Ensembl VEP | Where | Classes | What correcting it would change |
 | --- | --- | --- | --- | --- |
 | A | The splice-region verdict is stored by assignment, so a later differing region overwrites an earlier one | `ensembl-variation`, `BaseTranscriptVariationAllele.pm` line 215 | 1, 2 | both classes vanish: `splice_region_variant` is kept wherever any differing region earned it |
 | B | `start_lost` and `start_retained_variant` are computed by two independent tests, and nothing keeps both from being true of one allele | `ensembl-variation`, `Utils/VariationEffect.pm` lines 851-963 and 1028-1075 | 3, 4 | both classes vanish: one term per allele, the one the record supports |
-| C | A record marked skipped loads no transcript regions of its own but stays in its batch and is annotated against whatever its neighbours loaded | `ensembl-vep`, `AnnotationSource.pm` line 238 against `InputBuffer.pm` lines 284-330 | 5, 6, 7, 8 | the batch dependence vanishes: Ensembl VEP writes for a skipped record what it writes for it alone, the same from any file; class 8 then agrees with vep-rs, and classes 5 to 7 differ only in that vep-rs annotates an oversize or unsupported record in full where Ensembl VEP skips it |
-| D | Transcripts are matched to records by coordinate alone, with no chromosome, and a record without a parsed mate is never chromosome-checked | `ensembl-vep`, `InputBuffer.pm` lines 345-366; `ensembl-variation`, `StructuralVariationOverlap.pm` lines 64-71 | 9, 10 | both classes vanish: a record is matched only to transcripts on its own chromosome, and its `intergenic_variant` row is written when there are none |
+| C | A structural record marked skipped is dropped before annotation and gets no row in any output format: a span over `--max_sv_size`, measured as `ensembl-io` derives it (`SVLEN` first, else `INFO/END`, a breakend's `INFO/END` discarded), an ALT type with no Sequence Ontology term, a multi-allelic symbolic list with no type, a deletion with neither `END` nor `SVLEN` or whose start exceeds its end, or a record whose coordinates `validate_vf` refuses. Up to release 115.2 a record on one of the four marked routes stayed in its batch and was annotated against whatever its neighbours had loaded, while a refused coordinate was already dropped; release 116 corrected that by dropping the marked record too | `ensembl-vep`, `Parser.pm` lines 189-191, 475-488, 491-501 and 821-827, `Parser/VCF.pm` lines 477-481, 487-489, 555-558 and 575; `ensembl-io`, `BaseVCF4.pm` lines 297-317 | 5 | nothing is left to correct in Ensembl VEP: the batch dependence is gone, and what remains is a record it declines to annotate and vep-rs annotates |
+| D | Retired. Up to release 115.2, transcripts were matched to records by coordinate alone, with no chromosome, so a record could be handed a transcript from another chromosome and lose its `intergenic_variant` row to it; release 116.1's chromosome-aware overlap (`InputBuffer.pm` lines 286-345, `_chr_matches_for_vf_overlap` at lines 348-357) hands a record to a transcript only when the record's chromosome, or a breakend mate's, is the transcript's | `ensembl-vep`, `InputBuffer.pm` | 9, 10, retired | nothing: neither class has a row against release 116.2 |
+| P | The tests after the chromosome-aware overlap compare chromosome names the overlap did not resolve the same way: the slice test names a record that arrives without a slice after the first transcript that reaches it, and the mate-allele test compares the mate's chromosome as written, through a synonym table matched verbatim and a case-folded equality, where the overlap had resolved it | `ensembl-vep`, `AnnotationType/Transcript.pm` lines 122 and 125-143, `AnnotationSource.pm` lines 235-258, `InputBuffer.pm` lines 191-207, 223-234 and 348-357; `ensembl-variation`, `StructuralVariationOverlap.pm` lines 86-102 and 144-160, `Utils/VariationEffect.pm` lines 111-124 | 23, 24 | both classes vanish: a bracket breakend's own-end rows and mate rows are written whatever the order of the input and the spelling of the mate's chromosome |
 | E | A mate-side row is created from the mate's coordinate, but every predicate except `feature_truncation` is evaluated at the record's own coordinate | `ensembl-variation`, `BaseVariationFeatureOverlapAllele.pm` lines 257 and 273 | 11 | the class vanishes: a mate-side row carries the terms the mate breakpoint supports |
 | none | A `<CNV:TR>` allele is expanded to literal sequence and annotated as an insertion or deletion, where vep-rs keeps it symbolic; neither reading is wrong | `ensembl-vep`, `Parser/VCF.pm` lines 382-431 | 12 | nothing to correct; the comparator pairs the two readings |
 | F | A breakpoint record without a bracket mate is split on `/` into one allele per part, the reference base included, so the reference allele gets a consequence row of its own | `ensembl-variation`, `StructuralVariationOverlap.pm` lines 64-77 | 13 | the reference-allele row disappears and every row is written once, as vep-rs writes it |
 | G | Any coordinate of the input buffer that, with the `--distance` flank added, reaches 2^31 (a breakend mate position, a span's end or a record's own position) turns every record of the buffer intergenic, the records loaded beside it included | `ensembl-vep`, `AnnotationSource.pm` line 190 (the flank added to each coordinate) with lines 251-254 and 306-309 | 14 | the buffer's records keep their transcript rows and the breakend its own-end rows, as vep-rs writes them |
-| H | A gVCF variant site, `A G,<NON_REF>`, is routed to the structural path by the `<NON_REF>` token and dropped whole as an unsupported type, the real allele with it | `ensembl-vep`, `Parser/VCF.pm` lines 237-245 and 469-481, `Parser.pm` lines 663-727 | 15 | the real allele is annotated, as vep-rs annotates it |
+| H | A gVCF variant site, `A G,<NON_REF>`, is routed to the structural path by the `<NON_REF>` token and dropped whole as an unsupported type, the real allele with it | `ensembl-vep`, `Parser/VCF.pm` lines 237-245 and 469-481, `Parser.pm` lines 663-728 | 15 | the real allele is annotated, as vep-rs annotates it |
 | I | A dot-notation breakend without `SVTYPE` takes the sequence rules for its coordinates, so its start is POS + 1 when the ALT's length differs from REF's and POS when it does not, its end is POS plus the length of REF minus one, and the row is a span rather than the point (`POS-(POS+1)` with the positions of an insertion for a REF of one or two bases) | `ensembl-io`, `BaseVCF4.pm` lines 255-275 and 297-316 | 16 | the record is the single base at POS + 1, as it is with `SVTYPE=BND` and as vep-rs writes it |
 | J | The missing value `.` in the ALT column is annotated as an allele when `SVTYPE` routes the record to the structural path | `ensembl-io`, `BaseVCF4.pm` lines 486-490; `ensembl-vep`, `Parser/VCF.pm` lines 237-245, `Parser.pm` lines 710-711 | 17 | the record writes nothing, as it does without `SVTYPE` and as vep-rs writes |
 | K | An `INFO/END` or `SVLEN` that is not an integer, or a POS in a non-integer spelling on the sequence path, is taken as written, passes `looks_like_number`, and the record is annotated with the text in its Location and a fractional distance | `ensembl-io`, `BaseVCF4.pm` lines 302-308; `ensembl-vep`, `Parser.pm` line 475 | 18 | the record is refused, as vep-rs refuses a non-integer `END`, or read at the number its text denotes, as vep-rs reads `SVLEN` and POS |
@@ -31,7 +34,7 @@ Grouped by the place in Ensembl VEP's source that produces them, the twenty-one 
 | N | A POS that is not a number is numified by the structural path's `$start++` (`.` to 1, `30_425_949` to 31, `-5` to -4) and the record is annotated at a position its line never named | `ensembl-io`, `BaseVCF4.pm` lines 255-264; `ensembl-vep`, `Parser.pm` lines 475-488 | 21 | the record is refused, as Ensembl VEP's own sequence path refuses it and as vep-rs refuses every form |
 | O | With a FASTA, a multi-allelic `<CNV:TR>` whose `RN` is 0 for one allele expands that allele to an empty part of the joined allele string, and the other allele is lost: an empty middle part hides the multi-allelic shape, an empty last part is dropped by `split` | `ensembl-vep`, `Parser/VCF.pm` lines 411 and 428, `Parser.pm` lines 881 and 978 | 22 | both alleles are annotated, as vep-rs annotates them |
 
-Source citations name the Ensembl repository, module and line at release 115 (the `release/115` branch of `ensembl-variation` and of `ensembl-vep`, the paper's release) for defects A to E and class 12, and at release 116.2 (the `release/116.2` tag of `ensembl-vep`, the `release/116` branch of `ensembl-variation` and of `ensembl-io`) for defects F to O and their classes 13 to 22, whose worked examples run on `ensemblorg/ensembl-vep:release_116.2`. The comparator scripts of this repository are `scripts/concordance/compare_vep_outputs.py` for the SNP/indel datasets and `scripts/validation/compare_sv_concordance.py` for the structural-variant sets. Every row on this page is in Ensembl VEP's default tab output, whose columns are:
+Source citations name the Ensembl repository, module and line at release 116: the `release/116.2` tag of `ensembl-vep` and the `release/116` branch of `ensembl-variation` and of `ensembl-io`, as bundled in the `ensemblorg/ensembl-vep:release_116.2` image, on which every worked example runs. Where a defect's section recounts what an earlier release did, it says so and names that release. The comparator scripts of this repository are `scripts/concordance/compare_vep_outputs.py` for the SNP/indel datasets and `scripts/validation/compare_sv_concordance.py` for the structural-variant sets. Every row on this page is in Ensembl VEP's default tab output, whose columns are:
 
 ```
 #Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
@@ -39,43 +42,42 @@ Source citations name the Ensembl repository, module and line at release 115 (th
 
 Coordinates follow VEP's output conventions: a symbolic deletion's Location starts one base after the VCF POS (the padding base), a breakend's Location is the base after the breakpoint, and an insertion's Location names the two flanking bases.
 
-The twenty-two classes, with the defect each belongs to:
+The nineteen classes, in page order, with the defect each belongs to:
 
 | # | Class | Defect | Kind | Datasets affected | Side set aside | Count |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Splice-region term lost to an assignment order | A | Ensembl VEP defect | ClinVar GRCh37, ClinVar GRCh38 | both members of each pair | 440, 1,444 pairs |
-| 2 | Class 1 on the structural-variant sets | A | Ensembl VEP defect | synthetic `02_mnp_complex` (GRCh38) | both members of each pair | 10 pairs |
-| 3 | `start_lost` and `start_retained_variant` emitted together | B | Ensembl VEP defect | ClinVar GRCh37 and GRCh38, gnomAD v2.1.1 and v4.1 chr21, 1000 Genomes high-coverage chr21 | both members of each pair | 261, 928, 3, 77, 1 pairs |
-| 4 | Class 3 on the structural-variant sets | B | Ensembl VEP defect | ClinVar SV, gnomAD-SV, 1000 Genomes SV and the synthetic `05_symbolic_del_ins`, `07_cnv_repeat`, `11_multi_allelic`, `12_complex_imprecise` | both members of each pair | 3 GRCh37 and 24 GRCh38 pairs |
-| 5 | Structural variants above `--max_sv_size` annotated against whichever transcripts the batch loaded | C | Ensembl VEP defect | gnomAD-SV v2.1 chr21 (GRCh37), gnomAD-SV v4.1 chr21 (GRCh38) | vep-rs (transcripts Ensembl VEP never loaded); Ensembl VEP where it names a transcript vep-rs does not | 10,934 vep-rs tuples; 183,964 vep-rs and 1,823 Ensembl VEP tuples |
-| 6 | The mate end of a breakend above `--max_sv_size` | C | Ensembl VEP defect | gnomAD-SV v2.1 chr21, gnomAD-SV v4.1 chr21 | vep-rs | 56 (GRCh37), 310 (GRCh38) tuples |
-| 7 | `<CPX>`, class 5 reaching an unsupported allele type | C | Ensembl VEP defect | gnomAD-SV v4.1 chr21 | vep-rs | 218 tuples on 3 records |
-| 8 | `<NON_REF>` is not a variant | C | Ensembl VEP defect; vep-rs 0.3.0 behaviour change | synthetic special-allele set (`10_special_alleles`), both assemblies | Ensembl VEP transcript rows and the vep-rs `intergenic_variant` row | 1,838 + 180 (GRCh37), 5,403 + 200 (GRCh38) rows |
-| 9 | Transcripts from another chromosome | D | Ensembl VEP defect | gnomAD-SV v2.1 chr21, gnomAD-SV v4.1 chr21, synthetic breakend set (`09_breakends`) | Ensembl VEP | 1,838 (GRCh37), 22,481 (GRCh38) tuples |
-| 10 | The orphaned `intergenic_variant` on the other side of class 9 | D | Ensembl VEP defect | gnomAD-SV v2.1 chr21, gnomAD-SV v4.1 chr21 | vep-rs | 155 (GRCh37), 518 (GRCh38) rows |
-| 11 | Breakend mate rows read from the other chromosome's coordinate | E | Ensembl VEP defect; vep-rs 0.3.0 behaviour change | synthetic `09_breakends` and `13_vcf45_features`, gnomAD-SV v4.1 chr21 | both members of each pair | 1,407 (GRCh37), 7,258 (GRCh38) pairs |
-| 12 | `<CNV:TR>` read symbolically, not expanded | none | representation difference | synthetic tandem-repeat set (`07_cnv_repeat`), both assemblies | both members of each pair | 1,368 (GRCh37), 2,644 (GRCh38) pairs |
+| 1 | Splice-region term lost to an assignment order | A | Ensembl VEP defect | ClinVar GRCh37, ClinVar GRCh38 | both members of each pair | 440, 1,994 pairs |
+| 2 | Class 1 on the structural-variant sets | A | Ensembl VEP defect | synthetic `02_mnp_complex` (GRCh38) | both members of each pair | 20 pairs |
+| 3 | `start_lost` and `start_retained_variant` emitted together | B | Ensembl VEP defect | ClinVar GRCh37 and GRCh38, gnomAD v2.1.1 and v4.1 chr21, 1000 Genomes high-coverage chr21 | both members of each pair | 261, 1,466, 3, 127, 1 pairs |
+| 4 | Class 3 on the structural-variant sets | B | Ensembl VEP defect | ClinVar SV, gnomAD-SV, 1000 Genomes SV and the synthetic `05_symbolic_del_ins`, `07_cnv_repeat`, `11_multi_allelic`, `12_complex_imprecise` | both members of each pair | 3 GRCh37 and 38 GRCh38 pairs |
+| 5 | A record Ensembl VEP drops before annotation (`reference_skipped_record`) | C | no Ensembl VEP row: the record is dropped | gnomAD-SV v2.1 chr21 (GRCh37) and v4.1 chr21 (GRCh38), 1000 Genomes SV (GRCh38), synthetic `10_special_alleles` and `12_complex_imprecise` (both assemblies) | vep-rs | 20,524 tuples on 389 records (GRCh37); 278,470 on 594 (GRCh38), 278,309 pooled |
+| 23 | A bracket breakend's own-end rows lost to the first transcript that reaches it (`bnd_own_chromosome_rows_lost`) | P | Ensembl VEP defect | synthetic breakend set (`09_breakends`), both assemblies | vep-rs, in the structural-variant comparator under the cache authority; counted and not set aside in the SNP/indel comparator | 202 (GRCh37), 1,012 (GRCh38) tuples |
+| 24 | A bracket breakend's mate rows lost to an unresolved chromosome prefix (`bnd_synonym_mate_rows_lost`) | P | Ensembl VEP defect | none of the measured sets (every mate is named as the cache names its chromosome) | vep-rs, as class 23 | 0 |
+| 11 | Breakend mate rows read from the other chromosome's coordinate | E | Ensembl VEP defect | synthetic `09_breakends` and `13_vcf45_features`, gnomAD-SV v4.1 chr21 | both members of each pair | 1,407 (GRCh37), 10,518 (GRCh38) pairs |
+| 12 | `<CNV:TR>` read symbolically, not expanded | none | representation difference | synthetic tandem-repeat set (`07_cnv_repeat`), both assemblies | both members of each pair | 1,368 (GRCh37), 3,751 (GRCh38) pairs |
 | 13 | The reference-allele row of a bare breakpoint | F | Ensembl VEP defect | none of the measured sets (every gnomAD-SV `<BND>` names its mate through `CHR2`) | the reference-allele rows are set aside: `bnd_bare_reference_allele_row` in both comparators | 0 |
 | 14 | A coordinate at or past 2,147,478,648 (a breakend mate, a span end or the record's own position) turns the reference's buffer intergenic | G | Ensembl VEP defect | none of the measured sets (no chromosome reaches the position) | nothing: counted as `bnd_mate_32bit_buffer_intergenic` in both comparators and not set aside | 0 |
 | 15 | A gVCF variant site dropped with its real allele | H | Ensembl VEP defect | none of the measured sets (no gVCF among them) | vep-rs's rows at the site: `gvcf_variant_site_dropped` in both comparators | 0 |
 | 16 | A dot-notation breakend without `SVTYPE` written as a pair | I | Ensembl VEP defect | none of the measured sets (the synthetic breakends carry `SVTYPE`) | both rows of the pair: `dot_breakend_without_svtype_pair` in both comparators | 0 |
 | 17 | The missing ALT value annotated as an allele | J | Ensembl VEP defect | none of the measured sets | the reference's rows: `missing_alt_annotated` in the structural-variant comparator | 0 |
 | 18 | A non-integer `END`, `SVLEN` or POS text annotated and printed | K | Ensembl VEP defect | none of the measured sets | the reference's text rows: `non_integer_end_annotated` in both comparators; vep-rs's rows of the same record in the structural-variant comparator | 0 |
-| 19 | An empty or unchanged `<CNV:TR>` expansion dropped without a row | L | Ensembl VEP defect | none of the measured sets (the protocol runs without a FASTA) | vep-rs's rows at the run: `cnv_tr_empty_expansion_dropped` in the structural-variant comparator | 0 |
+| 19 | An empty or unchanged `<CNV:TR>` expansion dropped without a row | L | Ensembl VEP defect | none of the measured sets (every `<CNV:TR>` of the synthetic sets is one allele with `RN=1` and a positive `RUC` that changes the run) | vep-rs's rows at the run: `cnv_tr_empty_expansion_dropped` in the structural-variant comparator | 0 |
 | 20 | `*` alone under a true `SVTYPE` annotated as the type's class | M | Ensembl VEP defect | none of the measured sets | the reference's rows: `star_alone_svtype_annotated` in the structural-variant comparator | 0 |
 | 21 | A non-numeric POS numified by the structural path's increment | N | Ensembl VEP defect | none of the measured sets | the reference's rows: `non_numeric_pos_numified` in both comparators (the SNP/indel comparator the negative Locations alone) | 0 |
-| 22 | A real `<CNV:TR>` allele dropped beside an `RN=0` allele | O | Ensembl VEP defect | none of the measured sets (the protocol runs without a FASTA) | vep-rs's rows under the dropped allele's direction term: `cnv_tr_rn_zero_allele_dropped` in the structural-variant comparator | 0 |
+| 22 | A real `<CNV:TR>` allele dropped beside an `RN=0` allele | O | Ensembl VEP defect | none of the measured sets (no `<CNV:TR>` of the synthetic sets is multi-allelic) | vep-rs's rows under the dropped allele's direction term: `cnv_tr_rn_zero_allele_dropped` in the structural-variant comparator | 0 |
+
+Classes 6 to 10 are retired and their numbers are not reused. Against release 115.2 they were: 6, the mate end of a breakend above `--max_sv_size`, which Ensembl VEP wrote only when a neighbouring record had loaded the region; 7, `<CPX>`, an unsupported type annotated against the batch's transcripts; 8, `<NON_REF>`, a reference block annotated as a variant; 9, transcripts from another chromosome; 10, the `intergenic_variant` row those transcripts displaced. Release 116 drops the records of 6 to 8 before annotation, so they are class 5 now, and release 116.1's overlap never hands a record a transcript from another chromosome, so 9 and 10 have no rows. The paper's class 5, an oversize structural variant annotated against whichever transcripts the batch had loaded, keeps its number: the records are the same, and the difference is that Ensembl VEP now writes nothing for them.
 
 How to read the counts:
 
 - Setting a tuple aside is also called **masking**: a class is fully masked when its rule sets aside every tuple of the class, and a rule is shape-limited when it sets aside only pairs of one exact shape.
 - The **six SNP/indel datasets** are ClinVar GRCh37 and GRCh38 (`clinvar_grch37.vcf.gz`, `clinvar_grch38.vcf.gz`), gnomAD v2.1.1 chr21 (GRCh37, `gnomad_genomes_v2.1.1_chr21.vcf.gz`), gnomAD v4.1 chr21 (GRCh38, `gnomad_genomes_v4.1_chr21.vcf.gz`), 1000 Genomes Phase 3 chr21 (GRCh37, `1kg_integrated_chr21.vcf.gz`) and 1000 Genomes high-coverage chr21 (GRCh38, `1kg_highcov_chr21.vcf.gz`), each scored as one file.
 - The **two structural-variant sets** are one pool per assembly of sixteen files, scored file by file and pooled: the thirteen synthetic files under `tests/sv_validation/<assembly>/` plus `clinvar_sv_chr21.vcf.gz`, the gnomAD-SV file (`gnomad_sv_v2.1_chr21.vcf.gz` for GRCh37, `gnomad_sv_v4.1_chr21.vcf.gz` for GRCh38) and `1kg_sv_chr21.vcf.gz`.
-- Counts are tuples or pairs measured with the comparators of this repository on vep-rs 0.3.0 against Ensembl VEP 115.2's output for the same inputs.
+- Counts are tuples or pairs measured with the comparators of this repository against Ensembl VEP 116.2's output for the same inputs.
 - A **pair** is one tuple from each engine that the comparator matches as two readings of one record on one transcript. For classes 1 to 4 and 11 the two tuples share Location, Allele, Feature and Feature_type and differ in the consequence set. For class 12 they share Feature and Feature_type only, because the two engines write the same record at a different Location and Allele (12.3).
-- Counts are per input file. The comparator also reports a pooled count per assembly in which a tuple that recurs in two files is counted once (the gnomAD-SV and 1000 Genomes files share 1 GRCh37 and 49 GRCh38 records at identical coordinates). Where the two differ this page gives the per-file count and names the pooled one (classes 4 and 10).
-- The classes overlap: a tuple two rules both match is set aside once. Class 7's 218 tuples are inside class 5's 183,964, and class 5's 1,823 Ensembl VEP tuples are class 9 tuples, so the Count column does not sum to the number of tuples set aside.
-- On the two ClinVar datasets classes 1 and 3 together are every tuple the adjusted figure sets aside. On the other four SNP/indel datasets class 3 is. On the two structural-variant sets classes 2 and 4 to 12 together are, and the adjusted figure is 1.0 on both.
+- Counts are per input file. The comparator also reports a pooled count per assembly in which a tuple that recurs in two files is counted once (35 tuples on each side recur on GRCh37; 16,731 Ensembl VEP and 16,892 vep-rs tuples on GRCh38, on records two files carry at identical coordinates). Where the two differ this page gives the per-file count and names the pooled one (classes 4 and 5).
+- The classes do not overlap on the measured sets: on each structural-variant set the Count column sums to the tuples set aside per file, 23,504 vep-rs and 2,778 Ensembl VEP tuples on GRCh37, 293,809 and 14,327 on GRCh38; pooled, GRCh38 sets aside 293,647 and 14,326, the 161 class 5 tuples and the one class 4 pair that recur in two files counted once.
+- On the two ClinVar datasets classes 1 and 3 together are every tuple the adjusted figure sets aside. On gnomAD v2.1.1 and v4.1 chr21 and 1000 Genomes high-coverage chr21 class 3 is, and on 1000 Genomes Phase 3 chr21 nothing is set aside. On the two structural-variant sets classes 2, 4, 5, 11, 12 and 23 together are. The adjusted figure is 1.0 on every dataset.
 
 ## Defect A: a later differing region erases the splice-region term
 
@@ -93,8 +95,8 @@ How to read the counts:
 **What correcting it would change.** Classes 1 and 2 would vanish: Ensembl VEP would keep `splice_region_variant` wherever any region earned it, which is what vep-rs writes.
 
 **The classes it produces.**
-- Class 1: the ClinVar GRCh37 and GRCh38 datasets, 440 and 1,444 pairs; both members of each pair are set aside.
-- Class 2: the same shape on the structural-variant sets, scored by the second comparator, 10 pairs on the synthetic complex-substitution set; both members of each pair are set aside.
+- Class 1: the ClinVar GRCh37 and GRCh38 datasets, 440 and 1,994 pairs; both members of each pair are set aside.
+- Class 2: the same shape on the structural-variant sets, scored by the second comparator, 20 pairs on the synthetic complex-substitution set; both members of each pair are set aside.
 
 ### 1. Splice-region term lost to an assignment order
 
@@ -161,7 +163,7 @@ Annotate the two differing bases as separate records and then together, with the
 | `13 32900383 . A T` | `synonymous_variant` | `synonymous_variant` |
 | `13 32900381 . GTA CTT` | `missense_variant` | `missense_variant,splice_region_variant` |
 
-Each part alone is annotated identically by both engines. The two parts as one record lose, in Ensembl VEP only, the term the first part earned. No flag changes the outcome: this class is deterministic, unlike classes 5 to 10.
+Each part alone is annotated identically by both engines. The two parts as one record lose, in Ensembl VEP only, the term the first part earned. No flag changes the outcome: this class is deterministic.
 
 #### 1.7 How the comparator treats this class
 
@@ -173,9 +175,9 @@ The rule is deliberately narrower than the family of splice differences. A pair 
 
 Counts:
 
-- ClinVar GRCh37: 440 pairs; ClinVar GRCh38: 1,444 pairs, every one of that shape.
+- ClinVar GRCh37: 440 pairs; ClinVar GRCh38: 1,994 pairs, every one of that shape.
 - gnomAD and 1000 Genomes datasets: none.
-- Structural-variant sets: 10 pairs (class 2).
+- Structural-variant sets: 20 pairs (class 2).
 
 The SNP/indel comparator's summary groups every splice-family pair into descriptive buckets for reporting. The buckets do not decide exclusion; this rule does, and the summary prints beside each bucket how many of its pairs the rule excluded.
 
@@ -208,11 +210,11 @@ synth_cpx_sub_0780	21:31663791-31663794	CA	ENSG00000142168	ENST00000270142	Trans
 synth_cpx_sub_0780	21:31663791-31663794	CA	ENSG00000142168	ENST00000270142	Transcript	frameshift_variant,splice_region_variant	151-154	74-77	25-26	ES/AX	gAAAGt/gCAt	-	IMPACT=HIGH;STRAND=1
 ```
 
-The rows agree in every column but Consequence, where vep-rs adds `splice_region_variant`. The record touches ten SOD1 transcripts with the same difference: eight coding ones (`frameshift_variant`) and two non-coding ones (`non_coding_transcript_exon_variant`).
+The rows agree in every column but Consequence, where vep-rs adds `splice_region_variant`. The record has 47 rows on each side, and 19 of them, all SOD1 transcripts, differ the same way: eleven coding transcripts (`frameshift_variant`), five coding transcripts flagged as NMD targets (`frameshift_variant,NMD_transcript_variant`), one whose exon 2 is untranslated (`3_prime_UTR_variant,NMD_transcript_variant`) and two non-coding ones (`non_coding_transcript_exon_variant`); the other 28 rows are identical.
 
 #### 2.4 Why Ensembl VEP writes that
 
-As 1.4: the first differing region (exon base 2) sets `splice_region` to 1 and the second (exon bases 4 and 5) sets it back to 0, on each of the ten transcripts.
+As 1.4: the first differing region (exon base 2) sets `splice_region` to 1 and the second (exon bases 4 and 5) sets it back to 0, on each of the nineteen transcripts.
 
 #### 2.5 Why vep-rs's row is the correct one
 
@@ -220,7 +222,7 @@ As 1.5: base 31663791 is the second base of exon 2, inside the window the term n
 
 #### 2.6 Try it yourself
 
-Ensembl VEP 115.2, GRCh38 cache and FASTA, the command of the closing section:
+Ensembl VEP 116.2, GRCh38 cache and FASTA, the command of the closing section:
 
 - `21 31663791 . A C` alone gives ENST00000270142 `missense_variant,splice_region_variant`;
 - `21 31663792 . AAG A` alone (the second differing region, Location `21:31663793-31663794`, Allele `-`) gives `frameshift_variant`;
@@ -232,7 +234,7 @@ vep-rs gives the same two rows for the two parts and `frameshift_variant,splice_
 
 `filter_registry_swap_pairs` in `scripts/validation/compare_sv_concordance.py` builds the pairs of the structural-variant comparison, one tuple on each side per Location, Allele, Feature and Feature_type. It applies to them the same two rules the SNP/indel comparator exports (`EXCLUDING_RULES` of `scripts/concordance/compare_vep_outputs.py`, imported so the two scripts cannot drift), setting both members of a matching pair aside.
 
-Counts: the class 1 rule matches the 10 transcripts of `synth_cpx_sub_0780` (GRCh38) and nothing else. Fully masked; the report counts them as `excluded_registry_swap_rust` and `excluded_registry_swap_perl`, split by rule in `excluded_registry_swap_by_bucket`.
+Counts: 20 pairs on the GRCh38 set and none on the GRCh37 set. Nineteen are the transcripts of `synth_cpx_sub_0780`; the twentieth is ENST00001077173 on `synth_mnp_0852` (`21 31667270 synth_mnp_0852 CTT TTA`, whose two differing bases, 31667270 and 31667272, stand either side of an unchanged base), `NMD_transcript_variant,synonymous_variant` against `NMD_transcript_variant,splice_region_variant,synonymous_variant`. Fully masked; the report counts them as `excluded_registry_swap_rust` and `excluded_registry_swap_perl`, split by rule in `excluded_registry_swap_by_bucket` (`covered_splice_region_swap`).
 
 ## Defect B: `start_lost` and `start_retained_variant` are both written for one allele
 
@@ -250,8 +252,8 @@ Counts: the class 1 rule matches the 10 transcripts of `synth_cpx_sub_0780` (GRC
 **What correcting it would change.** Correcting the misread at line 939 removes the sequence pairs; correcting the structural shortcut at line 1037 removes the structural pairs. With both corrected, classes 3 and 4 vanish and Ensembl VEP writes one term per allele, as vep-rs does.
 
 **The classes it produces.**
-- Class 3: the SNP/indel datasets (ClinVar GRCh37 and GRCh38, gnomAD v2.1.1 and v4.1 chr21, 1000 Genomes high-coverage chr21: 261, 928, 3, 77 and 1 pairs); both members of each pair are set aside.
-- Class 4: the structural-variant sets, 3 pairs on GRCh37 and 24 on GRCh38; both members of each pair are set aside.
+- Class 3: the SNP/indel datasets (ClinVar GRCh37 and GRCh38, gnomAD v2.1.1 and v4.1 chr21, 1000 Genomes high-coverage chr21: 261, 1,466, 3, 127 and 1 pairs); both members of each pair are set aside.
+- Class 4: the structural-variant sets, 3 pairs on GRCh37 and 38 on GRCh38 (37 distinct); both members of each pair are set aside.
 
 ### 3. `start_lost` and `start_retained_variant` emitted together
 
@@ -323,7 +325,7 @@ gnomAD-SV_v3_DEL_chr21_88237371	21:26965975-26966647	deletion	ENSG00000154736	EN
 gnomAD-SV_v3_DEL_chr21_88237371	21:26965975-26966647	deletion	ENSG00000154736	ENST00000284987	Transcript	frameshift_variant,start_lost,feature_truncation,5_prime_UTR_variant	442-1114	?-417	?-139	-	-	-	IMPACT=HIGH;STRAND=-1;OverlapBP=673;OverlapPC=1.37
 ```
 
-In each pair the rows agree in every column but Consequence: Ensembl VEP writes both start terms, vep-rs writes one. The second record's other coding transcript, ENST00000970346, carries the same difference.
+In each pair the rows agree in every column but Consequence: Ensembl VEP writes both start terms, vep-rs writes one. The second record's other four coding transcripts, ENST00000970346, ENST00001108182, ENST00001108183 and ENST00001131497, carry the same difference, and its sixth row, `upstream_gene_variant` on ENST00000652031, is identical on both sides.
 
 #### 3.4 Why Ensembl VEP writes that
 
@@ -353,7 +355,7 @@ Both rows also carry `frameshift_variant`, which both engines derive from the de
 
 #### 3.6 Try it yourself
 
-The sequence deletion has two VCF spellings of one edit, because the deleted A is part of a two-base run. Annotate both with Ensembl VEP 115.2 (GRCh37 cache and FASTA, the command of the closing section):
+The sequence deletion has two VCF spellings of one edit, because the deleted A is part of a two-base run. Annotate both with Ensembl VEP 116.2 (GRCh37 cache and FASTA, the command of the closing section):
 
 - The left-aligned `21 36265245 . AT A` above gives ENST00000486278 `frameshift_variant,start_lost,start_retained_variant`.
 - The right-aligned `21 36265246 . TT T` (ClinVar's own `g.36265247del`) gives `5_prime_UTR_variant` with no start term at all; vep-rs writes the same `5_prime_UTR_variant` for that spelling.
@@ -362,7 +364,7 @@ One molecule, and Ensembl VEP calls its start codon both lost and untouched depe
 
 The structural deletion has an explicit spelling too: write the same 673 deleted bases out. REF is the reference sequence of 21:26965974-26966647, 674 bases (`samtools faidx Homo_sapiens.GRCh38.dna.primary_assembly.fa 21:26965974-26966647`); ALT is its first base, `G`.
 
-- The explicit spelling: Ensembl VEP evaluates the edited sequence and writes ENST00000284987 `start_lost,5_prime_UTR_variant`, with no `start_retained_variant`. Its sequence-variant rules also drop `feature_truncation`, a structural term, and `frameshift_variant`, because the 417 deleted coding bases are a multiple of three; the probe is about the start pair.
+- The explicit spelling: Ensembl VEP evaluates the edited sequence and writes ENST00000284987 `start_lost,5_prime_UTR_variant`, with no `start_retained_variant`. Its sequence-variant rules also drop `feature_truncation`, a structural term, and `frameshift_variant`, because the 417 deleted coding bases are a multiple of three; the probe is about the start pair. vep-rs writes the same `start_lost,5_prime_UTR_variant` row for the explicit spelling.
 - The `<DEL>` spelling of the same interval receives both start terms.
 
 #### 3.7 How the comparator treats this class
@@ -372,16 +374,16 @@ The structural deletion has an explicit spelling too: write the same 673 deleted
 The class is fully masked. Counts, from the SNP/indel summary's `start_cooccurrence_swap` line:
 
 - ClinVar GRCh37: 261 pairs.
-- ClinVar GRCh38: 928 pairs.
+- ClinVar GRCh38: 1,466 pairs.
 - gnomAD v2.1.1 chr21: 3 pairs.
-- gnomAD v4.1 chr21: 77 pairs.
+- gnomAD v4.1 chr21: 127 pairs.
 - 1000 Genomes high-coverage chr21: 1 pair.
 
 Its reach into the structural-variant sets is class 4.
 
 ### 4. Class 3 on the structural-variant sets
 
-**In short.** Structural deletions and gains over a start codon in the structural-variant files reach the structural arm of class 3. Ensembl VEP writes `start_lost` and `start_retained_variant` together on them; vep-rs keeps one of the two. For the structural deletions, whose interval contains the codon, the argument of 3.5 holds and vep-rs's row is the correct one. For the five structural gains the record decides only which member came from evidence, and the comparator sets both members aside rather than deciding it.
+**In short.** Structural deletions and gains over a start codon in the structural-variant files reach the structural arm of class 3. Ensembl VEP writes `start_lost` and `start_retained_variant` together on them; vep-rs keeps one of the two. For the structural deletions, whose interval contains the codon, the argument of 3.5 holds and vep-rs's row is the correct one. For the structural gains, ten pairs on five records, the record decides only which member came from evidence, and the comparator sets both members aside rather than deciding it.
 
 #### 4.1 What a reader needs to know first
 
@@ -393,7 +395,16 @@ The structural deletion of 3.2, `gnomAD-SV_v3_DEL_chr21_88237371` on ENST0000028
 
 #### 4.3 What each engine writes
 
-The rows are those of 3.3.
+The RUNX1 deletion's rows in `clinvar_sv_chr21.vcf.gz`, which carries the record under the same ID, are those of 3.3. The `<CN2>` gain `synth_cn2_0016` of 4.5, on ENST00000647188 (DYRK1A, forward strand):
+
+```
+# Ensembl VEP
+synth_cn2_0016	21:37367280-37521417	duplication	ENSG00000157540	ENST00000647188	Transcript	start_lost,feature_elongation,start_retained_variant,coding_sequence_variant,5_prime_UTR_variant,3_prime_UTR_variant,intron_variant	508-12083	-	-	-	-	-	IMPACT=HIGH;STRAND=1;OverlapBP=154138;OverlapPC=96.59
+# vep-rs
+synth_cn2_0016	21:37367280-37521417	duplication	ENSG00000157540	ENST00000647188	Transcript	start_lost,feature_elongation,coding_sequence_variant,5_prime_UTR_variant,3_prime_UTR_variant,intron_variant	508-12083	-	-	-	-	-	IMPACT=HIGH;STRAND=1;OverlapBP=154138;OverlapPC=96.59
+```
+
+The record's other four pairs, on ENST00000643624, ENST00000644942, ENST00000647504 and ENST00001131494, differ the same way; its other 29 rows are identical on both sides.
 
 #### 4.4 Why Ensembl VEP writes that
 
@@ -402,96 +413,80 @@ As 3.4 for the deletions. On a structural gain, the same two structural tests ap
 - `start_lost` from the overlap of the stated span with the codon;
 - `start_retained_variant` from the retention test that returns 0 for every structural allele.
 
-#### 4.5 Why vep-rs's row is the correct one for the deletions, and what the five structural gains show
+#### 4.5 Why vep-rs's row is the correct one for the deletions, and what the structural gains show
 
-As 3.5 for the 21 structural deletions of the class, whose interval contains the codon.
+As 3.5 for the 30 structural deletions of the class (2 on GRCh37, 28 on GRCh38; 29 pooled, one deletion recurring in two GRCh38 files), whose interval contains the codon.
 
-The five structural gains of the class, all over a start codon, are:
+The ten structural-gain pairs of the class, on five GRCh38 records, all over a start codon, are:
 
-- an Alu insertion on two transcripts;
-- an insertion;
-- two duplications.
+- an Alu insertion on two transcripts (gnomAD-SV v4.1 chr21, `21:39660415-39660694`);
+- an insertion on one transcript (`05_symbolic_del_ins`, `21:37420264-37526076`, ENST00000646548);
+- the `<CN2>` copy gain `synth_cn2_0016` on five transcripts (`07_cnv_repeat`, `21:37367280-37521417`);
+- two duplications on one transcript each (gnomAD-SV v4.1 chr21, `21:30487315-30487396` and `21:46142001-46156000`).
 
 For them the deletion argument does not apply, and a symbolic gain does not say what becomes of the codon.
 
 What the record does decide is which member came from evidence. Ensembl VEP's structural `start_lost` is the overlap of the stated span with the codon's three coordinates (3.4). Its `start_retained_variant` on a structural allele comes from a test that returns "retained" for every structural allele without reading the sequence. So the retained member is the one emitted from nothing and is the contradiction, and vep-rs keeps the member computed from the record.
 
-That is a statement about which test read the record, not about the biology. Whether a gain over the codon leaves the start in place is not decidable from a symbolic record (a tandem duplication keeps its first copy of the codon). So for these five pairs the page claims only that vep-rs's row drops the term emitted without evidence, and the comparator sets both members aside rather than deciding it.
+That is a statement about which test read the record, not about the biology. Whether a gain over the codon leaves the start in place is not decidable from a symbolic record (a tandem duplication keeps its first copy of the codon). So for these ten pairs the page claims only that vep-rs's row drops the term emitted without evidence, and the comparator sets both members aside rather than deciding it.
 
 #### 4.6 Try it yourself
 
-For the deletions, 3.6. The five structural gains are in the files named in 4.7; the `<CN2>` record is `21 37367279 synth_cn2_0016 T <CN2>` with `END=37521417`.
+For the deletions, 3.6. The structural gains are the records named in 4.5; the `<CN2>` record is `21 37367279 synth_cn2_0016 T <CN2>` with `END=37521417`.
 
 #### 4.7 How the comparator treats this class
 
 The same `filter_registry_swap_pairs` as class 2 applies the class 3 rule to the pairs of the structural-variant comparison.
 
-Counts: the class 3 rule matches 3 pairs on GRCh37 and 24 on GRCh38.
+Counts: the class 3 rule matches 3 pairs on GRCh37 and 38 on GRCh38 per file; pooled per assembly, 3 and 37.
 
-- GRCh37, 3 pairs: one each in `11_multi_allelic.vcf.gz`, `clinvar_sv_chr21.vcf.gz` (where it is the RUNX1 deletion of 3.2) and `gnomad_sv_v2.1_chr21.vcf.gz`.
-- GRCh38, 24 pairs: `gnomad_sv_v4.1_chr21.vcf.gz` 20, and one each in `05_symbolic_del_ins.vcf.gz`, `07_cnv_repeat.vcf.gz`, `12_complex_imprecise.vcf.gz` and `1kg_sv_chr21.vcf.gz`; 23 distinct, one deletion recurring in two files.
+- GRCh37, 3 pairs: one each in `11_multi_allelic.vcf.gz` (`synth_multi_mix_0476`, a deletion), `clinvar_sv_chr21.vcf.gz` (where it is the RUNX1 deletion of 3.2) and `gnomad_sv_v2.1_chr21.vcf.gz` (`gnomAD-SV_v2.1_DEL_21_179957`).
+- GRCh38, 38 pairs per file: `gnomad_sv_v4.1_chr21.vcf.gz` 30, `07_cnv_repeat.vcf.gz` 5, and one each in `05_symbolic_del_ins.vcf.gz`, `12_complex_imprecise.vcf.gz` and `1kg_sv_chr21.vcf.gz`. Pooled, 37: the deletion `21:30755356-30755423` on ENST00000335093 is `HGSV_242982` in the 1000 Genomes file and `gnomAD-SV_v3_DEL_chr21_d911172a` in the gnomAD-SV file, one key counted once.
 
-The tandem-repeat file, `07_cnv_repeat.vcf.gz`, carries 700 `<CNV>` and `<CN0>` to `<CN9>` copy-number records beside its 200 `<CNV:TR>` records, and Ensembl VEP expands only the `<CNV:TR>` ones (12.4). Its class 3 pair is `synth_cn2_0016`, a `<CN2>` copy gain at 21:37367279-37521417 over the start codon of ENST00000647188.
+The tandem-repeat file, `07_cnv_repeat.vcf.gz`, carries 700 `<CNV>` and `<CN0>` to `<CN9>` copy-number records beside its 200 `<CNV:TR>` records, and Ensembl VEP expands only the `<CNV:TR>` ones (12.4). Its five class 3 pairs are the `<CN2>` copy gain `synth_cn2_0016`, Location 21:37367280-37521417, on the five transcripts whose start codon it covers, ENST00000647188 among them.
 
-Of the 27 pairs, 21 are structural deletions whose interval contains the codon and 5 are structural gains, where vep-rs keeps `start_lost`. The RUNX1 record is the one sequence allele, where it keeps `start_retained_variant`.
+Of the 41 per-file pairs of both assemblies (40 pooled), 30 are structural deletions whose interval contains the codon (29 pooled) and 10 are structural gains, where vep-rs keeps `start_lost`. The RUNX1 record is the one sequence allele, where it keeps `start_retained_variant`.
 
 Fully masked; the report counts them as `excluded_registry_swap_rust` and `excluded_registry_swap_perl`, split by rule in `excluded_registry_swap_by_bucket`.
 
-## Defect C: a record marked skipped is still annotated, against whatever its neighbours loaded
+## Defect C, restated for release 116: a record marked skipped is dropped before annotation
 
-**The defect in one sentence.** A structural variant that Ensembl VEP marks skipped, for a span above `--max_sv_size` or an ALT type with no Sequence Ontology term, loads no transcript regions of its own but is still annotated, against whatever regions its batch neighbours loaded.
+**The difference in one sentence.** Ensembl VEP 116 drops a structural record it marks skipped before the record reaches the annotation pass, so the record has no row in any output format, while vep-rs annotates it.
 
-**Why this is a defect.** Ensembl VEP reports the skip in its warnings file, then annotates the record anyway. The output depends on things that have nothing to do with the record: which other records share its chunk, and so `--fork`, `--buffer_size` and the order of lines in the file. One record gets 51 transcripts, or 497, or 68, or none, depending on its neighbours, while the warnings file states that it was skipped. An annotation that changes with the rest of the file is not an annotation of the record, and a record declared skipped and then annotated in part is a self-contradiction.
+**What release 116 corrected.** Up to release 115.2 the skipped record stayed in its batch: it loaded no transcript regions of its own and was annotated against whatever regions its neighbours had loaded (`AnnotationSource.pm` line 238 against `InputBuffer.pm` lines 284-330 of that release). Its output changed with `--fork`, `--buffer_size` and the order of lines in the file while the warnings file reported the record as skipped; one record got 51 transcripts, or 497, or none, depending on its neighbours. That batch dependence was defect C, and it produced the paper's classes 5 to 8: an oversize structural variant annotated against whichever transcripts the batch had loaded, the mate end of such a breakend, `<CPX>`, and a `<NON_REF>` block annotated as a variant. From release 116 the parser drops the record instead (`validate_svf` returns 0 for a `vep_skip` record and `next` discards it unless `--dont_skip` is set), which is the correction those classes called for. What remains is not a defect but a difference of coverage: Ensembl VEP writes nothing for the record, vep-rs annotates it, and no row of either engine can be judged against the other's. This section documents that difference and the records it reaches.
 
-**What vep-rs does instead.** vep-rs's output for a record depends on the record's coordinates alone. In the default and tab outputs it annotates an oversize record against every transcript it overlaps, the same set from any file; in the VCF and JSON outputs it does what Ensembl VEP 115.2 does there, carrying the line without consequences or omitting it. For a `<NON_REF>` reference block, which asserts the absence of a variant, vep-rs writes one `intergenic_variant` row, the row Ensembl VEP itself writes when the block is annotated alone.
+**Which records are dropped.** A record takes one of four routes to the mark, or a fifth to the same drop:
 
-**Where it is in Ensembl VEP's source** (`ensembl-vep`):
-- `Bio/EnsEMBL/VEP/Parser.pm`, lines 491-498: the size test writes the warning and sets `vep_skip`; in release 115.2 the record is dropped only when VEP runs as a REST server (release 116 drops it in every mode: the section below). `Config.pm` line 310 holds the 10,000,000 default.
-- `Parser/VCF.pm`, lines 477-481 and 575: an ALT type with no Sequence Ontology term gets the same mark.
-- `AnnotationSource.pm`, line 238: `next if $vf->{vep_skip}` when regions are collected, before the breakend-mate loop at lines 250-257; line 143, `filter_features_by_min_max`, then drops loaded transcripts outside the chunk's coordinate range.
-- `InputBuffer.pm`, lines 284-330: `get_overlapping_vfs` hands each loaded transcript every record of the buffer that overlaps it, skipped or not.
-- `Runner.pm`, line 465: a chunk is at most `int(buffer_size / (2 * fork))` records.
+- a structural variant whose span exceeds `--max_sv_size` (default 10,000,000; `Config.pm` line 315). The span is the one `ensembl-io` derives for the record (`BaseVCF4.pm` lines 297-317): from `SVLEN` first, else from `INFO/END`, else the record's start itself; and the size test compares the span's end minus its start with the cap (`Parser.pm` lines 491-501). A breakend's `INFO/END` is discarded before the span is derived (`Parser/VCF.pm` lines 487-489), so a breakend's span is its `SVLEN` where the record carries one. A gnomAD-SV breakend record carries an `SVLEN` to its mate, so a same-chromosome breakend whose mate lies more than 10,000,000 bases away is dropped whole, its mate end included;
+- an ALT type with no Sequence Ontology term, `<CPX>`, `<CTX>` and `<NON_REF>` among them: `get_SO_term` (`Parser.pm` lines 663-728) finds no term for the type, and `Parser/VCF.pm` lines 477-481 mark the line, the type string standing in for the term;
+- a multi-allelic symbolic list with no type of its own (`<INS>,<DEL>`, `<INV>,<DUP>`): `get_SO_term` reads one type from the ALTs joined by `/` and finds none;
+- a `<DEL>` with neither `END` nor `SVLEN`, or whose start exceeds its end (`Parser/VCF.pm` lines 555-558, "deletion looks incomplete");
+- a record whose start or end is not a number, or whose end lies more than one base before its start (`END=0`, `END=abc`, a breakpoint's `END=`): `validate_vf`'s own checks return 0 before any mark is read (`Parser.pm` lines 475-488), and the record is dropped the same way.
 
-**What correcting it would change.** If a skipped record were left out of the annotation pass, Ensembl VEP would write for it what it writes for it alone, the same from any file. Class 8 would then agree with vep-rs. Classes 5 to 7 would differ only in that vep-rs annotates an oversize or unsupported record in full on the default and tab outputs where Ensembl VEP writes nothing or one `intergenic_variant` row (5.5).
+The mark is set on the feature at `Parser/VCF.pm` line 575. `validate_vf` then hands a structural feature to `validate_svf` (`Parser.pm` line 551), which returns 0 for a marked record (lines 821-827), and `next` at lines 189-191 discards it unless `--dont_skip` is set. The warning is still written to the warnings file, naming the line and the reason.
 
-**The classes it produces.**
-- Class 5: a structural variant above `--max_sv_size`, annotated against the batch's transcripts (gnomAD-SV v2.1 and v4.1 chr21). Set aside: vep-rs's rows, and Ensembl VEP's rows that name a transcript vep-rs does not, each of which is also a class 9 tuple.
-- Class 6: the mate end of such a breakend, which Ensembl VEP writes only when a neighbour loaded the region (gnomAD-SV v2.1 and v4.1 chr21). Set aside: vep-rs's rows.
-- Class 7: `<CPX>`, an ALT type Ensembl VEP has no term for (gnomAD-SV v4.1 chr21). Set aside: vep-rs's rows.
-- Class 8: `<NON_REF>`, a reference block annotated as a variant (the synthetic special-allele set). Set aside: Ensembl VEP's transcript rows and vep-rs's `intergenic_variant` row.
+**What vep-rs does instead.** vep-rs annotates every record of the four marked routes, and refuses the fifth route's records at warning level as Ensembl VEP does, so neither engine writes a row for those. In the default, tab and Parquet outputs an oversize or unsupported record is annotated against every transcript it overlaps, and a list with no type gets one row per ALT under each ALT's own class; an unsupported ALT whose letters name a class is written under that class's term (`deletion` for `<del>`, `<Del>`, `<DEL:>` or `<DEL >`, `duplication` for `<Dup>`, `inversion` for `<Inv>`, `copy_number_variation` for `<CN=X>`, `insertion` for `<Ins>`, `chromosome_breakpoint` for `<Bnd>`) and one whose letters name none under its raw type (`CPX`); a `<NON_REF>` block, which asserts the absence of a variant, gets one `intergenic_variant` row and a warning on standard error; in the VCF output the line of an oversize or unsupported record is carried without consequences; in the JSON output an unsupported record is an `input`-only object and an oversize one is omitted; a `<DEL>` with neither `END` nor `SVLEN` is read as a deletion of the base after POS, and one whose start exceeds its end (`END` at POS, `SVLEN=0`, a `SVLEN` that is not a number) as the pair `POS-(POS+1)` with an insertion's positions (`21:30425650-30425651 deletion` for `21 30425650 x N <DEL> . . SVTYPE=DEL;END=30425650`), each written in every format. vep-rs takes `--max_sv_size` too, with the same default, and `--max_sv_size -1` lifts the cap on both engines.
 
-### Release 116: the record is dropped before annotation
+**Why the rows are set aside.** The divergence is every row vep-rs writes for such a record, and there is no Ensembl VEP row at the record to judge it against: Ensembl VEP's output does not say what the record's transcripts are, only that the record was not annotated. The comparators therefore set vep-rs's rows aside rather than charge them, and the golden corpora record those rows in their manifests under the class `reference_skipped_record` (`tests/golden/116/GRCh37`: four `<BND>` records above `--max_sv_size` and two `<CPX>`; `tests/golden/116/GRCh38-release116`: `<INS>,<DEL>`, `<INV>,<DUP>` and a `<DEL>` without `END`).
 
-From Ensembl VEP release 116 the parser drops a record it marks skipped: `validate_svf` returns 0 for a `vep_skip` record and `validate_vf` returns 0 for an oversize one, so `next` discards the record unless `--dont_skip` is set (`ensembl-vep` tag `release/116.2`, `Bio/EnsEMBL/VEP/Parser.pm` lines 189-191, 491-499, 551 and 821-827; in release 115.2 `validate_svf` returned 1). The record then appears in no output format, and the batch dependence of classes 5 to 7 is gone: this is the correction described above. The records dropped this way are a structural variant spanning more than `--max_sv_size` bases, an ALT type with no Sequence Ontology term (`<CPX>`, `<NON_REF>`), a multi-allelic symbolic list with no type (`<INS>,<DEL>`, `<INV>,<DUP>`; `Parser.pm` lines 663-727 read one type from the ALTs joined by `/`) and a `<DEL>` with neither `END` nor `SVLEN`, or whose start exceeds its end (`Parser/VCF.pm` lines 555-558, "deletion looks incomplete").
+**The class it produces.**
+- Class 5: the dropped records of the measured sets. GRCh37: 389 records and 20,524 vep-rs tuples, in gnomAD-SV v2.1 chr21 (89 records), the synthetic special-allele set (its 200 `<NON_REF>` blocks) and the synthetic complex set (its 100 `<CPX>` records). GRCh38: 594 records and 278,470 tuples per file (278,309 pooled: 161 tuples of records the gnomAD-SV and 1000 Genomes files carry at identical coordinates are counted once), in gnomAD-SV v4.1 chr21 (245 records), 1000 Genomes SV (49), the special-allele set (200) and the complex set (100). Set aside: vep-rs's rows.
 
-vep-rs annotates every one of them. In the default, tab and Parquet outputs an oversize or unsupported record is annotated against every transcript it overlaps, and a list with no type gets one row per ALT under each ALT's own class; an unsupported ALT whose letters name a class is written under that class's term (`deletion` for `<del>`, `<Del>`, `<DEL:>` or `<DEL >`, `duplication` for `<Dup>`, `inversion` for `<Inv>`, `copy_number_variation` for `<CN=X>`, `insertion` for `<Ins>`, `chromosome_breakpoint` for `<Bnd>`) and one whose letters name none under its raw type (`CPX`); in the VCF output the line of an oversize or unsupported record is carried without consequences; in the JSON output an unsupported record is an `input`-only object and an oversize one is omitted; a `<DEL>` with neither `END` nor `SVLEN` is read as a deletion of the base after POS, and one whose start exceeds its end (`END` at POS, `SVLEN=0`, a `SVLEN` that is not a number) as the pair `POS-(POS+1)` with an insertion's positions (`21:30425650-30425651 deletion` for `21 30425650 x N <DEL> . . SVTYPE=DEL;END=30425650`), each written in every format. Against release 116.2 the divergence is every row vep-rs writes for such a record, and the golden corpora record those rows in their manifests under the class `reference_skipped_record` (`tests/golden/116/GRCh37`: four `<BND>` records above `--max_sv_size` and two `<CPX>`; `tests/golden/116/GRCh38-release116`: `<INS>,<DEL>`, `<INV>,<DUP>` and a `<DEL>` without `END`). The structural-variant comparator sets those rows aside from the input record: it locates the pair rows at the pair, which is printed low to high and does not start at the record's own start, and it accepts the class term vep-rs prints for an unsupported ALT as one of the record's alleles.
+### 5. A record Ensembl VEP drops before annotation
 
-### 5. Structural variants above `--max_sv_size` annotated against whichever transcripts the batch loaded
-
-**In short.** The record is a gnomAD-SV breakend whose span of 27 Mb on chromosome 21 exceeds the `--max_sv_size` cap (default 10,000,000). Ensembl VEP's warnings file declares the record skipped, yet its output carries 51 transcript rows for it, a count that changes with `--fork`, `--buffer_size` and the neighbouring lines of the file. vep-rs writes a row for each of the 3,763 transcripts the span overlaps or comes within 5,000 bases of, the same set from any file that contains the record. The record's coordinates alone determine which transcripts it reaches, so vep-rs's complete set is the correct one.
+**In short.** Three records of the measured sets take three of the routes to the drop. `gnomAD-SV_v3_BND_chr21_3f3f16e7` is a gnomAD-SV breakend whose `SVLEN` to its mate, 27 Mb on the same chromosome, exceeds `--max_sv_size`; `gnomAD-SV_v3_CPX_chr21_df09f6c2` is a 1.66 Mb complex rearrangement whose allele `<CPX>` has no Sequence Ontology term; `synth_nonref_0033` is a 279-base `<NON_REF>` block over a coding exon. Ensembl VEP 116.2 writes no row for any of the three, in any output format, and names each line in its warnings file. vep-rs annotates the breakend and the complex event against every transcript their spans overlap or come within 5,000 bases of, and writes one `intergenic_variant` row for the block. With no Ensembl VEP row to compare, vep-rs's rows are set aside.
 
 #### 5.1 What a reader needs to know first
 
-A breakend record (`SVTYPE=BND`) describes one end of a rearrangement: the position where the reference is broken and the position it is joined to, its mate. gnomAD-SV writes the record with a symbolic `<BND>` allele and puts the mate in `INFO/CHR2` and `INFO/END2`; VCF's own notation writes the mate into the allele, `N[chr21:41770788[`. Ensembl VEP reads either form.
+A breakend record (`SVTYPE=BND`) describes one end of a rearrangement: the position where the reference is broken and the position it is joined to, its mate. gnomAD-SV writes the record with a symbolic `<BND>` allele and puts the mate in `INFO/CHR2` and `INFO/END2`; VCF's own notation writes the mate into the allele, `N[chr21:41770788[`. Both engines read either form, and when the mate is on the same chromosome both represent the record as a feature spanning from the base after POS to the mate (Location `21:14604132-41770788`), with rows under two alleles: the local end, `N.`, and the mate, `N[chr21:41770788[`.
 
-When the mate is on the same chromosome, Ensembl VEP represents the record as a feature spanning from the base after POS to the mate (Location `21:14604132-41770788`). It can then write rows under two alleles: the local end, `N.`, and the mate, `N[chr21:41770788[`. For the record below the reference output has rows under the local allele only; class 6 explains the missing mate allele.
+`--max_sv_size` (default 10,000,000) is the documented size cap of both engines. A structural variant whose span exceeds it is reported as skipped in the warnings file Ensembl VEP writes beside its output (`<output>_warnings.txt`); Ensembl VEP's source calls the cap a guard "to avoid memory problems". The span Ensembl VEP measures is derived from `SVLEN` first: for the breakend below, `SVLEN=27166657` gives a span of 27,166,656 bases, whatever `END` says.
 
-A breakend record with a parsed mate never gets an `intergenic_variant` row. Ensembl VEP's intergenic object creates its alleles through the same distance gate as a transcript row (9.4), and with no transcript to measure against it creates none.
+`<CPX>` is gnomAD-SV's symbolic allele for a complex rearrangement; here the rearrangement is a deletion followed by an inversion, `CPX_TYPE=delINV`. Ensembl VEP has no Sequence Ontology class for it. vep-rs annotates the record for the span alone, under the type string `CPX` and without a direction term (`feature_elongation` or `feature_truncation`): its rows claim overlap, not disruption, with `coding_transcript_variant` (SO:0001968) and `non_coding_transcript_variant` (SO:0001619, "a transcript variant of a non coding RNA gene") for transcripts inside the span, `intron_variant` and the exon terms for transcripts the span partly overlaps, and `mature_miRNA_variant` for a microRNA it covers.
 
-Such a record annotated against nothing therefore writes nothing at all (`ensembl-variation`, `StructuralVariationOverlap.pm` lines 72-87 with an undefined feature). A record without a parsed mate (a `<DEL>`, `<CPX>` or `<NON_REF>`) takes the unconditional allele of lines 64-71 and writes one `intergenic_variant` row instead. This is why 5.6 below shows 0 rows for the record alone and 7.6 shows 1.
+A gVCF (genomic VCF) reports every position of a sample, not only the variant ones, and compresses the positions where the sample matches the reference into reference-confidence blocks: one record whose ALT is the symbolic `<NON_REF>` (or its VCF 4.3 spelling `<*>`, the same construct), spanning POS to `INFO/END`, meaning "no variant was called in this interval, with this confidence". Such a record asserts the absence of a variant; there is no allele to predict a consequence for. Ensembl VEP has no Sequence Ontology class for `<NON_REF>` and drops the block. vep-rs writes the record's one output line in Ensembl VEP's own convention for a record that overlaps nothing it annotated: Feature `-`, consequence `intergenic_variant` (SO:0001628), IMPACT MODIFIER, and warns once per record on standard error. That row is a convention, not a claim that the block lies between genes, and it keeps one output line per input record, which is what the default output promises. `<*>` is not marked skipped by Ensembl VEP: both engines annotate it as a span and their rows agree, so it is outside the class by measurement, not by principle.
 
-`--max_sv_size` (default 10,000,000) is the documented size cap. A structural variant whose span exceeds it is reported as skipped in the warnings file that Ensembl VEP writes beside its output (`<output>_warnings.txt`). The warning for the record below reads `WARNING: line 9777 skipped (21 14604131 gnomAD-SV_v3_BND_chr21_3f3f16e7 N ...): variant size (27166656) is bigger than --max_sv_size (10000000)`.
-
-Ensembl VEP annotates its input in batches of `--buffer_size` records (default 5,000) and splits each batch into chunks for the `--fork` workers. For each chunk it loads the transcript-cache regions (1 Mb bins) that the chunk's records overlap.
-
-Four Sequence Ontology terms are involved in this class:
-
-- `feature_truncation` (SO:0001906): "a sequence variant that causes the reduction of a genomic feature, with regard to the reference sequence".
-- `intron_variant` (SO:0001627): "a transcript variant occurring within an intron".
-- `non_coding_transcript_exon_variant` (SO:0001792): "a sequence variant that changes non-coding exon sequence in a non-coding transcript".
-- `coding_transcript_variant` (SO:0001968): "a transcript variant of a protein coding gene".
-
-#### 5.2 The record
+#### 5.2 The records
 
 `gnomAD-SV_v3_BND_chr21_3f3f16e7`, gnomAD-SV v4.1 chr21 (GRCh38, `gnomad_sv_v4.1_chr21.vcf.gz`), a breakend at 21:14604131 whose mate lies 27 Mb away on the same chromosome:
 
@@ -499,590 +494,271 @@ Four Sequence Ontology terms are involved in this class:
 21	14604131	gnomAD-SV_v3_BND_chr21_3f3f16e7	N	<BND>	251	UNRESOLVED	CHR2=chr21;END=14604131;END2=41770788;POS2=41770787;SVLEN=27166657;SVTYPE=BND
 ```
 
-Two transcripts stand for the two kinds of row. ENST00000400562 (SAMSN1, reverse strand, a retained-intron transcript, 14593720-14658821) has the local breakpoint 14604132 in its intron 5 (14602100-14609481), and the feature's span covers its exons 1 to 5. Ensembl VEP names it. ENST00000270142 (SOD1, forward strand, 31659693-31668931) lies 17 Mb inside the span. Ensembl VEP does not name it.
-
-Between 14604132 and 41770788 the span overlaps, or comes within 5,000 bases of, 3,763 transcripts of the GRCh38 chromosome 21 set.
-
-#### 5.3 What each engine writes
-
-Ensembl VEP's reference output (the whole file, `--fork 4 --buffer_size 5000`) carries 51 rows for the record, all under the local allele `N.`. vep-rs writes 3,783 rows: 3,763 under `N.` and 20 under the mate allele (class 6). All 51 of Ensembl VEP's rows are among them.
-
-The SAMSN1 row is identical in both. The SOD1 row, one of the 3,712 local-allele rows vep-rs writes and Ensembl VEP does not, is the divergence:
-
-```
-# Ensembl VEP (1 of 51 rows)
-gnomAD-SV_v3_BND_chr21_3f3f16e7	21:14604132-41770788	N.	ENSG00000155307	ENST00000400562	Transcript	feature_truncation,non_coding_transcript_exon_variant,intron_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1
-# vep-rs (the same row, 1 of 3,783)
-gnomAD-SV_v3_BND_chr21_3f3f16e7	21:14604132-41770788	N.	ENSG00000155307	ENST00000400562	Transcript	feature_truncation,non_coding_transcript_exon_variant,intron_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1
-# Ensembl VEP
-(no row for ENST00000270142)
-# vep-rs (1 of the 3,712 rows Ensembl VEP lacks)
-gnomAD-SV_v3_BND_chr21_3f3f16e7	21:14604132-41770788	N.	ENSG00000142168	ENST00000270142	Transcript	feature_truncation,coding_transcript_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1
-```
-
-Every row Ensembl VEP writes for the record, vep-rs writes too. The 3,712 rows like the SOD1 row are the ones only vep-rs writes.
-
-#### 5.4 Why Ensembl VEP writes that
-
-The size check does not remove the record. It marks it skipped and writes the warning, but the record stays in its batch. The mark only stops the record from loading any transcript-cache region of its own. The annotation pass then runs it against whatever regions the other records of its chunk happened to load, further limited to the coordinate range those other records span.
-
-Which transcripts are reported therefore depends on which records share the chunk, and so on `--fork`, `--buffer_size` and the order and content of the file.
-
-Source (`ensembl-vep`):
-
-- `Bio/EnsEMBL/VEP/Parser.pm` lines 491-498: the size test calls `skipped_variant_msg` and sets `vep_skip`; the record is dropped only when VEP runs as a REST server.
-- `Config.pm` line 310: the 10,000,000 default.
-- `AnnotationSource.pm` line 238: `next if $vf->{vep_skip}` in `get_all_regions_by_InputBuffer`, before any region is requested for the record; line 143: `filter_features_by_min_max`, which drops loaded transcripts outside the chunk's coordinate range.
-- `InputBuffer.pm` lines 284-330: `get_overlapping_vfs`, which hands each loaded transcript every record of the buffer that overlaps it, skipped or not.
-- `Runner.pm` line 465: a chunk is at most `int(buffer_size / (2 * fork))` records.
-
-#### 5.5 Why vep-rs's row is the correct one
-
-The record's coordinates alone determine which transcripts it reaches: every transcript the span 14604132-41770788 overlaps or comes within 5,000 bases of on chromosome 21, 3,763 of them. vep-rs reports that set, the same set from any file that contains the record. Ensembl VEP reports 51 of them, or 497, or 68, or none, depending on the neighbouring lines and the fork count (5.6), while its own warnings file says the record was skipped.
-
-An annotation that changes with the rest of the file is not an annotation of the record. A record that is declared skipped and then annotated in part is a self-contradiction. Both point at the same defect.
-
-vep-rs takes `--max_sv_size` too, with the same default of 10,000,000. In the default and tab outputs it annotates an oversize record against every transcript it overlaps. In the VCF output it carries the record's line without consequences, and in the JSON output it omits the record, which is what Ensembl VEP 115.2 does in those two formats; release 116 writes nothing for the record in any format (the release 116 section of Defect C).
-
-Ensembl VEP's cap is a memory guard (its source comments "to avoid memory problems"), not a statement about the record. Skipping is therefore a legitimate output, and vep-rs's VCF and JSON outputs give it. What neither engine should write is a partial set that depends on the neighbouring lines; on the default and tab outputs vep-rs writes the complete set instead.
-
-#### 5.6 Try it yourself
-
-Run Ensembl VEP 115.2 (GRCh38 cache and FASTA, the command of the closing section) on inputs built from the record:
-
-| Input                                                                  | Rows for the record (local allele `N.` / mate allele)                                 |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| the record alone                                                       | 0 / 0 (the warnings file says skipped; a breakend record gets no intergenic row, 5.1) |
-| the record plus the SNV `21 14604131 . A C`                            | 4 / 0                                                                                 |
-| the record plus the SNV `21 41770788 . C A`                            | 20 / 20                                                                               |
-| the whole `gnomad_sv_v4.1_chr21.vcf.gz`, `--fork 4 --buffer_size 5000` | 51 / 0                                                                                |
-| the same file, `--fork 1`                                              | 497 / 0                                                                               |
-| the same file, `--fork 16`                                             | 68 / 0                                                                                |
-| the same file, `--buffer_size 1`                                       | 0 / 0                                                                                 |
-
-vep-rs writes 3,763 / 20 for every one of those inputs. Ensembl VEP's count moves with the neighbouring lines and the fork count, from 0 to 497; vep-rs's does not.
-
-#### 5.7 How the comparator treats this class
-
-`filter_intended_divergences` in `scripts/validation/compare_sv_concordance.py` acts on a (Location, Allele) key that both engines annotated and whose span exceeds 10,000,000 bases (or whose allele type is one Ensembl VEP has no Sequence Ontology term for, class 7). A transcript named by vep-rs and not by Ensembl VEP is set aside on the vep-rs side when vep-rs named more transcripts for the key than Ensembl VEP did. A transcript named by Ensembl VEP and not by vep-rs is set aside on the Ensembl VEP side when vep-rs named at least as many. The direction guards (those two conditions on how many transcripts each engine named) keep a vep-rs under-annotation charged.
-
-The rule needs Ensembl VEP to have written at least one row for the key. Every same-chromosome record above the cap in the two files has one (34 records in gnomAD-SV v2.1 chr21, 32 in v4.1), so none is outside the rule. The 18 GRCh38 breakends whose mate is on chromosome X are point records (11.1), have no measured span, and are not in this class.
-
-Counts:
-
-- gnomAD-SV v2.1 chr21 (GRCh37): 10,934 vep-rs tuples and no Ensembl VEP tuple.
-- gnomAD-SV v4.1 chr21 (GRCh38): 183,964 vep-rs tuples (218 of them class 7) and 1,823 Ensembl VEP tuples. Each of those Ensembl VEP tuples names a transcript on another chromosome and is therefore also a class 9 tuple (a tuple in two classes is set aside once).
-
-The class is fully masked on both sides (`excluded_transcript_selection_rust` and `excluded_transcript_selection_perl` in the report).
-
-Its blind spot is stated here because it is inherent to the shape: a wrong vep-rs term on a transcript Ensembl VEP's batch never loaded would be set aside unseen. The direction guards limit that exposure to transcripts Ensembl VEP did not name at all. The mate allele of the same records is class 6.
-
-The SNP/indel comparator, `scripts/concordance/compare_vep_outputs.py`, applies the same rule under the same two guards to a whole-genome input, which carries such records among its sequence variants. Its sorted merge collects the transcripts each engine named on every record in the rule's scope, and `filter_snp_indel_intended_divergences` sets aside the one-sided rows the rule admits, reported as `sv_transcript_selection` beside the pair classes. The scope test (`_batch_dependent_annotation_scope`) is defined once, in the SNP/indel comparator, and imported by the structural-variant one.
-
-### 6. The mate end of a breakend above `--max_sv_size`
-
-**In short.** The record is the same-chromosome breakend of class 5, whose span 14604132-41770788 exceeds `--max_sv_size`; its output has two alleles, the local end and the mate. Ensembl VEP writes no row under the mate allele. vep-rs writes 20, one for each transcript within 5,000 bases of the mate breakpoint 41770788. Ensembl VEP's own admission rule gives the mate allele exactly those 20 rows, and Ensembl VEP writes them itself once a neighbouring record loads the region, so vep-rs's rows are the correct ones.
-
-#### 6.1 What a reader needs to know first
-
-The record of class 5 has two alleles in the output: the local end, written `N.`, and the mate, written `N[chr21:41770788[`. Ensembl VEP creates a mate-allele row for a transcript only when the mate lies within 5,000 bases of that transcript on the same chromosome (the breakend distance gate of 9.4). So the mate allele's rows are the transcripts around 41770788. The terms are those of 5.1.
-
-#### 6.2 The record
-
-The same record as class 5, `gnomAD-SV_v3_BND_chr21_3f3f16e7` (gnomAD-SV v4.1 chr21, GRCh38).
-
-The mate breakpoint 41770788 lies in intron 2 (41768018-41774115) of ENST00000700893, a long non-coding RNA (lncRNA) transcript of ENSG00000289513 on the forward strand at 41767163-41774864. It also lies within 5,000 bases of 19 other transcripts, the two RIPK4 transcripts among them.
-
-Ensembl VEP represents this same-chromosome record as the span 14604132-41770788 (5.1), and both engines evaluate the mate allele of a span record over that span, so the row's terms are the span's. Exons 1 and 2 of ENST00000700893 (41767163-41767234 and 41767859-41768017) lie inside it, hence `non_coding_transcript_exon_variant` beside `intron_variant` below. The point-breakend rule of class 11 does not apply to a span record.
-
-#### 6.3 What each engine writes
-
-Ensembl VEP's reference output has no mate-allele row for the record. vep-rs writes 20, one of them:
-
-```
-# Ensembl VEP
-(no row under the mate allele)
-# vep-rs (1 of 20 mate-allele rows)
-gnomAD-SV_v3_BND_chr21_3f3f16e7	21:14604132-41770788	N[chr21:41770788[	ENSG00000289513	ENST00000700893	Transcript	feature_truncation,non_coding_transcript_exon_variant,intron_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1
-```
-
-The 20 rows are the 20 transcripts of 6.2: ENST00000700893 and the 19 others within 5,000 bases of the mate breakpoint.
-
-#### 6.4 Why Ensembl VEP writes that
-
-The same skip as class 5, one step earlier in the loop. The region-loading pass skips a `vep_skip` record before it reaches the code that requests the regions around a breakend's mate. So no region near 41770788 is loaded for this record, and the mate allele's transcripts exist for the annotation pass only if another record of the chunk loaded them. In the reference run none did.
-
-Source (`ensembl-vep`):
-
-- `Bio/EnsEMBL/VEP/AnnotationSource.pm`, line 238: `next if $vf->{vep_skip}`, the skip, against lines 250-257, the breakend-mate region loop it skips.
-
-Source (`ensembl-variation`):
-
-- `Bio/EnsEMBL/Variation/StructuralVariationOverlap.pm`, lines 72-87 and 130-146: the mate allele is created for a transcript within `MAX_DISTANCE_FROM_TRANSCRIPT`.
-- `Utils/VariationEffect.pm`, line 60: `MAX_DISTANCE_FROM_TRANSCRIPT` is 5,000 bases.
-
-#### 6.5 Why vep-rs's row is the correct one
-
-The mate breakpoint lies inside ENST00000700893, in its intron 2, and within 5,000 bases of the other 19 transcripts. By Ensembl VEP's own admission rule, then, the mate allele has rows on exactly those 20 transcripts. Whether they are written cannot depend on a neighbouring line loading the region. When that region is loaded, Ensembl VEP writes the same 20 rows with the same consequence sets (6.6).
-
-The reservation of 5.5 applies here too. The documented outcome for an oversize record is a skip; vep-rs gives that skip in its VCF and JSON outputs, and on the default and tab outputs it writes the complete set rather than the neighbour-dependent one.
-
-#### 6.6 Try it yourself
-
-As 5.6: annotate the record alone and beside one single-nucleotide variant (SNV), and count Ensembl VEP's mate-allele rows.
-
-- The record plus the SNV `21 41770788 . C A`, at the mate breakpoint: Ensembl VEP writes 20 mate-allele rows, and they equal vep-rs's 20 in Feature and Consequence, row for row.
-- The record alone: none.
-- The record plus the SNV `21 14604131 . A C` at the local end: none.
-- The whole file at every `--fork` and `--buffer_size` setting of 5.6: none.
-
-The same procedure on each of the 37 records of the class in the two gnomAD-SV files (the record plus one SNV at its `END2` position) reproduces vep-rs's mate-allele rows on 366 of 366.
-
-#### 6.7 How the comparator treats this class
-
-`filter_giant_breakend_mate_divergences` in `scripts/validation/compare_sv_concordance.py` sets aside a vep-rs tuple when all four of these hold:
-
-- its Allele is bracket notation naming a mate on the same chromosome as the Feature;
-- the Location span exceeds 10,000,000 bases;
-- Ensembl VEP wrote at least one tuple for the Location (it saw the record) and none under the mate allele;
-- the mate lies within 5,000 bases of the transcript's span in the cache, so that Ensembl VEP's own gate would have created the allele.
-
-A mate farther from the transcript than that is a row Ensembl VEP never writes and stays charged to vep-rs.
-
-Counts:
-
-- gnomAD-SV v2.1 chr21 (GRCh37): 56 tuples on 15 records.
-- gnomAD-SV v4.1 chr21 (GRCh38): 310 tuples on 22 records.
-
-The spans run from 10.7 to 39.2 Mb. Fully masked, vep-rs side, under the counter `excluded_transcript_selection_mate_rust`.
-
-### 7. `<CPX>`, class 5 reaching an unsupported allele type
-
-**In short.** `gnomAD-SV_v3_CPX_chr21_df09f6c2` is a gnomAD-SV v4.1 chr21 record whose symbolic allele `<CPX>` marks a complex rearrangement, a structural variant type Ensembl VEP does not support. Ensembl VEP writes 412 rows for the record; vep-rs writes 508, the same 412 plus rows for 96 more transcripts, all in the last 200 kb of the span. The record states the span, every one of the 508 transcripts lies inside it, and Ensembl VEP itself names all 508 once the regions are loaded, so vep-rs's rows are the correct ones.
-
-#### 7.1 What a reader needs to know first
-
-`<CPX>` is gnomAD-SV's symbolic allele for a complex rearrangement. Here the rearrangement is a deletion followed by an inversion, `CPX_TYPE=delINV`.
-
-Ensembl VEP has no Sequence Ontology class for it and says so in the warnings file. For a file holding the record alone the warning reads: `WARNING: line 1 skipped (21 14923958 gnomAD-SV_v3_CPX_chr21_df09f6c2 N ...): CPX is not a supported structural variant type`.
-
-The Allele column then carries the type string `CPX`, and the record is annotated for the span alone, without a direction term (`feature_elongation` or `feature_truncation`, the term that says what a longer or shorter feature results): the rows claim overlap, not disruption. The terms written are:
-
-- `coding_transcript_variant` (SO:0001968) and `non_coding_transcript_variant` (SO:0001619, "a transcript variant of a non coding RNA gene") for transcripts inside the span;
-- `intron_variant` and the exon terms for transcripts the span partly overlaps;
-- `mature_miRNA_variant` for a microRNA it covers;
-- `intergenic_variant` when nothing is loaded.
-
-#### 7.2 The record
-
-`gnomAD-SV_v3_CPX_chr21_df09f6c2`, from gnomAD-SV v4.1 chr21 (GRCh38, `gnomad_sv_v4.1_chr21.vcf.gz`), is a 1.66 Mb complex event, well below `--max_sv_size`:
+`gnomAD-SV_v3_CPX_chr21_df09f6c2`, from the same file, a 1.66 Mb complex event, well below `--max_sv_size`:
 
 ```
 21	14923958	gnomAD-SV_v3_CPX_chr21_df09f6c2	N	<CPX>	1	UNRESOLVED	CHR2=chr21;CPX_INTERVALS=DEL_chr21:14923958-15004545,INV_chr21:15004545-16588073;CPX_TYPE=delINV;END=16588080;SVLEN=1664122;SVTYPE=CPX
 ```
 
-Two transcripts stand for the two kinds of row:
-
-- ENST00000285679 (USP25, forward strand, 15730025-15878911) lies entirely inside the span 14923959-16588080, and Ensembl VEP names it.
-- ENST00000362160 (MIRLET7C, a microRNA at 16539828-16539911) also lies inside the span, and Ensembl VEP does not name it.
-
-#### 7.3 What each engine writes
-
-Ensembl VEP's reference output carries 412 rows for the record; vep-rs writes 508. The 412 are a subset of the 508. The 96 transcripts only vep-rs names all start at or beyond 16,391,614, in the last 200 kb of the span; 87 of them are transcripts of one lncRNA gene, ENSG00000215386.
-
-```
-# Ensembl VEP (1 of 412 rows)
-gnomAD-SV_v3_CPX_chr21_df09f6c2	21:14923959-16588080	CPX	ENSG00000155313	ENST00000285679	Transcript	coding_transcript_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;OverlapBP=148887;OverlapPC=100.00
-# vep-rs (the same row, 1 of 508)
-gnomAD-SV_v3_CPX_chr21_df09f6c2	21:14923959-16588080	CPX	ENSG00000155313	ENST00000285679	Transcript	coding_transcript_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;OverlapBP=148887;OverlapPC=100.00
-# Ensembl VEP
-(no row for ENST00000362160)
-# vep-rs (1 of the 96 rows Ensembl VEP lacks)
-gnomAD-SV_v3_CPX_chr21_df09f6c2	21:14923959-16588080	CPX	ENSG00000199030	ENST00000362160	Transcript	mature_miRNA_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;OverlapBP=84;OverlapPC=100.00
-```
-
-For ENST00000285679 the two rows are identical in every column. For ENST00000362160 vep-rs writes a row and Ensembl VEP writes none.
-
-#### 7.4 Why Ensembl VEP writes that
-
-An ALT whose type has no Sequence Ontology term is kept with the same skip mark that the `--max_sv_size` size test sets, and everything of class 5 follows from it. No region is loaded for the record, and the annotation pass runs it against whatever its chunk loaded, bounded by the chunk's coordinate range.
-
-Here the coordinate range of the chunk's other records ended between 16,357,273 and 16,391,614: the highest transcript start Ensembl VEP named and the lowest it omitted. The 96 transcripts starting beyond it were therefore dropped, although their 1 Mb bin was loaded.
-
-Alone in a batch the record gets one `intergenic_variant` row rather than none, because it has no parsed mate and so takes the unconditional allele (5.1).
-
-Source (`ensembl-vep`):
-
-- `Bio/EnsEMBL/VEP/Parser/VCF.pm`, lines 477-481 (`get_SO_term` returns nothing for the type, `$skip_line` is set and the type string stands in for the term) and line 575 (`vep_skip` is set on the feature).
-- Then `AnnotationSource.pm`, lines 238 and 143, as in 5.4.
-
-#### 7.5 Why vep-rs's row is the correct one
-
-The event's span is stated by the record, and every transcript inside 14923959-16588080 lies inside the interval the record describes. The rows claim overlap, not disruption: `coding_transcript_variant` and its non-coding counterparts are MODIFIER terms. The 96 transcripts Ensembl VEP omits lie inside the interval as surely as the 412 it names.
-
-The boundary between the two groups, 16,391,614, is a property of the other records in the chunk, not of this one. When the regions are loaded Ensembl VEP names the same 508 transcripts with the same consequence sets (7.6).
-
-#### 7.6 Try it yourself
-
-Run Ensembl VEP 115.2 with the GRCh38 cache and FASTA, using the command of the closing section:
-
-| Input | Rows for the record |
-| --- | --- |
-| the record alone | 1, `intergenic_variant` (the warnings file says the type is unsupported) |
-| the record plus the four SNVs `21 14923958 . T A`, `21 15500000 . G A`, `21 16400000 . G A` and `21 16590000 . A C` (the last one past the record's end, so that the chunk's coordinate range reaches the whole span) | 508, equal to vep-rs's 508 in Feature and Consequence |
-| the whole `gnomad_sv_v4.1_chr21.vcf.gz` at `--fork 1`, `--fork 4` or `--fork 16` | 412 |
-| the same file, `--buffer_size 1` | 1, `intergenic_variant` |
-
-Alone, or at `--buffer_size 1`, the record gets one `intergenic_variant` row. With four SNVs extending the chunk's coordinate range across the whole span, Ensembl VEP writes the 508 rows vep-rs writes.
-
-At `--buffer_size 1` all 169 `CPX` records of the GRCh38 file and all 60 of the GRCh37 file write exactly `intergenic_variant`. At the reference settings 143 and 42 of them carry transcript rows.
-
-The other two giant `CPX` records of the GRCh38 file, `21:26860425-29034168` and `21:36134639-36403117`, carry:
-
-- 112 and 79 rows at `--fork 4`;
-- 265 and 103 at `--fork 1`;
-- 112 and 70 at `--fork 16`.
-
-#### 7.7 How the comparator treats this class
-
-This class uses the same `filter_intended_divergences` as class 5, whose scope test admits a (Location, Allele) key for either of two reasons:
-
-- the span exceeds 10,000,000 bases;
-- the Allele is one of the unsupported symbolic types present in the datasets, `CPX` and `CTX` (`_VEP_SKIP_UNSUPPORTED_ALLELES`).
-
-Both direction guards are unchanged.
-
-The rule reaches 218 vep-rs tuples on the three giant `CPX` records of gnomAD-SV v4.1 chr21 (GRCh38) and nothing else:
-
-- The two `CTX` records are concordant.
-- A pair on a `CPX` record where both engines name the transcript and differ on a term is outside the scope test and stays charged.
-- The 26 GRCh38 and 18 GRCh37 `CPX` records whose reference rows are `intergenic_variant` alone have no transcript within 5,000 bases, so vep-rs writes the same row for each and they are concordant.
-
-The class is fully masked on the vep-rs side and counted inside `excluded_transcript_selection_rust`.
-
-### 8. `<NON_REF>` is not a variant
-
-**In short.** A gVCF reference-confidence block, a record whose ALT is `<NON_REF>`, states that the sample matches the reference over an interval: it asserts the absence of a variant. Ensembl VEP writes transcript rows for the block when another record in the batch has loaded the region, and `intergenic_variant` when nothing is loaded. vep-rs 0.3.0 annotates the block against no transcript and writes one `intergenic_variant` row for it under every setting. A record that changes no base can affect no transcript, so vep-rs's row is the correct one.
-
-#### 8.1 What a reader needs to know first
-
-A gVCF (genomic VCF) reports every position of a sample, not only the variant ones. Positions where the sample matches the reference are compressed into reference-confidence blocks. A block is one record whose ALT is the symbolic `<NON_REF>` (or its VCF 4.3 spelling `<*>`, the same construct), spanning POS to `INFO/END`, meaning "no variant was called in this interval, with this confidence".
-
-Such a record asserts the absence of a variant; there is no allele to predict a consequence for.
-
-Ensembl VEP has no Sequence Ontology class for the allele and says so in the warnings file (`NON_REF is not a supported structural variant type`). Yet it writes rows for the record:
-
-- `intergenic_variant` when nothing is loaded;
-- transcript rows for the span (`intron_variant`, `coding_sequence_variant`, `upstream_gene_variant`, and so on) when a neighbour has loaded the region.
-
-vep-rs 0.3.0 annotates the block against no transcript. It writes the record's one output line in Ensembl VEP's own convention for a record that overlaps nothing it annotated: Feature `-`, consequence `intergenic_variant` (SO:0001628), IMPACT MODIFIER.
-
-#### 8.2 The record
-
-This class is shown on two records. Both are from the synthetic special-allele set `tests/sv_validation/grch37/10_special_alleles.vcf.gz` (GRCh37; the GRCh38 set is `tests/sv_validation/grch38/10_special_alleles.vcf.gz`).
-
-The first is a 279-base block over a coding exon, and one of the 180 GRCh37 blocks that carry transcript rows in the reference output:
+`synth_nonref_0033`, from the synthetic special-allele set `tests/sv_validation/grch37/10_special_alleles.vcf.gz` (GRCh37; the GRCh38 set is `tests/sv_validation/grch38/10_special_alleles.vcf.gz`), a 279-base block whose interval 27347259-27347537 lies in APP (ENST00000346798, reverse strand, canonical, GRCh37 27252861-27542972) and covers 155 of the 159 bases of exon 11 (27347383-27347541, a coding exon) and 124 bases of intron 11 (27328070-27347382):
 
 ```
 21	27347258	synth_nonref_0033	C	<NON_REF>	.	PASS	END=27347537
 ```
 
-The block 27347259-27347537 lies in APP (ENST00000346798, reverse strand, canonical, GRCh37 27252861-27542972). It covers 155 of the 159 bases of exon 11 (27347383-27347541, a coding exon) and 124 bases of intron 11 (27328070-27347382). Eleven other APP transcripts overlap it too.
+#### 5.3 What each engine writes
 
-The second is a 228-base block in an intron, one of the 20 GRCh37 blocks whose reference row is `intergenic_variant`. It is the record on which the flag experiment of 8.6 is run:
-
-```
-21	38589780	synth_nonref_0188	A	<NON_REF>	.	PASS	END=38590008
-```
-
-The block 38589781-38590008 lies in or near eight transcripts in all:
-
-- it lies in intron 2 (38581058-38592538) of ENST00000454482 (DSCR9, forward strand, lincRNA, 38580804-38594037);
-- it lies inside an intron of four other DSCR9 transcripts;
-- it is 3,712 bases upstream of ENST00000440629;
-- it is within 5,000 bases of two more transcripts.
-
-#### 8.3 What each engine writes
-
-For the first record the reference output (the whole file, `--fork 4 --buffer_size 5000`) carries 12 transcript rows, and vep-rs one row:
+Ensembl VEP 116.2 writes no row for any of the three records, in any output format; its warnings file names each line as skipped, with the reason. vep-rs writes 4,652 rows for the breakend, 4,628 under the local allele `N.` for the transcripts its span 14604132-41770788 overlaps or comes within 5,000 bases of, and 24 under the mate allele `N[chr21:41770788[` for the transcripts within 5,000 bases of the mate breakpoint 41770788; 534 rows for the complex event, every transcript inside 14923959-16588080 under the allele `CPX`; and one `intergenic_variant` row for the block.
 
 ```
-# Ensembl VEP (1 of 12 rows)
-synth_nonref_0033	21:27347259-27347537	<NON_REF>	ENSG00000142192	ENST00000346798	Transcript	coding_sequence_variant,intron_variant	1338-?	1304-?	435-?	-	-	-	IMPACT=MODIFIER;STRAND=-1;OverlapBP=279;OverlapPC=0.10
-# vep-rs
+# Ensembl VEP, warnings file, each record run alone
+WARNING: line 1 skipped (21 14604131 gnomAD-SV_v3_BND_chr21_3f3f16e7 N ...): variant size (27166656) is bigger than --max_sv_size (10000000)
+WARNING: line 1 skipped (21 14923958 gnomAD-SV_v3_CPX_chr21_df09f6c2 N ...): CPX is not a supported structural variant type
+WARNING: line 1 skipped (21 27347258 synth_nonref_0033 C <NON_REF> . PA...): NON_REF is not a supported structural variant type
+# Ensembl VEP, output
+(no row for any of the three records)
+# vep-rs, the breakend (2 of 4,652 rows: the SAMSN1 row under the local allele and a mate-allele row)
+gnomAD-SV_v3_BND_chr21_3f3f16e7	21:14604132-41770788	N.	ENSG00000155307	ENST00000400562	Transcript	feature_truncation,non_coding_transcript_exon_variant,intron_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1
+gnomAD-SV_v3_BND_chr21_3f3f16e7	21:14604132-41770788	N[chr21:41770788[	ENSG00000289513	ENST00000700893	Transcript	feature_truncation,non_coding_transcript_exon_variant,intron_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1
+# vep-rs, the complex event (2 of 534 rows: USP25 and the microRNA MIRLET7C)
+gnomAD-SV_v3_CPX_chr21_df09f6c2	21:14923959-16588080	CPX	ENSG00000155313	ENST00000285679	Transcript	coding_transcript_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;OverlapBP=150140;OverlapPC=100.00
+gnomAD-SV_v3_CPX_chr21_df09f6c2	21:14923959-16588080	CPX	ENSG00000199030	ENST00000362160	Transcript	mature_miRNA_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;OverlapBP=84;OverlapPC=100.00
+# vep-rs, the block
 synth_nonref_0033	21:27347259-27347537	<NON_REF>	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
 ```
 
-For the second record the reference output carries one row, identical to vep-rs's. Add one SNV beside the record and Ensembl VEP writes eight transcript rows for it instead:
+In the reference outputs of the whole files the same three warnings name line 9777 and line 9978 of the gnomAD-SV file and line 188 of the special-allele set, and the outputs carry no row for the records. vep-rs warns once for the block, on standard error: `21:27347258 <NON_REF>: NON_REF is not a supported structural variant type; a reference-confidence block is written as one intergenic row`.
 
-```
-# Ensembl VEP, reference output
-synth_nonref_0188	21:38589781-38590008	<NON_REF>	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
-# Ensembl VEP, the record plus the SNV 21 38589780 . A C (1 of 8 rows)
-synth_nonref_0188	21:38589781-38590008	<NON_REF>	ENSG00000230366	ENST00000454482	Transcript	intron_variant,non_coding_transcript_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;OverlapBP=228;OverlapPC=1.72
-# vep-rs
-synth_nonref_0188	21:38589781-38590008	<NON_REF>	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
-```
+#### 5.4 Why Ensembl VEP writes nothing
 
-vep-rs also warns once per record, on standard error: `21:27347258 <NON_REF>: NON_REF is not a supported structural variant type; a reference-confidence block is written as one intergenic row`.
+Each record is marked skipped on its route and dropped by the parser before it reaches the input buffer:
 
-#### 8.4 Why Ensembl VEP writes that
+- The breakend: `Parser/VCF.pm` lines 487-489 discard its `INFO/END` and re-derive the end, which `BaseVCF4.pm` lines 302-306 take from `SVLEN`: the span is 27,166,656 bases, and the size test at `Parser.pm` lines 491-501 marks the record and writes `variant size (27166656) is bigger than --max_sv_size (10000000)`.
+- The complex event: `get_SO_term` (`Parser.pm` lines 663-728) has no term for `CPX`, so `Parser/VCF.pm` lines 477-481 mark the line and write `CPX is not a supported structural variant type`.
+- The block: the same route, `NON_REF is not a supported structural variant type`.
 
-The unsupported type is kept with the skip mark of class 7, and class 5's batch dependence follows. Alone, the record loads nothing and is written as `intergenic_variant` (the unconditional allele of 5.1, since the record has no mate). Beside a record that loads the region, it is annotated as a span over every transcript there, coding sequence included.
+Then `validate_svf` (`Parser.pm` lines 821-827) returns 0 for each, and `next` at lines 189-191 discards it. Nothing of the record reaches the annotation pass or any output writer. With `--dont_skip` the marked record enters the buffer, loads no transcript regions of its own (`AnnotationSource.pm` line 238) and is annotated against whatever its batch has loaded, as releases up to 115.2 annotated it.
 
-In the reference output:
+#### 5.5 Why vep-rs annotates the record
 
-- GRCh37 set: 180 of the 200 `<NON_REF>` records carry transcript rows (1,838 of them) and 20 carry `intergenic_variant`.
-- GRCh38 set: all 200 carry transcript rows (5,403).
+The record's coordinates alone determine which transcripts it reaches. The breakend's span 14604132-41770788 overlaps, or comes within 5,000 bases of, a definite set of chromosome 21 transcripts, the same from any file; the complex event's span 14923959-16588080 contains its transcripts as surely as any deletion contains its own; and a `<NON_REF>` block changes no base, so no transcript's sequence, splicing or dosage is affected by it, which is what the intergenic row says.
 
-At `--buffer_size 1` all 200 of each set write `intergenic_variant`.
+Ensembl VEP's cap is a memory guard, not a statement about the record, and its missing term for `<CPX>` is a gap in its vocabulary, not a reading of the event. Skipping is a legitimate output for both, and vep-rs gives that skip in its VCF and JSON outputs, where it carries the line without consequences or omits it. On the default, tab and Parquet outputs it writes the complete set, which is what a caller who kept the record in the file asked for. Neither engine's output here can be checked against the other's, which is why the rows are set aside rather than defended as the correct ones.
 
-Source (`ensembl-vep`):
+#### 5.6 Try it yourself
 
-- `Bio/EnsEMBL/VEP/Parser/VCF.pm`, lines 477-481 and 575: a type with no Sequence Ontology term is marked skipped, as in 7.4.
-- `AnnotationSource.pm`, line 238: the skip mark stops the record's own region loading, as in 5.4.
+Run Ensembl VEP 116.2 and vep-rs (GRCh38 cache and FASTA for the gnomAD-SV records, GRCh37 for the block, the commands of the closing section) on inputs built from the records:
 
-#### 8.5 Why vep-rs's row is the correct one
+| Input | Ensembl VEP 116.2 rows for the record | vep-rs rows for the record |
+| --- | --- | --- |
+| the breakend alone | 0, the size warning | 4,652 (4,628 local, 24 mate) |
+| the breakend plus the SNV `21 14604131 . A C` | 0 (the SNV gets its 4 rows) | 4,652 |
+| the breakend plus the SNV `21 41770788 . C A`, at the mate breakpoint | 0 (the SNV gets its 24 rows) | 4,652 |
+| the whole `gnomad_sv_v4.1_chr21.vcf.gz`, `--fork 4 --buffer_size 5000` | 0, line 9777 skipped | 4,652 |
+| the complex event alone | 0, the type warning | 534 |
+| the complex event plus the four SNVs `21 14923958 . T A`, `21 15500000 . G A`, `21 16400000 . G A` and `21 16590000 . A C` | 0 (the SNVs get their 368 rows) | 534 |
+| the block alone | 0, the type warning | 1 |
+| `synth_nonref_0188` (`21 38589780 synth_nonref_0188 A <NON_REF>` with `END=38590008`, a 228-base block in a DSCR9 intron) plus the SNV `21 38589780 . A C` | 0 (the SNV gets its 8 rows) | 1 |
 
-A reference-confidence block states that the sample carries the reference over the interval. It changes no base, so no transcript's sequence, splicing or dosage is affected. Every transcript-level consequence Ensembl VEP writes for it describes the effect of a variant that the record says does not exist: a `coding_sequence_variant` of APP over 155 coding bases, an `upstream_gene_variant` 3,712 bases from a gene.
+No neighbouring record changes the outcome: under release 115.2 the breakend beside the SNV at its mate breakpoint got 20 mate-allele rows and the block beside its SNV eight transcript rows, and under 116.2 both get none. Other records of the measured sets on the same routes: the GRCh37 breakend `gnomAD-SV_v2.1_BND_21_56677` (`SVLEN=14688819`; the warning reads `variant size (14688818)`) gets 0 rows against vep-rs's 381; the GRCh37 complex event `gnomAD-SV_v2.1_CPX_21_5151` 0 against 4; the GRCh38 `gnomAD-SV_v3_CTX_chr21_d895c6b5` 0 (`CTX is not a supported structural variant type`) against vep-rs's one `intergenic_variant` row under the allele `CTX`; the GRCh38 breakend `gnomAD-SV_v3_BND_chr21_f6d2016e` (`SVLEN=39158730`; the warning reads `variant size (39158729)`) 0 against 6,967; and `gnomAD-SV_v3_CPX_chr21_896ebdf0`, a `<CPX>` spanning 39,354,624 bases, is on two routes at once and gets both warnings, the type's and the size's, against vep-rs's 7,123 rows.
 
-vep-rs 0.3.0 therefore annotates the block against no transcript, and writes the record's one output line as Ensembl VEP's fallback row, Feature `-` and `intergenic_variant`. That row is a convention, not a claim that the block lies between genes: the first block lies in a coding exon of APP, the second in a DSCR9 intron. It is the row Ensembl VEP itself writes for each of the 200 blocks at `--buffer_size 1`, and it keeps one output line per input record, which is what the default output promises.
+#### 5.7 How the comparator treats this class
 
-vep-rs 0.2.0 annotated the block as a copy-number span over every transcript it covers. Those rows matched Ensembl VEP's transcript rows whenever Ensembl VEP's batch had loaded the region and differed otherwise, and both readings of a non-variant were wrong.
+The two comparators recognise a dropped record from what each reads, and both set vep-rs's rows for it aside.
 
-The warning names the record so that a caller who wants no line at all can drop it.
+The structural-variant comparator, `filter_reference_skipped_records` in `scripts/validation/compare_sv_concordance.py`, reads the input VCF and names the records from it with a port of Ensembl VEP's own routes: `get_SO_term` over the ALT list and `SVTYPE`, the incomplete-deletion test, the size test over the span `get_end` derives (`SVLEN` first, else `END`, a breakend's `END` discarded), and the coordinate checks of `validate_vf`. Each such record is confirmed dropped when Ensembl VEP wrote no row under the record's own Location start and an allele string the record produces: the Sequence Ontology class of its ALT and of its ALT list, the class term vep-rs prints for an ALT whose letters name a class but whose spelling has no term, the raw type of an ALT whose letters name none (`CPX`), a breakend's bracket, own-end and `CHR2`/`END2` mate strings, a sequence ALT as written. Exactly that record's vep-rs rows, under those alleles, are set aside. A deletion whose start exceeds its end is written by vep-rs at the pair `POS-(POS+1)`, printed low to high and starting one base before the record's own start, and the comparator locates its rows there. A kept record sharing the start, or the whole Location string, with a dropped one neither hides it nor joins it (gnomAD-SV places a `<CPX>` at the Location of a kept `<DEL>`; a `<NON_REF>` block can start where a kept record starts): two records at one start producing the same allele are told apart by the end of the Location. The records and the outputs are the authority, not the warnings file, which is absent on a cached reference and truncates its record excerpt. A disagreement between them stops the comparison with an `ERROR:` naming the record: a record on a route whose own rows Ensembl VEP wrote (a reference run under `--dont_skip` or under another `--max_sv_size`, declared with `--reference-max-sv-size`, `-1` for no cap); vep-rs structural rows at a Location Ensembl VEP wrote nothing for that no record on a route explains; or a dropped and a kept record at one start whose alleles and ends coincide.
 
-#### 8.6 Try it yourself
+The SNP/indel comparator, `scripts/concordance/compare_vep_outputs.py`, reads the two outputs and no input VCF, so it applies an output-only rule: Ensembl VEP 116.2 writes at least one row for every record it keeps, an `intergenic_variant` row when no transcript is in range, so a Location at which vep-rs wrote rows and Ensembl VEP wrote nothing, under any allele, is a record Ensembl VEP dropped. At least one vep-rs row at the Location must carry a structural allele (every route to the mark is structural), and `tandem_repeat` does not admit a Location, because Ensembl VEP keeps a `<CNV:TR>` record and writes it at another Location (class 12); once admitted, every vep-rs row at the Location is set aside, a sequence allele beside the symbolic one of a mixed ALT list included, because Ensembl VEP skips the line whole. The SNP/indel datasets carry no such record.
 
-Ensembl VEP 115.2, GRCh37 cache and FASTA, the command of the closing section:
+Counts (`excluded_reference_skipped_rust`, per file in `excluded_reference_skipped_by_file`, the records in `reference_skipped_records`):
 
-- `synth_nonref_0188` alone gives one row, `intergenic_variant`.
-- The record plus the SNV `21 38589780 . A C` gives eight transcript rows for the block, the eight transcripts within 5,000 bases of it.
-- The whole `10_special_alleles.vcf.gz` (GRCh37) at `--buffer_size 1` gives `intergenic_variant` for all 200 `<NON_REF>` records.
-- The same file at `--fork 4 --buffer_size 5000`: 180 of them carry transcript rows, `synth_nonref_0033` with its 12 rows among them.
-- The set of rows changes again between `--fork 4` and `--fork 1`.
+- GRCh37: 20,524 vep-rs tuples on 389 records. gnomAD-SV v2.1 chr21: 19,135 tuples on 89 records, its 60 `<CPX>` records and 29 `<BND>` records whose `SVLEN` exceeds the cap. `10_special_alleles`: 200 tuples on its 200 `<NON_REF>` blocks, one `intergenic_variant` row each. `12_complex_imprecise`: 1,189 tuples on its 100 `<CPX>` records.
+- GRCh38: 278,470 vep-rs tuples on 594 records per file; pooled, 278,309, because 161 tuples of records the gnomAD-SV and 1000 Genomes files carry at identical coordinates are counted once. gnomAD-SV v4.1 chr21: 272,627 tuples on 245 records, its 169 `<CPX>` records, its two `<CTX>` records, and 72 `<BND>` records and two mobile-element deletions whose `SVLEN` exceeds the cap. `1kg_sv_chr21`: 662 tuples on its 49 `<CPX>` records. `10_special_alleles`: 200 tuples on 200 blocks. `12_complex_imprecise`: 4,981 tuples on its 100 `<CPX>` records.
 
-vep-rs 0.3.0 writes one `intergenic_variant` row per block under every setting.
+The class is fully masked on the vep-rs side. No record of the measured sets takes the fifth route.
 
-#### 8.7 How the comparator treats this class
+## Defect P: the tests after the chromosome-aware overlap compare chromosome names the overlap did not resolve
 
-`filter_non_ref_batch_divergences` in `scripts/validation/compare_sv_concordance.py` acts on a (Location, Allele) key whose Allele is `<NON_REF>` and whose vep-rs set is exactly the one `intergenic_variant` row. At such a key:
+**Defect D, retired.** Up to release 115.2 Ensembl VEP matched loaded transcripts to the records of a batch through one interval tree keyed on coordinates alone, with no chromosome, so a chromosome 21 record could be handed a chromosome X transcript whose coordinates overlapped its numbers and lose its `intergenic_variant` row to it (the paper's defect D, classes 9 and 10); release 116.1 keys the overlap on the chromosome as well (`InputBuffer.pm` lines 286-345, `_chr_matches_for_vf_overlap` at lines 348-357: a record is handed to a transcript only when the record's chromosome, or one of its breakend mates', is the transcript's, names resolved through the synonym table), and neither class has a row against release 116.2.
 
-- every Ensembl VEP transcript tuple is set aside;
-- the vep-rs intergenic row is set aside when Ensembl VEP wrote transcript tuples and no intergenic row there, so that neither engine is charged for a block neither should annotate.
+**The defect in one sentence.** After the chromosome-aware overlap has handed a record to a transcript, two further tests compare chromosome names the overlap did not resolve the same way: the slice test names a record that arrives without a slice after the first transcript that reaches it, and the mate-allele test compares the mate's chromosome as written, so a bracket breakend loses the rows of its own end when a mate-chromosome transcript reaches it first, and the rows of its mate when the mate's chromosome is spelled in a way that test does not resolve, `Chr21` for `21`.
 
-A record on which vep-rs wrote anything else is never touched. A key where Ensembl VEP also wrote the intergenic row keeps it on both sides, matched.
+**Why this is a defect.** A record's chromosome is a fact of its own line, and a mate's chromosome is a fact of its allele; neither depends on which transcript the annotation pass happened to reach first, or on the spelling the file uses for a chromosome the cache knows under another name. Ensembl VEP's own overlap admits the transcript, and a later test then refuses the row for a reason that is not in the record. The result changes with the order of the input: the same record keeps its own-end rows in one file and loses them in another.
 
-Counts (`excluded_non_ref_batch_perl` and `excluded_non_ref_batch_rust`):
+**What vep-rs does instead.** vep-rs annotates each breakend of a record on its own chromosome, resolved once from the record and the allele: the own end against the transcripts of CHROM within 5,000 bases of the base after POS, the mate against the transcripts of the mate's chromosome within 5,000 bases of the mate position, whatever the order of the input and whichever name the file uses for the chromosome.
 
-- GRCh37 set: 1,838 Ensembl VEP tuples and 180 vep-rs rows.
-- GRCh38 set: 5,403 Ensembl VEP tuples and 200 vep-rs rows.
+**Where it is in Ensembl VEP's source** (`ensembl-vep`):
+- `Bio/EnsEMBL/VEP/AnnotationType/Transcript.pm`, line 122: `$vf->{slice} ||= $slice ||= $tr->{slice}`, inside the loop over the records a transcript reaches: a record without a slice takes the slice of the first transcript that reaches it, and in offline mode a record arrives without one.
+- The same module, lines 125-143: the slice test. A `chromosome_breakpoint` record passes when the transcript's chromosome equals the record's slice name (line 128) or any of its breakends' `seq_region_name` with a leading `chr` stripped (lines 130-136); any other record passes only on its slice name (line 141); `next if $seq_mismatch` at line 143 drops the pair.
+- `AnnotationSource.pm`, lines 235-258: the regions of a buffer are loaded in the order its records first ask for them, each record's own region before its breakend mates', a region listed once at its first request; `AnnotationType/Transcript.pm` lines 277-300 (`merge_features`) remove duplicates and keep that order, so the transcripts are visited region by region in it. A record whose mate lies within reach of a transcript in a region an earlier record asked for, before the record's own region was asked for, is therefore reached by that transcript before any of its own chromosome's.
+- `InputBuffer.pm`, lines 191-207 and 223-234: a buffer holds the records of one chromosome, so the records that share a buffer with a breakend are the ones on its own chromosome before it in the input.
+- `InputBuffer.pm`, lines 348-357: `_chr_matches_for_vf_overlap` resolves a chromosome name through `get_source_chr_name`, the synonym table, so a mate written `NC_000002.12` reaches the transcripts of chromosome 2; the slice test at `AnnotationType/Transcript.pm` line 134 compares the raw name, `chr` stripped, and `NC_000002.12` is not `2`. A mate written `Chr21` passes the slice test (the strip is case-insensitive) and fails the mate-allele test below, whose synonym lookup is verbatim and whose fallback is a case-folded equality of the whole name.
 
-Fully masked, both sides.
+(`ensembl-variation`): `StructuralVariationOverlap.pm` lines 86-102 and 144-160: a mate allele is added to a row only when `_close_to_feature` passes, which compares the mate's `seq_region_name` with the transcript's through `_compare_seq_region_names` (`Utils/VariationEffect.pm` lines 111-124: the synonym table's keys verbatim, else a case-folded equality) and applies the 5,000-base window (`MAX_DISTANCE_FROM_TRANSCRIPT`, line 60). `StructuralVariationFeature.pm` lines 1300-1304: a breakend's slice is named after the chromosome exactly as the allele writes it.
 
-Those transcript rows agreed with vep-rs 0.2.0's rows whenever Ensembl VEP's batch had loaded the region. Raw F1 on the two structural-variant sets is therefore lower for vep-rs 0.3.0 than for 0.2.0 by these tuples together with the pairs of class 11, and by nothing else, since raw F1 sets nothing aside.
-
-`<*>` is the same gVCF construct written the other way, and the argument of 8.5 applies to it word for word; it is out of this class by measurement, not by principle. Ensembl VEP does not mark `<*>` skipped, both engines annotate it as a span, and their rows are identical (1,007 rows on the GRCh37 set, 2,595 on the GRCh38 set), so there is no divergence to set aside. The class covers the spelling on which the two engines differ.
-
-## Defect D: transcripts matched to records by coordinate alone, without the chromosome
-
-**The defect in one sentence.** Ensembl VEP matches loaded transcripts to the records of a batch through one interval tree keyed on coordinate numbers only, with no chromosome, so a chromosome 21 deletion can be handed a chromosome X transcript whose coordinates overlap its numbers.
-
-**Why this is a defect.** A transcript on another chromosome cannot be affected by a deletion on chromosome 21; the row Ensembl VEP writes for it describes an overlap that does not exist. The row appears only when another record in the batch, a breakend whose mate is on chromosome X, loaded that chromosome's regions, so the output again depends on the record's neighbours. And because the record's transcript list is then not empty, the `intergenic_variant` row it should carry is never written.
-
-**What vep-rs does instead.** vep-rs matches transcripts by chromosome and coordinate, so a record on chromosome 21 reaches chromosome 21 transcripts only, and a record with no transcript within range gets its `intergenic_variant` row.
-
-**Where it is in Ensembl VEP's source**:
-- `ensembl-vep`, `Bio/EnsEMBL/VEP/InputBuffer.pm`, lines 345-366: `interval_tree` inserts every record and every breakend mate by start and end, with no chromosome; lines 284-330: `get_overlapping_vfs` fetches by coordinates alone.
-- `ensembl-vep`, `AnnotationSource.pm`, lines 250-257: the regions around each breakend's mate are loaded for the batch.
-- `ensembl-variation`, `Bio/EnsEMBL/Variation/StructuralVariationOverlap.pm`, lines 64-71: a record without a parsed mate (a `<DEL>`, `<INS>`, `<CPX>`, `<NON_REF>` or a single breakend) gets its one allele unconditionally and is never chromosome-checked. Lines 72-87 and 130-146 are the contrast: a record with a parsed mate has its ends passed through `_close_to_feature`, which compares `seq_region_name`s and applies the 5,000-base window.
-- `ensembl-variation`, `StructuralVariationFeature.pm`, `get_IntergenicStructuralVariation`, lines 674-689: the `intergenic_variant` row is created only when the transcript list is empty.
-
-**What correcting it would change.** If the tree were keyed on chromosome and coordinate, or the unconditional allele were chromosome-checked, classes 9 and 10 would vanish: the off-chromosome rows would not be written and the record's `intergenic_variant` row would be.
+**What correcting it would change.** If the slice test and the mate-allele test compared the record's own chromosome and each breakend's, resolved as the overlap resolves them, classes 23 and 24 would vanish: a bracket breakend's own-end rows and mate rows would be written whatever the order of the input and the spelling of the mate's chromosome.
 
 **The classes it produces.**
-- Class 9: the off-chromosome transcript rows Ensembl VEP writes (gnomAD-SV v2.1 and v4.1 chr21 and the synthetic breakend set: 1,838 and 22,481 tuples). Set aside: Ensembl VEP's rows.
-- Class 10: the record's own `intergenic_variant` row, which those rows displace (155 and 518 rows). Set aside: vep-rs's rows.
+- Class 23: the own-end rows of a bracket breakend whose mate is on another chromosome, lost when a mate-chromosome transcript names its slice first (the synthetic breakend set: 202 vep-rs tuples on 53 records in GRCh37, 1,012 on 71 in GRCh38). Set aside: vep-rs's rows, in the structural-variant comparator under the cache authority; counted and not set aside by the SNP/indel comparator.
+- Class 24: the mate rows of a bracket breakend whose mate's chromosome is spelled with a prefix the mate-allele test does not resolve, `Chr21` (none on the measured sets). Set aside the same way.
 
-### 9. Transcripts from another chromosome
+A third shape of the same test is counted and never set aside, under the name `fasta_named_slice_intergenic`: under `--check_ref` or `--lookup_ref` with a FASTA whose sequence names differ from the cache's (`chr1` against `1`), every record's slice is named after the FASTA (`Parser.pm` line 749) and every transcript fails the test at line 141, so Ensembl VEP writes `intergenic_variant` where vep-rs writes transcript rows. The condition is the run's configuration, not a property of any record, and it reaches every record of the run; both comparators count it, and a run that shows the count is re-run with matching sequence names rather than scored. It is 0 on every measured set.
 
-**In short.** A 75-base deletion on chromosome 21 from gnomAD-SV v2.1, `gnomAD-SV_v2.1_DEL_21_178762`, has coordinates that fall, as numbers only, inside an intron of GRPR, a gene on chromosome X. Ensembl VEP writes `intron_variant` on that chromosome X transcript, ENST00000380289; vep-rs writes `intergenic_variant`, because the deletion has no chromosome 21 transcript within the 5,000-base window. A deletion on chromosome 21 changes no base of chromosome X, so vep-rs's row is the correct one, and Ensembl VEP itself writes `intergenic_variant` when the record is annotated alone.
+### 23. A bracket breakend's own-end rows lost to the first transcript that reaches it
 
-#### 9.1 What a reader needs to know first
+**In short.** `synth_bnd_inter_0062_B` is a chromosome 1 breakend of the synthetic set whose mate lies in SOD1 on chromosome 21. Run alone, both engines write the same seven rows for it: one under its own-end allele, for the transcript its own breakpoint lands in, and six under the mate allele. In the whole file Ensembl VEP writes the six mate rows and nothing under the own-end allele, because the file's first record, a chromosome 1 breakend whose mate lies 1,016 bases from this one's, asked for the chromosome 21 region first: a SOD1 transcript reaches the record before any chromosome 1 transcript does, names its slice `21`, and the chromosome 1 transcript then fails the slice test. vep-rs writes the seven rows in every context. The transcripts the own end reaches are a fact of the record's own line, and Ensembl VEP writes the row itself when the record is alone, with its mate, under `--buffer_size 1`, or before the other record, so vep-rs's row is the correct one.
 
-A transcript can only be affected by a variant on its own chromosome; a deletion on chromosome 21 cannot lie in an intron of a gene on chromosome X.
+#### 23.1 What a reader needs to know first
 
-Two Sequence Ontology terms appear in this class:
+A bracket breakend has two coordinates, its own (POS on CHROM) and its mate's (the chromosome and position inside the allele's brackets), and Ensembl VEP writes rows under two alleles for it: the own end, printed as the reference base and a dot (`A.` or `.A`, the dot on the side the mate joins), and the mate, printed as the bracket string. The own-end rows are the transcripts within 5,000 bases of the base after POS on CHROM; the mate rows are the transcripts within 5,000 bases of the mate position on the mate's chromosome (class 11 describes what those rows should say).
 
-- `intron_variant` (SO:0001627): "a transcript variant occurring within an intron".
-- `intergenic_variant` (SO:0001628): "a sequence variant located in the intergenic region, between genes". This is the row Ensembl VEP writes for a variant with no transcript within 5,000 bases.
+Ensembl VEP annotates in batches of at most `--buffer_size` records (default 5,000) that never span two chromosomes, split into chunks for the `--fork` workers, and for each chunk loads the transcript-cache regions (1 Mb bins) its records overlap, a record's own region and each mate's, in the order the records ask for them. The transcripts are then visited region by region in that order, and a transcript that reaches a record decides, by a test on chromosome names, whether to annotate it. The term involved is `feature_truncation` (SO:0001906) with the region the breakpoint lands in, or `upstream_gene_variant` and `downstream_gene_variant` for a breakpoint near a transcript (11.1).
 
-A breakend is a record for one side of a breakpoint; the other side, called its mate, is named in the allele. A breakend whose mate lies on a different chromosome (an inter-chromosomal breakend) is the one record type whose annotation legitimately reaches a second chromosome. In the allele `N[X:16162317[` the mate lies on chromosome X, and Ensembl VEP loads the transcript-cache regions around the mate so that the mate allele can be annotated there.
+#### 23.2 The record
 
-#### 9.2 The record
-
-`gnomAD-SV_v2.1_DEL_21_178762`, gnomAD-SV v2.1 chr21 (GRCh37, `gnomad_sv_v2.1_chr21.vcf.gz`), a 75-base deletion:
+`synth_bnd_inter_0062_B`, the second record of the synthetic breakend set `tests/sv_validation/grch37/09_breakends.vcf.gz` (GRCh37), a chromosome 1 breakend whose mate lies in intron 1 of SOD1 on chromosome 21, with the file's first record, `synth_bnd_inter_0066_B` (the record of class 11), whose mate lies 1,016 bases from it in the same intron:
 
 ```
-21	16155573	gnomAD-SV_v2.1_DEL_21_178762	N	<DEL>	693	PASS	END=16155648;SVTYPE=DEL;SVLEN=75
+1	14374333	synth_bnd_inter_0066_B	A	]21:33034355]A	.	PASS	SVTYPE=BND;MATEID=synth_bnd_inter_0066_A
+1	16602616	synth_bnd_inter_0062_B	A	A]21:33033339]	.	PASS	SVTYPE=BND;MATEID=synth_bnd_inter_0062_A
 ```
 
-The transcript Ensembl VEP names is ENST00000380289 (GRPR, forward strand, canonical), on chromosome X at X:16141679-16171144: exon 1 X:16141679-16142489, intron 1 X:16142490-16168427. The deletion's coordinates 16155574-16155648 fall, as numbers, inside that intron.
+The record's own breakpoint, 1:16602617, lies in an intron of ENST00000375592 (ENSG00000037637, reverse strand), the one chromosome 1 transcript within 5,000 bases of it; its mate, 21:33033339, lies within 5,000 bases of six chromosome 21 transcripts, the SOD1 transcripts and their neighbours of 11.2.
 
-On chromosome 21 the nearest transcript to the deletion is ENST00000448152 (GAPDHP16, a processed pseudogene at 21:16146622-16147583), 7,991 bases away, beyond the 5,000-base window.
-
-The neighbouring record that matters is a breakend 6.7 kb away whose mate lies on chromosome X at X:16162317, inside GRPR:
+The GRCh38 set (`tests/sv_validation/grch38/09_breakends.vcf.gz`) shows the same shape on `synth_bnd_inter_0007_B`, whose own breakpoint 1:57985330 lies in an intron of the non-coding transcript ENST00000485760 (ENSG00000173406) and whose mate 21:25898426 lies in APP, after the file's first record, `synth_bnd_inter_0015_B`, whose mate lies 43 kb away in the same gene:
 
 ```
-21	16162316	gnomAD-SV_v2.1_BND_21_56729	N	<BND>	473	UNRESOLVED	END=16162317;SVTYPE=BND;SVLEN=-1;CHR2=X;POS2=16162316;END2=16162317
+1	10305888	synth_bnd_inter_0015_B	A	]21:25941574]A	.	PASS	SVTYPE=BND;MATEID=synth_bnd_inter_0015_A
+1	57985329	synth_bnd_inter_0007_B	A	[21:25898426[A	.	PASS	SVTYPE=BND;MATEID=synth_bnd_inter_0007_A
 ```
 
-#### 9.3 What each engine writes
+#### 23.3 What each engine writes
+
+Alone, both engines write seven rows for the GRCh37 record: one under its own-end allele `A.` and six under the mate allele `A]21:33033339]` (the mate rows differ between the engines by class 11, as the rows of 11.3 do). In the whole file Ensembl VEP writes the six mate rows, unchanged, and nothing under `A.`; vep-rs writes the same seven rows as alone:
 
 ```
-# Ensembl VEP
-gnomAD-SV_v2.1_DEL_21_178762	21:16155574-16155648	deletion	ENSG00000126010	ENST00000380289	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;OverlapBP=75;OverlapPC=0.25
-# vep-rs
-gnomAD-SV_v2.1_DEL_21_178762	21:16155574-16155648	deletion	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+# Ensembl VEP, whole file (2 of its 6 rows, all under the mate allele)
+synth_bnd_inter_0062_B	1:16602617	A]21:33033339]	ENSG00000142168	ENST00000270142	Transcript	feature_truncation	-	-	-	-	-	-	IMPACT=HIGH;STRAND=1
+synth_bnd_inter_0062_B	1:16602617	A]21:33033339]	ENSG00000234509	ENST00000449339	Transcript	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=-1
+# Ensembl VEP, whole file
+(no row under A.)
+# vep-rs, whole file (1 of 7 rows: the own-end row, identical to the row both engines write for the record alone)
+synth_bnd_inter_0062_B	1:16602617	A.	ENSG00000037637	ENST00000375592	Transcript	feature_truncation,intron_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1
 ```
 
-Ensembl VEP names a transcript on chromosome X and writes `intron_variant`; vep-rs names no transcript and writes `intergenic_variant`.
+The GRCh38 record has 42 rows on each side when run alone, one of them under its own-end allele `.A`; in the whole file Ensembl VEP writes the 41 mate rows and vep-rs all 42:
 
-Ensembl VEP's `OverlapPC=0.25` is the deletion's 75 bases as a share of GRPR's 29,466-base span: the overlap was computed as if the two lay on one chromosome.
+```
+# vep-rs, whole file (1 of 42 rows; Ensembl VEP writes the other 41)
+synth_bnd_inter_0007_B	1:57985330	.A	ENSG00000173406	ENST00000485760	Transcript	feature_truncation,intron_variant,non_coding_transcript_variant	-	-	-	-	-	-	IMPACT=HIGH;STRAND=-1
+```
 
-#### 9.4 Why Ensembl VEP writes that
+#### 23.4 Why Ensembl VEP writes that
 
-The breakend record in the same chunk loads the chromosome X cache regions around its mate. Ensembl VEP then matches loaded transcripts to the records of the batch through an interval tree. The tree holds every record and every mate by coordinate number only, with no chromosome. So GRPR, at X:16141679-16171144, is handed every record of the batch whose numbers fall in that range, the chromosome 21 deletion among them.
+A buffer holds records of one chromosome (`InputBuffer.pm` lines 191-207 and 223-234): the GRCh37 file's seventeen chromosome 1 records form one buffer, with `synth_bnd_inter_0066_B` first and `synth_bnd_inter_0062_B` second. The regions of a buffer are loaded in the order its records first ask for them, each record's own region before its mate's, a region asked for twice listed once, at its first request (`AnnotationSource.pm` lines 235-258): the first record asks for its own region, chromosome 1 at 14 Mb, then its mate's, chromosome 21 at 33 Mb; the second record's own region, chromosome 1 at 16 Mb, comes third, and its mate's region is the one already listed second.
 
-Whether a chromosome is then compared depends on the record's shape. A record with a parsed mate has both its ends checked: the local end and each mate pass through `_close_to_feature`, which compares chromosome names and applies the 5,000-base window (the loop over the record and its breakends). A record with no parsed mate gets its one allele unconditionally and is never chromosome-checked. That shape is a `<DEL>`, `<INS>`, `<CPX>` or `<NON_REF>`, and also a single breakend written `G.` or `.C` (a breakpoint whose partner is unknown).
+The transcripts are visited in that order. The chromosome-aware overlap hands the record to the SOD1 transcripts near its mate (through the mate, `InputBuffer.pm` lines 336-342) and to ENST00000375592 near its own breakpoint (through its own coordinates, lines 324-326). The SOD1 transcripts come first, and line 122 of `AnnotationType/Transcript.pm` names the record's slice after the first of them, `21`. From then on the slice test (lines 125-143) passes a transcript only if its chromosome is `21`, the slice's name, or the mate's, also `21`; ENST00000375592 fails it and is dropped at line 143, and the own-end row is never created. When the record's own region comes first in the load order, ENST00000375592 names the slice `1`, the SOD1 transcripts still pass through the mate, and both sets of rows are written. The whole GRCh38 file does the same to `synth_bnd_inter_0007_B`: the first chromosome 1 record's mate region, chromosome 21 at 25 Mb, holds the APP transcripts that reach the record's mate, and it is listed before the record's own region at 57 Mb.
 
-Alone in a batch the deletion loads no chromosome X region and is written as `intergenic_variant`.
+#### 23.5 Why vep-rs's row is the correct one
 
-Source (`ensembl-vep`):
+The transcripts within 5,000 bases of the record's own breakpoint on chromosome 1 are a fact of the record's own line, and Ensembl VEP's own admission rule gives the own-end allele exactly those rows. Whether they are written cannot depend on which record of the file asked for the mate's region first. Ensembl VEP agrees whenever the order is the other way round: alone, with its mate, under `--buffer_size 1`, or placed before the other record, it writes the own-end row, byte for byte the row vep-rs writes in every context (23.6).
 
-- `Bio/EnsEMBL/VEP/AnnotationSource.pm`, lines 250-257: `get_all_regions_by_InputBuffer` requests the regions around each breakend's mate.
-- `InputBuffer.pm`, lines 345-366: `interval_tree` inserts every record and mate by start and end, no chromosome. Lines 284-330: `get_overlapping_vfs` fetches by coordinates alone.
+#### 23.6 Try it yourself
 
-Source (`ensembl-variation`):
+Annotate the GRCh37 record with Ensembl VEP 116.2 (GRCh37 cache and FASTA, the command of the closing section) in each of these inputs, and count its rows under the own-end allele `A.` and under the mate allele:
 
-- `Bio/EnsEMBL/Variation/StructuralVariationOverlap.pm`, lines 64-71: a record without breakends gets its allele unconditionally. Against that, lines 72-87 are the loop over the record's own end and its mates, and lines 130-146 are `_close_to_feature`, which compares `seq_region_name`s and applies the 5,000-base window.
-
-#### 9.5 Why vep-rs's row is the correct one
-
-A deletion of 75 bases on chromosome 21 changes no base of chromosome X, so it is not in GRPR's intron whatever the coordinate numbers say. The row is impossible on the record's own coordinates.
-
-On its own chromosome the deletion has no transcript within 7,991 bases and the 5,000-base window is empty, which is `intergenic_variant`. That is the row vep-rs writes, and the row Ensembl VEP itself writes when no chromosome X region happens to be loaded (9.6).
-
-#### 9.6 Try it yourself
-
-Annotate the deletion with Ensembl VEP 115.2, GRCh37 cache and FASTA, the command of the closing section, under each of the four inputs below:
-
-| Input | Ensembl VEP row for the deletion |
+| Input | Ensembl VEP rows for `synth_bnd_inter_0062_B`, own end / mate |
 | --- | --- |
-| the record alone | `intergenic_variant` |
-| the record plus the `gnomAD-SV_v2.1_BND_21_56729` line of 9.2 only | ENST00000380289 (GRPR, chromosome X) `intron_variant` |
-| the whole `gnomad_sv_v2.1_chr21.vcf.gz`, `--fork 1`, `--fork 4` or `--fork 16` | ENST00000380289 `intron_variant` |
-| the same file, `--buffer_size 1` | `intergenic_variant` |
+| the record alone | 1 / 6 |
+| the record with its mate record `synth_bnd_inter_0062_A` (`21 33033339 ... A [1:16602616[A`) | 1 / 6 |
+| `synth_bnd_inter_0066_B` then the record (the file's first two lines) | 0 / 6 |
+| the record then `synth_bnd_inter_0066_B` | 1 / 6 |
+| a hand-written `1 14374333 x A ]21:33034355]A` with `SVTYPE=BND` and no MATEID, then the record | 0 / 6 |
+| a hand-written chromosome 1 breakend at 14374333 whose mate is far from the record's, `]21:27367670]A`, then the record | 1 / 6 |
+| a hand-written chromosome 1 breakend at a higher position, `1 16954684 x A ]21:33034355]A`, then the record (both own breakpoints lie in the same 1 Mb region, which is then listed first) | 1 / 6 |
+| a hand-written chromosome 2 breakend, `2 1000000 x A ]21:33034355]A`, then the record (two buffers: a buffer holds one chromosome) | 1 / 6 |
+| the SNV `21 33033339 . A C` then the record, or the SNV `1 14374333 . A C` then the record, or the SNV `1 16602616 . C A` then the record | 1 / 6 |
+| the mate record `synth_bnd_inter_0066_A` (on chromosome 21) then the record | 1 / 6 |
+| the whole `09_breakends.vcf.gz`, `--fork 4 --buffer_size 5000` (the reference setting), or `--fork 1 --buffer_size 5000` | 0 / 6 |
+| the whole file at `--buffer_size 1`, `--fork 1` or `--fork 4` | 1 / 6 |
 
-At `--buffer_size 1` every one of the 155 chromosome 21 records of this class in the file writes `intergenic_variant`, the vep-rs row.
+vep-rs writes 1 / 6 for every one of those inputs. The loss needs, in the record's own buffer and before it, a record that asks for the region holding the transcripts within reach of the record's mate before the record's own region is asked for; `--fork` does not change the result and `--buffer_size 1`, which annotates every record alone, removes it. The GRCh38 record behaves the same way: 1 / 41 alone, with its mate, after the SNV `21 25898426 . T A` at its mate's position, or after SNVs at the first record's two breakpoints; 0 / 41 after the file's first record `synth_bnd_inter_0015_B`, after `synth_bnd_inter_0037_B` (`1 11286046 ... A A[21:26072808[`, whose mate's region holds the APP transcripts that reach this record's mate), and in the whole file.
 
-#### 9.7 How the comparator treats this class
+#### 23.7 How the comparator treats this class
 
-`filter_cross_chromosome_divergences` in `scripts/validation/compare_sv_concordance.py` sets aside, on Ensembl VEP's side, every tuple whose Feature the transcript cache does not hold for the chromosome of the tuple's Location. Bracket-notation breakend alleles are exempt, since their mate legitimately names another chromosome. A single breakend's `G.` or `.C` allele is not bracket notation and is not exempt.
+`filter_bnd_own_rows_lost` in `scripts/validation/compare_sv_concordance.py` runs under the cache authority (`--vep-rs-cache`, the transcript cache that says which chromosome a transcript is on). It sets aside a vep-rs tuple when all of these hold: the Location is a bracket breakend's whose mate is on another chromosome; Ensembl VEP wrote a Transcript row at the Location under the bracket allele and none under any own-end allele (`N.`, `.N` or `chromosome_breakpoint`); and the tuple's transcript is one the cache files on the Location's chromosome within 5,000 bases of the breakpoint, Ensembl VEP's own admission rule (`StructuralVariationOverlap.pm` lines 144-160). A vep-rs own-end row on a transcript farther than that, or on another chromosome, stays charged.
 
-The test is a fact about the cache, not a mechanism guess. It runs on vep-rs's side as an assertion: vep-rs annotates from a per-chromosome index, so if it ever produced the shape the comparison aborts rather than masking it.
+The SNP/indel comparator, `scripts/concordance/compare_vep_outputs.py`, has no transcript-to-chromosome authority, so it counts the shape under the same name and sets nothing aside: a Location at which Ensembl VEP wrote rows under a bracket allele and none under an own-end allele, and vep-rs wrote own-end rows.
 
-Counts:
+Counts (`excluded_bnd_own_rows_lost_rust`, per file in `excluded_bnd_own_rows_lost_by_file`):
 
-- GRCh37: 1,838 Ensembl VEP tuples (gnomAD-SV v2.1 chr21 1,790; `09_breakends` 48).
-- GRCh38: 22,481 (gnomAD-SV v4.1 chr21 22,381; `09_breakends` 100).
+- GRCh37: 202 vep-rs tuples on 53 records, all in `09_breakends.vcf.gz`: the records on chromosomes 1 to 5 whose mates are on chromosome 21 (12 on chromosome 1, 17 on 2, 8 on 3, 5 on 4, 11 on 5); none of the set's chromosome 21 records, and none in any other file.
+- GRCh38: 1,012 vep-rs tuples on 71 records, all in `09_breakends.vcf.gz` (21 on chromosome 1, 18 on 2, 12 on 3, 11 on 4, 9 on 5).
 
-The synthetic tuples are single breakends (`G.`, `.C`, printed with the Allele `chromosome_breakpoint`) at chromosome 21 positions near 33.03 Mb (GRCh37) and 26.0 Mb (GRCh38). Their numbers fall inside chromosome 1 transcripts that the mates of neighbouring inter-chromosomal records had loaded.
+The gnomAD-SV files, the 1000 Genomes files and the other synthetic files show none. Fully masked, vep-rs side.
 
-Ensembl VEP's side of the class is fully masked (`excluded_cross_chromosome_perl`); the vep-rs row it leaves standing is class 10.
+### 24. A bracket breakend's mate rows lost to an unresolved chromosome prefix
 
-### 10. The orphaned `intergenic_variant` on the other side of class 9
+**In short.** A hand-written chromosome 21 breakend whose mate, 50 bases away on the same chromosome, is written `N[Chr21:30425700[` reaches its transcripts through its own coordinates and passes the slice test; the test that adds the mate allele then compares `Chr21` with the transcript's `21` through the synonym table, whose keys hold `chr21` and not `Chr21`, and a case-folded equality, which `chr21` against `21` fails, so Ensembl VEP writes the own-end rows and nothing under the mate allele. vep-rs reads `Chr21` as chromosome 21 and writes the mate rows too. The mate's chromosome is a fact of the allele, and Ensembl VEP writes the same mate rows when the allele spells it `chr21` or `21`, so vep-rs's rows are the correct ones.
 
-**In short.** `gnomAD-SV_v2.1_DEL_21_178762` is a 75-base deletion on chromosome 21 with no transcript within 5,000 bases on its own chromosome. Ensembl VEP's only row for it names a transcript on chromosome X, a row class 9 removes, so nothing of the record is left on Ensembl VEP's side; vep-rs writes one row, `intergenic_variant`. A variant with no transcript within 5,000 bases on its own chromosome is intergenic on either engine's terms, and Ensembl VEP itself writes that row whenever the chromosome X region is not loaded, so vep-rs's row is the correct one.
+#### 24.1 What a reader needs to know first
 
-#### 10.1 What a reader needs to know first
+A VCF may name a chromosome by any of the names its reference assembly report lists: `21`, `chr21`, `NC_000021.9`, `CM000683.2`. Ensembl VEP's cache carries a synonym table for them (`--synonyms` adds to it), and its chromosome-aware overlap resolves a mate's name through that table before matching it to a transcript's chromosome (`InputBuffer.pm` lines 348-357). Two later tests compare names again: the slice test of `AnnotationType/Transcript.pm` lines 125-143, which strips a leading `chr` from a breakend's name, case-insensitively, and compares the rest as written, and `_close_to_feature` (`StructuralVariationOverlap.pm` lines 144-160), which accepts a synonym table key verbatim or a case-folded equality of the whole name. The mate rows are written only when every test passes.
 
-Class 9 removes Ensembl VEP's off-chromosome rows for a record. For the records of this class the off-chromosome transcript was the only one Ensembl VEP named, so once class 9 has removed that row, nothing of the record is left on Ensembl VEP's side.
+#### 24.2 The record
 
-vep-rs's side has one row, `intergenic_variant`: the row for a variant with no transcript within 5,000 bases on its own chromosome. One Sequence Ontology term appears in this class:
-
-- `intergenic_variant` (SO:0001628): "a sequence variant located in the intergenic region, between genes".
-
-Without a rule for this shape, the comparator would count that row as a vep-rs tuple with no counterpart and charge vep-rs for it.
-
-#### 10.2 The record
-
-The same record as class 9, `gnomAD-SV_v2.1_DEL_21_178762` (gnomAD-SV v2.1 chr21, GRCh37):
-
-```
-21	16155573	gnomAD-SV_v2.1_DEL_21_178762	N	<DEL>	693	PASS	END=16155648;SVTYPE=DEL;SVLEN=75
-```
-
-On chromosome 21 the nearest transcript is ENST00000448152 (GAPDHP16, 21:16146622-16147583), 7,991 bases from the deletion.
-
-#### 10.3 What each engine writes
+Hand-written, GRCh38: a breakend at 21:30425650 whose mate lies 50 bases away on the same chromosome, written with a capitalised prefix:
 
 ```
-# Ensembl VEP (the record's only row; removed by class 9)
-gnomAD-SV_v2.1_DEL_21_178762	21:16155574-16155648	deletion	ENSG00000126010	ENST00000380289	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER;STRAND=1;OverlapBP=75;OverlapPC=0.25
-# vep-rs (the record's only row)
-gnomAD-SV_v2.1_DEL_21_178762	21:16155574-16155648	deletion	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+21	30425650	x	N	N[Chr21:30425700[	.	.	SVTYPE=BND
 ```
 
-Each engine writes exactly one row for the record. Ensembl VEP's row names ENST00000380289, the off-chromosome transcript, and class 9 removes that row; vep-rs's row names no gene or transcript and carries `intergenic_variant`.
+The own breakpoint, 21:30425651, lies in the coding sequence of ENST00000390690 (reverse strand) and 4,569 bases upstream of ENST00000334068; the mate, 50 bases away, reaches the same two transcripts. The GRCh37 counterpart is `21 33034300 x N N[Chr21:33034355[` with `SVTYPE=BND`, the breakpoint of class 11 as its mate, which reaches seven transcripts.
 
-#### 10.4 Why Ensembl VEP writes that
+#### 24.3 What each engine writes
 
-The same as class 9: the off-chromosome transcript, matched by coordinate number, fills the record's transcript list, and Ensembl VEP writes an intergenic row only when that list is empty. With the chromosome X transcript in the list, the intergenic row is never written. Without it, as when the record is annotated alone, it is.
+```
+# Ensembl VEP (both rows)
+x	21:30425651	N.	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=4569;STRAND=1
+x	21:30425651	N.	ENSG00000240432	ENST00000390690	Transcript	feature_truncation,coding_sequence_variant	276	262	88	-	-	-	IMPACT=HIGH;STRAND=-1
+# vep-rs (all four rows)
+x	21:30425651	N.	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=4569;STRAND=1
+x	21:30425651	N[Chr21:30425700[	ENSG00000186971	ENST00000334068	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=4569;STRAND=1
+x	21:30425651	N.	ENSG00000240432	ENST00000390690	Transcript	feature_truncation,coding_sequence_variant	276	262	88	-	-	-	IMPACT=HIGH;STRAND=-1
+x	21:30425651	N[Chr21:30425700[	ENSG00000240432	ENST00000390690	Transcript	feature_truncation,coding_sequence_variant	276	262	88	-	-	-	IMPACT=HIGH;STRAND=-1
+```
 
-Source (`ensembl-variation`): as in 9.4, plus one module:
+Ensembl VEP writes the two own-end rows and nothing under the mate allele; vep-rs writes the same two own-end rows and the two mate rows, identical to the own-end rows in every column but Allele because the two breakpoints are 50 bases apart. On GRCh37 the record writes 7 rows against 14 the same way.
 
-- `Bio/EnsEMBL/Variation/StructuralVariationFeature.pm`, `get_IntergenicStructuralVariation`, lines 674-689: the intergenic overlap is created if and only if the transcript overlap list is empty.
+#### 24.4 Why Ensembl VEP writes that
 
-#### 10.5 Why vep-rs's row is the correct one
+The chromosome 21 transcripts reach the record through its own coordinates and pass the slice test on the record's slice, `21`. For each of them the mate allele is added to the row only if `_close_to_feature` passes for the breakend (`StructuralVariationOverlap.pm` lines 90-102), and its name test, `_compare_seq_region_names` (`Utils/VariationEffect.pm` lines 111-124), finds `Chr21` neither among the synonym table's keys, which hold `chr21`, nor equal to `21` once both are lower-cased. The own-end rows are written; the mate allele is never added. With the mate written `chr21` or `21` the same test passes and the mate rows are written.
 
-The deletion overlaps no chromosome 21 transcript, and none lies within 5,000 bases of it: the nearest is 7,991 bases away. That is the definition of the intergenic row on either engine's terms.
+A mate written with a RefSeq accession takes the other route. On another chromosome, `N[NC_000002.12:321682[`, the overlap resolves the accession (`InputBuffer.pm` line 356) and hands the record to the chromosome 2 transcripts, and the slice test then compares the breakend's `seq_region_name`, the accession as the allele wrote it (`StructuralVariationFeature.pm` lines 1300-1304), `chr` stripped, with the transcript's `2` (`AnnotationType/Transcript.pm` lines 130-136), finds no match and drops the pair at line 143: Ensembl VEP writes no mate row. vep-rs does not resolve the accession and writes no mate row either, so the two outputs agree and nothing is set aside. On the record's own chromosome, `N[NC_000021.9:30425700[`, the transcripts reach the record through its own coordinates, the accession is a key of the synonym table, and Ensembl VEP writes the mate rows; vep-rs writes none, a vep-rs under-annotation that stays charged to vep-rs in both figures.
 
-It is also the row Ensembl VEP writes for the record whenever no chromosome X region is loaded: for the record alone, and for all 155 records of the class at `--buffer_size 1` (9.6).
+#### 24.5 Why vep-rs's row is the correct one
 
-#### 10.6 Try it yourself
+The mate's chromosome is a fact of the allele, and `Chr21` names the chromosome the cache holds as `21` and lists as `chr21`. The transcripts within 5,000 bases of the mate position on that chromosome are the mate rows under Ensembl VEP's own admission rule, and Ensembl VEP writes them itself when the allele spells the chromosome `chr21` or `21` (24.6). A prefix that differs from a listed synonym by its case cannot be a reason to withhold them.
 
-As 9.6: the outcome turns on whether a chromosome X region is loaded alongside the record.
+#### 24.6 Try it yourself
 
-- The record alone, or the whole `gnomad_sv_v2.1_chr21.vcf.gz` at `--buffer_size 1`: Ensembl VEP writes its `intergenic_variant` row, identical to vep-rs's.
-- The whole file at `--fork 1`, `--fork 4` or `--fork 16`, or the record beside `gnomAD-SV_v2.1_BND_21_56729` alone: Ensembl VEP writes the GRPR row instead, the Ensembl VEP row of 10.3.
+Annotate the record with each spelling of the mate's chromosome, with Ensembl VEP 116.2 and vep-rs (GRCh38 cache and FASTA, the commands of the closing section; the GRCh37 counterpart of 24.2 in parentheses):
 
-The 1000 Genomes structural-variant files carry records of the class at identical coordinates:
+| Mate | Ensembl VEP 116.2 rows | vep-rs rows |
+| --- | --- | --- |
+| `N[21:30425700[` or `N[chr21:30425700[` | 4 (14): own end and mate | 4 (14) |
+| `N[Chr21:30425700[` | 2 (7): own end only | 4 (14) |
+| `N[NC_000021.9:30425700[` (GRCh37 `NC_000021.8`) | 4 (14) | 2 (7): own end only, a vep-rs under-annotation charged to vep-rs |
+| `N[2:321682[` or `N[chr2:321682[` (GRCh37 `Y:15437971`, `chrY:15437971`) | 13 (15) | 13 (15); the mate rows differ by class 11 |
+| `N[NC_000002.12:321682[` (GRCh37 `NC_000024.9:15437971`) | 2 (7): own end only | 2 (7): own end only, so the outputs agree and nothing is set aside |
 
-- GRCh37 (`1kg_sv_chr21.vcf.gz`, 1000 Genomes Phase 3, fetched by `scripts/data/download_real_world_vcfs.sh`): one record.
-- GRCh38 (`1kg_sv_chr21.vcf.gz`, 1000 Genomes high-coverage): 49 records.
+Only the capitalised prefix produces the class: Ensembl VEP writes the own-end rows alone where vep-rs also writes the mate rows.
 
-There, in a file with no inter-chromosomal breakend nearby, Ensembl VEP writes `intergenic_variant` for each of them inside the reference output itself.
+#### 24.7 How the comparator treats this class
 
-#### 10.7 How the comparator treats this class
+`filter_bnd_synonym_mate_rows` in `scripts/validation/compare_sv_concordance.py` runs under the cache authority. It sets aside a vep-rs tuple under a bracket allele when the mate name, `chr` stripped, is not a chromosome the cache files, Ensembl VEP wrote rows at the Location and none under the bracket allele, and the tuple's transcript is not on the Location's own chromosome; or when the mate name is the record's own chromosome spelled with a prefix Ensembl VEP does not resolve (`Chr21`), in which case vep-rs's mate rows on the own chromosome are set aside too. The SNP/indel comparator counts the shape and sets nothing aside, a synonym there being any mate name outside the canonical contig set.
 
-`filter_cross_chromosome_orphan_intergenic` in `scripts/validation/compare_sv_concordance.py` sets aside a vep-rs tuple when all four of these hold.
-
-- Its Feature is `-` and its consequence `intergenic_variant`.
-- Ensembl VEP wrote at least one tuple for the same Location and Allele.
-- Every Ensembl VEP tuple there was removed by class 9.
-- vep-rs's whole set for the record is that one row.
-
-A record with any surviving Ensembl VEP tuple, a record Ensembl VEP wrote nothing for, or a vep-rs set with anything beside the intergenic row stays charged where it falls.
-
-Counts:
-
-- gnomAD-SV v2.1 chr21 (GRCh37): 155 rows.
-- gnomAD-SV v4.1 chr21 (GRCh38): 518 rows.
-
-The comparator's pooled per-assembly count (introduction) reads 154 and 469, because 1 and 49 of those records recur in the 1000 Genomes file, where both engines write the intergenic row.
-
-Fully masked, vep-rs side (`excluded_cross_chromosome_rust`).
+Counts (`excluded_bnd_synonym_mate_rows_rust`): 0 on every measured set. Every mate in the gnomAD-SV files is named through `CHR2` as `chr21`, `chrX` or `chrY`, synonyms the cache lists, and the synthetic breakends write their mates with the cache's own names.
 
 ## Defect E: a breakend's mate-side row evaluated at the record's own coordinate
 
@@ -1095,12 +771,12 @@ Fully masked, vep-rs side (`excluded_cross_chromosome_rust`).
 **Where it is in Ensembl VEP's source** (`ensembl-variation`):
 - `Bio/EnsEMBL/Variation/BaseVariationFeatureOverlapAllele.pm`, lines 257 and 273: the record's own feature is passed to every predicate.
 - `Utils/VariationEffect.pm`, lines 350-358: `feature_truncation` alone tests `within_feature` on the breakend; lines 444-458: `upstream` and `downstream` read the record; lines 629-634: `within_intron` reads the record's differing region, which `BaseTranscriptVariationAllele.pm` line 118 derives from the record's start.
-- `StructuralVariationOverlap.pm`, lines 72-87 and 130-146: the mate allele is created from the mate's coordinate and chromosome.
+- `StructuralVariationOverlap.pm`, lines 86-102 and 144-160: the mate allele is created from the mate's coordinate and chromosome.
 
 **What correcting it would change.** If every predicate were evaluated at the breakpoint the row is for, class 11 would vanish.
 
 **The classes it produces.**
-- Class 11: mate-side rows of point breakends whose mate lies on another chromosome or far from the record (the synthetic `09_breakends` and `13_vcf45_features` sets and gnomAD-SV v4.1 chr21: 1,407 and 7,258 pairs). Set aside: both members of each pair. vep-rs 0.2.0 reproduced Ensembl VEP's rows here and 0.3.0 does not, which, together with class 8, is why its raw F1 on the structural-variant sets is lower for 0.3.0 than for 0.2.0.
+- Class 11: mate-side rows of point breakends whose mate lies on another chromosome or far from the record (the synthetic `09_breakends` and `13_vcf45_features` sets and gnomAD-SV v4.1 chr21: 1,407 and 10,518 pairs). Set aside: both members of each pair.
 
 ### 11. Breakend mate rows read from the other chromosome's coordinate
 
@@ -1112,10 +788,10 @@ A breakend record has two coordinates: its own (POS on CHROM) and its mate's (th
 
 Ensembl VEP represents a breakend in one of two ways:
 
-- A `<BND>` whose mate is on the same chromosome and given in `INFO/CHR2` and `END2` becomes a span from POS+1 to the mate (classes 5 and 6). Every allele of a span record is evaluated over the span.
+- A `<BND>` whose mate is on the same chromosome and given in `INFO/CHR2` and `END2` becomes a span from POS+1 to the mate (class 5 shows one). Every allele of a span record is evaluated over the span.
 - A breakend written in bracket notation, or a `<BND>` whose mate is on another chromosome, becomes a point record whose Location is the single base after POS.
 
-This class is about the mate-allele rows of point records. For a transcript within 5,000 bases of the mate, Ensembl VEP writes a mate-allele row (6.1). What that row should say is what the mate breakpoint does to that transcript:
+This class is about the mate-allele rows of point records. For a transcript within 5,000 bases of the mate, Ensembl VEP writes a mate-allele row (`StructuralVariationOverlap.pm` lines 86-102 and 144-160). What that row should say is what the mate breakpoint does to that transcript:
 
 - when the breakpoint falls inside it: `feature_truncation` (SO:0001906), plus the region the breakpoint lands in (`intron_variant`, SO:0001627, or an exon term);
 - when it falls near it: `upstream_gene_variant` (SO:0001631, "a sequence variant located 5' of a gene") and `downstream_gene_variant` (SO:0001632, "a sequence variant located 3' of a gene") with a DISTANCE.
@@ -1189,7 +865,7 @@ Source (`ensembl-variation`):
 
 - `Bio/EnsEMBL/Variation/BaseVariationFeatureOverlapAllele.pm`, lines 257 and 273: `$bvf` is the record's own feature and is passed to every predicate.
 - `Utils/VariationEffect.pm`, lines 350-358: `feature_truncation` alone tests `within_feature` on `$bvfoa->breakend`; lines 444-458: `upstream` and `downstream` read `$bvf`; lines 629-634: `within_intron` reads the record's differing region, which `BaseTranscriptVariationAllele.pm` line 118 derives from `$vf->{start}`.
-- `StructuralVariationOverlap.pm`, lines 72-87 and 130-146: the mate allele is created from the mate's coordinate and chromosome.
+- `StructuralVariationOverlap.pm`, lines 86-102 and 144-160: the mate allele is created from the mate's coordinate and chromosome.
 
 #### 11.5 Why vep-rs's row is the correct one
 
@@ -1201,7 +877,7 @@ Ensembl VEP itself annotates the same breakpoint correctly when it is the record
 
 #### 11.6 Try it yourself
 
-Annotate with Ensembl VEP 115.2, GRCh37 cache and FASTA, using the command of the closing section. Keep the mate at `21:33034355` and move the record's own position:
+Annotate with Ensembl VEP 116.2, GRCh37 cache and FASTA, using the command of the closing section. Keep the mate at `21:33034355` and move the record's own position:
 
 | Record | Ensembl VEP, mate-allele rows on ENST00000270142 and ENST00000449339 |
 | --- | --- |
@@ -1222,11 +898,11 @@ It sets a pair aside only when the two derivations differ, Ensembl VEP's set equ
 Counts, reported as `excluded_breakend_mate_local_read_rust` and `excluded_breakend_mate_local_read_perl`:
 
 - GRCh37: 1,407 pairs (`09_breakends.vcf.gz` 1,369; `13_vcf45_features.vcf.gz` 38).
-- GRCh38: 7,258 pairs (`09_breakends.vcf.gz` 4,055; `13_vcf45_features.vcf.gz` 22; `gnomad_sv_v4.1_chr21.vcf.gz` 3,181).
+- GRCh38: 10,518 pairs (`09_breakends.vcf.gz` 6,333; `13_vcf45_features.vcf.gz` 27; `gnomad_sv_v4.1_chr21.vcf.gz` 4,158).
 
 Rows like the coincidence record, where the two derivations agree, are concordant and not in the class. The class is fully masked, both sides.
 
-vep-rs 0.2.0 evaluated no position on the mate side and so reproduced Ensembl VEP's fall-through rows. vep-rs 0.3.0 evaluates the mate breakpoint where it is. Raw F1 on the structural-variant sets is lower for 0.3.0 than for 0.2.0 by these pairs together with the tuples of class 8, and by nothing else, since raw F1 sets nothing aside.
+vep-rs releases before 0.3.0 evaluated no position on the mate side and so reproduced Ensembl VEP's fall-through rows; from 0.3.0 vep-rs evaluates the mate breakpoint where it is, and these pairs are what that costs the raw figure, which sets nothing aside.
 
 ## A representation difference, not a defect: `<CNV:TR>`
 
@@ -1239,7 +915,7 @@ vep-rs 0.2.0 evaluated no position on the mate side and so reproduced Ensembl VE
 **Where the readings part** (`ensembl-vep`): `Bio/EnsEMBL/VEP/Parser/VCF.pm`, `_expand_tandem_repeat_allele_string`, lines 382-431, called from `create_StructuralVariationFeatures` at line 520.
 
 **The class.**
-- Class 12: the synthetic tandem-repeat set on both assemblies, 1,368 and 2,644 pairs. Set aside: both members of each pair.
+- Class 12: the synthetic tandem-repeat set on both assemblies, 1,368 and 3,751 pairs. Set aside: both members of each pair.
 
 ### 12. `<CNV:TR>` read symbolically, not expanded
 
@@ -1269,7 +945,7 @@ The terms involved are:
 - `coding_sequence_variant` (SO:0001580): "a sequence variant that changes the coding sequence".
 - `inframe_insertion` (SO:0001821): "an inframe non synonymous variant that inserts bases into in the coding sequence".
 
-Both engines follow Ensembl's rule for a span allele (a deletion, duplication, insertion or repeat): `feature_elongation` and `feature_truncation` are written only when the span touches the transcript's exonic sequence. The rule is in `ensembl-variation`, `Utils/VariationEffect.pm` lines 337-348 and 350-373, the `within_cdna` tests at lines 344 and 362. So a run inside an intron gets the region term alone, and a run inside an exon gets the region term plus the direction term. A breakend's `feature_truncation` is a different test, the breakpoint falling anywhere inside the transcript, intron included (lines 357-358; classes 6 and 11).
+Both engines follow Ensembl's rule for a span allele (a deletion, duplication, insertion or repeat): `feature_elongation` and `feature_truncation` are written only when the span touches the transcript's exonic sequence. The rule is in `ensembl-variation`, `Utils/VariationEffect.pm` lines 337-348 and 350-373, the `within_cdna` tests at lines 344 and 362. So a run inside an intron gets the region term alone, and a run inside an exon gets the region term plus the direction term. A breakend's `feature_truncation` is a different test, the breakpoint falling anywhere inside the transcript, intron included (lines 357-358; class 11).
 
 #### 12.2 The record
 
@@ -1281,7 +957,7 @@ Both records are from the synthetic tandem-repeat set `tests/sv_validation/grch3
 
 The reference at 21:25896410-25896445 reads `AGTAACACT` `CACACACACACACACACA` `AAACAAAAC` (9 + 18 + 9 bases). The run is the 18 bases 25896419-25896436 (nine CA units), and the alternate has 121 units, a gain of 112 units or 224 bases.
 
-The transcript is ENST00000346798 (APP, reverse strand, canonical, 25880550-26170770); the run lies in its intron 16 (25891869-25897572). The record has 32 rows on each side, one per APP transcript the run lies in.
+The transcript is ENST00000346798 (APP, reverse strand, canonical, 25880550-26170770); the run lies in its intron 16 (25891869-25897572). The record has 41 rows on each side, one per APP transcript within reach of the run.
 
 The second is a gain inside a coding exon:
 
@@ -1315,7 +991,7 @@ On the second record the two readings also name different terms: an in-frame ins
 
 Ensembl VEP builds the alternate allele as a literal sequence (it materialises the allele). It reads the reference bases of the run and builds the alternate as `RUS` repeated `RUC` times (or `RB` divided by the unit's length, in whole units, when `RUC` is absent). It then hands the pair to its sequence-variant machinery, which trims the common prefix. What is left is a gain as an insertion of whole units after the run's last base, or a loss as a deletion of whole units ending at the run's last base.
 
-The materialisation is skipped for the whole record when any repeat sequence of any of its alleles is longer than `--max_sv_size` bases (the same 10,000,000 default; under `-1` it is always skipped), and every allele of the record is then annotated symbolically. vep-rs reads the direction of change under the same limit, so above it the two engines agree on the symbolic gain. The materialisation also needs the run's reference bases: a run without `--fasta` (the protocol the golden corpora and the measured sets use, `--offline` with no FASTA) fetches no slice, builds no literal allele, and every `<CNV:TR>` record is annotated as a symbolic `tandem_repeat` over the run, which `copy_number_gain` reads as a gain, so a loss is labelled `feature_elongation` with the region terms (lines 516-527 of the same file; `Utils/VariationEffect.pm` lines 246-256). vep-rs reads the direction from the INFO fields with or without a FASTA, so against a FASTA-less reference a loss is `feature_truncation` with the deletion's terms where the reference writes `feature_elongation`; a gain keeps the run as its span on both sides and agrees.
+The materialisation is skipped for the whole record when any repeat sequence of any of its alleles is longer than `--max_sv_size` bases (the same 10,000,000 default; under `-1` it is always skipped), and every allele of the record is then annotated symbolically. vep-rs reads the direction of change under the same limit, so above it the two engines agree on the symbolic gain. The materialisation also needs the run's reference bases: a run without `--fasta` (`--offline` with no FASTA, the protocol of the golden corpora; the measured structural-variant sets ran with the FASTA, so their reference rows are the expanded alleles) fetches no slice, builds no literal allele, and every `<CNV:TR>` record is annotated as a symbolic `tandem_repeat` over the run, which `copy_number_gain` reads as a gain, so a loss is labelled `feature_elongation` with the region terms (lines 516-527 of the same file; `Utils/VariationEffect.pm` lines 246-256). vep-rs reads the direction from the INFO fields with or without a FASTA, so against a FASTA-less reference a loss is `feature_truncation` with the deletion's terms where the reference writes `feature_elongation`; a gain keeps the run as its span on both sides and agrees.
 
 Source (`ensembl-vep`):
 
@@ -1339,7 +1015,7 @@ Neither reading is wrong; the comparator pairs them rather than ranking them.
 
 #### 12.6 Try it yourself
 
-Ensembl VEP 115.2, GRCh38 cache and FASTA, the command of the closing section. Lower the expansion cap below the alternate allele's length and Ensembl VEP annotates the record symbolically. Two settings do that for the two records:
+Ensembl VEP 116.2, GRCh38 cache and FASTA, the command of the closing section. Lower the expansion cap below the alternate allele's length and Ensembl VEP annotates the record symbolically. Two settings do that for the two records:
 
 - `--max_sv_size 200` on the first record (alternate 242 bases);
 - `--max_sv_size 100` on the second record (alternate 138 bases).
@@ -1356,7 +1032,7 @@ With `--max_sv_size 100` the row on the second record becomes
 synth_cnv_tr_0023	21:26021866-26021886	tandem_repeat	ENSG00000142192	ENST00000346798	Transcript	feature_elongation,coding_sequence_variant	969-989	819-839	273-280	-	-	-	IMPACT=HIGH;STRAND=-1;OverlapBP=21;OverlapPC=0.01
 ```
 
-Both rows are byte for byte the vep-rs rows of 12.3. At the default `--max_sv_size` of 10,000,000 every `<CNV:TR>` record of the synthetic sets is expanded.
+Both rows are byte for byte the vep-rs rows of 12.3. Running Ensembl VEP without `--fasta` gives the same two symbolic rows, with the warning `could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta`. At the default `--max_sv_size` of 10,000,000 and with the FASTA every `<CNV:TR>` record of the synthetic sets is expanded.
 
 #### 12.7 How the comparator treats this class
 
@@ -1380,7 +1056,7 @@ An expansion the reference drops without a row is not a pair but class 19 (19.7)
 The class is fully masked:
 
 - GRCh37 set: 1,368 of 1,368 pairs;
-- GRCh38 set: 2,644 of 2,644 pairs.
+- GRCh38 set: 3,751 of 3,751 pairs.
 
 The counters are `excluded_cnvtr_rust` and `excluded_cnvtr_perl`, against the class sizes `cnvtr_swap_pairs_total_rust` and `cnvtr_swap_pairs_total_perl`.
 
@@ -1576,7 +1252,7 @@ The class is `bnd_mate_32bit_buffer_intergenic` in the 116.2 registry of both co
 - `Bio/EnsEMBL/VEP/Parser/VCF.pm`, lines 237-245: a line is routed to `create_StructuralVariationFeatures` when REF and the ALTs together are not a run of `ACGT` and an ALT matches `[<\[\]][^\*]+[>\]\[]`, which `<NON_REF>` does.
 - `Parser/VCF.pm`, lines 469-481: the ALTs are joined (`G/<NON_REF>`) and passed to `get_SO_term`; with no term for them, the line is marked `vep_skip`.
 - `Parser.pm`, lines 712-717: the last branch of `get_SO_term` strips the angle brackets and finds no `%SO_TERMS` entry for `G/NON_REF`.
-- `Parser.pm`, lines 821-826: the marked line is dropped before the input buffer.
+- `Parser.pm`, lines 821-827: the marked line is dropped before the input buffer.
 
 **What correcting it would change.** The real allele would be annotated, as vep-rs annotates it; class 15 would vanish.
 
@@ -1613,7 +1289,7 @@ The same happens with a reference base of `N` (`N G,<NON_REF>`, where vep-rs wri
 
 #### 15.4 Why Ensembl VEP writes that
 
-`Parser/VCF.pm` lines 237-245 route a line to `create_StructuralVariationFeatures` when REF and the ALTs together are not a run of `ACGT` and an ALT matches `[<\[\]][^\*]+[>\]\[]`, which `<NON_REF>` does; lines 469-481 join the ALTs (`G/<NON_REF>`) and call `get_SO_term`, whose last branch (`Parser.pm` lines 712-717) strips the angle brackets and finds no `%SO_TERMS` entry for `G/NON_REF`, so the line is marked `vep_skip` and dropped before the input buffer (`Parser.pm` lines 821-826).
+`Parser/VCF.pm` lines 237-245 route a line to `create_StructuralVariationFeatures` when REF and the ALTs together are not a run of `ACGT` and an ALT matches `[<\[\]][^\*]+[>\]\[]`, which `<NON_REF>` does; lines 469-481 join the ALTs (`G/<NON_REF>`) and call `get_SO_term`, whose last branch (`Parser.pm` lines 712-717) strips the angle brackets and finds no `%SO_TERMS` entry for `G/NON_REF`, so the line is marked `vep_skip` and dropped before the input buffer (`Parser.pm` lines 821-827).
 
 #### 15.5 Why vep-rs's rows are the correct ones
 
@@ -2192,13 +1868,13 @@ Without a FASTA the record is not expanded and the run completes. vep-rs reads t
 
 ## Scoring against Ensembl VEP 116.2
 
-Classes 1 to 12 are the ones the comparators apply when the reference is Ensembl VEP 115.2 (`--reference-release 115.2`), the release the paper was measured against. Ensembl VEP 116 drops a record it marks skipped before its input buffer, so defect C's classes 5 to 8 have no reference row to compare against, and 116.1's chromosome-aware overlap removes defect D's classes 9 and 10 while dropping rows vep-rs writes in three breakend shapes of its own; defects A, B and E and the `<CNV:TR>` representation are unchanged. Classes 13 to 22 are applied under 116.2 only. Every class the comparators apply against 116.2, the default, is listed with its treatment in [docs/concordance-provenance/116.2-divergence-classes.md](concordance-provenance/116.2-divergence-classes.md); under 115.2 the comparators write exactly the reports they wrote for the paper.
+The comparators score against one Ensembl VEP release at a time, chosen by `--reference-release`, and `116.2` is the default: against it they apply the classes of this page, and every class the 116.2 registry sets aside or counts is listed with its treatment in [docs/concordance-provenance/116.2-divergence-classes.md](concordance-provenance/116.2-divergence-classes.md). Under `--reference-release 115.2`, the release the paper was measured against, they apply the paper's twelve classes instead, classes 1 to 12 as the paper's supplement and this page's previous version document them, and write exactly the reports they wrote for the paper; the five masks of the paper's classes 5 to 10 are listed as not applied in every 116.2 report, each with its reason.
 
 ## Reproducing these examples
 
 Every example above is one or two VCF records, from a public dataset or hand-written and printed in full in its section, run through both engines with their default consequence settings.
 
-**The engines.** Every command on this page writes both binaries as `vep`: vep-rs's, a release binary or a source build placed on PATH (`cargo build --release` leaves it at `target/release/vep`), and Ensembl VEP's, the name it has inside the `ensemblorg/ensembl-vep:release_115.2` image (or a local install of release 115.2); the text beside each command names the engine it runs.
+**The engines.** Every command on this page writes both binaries as `vep`: vep-rs's, a release binary or a source build placed on PATH (`cargo build --release` leaves it at `target/release/vep`), and Ensembl VEP's, the name it has inside the `ensemblorg/ensembl-vep:release_116.2` image (or a local install of release 116.2); the text beside each command names the engine it runs.
 
 **The inputs**, all fetched and laid out by `scripts/data/download_real_world_vcfs.sh`, which pins the ClinVar release:
 
@@ -2210,9 +1886,9 @@ Every example above is one or two VCF records, from a public dataset or hand-wri
 
 Contig names are Ensembl's (`21`, not `chr21`; `scripts/README.md` describes the canonicalisation).
 
-**The transcripts.** The transcript sets are Ensembl release 115's: Ensembl VEP reads its own cache (`homo_sapiens/115_GRCh37` and `homo_sapiens/115_GRCh38`), and vep-rs reads the JSON conversion of the same cache (`scripts/data/storable_to_json.pl`, described in `docs/cache-setup.md`), so both engines see identical transcripts. Transcript coordinates quoted above are read from that cache.
+**The transcripts.** The transcript sets are Ensembl release 116's: Ensembl VEP reads its own cache (`homo_sapiens/116_GRCh37` and `homo_sapiens/116_GRCh38`), and vep-rs reads the JSON conversion of the same cache (`scripts/data/storable_to_json.pl`, described in `docs/cache-setup.md`, laid out as `json_cache/homo_sapiens/116_GRCh37` and `json_cache/homo_sapiens/116_GRCh38`), so both engines see identical transcripts. Transcript coordinates quoted above are read from that cache. The worked examples of classes 13 to 22 run vep-rs on the pruned slice of the GRCh38 cache committed with the golden corpus, `tests/golden/116/GRCh38-release116/json_cache`, which holds the transcripts the corpus's records reach.
 
-**The reference genome.** Both engines take the assembly's Ensembl primary-assembly FASTA on every example, the SNP/indel ones included: `Homo_sapiens.GRCh38.dna.primary_assembly.fa` (Ensembl release 115) and `Homo_sapiens.GRCh37.75.dna.primary_assembly.fa` (Ensembl's GRCh37 primary assembly, first served under release 75 and unchanged since), each with its `.fai` index. The reference bases quoted above come from them (`samtools faidx Homo_sapiens.GRCh38.dna.primary_assembly.fa 21:26965974-26966647` gives the 674 bases of class 3's explicit spelling).
+**The reference genome.** Both engines take the assembly's Ensembl primary-assembly FASTA on every example, the SNP/indel ones included: `Homo_sapiens.GRCh38.dna.primary_assembly.fa` (Ensembl release 116) and `Homo_sapiens.GRCh37.75.dna.primary_assembly.fa` (Ensembl's GRCh37 primary assembly, first served under release 75 and unchanged since), each with its `.fai` index. The reference bases quoted above come from them (`samtools faidx Homo_sapiens.GRCh38.dna.primary_assembly.fa 21:26965974-26966647` gives the 674 bases of class 3's explicit spelling).
 
 **Writing a probe input.** Every probe input on this page is written as its five leading VCF columns, CHROM POS ID REF ALT, tab-separated. To run one, put it in a file after the two header lines `##fileformat=VCFv4.2` and `#CHROM POS ID REF ALT QUAL FILTER INFO` (tab-separated). Use `.` in QUAL and FILTER and, in INFO, `.` or the keys the class shows (`END=`, `SVTYPE=` and the like); `--format vcf` needs all eight columns. The `alone` inputs are such a file with one record, the `plus one SNV` inputs the same file with the SNV line added.
 
@@ -2220,26 +1896,25 @@ Contig names are Ensembl's (`21`, not `chr21`; `scripts/README.md` describes the
 
 ```
 vep -i record.vcf -o vep-rs.txt --offline \
-  --json_cache /path/to/json_cache/homo_sapiens/115_GRCh38 \
+  --json_cache /path/to/json_cache/homo_sapiens/116_GRCh38 \
   --fasta /path/to/Homo_sapiens.GRCh38.dna.primary_assembly.fa \
   --species homo_sapiens --assembly GRCh38 \
   --fork 16 --buffer_size 5000 --force --no_stats
 ```
 
-Ensembl VEP 115.2, with the flags the reference outputs were generated with:
+Ensembl VEP 116.2, with the flags the reference outputs were generated with:
 
 ```
-vep -i record.vcf -o vep.txt --offline --cache \
-  --dir_cache /path/to/vep_cache --cache_version 115 \
+docker run --rm -v "$PWD":/work -v /path/to/vep_cache:/cache -v /path/to/fasta:/fasta ensemblorg/ensembl-vep:release_116.2 \
+  vep -i /work/record.vcf -o /work/vep.txt --offline --cache \
+  --dir_cache /cache --cache_version 116 \
   --species homo_sapiens --assembly GRCh38 --format vcf \
-  --fasta /path/to/Homo_sapiens.GRCh38.dna.primary_assembly.fa \
+  --fasta /fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa \
   --buffer_size 5000 --fork 4 --no_stats --force_overwrite
 ```
 
 Substitute `GRCh37` and its cache and FASTA for the GRCh37 examples.
 
-**The batch-dependent classes.** The reference outputs behind the counts used `--fork 4` for the structural-variant sets and `--fork 16` for the SNP/indel datasets. Where a class depends on the batch (5 to 10), the tables above say which `--fork` and `--buffer_size` values give which rows.
-
-The three `--fork` values those tables use are the two reference settings, 4 and 16, and 1, the serial run. The serial run's chunk is the largest the buffer allows (a chunk is at most `buffer_size / (2 × fork)` records, 5.4), so it loads the most regions and writes the most rows; `--buffer_size 1` is the setting under which every record is annotated alone. Both engines accept `--max_sv_size` (default 10,000,000; 5.5 says what each does with it), and class 12 lowers it on Ensembl VEP alone. Ensembl VEP's warnings are in `vep.txt_warnings.txt`; vep-rs's are on standard error.
+**The order-dependent class.** The reference outputs behind the counts used `--fork 4` for the structural-variant sets and `--fork 16` for the SNP/indel datasets. Two classes depend on the other records of a buffer: class 23 on the order in which the buffer's records ask for their regions, and class 14 on the records loaded beside the one whose coordinate reaches 2,147,478,648, which the turn makes intergenic too; their sections say which inputs give which rows. No neighbouring record, `--fork` or `--buffer_size` value changes the outcome of any other class. Flags that do change an outcome are named in the sections that use them: `--max_sv_size` (default 10,000,000 on both engines; `-1` lifts the cap on both) decides class 5's oversize route, and class 12 lowers it on Ensembl VEP alone; `--dont_skip` lets Ensembl VEP annotate a record it would drop (5.4); `--fasta`, which the reference protocol passes, decides whether Ensembl VEP expands a `<CNV:TR>` record (classes 12, 19 and 22); `--distance` moves the coordinate at which class 14's turn happens (14.6). Ensembl VEP's warnings are in `vep.txt_warnings.txt`; vep-rs's are on standard error.
 
 **The comparators** are `scripts/concordance/compare_vep_outputs.py` (SNP/indel) and `scripts/validation/compare_sv_concordance.py` (structural variants); their per-class counters are named in each class's last section, and `scripts/README.md` describes the full measurement.

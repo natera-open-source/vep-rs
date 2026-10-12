@@ -1530,7 +1530,7 @@ def _tuples_by_location(tuples: set[AnnotTuple]) -> dict[str, set[AnnotTuple]]:
 
 # The reference's own skip routes, ported for the cross-check below. `_SO_TERMS` is
 # ensembl-variation Utils/Config.pm:1417-1438 at release 116; the abbreviation rules are
-# Parser.pm 116.2:663-727 (`get_SO_term`), the type derivation Parser/VCF.pm:468-481, the
+# Parser.pm 116.2:663-728 (`get_SO_term`), the type derivation Parser/VCF.pm:468-481, the
 # routing of a record to the structural path Parser/VCF.pm:237-245, the coordinates
 # ensembl-io BaseVCF4.pm `get_start` / `get_end` (the base before the event is the
 # start; SVLEN sets the end before END does; a breakend's END is discarded).
@@ -1707,9 +1707,9 @@ def perl_skip_route(v: VcfVariant, max_sv_size: int = _MAX_SV_SIZE) -> str | Non
     """The route by which Ensembl VEP 116.2 drops a VCF record before its input buffer, or
     None when it keeps the record: ``unsupported_type`` (Parser/VCF.pm:477-481), or
     ``gvcf_variant_site`` when the unsupported type lists `<NON_REF>` beside another ALT,
-    ``incomplete_deletion`` (:555-557), ``invalid_span`` (Parser.pm:475-488: a start or
+    ``incomplete_deletion`` (:555-558), ``invalid_span`` (Parser.pm:475-488: a start or
     end that is not a number, or a start past the end by more than one), ``oversize``
-    (Parser.pm:491-500 over the span `get_end` derives: SVLEN first, else END, else the
+    (Parser.pm:491-501 over the span `get_end` derives: SVLEN first, else END, else the
     start; a breakend's END is discarded). An SVLEN or END spelled `Inf` is ``oversize``
     under a cap (Perl's `abs("Inf")`); one spelled `NaN` keeps the record, every comparison
     on NaN being false. ``max_sv_size`` is the cap the reference ran with; -1 is no cap, as
@@ -2377,14 +2377,19 @@ def filter_bnd_own_rows_lost(
     """A bracket breakend whose own-end rows the reference lost to its mate chromosome.
 
     THE SHAPE. A record's slice is named by the first transcript that reaches it
-    (AnnotationType/Transcript.pm 116.2:122, `$vf->{slice} ||= $tr->{slice}`), and the
-    transcripts of a region already in memory come first (AnnotationSource.pm
-    116.2:119-134). When a mate-chromosome region is in memory from the previous buffer
-    and the record's own region is not, a mate-chromosome transcript names the slice,
-    every own-chromosome transcript then fails the slice test (:128-139: neither the
-    record's slice nor any breakend's is on the transcript's chromosome) and the
-    reference writes nothing under the own-end allele while keeping the mate rows. The
-    result depends on the order of the input, which no annotation should.
+    (AnnotationType/Transcript.pm 116.2:122, `$vf->{slice} ||= $tr->{slice}`). A buffer
+    holds the records of one chromosome (InputBuffer.pm 116.2:191-207, 223-234), its
+    regions load in the order its records first ask for them, each record's own region
+    before its mates' and a region listed once at its first request (AnnotationSource.pm
+    116.2:235-258), and the transcripts are visited in that order. When an earlier record
+    of the buffer asked for a region holding a transcript within reach of the record's
+    mate before the record's own region was asked for, that mate-chromosome transcript
+    names the slice, every own-chromosome transcript then fails the slice test (:125-143:
+    neither the record's slice nor any breakend's is on the transcript's chromosome) and
+    the reference writes nothing under the own-end allele while keeping the mate rows.
+    The result depends on the order of the input, which no annotation should; the record
+    alone, with its mate, or under --buffer_size 1 keeps the rows, and --fork does not
+    change the result.
 
     THE PREDICATE, on a Location whose bracket allele names a mate on another
     chromosome: the reference wrote a Transcript tuple under the bracket allele and no
@@ -2429,14 +2434,23 @@ def filter_bnd_synonym_mate_rows(
     rust_tuples: set[AnnotTuple],
     transcripts_by_chr: dict[str, set[str]],
 ) -> set[AnnotTuple]:
-    """A bracket breakend whose mate is written with a chromosome synonym.
+    """A bracket breakend whose mate's chromosome is spelled in a way the reference does not resolve.
 
-    THE SHAPE. The overlap test resolves the mate's name through the synonym table
-    (InputBuffer.pm 116.2:348-358, `get_source_chr_name`), so a mate-chromosome
-    transcript receives the record; the slice test then compares the breakend's raw name,
-    `chr` stripped, with the cache's (AnnotationType/Transcript.pm 116.2:134), and
-    `NC_000002.12` is not `2`, so the reference writes nothing under the mate allele
-    while keeping the record's own rows.
+    THE SHAPE. A mate whose chromosome carries a prefix the mate-allele test does not
+    resolve, `Chr21` for `21`, reaches the record's transcripts through the record's own
+    coordinates and passes the slice test; the mate allele is then added only when
+    `_close_to_feature` passes (StructuralVariationOverlap.pm 116:86-102, 144-160), whose
+    name test (Utils/VariationEffect.pm 116:111-124) matches a synonym table key verbatim
+    or the whole name case-folded, and `Chr21` is neither, so the reference writes the
+    own-end rows alone while vep-rs writes the mate rows too. A mate named by an accession
+    takes the other route: on another chromosome the overlap test resolves it
+    (InputBuffer.pm 116.2:348-357, `get_source_chr_name`) and the slice test then compares
+    the raw name, `chr` stripped, with the cache's (AnnotationType/Transcript.pm 116.2:134),
+    so the reference writes no mate row. vep-rs does not resolve the accession and writes
+    no mate row either, so on real output nothing is set aside; a vep-rs row under such a
+    mate off the record's own chromosome, which only a constructed input produces, is set
+    aside by the predicate below. On the record's own chromosome the reference keeps the
+    mate rows and vep-rs lacks them, a vep-rs under-annotation that stays charged.
 
     THE PREDICATE, on a Location with a bracket allele whose mate name, read as the
     reference reads it (`reference_mate_chromosome`: `chr` as written stripped, any other

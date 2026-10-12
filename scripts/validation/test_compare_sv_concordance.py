@@ -2383,8 +2383,8 @@ def REC(pos: int, ref: str, alt: str, info: str, vid: str = "r", chrom: str = "2
 
 
 class ReferenceSkippedRecordTests(unittest.TestCase):
-    """116 drops a `vep_skip` record before the input buffer (Parser.pm 116.2:491-500,
-    821-826; Parser/VCF.pm 116.2:477-481, 555-557, 575) and writes no row for it; vep-rs
+    """116 drops a `vep_skip` record before the input buffer (Parser.pm 116.2:491-501,
+    821-827; Parser/VCF.pm 116.2:477-481, 555-558, 575) and writes no row for it; vep-rs
     annotates it. The record is named by the input (`perl_skip_route`), confirmed by the
     reference's absence under its own Location start and alleles (`record_alleles`), and its
     vep-rs rows under those alleles are the class, whatever else shares the start."""
@@ -2565,8 +2565,9 @@ class RecordLocationTests(unittest.TestCase):
 
 class BndOwnRowsLostTests(unittest.TestCase):
     """A bracket breakend whose mate is on another chromosome loses its own-end rows
-    when a mate-chromosome transcript names its slice first (AnnotationType/Transcript.pm
-    116.2:122-143 with AnnotationSource.pm 116.2:119-134)."""
+    when a mate-chromosome transcript, loaded for an earlier record of the same buffer, names
+    its slice first (AnnotationType/Transcript.pm 116.2:122-143 with InputBuffer.pm
+    116.2:191-207, 223-234 and AnnotationSource.pm 116.2:235-258)."""
 
     LOC = "21:26037668"
     MATE = "N[22:26037668["
@@ -2623,9 +2624,13 @@ class BndOwnRowsLostTests(unittest.TestCase):
 
 
 class BndSynonymMateRowsTests(unittest.TestCase):
-    """A mate written with a chromosome synonym passes the overlap test (InputBuffer.pm
-    116.2:348-358) and fails the slice test (AnnotationType/Transcript.pm 116.2:134), so
-    the reference writes nothing under the mate allele."""
+    """A mate whose chromosome carries a prefix the mate-allele test does not resolve (`Chr21`
+    for `21`) loses its mate rows in the reference alone (StructuralVariationOverlap.pm
+    116:86-102, 144-160; Utils/VariationEffect.pm 116:111-124); a mate named by an accession
+    on another chromosome passes the overlap test (InputBuffer.pm 116.2:348-357) and fails the
+    slice test (AnnotationType/Transcript.pm 116.2:134); vep-rs writes no mate row for it
+    either, so on real output nothing is set aside, and a vep-rs row under such a mate off the
+    own chromosome, which only a constructed input produces, is set aside."""
 
     LOC = "21:26037668"
     SYN = "N[NC_000022.11:26037668["
@@ -3110,7 +3115,7 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
 
 class SkipRouteCrossCheckTests(unittest.TestCase):
     """`perl_skip_route` is the reference's own drop logic on the input record (Parser/VCF.pm
-    116.2:237-245, 468-481, 555-557; Parser.pm:491-500, 663-727; ensembl-io BaseVCF4
+    116.2:237-245, 468-481, 555-558; Parser.pm:491-501, 663-728; ensembl-io BaseVCF4
     get_start/get_end), and `check_skip_routes` holds the records and the outputs to each
     other."""
 

@@ -774,33 +774,41 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
         excludes=True,
         excludes_with_cache=True,
         taxonomy_class="reference_skipped_record",
-        perl_citation="Parser.pm:491-500, 821-826; Parser/VCF.pm:477-481, 555-557, 575",
+        perl_citation="Parser.pm:491-501, 821-827; Parser/VCF.pm:477-481, 555-558, 575",
     ),
     OneSidedRule(
         bucket=BND_OWN_ROWS_LOST_BUCKET,
         definition=(
             "A bracket breakend whose mate is on another chromosome loses the rows of its "
-            "own end when a mate-chromosome transcript, in memory from the previous buffer, "
-            "reaches it first and names its slice: the reference keeps the mate rows and "
-            "writes nothing under the own-end allele, an order-dependent result."
+            "own end when a mate-chromosome transcript, loaded for an earlier record of the "
+            "same buffer, reaches it first and names its slice: the reference keeps the mate "
+            "rows and writes nothing under the own-end allele, an order-dependent result."
         ),
         excludes=False,
         excludes_with_cache=True,
-        taxonomy_class="bnd_slice_claimed_by_mate_chromosome",
-        perl_citation="AnnotationSource.pm:119-134; AnnotationType/Transcript.pm:122-143",
+        taxonomy_class="bnd_own_chromosome_rows_lost",
+        perl_citation=(
+            "InputBuffer.pm:191-207, 223-234; AnnotationSource.pm:235-258; "
+            "AnnotationType/Transcript.pm:122-143"
+        ),
     ),
     OneSidedRule(
         bucket=BND_SYNONYM_MATE_ROWS_LOST_BUCKET,
         definition=(
-            "A bracket breakend whose mate is written with a chromosome synonym passes the "
-            "overlap test through the synonym table but fails the slice test, which "
-            "compares the raw name with the cache's, so the reference writes nothing under "
-            "the mate allele."
+            "A bracket breakend whose mate's chromosome is spelled with a prefix the "
+            "mate-allele test does not resolve, Chr21 for 21, loses its mate rows in the "
+            "reference and keeps them in vep-rs; a mate named by an accession on another "
+            "chromosome loses them on both engines, so nothing is set aside, and one on the "
+            "record's own chromosome keeps them in the reference alone, a vep-rs "
+            "under-annotation charged to vep-rs."
         ),
         excludes=False,
         excludes_with_cache=True,
-        taxonomy_class="bnd_synonym_mate_slice_mismatch",
-        perl_citation="InputBuffer.pm:348-358; AnnotationType/Transcript.pm:134",
+        taxonomy_class="bnd_synonym_mate_rows_lost",
+        perl_citation=(
+            "StructuralVariationOverlap.pm:86-102, 144-160; Utils/VariationEffect.pm:111-124; "
+            "InputBuffer.pm:348-357; AnnotationType/Transcript.pm:134"
+        ),
     ),
     OneSidedRule(
         bucket=FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
@@ -866,7 +874,7 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
         excludes=True,
         excludes_with_cache=True,
         taxonomy_class="gvcf_variant_site_dropped",
-        perl_citation="Parser/VCF.pm:237-245, 469-481; Parser.pm:663-727",
+        perl_citation="Parser/VCF.pm:237-245, 469-481; Parser.pm:663-728",
     ),
     OneSidedRule(
         bucket=DOT_BREAKEND_PAIR_BUCKET,
