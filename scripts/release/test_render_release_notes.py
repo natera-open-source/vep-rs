@@ -518,3 +518,340 @@ def test_missing_records_or_changelog_section_fail(tmp_path: Path) -> None:
     assert "lacks population_concordance" in error(repo)
     release.unlink()
     assert f"no docs/concordance-provenance/*-release-v{VERSION}.json" in error(repo)
+
+
+# The six-dataset shape: a release record carrying the two ClinVar cells with their adjusted counts, the two
+# structural-variant cells with sixteen per-file entries each and a `perl_reference` block per suite family,
+# beside a population record carrying its own block. Every expected figure below is re-derived from these
+# integers with Fraction; the records' own rounded fields are spoiled on purpose where a test reads them.
+IMAGE = "ensemblorg/ensembl-vep:release_116.2"
+REFERENCE = {"image": IMAGE, "digest": "sha256:" + "5" * 64, "cache_version": 116}
+POPULATION = (  # dataset, label, assembly, perl, vep-rs, intersection, excluded_perl, excluded_rust
+    ("gnomad_v4.1_genomes", "gnomAD v4.1, whole genome", "GRCh38", 7_409_818_550, 7_409_818_550, 7_409_815_011, 3_539, 3_539),
+    ("gnomad_v2.1.1_genomes", "gnomAD v2.1.1, whole genome", "GRCh37", 885_664_902, 885_664_902, 885_664_478, 424, 424),
+    ("1000g_phase3", "1000 Genomes Phase 3, whole genome", "GRCh37", 286_649_478, 286_649_478, 286_649_396, 82, 82),
+    ("1000g_highcov", "1000 Genomes high-coverage, whole genome", "GRCh38", 699_522_065, 699_534_118, 699_521_778, 287, 12_340),
+)
+CLINVAR = {  # suite: label, perl, vep-rs, intersection, adj_perl, adj_rust, adj_intersection
+    "s01": ("ClinVar GRCh37", 33_483_881, 33_483_881, 33_483_180, 33_483_180, 33_483_180, 33_483_180),
+    "s02": ("ClinVar GRCh38", 125_572_619, 125_572_619, 125_569_159, 125_569_159, 125_569_159, 125_569_159),
+}
+SYNTHETIC_FILES = (
+    "01_snv", "02_mnp_complex", "03_small_indels", "04_large_explicit", "05_symbolic_del_ins", "06_symbolic_dup_inv",
+    "07_cnv_repeat", "08_mobile_elements", "09_breakends", "10_special_alleles", "11_multi_allelic",
+    "12_complex_imprecise", "13_vcf45_features",
+)
+SV_CELLS = {"s07": ("GRCh37", "gnomad_sv_v2.1_chr21", 7_000), "s08": ("GRCh38", "gnomad_sv_v4.1_chr21", 23_000)}
+WALL = {  # dataset: per-chromosome medians on arm64, then on x86_64; the sums carry halves to pin ROUND_HALF_UP
+    "gnomad_v4.1_genomes": ((400.125, 323.5), (650.25, 518.3)),
+    "gnomad_v2.1.1_genomes": ((150.5, 131.0), (240.75, 234.75)),
+    "1000g_phase3": ((44.2, 40.3), (70.5, 65.0)),
+    "1000g_highcov": ((38.25, 35.25), (60.1, 57.4)),
+}
+CLINVAR_WALL = {("s01", "arm64"): 4.31, ("s01", "x86_64"): 6.9, ("s02", "arm64"): 12.5, ("s02", "x86_64"): 21.2}
+COMPUTE = {"arm64": "c8gd.8xlarge", "x86_64": "c8id.8xlarge"}
+MEMORY = {"arm64": "r8gd.8xlarge", "x86_64": "r8id.8xlarge"}
+
+
+def sv_files(suite: str) -> dict[str, tuple[int, int, int, int, int, int]]:
+    """Per file of a structural-variant cell: perl, vep-rs and intersection counts, raw then adjusted. The
+    integers differ per file and per cell, so no pooled figure equals a single file's."""
+    _, gnomad, base = SV_CELLS[suite]
+    out = {}
+    for k, name in enumerate((*SYNTHETIC_FILES, "1kg_sv_chr21", "clinvar_sv_chr21", gnomad), 1):
+        perl = base + 311 * k
+        intersection = perl - 5 * k
+        out[name] = (perl, perl + 17 * k, intersection, intersection + k % 2, intersection + k % 3, intersection)
+    return out
+
+
+def six_dataset_records() -> tuple[dict, dict]:
+    """The release and population records of the six-dataset shape, every float field a coarse or wrong
+    rounding of the counts beside it."""
+    per_dataset = [
+        {"dataset": ds, "label": label, "assembly": asm, "perl_tuples": p, "vep_rs_tuples": r, "intersection": i,
+         "excluded_perl": xp, "excluded_rust": xr, "raw_f1": 0.5, "adjusted_f1": 0.5}
+        for ds, label, asm, p, r, i, xp, xr in POPULATION
+    ]
+    conc = {
+        s: {"perl": p, "rust": r, "intersection": i, "adj_perl": ap, "adj_rust": ar, "adj_intersection": ai, "raw_f1": 0.5, "adj_f1": 0.5}
+        for s, (_, p, r, i, ap, ar, ai) in CLINVAR.items()
+    }
+    for s in SV_CELLS:
+        files = sv_files(s)
+        conc[s] = {
+            "perl": sum(f[0] for f in files.values()), "rust": sum(f[1] for f in files.values()),
+            "intersection": sum(f[2] for f in files.values()), "adj_perl": sum(f[3] for f in files.values()),
+            "adj_rust": sum(f[4] for f in files.values()), "adj_intersection": sum(f[5] for f in files.values()),
+            "raw_f1": 0.5, "adj_f1": 0.5,
+            "per_file": {n: {"perl_tuples": f[0], "engine_tuples": f[1], "intersection": f[2], "f1": 0.5} for n, f in files.items()},
+            "per_file_adjusted": {n: {"perl_tuples": f[3], "engine_tuples": f[4], "intersection": f[5], "f1": 0.5} for n, f in files.items()},
+        }
+    aggregates = [
+        {"arch": arch, "suite_id": s, "median_sec": sec, "instance_type": MEMORY[arch], "n_clones": 20}
+        for (s, arch), sec in CLINVAR_WALL.items()
+    ]
+    aggregates += [{"arch": a, "suite_id": s, "median_sec": 1.5, "instance_type": MEMORY[a], "n_clones": 20} for s in SV_CELLS for a in MEMORY]
+    release = {
+        "release": TAG, "record": "release-addendum", "concordance": conc, "per_cell_aggregates": aggregates,
+        "perl_reference": {
+            "snv_indel": {**REFERENCE, "prefix": "canonical_116_fixture", "fork": 16},
+            "sv": {**REFERENCE, "prefix": "sv_reference_116_fixture", "fork": 4},
+        },
+        "population_concordance": {
+            "release": TAG, "per_dataset": per_dataset, "pooled": {"label": "All four", "raw_f1": 0.5, "adjusted_f1": 0.5},
+            "perl_reference": {**REFERENCE, "prefix": "population_r116.2_c116_fixture"},
+        },
+    }
+    per_cell = [
+        {"dataset": ds, "label": label, "assembly": asm, "chromosome": str(c), "arch": arch, "instance_type": COMPUTE[arch],
+         "n_clones": 20, "median_sec": sec, "peak_rss_mb_median": 2_501.0 if (ds, c, arch) == ("gnomad_v4.1_genomes", 2, "x86_64") else 1_900.0}
+        for ds, label, asm, *_ in POPULATION
+        for arch, medians in zip(("arm64", "x86_64"), WALL[ds])
+        for c, sec in enumerate(medians, 1)
+    ]
+    population = {
+        "release": TAG, "record": "population-measurements", "fork": 16,
+        "wall_time": {
+            "vep_rs": {"engine": "vep-rs", "engine_version": TAG, "instance_types": COMPUTE, "n_clones_per_cell": 20, "per_cell": per_cell},
+            "ensembl_vep": {"engine": "ensembl_vep", "engine_version": "release_115.2", "instance_types": MEMORY},
+        },
+        "perl_reference": {**REFERENCE, "prefix": "population_r116.2_c116_fixture"},
+    }
+    return release, population
+
+
+def six_dataset_repo(tmp_path: Path) -> Path:
+    """The 0.3.2 scratch repository with its two records replaced by records of the six-dataset shape under
+    the same version: the renderer reads the shape from the record, never from the version."""
+    repo = fixture_repo(tmp_path)
+    records = repo / "docs" / "concordance-provenance"
+    for old in records.glob(f"*-v{VERSION}.json"):
+        old.unlink()
+    release, population = six_dataset_records()
+    (records / f"six-dataset-release-v{VERSION}.json").write_text(json.dumps(release))
+    (records / f"six-dataset-population-v{VERSION}.json").write_text(json.dumps(population))
+    return repo
+
+
+def pooled(cells: list[tuple[int, int, int]]) -> str:
+    return f1(sum(c[0] for c in cells), sum(c[1] for c in cells), sum(c[2] for c in cells))
+
+
+def expected_six_dataset_section() -> list[str]:
+    raw: list[tuple[int, int, int]] = []
+    adjusted: list[tuple[int, int, int]] = []
+    rows = ["| Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) |", "| --- | --- | --- | --- | --- |"]
+    for ds, label, _, p, r, i, xp, xr in POPULATION:
+        raw.append((i, p, r))
+        adjusted.append((i, p - xp, r - xr))
+        arm, x86 = (sum(Fraction(str(m)) for m in medians) for medians in WALL[ds])
+        rows.append(f"| {label.replace(', whole genome', '')} | {f1(i, p, r)} | {f1(i, p - xp, r - xr)} | {half_up(arm, 0)} | {half_up(x86, 0)} |")
+    for s, (label, p, r, i, ap, ar, ai) in CLINVAR.items():
+        raw.append((i, p, r))
+        adjusted.append((ai, ap, ar))
+        arm, x86 = (half_up(Fraction(str(CLINVAR_WALL[(s, arch)])), 0) for arch in ("arm64", "x86_64"))
+        rows.append(f"| {label} | {f1(i, p, r)} | {f1(ai, ap, ar)} | {arm} | {x86} |")
+    rows.append(f"| All six | {pooled(raw)} | {pooled(adjusted)} | | |")
+    sv = ["| File set | Assembly | Raw F1 | Adjusted F1 |", "| --- | --- | --- | --- |"]
+    for s, (assembly, gnomad, _) in SV_CELLS.items():
+        files = sv_files(s)
+        for label, names in (("ClinVar SV", ["clinvar_sv_chr21"]), ("gnomAD SV", [gnomad]), ("1000 Genomes SV", ["1kg_sv_chr21"]),
+                             ("Synthetic (13 files)", list(SYNTHETIC_FILES))):
+            raw_files = [(files[n][2], files[n][0], files[n][1]) for n in names]
+            adjusted_files = [(files[n][5], files[n][3], files[n][4]) for n in names]
+            sv.append(f"| {label} | {assembly} | {pooled(raw_files)} | {pooled(adjusted_files)} |")
+    caption = (
+        "Whole genome against Ensembl VEP 116.2: the population datasets one run per chromosome, each ClinVar release one "
+        "genome-wide file; wall time is the sum of the per-chromosome medians of 20 machines at 16 threads on `c8gd.8xlarge` "
+        "(ARM) and `c8id.8xlarge` (x86) for the population datasets, and the whole-file median of 20 machines on "
+        "`r8gd.8xlarge` (ARM) and `r8id.8xlarge` (x86) for the ClinVar files, another instance class and protocol, so the "
+        "`All six` row carries no wall time; peak memory at most 2.5 GB on any chromosome; tuple counts, per-chromosome rows "
+        f"and per-file counts are in the [provenance records]({REPO_URL}/tree/{TAG}/docs/concordance-provenance)."
+    )
+    sv_caption = (
+        "Structural-variant file sets measured on the released binary against the same reference, each set's files pooled by "
+        "summed counts; the paper's own figures stay as published in "
+        f"[docs/published-figures.md]({REPO_URL}/blob/{TAG}/docs/published-figures.md)."
+    )
+    return [caption, "\n".join(rows), sv_caption, "\n".join(sv)]
+
+
+def concordance_section(body: str) -> str:
+    return body.split("## Concordance and wall time\n\n", 1)[1].split("\n\n## Install", 1)[0]
+
+
+def test_six_dataset_records_render_six_rows_all_six_and_the_eight_structural_variant_rows(tmp_path: Path) -> None:
+    repo = six_dataset_repo(tmp_path)
+    body = page(repo)
+    section = concordance_section(body)
+    caption, table, sv_caption, sv_table = expected_six_dataset_section()
+    assert section == f"{caption}\n\n{table}\n\n{sv_caption}\n\n{sv_table}"
+    rows = table.splitlines()[2:]
+    assert [r.split(" | ")[0][2:] for r in rows] == [
+        "gnomAD v4.1", "gnomAD v2.1.1", "1000 Genomes Phase 3", "1000 Genomes high-coverage", "ClinVar GRCh37", "ClinVar GRCh38", "All six",
+    ]
+    assert rows[0].startswith("| gnomAD v4.1 | 0.999999522 | 1.000000000 | 724 | 1,169 |")
+    assert rows[4] == "| ClinVar GRCh37 | 0.999979065 | 1.000000000 | 4 | 7 |"
+    assert rows[5] == "| ClinVar GRCh38 | 0.999972446 | 1.000000000 | 13 | 21 |", "12.5 s rounds half up, never to even"
+    assert rows[6] == "| All six | 0.999998462 | 1.000000000 | | |"
+    sv_rows = sv_table.splitlines()[2:]
+    assert [r.split(" | ")[0][2:] for r in sv_rows] == ["ClinVar SV", "gnomAD SV", "1000 Genomes SV", "Synthetic (13 files)"] * 2
+    assert [r.split(" | ")[1] for r in sv_rows] == ["GRCh37"] * 4 + ["GRCh38"] * 4
+    assert sv_table.count("1.000000000") == 0 and len(set(sv_rows)) == 8
+    assert "chromosome 21" not in section and "All four" not in body and "ClinVar full" not in body and "SV per-VCF" not in body
+    assert "115.2" not in section and "r8gd" in caption and "c8gd" in caption
+    assert len([l for l in section.splitlines() if l.strip()]) <= 23
+    assert len(body.splitlines()) <= 60
+    assert [l for l in body.splitlines() if l.startswith("#")] == [
+        "## Upgrade notes", "## Changed", "## Concordance and wall time", "## Install", "## Cite",
+    ]
+
+    # A record carrying the chromosome 21 cells renders no row for them; the record's own rounded F1 fields are not read.
+    def add_development_cells_and_spoil_floats(record: dict) -> None:
+        for s in ("s03", "s04", "s05", "s06"):
+            record["concordance"][s] = {"perl": 10, "rust": 10, "intersection": 9, "raw_f1": 0.9, "adj_f1": 1.0}
+        for cell in record["concordance"].values():
+            cell["raw_f1"], cell["adj_f1"] = 0.1, 0.2
+            for block in ("per_file", "per_file_adjusted"):
+                for entry in cell.get(block, {}).values():
+                    entry["f1"] = 0.3
+        for r in [*record["population_concordance"]["per_dataset"], record["population_concordance"]["pooled"]]:
+            r["raw_f1"], r["adjusted_f1"] = 0.1, 0.2
+
+    edit_record(repo, "release", add_development_cells_and_spoil_floats)
+    assert page(repo) == body
+
+
+def test_six_dataset_adjusted_f1_is_computed_from_the_adjusted_counts(tmp_path: Path) -> None:
+    repo = six_dataset_repo(tmp_path)
+    body = page(repo)
+
+    # 2 x 125,569,059 / (2 x 125,569,159) rounds to 0.999999204 at nine places; a rendering that copied the
+    # record's six-place adj_f1 would print 0.999999000.
+    def lower_the_adjusted_intersection(record: dict) -> None:
+        record["concordance"]["s02"]["adj_intersection"] -= 100
+        record["concordance"]["s02"]["adj_f1"] = 0.999999
+
+    edit_record(repo, "release", lower_the_adjusted_intersection)
+    moved = page(repo)
+    assert "| ClinVar GRCh38 | 0.999972446 | 0.999999204 | 13 | 21 |" in moved
+    assert f1(125_569_059, 125_569_159, 125_569_159) == "0.999999204" and "0.999999000" not in moved
+    all_six = next(l for l in moved.splitlines() if l.startswith("| All six |"))
+    assert all_six != next(l for l in body.splitlines() if l.startswith("| All six |")) and all_six.endswith("| | |")
+
+    def drop_adjusted_counts(record: dict) -> None:
+        del record["concordance"]["s01"]["adj_rust"]
+
+    edit_record(repo, "release", drop_adjusted_counts)
+    assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] concordance.s01 carries no adj_rust"
+
+    def unmask_a_population_dataset(record: dict) -> None:
+        record["population_concordance"]["per_dataset"][3]["excluded_rust"] = 0
+
+    repo = six_dataset_repo(tmp_path / "unmasked")
+    edit_record(repo, "release", unmask_a_population_dataset)
+    _, _, _, p, r, i, xp, _ = POPULATION[3]
+    assert f"| 1000 Genomes high-coverage | {f1(i, p, r)} | {f1(i, p - xp, r)} | " in page(repo) and f1(i, p - xp, r) != "1.000000000"
+
+    def drop_a_population_dataset(record: dict) -> None:
+        del record["population_concordance"]["per_dataset"][3]
+
+    repo = six_dataset_repo(tmp_path / "three")
+    edit_record(repo, "release", drop_a_population_dataset)
+    assert error(repo).rstrip("\n") == (
+        "ERROR: [render_release_notes] the population concordance has 3 datasets; the six-dataset table pools four with the two ClinVar files"
+    )
+
+
+def test_records_naming_different_reference_releases_are_refused_with_one_error_line(tmp_path: Path) -> None:
+    repo = six_dataset_repo(tmp_path)
+    earlier = {"image": "ensemblorg/ensembl-vep:release_115.2", "cache_version": 115, "prefix": "population_r115.2_c115_fixture"}
+
+    def population_scored_against_the_earlier_release(record: dict) -> None:
+        record["perl_reference"] = earlier
+
+    edit_record(repo, "population", population_scored_against_the_earlier_release)
+    err = error(repo)
+    assert err.count("\n") == 1 and err == (
+        "ERROR: [render_release_notes] the records name different Ensembl VEP releases: the release record.snv_indel 116.2, "
+        "the release record.sv 116.2, population_concordance 116.2, the population record 115.2\n"
+    )
+
+    repo = six_dataset_repo(tmp_path / "families")
+
+    def families_disagree(record: dict) -> None:
+        record["perl_reference"]["sv"] = earlier
+
+    edit_record(repo, "release", families_disagree)
+    assert "the release record.sv 115.2" in error(repo)
+
+    def no_block_on_the_release_record(record: dict) -> None:
+        del record["perl_reference"]
+
+    edit_record(repo, "release", no_block_on_the_release_record)
+    assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] the release record carries no perl_reference block"
+
+    repo = six_dataset_repo(tmp_path / "population")
+
+    def no_block_on_the_population_record(record: dict) -> None:
+        del record["perl_reference"]
+
+    edit_record(repo, "population", no_block_on_the_population_record)
+    assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] the population record carries no perl_reference block"
+    assert "115.2" not in error(repo), "the engine version of a carried-forward wall-time run is never the reference"
+
+
+def test_structural_variant_sets_follow_the_file_names_and_a_malformed_cell_is_refused(tmp_path: Path) -> None:
+    repo = six_dataset_repo(tmp_path)
+
+    def rename_a_file(record: dict) -> None:
+        cell = record["concordance"]["s08"]
+        for block in ("per_file", "per_file_adjusted"):
+            cell[block]["extra_set_chr21"] = cell[block].pop("gnomad_sv_v4.1_chr21")
+
+    edit_record(repo, "release", rename_a_file)
+    assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] concordance.s08.per_file lists extra_set_chr21, a file of no known set"
+
+    repo = six_dataset_repo(tmp_path / "twelve")
+
+    def drop_a_synthetic_file(record: dict) -> None:
+        for block in ("per_file", "per_file_adjusted"):
+            del record["concordance"]["s07"][block]["13_vcf45_features"]
+
+    edit_record(repo, "release", drop_a_synthetic_file)
+    assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] concordance.s07.per_file lists 12 synthetic files; the set has 13"
+
+    repo = six_dataset_repo(tmp_path / "adjusted")
+
+    def drop_a_file_from_the_adjusted_block(record: dict) -> None:
+        del record["concordance"]["s07"]["per_file_adjusted"]["clinvar_sv_chr21"]
+
+    edit_record(repo, "release", drop_a_file_from_the_adjusted_block)
+    assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] concordance.s07 per_file and per_file_adjusted list different files"
+
+    repo = six_dataset_repo(tmp_path / "counts")
+
+    def drop_a_count(record: dict) -> None:
+        del record["concordance"]["s08"]["per_file"]["09_breakends"]["engine_tuples"]
+
+    edit_record(repo, "release", drop_a_count)
+    assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] concordance.s08.per_file 09_breakends lacks engine_tuples"
+
+    repo = six_dataset_repo(tmp_path / "aggregate")
+
+    def drop_a_wall_time(record: dict) -> None:
+        record["per_cell_aggregates"] = [a for a in record["per_cell_aggregates"] if (a["suite_id"], a["arch"]) != ("s02", "x86_64")]
+
+    edit_record(repo, "release", drop_a_wall_time)
+    assert error(repo).rstrip("\n") == (
+        "ERROR: [render_release_notes] the release record has 0 per_cell_aggregates entries for s02 on x86_64; one is read"
+    )
+
+    repo = six_dataset_repo(tmp_path / "cells")
+
+    def drop_the_grch38_sv_cell(record: dict) -> None:
+        del record["concordance"]["s08"]
+
+    edit_record(repo, "release", drop_the_grch38_sv_cell)
+    assert "lacks concordance rows for ['s08']" in error(repo)
