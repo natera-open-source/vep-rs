@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/intended-divergences.md` is organised by Ensembl VEP defect, one walkthrough per class in short sections, the classes renumbered in page order (former 1,9,2,9,3,7,8,10,4,6,11,5 are 1 to 12). (#38)
 - `docs/intended-divergences.md` is written against Ensembl VEP 116.2: classes 6 to 10 retired, class 5 the records 116 drops, classes 23 and 24 breakend rows 116.1 loses, counts re-measured. (#45)
 - `--plugin LoFTEE` warns that the splice-prediction layer is not implemented when `run_splice_predictions` is set to a value Perl LoFTEE treats as true. (#47)
-- The release page's concordance section carries the six whole-genome datasets with `All six`, then a structural-variant F1 table by file set, replacing the chromosome 21 table. (#48)
+- The release page's concordance section carries the six whole-genome datasets with `All six`, then a structural-variant F1 table by file set, replacing the chromosome 21 table. (#50)
 
 ### Fixed
 
