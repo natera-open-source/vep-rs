@@ -296,6 +296,22 @@ target/release/vep \
 | [Released data](manuscript/data/README.md) | The measurement CSVs every published figure re-derives from |
 | [Contributing](CONTRIBUTING.md) | Build, test, code conventions, sign-off and pull-request guidelines |
 
+## Crates
+
+One row per crate under `crates/`, in directory order; each links the crate's own README.
+
+| Crate | Purpose | Kind |
+| --- | --- | --- |
+| [vep-builtins](crates/vep-builtins/README.md) | The built-in plugins: the tabix annotation engine, allele matching and the clinical plugins such as LoFTEE | library |
+| [vep-cache-builder](crates/vep-cache-builder/README.md) | Builds the JSON transcript cache from an Ensembl GFF3, protein FASTA and variation VCF release | binary |
+| [vep-cache-converter](crates/vep-cache-converter/README.md) | Copies a flat JSON transcript cache into the per-chromosome runtime layout, validating each region, and converts tabix plugin data to the binary annotation format | binary |
+| [vep-cli](crates/vep-cli/README.md) | The `vep` command line: argument parsing, the runner and the output pipeline | library and binary |
+| [vep-core](crates/vep-core/README.md) | The shared types: variants, transcripts, consequences and coordinates | library |
+| [vep-effects](crates/vep-effects/README.md) | The consequence-calculation engine, with HGVS and protein prediction | library |
+| [vep-fasta](crates/vep-fasta/README.md) | Indexed FASTA access for the reference genome | library |
+| [vep-io](crates/vep-io/README.md) | Input parsers (VCF, Ensembl default, HGVS, region) and the output writers (VEP, VCF, JSON, Tab, Parquet) | library |
+| [vep-plugin](crates/vep-plugin/README.md) | The plugin trait, the dynamic-library loader and the registry | library |
+
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for build, test and pull-request guidelines, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations. To report a security vulnerability, follow [SECURITY.md](SECURITY.md) rather than filing a public issue.

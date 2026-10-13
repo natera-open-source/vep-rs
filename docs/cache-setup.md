@@ -19,10 +19,10 @@ Add `--include-predictions` to embed the SIFT and PolyPhen matrices that `--sift
 `--polyphen` read; see [SIFT and PolyPhen predictions](#sift-and-polyphen-predictions).
 
 The GRCh38 command is in the [README's quick start](../README.md#quick-start). For GRCh37
-pass the GFF3 explicitly with `--gff3`: Ensembl ships the GRCh37 gene set frozen at
-release 87, as `Homo_sapiens.GRCh37.87.gff3.gz` and `Homo_sapiens.GRCh37.87.gtf.gz`
-under `pub/grch37/release-116/`, and the builder's own GRCh37 GFF3 download looks for
-a release-116 file name that is not there.
+the same download works: Ensembl ships the GRCh37 gene set frozen at release 87, as
+`Homo_sapiens.GRCh37.87.gff3.gz` and `Homo_sapiens.GRCh37.87.gtf.gz` under
+`pub/grch37/release-116/`, and the builder names that release-87 file for any `--release`
+from 88 onward. Local copies can be passed instead, as below.
 
 ```bash
 target/release/vep-cache-builder \
@@ -52,8 +52,6 @@ to `--json_cache`. The published concordance figures were measured on such a con
 for that assembly, which differs from the cache-version-115 build in 310 of those transcripts
 (the `storable_113_*` columns of `manuscript/data/transcript_set_parity.csv`). A converted cache carries no variation data and no SIFT
 or PolyPhen matrices.
-`vep-cache-converter --json-dir <converted> --output-dir <dest>` copies a converted cache
-into the runtime layout and sanity-checks it on the way.
 
 The conversion carries each translation's sequence edits (`seq_edits`: the initial-methionine,
 selenocysteine and amino-acid-substitution edits VEP applies to the reference peptide at
