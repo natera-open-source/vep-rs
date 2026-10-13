@@ -524,6 +524,40 @@ def test_missing_records_or_changelog_section_fail(tmp_path: Path) -> None:
     assert f"no docs/concordance-provenance/*-release-v{VERSION}.json" in error(repo)
 
 
+def test_an_earlier_shape_record_whose_clinvar_grch37_cell_is_not_an_object_is_refused(tmp_path: Path) -> None:
+    repo = fixture_repo(tmp_path)
+    edit_record(repo, "release", lambda r: r["concordance"].update(s01=7))
+    assert "lacks concordance rows for ['s01']" in error(repo)
+
+
+def test_a_record_that_is_not_an_object_is_refused_by_name(tmp_path: Path) -> None:
+    repo = fixture_repo(tmp_path)
+    release = next((repo / "docs" / "concordance-provenance").glob(f"*-release-v{VERSION}.json"))
+    release.write_text("[1, 2]")
+    assert error(repo).rstrip("\n") == f"ERROR: [render_release_notes] {release.name} is not an object"
+    repo = fixture_repo(tmp_path / "population")
+    population = next((repo / "docs" / "concordance-provenance").glob(f"*-population-v{VERSION}.json"))
+    population.write_text("7")
+    assert error(repo).rstrip("\n") == f"ERROR: [render_release_notes] {population.name} is not an object"
+
+
+def test_an_earlier_shape_record_whose_pooled_block_is_malformed_is_refused_by_name(tmp_path: Path) -> None:
+    repo = fixture_repo(tmp_path)
+    edit_record(repo, "release", lambda r: r["population_concordance"]["pooled"].pop("excluded_perl"))
+    assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] population_concordance.pooled carries no excluded_perl"
+    edit_record(repo, "release", lambda r: r["population_concordance"].update(pooled=[1]))
+    assert error(repo).rstrip("\n") == "ERROR: [render_release_notes] population_concordance.pooled carries no label"
+
+
+def test_a_flat_perl_reference_block_with_a_nested_object_keeps_the_earlier_shape(tmp_path: Path) -> None:
+    """A flat block whose one nested value sits under a key of no suite family is not the six-dataset shape: the
+    record's ClinVar GRCh37 cell carries no adjusted counts, so the earlier page renders, its caption from the block."""
+    repo = fixture_repo(tmp_path)
+    block = {"image": "ensemblorg/ensembl-vep:release_115.2", "cache_version": 115, "cells": {"s01": {"scored": 1}}}
+    edit_record(repo, "release", lambda r: r.update(perl_reference=block))
+    assert page(repo) == expected_page(repo)
+
+
 IMAGE = "ensemblorg/ensembl-vep:release_116.2"
 REFERENCE = {"image": IMAGE, "digest": "sha256:" + "5" * 64, "cache_version": 116}
 POPULATION = (  # dataset, label, assembly, perl, vep-rs, intersection, excluded_perl, excluded_rust
@@ -908,6 +942,16 @@ def keep_timed_cells(record: dict, keep) -> None:
     record["wall_time"]["vep_rs"]["per_cell"] = [c for c in record["wall_time"]["vep_rs"]["per_cell"] if keep(c)]
 
 
+def timed_cell(record: dict, index: int) -> dict:
+    return record["wall_time"]["vep_rs"]["per_cell"][index]
+
+
+def set_every_median(record: dict, dataset: str, arch: str, value) -> None:
+    for c in record["wall_time"]["vep_rs"]["per_cell"]:
+        if (c["dataset"], c["arch"]) == (dataset, arch):
+            c["median_sec"] = value
+
+
 def every_aggregate_engine(record: dict, engine: str) -> None:
     for a in record["per_cell_aggregates"]:
         a["engine"] = engine
@@ -1047,18 +1091,112 @@ SIX_DATASET_PROBES = [  # record kind, its edit, then the exact ERROR line or a 
     ),
     pytest.param(
         "release", lambda r: aggregate(r, "s02", "x86_64").update(n_clones="twenty"),
-        ERR + "the per_cell_aggregates entry for s02 on x86_64 carries a n_clones that is not an integer: 'twenty'",
+        ERR + "the per_cell_aggregates entry for s02 on x86_64 carries n_clones that is not an integer: 'twenty'",
         id="an-aggregate-whose-clone-count-is-not-an-integer",
     ),
     pytest.param(
         "release", lambda r: r["concordance"]["s08"]["per_file"]["09_breakends"].update(perl_tuples=7.9),
-        ERR + "concordance.s08.per_file 09_breakends carries a perl_tuples that is not an integer: 7.9",
+        ERR + "concordance.s08.per_file 09_breakends carries perl_tuples that is not an integer: 7.9",
         id="a-per-file-count-that-is-not-an-integer",
     ),
     pytest.param(
         "release", lambda r: aggregate(r, "s01", "arm64").update(median_sec=float("nan")),
         ERR + "the per_cell_aggregates entry for s01 on arm64 carries a median_sec that is not finite: nan",
         id="an-aggregate-whose-median-sec-is-not-finite",
+    ),
+    pytest.param(
+        "release", lambda r: r["per_cell_aggregates"].append(7),
+        ERR + "the release record's per_cell_aggregates is not a list of objects",
+        id="an-aggregate-that-is-not-an-object",
+    ),
+    pytest.param(
+        "release", lambda r: r["population_concordance"]["per_dataset"][0].update(perl_tuples=19.6),
+        ERR + "population_concordance.per_dataset gnomad_v4.1_genomes carries perl_tuples that is not an integer: 19.6",
+        id="a-population-count-that-is-not-an-integer",
+    ),
+    pytest.param(
+        "release", lambda r: r["population_concordance"]["per_dataset"][1].update(intersection=True),
+        ERR + "population_concordance.per_dataset gnomad_v2.1.1_genomes carries intersection that is not an integer: True",
+        id="a-population-count-that-is-a-boolean",
+    ),
+    pytest.param(
+        "release", lambda r: r.update(concordance=[1, 2]),
+        ERR + "the release record's concordance is not an object", id="a-concordance-that-is-not-an-object",
+    ),
+    pytest.param(
+        "release", lambda r: r.update(population_concordance="abc"),
+        ERR + "the release record's population_concordance is not an object",
+        id="a-population-concordance-that-is-not-an-object",
+    ),
+    pytest.param(
+        "release", lambda r: drop_keys(r["population_concordance"], "per_dataset"),
+        ERR + "population_concordance carries no per_dataset", id="a-population-concordance-without-per-dataset",
+    ),
+    pytest.param(
+        "release", lambda r: drop_keys(r["population_concordance"], "pooled"),
+        ERR + "population_concordance carries no pooled", id="a-population-concordance-without-pooled",
+    ),
+    pytest.param(
+        "release", lambda r: r["population_concordance"].update(per_dataset={}),
+        ERR + "the release record's population_concordance.per_dataset is not a list",
+        id="a-per-dataset-that-is-not-a-list",
+    ),
+    pytest.param(
+        "release", lambda r: r["population_concordance"].update(per_dataset=[1, 2, 3, 4]),
+        ERR + "population_concordance.per_dataset[0] carries no dataset, label",
+        id="a-per-dataset-entry-that-is-not-an-object",
+    ),
+    pytest.param(
+        "release", lambda r: drop_keys(r["population_concordance"]["per_dataset"][0], "dataset"),
+        ERR + "population_concordance.per_dataset[0] carries no dataset", id="a-per-dataset-entry-without-its-dataset",
+    ),
+    pytest.param(
+        "release", lambda r: drop_keys(r["population_concordance"]["per_dataset"][1], "label"),
+        ERR + "population_concordance.per_dataset[1] carries no label", id="a-per-dataset-entry-without-its-label",
+    ),
+    pytest.param(
+        "release", lambda r: drop_keys(r["population_concordance"]["per_dataset"][0], "excluded_perl"),
+        ERR + "population_concordance.per_dataset gnomad_v4.1_genomes carries no excluded_perl",
+        id="a-per-dataset-entry-without-a-count",
+    ),
+    pytest.param(
+        "release", lambda r: r.update(per_cell_aggregates={}),
+        ERR + "the release record's per_cell_aggregates is not a list of objects", id="an-aggregates-block-that-is-an-object",
+    ),
+    pytest.param(
+        "release", lambda r: aggregate(r, "s01", "arm64").update(median_sec=1e30),
+        ERR + "a wall time of 1E+30 seconds is too large to round to whole seconds",
+        id="an-aggregate-whose-median-sec-is-too-large-to-round",
+    ),
+    pytest.param(
+        "population", lambda r: timed_cell(r, 0).update(median_sec="n/a"),
+        ERR + "the population record's wall_time.vep_rs.per_cell[0] carries a median_sec that is not a number: 'n/a'",
+        id="a-chromosome-whose-median-sec-is-not-a-number",
+    ),
+    pytest.param(
+        "population", lambda r: timed_cell(r, 0).update(median_sec=None),
+        ERR + "the population record's wall_time.vep_rs.per_cell[0] carries no median_sec",
+        id="a-chromosome-with-a-null-median-sec",
+    ),
+    pytest.param(
+        "population", lambda r: drop_keys(timed_cell(r, 3), "median_sec"),
+        ERR + "the population record's wall_time.vep_rs.per_cell[3] carries no median_sec",
+        id="a-chromosome-without-median-sec",
+    ),
+    pytest.param(
+        "population", lambda r: timed_cell(r, 0).update(median_sec=float("nan")),
+        ERR + "the population record's wall_time.vep_rs.per_cell[0] carries a median_sec that is not finite: nan",
+        id="a-chromosome-whose-median-sec-is-not-finite",
+    ),
+    pytest.param(
+        "population", lambda r: r["wall_time"]["vep_rs"]["per_cell"].insert(2, 7),
+        ERR + "the population record's wall_time.vep_rs.per_cell[2] carries no dataset, arch, median_sec",
+        id="a-chromosome-cell-that-is-not-an-object",
+    ),
+    pytest.param(
+        "population", lambda r: set_every_median(r, "gnomad_v4.1_genomes", "arm64", 1e30),
+        ERR + "a wall time of 2E+30 seconds is too large to round to whole seconds",
+        id="a-dataset-whose-summed-medians-are-too-large-to-round",
     ),
 ]
 
