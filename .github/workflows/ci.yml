@@ -103,8 +103,8 @@ jobs:
           bash -n scripts/concordance/run_concordance.sh
           out=$(bash scripts/data/test_plugin_data_layout.sh 2>&1) || { printf '%s\n' "$out"; exit 1; }
           n=$(printf '%s\n' "$out" | grep -c '^  ok ') || n=0
-          echo "plugin data layout suite reported $n ok lines (floor 40)"
-          [ "$n" -ge 40 ]
+          echo "plugin data layout suite reported $n ok lines (floor 46)"
+          [ "$n" -ge 46 ]
 
   # The measurement harness and the reference-output generator each ship with a
   # pure-bash test suite (stub engines, a stub bcftools, a stub docker) whose

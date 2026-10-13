@@ -38,10 +38,15 @@
 //! **Not implemented:** the MaxEntScan + logistic-regression + de-novo-donor-SVM
 //! splice-prediction layer and the `OS` confidence class (both off by default on the
 //! upstream `grch38` branch), and the PhyloCSF flags: `conservation_file=` is parsed and ignored.
+//! `run_splice_predictions=` is accepted so the key does not trip the unknown-parameter
+//! warning when a Perl `LoF` argument string is reused: `0` or an empty value is accepted
+//! silently, any other value logs a warning that the layer is not implemented, and the run
+//! continues without it.
 //!
 //! **Usage:** `--plugin LoFTEE[,human_ancestor_fa=PATH][,gerp_bigwig=PATH]`
 //! `[,gerp_tabix=PATH][,gerp=PATH][,conservation_file=PATH][,min_intron_size=15]`
 //! `[,use_gerp_end_trunc=true][,gerp_end_trunc_cutoff=N][,filter_position=0.05][,check_complete_cds=false]`
+//! `[,run_splice_predictions=0]`
 //!
 //! **Assembly handling.** The two upstream LoFTEE data bundles are structurally
 //! different, so both are supported:
@@ -66,6 +71,7 @@ use tracing::warn;
 use crate::tabix::{TabixAnnotator, TabixConfig};
 use crate::traits::{BuiltinPlugin, PluginError};
 use vep_core::consequence::{Consequence, LofteeContext, TranscriptConsequence};
+use vep_core::sv_routing::perl_true;
 use vep_core::variant::{InputVariant, VariantClass};
 
 const FIELD_LOF: &str = "LoF";
@@ -212,15 +218,6 @@ fn parse_rank_of_total(s: Option<&str>) -> Option<(u32, u32)> {
     let s = s?;
     let (n, total) = s.split_once('/')?;
     Some((n.trim().parse().ok()?, total.trim().parse().ok()?))
-}
-
-/// Whether a `run_splice_predictions` value switches the splice-prediction
-/// layer on. Perl LoFTEE tests the value for Perl string truth (`LoF.pm:172` on
-/// the `grch38` branch), so only `""` and `"0"` leave it off and `"0.0"` or
-/// `"00"` turn it on. `init` passes the value trimmed, so `" 0"` reads as off
-/// here although Perl would treat it as true.
-fn splice_predictions_requested(value: &str) -> bool {
-    !matches!(value, "" | "0")
 }
 
 /// True if the consequence list contains any of the given SO terms.
@@ -420,9 +417,14 @@ impl BuiltinPlugin for LofteePlugin {
                         (value != "false" && !value.is_empty()).then(|| value.to_string());
                 }
                 "run_splice_predictions" => {
-                    if splice_predictions_requested(value) {
+                    // Perl LoFTEE reads the value by string truth (LoF.pm:172 on grch38, :186
+                    // on master), so only `0` is off there. An empty value never reaches that
+                    // test: `new` drops a parameter whose `split /:/` yields one field, and the
+                    // branch default applies, 0 on grch38 and 1 on master (LoF.pm:98). `init`
+                    // trims the value, so ` 0` is off here and true in Perl.
+                    if perl_true(value) {
                         warn!(
-                            "LoFTEE: run_splice_predictions={value} asks for the splice-prediction layer, which is not implemented; annotating without it"
+                            "LoFTEE: run_splice_predictions='{value}' asks for the splice-prediction layer, which is not implemented; annotating without it"
                         );
                     }
                 }
@@ -1130,16 +1132,6 @@ mod tests {
         let mut p = LofteePlugin::new();
         p.init(&["min_intron_size:25".to_string()]).unwrap();
         assert_eq!(p.min_intron_size, 25);
-    }
-
-    #[test]
-    fn splice_predictions_requested_follows_perl_truth() {
-        assert!(!splice_predictions_requested("0"));
-        assert!(!splice_predictions_requested(""));
-        assert!(splice_predictions_requested("1"));
-        assert!(splice_predictions_requested("false"));
-        assert!(splice_predictions_requested("0.0"));
-        assert!(splice_predictions_requested("00"));
     }
 
     #[test]

@@ -999,7 +999,8 @@ build_plugin_args() {
                 pld="/work/loftee_data"
             fi
             # Perl reads gerp_bigwig on the grch38 branch, gerp_file on master.
-            # Both branches get run_splice_predictions:0: master defaults it to 1, and vep-rs does not implement the layer.
+            # master defaults run_splice_predictions to 1 (LoF.pm:98) and vep-rs has no
+            # splice layer, so both branches pass :0.
             if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
                 echo "LoF,loftee_path:${lp},human_ancestor_fa:${pld}/${ancestor_bgzf},gerp_file:${pld}/${gerp_file},run_splice_predictions:0"
             else
@@ -1145,7 +1146,9 @@ if [[ -n "${PLUGINS}" && -d "${PLUGIN_DATA_DIR}" ]]; then
             -exec stat "${_stat_fmt[@]}" {} \; 2>/dev/null | sort | "${_sha_cmd[@]}" | cut -d' ' -f1
     )"
 fi
-PERL_VEP_SIGNATURE="mode=${PERL_VEP_MODE};docker_image=${PERL_VEP_DOCKER_IMAGE};perl_cache_dir=${PERL_CACHE_DIR};species=${SPECIES};assembly=${ASSEMBLY};format=vcf;buffer_size=5000;fork=1;no_headers=1;no_stats=1;offline=1;cache=1;plugins=${PLUGINS};plugin_data_dir=${PLUGIN_DATA_DIR};plugin_data=${PLUGIN_DATA_FINGERPRINT};fasta=${FASTA:-}"
+# The plugin argument strings are in the key as well: the same plugin names over the same
+# data with one parameter changed are another Perl run.
+PERL_VEP_SIGNATURE="mode=${PERL_VEP_MODE};docker_image=${PERL_VEP_DOCKER_IMAGE};perl_cache_dir=${PERL_CACHE_DIR};species=${SPECIES};assembly=${ASSEMBLY};format=vcf;buffer_size=5000;fork=1;no_headers=1;no_stats=1;offline=1;cache=1;plugins=${PLUGINS};plugin_data_dir=${PLUGIN_DATA_DIR};plugin_data=${PLUGIN_DATA_FINGERPRINT};fasta=${FASTA:-}${PERL_PLUGIN_ARGS[*]+";perl_plugin_args=${PERL_PLUGIN_ARGS[*]}"}"
 PERL_VEP_SIGNATURE_SHA="$(sha256_string "${PERL_VEP_SIGNATURE}")"
 
 for input_vcf in "${prepared_inputs[@]}"; do

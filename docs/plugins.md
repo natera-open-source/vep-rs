@@ -210,10 +210,11 @@ GERP parameter differs per assembly. vep-rs reads both formats natively.
 - `gerp_end_trunc_cutoff` -- **derived from `--assembly`** unless set explicitly,
   because the two upstream branches use cutoffs of opposite sign: `-58` on grch38,
   `+180` on master/GRCh37. Setting it pins that value for both.
-- `run_splice_predictions` -- accepted so a Perl `LoF` argument string can be
-  reused. The splice-prediction layer it switches on is not implemented, so a value
-  Perl treats as true (anything but `0` or empty) logs a warning and the run
-  continues without the layer.
+- `run_splice_predictions` -- accepted so the key does not trip the
+  unknown-parameter warning when a Perl `LoF` argument string is reused. The
+  splice-prediction layer it switches on is not implemented: `0` or an empty value
+  is accepted silently, any other value (true by Perl's string truth) logs a
+  warning, and the run continues without the layer.
 - `--fasta` (the pipeline reference genome) is required for the splice-motif
   checks (the `GC_TO_GT_DONOR` filter and the `NON_CAN_SPLICE` and `NAGNAG_SITE`
   flags); without it those checks are skipped.
@@ -466,7 +467,7 @@ scripts/concordance/run_concordance.sh \
   --mode smoke
 ```
 
-With `--plugins` set, the harness maps each plugin to a `--plugin Name,params` flag for both engines, with file paths from the layout table (Perl's remapped under the container mount `/work/plugin_data`); mounts the data directory into the Perl container, plus a `VEP_plugins/` checkout when one exists at `$VEP_PLUGINS_DIR` (default: a `VEP_plugins/` sibling of the repository; otherwise the `ensemblorg/ensembl-vep` image's own `/plugins` copies serve); keys its Perl output cache on the plugin list, the data directory and a size-and-mtime fingerprint of its files, so cached outputs from another plugin configuration are not reused; and, after the consequence comparison, runs `compare_plugin_outputs.py` per plugin and writes `reports/plugin_concordance.json` (per plugin: `match`, `mismatch`, unrounded `concordance_pct`, plus `tolerance`, `min_annotated`, `file_count` and per-file `results`). A failing plugin makes the harness exit non-zero. Unless `--no-perf` is passed, a baseline vep-rs run without plugins is also timed on the first prepared input and `reports/perf/plugin_timing.json` records the plugin overhead and the Perl-with-plugins over vep-rs-with-plugins wall time.
+With `--plugins` set, the harness maps each plugin to a `--plugin Name,params` flag for both engines, with file paths from the layout table (Perl's remapped under the container mount `/work/plugin_data`); mounts the data directory into the Perl container, plus a `VEP_plugins/` checkout when one exists at `$VEP_PLUGINS_DIR` (default: a `VEP_plugins/` sibling of the repository; otherwise the `ensemblorg/ensembl-vep` image's own `/plugins` copies serve); keys its Perl output cache on the plugin list, the Perl plugin argument strings, the data directory and a size-and-mtime fingerprint of its files, so cached outputs from another plugin configuration or parameter are not reused; and, after the consequence comparison, runs `compare_plugin_outputs.py` per plugin and writes `reports/plugin_concordance.json` (per plugin: `match`, `mismatch`, unrounded `concordance_pct`, plus `tolerance`, `min_annotated`, `file_count` and per-file `results`). A failing plugin makes the harness exit non-zero. Unless `--no-perf` is passed, a baseline vep-rs run without plugins is also timed on the first prepared input and `reports/perf/plugin_timing.json` records the plugin overhead and the Perl-with-plugins over vep-rs-with-plugins wall time.
 
 `compare_plugin_outputs.py` also runs standalone on two default-format outputs:
 

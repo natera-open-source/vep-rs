@@ -498,6 +498,19 @@ mod tests {
         assert_eq!(sv_type_abbreviation("/", None), "/");
     }
 
+    /// Perl's string truth: the empty string and `0` are false, every other string is
+    /// true, `0.0`, `00` and `false` included.
+    #[test]
+    fn perl_truth_is_string_truth() {
+        assert!(!perl_true(""));
+        assert!(!perl_true("0"));
+        assert!(perl_true("1"));
+        assert!(perl_true("0.0"));
+        assert!(perl_true("00"));
+        assert!(perl_true("false"));
+        assert!(perl_true(" 0"));
+    }
+
     /// Parser/VCF.pm:237-245 over REF, the ALTs and a true SVTYPE.
     #[test]
     fn routing_follows_the_reference_and_alleles_and_a_true_svtype() {
