@@ -119,7 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The structural-variant comparator reads POS as Ensembl VEP numifies it (`3e7` is 30000000, a non-number 0), so a dataset carrying one such record is measured rather than refused. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
 - The concordance harness passes `run_splice_predictions:0` to Perl LoFTEE on both assemblies, so `master`'s default splice-prediction layer is not counted as GRCh37 discordance. (#47)
-- The concordance harness keys its Perl output cache on the plugin argument strings, so a changed LoFTEE parameter is not served from an older cache. (#48)
+- The concordance harness keys its Perl output cache on the plugin argument strings, so a changed LoFTEE parameter is not served from an older cache. (#49)
 
 ## [0.3.2] - 2026-10-06
 
