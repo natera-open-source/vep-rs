@@ -40,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--hgvs` types an indel inside the stop codon by its peptides (`p.Ter211=`, `p.Ter133delinsCysTer`) rather than as a frameshift, as Ensembl VEP 116 does. (#44)
 - `docs/intended-divergences.md` is organised by Ensembl VEP defect, one walkthrough per class in short sections, the classes renumbered in page order (former 1,9,2,9,3,7,8,10,4,6,11,5 are 1 to 12). (#38)
 - `docs/intended-divergences.md` is written against Ensembl VEP 116.2: classes 6 to 10 retired, class 5 the records 116 drops, classes 23 and 24 breakend rows 116.1 loses, counts re-measured. (#45)
-- The release page's concordance section carries the six whole-genome datasets with `All six`, then a structural-variant F1 table by file set, replacing the chromosome 21 table. (#47)
+- `--plugin LoFTEE` warns that the splice-prediction layer is not implemented when `run_splice_predictions` is set to a value Perl LoFTEE treats as true. (#47)
+- The release page's concordance section carries the six whole-genome datasets with `All six`, then a structural-variant F1 table by file set, replacing the chromosome 21 table. (#48)
 
 ### Fixed
 
@@ -118,6 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bnd_synonym_mate_rows_lost` sets aside vep-rs's mate rows when the mate is the record's own chromosome spelled with a prefix Ensembl VEP does not resolve (`N[Chr21:30425700[` on `21`). (#44)
 - The structural-variant comparator reads POS as Ensembl VEP numifies it (`3e7` is 30000000, a non-number 0), so a dataset carrying one such record is measured rather than refused. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
+- The concordance harness passes `run_splice_predictions:0` to Perl LoFTEE on both assemblies, so `master`'s default splice-prediction layer no longer counts as GRCh37 discordance. (#47)
 
 ## [0.3.2] - 2026-10-06
 

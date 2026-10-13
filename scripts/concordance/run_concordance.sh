@@ -999,10 +999,11 @@ build_plugin_args() {
                 pld="/work/loftee_data"
             fi
             # Perl reads gerp_bigwig on the grch38 branch, gerp_file on master.
+            # Both branches get run_splice_predictions:0: master defaults it to 1, and vep-rs does not implement the layer.
             if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
-                echo "LoF,loftee_path:${lp},human_ancestor_fa:${pld}/${ancestor_bgzf},gerp_file:${pld}/${gerp_file}"
+                echo "LoF,loftee_path:${lp},human_ancestor_fa:${pld}/${ancestor_bgzf},gerp_file:${pld}/${gerp_file},run_splice_predictions:0"
             else
-                echo "LoF,loftee_path:${lp},human_ancestor_fa:${pld}/${ancestor_bgzf},gerp_bigwig:${pld}/${gerp_file}"
+                echo "LoF,loftee_path:${lp},human_ancestor_fa:${pld}/${ancestor_bgzf},gerp_bigwig:${pld}/${gerp_file},run_splice_predictions:0"
             fi
         else
             echo "LoFTEE,human_ancestor_fa=${ld}/${ancestor_plain},${gerp_key}=${ld}/${gerp_file}"

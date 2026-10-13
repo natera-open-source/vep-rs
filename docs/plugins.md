@@ -173,7 +173,9 @@ column names to extract:
 
 **LoFTEE** -- loss-of-function confidence flagging (consequence-filtering, not a
 lookup). Targets parity with the upstream LoFTEE `grch38` branch defaults
-(splice-prediction layer off). Built-in names are matched exactly as written in the
+(splice-prediction layer off). On GRCh37 the matching Perl run is the `master`
+branch with `run_splice_predictions:0`, because `master` turns that layer on by
+default. Built-in names are matched exactly as written in the
 matrix: Perl VEP loads LoFTEE as `--plugin LoF,...` and vep-rs as `--plugin LoFTEE,...`.
 Named `key=value` parameters, all optional (LoFTEE's native `key:value` form is
 accepted alongside):
@@ -208,6 +210,10 @@ GERP parameter differs per assembly. vep-rs reads both formats natively.
 - `gerp_end_trunc_cutoff` -- **derived from `--assembly`** unless set explicitly,
   because the two upstream branches use cutoffs of opposite sign: `-58` on grch38,
   `+180` on master/GRCh37. Setting it pins that value for both.
+- `run_splice_predictions` -- accepted so a Perl `LoF` argument string can be
+  reused. The splice-prediction layer it switches on is not implemented, so a value
+  Perl treats as true (anything but `0` or empty) logs a warning and the run
+  continues without the layer.
 - `--fasta` (the pipeline reference genome) is required for the splice-motif
   checks (the `GC_TO_GT_DONOR` filter and the `NON_CAN_SPLICE` and `NAGNAG_SITE`
   flags); without it those checks are skipped.
@@ -472,6 +478,6 @@ python3 scripts/concordance/compare_plugin_outputs.py \
     --fields CADD_PHRED,CADD_RAW
 ```
 
-**LoFTEE.** A docker-mode run with LoFTEE also needs `LOFTEE_PERL_PATH` set to a checkout of https://github.com/konradjk/loftee (branch `master` for GRCh37, `grch38` for GRCh38), which the harness mounts into the Perl container; `LOFTEE_DATA_DIR` overrides the default data location, `<plugin-data-dir>/loftee/<assembly>/`. vep-rs reads the plain `human_ancestor.fa`, so decompress the upstream bgzipped file and re-index it (`bgzip -d`, then `samtools faidx`); the harness hands Perl's `LoF` plugin the bgzipped `human_ancestor.fa.gz`, and `setup_plugin_data.sh` reports the directory READY only when the plain file, the compressed copy and all three indexes are present. The `END_TRUNC` cutoff differs in sign between the two upstream branches (`-58` on `grch38`, `+180` on `master`); vep-rs derives it from `--assembly`, so pass that flag rather than `gerp_end_trunc_cutoff=`. Compare `LoF` and `LoF_filter` only (`--fields LoF,LoF_filter --tolerance 0`): `LoF_info` and `LoF_flags` are informational and differ in formatting between the two implementations. Three things to know when reading a LoFTEE comparison: on GRCh38, Perl's plugin reads the GERP bigWig through lossy zoom-level summaries while vep-rs sums exact per-base values, so a borderline variant can land on either side of the `END_TRUNC` cutoff; on GRCh37, Perl's `master` plugin takes whole intermediate exons from the `gerp_exons` table of its conservation database, which the harness does not pass, so a record whose exon walk needs a whole-exon total dies on the Perl side and is counted as vep-rs-only; and Perl's `ANC_ALLELE` check shells out to `samtools faidx`, which the `ensemblorg/ensembl-vep` image does not ship, so that filter is never applied on the Perl side in Docker.
+**LoFTEE.** A docker-mode run with LoFTEE also needs `LOFTEE_PERL_PATH` set to a checkout of https://github.com/konradjk/loftee (branch `master` for GRCh37, `grch38` for GRCh38), which the harness mounts into the Perl container; `LOFTEE_DATA_DIR` overrides the default data location, `<plugin-data-dir>/loftee/<assembly>/`. The harness passes `run_splice_predictions:0` to Perl's `LoF` on both assemblies, because `master` (GRCh37) runs the splice-prediction layer by default and vep-rs does not implement it. vep-rs reads the plain `human_ancestor.fa`, so decompress the upstream bgzipped file and re-index it (`bgzip -d`, then `samtools faidx`); the harness hands Perl's `LoF` plugin the bgzipped `human_ancestor.fa.gz`, and `setup_plugin_data.sh` reports the directory READY only when the plain file, the compressed copy and all three indexes are present. The `END_TRUNC` cutoff differs in sign between the two upstream branches (`-58` on `grch38`, `+180` on `master`); vep-rs derives it from `--assembly`, so pass that flag rather than `gerp_end_trunc_cutoff=`. Compare `LoF` and `LoF_filter` only (`--fields LoF,LoF_filter --tolerance 0`): `LoF_info` and `LoF_flags` are informational and differ in formatting between the two implementations. Three things to know when reading a LoFTEE comparison: on GRCh38, Perl's plugin reads the GERP bigWig through lossy zoom-level summaries while vep-rs sums exact per-base values, so a borderline variant can land on either side of the `END_TRUNC` cutoff; on GRCh37, Perl's `master` plugin takes whole intermediate exons from the `gerp_exons` table of its conservation database, which the harness does not pass, so a record whose exon walk needs a whole-exon total dies on the Perl side and is counted as vep-rs-only; and Perl's `ANC_ALLELE` check shells out to `samtools faidx`, which the `ensemblorg/ensembl-vep` image does not ship, so that filter is never applied on the Perl side in Docker.
 
 No per-plugin agreement figure is published: the released concordance results are core-annotation F1 with no plugin enabled, and a plugin comparison here is a check on your own data and binary, not a reproduction of a published number.

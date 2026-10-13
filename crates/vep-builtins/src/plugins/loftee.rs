@@ -214,6 +214,15 @@ fn parse_rank_of_total(s: Option<&str>) -> Option<(u32, u32)> {
     Some((n.trim().parse().ok()?, total.trim().parse().ok()?))
 }
 
+/// Whether a `run_splice_predictions` value switches the splice-prediction
+/// layer on. Perl LoFTEE tests the value for Perl string truth (`LoF.pm:172` on
+/// the `grch38` branch), so only `""` and `"0"` leave it off and `"0.0"` or
+/// `"00"` turn it on. `init` passes the value trimmed, so `" 0"` reads as off
+/// here although Perl would treat it as true.
+fn splice_predictions_requested(value: &str) -> bool {
+    !matches!(value, "" | "0")
+}
+
 /// True if the consequence list contains any of the given SO terms.
 fn has_consequence(tc: &TranscriptConsequence, wanted: &[Consequence]) -> bool {
     tc.consequences.iter().any(|c| wanted.contains(c))
@@ -409,6 +418,13 @@ impl BuiltinPlugin for LofteePlugin {
                 "conservation_file" => {
                     self.conservation_file =
                         (value != "false" && !value.is_empty()).then(|| value.to_string());
+                }
+                "run_splice_predictions" => {
+                    if splice_predictions_requested(value) {
+                        warn!(
+                            "LoFTEE: run_splice_predictions={value} asks for the splice-prediction layer, which is not implemented; annotating without it"
+                        );
+                    }
                 }
                 "loftee_path" => { /* accepted for arg-string parity; unused natively */ }
                 other => {
@@ -1114,6 +1130,16 @@ mod tests {
         let mut p = LofteePlugin::new();
         p.init(&["min_intron_size:25".to_string()]).unwrap();
         assert_eq!(p.min_intron_size, 25);
+    }
+
+    #[test]
+    fn splice_predictions_requested_follows_perl_truth() {
+        assert!(!splice_predictions_requested("0"));
+        assert!(!splice_predictions_requested(""));
+        assert!(splice_predictions_requested("1"));
+        assert!(splice_predictions_requested("false"));
+        assert!(splice_predictions_requested("0.0"));
+        assert!(splice_predictions_requested("00"));
     }
 
     #[test]
