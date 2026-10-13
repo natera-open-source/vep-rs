@@ -93,9 +93,9 @@ vep -i input.vcf \
 Pass `--assembly` whenever plugins are enabled. CADD, dbscSNV and AlphaMissense use it
 to reject a data file whose own build marker contradicts the run; REVEL uses it to
 pick which of its two coordinate columns (`hg19_pos`, `grch38_pos`) the index was
-built on; LoFTEE uses it to select the END_TRUNC cutoff and the GERP reader. Without
-it those guards are inert and REVEL falls back to the GRCh37 column with only a
-warning. gnomADc carries no in-file build marker and is not checked.
+built on; LoFTEE uses it to select the END_TRUNC cutoff. Without it those guards are
+inert and REVEL falls back to the GRCh37 column with only a warning. gnomADc carries
+no in-file build marker and is not checked.
 
 The runner resolves `--plugin Name,...` arguments against the built-in registry
 first. A name no built-in claims is loaded as a C-ABI dynamic library through
