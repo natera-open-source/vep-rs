@@ -118,7 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bnd_synonym_mate_rows_lost` sets aside vep-rs's mate rows when the mate is the record's own chromosome spelled with a prefix Ensembl VEP does not resolve (`N[Chr21:30425700[` on `21`). (#44)
 - The structural-variant comparator reads POS as Ensembl VEP numifies it (`3e7` is 30000000, a non-number 0), so a dataset carrying one such record is measured rather than refused. (#44)
 - `run_clone_measurement.sh --engine perl` structural-variant cells run to completion: the cache version reaches the per-VCF child as an argument, not as a variable unbound under `set -u`. (#43)
-- The concordance harness passes `run_splice_predictions:0` to Perl LoFTEE on both assemblies, so `master`'s default splice-prediction layer no longer counts as GRCh37 discordance. (#47)
+- The concordance harness passes `run_splice_predictions:0` to Perl LoFTEE on both assemblies, so `master`'s default splice-prediction layer is not counted as GRCh37 discordance. (#47)
 
 ## [0.3.2] - 2026-10-06
 
