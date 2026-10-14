@@ -415,7 +415,7 @@ pub struct Args {
     #[arg(long)]
     pub custom: Vec<String>,
 
-    /// Refused: would keep a --custom VCF source's FILTER column out of the output unless --fields names it; custom annotation is not supported
+    /// Refused: would keep a --custom VCF source's FILTER column out of the output unless the --custom source's fields argument names it; custom annotation is not supported
     #[arg(long = "custom_suppress_filter")]
     pub custom_suppress_filter: bool,
 
@@ -466,8 +466,8 @@ impl Args {
              not supported"
         } else if self.custom_suppress_filter {
             "--custom_suppress_filter is not supported: it would keep a --custom VCF \
-             source's FILTER column out of the output unless --fields names it, and custom \
-             annotation is not supported"
+             source's FILTER column out of the output unless the --custom source's fields \
+             argument names it, and custom annotation is not supported"
         } else {
             return None;
         };
@@ -658,8 +658,8 @@ mod tests {
             args.refused_flag().as_deref(),
             Some(
                 "--custom_suppress_filter is not supported: it would keep a --custom VCF \
-                 source's FILTER column out of the output unless --fields names it, and custom \
-                 annotation is not supported"
+                 source's FILTER column out of the output unless the --custom source's fields \
+                 argument names it, and custom annotation is not supported"
             )
         );
     }

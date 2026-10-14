@@ -348,7 +348,8 @@ impl Config {
     }
 
     /// The cache directory the output headers name: the JSON cache when one is
-    /// given, else VEP's `<dir_cache>/<species>[_<assembly>]/<version>` layout.
+    /// given, else Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout
+    /// (CacheDir.pm:315 and :368), `<version>` alone when no assembly is set.
     pub fn cache_dir_path(&self) -> String {
         if let Some(json_cache) = &self.json_cache {
             return json_cache.clone();
@@ -359,8 +360,8 @@ impl Config {
             .map(|a| format!("_{}", a))
             .unwrap_or_default();
         format!(
-            "{}/{}{}/{}",
-            self.dir_cache, self.species, assembly_suffix, self.cache_version
+            "{}/{}/{}{}",
+            self.dir_cache, self.species, self.cache_version, assembly_suffix
         )
     }
 }
@@ -556,13 +557,16 @@ mod tests {
         assert_eq!(config.dir_cache, "/cache/vep");
     }
 
+    /// Ensembl VEP's `CacheDir.pm` appends the species directory (:315) and then
+    /// `<version>_<assembly>` (:368), so `--dir_cache /opt/vep --assembly GRCh38`
+    /// names `/opt/vep/homo_sapiens/<version>_GRCh38`.
     #[test]
     fn test_cache_dir_path() {
         let args = Args::parse_from(["vep", "--dir_cache", "/opt/vep", "--assembly", "GRCh38"]);
         let config = Config::from_args(args);
         assert_eq!(
             config.cache_dir_path(),
-            format!("/opt/vep/homo_sapiens_GRCh38/{}", vep_core::VEP_VERSION)
+            format!("/opt/vep/homo_sapiens/{}_GRCh38", vep_core::VEP_VERSION)
         );
     }
 

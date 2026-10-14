@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::consequence::{Consequence, TranscriptConsequence};
 use crate::coordinate::{normalize_chromosome, Strand};
-use crate::sv_routing::{sv_so_term_and_class, sv_type_abbreviation};
+use crate::sv_routing::{perl_true, sv_so_term_and_class, sv_type_abbreviation};
 
 /// Classification of variant types based on Sequence Ontology (SO) variant classes.
 ///
@@ -468,13 +468,16 @@ impl InputVariant {
         }
     }
 
-    /// The explicit input identifier, if the record carried one (VCF ID other
-    /// than `.`; the first of several `;`-separated IDs).
+    /// The identifier the record carries, as Ensembl VEP reads it: the first of the
+    /// `;`-joined IDs (Parser/VCF.pm:347 takes `$ids->[0]`), absent when that element
+    /// is empty or `0` (Parser.pm:462 `||=` replaces a Perl-false name) or `.`
+    /// (OutputFactory.pm:900). The later elements are never read, so `.;rs2` carries
+    /// no identifier and `rs2;.` carries `rs2`.
     fn explicit_id(&self) -> Option<&str> {
         self.id
             .as_deref()
-            .filter(|id| !id.is_empty() && *id != ".")
-            .map(|id| id.split(';').next().unwrap_or(id))
+            .and_then(|id| id.split(';').next())
+            .filter(|id| perl_true(id) && *id != ".")
     }
 
     /// `Uploaded_variation` as VEP prints it (OutputFactory.pm
@@ -717,6 +720,26 @@ mod tests {
 
         v.id = Some(".".into());
         assert_eq!(v.uploaded_variation(), "21_100_A/G");
+    }
+
+    /// Ensembl VEP reads only the first `;`-joined ID (Parser/VCF.pm:347) and names
+    /// the record by its line when that element is `.` (OutputFactory.pm:900), empty
+    /// or `0` (Parser.pm:462 `||=` replaces a Perl-false name with `chr_start_alleles`,
+    /// which OutputFactory.pm:900 then rejects as the generated name). On `21 100 . AT A`,
+    /// minimised to `T/-` at 101, the IDs `.;rs2`, `;rs2`, `0` and `0;rs2` all yield
+    /// the line name `21_100_AT/A`; `rs2;.` yields `rs2`.
+    #[test]
+    fn a_perl_false_or_dot_first_id_names_the_record_by_its_line() {
+        let mut v = InputVariant::new("21".into(), 101, 101, b"T".to_vec(), b"-".to_vec());
+        v.uploaded_allele_string = Some("AT/A".into());
+        v.input_line_name = Some("21_100_AT/A".into());
+        v.minimised = true;
+        for id in [".;rs2", ";rs2", "0", "0;rs2"] {
+            v.id = Some(id.into());
+            assert_eq!(v.uploaded_variation(), "21_100_AT/A", "ID {id}");
+        }
+        v.id = Some("rs2;.".into());
+        assert_eq!(v.uploaded_variation(), "rs2");
     }
 
     #[test]

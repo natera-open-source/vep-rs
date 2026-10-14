@@ -576,6 +576,34 @@ mod tests {
         );
     }
 
+    /// Only the first `;`-joined ID is read (Parser/VCF.pm:347 `$ids->[0]`), and the
+    /// record is named by its line when that element is `.` (OutputFactory.pm:900), empty
+    /// or `0`: Parser.pm:462 `||=` replaces a Perl-false name with `chr_start_alleles`,
+    /// here `21_34836522_GAGACGGA/-`, which OutputFactory.pm:900 rejects as the generated
+    /// name. On the GRCh37 corpus record `21 34836521 TGAGACGGA T` the IDs `.;rs2`,
+    /// `;rs2`, `0` and `0;rs2` therefore all yield the line name
+    /// `21_34836521_TGAGACGGA/T`, the name Ensembl VEP 116.2 writes for the record's
+    /// `.` ID, and `rs2;.` yields `rs2`.
+    #[test]
+    fn a_dot_empty_or_zero_first_id_names_the_record_by_its_line() {
+        for id in [".;rs2", ";rs2", "0", "0;rs2"] {
+            let variants =
+                parse_vcf_line(&format!("21\t34836521\t{id}\tTGAGACGGA\tT\t.\t.\t."), false)
+                    .unwrap();
+            assert_eq!(variants[0].start, 34836522, "ID {id}");
+            assert_eq!(variants[0].allele_string, "GAGACGGA/-", "ID {id}");
+            assert_eq!(
+                variants[0].uploaded_variation(),
+                "21_34836521_TGAGACGGA/T",
+                "ID {id}"
+            );
+        }
+        assert_eq!(
+            uploaded_variations("21\t34836521\trs2;.\tTGAGACGGA\tT\t.\t.\t."),
+            ["rs2"]
+        );
+    }
+
     /// Ensembl VEP 116.2 on the GRCh37-hgvs corpus names `21 34971477 . C A`
     /// `21_34971477_C/A`.
     #[test]
