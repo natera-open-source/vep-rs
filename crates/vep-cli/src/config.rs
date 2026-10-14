@@ -374,9 +374,10 @@ impl Config {
         );
         let mut path = String::with_capacity(joined.len());
         for c in joined.chars() {
-            if c != '/' || !path.ends_with('/') {
-                path.push(c);
+            if c == '/' && path.ends_with('/') {
+                continue;
             }
+            path.push(c);
         }
         path
     }
