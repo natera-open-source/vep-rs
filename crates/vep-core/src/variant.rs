@@ -472,15 +472,14 @@ impl InputVariant {
     }
 
     /// The identifier that names the record in `Uploaded_variation`: [`Self::id`]
-    /// unless it is `0` (Parser.pm:462 `||=` replaces a Perl-false name with the
-    /// generated one) or `.` (OutputFactory.pm:900).
+    /// when [`id_names_record`] admits it.
     fn explicit_id(&self) -> Option<&str> {
-        self.id.as_deref().filter(|id| perl_true(id) && *id != ".")
+        self.id.as_deref().filter(|id| id_names_record(id))
     }
 
     /// `Uploaded_variation` as VEP prints it (OutputFactory.pm
-    /// `VariationFeature_to_output_hash`): the input ID unless it is the
-    /// `chr_start_alleles` name VEP gives an ID-less record; else the name built
+    /// `VariationFeature_to_output_hash`): the identifier `explicit_id` admits unless
+    /// it is the `chr_start_alleles` name VEP gives an ID-less record; else the name built
     /// from the input line ([`Self::input_line_name`]); else, for an input format
     /// VEP names from the variant, `chr_start_alleles` where start is the
     /// anchor-trimmed start and the alleles are [`Self::uploaded_allele_string`].
@@ -625,6 +624,13 @@ impl InputVariant {
 /// column is not split (Parser/VEP_input.pm:127 takes the column whole).
 pub fn first_vcf_id(field: &str) -> Option<&str> {
     field.split(';').next().filter(|id| !id.is_empty())
+}
+
+/// Whether a stored name ([`InputVariant::id`]) names its record in `Uploaded_variation`
+/// and may stand in for a breakend's mate: Parser.pm:462 `||=` replaces a Perl-false
+/// name (`0`) with the generated one, and OutputFactory.pm:900 rejects `.`.
+pub fn id_names_record(id: &str) -> bool {
+    perl_true(id) && id != "."
 }
 
 /// Classify a variant based on ref and alt alleles.

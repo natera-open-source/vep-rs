@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A multi-allelic structural variant takes one class from its joined ALTs (`<INS>,<INS>` an insertion, any DEL beside DUP a `copy_number_variation`) and writes one row per ALT (Ensembl VEP 116). (#44)
 - A multi-allelic mobile-element record labels every row with the record's subtype term (`<INS:ME:ALU>,<INS>` prints `Alu_insertion` twice), as Ensembl VEP 116 does. (#44)
 - The plugin-visible `InputVariant` key `mate_id` appears only on a record that names a mate (a bracket or `<BND>` record: MATEID, PARID or a stand-in), never on a single breakend. (#44)
-- The plugin-visible `InputVariant` key `id` holds the first `;`-joined VCF ID as written, `.` included (it was absent for a `.` ID), or the whole Ensembl-format ID column. (#51)
+- The plugin-visible `InputVariant` key `id`, and a breakend's `mate_id` stand-in, take a VCF record's first `;`-joined ID as written, `.` included; `id` is `null` when the column is empty. (#51)
 - `--max_sv_size -1` lifts the size limit, so a structural variant of any span is annotated in every output format. (#44)
 - Records Ensembl VEP 116 drops before annotation (oversize, an unsupported type or ALT list, a `<DEL>` without `END` or `SVLEN`) are annotated, the divergence the golden manifests class `reference_skipped_record`. (#44)
 - JSON `cdna_end`, `cds_end` and `protein_end` are omitted when the end is undefined (`445-?` writes `cdna_start` alone), and `--total_length` positions are written as `N/T` strings, as Ensembl VEP 116 does. (#44)

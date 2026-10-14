@@ -20,7 +20,7 @@ use vep_core::allele::trim_alleles;
 use vep_core::coordinate::parse_pos;
 use vep_core::sv_record::{structural_variants, DEFAULT_MAX_SV_SIZE};
 use vep_core::sv_routing::{perl_true, routes_to_structural, variant_alts, written_alts};
-use vep_core::variant::{first_vcf_id, InputVariant, VariantClass};
+use vep_core::variant::{first_vcf_id, id_names_record, InputVariant, VariantClass};
 use vep_core::vcf_info::info_value;
 
 /// Parse a VCF data line into one or more `InputVariant`s.
@@ -87,10 +87,7 @@ pub fn parse_vcf_line_with_max_sv_size(
 
     let raw_input: Option<Arc<str>> = capture_raw_input.then(|| Arc::from(line));
     let record_id = first_vcf_id(id).map(str::to_string);
-    // The identifier a mate stand-in may take: the name when it names the record.
-    let explicit_id = record_id
-        .as_deref()
-        .filter(|id| perl_true(id) && *id != ".");
+    let explicit_id = record_id.as_deref().filter(|id| id_names_record(id));
     let line_name: Arc<str> = input_line_name(&chr, pos, ref_allele, alt_field).into();
 
     if valid_alts.is_empty() {
@@ -1857,10 +1854,11 @@ mod tests {
     /// breakends, a bare `<BND>` with MATEID, repeated and bare INFO keys, a trailing
     /// empty ALT, POS 0, a POS spelled `1e3` or `1000.0`, a `*`-only record, a `*` beside
     /// sequence alleles in either order, `<CNV:TR>` counts, an ID field of `.`, `.;rs2`,
-    /// `;rs2`, `0`, `0;rs2`, `rs2;.` or `rs1;rs2`) every variant's path, class, skip mark,
-    /// term, span, allele index and number, Allele, mate, record string, allele-less mark,
-    /// repeat length, stored ID, `Uploaded_variation` and JSON `id` agree; a POS past the
-    /// ceiling, and a structural record's POS at it, are refused by both.
+    /// `;rs2`, `0`, `0;rs2`, `rs2;.`, `rs1;rs2` or an empty column, a multi-allelic
+    /// record under a `0` ID) every variant's path, class, skip mark, term, span, allele
+    /// index and number, Allele, mate, record strings, allele-less mark, repeat length,
+    /// stored ID, `Uploaded_variation` and JSON `id` agree; a POS past the ceiling, and a
+    /// structural record's POS at it, are refused by both.
     #[test]
     fn the_vep_io_reader_routes_as_this_parser_does() {
         use vep_io::input::vcf::VcfParser as Reader;
@@ -1881,12 +1879,9 @@ mod tests {
                     v.is_single_breakend,
                 ),
                 (v.mate_chr.clone(), v.mate_pos, v.tr_alt_bases, v.no_allele),
-                // The record strings of the sequence path are the command-line parser's
-                // alone; the structural ones come from the shared record builder.
                 (
-                    v.is_structural
-                        .then(|| v.uploaded_allele_string.as_deref().map(str::to_string)),
-                    v.is_structural.then(|| v.record_allele_string()),
+                    v.uploaded_allele_string.as_deref().map(str::to_string),
+                    v.record_allele_string(),
                     v.input_line_name.as_deref().map(str::to_string),
                 ),
                 (v.id.clone(), v.uploaded_variation(), v.variation_name()),
@@ -1970,6 +1965,9 @@ mod tests {
             "21\t1000\trs1;rs2\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=1100",
             "21\t1000\t0\tN\t<BND>\t.\t.\tSVTYPE=BND;SVLEN=100",
             "21\t1000\t.\tN\t*\t.\t.\t.",
+            "21\t1000\t\tA\tG\t.\t.\t.",
+            "21\t100\t0\tTAG\tTA,T\t.\t.\t.",
+            "21\t100\t;rs2\tA\tG,*\t.\t.\t.",
         ] {
             let cli: Vec<Result<_, String>> = parse_vcf_line(record, false)
                 .unwrap()
