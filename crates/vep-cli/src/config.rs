@@ -356,10 +356,11 @@ impl Config {
             return json_cache.clone();
         }
         let mut species_dir = self.species.clone();
-        for (flag, suffix) in [(self.refseq, "_refseq"), (self.merged, "_merged")] {
-            if flag {
-                species_dir.push_str(suffix);
-            }
+        if self.refseq {
+            species_dir.push_str("_refseq");
+        }
+        if self.merged {
+            species_dir.push_str("_merged");
         }
         let assembly_suffix = self
             .assembly
