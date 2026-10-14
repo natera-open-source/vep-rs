@@ -741,6 +741,36 @@ mod tests {
         );
     }
 
+    /// Without MATEID or PARID a mate's `mate_id` stands in the record's identifier
+    /// (`id_names_record`): the first `;`-joined ID when it names the record, else the
+    /// breakend's `chr:start`, so `rs1;rs2` gives `rs1` and `.`, `;rs2` and `0` give
+    /// `21:1001` on a bracket mate and on a CHR2 mate alike.
+    #[test]
+    fn the_mate_stand_in_is_the_id_only_when_it_names_the_record() {
+        let mate_id = |id: &str, alt: &str, info: &str| {
+            let variants =
+                parse_vcf_line(&format!("21\t1000\t{id}\tN\t{alt}\t.\t.\t{info}"), false).unwrap();
+            assert_eq!(variants.len(), 2, "ID {id}");
+            variants[1].mate_id.clone()
+        };
+        assert_eq!(
+            mate_id("rs1;rs2", "N[21:1700[", "SVTYPE=BND").as_deref(),
+            Some("rs1")
+        );
+        for id in [".", ";rs2", "0"] {
+            assert_eq!(
+                mate_id(id, "N[21:1700[", "SVTYPE=BND").as_deref(),
+                Some("21:1001"),
+                "ID {id}"
+            );
+            assert_eq!(
+                mate_id(id, "<BND>", "SVTYPE=BND;CHR2=21;END2=1700").as_deref(),
+                Some("21:1001"),
+                "ID {id}"
+            );
+        }
+    }
+
     #[test]
     fn test_parse_vcf_line_ignores_star_for_joint_trimming() {
         // * (spanning deletion) is filtered: Perl VEP does not annotate it.
@@ -1855,10 +1885,12 @@ mod tests {
     /// empty ALT, POS 0, a POS spelled `1e3` or `1000.0`, a `*`-only record, a `*` beside
     /// sequence alleles in either order, `<CNV:TR>` counts, an ID field of `.`, `.;rs2`,
     /// `;rs2`, `0`, `0;rs2`, `rs2;.`, `rs1;rs2` or an empty column, a multi-allelic
-    /// record under a `0` ID) every variant's path, class, skip mark, term, span, allele
-    /// index and number, Allele, mate, record strings, allele-less mark, repeat length,
-    /// stored ID, `Uploaded_variation` and JSON `id` agree; a POS past the ceiling, and a
-    /// structural record's POS at it, are refused by both.
+    /// record under a `0` ID, a `.` ALT beside an allele sharing REF's first base, a
+    /// bracket or CHR2 mate under `rs1;rs2`, `.`, `;rs2` or `0`) every variant's path,
+    /// class, skip mark, term, span, allele index and number, Allele, mate, record
+    /// strings, allele-less mark, repeat length, stored ID, `Uploaded_variation` and JSON
+    /// `id` agree; a POS past the ceiling, and a structural record's POS at it, are
+    /// refused by both.
     #[test]
     fn the_vep_io_reader_routes_as_this_parser_does() {
         use vep_io::input::vcf::VcfParser as Reader;
@@ -1873,11 +1905,7 @@ mod tests {
                     v.record_so_term.clone(),
                 ),
                 (v.start, v.end, v.allele_index, v.allele_num),
-                (
-                    v.display_allele(),
-                    v.mate_id.is_some(),
-                    v.is_single_breakend,
-                ),
+                (v.display_allele(), v.mate_id.clone(), v.is_single_breakend),
                 (v.mate_chr.clone(), v.mate_pos, v.tr_alt_bases, v.no_allele),
                 (
                     v.uploaded_allele_string.as_deref().map(str::to_string),
@@ -1968,6 +1996,11 @@ mod tests {
             "21\t1000\t\tA\tG\t.\t.\t.",
             "21\t100\t0\tTAG\tTA,T\t.\t.\t.",
             "21\t100\t;rs2\tA\tG,*\t.\t.\t.",
+            "21\t1000\t0\tAT\tAG,.\t.\t.\t.",
+            "21\t1000\trs1;rs2\tN\tN[21:1700[\t.\t.\tSVTYPE=BND",
+            "21\t1000\t.\tN\tN[21:1700[\t.\t.\tSVTYPE=BND",
+            "21\t1000\t;rs2\tN\tN[21:1700[\t.\t.\tSVTYPE=BND",
+            "21\t1000\t0\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=1700",
         ] {
             let cli: Vec<Result<_, String>> = parse_vcf_line(record, false)
                 .unwrap()

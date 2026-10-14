@@ -156,18 +156,30 @@ impl VcfParser {
         let mut variants = Vec::with_capacity(valid_alts.len());
 
         if !routes_to_structural(vcf_ref, &alts, svtype) {
-            let explicit_alts: Vec<Vec<u8>> = valid_alts
+            // Every ALT but a `*` votes on the anchor chop, so a `.` beside an allele
+            // vetoes it (Parser/VCF.pm:301-322, as the command-line parser's trim reads
+            // them); `*` and `.` then name no variant of their own.
+            let voting: Vec<&str> = alts
                 .iter()
-                .map(|(_, alt)| alt.as_bytes().to_vec())
+                .map(|(_, alt)| *alt)
+                .filter(|alt| *alt != "*")
                 .collect();
+            let voting_bytes: Vec<Vec<u8>> =
+                voting.iter().map(|alt| alt.as_bytes().to_vec()).collect();
             let vcf_ref_bytes = vcf_ref.as_bytes();
-            let (mut trimmed_ref, mut trimmed_alts, prefix_trimmed) =
-                trim_multi_alleles(vcf_ref_bytes, &explicit_alts);
+            let (mut trimmed_ref, mut trimmed_voting, prefix_trimmed) =
+                trim_multi_alleles(vcf_ref_bytes, &voting_bytes);
             // `validate_vf` upper-cases the allele string (Parser.pm:554).
             trimmed_ref.make_ascii_uppercase();
-            trimmed_alts
+            trimmed_voting
                 .iter_mut()
                 .for_each(|alt| alt.make_ascii_uppercase());
+            let trimmed_alts: Vec<Vec<u8>> = voting
+                .iter()
+                .zip(trimmed_voting)
+                .filter(|(alt, _)| **alt != ".")
+                .map(|(_, trimmed)| trimmed)
+                .collect();
 
             // The record's allele strings as the command-line parser holds them: the
             // raw REF and every ALT, and for several ALTs the chopped alleles with a

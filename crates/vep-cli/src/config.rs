@@ -350,7 +350,8 @@ impl Config {
     /// The cache directory the output headers name: the JSON cache when one is
     /// given, else Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout
     /// (CacheDir.pm:315 and :368), the species directory suffixed `_refseq` and then
-    /// `_merged` under those flags (:312), `<version>` alone when no assembly is set.
+    /// `_merged` under those flags (:312), `<version>` alone when no assembly is set,
+    /// consecutive `/` collapsed to one (:373), so a `--dir_cache` ending in `/` adds none.
     pub fn cache_dir_path(&self) -> String {
         if let Some(json_cache) = &self.json_cache {
             return json_cache.clone();
@@ -367,10 +368,17 @@ impl Config {
             .as_deref()
             .map(|a| format!("_{}", a))
             .unwrap_or_default();
-        format!(
+        let joined = format!(
             "{}/{}/{}{}",
             self.dir_cache, species_dir, self.cache_version, assembly_suffix
-        )
+        );
+        let mut path = String::with_capacity(joined.len());
+        for c in joined.chars() {
+            if c != '/' || !path.ends_with('/') {
+                path.push(c);
+            }
+        }
+        path
     }
 }
 
@@ -567,8 +575,10 @@ mod tests {
 
     /// Ensembl VEP's `CacheDir.pm` appends the species directory (:315), suffixed
     /// `_refseq` and then `_merged` under those flags (:312), and then
-    /// `<version>_<assembly>` (:368), so `--dir_cache /opt/vep --assembly GRCh38`
-    /// names `/opt/vep/homo_sapiens/<version>_GRCh38`, `--refseq`
+    /// `<version>_<assembly>` (:368), and collapses consecutive `/` (:373), so
+    /// `--dir_cache /opt/vep --assembly GRCh38` names
+    /// `/opt/vep/homo_sapiens/<version>_GRCh38`, as do `--dir_cache /opt/vep/` and
+    /// `--dir_cache /opt//vep`; `--refseq` names
     /// `/opt/vep/homo_sapiens_refseq/<version>_GRCh38` and `--refseq --merged`
     /// `/opt/vep/homo_sapiens_refseq_merged/<version>_GRCh38`.
     #[test]
@@ -592,6 +602,14 @@ mod tests {
             path(&["--merged", "--refseq"]),
             format!("/opt/vep/homo_sapiens_refseq_merged/{version}_GRCh38")
         );
+        for dir_cache in ["/opt/vep/", "/opt//vep"] {
+            let args = Args::parse_from(["vep", "--dir_cache", dir_cache, "--assembly", "GRCh38"]);
+            assert_eq!(
+                Config::from_args(args).cache_dir_path(),
+                format!("/opt/vep/homo_sapiens/{version}_GRCh38"),
+                "{dir_cache}"
+            );
+        }
     }
 
     #[test]

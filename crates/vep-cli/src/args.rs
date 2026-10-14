@@ -419,11 +419,11 @@ pub struct Args {
     #[arg(long = "custom_suppress_filter")]
     pub custom_suppress_filter: bool,
 
-    /// Accepted for VEP compatibility; not implemented (the transcript set is the --json_cache contents)
+    /// Suffixes the species directory of the output header's cache path with _refseq when --json_cache is absent (accepted for VEP compatibility; selects no transcript set, which is the --json_cache contents)
     #[arg(long)]
     pub refseq: bool,
 
-    /// Accepted for VEP compatibility; not implemented (the transcript set is the --json_cache contents)
+    /// Suffixes the species directory of the output header's cache path with _merged, after _refseq, when --json_cache is absent (accepted for VEP compatibility; selects no transcript set, which is the --json_cache contents)
     #[arg(long)]
     pub merged: bool,
 

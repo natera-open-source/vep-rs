@@ -12,12 +12,14 @@ workspace, and `vep-core` is the only sibling crate it depends on.
 
 Take the VCF line `21 25000100 rs123 A G,T . PASS .` (tabs between columns).
 `VcfParser::next_variant` reads the line, removes the line terminator, lets
-`noodles` parse the record and reads POS from the line's own text, so a spelling
-such as `3e7` is numified as Ensembl VEP numifies it. `parse_record` lists the
-written ALT alleles, drops `*` and `.`, and asks `vep_core::sv_routing` whether
-the INFO/SVTYPE key (the structural variant type) or a symbolic ALT routes the
-record to the structural path; nothing does here, so
-`trim_multi_alleles` removes the prefix every allele shares (never a suffix),
+`noodles` parse the record and reads POS and the ID column from the line's own
+text, so a spelling such as `3e7` is numified as Ensembl VEP numifies it and a
+`.` ID is told from an empty column. `parse_record` lists the written ALT
+alleles, keeps `rs123` as the record's name (the first `;`-joined ID), drops `*`
+and `.` from the alleles, and asks `vep_core::sv_routing` whether the INFO/SVTYPE
+key (the structural variant type) or a symbolic ALT routes the record to the
+structural path; nothing does here, so `trim_multi_alleles` removes the prefix
+every allele but a `*` shares (never a suffix; a `.` beside an allele vetoes it),
 upper-cases the alleles, and `compute_vep_coords` places each allele at start
 25000100 and end 25000100 (an insertion gets `end = start - 1`). Two
 `InputVariant` values leave the parser in ALT order, `allele_index` 0 and 1, both
