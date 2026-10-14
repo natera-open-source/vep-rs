@@ -1,6 +1,6 @@
 # CLI Reference
 
-The `vep` binary accepts the Perl VEP command-line interface. Most flags have the same name and behavior; a flag marked "Accepted for VEP compatibility" below is parsed and has no effect, so an existing VEP command line is accepted. The annotation cache is always `--json_cache`.
+The `vep` binary accepts the Perl VEP command-line interface. Most flags have the same name and behavior; a flag marked "Accepted for VEP compatibility" below is parsed and has no effect on the annotation (the cache flags among them only name the cache path the output header prints), so an existing VEP command line is accepted. The annotation cache is always `--json_cache`.
 
 ```bash
 # Show all flags
@@ -134,7 +134,7 @@ error.
 | Flag               | Type   | Default        | Description                                |
 | ------------------ | ------ | -------------- | ------------------------------------------ |
 | `--species`, `-s`  | String | `homo_sapiens` | Accepted for VEP compatibility; only names the species in the header's cache path when `--json_cache` is absent. The data annotated is the `--json_cache` contents |
-| `--assembly`, `-a` | String | --             | Genome assembly, `GRCh37` or `GRCh38` (`hg19`/`hg38` are accepted; an unrecognized value warns and leaves the plugin guards inert). Names the assembly in the JSON output's `assembly_name` and the Parquet footer metadata (without it the cache's own assembly is used there), and is **load-bearing for plugins**: it picks the coordinate column a dual-coordinate database is indexed on and refuses a data file whose own assembly contradicts it. Pass it whenever `--plugin` is used. |
+| `--assembly`, `-a` | String | --             | Genome assembly, `GRCh37` or `GRCh38` (`hg19`/`hg38` are accepted; an unrecognized value warns and leaves the plugin guards inert). Names the assembly in the JSON output's `assembly_name` and the Parquet footer metadata (without it the cache's own assembly is used there), and is **load-bearing for plugins**: it picks the coordinate column a dual-coordinate database is indexed on and refuses a data file whose own assembly contradicts it. Pass it whenever `--plugin` is used. When `--json_cache` is absent the flag also supplies the `_<assembly>` suffix of the header's cache path leaf, `<version>_GRCh38`; the leaf is the bare `<version>` when the flag is absent |
 
 ## Runtime
 

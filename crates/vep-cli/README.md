@@ -64,15 +64,16 @@ has drained.
 
 `vep` has no subcommands: one invocation annotates one input. The flags are Perl VEP's,
 underscores included, so an existing VEP command line parses; a flag the help marks "accepted
-for VEP compatibility" parses and changes nothing. The groups below name the flags that shape a
-run; the full list, with every flag's parity note, is
+for VEP compatibility" parses and changes no annotation (the cache flags among them only name
+the cache path the output header prints). The groups below name the flags that shape a run;
+the full list, with every flag's parity note, is
 [docs/cli-reference.md](../../docs/cli-reference.md).
 
 | Group     | Flags                                                                                                                                                                                                                                                      |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Input     | `-i`/`--input_file` (default `STDIN`); `--format` vcf, ensembl, hgvs, region, or `guess`, which reads the file extension                                                                                                                                   |
 | Output    | `-o`/`--output_file` (default `variant_effect_output.txt`, `STDOUT` for standard output); `--output_format` vep, vcf, json, tab or parquet, with `--vcf`, `--json` and `--tab` as shorthands; `--force_overwrite`; `--no_headers`; `--vcf_info_field` (default `CSQ`) |
-| Cache     | `--json_cache <dir>`, the one annotation cache; `--cache`, `--offline`, `--dir`, `--dir_cache`, `--cache_version` and `--species` only name the cache path the output header prints                                                                          |
+| Cache     | `--json_cache <dir>`, the one annotation cache; `--cache`, `--offline`, `--dir`, `--dir_cache`, `--cache_version`, `--species`, `--refseq` and `--merged` only name the cache path the output header prints                                                  |
 | Reference | `--fasta`/`--fa`, an indexed FASTA; `--shift_3prime`, which requires it; `--assembly`, read by the assembly-sensitive plugins                                                                                                                              |
 | Runtime   | `--fork`/`--threads` (0 = every logical CPU up to 32); `--decompression_threads` (0 = up to 10, for `.gz` input); `--buffer_size` (default 5000 variants per batch); `--max_sv_size` (-1 lifts the limit)                                                   |
 | Fields    | `--everything` and the field flags it implies: `--symbol`, `--canonical`, `--mane`, `--hgvs`, `--sift`, `--polyphen`, `--numbers`, `--domains`, `--variant_class`, `--af`, `--af_1kg`, `--af_gnomade`, `--af_gnomadg`, `--max_af`, `--pubmed`, `--check_existing` and the rest |
