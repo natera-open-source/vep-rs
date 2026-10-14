@@ -20,7 +20,7 @@ use vep_core::allele::trim_alleles;
 use vep_core::coordinate::parse_pos;
 use vep_core::sv_record::{structural_variants, DEFAULT_MAX_SV_SIZE};
 use vep_core::sv_routing::{perl_true, routes_to_structural, variant_alts, written_alts};
-use vep_core::variant::{InputVariant, VariantClass};
+use vep_core::variant::{first_vcf_id, InputVariant, VariantClass};
 use vep_core::vcf_info::info_value;
 
 /// Parse a VCF data line into one or more `InputVariant`s.
@@ -86,7 +86,11 @@ pub fn parse_vcf_line_with_max_sv_size(
         .collect();
 
     let raw_input: Option<Arc<str>> = capture_raw_input.then(|| Arc::from(line));
-    let explicit_id = (id != "." && !id.is_empty()).then(|| id.to_string());
+    let record_id = first_vcf_id(id).map(str::to_string);
+    // The identifier a mate stand-in may take: the name when it names the record.
+    let explicit_id = record_id
+        .as_deref()
+        .filter(|id| perl_true(id) && *id != ".");
     let line_name: Arc<str> = input_line_name(&chr, pos, ref_allele, alt_field).into();
 
     if valid_alts.is_empty() {
@@ -95,11 +99,10 @@ pub fn parse_vcf_line_with_max_sv_size(
         }
         let mut variant =
             InputVariant::without_allele(chr, pos, ref_allele, written.iter().map(|(_, alt)| *alt));
-        // The record's raw string, as on the sequence path: a VCF record's JSON `id`
-        // keeps the ID column's `.` (`variation_name`), told by this field being set.
+        // The record's raw string, as on the sequence path.
         variant.uploaded_allele_string = Some(variant.allele_string.as_str().into());
         variant.raw_input = raw_input;
-        variant.id = explicit_id;
+        variant.id = record_id;
         variant.input_line_name = Some(line_name);
         return Ok(vec![variant]);
     }
@@ -189,7 +192,7 @@ pub fn parse_vcf_line_with_max_sv_size(
             variant.uploaded_allele_string = Some(uploaded_alleles.clone());
             variant.record_allele_string_multi = chopped.clone();
             variant.raw_input = raw_input.clone();
-            variant.id = explicit_id.clone();
+            variant.id = record_id.clone();
             variants.push(variant);
         }
     } else {
@@ -200,7 +203,7 @@ pub fn parse_vcf_line_with_max_sv_size(
             &written,
             info_field,
             max_sv_size,
-            explicit_id.as_deref(),
+            explicit_id,
         )?;
         if variants
             .iter()
@@ -216,7 +219,7 @@ pub fn parse_vcf_line_with_max_sv_size(
         }
         for variant in &mut variants {
             variant.raw_input = raw_input.clone();
-            variant.id = explicit_id.clone();
+            variant.id = record_id.clone();
         }
     }
 
@@ -583,10 +586,17 @@ mod tests {
     /// name. On the GRCh37 corpus record `21 34836521 TGAGACGGA T` the IDs `.;rs2`,
     /// `;rs2`, `0` and `0;rs2` therefore all yield the line name
     /// `21_34836521_TGAGACGGA/T`, the name Ensembl VEP 116.2 writes for the record's
-    /// `.` ID, and `rs2;.` yields `rs2`.
+    /// `.` ID, and `rs2;.` yields `rs2`. The JSON `id` (OutputFactory/JSON.pm:236) is the
+    /// stored name after the `||=`: `.` for `.;rs2`, `21_34836522_GAGACGGA/-` for `;rs2`,
+    /// `0` and `0;rs2`, `rs2` for `rs2;.`.
     #[test]
     fn a_dot_empty_or_zero_first_id_names_the_record_by_its_line() {
-        for id in [".;rs2", ";rs2", "0", "0;rs2"] {
+        for (id, json_id) in [
+            (".;rs2", "."),
+            (";rs2", "21_34836522_GAGACGGA/-"),
+            ("0", "21_34836522_GAGACGGA/-"),
+            ("0;rs2", "21_34836522_GAGACGGA/-"),
+        ] {
             let variants =
                 parse_vcf_line(&format!("21\t34836521\t{id}\tTGAGACGGA\tT\t.\t.\t."), false)
                     .unwrap();
@@ -597,11 +607,11 @@ mod tests {
                 "21_34836521_TGAGACGGA/T",
                 "ID {id}"
             );
+            assert_eq!(variants[0].variation_name(), json_id, "ID {id}");
         }
-        assert_eq!(
-            uploaded_variations("21\t34836521\trs2;.\tTGAGACGGA\tT\t.\t.\t."),
-            ["rs2"]
-        );
+        let variants = parse_vcf_line("21\t34836521\trs2;.\tTGAGACGGA\tT\t.\t.\t.", false).unwrap();
+        assert_eq!(variants[0].uploaded_variation(), "rs2");
+        assert_eq!(variants[0].variation_name(), "rs2");
     }
 
     /// Ensembl VEP 116.2 on the GRCh37-hgvs corpus names `21 34971477 . C A`
@@ -1846,10 +1856,11 @@ mod tests {
     /// a lowercase ALT, a mixed list, a breakpoint list, bracket and CHR2 mates, dot
     /// breakends, a bare `<BND>` with MATEID, repeated and bare INFO keys, a trailing
     /// empty ALT, POS 0, a POS spelled `1e3` or `1000.0`, a `*`-only record, a `*` beside
-    /// sequence alleles in either order, `<CNV:TR>`
-    /// counts) every variant's path, class, skip mark, term, span, allele index and
-    /// number, Allele, mate, record string, allele-less mark and repeat length agree; a
-    /// POS past the ceiling, and a structural record's POS at it, are refused by both.
+    /// sequence alleles in either order, `<CNV:TR>` counts, an ID field of `.`, `.;rs2`,
+    /// `;rs2`, `0`, `0;rs2`, `rs2;.` or `rs1;rs2`) every variant's path, class, skip mark,
+    /// term, span, allele index and number, Allele, mate, record string, allele-less mark,
+    /// repeat length, stored ID, `Uploaded_variation` and JSON `id` agree; a POS past the
+    /// ceiling, and a structural record's POS at it, are refused by both.
     #[test]
     fn the_vep_io_reader_routes_as_this_parser_does() {
         use vep_io::input::vcf::VcfParser as Reader;
@@ -1878,6 +1889,7 @@ mod tests {
                     v.is_structural.then(|| v.record_allele_string()),
                     v.input_line_name.as_deref().map(str::to_string),
                 ),
+                (v.id.clone(), v.uploaded_variation(), v.variation_name()),
             )
         };
         let from_reader = |record: &str| {
@@ -1949,6 +1961,15 @@ mod tests {
             "21\t30425650\tx\tA\t*,G\t.\t.\t.",
             "21\t30425650\tx\tAG\t*,A\t.\t.\t.",
             "21\t30425650\tx\tA\tG,T,*\t.\t.\t.",
+            "21\t1000\t.\tA\tG\t.\t.\t.",
+            "21\t1000\t.;rs2\tA\tG\t.\t.\t.",
+            "21\t1000\t;rs2\tA\tG\t.\t.\t.",
+            "21\t1000\t0\tA\tG\t.\t.\t.",
+            "21\t1000\t0;rs2\tA\tG\t.\t.\t.",
+            "21\t1000\trs2;.\tA\tG\t.\t.\t.",
+            "21\t1000\trs1;rs2\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=1100",
+            "21\t1000\t0\tN\t<BND>\t.\t.\tSVTYPE=BND;SVLEN=100",
+            "21\t1000\t.\tN\t*\t.\t.\t.",
         ] {
             let cli: Vec<Result<_, String>> = parse_vcf_line(record, false)
                 .unwrap()

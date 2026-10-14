@@ -72,16 +72,12 @@ impl<R: BufRead> EnsemblParser<R> {
 
         let strand = Strand::from_i8(strand_val).unwrap_or(Strand::Forward);
 
-        let id = if parts.len() >= 6 {
-            let id_str = parts[5];
-            if id_str == "." || id_str.is_empty() {
-                None
-            } else {
-                Some(id_str.to_string())
-            }
-        } else {
-            None
-        };
+        // The ID column whole, `.` included, as Parser/VEP_input.pm:127 takes it; a
+        // `;` is part of the name here, where a VCF ID field is split on it.
+        let id = parts
+            .get(5)
+            .filter(|id| !id.is_empty())
+            .map(|id| id.to_string());
 
         let alleles: Vec<&str> = allele_string.split('/').collect();
         if alleles.len() < 2 {
@@ -189,7 +185,7 @@ mod tests {
         assert_eq!(v.end, 25585660);
         assert_eq!(v.ref_allele, b"ACGTG");
         assert_eq!(v.alt_allele(), b"-");
-        assert_eq!(v.id, None);
+        assert_eq!(v.id, Some(".".to_string()));
 
         assert!(parser.next_variant().is_none());
     }
@@ -207,6 +203,31 @@ mod tests {
             names.push(v.unwrap().uploaded_variation());
         }
         assert_eq!(names, ["21_99_-/A", "21_200_A/G/T", "21_200_A/G/T", "rs1"]);
+    }
+
+    /// Parser/VEP_input.pm:127 takes the ID column whole, so `a;b` names the record
+    /// `a;b` in `Uploaded_variation` and in the JSON `id` (a VCF ID field is split on
+    /// `;`). A `.` stays the JSON `id` (Perl reads it as true) while the record is
+    /// named by its line; `0` is replaced by `validate_vf`'s generated name, here
+    /// `21_100_-/A` (start 100, allele string `-/A`), which OutputFactory.pm rejects,
+    /// so the record is named by its line at the lower coordinate, `21_99_-/A`.
+    #[test]
+    fn an_ensembl_format_id_column_is_kept_whole() {
+        let data = "21\t300\t300\tC/T\t1\ta;b\n21\t200\t200\tA/G\t1\t.\n21\t100\t99\t-/A\t1\t0\n";
+        let mut parser = EnsemblParser::new(Cursor::new(data.as_bytes()));
+        let mut names = Vec::new();
+        while let Some(v) = parser.next_variant() {
+            let v = v.unwrap();
+            names.push((v.uploaded_variation(), v.variation_name()));
+        }
+        assert_eq!(
+            names,
+            [
+                ("a;b".to_string(), "a;b".to_string()),
+                ("21_200_A/G".to_string(), ".".to_string()),
+                ("21_99_-/A".to_string(), "21_100_-/A".to_string()),
+            ]
+        );
     }
 
     #[test]

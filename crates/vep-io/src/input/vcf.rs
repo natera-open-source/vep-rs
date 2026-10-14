@@ -11,7 +11,7 @@ use noodles::vcf;
 use vep_core::coordinate::parse_pos;
 use vep_core::sv_record::{structural_variants, StructuralRecordError, DEFAULT_MAX_SV_SIZE};
 use vep_core::sv_routing::{perl_true, routes_to_structural, variant_alts, written_alts};
-use vep_core::variant::{InputVariant, VariantClass};
+use vep_core::variant::{first_vcf_id, InputVariant, VariantClass};
 use vep_core::vcf_info::info_value;
 
 use crate::error::IoError;
@@ -111,11 +111,14 @@ impl VcfParser {
 
         let ids = record.ids();
         let ids_str: &str = ids.as_ref();
+        // noodles hands the missing value `.` over as an empty field.
         let id = if ids_str.is_empty() {
-            None
+            Some(".".to_string())
         } else {
-            Some(ids_str.to_string())
+            first_vcf_id(ids_str).map(str::to_string)
         };
+        // The identifier a mate stand-in may take: the name when it names the record.
+        let explicit_id = id.as_deref().filter(|id| perl_true(id) && *id != ".");
 
         let alt_bases = record.alternate_bases();
         let alt_column: &str = alt_bases.as_ref();
@@ -195,7 +198,7 @@ impl VcfParser {
                 &written,
                 info_raw,
                 self.max_sv_size,
-                id.as_deref(),
+                explicit_id,
             ) {
                 Ok(variants) => variants,
                 Err(StructuralRecordError::Span(error)) => {
@@ -431,7 +434,7 @@ mod tests {
         assert_eq!(variant.ref_allele, b"-");
         assert_eq!(variant.alt_allele(), b"TT");
         assert_eq!(variant.allele_string, "-/TT");
-        assert_eq!(variant.id, None);
+        assert_eq!(variant.id, Some(".".into()));
     }
 
     #[test]
@@ -500,8 +503,9 @@ mod tests {
         let mut parser = VcfParser::new(reader).unwrap();
 
         let variant = parser.next_variant().unwrap().unwrap();
-        assert_eq!(variant.id, None);
+        assert_eq!(variant.id, Some(".".into()));
         assert_eq!(variant.uploaded_variation(), "21_300_C/T");
+        assert_eq!(variant.variation_name(), ".");
     }
 
     #[test]

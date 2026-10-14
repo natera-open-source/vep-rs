@@ -560,7 +560,7 @@ mod tests {
     #[test]
     fn multi_allelic_record_is_one_object() {
         let mut a = make_annotated_variant();
-        a.id = None;
+        a.id = Some(".".into());
         a.allele_index = 0;
         a.uploaded_allele_string = Some("A/G/T".into());
         a.record_allele_string_multi = Some("A/G/T".into());
