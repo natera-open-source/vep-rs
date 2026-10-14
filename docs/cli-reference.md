@@ -235,8 +235,8 @@ batch continues. `crates/vep-plugin/examples/echo_plugin.rs` is a working exampl
 
 | Flag              | Type | Default | Description                                                                                       |
 | ----------------- | ---- | ------- | ------------------------------------------------------------------------------------------------- |
-| `--refseq`        | bool | false   | Accepted for VEP compatibility; not implemented (the transcript set is the `--json_cache` contents) |
-| `--merged`        | bool | false   | Accepted for VEP compatibility; not implemented (the transcript set is the `--json_cache` contents) |
+| `--refseq`        | bool | false   | Accepted for VEP compatibility; selects no transcript set (the transcript set is the `--json_cache` contents). Only suffixes the species directory of the header's cache path, `homo_sapiens_refseq`, when `--json_cache` is absent |
+| `--merged`        | bool | false   | Accepted for VEP compatibility; selects no transcript set (the transcript set is the `--json_cache` contents). Only suffixes the species directory of the header's cache path, `homo_sapiens_merged` (`homo_sapiens_refseq_merged` with `--refseq`), when `--json_cache` is absent |
 | `--gencode_basic` | bool | false   | Accepted for VEP compatibility; not implemented (the transcript set is the `--json_cache` contents) |
 
 ## Statistics
