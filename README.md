@@ -6,7 +6,7 @@
 
 A fast, memory-efficient reimplementation of the Ensembl Variant Effect Predictor (VEP) in Rust. It takes VEP's inputs and flags, writes VEP's consequence vocabulary in VEP's output formats, and annotates population-scale callsets two orders of magnitude faster than the Perl implementation.
 
-In this README, "Perl VEP" is the reference implementation, `ensemblorg/ensembl-vep` release 115.2. The accompanying paper calls the same engine "VEP".
+In this README, "Perl VEP" is the reference implementation, `ensemblorg/ensembl-vep` release 116.2. The accompanying paper calls the same engine "VEP".
 
 ## Why vep-rs instead of Ensembl VEP or fastVEP
 
@@ -199,7 +199,7 @@ Each published release from 0.2.0 on is also an image on the GitHub Container Re
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" \
   -v "$PWD/tests/golden/116/GRCh37:/corpus:ro" -v "$PWD:/data" \
-  ghcr.io/natera-open-source/vep-rs:0.2.0 \
+  ghcr.io/natera-open-source/vep-rs:0.4.0 \
   vep --json_cache /corpus/json_cache --assembly GRCh37 -i /corpus/variants.vcf -o /data/output.txt
 ```
 
@@ -209,7 +209,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
 - Each image carries a build-provenance attestation:
 
   ```bash
-  gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:0.2.0 --repo natera-open-source/vep-rs
+  gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:0.4.0 --repo natera-open-source/vep-rs
   ```
 
 ## Quick start
@@ -329,7 +329,7 @@ If you use vep-rs in published work, cite the paper:
 
 > Porter M, Borkowski R. _vep-rs: high-throughput Rust variant annotation with population-scale concordance to Ensembl VEP._ bioRxiv (2026). [doi:10.64898/2026.09.22.753614](https://doi.org/10.64898/2026.09.22.753614).
 
-The journal DOI will be added here on acceptance. The paper's figures are in [docs/published-figures.md](docs/published-figures.md) and re-derive from `manuscript/data/*.csv` in this tree ([manuscript/data/README.md](manuscript/data/README.md)). The current release's own measurements are in [Current release](#current-release-v032).
+The journal DOI will be added here on acceptance. The paper's figures are in [docs/published-figures.md](docs/published-figures.md) and re-derive from `manuscript/data/*.csv` in this tree ([manuscript/data/README.md](manuscript/data/README.md)). The current release's own measurements are in [Current release](#current-release-v040).
 
 The software itself is archived at Zenodo, and that archive is the citation for the code and the released data files:
 
