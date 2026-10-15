@@ -72,6 +72,10 @@ def fixture_repo(tmp_path: Path) -> Path:
     (repo / ".github" / "release-notes").mkdir(parents=True)
     for rel in ("CHANGELOG.md", "CITATION.cff", "Cargo.toml"):
         shutil.copy(ROOT / rel, repo / rel)
+    # The repository's CITATION.cff names the current version, not the fixture release, and `read_doi`
+    # reads the top-level DOI as a version's own only when the file's version is the one rendered.
+    cff = repo / "CITATION.cff"
+    cff.write_text(re.sub(r"^version: .*$", f"version: {VERSION}", cff.read_text(), flags=re.MULTILINE))
     for record in (ROOT / "docs" / "concordance-provenance").glob(f"*-v{VERSION}.json"):
         shutil.copy(record, repo / "docs" / "concordance-provenance" / record.name)
     write_notes(repo, OPENER, f"Upgrade notes\n\n{repository_upgrade_notes()}")
