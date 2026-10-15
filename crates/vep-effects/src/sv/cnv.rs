@@ -20,7 +20,7 @@ use super::{
     engulfed_transcript_row_terms, is_mature_mirna_sv, overlaps_any_exon,
     overlaps_any_intron_trimmed, overlaps_cds_exon, overlaps_five_prime_utr,
     overlaps_polypyrimidine_tract, overlaps_three_prime_utr, perl_coding_pre_predicate,
-    transcript_has_incomplete_cds,
+    perl_partial_codon,
 };
 use smallvec::{smallvec, SmallVec};
 use vep_core::consequence::{
@@ -182,8 +182,6 @@ pub fn calculate(
         if let (Some(cds_start), Some(cds_end)) =
             (transcript.coding_region_start, transcript.coding_region_end)
         {
-            let has_complete_cds =
-                transcript.has_cds() && !transcript_has_incomplete_cds(transcript);
             let (stop_start, stop_end) = match transcript.strand {
                 Strand::Forward => (cds_end.saturating_sub(2), cds_end),
                 Strand::Reverse => (cds_start, cds_start + 2),
@@ -192,10 +190,14 @@ pub fn calculate(
             // tested only for a span the `coding` pre-predicate admits: one that
             // overlaps the coding region and an exon. A deletion inside an intron
             // that splits the stop codon reaches the window but is `non_coding`.
+            // Perl's structural `stop_lost` reads no `cds_start_NF` or `cds_end_NF`
+            // flag: `partial_codon` (`perl_partial_codon`, release/116) is its only
+            // completeness test, so a `<CN0>` over the complete last codon of an
+            // open-ended coding sequence keeps the term.
             if sv_start <= stop_end
                 && sv_end >= stop_start
-                && has_complete_cds
                 && perl_coding_pre_predicate(transcript, sv_start, sv_end)
+                && !perl_partial_codon(transcript, sv_start, sv_end)
             {
                 consequences.push(Consequence::StopLost);
             }
@@ -937,6 +939,71 @@ mod tests {
             tc.consequences.contains(&Consequence::StopLost),
             "{:?}",
             tc.consequences
+        );
+    }
+
+    /// A `<CN0>` over the last base of a `cds_end_NF` segment whose 12 coding bases end
+    /// on a codon boundary, running off the 3' end: Perl's `stop_lost` reads no
+    /// completeness flag and `partial_codon` is false (a three-base last codon), so the
+    /// positional test keeps `stop_lost` beside `3_prime_UTR_variant`,
+    /// `coding_sequence_variant` and `feature_truncation`, as it does for a `<DEL>`.
+    #[test]
+    fn cn0_keeps_stop_lost_on_the_complete_last_codon_of_an_open_ended_segment() {
+        let tx = crate::test_helpers::make_open_ended_segment(Strand::Forward, "ACTGGGGGATAC");
+        assert_eq!(tx.coding_region_end, Some(40_000_042));
+        let v = make_cnv(b"<CN0>", 40_000_042, 40_001_000);
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        crate::test_helpers::assert_consequence_set_eq(
+            &tc,
+            &[
+                "3_prime_UTR_variant",
+                "coding_sequence_variant",
+                "feature_truncation",
+                "stop_lost",
+            ],
+        );
+    }
+
+    /// A `<CN0>` whose transcript-5' base is CDS 13 of 13, the one-base terminal codon
+    /// of the segment: `partial_codon` is true and `stop_lost` is withheld, the three
+    /// other terms unchanged.
+    #[test]
+    fn cn0_withholds_stop_lost_in_the_partial_terminal_codon() {
+        let tx = crate::test_helpers::make_open_ended_segment(Strand::Forward, "ACTGGGGGATACG");
+        let v = make_cnv(b"<CN0>", 40_000_043, 40_001_000);
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        crate::test_helpers::assert_consequence_set_eq(
+            &tc,
+            &[
+                "3_prime_UTR_variant",
+                "coding_sequence_variant",
+                "feature_truncation",
+            ],
+        );
+    }
+
+    /// A `cds_start_NF` transcript with a complete stop codon (15 coding bases ending in
+    /// `TAG`): the flag is no part of Perl's `stop_lost`, and `partial_codon` is false
+    /// for the span's first coding base, CDS 13, so a `<CN0>` over the stop codon keeps
+    /// `stop_lost`.
+    #[test]
+    fn cn0_keeps_stop_lost_on_a_cds_start_nf_transcript_with_a_complete_stop_codon() {
+        let mut tx = crate::test_helpers::make_single_exon_transcript(
+            Strand::Forward,
+            "ACTGGGGGATACTAG",
+            "",
+        );
+        tx.flags = vec!["cds_start_NF".to_string()].into();
+        let v = make_cnv(b"<CN0>", 40_000_043, 40_001_000);
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        crate::test_helpers::assert_consequence_set_eq(
+            &tc,
+            &[
+                "3_prime_UTR_variant",
+                "coding_sequence_variant",
+                "feature_truncation",
+                "stop_lost",
+            ],
         );
     }
 }

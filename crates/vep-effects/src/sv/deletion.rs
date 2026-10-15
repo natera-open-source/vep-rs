@@ -14,7 +14,7 @@ use super::{
     bnd_breakend_within_transcript, is_mature_mirna_sv, overlaps_any_exon as sv_overlaps_any_exon,
     overlaps_any_intron_trimmed as sv_overlaps_any_intron_trimmed, overlaps_cds_exon,
     overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
-    perl_coding_pre_predicate,
+    perl_coding_pre_predicate, perl_partial_codon,
 };
 use smallvec::SmallVec;
 use vep_core::consequence::{
@@ -241,31 +241,14 @@ pub(super) fn calculate_span(
                 Strand::Reverse => (cds_start, cds_start + 2, cds_end.saturating_sub(2), cds_end),
             };
             let perl_coding = perl_coding_pre_predicate(transcript, del_start, del_end);
-            // `stop_lost` opens with `return 0 if partial_codon(@_)` (release/116
-            // `Utils/VariationEffect.pm:1240`; `partial_codon` at `:1588-1614`), which
-            // reads the span's `translation_start`: the first `genomic2pep` element in
-            // transcript order (`BaseTranscriptVariation.pm:365-380`, the list reversed
-            // on the reverse strand by `Mapper.pm`), so the anchor is the span's
-            // transcript-5' base, and a leading Gap (that base in a UTR, an intron or
-            // outside the transcript) leaves `translation_start` undefined and the
-            // positional test in force. A deletion clipping the partial terminal codon
-            // of a `cds_end_NF` transcript on its way off the 3' end loses no stop.
-            let five_prime_base = match transcript.strand {
-                Strand::Forward => del_start,
-                Strand::Reverse => del_end,
-            };
-            let in_partial_codon =
-                match crate::mapper::map_genomic_to_transcript(five_prime_base, transcript, 0, 0) {
-                    Some(crate::mapper::TranscriptPosition::Coding { cds_pos, .. }) => {
-                        crate::consequences::is_in_incomplete_terminal_codon(transcript, cds_pos)
-                    }
-                    _ => false,
-                };
+            // `stop_lost` also opens with `return 0 if partial_codon(@_)` (release/116
+            // `Utils/VariationEffect.pm:1240`), the `perl_partial_codon` conjunct, read
+            // last so the transcript mapping runs only for a span inside the window.
             if !is_chromosome_breakpoint
                 && perl_coding
-                && !in_partial_codon
                 && del_end >= stop_lo
                 && del_start <= stop_hi
+                && !perl_partial_codon(transcript, del_start, del_end)
             {
                 push_unique(&mut consequences, Consequence::StopLost);
             }
@@ -1101,16 +1084,6 @@ mod tests {
         assert_eq!(tc.protein_id, None);
     }
 
-    /// A single-exon gene segment whose coding sequence `cds` runs to the
-    /// transcript's last base behind a 30-base 5' UTR, flagged `cds_start_NF` and
-    /// `cds_end_NF`: the shape of an IG or TR D segment, whose terminal codon is
-    /// partial when `cds` is not a multiple of three bases.
-    fn open_ended_segment(strand: Strand, cds: &str) -> Transcript {
-        let mut t = crate::test_helpers::make_single_exon_transcript(strand, cds, "");
-        t.flags = vec!["cds_start_NF".to_string(), "cds_end_NF".to_string()].into();
-        t
-    }
-
     /// Ensembl VEP 116.2 on a `<DEL>` clipping the last base of TRDD3
     /// (`ENST00000448914`, 13 coding bases, forward strand) and running off its 3'
     /// end: `3_prime_UTR_variant,coding_sequence_variant,feature_truncation`, the
@@ -1120,7 +1093,7 @@ mod tests {
     #[test]
     fn stop_lost_withheld_in_the_partial_terminal_codon_forward_strand() {
         // 13 coding bases: genomic 40_000_031..=40_000_043, the transcript's last.
-        let t = open_ended_segment(Strand::Forward, "ACTGGGGGATACG");
+        let t = crate::test_helpers::make_open_ended_segment(Strand::Forward, "ACTGGGGGATACG");
         assert_eq!(t.coding_region_end, Some(40_000_043));
         assert_eq!(t.end, 40_000_043);
         let v = make_del("21", 40_000_043, 40_001_000);
@@ -1143,7 +1116,7 @@ mod tests {
     #[test]
     fn stop_lost_withheld_in_the_partial_terminal_codon_reverse_strand() {
         // 11 coding bases: genomic 40_000_011 (CDS 1) down to 40_000_001 (CDS 11).
-        let t = open_ended_segment(Strand::Reverse, "CTAACTGGGGA");
+        let t = crate::test_helpers::make_open_ended_segment(Strand::Reverse, "CTAACTGGGGA");
         assert_eq!(t.coding_region_start, Some(40_000_001));
         assert_eq!(t.start, 40_000_001);
         let v = make_del("21", 39_999_000, 40_000_002);
@@ -1234,9 +1207,50 @@ mod tests {
     /// `stop_lost` on a deletion clipping its last base, as Ensembl VEP does.
     #[test]
     fn stop_lost_kept_on_a_complete_last_codon_of_an_open_ended_segment() {
-        let t = open_ended_segment(Strand::Forward, "ACTGGGGGATAC");
+        let t = crate::test_helpers::make_open_ended_segment(Strand::Forward, "ACTGGGGGATAC");
         assert_eq!(t.coding_region_end, Some(40_000_042));
         let v = make_del("21", 40_000_042, 40_001_000);
+        let result = calculate(&v, &t, 5000, 5000).unwrap();
+        crate::test_helpers::assert_consequence_set_eq(
+            &result,
+            &[
+                "3_prime_UTR_variant",
+                "coding_sequence_variant",
+                "feature_truncation",
+                "stop_lost",
+            ],
+        );
+    }
+
+    /// The base before the partial codon: the deletion's first base is CDS 12 of 13,
+    /// the last base of the last complete codon, so Perl's `translation_start` is 4,
+    /// the last codon length 13 - 9 = 4, `partial_codon` is false and the positional
+    /// test keeps `stop_lost`; a span starting one base further on, at CDS 13, is the
+    /// withheld case of `stop_lost_withheld_in_the_partial_terminal_codon_forward_strand`.
+    #[test]
+    fn stop_lost_kept_when_the_deletion_starts_on_the_last_complete_codon_forward_strand() {
+        let t = crate::test_helpers::make_open_ended_segment(Strand::Forward, "ACTGGGGGATACG");
+        let v = make_del("21", 40_000_042, 40_001_000);
+        let result = calculate(&v, &t, 5000, 5000).unwrap();
+        crate::test_helpers::assert_consequence_set_eq(
+            &result,
+            &[
+                "3_prime_UTR_variant",
+                "coding_sequence_variant",
+                "feature_truncation",
+                "stop_lost",
+            ],
+        );
+    }
+
+    /// The same edge on the reverse strand: the span's genomic end 40_000_003 is CDS 9
+    /// of 11, the last base of codon 3, so the last codon length is 11 - 6 = 5 and
+    /// `stop_lost` stands; a span ending one base lower, at CDS 10, is the withheld
+    /// case of `stop_lost_withheld_in_the_partial_terminal_codon_reverse_strand`.
+    #[test]
+    fn stop_lost_kept_when_the_deletion_starts_on_the_last_complete_codon_reverse_strand() {
+        let t = crate::test_helpers::make_open_ended_segment(Strand::Reverse, "CTAACTGGGGA");
+        let v = make_del("21", 39_999_000, 40_000_003);
         let result = calculate(&v, &t, 5000, 5000).unwrap();
         crate::test_helpers::assert_consequence_set_eq(
             &result,
@@ -1265,12 +1279,12 @@ mod tests {
             "stop_lost",
         ];
         // Forward: from cDNA 20 of the 30-base UTR over the 13 coding bases and off.
-        let t = open_ended_segment(Strand::Forward, "ACTGGGGGATACG");
+        let t = crate::test_helpers::make_open_ended_segment(Strand::Forward, "ACTGGGGGATACG");
         let v = make_del("21", 40_000_020, 40_001_000);
         let result = calculate(&v, &t, 5000, 5000).unwrap();
         crate::test_helpers::assert_consequence_set_eq(&result, &expected);
         // Reverse: the transcript's 5' UTR is its genomic end, 40_000_012..=40_000_041.
-        let t = open_ended_segment(Strand::Reverse, "CTAACTGGGGA");
+        let t = crate::test_helpers::make_open_ended_segment(Strand::Reverse, "CTAACTGGGGA");
         let v = make_del("21", 39_999_000, 40_000_020);
         let result = calculate(&v, &t, 5000, 5000).unwrap();
         crate::test_helpers::assert_consequence_set_eq(&result, &expected);

@@ -393,9 +393,28 @@ pub(crate) fn overlaps_cds_exon(transcript: &Transcript, sv_start: u64, sv_end: 
     })
 }
 
-pub(crate) fn transcript_has_incomplete_cds(transcript: &Transcript) -> bool {
-    let facts = transcript.facts();
-    facts.cds_start_nf || facts.cds_end_nf
+/// Perl's `partial_codon` for a structural span (release/116 `Utils/VariationEffect.pm:1588-1614`):
+/// the span's `translation_start` lies in the partial terminal codon of a coding sequence
+/// whose length is not a multiple of three. `translation_start` is the first `genomic2pep`
+/// element in transcript order (`BaseTranscriptVariation.pm:365-380`; `Mapper.pm` reverses
+/// the list on the reverse strand), so the base read is the span's transcript-5' end, its
+/// start on the forward strand and its end on the reverse; when that base lies in a UTR, an
+/// intron or outside the transcript the element is a Gap, `translation_start` is undefined
+/// and the predicate is false. `stop_lost` opens with `return 0 if partial_codon(@_)`
+/// (`:1240`) and its structural arm admits every `deletion`, `copy_number_loss` included,
+/// so the guard covers `<DEL>` and `<CN0>` alike; the transcript's `cds_start_NF` and
+/// `cds_end_NF` flags play no part in it.
+pub(crate) fn perl_partial_codon(transcript: &Transcript, sv_start: u64, sv_end: u64) -> bool {
+    let five_prime_base = match transcript.strand {
+        Strand::Forward => sv_start,
+        Strand::Reverse => sv_end,
+    };
+    match crate::mapper::map_genomic_to_transcript(five_prime_base, transcript, 0, 0) {
+        Some(crate::mapper::TranscriptPosition::Coding { cds_pos, .. }) => {
+            crate::consequences::is_in_incomplete_terminal_codon(transcript, cds_pos)
+        }
+        _ => false,
+    }
 }
 
 /// Perl's `coding` pre-predicate for a structural span (`_bvfo_preds`,

@@ -308,6 +308,16 @@ pub(crate) mod test_helpers {
         }
     }
 
+    /// A single-exon gene segment whose coding sequence `cds` runs to the transcript's
+    /// last base behind the 30-base 5' UTR of [`make_single_exon_transcript`], flagged
+    /// `cds_start_NF` and `cds_end_NF`: the shape of an IG or TR D segment, whose
+    /// terminal codon is partial when `cds` is not a multiple of three bases.
+    pub fn make_open_ended_segment(strand: Strand, cds: &str) -> Transcript {
+        let mut tx = make_single_exon_transcript(strand, cds, "");
+        tx.flags = vec!["cds_start_NF".to_string(), "cds_end_NF".to_string()].into();
+        tx
+    }
+
     /// A 69-base coding sequence: `ATG`, twenty `GCT`, then `penultimate` and `stop`,
     /// so the stop codon is CDS 67..69 and the penultimate codon CDS 64..66.
     pub fn cds_ending_in(penultimate: &str, stop: &str) -> String {
