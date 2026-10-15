@@ -1,0 +1,23 @@
+# The documentation site, https://natera-open-source.github.io/vep-rs/. The
+# published site is the latest release's pages, built by
+# scripts/docs/build_release_site.sh from .github/workflows/pages.yml. Build
+# this checkout's pages with `mdbook build` (output in target/book) or preview
+# them with `mdbook serve`.
+[book]
+title = "vep-rs"
+description = "A fast, memory-efficient reimplementation of the Ensembl Variant Effect Predictor in Rust"
+authors = ["Matthew Porter", "Robert Borkowski"]
+language = "en"
+src = "docs"
+
+[build]
+build-dir = "target/book"
+
+# The home page is README.md, the changelog page CHANGELOG.md, and links that
+# leave docs/ go to GitHub (scripts/docs/mdbook_repo_links.py).
+[preprocessor.repo-links]
+command = "python3 scripts/docs/mdbook_repo_links.py"
+
+[output.html]
+site-url = "/vep-rs/"
+git-repository-url = "https://github.com/natera-open-source/vep-rs"

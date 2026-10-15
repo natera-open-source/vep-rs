@@ -28,6 +28,7 @@ These scripts read their data locations from environment variables, each with a 
 | `release/`     | Render the GitHub release body the release workflow publishes as a draft       | Python 3.10+                  |
 | `docker/`      | Stage, tag and smoke-test the container image `.github/workflows/docker.yml` publishes | `gh`, Docker            |
 | `parity/`      | Hold `tests/parity/matrix.tsv` to the tree: every flag has a row and every landed row's tests resolve | Python 3.10+ |
+| `docs/`        | Build the documentation site of a release and check its links (`.github/workflows/pages.yml`) | Python 3.10+, mdBook |
 
 ## Reproducing the published concordance
 
@@ -204,3 +205,11 @@ initiation codons.
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `check_parity_matrix.py`        | Holds `tests/parity/matrix.tsv` to the tree (CI job `Comparator Tests`): a flag in `crates/vep-cli/src/args.rs` without a row, a landed row without its tests, or a named test or corpus that does not resolve fails. `crates/vep-cli/tests/parity_matrix.rs` asks clap for the flag list and is the arbiter. |
 | `test_check_parity_matrix.py`   | Tests on a fixture tree: one per rule, every clap field shape the reader follows, the test-attribute rule, the header and vocabulary checks, the exit codes |
+
+### docs/
+
+| Script                  | Description                                                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build_release_site.sh` | Builds the site of one release tag (`build_release_site.sh v0.3.2 target/site`): the tag's README, CHANGELOG and `docs/`, this checkout's `book.toml` and `scripts/docs/`, then the link check against the tag's tree. The `Pages` workflow publishes its output |
+| `mdbook_repo_links.py`  | mdBook preprocessor (`book.toml`): makes `README.md` the home page and `CHANGELOG.md` the changelog page, and sends links that leave `docs/` to their GitHub view at the ref built (`$VEP_RS_DOCS_REF`, default `main`) |
+| `check_site_links.py`   | Fails on a link in the built site to a missing page, a missing heading id, or a repository path that does not exist in the tree built from (CI job `Pages`) |

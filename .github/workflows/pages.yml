@@ -1,0 +1,125 @@
+name: Pages
+
+# Publishes the documentation site of the latest release to
+# https://natera-open-source.github.io/vep-rs/, so the site describes the
+# binaries users install, not main. scripts/docs/build_release_site.sh takes the
+# pages (README.md, CHANGELOG.md, docs/) from the release tag and the tooling
+# (book.toml, scripts/docs/) from main, builds the site with mdBook and checks
+# its links.
+#
+# Publishing a release redeploys the site. The github-pages environment deploys
+# from main only, and a release run's ref is the tag, so that run dispatches
+# this workflow on main rather than deploying itself. A push to main that
+# changes the tooling redeploys the latest release with it. `workflow_dispatch`
+# deploys the latest release, or the tag it is given. A pull request builds its
+# own pages and the latest release with its tooling, checks both and deploys
+# nothing. mdBook is installed from its pinned prebuilt release, checked against
+# the SHA-256 below.
+on:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths:
+      - book.toml
+      - docs/SUMMARY.md
+      - docs/index.md
+      - docs/changelog.md
+      - scripts/docs/**
+      - .github/workflows/pages.yml
+  pull_request:
+    paths:
+      - README.md
+      - CHANGELOG.md
+      - book.toml
+      - docs/**
+      - scripts/docs/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (vX.Y.Z); empty publishes the latest release
+        required: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: pages-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  dispatch:
+    name: Dispatch the deploy on main
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+
+  build:
+    name: Build and check links
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install mdBook
+        run: |
+          set -euo pipefail
+          MDBOOK_VERSION=0.5.4
+          MDBOOK_SHA256=5222beabd3e37dc5be0d18ff99b79058469354db5c220153a1b92db5ba12be89
+          ASSET="mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL -o "/tmp/${ASSET}" "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/${ASSET}"
+          echo "${MDBOOK_SHA256}  /tmp/${ASSET}" | sha256sum -c -
+          tar xzf "/tmp/${ASSET}" -C /tmp
+          install -m 0755 /tmp/mdbook /usr/local/bin/mdbook
+          mdbook --version
+      - name: Build the pull request's pages
+        if: github.event_name == 'pull_request'
+        run: |
+          mdbook build
+          python3 scripts/docs/check_site_links.py --site target/book --tree HEAD
+      - name: Build the release's site
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          fi
+          echo "Building the site of $TAG"
+          git fetch --no-tags --depth 1 origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          scripts/docs/build_release_site.sh "$TAG" target/release-site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name != 'pull_request'
+        with:
+          path: target/release-site/target/book
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

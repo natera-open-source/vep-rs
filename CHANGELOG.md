@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The comparators' 116.2 registry gains `bnd_mate_32bit_buffer_intergenic`, the buffer Ensembl VEP writes as intergenic for a breakend mate at or past 2,147,478,648, counted and not set aside. (#44)
 - The comparators' 116.2 registry gains `gvcf_variant_site_dropped`, `dot_breakend_without_svtype_pair`, `missing_alt_annotated`, `non_integer_end_annotated` and `cnv_tr_empty_expansion_dropped`, five records Ensembl VEP drops, pairs or annotates where vep-rs does not. (#44)
 - The comparators' 116.2 registry gains `star_alone_svtype_annotated`, `non_numeric_pos_numified` and `cnv_tr_rn_zero_allele_dropped`, three records Ensembl VEP annotates from INFO alone or drops in part where vep-rs does not. (#44)
+- The documentation site, https://natera-open-source.github.io/vep-rs/, publishes the latest release's README, changelog and `docs/` with mdBook, redeployed when a release is published. (#57)
 
 ### Changed
 
