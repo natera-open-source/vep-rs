@@ -125,6 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Uploaded_variation` reads the first `;`-joined VCF ID, names the record by its line when it is `.`, empty or `0`, and keeps an Ensembl-format ID whole (Ensembl VEP 116). (#51)
 - JSON `id` of a record whose first `;`-joined ID is empty or `0` is the generated `chr_start_alleles` name, as Ensembl VEP writes it; `.` stays `.`. (#51)
 - The header cache path of a run without `--json_cache` follows Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout, where it read `<species>_<assembly>/<version>`. (#51)
+- A structural deletion clipping the incomplete terminal codon of a `cds_end_NF` transcript takes no `stop_lost`, as Ensembl VEP 116 withholds it. (#N)
 
 ## [0.3.2] - 2026-10-06
 

@@ -2425,7 +2425,7 @@ fn is_stop_retained_insertion_full_cds(
 /// An incomplete terminal codon exists when the translateable sequence length
 /// is not divisible by 3. Variants in the last 1-2 bases get this annotation
 /// instead of a standard coding consequence.
-fn is_in_incomplete_terminal_codon(transcript: &Transcript, cds_pos: u64) -> bool {
+pub(crate) fn is_in_incomplete_terminal_codon(transcript: &Transcript, cds_pos: u64) -> bool {
     let cds_len = transcript
         .vefc
         .as_ref()
