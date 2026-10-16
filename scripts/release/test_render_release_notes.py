@@ -1220,3 +1220,22 @@ def test_each_six_dataset_fault_is_refused_by_its_line_or_rendered_with_its_figu
         assert error(repo) == f"{expected}\n"
     else:
         assert expected in page(repo)
+
+
+def test_a_chromosome_peak_rss_that_is_absent_or_not_a_finite_number_is_refused_by_name(tmp_path: Path) -> None:
+    repo = six_dataset_repo(tmp_path)
+    where = f"{ERR}the population record's wall_time.vep_rs.per_cell[0] carries"
+    for edit, expected in (
+        (lambda r: drop_keys(timed_cell(r, 0), "peak_rss_mb_median"), f"{where} no peak_rss_mb_median"),
+        (lambda r: timed_cell(r, 0).update(peak_rss_mb_median=None), f"{where} no peak_rss_mb_median"),
+        (lambda r: timed_cell(r, 0).update(peak_rss_mb_median="n/a"), f"{where} a peak_rss_mb_median that is not a number: 'n/a'"),
+        (lambda r: timed_cell(r, 0).update(peak_rss_mb_median=float("nan")), f"{where} a peak_rss_mb_median that is not finite: nan"),
+        (lambda r: timed_cell(r, 0).update(peak_rss_mb_median=float("inf")), f"{where} a peak_rss_mb_median that is not finite: inf"),
+    ):
+        edit_record(repo, "population", edit)
+        assert error(repo) == f"{expected}\n"
+    # The earlier page builds its caption before its dataset rows, so an empty cell list reaches peak_rss_gb before
+    # the rows refuse it; the six-dataset page refuses it as a dataset without wall time first.
+    repo = fixture_repo(tmp_path / "empty")
+    edit_record(repo, "population", lambda r: r["wall_time"]["vep_rs"]["per_cell"].clear())
+    assert error(repo) == f"{ERR}the population record's wall_time.vep_rs.per_cell is empty\n"

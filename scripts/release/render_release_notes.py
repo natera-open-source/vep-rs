@@ -359,9 +359,22 @@ def wall_time_sums(population: dict) -> dict[tuple[str, str], Decimal]:
 def peak_rss_gb(population: dict) -> str:
     """The largest per-chromosome median peak RSS of the released binary, the record's MB over 1000 in GB
     rounded up to one decimal, so the stated bound is never below a measured cell; the README's own reading
-    of the same field."""
-    peak = max(Decimal(str(c["peak_rss_mb_median"])) for c in population["wall_time"]["vep_rs"]["per_cell"])
-    return str((peak / 1000).quantize(Decimal("0.1"), rounding=ROUND_CEILING))
+    of the same field. A cell's peak is refused by name when absent or not a finite number, as is a record
+    with no cells."""
+    peaks: list[Decimal] = []
+    for index, cell in enumerate(population["wall_time"]["vep_rs"]["per_cell"]):
+        where = f"the population record's wall_time.vep_rs.per_cell[{index}]"
+        (value,) = required(cell, ("peak_rss_mb_median",), where)
+        try:
+            peak = Decimal(str(value))
+        except InvalidOperation:
+            fail(f"{where} carries a peak_rss_mb_median that is not a number: {value!r}")
+        if not peak.is_finite():
+            fail(f"{where} carries a peak_rss_mb_median that is not finite: {value!r}")
+        peaks.append(peak)
+    if not peaks:
+        fail("the population record's wall_time.vep_rs.per_cell is empty")
+    return str((max(peaks) / 1000).quantize(Decimal("0.1"), rounding=ROUND_CEILING))
 
 
 def short_label(label: str) -> str:
