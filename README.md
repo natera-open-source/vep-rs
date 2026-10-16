@@ -15,7 +15,7 @@ In this README, "Perl VEP" is the reference implementation, `ensemblorg/ensembl-
 | **Speed vs Ensembl VEP 115.2**   | 343x faster on ARM (Graviton4), 187x on x86; 96.2x to 421x per dataset              |
 | **Speed vs fastVEP v0.4.0**      | 16.2x faster on ARM, 8.2x on x86; 5.2x to 21.6x per dataset                         |
 | **All of gnomAD v4.1**           | 759,336,320 variants, 24 chromosomes: 881 s on one ARM machine, 1,365 s on x86      |
-| **Peak memory**                  | At most 2.5 GB RSS on any chromosome                                                |
+| **Peak memory**                  | At most 2.6 GB RSS on any chromosome                                                |
 | **Concordance with Ensembl VEP** | Adjusted F1 1.000000000 on all six whole-genome datasets, raw F1 0.999998408 pooled |
 | **Plugins**                      | 10 built-in databases, plus C-ABI dynamic-library plugins                           |
 | **Output formats**               | VEP default, VCF, JSON, Tab, Parquet                                                |
@@ -71,18 +71,18 @@ Seconds: a population dataset as the sum of its per-chromosome medians, each Cli
 
 | Dataset | Assembly | Variants | Arch | vep-rs v0.4.0 (s) | fastVEP v0.4.0 (s) | Ensembl VEP 115.2 (s) | vep-rs, largest cell median (s) | P5 to P95 (s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| gnomAD v4.1 | GRCh38 | 759,336,320 | ARM | 881 | 13,437 (15.2x) | 296,805 (337x) | 75.56 (chromosome 2) | 74.86 to 78.00 |
+| gnomAD v4.1 | GRCh38 | 759,336,320 | ARM | 881 | 13,437 (15.2x) | 296,805 (337x) | 75.57 (chromosome 2) | 74.86 to 78.00 |
 | gnomAD v4.1 | GRCh38 | 759,336,320 | x86 | 1,365 | 10,465 (7.7x) | 251,614 (184x) | 115.44 (chromosome 2) | 113.05 to 115.95 |
 | gnomAD v2.1.1 | GRCh37 | 261,942,336 | ARM | 282 | 6,111 (21.6x) | 119,011 (421x) | 23.63 (chromosome 2) | 23.21 to 24.22 |
 | gnomAD v2.1.1 | GRCh37 | 261,942,336 | x86 | 472 | 5,037 (10.7x) | 104,430 (221x) | 39.03 (chromosome 2) | 38.46 to 39.74 |
-| 1000 Genomes Phase 3 | GRCh37 | 84,805,772 | ARM | 49 | 504 (10.4x) | 9,521 (196x) | 4.05 (chromosome 2) | 3.91 to 4.33 |
+| 1000 Genomes Phase 3 | GRCh37 | 84,805,772 | ARM | 49 | 504 (10.4x) | 9,521 (196x) | 4.06 (chromosome 2) | 3.91 to 4.33 |
 | 1000 Genomes Phase 3 | GRCh37 | 84,805,772 | x86 | 76 | 396 (5.2x) | 7,287 (96.2x) | 6.33 (chromosome 2) | 6.12 to 6.57 |
 | 1000 Genomes high-coverage | GRCh38 | 73,554,796 | ARM | 85 | 991 (11.6x) | 19,591 (229x) | 7.08 (chromosome 2) | 6.76 to 7.76 |
 | 1000 Genomes high-coverage | GRCh38 | 73,554,796 | x86 | 116 | 752 (6.5x) | 15,840 (137x) | 9.75 (chromosome 2) | 9.56 to 9.98 |
 | ClinVar | GRCh37 | 4,388,172 | ARM | 4.54 | 43.65 (fastVEP 0.3.0) | 961.08 | 4.54 (whole file) | 4.36 to 4.86 |
 | ClinVar | GRCh37 | 4,388,172 | x86 | 5.73 | 33.16 (fastVEP 0.3.0) | 849.97 | 5.73 (whole file) | 5.62 to 5.99 |
-| ClinVar | GRCh38 | 4,398,127 | ARM | 13.96 | 121.12 (fastVEP 0.3.0) | 2,722.01 | 13.96 (whole file) | 13.53 to 14.51 |
-| ClinVar | GRCh38 | 4,398,127 | x86 | 14.38 | 90.25 (fastVEP 0.3.0) | 2,378.34 | 14.38 (whole file) | 14.29 to 15.39 |
+| ClinVar | GRCh38 | 4,398,127 | ARM | 13.96 | 121.13 (fastVEP 0.3.0) | 2,722.01 | 13.96 (whole file) | 13.53 to 14.51 |
+| ClinVar | GRCh38 | 4,398,127 | x86 | 14.39 | 90.26 (fastVEP 0.3.0) | 2,378.35 | 14.39 (whole file) | 14.29 to 15.39 |
 | All four population datasets | GRCh37 and GRCh38 | 1,179,639,224 | ARM | 1,298 | 21,043 (16.2x) | 444,929 (343x) | | |
 | All four population datasets | GRCh37 and GRCh38 | 1,179,639,224 | x86 | 2,028 | 16,649 (8.2x) | 379,170 (187x) | | |
 

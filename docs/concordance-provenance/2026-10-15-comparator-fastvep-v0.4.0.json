@@ -5,7 +5,9 @@
   "binary_md5": {
     "arm64": "d6ad0ff10a58496d45e42bb094d84f08"
   },
-  "binary_sha256": {},
+  "binary_sha256": {
+    "arm64": "72362bf61d631490e7f51bbbd252e00fbc93c79724947634a46c5bfbb8705a16"
+  },
   "cache_prefix": "caches/fastvep-v0.4.0-ensembl116",
   "clone_manifest_note": "Instance ids are positional (clone-<arch>-<index>); every clone ran the sweep and binary this record pins.",
   "clones": [
@@ -210,13 +212,13 @@
       "suite": "ClinVar full"
     }
   },
-  "concordance_note": "Per suite: raw counts (perl, engine_tuples, intersection) and the adjusted counts after the documented classes are set aside; raw_f1 and adjusted.f1 are 2I/(A+B) from those integers at nine decimal places. The SV suites pool the 16 files' counts per assembly (aggregation_basis file_summed) and carry every file's counts under per_file and per_file_adjusted; the cross-chromosome shape is counted, not excluded, for an engine with its own annotation release (adjusted.counted_not_excluded).",
+  "concordance_note": "Per suite: raw counts (perl, engine_tuples, intersection) and the adjusted counts after the documented classes are set aside; raw_f1 and adjusted.f1 are 2I/(A+B) from those integers at nine decimal places.",
   "dataset_inventory_sha256": "e79f934f701f03d41983a09e69079b3193b232e555cddbfffd85362a2097221c",
   "dataset_inventory_sha256_fastvep_arm64": "e79f934f701f03d41983a09e69079b3193b232e555cddbfffd85362a2097221c",
   "date": "2026-10-15",
   "engine": "fastvep",
   "engine_version": "v0.4.0",
-  "generated_at_utc": "2026-10-15T23:11:47.208887+00:00",
+  "generated_at_utc": "2026-10-16T10:45:08.580465+00:00",
   "ground_truth": {
     "snp_indel": "ground_truth/perl/canonical_116_20261008"
   },
@@ -235,7 +237,7 @@
   },
   "pool_arch": "arm64",
   "record": "comparator-suites",
-  "scope": "fastvep v0.4.0 scored against Ensembl VEP 116.2's output on the cells the whole-genome campaign does not cover: ClinVar full and the structural-variant per-VCF sets, both assemblies. Concordance only; wall time is not measured here. Raw F1 counts every tuple; the adjusted figure sets aside the documented classes of docs/intended-divergences.md, the same comparator and classes the vep-rs figures use.",
+  "scope": "fastvep v0.4.0 scored against Ensembl VEP 116.2's output on the cells the whole-genome campaign does not cover: ClinVar full (GRCh37 and GRCh38). Concordance only; wall time is not measured here. Raw F1 counts every tuple; the adjusted figure sets aside the documented classes of docs/intended-divergences.md, the same comparator and classes the vep-rs figures use.",
   "suites": [
     "s01",
     "s02"
