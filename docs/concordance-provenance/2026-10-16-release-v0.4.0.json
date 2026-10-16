@@ -2815,7 +2815,7 @@
       }
     }
   },
-  "concordance_note": "One value per suite, scored against Ensembl VEP 116.2's archived output (perl_reference names the sets): every clone of both architectures of the concordance sweep reported the same raw and adjusted F1 and the same tuple counts (F1 is deterministic per binary and architecture-independent). The README's \"Current release\" tables render these values from this record at nine decimal places, recomputed from the tuple counts. Adjusted F1 is 1.0 on every suite. Tuple counts move against v0.3.2 on s01, s02, s07, s08; the movement is in this record, previous_release_concordance beside concordance per cell and per file for the structural-variant cells, and in the README's \"Current release\" tables, which render the re-scored rows beneath this version's. The paired run of the previous release (previous_release_concordance, the same day, the same clones' protocol, the same Ensembl VEP 116.2 reference) is the comparison the release standard requires.",
+  "concordance_note": "One value per suite, scored against Ensembl VEP 116.2's archived output (perl_reference names the sets): every clone of both architectures of the concordance sweep reported the same raw and adjusted F1 and the same tuple counts (F1 is deterministic per binary and architecture-independent). The README's \"Current release\" tables render these values from this record at nine decimal places, recomputed from the tuple counts. Adjusted F1 is 1.0 on every suite. Tuple counts move against v0.3.2 on s01, s02, s07, s08; the movement is in this record, previous_release_concordance beside concordance per cell and per file for the structural-variant cells, and in the README's \"Current release\" tables, which render the re-scored rows beneath this version's. The paired run of the previous release (previous_release_concordance, the same day, the same clones' protocol, the same Ensembl VEP 116.2 reference) is the comparison basis: raw F1 and tuple counts are held not below it on every suite.",
   "concordance_sweep_id": "sweep-20261015T215711Z",
   "dataset_inventory_sha256_concordance_sweep": "4e66121a2dca0cd34bdd103b0ccc9a94d48c68575660dbf8259c5e5e004ecbd7",
   "dataset_inventory_sha256_note": "One value per sweep, identical across its clones of both architectures (each clone entry carries its own). The concordance sweep's clones also synced the archived Perl ground truth the comparator reads, so its inventory covers more files than the wall-time sweep's.",
@@ -3255,7 +3255,7 @@
       }
     }
   },
-  "generated_at_utc": "2026-10-16T05:39:02Z",
+  "generated_at_utc": "2026-10-16T12:47:13Z",
   "harness_skip_fields": false,
   "harness_skip_fields_note": "The per-column field comparator (compare_vep_fields.py) ran on every concordance clone of both releases; field_agreement summarises the released version's per-suite, per-column agreement and names every column whose agreement differs from the previous release's.",
   "harvest_problems": {
@@ -3285,6 +3285,7 @@
       "x86_64": 20
     }
   },
+  "n_clones_per_cell": 20,
   "outlier_threshold_p95_p5_ratio": 1.3,
   "per_cell_aggregates": [
     {
