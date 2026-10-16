@@ -38,8 +38,11 @@ date-released: 2026-10-16
 doi: 10.5281/zenodo.22837896
 identifiers:
   - type: doi
+    value: 10.5281/zenodo.22837896
+    description: The concept DOI of the work, all versions.
+  - type: doi
     value: 10.5281/zenodo.22837897
-    description: version 0.1.0
+    description: The versioned DOI for version 0.1.0 of the work.
 keywords:
   - variant annotation
   - variant effect prediction
