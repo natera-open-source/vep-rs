@@ -22,7 +22,7 @@ import argparse
 import json
 import re
 import sys
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "concordance"))
@@ -357,10 +357,11 @@ def wall_time_sums(population: dict) -> dict[tuple[str, str], Decimal]:
 
 
 def peak_rss_gb(population: dict) -> str:
-    """The largest per-chromosome median peak RSS of the released binary, the record's MB over 1000 at one
-    decimal, the README's own reading of the same field."""
-    peak = max(float(c["peak_rss_mb_median"]) for c in population["wall_time"]["vep_rs"]["per_cell"])
-    return half_up(peak / 1000, 1)
+    """The largest per-chromosome median peak RSS of the released binary, the record's MB over 1000 in GB
+    rounded up to one decimal, so the stated bound is never below a measured cell; the README's own reading
+    of the same field."""
+    peak = max(Decimal(str(c["peak_rss_mb_median"])) for c in population["wall_time"]["vep_rs"]["per_cell"])
+    return str((peak / 1000).quantize(Decimal("0.1"), rounding=ROUND_CEILING))
 
 
 def short_label(label: str) -> str:

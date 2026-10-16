@@ -211,7 +211,7 @@ def expected_page(repo: Path) -> str:
         "## Concordance and wall time",
         "Whole genome against Ensembl VEP 115.2, one run per chromosome; wall time is the sum of the per-chromosome "
         "medians of 20 machines at 16 threads on `c8gd.8xlarge` (ARM) and `c8id.8xlarge` (x86); peak memory at most "
-        "2.4 GB on any chromosome; tuple counts and per-chromosome rows are in the "
+        "2.5 GB on any chromosome; tuple counts and per-chromosome rows are in the "
         f"[provenance records]({REPO_URL}/tree/{TAG}/docs/concordance-provenance).",
         "\n".join(["| Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) |", "| --- | --- | --- | --- | --- |", *expected_whole_genome_rows()]),
         "The paper's chromosome 21 cells measured on the released binary; the paper's own figures stay as published in "
@@ -291,16 +291,23 @@ def test_captions_carry_the_comparator_protocol_memory_and_record_link(tmp_path:
     assert (
         "Whole genome against Ensembl VEP 115.2, one run per chromosome; wall time is the sum of the per-chromosome "
         "medians of 20 machines at 16 threads on `c8gd.8xlarge` (ARM) and `c8id.8xlarge` (x86); peak memory at most "
-        "2.4 GB on any chromosome; tuple counts and per-chromosome rows are in the "
+        "2.5 GB on any chromosome; tuple counts and per-chromosome rows are in the "
         f"[provenance records]({REPO_URL}/tree/{TAG}/docs/concordance-provenance)."
     ) in body
     assert "-release-v" not in body and "-population-v" not in body
 
-    def raise_peak(record: dict) -> None:
-        record["wall_time"]["vep_rs"]["per_cell"][0]["peak_rss_mb_median"] = 2500
+    def set_peak(mb: float):
+        def edit(record: dict) -> None:
+            for cell in record["wall_time"]["vep_rs"]["per_cell"]:
+                cell["peak_rss_mb_median"] = 1_900.0
+            record["wall_time"]["vep_rs"]["per_cell"][0]["peak_rss_mb_median"] = mb
 
-    edit_record(repo, "population", raise_peak)
-    assert "peak memory at most 2.5 GB on any chromosome" in page(repo)
+        return edit
+
+    # The bound rounds up, never down: 2,500.0 MB is exactly 2.5 GB, anything above it reads 2.6 GB.
+    for mb, shown in ((2_500.0, "2.5"), (2_500.1, "2.6"), (2_502.7, "2.6"), (2_438.3, "2.5")):
+        edit_record(repo, "population", set_peak(mb))
+        assert f"peak memory at most {shown} GB on any chromosome" in page(repo), mb
 
 
 def test_the_concordance_caption_reads_the_perl_reference_block_when_a_record_carries_one(tmp_path: Path) -> None:
@@ -715,7 +722,7 @@ def expected_six_dataset_section() -> list[str]:
         "genome-wide file; wall time is the sum of the per-chromosome medians of 20 machines at 16 threads on `c8gd.8xlarge` "
         "(ARM) and `c8id.8xlarge` (x86) for the population datasets, and the whole-file median of 20 machines on "
         "`r8gd.8xlarge` (ARM) and `r8id.8xlarge` (x86) for the ClinVar files, another instance class and protocol, so the "
-        "`All six` row carries no wall time; peak memory at most 2.5 GB on any chromosome; tuple counts, per-chromosome rows "
+        "`All six` row carries no wall time; peak memory at most 2.6 GB on any chromosome; tuple counts, per-chromosome rows "
         f"and per-file counts are in the [provenance records]({REPO_URL}/tree/{TAG}/docs/concordance-provenance)."
     )
     sv_caption = (
