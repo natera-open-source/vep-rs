@@ -82,7 +82,7 @@ jobs:
           check scripts/golden/test_golden_scripts.py 20
           check scripts/release/test_render_release_notes.py 77
           check scripts/parity/test_check_parity_matrix.py 36
-          check scripts/docs/test_site_tools.py 72
+          check scripts/docs/test_site_tools.py 77
           [ "$fail" -eq 0 ]
           python3 -m pytest -q \
             scripts/validation/test_compare_sv_concordance.py \

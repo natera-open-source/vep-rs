@@ -12,9 +12,8 @@
 # have, or whose source anchor is still a heading of the tag's own page. Each
 # drop prints a line, and a redirect entry the filter cannot read (anything but
 # "source" = "destination" on one line) fails the build. A tag whose
-# docs/index.md is absent, or is the stub that
-# points at the README, keeps the README as its home page
-# (VEP_RS_DOCS_README_HOME=1).
+# docs/index.md is absent, or is the stub that points at the README, keeps the
+# README as its home page (VEP_RS_DOCS_README_HOME=1).
 #
 # Preview form (--main). The pages come from HEAD; the site is titled
 # "vep-rs main", addressed under /vep-rs/main/ and marked with its channel, which
@@ -184,6 +183,8 @@ def destination_exists(key, dest):
         resolved = page.lstrip("/")
     else:
         resolved = posixpath.normpath(posixpath.join(posixpath.dirname(key.lstrip("/")), page))
+    if page.endswith("/"):
+        resolved = posixpath.join(resolved, "index.md")
     return os.path.exists(os.path.join(docs, re.sub(r"\.html$", ".md", resolved)))
 
 

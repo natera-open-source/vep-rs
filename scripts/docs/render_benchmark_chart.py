@@ -2,8 +2,8 @@
 """Render the current release's whole-genome wall-time chart as an SVG.
 
 Input: the README's `## Current release: vX.Y.Z` heading names the release, and the
-latest `docs/concordance-provenance/<date>-population-vX.Y.Z.json` by name is its
-population record. The chart reads that record's `datasets` (the four whole-genome
+one `docs/concordance-provenance/<date>-population-vX.Y.Z.json` of that version is
+its population record. The chart reads that record's `datasets` (the four whole-genome
 population datasets) and, per engine under `wall_time` (`vep_rs`, `ensembl_vep`,
 `fastvep`), the ARM `per_cell` wall-time medians, summed per dataset as the README's
 tables sum them, plus the protocol fields `n_clones_per_cell` and `fork` and each

@@ -180,17 +180,19 @@ def check_redirects(site, pages, base):
                 continue
             checked += 1
             path, _, fragment = dest.partition("#")
+            if path.endswith("/"):
+                path += "index.html"
             if not path:
                 target = page
             elif path.startswith("/"):
-                if not path.startswith(base_path):
+                if not path.startswith(base_path) and path != base_path.rstrip("/"):
                     broken.append(f"{page}: redirect to {dest} leaves the site")
                     continue
                 target = path[len(base_path):]
             else:
                 target = posixpath.normpath(posixpath.join(posixpath.dirname(page), path))
-            if not target or target.endswith("/"):
-                target += "index.html"
+            if not target:
+                target = "index.html"
             if not os.path.isfile(os.path.join(site, target)):
                 broken.append(f"{page}: redirect to {dest}: no such file in the site")
                 continue

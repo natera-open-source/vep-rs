@@ -108,14 +108,19 @@ def context(root, repo_url=REPO_URL):
     return {"root": str(root), "config": {"book": {"src": "docs"}, "output": {"html": html}}}
 
 
+def set_variable(monkeypatch, name, value):
+    """Set the environment variable, or remove it when `value` is None."""
+    if value is None:
+        monkeypatch.delenv(name, raising=False)
+    else:
+        monkeypatch.setenv(name, value)
+
+
 def run_preprocessor(monkeypatch, root, items, env=None, repo_url=REPO_URL):
     settings = {"VEP_RS_DOCS_REF": None, "VEP_RS_DOCS_RELEASE": RELEASE, "VEP_RS_DOCS_README_HOME": None}
     settings.update(env or {})
     for name, value in settings.items():
-        if value is None:
-            monkeypatch.delenv(name, raising=False)
-        else:
-            monkeypatch.setenv(name, value)
+        set_variable(monkeypatch, name, value)
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps([context(root, repo_url), {"items": items}])))
     monkeypatch.setattr(sys, "argv", ["mdbook_repo_links.py"])
     links.main()
@@ -156,10 +161,7 @@ def test_supports_exits_zero(monkeypatch):
     ids=["set-stub", "set-landing", "unset-by-zero", "stub", "landing", "stub-trailing-blank", "crlf-stub", "no-index"],
 )
 def test_readme_is_home_follows_the_variable_else_the_three_line_stub(monkeypatch, setting, content, home):
-    if setting is None:
-        monkeypatch.delenv("VEP_RS_DOCS_README_HOME", raising=False)
-    else:
-        monkeypatch.setenv("VEP_RS_DOCS_README_HOME", setting)
+    set_variable(monkeypatch, "VEP_RS_DOCS_README_HOME", setting)
     items = [chapter("guide/page.md", "Text.\n")]
     if content is not None:
         items.append(chapter("index.md", content))
@@ -414,6 +416,12 @@ def test_without_the_gate_flag_a_violation_leaves_the_exit_status_zero(tmp_path)
     assert out.stdout.endswith("Gate: FAIL (4 violations on 1 of 1 pages)\n")
 
 
+VERSIONS = {
+    "release": RELEASE,
+    "channels": [{"name": RELEASE, "path": "/vep-rs/"}, {"name": "main", "path": "/vep-rs/main/"}],
+}
+
+
 def page_html(title, body):
     return (
         "<!DOCTYPE html>\n<html>\n<head>\n"
@@ -462,10 +470,7 @@ def built_site(tmp_path, chart_release=RELEASE, redirect="guide/setup.html#step-
 
 def finish(monkeypatch, capsys, site, *extra, base=BASE, readme_home=None):
     """Exit status and output of the post-build step on `site`."""
-    if readme_home is None:
-        monkeypatch.delenv("VEP_RS_DOCS_README_HOME", raising=False)
-    else:
-        monkeypatch.setenv("VEP_RS_DOCS_README_HOME", readme_home)
+    set_variable(monkeypatch, "VEP_RS_DOCS_README_HOME", readme_home)
     monkeypatch.setattr(sys, "argv", ["site_postbuild.py", str(site), "--base", base, "--release", RELEASE, *extra])
     with pytest.raises(SystemExit) as excinfo:
         postbuild.main()
@@ -511,10 +516,7 @@ def test_preview_channel_marks_its_pages_and_writes_no_sitemap(monkeypatch, caps
     assert '<meta name="vep-rs-channel" content="main">' in index
     assert '<meta name="robots" content="noindex">' in index
     assert not (site / "sitemap.xml").exists()
-    assert json.loads((site / "versions.json").read_text(encoding="utf-8")) == {
-        "release": RELEASE,
-        "channels": [{"name": RELEASE, "path": "/vep-rs/"}, {"name": "main", "path": "/vep-rs/main/"}],
-    }
+    assert json.loads((site / "versions.json").read_text(encoding="utf-8")) == VERSIONS
 
 
 def test_release_form_adds_no_channel_metas_and_writes_versions_and_the_sitemap(monkeypatch, capsys, tmp_path):
@@ -528,10 +530,7 @@ def test_release_form_adds_no_channel_metas_and_writes_versions_and_the_sitemap(
         '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         f"  <url><loc>{BASE}guide/setup.html</loc></url>\n  <url><loc>{BASE}</loc></url>\n</urlset>\n"
     )
-    assert json.loads((site / "versions.json").read_text(encoding="utf-8")) == {
-        "release": RELEASE,
-        "channels": [{"name": RELEASE, "path": "/vep-rs/"}, {"name": "main", "path": "/vep-rs/main/"}],
-    }
+    assert json.loads((site / "versions.json").read_text(encoding="utf-8")) == VERSIONS
 
 
 @pytest.mark.parametrize(
@@ -540,14 +539,27 @@ def test_release_form_adds_no_channel_metas_and_writes_versions_and_the_sitemap(
         ("gone.html", "old.html: redirect to gone.html: no such file in the site"),
         ("guide/setup.html#nowhere", "old.html: redirect to guide/setup.html#nowhere: no id 'nowhere' on guide/setup.html"),
         ("/elsewhere/page.html", "old.html: redirect to /elsewhere/page.html leaves the site"),
+        ("/vep-rs-old/page.html", "old.html: redirect to /vep-rs-old/page.html leaves the site"),
+        ("guide/", "old.html: redirect to guide/: no such file in the site"),
     ],
-    ids=["missing-page", "missing-id", "outside-the-site"],
+    ids=["missing-page", "missing-id", "outside-the-site", "longer-name-than-the-site-root", "directory-without-an-index-page"],
 )
 def test_a_redirect_without_its_destination_fails_by_name(monkeypatch, capsys, tmp_path, destination, message):
     site, source = built_site(tmp_path, redirect=destination)
     code, out = finish(monkeypatch, capsys, site, "--source", str(source))
     assert code == 1
     assert f"ERROR: [site_postbuild] {message}\n" in out
+
+
+@pytest.mark.parametrize(
+    "destination", ["/vep-rs", "/vep-rs/", "guide/"], ids=["site-root-without-the-slash", "site-root", "directory"]
+)
+def test_a_redirect_to_a_directory_is_checked_against_its_index_page(monkeypatch, capsys, tmp_path, destination):
+    site, source = built_site(tmp_path, redirect=destination)
+    (site / "guide" / "index.html").write_text(page_html("Guide", '<h1 id="guide">Guide</h1>'), encoding="utf-8")
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 0, out
+    assert "redirect destinations: 3 checked, 1 external not fetched, 0 broken\n" in out
 
 
 def test_chart_release_differing_from_the_readme_heading_fails(monkeypatch, capsys, tmp_path):
