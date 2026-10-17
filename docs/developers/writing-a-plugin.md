@@ -168,7 +168,7 @@ those two structs are the authoritative schema. Absent optional values are
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | `chr`                                                                 | Chromosome, normalized                                                                      | `"21"`                                                    |
 | `original_chr`                                                        | Chromosome as input                                                                         | `"chr21"`                                                 |
-| `start`, `end`                                                        | 1-based inclusive; `end` is `start - 1` for an insertion                                    | `9068417`                                                 |
+| `start`, `end`                                                        | 1-based inclusive; `end` is `start - 1` for an insertion                                    | 9068417                                                 |
 | `strand`                                                              | Strand                                                                                      | `"Forward"`, `"Reverse"`                                  |
 | `allele_string`                                                       | Alleles in VEP form                                                                         | `"A/G"`, `"AC/-"`, `"-/TT"`                               |
 | `ref_allele`, `alt_alleles`                                           | Serialized as arrays of byte values, so read `allele_string` for the sequences              | `[65]`                                                    |
@@ -201,10 +201,10 @@ The structural-variant fields:
 | Field                             | Meaning                                                                                                              | Example                                     |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | `is_structural`                   | Whether the allele is a structural variant                                                                           | `true`                                      |
-| `sv_end`, `sv_type`, `sv_len`     | INFO END, SVTYPE and SVLEN                                                                                           | `9100000`, `"DEL"`, `-31583`                |
+| `sv_end`, `sv_type`, `sv_len`     | INFO END, SVTYPE and SVLEN                                                                                           | 9100000, `"DEL"`, `-31583`                |
 | `ci_pos`, `ci_end`                | CIPOS and CIEND confidence intervals                                                                                 | `[-10, 10]`                                 |
 | `mate_id`                         | Only on a record that names a mate, a bracket or `<BND>` record: MATEID, PARID or a stand-in; never on a single breakend |                                          |
-| `mate_chr`, `mate_pos`            | The mate's chromosome and position                                                                                   | `"21"`, `9150000`                           |
+| `mate_chr`, `mate_pos`            | The mate's chromosome and position                                                                                   | `"21"`, 9150000                           |
 | `is_single_breakend`              | Whether the allele is a single breakend                                                                              | `true`                                      |
 | `record_so_term`                  | The whole record's class term; see below                                                                             | `"Alu_insertion"`, `"copy_number_variation"` |
 

@@ -28,7 +28,7 @@ These flags name the annotation cache and the reference FASTA, the species and a
 | Flag | Default | What it does |
 | --- | --- | --- |
 | [`--buffer_size`](#opt_buffer_size) | `5000` | Variants per annotation batch |
-| [`--max_sv_size`](#opt_max_sv_size) | `10000000` | Span above which a structural variant is oversize; `-1` lifts the limit |
+| [`--max_sv_size`](#opt_max_sv_size) | 10000000 | Span above which a structural variant is oversize; `-1` lifts the limit |
 | [`--fork`, `--threads`](#opt_fork) | `0` | Annotation worker threads; `0` is one per logical CPU, at most 32 |
 | [`--decompression_threads`](#opt_decompression_threads) | `0` | BGZF decompression threads for `.gz` input; `0` is one per logical CPU, at most 10 |
 | [`--distance`](#opt_distance) | `5000` | Upstream and downstream distance in bp, or `up,down` |
@@ -129,7 +129,7 @@ Number of variants per annotation batch.
 
 ### `--max_sv_size` {#opt_max_sv_size}
 
-**`--max_sv_size <bases>`**, integer, default `10000000`. Ensembl VEP: same flag and default.
+**`--max_sv_size <bases>`**, integer, default 10000000. Ensembl VEP: same flag and default.
 
 A structural variant spanning more than this many bases is oversize; `-1` lifts the limit, as in VEP 116. A `<CNV:TR>` record whose repeat sequence is longer than this stays symbolic rather than reading a direction of change (under `-1` every one does), as in VEP 116.
 

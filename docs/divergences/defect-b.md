@@ -77,7 +77,7 @@ The sequence deletion, on ENST00000486278, one row from Ensembl VEP and one from
 
 | Column | Ensembl VEP | vep-rs |
 | --- | --- | --- |
-| Uploaded_variation | `4629713` | `4629713` |
+| Uploaded_variation | 4629713 | 4629713 |
 | Location | `21:36265246` | `21:36265246` |
 | Allele | `-` | `-` |
 | Gene | `ENSG00000159216` | `ENSG00000159216` |
