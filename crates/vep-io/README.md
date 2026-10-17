@@ -103,8 +103,8 @@ Output:
 | `IoError`                                               | The crate's error type, re-exported at the root with `InputParser` and `OutputFormatter`.                                                           |
 
 The flags behind `FieldOptions` are documented in
-[docs/cli-reference.md](../../docs/cli-reference.md#output-control); the input
-formats and their selection in its [Input](../../docs/cli-reference.md#input)
+[docs/cli/output-control.md](../../docs/cli/output-control.md); the input
+formats and their selection in the CLI reference's [Input](../../docs/cli/input-output.md#input)
 section.
 
 ## Run it

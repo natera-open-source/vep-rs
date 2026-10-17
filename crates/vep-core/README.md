@@ -31,7 +31,7 @@ Take the VCF (Variant Call Format) line `chr21 25000100 . ACG A . . .`, a two-ba
 
 ## Public API
 
-The items a caller reaches for, by module. The record types (`InputVariant`, `TranscriptConsequence`, `Transcript`, `CachedVariation`, `CacheInfo`) derive `serde::Serialize` and `serde::Deserialize`, and `InputVariant` and `TranscriptConsequence` are the JSON (JavaScript Object Notation) documents a dynamic-library plugin receives ([docs/plugins.md](../../docs/plugins.md#what-run-receives)).
+The items a caller reaches for, by module. The record types (`InputVariant`, `TranscriptConsequence`, `Transcript`, `CachedVariation`, `CacheInfo`) derive `serde::Serialize` and `serde::Deserialize`, and `InputVariant` and `TranscriptConsequence` are the JSON (JavaScript Object Notation) documents a dynamic-library plugin receives ([docs/developers/writing-a-plugin.md](../../docs/developers/writing-a-plugin.md#what-run-receives)).
 
 | Item                                                             | Module        | What it gives a caller                                                                                                                                   |
 | ---------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |

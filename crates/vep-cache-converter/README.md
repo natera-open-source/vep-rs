@@ -83,5 +83,5 @@ The unit tests cover `parse_region_filename`. The workspace's standard build, te
 - [`vep-core`](../vep-core/README.md): declared in `Cargo.toml`, not imported by `main.rs`.
 - [`vep-cache-builder`](../vep-cache-builder/README.md): writes the per-chromosome layout directly, so a natively built cache needs no conversion.
 - [docs/cache-setup.md](../../docs/cache-setup.md): the routes to the per-chromosome JSON transcript cache the flat copy targets.
-- [docs/plugins.md § Data File Preparation](../../docs/plugins.md#data-file-preparation): how a plugin finds a `.vpd` store beside its data file.
+- [docs/plugins/data-files.md § Tabix indexes and `.vpd` stores](../../docs/plugins/data-files.md#tabix-indexes-and-vpd-stores): how a plugin finds a `.vpd` store beside its data file.
 - [Root README § Installation](../../README.md#installation): the release archives and the container image that ship this binary.
