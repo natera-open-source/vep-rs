@@ -1,16 +1,18 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! HGVS notation generation for variant-transcript consequences.
+//! HGVS notation generation: HGVSc (coding DNA) and HGVSp (protein) for a
+//! variant-transcript pair, and HGVSg (genomic) for a variant allele.
 //!
-//! Produces HGVSc (coding DNA) and HGVSp (protein) notation strings following
-//! the Human Genome Variation Society nomenclature conventions, matching Perl
-//! VEP's output.
+//! The strings follow the Human Genome Variation Society nomenclature
+//! conventions, matching Perl VEP's output.
 //!
 //! Perl citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`).
 //!
 //! Reference: <https://varnomen.hgvs.org/>
+
+use std::borrow::Cow;
 
 use vep_core::coordinate::Strand;
 use vep_core::transcript::{MapperPair, Transcript};
@@ -148,7 +150,8 @@ impl TranscriptSlice<'_> {
     }
 }
 
-/// Perl's HGVS variant type (`hgvs_variant_notation`, Utils/Sequence.pm 493).
+/// Perl's HGVS variant type (`hgvs_variant_notation`, Utils/Sequence.pm 493),
+/// shared by the transcript (`c.`/`n.`) and genomic (`g.`) descriptions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum HgvscKind {
     Del,
@@ -161,7 +164,7 @@ enum HgvscKind {
     Multiple(usize),
 }
 
-/// Perl's `$hgvs_notation` hash for a transcript-level description.
+/// Perl's `$hgvs_notation` hash for one description.
 struct HgvscNotation {
     start: i64,
     end: i64,
@@ -171,21 +174,22 @@ struct HgvscNotation {
 }
 
 /// `hgvs_variant_notation` (Utils/Sequence.pm 493) with the default lookup
-/// order: the type and displayed span of `alt_seq` replacing slice positions
-/// `ref_start..=ref_end`. `None` where Perl returns `undef` (the alleles are
-/// equal) or the reference bases cannot be read.
+/// order: the type and displayed span of `alt_seq` replacing reference positions
+/// `ref_start..=ref_end`. `read(start, len)` returns the `len` reference bases
+/// from 1-based `start`, `None` when they cannot be read; the reference allele
+/// falls back to `fallback_ref` when given. `None` where Perl returns `undef`
+/// (the alleles are equal) or the reference bases cannot be read.
 fn hgvs_variant_notation(
-    slice: &TranscriptSlice<'_>,
-    fallback_ref: &[u8],
+    read: impl Fn(i64, usize) -> Option<Vec<u8>>,
+    fallback_ref: Option<&[u8]>,
     alt_seq: Vec<u8>,
     ref_start: i64,
     ref_end: i64,
 ) -> Option<HgvscNotation> {
     let ref_length = (ref_end - ref_start + 1).max(0) as usize;
-    let ref_seq = match slice.substr(ref_start, ref_length) {
+    let ref_seq = match read(ref_start, ref_length) {
         Some(s) => s,
-        None if slice.fasta.is_none() => fallback_ref.to_vec(),
-        None => return None,
+        None => fallback_ref?.to_vec(),
     };
     if ref_seq == alt_seq {
         return None;
@@ -213,13 +217,13 @@ fn hgvs_variant_notation(
     }
     if ref_length == 0 {
         // Perl's `lookup_order` 1: the bases after the site are tried first.
-        let after = slice.substr(ref_end + 1, alt_length);
+        let after = read(ref_end + 1, alt_length);
         if after.as_deref() == Some(n.alt_seq.as_slice()) {
             n.end = n.start + alt_length as i64 - 1;
             n.kind = HgvscKind::Dup;
             return Some(n);
         }
-        let before = slice.substr(ref_end - alt_length as i64 + 1, alt_length);
+        let before = read(ref_end - alt_length as i64 + 1, alt_length);
         if before.as_deref() == Some(n.alt_seq.as_slice()) {
             n.start = n.end - alt_length as i64 + 1;
             n.kind = HgvscKind::Dup;
@@ -617,8 +621,8 @@ fn hgvsc_at(
         .unwrap_or(&fallback_ref);
 
     let mut n = hgvs_variant_notation(
-        &slice,
-        fallback_ref,
+        |start, len| slice.substr(start, len),
+        slice.fasta.is_none().then_some(fallback_ref),
         alt_seq,
         slice_start + offset,
         slice_end + offset,
@@ -820,6 +824,326 @@ fn hgvsp_at(
         reference_fasta,
     )?;
     Some(format!("{protein_prefix}{notation}"))
+}
+
+/// HGVSg, the genomic notation `--hgvsg` adds: Perl VEP's `hgvs_genomic`
+/// (VariationFeature.pm 1877) on the variant's chromosome, as
+/// `VariationFeatureOverlapAllele_to_output_hash` (OutputFactory.pm 1366-1395)
+/// calls it for every sequence-variant row.
+///
+/// The reference name is the chromosome as the input names it (`21:g.`,
+/// `chr21:g.`) and the numbering `m.` on `MT`. The alleles are those of the
+/// whole record ([`InputVariant::record_allele_string`]); a record with several
+/// ALTs describes the ALT at `ALLELE_NUM`, trimmed against the reference
+/// (`trim_sequences`) to find its span and class, a bi-allelic record its one ALT
+/// as written. An insertion or deletion is moved to its most 3' position on the
+/// forward strand, whatever the transcript strand, within the flank Perl reads
+/// (100 bases, more for an allele over 50; `_get_flank_seq`, VariationFeature.pm
+/// 1805); the reference bases come from the FASTA, never from the input, so the
+/// type follows `hgvs_variant_notation` on the sequence there and a `delins` is
+/// clipped by `_clip_alleles` (VariationFeature.pm 2046).
+///
+/// `None` without a FASTA or when the FASTA lacks the chromosome, for a
+/// structural variant (whose rows carry no HGVSg), for an allele with a
+/// character outside `ACGT-`, for a span outside the chromosome, and where the
+/// allele equals the reference sequence at its (shifted) position.
+pub fn generate_hgvsg(
+    variant: &InputVariant,
+    reference_fasta: Option<&vep_fasta::IndexedFasta>,
+) -> Option<String> {
+    if variant.is_structural || variant.variant_class.is_structural() || variant.no_allele {
+        return None;
+    }
+    let fasta = reference_fasta?;
+    let (contig, chr_len) = fasta.contig(&variant.chr)?;
+    let chr_len = chr_len as i64;
+
+    // The VariationFeature's allele string, upper-cased by `validate_vf`.
+    let record = variant.record_allele_string().to_ascii_uppercase();
+    let all_alleles: Vec<&str> = record.split('/').collect();
+    let is_multi_allelic = all_alleles.len() > 2;
+    // OutputFactory.pm 1387-1390: the ALT at `allele_number` of a multi-allelic
+    // record, else the second allele.
+    let allele_number = if is_multi_allelic {
+        variant
+            .allele_num
+            .map_or(variant.allele_index + 1, |n| n as usize)
+    } else {
+        1
+    };
+    let original_allele = *all_alleles.get(allele_number)?;
+
+    let (vf_start, vf_end) = (variant.start as i64, variant.end as i64);
+    // VariationFeature.pm 1904-1907: the span must lie on the chromosome.
+    if vf_start < 1 || vf_end < 1 || vf_start > chr_len || vf_end > chr_len {
+        return None;
+    }
+
+    // `_get_flank_seq` (VariationFeature.pm 1805-1849): 100 bases each side, or
+    // 50 more than the length of the last allele longer than 50.
+    let mut add_length: i64 = 100;
+    for allele in &all_alleles {
+        if allele.len() > 50 {
+            add_length = allele.len() as i64 + 50;
+        }
+    }
+    let mut seq_start = vf_start - add_length;
+    let seq_end = vf_end + add_length;
+    let mut ref_start = add_length;
+    let mut ref_end = add_length + vf_end - vf_start;
+    if seq_start < 0 {
+        ref_start += seq_start;
+        ref_end += seq_start;
+        seq_start = 0;
+    }
+    let flank = padded_sequence(fasta, &variant.chr, chr_len, seq_start + 1, seq_end)?;
+
+    // VariationFeature.pm 1942-1944: written tandems spelt out, then any allele
+    // with a character outside `ACGT-` skipped.
+    let allele = expand_tandems(original_allele).into_bytes();
+    if allele
+        .iter()
+        .any(|b| !matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T' | b'-'))
+    {
+        return None;
+    }
+    // VariationFeature.pm 1949-1957: an Ensembl-format line on the reverse strand
+    // is described on the forward strand of the chromosome slice.
+    let flip = variant.strand == Strand::Reverse;
+
+    // VariationFeature.pm 1967-1976: an ALT of a multi-allelic record is trimmed
+    // against the reference, narrowing the span. Perl took its `$check_allele`
+    // before this, so an allele that is not an insertion or deletion is still
+    // described by its untrimmed bases over the narrowed span (`GT/G/CT` gives
+    // `delinsCT` at the `G`).
+    let mut chr_start = vf_start;
+    let (trimmed_ref, trimmed_alt): (Cow<[u8]>, Cow<[u8]>) = if is_multi_allelic {
+        let (trimmed_ref, trimmed_alt, start, end) =
+            trim_sequences(all_alleles[0].as_bytes(), &allele, vf_start, vf_end);
+        ref_start += start - vf_start;
+        ref_end += end - vf_end;
+        chr_start = start;
+        (
+            dash_if_empty(trimmed_ref).into(),
+            dash_if_empty(trimmed_alt).into(),
+        )
+    } else {
+        (all_alleles[0].as_bytes().into(), allele.as_slice().into())
+    };
+
+    // `var_allele_class` (SO_variation_class, Utils/Sequence.pm 335): only an
+    // `insertion` (`-/ACG`) or a `deletion` (`ACG/-`) is shifted.
+    let base_run = |s: &[u8]| !s.is_empty() && s.iter().all(u8::is_ascii_uppercase);
+    let insertion = *trimmed_ref == *b"-" && base_run(&trimmed_alt);
+    let deletion = base_run(&trimmed_ref) && trimmed_alt.contains(&b'-');
+
+    // VariationFeature.pm 1981-2012 (`DEFAULT_SHIFT_HGVS_VARIANTS_3PRIME` is 1):
+    // the deleted or inserted bases rotate along the flank after the variant.
+    let (check_allele, offset) = if insertion || deletion {
+        let mut seq_to_check = if deletion { trimmed_ref } else { trimmed_alt }.into_owned();
+        if flip {
+            seq_to_check = crate::coding::reverse_complement(&seq_to_check);
+        }
+        let (three_prime_allele, offset) = match flank.get(ref_end as usize..) {
+            Some(downstream) => three_prime_seq_offset(seq_to_check, downstream),
+            None => (seq_to_check, 0),
+        };
+        let check_allele = if insertion {
+            three_prime_allele
+        } else {
+            b"-".to_vec()
+        };
+        (check_allele, offset)
+    } else if flip {
+        // Perl's `lookup_order` -1 matters only where the span is empty, an
+        // insertion, which always takes the branch above.
+        (crate::coding::reverse_complement(&allele), 0)
+    } else {
+        (allele, 0)
+    };
+
+    let alt_seq: Vec<u8> = check_allele.into_iter().filter(|&b| b != b'-').collect();
+    let mut n = hgvs_variant_notation(
+        |start, len| perl_substr(&flank, start - 1, len).map(<[u8]>::to_vec),
+        None,
+        alt_seq,
+        ref_start + offset,
+        ref_end + offset,
+    )?;
+    // The flank positions the notation carries become chromosome positions
+    // (`$chr_start + $offset` and `$chr_end + $offset` are the display span).
+    let to_chromosome = chr_start - ref_start;
+    n.start += to_chromosome;
+    n.end += to_chromosome;
+    if n.kind == HgvscKind::Delins {
+        genomic_clip_alleles(&mut n);
+    }
+
+    // VariationFeature.pm 2034: `m.` only when the slice is named `MT`; offline the
+    // slice is the FASTA contig the input chromosome resolves to (BaseVEP.pm
+    // `get_slice`), so a UCSC `chrM` FASTA gives `g.`.
+    let numbering = if contig == "MT" { 'm' } else { 'g' };
+    Some(format_hgvs_string(
+        &variant.original_chr,
+        numbering,
+        &n.start.to_string(),
+        &n.end.to_string(),
+        &n,
+    ))
+}
+
+/// Bases `start..=end` (1-based) of `chr`, read as Perl's FASTA-backed slice
+/// reads them: positions past the end of the contig are `N` (`_raw_seq`,
+/// FastaSequence.pm 627-636).
+fn padded_sequence(
+    fasta: &vep_fasta::IndexedFasta,
+    chr: &str,
+    chr_len: i64,
+    start: i64,
+    end: i64,
+) -> Option<Vec<u8>> {
+    let mut seq = fasta.sequence(chr, start as u64, end.min(chr_len) as u64)?;
+    seq.resize((end - start + 1) as usize, b'N');
+    Some(seq)
+}
+
+/// Perl's `substr($s, $offset, $len)`: a negative offset counts from the end,
+/// a span partly outside the string yields the part inside it, and an offset
+/// past the end yields `undef`.
+fn perl_substr(s: &[u8], offset: i64, len: usize) -> Option<&[u8]> {
+    let n = s.len() as i64;
+    let start = if offset < 0 { n + offset } else { offset };
+    if start > n {
+        return None;
+    }
+    let end = (start + len as i64).clamp(0, n);
+    let start = start.clamp(0, n);
+    Some(&s[start as usize..end.max(start) as usize])
+}
+
+/// `expand` (ensembl Utils/Sequence.pm): `s/(\w*)\((\w+)\)(\d+)/$1.$2 x $3/eg`,
+/// so `(CA)3` reads `CACACA`.
+fn expand_tandems(allele: &str) -> String {
+    if !allele.contains('(') {
+        return allele.to_string();
+    }
+    let is_word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let bytes = allele.as_bytes();
+    let mut out = String::with_capacity(allele.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'(' {
+            let unit_end = (i + 1..bytes.len())
+                .find(|&j| !is_word(bytes[j]))
+                .unwrap_or(bytes.len());
+            let count_end = (unit_end + 1..bytes.len())
+                .find(|&j| !bytes[j].is_ascii_digit())
+                .unwrap_or(bytes.len());
+            if unit_end > i + 1 && bytes.get(unit_end) == Some(&b')') && count_end > unit_end + 1 {
+                let count: usize = allele[unit_end + 1..count_end].parse().unwrap_or(0);
+                out.push_str(&allele[i + 1..unit_end].repeat(count));
+                i = count_end;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+/// `trim_sequences` (Utils/Sequence.pm 965) on the forward strand: the bases
+/// `ref_allele` and `alt` share are trimmed from the left, moving `start`, then
+/// from the right, moving `end`.
+fn trim_sequences(
+    ref_allele: &[u8],
+    alt: &[u8],
+    mut start: i64,
+    mut end: i64,
+) -> (Vec<u8>, Vec<u8>, i64, i64) {
+    let (mut r, mut a) = (ref_allele, alt);
+    while let (Some(x), Some(y)) = (r.first(), a.first()) {
+        if x != y {
+            break;
+        }
+        (r, a) = (&r[1..], &a[1..]);
+        start += 1;
+    }
+    while let (Some(x), Some(y)) = (r.last(), a.last()) {
+        if x != y {
+            break;
+        }
+        (r, a) = (&r[..r.len() - 1], &a[..a.len() - 1]);
+        end -= 1;
+    }
+    (r.to_vec(), a.to_vec(), start, end)
+}
+
+fn dash_if_empty(allele: Vec<u8>) -> Vec<u8> {
+    if allele.is_empty() {
+        b"-".to_vec()
+    } else {
+        allele
+    }
+}
+
+/// `get_3prime_seq_offset` (Utils/Sequence.pm 792): `seq` rotated one base at a
+/// time while its first base equals the next base of `post_seq`, and the number
+/// of positions it moved.
+fn three_prime_seq_offset(mut seq: Vec<u8>, post_seq: &[u8]) -> (Vec<u8>, i64) {
+    let mut offset = 0;
+    for &next in post_seq {
+        if seq.first() != Some(&next) {
+            break;
+        }
+        seq.rotate_left(1);
+        offset += 1;
+    }
+    (seq, offset)
+}
+
+/// `_clip_alleles` of VariationFeature.pm (2046), which `hgvs_genomic` applies
+/// to a `delins`: the shared leading and trailing bases are trimmed, moving
+/// `start` and `end`, and the type is re-read from what remains. An emptied
+/// reference becomes a `dup` of the trimmed leading bases when they end in the
+/// inserted ones, else an `ins` between the base before and the one after; an
+/// emptied alternate a `del`. The `=` type is unreachable: a `delins` has
+/// differing alleles.
+fn genomic_clip_alleles(n: &mut HgvscNotation) {
+    let mut preseq: Vec<u8> = Vec::new();
+    let (mut r, mut a): (&[u8], &[u8]) = (&n.ref_seq, &n.alt_seq);
+    while let (Some(&x), Some(&y)) = (r.first(), a.first()) {
+        if x != y {
+            break;
+        }
+        preseq.push(x);
+        (r, a) = (&r[1..], &a[1..]);
+        n.start += 1;
+    }
+    while let (Some(x), Some(y)) = (r.last(), a.last()) {
+        if x != y {
+            break;
+        }
+        (r, a) = (&r[..r.len() - 1], &a[..a.len() - 1]);
+        n.end -= 1;
+    }
+    let (r, a) = (dash_if_empty(r.to_vec()), dash_if_empty(a.to_vec()));
+    if r != b"-" && r.len() == 1 && a.len() == 1 {
+        n.kind = HgvscKind::Sub;
+    } else if r == b"-" {
+        if preseq.ends_with(&a) {
+            n.kind = HgvscKind::Dup;
+            n.start -= a.len() as i64;
+        } else {
+            n.kind = HgvscKind::Ins;
+            n.start -= 1;
+            n.end = n.start + 1;
+        }
+    } else if a == b"-" {
+        n.kind = HgvscKind::Del;
+    }
+    n.ref_seq = r;
+    n.alt_seq = a;
 }
 
 #[cfg(test)]
@@ -1154,18 +1478,6 @@ mod tests {
         assert_eq!(generate_hgvsc(&after, &tx, None), None);
     }
 
-    /// A slice with no FASTA: `substr` reads nothing, so the reference comes from
-    /// the caller and no duplication lookup can succeed.
-    fn unreadable_slice() -> TranscriptSlice<'static> {
-        TranscriptSlice {
-            chr: "21",
-            tr_start: 1,
-            tr_end: 10_000,
-            reverse: false,
-            fasta: None,
-        }
-    }
-
     #[test]
     fn test_versioned_reference_name() {
         assert_eq!(
@@ -1189,10 +1501,12 @@ mod tests {
 
     #[test]
     fn test_hgvs_variant_notation_types() {
-        let slice = unreadable_slice();
+        // No reference sequence: the reference allele is the fallback.
+        let unreadable = |_: i64, _: usize| None;
         let kind = |r: &[u8], a: &[u8]| {
             let end = 100 + r.len() as i64 - 1;
-            hgvs_variant_notation(&slice, r, a.to_vec(), 100, end).map(|n| (n.kind, n.start, n.end))
+            hgvs_variant_notation(unreadable, Some(r), a.to_vec(), 100, end)
+                .map(|n| (n.kind, n.start, n.end))
         };
         assert_eq!(kind(b"A", b"G"), Some((HgvscKind::Sub, 100, 100)));
         assert_eq!(kind(b"ACG", b""), Some((HgvscKind::Del, 100, 102)));
@@ -1207,7 +1521,7 @@ mod tests {
         assert_eq!(kind(b"ACG", b"ACG"), None);
         // An insertion (`ref_end < ref_start`) lists the smaller coordinate first.
         assert_eq!(
-            hgvs_variant_notation(&slice, b"", b"TT".to_vec(), 100, 99)
+            hgvs_variant_notation(unreadable, Some(b""), b"TT".to_vec(), 100, 99)
                 .map(|n| (n.kind, n.start, n.end)),
             Some((HgvscKind::Ins, 99, 100))
         );
@@ -1485,5 +1799,282 @@ mod tests {
             generate_hgvsp(&variant, &tx, None).as_deref(),
             Some("ENSP00000000001.1:p.Ter283=")
         );
+    }
+
+    /// Chromosome `21` of the HGVSg fixture: an `AAAA` run at 11-14, a `CACACA`
+    /// run at 21-26, `GGATC` at 31-35 and `CC` at 35-36. Every expected HGVSg
+    /// below is what Ensembl VEP 116's `hgvs_genomic` prints for the same variant
+    /// on this sequence (a FASTA-backed whole-chromosome slice, as `--offline
+    /// --fasta` builds it).
+    const HGVSG_CHR21: &str = "CGTACGTACGAAAATCCGATCACACAGTTCGGATCCTAGGTCAGAGACTTGCATGCATGC";
+
+    /// The fixture FASTA: `21` as above and a 14-base `MT`.
+    fn hgvsg_fasta() -> (tempfile::TempDir, vep_fasta::IndexedFasta) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(&fa, format!(">21\n{HGVSG_CHR21}\n>MT\nGATTACAGATTACA\n"))
+            .expect("write FASTA");
+        std::fs::write(
+            dir.path().join("ref.fa.fai"),
+            "21\t60\t4\t60\t61\nMT\t14\t69\t14\t15\n",
+        )
+        .expect("write FASTA index");
+        let fasta = vep_fasta::IndexedFasta::from_path(&fa).expect("load indexed FASTA");
+        (dir, fasta)
+    }
+
+    /// A bi-allelic variant as the parsers hold it (an insertion has `end` one
+    /// below `start`).
+    fn biallelic(chr: &str, start: u64, end: u64, ref_allele: &str, alt: &str) -> InputVariant {
+        InputVariant::new(
+            chr.into(),
+            start,
+            end,
+            ref_allele.as_bytes().to_vec(),
+            alt.as_bytes().to_vec(),
+        )
+    }
+
+    fn hgvsg(variant: &InputVariant, fasta: &vep_fasta::IndexedFasta) -> Option<String> {
+        generate_hgvsg(variant, Some(fasta))
+    }
+
+    #[test]
+    fn test_hgvsg_snv_is_named_by_the_input_chromosome() {
+        let (_dir, fasta) = hgvsg_fasta();
+        assert_eq!(
+            hgvsg(&biallelic("21", 33, 33, "A", "G"), &fasta).as_deref(),
+            Some("21:g.33A>G")
+        );
+        assert_eq!(
+            hgvsg(&biallelic("chr21", 33, 33, "A", "G"), &fasta).as_deref(),
+            Some("chr21:g.33A>G")
+        );
+    }
+
+    /// The reference bases come from the FASTA, not the input: a mismatching REF
+    /// is described with the FASTA's base, and an ALT equal to it has no HGVSg.
+    #[test]
+    fn test_hgvsg_reads_the_reference_from_the_fasta() {
+        let (_dir, fasta) = hgvsg_fasta();
+        assert_eq!(
+            hgvsg(&biallelic("21", 33, 33, "C", "G"), &fasta).as_deref(),
+            Some("21:g.33A>G")
+        );
+        assert_eq!(hgvsg(&biallelic("21", 33, 33, "G", "A"), &fasta), None);
+    }
+
+    #[test]
+    fn test_hgvsg_deletion_outside_a_repeat_keeps_its_position() {
+        let (_dir, fasta) = hgvsg_fasta();
+        assert_eq!(
+            hgvsg(&biallelic("21", 34, 34, "T", "-"), &fasta).as_deref(),
+            Some("21:g.34del")
+        );
+    }
+
+    /// A deletion in a repeat moves to the repeat's 3' end on the forward strand.
+    #[test]
+    fn test_hgvsg_deletion_in_a_repeat_is_shifted_3prime() {
+        let (_dir, fasta) = hgvsg_fasta();
+        assert_eq!(
+            hgvsg(&biallelic("21", 11, 11, "A", "-"), &fasta).as_deref(),
+            Some("21:g.14del")
+        );
+        assert_eq!(
+            hgvsg(&biallelic("21", 21, 22, "CA", "-"), &fasta).as_deref(),
+            Some("21:g.25_26del")
+        );
+    }
+
+    #[test]
+    fn test_hgvsg_insertion_repeating_no_neighbour_is_ins() {
+        let (_dir, fasta) = hgvsg_fasta();
+        assert_eq!(
+            hgvsg(&biallelic("21", 35, 34, "-", "G"), &fasta).as_deref(),
+            Some("21:g.34_35insG")
+        );
+    }
+
+    /// An insertion of bases the reference already holds is a `dup` of the
+    /// most 3' copy: in place after the `AAAA` run, and after shifting from the
+    /// run's start or the `CACACA` run's start.
+    #[test]
+    fn test_hgvsg_insertion_repeating_its_neighbour_is_dup() {
+        let (_dir, fasta) = hgvsg_fasta();
+        assert_eq!(
+            hgvsg(&biallelic("21", 15, 14, "-", "A"), &fasta).as_deref(),
+            Some("21:g.14dup")
+        );
+        assert_eq!(
+            hgvsg(&biallelic("21", 11, 10, "-", "A"), &fasta).as_deref(),
+            Some("21:g.14dup")
+        );
+        assert_eq!(
+            hgvsg(&biallelic("21", 21, 20, "-", "CA"), &fasta).as_deref(),
+            Some("21:g.25_26dup")
+        );
+    }
+
+    /// Equal-length alleles: a `delins`, an `inv` when the ALT is the reverse
+    /// complement, and a `delins` clipped of the bases it shares with the
+    /// reference (`_clip_alleles`).
+    #[test]
+    fn test_hgvsg_mnv_is_delins_or_inv() {
+        let (_dir, fasta) = hgvsg_fasta();
+        assert_eq!(
+            hgvsg(&biallelic("21", 34, 35, "TC", "AG"), &fasta).as_deref(),
+            Some("21:g.34_35delinsAG")
+        );
+        assert_eq!(
+            hgvsg(&biallelic("21", 31, 33, "GGA", "TCC"), &fasta).as_deref(),
+            Some("21:g.31_33inv")
+        );
+        assert_eq!(
+            hgvsg(&biallelic("21", 31, 33, "GGA", "GCT"), &fasta).as_deref(),
+            Some("21:g.32_33delinsCT")
+        );
+    }
+
+    /// The record `TC/T/GC/TCC` at 34-35 (VCF `21 34 . TC T,GC,TCC`): each ALT,
+    /// picked by its ALLELE_NUM, is trimmed against the reference first. `T` is a
+    /// deletion of the `C` at 35, shifted to 36; `TCC` an insertion of `C`, a
+    /// `dup` of 36; and `GC`, neither, keeps its untrimmed bases over the trimmed
+    /// one-base span, as Perl does.
+    #[test]
+    fn test_hgvsg_multi_allelic_record_describes_each_alt() {
+        let (_dir, fasta) = hgvsg_fasta();
+        let record: std::sync::Arc<str> = "TC/T/GC/TCC".into();
+        let expected = ["21:g.36del", "21:g.34delinsGC", "21:g.36dup"];
+        for (index, (alt, expected)) in ["T", "GC", "TCC"].into_iter().zip(expected).enumerate() {
+            let mut variant = biallelic("21", 34, 35, "TC", alt);
+            variant.record_allele_string_multi = Some(record.clone());
+            variant.allele_index = index;
+            assert_eq!(hgvsg(&variant, &fasta).as_deref(), Some(expected), "{alt}");
+        }
+    }
+
+    #[test]
+    fn test_hgvsg_mitochondrion_uses_m_numbering() {
+        let (_dir, fasta) = hgvsg_fasta();
+        assert_eq!(
+            hgvsg(&biallelic("MT", 2, 2, "A", "C"), &fasta).as_deref(),
+            Some("MT:m.2A>C")
+        );
+        assert_eq!(
+            hgvsg(&biallelic("chrM", 2, 2, "A", "C"), &fasta).as_deref(),
+            Some("chrM:m.2A>C")
+        );
+    }
+
+    /// Ensembl VEP picks `m.` by the FASTA contig's name, not the input's: a UCSC
+    /// FASTA's `chrM` is numbered `g.` (Ensembl VEP 116 prints `chrM:g.2A>C`).
+    #[test]
+    fn test_hgvsg_ucsc_mitochondrion_uses_g_numbering() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fa = dir.path().join("ucsc.fa");
+        std::fs::write(&fa, ">chrM\nGATTACAGATTACA\n").expect("write FASTA");
+        std::fs::write(dir.path().join("ucsc.fa.fai"), "chrM\t14\t6\t14\t15\n")
+            .expect("write FASTA index");
+        let fasta = vep_fasta::IndexedFasta::from_path(&fa).expect("load indexed FASTA");
+        assert_eq!(
+            hgvsg(&biallelic("chrM", 2, 2, "A", "C"), &fasta).as_deref(),
+            Some("chrM:g.2A>C")
+        );
+    }
+
+    /// The 3' shift stops at the flank Ensembl VEP reads: 100 bases, or 50 more
+    /// than an allele longer than 50 bases. Contig `1` is `CG` x 100, then 150 `A`s
+    /// (201-350), then 50 `C`s. Ensembl VEP 116.2 prints `1:g.301del`,
+    /// `1:g.291_350del` and `1:g.251_305dup` for these records.
+    #[test]
+    fn test_hgvsg_shift_stops_at_the_flank() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fa = dir.path().join("flank.fa");
+        let seq = format!("{}{}{}", "CG".repeat(100), "A".repeat(150), "C".repeat(50));
+        std::fs::write(&fa, format!(">1\n{seq}\n")).expect("write FASTA");
+        std::fs::write(dir.path().join("flank.fa.fai"), "1\t400\t3\t400\t401\n")
+            .expect("write FASTA index");
+        let fasta = vep_fasta::IndexedFasta::from_path(&fa).expect("load indexed FASTA");
+        // VCF `1 200 GA G`
+        assert_eq!(
+            hgvsg(&biallelic("1", 201, 201, "A", "-"), &fasta).as_deref(),
+            Some("1:g.301del")
+        );
+        // VCF `1 200 G(A x 60) G`
+        assert_eq!(
+            hgvsg(&biallelic("1", 201, 260, &"A".repeat(60), "-"), &fasta).as_deref(),
+            Some("1:g.291_350del")
+        );
+        // VCF `1 200 G G(A x 55)`
+        assert_eq!(
+            hgvsg(&biallelic("1", 201, 200, "-", &"A".repeat(55)), &fasta).as_deref(),
+            Some("1:g.251_305dup")
+        );
+    }
+
+    /// A deletion shifted up to the contig's last base (the flank past the end
+    /// reads as `N`), and Ensembl VEP's `0_1ins` for an insertion before base 1
+    /// in a multi-allelic record (`22:g.17del`, `21:g.0_1insT`, `21:g.1C>G` in
+    /// Ensembl VEP 116.2).
+    #[test]
+    fn test_hgvsg_at_the_contig_ends() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fa = dir.path().join("ends.fa");
+        std::fs::write(&fa, ">22\nACGTACGTACGTAAAAA\n").expect("write FASTA");
+        std::fs::write(dir.path().join("ends.fa.fai"), "22\t17\t4\t17\t18\n")
+            .expect("write FASTA index");
+        let ends = vep_fasta::IndexedFasta::from_path(&fa).expect("load indexed FASTA");
+        // VCF `22 12 TA T`
+        assert_eq!(
+            hgvsg(&biallelic("22", 13, 13, "A", "-"), &ends).as_deref(),
+            Some("22:g.17del")
+        );
+
+        // VCF `21 1 C TC,G`
+        let (_dir, fasta) = hgvsg_fasta();
+        let record: std::sync::Arc<str> = "C/TC/G".into();
+        for (index, (alt, expected)) in [("TC", "21:g.0_1insT"), ("G", "21:g.1C>G")]
+            .into_iter()
+            .enumerate()
+        {
+            let mut variant = biallelic("21", 1, 1, "C", alt);
+            variant.record_allele_string_multi = Some(record.clone());
+            variant.allele_index = index;
+            assert_eq!(hgvsg(&variant, &fasta).as_deref(), Some(expected), "{alt}");
+        }
+    }
+
+    /// An Ensembl-format line on the reverse strand is described on the forward
+    /// strand: its alleles are complemented, and a deletion is shifted only when
+    /// its complemented bases repeat downstream.
+    #[test]
+    fn test_hgvsg_reverse_strand_input_is_described_on_the_forward_strand() {
+        let (_dir, fasta) = hgvsg_fasta();
+        let mut snv = biallelic("21", 34, 34, "T", "G");
+        snv.strand = Strand::Reverse;
+        assert_eq!(hgvsg(&snv, &fasta).as_deref(), Some("21:g.34T>C"));
+        let mut deletion = biallelic("21", 21, 22, "CA", "-");
+        deletion.strand = Strand::Reverse;
+        assert_eq!(hgvsg(&deletion, &fasta).as_deref(), Some("21:g.21_22del"));
+    }
+
+    /// Ensembl VEP leaves HGVSg empty without a reference sequence, for an ALT
+    /// outside `ACGT-`, for a span off the chromosome and for a structural
+    /// variant; vep-rs leaves it empty too when the FASTA lacks the chromosome.
+    #[test]
+    fn test_hgvsg_is_empty_where_vep_leaves_it_empty() {
+        let (_dir, fasta) = hgvsg_fasta();
+        assert_eq!(
+            generate_hgvsg(&biallelic("21", 33, 33, "A", "G"), None),
+            None
+        );
+        assert_eq!(hgvsg(&biallelic("22", 33, 33, "A", "G"), &fasta), None);
+        assert_eq!(hgvsg(&biallelic("21", 33, 33, "A", "N"), &fasta), None);
+        assert_eq!(hgvsg(&biallelic("21", 61, 60, "-", "A"), &fasta), None);
+        let mut structural = biallelic("21", 30, 40, "N", "<DEL>");
+        structural.variant_class = VariantClass::StructuralDeletion;
+        structural.is_structural = true;
+        assert_eq!(hgvsg(&structural, &fasta), None);
     }
 }

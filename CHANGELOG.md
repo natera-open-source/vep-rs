@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `--hgvsg` fills the `HGVSg` column (JSON and plugin `hgvsg`) with Ensembl VEP 116's genomic notation, read from `--fasta` and shifted 3'; empty without `--fasta` and for structural variants. (#62)
+
+### Fixed
+
+- JSON `allele_string` and a generated `id` list every allele of a multi-allelic Ensembl-format input line (`C/A/G`), as Ensembl VEP does, rather than the row's pair. (#62)
+
 ## [0.4.0] - 2026-10-16
 
 ### Added

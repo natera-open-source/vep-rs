@@ -46,7 +46,8 @@ in shape. `--vcf` also switches on `--symbol`, `--biotype` and `--numbers`, as i
 VEP, and `--json` output is unescaped (VEP's `--no_escape` behavior; vep-rs has no
 `--no_escape` flag). Under `--everything`, vep-rs also switches on `--allele_number`
 and `--hgvsg`, which VEP's `--everything` does not, so the `ALLELE_NUM` and `HGVSg`
-header keys differ there. The formats, the header blocks and the golden-corpus
+header keys differ there and the rows carry both fields (`HGVSg` filled when
+`--fasta` is given). The formats, the header blocks and the golden-corpus
 tests are described in [output-formats.md](output-formats.md).
 
 ### Parquet output
@@ -167,7 +168,7 @@ These flags control which annotation fields appear in the output (`--coding_only
 | `--uniprot`          | bool   | false   | UniProt cross-references: `SWISSPROT` and `TREMBL`. The `UNIPARC` and `UNIPROT_ISOFORM` columns are added but never computed (always empty)                                        |
 | `--xref_refseq`      | bool   | false   | RefSeq transcript cross-references                                                                                                                                                |
 | `--hgvs`             | bool   | false   | HGVS coding and protein notations, and `HGVS_OFFSET` when an insertion or deletion was shifted 3' along the transcript for them. As in Ensembl VEP 116, a deletion that runs over either end of the transcript is described over the bases inside it (`ENST00000290239.6:c.-49_77+1248del`), and a frameshift whose first changed residue is the stop codon reads as an extension, the count excluding the replaced stop (`p.Ter124IleextTer14`, not `p.Ter124IlefsTer15`) |
-| `--hgvsg`            | bool   | false   | Accepted for VEP compatibility; HGVSg is not computed (the `HGVSg` column is added but always empty)                                                                               |
+| `--hgvsg`            | bool   | false   | HGVS genomic notation of each allele (`HGVSg`; JSON `hgvsg`), as Ensembl VEP 116 writes it: named by the input chromosome (`21:g.`, `chr21:g.`; `m.` when the FASTA names the contig `MT`, so a UCSC `chrM` FASTA gives `chrM:g.` as in Ensembl VEP), the reference bases read from `--fasta`, an insertion or deletion shifted 3' along the forward strand whatever the transcript strand, at most as far as the flank Ensembl VEP reads (100 bases, or 50 more than an allele longer than 50) (`21:g.14dup`, `21:g.25_26del`), and each ALT of a multi-allelic record trimmed against the reference first. Empty without `--fasta` (Ensembl VEP refuses `--hgvsg` offline without one), on a chromosome the FASTA lacks, for an ALT outside `ACGT-` and for structural variants. Under `--minimal` it describes the record's unminimised alleles, since per-allele minimisation is not implemented |
 | `--sift`             | String | --      | SIFT predictions (`p`=prediction, `s`=score, `b`=both)                                                                                                                            |
 | `--polyphen`         | String | --      | PolyPhen predictions (`p`=prediction, `s`=score, `b`=both)                                                                                                                        |
 | `--numbers`          | bool   | false   | Exon/intron numbers                                                                                                                                                               |

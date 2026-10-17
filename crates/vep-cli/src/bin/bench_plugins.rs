@@ -204,6 +204,7 @@ fn main() -> Result<()> {
         max_indel_3prime_shift: 2000,
         populate_loftee_context: false,
         compute_hgvs: false,
+        compute_hgvsg: false,
         compute_exon_intron_numbers: true,
         protein_version: false,
     });

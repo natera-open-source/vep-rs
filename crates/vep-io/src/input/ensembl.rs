@@ -96,6 +96,9 @@ impl<R: BufRead> EnsemblParser<R> {
         // branch: the lower coordinate, so an insertion written `100 99` is named
         // at 99.
         let line_name: Arc<str> = format!("{chr}_{}_{allele_string}", start.min(end)).into();
+        // The VariationFeature keeps the whole allele string (Parser/VEP_input.pm);
+        // HGVSg reads every allele of a multi-allelic line from it.
+        let record_allele_string: Option<Arc<str>> = multi_allelic.then(|| allele_string.into());
 
         for (i, alt) in alts.iter().enumerate() {
             let mut variant = InputVariant::new(
@@ -110,6 +113,7 @@ impl<R: BufRead> EnsemblParser<R> {
             variant.allele_index = i;
             variant.minimised = multi_allelic;
             variant.input_line_name = Some(line_name.clone());
+            variant.record_allele_string_multi = record_allele_string.clone();
 
             variants.push(variant);
         }
@@ -230,6 +234,8 @@ mod tests {
         );
     }
 
+    /// Every allele of a multi-allelic line carries the line's whole allele string,
+    /// the VariationFeature's `allele_string` (JSON `allele_string`, HGVSg).
     #[test]
     fn test_parse_multi_allelic() {
         let data = "21\t25585733\t25585733\tA/G/T\t1\trs699\n";
@@ -240,11 +246,13 @@ mod tests {
         assert_eq!(v1.alt_allele(), b"G");
         assert_eq!(v1.allele_index, 0);
         assert!(v1.minimised);
+        assert_eq!(v1.record_allele_string(), "A/G/T");
 
         let v2 = parser.next_variant().unwrap().unwrap();
         assert_eq!(v2.alt_allele(), b"T");
         assert_eq!(v2.allele_index, 1);
         assert!(v2.minimised);
+        assert_eq!(v2.record_allele_string(), "A/G/T");
 
         assert!(parser.next_variant().is_none());
     }

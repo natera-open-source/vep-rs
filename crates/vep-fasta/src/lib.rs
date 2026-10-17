@@ -244,6 +244,18 @@ impl IndexedFasta {
         Some(seq)
     }
 
+    /// The FASTA's own name and the length of the contig `chr` resolves to
+    /// (`chrM` for `MT` in a UCSC-named FASTA), or `None` when it has no such contig.
+    pub fn contig(&self, chr: &str) -> Option<(&str, u64)> {
+        let (name, rec) = match self.records.get_key_value(chr) {
+            Some(entry) => entry,
+            None => self
+                .records
+                .get_key_value(self.aliases.get(&chr.to_ascii_lowercase())?)?,
+        };
+        Some((name.as_str(), rec.len))
+    }
+
     fn record_for(&self, chr: &str) -> Option<&FaiRecord> {
         if let Some(rec) = self.records.get(chr) {
             return Some(rec);

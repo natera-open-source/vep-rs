@@ -44,7 +44,7 @@ attaches it to the variant for the plugin phase and the output formatters.
 | `src/mapper.rs`            | Maps a genomic position to a `TranscriptPosition` (upstream, downstream, UTR, coding, intron, non-coding exon) and a genomic span to CDS and peptide bounds or to a segment projection                                                                                |
 | `src/coding.rs`            | Codon extraction and translation, the frameshift test on CDS-mapped lengths, inframe indel classification by peptide comparison, full-CDS peptide alleles and the ported Perl coding predicates (`perl_coding_terms`, `perl_hgvs_protein`)                            |
 | `src/display.rs`           | The five display columns and the `EXON` and `INTRON` ordinals, rendered through the transcript mapper as Ensembl VEP renders them, apart from the term analysis                                                                                                       |
-| `src/hgvs.rs`              | HGVSc and HGVSp strings and the `HGVS_OFFSET` of an insertion or deletion shifted 3' along the transcript                                                                                                                                                             |
+| `src/hgvs.rs`              | HGVSc and HGVSp strings and the `HGVS_OFFSET` of an insertion or deletion shifted 3' along the transcript; the transcript-independent HGVSg string                                                                                                                    |
 | `src/overlap.rs`           | `find_overlapping_transcripts`: filters a transcript slice by chromosome and by the strand-aware extended region                                                                                                                                                      |
 | `src/sv/mod.rs`            | `calculate_sv_consequences`: dispatches a structural variant on its class, reads the `start = end + 1` insertion pair and the `<CNV:TR>` contraction or gain, and holds the shared overlap predicates (exon, CDS, UTR, intron, polypyrimidine tract, mature microRNA) |
 | `src/sv/deletion.rs`       | `<DEL>` and mobile-element deletions: `transcript_ablation` when the deletion contains the transcript, otherwise `feature_truncation` with the region terms; `stop_lost` over a stop-codon base, `start_lost` over a start-codon base when both ends are exonic       |
@@ -71,6 +71,7 @@ in [docs/cli-reference.md](../../docs/cli-reference.md).
 | `reference_fasta`                                     | `None`        | An indexed FASTA from [vep-fasta](../vep-fasta/README.md) for the sequence-aware steps, HGVS and indel 3' shifting among them (`--fasta`) |
 | `enable_indel_3prime_shift`, `max_indel_3prime_shift` | `false`, 2000 | Shift an insertion or deletion 3' along the transcript before classifying it, up to the given number of bases (`--shift_3prime`)          |
 | `compute_hgvs`                                        | `false`       | Build HGVSc, HGVSp and `HGVS_OFFSET` (`--hgvs`; `vep-cli` also sets it for the Variant Call Format (VCF), JSON and Parquet outputs)       |
+| `compute_hgvsg`                                       | `false`       | Read by the caller, which sets each variant's `hgvsg` with `hgvs::generate_hgvsg` (`--hgvsg`); the crate itself does not read it          |
 | `compute_exon_intron_numbers`                         | `false`       | Fill the `EXON` and `INTRON` ordinals (`--numbers`, and whenever a plugin runs)                                                           |
 | `protein_version`                                     | `false`       | Append the translation version to the protein identifier (`--protein_version`)                                                            |
 | `populate_loftee_context`                             | `false`       | Read by the caller, which attaches the transcript model to each row for the LoFTEE plugin; the crate itself leaves it empty               |
@@ -85,6 +86,7 @@ The other callables a caller reaches for, each one phrase:
 - `coding::get_codon_change(variant, transcript, cds_pos) -> Option<CodonChange>`: the reference and alternate codons and residues of one variant, the changed base in upper case.
 - `display::display_fields(variant, transcript) -> DisplayFields`: the five display columns on their own.
 - `hgvs::generate_hgvs(variant, transcript, fasta) -> HgvsNotation`: HGVSc, HGVSp and the shift offset in one call; `generate_hgvsc` and `generate_hgvsp` give each alone.
+- `hgvs::generate_hgvsg(variant, fasta) -> Option<String>`: the allele's HGVSg (`21:g.25_26del`), shifted 3' along the forward strand.
 - `consequences::shift_indel_3prime_coords(variant, transcript, fasta, max_shift) -> Option<(u64, u64)>`: the shifted span of an insertion or deletion.
 
 `cargo doc` renders the full item list:

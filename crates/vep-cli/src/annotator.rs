@@ -227,6 +227,7 @@ impl Annotator {
             reference_fasta.clone(),
             config.shift_3prime,
             crate::runner::needs_hgvs_computation(config),
+            config.hgvsg,
             crate::runner::needs_exon_intron_numbers(config),
             config.protein_version,
         );
@@ -477,6 +478,7 @@ pub fn build_effects_config(
     reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
     shift_3prime: bool,
     compute_hgvs: bool,
+    compute_hgvsg: bool,
     compute_exon_intron_numbers: bool,
     protein_version: bool,
 ) -> Arc<vep_effects::EffectsConfig> {
@@ -491,6 +493,7 @@ pub fn build_effects_config(
         // active; this shared helper is not on that path.
         populate_loftee_context: false,
         compute_hgvs,
+        compute_hgvsg,
         compute_exon_intron_numbers,
         protein_version,
     })
