@@ -6,17 +6,21 @@
 //! release and assembly, annotated with the corpus's own pruned cache and
 //! compared column by column with the Ensembl VEP output committed beside it.
 //!
-//! One run per corpus; every mismatch is collected and reported in one failure
-//! message, grouped by column and consequence set, so a change is measured
-//! against the whole corpus rather than its first failing row.
+//! One run per corpus and per `flag_sets` entry of its manifest; every mismatch
+//! is collected and reported in one failure message, grouped by column and
+//! consequence set, so a change is measured against the whole corpus rather
+//! than its first failing row.
 
 mod common;
 
 use std::collections::BTreeSet;
+use std::fs;
+use std::io::Write;
+use std::path::Path;
 
 use common::{
-    compare_entries, compare_tab_headers, corpora, parse_default, parse_json, parse_vcf,
-    read_expected, run_vep, Documented, REFERENCE_SKIPPED_RECORD,
+    compare_run, corpora, parse_default, parse_json, parse_vcf, read_expected, runs, Corpus,
+    REFERENCE_SKIPPED_RECORD,
 };
 
 #[test]
@@ -26,29 +30,25 @@ fn default_output_matches_vep_on_every_corpus() {
     let tmp = tempfile::tempdir().unwrap();
     let mut failures = Vec::new();
     for corpus in &corpora {
-        let expected = read_expected(&corpus.dir, "default.txt");
-        let actual = run_vep(corpus, "default", tmp.path(), &[]);
-        let documented = Documented::from_manifest(&corpus.manifest);
-        let header = compare_tab_headers(&expected, &actual);
-        let body = compare_entries(
-            &parse_default(&expected),
-            &parse_default(&actual),
-            &documented,
-        );
-        if !header.is_empty() || !body.is_empty() {
-            failures.push(format!(
-                "== corpus {}/{} (default format)\n{header}{body}",
-                corpus.release, corpus.name
-            ));
+        for run in runs(corpus).iter().filter(|r| r.compares("default")) {
+            let (header, body) = compare_run(run, "default", tmp.path());
+            if !header.is_empty() || !body.is_empty() {
+                failures.push(format!(
+                    "== corpus {} (default format)\n{header}{body}",
+                    run.label()
+                ));
+            }
         }
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
 
 /// The manifest is internally consistent with the committed inputs and
-/// expected output: every record it lists is in `variants.vcf`, every
-/// combination it claims to cover appears in VEP's output for the corpus, and
-/// the generator left no combination without an exemplar.
+/// expected output: every record it lists is in `variants.vcf`, every flag
+/// set's input carries one data line per record, its `covers` names at least
+/// one parity-matrix row, every combination it claims to cover appears in VEP's
+/// output for the corpus, and the generator left no combination without an
+/// exemplar.
 #[test]
 fn manifest_covers_every_combination_it_claims() {
     for corpus in corpora() {
@@ -69,6 +69,24 @@ fn manifest_covers_every_combination_it_claims() {
                 "{}/{}: record {i} differs between manifest and variants.vcf",
                 corpus.release,
                 corpus.name
+            );
+        }
+        let covers = m["covers"].as_array();
+        assert!(
+            covers
+                .is_some_and(|c| !c.is_empty()
+                    && c.iter().all(|n| n.as_str().is_some_and(|s| !s.is_empty()))),
+            "{}/{}: the manifest's covers must name at least one parity-matrix row",
+            corpus.release,
+            corpus.name
+        );
+        for run in runs(&corpus).iter().filter(|r| r.input != "variants.vcf") {
+            assert_eq!(
+                records.len(),
+                run.input_records().len(),
+                "{}: manifest records vs {} data lines",
+                run.label(),
+                run.input
             );
         }
         assert!(
@@ -109,6 +127,209 @@ fn manifest_covers_every_combination_it_claims() {
             corpus.release, corpus.name
         );
     }
+}
+
+fn copy_dir(src: &Path, dst: &Path) {
+    fs::create_dir_all(dst).unwrap();
+    for entry in fs::read_dir(src).unwrap().flatten() {
+        let target = dst.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_dir(&entry.path(), &target);
+        } else {
+            fs::copy(entry.path(), &target).unwrap();
+        }
+    }
+}
+
+/// A corpus runs once per `flag_sets` entry beside its own run. On a copy of
+/// the smallest committed corpus, three entries point at the manifest's
+/// expected outputs: one repeating its flags as written, one over a
+/// bgzip-compressed copy of the input, one with the input piped on standard
+/// input and `--format vcf` added to the flags, the input format a stdin run
+/// must name; each compares the formats it names and no other, the compressed
+/// input carries one data line per manifest record, and the entries inherit the
+/// manifest's documented divergences. A fourth entry carrying an empty
+/// `divergences` list of its own is compared without them, so the reference's
+/// skipped records make it fail.
+#[test]
+fn flag_sets_run_once_per_entry_with_their_input_and_stdin() {
+    let source = corpora()
+        .into_iter()
+        .find(|c| c.name == "GRCh38-release116")
+        .expect("the GRCh38-release116 corpus is committed");
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("corpus");
+    copy_dir(&source.dir, &dir);
+    let plain = fs::read(dir.join("variants.vcf")).unwrap();
+    // Two bgzf members, as a bgzip file over 64 KiB has: a single-member reader
+    // would stop at the first and read half the records.
+    let mut bgzip =
+        noodles_bgzf::io::Writer::new(fs::File::create(dir.join("variants.vcf.gz")).unwrap());
+    let (head, tail) = plain.split_at(plain.len() / 2);
+    bgzip.write_all(head).unwrap();
+    bgzip.flush().unwrap();
+    bgzip.write_all(tail).unwrap();
+    bgzip.finish().unwrap();
+    let flags = source.manifest["flags"].clone();
+    let mut stdin_flags = flags.as_array().unwrap().clone();
+    stdin_flags.extend(["--format", "vcf"].map(serde_json::Value::from));
+    let mut manifest = source.manifest.clone();
+    manifest["flag_sets"] = serde_json::json!([
+        {"name": "again", "flags": flags, "formats": ["default", "tab", "vcf", "json"], "expected_dir": "expected", "covers": []},
+        {"name": "bgzip", "flags": flags, "input": "variants.vcf.gz", "formats": ["default", "json"], "expected_dir": "expected"},
+        {"name": "stdin", "flags": stdin_flags, "stdin": true, "formats": ["vcf"], "expected_dir": "expected"},
+        {"name": "strict", "flags": flags, "formats": ["default"], "expected_dir": "expected",
+         "divergences": [], "vep_rs_only_tuples": []},
+    ]);
+    let corpus = Corpus {
+        release: source.release.clone(),
+        name: source.name.clone(),
+        assembly: source.assembly.clone(),
+        dir,
+        manifest,
+    };
+    let runs = runs(&corpus);
+    let names: Vec<&str> = runs.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, ["default", "again", "bgzip", "stdin", "strict"]);
+    assert_eq!(runs[0].label(), "116/GRCh38-release116");
+    assert_eq!(runs[2].label(), "116/GRCh38-release116 [bgzip]");
+    assert!(runs[2].compares("json") && !runs[2].compares("tab"));
+    assert!(runs[3].stdin && !runs[2].stdin);
+    let records = corpus.manifest["records"].as_array().unwrap().len();
+    assert_eq!(runs[2].input_records().len(), records);
+    assert_eq!(runs[2].input_records(), runs[0].input_records());
+
+    let mut failures = Vec::new();
+    for run in &runs[..4] {
+        for format in ["default", "tab", "vcf", "json"] {
+            if !run.compares(format) {
+                continue;
+            }
+            let (header, body) = compare_run(run, format, tmp.path());
+            if !header.is_empty() || !body.is_empty() {
+                failures.push(format!("== {} ({format})\n{header}{body}", run.label()));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+
+    let (_header, report) = compare_run(&runs[4], "default", tmp.path());
+    assert!(
+        report.contains("UNEXPECTED in vep-rs"),
+        "an entry with its own empty divergence lists is compared without the manifest's:\n{report}"
+    );
+}
+
+/// `runs` refuses the `flag_sets` entries the corpus tool's `flag-set` refuses,
+/// naming the entry and the reason, so a manifest edited by hand cannot certify
+/// a set's `covers` with a run the tool would not have written; the shapes the
+/// tool writes (a name of letters, digits, `_` and `-` that starts with a letter
+/// or digit) run.
+#[test]
+fn runs_refuses_the_flag_set_entries_the_corpus_tool_refuses() {
+    let source = corpora()
+        .into_iter()
+        .find(|c| c.name == "GRCh38-release116")
+        .expect("the GRCh38-release116 corpus is committed");
+    let label = format!("{}/{}", source.release, source.name);
+    let with_flag_sets = |flag_sets: serde_json::Value| {
+        let mut manifest = source.manifest.clone();
+        manifest["flag_sets"] = flag_sets;
+        Corpus {
+            release: source.release.clone(),
+            name: source.name.clone(),
+            assembly: source.assembly.clone(),
+            dir: source.dir.clone(),
+            manifest,
+        }
+    };
+    let not_a_name = |name: &str| {
+        format!("{label}: flag set name {name:?} is not a plain word other than default")
+    };
+    let outside =
+        |path: &str| format!("{label} flag set x: {path:?} is not a path inside the corpus");
+    let refused = [
+        (
+            serde_json::json!([{"name": "default"}]),
+            not_a_name("default"),
+        ),
+        (serde_json::json!([{"name": ""}]), not_a_name("")),
+        (serde_json::json!([{"name": "-x"}]), not_a_name("-x")),
+        (serde_json::json!([{"name": "_x"}]), not_a_name("_x")),
+        (serde_json::json!([{"name": "a/b"}]), not_a_name("a/b")),
+        (
+            serde_json::json!([{"name": "x"}, {"name": "x"}]),
+            format!("{label}: flag set x is named twice"),
+        ),
+        (
+            serde_json::json!([{"name": "x", "formats": []}]),
+            format!("{label} flag set x: no format to compare"),
+        ),
+        (
+            serde_json::json!([{"name": "x", "formats": ["parquet"]}]),
+            format!("{label} flag set x: unknown format parquet"),
+        ),
+        (serde_json::json!([{"name": "x", "input": ""}]), outside("")),
+        (
+            serde_json::json!([{"name": "x", "input": "../variants.vcf"}]),
+            outside("../variants.vcf"),
+        ),
+        (
+            serde_json::json!([{"name": "x", "input": "/variants.vcf"}]),
+            outside("/variants.vcf"),
+        ),
+        (
+            serde_json::json!([{"name": "x", "expected_dir": ""}]),
+            outside(""),
+        ),
+        (
+            serde_json::json!([{"name": "x", "expected_dir": "../expected"}]),
+            outside("../expected"),
+        ),
+        (
+            serde_json::json!([{"name": "x", "stdin": true, "flags": ["--symbol"]}]),
+            format!("{label} flag set x: a stdin run names its input format with --format"),
+        ),
+        (
+            serde_json::json!([{"name": "x", "stdin": "true"}]),
+            format!("{label} flag set x: stdin is not of its type"),
+        ),
+        (
+            serde_json::json!([{"name": "x", "input": 5}]),
+            format!("{label} flag set x: input is not of its type"),
+        ),
+        (
+            serde_json::json!([{"name": "x", "formats": "vcf"}]),
+            format!("{label} flag set x: formats is not of its type"),
+        ),
+        (
+            serde_json::json!([{"name": "x", "flags": "--symbol"}]),
+            format!("{label} flag set x: flags is not of its type"),
+        ),
+    ];
+    let mut wrong = Vec::new();
+    for (flag_sets, reason) in refused {
+        let corpus = with_flag_sets(flag_sets.clone());
+        let outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| runs(&corpus).len()));
+        let message = match &outcome {
+            Ok(count) => format!("accepted, {count} runs"),
+            Err(panic) => panic
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_default(),
+        };
+        if message != reason {
+            wrong.push(format!("{flag_sets}: expected {reason:?}, got {message:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
+    let corpus = with_flag_sets(serde_json::json!([
+        {"name": "x1_-", "flags": ["--format", "vcf"], "stdin": true, "formats": ["vcf"], "expected_dir": "expected"},
+        {"name": "eq", "flags": ["--format=vcf"], "stdin": true},
+    ]));
+    assert_eq!(runs(&corpus).len(), 3);
 }
 
 /// The records the reference dropped before annotation are marked consistently

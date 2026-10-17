@@ -20,7 +20,8 @@
   "protein",
   "breakends",
   "incomplete-del",
-  "skipped-variant-semantics"
+  "skipped-variant-semantics",
+  "flag_matrix_concordance"
  ],
  "suites": {
   "GRCh38-release116": {

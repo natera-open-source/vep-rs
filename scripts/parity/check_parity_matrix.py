@@ -18,9 +18,17 @@ request when:
 - a named `test1`, `test2` or `interim` entry does not resolve. `test1` and `interim` entries are
   `<path>.rs::<fn>` under `crates/` (no `..` segment) and resolve when the file declares `fn <fn>`
   under a test attribute (`#[test]`, `#[tokio::test]`, `#[rstest]`, any attribute whose name
-  carries `test`); `test2` entries are golden corpora `tests/golden/<set>/<corpus>` and resolve
-  when the directory exists and its manifest.json has a `covers` list naming the row. Several
-  entries in one cell are separated by `;`;
+  carries `test`); a `test1` entry may instead be `scripts/<dir>/test_<name>.py::<fn>`, a pytest
+  function, resolving when the module exists under `scripts/` (no `..` segment) and declares
+  `def <fn>(` at module level or inside a class (comments and strings are not declarations);
+  `test2` entries are golden corpora `tests/golden/<set>/<corpus>` and resolve when the directory
+  exists and its manifest.json names the row in its `covers` list or in the `covers` of one of
+  its `flag_sets` entries. Several entries in one cell are separated by `;`;
+- a process row names an Ensembl VEP module. A row with a scripts `test1` entry is a process row:
+  it registers a release procedure rather than a behaviour of Ensembl VEP's, so its
+  `perl_reference` must be `-`; its `test2` resolves as any other row's;
+- a `covers` list reached through a `test2` cell names something that is not a row of the matrix
+  (the manifest's own list and every flag set's are read);
 - a row lands at a target other than its own. The check reads only `target` and `state`: a state
   is `open` or `landed:<target>`, the landed target must repeat the row's `target`, so a row whose
   work proved more or less than its target is changed by a target decision, never landed under
@@ -36,6 +44,7 @@ Exit 0 with a one-line summary when clean; exit 1 with one `ERROR: [parity] ...`
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
 import json
 import re
@@ -64,6 +73,11 @@ MATRIX = Path("tests/parity/matrix.tsv")
 ARGS_RS = Path("crates/vep-cli/src/args.rs")
 RUST_TEST = Path("crates/vep-cli/tests/parity_matrix.rs")
 TEST_PATH_RE = re.compile(r"^(crates/[A-Za-z0-9_./-]+\.rs)::([A-Za-z_][A-Za-z0-9_]*)$")
+SCRIPT_TEST_RE = re.compile(
+    r"^(scripts/[A-Za-z0-9_./-]+/test_[A-Za-z0-9_]+\.py)::(test_[A-Za-z0-9_]*)$"
+)
+CRATE_SHAPE = "<path>.rs::<fn> under crates/"
+SCRIPT_SHAPE = "scripts/<dir>/test_<name>.py::<fn>"
 CORPUS_RE = re.compile(r"^tests/golden/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 # The clap attributes that declare a flag, in the current and the legacy spelling.
 ARG_ATTR_RE = re.compile(r"#\[\s*(?:arg|clap)\s*\(")
@@ -336,41 +350,127 @@ def declares_test_fn(text: str, fn: str) -> bool:
     return False
 
 
-def resolve_test(root: Path, entry: str) -> str | None:
-    """None when `<path>.rs::<fn>` names a file under crates/ declaring the test function, else the reason."""
+def declares_pytest_fn(source: str, fn: str) -> tuple[bool, str | None]:
+    """(declared, reason): whether the module declares `def <fn>(` at module level or inside a
+    class; the source is parsed, so a `def` inside a comment or a string declares nothing, and a
+    module that does not parse declares nothing with the parse error as the reason."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        return False, f"does not parse ({exc.msg}, line {exc.lineno})"
+    functions = (ast.FunctionDef, ast.AsyncFunctionDef)
+    for node in tree.body:
+        if isinstance(node, functions) and node.name == fn:
+            return True, None
+        if isinstance(node, ast.ClassDef) and any(
+            isinstance(inner, functions) and inner.name == fn for inner in node.body
+        ):
+            return True, None
+    return False, None
+
+
+def resolve_test(root: Path, entry: str, scripts_allowed: bool = False) -> str | None:
+    """None when the entry names a test the tree declares, else the reason. The crate shape,
+    `<path>.rs::<fn>` under crates/, resolves to a function under a test attribute; the scripts
+    shape, `scripts/<dir>/test_<name>.py::<fn>`, accepted for `test1` only, resolves to a pytest
+    function of the module."""
+    script = SCRIPT_TEST_RE.match(entry) if scripts_allowed else None
     match = TEST_PATH_RE.match(entry)
-    if not match:
-        return "is not <path>.rs::<fn> under crates/"
-    path, fn = match.groups()
+    if not match and not script:
+        shapes = f"{CRATE_SHAPE} or {SCRIPT_SHAPE}" if scripts_allowed else CRATE_SHAPE
+        return f"is not {shapes}"
+    path, fn = (script or match).groups()
     if ".." in path.split("/"):
         return "has a `..` segment"
     file = root / path
     if not file.is_file():
         return f"{path} does not exist"
-    if not declares_test_fn(file.read_text(encoding="utf-8", errors="replace"), fn):
+    source = file.read_text(encoding="utf-8", errors="replace")
+    if script:
+        declared, reason = declares_pytest_fn(source, fn)
+        if reason:
+            return f"{path} {reason}"
+        if not declared:
+            return f"{path} declares no def {fn}"
+    elif not declares_test_fn(source, fn):
         return f"{path} declares no test fn {fn}"
     return None
 
 
-def resolve_corpus(root: Path, entry: str, item: str) -> str | None:
-    """None when the corpus directory exists and its manifest's `covers` names the item, else the reason."""
+def is_process_row(row: dict) -> bool:
+    """A row with a scripts `test1` entry registers a release procedure, not an Ensembl VEP behaviour."""
+    return any(SCRIPT_TEST_RE.match(entry) for entry in entries(row["test1"]))
+
+
+def manifest_covers(manifest: dict) -> tuple[list[tuple[str | None, list]], str | None]:
+    """Every `covers` list of a manifest, (None, the manifest's own) then (set name, the set's)
+    for each `flag_sets` entry, or the reason one of them cannot be read."""
+    covers = manifest.get("covers")
+    if not isinstance(covers, list):
+        return [], "has no covers list"
+    lists: list[tuple[str | None, list]] = [(None, covers)]
+    flag_sets = manifest.get("flag_sets", [])
+    if not isinstance(flag_sets, list):
+        return [], "has a flag_sets that is not a list"
+    for flag_set in flag_sets:
+        name = flag_set.get("name") if isinstance(flag_set, dict) else None
+        if not isinstance(name, str):
+            return [], "has a flag_sets entry without a name"
+        set_covers = flag_set.get("covers", [])
+        if not isinstance(set_covers, list):
+            return [], f"flag set {name} has a covers that is not a list"
+        lists.append((name, set_covers))
+    return lists, None
+
+
+def read_corpus_manifest(root: Path, entry: str) -> tuple[dict | None, str | None]:
+    """The corpus's manifest, or the reason it cannot be read."""
     if not CORPUS_RE.match(entry):
-        return "is not tests/golden/<set>/<corpus>"
+        return None, "is not tests/golden/<set>/<corpus>"
     corpus = root / entry
     if not corpus.is_dir():
-        return f"{entry} does not exist"
+        return None, f"{entry} does not exist"
     manifest = corpus / "manifest.json"
     if not manifest.is_file():
-        return f"{entry} has no manifest.json"
+        return None, f"{entry} has no manifest.json"
     try:
-        covers = json.loads(manifest.read_text(encoding="utf-8")).get("covers")
+        parsed = json.loads(manifest.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        return f"{entry}/manifest.json is not JSON ({exc})"
-    if not isinstance(covers, list):
-        return f"{entry}/manifest.json has no covers list"
-    if item not in covers:
+        return None, f"{entry}/manifest.json is not JSON ({exc})"
+    if not isinstance(parsed, dict):
+        return None, f"{entry}/manifest.json is not a JSON object"
+    return parsed, None
+
+
+def resolve_corpus(root: Path, entry: str, item: str, manifests: dict) -> str | None:
+    """None when the corpus directory exists and its manifest names the item in its `covers` or in
+    a flag set's, else the reason. `manifests` caches the parsed manifests by entry."""
+    if entry not in manifests:
+        manifests[entry] = read_corpus_manifest(root, entry)
+    manifest, reason = manifests[entry]
+    if reason:
+        return reason
+    lists, reason = manifest_covers(manifest)
+    if reason:
+        return f"{entry}/manifest.json {reason}"
+    if not any(item in covers for _name, covers in lists):
         return f"{entry}/manifest.json covers does not name {item}"
     return None
+
+
+def covers_outside_matrix(entry: str, manifest: dict, items: set[str]) -> list[str]:
+    """One error per `covers` name of the manifest (its own list and every flag set's) that is
+    not a row; a value that is not a string names no row."""
+    errors: list[str] = []
+    lists, _reason = manifest_covers(manifest)
+    for name, covers in lists:
+        where = f"{entry}/manifest.json" + (f" flag set {name}" if name else "")
+        errors.extend(
+            f"{where} covers names {covered}, which is not a row"
+            for covered in covers
+            if not isinstance(covered, str) or covered not in items
+        )
+    return errors
 
 
 def check(root: Path) -> tuple[list[str], str]:
@@ -394,9 +494,14 @@ def check(root: Path) -> tuple[list[str], str]:
 
     landed = 0
     interim = 0
+    manifests: dict[str, tuple[dict | None, str | None]] = {}
     for row in rows:
         item, target, state = row["item"], row["target"], row["state"]
         where = f"{MATRIX}:{row['lineno']}: {item}"
+        if is_process_row(row) and row["perl_reference"] != "-":
+            errors.append(
+                f"{where}: a process row names no Ensembl VEP module; perl_reference must be -"
+            )
         is_landed = state != "open"
         if is_landed:
             landed += 1
@@ -418,11 +523,11 @@ def check(root: Path) -> tuple[list[str], str]:
             if entries(row["interim"]):
                 errors.append(f"{where}: a landed row has no interim")
         for entry in entries(row["test1"]):
-            reason = resolve_test(root, entry)
+            reason = resolve_test(root, entry, scripts_allowed=True)
             if reason:
                 errors.append(f"{where}: test1 {entry} {reason}")
         for entry in entries(row["test2"]):
-            reason = resolve_corpus(root, entry, item)
+            reason = resolve_corpus(root, entry, item, manifests)
             if reason:
                 errors.append(f"{where}: test2 {entry} {reason}")
         for entry in entries(row["interim"]):
@@ -430,6 +535,9 @@ def check(root: Path) -> tuple[list[str], str]:
             reason = resolve_test(root, entry)
             if reason:
                 errors.append(f"{where}: interim {entry} {reason}")
+    for entry, (manifest, reason) in manifests.items():
+        if manifest is not None and reason is None:
+            errors.extend(covers_outside_matrix(entry, manifest, items))
 
     summary = f"parity: {len(rows)} rows, {len(flags)} flags covered, {landed} landed, {interim} interim entries resolve"
     return errors, summary

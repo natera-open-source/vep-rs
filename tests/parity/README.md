@@ -13,8 +13,8 @@ every pull request.
 | `perl_reference` | The Ensembl VEP module that implements the item, as a path below `modules/Bio/EnsEMBL/VEP/` (ensembl-variation modules under `Variation/`), with the consuming sub after `::` where one is the reference (`BaseVEP.pm::status_msg`); `vep` and `INSTALL.pl` name the scripts; `-` when there is none (an item vep-rs alone has, or a distribution item).                                                                                     |
 | `target`         | What vep-rs does for the item once the row has landed. `implemented`: the behaviour of Ensembl VEP. `documented_subset`: part of it, with the exclusion documented. `accepted_noop`: the flag parses and changes nothing, as in Ensembl VEP. `error`: the flag or input is refused with a message naming it unsupported. `removed`: a flag or cache field vep-rs alone had, and drops. `excluded`: outside the port; such a row never lands. |
 | `state`          | `open`, or `landed:<target>` naming the target the row landed at, which must equal `target`: a row that proved more or less than its target is changed by a target decision, not landed under another target; a bare `landed` is an error, and an `excluded` row never lands.                                                                                                                                                                |
-| `test1`          | Test 1, the unit or behaviour test, as `<path>.rs::<fn>` under `crates/` (`crates/vep-effects/src/coding.rs::test_snv_stop_gained`); the function carries a test attribute (`#[test]`, `#[tokio::test]`, `#[rstest]`). Several entries are separated by `;`.                                                                                                                                                                                 |
-| `test2`          | Test 2, the golden corpus whose records exercise the item, as `tests/golden/<set>/<corpus>`. The corpus's `manifest.json` carries a `covers` list naming every row its records exercise; a row's `test2` resolves only when that list names the row, so a corpus regenerated without the row's records cannot certify it.                                                                                                                    |
+| `test1`          | Test 1, the unit or behaviour test, as `<path>.rs::<fn>` under `crates/` (`crates/vep-effects/src/coding.rs::test_snv_stop_gained`); the function carries a test attribute (`#[test]`, `#[tokio::test]`, `#[rstest]`). A process row, which registers a release procedure rather than a behaviour of Ensembl VEP's, names a pytest function instead, as `scripts/<dir>/test_<name>.py::<fn>`; its `perl_reference` is `-`. Several entries are separated by `;`. |
+| `test2`          | Test 2, the golden corpus whose records exercise the item, as `tests/golden/<set>/<corpus>`. The corpus's `manifest.json` carries a `covers` list naming every row its records exercise, and each of its `flag_sets` entries (a run of the corpus under other flags) carries one of its own; a row's `test2` resolves only when one of those lists names the row, so a corpus regenerated without the row's records cannot certify it, and every name in them is a row. |
 | `interim`        | A refusal or stop-gap shipped before the row lands, as the `<path>.rs::<fn>` test that proves it; empty otherwise, and always empty once the row has landed.                                                                                                                                                                                                                                                                                 |
 
 ## How a row closes
@@ -29,13 +29,23 @@ target, with the tests its target requires:
    subset's effect, plus a test that the documented exclusion is stated.
 2. **Test 2**, for `implemented` and `documented_subset` rows: a golden corpus under `tests/golden/`
    holding records that exercise the item, Ensembl VEP's output for them in all four formats, and a
-   manifest whose `covers` list names the row. `cargo test -p vep-cli --test golden --test format_parity`
-   compares every column of every format.
+   manifest whose `covers` list names the row, in the manifest's own list or in that of a `flag_sets`
+   entry, a run of the same records under other flags with expected outputs of its own.
+   `cargo test -p vep-cli --test golden --test format_parity` compares every column of every format
+   of every run. `scripts/golden/build_golden_corpus.py` writes the lists (`select --covers`, `covers
+   --add`, `flag-set --covers`); `covers --add`, `flag-set --covers`, `select --matrix` and `check
+   --matrix` refuse a name that is not a row.
 3. **Test 3**, for the same two targets: a comparison against Ensembl VEP's output on the same input,
    cache and flags, every compared column agreeing exactly after the documented divergences are masked.
 
+A process row (`flag_matrix_concordance`) registers a release procedure rather than a behaviour of
+Ensembl VEP's: its `perl_reference` is `-`, its Test 1 is the pytest function that proves the
+procedure's mechanism, named `scripts/<dir>/test_<name>.py::<fn>`, and its Test 2 is a corpus whose
+`covers` names the row, as for any other row.
+
 `python3 scripts/parity/check_parity_matrix.py` fails a pull request whose `args.rs` declares a flag
 without a row, whose landed row lacks a required test or keeps an `interim`, whose `removed` row lands
-while `args.rs` still declares the flag, or whose named test or corpus does not resolve; it reads the
-flags from the attributes of `args.rs`, and `cargo test -p vep-cli --test parity_matrix` asks clap for
-the same list, hidden and flattened flags included.
+while `args.rs` still declares the flag, whose process row names an Ensembl VEP module, whose named
+test or corpus does not resolve, or whose corpus `covers` names something that is not a row; it reads
+the flags from the attributes of `args.rs`, and `cargo test -p vep-cli --test parity_matrix` asks clap
+for the same list, hidden and flattened flags included.

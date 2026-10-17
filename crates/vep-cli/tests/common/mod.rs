@@ -26,6 +26,14 @@
 //! HGVS string) is documented to differ, with the value vep-rs prints; every
 //! other field of such a key compares exactly.
 //!
+//! A corpus is run once per [`Run`]: the manifest's own run (its `flags`,
+//! `variants.vcf`, every format, `expected/`) and once per `flag_sets` entry,
+//! which names its own `flags` (the whole list for that run), `input` (a file in
+//! the corpus, `variants.vcf` by default), `stdin` (the input piped on standard
+//! input with `-i STDIN`), `formats` (the formats compared, all four by default)
+//! and `expected_dir` (`expected_<name>` by default). An entry carrying its own
+//! `divergences` documents its run; one without inherits the manifest's lists.
+//!
 //! The VCF and JSON formats carry no `Location`, so their entries are keyed by
 //! the corpus record ordinal, found by matching each output record to its
 //! input line (the VCF's first five columns, the JSON object's `input`).
@@ -34,9 +42,9 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
 
 /// One corpus directory.
 pub struct Corpus {
@@ -86,19 +94,227 @@ pub fn corpora() -> Vec<Corpus> {
     out
 }
 
-/// Reads `path` or `path.gz`, whichever exists.
+/// Reads `<dir>/expected/<name>` or its `.gz`, whichever exists.
 pub fn read_expected(dir: &Path, name: &str) -> String {
-    let plain = dir.join("expected").join(name);
-    if plain.is_file() {
-        return fs::read_to_string(&plain).unwrap();
+    read_maybe_gz(&dir.join("expected").join(name))
+}
+
+/// Reads `path` or `path.gz`, whichever exists.
+fn read_maybe_gz(path: &Path) -> String {
+    if path.is_file() {
+        return fs::read_to_string(path).unwrap();
     }
-    let gz = dir.join("expected").join(format!("{name}.gz"));
+    let gz = PathBuf::from(format!("{}.gz", path.display()));
     let file = fs::File::open(&gz).unwrap_or_else(|e| panic!("{}: {e}", gz.display()));
     let mut text = String::new();
     flate2::read::GzDecoder::new(file)
         .read_to_string(&mut text)
         .unwrap();
     text
+}
+
+/// The data lines of an input file (a `.gz` is decompressed), in order.
+fn data_lines(path: &Path) -> Vec<String> {
+    let text = if path.extension().is_some_and(|e| e == "gz") {
+        let mut text = String::new();
+        flate2::read::MultiGzDecoder::new(fs::File::open(path).unwrap())
+            .read_to_string(&mut text)
+            .unwrap();
+        text
+    } else {
+        fs::read_to_string(path).unwrap()
+    };
+    text.lines()
+        .filter(|l| !l.starts_with('#'))
+        .map(str::to_string)
+        .collect()
+}
+
+/// The output formats a run compares when its entry names none.
+const ALL_FORMATS: [&str; 4] = ["default", "tab", "vcf", "json"];
+
+/// One run of a corpus: the manifest's own run (named `default`) or one of its
+/// `flag_sets` entries, each with its own flags, input, formats and expected
+/// outputs.
+pub struct Run<'a> {
+    pub corpus: &'a Corpus,
+    pub name: String,
+    pub flags: Vec<String>,
+    /// The input file, relative to the corpus directory.
+    pub input: String,
+    /// Whether the input is piped on standard input, with `-i STDIN`.
+    pub stdin: bool,
+    pub formats: Vec<String>,
+    /// The directory of the expected outputs, relative to the corpus directory.
+    pub expected_dir: String,
+    /// The manifest object whose divergence lists apply to this run.
+    documented: &'a serde_json::Value,
+}
+
+impl Run<'_> {
+    /// `<release>/<corpus>` for the manifest's own run, `<release>/<corpus> [<set>]` for a flag set.
+    pub fn label(&self) -> String {
+        if self.name == "default" {
+            format!("{}/{}", self.corpus.release, self.corpus.name)
+        } else {
+            format!(
+                "{}/{} [{}]",
+                self.corpus.release, self.corpus.name, self.name
+            )
+        }
+    }
+
+    pub fn compares(&self, format: &str) -> bool {
+        self.formats.iter().any(|f| f == format)
+    }
+
+    /// The expected output `name` (or its `.gz`) in the run's expected directory.
+    pub fn expected(&self, name: &str) -> String {
+        read_maybe_gz(&self.corpus.dir.join(&self.expected_dir).join(name))
+    }
+
+    /// The run's input data lines, in order.
+    pub fn input_records(&self) -> Vec<String> {
+        data_lines(&self.corpus.dir.join(&self.input))
+    }
+
+    pub fn documented(&self) -> Documented {
+        Documented::from_manifest(self.documented)
+    }
+}
+
+fn strings(value: &serde_json::Value) -> Vec<String> {
+    value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|v| v.as_str().expect("manifest lists are strings").to_string())
+        .collect()
+}
+
+/// The manifest's own run.
+pub fn default_run(corpus: &Corpus) -> Run<'_> {
+    Run {
+        corpus,
+        name: "default".to_string(),
+        flags: strings(&corpus.manifest["flags"]),
+        input: "variants.vcf".to_string(),
+        stdin: false,
+        formats: ALL_FORMATS.iter().map(|f| f.to_string()).collect(),
+        expected_dir: "expected".to_string(),
+        documented: &corpus.manifest,
+    }
+}
+
+/// Whether a manifest path stays inside the corpus directory: non-empty,
+/// relative, with no `..` segment.
+fn inside_corpus(path: &str) -> bool {
+    let parsed = Path::new(path);
+    !path.is_empty()
+        && !parsed.is_absolute()
+        && !parsed
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+}
+
+/// Whether a flag set name is one the corpus tool writes: a letter or digit,
+/// then letters, digits, `_` and `-`, and not `default`, the manifest's own run.
+fn plain_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    name != "default"
+        && chars.next().is_some_and(|c| c.is_ascii_alphanumeric())
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// The manifest's own run followed by one run per `flag_sets` entry. An entry
+/// the corpus tool would refuse (a name that is `default`, repeated or not a
+/// plain word, no format to compare, an empty path or one outside the corpus,
+/// a stdin run whose flags name no `--format`) fails here, so a hand-written
+/// entry cannot certify its `covers` with a run that compares nothing.
+pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
+    let label = format!("{}/{}", corpus.release, corpus.name);
+    let mut out = vec![default_run(corpus)];
+    for set in corpus.manifest["flag_sets"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let name = set["name"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{label}: a flag set has a name"))
+            .to_string();
+        assert!(
+            plain_name(&name),
+            "{label}: flag set name {name:?} is not a plain word other than default"
+        );
+        assert!(
+            out.iter().all(|r| r.name != name),
+            "{label}: flag set {name} is named twice"
+        );
+        // A key that is present reads as its one type: a wrong type never falls
+        // back to the default, which would run a set other than the one written.
+        let typed = |key: &str, ok: bool| {
+            assert!(
+                set.get(key).is_none() || ok,
+                "{label} flag set {name}: {key} is not of its type"
+            );
+        };
+        typed("formats", set["formats"].is_array());
+        typed("flags", set["flags"].is_array());
+        typed("input", set["input"].is_string());
+        typed("expected_dir", set["expected_dir"].is_string());
+        typed("stdin", set["stdin"].is_boolean());
+        let formats = if set["formats"].is_array() {
+            strings(&set["formats"])
+        } else {
+            ALL_FORMATS.iter().map(|f| f.to_string()).collect()
+        };
+        assert!(
+            !formats.is_empty(),
+            "{label} flag set {name}: no format to compare"
+        );
+        for format in &formats {
+            assert!(
+                ALL_FORMATS.contains(&format.as_str()),
+                "{label} flag set {name}: unknown format {format}"
+            );
+        }
+        let input = set["input"].as_str().unwrap_or("variants.vcf").to_string();
+        let expected_dir = set["expected_dir"]
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("expected_{name}"));
+        for path in [&input, &expected_dir] {
+            assert!(
+                inside_corpus(path),
+                "{label} flag set {name}: {path:?} is not a path inside the corpus"
+            );
+        }
+        let flags = strings(&set["flags"]);
+        let stdin = set["stdin"].as_bool().unwrap_or(false);
+        assert!(
+            !stdin
+                || flags
+                    .iter()
+                    .any(|f| f == "--format" || f.starts_with("--format=")),
+            "{label} flag set {name}: a stdin run names its input format with --format"
+        );
+        out.push(Run {
+            corpus,
+            name,
+            flags,
+            input,
+            stdin,
+            formats,
+            expected_dir,
+            documented: if set.get("divergences").is_some() {
+                set
+            } else {
+                &corpus.manifest
+            },
+        });
+    }
+    out
 }
 
 /// The corpus's reference FASTA decompressed into `out_dir` (once; later calls
@@ -128,14 +344,20 @@ fn corpus_fasta(corpus: &Corpus, out_dir: &Path) -> Option<PathBuf> {
     Some(target)
 }
 
-/// The `vep` invocation every golden run starts from: the corpus input and
-/// cache, the fixed arguments, then the manifest's `flags` and `fasta`. The
-/// caller adds the output path and format.
-pub fn vep_command(corpus: &Corpus, out_dir: &Path) -> Command {
+/// The `vep` invocation a run starts from: the run's input (`-i STDIN` when it
+/// is piped) and the corpus cache, the fixed arguments, then the run's `flags`
+/// and the corpus `fasta`. The caller adds the output path and format and runs
+/// it through [`run_output`], which pipes the input when the run says so.
+pub fn vep_command(run: &Run, out_dir: &Path) -> Command {
+    let corpus = run.corpus;
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
-    cmd.arg("-i")
-        .arg(corpus.dir.join("variants.vcf"))
-        .arg("--offline")
+    cmd.arg("-i");
+    if run.stdin {
+        cmd.arg("STDIN").stdin(Stdio::piped());
+    } else {
+        cmd.arg(corpus.dir.join(&run.input));
+    }
+    cmd.arg("--offline")
         .arg("--json_cache")
         .arg(corpus.dir.join("json_cache"))
         .args(["--species", "homo_sapiens", "--assembly", &corpus.assembly])
@@ -145,21 +367,44 @@ pub fn vep_command(corpus: &Corpus, out_dir: &Path) -> Command {
             "--force_overwrite",
             "--no_stats",
             "--quiet",
-        ]);
-    for flag in corpus.manifest["flags"].as_array().into_iter().flatten() {
-        cmd.arg(flag.as_str().expect("manifest flags are strings"));
-    }
+        ])
+        .args(&run.flags);
     if let Some(fasta) = corpus_fasta(corpus, out_dir) {
         cmd.arg("--fasta").arg(fasta);
     }
     cmd
 }
 
-/// Runs the `vep` binary on the corpus in one output format and returns the
+/// Runs a [`vep_command`] to completion, feeding the run's input file on
+/// standard input when the run is a stdin run.
+pub fn run_output(run: &Run, cmd: &mut Command) -> Output {
+    if !run.stdin {
+        return cmd.output().expect("vep binary runs");
+    }
+    let bytes = fs::read(run.corpus.dir.join(&run.input)).unwrap();
+    let mut child = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("vep binary runs");
+    let mut stdin = child.stdin.take().expect("stdin is piped");
+    let writer = std::thread::spawn(move || stdin.write_all(&bytes));
+    let output = child.wait_with_output().expect("vep binary runs");
+    let written = writer.join().unwrap();
+    // A child that exited before reading its input leaves the writer a broken
+    // pipe; the caller reports that child's stderr, so the write is checked
+    // only for a child that succeeded.
+    if output.status.success() {
+        written.expect("input written to vep");
+    }
+    output
+}
+
+/// Runs the `vep` binary for the run in one output format and returns the
 /// output file's text. `format` is `default`, `tab`, `vcf` or `json`.
-pub fn run_vep(corpus: &Corpus, format: &str, out_dir: &Path, extra: &[&str]) -> String {
-    let out = out_dir.join(format!("{}-{format}.out", corpus.name));
-    let mut cmd = vep_command(corpus, out_dir);
+pub fn run_vep(run: &Run, format: &str, out_dir: &Path, extra: &[&str]) -> String {
+    let out = out_dir.join(format!("{}-{}-{format}.out", run.corpus.name, run.name));
+    let mut cmd = vep_command(run, out_dir);
     cmd.arg("-o").arg(&out);
     match format {
         "default" => {}
@@ -169,25 +414,19 @@ pub fn run_vep(corpus: &Corpus, format: &str, out_dir: &Path, extra: &[&str]) ->
         other => panic!("unknown format {other}"),
     }
     cmd.args(extra);
-    let output = cmd.output().expect("vep binary runs");
+    let output = run_output(run, &mut cmd);
     assert!(
         output.status.success(),
-        "vep --{format} failed on {}/{}:\n{}",
-        corpus.release,
-        corpus.name,
+        "vep --{format} failed on {}:\n{}",
+        run.label(),
         String::from_utf8_lossy(&output.stderr)
     );
     fs::read_to_string(&out).unwrap()
 }
 
-/// The corpus input's data lines, in order.
+/// The corpus input's data lines (`variants.vcf`), in order.
 pub fn input_records(corpus: &Corpus) -> Vec<String> {
-    fs::read_to_string(corpus.dir.join("variants.vcf"))
-        .unwrap()
-        .lines()
-        .filter(|l| !l.starts_with('#'))
-        .map(str::to_string)
-        .collect()
+    data_lines(&corpus.dir.join("variants.vcf"))
 }
 
 // --------------------------------------------------------------------------
@@ -1046,6 +1285,54 @@ pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
         }
     }
     String::new()
+}
+
+/// Runs the `vep` binary for the run in one output format and compares the
+/// output with the run's expected file for it: the header report, then the
+/// entry report, each empty when the two agree (the JSON format has no header
+/// to compare). `format` is `default`, `tab`, `vcf` or `json`.
+pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) {
+    let expected = run.expected(match format {
+        "default" => "default.txt",
+        "tab" => "tab.txt",
+        "vcf" => "vcf.vcf",
+        "json" => "json.jsonl",
+        other => panic!("unknown format {other}"),
+    });
+    let actual = run_vep(run, format, out_dir, &[]);
+    let documented = run.documented();
+    match format {
+        "default" | "tab" => (
+            compare_tab_headers(&expected, &actual),
+            compare_entries(
+                &parse_default(&expected),
+                &parse_default(&actual),
+                &documented,
+            ),
+        ),
+        "vcf" => {
+            let inputs = run.input_records();
+            (
+                compare_vcf_headers(&expected, &actual),
+                compare_entries(
+                    &parse_vcf(&expected, &inputs),
+                    &parse_vcf(&actual, &inputs),
+                    &documented,
+                ),
+            )
+        }
+        _ => {
+            let inputs = run.input_records();
+            (
+                String::new(),
+                compare_entries(
+                    &parse_json(&expected, &inputs),
+                    &parse_json(&actual, &inputs),
+                    &documented,
+                ),
+            )
+        }
+    }
 }
 
 /// Sum of file sizes under a directory.

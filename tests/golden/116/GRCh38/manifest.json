@@ -6,7 +6,9 @@
  "exemplars_per_combination": 2,
  "max_span": 1000000,
  "cache_cost_flank": 5000,
- "covers": [],
+ "covers": [
+  "flag_matrix_concordance"
+ ],
  "suites": {
   "s02": {
    "reference": "s02.txt",

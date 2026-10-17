@@ -4,7 +4,7 @@
 #
 # The release binaries need glibc 2.39: keep both stages on Debian 13 or newer.
 
-FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS duckdb
+FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS duckdb
 # A DuckDB bump changes all three: the sha256s are of the release zip and of
 # LICENSE at the release tag.
 ARG DUCKDB_VERSION=1.5.5
@@ -21,7 +21,7 @@ RUN curl -fsSLo duckdb.zip "https://github.com/duckdb/duckdb/releases/download/v
  && printf '%s  duckdb.zip\n%s  LICENSE\n' "$DUCKDB_SHA256" "$DUCKDB_LICENSE_SHA256" | sha256sum --check --strict - \
  && unzip -q duckdb.zip duckdb
 
-FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a
+FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
 ARG VERSION
 LABEL org.opencontainers.image.title="vep-rs" \
       org.opencontainers.image.description="Ensembl Variant Effect Predictor in Rust: vep, vep-cache-builder, vep-cache-converter and the duckdb CLI for Parquet output" \

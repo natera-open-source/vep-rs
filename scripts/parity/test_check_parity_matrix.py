@@ -322,9 +322,184 @@ def test_test1_must_name_an_existing_function(tmp_path):
     assert errors == [
         "tests/parity/matrix.tsv:4: symbol: test1 crates/vep-cli/src/fields.rs::no_such_fn crates/vep-cli/src/fields.rs declares no test fn no_such_fn",
         "tests/parity/matrix.tsv:4: symbol: test1 crates/vep-cli/src/gone.rs::x crates/vep-cli/src/gone.rs does not exist",
-        "tests/parity/matrix.tsv:4: symbol: test1 docs/a.rs::y is not <path>.rs::<fn> under crates/",
+        "tests/parity/matrix.tsv:4: symbol: test1 docs/a.rs::y is not <path>.rs::<fn> under crates/ or scripts/<dir>/test_<name>.py::<fn>",
         "tests/parity/matrix.tsv:4: symbol: test1 crates/../tests/parity/x.rs::outside has a `..` segment",
     ]
+
+
+# A pytest module with every declaration shape the scripts resolver must tell apart.
+TEST_PY = '''"""def test_in_docstring(): pass"""
+import pytest
+
+# def test_commented_out(): pass
+NOTE = "def test_in_a_string(): pass"
+
+
+def helper(): pass
+
+
+@pytest.mark.parametrize("n", [1])
+def test_decorated(n): pass
+
+
+async def test_async(): pass
+
+
+class TestGroup:
+    def test_in_class(self): pass
+
+    class Inner:
+        def test_nested_twice(self): pass
+
+
+def outer():
+    def test_nested_in_function(): pass
+'''
+SCRIPT_TEST = "scripts/parity/test_check_parity_matrix.py"
+
+
+def with_script_test(root: Path, source: str = TEST_PY) -> Path:
+    (root / "scripts" / "parity").mkdir(parents=True)
+    (root / "scripts" / "parity" / "test_check_parity_matrix.py").write_text(source)
+    return root
+
+
+@pytest.mark.parametrize(
+    "fn,declared",
+    [
+        ("test_decorated", True),
+        ("test_async", True),
+        ("test_in_class", True),
+        ("test_nested_twice", False),
+        ("test_nested_in_function", False),
+        ("test_commented_out", False),
+        ("test_in_a_string", False),
+        ("test_in_docstring", False),
+    ],
+)
+def test_scripts_test_entry_resolves_to_a_pytest_function(tmp_path, fn, declared):
+    """A `test1` entry may name a pytest function of a `scripts/**/test_*.py` module: one declared
+    at module level or directly inside a class, never in a comment, a string or a nested function."""
+    assert cpm.declares_pytest_fn(TEST_PY, fn) == (declared, None)
+    rows = rows_with("symbol", test1=f"{SCRIPT_TEST}::{fn}", perl="-")
+    root = with_script_test(build_tree(tmp_path, rows))
+    errors = errors_of(root)
+    if declared:
+        assert errors == []
+    else:
+        assert errors == [
+            f"tests/parity/matrix.tsv:4: symbol: test1 {SCRIPT_TEST}::{fn} {SCRIPT_TEST} declares no def {fn}"
+        ]
+
+
+def test_scripts_test_entry_shapes(tmp_path):
+    """The scripts shape is `scripts/<dir>/test_<name>.py::test_<fn>` with no `..` segment, in an
+    existing module that parses; `interim` keeps the crate shape."""
+    rows = rows_with(
+        "symbol",
+        test1=(
+            "scripts/parity/check_parity_matrix.py::test_x;scripts/test_top.py::test_x;"
+            "scripts/parity/test_check_parity_matrix.py::helper;scripts/parity/test_gone.py::test_x;"
+            "scripts/../scripts/parity/test_check_parity_matrix.py::test_x"
+        ),
+        interim=f"{SCRIPT_TEST}::test_decorated",
+        perl="-",
+    )
+    root = with_script_test(build_tree(tmp_path, rows))
+    assert errors_of(root) == [
+        "tests/parity/matrix.tsv:4: symbol: test1 scripts/parity/check_parity_matrix.py::test_x is not <path>.rs::<fn> under crates/ or scripts/<dir>/test_<name>.py::<fn>",
+        "tests/parity/matrix.tsv:4: symbol: test1 scripts/test_top.py::test_x is not <path>.rs::<fn> under crates/ or scripts/<dir>/test_<name>.py::<fn>",
+        f"tests/parity/matrix.tsv:4: symbol: test1 {SCRIPT_TEST}::helper is not <path>.rs::<fn> under crates/ or scripts/<dir>/test_<name>.py::<fn>",
+        "tests/parity/matrix.tsv:4: symbol: test1 scripts/parity/test_gone.py::test_x scripts/parity/test_gone.py does not exist",
+        "tests/parity/matrix.tsv:4: symbol: test1 scripts/../scripts/parity/test_check_parity_matrix.py::test_x has a `..` segment",
+        f"tests/parity/matrix.tsv:4: symbol: interim {SCRIPT_TEST}::test_decorated is not <path>.rs::<fn> under crates/",
+    ]
+    (root / "scripts" / "parity" / "test_check_parity_matrix.py").write_text("def test_x(:\n")
+    rows = rows_with("symbol", test1=f"{SCRIPT_TEST}::test_x", perl="-")
+    (root / "tests" / "parity" / "matrix.tsv").write_text(HEADER + "".join(rows))
+    assert errors_of(root) == [
+        f"tests/parity/matrix.tsv:4: symbol: test1 {SCRIPT_TEST}::test_x {SCRIPT_TEST} does not parse (invalid syntax, line 1)"
+    ]
+
+
+def test_process_row_perl_reference_is_dash(tmp_path):
+    """A row proven by a scripts test is a process row and names no Ensembl VEP module."""
+    rows = rows_with("symbol", test1=f"{SCRIPT_TEST}::test_decorated")
+    root = with_script_test(build_tree(tmp_path, rows))
+    assert errors_of(root) == [
+        "tests/parity/matrix.tsv:4: symbol: a process row names no Ensembl VEP module; perl_reference must be -"
+    ]
+    rows = rows_with("symbol", test1=f"{SCRIPT_TEST}::test_decorated;{TEST1}", perl="-")
+    root = with_script_test(build_tree(tmp_path / "dash", rows))
+    assert errors_of(root) == []
+    # The crate shape alone keeps the row an Ensembl VEP row, whose perl_reference names a module.
+    assert errors_of(build_tree(tmp_path / "crate", rows_with("symbol", test1=TEST1))) == []
+
+
+def test_process_row_test2_is_a_covering_corpus(tmp_path):
+    """A landed process row needs its test2 like any implemented row, and the corpus resolves
+    through its `covers` as for any other row."""
+    rows = rows_with("symbol", state="landed:implemented", test1=f"{SCRIPT_TEST}::test_decorated", perl="-")
+    root = with_script_test(build_tree(tmp_path, rows))
+    assert errors_of(root) == [
+        "tests/parity/matrix.tsv:4: symbol: landed implemented with no test2"
+    ]
+    rows = rows_with(
+        "symbol", state="landed:implemented", test1=f"{SCRIPT_TEST}::test_decorated", test2=TEST2, perl="-"
+    )
+    root = with_script_test(build_tree(tmp_path / "ok", rows))
+    errors, summary = cpm.check(root)
+    assert errors == []
+    assert summary.endswith("1 landed, 0 interim entries resolve")
+    root = with_script_test(build_tree(tmp_path / "other", rows, covers=("max_af",)))
+    assert errors_of(root) == [
+        "tests/parity/matrix.tsv:4: symbol: test2 tests/golden/116/GRCh38 tests/golden/116/GRCh38/manifest.json covers does not name symbol"
+    ]
+
+
+def test_covers_entry_must_be_a_matrix_row(tmp_path):
+    """Every name in a `covers` list reached through a test2 cell is a row: the manifest's own
+    list and each flag set's, reported once per corpus however many rows name it."""
+    rows = rows_with("symbol", test2=TEST2)
+    rows = [row("max_af", test2=TEST2) if r.startswith("max_af\t") else r for r in rows]
+    root = build_tree(tmp_path, rows, covers=("symbol", "max_af", "retired_row"))
+    assert errors_of(root) == [
+        "tests/golden/116/GRCh38/manifest.json covers names retired_row, which is not a row"
+    ]
+    manifest = root / "tests" / "golden" / "116" / "GRCh38" / "manifest.json"
+    manifest.write_text(json.dumps({
+        "covers": ["symbol"],
+        "flag_sets": [{"name": "af", "flags": ["--max_af"], "covers": ["max_af", "ghost"]}],
+    }))
+    assert errors_of(root) == [
+        "tests/golden/116/GRCh38/manifest.json flag set af covers names ghost, which is not a row"
+    ]
+    # A value that is not a string is reported, not raised on.
+    manifest.write_text(json.dumps({"covers": ["symbol", "max_af", ["max_af"], 7], "flag_sets": []}))
+    assert errors_of(root) == [
+        "tests/golden/116/GRCh38/manifest.json covers names ['max_af'], which is not a row",
+        "tests/golden/116/GRCh38/manifest.json covers names 7, which is not a row",
+    ]
+    # A corpus no test2 cell reaches is not read.
+    (root / "tests" / "parity" / "matrix.tsv").write_text(HEADER + "".join(BASE_ROWS))
+    assert errors_of(root) == []
+
+
+def test_test2_resolves_through_a_flag_sets_covers(tmp_path):
+    """A row covered by a flag set of the corpus resolves, and a malformed `flag_sets` is a reason."""
+    rows = rows_with("symbol", test2=TEST2)
+    root = build_tree(tmp_path, rows, covers=("max_af",))
+    manifest = root / "tests" / "golden" / "116" / "GRCh38" / "manifest.json"
+    manifest.write_text(json.dumps({"covers": ["max_af"], "flag_sets": [{"name": "sym", "covers": ["symbol"]}]}))
+    assert errors_of(root) == []
+    prefix = "tests/parity/matrix.tsv:4: symbol: test2 tests/golden/116/GRCh38 tests/golden/116/GRCh38/manifest.json"
+    for flag_sets, reason in [
+        ({"a": 1}, "has a flag_sets that is not a list"),
+        ([{"covers": ["symbol"]}], "has a flag_sets entry without a name"),
+        ([{"name": "sym", "covers": "symbol"}], "flag set sym has a covers that is not a list"),
+    ]:
+        manifest.write_text(json.dumps({"covers": ["max_af"], "flag_sets": flag_sets}))
+        assert errors_of(root) == [f"{prefix} {reason}"]
 
 
 # Every literal and comment shape the stripper must read: each line pairs a source with what
@@ -405,6 +580,11 @@ def test_test2_corpus_must_exist_with_a_manifest_covering_the_row(tmp_path):
     assert errors_of(root)[0].startswith(
         "tests/parity/matrix.tsv:4: symbol: test2 tests/golden/116/GRCh37 tests/golden/116/GRCh37/manifest.json is not JSON"
     )
+    for not_an_object in ("[]", '"x"', "null"):
+        (root / "tests" / "golden" / "116" / "GRCh37" / "manifest.json").write_text(not_an_object)
+        assert errors_of(root) == [
+            "tests/parity/matrix.tsv:4: symbol: test2 tests/golden/116/GRCh37 tests/golden/116/GRCh37/manifest.json is not a JSON object"
+        ]
     (root / "tests" / "golden" / "116" / "GRCh37" / "manifest.json").write_text(
         json.dumps({"exemplars": []})
     )

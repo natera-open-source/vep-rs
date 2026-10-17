@@ -10,12 +10,20 @@ Subcommands:
 
   select    Stream one or more VEP default-format reference outputs, enumerate the distinct
             consequence sets they contain, choose up to K exemplar records per set
-            (stratified by variant class and transcript strand; when `--cache` names the
-            JSON cache the fixture is pruned from, the records whose transcripts cost the
-            fixture cache the fewest bytes come first, then the records that exercise
-            transcript flags, coordinate ranges and unmappable ends; every variant class
-            seen keeps at least one exemplar), resolve each exemplar back to its input VCF
-            record, and write `variants.vcf` plus `manifest.json`.
+            (stratified by variant class and transcript strand, and by the family key of
+            `--family-columns` when given; when `--cache` names the JSON cache the fixture
+            is pruned from, the records whose transcripts cost the fixture cache the fewest
+            bytes come first, then the records that exercise transcript flags, coordinate
+            ranges and unmappable ends; every variant class and every family stratum seen
+            keeps at least one exemplar), resolve each exemplar back to its input VCF
+            record, and write `variants.vcf` plus `manifest.json`. The manifest's `covers`
+            list names the parity-matrix rows the corpus exercises: `--covers <item>`
+            (repeatable) writes it, each name a row of `--matrix` when one is given, a corpus
+            regenerated over an existing manifest keeps that manifest's list and its
+            `flag_sets` (each set's run definition and
+            `covers`; the divergence keys `classify --flag-set` wrote describe the old
+            records and are dropped, as the manifest's own are), and a run with neither
+            writes nothing.
   classify  Compare a VEP default-format output for `variants.vcf` with a vep-rs output for
             the same file and record, per exemplar row VEP emits that vep-rs does not, the
             documented divergence class that explains it (or `unexplained_residual`), so the
@@ -25,13 +33,36 @@ Subcommands:
             corpus is built), it gets `reference_rows` 0, and every key only vep-rs emits
             for it is classed `reference_skipped_record`; any other key only vep-rs emits is
             `unexplained_residual`. A zero-row record without the warning, or a warned record
-            with rows, is an error.
+            with rows, is an error. `covers` and `flag_sets` are kept; with `--flag-set
+            <name>` the divergence keys are written into that flag set instead of the
+            manifest's top level, so each flag set documents its own run.
   check     Recompute the observed combination space from the reference outputs and fail
-            when a combination has no exemplar in the manifest.
+            when a combination has no exemplar in the manifest; with `--matrix` fail when a
+            `covers` name (the manifest's or a flag set's) is not a matrix row; with
+            `--family-columns` fail when a family stratum the references show has no
+            exemplar among the corpus's records.
+  covers    List (`--list`) or extend (`--add <item>`, repeatable) the `covers` of a corpus,
+            or of one of its flag sets (`--flag-set <name>`); a name that is not a row of
+            `--matrix` is refused and nothing is written.
+  flag-set  Write one `flag_sets` entry: a run of the corpus under its own `flags` beside
+            the manifest's default run, with its own expected outputs. An entry carries
+            `name`, `flags` (the whole flag list of that run), `input` (a file in the corpus,
+            `variants.vcf` by default), `stdin` (the input piped on standard input, with
+            `-i STDIN`; its `flags` must name `--format`, which Ensembl VEP needs on
+            STDIN), `formats` (the output formats compared, all four by default),
+            `expected_dir` (`expected_<name>` by default) and `covers`; `input` and
+            `expected_dir` are paths inside the corpus directory. A set that exists is
+            rewritten from the options, so `classify --flag-set` runs after it.
 
 Row keys follow `compare_vep_outputs.py`: (Location, Allele, Feature, Feature_type,
 consequence set), consequence terms sorted and comma-joined. A record is identified by
 VEP's (Uploaded_variation, Location) pair, which every row of one input record shares.
+
+The family key of `--family-columns` is one class per named Extra column plus the variant
+class: a bare name (`HGVSc`) classes a row by the column's presence (`HGVSc+`, `HGVSc-`), a
+name ending in `=` (`IMPACT=`) by its value (`IMPACT=HIGH`); `check --family-columns`
+asserts every stratum the references show is covered, which is the per-family coverage
+claim behind a flag family's corpus.
 
 Selection is deterministic under `--seed`: reservoir sampling bounds the candidates kept per
 combination and the same seed reproduces the same corpus from the same references.
@@ -46,13 +77,18 @@ import re
 import sys
 import zlib
 from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Iterator
 
 GENERATOR_VERSION = "2"
 RESERVOIR = 64
+FAMILY_RESERVOIR = 8
 SEQUENCE_CLASSES = ("snv", "deletion", "insertion", "mnv_or_complex")
+OUTPUT_FORMATS = ("default", "tab", "vcf", "json")
+DEFAULT_INPUT = "variants.vcf"
+CLASSIFY_KEYS = ("divergences", "vep_rs_only_tuples", "divergence_summary", "vep_rs_only_summary",
+                 "fields_compared", "field_divergences", "field_divergence_summary")
 DEFAULT_COLUMNS = (
     "Uploaded_variation", "Location", "Allele", "Gene", "Feature", "Feature_type",
     "Consequence", "cDNA_position", "CDS_position", "Protein_position", "Amino_acids",
@@ -106,6 +142,28 @@ def variant_class(location: str, allele: str) -> str:
     return "snv" if len(allele) == 1 else "mnv_or_complex"
 
 
+def parse_family_columns(arg: str | None) -> list[str]:
+    """`--family-columns HGVSc,IMPACT=`: a column name (presence) or a name ending in `=` (value)."""
+    specs = [s.strip() for s in (arg or "").split(",") if s.strip()]
+    for spec in specs:
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+=?", spec):
+            raise SystemExit(f"ERROR: [build_golden_corpus] --family-columns wants NAME or NAME=, got {spec!r}")
+    return specs
+
+
+def family_classes(extra: dict[str, str], specs: list[str]) -> tuple[str, ...]:
+    """One class per spec: `NAME+` or `NAME-` for presence, `NAME=<value>` for a value (`-` when absent)."""
+    classes = []
+    for spec in specs:
+        if spec.endswith("="):
+            name = spec[:-1]
+            classes.append(f"{name}={extra.get(name) or '-'}")
+        else:
+            present = spec in extra and extra[spec] not in ("", "-")
+            classes.append(f"{spec}{'+' if present else '-'}")
+    return tuple(classes)
+
+
 @dataclass
 class Row:
     suite: str
@@ -118,6 +176,7 @@ class Row:
     strand: str
     flags: str
     positions: tuple[str, str, str]
+    family: tuple[str, ...] = ()
 
     @property
     def record_key(self) -> tuple[str, str]:
@@ -126,6 +185,11 @@ class Row:
     @property
     def klass(self) -> str:
         return variant_class(self.location, self.allele)
+
+    @property
+    def family_stratum(self) -> str:
+        """The family classes and the variant class, `;`-joined: the key `--family-columns` covers."""
+        return ";".join((*self.family, self.klass))
 
     def preference(self) -> int:
         score = 0
@@ -150,7 +214,7 @@ class Row:
             return 0
 
 
-def iter_rows(path: Path, suite: str) -> Iterator[Row]:
+def iter_rows(path: Path, suite: str, family_specs: list[str] | None = None) -> Iterator[Row]:
     with opener(path)(path, "rt", encoding="utf-8", errors="replace") as handle:
         for line in handle:
             if not line or line.startswith("#"):
@@ -172,6 +236,7 @@ def iter_rows(path: Path, suite: str) -> Iterator[Row]:
                 strand=extra.get("STRAND", ""),
                 flags=extra.get("FLAGS", ""),
                 positions=(f[7], f[8], f[9]),
+                family=family_classes(extra, family_specs) if family_specs else (),
             )
 
 
@@ -248,25 +313,40 @@ class CacheCost:
 
 
 # ----------------------------------------------------------------------------- select
-def reservoir_pass(suites: list[tuple[str, Path, Path]], seed: int) -> tuple[dict[str, list[Row]], Counter[str], dict[str, Counter[str]]]:
-    """One streaming pass: per consequence set, a bounded uniform sample of rows plus counts."""
+def reservoir_pass(
+    suites: list[tuple[str, Path, Path]], seed: int, family_specs: list[str] | None = None
+) -> tuple[dict[str, list[Row]], Counter[str], dict[str, Counter[str]], dict[str, list[Row]]]:
+    """One streaming pass: per consequence set, a bounded uniform sample of rows plus counts,
+    and per family stratum (when `family_specs` is given) a smaller sample of its own, so a
+    stratum too rare to reach any consequence set's sample still has candidates."""
     rng = random.Random(seed)
     reservoir: dict[str, list[Row]] = defaultdict(list)
     seen: Counter[str] = Counter()
     per_suite: dict[str, Counter[str]] = defaultdict(Counter)
+    families: dict[str, list[Row]] = defaultdict(list)
+    family_seen: Counter[str] = Counter()
+
+    def sample(bucket: list[Row], row: Row, offered: int, capacity: int) -> None:
+        """One reservoir step: `bucket` stays a uniform sample of at most `capacity` of the
+        `offered` rows seen so far for its key."""
+        if len(bucket) < capacity:
+            bucket.append(row)
+        else:
+            j = rng.randrange(offered)
+            if j < capacity:
+                bucket[j] = row
+
     for sid, ref, _inp in suites:
-        for row in iter_rows(ref, sid):
+        for row in iter_rows(ref, sid, family_specs):
             c = row.consequence_set
             seen[c] += 1
             per_suite[sid][c] += 1
-            bucket = reservoir[c]
-            if len(bucket) < RESERVOIR:
-                bucket.append(row)
-            else:
-                j = rng.randrange(seen[c])
-                if j < RESERVOIR:
-                    bucket[j] = row
-    return reservoir, seen, per_suite
+            sample(reservoir[c], row, seen[c], RESERVOIR)
+            if family_specs:
+                stratum = row.family_stratum
+                family_seen[stratum] += 1
+                sample(families[stratum], row, family_seen[stratum], FAMILY_RESERVOIR)
+    return reservoir, seen, per_suite, families
 
 
 def exemplar_order(row: Row, max_span: int, cost: Callable[[Row], int] | None) -> tuple[int, int, int]:
@@ -298,6 +378,24 @@ def ensure_class_exemplars(
     return chosen
 
 
+def ensure_family_exemplars(
+    chosen: dict[str, list[Row]],
+    families: dict[str, list[Row]],
+    max_span: int,
+    cost: Callable[[Row], int] | None,
+) -> dict[str, list[Row]]:
+    """Every family stratum the references show keeps an exemplar: a stratum no chosen row
+    has takes, from its own sample, the row that sorts first in `exemplar_order`, added to
+    the combination it was sampled for."""
+    covered = {r.family_stratum for rows in chosen.values() for r in rows}
+    for stratum, rows in sorted(families.items()):
+        if stratum in covered:
+            continue
+        r = min(rows, key=lambda row: exemplar_order(row, max_span, cost))
+        chosen.setdefault(r.consequence_set, []).append(r)
+    return chosen
+
+
 def choose_exemplars(
     reservoir: dict[str, list[Row]],
     k: int,
@@ -307,7 +405,8 @@ def choose_exemplars(
     focus_k: int | None = None,
     cost: Callable[[Row], int] | None = None,
 ) -> dict[str, list[Row]]:
-    """Up to K rows per combination, distinct (class, strand) first, in `exemplar_order`.
+    """Up to K rows per combination, distinct (class, strand, family classes) first, in
+    `exemplar_order`.
 
     Rows wider than `max_span` bases (when > 0) come after every narrower row, so a
     combination takes a wide structural variant only when nothing narrower shows it:
@@ -328,9 +427,9 @@ def choose_exemplars(
         rng.shuffle(cands)
         cands.sort(key=lambda r: exemplar_order(r, max_span, cost))
         picked: list[Row] = []
-        strata_seen: set[tuple[str, str]] = set()
+        strata_seen: set[tuple[str, str, tuple[str, ...]]] = set()
         for r in cands:
-            stratum = (r.klass, r.strand)
+            stratum = (r.klass, r.strand, r.family)
             if stratum in strata_seen:
                 continue
             picked.append(r)
@@ -474,13 +573,176 @@ def run_options(args: argparse.Namespace) -> dict:
     return options
 
 
+def failure(message: str) -> SystemExit:
+    return SystemExit(f"ERROR: [build_golden_corpus] {message}")
+
+
+def is_name_list(value: object) -> bool:
+    return isinstance(value, list) and all(isinstance(n, str) and n.strip() for n in value)
+
+
+FLAG_SET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+
+
+def is_flag_set_name(value: object) -> bool:
+    return isinstance(value, str) and value != "default" and FLAG_SET_NAME.fullmatch(value) is not None
+
+
+def is_corpus_path(value: object) -> bool:
+    """A non-empty path relative to the corpus directory with no `..` segment."""
+    if not isinstance(value, str) or not value:
+        return False
+    path = Path(value)
+    return not path.is_absolute() and ".." not in path.parts
+
+
+def names_format(flags: list[str]) -> bool:
+    """Whether a flag list carries `--format` (as its own token or as `--format=<format>`)."""
+    return any(f == "--format" or f.startswith("--format=") for f in flags)
+
+
+def flag_set_shape_error(fs: object) -> str | None:
+    """The reason one `flag_sets` entry cannot be run: the shapes `flag-set` writes, so a
+    hand-written entry is held to the same rules."""
+    name = fs.get("name") if isinstance(fs, dict) else None
+    if not is_flag_set_name(name):
+        return "has a flag_sets entry without a name (letters, digits, _ and -, not default)"
+    if "flags" in fs and not (isinstance(fs["flags"], list) and all(isinstance(f, str) for f in fs["flags"])):
+        return f"flag set {name} flags is not a list of strings"
+    for key in ("input", "expected_dir"):
+        if key in fs and not is_corpus_path(fs[key]):
+            return f"flag set {name} {key} is not a path inside the corpus directory"
+    if "stdin" in fs and not isinstance(fs["stdin"], bool):
+        return f"flag set {name} stdin is not true or false"
+    if "formats" in fs and not (isinstance(fs["formats"], list) and fs["formats"]
+                                and all(f in OUTPUT_FORMATS for f in fs["formats"])):
+        return f"flag set {name} formats is not a non-empty subset of {','.join(OUTPUT_FORMATS)}"
+    if fs.get("stdin") and not names_format(fs.get("flags") or []):
+        return f"flag set {name} runs on stdin without --format among its flags"
+    if "covers" in fs and not is_name_list(fs["covers"]):
+        return f"flag set {name} covers is not a list of names"
+    return None
+
+
+def manifest_shape_error(manifest: dict) -> str | None:
+    """The reason a manifest's `covers` or `flag_sets` cannot be read: `covers` must be a list of
+    non-empty names and `flag_sets` a list of entries of the shape `flag_set_shape_error` holds
+    them to, with distinct names."""
+    if "covers" in manifest and not is_name_list(manifest["covers"]):
+        return "covers is not a list of names"
+    flag_sets = manifest.get("flag_sets", [])
+    if not isinstance(flag_sets, list):
+        return "flag_sets is not a list"
+    names: set[str] = set()
+    for fs in flag_sets:
+        reason = flag_set_shape_error(fs)
+        if reason:
+            return reason
+        if fs["name"] in names:
+            return f"names flag set {fs['name']} twice"
+        names.add(fs["name"])
+    return None
+
+
+def read_manifest(corpus: Path) -> dict:
+    """The corpus manifest, refused unless it is a JSON object whose `covers` and `flag_sets`
+    have the shapes `manifest_shape_error` describes."""
+    path = corpus / "manifest.json"
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise failure(f"{path} is not readable JSON ({exc})") from None
+    if not isinstance(manifest, dict):
+        raise failure(f"{path} is not a JSON object")
+    reason = manifest_shape_error(manifest)
+    if reason:
+        raise failure(f"{path} {reason}")
+    return manifest
+
+
+def write_manifest(corpus: Path, manifest: dict) -> None:
+    (corpus / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
+
+
+def matrix_items(path: Path) -> set[str]:
+    """The `item` column of a parity matrix (tab-separated, `item` first)."""
+    if not path.is_file():
+        raise failure(f"{path} is not a file: name the parity matrix with --matrix")
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise failure(f"{path} is not a readable text file ({exc})") from None
+    if not lines or lines[0].split("\t", 1)[0] != "item":
+        raise failure(f"{path} is not a parity matrix (first column must be item)")
+    return {line.split("\t", 1)[0] for line in lines[1:] if line.strip()}
+
+
+def covers_owner(flag_set: str | None) -> str:
+    """How an error names a `covers` list: the manifest's own, or that of the flag set `flag_set`."""
+    return f"flag set {flag_set} covers" if flag_set is not None else "covers"
+
+
+def covers_lists(manifest: dict) -> list[tuple[str, list]]:
+    """Every `covers` list of a manifest with its owner: the manifest's own, then each flag set's."""
+    lists = [(covers_owner(None), manifest.get("covers") or [])]
+    for fs in manifest.get("flag_sets") or []:
+        lists.append((covers_owner(fs["name"]), fs.get("covers") or []))
+    return lists
+
+
+def names_outside_matrix(names: Iterable[str], items: set[str], matrix: Path, owner: str) -> list[str]:
+    """One error line per name that is not a row of the matrix, naming the list it came from."""
+    return [f"{owner} names {n}, which is not a row of {matrix}" for n in names if n not in items]
+
+
+def covers_names(args_names: list[str] | None) -> list[str]:
+    """The `--covers` names of a command line, each non-empty, in order and without repeats."""
+    names = list(dict.fromkeys(args_names or []))
+    if not is_name_list(names):
+        raise failure("--covers wants a non-empty row name")
+    return names
+
+
+def flag_set_named(manifest: dict, name: str) -> dict:
+    for fs in manifest.get("flag_sets") or []:
+        if fs["name"] == name:
+            return fs
+    raise failure(f"the manifest has no flag set {name!r}")
+
+
+def path_inside_corpus(value: str, option: str) -> str:
+    """A file or directory name relative to the corpus directory: no absolute path, no `..` segment."""
+    if not is_corpus_path(value):
+        raise failure(f"{option} wants a path inside the corpus directory, got {value!r}")
+    return value
+
+
 def cmd_select(args: argparse.Namespace) -> int:
     suites = [parse_suite_arg(s) for s in args.suite]
+    out = Path(args.out)
+    existing = read_manifest(out) if (out / "manifest.json").is_file() else {}
+    covers = list(dict.fromkeys([*(existing.get("covers") or []), *covers_names(args.covers)]))
+    # A set's divergence keys name the old records by ordinal; `classify --flag-set` rebuilds them.
+    flag_sets = [{k: v for k, v in fs.items() if k not in CLASSIFY_KEYS} for fs in existing.get("flag_sets") or []]
+    if not covers:
+        print("ERROR: [build_golden_corpus] select writes no manifest without --covers: "
+              "name the parity-matrix rows the corpus exercises", file=sys.stderr)
+        return 1
+    if args.matrix is not None:
+        matrix = Path(args.matrix)
+        errors = names_outside_matrix(covers, matrix_items(matrix), matrix, covers_owner(None))
+        for e in errors:
+            print(f"ERROR: [build_golden_corpus] {e}", file=sys.stderr)
+        if errors:
+            return 1
+    family_specs = parse_family_columns(args.family_columns)
     rng = random.Random(args.seed)
-    reservoir, seen, per_suite = reservoir_pass(suites, args.seed)
+    reservoir, seen, per_suite, families = reservoir_pass(suites, args.seed, family_specs)
     cost = CacheCost(Path(args.cache), args.flank).row_cost if args.cache else None
     chosen = choose_exemplars(reservoir, args.k, rng, args.max_span, args.focus_term or (), args.focus_k, cost)
     chosen = ensure_class_exemplars(chosen, reservoir, args.max_span, cost)
+    if family_specs:
+        chosen = ensure_family_exemplars(chosen, families, args.max_span, cost)
     wanted: dict[str, set[str]] = defaultdict(set)
     for combo, rows in chosen.items():
         for r in rows:
@@ -505,6 +767,7 @@ def cmd_select(args: argparse.Namespace) -> int:
                 rec["exemplar_rows"].append({
                     "uploaded_variation": r.uploaded_variation, "location": r.location, "allele": r.allele,
                     "feature": r.feature, "variant_class": r.klass, "strand": r.strand,
+                    **({"family_stratum": r.family_stratum} if family_specs else {}),
                 })
     for sid in sorted(multi):
         for stratum, lines in sorted(multi[sid].items()):
@@ -513,13 +776,16 @@ def cmd_select(args: argparse.Namespace) -> int:
                 rec = records.setdefault(key, {"suite": sid, "vcf": line, "combinations": [], "exemplar_rows": []})
                 rec.setdefault("strata", []).append(stratum)
     if len(records) > args.max_records:
-        # Keep every record that is the sole exemplar of some combination, then fill by
-        # preference until the cap; deterministic because the record order is sorted.
-        by_combo: dict[str, list[str]] = defaultdict(list)
+        # The first record of every combination and family stratum survives the cap, which the
+        # groups alone may exceed; the rest fill in sorted record order, so the cut is deterministic.
+        by_group: dict[str, list[str]] = defaultdict(list)
         for key, rec in records.items():
             for c in rec["combinations"]:
-                by_combo[c].append(key)
-        keep = {keys[0] for keys in by_combo.values()}
+                by_group[f"combination {c}"].append(key)
+            for row in rec["exemplar_rows"]:
+                if "family_stratum" in row:
+                    by_group[f"stratum {row['family_stratum']}"].append(key)
+        keep = {keys[0] for keys in by_group.values()}
         for key in sorted(records):
             if len(keep) >= args.max_records:
                 break
@@ -533,7 +799,6 @@ def cmd_select(args: argparse.Namespace) -> int:
         return (chrom_rank, int(f[1]), f[3], f[4])
 
     ordered = sorted(records.items(), key=sort_key)
-    out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     header = headers[0] if headers else "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
     with (out / "variants.vcf").open("w", encoding="utf-8", newline="\n") as fh:
@@ -552,11 +817,16 @@ def cmd_select(args: argparse.Namespace) -> int:
         "max_span": args.max_span,
         **({"cache_cost_flank": args.flank} if args.cache else {}),
         **run_options(args),
+        "covers": covers,
+        **({"flag_sets": flag_sets} if flag_sets else {}),
         # File names only: the directory each suite was staged in belongs to the build
         # host, not to the corpus, and the tests read neither field.
         "suites": {sid: {"reference": Path(ref).name, "input": Path(inp).name, "rows": sum(per_suite[sid].values()), "combinations": len(per_suite[sid])} for sid, ref, inp in suites},
         "combinations": {c: {"observed_rows": seen[c], "exemplar_records": sum(1 for _k, rec in ordered if c in rec["combinations"])} for c in sorted(seen)},
         "variant_classes": dict(sorted(Counter(r.klass for rows in chosen.values() for r in rows).items())),
+        **({"family_columns": family_specs,
+            "family_strata": dict(sorted(Counter(r.family_stratum for rows in chosen.values() for r in rows).items()))}
+           if family_specs else {}),
         "records": [
             {"suite": rec["suite"], "vcf": rec["vcf"], "combinations": sorted(rec["combinations"]), **({"strata": rec["strata"]} if rec.get("strata") else {})}
             for _k, rec in ordered
@@ -565,7 +835,7 @@ def cmd_select(args: argparse.Namespace) -> int:
         "uncovered_combinations": sorted(set(seen) - covered),
         "unresolved_exemplars": missing,
     }
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
+    write_manifest(out, manifest)
     classes = manifest["variant_classes"]
     class_counts = ", ".join(f"{k} {v}" for k, v in classes.items())
     print(f"combinations observed {len(seen)}, covered {len(covered)}, records {len(ordered)}, unresolved exemplars {len(missing)}, "
@@ -687,7 +957,12 @@ def load_corpus_models(corpus: Path) -> dict:
 
 def cmd_classify(args: argparse.Namespace) -> int:
     corpus = Path(args.corpus)
-    manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
+    manifest = read_manifest(corpus)
+    target = flag_set_named(manifest, args.flag_set) if args.flag_set is not None else manifest
+    if args.flag_set is not None and run_options(args):
+        print("ERROR: [build_golden_corpus] --flag and --fasta-name describe the default run; "
+              "a flag set's flags are its own entry's", file=sys.stderr)
+        return 1
     perl, perl_names = load_tuples(Path(args.vep_default))
     rust, rust_names = load_tuples(Path(args.vep_rs_output))
     by_name = record_name_index(manifest["records"])
@@ -741,13 +1016,12 @@ def cmd_classify(args: argparse.Namespace) -> int:
         })
     # Classify's own keys are rewritten from scratch, in one order, so a key a previous run
     # wrote with other inputs (another `--field` list) does not survive this one.
-    for key in ("divergences", "vep_rs_only_tuples", "divergence_summary", "vep_rs_only_summary",
-                "fields_compared", "field_divergences", "field_divergence_summary"):
-        manifest.pop(key, None)
-    manifest["divergences"] = divergences
-    manifest["vep_rs_only_tuples"] = extra_rust
-    manifest["divergence_summary"] = dict(Counter(d["expected_divergence"] for d in divergences))
-    manifest["vep_rs_only_summary"] = dict(Counter(t["expected_divergence"] for t in extra_rust))
+    for key in CLASSIFY_KEYS:
+        target.pop(key, None)
+    target["divergences"] = divergences
+    target["vep_rs_only_tuples"] = extra_rust
+    target["divergence_summary"] = dict(Counter(d["expected_divergence"] for d in divergences))
+    target["vep_rs_only_summary"] = dict(Counter(t["expected_divergence"] for t in extra_rust))
     field_note = ""
     if args.field:
         # Field values are compared only on keys whose consequence sets agree; a key whose
@@ -771,14 +1045,14 @@ def cmd_classify(args: argparse.Namespace) -> int:
                         "consequence_set": key[4], "field": name, "vep": pvals[name], "vep_rs": rvals[name],
                         "expected_divergence": UNEXPLAINED,
                     })
-        manifest["fields_compared"] = list(args.field)
-        manifest["field_divergences"] = field_divergences
-        manifest["field_divergence_summary"] = dict(Counter(d["expected_divergence"] for d in field_divergences))
-        field_note = f"; field divergences {len(field_divergences)} ({manifest['field_divergence_summary']})"
+        target["fields_compared"] = list(args.field)
+        target["field_divergences"] = field_divergences
+        target["field_divergence_summary"] = dict(Counter(d["expected_divergence"] for d in field_divergences))
+        field_note = f"; field divergences {len(field_divergences)} ({target['field_divergence_summary']})"
     manifest.update(run_options(args))
-    (corpus / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
-    print(f"divergent VEP rows {len(divergences)} ({manifest['divergence_summary']}); "
-          f"vep-rs-only tuples {len(extra_rust)} ({manifest['vep_rs_only_summary']}); "
+    write_manifest(corpus, manifest)
+    print(f"divergent VEP rows {len(divergences)} ({target['divergence_summary']}); "
+          f"vep-rs-only tuples {len(extra_rust)} ({target['vep_rs_only_summary']}); "
           f"reference-skipped records {sorted(skipped)}{field_note}")
     return 0
 
@@ -786,18 +1060,141 @@ def cmd_classify(args: argparse.Namespace) -> int:
 # ------------------------------------------------------------------------------ check
 def cmd_check(args: argparse.Namespace) -> int:
     corpus = Path(args.corpus)
-    manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
+    manifest = read_manifest(corpus)
+    errors: list[str] = []
+    if args.matrix is not None:
+        matrix = Path(args.matrix)
+        items = matrix_items(matrix)
+        for owner, names in covers_lists(manifest):
+            errors += names_outside_matrix(names, items, matrix, owner)
     suites = [parse_suite_arg(s) for s in args.suite]
+    family_specs = parse_family_columns(args.family_columns)
+    by_name = record_name_index(manifest["records"])
+    records = manifest["records"]
+
+    def is_corpus_row(r: Row) -> bool:
+        chrom = r.location.split(":", 1)[0]
+        return any(records[i]["suite"] == r.suite and records[i]["vcf"].split("\t", 1)[0] == chrom
+                   for i in by_name.get(r.uploaded_variation, []))
+
     observed: set[str] = set()
+    strata_observed: set[str] = set()
+    strata_covered: set[str] = set()
     for sid, ref, _inp in suites:
-        for r in iter_rows(ref, sid):
+        for r in iter_rows(ref, sid, family_specs):
             observed.add(r.consequence_set)
-    covered = {c for rec in manifest["records"] for c in rec["combinations"]}
+            if family_specs:
+                strata_observed.add(r.family_stratum)
+                if is_corpus_row(r):
+                    strata_covered.add(r.family_stratum)
+    covered = {c for rec in records for c in rec["combinations"]}
     missing = sorted(observed - covered)
     print(f"observed {len(observed)}, covered by corpus {len(covered & observed)}, missing {len(missing)}")
     for m in missing[:50]:
         print("  MISSING", m)
-    return 1 if missing else 0
+    missing_strata = sorted(strata_observed - strata_covered)
+    if family_specs:
+        print(f"family strata observed {len(strata_observed)}, covered by corpus {len(strata_covered)}, "
+              f"missing {len(missing_strata)}")
+        for m in missing_strata[:50]:
+            print("  MISSING family stratum", m)
+    for e in errors:
+        print(f"ERROR: [build_golden_corpus] {e}", file=sys.stderr)
+    return 1 if missing or missing_strata or errors else 0
+
+
+def cmd_covers(args: argparse.Namespace) -> int:
+    corpus = Path(args.corpus)
+    manifest = read_manifest(corpus)
+    target = flag_set_named(manifest, args.flag_set) if args.flag_set is not None else manifest
+    covers = list(target.get("covers") or [])
+    if args.add:
+        added = covers_names(args.add)
+        matrix = Path(args.matrix)
+        errors = names_outside_matrix(added, matrix_items(matrix), matrix, covers_owner(args.flag_set))
+        for e in errors:
+            print(f"ERROR: [build_golden_corpus] {e}", file=sys.stderr)
+        if errors:
+            return 1
+        covers = list(dict.fromkeys([*covers, *added]))
+        target["covers"] = covers
+        write_manifest(corpus, manifest)
+    if args.list or not args.add:
+        for name in covers:
+            print(name)
+    return 0
+
+
+def cmd_flag_set(args: argparse.Namespace) -> int:
+    corpus = Path(args.corpus)
+    manifest = read_manifest(corpus)
+    sets = manifest.setdefault("flag_sets", [])
+    if args.list:
+        for fs in sets:
+            columns = [
+                fs["name"],
+                " ".join(fs.get("flags") or []),
+                fs.get("input", DEFAULT_INPUT),
+                str(bool(fs.get("stdin"))).lower(),
+                ",".join(fs.get("formats") or OUTPUT_FORMATS),
+                fs.get("expected_dir", f"expected_{fs['name']}"),
+                ",".join(fs.get("covers") or []),
+            ]
+            print("\t".join(columns))
+        return 0
+    if not args.name:
+        print("ERROR: [build_golden_corpus] flag-set wants --name (or --list)", file=sys.stderr)
+        return 1
+    if not is_flag_set_name(args.name):
+        print(f"ERROR: [build_golden_corpus] flag set name {args.name!r}: letters, digits, _ and -, "
+              "and not the manifest's own run, default", file=sys.stderr)
+        return 1
+    formats = [f.strip() for f in (args.format or ",".join(OUTPUT_FORMATS)).split(",") if f.strip()]
+    bad = [f for f in formats if f not in OUTPUT_FORMATS]
+    if bad or not formats:
+        print(f"ERROR: [build_golden_corpus] --format wants a non-empty subset of {','.join(OUTPUT_FORMATS)}, "
+              f"got {args.format!r}", file=sys.stderr)
+        return 1
+    flags = list(args.flag or [])
+    if args.stdin and not names_format(flags):
+        # Ensembl VEP detects no format on STDIN and dies without --format, so a stdin run's
+        # reference exists only for a flag list that names one.
+        print("ERROR: [build_golden_corpus] a stdin run names its input format: add --flag=--format --flag=<format>",
+              file=sys.stderr)
+        return 1
+    path_inside_corpus(args.input, "--input")
+    if not (corpus / args.input).is_file():
+        print(f"ERROR: [build_golden_corpus] input {args.input} is not a file in {corpus}", file=sys.stderr)
+        return 1
+    expected_dir = path_inside_corpus(args.expected_dir or f"expected_{args.name}", "--expected-dir")
+    covers = covers_names(args.covers)
+    if covers:
+        matrix = Path(args.matrix)
+        errors = names_outside_matrix(covers, matrix_items(matrix), matrix, covers_owner(args.name))
+        for e in errors:
+            print(f"ERROR: [build_golden_corpus] {e}", file=sys.stderr)
+        if errors:
+            return 1
+    entry = {
+        "name": args.name,
+        "flags": flags,
+        "input": args.input,
+        "stdin": bool(args.stdin),
+        "formats": formats,
+        "expected_dir": expected_dir,
+        "covers": covers,
+    }
+    for i, fs in enumerate(sets):
+        if fs["name"] == args.name:
+            sets[i] = entry
+            break
+    else:
+        sets.append(entry)
+    write_manifest(corpus, manifest)
+    print(f"flag set {args.name}: {len(entry['flags'])} flags, input {entry['input']}"
+          f"{' on stdin' if entry['stdin'] else ''}, formats {','.join(formats)}, expected {entry['expected_dir']}, "
+          f"covers {len(covers)}")
+    return 0
 
 
 def add_run_options(parser: argparse.ArgumentParser) -> None:
@@ -805,6 +1202,10 @@ def add_run_options(parser: argparse.ArgumentParser) -> None:
                         help="a command-line flag both engines ran with, written --flag=--hgvs (repeatable), recorded as `flags`")
     parser.add_argument("--fasta-name", default=None,
                         help="file name of the gzipped reference beside the manifest, recorded as `fasta`")
+
+
+MATRIX_HELP = "the parity matrix whose `item` column every `covers` name must be in"
+DEFAULT_MATRIX = "tests/parity/matrix.tsv"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -830,6 +1231,13 @@ def main(argv: list[str] | None = None) -> int:
                         "bytes to it come first, ahead of the flag and position preferences")
     s.add_argument("--flank", type=int, default=5000,
                    help="the transcript flank the pruner keeps around each record, in bases (its --flank)")
+    s.add_argument("--covers", action="append",
+                   help="a parity-matrix row the corpus exercises (repeatable), recorded as `covers`; "
+                        "required unless the manifest being regenerated already carries a list")
+    s.add_argument("--family-columns", default=None,
+                   help="Extra columns of the family key, comma-separated: NAME stratifies by presence, NAME= by value; "
+                        "every stratum seen keeps an exemplar")
+    s.add_argument("--matrix", default=None, help=MATRIX_HELP)
     add_run_options(s)
     s.set_defaults(fn=cmd_select)
     c = sub.add_parser("classify")
@@ -838,12 +1246,36 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--vep-rs-output", required=True, help="vep-rs default-format output for variants.vcf")
     c.add_argument("--field", action="append",
                    help="an Extra field (HGVSc, HGVSp) compared on every key whose consequence sets agree")
+    c.add_argument("--flag-set", default=None,
+                   help="write the divergence keys into this flag set's entry instead of the manifest's top level")
     add_run_options(c)
     c.set_defaults(fn=cmd_classify)
     k = sub.add_parser("check")
     k.add_argument("--corpus", required=True)
     k.add_argument("--suite", action="append", required=True)
+    k.add_argument("--matrix", default=None, help=MATRIX_HELP)
+    k.add_argument("--family-columns", default=None,
+                   help="the family key (see select); every stratum the suites show must have an exemplar")
     k.set_defaults(fn=cmd_check)
+    v = sub.add_parser("covers")
+    v.add_argument("corpus")
+    v.add_argument("--add", action="append", help="a parity-matrix row to add (repeatable)")
+    v.add_argument("--list", action="store_true", help="print the list, one name per line")
+    v.add_argument("--flag-set", default=None, help="the flag set whose list is read or extended")
+    v.add_argument("--matrix", default=DEFAULT_MATRIX, help=f"{MATRIX_HELP} (default: {DEFAULT_MATRIX})")
+    v.set_defaults(fn=cmd_covers)
+    f = sub.add_parser("flag-set")
+    f.add_argument("corpus")
+    f.add_argument("--name", default=None, help="the set's name; `expected_<name>` holds its outputs unless --expected-dir")
+    f.add_argument("--flag", action="append", help="a command-line flag of the run, written --flag=--pick (repeatable)")
+    f.add_argument("--input", default=DEFAULT_INPUT, help=f"the input file inside the corpus (default: {DEFAULT_INPUT})")
+    f.add_argument("--stdin", action="store_true", help="pipe the input on standard input and pass -i STDIN")
+    f.add_argument("--format", default=None, help=f"the output formats compared, comma-separated (default: all of {','.join(OUTPUT_FORMATS)})")
+    f.add_argument("--expected-dir", default=None, help="the directory of the set's expected outputs")
+    f.add_argument("--covers", action="append", help="a parity-matrix row the set exercises (repeatable)")
+    f.add_argument("--matrix", default=DEFAULT_MATRIX, help=f"{MATRIX_HELP} (default: {DEFAULT_MATRIX})")
+    f.add_argument("--list", action="store_true", help="print the sets, one tab-separated line each")
+    f.set_defaults(fn=cmd_flag_set)
     args = ap.parse_args(argv)
     return args.fn(args)
 

@@ -2,28 +2,26 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Format-parity tests: the `--tab`, `--vcf` and `--json` outputs (and the
-//! Parquet output when the DuckDB CLI is installed) on each golden corpus are
-//! compared with the Ensembl VEP files committed beside it. Header lines VEP
-//! fills with run-specific values (time, paths, command line, Perl API
-//! component versions) compare by shape; every other header line and every data
-//! value compares exactly, except the consequence keys the corpus manifest
-//! documents as divergent.
+//! Parquet output when the DuckDB CLI is installed) on each golden corpus, and
+//! on each `flag_sets` run of its manifest that names the format, are compared
+//! with the Ensembl VEP files committed beside it. Header lines VEP fills with
+//! run-specific values (time, paths, command line, Perl API component versions)
+//! compare by shape; every other header line and every data value compares
+//! exactly, except the consequence keys the corpus manifest documents as
+//! divergent. The Parquet round trip runs on the manifest's own run alone.
 
 mod common;
 
 use std::path::Path;
 use std::process::Command;
 
-use common::{
-    compare_entries, compare_tab_headers, compare_vcf_headers, corpora, input_records, parse_json,
-    parse_tab, parse_vcf, read_expected, run_vep, vep_command, Corpus, Documented,
-};
+use common::{compare_run, corpora, default_run, run_output, run_vep, runs, vep_command, Run};
 
-fn check(corpus: &Corpus, label: &str, header: String, body: String, failures: &mut Vec<String>) {
+fn check(run: &Run, label: &str, header: String, body: String, failures: &mut Vec<String>) {
     if !header.is_empty() || !body.is_empty() {
         failures.push(format!(
-            "== corpus {}/{} ({label})\n{header}{body}",
-            corpus.release, corpus.name
+            "== corpus {} ({label})\n{header}{body}",
+            run.label()
         ));
     }
 }
@@ -33,16 +31,10 @@ fn tab_output_matches_vep_on_every_corpus() {
     let tmp = tempfile::tempdir().unwrap();
     let mut failures = Vec::new();
     for corpus in &corpora() {
-        let expected = read_expected(&corpus.dir, "tab.txt");
-        let actual = run_vep(corpus, "tab", tmp.path(), &[]);
-        let documented = Documented::from_manifest(&corpus.manifest);
-        check(
-            corpus,
-            "--tab",
-            compare_tab_headers(&expected, &actual),
-            compare_entries(&parse_tab(&expected), &parse_tab(&actual), &documented),
-            &mut failures,
-        );
+        for run in runs(corpus).iter().filter(|r| r.compares("tab")) {
+            let (header, body) = compare_run(run, "tab", tmp.path());
+            check(run, "--tab", header, body, &mut failures);
+        }
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
@@ -52,21 +44,10 @@ fn vcf_output_matches_vep_on_every_corpus() {
     let tmp = tempfile::tempdir().unwrap();
     let mut failures = Vec::new();
     for corpus in &corpora() {
-        let expected = read_expected(&corpus.dir, "vcf.vcf");
-        let actual = run_vep(corpus, "vcf", tmp.path(), &[]);
-        let documented = Documented::from_manifest(&corpus.manifest);
-        let inputs = input_records(corpus);
-        check(
-            corpus,
-            "--vcf",
-            compare_vcf_headers(&expected, &actual),
-            compare_entries(
-                &parse_vcf(&expected, &inputs),
-                &parse_vcf(&actual, &inputs),
-                &documented,
-            ),
-            &mut failures,
-        );
+        for run in runs(corpus).iter().filter(|r| r.compares("vcf")) {
+            let (header, body) = compare_run(run, "vcf", tmp.path());
+            check(run, "--vcf", header, body, &mut failures);
+        }
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
@@ -76,21 +57,10 @@ fn json_output_matches_vep_on_every_corpus() {
     let tmp = tempfile::tempdir().unwrap();
     let mut failures = Vec::new();
     for corpus in &corpora() {
-        let expected = read_expected(&corpus.dir, "json.jsonl");
-        let actual = run_vep(corpus, "json", tmp.path(), &[]);
-        let documented = Documented::from_manifest(&corpus.manifest);
-        let inputs = input_records(corpus);
-        check(
-            corpus,
-            "--json",
-            String::new(),
-            compare_entries(
-                &parse_json(&expected, &inputs),
-                &parse_json(&actual, &inputs),
-                &documented,
-            ),
-            &mut failures,
-        );
+        for run in runs(corpus).iter().filter(|r| r.compares("json")) {
+            let (header, body) = compare_run(run, "json", tmp.path());
+            check(run, "--json", header, body, &mut failures);
+        }
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
@@ -118,7 +88,8 @@ fn parquet_round_trips_to_the_tab_output() {
     let tmp = tempfile::tempdir().unwrap();
     let mut failures = Vec::new();
     for corpus in &corpora() {
-        let tab = run_vep(corpus, "tab", tmp.path(), &[]);
+        let run = default_run(corpus);
+        let tab = run_vep(&run, "tab", tmp.path(), &[]);
         let mut expected_rows: Vec<&str> = tab.lines().filter(|l| !l.starts_with("##")).collect();
         expected_rows.sort_unstable();
         for shape in ["flat", "nested"] {
@@ -126,14 +97,14 @@ fn parquet_round_trips_to_the_tab_output() {
                 "{}_{}_{shape}.parquet",
                 corpus.release, corpus.name
             ));
-            let mut cmd = vep_command(corpus, tmp.path());
+            let mut cmd = vep_command(&run, tmp.path());
             cmd.arg("-o").arg(&parquet_dir).args([
                 "--output_format",
                 "parquet",
                 "--parquet_shape",
                 shape,
             ]);
-            let out = cmd.output().unwrap();
+            let out = run_output(&run, &mut cmd);
             assert!(
                 out.status.success(),
                 "vep --output_format parquet ({shape}) failed:\n{}",
@@ -196,15 +167,15 @@ fn parquet_row_groups_prune_on_bloom_filters() {
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
-    let corpus = &corpora()[0];
+    let corpora = corpora();
+    let run = default_run(&corpora[0]);
     let parquet_dir = tmp.path().join("rowgroups.parquet");
-    let out = vep_command(corpus, tmp.path())
-        .arg("-o")
+    let mut cmd = vep_command(&run, tmp.path());
+    cmd.arg("-o")
         .arg(&parquet_dir)
         .args(["--output_format", "parquet", "--parquet_shape", "flat"])
-        .args(["--parquet_row_group_size", "2048"])
-        .output()
-        .unwrap();
+        .args(["--parquet_row_group_size", "2048"]);
+    let out = run_output(&run, &mut cmd);
     assert!(
         out.status.success(),
         "vep --output_format parquet failed:\n{}",

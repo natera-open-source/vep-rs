@@ -6,7 +6,9 @@
  "exemplars_per_combination": 3,
  "max_span": 1000000,
  "multi_allelic_per_suite": 4,
- "covers": [],
+ "covers": [
+  "flag_matrix_concordance"
+ ],
  "suites": {
   "GRCh37": {
    "reference": "default.txt",

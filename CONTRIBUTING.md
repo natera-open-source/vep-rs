@@ -66,10 +66,15 @@ corpus of input records covering every consequence-set combination observed on
 the benchmark datasets, Ensembl VEP's output for them in all four formats
 (`expected/`, gzipped), a pruned JSON cache that reproduces vep-rs's full-cache
 output on those records, and a `manifest.json` listing the exemplars per
-combination and the consequence keys whose terms are documented to differ.
+combination, the consequence keys whose terms are documented to differ, the
+parity-matrix rows the corpus exercises (`covers`, written by `select --covers`
+or `covers --add`; `covers --add`, `flag-set --covers` and `select --matrix` refuse
+a name that is not a row of `tests/parity/matrix.tsv`) and, under
+`flag_sets`, the further runs of the same records under other flags, each with
+its own `flags`, input, formats, expected directory and `covers` (`flag-set`).
 `cargo test -p vep-cli --test golden --test format_parity` annotates each corpus
-and compares every column of every format (the Parquet round trip needs the
-`duckdb` CLI; without it that one test skips). A failure lists every mismatch
+once per run and compares every column of every format (the Parquet round trip
+needs the `duckdb` CLI; without it that one test skips). A failure lists every mismatch
 grouped by column and consequence set. A record Ensembl VEP dropped before
 annotation carries `reference_warning` (VEP's reason, from its warnings file,
 recorded when the corpus is built); `classify` writes `reference_rows` 0 on it
@@ -85,7 +90,8 @@ VEP in the four formats, then `build_golden_corpus.py classify` against the
 pinned vep-rs binary), record the VEP image digest and the expected files'
 sha256 in `provenance.json`, and commit the new directory; older directories
 stay until their release is dropped. Each corpus must stay under 15 MB on
-disk (`each_corpus_fits_its_size_budget`); prefer narrower exemplars
+disk (`each_corpus_fits_its_size_budget`), every flag set's expected directory
+included; prefer narrower exemplars
 (`--max-span`) and, with `select --cache <json cache>`, the exemplars whose
 transcripts add the fewest bytes to the pruned cache, over a larger cache.
 

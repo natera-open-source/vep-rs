@@ -79,9 +79,9 @@ jobs:
           check scripts/concordance/test_compare_output_formats.py 33
           check scripts/concordance/test_compare_vep_fields.py 6
           check scripts/concordance/test_compare_plugin_outputs.py 3
-          check scripts/golden/test_golden_scripts.py 20
+          check scripts/golden/test_golden_scripts.py 37
           check scripts/release/test_render_release_notes.py 77
-          check scripts/parity/test_check_parity_matrix.py 36
+          check scripts/parity/test_check_parity_matrix.py 60
           [ "$fail" -eq 0 ]
           python3 -m pytest -q \
             scripts/validation/test_compare_sv_concordance.py \
@@ -198,7 +198,7 @@ jobs:
           toolchain: 1.97.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo build --release --locked --bin vep
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vep-linux-x86_64
           path: target/release/vep
