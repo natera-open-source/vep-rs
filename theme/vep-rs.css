@@ -50,6 +50,12 @@
     --code-bg: #f6f7f6;
 }
 
+/* The one light token below 4.5:1 on the code background. */
+.light .hljs-addition,
+html:not(.js) .hljs-addition {
+    color: #1e7b34;
+}
+
 .light {
     --sidebar-active: var(--links);
 }
