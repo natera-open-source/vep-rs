@@ -78,16 +78,24 @@ one class under which the harness accepts a record-level VCF line or JSON
 object with no reference counterpart.
 
 To add a release or assembly, run the generator where the VEP reference outputs,
-their inputs and the JSON cache are (`scripts/golden/build_golden_corpus.py
-select`, `scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop
-protein_features --drop protein_function_predictions --perl-info <cache>/info.txt`,
-VEP in the four formats, then `build_golden_corpus.py classify` against the
-pinned vep-rs binary), record the VEP image digest and the expected files'
-sha256 in `provenance.json`, and commit the new directory; older directories
-stay until their release is dropped. Each corpus must stay under 15 MB on
-disk (`each_corpus_fits_its_size_budget`); prefer narrower exemplars
-(`--max-span`) and, with `select --cache <json cache>`, the exemplars whose
-transcripts add the fewest bytes to the pruned cache, over a larger cache.
+their inputs and the JSON cache are: select the exemplars, prune the cache, run
+VEP in the four formats, then classify against the pinned vep-rs binary.
+
+```sh
+scripts/golden/build_golden_corpus.py select
+scripts/golden/prune_json_cache.py --gzip --drop sorted_exons \
+    --drop protein_features --drop protein_function_predictions \
+    --perl-info <cache>/info.txt
+# run VEP in the four formats, then
+scripts/golden/build_golden_corpus.py classify
+```
+
+Record the VEP image digest and the expected files' sha256 in `provenance.json`,
+and commit the new directory; older directories stay until their release is
+dropped. Each corpus must stay under 15 MB on disk
+(`each_corpus_fits_its_size_budget`); prefer narrower exemplars (`--max-span`)
+and, with `select --cache <json cache>`, the exemplars whose transcripts add the
+fewest bytes to the pruned cache, over a larger cache.
 
 ## Parity matrix
 
