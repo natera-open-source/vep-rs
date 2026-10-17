@@ -12,12 +12,42 @@ src = "docs"
 
 [build]
 build-dir = "target/book"
+create-missing = false
 
-# The home page is README.md, the changelog page CHANGELOG.md, and links that
-# leave docs/ go to GitHub (scripts/docs/mdbook_repo_links.py).
+# Chapters that mirror a repository file, and links that leave docs/, are
+# rewritten by scripts/docs/mdbook_repo_links.py.
 [preprocessor.repo-links]
 command = "python3 scripts/docs/mdbook_repo_links.py"
 
 [output.html]
 site-url = "/vep-rs/"
 git-repository-url = "https://github.com/natera-open-source/vep-rs"
+edit-url-template = "https://github.com/natera-open-source/vep-rs/edit/main/{path}"
+additional-css = ["theme/vep-rs.css", "theme/pagetoc.css"]
+additional-js = ["theme/pagetoc.js", "theme/vep-rs.js"]
+# The class numbers on the divergence pages are identifiers; chapter numbers
+# in the sidebar would compete with them.
+no-section-label = true
+sidebar-header-nav = false
+input-404 = "404.md"
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.print]
+enable = false
+
+[output.html.search]
+use-boolean-and = true
+limit-results = 20
+boost-title = 2
+boost-hierarchy = 2
+expand = true
+# Every CLI option is a level-3 heading, so each is its own search result.
+heading-split-level = 3
+
+[output.html.search.chapter]
+# Changelog entries name the same options and fields as the reference pages
+# and would crowd them out of the results.
+"changelog.md" = { enable = false }
