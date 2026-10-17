@@ -9,10 +9,12 @@
 #   converted            present but as a different container type (object -> string)
 #   dropped_undef        undefined on the Storable side, so the converter writes nothing
 #   dropped_by_converter absent by a named converter rule (back-references, the slice,
-#                        the exon coordinate mapper, prediction matrices, ...)
+#                        the exon coordinate mapper's trees, ...)
 #   unexplained          absent on the JSON side and matched by no rule: a parity gap
 # JSON fields with no Storable counterpart are `derived` when a rule produces them and
-# `only_in_json` otherwise.
+# `only_in_json` otherwise. An array (exons, attributes, protein features, sequence
+# edits) is compared as one container and then element by element under the path
+# `<array>[]`, index-free, so every element's fields are classified.
 #
 # Rationale: a null `vefc.three_prime_utr` in the JSON cache changes which
 # consequences vep-rs emits, so a field the converter silently drops shows up as
@@ -23,7 +25,7 @@
 #   perl cache_parity_audit.pl <storable_cache_dir> <json_cache_dir> [N] [SEED]
 # Where:
 #   storable_cache_dir = /opt/vep/.vep (or the Perl cache root, with homo_sapiens/<version>/)
-#   json_cache_dir     = directory containing chr-keyed JSON files
+#   json_cache_dir     = the converter's output directory (every *.json under it is read)
 #   N                  = number of transcripts to sample (default 1000)
 #   SEED               = srand seed for the chunk order (default 1), recorded in the
 #                        manifest so a run is reproducible
@@ -87,7 +89,12 @@ for my $file (@shuffled) {
 
 # --- Load JSON side: lookup by stable_id ---
 my %json_by_id;
-for my $jfile (sort glob("$json_root/*.json")) {
+my @json_files;
+find(
+    sub { push @json_files, $File::Find::name if -f && /\.json$/ },
+    $json_root
+);
+for my $jfile (sort @json_files) {
     open(my $jfh, "<", $jfile) or next;
     my $payload = do { local $/; <$jfh> };
     close $jfh;
@@ -141,37 +148,48 @@ sub _kind {
 # is recorded with its class and the `cycle` marker, and JSON, which cannot carry a
 # cycle, reports whatever the converter put there. Shared objects that are not
 # ancestors are walked at every path they appear under, so each path is compared.
-# Keys are visited in sorted order so the manifest is independent of hash order.
+# Keys are visited in sorted order so the manifest is independent of hash order. The
+# elements of an array are walked under one index-free path, `<array>[]`, so a field
+# present on any element is classified once per transcript.
 sub field_keys {
     my ($v, $prefix, $out, $path_refs) = @_;
     $path_refs //= {};
-    if ((reftype($v) // '') eq 'HASH') {
+    my $rt = reftype($v) // '';
+    if ($rt eq 'HASH') {
         my $addr = refaddr($v);
         return $out if $path_refs->{$addr};
         $path_refs->{$addr} = 1;
         for my $k (sort keys %$v) {
-            my $path  = $prefix ? "$prefix.$k" : $k;
-            my $child = $v->{$k};
-            my $child_is_hash = (reftype($child) // '') eq 'HASH';
-            if ($child_is_hash && $path_refs->{ refaddr($child) }) {
-                $out->{$path} = _kind($child) =~ s/\)$/,cycle)/r;
-                next;
-            }
-            $out->{$path} = _kind($child);
-            field_keys($child, $path, $out, $path_refs) if $child_is_hash;
+            _field_key($v->{$k}, ($prefix ? "$prefix.$k" : $k), $out, $path_refs);
         }
         delete $path_refs->{$addr};
+    } elsif ($rt eq 'ARRAY') {
+        for my $element (@$v) {
+            _field_key($element, $prefix . '[]', $out, $path_refs);
+        }
     }
     return $out;
+}
+
+sub _field_key {
+    my ($child, $path, $out, $path_refs) = @_;
+    my $child_rt = reftype($child) // '';
+    if ($child_rt eq 'HASH' && $path_refs->{ refaddr($child) }) {
+        $out->{$path} = _kind($child) =~ s/\)$/,cycle)/r;
+        return;
+    }
+    $out->{$path} = _kind($child);
+    field_keys($child, $path, $out, $path_refs) if $child_rt eq 'HASH' || $child_rt eq 'ARRAY';
 }
 
 # --- The converter's rules, restated so a missing field can be attributed -----------
 #
 # storable_to_json.pl whitelists fields, renames the underscore-prefixed Perl internals,
-# flattens the UTR objects to sequence strings, replaces the exon coordinate mapper with
-# a pair list, and copies prediction matrices only from a `predictions_data` field that
-# the Storable cache does not carry. Each entry names the behaviour that accounts for
-# a Storable path being absent under its own name on the JSON side.
+# flattens the UTR objects to sequence strings and each protein feature's analysis
+# object to its `_display_label`, replaces the exon coordinate mapper with a pair list,
+# and writes each prediction matrix's gzip blob base64-encoded under `predictions_data`.
+# Each entry names the behaviour that accounts for a Storable path being absent under
+# its own name on the JSON side.
 my %RENAME = (
     '_gene_stable_id'                 => 'gene_stable_id',
     '_gene_symbol'                    => 'gene_symbol',
@@ -185,41 +203,54 @@ my %RENAME = (
     '_swissprot'                      => 'swissprot',
     '_trembl'                         => 'trembl',
     '_uniparc'                        => 'uniparc',
+    '_uniprot_isoform'                => 'uniprot_isoform',
+    '_source_cache'                   => 'source_cache',
+    '_gene_symbol_id'                 => 'gene_symbol_id',
+    '_bam_edit_status'                => 'bam_edit_status',
     '_trans_exon_array'               => 'exons',
     '_variation_effect_feature_cache' => 'variation_effect_feature_cache',
 );
 my @DROPPED = (
     [qr/^slice(?:\.|$)/,                       'slice: the chromosome is the shard directory and no slice field is read'],
-    [qr/^_gene(?:\.|$)/,                       'gene object: the gene fields are carried by the _gene_* renames'],
+    [qr/^_gene(?:\.|$)/,                       'gene object: its stable_id and version are carried by the _gene_* renames; start, end and strand are read by nothing at run time'],
     [qr/^_vep_lazy_loaded$/,                   'runtime flag set by the Perl cache loader'],
     [qr/^translation\.(?:start|end)_exon(?:\.|$)/, 'translation exons: derivable from exons and the translation start and end'],
     [qr/^translation\.transcript$/,            'back-reference to the enclosing transcript'],
-    [qr/^_variation_effect_feature_cache\.seq_edits$/, 'seq_edits: optional in the JSON cache; a cache without the key loads none and reads the reference peptide from the cached translation'],
     [qr/^_variation_effect_feature_cache\.mapper\.exon_coord_mapper(?:\.|$)/, 'exon coordinate mapper: replaced by mapper.pairs'],
-    [qr/^_variation_effect_feature_cache\.protein_function_predictions\.\w+\.(?:matrix|matrix_compressed|translation_md5)$/,
-        'prediction matrices are not converted: the converter reads predictions_data, which only the native cache builder writes'],
+    [qr/^(?:_trans_exon_array|_variation_effect_feature_cache\.sorted_exons)\[\]\.strand$/, 'exon strand: the transcript strand'],
+    [qr/^_variation_effect_feature_cache\.introns\[\]\.strand$/, 'intron strand: the transcript strand'],
+    [qr/^_variation_effect_feature_cache\.introns\[\]\.(?:prev|next)(?:\.|$)/, 'intron exon references: the flanking exons are the exons array'],
+    [qr/^_variation_effect_feature_cache\.introns\[\]\.slice(?:\.|$)/, 'intron slice: the chromosome is the shard directory and no slice field is read'],
+    [qr/^_variation_effect_feature_cache\.seq_edits\[\]\.description$/, 'sequence edit description: read by nothing at run time'],
+    [qr/^_variation_effect_feature_cache\.protein_function_predictions\.\w+\.matrix_compressed$/,
+        'matrix_compressed: constant, every exported predictions_data is the gzip blob'],
     [qr/^_variation_effect_feature_cache\.(?:five|three)_prime_utr\./, 'UTR object flattened to its sequence string'],
 );
-my %DERIVED = (
-    'variation_effect_feature_cache.mapper.pairs'      => 'pair list taken from mapper.pairs or computed from sorted_exons',
-    'variation_effect_feature_cache.mapper.pair_count' => 'length of mapper.pairs',
+my @DERIVED = (
+    [qr/^variation_effect_feature_cache\.mapper\.pairs(?:\[\]|\.|$)/, 'pair list taken from mapper.pairs or computed from sorted_exons'],
+    [qr/^variation_effect_feature_cache\.mapper\.pair_count$/,          'length of mapper.pairs'],
+    [qr/^variation_effect_feature_cache\.seq_edits$/,                    'seq_edits: written as [] when the transcript has no translation'],
+    [qr/^variation_effect_feature_cache\.seq_edits\[\]\.length_diff$/, 'seq_edits length_diff: computed from start, end and alt_seq as SeqEdit::length_diff does'],
 );
 
 sub mapped_path {
     my ($k) = @_;
     my @parts = split /\./, $k;
-    $parts[0] = $RENAME{ $parts[0] } if exists $RENAME{ $parts[0] };
-    return join ".", @parts;
+    my ($head, $suffix) = $parts[0] =~ /^(.*?)((?:\[\])?)$/;
+    $parts[0] = $RENAME{$head} . $suffix if exists $RENAME{$head};
+    my $path = join ".", @parts;
+    $path =~ s/^(variation_effect_feature_cache\.protein_function_predictions\.\w+)\.matrix$/$1.predictions_data/;
+    return $path;
 }
 
 my (%identical, %renamed, %converted, %dropped_undef, %dropped_rule, %unexplained, %derived, %only_json);
 my %gap_examples;   # gap path -> up to three stable ids, so a gap can be looked up
 sub note_gap { my ($key, $sid) = @_; my $l = $gap_examples{$key} //= []; push @$l, $sid if @$l < 3; }
 my ($n_matched) = (0);
-# The converter processes only the primary-assembly directories (1-22, X, Y, MT), so a
-# sampled transcript from a patch, haplotype, LRG or unplaced-contig directory has no
-# JSON counterpart by design; the count is reported per class so the unmatched sample
-# is attributable rather than a silent shortfall.
+# The converter writes every chromosome directory, so a sampled transcript without a
+# JSON counterpart is a gap; the count is reported per contig class (the assembled
+# chromosomes against patches, haplotypes, LRG and unplaced contigs) so a conversion
+# restricted to a chromosome list is attributable rather than a silent shortfall.
 my %unmatched = (canonical_contig => 0, non_canonical_contig => 0);
 
 for my $entry (@sampled) {
@@ -260,7 +291,8 @@ for my $entry (@sampled) {
     }
     for my $m (keys %$j_keys) {
         next if $accounted{$m};
-        if (exists $DERIVED{$m}) { $derived{"$m: $DERIVED{$m}"}++; next; }
+        my ($rule) = grep { $m =~ $_->[0] } @DERIVED;
+        if ($rule) { $derived{"$m: $rule->[1]"}++; next; }
         $only_json{"only_in_json:$m"}++;
         note_gap("only_in_json:$m", $sid);
     }

@@ -6,6 +6,7 @@
 
 - [Cache setup](cache-setup.md)
 - [CLI reference](cli-reference.md)
+- [Examples](examples.md)
 - [Output formats](output-formats.md)
 - [Plugins](plugins.md)
 

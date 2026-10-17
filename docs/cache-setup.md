@@ -44,14 +44,30 @@ disagreement.
 
 **Convert an existing Perl VEP cache.** `scripts/data/storable_to_json.pl` reads a Perl VEP
 Storable cache directory (for example `~/.vep/homo_sapiens/116_GRCh38`) and writes the same
-JSON layout for chromosomes 1-22, X, Y and MT, with an `info.json` derived from the cache's
-`info.txt`; it runs inside the `ensemblorg/ensembl-vep` container
-([scripts/README.md](../scripts/README.md) gives the invocation), and its output goes straight
-to `--json_cache`. The published concordance figures were measured on such a conversion ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)), which holds the transcript set identical between the two engines; the converted caches carry 195,232 transcripts (GRCh37) and 505,231
-(GRCh38); the GRCh37 conversion is of the cache-version-113 Storable that VEP release 115 ships
+JSON layout for every chromosome directory the cache holds, the assembled chromosomes and the
+patch, alternate-locus, unplaced-scaffold and `LRG_` directories alike, as Ensembl VEP itself
+lists them; beside the transcripts it writes an `info.json` derived from the cache's `info.txt`
+(with `contig_order`, the converted contigs as autosomes by number, then X, Y and MT, then every
+other contig by name) and copies the cache's `chr_synonyms.txt`. It runs inside the
+`ensemblorg/ensembl-vep` container ([scripts/README.md](../scripts/README.md) gives the
+invocation), and its output goes straight to `--json_cache`. Every field the cache dumper keeps
+on a transcript is carried, flattened or dropped under a rule the parity audit names
+(`scripts/concordance/cache_parity_audit.pl`): carried are the gene, transcript and protein
+identifiers (UniProt isoforms included, and on a merged cache the source), the attributes, the
+exons and introns, the translation with its sequence edits, the translateable sequence and
+peptide, the codon table, the exon coordinate mapper's pairs and the SIFT and PolyPhen prediction
+matrices; flattened are the UTR objects, to their sequence strings, and each
+protein feature's analysis, to the label Ensembl VEP's `DOMAINS` column prints; dropped are the
+Perl object references (the slice, the gene object, the exon coordinate mapper's trees), the
+per-exon and per-intron strand, which is the transcript's, a sequence edit's description and the
+dump-time flags. A converted cache carries no variation data. A cache written with the Sereal serialiser (`serialiser_type sereal` in its
+`info.txt`, or `.sereal` shards) is refused with an error naming the serialiser; only Storable
+caches convert, and a run in which any shard fails to read or write stops with an error before
+`info.json` is written.
+The published concordance figures were measured on such a conversion ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)), which holds the transcript set identical between the two engines; the caches those figures were measured on carry 195,232 transcripts (GRCh37) and 505,231
+(GRCh38), the canonical chromosomes only, and the GRCh37 conversion is of the cache-version-113 Storable that VEP release 115 ships
 for that assembly, which differs from the cache-version-115 build in 310 of those transcripts
-(the `storable_113_*` columns of `manuscript/data/transcript_set_parity.csv`). A converted cache carries no variation data and no SIFT
-or PolyPhen matrices.
+(the `storable_113_*` columns of `manuscript/data/transcript_set_parity.csv`).
 
 The conversion carries each translation's sequence edits (`seq_edits`: the initial-methionine,
 selenocysteine and amino-acid-substitution edits VEP applies to the reference peptide at
@@ -75,4 +91,4 @@ vep-cache-builder --release 116 --assembly GRCh38 --output-dir /path/to/cache \
 vep -i input.vcf --sift b --polyphen b --json_cache /path/to/cache --offline
 ```
 
-A cache converted from a Perl VEP Storable cache carries no matrices: the converter reads a `predictions_data` field that only the native builder writes, so `--sift` and `--polyphen` print nothing on a converted cache. The `dbNSFP` plugin is a separate, unsupported route to third-party SIFT and PolyPhen scores ([plugins.md](plugins.md#not-supported-dbnsfp)).
+A cache converted from a Perl VEP Storable cache carries the matrices the Storable holds, the SIFT, PolyPhen HumVar and PolyPhen HumDiv blobs stored for a translated transcript, base64-encoded under the same `predictions_data` key and in the same binary layout the native builder writes, so `--sift` and `--polyphen` read either kind of cache alike; `info.json` keeps the `sift` and `polyphen` markers only when the conversion wrote a matrix of that tool. The `dbNSFP` plugin is a separate, unsupported route to third-party SIFT and PolyPhen scores ([plugins.md](plugins.md#not-supported-dbnsfp)).

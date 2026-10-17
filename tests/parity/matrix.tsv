@@ -21,7 +21,7 @@ allow_non_variant	Parser/VCF.pm	documented_subset	open
 AlphaMissense	AlphaMissense.pm	implemented	open			
 alt_equals_ref_and_duplicate_alts	Variation/VariationFeatureOverlap.pm	implemented	open			
 ambiguity	Config.pm	implemented	open			
-ambiguous_hgvs	Parser/HGVS.pm	error	open			
+ambiguous_hgvs	Parser/HGVS.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::ambiguous_hgvs_is_refused		
 AncestralAllele	AncestralAllele.pm	error	open			
 anchor-base-trimming	VCF.pm	implemented	open			
 api-config-access	BaseVepPlugin.pm	documented_subset	open			
@@ -108,12 +108,12 @@ clinvar_somatic_classification	Config.pm	documented_subset	open
 coding_only	OutputFactory.pm	implemented	open			
 compress-output-gzip-vs-bgzip	BaseRunner.pm	implemented	open			
 compress_output	Config.pm	implemented	open			
-condel	Config.pm	accepted_noop	open			
+condel	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::condel_is_accepted_without_effect		
 config	Config.pm::read_config_from_file	implemented	open			
 config-file	Config.pm	implemented	open			
 Conservation	Conservation.pm	error	open			
 conservation-shortcuts	Config.pm	documented_subset	open			
-convert	Config.pm	error	open			
+convert	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::convert_is_deprecated_error		
 convert-cache-pl	convert_cache.pl	accepted_noop	open			
 crlf-blank-lines-whitespace	Parser.pm	implemented	open			
 CSN	CSN.pm	error	open			
@@ -123,9 +123,9 @@ custom-output-fields	OutputFactory.pm	documented_subset	open
 custom_multi_allelic	Config.pm	implemented	open			
 custom_suppress_filter	Config.pm	implemented	open			crates/vep-cli/src/args.rs::custom_suppress_filter_is_refused;crates/vep-cli/tests/integration_test.rs::refused_flags_exit_with_their_message
 DAS	DAS.pm	error	open			
-database	vep	error	open			
-database-only-features	AnnotationSourceAdaptor.pm	error	open			
-db_version	Config.pm	error	open			
+database	vep	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
+database-only-features	AnnotationSourceAdaptor.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::every_error_table_entry_names_flag_need_and_route		
+db_version	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::db_version_is_refused		
 dbNSFP	dbNSFP.pm	implemented	open			
 dbscSNV	dbscSNV.pm	implemented	open			
 dead-input-code	-	removed	open			
@@ -154,13 +154,13 @@ engine_identity_lines	-	implemented	open
 ensembl-input-format	VEP_input.pm	implemented	open			
 EVE	EVE.pm	error	open			
 everything	Config.pm	implemented	open			
-exac-columns	OutputFactory.pm	error	open			
+exac-columns	OutputFactory.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::af_exac_is_refused_as_removed_upstream		
 examples_and_validator	Parser.pm::validate_vf	implemented	open			
 exclude_null_alleles	Config.pm	implemented	open			
 exclude_predicted	Config.pm	implemented	open			
 existing-variation-matching	AnnotationType/Variation.pm	implemented	open			
 exit-codes	vep	implemented	open			
-exit-codes-and-error-text	vep	implemented	open			
+exit-codes-and-error-text	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_exit_codes.rs::success_is_0;crates/vep-cli/tests/cli_exit_codes.rs::run_error_is_1;crates/vep-cli/tests/cli_exit_codes.rs::usage_error_is_2;crates/vep-cli/tests/cli_exit_codes.rs::refused_flag_is_1	tests/golden/116/GRCh38-run-control	
 extended_promoters	Config.pm	implemented	open			crates/vep-cli/src/args.rs::extended_promoters_is_refused;crates/vep-cli/tests/integration_test.rs::refused_flags_exit_with_their_message
 extra-key-order-and-percent-encoding	VEP_output.pm	implemented	open			
 failed	Config.pm	implemented	open			
@@ -185,7 +185,7 @@ flag_pick_allele_gene	OutputFactory.pm	implemented	open
 FlagLRG	FlagLRG.pm	error	open			
 force-overwrite-scope	BaseRunner.pm	documented_subset	open			
 force_overwrite	BaseRunner.pm	implemented	open			
-fork	Runner.pm::_forked_buffer_to_output	implemented	open			
+fork	Runner.pm::_forked_buffer_to_output	implemented	landed:implemented	crates/vep-cli/src/runner.rs::test_annotate_batch_fork_1_matches_fork_4	tests/golden/116/GRCh38-run-control	
 format	Config.pm	implemented	open			
 freq_filter	Config.pm	implemented	open			
 freq_freq	Config.pm	implemented	open			
@@ -206,7 +206,7 @@ gene_version	OutputFactory.pm	implemented	open
 GeneBe	GeneBe.pm	error	open			
 GeneSplicer	GeneSplicer.pm	error	open			
 Geno2MP	Geno2MP.pm	error	open			
-genomes	Config.pm	error	open			
+genomes	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::genomes_is_refused		
 gff	Config.pm	error	open			
 gff-gtf-transcript-source	BaseGXF.pm	documented_subset	open			
 given-ref-used-ref-columns	OutputFactory.pm	documented_subset	open			
@@ -215,8 +215,8 @@ gnomade-columns	OutputFactory.pm	implemented	open
 gnomadg-columns	OutputFactory.pm	implemented	open			
 gnomADMt	gnomADMt.pm	implemented	open			
 GO	GO.pm	error	open			
-gp	Parser/VCF.pm	error	open			
-grch37	Config.pm	implemented	open			
+gp	Parser/VCF.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::gp_is_refused		
+grch37	Config.pm	implemented	landed:implemented	crates/vep-cli/src/option_rules.rs::grch37_sets_assembly;crates/vep-cli/src/config.rs::grch37_sets_the_assembly	tests/golden/116/GRCh37	
 gtf	Config.pm	error	open			
 gvcf-non-ref-alleles	VCF.pm	implemented	open			
 GWAS	GWAS.pm	implemented	open			
@@ -224,8 +224,8 @@ GXA	GXA.pm	error	open
 gzip-bgzip-compressed-input	Parser.pm	implemented	open			
 gzip-bgzip-input	Parser.pm	implemented	open			
 haplo	haplo	documented_subset	open			
-help	vep	implemented	open			
-hgnc	Config.pm	accepted_noop	open			
+help	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::empty_argv_prints_help_and_exits_0;crates/vep-cli/tests/cli_run_control.rs::help_and_version_win_over_a_flag_refused_before_parsing	tests/golden/116/GRCh38-run-control	
+hgnc	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::hgnc_is_accepted_without_effect		
 hgvs	OutputFactory.pm	documented_subset	open			
 hgvs-genomic-input	Sequence.pm	implemented	open			
 hgvs-offset-field	OutputFactory.pm	implemented	open			
@@ -242,7 +242,7 @@ hgvsp_use_prediction	OutputFactory.pm	implemented	open
 HGVSReferenceBase	HGVSReferenceBase.pm	error	open			
 high-inf-pos-motif-score-change	MotifFeatureVariationAllele.pm	implemented	open			
 homebrew-distribution	-	documented_subset	open			
-host	Config.pm	error	open			
+host	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
 humdiv	Config.pm	implemented	open			
 id-input-format	ID.pm	documented_subset	open			
 incomplete-del	VCF.pm	implemented	open			
@@ -264,13 +264,13 @@ input_file	Config.pm	implemented	open
 install-pl-auto	INSTALL.pl	implemented	open			
 IntAct	IntAct.pm	error	open			
 is_canonical	Database/Transcript.pm	implemented	open			
-is_multispecies	Config.pm	error	open			
+is_multispecies	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::is_multispecies_is_refused		
 iupac-alleles	Parser.pm	accepted_noop	open			
 json	Config.pm	implemented	open			
 json-output-key-set	JSON.pm	documented_subset	open			
 json-regulatory-consequences	OutputFactory/JSON.pm	documented_subset	open			
 json_cache	-	documented_subset	open			
-keep_ann	Config.pm	accepted_noop	open			
+keep_ann	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::keep_ann_is_accepted_without_effect		
 keep_csq	Config.pm	implemented	open			
 keep_intermediate	-	removed	open			
 LD	LD.pm	error	open			
@@ -281,7 +281,7 @@ LoFtool	LoFtool.pm	implemented	open
 lookup_ref	Parser.pm	implemented	open			
 LOVD	LOVD.pm	error	open			
 lowercase-alleles	Parser.pm	implemented	open			
-lrg	Parser.pm	error	open			
+lrg	Parser.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::lrg_is_refused		
 mane	OutputFactory.pm	implemented	open			
 mane-alternative-id-values	OutputFactory.pm	implemented	open			
 mane_select	OutputFactory.pm	implemented	open			
@@ -318,7 +318,7 @@ nextflow-nf-core-drop-in	-	documented_subset	open
 neXtProt	neXtProt.pm	error	open			
 NMD	NMD.pm	implemented	open			
 no_check_alleles	Config.pm	implemented	open			
-no_check_variants_order	InputBuffer.pm	accepted_noop	open			
+no_check_variants_order	InputBuffer.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::no_check_variants_order_is_accepted_without_effect		
 no_escape	Config.pm	implemented	open			
 no_fasta	CacheDir.pm	implemented	open			
 no_headers	Config.pm	implemented	open			
@@ -328,24 +328,24 @@ no_stats	BaseRunner.pm	implemented	open
 non-variant-records	VCF.pm	implemented	open			
 NonSynonymousFilter	NonSynonymousFilter.pm	error	open			
 numbers	Config.pm	implemented	open			
-offline	Config.pm	accepted_noop	open			
+offline	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::offline_changes_no_output		
 old_maf	Config.pm	implemented	open			
 OpenTargets	OpenTargets.pm	error	open			
 option-prefix-abbreviation	Config.pm	implemented	open			
-option_rule_tables	Config.pm	implemented	open			
+option_rule_tables	Config.pm	implemented	landed:implemented	crates/vep-cli/src/option_rules.rs::incompatible_pairs_match_config_pm;crates/vep-cli/src/option_rules.rs::requires_match_config_pm;crates/vep-cli/src/option_rules.rs::option_sets_match_config_pm;crates/vep-cli/src/option_rules.rs::repeated_plugin_and_custom_accumulate;crates/vep-cli/src/option_rules.rs::list_flags_split_on_comma;crates/vep-cli/src/option_rules.rs::output_format_validated	tests/golden/116/GRCh38-run-control	
 os_and_architecture_matrix	-	documented_subset	open			
-output_file	Config.pm	implemented	open			
+output_file	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::stdout_literal_is_case_insensitive;crates/vep-cli/tests/cli_run_control.rs::repeated_output_file_keeps_last_with_warning;crates/vep-cli/tests/cli_run_control.rs::existing_output_is_refused_with_ensembl_veps_text	tests/golden/116/GRCh38-run-control	
 output_format	Config.pm	documented_subset	open			
 overlapbp-overlappc-sv	OutputFactory.pm::StructuralVariationOverlapAllele_to_output_hash	documented_subset	open			
 overlaps	OutputFactory.pm	implemented	open			
 Paralogues	Paralogues.pm	error	open			
 parquet_row_group_size	-	removed	open			
 parquet_shape	-	removed	open			
-password	Config.pm	error	open			
+password	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
 per-gene-regulatory-rows	OutputFactory.pm	implemented	open			
 per-gene-tie-break	OutputFactory.pm	implemented	open			
 per_gene	OutputFactory.pm	implemented	open			
-phased	Parser/VCF.pm	accepted_noop	open			
+phased	Parser/VCF.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::phased_is_accepted_without_effect		
 phastCons	Config.pm	implemented	open			
 phenotype_or_disease	Database/Variation.pm	implemented	open			
 PhenotypeOrthologous	PhenotypeOrthologous.pm	error	open			
@@ -366,7 +366,7 @@ plugins-regulatory-feature-types	Runner.pm	implemented	open
 polyphen	Config.pm	documented_subset	open			
 PolyPhen_SIFT	PolyPhen_SIFT.pm	error	open			
 PON_P2	PON_P2.pm	error	open			
-port	Config.pm	error	open			
+port	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
 portable-cpu-baseline-builds	-	implemented	open			
 PostGAP	PostGAP.pm	error	open			
 prebuilt-binaries-glibc-floor	-	implemented	open			
@@ -392,7 +392,7 @@ refseq-merged-cache-selection	CacheDir.pm	documented_subset	open
 refseq-xrefs	Database/Transcript.pm	implemented	open			
 RefSeqHGVS	RefSeqHGVS.pm	error	open			
 region-input-format	Region.pm	implemented	open			
-registry	Config.pm	error	open			
+registry	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
 regulatory	CacheDir.pm	implemented	open			
 regulatory-cache-data-path	Regulation.pm	implemented	open			
 regulatory-feature-biotype	OutputFactory.pm	implemented	open			
@@ -414,7 +414,7 @@ RiboseqORFs	RiboseqORFs.pm	error	open
 safe	Runner.pm	implemented	open			
 SameCodon	SameCodon.pm	error	open			
 satMutMPRA	satMutMPRA.pm	error	open			
-sereal	CacheDir.pm	accepted_noop	open			
+sereal	CacheDir.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::sereal_is_accepted_without_effect		
 shift_3prime	AnnotationType/Transcript.pm	documented_subset	open			
 shift_genomic	OutputFactory.pm	implemented	open			
 shift_hgvs	BaseRunner.pm	implemented	open			
@@ -430,7 +430,7 @@ skipped-variant-reporting	Parser.pm	implemented	open
 skipped-variant-semantics	Parser.pm	implemented	open			
 skipped-variant-warning-lines	BaseVEP.pm	implemented	open			
 skipped_variants_file	BaseRunner.pm	implemented	open			
-solr	Config.pm	accepted_noop	open			
+solr	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::solr_is_accepted_without_effect		
 somatic	Database/Variation.pm	implemented	open			
 source-cache	MergeVEP.pm	documented_subset	open			
 source_regbuild	Database/RegFeat.pm	implemented	open			
@@ -471,7 +471,7 @@ stats_text	BaseRunner.pm	implemented	open
 status-messages	BaseVEP.pm	implemented	open			
 stdin-input	Parser.pm	implemented	open			
 stdin-when-input-file-absent	Config.pm	implemented	open			
-stdout-output	BaseRunner.pm	documented_subset	open			
+stdout-output	BaseRunner.pm	documented_subset	landed:documented_subset	crates/vep-cli/tests/cli_run_control.rs::stdout_any_case_writes_stdout;crates/vep-cli/tests/cli_run_control.rs::parquet_to_stdout_is_refused	tests/golden/116/GRCh38-run-control	
 stop_codon_predicates_116	Variation/Utils/VariationEffect.pm	implemented	landed:implemented	crates/vep-effects/src/concordance_tests.rs::release116_insertion_keeping_a_lone_stop_is_stop_retained_without_inframe_insertion;crates/vep-effects/src/concordance_tests.rs::release116_deleting_the_stop_codon_is_stop_lost_without_inframe_deletion;crates/vep-effects/src/coding.rs::test_stop_gained_yields_to_stop_lost;crates/vep-effects/src/concordance_tests.rs::release116_partial_codon_deletion_is_never_stop_lost;crates/vep-effects/src/concordance_tests.rs::release116_stop_lost_with_an_x_peptide_reads_the_edited_stop_codon_as_lost;crates/vep-effects/src/concordance_tests.rs::release116_stop_lost_with_an_x_peptide_reads_the_edited_stop_codon_as_kept;crates/vep-effects/src/concordance_tests.rs::release116_stop_retained_cil_forward_strand_drops_a_four_base_insertion;crates/vep-effects/src/concordance_tests.rs::release116_stop_retained_cil_reverse_strand_keeps_a_four_base_insertion;crates/vep-effects/src/concordance_tests.rs::release116_frameshift_starting_at_the_stop_codon_is_not_a_frameshift;crates/vep-effects/src/concordance_tests.rs::release116_ref_eq_alt_sequence_reads_the_first_residue_past_the_protein;crates/vep-effects/src/sv/deletion.rs::stop_lost_withheld_in_the_partial_terminal_codon_forward_strand;crates/vep-effects/src/sv/deletion.rs::stop_lost_withheld_in_the_partial_terminal_codon_reverse_strand;crates/vep-effects/src/sv/deletion.rs::stop_lost_withheld_in_the_partial_terminal_codon_of_a_spliced_transcript;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_clipped_terminal_codon_is_complete;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_on_a_complete_last_codon_of_an_open_ended_segment;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_deletion_enters_the_partial_codon_from_the_utr;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_deletion_starts_on_the_last_complete_codon_forward_strand;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_deletion_starts_on_the_last_complete_codon_reverse_strand;crates/vep-effects/src/sv/cnv.rs::cn0_keeps_stop_lost_on_the_complete_last_codon_of_an_open_ended_segment;crates/vep-effects/src/sv/cnv.rs::cn0_withholds_stop_lost_in_the_partial_terminal_codon;crates/vep-effects/src/sv/cnv.rs::cn0_keeps_stop_lost_on_a_cds_start_nf_transcript_with_a_complete_stop_codon	tests/golden/116/GRCh38-release116	
 StructuralVariantOverlap	StructuralVariantOverlap.pm	error	open			
 SubsetVCF	SubsetVCF.pm	error	open			
@@ -489,8 +489,8 @@ tabix-and-bigwig-readers	File.pm	documented_subset	open
 tandem-repeats-cnv-tr	VCF.pm	documented_subset	open			
 terms	Config.pm	implemented	open			
 terms-vocabularies	Variation/Utils/Constants.pm	implemented	open			
-threads	-	implemented	open			
-tmpdir	Config.pm	accepted_noop	open			
+threads	-	implemented	landed:implemented	crates/vep-cli/src/args.rs::test_threads_alias	tests/golden/116/GRCh38-run-control	
+tmpdir	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::tmpdir_is_accepted_without_effect		
 total_length	Config.pm	implemented	open			
 trans-exon-array	Core.pm	implemented	open			
 transcript-biotype	OutputFactory.pm	implemented	open			
@@ -510,12 +510,12 @@ ucsc_assembly	Config.pm	implemented	open
 ucsc_data_root	Config.pm	implemented	open			
 uniparc-uniprot-isoform-columns	OutputFactory.pm	implemented	open			
 uniprot	OutputFactory.pm	documented_subset	open			
-unsorted-input	InputBuffer.pm	accepted_noop	open			
+unsorted-input	InputBuffer.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::unsorted_input_is_annotated_in_input_order		
 uploaded_allele	Config.pm	implemented	open			
 uploaded_variation_naming_116	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/vcf_parser.rs::uploaded_variation_is_the_id_when_the_record_carries_one;crates/vep-cli/src/vcf_parser.rs::dot_id_names_an_snv_by_its_line;crates/vep-cli/src/vcf_parser.rs::dot_id_names_an_indel_by_its_line;crates/vep-cli/src/vcf_parser.rs::minimised_copy_is_named_by_its_line;crates/vep-cli/src/vcf_parser.rs::dot_id_names_a_multi_allelic_record_by_its_line;crates/vep-cli/src/vcf_parser.rs::dot_id_names_a_symbolic_record_by_its_line;crates/vep-cli/src/vcf_parser.rs::an_id_equal_to_the_generated_name_yields_the_line_name;crates/vep-io/src/input/ensembl.rs::id_less_line_is_named_by_its_lower_coordinate_and_allele_column;crates/vep-cli/src/vcf_parser.rs::a_dot_empty_or_zero_first_id_names_the_record_by_its_line;crates/vep-core/src/variant.rs::a_perl_false_or_dot_name_yields_the_line_name_and_the_generated_json_id;crates/vep-core/src/variant.rs::first_vcf_id_takes_the_first_element_as_written;crates/vep-io/src/input/ensembl.rs::an_ensembl_format_id_column_is_kept_whole	tests/golden/116/GRCh37-hgvs	
-use_given_ref	Config.pm	accepted_noop	open			
+use_given_ref	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::use_given_ref_is_accepted_without_effect		
 use_transcript_ref	AnnotationType/Transcript.pm	documented_subset	open			
-user	Config.pm	error	open			
+user	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
 UTRAnnotator	UTRAnnotator.pm	implemented	open			
 validate-vf-checks	Parser.pm	documented_subset	open			
 var_synonyms	Config.pm	implemented	open			
@@ -547,6 +547,6 @@ vefc-translateable-seq	Database/Transcript.pm	implemented	open
 vep-environment-variables	Config.pm	implemented	open			
 verbose	Config.pm	implemented	open			
 verbose-and-v	Config.pm	implemented	open			
-version	-	implemented	open			
+version	-	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::version_prints_crate_version_and_exits_0	tests/golden/116/GRCh38-run-control	
 warning_file	BaseVEP.pm::warning_msg	implemented	open			
 xref_refseq	OutputFactory.pm	documented_subset	open			

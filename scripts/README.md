@@ -64,7 +64,7 @@ The published F1 values come from `concordance/run_clone_measurement.sh`, which 
 
 2. **Generate the reference output.** `concordance/generate_reference_output.sh` runs Perl VEP (`ensemblorg/ensembl-vep:release_116.2` with cache version 116 by default; `--perl-image` and `--cache-version` override) over the canonical inputs and writes the SNP/indel reference output per suite and the structural-variant reference output per input VCF into the `ground_truth/` layout above, passing `--fasta` at every call site; each of the 16 structural-variant VCFs per assembly is annotated in its own invocation, so no file's transcript-cache population can affect another's. The published values were scored against reference output at cache version 115, except ClinVar GRCh37, whose reference is the cache 113 set that a cache 115 regeneration reproduces key for key (`docs/concordance-provenance/2026-09-18-grch37-cache-113-vs-115.json`).
 
-3. **Convert the cache both engines read.** vep-rs annotates from a JSON conversion of the Storable cache Perl VEP read (`data/storable_to_json.pl`, usage below), which holds the transcript set fixed across the two engines. `concordance/cache_parity_audit.pl` audits the conversion: it reads a seeded sample of transcripts from both caches and classifies every Storable field against the converter's rules (identical, renamed, converted, dropped because undefined, dropped by a named rule, or an unexplained gap). Its manifest for the GRCh37 pair, the cache-version-113 Storable VEP release 115 ships for that assembly and its JSON conversion, is `docs/concordance-provenance/2026-09-16-cache-parity-audit.json` (the manifest names neither release nor assembly; its `json_transcripts_indexed` of 195,232 is the GRCh37 cache's transcript count). Every field vep-rs reads for consequence calling is carried. Two Storable fields are absent from the JSON side under no rule (`_gene_version`, which the converter maps and the published cache lacks, and `_uniprot_isoform`, unmapped), and vep-rs reads neither. The SIFT and PolyPhen prediction matrices are dropped by a named rule: the converter reads a `predictions_data` field that only the native cache builder writes, and the concordance tuple carries no prediction field, so this enters no published F1. The translation's sequence edits, the `Bio::EnsEMBL::SeqEdit` list VEP applies to the reference allele's peptide at annotation time, are carried as `variation_effect_feature_cache.seq_edits`, one object per edit (`code`, `name`, `start`, `end`, `alt_seq`, `length_diff`; always an array, `[]` when the translation has none), and vep-rs applies them as VEP does. The cached peptide cannot stand in for them: the release 115 Storable caches store `M` as the first residue over any start codon of the codon table whether or not an `initial_met` edit exists. The audit's named rule for that field applies only to a cache converted without it; on such a cache vep-rs applies no edit, and a variant at codon 1 of a transcript with an alternative initiation codon is called from the cached peptide. The manifest above records the published GRCh37 conversion, which carries no `seq_edits`.
+3. **Convert the cache both engines read.** vep-rs annotates from a JSON conversion of the Storable cache Perl VEP read (`data/storable_to_json.pl`, usage below), which holds the transcript set fixed across the two engines. `concordance/cache_parity_audit.pl` audits the conversion: it reads a seeded sample of transcripts from both caches and classifies every Storable field against the converter's rules (identical, renamed, converted, dropped because undefined, dropped by a named rule, or an unexplained gap); every field the audit classifies is carried or dropped under a named rule, so a conversion made with the current converter audits with no gap. The manifest for the GRCh37 pair the published figures were measured on, the cache-version-113 Storable VEP release 115 ships for that assembly and its JSON conversion by an earlier converter, is `docs/concordance-provenance/2026-09-16-cache-parity-audit.json` (the manifest names neither release nor assembly; its `json_transcripts_indexed` of 195,232 is the GRCh37 cache's transcript count). It records two Storable fields absent from that JSON side under no rule (`_gene_version`, which that conversion lacked, and `_uniprot_isoform`, which that converter did not map), neither of which vep-rs read for consequence calling, and the SIFT and PolyPhen prediction matrices dropped by a named rule; the concordance tuple carries no prediction field, so none of this enters a published F1. The translation's sequence edits, the `Bio::EnsEMBL::SeqEdit` list VEP applies to the reference allele's peptide at annotation time, are carried as `variation_effect_feature_cache.seq_edits`, one object per edit (`code`, `name`, `start`, `end`, `alt_seq`, `length_diff`; always an array, `[]` when the translation has none), and vep-rs applies them as VEP does. The cached peptide cannot stand in for them: the release 115 Storable caches store `M` as the first residue over any start codon of the codon table whether or not an `initial_met` edit exists. A cache converted without the key loads; on such a cache vep-rs applies no edit, and a variant at codon 1 of a transcript with an alternative initiation codon is called from the cached peptide. The manifest above records the published GRCh37 conversion, which carries no `seq_edits`.
 
 4. **Run the measurement.**
 
@@ -151,7 +151,7 @@ F1 is deterministic per binary and architecture-independent: a re-run on the sam
 
 | Script                             | Description                                                                                                                                                                  |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `storable_to_json.pl`              | Convert Perl VEP Storable cache to JSON for vep-rs, and its `info.txt` to the `info.json` the output headers read (source versions). Runs inside the `ensemblorg/ensembl-vep` Docker container. Arguments: `cache_dir output_dir [chr1,chr2,...]`. See usage below. |
+| `storable_to_json.pl`              | Convert a Perl VEP Storable cache to JSON for vep-rs: every chromosome directory, every field the cache dumper keeps, carried, flattened or dropped under a rule the parity audit names (prediction matrices and UniProt isoforms included; the Perl object references, the per-exon and per-intron strand, a sequence edit's description and the dump-time flags dropped), `info.txt` to the `info.json` the output headers read (source versions, `contig_order`), and `chr_synonyms.txt` copied beside it; a Sereal cache is refused. Runs inside the `ensemblorg/ensembl-vep` Docker container. Arguments: `cache_dir output_dir [chr1,chr2,...]`. See usage below. |
 | `setup_plugin_data.sh`             | Stage plugin data per assembly (`--assembly` REQUIRED). `--source upstream` (default) prints each database's URL and preparation steps for you to run (it downloads nothing); `--source s3` syncs an already-prepared copy from your own bucket (`--bucket` or `$VEP_BENCHMARK_BUCKET`; layout and `MANIFEST.json` schema in the script header). Skips databases the assembly does not publish. quick/full tiers |
 | `plugin_data_layout.sh`            | The one table of staged plugin data file names, sourced by `setup_plugin_data.sh` and `concordance/run_concordance.sh`                                                        |
 | `test_plugin_data_layout.sh`       | Proves every plugin data path `run_concordance.sh` passes is a file `setup_plugin_data.sh` stages, on both assemblies, and that both Perl `LoF` argument strings pin `run_splice_predictions:0` and the Perl output-cache key changes with the plugin argument strings |
@@ -186,13 +186,29 @@ docker run --rm -v /path/to/cache:/input:ro -v /output/dir:/output \
 To inspect a Storable object's raw structure, use Perl's `Data::Dumper` inside the same
 container; the converter has no dump mode.
 
-Output: `{output}/transcripts/{chr}/{start}-{end}.json` + `{output}/info.json`. Each
-transcript's `variation_effect_feature_cache` carries `seq_edits`, the translation's
-`Bio::EnsEMBL::SeqEdit` list (`code`, `name`, `start`, `end`, `alt_seq`, `length_diff`, protein
-coordinates; `[]` when there are none), which vep-rs applies to the reference peptide. A cache
-without a `seq_edits` key (the published conversions among them) loads; vep-rs applies no edit
-and reads the reference peptide as cached, so convert again to get VEP's calls at alternative
-initiation codons.
+Output: `{output}/transcripts/{chr}/{start}-{end}.json` for every chromosome directory of the
+cache (the assembled chromosomes and the patch, alternate-locus, scaffold and `LRG_`
+directories alike; the optional list restricts it), `{output}/info.json` (the `info.txt`
+metadata as the output headers read it, plus `contig_order`: the converted contigs as autosomes by
+number, then X, Y, MT, then every other contig by name; the `sift` and `polyphen` markers only when
+a matrix of that tool was written) and `{output}/chr_synonyms.txt`, the cache's own copy. A cache
+whose `info.txt` names the `sereal` serialiser, or whose chromosome directories hold `.sereal`
+shards, is refused with `ERROR: [storable_to_json] ...` and exit status 1, as is a cache with no
+`<start>-<end>.gz` shard at all, a listed chromosome that is not a directory of the cache, an
+unreadable chromosome directory, and a run in which any shard failed to read or write (each such
+shard is named on a `WARN:` line; the run stops before `chr_synonyms.txt` and `info.json` are
+written, so a partial output lacks both). Each transcript carries every field the cache dumper
+keeps, carried, flattened or dropped under a rule `cache_parity_audit.pl` names (dropped: the Perl
+object references, the per-exon and per-intron strand, which is the transcript's, a sequence edit's
+description and the dump-time flags): the identifiers
+(`uniprot_isoform` included), the protein features with the analysis label Ensembl VEP's `DOMAINS`
+column prints, as `analysis`, the SIFT and PolyPhen matrices (`predictions_data`, the Storable's gzip blob
+base64-encoded, beside `translation_md5`), and in `variation_effect_feature_cache` the
+`seq_edits`, the translation's `Bio::EnsEMBL::SeqEdit` list (`code`, `name`, `start`, `end`,
+`alt_seq`, `length_diff`, protein coordinates; `[]` when there are none), which vep-rs applies to
+the reference peptide. A cache without a `seq_edits` key (the published conversions among them)
+loads; vep-rs applies no edit and reads the reference peptide as cached, so convert again to get
+VEP's calls at alternative initiation codons.
 
 ### release/
 
