@@ -10,7 +10,7 @@ JSON transcript cache, and writes VEP's default, tab, VCF, JSON or Parquet outpu
 
 ## How it works
 
-Follow one VCF record. `main.rs` parses the command line into `Args`; `Config::from_args`
+Follow one VCF record. `main.rs` parses the command line into `Args`; `Config::from_parsed`
 resolves the defaults, the fields `--everything` and `--vcf` imply, and the automatic thread
 counts; `Runner::run` refuses to overwrite an existing output without `--force_overwrite`,
 builds a rayon thread pool of `--fork` workers, opens the indexed FASTA (the reference
@@ -47,8 +47,9 @@ has drained.
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/main.rs`               | The `vep` binary: parses `Args`, sets the log level from `--verbose` and `--quiet`, prints the version banner, builds `Config` and runs `Runner`; mimalloc is the global allocator under the default `mimalloc` feature     |
 | `src/lib.rs`                | The library root: re-exports the embedding surface (`Annotator`, `Config`, `apply_filters`, the transcript index types, `InputVariant`, `JsonOutputFormatter`) and declares the modules                                      |
-| `src/args.rs`               | The clap definition of every flag, named as Perl VEP names them (underscores included); `refused_flag` names the three declared flags the binary refuses                                                                     |
-| `src/config.rs`             | `Config::from_args`: the fields `--everything` and `--vcf` imply, the `--fork` and `--decompression_threads` automatic caps, `--distance`, tilde expansion and the cache path the output header prints                       |
+| `src/args.rs`               | The clap definition of every flag, named as Perl VEP names them (underscores included); a flag the error table of `config.rs` governs takes its help text from that table                                                                     |
+| `src/config.rs`             | `Config::from_parsed`: the error table of refused and no-effect flags, the fields the option sets imply, the `--fork` and `--decompression_threads` automatic caps, `--distance`, tilde expansion and the cache path the output header prints                       |
+| `src/option_rules.rs`       | Ensembl VEP's option rules as data (`Config.pm:327-645`): the lists, option sets, valid values, requirements, incompatibilities and deprecations, and the flag state they are applied to and checked on |
 | `src/runner.rs`             | `Runner::run`: opens input and output, loads FASTA, plugins, transcripts and variations, picks the output formatter, drives the pipeline and finalizes Parquet; owns `annotate_one`, `annotate_batch` and `annotate_variant` |
 | `src/pipeline.rs`           | The three-stage pipeline: reader thread, coordinator and writer thread over bounded channels, the chromosome prewarmer, the fused annotate-render pass and the default-format row writer                                     |
 | `src/annotator.rs`          | The embedding entry point: `Annotator` over `AnnotationResources` and a scoped pool, the `RawRow` simple-allele input, the per-row `AnnotationError`, and the shared loaders for FASTA, plugins, transcripts and variations |
@@ -102,7 +103,7 @@ binaries and tests, and their contents may move between releases.
 
 | Item                                                                                        | Use                                                                                                                                                                                                                 |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Config`, `Config::from_args`                                                               | The resolved run configuration; `config::resolve_fork` applies the same automatic thread count to an embedder's own setting                                                                                        |
+| `Config`, `Config::from_argv`                                                               | The resolved run configuration; `config::resolve_fork` applies the same automatic thread count to an embedder's own setting                                                                                        |
 | `Annotator`                                                                                 | One loaded cache plus a scoped thread pool, reused across batches: `from_config` loads every chromosome up front, `annotate_batch` annotates `InputVariant`s in place, `try_annotate_rows` takes `RawRow`s         |
 | `AnnotationResources`, `build_thread_pool`                                                  | The shared transcripts, variation data, effects configuration and plugins behind an `Annotator`, and the pool it runs on                                                                                           |
 | `AnnotationStats`, `AnnotationError`, `RawRow`, `validate_raw_row`, `row_to_input_variant`  | The per-batch counts, the row-level error taxonomy, and the simple-allele input (chromosome, 1-based position, reference allele, alternate allele) with its validation and conversion                               |

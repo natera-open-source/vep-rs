@@ -263,7 +263,8 @@ target/release/vep \
 
 | Document | Covers |
 | --- | --- |
-| [CLI reference](docs/cli-reference.md) | Every flag, with examples, and what is not ported from Perl VEP |
+| [CLI reference](docs/cli-reference.md) | Every flag, the option rules, the flags refused or accepted without effect, and the exit-status contract |
+| [Examples](docs/examples.md) | The common shapes of a run |
 | [Output formats](docs/output-formats.md) | VEP, VCF, JSON, Tab and Parquet output specs |
 | [Plugins](docs/plugins.md) | Support matrix, data files, preparation, development, concordance testing |
 | [Cache setup](docs/cache-setup.md) | Building a JSON transcript cache natively or converting a Perl VEP cache; SIFT and PolyPhen matrices |

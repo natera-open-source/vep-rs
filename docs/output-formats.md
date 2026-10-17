@@ -12,6 +12,8 @@ vep-rs supports five output formats, selected via `--output_format` or the short
 
 With the default flag set and `--tab`, `--vcf` or `--json`, the default, `tab`, `vcf` and `json` outputs match what Ensembl VEP 116.2 writes field for field: every column of every row and, for JSON, every key of every object compared as text (VEP writes JSON keys in Perl hash order, so the JSON is not byte-identical and key order is not compared). Header lines that carry a time, a cache path or the command line are compared by shape, and VEP's Perl API component version lines have no counterpart. The contract is enforced by the golden corpora under `tests/golden/<release>/<assembly>/` (`crates/vep-cli/tests/golden.rs` and `format_parity.rs`): every consequence-set combination observed on the benchmark datasets, annotated with the corpus's own pruned cache and compared with VEP's committed output in all four formats, plus the Parquet round trip. Consequence terms themselves are governed by the concordance measurement ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)). The corpus manifest records the (Location, Allele, Feature) keys whose terms differ between the engines (117 of the 17,556 GRCh37 rows, 4 of the 2,818 GRCh37-hgvs rows, 323 of the 20,623 GRCh38 rows and 2 of the 977 GRCh38-release116 rows, none of them `unexplained_residual`) and the rows only one engine emits, each under its divergence class; for a recorded key the parity tests check only that the row's consequence set is one of the recorded sets, compare none of its other columns, and skip the record's `most_severe_consequence` in JSON. Outside the tested flag set there are known differences: `--regulatory` adds its (always empty) fields to the headers and columns and warns that regulatory annotation is not implemented, `--overlaps` does not exist, `--output_format vcf` switches on the same fields as `--vcf` (VEP ties them to the flag alone), and under `--check_existing` a row none of whose co-located variants is somatic or phenotype-linked prints `SOMATIC=0` and `PHENO=0` where VEP prints neither key.
 
+The golden-corpus flag set is `--offline --json_cache <dir> --species homo_sapiens --assembly <assembly> --buffer_size 5000 --no_stats --quiet` plus one format flag and the corpus manifest's own flags; under it the default, `--tab`, `--vcf` and `--json` data rows match Ensembl VEP 116.2 apart from the consequence-term divergences the manifests document, and header lines that carry a time, a path, the command line or Perl API component versions match in shape. `--vcf` also switches on `--symbol`, `--biotype` and `--numbers`, as in VEP, and `--json` output is unescaped (VEP's `--no_escape` behavior; vep-rs has no `--no_escape` flag). `--everything` switches on exactly Ensembl VEP's set ([CLI reference](cli-reference.md#option-sets-configpm351-593)), so the header keys agree; the regulatory columns it implies through `--regulatory` are not produced, and no RegulatoryFeature or MotifFeature row is written.
+
 The rules the formatters follow are VEP's own, cited to their Perl sources in `crates/vep-io/src/output/fields.rs` (the single field table shared by every format), `crates/vep-effects/src/display.rs` (positions, codons and peptides) and the formatters beside them. The ones a reader of the output most often needs:
 
 - **Row order.** Rows of one input record are transcript-major (sorted by transcript stable id) and allele-minor (ALT order); intergenic rows come last. A record's rows are contiguous in the default and tab formats and become one line (VCF) or one object (JSON).
@@ -237,7 +239,9 @@ An allele gets an `intergenic_consequences` entry only when it overlaps no trans
 
 ## Parquet Format
 
-Selected with `--output_format parquet`. Writes a TSV intermediate (one row per allele x transcript consequence, in VEP's row order) and post-processes it to Parquet via the `duckdb` CLI. **Requires `duckdb` 1.2 or newer on PATH**; the runner fails at startup otherwise.
+Selected with `--output_format parquet`. Writes a TSV intermediate (one row per allele x transcript consequence, in VEP's row order) at `<output>.tsv.tmp` and post-processes it to Parquet via the `duckdb` CLI; the intermediate is deleted on success unless the hidden `--keep_intermediate` is given. The output is a directory, so `-o STDOUT` is refused (`ERROR: [output] --output_format parquet needs a file path`).
+
+**Requires `duckdb` 1.2 or newer on PATH.** Install via `brew install duckdb` (macOS) or the CLI archive from <https://duckdb.org/docs/installation/> (Linux: the `duckdb_cli-linux-*.zip` release asset). vep-rs checks for it after the FASTA, plugins and variation cache are loaded and before the first variant is read, and fails there if `duckdb` is missing or too old, so no annotation is spent on a run it cannot finalize.
 
 ### Directory layout
 
@@ -268,8 +272,22 @@ Five key columns, then exactly the `--tab` columns in `--tab` order:
 
 ### Row shape (`--parquet_shape`)
 
-- `nested` (default): one row per (record, allele); `Uploaded_variation`, `Location`, `Allele` and `Existing_variation` stay scalar and every per-consequence column is a LIST in the flat row order. Two input records at one site stay two rows when they differ in ID, END or another per-record column; identical ID-less duplicate lines merge into one row.
-- `flat`: one row per (allele x transcript consequence); every column scalar.
+- `nested` (default): one row per (record, allele); `Uploaded_variation`, `Location`, `Allele` and `Existing_variation` stay scalar and every per-consequence column is a LIST in the flat row order. Two input records at one site stay two rows when they differ in ID, END or another per-record column; identical ID-less duplicate lines merge into one row. Query with `UNNEST` or `list_contains`:
+
+  ```sql
+  SELECT chrom, pos, ref, alt
+  FROM read_parquet('out.parquet/**/*.parquet', hive_partitioning=false)
+  WHERE list_contains(Feature, 'ENST00000366667')
+    AND list_contains(IMPACT, 'HIGH');
+  ```
+
+- `flat`: one row per (allele x transcript consequence); every column scalar, so predicates push down directly:
+
+  ```sql
+  SELECT chrom, pos, ref, alt, Consequence, IMPACT
+  FROM read_parquet('out.parquet/**/*.parquet', hive_partitioning=false)
+  WHERE Feature = 'ENST00000366667' AND IMPACT = 'HIGH';
+  ```
 
 ### Writer options
 

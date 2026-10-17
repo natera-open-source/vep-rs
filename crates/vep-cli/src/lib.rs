@@ -39,6 +39,7 @@ pub mod annotator;
 pub mod config;
 pub mod dylib_plugins;
 pub mod json_cache;
+pub mod option_rules;
 pub mod pick;
 pub(crate) mod pipeline;
 pub mod runner;

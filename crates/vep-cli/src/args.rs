@@ -7,13 +7,23 @@
 //! can switch between implementations with minimal changes. The Perl VEP
 //! uses underscores in flag names (e.g., `--input_file`, `--dir_cache`),
 //! so every underscore-containing flag has an explicit `long = "..."`.
+//!
+//! A flag the error table of [`crate::config`] governs (refused, or accepted
+//! without effect) carries no help text here: [`Args::command_with_error_table`]
+//! applies the table's, so `--help` and the generated CLI reference read one
+//! source. Every flag lives under a help heading, the section of the reference
+//! it is documented in.
 
-use clap::Parser;
+use clap::{ArgAction, CommandFactory, Parser};
 
 /// Ensembl VEP's `--max_sv_size` default: the span above which a structural variant
 /// is oversize, and the repeat-sequence length above which a tandem repeat stays
 /// symbolic.
 pub const DEFAULT_MAX_SV_SIZE: i64 = vep_core::sv_record::DEFAULT_MAX_SV_SIZE as i64;
+
+/// The help's first line is the binary's name and version, as `--version` prints.
+const HELP_TEMPLATE: &str =
+    "{name} {version}\n{about-with-newline}\n{usage-heading} {usage}\n\n{all-args}{after-help}";
 
 #[derive(Parser, Debug)]
 #[command(
@@ -21,33 +31,63 @@ pub const DEFAULT_MAX_SV_SIZE: i64 = vep_core::sv_record::DEFAULT_MAX_SV_SIZE as
     version = env!("CARGO_PKG_VERSION"),
     about = "Ensembl Variant Effect Predictor (Rust implementation)",
     long_about = "Predict functional effects of genomic variants.\n\n\
-                  Usage: vep -i input.vcf -o output.txt --json_cache <dir>"
+                  Usage: vep -i input.vcf -o output.txt --json_cache <dir>",
+    help_template = HELP_TEMPLATE,
+    args_override_self = true
 )]
 pub struct Args {
     /// Input file path (use "STDIN" for standard input)
-    #[arg(short = 'i', long = "input_file", default_value = "STDIN")]
+    #[arg(
+        help_heading = "Input",
+        short = 'i',
+        long = "input_file",
+        default_value = "STDIN"
+    )]
     pub input_file: String,
 
     /// Input data string (accepted for VEP compatibility; not implemented, input is read from --input_file)
-    #[arg(long = "input_data")]
+    #[arg(help_heading = "Input", long = "input_data")]
     pub input_data: Option<String>,
 
-    /// Input file format (vcf, ensembl, hgvs, region; "guess" = auto-detect)
-    #[arg(long, default_value = "guess")]
+    /// Input file format ("guess" = auto-detect)
+    #[arg(
+        help_heading = "Input",
+        long,
+        default_value = "guess",
+        value_parser = ["ensembl", "vcf", "hgvs", "id", "spdi", "region", "guess"]
+    )]
     pub format: String,
 
-    /// Output file path (use "STDOUT" for standard output)
+    #[arg(help_heading = "Input", long)]
+    pub gp: bool,
+
+    #[arg(help_heading = "Input", long = "ambiguous_hgvs")]
+    pub ambiguous_hgvs: bool,
+
+    #[arg(help_heading = "Input", long)]
+    pub phased: bool,
+
+    #[arg(help_heading = "Input", long = "no_check_variants_order")]
+    pub no_check_variants_order: bool,
+
+    /// Output file path (use "STDOUT" for standard output, in any case); the last of several wins
     #[arg(
+        help_heading = "Output",
         short = 'o',
         long = "output_file",
+        action = ArgAction::Append,
         default_value = "variant_effect_output.txt"
     )]
-    pub output_file: String,
+    pub output_file: Vec<String>,
 
-    /// Output format: vep, vcf, json, tab, parquet.
-    /// `parquet` writes a TSV intermediate and post-processes to Parquet via a
-    /// `duckdb` CLI subprocess; the `duckdb` binary must be on PATH.
-    #[arg(long = "output_format", default_value = "vep")]
+    /// Output format. `parquet` writes a TSV intermediate and post-processes it
+    /// to Parquet through a `duckdb` CLI subprocess; the `duckdb` binary must be on PATH
+    #[arg(
+        help_heading = "Output",
+        long = "output_format",
+        default_value = "vep",
+        value_parser = ["vep", "vcf", "json", "tab", "parquet"]
+    )]
     pub output_format: String,
 
     /// Parquet row shape (only effective when --output_format=parquet).
@@ -55,6 +95,7 @@ pub struct Args {
     ///   flat: one row per (variant × transcript-consequence) tuple, CSQ
     ///   subfields are scalar.
     #[arg(
+        help_heading = "Output",
         long = "parquet_shape",
         default_value = "nested",
         value_parser = ["nested", "flat"]
@@ -64,7 +105,12 @@ pub struct Args {
     /// Keep the Parquet intermediate TSV after DuckDB finalize succeeds.
     /// Debug aid: normally the intermediate is deleted once the Parquet
     /// directory is written.
-    #[arg(long = "keep_intermediate", default_value_t = false, hide = true)]
+    #[arg(
+        help_heading = "Output",
+        long = "keep_intermediate",
+        default_value_t = false,
+        hide = true
+    )]
     pub keep_intermediate: bool,
 
     /// Rows per Parquet row group (only effective when --output_format=parquet).
@@ -72,89 +118,167 @@ pub struct Args {
     /// the dictionary size limit. Test aid for producing several row groups
     /// from a small input.
     #[arg(
+        help_heading = "Output",
         long = "parquet_row_group_size",
         default_value_t = 122_880,
         hide = true
     )]
     pub parquet_row_group_size: u64,
 
-    /// Shorthand for --output_format vcf
-    #[arg(long)]
+    /// Shorthand for --output_format vcf; also switches on --symbol, --biotype and --numbers
+    #[arg(help_heading = "Output", long)]
     pub vcf: bool,
 
     /// Shorthand for --output_format json
-    #[arg(long)]
+    #[arg(help_heading = "Output", long)]
     pub json: bool,
 
     /// Shorthand for --output_format tab
-    #[arg(long)]
+    #[arg(help_heading = "Output", long)]
     pub tab: bool,
 
     /// Compress output file (accepted for VEP compatibility; not implemented, output is written uncompressed)
-    #[arg(long = "compress_output")]
+    #[arg(help_heading = "Output", long = "compress_output", value_parser = ["gzip", "bgzip"])]
     pub compress_output: Option<String>,
 
     /// Overwrite output file if it already exists
-    #[arg(long = "force_overwrite", visible_alias = "force")]
+    #[arg(
+        help_heading = "Output",
+        long = "force_overwrite",
+        visible_alias = "force"
+    )]
     pub force_overwrite: bool,
 
     /// Suppress header lines in output
-    #[arg(long = "no_headers")]
+    #[arg(help_heading = "Output", long = "no_headers")]
     pub no_headers: bool,
 
     /// Print the cache directory in the output headers as [PATH]/<leaf>
-    #[arg(long = "mask_header_cache_path")]
+    #[arg(help_heading = "Output", long = "mask_header_cache_path")]
     pub mask_header_cache_path: bool,
 
+    /// Accepted for VEP compatibility; not implemented (the columns follow the field flags)
+    #[arg(help_heading = "Output", long)]
+    pub fields: Option<String>,
+
+    /// VCF INFO field name for VEP annotation
+    #[arg(
+        help_heading = "Output",
+        long = "vcf_info_field",
+        default_value = "CSQ"
+    )]
+    pub vcf_info_field: String,
+
+    #[arg(help_heading = "Output", long = "keep_ann")]
+    pub keep_ann: bool,
+
+    #[arg(help_heading = "Output", long)]
+    pub solr: bool,
+
+    #[arg(help_heading = "Output", long, value_name = "FORMAT")]
+    pub convert: Option<String>,
+
     /// Accepted for VEP compatibility; no effect (the annotation cache is --json_cache)
-    #[arg(long)]
+    #[arg(help_heading = "Cache / Offline", long)]
     pub cache: bool,
 
-    /// Accepted for VEP compatibility; sets --cache, which has no effect (vep-rs always runs offline)
-    #[arg(long)]
+    #[arg(help_heading = "Cache / Offline", long)]
     pub offline: bool,
 
     /// Top-level VEP data directory (accepted for VEP compatibility; nothing is loaded from it, it only heads the cache path in the output header)
-    #[arg(long, default_value = "~/.vep")]
+    #[arg(help_heading = "Cache / Offline", long, default_value = "~/.vep")]
     pub dir: String,
 
     /// Cache directory (defaults to --dir; accepted for VEP compatibility, nothing is loaded from it, it only names the cache path in the output header)
-    #[arg(long = "dir_cache")]
+    #[arg(help_heading = "Cache / Offline", long = "dir_cache")]
     pub dir_cache: Option<String>,
 
-    /// Plugin directory
-    #[arg(long = "dir_plugins")]
-    pub dir_plugins: Option<String>,
-
     /// Cache version named in the output header's cache path (defaults to the VEP release; selects no cache)
-    #[arg(long = "cache_version")]
+    #[arg(help_heading = "Cache / Offline", long = "cache_version")]
     pub cache_version: Option<u32>,
 
+    /// Path to the JSON transcript cache directory (built by vep-cache-builder or converted from a Perl VEP cache)
+    #[arg(help_heading = "Cache / Offline", long = "json_cache")]
+    pub json_cache: Option<String>,
+
     /// FASTA file for reference sequence lookup
-    #[arg(long, visible_alias = "fa")]
+    #[arg(help_heading = "Cache / Offline", long, visible_alias = "fa")]
     pub fasta: Option<String>,
 
     /// Enable 3' shifting of insertions/deletions (requires --fasta)
-    #[arg(long = "shift_3prime")]
+    #[arg(help_heading = "Cache / Offline", long = "shift_3prime")]
     pub shift_3prime: bool,
 
+    #[arg(help_heading = "Cache / Offline", long)]
+    pub sereal: bool,
+
     /// Species named in the output header's cache path (the annotated data is the --json_cache contents)
-    #[arg(short = 's', long, default_value = "homo_sapiens")]
+    #[arg(
+        help_heading = "Species / Assembly",
+        short = 's',
+        long,
+        default_value = "homo_sapiens"
+    )]
     pub species: String,
 
     /// Genome assembly (e.g., GRCh38)
-    #[arg(short = 'a', long)]
+    #[arg(help_heading = "Species / Assembly", short = 'a', long)]
     pub assembly: Option<String>,
 
+    /// Annotate against GRCh37: sets --assembly GRCh37, over an explicit --assembly, as Ensembl VEP's option set does
+    #[arg(help_heading = "Species / Assembly", long)]
+    pub grch37: bool,
+
+    #[arg(help_heading = "Database", long)]
+    pub database: bool,
+
+    #[arg(help_heading = "Database", long, value_name = "HOST")]
+    pub host: Option<String>,
+
+    #[arg(help_heading = "Database", long, value_name = "PORT")]
+    pub port: Option<String>,
+
+    #[arg(help_heading = "Database", short = 'u', long, value_name = "USER")]
+    pub user: Option<String>,
+
+    #[arg(
+        help_heading = "Database",
+        long,
+        visible_alias = "pass",
+        value_name = "PASSWORD"
+    )]
+    pub password: Option<String>,
+
+    #[arg(help_heading = "Database", long, value_name = "FILE")]
+    pub registry: Option<String>,
+
+    #[arg(help_heading = "Database", long = "db_version", value_name = "VERSION")]
+    pub db_version: Option<String>,
+
+    #[arg(help_heading = "Database", long)]
+    pub genomes: bool,
+
+    #[arg(
+        help_heading = "Database",
+        long = "is_multispecies",
+        value_name = "0|1"
+    )]
+    pub is_multispecies: Option<String>,
+
     /// Number of variants to process per batch
-    #[arg(long = "buffer_size", default_value_t = 5000)]
+    #[arg(help_heading = "Runtime", long = "buffer_size", default_value_t = 5000)]
     pub buffer_size: usize,
 
-    /// Structural variants spanning more than this many bases are written to the
-    /// VCF output without consequences and omitted from the JSON output; -1 lifts
-    /// the limit. A <CNV:TR> record whose repeat sequence is longer than this stays
-    /// symbolic, as does every one under -1
+    /// A structural variant spanning more than this many bases is oversize; -1 lifts
+    /// the limit, as in Ensembl VEP 116. A <CNV:TR> record whose repeat sequence is
+    /// longer than this stays symbolic rather than reading a direction of change
+    /// (under -1 every one does), as in Ensembl VEP 116. Ensembl VEP 116 drops an
+    /// oversize record before annotation and writes nothing for it in any format;
+    /// vep-rs annotates it: rows in the default, tab and parquet outputs, its VCF
+    /// line without consequences, no JSON object (docs/output-formats.md and
+    /// docs/intended-divergences.md describe the divergence)
     #[arg(
+        help_heading = "Runtime",
         long = "max_sv_size",
         default_value_t = DEFAULT_MAX_SV_SIZE,
         allow_negative_numbers = true,
@@ -162,12 +286,17 @@ pub struct Args {
     )]
     pub max_sv_size: i64,
 
-    /// Number of parallel annotation worker threads.
+    /// Number of parallel annotation worker threads (Ensembl VEP forks processes; vep-rs runs threads and is parallel by default).
     /// Default 0 = auto: uses the number of available logical CPUs, capped at
     /// 32 (wall time stops improving past that and rises on wider hosts). Set
     /// to 1 to force single-threaded annotation, or any positive value to pin
     /// the worker count; user-supplied values are not capped.
-    #[arg(long, visible_alias = "threads", default_value_t = 0)]
+    #[arg(
+        help_heading = "Runtime",
+        long,
+        visible_alias = "threads",
+        default_value_t = 0
+    )]
     pub fork: usize,
 
     /// Number of BGZF decompression worker threads for .gz/.bgz VCF inputs.
@@ -176,7 +305,11 @@ pub struct Args {
     /// and is flat past that). User-supplied positive
     /// values are not capped: pass any integer to pin the worker count,
     /// e.g. `--decompression_threads=1` for single-threaded.
-    #[arg(long = "decompression_threads", default_value_t = 0)]
+    #[arg(
+        help_heading = "Runtime",
+        long = "decompression_threads",
+        default_value_t = 0
+    )]
     pub decompression_threads: usize,
 
     /// Transcript overlap index implementation (hidden, for A/B benchmarking).
@@ -184,6 +317,7 @@ pub struct Args {
     /// sorted (sorted array + suffix_max_end). All three must produce identical
     /// overlap sets; any difference between implementations indicates a bug.
     #[arg(
+        help_heading = "Runtime",
         long = "transcript_index_impl",
         default_value = "bin",
         hide = true,
@@ -192,298 +326,324 @@ pub struct Args {
     pub transcript_index_impl: String,
 
     /// Upstream/downstream distance in bp (or "up,down" for asymmetric)
-    #[arg(long, default_value = "5000")]
+    #[arg(help_heading = "Runtime", long, default_value = "5000")]
     pub distance: String,
 
-    /// Shorthand to enable commonly used output fields
-    #[arg(short = 'e', long)]
+    /// Shorthand for Ensembl VEP's --everything set: --sift b, --polyphen b, --ccds, --hgvs, --symbol,
+    /// --numbers, --domains, --regulatory, --canonical, --protein, --biotype, --af, --af_1kg,
+    /// --af_gnomade, --af_gnomadg, --max_af, --pubmed, --uniprot, --mane, --tsl, --appris,
+    /// --variant_class, --gene_phenotype and --mirna, each overriding an explicit value as in Ensembl VEP.
+    /// Every column of Ensembl VEP's --everything except the regulatory columns: --regulatory is
+    /// switched on and annotates nothing, so no RegulatoryFeature or MotifFeature row is written
+    #[arg(help_heading = "Output Control", short = 'e', long)]
     pub everything: bool,
 
     /// Add gene symbol to output
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub symbol: bool,
 
     /// Add transcript biotype to output
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub biotype: bool,
 
     /// Flag canonical transcripts
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub canonical: bool,
 
     /// Add MANE Select and MANE Plus Clinical flags
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub mane: bool,
 
     /// Add MANE Select flag only
-    #[arg(long = "mane_select")]
+    #[arg(help_heading = "Output Control", long = "mane_select")]
     pub mane_select: bool,
 
     /// Add Transcript Support Level
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub tsl: bool,
 
     /// Add APPRIS isoform annotation
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub appris: bool,
 
     /// Add CCDS transcript ID
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub ccds: bool,
 
     /// Add Ensembl protein ID
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub protein: bool,
 
     /// Add the translation version to the Ensembl protein ID (ENSP00000286808.3); needs --protein
-    #[arg(long = "protein_version")]
+    #[arg(help_heading = "Output Control", long = "protein_version")]
     pub protein_version: bool,
 
     /// Add UniProt cross-references
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub uniprot: bool,
 
     /// Add RefSeq transcript cross-references
-    #[arg(long = "xref_refseq")]
+    #[arg(help_heading = "Output Control", long = "xref_refseq")]
     pub xref_refseq: bool,
 
     /// Add HGVS coding and protein notations
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub hgvs: bool,
 
     /// Add the HGVSg column (accepted for VEP compatibility; the value is not computed and stays empty)
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub hgvsg: bool,
 
     /// SIFT predictions (p = prediction, s = score, b = both)
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long, value_parser = ["s", "p", "b"])]
     pub sift: Option<String>,
 
     /// PolyPhen predictions (p = prediction, s = score, b = both)
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long, value_parser = ["s", "p", "b"])]
     pub polyphen: Option<String>,
 
+    #[arg(help_heading = "Output Control", long, value_name = "CONDEL")]
+    pub condel: Option<String>,
+
     /// Add exon/intron numbers
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub numbers: bool,
 
     /// Add overlapping protein domain information
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub domains: bool,
 
     /// Accepted for VEP compatibility; regulatory-feature annotation is not implemented and the flag warns
-    #[arg(long)]
+    #[arg(help_heading = "Output Control", long)]
     pub regulatory: bool,
 
-    /// Refused: would annotate regulatory features and motifs from a GFF3 file in place of the cache; regulatory annotation is not supported
-    #[arg(long = "regulatory_gff")]
+    #[arg(
+        help_heading = "Output Control",
+        long = "regulatory_gff",
+        value_name = "FILE"
+    )]
     pub regulatory_gff: Option<String>,
 
-    /// Refused: would widen the promoters read with --regulatory_gff to their extended bounds; regulatory annotation is not supported
-    #[arg(long = "extended_promoters")]
+    #[arg(help_heading = "Output Control", long = "extended_promoters")]
     pub extended_promoters: bool,
 
     /// Add variant class from SO
-    #[arg(long = "variant_class")]
+    #[arg(help_heading = "Output Control", long = "variant_class")]
     pub variant_class: bool,
 
-    /// Add global allele frequency from 1000 Genomes Phase 3
-    #[arg(long)]
-    pub af: bool,
-
-    /// Add continental allele frequencies from 1000 Genomes
-    #[arg(long = "af_1kg")]
-    pub af_1kg: bool,
-
-    /// Add gnomAD exome allele frequencies
-    #[arg(long = "af_gnomade")]
-    pub af_gnomade: bool,
-
-    /// Add gnomAD genome allele frequencies
-    #[arg(long = "af_gnomadg")]
-    pub af_gnomadg: bool,
-
-    /// Add highest allele frequency across populations
-    #[arg(long = "max_af")]
-    pub max_af: bool,
-
-    /// Add PubMed IDs for co-located variants
-    #[arg(long)]
-    pub pubmed: bool,
-
-    /// Add gene-phenotype associations
-    #[arg(long = "gene_phenotype")]
-    pub gene_phenotype: bool,
-
-    /// Add the miRNA column (accepted for VEP compatibility; the value is not computed and stays empty)
-    #[arg(long)]
-    pub mirna: bool,
-
     /// Check for co-located known variants
-    #[arg(long = "check_existing")]
+    #[arg(help_heading = "Output Control", long = "check_existing")]
     pub check_existing: bool,
 
     /// Accepted for VEP compatibility; not implemented
-    #[arg(long = "coding_only")]
+    #[arg(help_heading = "Output Control", long = "coding_only")]
     pub coding_only: bool,
 
     /// Accepted for VEP compatibility; not implemented
-    #[arg(long = "no_intergenic")]
+    #[arg(help_heading = "Output Control", long = "no_intergenic")]
     pub no_intergenic: bool,
 
+    #[arg(help_heading = "Output Control", long)]
+    pub hgnc: bool,
+
+    /// Add global allele frequency from 1000 Genomes Phase 3
+    #[arg(help_heading = "Allele Frequencies", long)]
+    pub af: bool,
+
+    /// Add continental allele frequencies from 1000 Genomes
+    #[arg(help_heading = "Allele Frequencies", long = "af_1kg")]
+    pub af_1kg: bool,
+
+    /// Add gnomAD exome allele frequencies
+    #[arg(help_heading = "Allele Frequencies", long = "af_gnomade")]
+    pub af_gnomade: bool,
+
+    /// Add gnomAD genome allele frequencies
+    #[arg(help_heading = "Allele Frequencies", long = "af_gnomadg")]
+    pub af_gnomadg: bool,
+
+    /// Add highest allele frequency across populations
+    #[arg(help_heading = "Allele Frequencies", long = "max_af")]
+    pub max_af: bool,
+
+    /// Add PubMed IDs for co-located variants
+    #[arg(help_heading = "Allele Frequencies", long)]
+    pub pubmed: bool,
+
+    /// Add gene-phenotype associations
+    #[arg(help_heading = "Allele Frequencies", long = "gene_phenotype")]
+    pub gene_phenotype: bool,
+
     /// Pick one consequence per variant
-    #[arg(long)]
+    #[arg(help_heading = "Filtering / Picking", long)]
     pub pick: bool,
 
     /// Pick one consequence per variant allele
-    #[arg(long = "pick_allele")]
+    #[arg(help_heading = "Filtering / Picking", long = "pick_allele")]
     pub pick_allele: bool,
 
     /// Pick one consequence per gene
-    #[arg(long = "per_gene")]
+    #[arg(help_heading = "Filtering / Picking", long = "per_gene")]
     pub per_gene: bool,
 
     /// Pick one consequence per allele per gene
-    #[arg(long = "pick_allele_gene")]
+    #[arg(help_heading = "Filtering / Picking", long = "pick_allele_gene")]
     pub pick_allele_gene: bool,
 
     /// Report only the single most severe consequence
-    #[arg(long = "most_severe")]
+    #[arg(help_heading = "Filtering / Picking", long = "most_severe")]
     pub most_severe: bool,
 
     /// Report a summary of all consequences
-    #[arg(long)]
+    #[arg(help_heading = "Filtering / Picking", long)]
     pub summary: bool,
 
     /// Flag (but don't remove) non-picked consequences
-    #[arg(long = "flag_pick")]
+    #[arg(help_heading = "Filtering / Picking", long = "flag_pick")]
     pub flag_pick: bool,
 
     /// Flag non-picked consequences per allele
-    #[arg(long = "flag_pick_allele")]
+    #[arg(help_heading = "Filtering / Picking", long = "flag_pick_allele")]
     pub flag_pick_allele: bool,
 
     /// Flag non-picked consequences per allele per gene
-    #[arg(long = "flag_pick_allele_gene")]
+    #[arg(help_heading = "Filtering / Picking", long = "flag_pick_allele_gene")]
     pub flag_pick_allele_gene: bool,
 
     /// Accepted for VEP compatibility; not implemented (the pick order is fixed to VEP's default)
-    #[arg(long = "pick_order")]
-    pub pick_order: Option<String>,
+    #[arg(
+        help_heading = "Filtering / Picking",
+        long = "pick_order",
+        value_delimiter = ',',
+        value_parser = [
+            "mane_select",
+            "mane_plus_clinical",
+            "canonical",
+            "appris",
+            "tsl",
+            "biotype",
+            "ccds",
+            "rank",
+            "length",
+            "ensembl",
+            "refseq",
+        ]
+    )]
+    pub pick_order: Option<Vec<String>>,
 
     /// Add allele number from input VCF
-    #[arg(long = "allele_number")]
+    #[arg(help_heading = "Filtering / Picking", long = "allele_number")]
     pub allele_number: bool,
 
     /// Show reference allele in output
-    #[arg(long = "show_ref_allele")]
+    #[arg(help_heading = "Filtering / Picking", long = "show_ref_allele")]
     pub show_ref_allele: bool,
 
-    /// Convert alleles to minimal representation
-    #[arg(long)]
+    /// Convert alleles to minimal representation; switches on --allele_number as in Ensembl VEP
+    #[arg(help_heading = "Filtering / Picking", long)]
     pub minimal: bool,
 
     /// Accepted for VEP compatibility; not implemented
-    #[arg(long = "total_length")]
+    #[arg(help_heading = "Filtering / Picking", long = "total_length")]
     pub total_length: bool,
 
-    /// Accepted for VEP compatibility; not implemented (no statistics file is written, with or without it)
-    #[arg(long = "no_stats")]
-    pub no_stats: bool,
-
-    /// Accepted for VEP compatibility; not implemented (no statistics file is written)
-    #[arg(long = "stats_file")]
-    pub stats_file: Option<String>,
-
-    /// Accepted for VEP compatibility; not implemented (no statistics file is written)
-    #[arg(long = "stats_text")]
-    pub stats_text: bool,
-
-    /// Verbose output (debug-level logging)
-    #[arg(short = 'v', long)]
-    pub verbose: bool,
-
-    /// Suppress status/progress messages
-    #[arg(short = 'q', long)]
-    pub quiet: bool,
-
     /// Load plugin(s) - can be specified multiple times
-    #[arg(long)]
+    #[arg(help_heading = "Plugins", long)]
     pub plugin: Vec<String>,
 
     /// Custom annotation source(s) (accepted for VEP compatibility; not implemented, sources are not loaded)
-    #[arg(long)]
+    #[arg(help_heading = "Plugins", long)]
     pub custom: Vec<String>,
 
-    /// Refused: would keep a --custom VCF source's FILTER column out of the output unless the --custom source's fields argument names it; custom annotation is not supported
-    #[arg(long = "custom_suppress_filter")]
+    #[arg(help_heading = "Plugins", long = "custom_suppress_filter")]
     pub custom_suppress_filter: bool,
 
+    /// Plugin directory
+    #[arg(help_heading = "Plugins", long = "dir_plugins")]
+    pub dir_plugins: Option<String>,
+
     /// Suffixes the species directory of the output header's cache path with _refseq when --json_cache is absent (accepted for VEP compatibility; selects no transcript set, which is the --json_cache contents)
-    #[arg(long)]
+    #[arg(help_heading = "Transcript Sets", long)]
     pub refseq: bool,
 
-    /// Suffixes the species directory of the output header's cache path with _merged, after _refseq, when --json_cache is absent (accepted for VEP compatibility; selects no transcript set, which is the --json_cache contents)
-    #[arg(long)]
+    /// Suffixes the species directory of the output header's cache path with _merged when --json_cache is absent (accepted for VEP compatibility; selects no transcript set, which is the --json_cache contents)
+    #[arg(help_heading = "Transcript Sets", long)]
     pub merged: bool,
 
     /// Accepted for VEP compatibility; not implemented (the transcript set is the --json_cache contents)
-    #[arg(long = "gencode_basic")]
+    #[arg(help_heading = "Transcript Sets", long = "gencode_basic")]
     pub gencode_basic: bool,
 
-    /// VCF INFO field name for VEP annotation
-    #[arg(long = "vcf_info_field", default_value = "CSQ")]
-    pub vcf_info_field: String,
+    #[arg(help_heading = "Transcript Sets", long = "use_given_ref")]
+    pub use_given_ref: bool,
 
-    /// Path to the JSON transcript cache directory (built by vep-cache-builder or converted from a Perl VEP cache)
-    #[arg(long = "json_cache")]
-    pub json_cache: Option<String>,
+    /// Accepted for VEP compatibility; not implemented (no statistics file is written, with or without it)
+    #[arg(help_heading = "Statistics", long = "no_stats")]
+    pub no_stats: bool,
 
-    /// Accepted for VEP compatibility; not implemented (the columns follow the field flags)
-    #[arg(long)]
-    pub fields: Option<String>,
+    /// Accepted for VEP compatibility; not implemented (no statistics file is written)
+    #[arg(help_heading = "Statistics", long = "stats_file")]
+    pub stats_file: Option<String>,
+
+    /// Accepted for VEP compatibility; not implemented (no statistics file is written)
+    #[arg(help_heading = "Statistics", long = "stats_text")]
+    pub stats_text: bool,
+
+    /// Verbose output (debug-level logging)
+    #[arg(help_heading = "Verbosity", short = 'v', long)]
+    pub verbose: bool,
+
+    /// Suppress status/progress messages
+    #[arg(help_heading = "Verbosity", short = 'q', long)]
+    pub quiet: bool,
 
     /// Abort the run on a variant that fails parsing instead of skipping it (VEP keeps the variant)
-    #[arg(long = "dont_skip")]
+    #[arg(help_heading = "Miscellaneous", long = "dont_skip")]
     pub dont_skip: bool,
 
     /// Process non-variant lines in VCF (e.g., reference-only calls)
-    #[arg(long = "allow_non_variant")]
+    #[arg(help_heading = "Miscellaneous", long = "allow_non_variant")]
     pub allow_non_variant: bool,
+
+    /// Add the miRNA column (accepted for VEP compatibility; the value is not computed and stays empty)
+    #[arg(help_heading = "Miscellaneous", long)]
+    pub mirna: bool,
+
+    #[arg(help_heading = "Miscellaneous", long)]
+    pub lrg: bool,
+
+    #[arg(help_heading = "Miscellaneous", long, value_name = "DIR")]
+    pub tmpdir: Option<String>,
 }
 
 impl Args {
-    /// The refusal for a flag vep-rs declares but does not honour, naming what the
-    /// flag would do and the feature it belongs to; `None` when none was passed.
-    pub fn refused_flag(&self) -> Option<String> {
-        let message = if self.regulatory_gff.is_some() {
-            "--regulatory_gff is not supported: it would annotate regulatory features \
-             and motifs from a GFF3 file in place of the cache, and regulatory annotation \
-             is not supported"
-        } else if self.extended_promoters {
-            "--extended_promoters is not supported: it would widen the promoters read \
-             with --regulatory_gff to their extended bounds, and regulatory annotation is \
-             not supported"
-        } else if self.custom_suppress_filter {
-            "--custom_suppress_filter is not supported: it would keep a --custom VCF \
-             source's FILTER column out of the output unless the --custom source's fields \
-             argument names it, and custom annotation is not supported"
-        } else {
-            return None;
-        };
-        Some(message.to_string())
+    /// The command with the error table's help text applied to every flag the
+    /// table governs; the parser `main` runs and the source of `--help` and the
+    /// CLI reference.
+    pub fn command_with_error_table() -> clap::Command {
+        Args::command().mut_args(|arg| {
+            let entry = arg
+                .get_long()
+                .and_then(crate::config::error_table_entry)
+                .filter(|e| e.declared);
+            match entry {
+                Some(entry) => arg.help(entry.help()),
+                None => arg,
+            }
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
 
     #[test]
     fn test_default_args() {
         let args = Args::parse_from(["vep"]);
         assert_eq!(args.input_file, "STDIN");
-        assert_eq!(args.output_file, "variant_effect_output.txt");
+        assert_eq!(args.output_file, ["variant_effect_output.txt"]);
         assert_eq!(args.output_format, "vep");
         assert_eq!(args.format, "guess");
         assert_eq!(args.species, "homo_sapiens");
@@ -506,9 +666,23 @@ mod tests {
             "--offline",
         ]);
         assert_eq!(args.input_file, "test.vcf");
-        assert_eq!(args.output_file, "out.txt");
+        assert_eq!(args.output_file, ["out.txt"]);
         assert!(args.cache);
         assert!(args.offline);
+    }
+
+    /// A repeated single-value flag keeps its last value, as Getopt::Long does;
+    /// `-o` accumulates (`output_file|o=s@`) so the duplicate can be reported.
+    #[test]
+    fn repeated_flags_keep_the_last_value() {
+        let args = Args::parse_from(["vep", "-i", "a.vcf", "-i", "b.vcf", "-o", "x", "-o", "y"]);
+        assert_eq!(args.input_file, "b.vcf");
+        assert_eq!(args.output_file, ["x", "y"]);
+        let args = Args::parse_from([
+            "vep", "--fork", "2", "--fork", "3", "--sift", "p", "--sift", "b",
+        ]);
+        assert_eq!(args.fork, 3);
+        assert_eq!(args.sift.as_deref(), Some("b"));
     }
 
     #[test]
@@ -527,6 +701,15 @@ mod tests {
     fn test_fa_alias() {
         let args = Args::parse_from(["vep", "--fa", "/path/to/ref.fa"]);
         assert_eq!(args.fasta.as_deref(), Some("/path/to/ref.fa"));
+    }
+
+    /// `-u` and `--pass` are Ensembl VEP's short forms of `--user` and `--password`
+    /// (`Config.pm:90-91`), so they reach the same refusal.
+    #[test]
+    fn database_short_forms_parse_as_their_flags() {
+        let args = Args::parse_from(["vep", "-u", "anonymous", "--pass", "secret"]);
+        assert_eq!(args.user.as_deref(), Some("anonymous"));
+        assert_eq!(args.password.as_deref(), Some("secret"));
     }
 
     #[test]
@@ -616,51 +799,45 @@ mod tests {
 
     #[test]
     fn protein_version_and_mask_header_cache_path_parse() {
-        let args = Args::parse_from(["vep", "--protein_version", "--mask_header_cache_path"]);
-        assert!(args.protein_version);
-        assert!(args.mask_header_cache_path);
-        assert!(args.refused_flag().is_none());
+        let config =
+            Config::from_argv(["vep", "--protein_version", "--mask_header_cache_path"]).unwrap();
+        assert!(config.protein_version);
+        assert!(config.mask_header_cache_path);
     }
 
     /// `--regulatory_gff` is refused: regulatory annotation is not supported.
     #[test]
     fn regulatory_gff_is_refused() {
-        let args = Args::parse_from(["vep", "--regulatory_gff", "reg.gff3.gz"]);
+        let err = Config::from_argv(["vep", "--regulatory_gff", "reg.gff3.gz"]).unwrap_err();
         assert_eq!(
-            args.refused_flag().as_deref(),
-            Some(
-                "--regulatory_gff is not supported: it would annotate regulatory features \
-                 and motifs from a GFF3 file in place of the cache, and regulatory annotation \
-                 is not supported"
-            )
+            err.to_string(),
+            "ERROR: [cli] --regulatory_gff is not supported: it would annotate regulatory features \
+             and motifs from a GFF3 file in place of the cache, and regulatory annotation \
+             is not supported"
         );
     }
 
     /// `--extended_promoters` is refused: regulatory annotation is not supported.
     #[test]
     fn extended_promoters_is_refused() {
-        let args = Args::parse_from(["vep", "--extended_promoters"]);
+        let err = Config::from_argv(["vep", "--extended_promoters"]).unwrap_err();
         assert_eq!(
-            args.refused_flag().as_deref(),
-            Some(
-                "--extended_promoters is not supported: it would widen the promoters read \
-                 with --regulatory_gff to their extended bounds, and regulatory annotation is \
-                 not supported"
-            )
+            err.to_string(),
+            "ERROR: [cli] --extended_promoters is not supported: it would widen the promoters read \
+             with --regulatory_gff to their extended bounds, and regulatory annotation is \
+             not supported"
         );
     }
 
     /// `--custom_suppress_filter` is refused: custom annotation is not supported.
     #[test]
     fn custom_suppress_filter_is_refused() {
-        let args = Args::parse_from(["vep", "--custom_suppress_filter"]);
+        let err = Config::from_argv(["vep", "--custom_suppress_filter"]).unwrap_err();
         assert_eq!(
-            args.refused_flag().as_deref(),
-            Some(
-                "--custom_suppress_filter is not supported: it would keep a --custom VCF \
-                 source's FILTER column out of the output unless the --custom source's fields \
-                 argument names it, and custom annotation is not supported"
-            )
+            err.to_string(),
+            "ERROR: [cli] --custom_suppress_filter is not supported: it would keep a --custom VCF \
+             source's FILTER column out of the output unless the --custom source's fields \
+             argument names it, and custom annotation is not supported"
         );
     }
 
@@ -690,11 +867,50 @@ mod tests {
         assert!(args.flag_pick);
         assert!(args.flag_pick_allele);
         assert!(args.flag_pick_allele_gene);
-        assert_eq!(args.pick_order.as_deref(), Some("canonical,biotype,rank"));
+        assert_eq!(
+            args.pick_order.as_deref(),
+            Some(
+                &[
+                    "canonical".to_string(),
+                    "biotype".to_string(),
+                    "rank".to_string()
+                ][..]
+            )
+        );
         assert!(args.allele_number);
         assert!(args.show_ref_allele);
         assert!(args.total_length);
         assert!(args.dont_skip);
         assert!(args.allow_non_variant);
+    }
+
+    /// Every flag has help text: its own doc comment, or the error table's.
+    #[test]
+    fn every_flag_has_help() {
+        let mut command = Args::command_with_error_table();
+        command.build();
+        let without: Vec<&str> = command
+            .get_arguments()
+            .filter(|a| a.get_help().is_none() && a.get_long_help().is_none())
+            .filter_map(|a| a.get_long())
+            .collect();
+        assert!(without.is_empty(), "flags without help: {without:?}");
+    }
+
+    /// Every flag is documented under a help heading, one of the reference's sections.
+    #[test]
+    fn every_flag_has_a_help_heading() {
+        let mut command = Args::command();
+        command.build();
+        let without: Vec<&str> = command
+            .get_arguments()
+            .filter(|a| a.get_long().is_some_and(|l| l != "help" && l != "version"))
+            .filter(|a| a.get_help_heading().is_none())
+            .filter_map(|a| a.get_long())
+            .collect();
+        assert!(
+            without.is_empty(),
+            "flags without a help heading: {without:?}"
+        );
     }
 }

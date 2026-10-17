@@ -7,7 +7,30 @@
  "max_span": 1000000,
  "multi_allelic_per_suite": 4,
  "covers": [
-  "flag_matrix_concordance"
+  "flag_matrix_concordance",
+  "grch37"
+ ],
+ "flags": [
+  "--grch37"
+ ],
+ "runs": [
+  {
+   "name": "grch37-over-explicit-assembly",
+   "argv": [
+    "{golden}",
+    "--assembly",
+    "GRCh38",
+    "--grch37",
+    "--json",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "json.jsonl",
+    "format": "json"
+   }
+  }
  ],
  "suites": {
   "GRCh37": {

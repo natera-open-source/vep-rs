@@ -327,8 +327,9 @@ fn test_output_file_exists_without_force() {
     );
 }
 
-/// The three flags vep-rs declares but refuses exit with a usage error naming the
-/// feature they belong to, before any input is read.
+/// The three regulatory and custom-annotation flags vep-rs declares but refuses
+/// exit 1 with the contract's one line, naming the feature they belong to,
+/// before any input is read.
 #[test]
 fn refused_flags_exit_with_their_message() {
     for (flag, feature) in [
@@ -344,10 +345,12 @@ fn refused_flags_exit_with_their_message() {
             .args(["-i", "/nonexistent/file.vcf", "--quiet"])
             .output()
             .unwrap();
-        assert_eq!(result.status.code(), Some(2), "{flag:?}");
+        assert_eq!(result.status.code(), Some(1), "{flag:?}");
         let stderr = String::from_utf8_lossy(&result.stderr);
+        assert_eq!(stderr.lines().count(), 1, "{flag:?}: {stderr}");
         assert!(
-            stderr.contains(&format!("{} is not supported", flag[0])) && stderr.contains(feature),
+            stderr.starts_with(&format!("ERROR: [cli] {} is not supported: ", flag[0]))
+                && stderr.contains(feature),
             "{flag:?}: {stderr}"
         );
     }

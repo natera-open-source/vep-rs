@@ -339,13 +339,18 @@ impl Runner {
     pub fn run(&self) -> anyhow::Result<()> {
         let start = Instant::now();
 
+        // BaseRunner.pm:203-204, with Ensembl VEP's text.
         if self.config.output_file != "STDOUT" {
             let path = Path::new(&self.config.output_file);
             if path.exists() && !self.config.force_overwrite {
-                bail!(
-                    "Output file '{}' already exists. Use --force_overwrite to overwrite.",
-                    self.config.output_file
-                );
+                return Err(crate::config::CliError::new(
+                    "output",
+                    format!(
+                        "Output file {} already exists. Specify a different output file with --output_file or overwrite existing file with --force_overwrite",
+                        self.config.output_file
+                    ),
+                )
+                .into());
             }
         }
 
@@ -1669,10 +1674,9 @@ mod tests {
     /// Build a `Config` from real CLI flags so the test tracks flag resolution
     /// and never breaks when unrelated `Config` fields are added.
     fn config_from(flags: &[&str]) -> Config {
-        use clap::Parser;
         let mut argv = vec!["vep"];
         argv.extend_from_slice(flags);
-        Config::from_args(crate::args::Args::parse_from(argv))
+        Config::from_argv(argv).unwrap()
     }
 
     /// The capture gate must be derived from the output format, not guessed.
@@ -1787,9 +1791,9 @@ mod tests {
             .contains(&("cache".to_string(), "[PATH]/116_GRCh38".to_string())));
     }
 
-    /// The exon/intron ordinals reach the output only under `--numbers`; `--vcf`
-    /// and `--everything` imply it, and a loaded plugin may read them off the
-    /// consequence, so those runs compute them too.
+    /// The exon/intron ordinals reach the output only under `--numbers`; a VCF
+    /// output by either route and `--everything` imply it, and a loaded plugin may
+    /// read them off the consequence, so those runs compute them too.
     #[test]
     fn exon_intron_numbers_are_computed_only_when_something_reads_them() {
         for fmt in ["vep", "tab", "json", "parquet"] {

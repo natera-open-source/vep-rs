@@ -34,6 +34,13 @@
 //! and `expected_dir` (`expected_<name>` by default). An entry carrying its own
 //! `divergences` documents its run; one without inherits the manifest's lists.
 //!
+//! A manifest may also carry `runs`, command lines executed after the default
+//! run whose expectations are about the process rather than the annotation: each
+//! [`ManifestRun`] names `argv` (with the placeholders [`expand_argv`] lists),
+//! `env`, `stdin` and an `expect` block of exit status, output file compared as
+//! the default run is, and text standard output starts with or standard error
+//! contains.
+//!
 //! The VCF and JSON formats carry no `Location`, so their entries are keyed by
 //! the corpus record ordinal, found by matching each output record to its
 //! input line (the VCF's first five columns, the JSON object's `input`).
@@ -344,6 +351,39 @@ fn corpus_fasta(corpus: &Corpus, out_dir: &Path) -> Option<PathBuf> {
     Some(target)
 }
 
+/// The arguments every run of a corpus starts from, after `-i <input>`: the
+/// corpus cache, the fixed arguments, the run's `flags` and the corpus `fasta`.
+/// A run whose flags carry `--grch37` names its assembly through that flag
+/// alone, so the option set, not `--assembly`, selects it.
+fn base_args(run: &Run, out_dir: &Path) -> Vec<String> {
+    let corpus = run.corpus;
+    let mut args = vec![
+        "--offline".to_string(),
+        "--json_cache".to_string(),
+        corpus.dir.join("json_cache").display().to_string(),
+        "--species".to_string(),
+        "homo_sapiens".to_string(),
+    ];
+    if !run.flags.iter().any(|f| f == "--grch37") {
+        args.extend(["--assembly".to_string(), corpus.assembly.clone()]);
+    }
+    args.extend(
+        [
+            "--buffer_size",
+            "5000",
+            "--force_overwrite",
+            "--no_stats",
+            "--quiet",
+        ]
+        .map(str::to_string),
+    );
+    args.extend(run.flags.iter().cloned());
+    if let Some(fasta) = corpus_fasta(corpus, out_dir) {
+        args.extend(["--fasta".to_string(), fasta.display().to_string()]);
+    }
+    args
+}
+
 /// The `vep` invocation a run starts from: the run's input (`-i STDIN` when it
 /// is piped) and the corpus cache, the fixed arguments, then the run's `flags`
 /// and the corpus `fasta`. The caller adds the output path and format and runs
@@ -357,38 +397,21 @@ pub fn vep_command(run: &Run, out_dir: &Path) -> Command {
     } else {
         cmd.arg(corpus.dir.join(&run.input));
     }
-    cmd.arg("--offline")
-        .arg("--json_cache")
-        .arg(corpus.dir.join("json_cache"))
-        .args(["--species", "homo_sapiens", "--assembly", &corpus.assembly])
-        .args([
-            "--buffer_size",
-            "5000",
-            "--force_overwrite",
-            "--no_stats",
-            "--quiet",
-        ])
-        .args(&run.flags);
-    if let Some(fasta) = corpus_fasta(corpus, out_dir) {
-        cmd.arg("--fasta").arg(fasta);
-    }
+    cmd.args(base_args(run, out_dir));
     cmd
 }
 
-/// Runs a [`vep_command`] to completion, feeding the run's input file on
-/// standard input when the run is a stdin run.
-pub fn run_output(run: &Run, cmd: &mut Command) -> Output {
-    if !run.stdin {
-        return cmd.output().expect("vep binary runs");
-    }
-    let bytes = fs::read(run.corpus.dir.join(&run.input)).unwrap();
+/// Runs `cmd` to completion with `input` written on its standard input, its
+/// standard output and error captured as [`Command::output`] captures them.
+fn output_with_stdin(cmd: &mut Command, input: Vec<u8>) -> Output {
     let mut child = cmd
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .expect("vep binary runs");
     let mut stdin = child.stdin.take().expect("stdin is piped");
-    let writer = std::thread::spawn(move || stdin.write_all(&bytes));
+    let writer = std::thread::spawn(move || stdin.write_all(&input));
     let output = child.wait_with_output().expect("vep binary runs");
     let written = writer.join().unwrap();
     // A child that exited before reading its input leaves the writer a broken
@@ -398,6 +421,16 @@ pub fn run_output(run: &Run, cmd: &mut Command) -> Output {
         written.expect("input written to vep");
     }
     output
+}
+
+/// Runs a [`vep_command`] to completion, feeding the run's input file on
+/// standard input when the run is a stdin run.
+pub fn run_output(run: &Run, cmd: &mut Command) -> Output {
+    if !run.stdin {
+        return cmd.output().expect("vep binary runs");
+    }
+    let input = fs::read(run.corpus.dir.join(&run.input)).unwrap();
+    output_with_stdin(cmd, input)
 }
 
 /// Runs the `vep` binary for the run in one output format and returns the
@@ -1333,6 +1366,289 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
             )
         }
     }
+}
+
+// --------------------------------------------------------------------------
+// Manifest runs: command lines with process-level expectations.
+
+/// What a manifest run expects of the process.
+pub struct Expect {
+    pub exit: i32,
+    /// An expected output file (under `expected/`) the run's output is compared
+    /// with as the default run's is: the file the run wrote at `{out}`, or its
+    /// standard output when the command line names no `{out}`.
+    pub output: Option<String>,
+    /// The format `output` is compared in: `default`, `tab`, `vcf` or `json`.
+    pub format: String,
+    pub stdout_starts_with: Option<String>,
+    pub stderr_contains: Option<String>,
+}
+
+/// One entry of a manifest's `runs` list.
+pub struct ManifestRun {
+    pub name: String,
+    /// The command line after the binary name, before placeholder expansion.
+    pub argv: Vec<String>,
+    pub env: BTreeMap<String, String>,
+    /// A file in the corpus whose bytes are piped on standard input.
+    pub stdin: Option<String>,
+    pub expect: Expect,
+}
+
+/// The keys an `expect` block may carry.
+const EXPECT_KEYS: [&str; 5] = [
+    "exit",
+    "output",
+    "format",
+    "stdout_starts_with",
+    "stderr_contains",
+];
+const RUN_KEYS: [&str; 5] = ["name", "argv", "env", "stdin", "expect"];
+
+/// The manifest's `runs`, each held to one shape: a plain unique name, `argv` a
+/// list of strings, `env` an object of strings, `stdin` a file inside the
+/// corpus, and an `expect` block with an integer `exit` and at least one of
+/// `output` (a file under `expected/`), `stdout_starts_with` and
+/// `stderr_contains`, each a non-empty string, so an entry that expects nothing
+/// cannot certify the rows the manifest covers. An unknown key anywhere is
+/// refused rather than ignored.
+pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
+    let label = format!("{}/{}", corpus.release, corpus.name);
+    let mut out: Vec<ManifestRun> = Vec::new();
+    for run in corpus.manifest["runs"].as_array().into_iter().flatten() {
+        let object = run
+            .as_object()
+            .unwrap_or_else(|| panic!("{label}: a run is an object"));
+        for key in object.keys() {
+            assert!(
+                RUN_KEYS.contains(&key.as_str()),
+                "{label}: run key {key:?} is not one of {RUN_KEYS:?}"
+            );
+        }
+        let name = run["name"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{label}: a run has a name"))
+            .to_string();
+        assert!(
+            plain_name(&name),
+            "{label}: run name {name:?} is not a plain word other than default"
+        );
+        assert!(
+            out.iter().all(|r| r.name != name),
+            "{label}: run {name} is named twice"
+        );
+        assert!(
+            run["argv"].is_array(),
+            "{label} run {name}: argv is a list of strings"
+        );
+        let argv = strings(&run["argv"]);
+        let mut env = BTreeMap::new();
+        if let Some(map) = run.get("env") {
+            let map = map
+                .as_object()
+                .unwrap_or_else(|| panic!("{label} run {name}: env is an object"));
+            for (k, v) in map {
+                let v = v
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{label} run {name}: env {k} is a string"));
+                env.insert(k.clone(), v.to_string());
+            }
+        }
+        let stdin = run.get("stdin").map(|s| {
+            let s = s
+                .as_str()
+                .unwrap_or_else(|| panic!("{label} run {name}: stdin is a file name"));
+            assert!(
+                inside_corpus(s),
+                "{label} run {name}: stdin {s:?} is not a path inside the corpus"
+            );
+            s.to_string()
+        });
+        let expect = run["expect"]
+            .as_object()
+            .unwrap_or_else(|| panic!("{label} run {name}: expect is an object"));
+        for key in expect.keys() {
+            assert!(
+                EXPECT_KEYS.contains(&key.as_str()),
+                "{label} run {name}: expect key {key:?} is not one of {EXPECT_KEYS:?}"
+            );
+        }
+        let exit = expect
+            .get("exit")
+            .and_then(|e| e.as_i64())
+            .unwrap_or_else(|| panic!("{label} run {name}: expect.exit is an integer"));
+        let text = |key: &str| -> Option<String> {
+            match expect.get(key) {
+                None | Some(serde_json::Value::Null) => None,
+                Some(v) => {
+                    let v = v
+                        .as_str()
+                        .unwrap_or_else(|| panic!("{label} run {name}: expect.{key} is a string"));
+                    assert!(!v.is_empty(), "{label} run {name}: expect.{key} is empty");
+                    Some(v.to_string())
+                }
+            }
+        };
+        let output = text("output");
+        if let Some(output) = &output {
+            assert!(
+                inside_corpus(output),
+                "{label} run {name}: output {output:?} is not a path inside the corpus"
+            );
+        }
+        let format = text("format").unwrap_or_else(|| "default".to_string());
+        assert!(
+            ALL_FORMATS.contains(&format.as_str()),
+            "{label} run {name}: unknown format {format}"
+        );
+        let stdout_starts_with = text("stdout_starts_with");
+        let stderr_contains = text("stderr_contains");
+        assert!(
+            output.is_some() || stdout_starts_with.is_some() || stderr_contains.is_some(),
+            "{label} run {name}: expects nothing beyond the exit status"
+        );
+        out.push(ManifestRun {
+            name,
+            argv,
+            env,
+            stdin,
+            expect: Expect {
+                exit: exit as i32,
+                output,
+                format,
+                stdout_starts_with,
+                stderr_contains,
+            },
+        });
+    }
+    out
+}
+
+/// Expands a run's `argv`: the token `{golden}` becomes the default run's
+/// arguments (`-i <input>` and [`base_args`]), `{flags}` the manifest's own
+/// flags; inside a token `{input}` is the corpus input path, `{cache}` the
+/// corpus cache, `{corpus}` the corpus directory, `{assembly}` the assembly and
+/// `{out}` the output path the caller chose.
+pub fn expand_argv(corpus: &Corpus, argv: &[String], out: &Path, out_dir: &Path) -> Vec<String> {
+    let default = default_run(corpus);
+    let input = corpus.dir.join("variants.vcf").display().to_string();
+    let cache = corpus.dir.join("json_cache").display().to_string();
+    let corpus_dir = corpus.dir.display().to_string();
+    let out = out.display().to_string();
+    let mut expanded = Vec::new();
+    for token in argv {
+        match token.as_str() {
+            "{golden}" => {
+                expanded.push("-i".to_string());
+                expanded.push(input.clone());
+                expanded.extend(base_args(&default, out_dir));
+            }
+            "{flags}" => expanded.extend(default.flags.iter().cloned()),
+            _ => expanded.push(
+                token
+                    .replace("{input}", &input)
+                    .replace("{cache}", &cache)
+                    .replace("{corpus}", &corpus_dir)
+                    .replace("{assembly}", &corpus.assembly)
+                    .replace("{out}", &out),
+            ),
+        }
+    }
+    expanded
+}
+
+/// Executes a manifest run in `out_dir` and returns a report of every
+/// expectation it missed, or an empty string.
+pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) -> String {
+    let out = out_dir.join(format!("{}-run-{}.out", corpus.name, run.name));
+    let argv = expand_argv(corpus, &run.argv, &out, out_dir);
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    cmd.args(&argv)
+        .envs(&run.env)
+        .current_dir(out_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let output = match &run.stdin {
+        Some(file) => {
+            let input = fs::read(corpus.dir.join(file)).unwrap();
+            output_with_stdin(&mut cmd, input)
+        }
+        None => {
+            cmd.stdin(Stdio::null());
+            cmd.output().expect("vep binary runs")
+        }
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let mut report = String::new();
+    let label = format!("{}/{} run {}", corpus.release, corpus.name, run.name);
+    if output.status.code() != Some(run.expect.exit) {
+        report.push_str(&format!(
+            "{label}: exit {:?}, expected {}\nstderr:\n{stderr}",
+            output.status.code(),
+            run.expect.exit
+        ));
+    }
+    if let Some(prefix) = &run.expect.stdout_starts_with {
+        if !stdout.starts_with(prefix) {
+            report.push_str(&format!(
+                "{label}: stdout does not start with {prefix:?}:\n{}\n",
+                stdout.lines().take(3).collect::<Vec<_>>().join("\n")
+            ));
+        }
+    }
+    if let Some(needle) = &run.expect.stderr_contains {
+        if !stderr.contains(needle) {
+            report.push_str(&format!(
+                "{label}: stderr does not contain {needle:?}:\n{stderr}"
+            ));
+        }
+    }
+    if let Some(expected_name) = &run.expect.output {
+        let actual = if run.argv.iter().any(|t| t.contains("{out}")) {
+            fs::read_to_string(&out).unwrap_or_else(|e| {
+                report.push_str(&format!("{label}: no output at {}: {e}\n", out.display()));
+                String::new()
+            })
+        } else {
+            stdout.clone()
+        };
+        let expected = read_expected(&corpus.dir, expected_name);
+        let documented = Documented::from_manifest(&corpus.manifest);
+        let inputs = input_records(corpus);
+        let (header, body) = match run.expect.format.as_str() {
+            "default" | "tab" => (
+                compare_tab_headers(&expected, &actual),
+                compare_entries(
+                    &parse_default(&expected),
+                    &parse_default(&actual),
+                    &documented,
+                ),
+            ),
+            "vcf" => (
+                compare_vcf_headers(&expected, &actual),
+                compare_entries(
+                    &parse_vcf(&expected, &inputs),
+                    &parse_vcf(&actual, &inputs),
+                    &documented,
+                ),
+            ),
+            _ => (
+                String::new(),
+                compare_entries(
+                    &parse_json(&expected, &inputs),
+                    &parse_json(&actual, &inputs),
+                    &documented,
+                ),
+            ),
+        };
+        if !header.is_empty() || !body.is_empty() {
+            report.push_str(&format!(
+                "{label}: output differs from {expected_name}\n{header}{body}"
+            ));
+        }
+    }
+    report
 }
 
 /// Sum of file sizes under a directory.
