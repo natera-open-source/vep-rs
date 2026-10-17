@@ -168,7 +168,7 @@ Real data needs a JSON transcript cache, built natively with `vep-cache-builder`
 
 ## Documentation
 
-The documentation site, https://natera-open-source.github.io/vep-rs/, describes the latest release; its pages are the `docs/` tree of this repository, in six sections. [Getting started](docs/getting-started/installation.md) covers installation, the transcript cache and the move from Ensembl VEP, and the reference pages cover [every flag](docs/cli-reference.md), [every output format](docs/output-formats.md) and [every plugin](docs/plugins.md). [Concordance with Ensembl VEP](docs/intended-divergences.md) documents each divergence class the adjusted F1 sets aside, [Benchmarks](docs/benchmarks/current-release.md) states the release's figures beside [the paper's](docs/published-figures.md), and [Writing a plugin](docs/developers/writing-a-plugin.md) is the developer guide.
+The documentation site, https://natera-open-source.github.io/vep-rs/, describes the latest release; its pages are the `docs/` tree of this repository, in six sections. [Getting started](docs/getting-started/installation.md) covers installation, the transcript cache and the move from Ensembl VEP, and the reference pages cover [every flag](docs/cli-reference.md), [every output format](docs/output-formats.md) and [every plugin](docs/plugins.md). [Concordance with Ensembl VEP](docs/intended-divergences.md) documents each divergence class the adjusted F1 sets aside, the [Current release](#current-release-v040) section above states the release's figures beside [the paper's](docs/published-figures.md), and [Writing a plugin](docs/developers/writing-a-plugin.md) is the developer guide.
 
 ## Crates
 

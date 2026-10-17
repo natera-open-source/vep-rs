@@ -1,6 +1,6 @@
 # Current release
 
-The two blocks below are the README's release figures, the summary table and the released version's own measurements.
+The two blocks below are the README's release figures, the summary table and the released version's own measurements, included from the README's `## Why vep-rs` and `## Current release` sections.
 
 <!-- readme-section: Why vep-rs | fragments: benchmarks/current-release.md -->
 
