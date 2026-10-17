@@ -270,13 +270,13 @@ def tile_path(out, stem, tile):
     return os.path.join(out, tile_name(stem, tile))
 
 
-def shoot_tiles(page, width, limit, path_for):
+def shoot_tiles(page, width, limit, out, stem):
     """Screenshot the page from the top down in at most `limit` tiles.
 
     Returns the tile names and whether rows remain below the last tile."""
     def snap(name, clip=None):
         page.wait_for_timeout(150)
-        page.screenshot(path=path_for(name), clip=clip, animations="disabled")
+        page.screenshot(path=tile_path(out, stem, name), clip=clip, animations="disabled")
         names.append(name)
 
     names = []
@@ -336,7 +336,7 @@ def shoot(args, names, base_url, probe):
                         rec.update(page.evaluate(PROBE_JS, 1))
                     limit = (args.max_tiles if width in to_end else 3) if full else 1
                     stem = f"{slug}-{width}-{theme}"
-                    tiles, more = shoot_tiles(page, width, limit, functools.partial(tile_path, out, stem))
+                    tiles, more = shoot_tiles(page, width, limit, out, stem)
                     rec["tiles"].extend(tile_name(stem, tile) for tile in tiles)
                     if more and width in to_end:
                         print(f"{name} at {width} px: the page continues past {limit} tiles")
@@ -354,7 +354,9 @@ def shoot(args, names, base_url, probe):
 
 
 def summary_html(rec):
-    bad = lambda flag, text: ('<b class="bad">%s</b>' if flag else "%s") % text
+    def bad(flag, text):
+        return f'<b class="bad">{text}</b>' if flag else text
+
     scroll = {kind: [s for s in rec["scrollers"] if s["kind"] == kind] for kind in ("pre", "table")}
     over = f"yes ({rec['overflowing_total']} elements)" if rec["overflow"] else "no"
     page_font = "" if rec["min_font_page_px"] == rec["min_font_px"] else f" (page {rec['min_font_page_px']} px)"
@@ -406,7 +408,9 @@ def summary_md(probe):
     """One Markdown table row per page and width, then the totals.
 
     A probe without `long_span_wraps` shows them as n/a."""
-    num = lambda v: "n/a" if v is None else f"{v:g}"
+    def num(value):
+        return "n/a" if value is None else f"{value:g}"
+
     cells = []
     for name, entry in probe["pages"].items():
         for width, rec in entry["widths"].items():
@@ -421,8 +425,12 @@ def summary_md(probe):
                   "| Min font px | Chars per line |"), "| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |"]
     lines += [f"| {c['page']} | {c['width']} | {c['tiles']} | {'yes' if c['overflow'] else 'no'} | {c['wrapped']} "
               f"| {num(c['long'])} | {c['bare']} | {num(c['font'])} | {num(c['cpl'])} |" for c in cells]
-    of = lambda n: f"{n} of {len(cells)} cells"
-    count = lambda key: f"{sum(c[key] or 0 for c in cells)} in {of(sum(bool(c[key]) for c in cells))}"
+    def of(n):
+        return f"{n} of {len(cells)} cells"
+
+    def count(key):
+        return f"{sum(c[key] or 0 for c in cells)} in {of(sum(bool(c[key]) for c in cells))}"
+
     split = all(c["long"] is not None for c in cells)
     fonts = sorted((c["font"], c["page"], c["width"]) for c in cells if c["font"] is not None)
     off = [c for c in cells if c["width"] >= 768 and c["cpl"] is not None and not 60 <= c["cpl"] <= 80]

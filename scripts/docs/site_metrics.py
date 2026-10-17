@@ -141,7 +141,7 @@ def summary_pages(summary_path):
 
 
 def readme_section(readme_lines, prefix):
-    """Return the (first line index, last line index) of the README section the prefix names."""
+    """Return (start, end) such that readme_lines[start:end] is the README section the prefix names."""
     starts = [i for i, line in enumerate(readme_lines) if line.startswith("## " + prefix)]
     if len(starts) != 1:
         sys.exit(

@@ -224,6 +224,7 @@ def read_chart(record: dict, name: str, version: str) -> dict:
     clones: dict[str, int] = {}
     notes: list[str] = []
     for engine, display, css_class in SERIES:
+        where = f"{name} wall_time.{engine}"
         block = wall_time.get(engine) if isinstance(wall_time, dict) else None
         if block is None:
             if engine in OPTIONAL_ENGINES:
@@ -233,14 +234,14 @@ def read_chart(record: dict, name: str, version: str) -> dict:
         times = engine_times(block, engine, datasets, name)
         missing = [d["key"] for d in datasets if d["key"] not in times]
         if missing and engine not in OPTIONAL_ENGINES:
-            fail(f"{name} wall_time.{engine} has no {ARCH} wall time for {', '.join(missing)}")
+            fail(f"{where} has no {ARCH} wall time for {', '.join(missing)}")
         for key in missing:
             notes.append(f"note: {name} has no {display} {ARCH} wall time for {key}; the chart omits that bar")
         if not times:
             notes.append(f"note: {name} times {display} on no dataset; the chart omits the series")
             continue
-        (n_clones,) = required(block, ("n_clones_per_cell",), f"{name} wall_time.{engine}")
-        clones[engine] = integer(n_clones, "n_clones_per_cell", f"{name} wall_time.{engine}")
+        (n_clones,) = required(block, ("n_clones_per_cell",), where)
+        clones[engine] = integer(n_clones, "n_clones_per_cell", where)
         series.append({"engine": engine, "display": display, "css_class": css_class,
                        "label": engine_label(block, engine, display, name), "times": times})
     if len(set(clones.values())) != 1:
@@ -603,14 +604,14 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Render the current release's wall-time chart as an SVG.")
     ap.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2], help="repository root")
     ap.add_argument("--out", type=Path, help="output path; default docs/assets/benchmark.svg under --repo")
-    a = ap.parse_args()
-    version = current_release(a.repo / "README.md")
-    path = population_record(a.repo, version)
+    args = ap.parse_args()
+    version = current_release(args.repo / "README.md")
+    path = population_record(args.repo, version)
     chart = read_chart(load_record(path, version), path.name, version)
     svg = render(chart)
     if "\n\n" in svg:
         fail("the rendered SVG contains a blank line")
-    out = a.out or a.repo / "docs" / "assets" / "benchmark.svg"
+    out = args.out or args.repo / "docs" / "assets" / "benchmark.svg"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(svg, encoding="utf-8")
     for note in chart["notes"]:

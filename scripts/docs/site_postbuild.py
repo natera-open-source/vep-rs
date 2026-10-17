@@ -134,15 +134,16 @@ def write_versions(site, base, release, channel):
         if not root.endswith(suffix):
             return [f"--base path {root} does not end in {suffix}, so the release path cannot be derived"]
         root = root[: -len(suffix)]
+    preview_path = root + PREVIEW_CHANNEL_NAME + "/"
     versions = {
         "release": release,
         "channels": [
             {"name": release, "path": root},
-            {"name": PREVIEW_CHANNEL_NAME, "path": root + "main/"},
+            {"name": PREVIEW_CHANNEL_NAME, "path": preview_path},
         ],
     }
     write(os.path.join(site, "versions.json"), json.dumps(versions, indent=2) + "\n")
-    print(f"versions.json: release {release}, channels at {root} and {root}main/")
+    print(f"versions.json: release {release}, channels at {root} and {preview_path}")
     return []
 
 
