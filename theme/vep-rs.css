@@ -41,8 +41,10 @@
     }
 }
 
-/* Palette corrections: every text colour reaches 4.5:1 on the surface it is
-   used on, and every code token at least 4.5:1 on its block background. */
+/* Palette corrections: on the light and navy themes every text colour reaches
+   4.5:1 on the surface it is used on and every code token at least 4.5:1 on its
+   block background; coal, rust and ayu take the corrections below without that
+   guarantee on every surface. */
 
 .light, html:not(.js) {
     --code-bg: #f6f7f6;
@@ -291,10 +293,6 @@
         justify-self: stretch;
     }
 
-    .content main > h1 {
-        max-width: none;
-    }
-
     /* The landing page: the chart keeps its first screen short, and its
        blocks sit closer together. */
     .content main > svg.benchmark-chart {
@@ -312,10 +310,6 @@
     .content main > details > :not(.table-scroll, .table-wrapper, pre) {
         max-width: var(--content-max-width);
         box-sizing: border-box;
-    }
-
-    .content main > svg {
-        max-width: min(100%, 680px);
     }
 
     .content main > pre {

@@ -361,7 +361,8 @@
             host.className = 'table-scroll';
             wrapper.parentNode.insertBefore(host, wrapper);
             host.appendChild(wrapper);
-            const firstCell = wrapper.querySelector('td:first-child, th:first-child');
+            // A blank header is hidden, so its cell has no width.
+            const firstCell = wrapper.querySelector('thead:not(.empty-head) th:first-child, td:first-child');
             const longCell = wrapper.querySelector('td.cell-long');
             const values = Array.from(wrapper.querySelectorAll('tr > :not(:first-child)'));
             const table = wrapper.querySelector('table');
@@ -374,7 +375,8 @@
             // value columns while the table still overflows.
             const soloCode = Array.from(wrapper.querySelectorAll('tr > :not(:first-child) code'))
                 .filter(code => !/[\s,;]/.test(code.textContent) && !code.querySelector('wbr'));
-            const valueColumns = Math.max(1, (wrapper.querySelector('tr') || { children: [] }).children.length - 1);
+            const firstRow = wrapper.querySelector('tr');
+            const valueColumns = firstRow ? Math.max(1, firstRow.children.length - 1) : 1;
 
             function padding(cell) {
                 const style = getComputedStyle(cell);
@@ -395,8 +397,10 @@
             }
 
             watch(wrapper, host, () => {
-                // Every decision is taken from the unwrapped state, so a class
-                // never feeds back into its own test. Cell code breaks at its
+                // Every span is measured with its classes removed, so its own
+                // wrapping never feeds its test; the overflow checks read the
+                // live layout, so a class already applied counts towards
+                // fitting the table. Cell code breaks at its
                 // cuts in an overflowing table, and there for a span wider
                 // than the cell its column has; a span that fits moves to the
                 // next line whole. In a stacked table each cell is its own
@@ -409,6 +413,8 @@
                 const widths = cutCode.map(code => code.getBoundingClientRect().width);
                 const stacked = narrow.matches && table && table.classList.contains('stack-rows');
                 const labelWidth = firstCell ? firstCell.offsetWidth : 0;
+                // Widest first: once the widest token breaks and the table
+                // fits, overflows() spares the narrower ones.
                 const solo = soloCode.map(code => ({ code, width: code.getBoundingClientRect().width }))
                     .sort((a, b) => b.width - a.width);
                 // Below 480 px an unstacked table scrolls whole, so nothing wraps.
@@ -548,7 +554,7 @@
         }
 
         function banner(releaseHref) {
-            if (channel !== 'main' || !content) {
+            if (channel !== 'main' || !content || content.querySelector('.vep-banner')) {
                 return;
             }
             const note = document.createElement('div');
