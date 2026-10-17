@@ -144,7 +144,7 @@ Before submitting a PR:
 
 1. All CI checks pass: `cargo test --workspace`, `cargo clippy --workspace -- -D warnings`, `cargo fmt --all -- --check`.
 2. Add tests for new features or bug fixes.
-3. Update the affected page under `docs/`: `cli-reference.md` for flags, `output-formats.md` for output layouts, `plugins.md` for plugins, `cache-setup.md` for the cache builder and converter.
+3. Update the affected page under `docs/`: the option's entry under `cli/` for flags, the format's page under `output/` for output layouts, the mechanism's page under `plugins/` for plugins, `cache-setup.md` for the cache builder and converter.
 4. For consequence or plugin changes, run concordance smoke to confirm no regressions.
 
 ## Comment and write-up discipline

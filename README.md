@@ -147,7 +147,7 @@ cargo build --release
 # Binary at target/release/vep
 ```
 
-Each release is also a container image, `ghcr.io/natera-open-source/vep-rs`, holding the release's x86_64 Linux binaries and the `duckdb` CLI. The [Installation](https://natera-open-source.github.io/vep-rs/getting-started/installation.html) page covers the CPU floor every build targets, how to build for an older CPU, and the image's tags, platform and attestation.
+Each release is also a container image, `ghcr.io/natera-open-source/vep-rs`, holding the release's x86_64 Linux binaries and the `duckdb` CLI. The [Installation](docs/getting-started/installation.md) page covers the CPU floor every build targets, how to build for an older CPU, and the image's tags, platform and attestation.
 
 ## Quick start
 
@@ -164,11 +164,11 @@ target/release/vep \
 
 ### 2. Annotate your own data
 
-Real data needs a JSON transcript cache, built natively with `vep-cache-builder` or converted from a Perl VEP cache. Then run the same VEP command you run today, with `--json_cache` naming the cache directory. The [Quick start](https://natera-open-source.github.io/vep-rs/getting-started/quick-start.html) page gives the cache-builder command, the annotation command and the plugin and HGVS options. [Cache setup](https://natera-open-source.github.io/vep-rs/cache-setup.html) explains each input of the cache build.
+Real data needs a JSON transcript cache, built natively with `vep-cache-builder` or converted from a Perl VEP cache. Then run the same VEP command you run today, with `--json_cache` naming the cache directory. The [Quick start](docs/getting-started/quick-start.md) page gives the cache-builder command, the annotation command and the plugin and HGVS options. [Cache setup](docs/cache-setup.md) explains each input of the cache build.
 
 ## Documentation
 
-The documentation site, https://natera-open-source.github.io/vep-rs/, describes the latest release in six sections. [Getting started](https://natera-open-source.github.io/vep-rs/getting-started/installation.html) covers installation, the transcript cache and the move from Ensembl VEP, and the reference pages cover [every flag](https://natera-open-source.github.io/vep-rs/cli-reference.html), [every output format](https://natera-open-source.github.io/vep-rs/output-formats.html) and [every plugin](https://natera-open-source.github.io/vep-rs/plugins.html). [Concordance with Ensembl VEP](https://natera-open-source.github.io/vep-rs/intended-divergences.html) documents each divergence class the adjusted F1 sets aside, [Benchmarks](https://natera-open-source.github.io/vep-rs/benchmarks/current-release.html) states the release's figures beside [the paper's](https://natera-open-source.github.io/vep-rs/published-figures.html), and [Writing a plugin](https://natera-open-source.github.io/vep-rs/developers/writing-a-plugin.html) is the developer guide.
+The documentation site, https://natera-open-source.github.io/vep-rs/, describes the latest release; its pages are the `docs/` tree of this repository, in six sections. [Getting started](docs/getting-started/installation.md) covers installation, the transcript cache and the move from Ensembl VEP, and the reference pages cover [every flag](docs/cli-reference.md), [every output format](docs/output-formats.md) and [every plugin](docs/plugins.md). [Concordance with Ensembl VEP](docs/intended-divergences.md) documents each divergence class the adjusted F1 sets aside, [Benchmarks](docs/benchmarks/current-release.md) states the release's figures beside [the paper's](docs/published-figures.md), and [Writing a plugin](docs/developers/writing-a-plugin.md) is the developer guide.
 
 ## Crates
 

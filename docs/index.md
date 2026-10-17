@@ -6,7 +6,7 @@ This site describes vep-rs {{vep-rs-ref}}; the latest release is {{vep-rs-releas
 
 {{#include assets/benchmark.svg}}
 
-Wall time on ARM; [Benchmarks](benchmarks/current-release.md) has the x86 figures and the method.
+Wall time on ARM, the sum of per-chromosome medians over 20 machines at 16 threads; [Benchmarks](benchmarks/current-release.md) has the x86 figures and the method.
 
 ```bash
 https://github.com/natera-open-source/vep-rs/releases   # Binary

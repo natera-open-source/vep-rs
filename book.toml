@@ -225,6 +225,15 @@ heading-split-level = 3
 "/intended-divergences.html#226-try-it-yourself" = "divergences/defect-o.html#226-try-it-yourself"
 "/intended-divergences.html#227-how-the-comparator-treats-this-class" = "divergences/defect-o.html#227-how-the-comparator-treats-this-class"
 
+# README sections the site does not carry: the README on GitHub.
+"/index.html#documentation" = "https://github.com/natera-open-source/vep-rs#documentation"
+"/index.html#crates" = "https://github.com/natera-open-source/vep-rs#crates"
+"/index.html#authors" = "https://github.com/natera-open-source/vep-rs#authors"
+"/index.html#disclaimer" = "https://github.com/natera-open-source/vep-rs#disclaimer"
+
+# Cache setup: a retired heading id.
+"/cache-setup.html#cache-setup-building-or-converting-the-json-transcript-cache" = "cache-setup.html"
+
 # README sections shown on the Benchmarks, Getting started and Project pages.
 "/index.html#current-release-v040" = "benchmarks/current-release.html#current-release-v040"
 "/index.html#whole-genome-concordance" = "benchmarks/current-release.html#whole-genome-concordance"
