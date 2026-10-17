@@ -4,6 +4,8 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](#installation)
 
+Documentation: https://natera-open-source.github.io/vep-rs/
+
 A fast, memory-efficient reimplementation of the Ensembl Variant Effect Predictor (VEP) in Rust. It takes VEP's inputs and flags, writes VEP's consequence vocabulary in VEP's output formats, and annotates population-scale callsets two orders of magnitude faster than the Perl implementation.
 
 In this README, "Perl VEP" is the reference implementation, `ensemblorg/ensembl-vep` release 116.2. The accompanying paper calls the same engine "VEP".
@@ -136,13 +138,7 @@ Every value above is recorded in these files:
 
 ## Installation
 
-### Pre-built binaries
-
-Binaries for Linux x86_64, Linux aarch64 and macOS aarch64 are on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page. The x86_64 binary needs AVX2; see [CPU floor](#cpu-floor).
-
-### Build from source
-
-Building needs Rust 1.88+ ([rustup](https://rustup.rs/)):
+Pre-built binaries for Linux x86_64, Linux aarch64 and macOS aarch64 are on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page. The x86_64 binary needs AVX2. Building from source needs Rust 1.88+ ([rustup](https://rustup.rs/)):
 
 ```bash
 git clone https://github.com/natera-open-source/vep-rs.git
@@ -151,43 +147,7 @@ cargo build --release
 # Binary at target/release/vep
 ```
 
-### CPU floor
-
-`.cargo/config.toml` compiles every build for a fixed CPU baseline, and release binaries are built the same way:
-
-| Target | `-C target-cpu` |
-| --- | --- |
-| x86_64 Linux | `x86-64-v3` (AVX2 required) |
-| aarch64 Linux | `neoverse-v1` |
-| Apple-silicon macOS | `apple-m1` |
-
-On an older CPU, a binary built or downloaded this way aborts with an illegal-instruction fault rather than running slowly. To build for the machine you are on, override the flag for that build:
-
-```bash
-RUSTFLAGS="-C target-cpu=native" cargo build --release
-```
-
-`RUSTFLAGS` replaces the file's setting; it does not add to it. You can also edit the `rustflags` line for your target in `.cargo/config.toml`.
-
-### Container image
-
-Each published release from 0.2.0 on is also an image on the GitHub Container Registry. It holds the release's own x86_64 Linux binaries, `vep-cache-builder`, `vep-cache-converter`, and the `duckdb` CLI that Parquet output needs.
-
-```bash
-docker run --rm --user "$(id -u):$(id -g)" \
-  -v "$PWD/tests/golden/116/GRCh37:/corpus:ro" -v "$PWD:/data" \
-  ghcr.io/natera-open-source/vep-rs:0.4.0 \
-  vep --json_cache /corpus/json_cache --assembly GRCh37 -i /corpus/variants.vcf -o /data/output.txt
-```
-
-- Tags are `X.Y.Z`, `X.Y` (the newest patch of that line) and `latest`.
-- The image is linux/amd64 only and has the same x86-64-v3 CPU floor as the release binary.
-- On Apple silicon, run it with `--platform linux/amd64` under Rosetta. That works, but it is a translated binary, so don't use it for timing.
-- Each image carries a build-provenance attestation:
-
-  ```bash
-  gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:0.4.0 --repo natera-open-source/vep-rs
-  ```
+Each release is also a container image, `ghcr.io/natera-open-source/vep-rs`, holding the release's x86_64 Linux binaries and the `duckdb` CLI. The [Installation](https://natera-open-source.github.io/vep-rs/getting-started/installation.html) page covers the CPU floor every build targets, how to build for an older CPU, and the image's tags, platform and attestation.
 
 ## Quick start
 
@@ -202,76 +162,13 @@ target/release/vep \
   -i tests/golden/116/GRCh37/variants.vcf -o output.txt
 ```
 
-### 2. Get a transcript cache
+### 2. Annotate your own data
 
-For real data you need a JSON transcript cache. Build one natively with `vep-cache-builder` (GRCh38 shown; [docs/cache-setup.md](docs/cache-setup.md) explains each input and gives the GRCh37 command):
-
-```bash
-# Ensembl release 116, GRCh38
-wget https://ftp.ensembl.org/pub/release-116/gtf/homo_sapiens/Homo_sapiens.GRCh38.116.gtf.gz
-wget https://ftp.ensembl.org/pub/release-116/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-samtools faidx Homo_sapiens.GRCh38.dna.primary_assembly.fa
-
-cargo build --release -p vep-cache-builder
-target/release/vep-cache-builder \
-  --species homo_sapiens --assembly GRCh38 --release 116 \
-  --gtf Homo_sapiens.GRCh38.116.gtf.gz \
-  --genome-fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa \
-  --output-dir $HOME/.vep/json_cache/homo_sapiens/116_GRCh38
-```
-
-Or convert an existing Perl VEP cache with `scripts/data/storable_to_json.pl` ([scripts/README.md](scripts/README.md)).
-
-### 3. Annotate
-
-Run the same VEP command you run today, with `--json_cache` naming the cache directory. That is the directory holding `info.json` and `transcripts/`, so `116_GRCh38` itself, not its parent:
-
-```bash
-target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
-  --assembly GRCh38 \
-  -i input.vcf -o output.txt
-```
-
-## Usage
-
-```bash
-# With annotation plugins, on data staged by scripts/data/setup_plugin_data.sh
-target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
-  --assembly GRCh38 \
-  --plugin CADD,snv=$HOME/.vep/plugin_data/grch38/full/cadd/whole_genome_SNVs.tsv.gz \
-  --plugin REVEL,file=$HOME/.vep/plugin_data/grch38/full/revel/revel.tsv.gz \
-  -i input.vcf -o output.txt --force_overwrite
-
-# JSON output with HGVS notation
-target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
-  --assembly GRCh38 --json \
-  --fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa \
-  --hgvs --everything \
-  -i input.vcf -o output.json
-```
-
-- **Output formats.** VEP default (the tab-delimited text format with the `Extra` column), `--vcf` (annotations in the `CSQ` INFO field), `--json` (one object per variant) and `--tab` match Perl VEP's layouts. `--parquet` is a vep-rs extension written through the `duckdb` CLI (1.2 or newer on PATH). Field-level specs are in [docs/output-formats.md](docs/output-formats.md).
-- **Plugins.** `--plugin <Name>,<params>` resolves one of the eleven built-in plugins first (ten with supported data), and otherwise loads a C-ABI dynamic library from `--dir_plugins`. Support is per reference genome: `--assembly` selects the right column and refuses a data file whose own assembly contradicts it. The support matrix, the data files and how to write a plugin are in [docs/plugins.md](docs/plugins.md).
-- **HGVS.** `--fasta` takes an uncompressed, `faidx`-indexed genome and gives `--hgvs` the reference context for the 3' shifting of indels.
-- **All flags.** [docs/cli-reference.md](docs/cli-reference.md) is the complete flag reference, including the flags accepted for Perl VEP compatibility but not implemented.
+Real data needs a JSON transcript cache, built natively with `vep-cache-builder` or converted from a Perl VEP cache. Then run the same VEP command you run today, with `--json_cache` naming the cache directory. The [Quick start](https://natera-open-source.github.io/vep-rs/getting-started/quick-start.html) page gives the cache-builder command, the annotation command and the plugin and HGVS options. [Cache setup](https://natera-open-source.github.io/vep-rs/cache-setup.html) explains each input of the cache build.
 
 ## Documentation
 
-| Document | Covers |
-| --- | --- |
-| [CLI reference](docs/cli-reference.md) | Every flag, with examples, and what is not ported from Perl VEP |
-| [Output formats](docs/output-formats.md) | VEP, VCF, JSON, Tab and Parquet output specs |
-| [Plugins](docs/plugins.md) | Support matrix, data files, preparation, development, concordance testing |
-| [Cache setup](docs/cache-setup.md) | Building a JSON transcript cache natively or converting a Perl VEP cache; SIFT and PolyPhen matrices |
-| [Intended divergences](docs/intended-divergences.md) | Every class the adjusted F1 sets aside against release 116.2 (the fourteen Perl VEP defects, the records release 116 drops before annotation, the one representation difference), each with the record, both engines' rows, the mechanism in Perl VEP's source and how to reproduce it |
-| [Published figures](docs/published-figures.md) | The paper's concordance and wall-time tables as published, and the released data they re-derive from |
-| [Scripts](scripts/README.md) | Script index and the runbook for reproducing the published concordance |
-| [Released data](manuscript/data/README.md) | The measurement CSVs every published figure re-derives from |
-| [Contributing](CONTRIBUTING.md) | Build, test, code conventions, sign-off and pull-request guidelines |
+The documentation site, https://natera-open-source.github.io/vep-rs/, describes the latest release in six sections. [Getting started](https://natera-open-source.github.io/vep-rs/getting-started/installation.html) covers installation, the transcript cache and the move from Ensembl VEP, and the reference pages cover [every flag](https://natera-open-source.github.io/vep-rs/cli-reference.html), [every output format](https://natera-open-source.github.io/vep-rs/output-formats.html) and [every plugin](https://natera-open-source.github.io/vep-rs/plugins.html). [Concordance with Ensembl VEP](https://natera-open-source.github.io/vep-rs/intended-divergences.html) documents each divergence class the adjusted F1 sets aside, [Benchmarks](https://natera-open-source.github.io/vep-rs/benchmarks/current-release.html) states the release's figures beside [the paper's](https://natera-open-source.github.io/vep-rs/published-figures.html), and [Writing a plugin](https://natera-open-source.github.io/vep-rs/developers/writing-a-plugin.html) is the developer guide.
 
 ## Crates
 
