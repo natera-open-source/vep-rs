@@ -263,7 +263,7 @@ def significant_3(x: Decimal) -> str:
 
 
 def ratio_clause(chart: dict, base: dict, series: dict) -> str:
-    """`208 to 422 times faster than Ensembl VEP 115.2`: the range over the datasets the series was timed
+    """`<low> to <high> times faster than <engine label>`: the range over the datasets the series was timed
     on, with their count when fewer than all. The base series covers every dataset, so the range is never
     empty."""
     ratios = sorted(series["times"][k] / base["times"][k] for k in series["times"])
