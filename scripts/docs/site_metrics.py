@@ -142,18 +142,20 @@ def summary_pages(summary_path):
 
 def readme_section(readme_lines, prefix):
     """Return (start, end) such that readme_lines[start:end] is the README section the prefix names."""
-    starts = [i for i, line in enumerate(readme_lines) if line.startswith("## " + prefix)]
+    headings, in_fence = [], False
+    for i, line in enumerate(readme_lines):
+        if FENCE.match(line):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("## "):
+            headings.append(i)
+    starts = [i for i in headings if readme_lines[i][3:].lstrip().startswith(prefix)]
     if len(starts) != 1:
         sys.exit(
             f"ERROR: site_metrics: readme-section {prefix!r} matches {len(starts)} "
             "README headings, not one"
         )
-    end = len(readme_lines)
-    for i in range(starts[0] + 1, len(readme_lines)):
-        if readme_lines[i].startswith("## "):
-            end = i
-            break
-    return starts[0], end
+    following = [i for i in headings if i > starts[0]]
+    return starts[0], following[0] if following else len(readme_lines)
 
 
 def load_page(docs_dir, page):

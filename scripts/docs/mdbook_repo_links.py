@@ -253,7 +253,11 @@ def readme_is_home(book):
         return setting == "1"
     for chapter in walk(book["items"]):
         if chapter.get("source_path") == "index.md":
-            lines = chapter["content"].strip().splitlines()
+            # Lines as build_release_site.sh counts them with awk: a final newline closes
+            # the last line, and nothing is stripped, so both tests read a file alike.
+            lines = chapter["content"].split("\n")
+            if lines[-1] == "":
+                lines.pop()
             return len(lines) == 3 and lines[0] == STUB_HEADING
     return False
 

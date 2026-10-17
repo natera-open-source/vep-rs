@@ -40,7 +40,7 @@ fail() {
 }
 
 latest_release() {
-    git describe --tags --abbrev=0 origin/main 2>/dev/null && return
+    git describe --tags --abbrev=0 --match 'v[0-9]*' origin/main 2>/dev/null && return
     git tag --list 'v[0-9]*' --sort=-v:refname | head -n 1
 }
 
