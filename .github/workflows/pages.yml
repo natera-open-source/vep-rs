@@ -99,6 +99,7 @@ jobs:
         run: |
           mdbook build
           python3 scripts/docs/check_site_links.py --site target/book --tree HEAD
+          python3 scripts/docs/site_metrics.py --gate
       - name: Build the release's site
         env:
           TAG: ${{ inputs.tag }}
