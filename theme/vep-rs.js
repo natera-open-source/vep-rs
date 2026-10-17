@@ -103,8 +103,7 @@
 
         document.addEventListener('keydown', event => {
             const target = event.target;
-            const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
-                || target.tagName === 'SELECT');
+            const typing = target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
             if (event.key === 'Escape' && checkbox.checked && !typing && !pushLayout.matches) {
                 setOpen(false);
                 toggle.focus();
@@ -119,8 +118,8 @@
     (function longInlineCode() {
         const all = Array.from(content.querySelectorAll(':not(pre) > code'));
         // Code in a table cell is one unbreakable run, spaces included, with
-        // a cut after a comma or semicolon that ends a piece of over 16
-        // characters; scrollEdges activates those cuts for a table wider than
+        // a cut after a comma or semicolon that ends a piece of 16 characters
+        // or more; scrollEdges activates those cuts for a table wider than
         // its wrapper, so a list of terms wraps and the table narrows, and a
         // span that fits stays on one line. Prose code, and code in the page
         // list of headings, wraps when it is wider than its block: between
@@ -182,7 +181,7 @@
             let current = '';
             code.textContent.split(listCuts).forEach(piece => {
                 current += piece;
-                if (current.trim().length > 16 && /[,;]$/.test(current)) {
+                if (current.trim().length >= 16 && /[,;]$/.test(current)) {
                     pieces.push(current);
                     current = '';
                 }
@@ -243,8 +242,7 @@
                         if (index) {
                             parts.append(document.createElement('wbr'));
                         }
-                        const part = runOf(piece);
-                        parts.append(part);
+                        parts.append(runOf(piece));
                     });
                     run.replaceWith(parts);
                 });
@@ -363,12 +361,25 @@
             host.className = 'table-scroll';
             wrapper.parentNode.insertBefore(host, wrapper);
             host.appendChild(wrapper);
-            const firstCell = wrapper.querySelector('tbody td:first-child, td:first-child, th:first-child');
+            const firstCell = wrapper.querySelector('td:first-child, th:first-child');
             const longCell = wrapper.querySelector('td.cell-long');
             const values = Array.from(wrapper.querySelectorAll('tr > :not(:first-child)'));
             const table = wrapper.querySelector('table');
             const cutCode = Array.from(wrapper.querySelectorAll('code[data-runs]'))
                 .filter(code => code.querySelector('wbr'));
+            // A value that is one token with no cut point, such as a repeat-
+            // expanded allele, may break at any character once it is wider
+            // than the room beside the first column, or, for a token of 40
+            // characters or more, wider than that room shared equally by the
+            // value columns while the table still overflows.
+            const soloCode = Array.from(wrapper.querySelectorAll('tr > :not(:first-child) code'))
+                .filter(code => !/[\s,;]/.test(code.textContent) && !code.querySelector('wbr'));
+            const valueColumns = Math.max(1, (wrapper.querySelector('tr') || { children: [] }).children.length - 1);
+
+            function padding(cell) {
+                const style = getComputedStyle(cell);
+                return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+            }
 
             function nearlyFits() {
                 return wrapper.scrollWidth <= wrapper.clientWidth * 1.1;
@@ -376,8 +387,7 @@
 
             function cellRoom(code) {
                 const cell = code.closest('td, th');
-                const style = getComputedStyle(cell);
-                return cell.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+                return cell.clientWidth - padding(cell);
             }
 
             function overflows() {
@@ -395,8 +405,32 @@
                 // so a few pixels of scroll never squeeze the other columns.
                 wrapper.classList.remove('wrap-heads', 'tight');
                 cutCode.forEach(code => code.classList.remove('code-wrap'));
+                soloCode.forEach(code => code.classList.remove('code-wide'));
                 const widths = cutCode.map(code => code.getBoundingClientRect().width);
-                if (narrow.matches && table && table.classList.contains('stack-rows')) {
+                const stacked = narrow.matches && table && table.classList.contains('stack-rows');
+                const labelWidth = firstCell ? firstCell.offsetWidth : 0;
+                const solo = soloCode.map(code => ({ code, width: code.getBoundingClientRect().width }))
+                    .sort((a, b) => b.width - a.width);
+                // Below 480 px an unstacked table scrolls whole, so nothing wraps.
+                if (stacked || !narrow.matches) {
+                    solo.forEach(entry => {
+                        const cell = entry.code.closest('td, th');
+                        const room = (stacked ? cell.clientWidth : wrapper.clientWidth - labelWidth) - padding(cell);
+                        if (entry.width > room) {
+                            entry.code.classList.add('code-wide');
+                        }
+                    });
+                }
+                if (!narrow.matches) {
+                    solo.forEach(entry => {
+                        const cell = entry.code.closest('td, th');
+                        const share = (wrapper.clientWidth - labelWidth) / valueColumns - padding(cell);
+                        if (entry.code.textContent.length >= 40 && entry.width > share && overflows()) {
+                            entry.code.classList.add('code-wide');
+                        }
+                    });
+                }
+                if (stacked) {
                     cutCode.forEach((code, index) => {
                         if (widths[index] > cellRoom(code) + 0.5) {
                             code.classList.add('code-wrap');
@@ -425,9 +459,9 @@
                     if (overflows() && nearlyFits()) {
                         wrapper.classList.add('tight');
                     }
-                }
-                if (!narrow.matches && table) {
-                    table.querySelectorAll('td[tabindex]').forEach(cell => cell.removeAttribute('tabindex'));
+                    if (table) {
+                        table.querySelectorAll('td[tabindex]').forEach(cell => cell.removeAttribute('tabindex'));
+                    }
                 }
                 if (!firstCell) {
                     return;
@@ -498,6 +532,7 @@
 
     (function channels() {
         const root = typeof path_to_root === 'string' ? path_to_root : '';
+        const parentSiteHref = root + '../';
         const channelMeta = document.querySelector('meta[name="vep-rs-channel"]');
         const channel = channelMeta ? channelMeta.getAttribute('content') : null;
 
@@ -526,14 +561,13 @@
             content.insertBefore(note, content.firstChild);
         }
 
-        function selector(data) {
-            const channels = Array.isArray(data.channels) ? data.channels : [];
+        function selector(channels, release) {
             const byPath = current(channels);
             // A site served at a path versions.json does not list still knows
             // its channel: the preview's meta names it, a release page has none.
-            const here = byPath || channels.find(entry => (channel
-                ? entry.name.split(' ')[0] === channel
-                : entry.name === data.release)) || null;
+            const here = byPath || (channel
+                ? channels.find(entry => entry.name.split(' ')[0] === channel)
+                : release) || null;
             const buttons = document.querySelector('#mdbook-menu-bar .right-buttons');
             if (channels.length < 2 || !here || !buttons) {
                 return;
@@ -575,14 +609,14 @@
             .then(response => (response.ok ? response.json() : null))
             .then(data => {
                 if (!data) {
-                    banner(root + '../');
+                    banner(parentSiteHref);
                     return;
                 }
                 const channels = Array.isArray(data.channels) ? data.channels : [];
                 const release = channels.find(entry => entry.name === data.release);
-                banner(release ? release.path : root + '../');
-                selector(data);
+                banner(release ? release.path : parentSiteHref);
+                selector(channels, release);
             })
-            .catch(() => banner(root + '../'));
+            .catch(() => banner(parentSiteHref));
     })();
 })();

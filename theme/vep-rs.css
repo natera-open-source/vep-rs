@@ -286,7 +286,6 @@
        overrun a track narrower than the bleed width. */
     .content main {
         grid-row: 2;
-        width: 100%;
         margin-inline: 0;
         max-width: var(--content-bleed-width);
         justify-self: stretch;
@@ -717,6 +716,14 @@ pre > code::-webkit-scrollbar-track {
 
 .content :not(pre) > code.code-wrap {
     white-space: normal;
+}
+
+/* A cell value that is one token wider than its room breaks at any
+   character; vep-rs.js marks it. */
+.content :not(pre) > code.code-wide,
+.content code.code-wide .code-run {
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 /* A break opportunity element inside no-wrap text still breaks the line in
