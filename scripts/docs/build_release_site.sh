@@ -10,8 +10,9 @@
 # takes it from the checkout. A SUMMARY.md entry naming a page the tag does not
 # have is dropped. So is a redirect whose destination page the tag does not
 # have, or whose source anchor is still a heading of the tag's own page. Each
-# drop prints a line, and a redirect entry the filter cannot read (anything but
-# "source" = "destination" on one line) fails the build. A tag whose
+# drop prints a line; a redirect entry the filter cannot read (anything but
+# "source" = "destination" on one line), or whose destination leaves the site,
+# fails the build. A tag whose
 # docs/index.md is absent, or is the stub that points at the README, keeps the
 # README as its home page (VEP_RS_DOCS_README_HOME=1).
 #
@@ -145,10 +146,10 @@ build_site() {
 # does not show them.
 if grep -q '^\[output\.html\.redirect\]' "$out/book.toml"; then
     build_site
-    python3 - "$out/book.toml" "$out/docs" "$out/target/book" "$docs_ref" <<'EOF'
+    python3 - "$out/book.toml" "$out/docs" "$out/target/book" "$docs_ref" "$site_url" <<'EOF'
 import html.parser, os, posixpath, re, sys
 
-toml, docs, site, ref = sys.argv[1:5]
+toml, docs, site, ref, site_url = sys.argv[1:6]
 ENTRY = re.compile(r'^\s*"([^"]+)"\s*=\s*"([^"]*)"\s*(#.*)?$')
 SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
@@ -180,7 +181,15 @@ def destination_exists(key, dest):
     if not page or SCHEME.match(page):
         return True
     if page.startswith("/"):
-        resolved = page.lstrip("/")
+        # A leading slash is a browser path, as mdBook writes it, so it must
+        # start with the site's own URL.
+        if page == site_url.rstrip("/"):
+            page = site_url
+        if not page.startswith(site_url):
+            sys.exit(f"ERROR: [build_release_site] redirect destination leaves the site: {key} -> {dest}")
+        # An empty segment after the site URL (//) leaves an absolute path,
+        # which os.path.join takes in place of the docs root.
+        resolved = page[len(site_url):].lstrip("/")
     else:
         resolved = posixpath.normpath(posixpath.join(posixpath.dirname(key.lstrip("/")), page))
     if page.endswith("/"):
