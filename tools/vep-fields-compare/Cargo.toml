@@ -1,0 +1,22 @@
+[package]
+name = "vep-fields-compare"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+license = "Apache-2.0"
+description = "Per-column field agreement between two VEP default-format outputs, byte-identical to scripts/concordance/compare_vep_fields.py"
+publish = false
+
+[dependencies]
+flate2 = "1"
+memchr = "2"
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

@@ -1,0 +1,3 @@
+## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+rs300	2:300	A	ENSG00000000300	ENST00000000300	Transcript	intron_variant	-	-	-	-	-	rs300	IMPACT=MODIFIER;STRAND=1

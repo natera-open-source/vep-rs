@@ -693,6 +693,80 @@ if [[ -f "$HARNESS" ]]; then
         bad "the F1 compare must not depend on SKIP_FIELDS (F1 at ${_f1_line:-?}, guard at ${_skip_line:-?})"
 fi
 
+# VEP_FIELDS_COMPARATOR swaps the field comparator's command and nothing else: the
+# SKIP_FIELDS block is extracted and run with a python3 stub and a comparator stub
+# that record their argv. An executable file runs in the Python's place with the
+# same flags, a bare name resolving through PATH; a set value that is not an
+# executable file (a directory included) warns and runs the Python; unset runs the
+# Python.
+if [[ -f "$HARNESS" ]]; then
+    _fields_block=$(awk '
+        !p && /^[[:space:]]*if \[\[ "\$SKIP_FIELDS" != "true" \]\]; then$/ { match($0, /^[[:space:]]*/); ind = substr($0, 1, RLENGTH); p = 1 }
+        p { print }
+        p && $0 == ind "fi" { exit }
+    ' "$HARNESS")
+    eval "_fields_block_fn() {
+$_fields_block
+}"
+    _fdir="$TMP/fields_dispatch"
+    mkdir -p "$_fdir/bin" "$_fdir/suite/report"
+    for _stub in python3 comparator; do
+        cat >"$_fdir/bin/$_stub" <<EOF
+#!/bin/bash
+printf '%s\n' "\$0" "\$@" >"$_fdir/argv"
+EOF
+        chmod +x "$_fdir/bin/$_stub"
+    done
+    : >"$_fdir/not_executable"
+    # $1 is the VEP_FIELDS_COMPARATOR value, "" for unset; clears the stubs' argv record,
+    # then prints the block's stdout and stderr.
+    _run_fields_block() {
+        rm -f "$_fdir/argv"
+        (
+            PATH="$_fdir/bin:$PATH"
+            REPO_DIR="$_fdir/repo" suite_dir="$_fdir/suite" suite_id=s06 suite_name=stub assembly=GRCh38 SKIP_FIELDS=false
+            csv_row() { echo "csv_row $*"; }
+            if [[ -n "$1" ]]; then export VEP_FIELDS_COMPARATOR="$1"; else unset VEP_FIELDS_COMPARATOR; fi
+            _fields_block_fn
+        ) 2>&1
+    }
+    # The stub the last run invoked: the first line of the argv record, "" when none ran.
+    _fields_invoked() { head -n 1 "$_fdir/argv" 2>/dev/null; }
+    _out=$(_run_fields_block "")
+    [[ "$(_fields_invoked)" == "$_fdir/bin/python3" && "$_out" != *WARNING* ]] &&
+        ok "VEP_FIELDS_COMPARATOR unset: the Python comparator runs" ||
+        bad "VEP_FIELDS_COMPARATOR unset: expected the python3 stub without a warning, got argv '$(_fields_invoked)' output '$_out'"
+    # The Python's flags start after its script path, the second argv line.
+    _py_flags=$(tail -n +3 "$_fdir/argv" 2>/dev/null | paste -sd' ' -)
+    _out=$(_run_fields_block "$_fdir/bin/comparator")
+    [[ "$(_fields_invoked)" == "$_fdir/bin/comparator" && "$_out" != *WARNING* ]] &&
+        ok "VEP_FIELDS_COMPARATOR executable: the binary runs in the Python's place" ||
+        bad "VEP_FIELDS_COMPARATOR executable: expected the comparator stub without a warning, got argv '$(_fields_invoked)' output '$_out'"
+    # The binary's flags start after its own path, the first argv line.
+    _bin_flags=$(tail -n +2 "$_fdir/argv" 2>/dev/null | paste -sd' ' -)
+    [[ -n "$_py_flags" && "$_py_flags" == "$_bin_flags" && "$_py_flags" == *"--out $_fdir/suite/report/fields.json --tmp-dir $_fdir/suite"* ]] &&
+        ok "VEP_FIELDS_COMPARATOR: the binary receives the Python's flags (--perl --rust --out --tmp-dir)" ||
+        bad "VEP_FIELDS_COMPARATOR: flag lists differ; python: $_py_flags binary: $_bin_flags"
+    for _bad_value in "$_fdir/not_executable" "$_fdir"; do
+        _out=$(_run_fields_block "$_bad_value")
+        [[ "$(_fields_invoked)" == "$_fdir/bin/python3" && "$_out" == *"WARNING: [run_clone_measurement] VEP_FIELDS_COMPARATOR=$_bad_value is not executable"* ]] &&
+            ok "VEP_FIELDS_COMPARATOR=${_bad_value##*/} (not an executable file): warns and runs the Python comparator" ||
+            bad "VEP_FIELDS_COMPARATOR=$_bad_value: expected a warning and the python3 stub, got argv '$(_fields_invoked)' output '$_out'"
+    done
+    # A bare name resolves through PATH, as the exec resolves it; the test's cwd holds no
+    # such file, so a guard that tests the name against the cwd warns and runs the Python.
+    _out=$(_run_fields_block comparator)
+    [[ "$(_fields_invoked)" == "$_fdir/bin/comparator" && "$_out" != *WARNING* ]] &&
+        ok "VEP_FIELDS_COMPARATOR=comparator (a bare name on PATH): the binary runs, resolved through PATH" ||
+        bad "VEP_FIELDS_COMPARATOR=comparator: expected the comparator stub through PATH without a warning, got argv '$(_fields_invoked)' output '$_out'"
+    # bash's PATH search returns a non-executable match when no executable one exists.
+    : >"$_fdir/bin/inert"
+    _out=$(_run_fields_block inert)
+    [[ "$(_fields_invoked)" == "$_fdir/bin/python3" && "$_out" == *"WARNING: [run_clone_measurement] VEP_FIELDS_COMPARATOR=inert is not executable"* ]] &&
+        ok "VEP_FIELDS_COMPARATOR=inert (a bare name whose only PATH match is not executable): warns and runs the Python comparator" ||
+        bad "VEP_FIELDS_COMPARATOR=inert: expected a warning and the python3 stub, got argv '$(_fields_invoked)' output '$_out'"
+fi
+
 echo "CONTAINER-PROBE: the container start-up probe times bare image starts, Perl only, after the suites"
 
 # Every timed Perl invocation pays one container start; --container-probe N measures that

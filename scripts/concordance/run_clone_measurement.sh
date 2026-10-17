@@ -129,6 +129,9 @@ Optional:
   --skip-fields          Skip the per-column field comparator (report/fields.json)
                          on the vep-rs SNP/indel cells; F1 is computed either way.
                          For runs that need only F1 and wall time. Default: run it.
+                         VEP_FIELDS_COMPARATOR, when it names an executable (a
+                         path, or a command on PATH), runs in the Python
+                         comparator's place with the same flags.
   --fork <N>             SNP/indel parallelism (default 16; fastVEP uses
                          RAYON_NUM_THREADS=N)
   --buffer-size <N>      Engine buffer size (default 5000)
@@ -652,7 +655,20 @@ measure_p1() {
 			# Per-column and Extra-key agreement, beside the F1 report. Not F1-bearing:
 			# a failure is logged in the CSV and the cell still completes.
 			if [[ "$SKIP_FIELDS" != "true" ]]; then
-				python3 "$REPO_DIR/scripts/concordance/compare_vep_fields.py" \
+				# VEP_FIELDS_COMPARATOR names a prebuilt comparator binary that takes the Python's
+				# flags and writes the same bytes to report/fields.json. `type -P` resolves a bare
+				# name through PATH as the exec does (`-x` alone would test it against the cwd) and
+				# returns a non-executable PATH match, hence the file tests on its result.
+				local fields_cmd=(python3 "$REPO_DIR/scripts/concordance/compare_vep_fields.py")
+				if [[ -n "${VEP_FIELDS_COMPARATOR:-}" ]]; then
+					local fields_bin
+					if fields_bin=$(type -P -- "$VEP_FIELDS_COMPARATOR") && [[ -f "$fields_bin" && -x "$fields_bin" ]]; then
+						fields_cmd=("$fields_bin")
+					else
+						echo "WARNING: [run_clone_measurement] VEP_FIELDS_COMPARATOR=$VEP_FIELDS_COMPARATOR is not executable; running the Python comparator" >&2
+					fi
+				fi
+				"${fields_cmd[@]}" \
 					--perl "$suite_dir/perl/output.txt" \
 					--rust "$suite_dir/rust/output.txt" \
 					--out "$suite_dir/report/fields.json" \

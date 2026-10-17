@@ -19,19 +19,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # tools/vep-fields-compare is its own Cargo root, so a `--workspace` command
+        # never reaches it; `comparator` is the same check over that package.
         include:
           - name: Test
             command: cargo test --workspace --locked
+            comparator: cargo test --locked --manifest-path tools/vep-fields-compare/Cargo.toml
           - name: Clippy
             command: cargo clippy --workspace -- -D warnings
+            comparator: cargo clippy --all-targets --locked --manifest-path tools/vep-fields-compare/Cargo.toml -- -D warnings
           - name: Format
             command: cargo fmt --all -- --check
+            comparator: cargo fmt --all --manifest-path tools/vep-fields-compare/Cargo.toml -- --check
           # Catches a license header run into a module's `//!` doc line with no
           # blank line between them. Test/Clippy/Format are all blind to it: the
           # joined line is a valid comment, so everything compiles and passes while
           # the first rustdoc line is silently lost.
           - name: Module Docs
             command: scripts/check_module_docs.sh
+            comparator: scripts/check_module_docs.sh tools
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,6 +54,7 @@ jobs:
           sudo unzip -q -o /tmp/duckdb.zip -d /usr/local/bin
           duckdb --version
       - run: ${{ matrix.command }}
+      - run: ${{ matrix.comparator }}
 
   # The Python comparators and the golden-corpus generator ship with their own
   # test files; a file that fails to import reports zero failures, so the
@@ -94,6 +101,23 @@ jobs:
             scripts/golden/test_golden_scripts.py \
             scripts/release/test_render_release_notes.py \
             scripts/parity/test_check_parity_matrix.py
+      # The Rust field comparator's goldens are what compare_vep_fields.py writes over its
+      # fixture pairs; the Test job holds the binary to them, this step holds the Python,
+      # so a change to either side that moves the contract fails here or there. From the
+      # package root with relative fixture paths, which the goldens' `inputs` block carries.
+      - run: |
+          set -e
+          cd tools/vep-fields-compare
+          golden=$(mktemp -d)
+          py=../../scripts/concordance/compare_vep_fields.py
+          python3 "$py" --perl tests/fixtures/reference.txt --rust tests/fixtures/scored.txt --out "$golden/fields.json" --tmp-dir "$golden" > "$golden/stdout.txt"
+          cmp "$golden/fields.json" tests/fixtures/expected_fields.json
+          cmp "$golden/stdout.txt" tests/fixtures/expected_stdout.txt
+          python3 "$py" --perl tests/fixtures/reference.txt --rust tests/fixtures/scored.txt --out "$golden/fields_examples1.json" --tmp-dir "$golden" --examples 1 > /dev/null
+          cmp "$golden/fields_examples1.json" tests/fixtures/expected_fields_examples1.json
+          python3 "$py" --perl tests/fixtures/disjoint_reference.txt --rust tests/fixtures/disjoint_scored.txt --out "$golden/disjoint_fields.json" --tmp-dir "$golden" > "$golden/disjoint_stdout.txt"
+          cmp "$golden/disjoint_fields.json" tests/fixtures/expected_disjoint_fields.json
+          cmp "$golden/disjoint_stdout.txt" tests/fixtures/expected_disjoint_stdout.txt
       # The parity matrix (tests/parity/matrix.tsv) must name every flag args.rs declares,
       # and every landed row's tests must resolve in this tree.
       - run: python3 scripts/parity/check_parity_matrix.py
@@ -124,7 +148,7 @@ jobs:
             echo "$1 reported $n ok lines (floor $2)"
             [ "$n" -ge "$2" ]
           }
-          check scripts/concordance/test_run_clone_measurement.sh 78
+          check scripts/concordance/test_run_clone_measurement.sh 85
           check scripts/concordance/test_generate_reference_output.sh 70
           check scripts/docker/test_image_tags.sh 8
           check scripts/docker/test_stage_release.sh 12
@@ -152,6 +176,11 @@ jobs:
           install -m 0755 "/tmp/${ASSET}/cargo-audit" "${CARGO_HOME:-$HOME/.cargo}/bin/cargo-audit"
           cargo audit --version
       - run: scripts/check_advisory_reachability.sh
+      # tools/vep-fields-compare has its own lockfile, outside the script's audit of the
+      # root one. The whole lockfile is audited, with no reachability distinction: an
+      # advisory of any class on any crate in it, including a backend the build leaves
+      # out, fails here and is cleared by a bump.
+      - run: cargo audit --deny warnings --file tools/vep-fields-compare/Cargo.lock
 
   # Builds on the DECLARED minimum supported Rust version rather than the
   # pinned toolchain. Every job above runs the pinned 1.97.1, the toolchain the
@@ -176,15 +205,18 @@ jobs:
           toolchain: 1.88
       - name: Toolchain matches the declared rust-version
         run: |
-          declared=$(sed -n 's/^rust-version *= *"\([^"]*\)".*/\1/p' Cargo.toml | head -1)
           actual=$(rustc --version | awk '{print $2}')
-          echo "declared rust-version=$declared, toolchain=$actual"
-          case "$actual" in
-            "$declared" | "$declared".*) ;;
-            *) echo "ERROR: [msrv] toolchain $actual is not the declared rust-version $declared; update both the toolchain input and Cargo.toml together" >&2; exit 1 ;;
-          esac
+          for manifest in Cargo.toml tools/vep-fields-compare/Cargo.toml; do
+            declared=$(sed -n 's/^rust-version *= *"\([^"]*\)".*/\1/p' "$manifest" | head -1)
+            echo "$manifest: declared rust-version=$declared, toolchain=$actual"
+            case "$actual" in
+              "$declared" | "$declared".*) ;;
+              *) echo "ERROR: [msrv] toolchain $actual is not the declared rust-version $declared in $manifest; update both the toolchain input and the manifest together" >&2; exit 1 ;;
+            esac
+          done
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo build --workspace --locked
+      - run: cargo build --locked --manifest-path tools/vep-fields-compare/Cargo.toml
 
   build-release:
     name: Build Release

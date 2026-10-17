@@ -1,0 +1,14 @@
+keys: reference 130 scored 129 intersection 128 (reference-only 2, scored-only 1)
+  Uploaded_variation       equal          128 /          128  agreement 1.0
+  Gene                     equal          128 /          128  agreement 1.0
+  cDNA_position            equal          128 /          128  agreement 1.0
+  CDS_position             equal          128 /          128  agreement 1.0
+  Protein_position         equal          128 /          128  agreement 1.0
+  Amino_acids              equal          126 /          128  agreement 0.984375
+  Codons                   equal            1 /          128  agreement 0.007812
+  Existing_variation       equal          126 /          128  agreement 0.984375
+  Extra:CANONICAL          equal            0 /            1  agreement 0.0
+  Extra:DISTANCE           equal          110 /          111  agreement 0.990991
+  Extra:FLAGS              equal            2 /            3  agreement 0.666667
+  Extra:IMPACT             equal          124 /          125  agreement 0.992
+  Extra:STRAND             equal          124 /          124  agreement 1.0
