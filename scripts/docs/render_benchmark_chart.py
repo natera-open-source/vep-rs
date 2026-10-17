@@ -139,12 +139,15 @@ def current_release(readme: Path) -> str:
 
 
 def population_record(repo: Path, version: str) -> Path:
-    """The last docs/concordance-provenance/<date>-population-v<version>.json by name, the latest date."""
+    """The one docs/concordance-provenance/<date>-population-v<version>.json; none or several fail."""
     pattern = f"*-population-v{version}.json"
     records = sorted((repo / "docs" / "concordance-provenance").glob(pattern))
     if not records:
         fail(f"no docs/concordance-provenance/{pattern}")
-    return records[-1]
+    if len(records) > 1:
+        fail(f"{len(records)} records match docs/concordance-provenance/{pattern}: "
+             + ", ".join(r.name for r in records))
+    return records[0]
 
 
 def load_record(path: Path, version: str) -> dict:

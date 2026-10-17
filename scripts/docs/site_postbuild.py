@@ -8,7 +8,8 @@ one `h1`, and collapses a `<title>` whose chapter name repeats the book title.
 On every page except `print.html`, `toc.html`, `404.html` and the stub mdBook
 writes for a redirected path, it inserts `<link rel="canonical">` and `og:url`
 for the page's address under `--base` and, on the preview,
-`<meta name="vep-rs-channel" content="main">`. It writes `versions.json`,
+`<meta name="vep-rs-channel" content="main">` and a `noindex` robots meta, so a
+search engine lists the release and not the preview. It writes `versions.json`,
 which the header's channel switcher reads, and for a release `sitemap.xml`.
 
 When `VEP_RS_DOCS_README_HOME` is `1` the home page renders the README, so its
@@ -116,10 +117,11 @@ def finish_pages(site, pages, reader_pages, base, channel, readme_home):
                 tags = [f'<link rel="canonical" href="{url}">', f'<meta property="og:url" content="{url}">']
                 if channel:
                     tags.append(f'<meta name="vep-rs-channel" content="{channel}">')
+                    tags.append('<meta name="robots" content="noindex">')
                 text = text.replace("</head>", "\n        ".join(tags) + "\n    </head>", 1)
                 inserted += 1
         write(path, text)
-    what = "canonical, og:url" + (", channel" if channel else "")
+    what = "canonical, og:url" + (", channel, noindex" if channel else "")
     print(
         f"{len(pages)} pages finished: menu title demoted, head tags ({what}) inserted on {inserted},"
         f" {present} already carried a canonical link"

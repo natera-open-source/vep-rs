@@ -10,13 +10,16 @@
 # takes it from the checkout. A SUMMARY.md entry naming a page the tag does not
 # have is dropped. So is a redirect whose destination page the tag does not
 # have, or whose source anchor is still a heading of the tag's own page. Each
-# drop prints a line. A tag whose docs/index.md is absent, or is the stub that
+# drop prints a line, and a redirect entry the filter cannot read (anything but
+# "source" = "destination" on one line) fails the build. A tag whose
+# docs/index.md is absent, or is the stub that
 # points at the README, keeps the README as its home page
 # (VEP_RS_DOCS_README_HOME=1).
 #
-# Preview form (--main). The pages come from HEAD; the site is titled as the
-# development preview, addressed under /vep-rs/main/ and marked with its
-# channel. VEP_RS_DOCS_RELEASE names the latest release: the environment's
+# Preview form (--main). The pages come from HEAD; the site is titled
+# "vep-rs main", addressed under /vep-rs/main/ and marked with its channel, which
+# the theme shows as the development-version banner and the header switcher.
+# VEP_RS_DOCS_RELEASE names the latest release: the environment's
 # value when set, else the newest tag reachable from origin/main, else the
 # highest tag.
 #
@@ -188,7 +191,10 @@ kept, in_table, seen, dropped = [], False, 0, 0
 for line in open(toml, encoding="utf-8"):
     if line.lstrip().startswith("["):
         in_table = line.strip() == "[output.html.redirect]"
-    elif in_table and (m := ENTRY.match(line)):
+    elif in_table and line.strip() and not line.lstrip().startswith("#"):
+        m = ENTRY.match(line)
+        if not m:
+            sys.exit(f"ERROR: [build_release_site] unrecognised redirect entry: {line.rstrip()}")
         seen += 1
         key, dest = m[1], m[2]
         source, _, fragment = key.lstrip("/").partition("#")
