@@ -85,7 +85,7 @@ cp "$checkout/book.toml" "$out/"
 mkdir -p "$out/scripts"
 cp -R "$checkout/scripts/docs" "$out/scripts/"
 
-index="$out/docs/index.md"
+index="${out}/docs/index.md"
 if [ ! -e "$index" ] || {
     [ "$(head -n 1 "$index")" = "# vep-rs documentation" ] && [ "$(awk 'END { print NR }' "$index")" -eq 3 ]
 }; then

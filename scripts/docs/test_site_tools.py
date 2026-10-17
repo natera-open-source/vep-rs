@@ -23,21 +23,28 @@ import site_postbuild as postbuild
 import site_screenshots as shots
 
 REPO_URL = "https://github.com/natera-open-source/vep-rs"
+EDIT_URL = f"{REPO_URL}/edit/main/"
 RELEASE = "v1.2.3"
 VERSION = "1.2.3"
 BASE = "https://docs.example/vep-rs/"
 STUB = "# vep-rs documentation\n\nThe home page is the README.\n"
 OVERVIEW = "# Overview\n\nWelcome.\n"
 
+# The two fixture pages sit in a subdirectory of the book, so link resolution across
+# directories is exercised.
+SUB = "guide"
+GUIDE_PAGE = f"{SUB}/page.md"
+GUIDE_SETUP = f"{SUB}/setup.md"
+
 # One README for the preprocessor and the metrics: a section with links and a fenced `## ` line, a
 # section that a shorter prefix also matches, and a last section that runs to the end of the file.
-README = """# Project
+README = f"""# Project
 
 Intro.
 
 ## Install
 
-Download the [archive](dist/archive.tar.gz), read [Notes](#notes) and [`docs/guide/setup.md`](docs/guide/setup.md).
+Download the [archive](dist/archive.tar.gz), read [Notes](#notes) and [`docs/{SUB}/setup.md`](docs/{SUB}/setup.md).
 
 ```text
 ## Not a heading
@@ -78,7 +85,7 @@ def git(root, *args):
 
 def repository(tmp_path, readme=README):
     root = tmp_path / "repo"
-    (root / "docs" / "guide").mkdir(parents=True)
+    (root / "docs" / SUB).mkdir(parents=True)
     (root / "scripts").mkdir()
     (root / "README.md").write_text(readme, encoding="utf-8")
     (root / "CHANGELOG.md").write_text(CHANGELOG, encoding="utf-8")
@@ -92,12 +99,12 @@ def chapter(source, content):
 
 
 def site_book(page):
-    """A book whose `guide/page.md` chapter holds `page`, beside a home page, a sibling and the two
+    """A book whose `GUIDE_PAGE` chapter holds `page`, beside a home page, a sibling and the two
     chapters that mirror repository files."""
     return [
         chapter("index.md", OVERVIEW),
-        chapter("guide/page.md", page),
-        chapter("guide/setup.md", "# Setup\n\n## Step 2\n"),
+        chapter(GUIDE_PAGE, page),
+        chapter(GUIDE_SETUP, "# Setup\n\n## Step 2\n"),
         chapter("changelog.md", ""),
         chapter("contributing.md", ""),
     ]
@@ -162,7 +169,7 @@ def test_supports_exits_zero(monkeypatch):
 )
 def test_readme_is_home_follows_the_variable_else_the_three_line_stub(monkeypatch, setting, content, home):
     set_variable(monkeypatch, "VEP_RS_DOCS_README_HOME", setting)
-    items = [chapter("guide/page.md", "Text.\n")]
+    items = [chapter(GUIDE_PAGE, "Text.\n")]
     if content is not None:
         items.append(chapter("index.md", content))
     assert links.readme_is_home({"items": items}) is home
@@ -187,7 +194,7 @@ def test_home_variable_zero_keeps_the_stub_and_sends_its_readme_link_to_github(m
 def test_directive_pastes_the_one_matching_section_up_to_the_next_heading(monkeypatch, capsys, tmp_path):
     page = "Before.\n\n<!-- readme-section: Install -->\n\nAfter.\n"
     pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book(page))
-    assert pages["guide/page.md"] == (
+    assert pages[GUIDE_PAGE] == (
         "Before.\n\n## Install\n\n"
         f"Download the [archive]({REPO_URL}/blob/main/dist/archive.tar.gz), read [Notes](#notes) and [`setup.md`](setup.md).\n\n"
         "```text\n## Not a heading\n```\n\n\nAfter.\n"
@@ -196,18 +203,18 @@ def test_directive_pastes_the_one_matching_section_up_to_the_next_heading(monkey
 
 def test_directive_for_the_last_section_runs_to_the_end_of_the_readme(monkeypatch, capsys, tmp_path):
     pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book("<!-- readme-section: Notes on -->\n"))
-    assert pages["guide/page.md"] == "## Notes on output\n\nColumns.\n"
+    assert pages[GUIDE_PAGE] == "## Notes on output\n\nColumns.\n"
 
 
 def test_noheading_option_drops_the_heading_line(monkeypatch, capsys, tmp_path):
     pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book("<!-- readme-section: Notes on | noheading -->\n"))
-    assert pages["guide/page.md"] == "\nColumns.\n"
+    assert pages[GUIDE_PAGE] == "\nColumns.\n"
 
 
 def test_fragments_option_points_bare_fragment_links_at_the_named_chapter(monkeypatch, capsys, tmp_path):
     page = "<!-- readme-section: Install | noheading | fragments: index.md -->\n"
     pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book(page))
-    assert pages["guide/page.md"] == (
+    assert pages[GUIDE_PAGE] == (
         f"\nDownload the [archive]({REPO_URL}/blob/main/dist/archive.tar.gz), read [Notes](../index.md#notes) and "
         "[`setup.md`](setup.md).\n\n```text\n## Not a heading\n```\n\n"
     )
@@ -249,7 +256,7 @@ def test_tokens_take_the_ref_and_release_from_the_environment(monkeypatch, capsy
     page = "Ref {{vep-rs-ref}}, release {{vep-rs-release}}, [scripts](../../scripts/README.md).\n"
     pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book(page),
                        env={"VEP_RS_DOCS_REF": "v2.0.0", "VEP_RS_DOCS_RELEASE": "v2.0.0"})
-    assert pages["guide/page.md"] == f"Ref v2.0.0, release v2.0.0, [scripts]({REPO_URL}/blob/v2.0.0/scripts/README.md).\n"
+    assert pages[GUIDE_PAGE] == f"Ref v2.0.0, release v2.0.0, [scripts]({REPO_URL}/blob/v2.0.0/scripts/README.md).\n"
 
 
 def test_tokens_default_to_main_and_a_link_to_the_latest_release(monkeypatch, capsys, tmp_path):
@@ -257,7 +264,7 @@ def test_tokens_default_to_main_and_a_link_to_the_latest_release(monkeypatch, ca
     git(root, "init", "-q")
     pages = preprocess(monkeypatch, capsys, root, site_book("{{vep-rs-ref}} {{vep-rs-release}}\n"),
                        env={"VEP_RS_DOCS_RELEASE": None})
-    assert pages["guide/page.md"] == f"main [on GitHub]({REPO_URL}/releases/latest)\n"
+    assert pages[GUIDE_PAGE] == f"main [on GitHub]({REPO_URL}/releases/latest)\n"
 
 
 def test_release_token_defaults_to_the_newest_tag_reachable_from_head(monkeypatch, capsys, tmp_path):
@@ -267,13 +274,13 @@ def test_release_token_defaults_to_the_newest_tag_reachable_from_head(monkeypatc
     git(root, "tag", "v9.9.9")
     pages = preprocess(monkeypatch, capsys, root, site_book("{{vep-rs-ref}} {{vep-rs-release}}\n"),
                        env={"VEP_RS_DOCS_RELEASE": None})
-    assert pages["guide/page.md"] == "main v9.9.9\n"
+    assert pages[GUIDE_PAGE] == "main v9.9.9\n"
 
 
 def test_links_directives_and_tokens_inside_fenced_code_are_untouched(monkeypatch, capsys, tmp_path):
     page = "```md\n[scripts](../../scripts/README.md) {{vep-rs-ref}}\n<!-- readme-section: Install -->\n```\n"
     pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book(page))
-    assert pages["guide/page.md"] == page
+    assert pages[GUIDE_PAGE] == page
 
 
 @pytest.mark.parametrize(
@@ -287,7 +294,7 @@ def test_links_directives_and_tokens_inside_fenced_code_are_untouched(monkeypatc
         ("../../README.md", f"{REPO_URL}/blob/main/README.md"),
         ("../../scripts/README.md", f"{REPO_URL}/blob/main/scripts/README.md"),
         ("../../scripts", f"{REPO_URL}/tree/main/scripts"),
-        ("missing.md", f"{REPO_URL}/blob/main/docs/guide/missing.md"),
+        ("missing.md", f"{REPO_URL}/blob/main/docs/{SUB}/missing.md"),
         ("https://example.org/page", "https://example.org/page"),
         ("#top", "#top"),
         ("../../../outside.md", "../../../outside.md"),
@@ -297,13 +304,13 @@ def test_links_directives_and_tokens_inside_fenced_code_are_untouched(monkeypatc
 )
 def test_link_targets_are_rewritten_for_the_site(monkeypatch, capsys, tmp_path, target, expected):
     pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book(f"See [it]({target}).\n"))
-    assert pages["guide/page.md"] == f"See [it]({expected}).\n"
+    assert pages[GUIDE_PAGE] == f"See [it]({expected}).\n"
 
 
 def test_readme_link_points_at_the_home_page_when_the_readme_is_home(monkeypatch, capsys, tmp_path):
     pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book("See [it](../../README.md).\n"),
                        env={"VEP_RS_DOCS_README_HOME": "1"})
-    assert pages["guide/page.md"] == "See [it](../index.md).\n"
+    assert pages[GUIDE_PAGE] == "See [it](../index.md).\n"
 
 
 def test_changelog_chapter_shows_the_repository_changelog_with_its_heading_link_moved(monkeypatch, capsys, tmp_path):
@@ -443,7 +450,7 @@ def built_site(tmp_path, chart_release=RELEASE, redirect="guide/setup.html#step-
     site = tmp_path / "book"
     (site / "guide").mkdir(parents=True)
     (site / "assets").mkdir()
-    edit = f'<a href="{REPO_URL}/edit/main/docs/index.md">Edit</a>\n<h1 id="overview">Overview</h1>'
+    edit = f'<a href="{EDIT_URL}docs/index.md">Edit</a>\n<h1 id="overview">Overview</h1>'
     (site / "index.html").write_text(page_html("vep-rs", edit), encoding="utf-8")
     (site / "guide" / "setup.html").write_text(
         page_html("Setup", '<h1 id="setup">Setup</h1>\n<h2 id="step-2">Step 2</h2>'), encoding="utf-8"
@@ -582,7 +589,7 @@ def test_readme_home_skips_the_chart_check_and_points_the_edit_link_at_the_readm
     assert code == 0, out
     assert "benchmark chart: not shown, the README is the home page; release check skipped\n" in out
     index = (site / "index.html").read_text(encoding="utf-8")
-    assert f'<a href="{REPO_URL}/edit/main/README.md">Edit</a>' in index
+    assert f'<a href="{EDIT_URL}README.md">Edit</a>' in index
     assert "docs/index.md" not in index
 
 
