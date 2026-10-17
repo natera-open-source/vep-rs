@@ -65,44 +65,56 @@ impl TabixRecord {
 ///
 /// Records are stored in a `HashMap<chr, BTreeMap<start, Vec<TabixRecord>>>`
 /// so that per-variant lookups are O(log N) BTreeMap range queries instead
-/// of linear scans.
+/// of linear scans. A record is found by every range its `start..=end` span
+/// overlaps, not only by the ranges containing its start.
 pub struct BatchQueryResult {
     /// Records indexed by chromosome and start position.
     records_by_pos: HashMap<String, BTreeMap<u64, Vec<TabixRecord>>>,
+    /// Per chromosome, the longest `end - start` of any record: how far below a
+    /// range's start a record keyed by its start can lie and still reach into
+    /// the range.
+    longest_span: HashMap<String, u64>,
 }
 
 impl BatchQueryResult {
     /// Create an empty batch result.
     pub fn empty() -> Self {
-        Self {
-            records_by_pos: HashMap::new(),
-        }
+        Self::from_records(HashMap::new())
     }
 
     /// Create a batch result from pre-built records indexed by chromosome and position.
     pub fn from_records(records_by_pos: HashMap<String, BTreeMap<u64, Vec<TabixRecord>>>) -> Self {
-        Self { records_by_pos }
+        let longest_span = records_by_pos
+            .iter()
+            .map(|(chr, by_start)| {
+                let longest = by_start
+                    .values()
+                    .flatten()
+                    .map(|record| record.end.saturating_sub(record.start))
+                    .max()
+                    .unwrap_or(0);
+                (chr.clone(), longest)
+            })
+            .collect();
+        Self {
+            records_by_pos,
+            longest_span,
+        }
     }
 
-    /// Look up all records overlapping a given range.
+    /// Look up all records whose span overlaps a given range.
     pub fn lookup(&self, chr: &str, start: u64, end: u64) -> Vec<&TabixRecord> {
-        let mut results = Vec::new();
         let Some(chr_map) = self.records_by_pos.get(chr) else {
-            return results;
+            return Vec::new();
         };
         let (start, end) = normalize_range_bounds(start, end);
+        let reach = self.longest_span.get(chr).copied().unwrap_or(0);
 
-        if start == end {
-            if let Some(records) = chr_map.get(&start) {
-                results.extend(records.iter());
-            }
-            return results;
-        }
-
-        for (_pos, records) in chr_map.range(start..=end) {
-            results.extend(records.iter());
-        }
-        results
+        chr_map
+            .range(start.saturating_sub(reach)..=end)
+            .flat_map(|(_start, records)| records.iter())
+            .filter(|record| record.end >= start)
+            .collect()
     }
 
     /// Check if the result is empty.
@@ -121,6 +133,11 @@ pub struct TabixConfig {
     /// 0-based column index for start position (default: 1).
     pub start_col: usize,
     /// 0-based column index for end position. If None, end = start.
+    ///
+    /// A record is matched by its `start..=end` span, as `tabix` matches it by
+    /// the columns its index was built on (`-b` and `-e`), so this names the
+    /// index's `-e` column and is `None` for an index built with `-b` and `-e`
+    /// on the same column.
     pub end_col: Option<usize>,
     /// 0-based column index for reference allele, if applicable.
     pub ref_col: Option<usize>,
@@ -143,8 +160,13 @@ pub struct TabixAnnotator {
     /// Open file handle cloned for per-query readers (avoids repeated open calls).
     file: std::fs::File,
     /// Loaded once and reused across queries.
-    index: tabix::Index,
+    index: Index,
+    /// Where `index` was read from, for error messages.
+    index_path: PathBuf,
 }
+
+/// A loaded `.tbi` or `.csi` index; the query path is the same for both.
+type Index = Box<dyn BinningIndex + Send + Sync>;
 
 impl TabixAnnotator {
     /// Open a tabix-indexed file with the given configuration.
@@ -153,6 +175,13 @@ impl TabixAnnotator {
 
         let index_path = find_index_path(&file_path)?;
         let index = load_index(&index_path)?;
+        if index.header().is_none() {
+            return Err(PluginError::Init(format!(
+                "index {} carries no tabix header, so its records cannot be \
+                 mapped to chromosomes; index the file with tabix",
+                index_path.display()
+            )));
+        }
 
         let header = parse_header(&file_path, config.start_col)?.map(Arc::new);
         let file = std::fs::File::open(&file_path).map_err(|e| {
@@ -164,6 +193,7 @@ impl TabixAnnotator {
 
         debug!(
             file = %file_path.display(),
+            index = %index_path.display(),
             header_cols = header.as_ref().map(|h| h.len()).unwrap_or(0),
             "opened tabix file"
         );
@@ -173,6 +203,7 @@ impl TabixAnnotator {
             header,
             file,
             index,
+            index_path,
         })
     }
 
@@ -184,9 +215,7 @@ impl TabixAnnotator {
         regions: &[(&str, u64, u64)],
     ) -> Result<BatchQueryResult, PluginError> {
         if regions.is_empty() {
-            return Ok(BatchQueryResult {
-                records_by_pos: HashMap::new(),
-            });
+            return Ok(BatchQueryResult::empty());
         }
 
         let mut by_chr: HashMap<&str, Vec<(u64, u64)>> = HashMap::new();
@@ -201,9 +230,16 @@ impl TabixAnnotator {
             intervals.sort_by_key(|&(s, _)| s);
             let merged = merge_intervals(&intervals);
 
-            for (m_start, m_end) in &merged {
-                let records = self.query_tabix_region(&self.index, chr, *m_start, *m_end)?;
+            let mut previous_end: Option<u64> = None;
+            for &(region_start, region_end) in &merged {
+                let records = self.query_tabix_region(chr, region_start, region_end)?;
                 for record in records {
+                    // A record starting at or before the previous region's end
+                    // and reaching into this one overlaps both, and the previous
+                    // region's read already collected it.
+                    if previous_end.is_some_and(|end| record.start <= end) {
+                        continue;
+                    }
                     all_records
                         .entry(chr.to_string())
                         .or_default()
@@ -211,27 +247,26 @@ impl TabixAnnotator {
                         .or_default()
                         .push(record);
                 }
+                previous_end = Some(region_end);
             }
         }
 
-        Ok(BatchQueryResult {
-            records_by_pos: all_records,
-        })
+        Ok(BatchQueryResult::from_records(all_records))
     }
 
     /// Query a single region. Convenience wrapper.
     pub fn query(&self, chr: &str, start: u64, end: u64) -> Result<Vec<TabixRecord>, PluginError> {
         let (start, end) = normalize_range_bounds(start, end);
-        self.query_tabix_region(&self.index, chr, start, end)
+        self.query_tabix_region(chr, start, end)
     }
 
     /// Query a region using the tabix index and bgzf reader.
     ///
-    /// Uses the CSI binning index to find relevant chunks in the bgzf file,
-    /// seeks to each chunk, and reads records that fall within the query region.
+    /// Uses the binning index to find relevant chunks in the bgzf file, seeks
+    /// to each chunk, and reads the records whose span overlaps the query
+    /// region, as `tabix <file> <region>` does.
     fn query_tabix_region(
         &self,
-        index: &tabix::Index,
         chr: &str,
         start: u64,
         end: u64,
@@ -239,15 +274,13 @@ impl TabixAnnotator {
         let mut records = Vec::new();
         let (start, end) = normalize_range_bounds(start, end);
 
-        let idx_header = match index.header() {
-            Some(h) => h,
-            None => return Ok(records), // No header = can't map chr to ref seq id
+        let Some(idx_header) = self.index.header() else {
+            return Ok(records); // No header = can't map chr to ref seq id
         };
         let ref_seq_names = idx_header.reference_sequence_names();
 
-        let ref_seq_id = match resolve_reference_sequence_id(ref_seq_names, chr) {
-            Some(id) => id,
-            None => return Ok(records), // Chromosome not in index
+        let Some((ref_seq_id, file_chr)) = resolve_reference_sequence(ref_seq_names, chr) else {
+            return Ok(records); // Chromosome not in index
         };
 
         let start_pos = Position::try_from(start.max(1) as usize)
@@ -256,7 +289,7 @@ impl TabixAnnotator {
             .map_err(|e| PluginError::Run(format!("invalid end position: {e}")))?;
         let interval = start_pos..=end_pos;
 
-        let chunks = match index.query(ref_seq_id, interval.into()) {
+        let chunks = match self.index.query(ref_seq_id, interval.into()) {
             Ok(chunks) => chunks,
             Err(_) => return Ok(records), // Region not found in index
         };
@@ -271,42 +304,87 @@ impl TabixAnnotator {
             .map_err(|e| PluginError::Run(format!("failed to clone bgzf file handle: {e}")))?;
         let mut bgzf_reader = bgzf::io::Reader::new(file);
 
-        // Do not hand-roll this by comparing `virtual_position()` against
-        // `chunk.end()` around a `BufReader`: a chunk end is a bgzf virtual
-        // position (compressed block offset in the high 48 bits, offset within
-        // the uncompressed block in the low 16) and `BufReader` fills in bulk, so
-        // the position jumps to the next block boundary after the first line and
-        // such a loop stops after one record. `csi::io::Query` handles the seek,
-        // the per-chunk end bound and the advance across chunks, and implements
-        // `BufRead`.
-        let query = noodles::csi::io::Query::new(&mut bgzf_reader, chunks);
-        let mut buf_reader = BufReader::new(query);
+        // No `BufReader` wraps the reader: a bulk fill runs past a chunk's end
+        // into bytes the next chunk's seek reads again, so records are returned
+        // twice and a line cut at the fill's end is glued to the next chunk's
+        // first line.
+        let mut line = Vec::new();
+        for chunk in chunks {
+            self.seek_to_chunk_start(&mut bgzf_reader, chunk.start())?;
 
-        let mut line = String::new();
-        loop {
-            line.clear();
-            let bytes_read = buf_reader
-                .read_line(&mut line)
-                .map_err(|e| PluginError::Run(format!("failed to read line: {e}")))?;
-            if bytes_read == 0 {
-                break;
-            }
+            while bgzf_reader.virtual_position() < chunk.end() {
+                line.clear();
+                let bytes_read = bgzf_reader
+                    .read_until(b'\n', &mut line)
+                    .map_err(|e| self.read_error(e))?;
+                if bytes_read == 0 {
+                    break;
+                }
 
-            let trimmed = line.trim_end();
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
+                let text = String::from_utf8_lossy(&line);
+                let trimmed = text.trim_end();
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    continue;
+                }
 
-            if let Some(record) = self.parse_line(trimmed) {
+                let Some(record) = self.parse_line(trimmed) else {
+                    continue;
+                };
                 // The index is bin-granular, so a chunk legitimately carries
-                // records outside the requested interval.
-                if record.start >= start && record.start <= end {
+                // records outside the requested interval; its bounds are also
+                // all that keeps another chromosome's records out of the read,
+                // so the chromosome is checked as well.
+                if record.chr.as_bytes() == file_chr.as_slice()
+                    && record.start <= end
+                    && record.end >= start
+                {
                     records.push(record);
                 }
             }
         }
 
         Ok(records)
+    }
+
+    /// Position `reader` at `chunk_start`, refusing an offset the block does
+    /// not hold.
+    ///
+    /// The chunk's block is entered at offset 0 so that its length is known
+    /// before the chunk's offset into it is applied: an index built for another
+    /// file names offsets no block of this one holds. A seek past the end of
+    /// the file reads no block and leaves the one read before in place, so the
+    /// block reached must report the offset asked for; a chunk starts at a
+    /// record, so a block with no bytes is refused as well.
+    fn seek_to_chunk_start(
+        &self,
+        reader: &mut bgzf::io::Reader<std::fs::File>,
+        chunk_start: bgzf::VirtualPosition,
+    ) -> Result<(), PluginError> {
+        let (block_offset, offset_in_block): (u64, u16) = chunk_start.into();
+        let offset_in_block = usize::from(offset_in_block);
+        let block_start = bgzf::VirtualPosition::try_from((block_offset, 0))
+            .map_err(|e| PluginError::Run(format!("invalid index offset: {e}")))?;
+        reader.seek(block_start).map_err(|e| self.read_error(e))?;
+        let block_len = reader.fill_buf().map_err(|e| self.read_error(e))?.len();
+        if block_len == 0 || reader.virtual_position() != block_start || offset_in_block > block_len
+        {
+            return Err(PluginError::Run(format!(
+                "index {} does not describe {}: no block at offset {block_offset} holds \
+                 byte {offset_in_block}",
+                self.index_path.display(),
+                self.config.file_path.display()
+            )));
+        }
+        reader.consume(offset_in_block);
+        Ok(())
+    }
+
+    /// The error for an I/O failure while reading the data file.
+    fn read_error(&self, e: std::io::Error) -> PluginError {
+        PluginError::Run(format!(
+            "failed to read {}: {e}",
+            self.config.file_path.display()
+        ))
     }
 
     /// Parse a tab-separated line into a TabixRecord.
@@ -338,13 +416,14 @@ impl TabixAnnotator {
             start
         };
 
-        let end = if let Some(end_col) = self.config.end_col {
-            columns
+        // An end column that is the start column names a single base, as
+        // `tabix -b N -e N` does, so it takes the start's zero-based shift too.
+        let end = match self.config.end_col {
+            Some(end_col) if end_col != self.config.start_col => columns
                 .get(end_col)
                 .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(start)
-        } else {
-            start
+                .unwrap_or(start),
+            _ => start,
         };
 
         Some(TabixRecord {
@@ -444,44 +523,62 @@ pub fn chromosome_query_candidates(chr: &str) -> Vec<String> {
     candidates
 }
 
-fn resolve_reference_sequence_id(
-    ref_seq_names: &indexmap::IndexSet<bstr::BString>,
+/// Resolve a query chromosome to the index's reference-sequence id and the
+/// file's own spelling of the name, which its records carry.
+fn resolve_reference_sequence<'a>(
+    ref_seq_names: &'a indexmap::IndexSet<bstr::BString>,
     chr: &str,
-) -> Option<usize> {
+) -> Option<(usize, &'a bstr::BString)> {
     for candidate in chromosome_query_candidates(chr) {
         let chr_bytes = bstr::BString::from(candidate.as_bytes());
-        if let Some(id) = ref_seq_names.get_index_of(&chr_bytes) {
-            return Some(id);
+        if let Some(found) = ref_seq_names.get_full(&chr_bytes) {
+            return Some(found);
         }
     }
     None
 }
 
-/// Find the .tbi index file for a given data file.
+/// Find the index file for a given data file in the order htslib searches:
+/// `<file>.csi` (the format `tabix -C` writes), `<stem>.csi`, `<file>.tbi`,
+/// `<stem>.tbi`, where `<stem>` drops the data file's last extension.
 fn find_index_path(data_path: &Path) -> Result<PathBuf, PluginError> {
-    let tbi_appended = PathBuf::from(format!("{}.tbi", data_path.display()));
-    if tbi_appended.exists() {
-        return Ok(tbi_appended);
+    for extension in ["csi", "tbi"] {
+        let appended = PathBuf::from(format!("{}.{extension}", data_path.display()));
+        if appended.exists() {
+            return Ok(appended);
+        }
+        if data_path.extension().is_some() {
+            let on_stem = data_path.with_extension(extension);
+            if on_stem.exists() {
+                return Ok(on_stem);
+            }
+        }
     }
 
     Err(PluginError::Init(format!(
-        "tabix index not found for {}. Expected {}.tbi",
-        data_path.display(),
-        data_path.display(),
+        "tabix index not found for {path}. Expected {path}.csi or {path}.tbi",
+        path = data_path.display(),
     )))
 }
 
-/// Load a tabix index from a .tbi file.
-fn load_index(index_path: &Path) -> Result<tabix::Index, PluginError> {
-    tabix::fs::read(index_path).map_err(|e| {
+/// Load a tabix index from a `.tbi` or `.csi` file, by its extension.
+fn load_index(index_path: &Path) -> Result<Index, PluginError> {
+    let read_error = |e: std::io::Error| {
         PluginError::Run(format!(
             "failed to read tabix index {}: {e}",
             index_path.display()
         ))
-    })
+    };
+    if index_path.extension().is_some_and(|ext| ext == "csi") {
+        let index = noodles::csi::fs::read(index_path).map_err(read_error)?;
+        Ok(Box::new(index))
+    } else {
+        let index = tabix::fs::read(index_path).map_err(read_error)?;
+        Ok(Box::new(index))
+    }
 }
 
-/// Read the 0-based column index that a tabix `.tbi` was built on.
+/// Read the 0-based column index that a tabix index was built on.
 ///
 /// This is the ground truth for which column a query resolves against, and it is
 /// independent of anything in the data file's header. A plugin that parses a
@@ -497,9 +594,9 @@ fn load_index(index_path: &Path) -> Result<tabix::Index, PluginError> {
 /// Returns `None` when no index is present, or when the index carries no header
 /// block. Callers treat that as "cannot verify" rather than "verified compatible".
 pub fn indexed_start_column(data_path: &Path) -> Result<Option<usize>, PluginError> {
-    // Resolved through the same helper as the query path: `with_extension` on an
-    // extensionless data file (REVEL unzips to a bare `revel_with_transcript_ids`)
-    // yields `name..tbi`, which never exists.
+    // Resolved through the same helper as the query path, so the appended
+    // `<file>.tbi` form is tried and an extensionless data file (REVEL unzips to
+    // a bare `revel_with_transcript_ids`) resolves.
     let Ok(index_path) = find_index_path(data_path) else {
         return Ok(None);
     };
@@ -761,6 +858,616 @@ mod tests {
     use super::*;
     use vep_core::variant::InputVariant;
 
+    /// A committed fixture under `tests/data`, each written by `bgzip --binary`
+    /// and indexed twice, by `tabix` (`.tbi`) and `tabix -C` (`.csi`):
+    /// `spans.tsv.gz` (`-s 1 -b 2 -e 3`; records that start before a query and
+    /// reach into it) and `blocks.tsv.gz` (`-s 1 -b 2 -e 2`; 3,400 rows on
+    /// chromosome 21 at positions `5010000 + 7i`, 71,425 bytes, so the row at
+    /// 5031749 straddles the 65,280-byte bgzf block boundary).
+    fn fixture(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/data")
+            .join(name)
+    }
+
+    /// Copy a fixture and one of its two indexes into `dir`, so that only
+    /// that index sits beside the data file.
+    fn fixture_with_index(dir: &Path, name: &str, index_extension: &str) -> PathBuf {
+        let data = dir.join(name);
+        std::fs::copy(fixture(name), &data).unwrap();
+        let index = format!("{name}.{index_extension}");
+        std::fs::copy(fixture(&index), dir.join(&index)).unwrap();
+        data
+    }
+
+    fn config(file_path: PathBuf, end_col: Option<usize>) -> TabixConfig {
+        TabixConfig {
+            file_path,
+            chr_col: 0,
+            start_col: 1,
+            end_col,
+            ref_col: None,
+            alt_col: None,
+            zero_based: false,
+        }
+    }
+
+    fn open(file_path: PathBuf, end_col: Option<usize>) -> TabixAnnotator {
+        TabixAnnotator::open(config(file_path, end_col)).unwrap()
+    }
+
+    /// The records as `tabix` prints them, with the chromosome column restored
+    /// in place (`parse_line` moves it out of `columns`).
+    fn lines<'a>(records: impl IntoIterator<Item = &'a TabixRecord>) -> Vec<String> {
+        records
+            .into_iter()
+            .map(|record| {
+                let mut columns = record.columns.clone();
+                columns[0] = record.chr.clone();
+                columns.join("\t")
+            })
+            .collect()
+    }
+
+    /// Expected lines are the output of `tabix spans.tsv.gz <region>` for each
+    /// region: a record is printed when its start..=end overlaps the region,
+    /// so a record starting before the region start is included. Read here
+    /// through the `.tbi`.
+    #[test]
+    fn record_spanning_query_start_is_returned() {
+        let dir = tempfile::tempdir().unwrap();
+        let ann = open(
+            fixture_with_index(dir.path(), "spans.tsv.gz", "tbi"),
+            Some(2),
+        );
+
+        // tabix spans.tsv.gz 21:200-210
+        assert_eq!(
+            lines(&ann.query("21", 200, 210).unwrap()),
+            [
+                "21\t150\t260\tspan150_260",
+                "21\t180\t320\tspan180_320",
+                "21\t200\t200\tp200",
+            ]
+        );
+        // tabix spans.tsv.gz 21:250-255
+        assert_eq!(
+            lines(&ann.query("21", 250, 255).unwrap()),
+            ["21\t150\t260\tspan150_260", "21\t180\t320\tspan180_320"]
+        );
+        // tabix spans.tsv.gz 21:300-300
+        assert_eq!(
+            lines(&ann.query("21", 300, 300).unwrap()),
+            ["21\t180\t320\tspan180_320", "21\t300\t300\tp300"]
+        );
+        // tabix spans.tsv.gz 21:321-399 prints nothing.
+        assert!(ann.query("21", 321, 399).unwrap().is_empty());
+        // tabix spans.tsv.gz 22:200-200
+        assert_eq!(
+            lines(&ann.query("22", 200, 200).unwrap()),
+            ["22\t150\t260\tchr22_span150_260"]
+        );
+
+        // The batch path reads the merged region once and answers each
+        // variant's lookup by span.
+        let batch = ann
+            .query_batch(&[("21", 200, 210), ("21", 250, 255), ("22", 200, 200)])
+            .unwrap();
+        assert_eq!(
+            lines(batch.lookup("21", 200, 210)),
+            [
+                "21\t150\t260\tspan150_260",
+                "21\t180\t320\tspan180_320",
+                "21\t200\t200\tp200",
+            ]
+        );
+        assert_eq!(
+            lines(batch.lookup("21", 250, 255)),
+            ["21\t150\t260\tspan150_260", "21\t180\t320\tspan180_320"]
+        );
+        assert_eq!(
+            lines(batch.lookup("22", 200, 200)),
+            ["22\t150\t260\tchr22_span150_260"]
+        );
+    }
+
+    /// Regions farther apart than `merge_intervals` bridges are read separately,
+    /// and a record longer than the gap between them overlaps both reads. The
+    /// batch holds it once, so a lookup returns it once, as `tabix` prints each
+    /// line once.
+    #[test]
+    fn batch_holds_a_record_spanning_two_merged_regions_once() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+
+        let dir = tempfile::tempdir().unwrap();
+        let lines_in = [
+            "#chrom\tstart\tend\tname",
+            "21\t100\t3000\tspan100_3000",
+            "21\t150\t150\tp150",
+            "21\t2500\t2500\tp2500",
+        ];
+        let path = write_tabix_fixture(dir.path(), "long.tsv.gz", &lines_in, IndexSpec::standard());
+        let ann = open(path, Some(2));
+
+        let batch = ann
+            .query_batch(&[("21", 2500, 2500), ("21", 150, 150)])
+            .unwrap();
+        assert_eq!(batch.records_by_pos["21"][&100].len(), 1);
+        assert_eq!(
+            lines(batch.lookup("21", 150, 150)),
+            ["21\t100\t3000\tspan100_3000", "21\t150\t150\tp150"]
+        );
+        assert_eq!(
+            lines(batch.lookup("21", 2500, 2500)),
+            ["21\t100\t3000\tspan100_3000", "21\t2500\t2500\tp2500"]
+        );
+        assert!(batch.lookup("21", 3001, 3001).is_empty());
+    }
+
+    /// Both chromosomes of `spans.tsv.gz` share one bgzf block, and chromosome
+    /// 22's record follows chromosome 21's last one at the same positions, so a
+    /// read that runs past chromosome 21's chunk takes it in. `tabix
+    /// spans.tsv.gz 21:150-260` prints the four chromosome 21 records and
+    /// `tabix spans.tsv.gz 22:150-260` the one chromosome 22 record.
+    #[test]
+    fn records_of_another_chromosome_in_the_same_block_are_not_returned() {
+        let ann = open(fixture("spans.tsv.gz"), Some(2));
+        assert_eq!(
+            lines(&ann.query("21", 150, 260).unwrap()),
+            [
+                "21\t150\t260\tspan150_260",
+                "21\t180\t320\tspan180_320",
+                "21\t190\t195\tspan190_195",
+                "21\t200\t200\tp200",
+            ]
+        );
+        assert_eq!(
+            lines(&ann.query("22", 150, 260).unwrap()),
+            ["22\t150\t260\tchr22_span150_260"]
+        );
+        // tabix spans.tsv.gz 22:100-100 prints nothing: p100 is chromosome 21's.
+        assert!(ann.query("22", 100, 100).unwrap().is_empty());
+    }
+
+    /// With only `<file>.csi` beside the data file, the index is found and
+    /// answers as `tabix` does with that index: `tabix spans.tsv.gz 21:200-210`
+    /// and `tabix blocks.tsv.gz 21:5033779-5033793` print the lines below.
+    #[test]
+    fn csi_index_is_found_beside_tbi() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let spans = fixture_with_index(dir.path(), "spans.tsv.gz", "csi");
+        assert_eq!(
+            find_index_path(&spans).unwrap(),
+            dir.path().join("spans.tsv.gz.csi")
+        );
+        assert_eq!(indexed_start_column(&spans).unwrap(), Some(1));
+        let ann = open(spans, Some(2));
+        assert_eq!(
+            lines(&ann.query("21", 200, 210).unwrap()),
+            [
+                "21\t150\t260\tspan150_260",
+                "21\t180\t320\tspan180_320",
+                "21\t200\t200\tp200",
+            ]
+        );
+
+        let blocks = fixture_with_index(dir.path(), "blocks.tsv.gz", "csi");
+        let ann = open(blocks, None);
+        assert_eq!(
+            lines(&ann.query("21", 5033779, 5033793).unwrap()),
+            [
+                "21\t5033779\tC\tG\t0.843",
+                "21\t5033786\tG\tT\t0.762",
+                "21\t5033793\tT\tA\t0.681",
+            ]
+        );
+        assert_eq!(ann.query("21", 5010000, 5033793).unwrap().len(), 3400);
+    }
+
+    /// The committed fixture carries both indexes; `.csi` is the one opened, as
+    /// htslib opens it (`tabix` reads `<file>.csi` before `<file>.tbi`), so a
+    /// `.tbi` left beside a later `tabix -C` index is not the one read.
+    #[test]
+    fn csi_preferred_when_both_exist() {
+        let data = fixture("spans.tsv.gz");
+        assert!(data.with_file_name("spans.tsv.gz.tbi").exists());
+        assert_eq!(
+            find_index_path(&data).unwrap(),
+            data.with_file_name("spans.tsv.gz.csi")
+        );
+
+        let ann = open(data, Some(2));
+        assert_eq!(
+            lines(&ann.query("21", 100, 100).unwrap()),
+            ["21\t100\t100\tp100"]
+        );
+
+        let orphan = tempfile::tempdir().unwrap();
+        let no_index = orphan.path().join("spans.tsv.gz");
+        std::fs::copy(fixture("spans.tsv.gz"), &no_index).unwrap();
+        let path = no_index.display();
+        assert_eq!(
+            find_index_path(&no_index).unwrap_err().to_string(),
+            format!(
+                "plugin initialization failed: tabix index not found for {path}. \
+                 Expected {path}.csi or {path}.tbi"
+            )
+        );
+    }
+
+    /// htslib also finds an index named after the data file's stem
+    /// (`stem.tsv.tbi` beside `stem.tsv.gz`): `tabix stem.tsv.gz 21:100-100`
+    /// prints `21 99 A` from such a pair, and only the `.tbi` is read.
+    #[test]
+    fn index_named_after_the_data_file_stem_is_found() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+
+        let dir = tempfile::tempdir().unwrap();
+        let lines_in = ["#chrom\tpos\tname", "21\t99\tA", "21\t100\tB", "21\t199\tC"];
+        let data = write_tabix_fixture(dir.path(), "stem.tsv.gz", &lines_in, IndexSpec::standard());
+        std::fs::rename(
+            dir.path().join("stem.tsv.gz.tbi"),
+            dir.path().join("stem.tsv.tbi"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            find_index_path(&data).unwrap(),
+            dir.path().join("stem.tsv.tbi")
+        );
+        let ann = TabixAnnotator::open(TabixConfig {
+            zero_based: true,
+            ..config(data, None)
+        })
+        .unwrap();
+        assert_eq!(lines(&ann.query("21", 100, 100).unwrap()), ["21\t99\tA"]);
+    }
+
+    /// A zero-based file whose index names one position column (`tabix -0 -s 1
+    /// -b 2 -e 2`) matches on the shifted position whether the end column is
+    /// given as that same column or left out: `tabix bed0.tsv.gz 21:100-100`
+    /// prints `21 99 A`, 21:101-101 `21 100 B`, 21:200-200 `21 199 C`, 21:99-99
+    /// nothing, and 21:1-1000 all three rows.
+    #[test]
+    fn zero_based_point_column_matches_on_the_shifted_position() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+
+        let dir = tempfile::tempdir().unwrap();
+        let lines_in = ["#chrom\tpos\tname", "21\t99\tA", "21\t100\tB", "21\t199\tC"];
+        let data = write_tabix_fixture(dir.path(), "bed0.tsv.gz", &lines_in, IndexSpec::standard());
+
+        for end_col in [Some(1), None] {
+            let ann = TabixAnnotator::open(TabixConfig {
+                zero_based: true,
+                ..config(data.clone(), end_col)
+            })
+            .unwrap();
+            assert_eq!(lines(&ann.query("21", 100, 100).unwrap()), ["21\t99\tA"]);
+            assert_eq!(lines(&ann.query("21", 101, 101).unwrap()), ["21\t100\tB"]);
+            assert_eq!(lines(&ann.query("21", 200, 200).unwrap()), ["21\t199\tC"]);
+            assert!(ann.query("21", 99, 99).unwrap().is_empty());
+            assert_eq!(ann.query("21", 1, 1000).unwrap().len(), 3);
+            let batch = ann.query_batch(&[("21", 100, 100)]).unwrap();
+            assert_eq!(lines(batch.lookup("21", 100, 100)), ["21\t99\tA"]);
+        }
+    }
+
+    /// A `.csi` written without the tabix header (the shape an index of a BCF
+    /// has) names no chromosome, so every query through it would return
+    /// nothing; opening the file is refused instead.
+    #[test]
+    fn csi_without_a_tabix_header_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = fixture_with_index(dir.path(), "spans.tsv.gz", "csi");
+        let csi = dir.path().join("spans.tsv.gz.csi");
+        noodles::csi::fs::write(&csi, &noodles::csi::Index::default()).unwrap();
+
+        let err = match TabixAnnotator::open(config(data, Some(2))) {
+            Ok(_) => panic!("a header-less index must be refused"),
+            Err(e) => e.to_string(),
+        };
+        assert_eq!(
+            err,
+            format!(
+                "plugin initialization failed: index {} carries no tabix header, so its \
+                 records cannot be mapped to chromosomes; index the file with tabix",
+                csi.display()
+            )
+        );
+    }
+
+    /// Write `lines_in` as one bgzf block with a `.tbi` whose one bin holds one
+    /// chunk per entry of `chunks_in` (a range of line indexes and the
+    /// compressed offset the chunk names as its block; the data's one block
+    /// sits at 0), the shape a span-indexed file's bins give a query: several
+    /// chunks apart in the file.
+    fn write_multi_chunk_fixture(
+        dir: &Path,
+        lines_in: &[&str],
+        chunks_in: &[(std::ops::Range<usize>, u64)],
+    ) -> PathBuf {
+        use noodles::csi::binning_index::index::header;
+        use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+        use noodles::csi::binning_index::index::reference_sequence::index::LinearIndex;
+        use noodles::csi::binning_index::index::reference_sequence::Bin;
+        use noodles::csi::binning_index::index::ReferenceSequence;
+        use std::io::Write;
+
+        let data_path = dir.join("chunks.tsv.gz");
+        let body: String = lines_in.iter().map(|l| format!("{l}\n")).collect();
+        let mut writer = bgzf::io::Writer::new(std::fs::File::create(&data_path).unwrap());
+        writer.write_all(body.as_bytes()).unwrap();
+        writer.try_finish().unwrap();
+
+        let mut line_offsets = vec![0usize];
+        for line in lines_in {
+            line_offsets.push(line_offsets.last().unwrap() + line.len() + 1);
+        }
+        let position = |block_offset: u64, offset: usize| {
+            bgzf::VirtualPosition::try_from((block_offset, u16::try_from(offset).unwrap())).unwrap()
+        };
+        let chunks: Vec<Chunk> = chunks_in
+            .iter()
+            .map(|(range, block_offset)| {
+                Chunk::new(
+                    position(*block_offset, line_offsets[range.start]),
+                    position(*block_offset, line_offsets[range.end]),
+                )
+            })
+            .collect();
+
+        let mut bins = indexmap::IndexMap::new();
+        bins.insert(0, Bin::new(chunks.clone()));
+        let reference = ReferenceSequence::<LinearIndex>::new(bins, vec![chunks[0].start()], None);
+        let header = header::Builder::default()
+            .set_reference_sequence_name_index(0)
+            .set_start_position_index(1)
+            .set_end_position_index(Some(2))
+            .set_reference_sequence_names(["21".as_bytes().into()].into_iter().collect())
+            .build();
+        let index = tabix::Index::builder()
+            .set_header(header)
+            .set_reference_sequences(vec![reference])
+            .build();
+        tabix::fs::write(format!("{}.tbi", data_path.display()), &index).unwrap();
+        data_path
+    }
+
+    /// A chunk that ends 7 bytes short of a buffered read's 8,192-byte fill
+    /// (817 lines of 10 bytes and one of 15 after the header) is followed by
+    /// lines at 20005: a read that fills past the chunk's end cuts the first of
+    /// them to `21\t2000`, a fragment that parses as a record inside a wide
+    /// query, so `tabix` would print 818 lines and the engine 819.
+    #[test]
+    fn fragment_of_a_line_cut_at_a_buffer_boundary_is_not_a_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut rows: Vec<String> = vec!["#chrom\tpos\tname".to_string()];
+        rows.extend((1000..1817).map(|pos| format!("21\t{pos}\tX")));
+        rows.push("21\t1817\tpadded".to_string());
+        rows.extend((20005..20045).map(|pos| format!("21\t{pos}\tX")));
+        let lines_in: Vec<&str> = rows.iter().map(String::as_str).collect();
+        assert_eq!(
+            lines_in[1..819].iter().map(|l| l.len() + 1).sum::<usize>(),
+            8185
+        );
+        let data = write_multi_chunk_fixture(dir.path(), &lines_in, &[(1..819, 0)]);
+        let ann = open(data, Some(1));
+
+        let found = ann.query("21", 1, 16384).unwrap();
+        assert_eq!(found.len(), 818);
+        assert!(found
+            .iter()
+            .all(|r| r.columns.len() == 3 && (1000..=1817).contains(&r.start)));
+    }
+
+    /// An index built for another file names offsets its blocks do not hold;
+    /// the query is refused with both files named instead of reading past the
+    /// block. A chunk whose offset the block does hold is read as usual.
+    #[test]
+    fn index_of_another_file_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("blocks.tsv.gz");
+        std::fs::copy(fixture("spans.tsv.gz"), &data).unwrap();
+        std::fs::copy(
+            fixture("blocks.tsv.gz.tbi"),
+            dir.path().join("blocks.tsv.gz.tbi"),
+        )
+        .unwrap();
+        let ann = open(data.clone(), None);
+
+        assert!(ann.query("21", 5010000, 5010007).unwrap().is_empty());
+        let err = match ann.query("21", 5033779, 5033793) {
+            Ok(_) => panic!("an offset past the block must be refused"),
+            Err(e) => e.to_string(),
+        };
+        let path = data.display();
+        assert_eq!(
+            err,
+            format!(
+                "plugin execution failed: index {path}.tbi does not describe {path}: no block \
+                 at offset 0 holds byte 59707"
+            )
+        );
+    }
+
+    /// An index whose chunk begins past the end of the data file reaches no
+    /// block; a chunk begins at a record, so the pair is refused rather than
+    /// answered with nothing. The seek past the end leaves the block read for
+    /// an earlier chunk in place, so a second chunk past the end is likewise
+    /// refused, not read again from that block.
+    #[test]
+    fn index_reaching_past_the_end_of_the_data_file_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let lines_in = ["#chrom\tstart\tend\tname", "21\t100\t100\tp100"];
+        let past_the_end = 1_000_000;
+        let refused = |data: &Path| {
+            let ann = open(data.to_path_buf(), Some(2));
+            let err = match ann.query("21", 100, 100) {
+                Ok(_) => panic!("a chunk past the end of the file must be refused"),
+                Err(e) => e.to_string(),
+            };
+            let path = data.display();
+            assert_eq!(
+                err,
+                format!(
+                    "plugin execution failed: index {path}.tbi does not describe {path}: no \
+                     block at offset {past_the_end} holds byte 0"
+                )
+            );
+        };
+
+        let first_chunk_past_the_end =
+            write_multi_chunk_fixture(dir.path(), &lines_in, &[(0..2, past_the_end)]);
+        refused(&first_chunk_past_the_end);
+
+        let other_dir = tempfile::tempdir().unwrap();
+        let second_chunk_past_the_end = write_multi_chunk_fixture(
+            other_dir.path(),
+            &lines_in,
+            &[(0..2, 0), (0..2, past_the_end)],
+        );
+        refused(&second_chunk_past_the_end);
+    }
+
+    /// A query answered from two chunks returns every record of both, each
+    /// once. A span record sits in a bin above the point records', so its chunk
+    /// lies apart from theirs in the file, and a read buffered in bulk past its
+    /// chunk's end takes in the second chunk's records before the seek to that
+    /// chunk reads them again.
+    #[test]
+    fn records_from_a_second_index_chunk_are_returned() {
+        let dir = tempfile::tempdir().unwrap();
+        // Points every 100 bp from 100 to 47900, with one record spanning
+        // 16000..40000 inserted in start order: 480 records, about 10 KB, so
+        // the bytes from the span record to the end fit one 8 KB fill.
+        let mut rows: Vec<String> = vec!["#chrom\tstart\tend\tname".to_string()];
+        for start in (100..48000).step_by(100) {
+            if start == 16000 {
+                rows.push("21\t16000\t40000\tlong16000_40000".to_string());
+            }
+            rows.push(format!("21\t{start}\t{start}\tp{start}"));
+        }
+        let lines_in: Vec<&str> = rows.iter().map(String::as_str).collect();
+        let long = lines_in.iter().position(|l| l.contains("long")).unwrap();
+        let first_in_window = lines_in
+            .iter()
+            .position(|l| l.starts_with("21\t32800\t"))
+            .unwrap();
+        let data = write_multi_chunk_fixture(
+            dir.path(),
+            &lines_in,
+            &[(long..long + 1, 0), (first_in_window..lines_in.len(), 0)],
+        );
+        let ann = open(data, Some(2));
+
+        // The precondition the test rests on: the index answers with two chunks.
+        let chunks = ann
+            .index
+            .query(
+                0,
+                (Position::new(39000).unwrap()..=Position::new(39000).unwrap()).into(),
+            )
+            .unwrap();
+        assert_eq!(chunks.len(), 2);
+
+        assert_eq!(
+            lines(&ann.query("21", 39000, 39000).unwrap()),
+            [
+                "21\t16000\t40000\tlong16000_40000",
+                "21\t39000\t39000\tp39000"
+            ]
+        );
+        // The long record and the 152 points from 32800 to 47900, each once.
+        let window = lines(&ann.query("21", 32800, 47900).unwrap());
+        assert_eq!(window.len(), 153);
+        assert_eq!(window[0], "21\t16000\t40000\tlong16000_40000");
+        assert_eq!(window[1], "21\t32800\t32800\tp32800");
+        let batch = ann
+            .query_batch(&[("21", 39000, 39000), ("21", 40000, 40000)])
+            .unwrap();
+        assert_eq!(
+            lines(batch.lookup("21", 39000, 39000)),
+            [
+                "21\t16000\t40000\tlong16000_40000",
+                "21\t39000\t39000\tp39000"
+            ]
+        );
+        assert_eq!(
+            lines(batch.lookup("21", 40000, 40000)),
+            [
+                "21\t16000\t40000\tlong16000_40000",
+                "21\t40000\t40000\tp40000"
+            ]
+        );
+    }
+
+    /// The row at 5031749 straddles the boundary between the fixture's two
+    /// bgzf blocks, read here through the `.tbi`. Expected lines are the output
+    /// of `tabix blocks.tsv.gz <region>` for each region, and
+    /// `tabix blocks.tsv.gz 21 | wc -l` is 3400.
+    #[test]
+    fn bgzf_block_boundary_record_is_returned() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = fixture_with_index(dir.path(), "blocks.tsv.gz", "tbi");
+        assert_eq!(
+            find_index_path(&data).unwrap(),
+            dir.path().join("blocks.tsv.gz.tbi")
+        );
+        let ann = open(data, None);
+
+        // tabix blocks.tsv.gz 21:5031749-5031749
+        assert_eq!(
+            lines(&ann.query("21", 5031749, 5031749).unwrap()),
+            ["21\t5031749\tT\tG\t0.333"]
+        );
+        // tabix blocks.tsv.gz 21:5031735-5031763
+        assert_eq!(
+            lines(&ann.query("21", 5031735, 5031763).unwrap()),
+            [
+                "21\t5031735\tC\tA\t0.495",
+                "21\t5031742\tG\tC\t0.414",
+                "21\t5031749\tT\tG\t0.333",
+                "21\t5031756\tA\tC\t0.252",
+                "21\t5031763\tC\tG\t0.171",
+            ]
+        );
+        // tabix blocks.tsv.gz 21:5031748-5031748 and 21:5031750-5031750 print nothing.
+        assert!(ann.query("21", 5031748, 5031748).unwrap().is_empty());
+        assert!(ann.query("21", 5031750, 5031750).unwrap().is_empty());
+        // tabix blocks.tsv.gz 21:5010000-5010007
+        assert_eq!(
+            lines(&ann.query("21", 5010000, 5010007).unwrap()),
+            ["21\t5010000\tA\tC\t0.000", "21\t5010007\tC\tG\t0.919"]
+        );
+        // tabix blocks.tsv.gz 21:5033779-5033793, entirely in the second block.
+        assert_eq!(
+            lines(&ann.query("21", 5033779, 5033793).unwrap()),
+            [
+                "21\t5033779\tC\tG\t0.843",
+                "21\t5033786\tG\tT\t0.762",
+                "21\t5033793\tT\tA\t0.681",
+            ]
+        );
+        assert_eq!(ann.query("21", 5010000, 5033793).unwrap().len(), 3400);
+        // `tabix blocks.tsv.gz 21` prints 3400 lines: a wide query returns each
+        // record once and no fragment of a line cut by the reader.
+        let every = ann.query("21", 1, 10_000_000).unwrap();
+        assert_eq!(every.len(), 3400);
+        assert!(every
+            .iter()
+            .all(|r| r.columns.len() == 5 && r.start >= 5010000));
+
+        let batch = ann
+            .query_batch(&[("21", 5031749, 5031749), ("21", 5033779, 5033793)])
+            .unwrap();
+        assert_eq!(
+            lines(batch.lookup("21", 5031749, 5031749)),
+            ["21\t5031749\tT\tG\t0.333"]
+        );
+        assert_eq!(batch.lookup("21", 5033779, 5033793).len(), 3);
+    }
+
     /// A region query must return every record in range, not only the first.
     ///
     /// Records in a small file share one bgzf block, so a chunk's end is that
@@ -923,10 +1630,39 @@ mod tests {
         let mut records_by_pos: HashMap<String, BTreeMap<u64, Vec<TabixRecord>>> = HashMap::new();
         records_by_pos.insert("1".to_string(), chr_positions);
 
-        let batch = BatchQueryResult { records_by_pos };
+        let batch = BatchQueryResult::from_records(records_by_pos);
         let hits = batch.lookup("1", 200, 100);
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].start, 150);
+    }
+
+    /// A long record keyed by its start must be found from every position it
+    /// covers, including after many shorter records that follow it. Expected
+    /// hits are the records whose `start..=end` overlaps the range.
+    #[test]
+    fn lookup_finds_records_spanning_the_range_start() {
+        let record = |start: u64, end: u64| TabixRecord {
+            chr: "1".to_string(),
+            start,
+            end,
+            columns: vec![],
+            header: None,
+        };
+        let mut by_start: BTreeMap<u64, Vec<TabixRecord>> = BTreeMap::new();
+        by_start.insert(100, vec![record(100, 5000)]);
+        for start in (200..=4900).step_by(100) {
+            by_start.insert(start, vec![record(start, start)]);
+        }
+        let mut records_by_pos = HashMap::new();
+        records_by_pos.insert("1".to_string(), by_start);
+        let batch = BatchQueryResult::from_records(records_by_pos);
+
+        let starts = |hits: Vec<&TabixRecord>| hits.iter().map(|r| r.start).collect::<Vec<_>>();
+        assert_eq!(starts(batch.lookup("1", 3000, 3000)), vec![100, 3000]);
+        assert_eq!(starts(batch.lookup("1", 4950, 4999)), vec![100]);
+        assert_eq!(starts(batch.lookup("1", 5001, 6000)), Vec::<u64>::new());
+        assert_eq!(starts(batch.lookup("1", 50, 99)), Vec::<u64>::new());
+        assert!(batch.lookup("2", 3000, 3000).is_empty());
     }
 
     /// The index's own recorded start column is the only thing distinguishing
