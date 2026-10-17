@@ -1,8 +1,9 @@
-"""Tests for render_release_notes.py on two input shapes: the repository's own 0.3.2 inputs (the release and
+"""Tests for render_release_notes.py on three inputs: the repository's own 0.3.2 inputs (the release and
 population records, the CHANGELOG section, CITATION.cff, Cargo.toml and the published SHA256SUMS digests),
-copied into a scratch repository that each test may edit, and release and population records of the
-six-dataset shape that the tests build under the same version. The scratch release-notes file keeps the
-repository file's Upgrade notes under an opener within the renderer's budget."""
+copied into a scratch repository that each test may edit; release and population records of the
+six-dataset shape that the tests build under the same version, on the instance classes and clone count a
+test names; and the repository's own 0.4.0 inputs, whose rendering is the published 0.4.0 page. The scratch
+release-notes file keeps the repository file's Upgrade notes under an opener within the renderer's budget."""
 
 from __future__ import annotations
 
@@ -309,6 +310,10 @@ def test_captions_carry_the_comparator_protocol_memory_and_record_link(tmp_path:
         edit_record(repo, "population", set_peak(mb))
         assert f"peak memory at most {shown} GB on any chromosome" in page(repo), mb
 
+    # The earlier page labels a pair of two generations as the six-dataset page does.
+    edit_record(repo, "population", lambda r: r["wall_time"]["vep_rs"].update(instance_types=NEWEST, n_clones_per_cell=5))
+    assert f"medians of 5 machines at 16 threads on {pair(NEWEST)}, {NEWEST_LABEL}; peak memory at most" in page(repo)
+
 
 def test_the_concordance_caption_reads_the_perl_reference_block_when_a_record_carries_one(tmp_path: Path) -> None:
     """A release scored against a later Ensembl VEP names it in a `perl_reference` block (image, digest,
@@ -596,6 +601,14 @@ WALL = {  # dataset: per-chromosome medians on arm64, then on x86_64; the sums c
 CLINVAR_WALL = {("s01", "arm64"): 4.31, ("s01", "x86_64"): 6.9, ("s02", "arm64"): 12.5, ("s02", "x86_64"): 21.2}
 COMPUTE = {"arm64": "c8gd.8xlarge", "x86_64": "c8id.8xlarge"}
 MEMORY = {"arm64": "r8gd.8xlarge", "x86_64": "r8id.8xlarge"}
+# A pair of two generations: a 9th-generation ARM class beside the 8th-generation x86 class.
+NEWEST = {"arm64": "c9gd.8xlarge", "x86_64": "c8id.8xlarge"}
+NEWEST_MEMORY = {"arm64": "r9gd.8xlarge", "x86_64": "r8id.8xlarge"}
+NEWEST_LABEL = "the newest available class per architecture"
+
+
+def pair(types: dict[str, str]) -> str:
+    return f"`{types['arm64']}` (ARM) and `{types['x86_64']}` (x86)"
 
 
 class FileCounts(NamedTuple):
@@ -619,9 +632,10 @@ def sv_files(suite: str) -> dict[str, FileCounts]:
     return out
 
 
-def six_dataset_records() -> tuple[dict, dict]:
+def six_dataset_records(compute: dict[str, str] = COMPUTE, clinvar: dict[str, str] = MEMORY, clones: int = 20) -> tuple[dict, dict]:
     """The release and population records of the six-dataset shape, every float field a coarse or wrong
-    rounding of the counts beside it."""
+    rounding of the counts beside it; the whole genome timed on `compute`, the ClinVar files on `clinvar`,
+    both by `clones` machines per cell."""
     per_dataset = [
         {"dataset": ds, "label": label, "assembly": asm, "perl_tuples": p, "vep_rs_tuples": r, "intersection": i,
          "excluded_perl": xp, "excluded_rust": xr, "raw_f1": 0.5, "adjusted_f1": 0.5}
@@ -644,10 +658,10 @@ def six_dataset_records() -> tuple[dict, dict]:
             },
         }
     aggregates = [
-        {"arch": arch, "suite_id": s, "median_sec": sec, "instance_type": MEMORY[arch], "n_clones": 20}
+        {"arch": arch, "suite_id": s, "median_sec": sec, "instance_type": clinvar[arch], "n_clones": clones}
         for (s, arch), sec in CLINVAR_WALL.items()
     ]
-    aggregates += [{"arch": a, "suite_id": s, "median_sec": 1.5, "instance_type": MEMORY[a], "n_clones": 20} for s in SV_CELLS for a in MEMORY]
+    aggregates += [{"arch": a, "suite_id": s, "median_sec": 1.5, "instance_type": clinvar[a], "n_clones": clones} for s in SV_CELLS for a in clinvar]
     release = {
         "release": TAG, "record": "release-addendum", "concordance": conc, "per_cell_aggregates": aggregates,
         "perl_reference": {
@@ -660,8 +674,8 @@ def six_dataset_records() -> tuple[dict, dict]:
         },
     }
     per_cell = [
-        {"dataset": ds, "label": label, "assembly": asm, "chromosome": str(c), "arch": arch, "instance_type": COMPUTE[arch],
-         "n_clones": 20, "median_sec": sec, "peak_rss_mb_median": 2_501.0 if (ds, c, arch) == ("gnomad_v4.1_genomes", 2, "x86_64") else 1_900.0}
+        {"dataset": ds, "label": label, "assembly": asm, "chromosome": str(c), "arch": arch, "instance_type": compute[arch],
+         "n_clones": clones, "median_sec": sec, "peak_rss_mb_median": 2_501.0 if (ds, c, arch) == ("gnomad_v4.1_genomes", 2, "x86_64") else 1_900.0}
         for ds, label, asm, *_ in POPULATION
         for arch, medians in zip(("arm64", "x86_64"), WALL[ds])
         for c, sec in enumerate(medians, 1)
@@ -669,7 +683,7 @@ def six_dataset_records() -> tuple[dict, dict]:
     population = {
         "release": TAG, "record": "population-measurements", "fork": 16,
         "wall_time": {
-            "vep_rs": {"engine": "vep-rs", "engine_version": TAG, "instance_types": COMPUTE, "n_clones_per_cell": 20, "per_cell": per_cell},
+            "vep_rs": {"engine": "vep-rs", "engine_version": TAG, "instance_types": compute, "n_clones_per_cell": clones, "per_cell": per_cell},
             "ensembl_vep": {"engine": "ensembl_vep", "engine_version": "release_115.2", "instance_types": MEMORY},
         },
         "perl_reference": {**REFERENCE, "prefix": "population_r116.2_c116_fixture"},
@@ -677,14 +691,14 @@ def six_dataset_records() -> tuple[dict, dict]:
     return release, population
 
 
-def six_dataset_repo(tmp_path: Path) -> Path:
+def six_dataset_repo(tmp_path: Path, **shape) -> Path:
     """The 0.3.2 scratch repository with its two records replaced by records of the six-dataset shape under
     the same version: the renderer reads the shape from the record, never from the version."""
     repo = fixture_repo(tmp_path)
     records = repo / "docs" / "concordance-provenance"
     for old in records.glob(f"*-v{VERSION}.json"):
         old.unlink()
-    release, population = six_dataset_records()
+    release, population = six_dataset_records(**shape)
     (records / f"six-dataset-release-v{VERSION}.json").write_text(json.dumps(release))
     (records / f"six-dataset-population-v{VERSION}.json").write_text(json.dumps(population))
     return repo
@@ -694,7 +708,20 @@ def pooled(cells: list[tuple[int, int, int]]) -> str:
     return f1(sum(c[0] for c in cells), sum(c[1] for c in cells), sum(c[2] for c in cells))
 
 
-def expected_six_dataset_section() -> list[str]:
+def expected_caption(clones: int, population_classes: str, clinvar_classes: str) -> str:
+    """The six-dataset caption over the fixture records: `population_classes` is the pair the whole genome was
+    timed on, `clinvar_classes` the pair the ClinVar files were timed on with what differs from the whole-genome
+    measurement."""
+    return (
+        "Whole genome against Ensembl VEP 116.2: the population datasets one run per chromosome, each ClinVar release one "
+        f"genome-wide file; wall time is the sum of the per-chromosome medians of {clones} machines at 16 threads on "
+        f"{population_classes} for the population datasets, and the whole-file median of {clones} machines on "
+        f"{clinvar_classes}, so the `All six` row carries no wall time; peak memory at most 2.6 GB on any chromosome; tuple "
+        f"counts, per-chromosome rows and per-file counts are in the [provenance records]({REPO_URL}/tree/{TAG}/docs/concordance-provenance)."
+    )
+
+
+def expected_six_dataset_section(caption: str | None = None) -> list[str]:
     raw: list[tuple[int, int, int]] = []
     adjusted: list[tuple[int, int, int]] = []
     rows = ["| Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) |", "| --- | --- | --- | --- | --- |"]
@@ -717,14 +744,8 @@ def expected_six_dataset_section() -> list[str]:
             raw_files = [(files[n].intersection, files[n].perl, files[n].rust) for n in names]
             adjusted_files = [(files[n].adj_intersection, files[n].adj_perl, files[n].adj_rust) for n in names]
             sv.append(f"| {label} | {assembly} | {pooled(raw_files)} | {pooled(adjusted_files)} |")
-    caption = (
-        "Whole genome against Ensembl VEP 116.2: the population datasets one run per chromosome, each ClinVar release one "
-        "genome-wide file; wall time is the sum of the per-chromosome medians of 20 machines at 16 threads on `c8gd.8xlarge` "
-        "(ARM) and `c8id.8xlarge` (x86) for the population datasets, and the whole-file median of 20 machines on "
-        "`r8gd.8xlarge` (ARM) and `r8id.8xlarge` (x86) for the ClinVar files, another instance class and protocol, so the "
-        "`All six` row carries no wall time; peak memory at most 2.6 GB on any chromosome; tuple counts, per-chromosome rows "
-        f"and per-file counts are in the [provenance records]({REPO_URL}/tree/{TAG}/docs/concordance-provenance)."
-    )
+    if caption is None:
+        caption = expected_caption(20, pair(COMPUTE), f"{pair(MEMORY)} for the ClinVar files, another instance class and protocol")
     sv_caption = (
         "Structural-variant file sets measured on the released binary against the same reference, each set's files pooled by "
         "summed counts; the paper's own figures stay as published in "
@@ -777,6 +798,37 @@ def test_six_dataset_records_render_six_rows_all_six_and_the_eight_structural_va
 
     edit_record(repo, "release", add_development_cells_and_spoil_floats)
     assert page(repo) == body
+
+
+def test_a_pair_of_two_generations_is_labelled_the_newest_available_class_per_architecture(tmp_path: Path) -> None:
+    """Records timed on a 9th-generation ARM class beside the 8th-generation x86 class, five machines per cell,
+    the ClinVar files on the whole genome's classes: the caption labels the pair, carries the record's clone
+    count and says the ClinVar files differ in protocol alone; a same-generation pair carries no label."""
+    repo = six_dataset_repo(tmp_path, compute=NEWEST, clinvar=NEWEST, clones=5)
+    body = page(repo)
+    section = concordance_section(body)
+    caption, table, sv_caption, sv_table = expected_six_dataset_section(
+        expected_caption(5, f"{pair(NEWEST)}, {NEWEST_LABEL},", "the same classes for the ClinVar files, another protocol")
+    )
+    assert section == f"{caption}\n\n{table}\n\n{sv_caption}\n\n{sv_table}"
+    assert caption.count(NEWEST_LABEL) == 1 and caption.count("5 machines") == 2 and caption.count("c9gd.8xlarge") == 1
+    assert "20 machines" not in section and "another instance class" not in section
+    assert "c8gd" not in section and "r8gd" not in section and "r8id" not in section
+    assert len(body.splitlines()) <= 60
+
+    # The label follows each pair's own generations: the whole genome's pair alone, the ClinVar pair alone, neither.
+    repo = six_dataset_repo(tmp_path / "clinvar-on-the-memory-class", compute=NEWEST, clinvar=MEMORY, clones=5)
+    assert expected_caption(
+        5, f"{pair(NEWEST)}, {NEWEST_LABEL},", f"{pair(MEMORY)} for the ClinVar files, another instance class and protocol"
+    ) in page(repo)
+    repo = six_dataset_repo(tmp_path / "clinvar-on-the-newer-memory-class", clinvar=NEWEST_MEMORY)
+    assert expected_caption(
+        20, pair(COMPUTE), f"{pair(NEWEST_MEMORY)}, {NEWEST_LABEL}, for the ClinVar files, another instance class and protocol"
+    ) in page(repo)
+    repo = six_dataset_repo(tmp_path / "one-generation-throughout", clinvar=COMPUTE)
+    body = page(repo)
+    assert expected_caption(20, pair(COMPUTE), "the same classes for the ClinVar files, another protocol") in body
+    assert NEWEST_LABEL not in body
 
 
 def test_six_dataset_adjusted_f1_is_computed_from_the_adjusted_counts(tmp_path: Path) -> None:
@@ -973,7 +1025,84 @@ def add_an_ensembl_vep_twin(record: dict) -> None:
     record["per_cell_aggregates"].append({**aggregate(record, "s01", "arm64"), "engine": "ensembl_vep", "median_sec": 999})
 
 
+def released(record: dict) -> dict:
+    return record["wall_time"]["vep_rs"]
+
+
+def retime_clinvar(record: dict, arch: str, instance_type: str) -> None:
+    for a in record["per_cell_aggregates"]:
+        if a["arch"] == arch:
+            a["instance_type"] = instance_type
+
+
+RELEASED = "the population record's wall_time.vep_rs"
 SIX_DATASET_PROBES = [  # record kind, its edit, then the exact ERROR line or a line of the page that renders
+    pytest.param(
+        "population", lambda r: drop_keys(r, "wall_time"),
+        ERR + "the population record carries no wall_time", id="no-wall-time",
+    ),
+    pytest.param(
+        "population", lambda r: drop_keys(r["wall_time"], "vep_rs"),
+        ERR + "the population record's wall_time carries no vep_rs", id="no-released-binary-under-wall-time",
+    ),
+    pytest.param(
+        "population", lambda r: r["wall_time"].update(vep_rs=[1]),
+        ERR + f"{RELEASED} is not an object", id="a-wall-time-block-that-is-a-list",
+    ),
+    pytest.param(
+        "population", lambda r: drop_keys(released(r), "instance_types"),
+        ERR + f"{RELEASED} carries no instance_types", id="no-instance-types",
+    ),
+    pytest.param(
+        "population", lambda r: drop_keys(released(r), "n_clones_per_cell"),
+        ERR + f"{RELEASED} carries no n_clones_per_cell", id="no-clone-count",
+    ),
+    pytest.param(
+        "population", lambda r: drop_keys(released(r), "instance_types", "n_clones_per_cell"),
+        ERR + f"{RELEASED} carries no instance_types, n_clones_per_cell", id="neither-instance-types-nor-clone-count",
+    ),
+    pytest.param(
+        "population", lambda r: released(r).update(n_clones_per_cell=5.0),
+        ERR + f"{RELEASED} carries n_clones_per_cell that is not an integer: 5.0", id="a-clone-count-that-is-not-an-integer",
+    ),
+    pytest.param(
+        "population", lambda r: drop_keys(r, "fork"),
+        ERR + "the population record carries no fork", id="no-fork",
+    ),
+    pytest.param(
+        "population", lambda r: r.update(fork="16"),
+        ERR + "the population record carries fork that is not an integer: '16'", id="a-fork-that-is-not-an-integer",
+    ),
+    pytest.param(
+        "population", lambda r: drop_keys(released(r)["instance_types"], "x86_64"),
+        ERR + f"{RELEASED}.instance_types carries no x86_64", id="no-x86-instance-type",
+    ),
+    pytest.param(
+        "population", lambda r: released(r).update(instance_types="c8gd.8xlarge"),
+        ERR + f"{RELEASED}.instance_types carries no arm64, x86_64", id="instance-types-that-are-one-string",
+    ),
+    pytest.param(
+        "population", lambda r: released(r)["instance_types"].update(arm64=7),
+        ERR + f"{RELEASED}.instance_types carries arm64 that is not a string: 7", id="an-instance-type-that-is-not-a-string",
+    ),
+    pytest.param(
+        "population", lambda r: released(r)["instance_types"].update(arm64="metal"),
+        ERR + f"{RELEASED} names the instance type 'metal', whose name carries no generation number",
+        id="an-instance-type-without-a-generation",
+    ),
+    pytest.param(
+        "release", lambda r: retime_clinvar(r, "x86_64", "metal"),
+        ERR + "the release record names the instance type 'metal', whose name carries no generation number",
+        id="a-clinvar-instance-type-without-a-generation",
+    ),
+    pytest.param(
+        "population", lambda r: drop_keys(released(r), "per_cell"),
+        ERR + f"{RELEASED} carries no per_cell", id="no-per-cell",
+    ),
+    pytest.param(
+        "population", lambda r: released(r).update(per_cell={}),
+        ERR + f"{RELEASED}.per_cell is not a list", id="a-per-cell-that-is-an-object",
+    ),
     pytest.param(
         "release", lambda r: aggregate(r, "s01", "arm64").update(n_clones=19),
         (
@@ -1239,3 +1368,76 @@ def test_a_chromosome_peak_rss_that_is_absent_or_not_a_finite_number_is_refused_
     repo = fixture_repo(tmp_path / "empty")
     edit_record(repo, "population", lambda r: r["wall_time"]["vep_rs"]["per_cell"].clear())
     assert error(repo) == f"{ERR}the population record's wall_time.vep_rs.per_cell is empty\n"
+
+
+# The published 0.4.0 release: the tag's commit, the SHA256SUMS digests of its assets, and the concordance section
+# of its page, which this script rendered at that tag from the records the repository carries.
+COMMIT_040 = "f64272326dee8f813a57f9fa832539ccd8067dab"
+DIGESTS_040 = {
+    "vep-0.4.0-aarch64-apple-darwin.tar.gz": "b22283552d1e4c995090025c04dedbc884f1b1afc477ee9f88334f9bb4674fc2",
+    "vep-0.4.0-aarch64-unknown-linux-gnu.tar.gz": "6057da61fb971e4ff822b1fe5c5b2e6c7f251fadedf2737f9b94ac2c195537d0",
+    "vep-0.4.0-x86_64-unknown-linux-gnu.tar.gz": "d72ff534447dd38ceef576c7d51d479cb7af354c09bba42c47f0991343bcb3a8",
+    "vep-rs-0.4.0.tar.gz": "0ff936860386d74d5f532ef86d0b19f4c31eadc90998062d0291c5bc402756ab",
+}
+PUBLISHED_040_CAPTION = (
+    "Whole genome against Ensembl VEP 116.2: the population datasets one run per chromosome, each ClinVar release one "
+    "genome-wide file; wall time is the sum of the per-chromosome medians of 20 machines at 16 threads on `c8gd.8xlarge` "
+    "(ARM) and `c8id.8xlarge` (x86) for the population datasets, and the whole-file median of 20 machines on "
+    "`r8gd.8xlarge` (ARM) and `r8id.8xlarge` (x86) for the ClinVar files, another instance class and protocol, so the "
+    "`All six` row carries no wall time; peak memory at most 2.6 GB on any chromosome; tuple counts, per-chromosome rows "
+    f"and per-file counts are in the [provenance records]({REPO_URL}/tree/v0.4.0/docs/concordance-provenance)."
+)
+PUBLISHED_040_TABLES = """\
+| Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) |
+| --- | --- | --- | --- | --- |
+| gnomAD v4.1 | 0.999999353 | 1.000000000 | 881 | 1,365 |
+| gnomAD v2.1.1 | 0.999999521 | 1.000000000 | 282 | 472 |
+| 1000 Genomes Phase 3 | 0.999999714 | 1.000000000 | 49 | 76 |
+| 1000 Genomes high-coverage | 0.999991204 | 1.000000000 | 85 | 116 |
+| ClinVar GRCh37 | 0.999979065 | 1.000000000 | 5 | 6 |
+| ClinVar GRCh38 | 0.999972446 | 1.000000000 | 14 | 14 |
+| All six | 0.999998408 | 1.000000000 | | |
+
+Structural-variant file sets measured on the released binary against the same reference, each set's files pooled by \
+summed counts; the paper's own figures stay as published in \
+[docs/published-figures.md](https://github.com/natera-open-source/vep-rs/blob/v0.4.0/docs/published-figures.md).
+
+| File set | Assembly | Raw F1 | Adjusted F1 |
+| --- | --- | --- | --- |
+| ClinVar SV | GRCh37 | 0.999952183 | 1.000000000 |
+| gnomAD SV | GRCh37 | 0.726719694 | 1.000000000 |
+| 1000 Genomes SV | GRCh37 | 1.000000000 | 1.000000000 |
+| Synthetic (13 files) | GRCh37 | 0.986694682 | 1.000000000 |
+| ClinVar SV | GRCh38 | 1.000000000 | 1.000000000 |
+| gnomAD SV | GRCh38 | 0.791428005 | 1.000000000 |
+| 1000 Genomes SV | GRCh38 | 0.989455966 | 1.000000000 |
+| Synthetic (13 files) | GRCh38 | 0.983528044 | 1.000000000 |"""
+
+
+def release_040_repo(tmp_path: Path) -> Path:
+    """The repository's own 0.4.0 inputs in a scratch repository: the release-notes file, the two records,
+    CHANGELOG.md, CITATION.cff and Cargo.toml as they stand, and the published digests."""
+    repo = tmp_path / "repo"
+    (repo / "docs" / "concordance-provenance").mkdir(parents=True)
+    (repo / ".github" / "release-notes").mkdir(parents=True)
+    for rel in ("CHANGELOG.md", "CITATION.cff", "Cargo.toml", ".github/release-notes/v0.4.0.md"):
+        shutil.copy(ROOT / rel, repo / rel)
+    for record in (ROOT / "docs" / "concordance-provenance").glob("*-v0.4.0.json"):
+        shutil.copy(record, repo / "docs" / "concordance-provenance" / record.name)
+    (repo / "SHA256SUMS").write_text("".join(f"{d}  {n}\n" for n, d in DIGESTS_040.items()))
+    return repo
+
+
+def test_the_0_4_0_records_render_the_published_concordance_section(tmp_path: Path) -> None:
+    """The repository's 0.4.0 records, timed on one generation per pair with the ClinVar files on another class
+    than the whole genome, render the published page's concordance section word for word: the caption without a
+    label, then the two tables."""
+    repo = release_040_repo(tmp_path)
+    out = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo", str(repo), "--version", "0.4.0", "--previous", "v0.3.2", "--commit", COMMIT_040,
+         "--toolchain", TOOLCHAIN, "--sha256sums", str(repo / "SHA256SUMS")],
+        capture_output=True, text=True, check=False,
+    )
+    assert out.returncode == 0, out.stderr
+    assert concordance_section(out.stdout) == f"{PUBLISHED_040_CAPTION}\n\n{PUBLISHED_040_TABLES}"
+    assert NEWEST_LABEL not in out.stdout and out.stdout.count("\n") <= 80

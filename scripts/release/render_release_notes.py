@@ -63,6 +63,9 @@ SYNTHETIC_FILES = 13
 LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+\.)\s")
 BULLET = re.compile(r"[-*] ")
 SENTENCE_END = re.compile(r"[.!?][\"'`)\]]*(?=\s|$)")
+GENERATION = re.compile(r"^[a-z]+(\d+)")
+NEWEST_CLASS = "the newest available class per architecture"
+WALL_TIME = "the population record's wall_time.vep_rs"
 
 
 def fail(message: str) -> None:
@@ -344,26 +347,45 @@ def reference_release(release: dict, pop: dict, population: dict) -> str:
     return next(iter(named.values()))
 
 
-def wall_time_sums(population: dict) -> dict[tuple[str, str], Decimal]:
+def released_wall_time(population: dict) -> dict:
+    """The population record's `wall_time.vep_rs` block, the released binary's whole-genome wall time; the
+    record's `wall_time` and the block are refused by name when absent, and the block when not an object."""
+    (wall_time,) = required(population, ("wall_time",), "the population record")
+    (vep_rs,) = required(wall_time, ("vep_rs",), "the population record's wall_time")
+    if not isinstance(vep_rs, dict):
+        fail(f"{WALL_TIME} is not an object")
+    return vep_rs
+
+
+def timed_cells(population: dict) -> list:
+    """The released binary's per-chromosome cells, `per_cell` of its wall-time block; refused by name when
+    absent or not a list."""
+    (cells,) = required(released_wall_time(population), ("per_cell",), WALL_TIME)
+    if not isinstance(cells, list):
+        fail(f"{WALL_TIME}.per_cell is not a list")
+    return cells
+
+
+def wall_time_sums(cells: list) -> dict[tuple[str, str], Decimal]:
     """Per (dataset, arch), the sum of the per-chromosome wall-time medians of the released binary; a cell's
     dataset, arch or median is refused by name when absent, and its median when it is not a finite number."""
     sums: dict[tuple[str, str], Decimal] = {}
-    for index, cell in enumerate(population["wall_time"]["vep_rs"]["per_cell"]):
-        where = f"the population record's wall_time.vep_rs.per_cell[{index}]"
+    for index, cell in enumerate(cells):
+        where = f"{WALL_TIME}.per_cell[{index}]"
         dataset, arch, median = required(cell, ("dataset", "arch", "median_sec"), where)
         key = (dataset, arch)
         sums[key] = sums.get(key, Decimal(0)) + median_seconds(median, where)
     return sums
 
 
-def peak_rss_gb(population: dict) -> str:
+def peak_rss_gb(cells: list) -> str:
     """The largest per-chromosome median peak RSS of the released binary, the record's MB over 1000 in GB
     rounded up to one decimal, so the stated bound is never below a measured cell; the README's own reading
     of the same field. A cell's peak is refused by name when absent or not a finite number, as is a record
     with no cells."""
     peaks: list[Decimal] = []
-    for index, cell in enumerate(population["wall_time"]["vep_rs"]["per_cell"]):
-        where = f"the population record's wall_time.vep_rs.per_cell[{index}]"
+    for index, cell in enumerate(cells):
+        where = f"{WALL_TIME}.per_cell[{index}]"
         (value,) = required(cell, ("peak_rss_mb_median",), where)
         try:
             peak = Decimal(str(value))
@@ -373,8 +395,48 @@ def peak_rss_gb(population: dict) -> str:
             fail(f"{where} carries a peak_rss_mb_median that is not finite: {value!r}")
         peaks.append(peak)
     if not peaks:
-        fail("the population record's wall_time.vep_rs.per_cell is empty")
+        fail(f"{WALL_TIME}.per_cell is empty")
     return str((max(peaks) / 1000).quantize(Decimal("0.1"), rounding=ROUND_CEILING))
+
+
+def instance_types(block, where: str) -> dict[str, str]:
+    """A record's instance type per architecture, `arm64` and `x86_64`; either is refused by name when absent
+    or not a string."""
+    types = dict(zip(ARCH_LABELS, required(block, tuple(ARCH_LABELS), where)))
+    for arch, instance_type in types.items():
+        if not isinstance(instance_type, str):
+            fail(f"{where} carries {arch} that is not a string: {instance_type!r}")
+    return types
+
+
+def generation(instance_type: str, where: str) -> int:
+    """The generation of an instance type, the number after its family letters (`c9gd.8xlarge` is the 9th);
+    a type whose name carries none is refused by name."""
+    m = GENERATION.match(instance_type)
+    if not m:
+        fail(f"{where} names the instance type {instance_type!r}, whose name carries no generation number")
+    return int(m.group(1))
+
+
+def class_names(types: dict[str, str]) -> str:
+    """The pair of classes a measurement ran on: `c9gd.8xlarge` (ARM) and `c8id.8xlarge` (x86)."""
+    return " and ".join(f"`{types[arch]}` ({label})" for arch, label in ARCH_LABELS.items())
+
+
+def pair_label(types: dict[str, str], where: str) -> str:
+    """The label of a pair of classes of different generations, so the ARM and x86 columns are not read as a
+    same-generation comparison; empty for a pair of one generation."""
+    return NEWEST_CLASS if generation(types["arm64"], where) != generation(types["x86_64"], where) else ""
+
+
+def classes_clause(types: dict[str, str], where: str) -> str:
+    """The pair of classes mid-sentence, the label set off by commas when the pair carries one:
+    "`c9gd.8xlarge` (ARM) and `c8id.8xlarge` (x86), the newest available class per architecture,"."""
+    label = pair_label(types, where)
+    names = class_names(types)
+    if label:
+        return f"{names}, {label},"
+    return names
 
 
 def short_label(label: str) -> str:
@@ -398,12 +460,21 @@ def whole_genome_row(label: str, entry: dict, arm: Decimal, x86: Decimal, where:
     return f"| {label} | {f1_9(*raw)} | {f1_9(*adjusted)} | {whole_seconds(arm)} | {whole_seconds(x86)} |"
 
 
-def whole_genome_setup(population: dict) -> tuple[dict, dict[str, str], dict[tuple[str, str], Decimal], list[str]]:
-    """Where both pages' whole-genome tables start: the released binary's wall-time block, its instance type
-    per architecture, the per-(dataset, arch) sums of its per-chromosome medians and the table's header rows."""
-    vep_rs = population["wall_time"]["vep_rs"]
+def whole_genome_setup(population: dict) -> tuple[int, int, dict[str, str], dict[tuple[str, str], Decimal], list[str]]:
+    """Where both pages' whole-genome tables start: the released binary's clones per cell and its threads, its
+    instance type per architecture, the per-(dataset, arch) sums of its per-chromosome medians and the table's
+    header rows; the clone count, the thread count and the instance types are refused by name when absent, and
+    the counts when not integers."""
+    types, clones = required(released_wall_time(population), ("instance_types", "n_clones_per_cell"), WALL_TIME)
+    (fork,) = required(population, ("fork",), "the population record")
     header = ["| Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) |", "| --- | --- | --- | --- | --- |"]
-    return vep_rs, vep_rs["instance_types"], wall_time_sums(population), header
+    return (
+        integer(clones, "n_clones_per_cell", WALL_TIME),
+        integer(fork, "fork", "the population record"),
+        instance_types(types, f"{WALL_TIME}.instance_types"),
+        wall_time_sums(timed_cells(population)),
+        header,
+    )
 
 
 def dataset_wall_time(dataset: str, sums: dict[tuple[str, str], Decimal]) -> tuple[Decimal, Decimal]:
@@ -541,10 +612,10 @@ def six_dataset_blocks(
     of all six) under a caption naming the reference release, both protocols, the instance types and the
     peak memory, then the structural-variant F1 table (per assembly the ClinVar, gnomAD and 1000 Genomes
     sets and the synthetic files pooled) under the caption that the paper's figures stay as published.
-    `All six` carries no wall time: the ClinVar whole-file medians were measured on another instance class
-    and protocol than the per-chromosome sums, so their sum is not a figure. A record's chromosome 21 cells
-    render no row."""
-    vep_rs, types, sums, rows = whole_genome_setup(population)
+    `All six` carries no wall time: the ClinVar whole-file medians and the per-chromosome sums are two protocols,
+    so their sum is not a figure; the caption says whether the two also ran on different classes. A record's
+    chromosome 21 cells render no row."""
+    clones, fork, types, sums, rows = whole_genome_setup(population)
     raw: list[tuple[int, int, int]] = []
     adjusted: list[tuple[int, int, int]] = []
     datasets = pop["per_dataset"]
@@ -562,7 +633,7 @@ def six_dataset_blocks(
         adjusted.append(adjusted_counts)
         rows.append(whole_genome_row(short_label(str(label)), r, arm, x86, where))
     clinvar_types: dict[str, set[str]] = {"arm64": set(), "x86_64": set()}
-    clones: dict[tuple[str, str], int] = {}
+    clinvar_clones: dict[tuple[str, str], int] = {}
     for suite, label in CLINVAR.items():
         cell, where = conc[suite], f"concordance.{suite}"
         i, a, b = int_triple(cell, ("intersection", "perl", "rust"), where)
@@ -570,23 +641,28 @@ def six_dataset_blocks(
         raw.append((i, a, b))
         adjusted.append(adj)
         medians: dict[str, str] = {}
-        for arch, instance_types in clinvar_types.items():
+        for arch, seen in clinvar_types.items():
             seconds, instance_type, n_clones = whole_file_wall_time(release, suite, arch)
             medians[arch] = whole_seconds(seconds)
-            instance_types.add(instance_type)
-            clones[(suite, arch)] = n_clones
+            seen.add(instance_type)
+            clinvar_clones[(suite, arch)] = n_clones
         rows.append(f"| {label} | {f1_9(i, a, b)} | {f1_9(*adj)} | {medians['arm64']} | {medians['x86_64']} |")
     rows.append(f"| All six | {pooled_f1(raw)} | {pooled_f1(adjusted)} | | |")
+    clinvar_pair = {arch: one(seen, f"{ARCH_LABELS[arch]} instance types") for arch, seen in clinvar_types.items()}
+    if clinvar_pair == types:
+        clinvar_classes = "the same classes for the ClinVar files, another protocol"
+    else:
+        clinvar_classes = (
+            f"{classes_clause(clinvar_pair, 'the release record')} for the ClinVar files, another instance class and protocol"
+        )
     caption = (
         f"Whole genome against Ensembl VEP {reference_release(release, pop, population)}: the population datasets "
         "one run per chromosome, each ClinVar release one genome-wide file; wall time is the sum of the "
-        f"per-chromosome medians of {int(vep_rs['n_clones_per_cell'])} machines at {int(population['fork'])} threads on "
-        f"`{types['arm64']}` (ARM) and `{types['x86_64']}` (x86) for the population datasets, and the whole-file "
-        f"median of {clone_count_clause(clones)} machines on `{one(clinvar_types['arm64'], 'ARM instance types')}` (ARM) "
-        f"and `{one(clinvar_types['x86_64'], 'x86 instance types')}` (x86) for the ClinVar files, another instance class "
-        "and protocol, so the `All six` row carries no wall time; peak memory at most "
-        f"{peak_rss_gb(population)} GB on any chromosome; tuple counts, per-chromosome rows and per-file counts are in "
-        f"the [provenance records]({REPO_URL}/tree/v{version}/{record_dir})."
+        f"per-chromosome medians of {clones} machines at {fork} threads on "
+        f"{classes_clause(types, WALL_TIME)} for the population datasets, and the whole-file "
+        f"median of {clone_count_clause(clinvar_clones)} machines on {clinvar_classes}, so the `All six` row carries "
+        f"no wall time; peak memory at most {peak_rss_gb(timed_cells(population))} GB on any chromosome; tuple counts, "
+        f"per-chromosome rows and per-file counts are in the [provenance records]({REPO_URL}/tree/v{version}/{record_dir})."
     )
     sv_caption = (
         "Structural-variant file sets measured on the released binary against the same reference, each set's files "
@@ -611,12 +687,15 @@ def measurements_blocks(repo: Path, version: str) -> list[str]:
     population = load_population_record(repo, version)
     if six_dataset_shape(release, conc):
         return six_dataset_blocks(release, conc, pop, population, record_dir, version)
-    vep_rs, types, sums, rows = whole_genome_setup(population)
+    clones, fork, types, sums, rows = whole_genome_setup(population)
+    generation_label = pair_label(types, WALL_TIME)
+    classes = class_names(types)
+    if generation_label:
+        classes = f"{classes}, {generation_label}"
     caption = (
         f"Whole genome against Ensembl VEP {comparator_version(population, pop, release)}, one run per chromosome; "
-        f"wall time is the sum of the per-chromosome medians of {int(vep_rs['n_clones_per_cell'])} machines "
-        f"at {int(population['fork'])} threads on `{types['arm64']}` (ARM) and `{types['x86_64']}` (x86); "
-        f"peak memory at most {peak_rss_gb(population)} GB on any chromosome; tuple counts and "
+        f"wall time is the sum of the per-chromosome medians of {clones} machines at {fork} threads on {classes}; "
+        f"peak memory at most {peak_rss_gb(timed_cells(population))} GB on any chromosome; tuple counts and "
         f"per-chromosome rows are in the [provenance records]({REPO_URL}/tree/v{version}/{record_dir})."
     )
     total_arm = total_x86 = Decimal(0)
