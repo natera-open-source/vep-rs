@@ -42,7 +42,7 @@ documented in `tests/sv_validation/README.md`.
 | `test_compare_vep_outputs.py` | Unit tests for the SNP/indel comparator and its two reference registries, including the report the 115.2 registry must reproduce byte for byte (`testdata/reference_release/`)                                                                                                            |
 | `compare_vep_formats.py`     | Per-column comparator for every output format: one Ensembl VEP output against a candidate's in the default, tab, VCF, JSON or Parquet format (every row, CSQ entry and JSON object, every field verbatim, with intended-divergence `--masks` from a corpus manifest, populated-count `--floors` and accepted `--field-pairs`); `--self-parity` holds one engine's four formats to each other column by column; `--warnings` compares two engines' `_warnings.txt` and skipped-variants files; a JSON report with a `verdict`, exit 1 on red |
 | `test_compare_vep_formats.py` | Unit tests for the per-column comparator on the committed `tests/golden/116/GRCh38-release116` outputs                                                                                                                                                                             |
-| `test_compare_vep_fields.py` | Unit tests for the per-column comparator                                                                                                                                                                                                                                               |
+| `test_compare_vep_fields.py` | Unit tests for `compare_vep_fields.py`, the per-column comparator of two default-format outputs                                                                                                                                                                                       |
 | `fastvep_normalize.py`       | Rewrites fastVEP's raw tab output so both engines' rows key alike before comparison                                                                                                                                                                                                    |
 | `count_warnings.py`          | Aggregates per-suite ERROR/WARN/INFO counts from both engines' stderr logs into `reports/warning_counts.json` and a Markdown section (`--out-md`)                                                                                                                                      |
 | `cache_parity_audit.pl`      | Audits the Storable-to-JSON cache conversion for field coverage over a transcript sample                                                                                                                                                                                               |
@@ -52,7 +52,7 @@ documented in `tests/sv_validation/README.md`.
 | `compare_intermediates.py`   | Joins a `trace_perl_intermediates.pl` TSV with vep-rs output on (location, allele, transcript) and reports which fields diverge                                                                                                                                                      |
 | `trace_perl_intermediates.pl` | Runs inside the Perl VEP container and dumps per-transcript intermediate values (CDS and translation coordinates, codons, peptides, consequence set) for a VCF of discordant variants                                                                                                                                  |
 | `trace_perl_variant.sh`      | Run Perl VEP on a single variant with injected `warn()` tracing in VariationEffect.pm, TranscriptVariationAllele.pm, and BaseTranscriptVariation.pm. Produces per-transcript predicate trace.                                                                                          |
-| `generate_reference_output.sh` | Writes the Perl VEP ground truth `run_clone_measurement.sh` scores against: one `output.txt` per SNP/indel suite and one `<vcf>.txt` per SV input, via Docker, with the harness's own invocation. See below.                                                                        |
+| `generate_reference_output.sh` | Writes the Ensembl VEP ground truth `run_clone_measurement.sh` scores against (one `output.txt` per SNP/indel suite and one `<vcf>.txt` per SV input, via Docker, with the harness's own invocation), a flag family's reference in any output format (`--flags`, `--format`, one container run per format), and a golden corpus's four expected outputs with its `provenance.json` (`--corpus`); the image digest is asserted before any run and `--stats` keeps Ensembl VEP's statistics report. See below. |
 | `finalize_sv_gt_set.py` | Finalizes a per-VCF SV ground-truth set directory after a file is regenerated: refreshes that file's canonical-inputs manifest entry from the file, and writes the set's `provenance.json` (per-file digests of every reference output and canonical input, both assemblies), `PROVENANCE` and `STATUS` from the per-file sidecars `generate_reference_output.sh` writes. |
 | `test_generate_reference_output.sh` | Tests for `generate_reference_output.sh`: a stub `docker` exercises the dry run and every fail-closed path                                                                                                                                                                       |
 | `extract_perl_reference.sh`  | Extracts five Perl VEP modules from the Docker image into a local directory for debugging and tracing.                                                                                                                                                                                 |
@@ -103,9 +103,70 @@ override them, but a reference generated at other settings is a different refere
 Every run is gated on annotation volume (rows >= input records, per suite and per SV set,
 the same floor the harness's `assert_perl_annotated` applies), refuses to overwrite an
 existing reference without `--force`, and writes a `<name>.provenance.json` beside each
-output recording the image digest, flags, input and output digests and counts.
-`test_generate_reference_output.sh` exercises the dry run and every fail-closed path with
-a stub `docker`.
+output recording the image digest, flags, input and output digests and counts. Before
+anything runs, the pulled image's digest must match `--perl-image-digest` (default the
+`release_116.2` tag's manifest-list digest, or `VEP_PERL_IMAGE_DIGEST`), so a moved tag
+cannot produce a reference under this name; `--perl-image` and `--perl-image-digest` move
+together. `test_generate_reference_output.sh` exercises the dry run and every fail-closed
+path with a stub `docker`.
+
+### Flag families and output formats
+
+Ensembl VEP writes one output format per run (`Runner.pm:871` builds the run's single
+`OutputFactory`), so a reference in several formats is one container run per format:
+
+```bash
+# The --everything family in all four formats, into its own root beside the harness's.
+scripts/concordance/generate_reference_output.sh --data-dir <data> --format all \
+  --flags "--everything" \
+  --snp-indel-gt-dir <data>/ground_truth/perl/everything/snp_indel \
+  --sv-gt-dir <data>/ground_truth/perl/everything/sv_per_vcf --sv-inputs-dir <data>/ground_truth/perl/sv_per_vcf/canonical_inputs
+```
+
+- `--flags "<words>"` appends the words, split on whitespace, after the harness's flags
+  and before the format flag; a flag the script sets itself (`--fork`, `--fasta`,
+  `--no_stats`, `--tab`, ...) is refused rather than passed twice, in the single-dash
+  and abbreviated spellings Ensembl VEP's option parser accepts as well.
+- `--format default|tab|vcf|json|all` names the output format (Ensembl VEP's own
+  `--format vcf` on the command line is its input format). The default format keeps the
+  names above; the others take their extension on the same stem (`output.tsv`,
+  `output.vcf`, `output.jsonl`; `<vcf-basename>.tsv`, `.vcf`, `.jsonl`), so a `*.txt`
+  glob still pairs only the default output. `--no_headers` goes with the default format
+  alone: the tab column line and the VCF `##INFO=<ID=CSQ...>` line name the columns of
+  those formats. Sidecars take the output's name less a default-format `.txt`
+  (`output.provenance.json`, `output.vcf.provenance.json`).
+- `--stats` keeps Ensembl VEP's statistics report as `<stem>.summary.log` instead of
+  passing `--no_stats` (the run passes `--stats_text`; without it Ensembl VEP writes the
+  HTML report alone).
+- The volume gate is per format: the default and tab formats count consequence rows
+  against input records; the VCF and JSON formats write one line per kept record, so
+  their floor is that every written record carries a CSQ field or a consequences array.
+  A flag family that drops records or rows (`--chr`, `--coding_only`, `--no_intergenic`,
+  `--filter_common`, `--allow_non_variant`, `--individual`, `--individual_zyg`,
+  `--dont_skip`), or one that
+  writes one row per record (`--pick`, `--most_severe`, `--summary`) on an input with
+  records Ensembl VEP skips before annotation, takes `--volume-floor any`, which keeps
+  only the one-annotated-unit floor. The VCF gate reads the field by name, so under
+  `--keep_csq` a record whose input already carried the field counts as annotated.
+
+### Golden corpus expected outputs
+
+`--corpus <dir>` writes a corpus's `expected/{default.txt,tab.txt,vcf.vcf,json.jsonl}.gz`
+and its `provenance.json` from `<dir>/variants.vcf`, with the manifest's `assembly`,
+`flags` and `fasta`, `--fork 1` and every format's headers kept, the layout
+`crates/vep-cli/tests/golden.rs` and `format_parity.rs` read:
+
+```bash
+scripts/concordance/generate_reference_output.sh --corpus tests/golden/116/GRCh38-release116 \
+  --perl-cache-dir <perl-cache> --stats
+```
+
+`provenance.json` carries the image digest, the vep command and the sha256 of every
+expected file's uncompressed bytes; a key the script does not own (the vep-rs binary the
+divergences were classified against, the pruned-cache summary) survives a regeneration,
+which needs `--force`, and `input` and `fasta` are filled only when absent, so a record's
+own description of them stands. The warnings and statistics reports land
+beside the expected files as `<format>.warnings.log` and `<format>.summary.log`.
 
 ## Output
 

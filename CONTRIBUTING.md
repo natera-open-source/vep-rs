@@ -85,11 +85,15 @@ object with no reference counterpart.
 To add a release or assembly, run the generator where the VEP reference outputs,
 their inputs and the JSON cache are (`scripts/golden/build_golden_corpus.py
 select`, `scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop
-protein_features --drop protein_function_predictions --perl-info <cache>/info.txt`,
-VEP in the four formats, then `build_golden_corpus.py classify` against the
-pinned vep-rs binary), record the VEP image digest and the expected files'
-sha256 in `provenance.json`, and commit the new directory; older directories
-stay until their release is dropped. Each corpus must stay under 15 MB on
+protein_features --drop protein_function_predictions --perl-info <cache>/info.txt`),
+write the four expected outputs and `provenance.json` with
+`scripts/concordance/generate_reference_output.sh --corpus <dir> --perl-cache-dir
+<perl cache>` (one Ensembl VEP container run per format from the manifest's
+`assembly`, `flags` and `fasta`; the image digest, the vep command and the
+expected files' sha256 are recorded for you, and `--force` regenerates an existing
+corpus), then run `build_golden_corpus.py classify` against the pinned vep-rs
+binary and commit the new directory; older directories stay until their release
+is dropped. Each corpus must stay under 15 MB on
 disk (`each_corpus_fits_its_size_budget`), every flag set's expected directory
 included; prefer narrower exemplars
 (`--max-span`) and, with `select --cache <json cache>`, the exemplars whose

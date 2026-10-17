@@ -148,8 +148,8 @@ jobs:
             echo "$1 reported $n ok lines (floor $2)"
             [ "$n" -ge "$2" ]
           }
-          check scripts/concordance/test_run_clone_measurement.sh 85
-          check scripts/concordance/test_generate_reference_output.sh 70
+          check scripts/concordance/test_run_clone_measurement.sh 101
+          check scripts/concordance/test_generate_reference_output.sh 168
           check scripts/docker/test_image_tags.sh 8
           check scripts/docker/test_stage_release.sh 12
           check scripts/docker/test_smoke_test.sh 13
