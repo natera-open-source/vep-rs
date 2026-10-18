@@ -796,6 +796,7 @@ mod tests {
             attributes: Vec::new(),
             vefc: None,
             derived: Default::default(),
+            id_rank: 0,
         }
     }
 

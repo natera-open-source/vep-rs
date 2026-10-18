@@ -195,6 +195,7 @@ pub(crate) mod test_helpers {
             attributes: vec![],
             vefc: Some(vefc),
             derived: Default::default(),
+            id_rank: 0,
         }
     }
 
@@ -311,6 +312,7 @@ pub(crate) mod test_helpers {
             attributes: vec![],
             vefc: Some(vefc),
             derived: Default::default(),
+            id_rank: 0,
         }
     }
 

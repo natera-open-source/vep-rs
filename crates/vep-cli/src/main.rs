@@ -83,6 +83,16 @@ fn run(argv: Vec<OsString>) -> i32 {
         parsed.args.input_data.is_some(),
     );
 
+    // Cache shards parse on rayon's global pool, whose threads would otherwise
+    // inherit the name of whichever thread first touches it.
+    if let Err(error) = rayon::ThreadPoolBuilder::new()
+        .thread_name(|i| format!("vep-parse-{i}"))
+        .build_global()
+    {
+        eprintln!("{}", CliError::new("run", error.to_string()));
+        return 1;
+    }
+
     let config = match config::Config::from_parsed(parsed) {
         Ok(config) => config,
         Err(error) => {

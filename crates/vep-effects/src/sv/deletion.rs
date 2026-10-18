@@ -17,9 +17,7 @@ use super::{
     perl_coding_pre_predicate, perl_partial_codon,
 };
 use smallvec::SmallVec;
-use vep_core::consequence::{
-    Consequence, ConsequenceList, FeatureType, Impact, TranscriptConsequence,
-};
+use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 use vep_core::variant::{InputVariant, VariantClass};
@@ -393,40 +391,17 @@ fn build_consequence(
         .unwrap_or(Impact::MODIFIER);
 
     TranscriptConsequence {
-        transcript_id: transcript.stable_id.clone(),
-        feature_start: transcript.start,
-        feature_end: transcript.end,
-        gene_id: transcript.gene_stable_id.clone(),
-        gene_symbol: transcript.gene_symbol.clone(),
-        gene_symbol_source: transcript.gene_symbol_source.clone(),
-        hgnc_id: transcript.hgnc_id.clone(),
         consequences,
         impact,
-        biotype: Some(transcript.biotype.clone()),
-        canonical: transcript.canonical,
-        strand: match transcript.strand {
-            Strand::Forward => 1,
-            Strand::Reverse => -1,
-        },
         distance,
-        feature_type: FeatureType::Transcript,
-        flags: transcript.flags.clone(),
-        tsl: transcript.tsl,
-        mane_select: transcript.mane_select.clone(),
-        mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-        appris: transcript.appris.clone(),
-        ccds: transcript.ccds.clone(),
-        protein_id: transcript.protein_id.clone(),
-        swissprot: transcript.swissprot.clone(),
-        trembl: transcript.trembl.clone(),
-        refseq: transcript.refseq.clone(),
-        ..TranscriptConsequence::default()
+        ..TranscriptConsequence::for_transcript(transcript)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vep_core::consequence::FeatureType;
     use vep_core::variant::{InputVariant, VariantClass};
 
     /// Helper to build a structural deletion variant.

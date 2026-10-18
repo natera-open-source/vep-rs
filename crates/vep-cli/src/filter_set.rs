@@ -1026,6 +1026,7 @@ mod tests {
             attributes: Vec::new(),
             vefc: Some(vep_core::transcript::TranscriptVEFC::default()),
             derived: Default::default(),
+            id_rank: 0,
         };
         let filter = |s: &str| FilterSet::transcript_filter(&[s]).unwrap();
         assert!(

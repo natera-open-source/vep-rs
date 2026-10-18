@@ -14,6 +14,8 @@ use std::sync::Arc;
 
 use smallvec::SmallVec;
 
+use crate::transcript::Transcript;
+
 /// Per-transcript consequence term list.
 ///
 /// Inline capacity 8 covers the typical 1-8 SO terms a single transcript
@@ -591,6 +593,14 @@ pub struct TranscriptConsequence {
     /// output is byte-identical. See [`LofteeContext`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loftee_ctx: Option<Box<LofteeContext>>,
+    /// The source transcript's [`Transcript::id_rank`]: `transcript_id`'s
+    /// position in the byte order of its chromosome's transcript ids, so two
+    /// rows of one chromosome compare by rank as they compare by id; rows of
+    /// different chromosomes, an interchromosomal breakend's mate rows among
+    /// them, do not. Never serialized; 0 for a consequence built without a
+    /// loaded transcript.
+    #[serde(skip)]
+    pub id_rank: u32,
 }
 
 /// Type of genomic feature that a consequence is annotated against.
@@ -667,11 +677,64 @@ impl Default for TranscriptConsequence {
             feature_start: 0,
             feature_end: 0,
             loftee_ctx: None,
+            id_rank: 0,
         }
     }
 }
 
 impl TranscriptConsequence {
+    /// A consequence against `transcript` with every field the transcript
+    /// determines filled from it (ids, symbol, biotype, flags, pick criteria,
+    /// cross-references, strand, span, rank) and every field the variant
+    /// determines empty: no terms, `MODIFIER` impact, no positions, notations,
+    /// predictions or plugin data. Every field is spelled rather than taken
+    /// from `Self::default()`, whose placeholder `Arc`s would be allocated and
+    /// dropped per consequence.
+    pub fn for_transcript(transcript: &Transcript) -> Self {
+        Self {
+            transcript_id: transcript.stable_id.clone(),
+            gene_id: transcript.gene_stable_id.clone(),
+            gene_symbol: transcript.gene_symbol.clone(),
+            gene_symbol_source: transcript.gene_symbol_source.clone(),
+            hgnc_id: transcript.hgnc_id.clone(),
+            consequences: SmallVec::new(),
+            impact: Impact::MODIFIER,
+            biotype: Some(transcript.biotype.clone()),
+            canonical: transcript.canonical,
+            cdna_position: None,
+            cds_position: None,
+            protein_position: None,
+            amino_acids: None,
+            codons: None,
+            protein_id: transcript.protein_id.clone(),
+            distance: None,
+            strand: transcript.strand.as_i8(),
+            exon: None,
+            intron: None,
+            hgvsc: None,
+            hgvsp: None,
+            hgvs_offset: None,
+            sift: None,
+            polyphen: None,
+            domains: Vec::new(),
+            feature_type: FeatureType::Transcript,
+            flags: transcript.flags.clone(),
+            tsl: transcript.tsl,
+            mane_select: transcript.mane_select.clone(),
+            mane_plus_clinical: transcript.mane_plus_clinical.clone(),
+            appris: transcript.appris.clone(),
+            ccds: transcript.ccds.clone(),
+            swissprot: transcript.swissprot.clone(),
+            trembl: transcript.trembl.clone(),
+            refseq: transcript.refseq.clone(),
+            plugin_data: indexmap::IndexMap::new(),
+            feature_start: transcript.start,
+            feature_end: transcript.end,
+            loftee_ctx: None,
+            id_rank: transcript.id_rank,
+        }
+    }
+
     /// Base pairs of a structural variant's span that fall inside the feature
     /// and the percentage of the feature they cover, as VEP's `OverlapBP` and
     /// `OverlapPC` report them (OutputFactory.pm `StructuralVariationOverlap`

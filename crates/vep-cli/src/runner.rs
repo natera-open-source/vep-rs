@@ -494,6 +494,9 @@ impl Runner {
             let f = BufReader::with_capacity(INPUT_BUFFER_BYTES, f);
             if self.config.input_file.ends_with(".gz") {
                 match std::num::NonZeroUsize::new(self.config.decompression_threads) {
+                    // The block reader starts its worker threads at the first read,
+                    // on the pipeline's reader thread, whose Linux thread name they
+                    // then carry.
                     Some(n) if n.get() > 1 => {
                         Box::new(bgzf::io::MultithreadedReader::with_worker_count(n, f))
                     }
@@ -1694,7 +1697,7 @@ pub(crate) fn default_rows_for_test(
     let alleles: Vec<&InputVariant> = batch.iter().collect();
     let plan = ExtraFieldsPlan::new(options);
     let mut out = Vec::new();
-    crate::pipeline::render_default_record(&mut out, &alleles, &plan, &mut Vec::new()).unwrap();
+    crate::render::render_default_record(&mut out, &alleles, &plan, &mut Vec::new()).unwrap();
     String::from_utf8(out).unwrap()
 }
 
@@ -1779,6 +1782,7 @@ pub(crate) fn make_runner_test_transcript(
         attributes: vec![],
         vefc: None,
         derived: Default::default(),
+        id_rank: 0,
     }
 }
 
@@ -2864,12 +2868,8 @@ mod tests {
             joined.most_severe_consequence,
             Some(Consequence::IntergenicVariant)
         );
-        let plan = ExtraFieldsPlan::new(FieldOptions::default());
-        let mut out = Vec::new();
-        crate::pipeline::render_default_record(&mut out, &[&joined], &plan, &mut Vec::new())
-            .unwrap();
         assert_eq!(
-            String::from_utf8(out).unwrap(),
+            default_rows(&[joined]),
             "snv\t21:1500\tG\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
         );
     }
@@ -2895,12 +2895,8 @@ mod tests {
             block.most_severe_consequence,
             Some(Consequence::IntergenicVariant)
         );
-
-        let plan = ExtraFieldsPlan::new(FieldOptions::default());
-        let mut out = Vec::new();
-        crate::pipeline::render_default_record(&mut out, &[block], &plan, &mut Vec::new()).unwrap();
         assert_eq!(
-            String::from_utf8(out).unwrap(),
+            default_rows(&batch),
             "block\t21:1101-1900\t<NON_REF>\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
         );
     }
@@ -2996,7 +2992,7 @@ mod tests {
         let alleles: Vec<&InputVariant> = record.iter().collect();
         let plan = ExtraFieldsPlan::new(FieldOptions::default());
         let mut out = Vec::new();
-        crate::pipeline::render_default_record(&mut out, &alleles, &plan, &mut Vec::new()).unwrap();
+        crate::render::render_default_record(&mut out, &alleles, &plan, &mut Vec::new()).unwrap();
         String::from_utf8(out).unwrap()
     }
 

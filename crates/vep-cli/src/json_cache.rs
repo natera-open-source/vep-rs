@@ -888,6 +888,7 @@ fn convert_transcript(jt: JsonTranscript, chr_override: &str) -> Transcript {
         attributes,
         vefc,
         derived: Default::default(),
+        id_rank: 0,
     }
 }
 
@@ -1153,7 +1154,25 @@ pub fn load_transcripts_for_chr(chr: &str, shards: &[PathBuf]) -> anyhow::Result
             }
         }
     }
+    assign_id_ranks(&mut out);
     Ok(out)
+}
+
+/// Sets every transcript's `id_rank` to its stable id's position in the byte
+/// order of the slice's ids; transcripts sharing an id share the rank.
+fn assign_id_ranks(transcripts: &mut [Transcript]) {
+    let mut by_id: Vec<usize> = (0..transcripts.len()).collect();
+    by_id.sort_by(|&a, &b| transcripts[a].stable_id.cmp(&transcripts[b].stable_id));
+    let mut rank = 0u32;
+    let mut previous: Option<Arc<str>> = None;
+    for i in by_id {
+        let id = &transcripts[i].stable_id;
+        if previous.as_ref().is_some_and(|p| p != id) {
+            rank += 1;
+        }
+        previous = Some(id.clone());
+        transcripts[i].id_rank = rank;
+    }
 }
 
 /// Load every chromosome's transcripts from the JSON cache directory.
@@ -1343,6 +1362,72 @@ mod tests {
         let mut ids: Vec<&str> = txs.iter().map(|t| &*t.stable_id).collect();
         ids.sort();
         assert_eq!(ids, vec!["ENST_A", "ENST_NODB", "ENST_STRADDLE"]);
+    }
+
+    /// `id_rank` orders a chromosome's transcripts as their stable ids order as
+    /// bytes, whatever order the shards listed them in, and two transcripts
+    /// with one id (distinct dbIDs) share a rank.
+    #[test]
+    fn loaded_transcripts_rank_by_stable_id_with_ties_shared() {
+        let dir = tempfile::Builder::new()
+            .prefix("vep_jc_rank_")
+            .tempdir()
+            .unwrap();
+        let chr_dir = dir.path().join("transcripts").join("21");
+        std::fs::create_dir_all(&chr_dir).unwrap();
+        let tx = |id: &str, db_id: u32, start: u64| {
+            format!(
+                r#"{{"stable_id":"{id}","dbID":"{db_id}","gene_stable_id":"ENSG","chr":"21","start":{start},"end":{end},"strand":1,"biotype":"protein_coding","source":"ensembl"}}"#,
+                end = start + 100
+            )
+        };
+        std::fs::write(
+            chr_dir.join("1-1000000.json"),
+            format!(
+                "[{},{},{}]",
+                tx("ENST00000300", 1, 100),
+                tx("ENST00000010", 2, 200),
+                tx("ENST00000200", 3, 300)
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            chr_dir.join("1000001-2000000.json"),
+            format!(
+                "[{},{}]",
+                tx("ENST00000200", 4, 1000100),
+                tx("ENST0000002", 5, 1000200)
+            ),
+        )
+        .unwrap();
+
+        let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
+        let txs = load_transcripts_for_chr("21", &shards["21"]).unwrap();
+        let mut ranked: Vec<(&str, u32)> = txs.iter().map(|t| (&*t.stable_id, t.id_rank)).collect();
+        ranked.sort();
+        // Byte order, not numeric: the shorter `ENST0000002` sorts between
+        // `ENST00000010` and `ENST00000200`.
+        assert_eq!(
+            ranked,
+            vec![
+                ("ENST00000010", 0),
+                ("ENST0000002", 1),
+                ("ENST00000200", 2),
+                ("ENST00000200", 2),
+                ("ENST00000300", 3),
+            ]
+        );
+        for a in &txs {
+            for b in &txs {
+                assert_eq!(
+                    a.id_rank.cmp(&b.id_rank),
+                    a.stable_id.cmp(&b.stable_id),
+                    "{} against {}",
+                    a.stable_id,
+                    b.stable_id
+                );
+            }
+        }
     }
 
     /// A shard may be stored gzip-compressed as `.json.gz`; it loads like a plain shard.

@@ -44,6 +44,7 @@ pub mod json_cache;
 pub mod option_rules;
 pub mod pick;
 pub(crate) mod pipeline;
+pub(crate) mod render;
 pub mod runner;
 pub mod transcript_index;
 pub mod variation_matcher;

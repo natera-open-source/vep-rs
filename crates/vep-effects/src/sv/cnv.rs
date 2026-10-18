@@ -23,9 +23,7 @@ use super::{
     perl_partial_codon,
 };
 use smallvec::{smallvec, SmallVec};
-use vep_core::consequence::{
-    Consequence, ConsequenceList, FeatureType, Impact, TranscriptConsequence,
-};
+use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 use vep_core::variant::InputVariant;
@@ -338,45 +336,10 @@ fn build_consequence(
     distance: Option<u64>,
 ) -> TranscriptConsequence {
     TranscriptConsequence {
-        transcript_id: transcript.stable_id.clone(),
-        feature_start: transcript.start,
-        feature_end: transcript.end,
-        gene_id: transcript.gene_stable_id.clone(),
-        gene_symbol: transcript.gene_symbol.clone(),
-        gene_symbol_source: transcript.gene_symbol_source.clone(),
-        hgnc_id: transcript.hgnc_id.clone(),
         consequences,
         impact,
-        biotype: Some(transcript.biotype.clone()),
-        canonical: transcript.canonical,
-        cdna_position: None,
-        cds_position: None,
-        protein_position: None,
-        amino_acids: None,
-        codons: None,
-        protein_id: transcript.protein_id.clone(),
         distance,
-        strand: transcript.strand.as_i8(),
-        exon: None,
-        intron: None,
-        hgvsc: None,
-        hgvsp: None,
-        hgvs_offset: None,
-        sift: None,
-        polyphen: None,
-        domains: Vec::new(),
-        feature_type: FeatureType::Transcript,
-        flags: transcript.flags.clone(),
-        tsl: transcript.tsl,
-        mane_select: transcript.mane_select.clone(),
-        mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-        appris: transcript.appris.clone(),
-        ccds: transcript.ccds.clone(),
-        swissprot: transcript.swissprot.clone(),
-        trembl: transcript.trembl.clone(),
-        refseq: transcript.refseq.clone(),
-        plugin_data: indexmap::IndexMap::new(),
-        loftee_ctx: None,
+        ..TranscriptConsequence::for_transcript(transcript)
     }
 }
 
@@ -388,6 +351,7 @@ mod tests {
     use crate::sv::tests::make_mature_mirna_transcript;
     use crate::test_helpers::make_test_transcript;
 
+    use vep_core::consequence::FeatureType;
     use vep_core::variant::VariantClass;
 
     /// Helper: build a CNV variant with specified alt allele and sv_end.

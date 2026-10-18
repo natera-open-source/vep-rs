@@ -52,9 +52,7 @@ use super::{
     overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
 };
 use smallvec::{smallvec, SmallVec};
-use vep_core::consequence::{
-    Consequence, ConsequenceList, FeatureType, Impact, TranscriptConsequence,
-};
+use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 use vep_core::variant::{InputVariant, VariantClass};
@@ -102,33 +100,7 @@ pub fn calculate(
         ),
     };
 
-    let mut tc = TranscriptConsequence {
-        transcript_id: transcript.stable_id.clone(),
-        feature_start: transcript.start,
-        feature_end: transcript.end,
-        gene_id: transcript.gene_stable_id.clone(),
-        gene_symbol: transcript.gene_symbol.clone(),
-        gene_symbol_source: transcript.gene_symbol_source.clone(),
-        hgnc_id: transcript.hgnc_id.clone(),
-        biotype: Some(transcript.biotype.clone()),
-        canonical: transcript.canonical,
-        strand: match transcript.strand {
-            Strand::Forward => 1,
-            Strand::Reverse => -1,
-        },
-        feature_type: FeatureType::Transcript,
-        flags: transcript.flags.clone(),
-        tsl: transcript.tsl,
-        mane_select: transcript.mane_select.clone(),
-        mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-        appris: transcript.appris.clone(),
-        ccds: transcript.ccds.clone(),
-        protein_id: transcript.protein_id.clone(),
-        swissprot: transcript.swissprot.clone(),
-        trembl: transcript.trembl.clone(),
-        refseq: transcript.refseq.clone(),
-        ..TranscriptConsequence::default()
-    };
+    let mut tc = TranscriptConsequence::for_transcript(transcript);
 
     let overlaps_transcript = sv_end >= tx_start && sv_start <= tx_end;
 
@@ -333,33 +305,7 @@ pub(super) fn calculate_insertion_pair(
         ),
     };
 
-    let mut tc = TranscriptConsequence {
-        transcript_id: transcript.stable_id.clone(),
-        feature_start: transcript.start,
-        feature_end: transcript.end,
-        gene_id: transcript.gene_stable_id.clone(),
-        gene_symbol: transcript.gene_symbol.clone(),
-        gene_symbol_source: transcript.gene_symbol_source.clone(),
-        hgnc_id: transcript.hgnc_id.clone(),
-        biotype: Some(transcript.biotype.clone()),
-        canonical: transcript.canonical,
-        strand: match transcript.strand {
-            Strand::Forward => 1,
-            Strand::Reverse => -1,
-        },
-        feature_type: FeatureType::Transcript,
-        flags: transcript.flags.clone(),
-        tsl: transcript.tsl,
-        mane_select: transcript.mane_select.clone(),
-        mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-        appris: transcript.appris.clone(),
-        ccds: transcript.ccds.clone(),
-        protein_id: transcript.protein_id.clone(),
-        swissprot: transcript.swissprot.clone(),
-        trembl: transcript.trembl.clone(),
-        refseq: transcript.refseq.clone(),
-        ..TranscriptConsequence::default()
-    };
+    let mut tc = TranscriptConsequence::for_transcript(transcript);
 
     // `within_feature`: both flanks inside the transcript. Otherwise `_before_start`
     // reads `end` and `_after_end` reads `start`, which is what

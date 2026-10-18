@@ -458,16 +458,25 @@ impl InputVariant {
     /// Uses the original chromosome name from the input VCF to preserve
     /// the naming convention (e.g., "chr21:100-200" for chr-prefixed input).
     pub fn location(&self) -> String {
+        let mut out = Vec::new();
+        self.write_location(&mut out);
+        written_text(out)
+    }
+
+    /// Appends [`Self::location`] to `out` without an intermediate `String`.
+    pub fn write_location(&self, out: &mut Vec<u8>) {
         // Perl VEP's `rejoin_variants_in_InputBuffer` restores a multi-allelic
         // record's shared window coordinates for output.
         let s = self.original_start.unwrap_or(self.start);
         let e = self.original_end.unwrap_or(self.end);
         let lo = s.min(e);
         let hi = s.max(e);
-        if lo == hi {
-            format!("{}:{}", self.original_chr, lo)
-        } else {
-            format!("{}:{}-{}", self.original_chr, lo, hi)
+        out.extend_from_slice(self.original_chr.as_bytes());
+        out.push(b':');
+        push_decimal(out, lo);
+        if lo != hi {
+            out.push(b'-');
+            push_decimal(out, hi);
         }
     }
 
@@ -484,11 +493,21 @@ impl InputVariant {
     /// VEP names from the variant, `chr_start_alleles` where start is the
     /// anchor-trimmed start and the alleles are [`Self::uploaded_allele_string`].
     pub fn uploaded_variation(&self) -> String {
+        let mut out = Vec::new();
+        self.write_uploaded_variation(&mut out);
+        written_text(out)
+    }
+
+    /// Appends [`Self::uploaded_variation`] to `out` without an intermediate
+    /// `String`.
+    pub fn write_uploaded_variation(&self, out: &mut Vec<u8>) {
         if let Some(id) = self.explicit_id().filter(|id| !self.is_generated_name(id)) {
-            return id.to_string();
+            out.extend_from_slice(id.as_bytes());
+            return;
         }
         if let Some(name) = &self.input_line_name {
-            return name.to_string();
+            out.extend_from_slice(name.as_bytes());
+            return;
         }
         let start = self.original_start.unwrap_or(self.start);
         let alleles = self
@@ -496,7 +515,11 @@ impl InputVariant {
             .as_deref()
             .or(self.original_allele_string.as_deref())
             .unwrap_or(&self.allele_string);
-        format!("{}_{}_{}", self.original_chr, start, alleles)
+        out.extend_from_slice(self.original_chr.as_bytes());
+        out.push(b'_');
+        push_decimal(out, start);
+        out.push(b'_');
+        out.extend_from_slice(alleles.as_bytes());
     }
 
     /// Whether `id` is the `chr_start_alleles` name VEP gives a record whose ID
@@ -569,19 +592,27 @@ impl InputVariant {
     /// the literal `<NON_REF>` (it has no SO term mapping).
     /// For small variants, returns the actual allele bases.
     pub fn display_allele(&self) -> String {
-        if self.is_structural || self.variant_class.is_structural() {
-            let raw = String::from_utf8_lossy(self.alt_allele()).to_string();
+        let mut out = Vec::new();
+        self.write_display_allele(&mut out);
+        written_text(out)
+    }
+
+    /// Appends [`Self::display_allele`] to `out` without an intermediate
+    /// `String`.
+    pub fn write_display_allele(&self, out: &mut Vec<u8>) {
+        let raw = String::from_utf8_lossy(self.alt_allele());
+        let allele: &str = if self.is_structural || self.variant_class.is_structural() {
             if self.variant_class == VariantClass::Translocation {
                 if self.mate_id.is_some() {
-                    raw
+                    &raw
                 } else {
-                    self.variant_class.so_term().to_string()
+                    self.variant_class.so_term()
                 }
             } else if let Some(term) = &self.record_so_term {
-                term.clone()
+                term
             } else if self.variant_class == VariantClass::ReferenceBlock {
                 // Perl VEP outputs the allele as written (no SO term mapping).
-                raw
+                &raw
             } else if self.variant_class == VariantClass::ComplexStructural {
                 // <CPX>: Perl VEP strips angle brackets to get "CPX" as class_SO_term,
                 // then outputs that as the allele string.
@@ -590,18 +621,15 @@ impl InputVariant {
                     .split(':')
                     .next()
                     .unwrap_or("CPX")
-                    .to_string()
             } else if self.variant_class == VariantClass::MobileElementInsertion
                 || self.variant_class == VariantClass::MobileElementDeletion
             {
                 // The ALT's own type read as the record's would be (`<INS:ME:ALU>` is
                 // `Alu_insertion`, `<DEL:ME>` `mobile_element_deletion`).
-                sv_so_term_and_class(&sv_type_abbreviation(&raw, None)).map_or_else(
-                    || self.variant_class.so_term().to_string(),
-                    |(term, _)| term.to_string(),
-                )
+                sv_so_term_and_class(&sv_type_abbreviation(&raw, None))
+                    .map_or(self.variant_class.so_term(), |(term, _)| term)
             } else {
-                self.variant_class.so_term().to_string()
+                self.variant_class.so_term()
             }
         } else if self.original_start.is_some() {
             // Perl VEP outputs the pre-minimised alt of a multi-allelic record;
@@ -610,11 +638,31 @@ impl InputVariant {
                 .as_deref()
                 .and_then(|s| s.split('/').nth(1))
                 .unwrap_or("-")
-                .to_string()
         } else {
-            String::from_utf8_lossy(self.alt_allele()).to_string()
+            &raw
+        };
+        out.extend_from_slice(allele.as_bytes());
+    }
+}
+
+/// Appends `n` in decimal; the buffer holds the 20 digits of `u64::MAX`.
+fn push_decimal(out: &mut Vec<u8>, mut n: u64) {
+    let mut digits = [0u8; 20];
+    let mut start = digits.len();
+    loop {
+        start -= 1;
+        digits[start] = b'0' + (n % 10) as u8;
+        n /= 10;
+        if n == 0 {
+            break;
         }
     }
+    out.extend_from_slice(&digits[start..]);
+}
+
+/// The text a byte writer appended: whole `str` values and ASCII, so UTF-8.
+fn written_text(bytes: Vec<u8>) -> String {
+    String::from_utf8(bytes).expect("byte writers append str slices and ASCII")
 }
 
 /// The name Ensembl VEP's VCF parser gives a record from its ID field: the first of the
@@ -717,6 +765,106 @@ mod tests {
             b"TT".to_vec(),
         );
         assert_eq!(ins.location(), "21:25000100-25000101");
+    }
+
+    /// The three byte writers append exactly the bytes of the `String` columns,
+    /// on every branch each column has: the location of a point, a span and an
+    /// insertion; a record named by its ID, by its input line and by its
+    /// alleles at the trimmed start; the allele of a sequence variant, a
+    /// pre-minimised multi-allelic record, every structural class term and a
+    /// breakend with and without a mate.
+    #[test]
+    fn byte_writers_match_the_string_columns() {
+        let mut named = InputVariant::new("chr21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        named.id = Some("rs123".into());
+        let del = InputVariant::new(
+            "21".into(),
+            25000100,
+            25000105,
+            b"ACGTAC".to_vec(),
+            b"-".to_vec(),
+        );
+        let mut ins = InputVariant::new(
+            "21".into(),
+            25000101,
+            25000100,
+            b"-".to_vec(),
+            b"TT".to_vec(),
+        );
+        ins.input_line_name = Some("21_25000100_A/ATT".into());
+        let mut multi = InputVariant::new("21".into(), 101, 101, b"AG".to_vec(), b"A".to_vec());
+        multi.original_start = Some(100);
+        multi.original_end = Some(102);
+        multi.original_allele_string = Some("TAG/TA".into());
+        multi.uploaded_allele_string = Some("TAG/TA/T".into());
+        let mut cpx = InputVariant::new("21".into(), 100, 300, b"N".to_vec(), b"<CPX:X>".to_vec());
+        cpx.variant_class = VariantClass::ComplexStructural;
+        cpx.is_structural = true;
+        let mut alu = make_me_variant(b"<INS:ME:ALU>");
+        alu.record_so_term = Some("Alu_insertion".into());
+        let bare_me = make_me_variant(b"<INS:ME:SVA>");
+        let mut non_ref =
+            InputVariant::new("21".into(), 100, 300, b"N".to_vec(), b"<NON_REF>".to_vec());
+        non_ref.variant_class = VariantClass::ReferenceBlock;
+        non_ref.is_structural = true;
+        let mut paired =
+            InputVariant::new("1".into(), 100, 100, b"N".to_vec(), b"A[21:200[".to_vec());
+        paired.variant_class = VariantClass::Translocation;
+        paired.is_structural = true;
+        paired.mate_id = Some("bnd_1".into());
+        let mut single = paired.clone();
+        single.mate_id = None;
+        let mut dup = InputVariant::new("21".into(), 100, 300, b"N".to_vec(), b"<DUP>".to_vec());
+        dup.variant_class = VariantClass::Duplication;
+        dup.is_structural = true;
+        dup.uploaded_allele_string = Some("<DUP>".into());
+
+        let expected = [
+            (&named, "rs123", "chr21:100", "G"),
+            (&del, "21_25000100_ACGTAC/-", "21:25000100-25000105", "-"),
+            (&ins, "21_25000100_A/ATT", "21:25000100-25000101", "TT"),
+            (&multi, "21_100_TAG/TA/T", "21:100-102", "TA"),
+            (&cpx, "21_100_N/<CPX:X>", "21:100-300", "CPX"),
+            (&alu, "1_100_N/<INS:ME:ALU>", "1:100-200", "Alu_insertion"),
+            (
+                &bare_me,
+                "1_100_N/<INS:ME:SVA>",
+                "1:100-200",
+                "SVA_insertion",
+            ),
+            (&non_ref, "21_100_N/<NON_REF>", "21:100-300", "<NON_REF>"),
+            (&paired, "1_100_N/A[21:200[", "1:100", "A[21:200["),
+            (
+                &single,
+                "1_100_N/A[21:200[",
+                "1:100",
+                "chromosome_breakpoint",
+            ),
+            (&dup, "21_100_<DUP>", "21:100-300", "duplication"),
+        ];
+        for (v, uploaded, location, allele) in expected {
+            let mut out = Vec::new();
+            v.write_uploaded_variation(&mut out);
+            assert_eq!(out, uploaded.as_bytes(), "{}", v.allele_string);
+            assert_eq!(v.uploaded_variation(), uploaded);
+            out.clear();
+            v.write_location(&mut out);
+            assert_eq!(out, location.as_bytes(), "{}", v.allele_string);
+            assert_eq!(v.location(), location);
+            out.clear();
+            v.write_display_allele(&mut out);
+            assert_eq!(out, allele.as_bytes(), "{}", v.allele_string);
+            assert_eq!(v.display_allele(), allele);
+        }
+    }
+
+    #[test]
+    fn push_decimal_writes_every_digit() {
+        for n in [0u64, 7, 10, 99, 100, 25000100, u64::MAX] {
+            let mut out = b"x".to_vec();
+            push_decimal(&mut out, n);
+            assert_eq!(out, format!("x{n}").into_bytes());
+        }
     }
 
     #[test]

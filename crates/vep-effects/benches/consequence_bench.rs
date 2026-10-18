@@ -174,6 +174,7 @@ fn build_bench_transcript() -> Transcript {
         attributes: vec![],
         vefc: Some(vefc),
         derived: Default::default(),
+        id_rank: 0,
     }
 }
 

@@ -9,9 +9,7 @@
 use std::sync::Arc;
 
 use smallvec::{smallvec, SmallVec};
-use vep_core::consequence::{
-    Consequence, ConsequenceList, FeatureType, Impact, TranscriptConsequence,
-};
+use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::transcript::Transcript;
 use vep_core::variant::InputVariant;
 
@@ -256,45 +254,9 @@ fn calculate_terms(
     // tier-3 predicates below.
     if complete_overlap && perl_deletion_pre_predicate(variant) {
         return Some(TranscriptConsequence {
-            transcript_id: transcript.stable_id.clone(),
-            feature_start: transcript.start,
-            feature_end: transcript.end,
-            gene_id: transcript.gene_stable_id.clone(),
-            gene_symbol: transcript.gene_symbol.clone(),
-            gene_symbol_source: transcript.gene_symbol_source.clone(),
-            hgnc_id: transcript.hgnc_id.clone(),
             consequences: smallvec![Consequence::TranscriptAblation],
             impact: Impact::HIGH,
-            biotype: Some(transcript.biotype.clone()),
-            canonical: transcript.canonical,
-            cdna_position: None,
-            cds_position: None,
-            protein_position: None,
-            amino_acids: None,
-            codons: None,
-            protein_id: transcript.protein_id.clone(),
-            distance: None,
-            strand: transcript.strand.as_i8(),
-            exon: None,
-            intron: None,
-            hgvsc: None,
-            hgvsp: None,
-            hgvs_offset: None,
-            sift: None,
-            polyphen: None,
-            domains: Vec::new(),
-            feature_type: FeatureType::Transcript,
-            flags: transcript.flags.clone(),
-            tsl: transcript.tsl,
-            mane_select: transcript.mane_select.clone(),
-            mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-            appris: transcript.appris.clone(),
-            ccds: transcript.ccds.clone(),
-            swissprot: transcript.swissprot.clone(),
-            trembl: transcript.trembl.clone(),
-            refseq: transcript.refseq.clone(),
-            plugin_data: indexmap::IndexMap::new(),
-            loftee_ctx: None,
+            ..TranscriptConsequence::for_transcript(transcript)
         });
     }
 
@@ -563,45 +525,13 @@ fn calculate_terms(
     };
 
     Some(TranscriptConsequence {
-        transcript_id: transcript.stable_id.clone(),
-        feature_start: transcript.start,
-        feature_end: transcript.end,
-        gene_id: transcript.gene_stable_id.clone(),
-        gene_symbol: transcript.gene_symbol.clone(),
-        gene_symbol_source: transcript.gene_symbol_source.clone(),
-        hgnc_id: transcript.hgnc_id.clone(),
         consequences,
         impact,
-        biotype: Some(transcript.biotype.clone()),
-        canonical: transcript.canonical,
-        cdna_position: None,
-        cds_position: None,
-        protein_position: None,
-        amino_acids: None,
-        codons: None,
-        protein_id: transcript.protein_id.clone(),
         distance: fields.distance,
-        strand: transcript.strand.as_i8(),
-        exon: None,
-        intron: None,
         hgvsc: hgvs.hgvsc,
         hgvsp: hgvs.hgvsp,
         hgvs_offset: hgvs.offset,
-        sift: None,
-        polyphen: None,
-        domains: Vec::new(),
-        feature_type: FeatureType::Transcript,
-        flags: transcript.flags.clone(),
-        tsl: transcript.tsl,
-        mane_select: transcript.mane_select.clone(),
-        mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-        appris: transcript.appris.clone(),
-        ccds: transcript.ccds.clone(),
-        swissprot: transcript.swissprot.clone(),
-        trembl: transcript.trembl.clone(),
-        refseq: transcript.refseq.clone(),
-        plugin_data: indexmap::IndexMap::new(),
-        loftee_ctx: None,
+        ..TranscriptConsequence::for_transcript(transcript)
     })
 }
 
@@ -3707,6 +3637,7 @@ fn mirna_attribute_cdna_range(value: &str) -> Option<(u64, u64)> {
 mod tests {
     use super::*;
     use crate::test_helpers::make_test_transcript;
+    use vep_core::consequence::FeatureType;
 
     #[test]
     fn test_upstream_variant() {

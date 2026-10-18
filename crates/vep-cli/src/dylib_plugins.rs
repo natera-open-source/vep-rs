@@ -184,6 +184,78 @@ mod tests {
         assert!(msg.contains("failed to load"), "{msg}");
     }
 
+    /// The consequence document a plugin receives carries these keys and no
+    /// other: every field of `TranscriptConsequence` except `id_rank`, with
+    /// `plugin_data` and `loftee_ctx` present only when populated.
+    #[test]
+    fn consequence_json_carries_every_documented_key_and_nothing_else() {
+        const ALWAYS: [&str; 37] = [
+            "transcript_id",
+            "gene_id",
+            "gene_symbol",
+            "gene_symbol_source",
+            "hgnc_id",
+            "consequences",
+            "impact",
+            "biotype",
+            "canonical",
+            "cdna_position",
+            "cds_position",
+            "protein_position",
+            "amino_acids",
+            "codons",
+            "protein_id",
+            "distance",
+            "strand",
+            "exon",
+            "intron",
+            "hgvsc",
+            "hgvsp",
+            "hgvs_offset",
+            "sift",
+            "polyphen",
+            "domains",
+            "feature_type",
+            "flags",
+            "tsl",
+            "mane_select",
+            "mane_plus_clinical",
+            "appris",
+            "ccds",
+            "swissprot",
+            "trembl",
+            "refseq",
+            "feature_start",
+            "feature_end",
+        ];
+        let sorted_keys = |tc: &TranscriptConsequence| -> Vec<String> {
+            let value = serde_json::to_value(tc).unwrap();
+            let mut names: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+            names.sort();
+            names
+        };
+        let mut expected: Vec<String> = ALWAYS.iter().map(|k| k.to_string()).collect();
+        expected.sort();
+
+        let mut tc = TranscriptConsequence {
+            id_rank: 7,
+            ..TranscriptConsequence::default()
+        };
+        assert_eq!(sorted_keys(&tc), expected);
+
+        tc.plugin_data
+            .insert("REVEL_score".to_string(), "0.9".to_string());
+        tc.loftee_ctx = Some(Box::new(
+            vep_core::consequence::LofteeContext::from_transcript(
+                &crate::runner::make_runner_test_transcript("ENST1", "ENSG1", "1", 100),
+            ),
+        ));
+        expected.push("plugin_data".to_string());
+        expected.push("loftee_ctx".to_string());
+        expected.sort();
+        assert_eq!(sorted_keys(&tc), expected);
+    }
+
     #[test]
     fn run_over_an_empty_registry_touches_nothing() {
         let mut variant =

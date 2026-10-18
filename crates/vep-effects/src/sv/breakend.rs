@@ -23,9 +23,7 @@
 
 use super::is_mature_mirna_sv;
 use smallvec::SmallVec;
-use vep_core::consequence::{
-    Consequence, ConsequenceList, FeatureType, Impact, TranscriptConsequence,
-};
+use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 use vep_core::variant::InputVariant;
@@ -276,54 +274,19 @@ pub fn calculate(
 
     consequences.sort_by_key(|c| c.rank());
 
-    Some(TranscriptConsequence {
-        transcript_id: transcript.stable_id.clone(),
-        feature_start: transcript.start,
-        feature_end: transcript.end,
-        gene_id: transcript.gene_stable_id.clone(),
-        gene_symbol: transcript.gene_symbol.clone(),
-        gene_symbol_source: transcript.gene_symbol_source.clone(),
-        hgnc_id: transcript.hgnc_id.clone(),
+    let mut tc = TranscriptConsequence {
         consequences,
         impact,
-        biotype: Some(transcript.biotype.clone()),
-        canonical: transcript.canonical,
         cdna_position,
         cds_position,
         protein_position,
-        amino_acids: None,
-        codons: None,
-        protein_id: if is_coding {
-            transcript.protein_id.clone()
-        } else {
-            None
-        },
         distance,
-        strand: match transcript.strand {
-            Strand::Forward => 1,
-            Strand::Reverse => -1,
-        },
-        exon: None,
-        intron: None,
-        hgvsc: None,
-        hgvsp: None,
-        hgvs_offset: None,
-        sift: None,
-        polyphen: None,
-        domains: vec![],
-        feature_type: FeatureType::Transcript,
-        flags: transcript.flags.clone(),
-        tsl: transcript.tsl,
-        mane_select: transcript.mane_select.clone(),
-        mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-        appris: transcript.appris.clone(),
-        ccds: transcript.ccds.clone(),
-        swissprot: transcript.swissprot.clone(),
-        trembl: transcript.trembl.clone(),
-        refseq: transcript.refseq.clone(),
-        plugin_data: indexmap::IndexMap::new(),
-        loftee_ctx: None,
-    })
+        ..TranscriptConsequence::for_transcript(transcript)
+    };
+    if !is_coding {
+        tc.protein_id = None;
+    }
+    Some(tc)
 }
 
 /// The mate-side row of a paired breakend: `transcript` lies on the mate chromosome
@@ -495,6 +458,7 @@ mod tests {
     use super::*;
     use crate::consequences::EffectsConfig;
     use crate::test_helpers::make_test_transcript;
+    use vep_core::consequence::FeatureType;
     use vep_core::variant::VariantClass;
 
     /// Build a BND variant at a given position.
@@ -1007,6 +971,26 @@ mod tests {
     }
 
     #[test]
+    fn test_bnd_row_takes_span_rank_strand_and_gated_protein_id() {
+        let mut tx = make_test_transcript();
+        tx.strand = Strand::Reverse;
+        tx.id_rank = 7;
+        let v = make_bnd(25_001_000); // Intron 1
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert_eq!(tc.strand, -1);
+        assert_eq!((tc.feature_start, tc.feature_end), (tx.start, tx.end));
+        assert_eq!(tc.id_rank, 7);
+        assert_eq!(tc.protein_id.as_deref(), Some("ENSP00000000001"));
+
+        tx.coding_region_start = None;
+        let tc = calculate(&v, &tx, 5000, 5000).unwrap();
+        assert_eq!(
+            tc.protein_id, None,
+            "has_cds() reads coding_region_start, so a transcript without one reports no protein id however it names one"
+        );
+    }
+
+    #[test]
     fn test_bnd_coding_exon_in_exon3() {
         let tx = make_test_transcript();
         // CDS in exon 3: genomic 25_004_000 - 25_004_299 (cDNA 601-900, CDS 551-850).
@@ -1296,6 +1280,7 @@ mod tests {
             }],
             vefc: Some(vefc),
             derived: Default::default(),
+            id_rank: 0,
         }
     }
 

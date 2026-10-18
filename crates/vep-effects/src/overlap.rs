@@ -111,6 +111,7 @@ mod tests {
             attributes: vec![],
             vefc: None,
             derived: Default::default(),
+            id_rank: 0,
         }
     }
 

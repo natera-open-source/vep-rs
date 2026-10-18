@@ -1303,6 +1303,7 @@ mod tests {
             }],
             vefc: Some(vefc),
             derived: Default::default(),
+            id_rank: 0,
         }
     }
 
@@ -2132,6 +2133,7 @@ mod tests {
             attributes: vec![],
             vefc: Some(vefc),
             derived: Default::default(),
+            id_rank: 0,
         }
     }
 
@@ -2279,6 +2281,7 @@ mod tests {
             attributes: vec![],
             vefc: Some(vefc),
             derived: Default::default(),
+            id_rank: 0,
         };
 
         // BND: 1000 to 10_002_000 (>10M span). Overlaps intron but not exons.
@@ -2704,6 +2707,7 @@ mod tests {
             }],
             vefc: Some(vefc),
             derived: Default::default(),
+            id_rank: 0,
         }
     }
 }

@@ -43,10 +43,13 @@ pub struct AnnotationResources {
 /// request fighting for one shared global pool of N threads, oversubscribing the
 /// CPU. With a scoped pool each annotator's parallel work runs inside
 /// `pool.install(...)` and stays bounded to its configured fork count.
+///
+/// The workers are `vep-annot-<i>`: Linux keeps 15 bytes of a thread name, so
+/// the prefix leaves room for the index of every worker a machine can run.
 pub fn build_thread_pool(num_threads: usize) -> anyhow::Result<Arc<ThreadPool>> {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads.max(1))
-        .thread_name(|i| format!("vep-annotator-{i}"))
+        .thread_name(|i| format!("vep-annot-{i}"))
         .build()
         .context("failed to build rayon thread pool for annotator")?;
     Ok(Arc::new(pool))
@@ -686,6 +689,23 @@ mod tests {
 
     fn empty_annotator() -> Annotator {
         annotator_over(Arc::new(LazyTranscriptIndexes::empty())).unwrap()
+    }
+
+    /// Every pool thread carries a distinct `vep-annot-<i>` name that fits the
+    /// 15 bytes Linux keeps of a thread name, so a per-thread profile of a
+    /// 16-worker run attributes each worker separately.
+    #[test]
+    fn pool_threads_carry_distinct_names_within_the_comm_limit() {
+        let pool = build_thread_pool(16).unwrap();
+        let mut names: Vec<String> =
+            pool.broadcast(|_| std::thread::current().name().unwrap().to_string());
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), 16);
+        for name in &names {
+            assert!(name.starts_with("vep-annot-"), "{name}");
+            assert!(name.len() <= 15, "{name}");
+        }
     }
 
     /// The library path annotates a giant breakend against the chromosome's complete
