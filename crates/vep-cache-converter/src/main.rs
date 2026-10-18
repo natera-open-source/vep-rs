@@ -453,7 +453,8 @@ fn convert_cache(json_dir: &Path, output_dir: &str, _region_size: u64) -> Result
     Ok(())
 }
 
-/// Copy and validate info.json.
+/// Copy `info.json`, and `chr_synonyms.txt` when the source has one, once
+/// [`validate_info`] accepts the metadata.
 fn copy_info_json(json_dir: &Path, output_path: &Path) -> Result<()> {
     let src = json_dir.join("info.json");
     let dst = output_path.join("info.json");
@@ -463,22 +464,50 @@ fn copy_info_json(json_dir: &Path, output_path: &Path) -> Result<()> {
 
     let value: serde_json::Value = serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse info.json at {}", src.display()))?;
-
-    if let Some(obj) = value.as_object() {
-        let species = obj
-            .get("species")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown");
-        let assembly = obj
-            .get("assembly")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown");
-        info!("Cache info: species={}, assembly={}", species, assembly);
-    }
+    validate_info(&value).with_context(|| format!("{} is not a cache's info", src.display()))?;
+    let species = value["species"].as_str().unwrap_or_default();
+    let assembly = value["assembly"].as_str().unwrap_or_default();
+    info!("Cache info: species={}, assembly={}", species, assembly);
 
     fs::write(&dst, &content).with_context(|| format!("Failed to write {}", dst.display()))?;
-
     info!("Copied info.json");
+
+    let synonyms = json_dir.join("chr_synonyms.txt");
+    if synonyms.is_file() {
+        fs::copy(&synonyms, output_path.join("chr_synonyms.txt"))
+            .with_context(|| format!("Failed to copy {}", synonyms.display()))?;
+        info!("Copied chr_synonyms.txt");
+    }
+    Ok(())
+}
+
+/// The metadata every cache carries and the runtime reads: an object with a
+/// non-empty `species` and `assembly`, the two lines Ensembl VEP's dumper
+/// writes first (`Pipeline/DumpVEP/Dumper/Core.pm:95`; the resolution compares
+/// the assembly with `--assembly` and the cache directory's name), a
+/// `contig_order` that is a list of strings when present, and a
+/// `variation_cols` that is a list of strings when present; any other shape is
+/// an error.
+fn validate_info(value: &serde_json::Value) -> Result<()> {
+    let Some(obj) = value.as_object() else {
+        bail!("info.json is not a JSON object");
+    };
+    for key in ["species", "assembly"] {
+        match obj.get(key).and_then(|v| v.as_str()) {
+            Some(text) if !text.is_empty() => {}
+            _ => bail!("info.json lacks a non-empty {key} string"),
+        }
+    }
+    for key in ["contig_order", "variation_cols"] {
+        if let Some(list) = obj.get(key) {
+            let is_string_list = list
+                .as_array()
+                .is_some_and(|items| items.iter().all(|item| item.is_string()));
+            if !is_string_list {
+                bail!("info.json {key} is not a list of strings");
+            }
+        }
+    }
     Ok(())
 }
 
@@ -827,5 +856,49 @@ mod tests {
         fs::write(shards.join("21_1-1000000.json"), b"[]").unwrap();
         let error = copy_variation_files(&shards, &tmp.path().join("out3")).unwrap_err();
         assert!(error.to_string().contains("JSON variation shard"));
+    }
+
+    /// `info.json` is copied with `chr_synonyms.txt` beside it; a metadata set
+    /// the runtime could not resolve a cache from (no species or assembly, a
+    /// `contig_order` or `variation_cols` that is not a list of strings, a
+    /// non-object) is refused.
+    #[test]
+    fn info_json_is_validated_and_synonyms_travel_with_it() {
+        let tmp = Scratch::new();
+        let src = tmp.path().join("src");
+        fs::create_dir_all(&src).unwrap();
+        let good = r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116,
+            "contig_order":["1","X"],"source_versions":{}}"#;
+        fs::write(src.join("info.json"), good).unwrap();
+        fs::write(src.join("chr_synonyms.txt"), "21\tNC_000021.9\n").unwrap();
+        let dst = tmp.path().join("dst");
+        fs::create_dir_all(&dst).unwrap();
+        copy_info_json(&src, &dst).unwrap();
+        assert_eq!(fs::read_to_string(dst.join("info.json")).unwrap(), good);
+        assert_eq!(
+            fs::read_to_string(dst.join("chr_synonyms.txt")).unwrap(),
+            "21\tNC_000021.9\n"
+        );
+
+        let refused = [
+            (r#"{"species":"homo_sapiens"}"#, "non-empty assembly"),
+            (r#"{"species":"","assembly":"GRCh38"}"#, "non-empty species"),
+            (
+                r#"{"species":"homo_sapiens","assembly":"GRCh38","contig_order":"1,2"}"#,
+                "contig_order is not a list of strings",
+            ),
+            (
+                r#"{"species":"homo_sapiens","assembly":"GRCh38","variation_cols":[1]}"#,
+                "variation_cols is not a list of strings",
+            ),
+            ("[]", "not a JSON object"),
+        ];
+        for (text, reason) in refused {
+            let error = validate_info(&serde_json::from_str(text).unwrap()).unwrap_err();
+            assert!(
+                error.to_string().contains(reason),
+                "{text}: {error} should name {reason}"
+            );
+        }
     }
 }

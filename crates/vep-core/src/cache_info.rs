@@ -38,6 +38,10 @@ pub struct CacheInfo {
     /// Source database versions (e.g., "ClinVar" -> "202306"), in the byte
     /// order the output headers print them.
     pub source_versions: BTreeMap<String, String>,
+    /// The cache's chromosome directories in the order the converter and the
+    /// builder list them: autosomes by number, X, Y, MT, then every other
+    /// contig by name. Empty when the cache's metadata predates the key.
+    pub contig_order: Vec<String>,
 }
 
 impl CacheInfo {
@@ -159,6 +163,7 @@ mod tests {
         assert!(info.var_type.is_none());
         assert!(info.build.is_none());
         assert!(info.source_versions.is_empty());
+        assert!(info.contig_order.is_empty());
     }
 
     #[test]
@@ -183,6 +188,7 @@ mod tests {
             var_type: Some("tabix".to_string()),
             build: Some("all".to_string()),
             source_versions,
+            contig_order: vec!["1".to_string(), "X".to_string(), "MT".to_string()],
         };
         assert_eq!(info.species, "homo_sapiens");
         assert_eq!(info.assembly, "GRCh38");
@@ -193,5 +199,6 @@ mod tests {
             info.source_versions.get("ensembl-variation"),
             Some(&"115.0".to_string())
         );
+        assert_eq!(info.contig_order, ["1", "X", "MT"]);
     }
 }

@@ -14,7 +14,8 @@
 //!   service environments where random mmap reads hit remote or block-backed
 //!   storage.
 //! - All queries are 1-based genomic coordinates, matching VEP conventions.
-//! - A small contig-alias map tolerates `chr`-prefixed references.
+//! - A small contig-alias map tolerates `chr`-prefixed references, and
+//!   [`IndexedFasta::add_synonyms`] extends it with a chromosome synonym table.
 
 use std::{
     collections::HashMap,
@@ -26,6 +27,7 @@ use std::{
 
 use memmap2::Mmap;
 use thiserror::Error;
+use vep_core::synonyms::ChromosomeSynonyms;
 
 #[derive(Debug, Error)]
 pub enum FastaError {
@@ -253,6 +255,24 @@ impl IndexedFasta {
         self.records.get(canon)
     }
 
+    /// Registers, for each record, the names a chromosome synonym table gives
+    /// it ([`ChromosomeSynonyms::aliases_of`]), as Ensembl VEP's reference
+    /// reader tries a query's synonyms when the query itself names no record
+    /// (`Variation/Utils/FastaSequence.pm:380-389`). A record's own name and an
+    /// alias already present win over a synonym; records are visited by name,
+    /// so two records claiming one alias resolve the same way on every run.
+    pub fn add_synonyms(&mut self, synonyms: &ChromosomeSynonyms) {
+        let mut names: Vec<&String> = self.records.keys().collect();
+        names.sort();
+        for name in names {
+            for alias in synonyms.aliases_of(name) {
+                self.aliases
+                    .entry(alias.to_ascii_lowercase())
+                    .or_insert_with(|| name.clone());
+            }
+        }
+    }
+
     /// Returns the path to the underlying FASTA file.
     ///
     /// Available to consumers for diagnostics, such as logging the loaded
@@ -404,5 +424,31 @@ mod tests {
             assert_eq!(in_memory.base("1", pos), mmap.base("1", pos));
         }
         assert_eq!(in_memory.sequence("chr1", 2, 5), Some(b"CACA".to_vec()));
+    }
+
+    /// A record named by its RefSeq accession is read under the cache's name
+    /// once the synonym table is added, and under the `chr` spelling of that
+    /// name, as `FastaSequence.pm:380-389` reaches it; a name no synonym links
+    /// stays unresolved, and the table changes nothing for a record it does not
+    /// mention.
+    #[test]
+    fn synonyms_reach_a_record_under_the_cache_name() {
+        let dir = tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        let fai = dir.path().join("ref.fa.fai");
+        // Headers ">NC_000021.9\n" (13 bytes) and ">X\n"; each sequence is 6 bases.
+        std::fs::write(&fa, b">NC_000021.9\nACACAC\n>X\nGGGTTT\n").unwrap();
+        std::fs::write(&fai, b"NC_000021.9\t6\t13\t6\t7\nX\t6\t23\t6\t7\n").unwrap();
+
+        let mut idx = IndexedFasta::from_path(&fa).unwrap();
+        assert_eq!(idx.base("21", 1), None);
+        idx.add_synonyms(&ChromosomeSynonyms::parse(
+            "21\tNC_000021.9\n21\tCM000683.2\n",
+        ));
+        assert_eq!(idx.sequence("21", 1, 3), Some(b"ACA".to_vec()));
+        assert_eq!(idx.sequence("chr21", 4, 6), Some(b"CAC".to_vec()));
+        assert_eq!(idx.base("CM000683.2", 1), None);
+        assert_eq!(idx.base("X", 1), Some(b'G'));
+        assert_eq!(idx.base("chrX", 6), Some(b'T'));
     }
 }

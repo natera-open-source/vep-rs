@@ -118,4 +118,21 @@ fn variation_shards_carry_ensembl_form_and_the_clinvar_columns() {
     assert_eq!(snv["phenotype_or_disease"], 0);
     assert!(snv.get("clin_sig_allele").is_none());
     assert!(snv.get("clinical_impact").is_none());
+
+    let info: Value =
+        serde_json::from_str(&std::fs::read_to_string(out.path().join("info.json")).unwrap())
+            .unwrap();
+    let columns: Vec<&str> = info["variation_cols"]
+        .as_array()
+        .expect("variation_cols is written with the records")
+        .iter()
+        .map(|c| c.as_str().unwrap())
+        .collect();
+    assert_eq!(columns[0], "variation_name");
+    for key in deletion.as_object().unwrap().keys() {
+        assert!(
+            columns.contains(&key.as_str()),
+            "{key} is a record key but no column"
+        );
+    }
 }

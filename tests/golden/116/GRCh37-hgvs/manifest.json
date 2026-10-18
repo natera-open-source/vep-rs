@@ -21,6 +21,7 @@
   "--hgvs"
  ],
  "fasta": "reference.fa.gz",
+ "fasta_in_cache": true,
  "covers": [
   "hgvs",
   "uploaded_variation_naming_116",
@@ -28,7 +29,8 @@
   "hgvsp_extter_116",
   "flag_matrix_concordance",
   "hgvs-offset-field",
-  "engine_identity_lines"
+  "engine_identity_lines",
+  "cache-fasta-auto-detection"
  ],
  "suites": {
   "GRCh37-hgvs": {

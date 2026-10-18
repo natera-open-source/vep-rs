@@ -13,7 +13,7 @@
 //!     ...
 //! ```
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -41,6 +41,12 @@ pub struct BuildStats {
     pub transcript_count: usize,
     pub chromosome_count: usize,
     pub region_file_count: usize,
+    /// The chromosome directories written, in the order `info.json` lists them.
+    pub chromosomes: Vec<String>,
+    /// Transcripts written with a SIFT matrix.
+    pub sift_matrices: usize,
+    /// Transcripts written with a PolyPhen matrix, HumVar or HumDiv.
+    pub polyphen_matrices: usize,
 }
 
 // These must serialize to field names matching what json_cache.rs expects.
@@ -352,10 +358,29 @@ pub fn build_cache(
         );
     }
 
+    let mut sift_matrices = 0usize;
+    let mut polyphen_matrices = 0usize;
+    for tr in by_chr.values().flatten() {
+        let Some(predictions) = &tr
+            .variation_effect_feature_cache
+            .protein_function_predictions
+        else {
+            continue;
+        };
+        if predictions.sift.is_some() {
+            sift_matrices += 1;
+        }
+        if predictions.polyphen_humvar.is_some() || predictions.polyphen_humdiv.is_some() {
+            polyphen_matrices += 1;
+        }
+    }
     Ok(BuildStats {
         transcript_count,
         chromosome_count: by_chr.len(),
         region_file_count,
+        chromosomes: crate::info::contig_order(by_chr.keys().cloned()),
+        sift_matrices,
+        polyphen_matrices,
     })
 }
 
@@ -393,74 +418,6 @@ fn copy_hgnc_ids_by_symbol(transcripts: &mut [CacheTranscript]) {
             tr.hgnc_id = Some(hgnc_id.clone());
         }
     }
-}
-
-/// Generate `info.json` in the output directory.
-///
-/// This file describes the cache contents and is read by `vep-cli` to
-/// determine available annotations and cache version.
-pub fn generate_info_json(
-    output_dir: &Path,
-    species: &str,
-    assembly: &str,
-    cache_version: u32,
-    include_predictions: bool,
-    source_versions: BTreeMap<String, String>,
-) -> Result<()> {
-    let info = CacheInfoJson {
-        species: species.to_string(),
-        assembly: assembly.to_string(),
-        cache_version,
-        sift: if include_predictions {
-            Some("b".to_string())
-        } else {
-            None
-        },
-        polyphen: if include_predictions {
-            Some("b".to_string())
-        } else {
-            None
-        },
-        regulatory: false,
-        variation_cols: vec![
-            "variation_name".to_string(),
-            "failed".to_string(),
-            "somatic".to_string(),
-            "start".to_string(),
-            "end".to_string(),
-            "allele_string".to_string(),
-            "strand".to_string(),
-            "minor_allele".to_string(),
-            "minor_allele_freq".to_string(),
-            "clin_sig".to_string(),
-            "phenotype_or_disease".to_string(),
-            "pubmed".to_string(),
-        ],
-        source_versions,
-    };
-
-    let filepath = output_dir.join("info.json");
-    let json = serde_json::to_string_pretty(&info).context("Failed to serialize info.json")?;
-    std::fs::write(&filepath, json)
-        .with_context(|| format!("Failed to write {}", filepath.display()))?;
-
-    info!("Wrote {}", filepath.display());
-    Ok(())
-}
-
-/// JSON structure for the cache info.json file.
-#[derive(Serialize)]
-struct CacheInfoJson {
-    species: String,
-    assembly: String,
-    cache_version: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    sift: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    polyphen: Option<String>,
-    regulatory: bool,
-    variation_cols: Vec<String>,
-    source_versions: BTreeMap<String, String>,
 }
 
 /// Build a single CacheTranscript from parsed GFF3 data.
@@ -1348,30 +1305,5 @@ mod tests {
         assert_eq!(region_start(1_000_000), 1);
         // Position 1000001 -> region 1000001-2000000
         assert_eq!(region_start(1_000_001), 1_000_001);
-    }
-
-    #[test]
-    fn test_generate_info_json() {
-        let tmpdir = std::env::temp_dir().join("vep_cache_builder_test_info_json");
-        let _ = std::fs::remove_dir_all(&tmpdir);
-        std::fs::create_dir_all(&tmpdir).unwrap();
-
-        let versions = BTreeMap::from([("assembly".to_string(), "GRCh37.p13".to_string())]);
-        generate_info_json(&tmpdir, "homo_sapiens", "GRCh37", 115, false, versions).unwrap();
-
-        let info_path = tmpdir.join("info.json");
-        assert!(info_path.exists());
-
-        let content = std::fs::read_to_string(&info_path).unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        assert_eq!(parsed["species"], "homo_sapiens");
-        assert_eq!(parsed["assembly"], "GRCh37");
-        assert_eq!(parsed["cache_version"], 115);
-        assert_eq!(parsed["regulatory"], false);
-        assert!(parsed["variation_cols"].is_array());
-        assert_eq!(parsed["variation_cols"][0], "variation_name");
-        assert_eq!(parsed["source_versions"]["assembly"], "GRCh37.p13");
-
-        let _ = std::fs::remove_dir_all(&tmpdir);
     }
 }

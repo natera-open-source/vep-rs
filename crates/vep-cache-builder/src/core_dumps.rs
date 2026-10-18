@@ -35,12 +35,14 @@ use anyhow::{bail, Context, Result};
 use flate2::read::GzDecoder;
 use tracing::{info, warn};
 
-/// The core tables `load` reads.
-pub const CORE_TABLES: [&str; 14] = [
+/// The core tables `load` reads, plus `seq_region_synonym`, which the
+/// chromosome synonyms file is written from (`info::write_chr_synonyms`).
+pub const CORE_TABLES: [&str; 15] = [
     "external_db",
     "attrib_type",
     "seq_region",
     "seq_region_attrib",
+    "seq_region_synonym",
     "meta",
     "gene",
     "transcript",
@@ -584,7 +586,11 @@ fn order_cds_flags(attributes: &mut [Attribute]) {
 
 /// A table's first two columns as a map, its identifier to its name:
 /// `external_db`, `attrib_type` and `seq_region` all start that way.
-fn id_to_name(dir: &Path, table: &'static str, columns: usize) -> Result<HashMap<String, String>> {
+pub fn id_to_name(
+    dir: &Path,
+    table: &'static str,
+    columns: usize,
+) -> Result<HashMap<String, String>> {
     read_table(dir, table, columns)?
         .map(|row| {
             let row = row?;

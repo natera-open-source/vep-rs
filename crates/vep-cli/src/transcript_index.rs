@@ -81,12 +81,32 @@ impl TranscriptIndexImpl {
     }
 }
 
+/// One chromosome's transcripts: the overlap index of the selected kind and the
+/// transcription start sites Ensembl VEP's `--nearest` searches.
+pub struct TranscriptIndex {
+    overlap: OverlapIndex,
+    tss: Vec<TssPoint>,
+}
+
 /// Selectable transcript interval index. Variants share identical semantics;
 /// only the data structure differs.
-pub enum TranscriptIndex {
+enum OverlapIndex {
     Bin(TranscriptBinIndex),
     Coitrees(TranscriptCoitreesIndex),
     Sorted(TranscriptSortedIndex),
+}
+
+/// A protein-coding transcript's transcription start site with the identifiers
+/// Ensembl VEP's `--nearest` reports: one line of the `transcript_gene_tss.txt`
+/// Ensembl VEP derives from its cache (`AnnotationType/Transcript.pm:747-751`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TssPoint {
+    /// The transcript's start on the forward strand, its end on the reverse.
+    pub tss: u64,
+    pub transcript: Arc<str>,
+    pub gene: Arc<str>,
+    /// The gene symbol, else the gene stable id.
+    pub symbol: Arc<str>,
 }
 
 impl TranscriptIndex {
@@ -97,23 +117,25 @@ impl TranscriptIndex {
         upstream_distance: u64,
         downstream_distance: u64,
     ) -> Self {
-        match kind {
-            TranscriptIndexImpl::Bin => Self::Bin(TranscriptBinIndex::new(
+        let tss = protein_coding_tss_points(&transcripts);
+        let overlap = match kind {
+            TranscriptIndexImpl::Bin => OverlapIndex::Bin(TranscriptBinIndex::new(
                 transcripts,
                 upstream_distance,
                 downstream_distance,
             )),
-            TranscriptIndexImpl::Coitrees => Self::Coitrees(TranscriptCoitreesIndex::new(
+            TranscriptIndexImpl::Coitrees => OverlapIndex::Coitrees(TranscriptCoitreesIndex::new(
                 transcripts,
                 upstream_distance,
                 downstream_distance,
             )),
-            TranscriptIndexImpl::Sorted => Self::Sorted(TranscriptSortedIndex::new(
+            TranscriptIndexImpl::Sorted => OverlapIndex::Sorted(TranscriptSortedIndex::new(
                 transcripts,
                 upstream_distance,
                 downstream_distance,
             )),
-        }
+        };
+        Self { overlap, tss }
     }
 
     /// Call `f` for every transcript whose extended region overlaps
@@ -125,25 +147,61 @@ impl TranscriptIndex {
         query_end: u64,
         f: impl FnMut(&Transcript),
     ) {
-        match self {
-            Self::Bin(idx) => idx.for_each_overlapping(query_start, query_end, f),
-            Self::Coitrees(idx) => idx.for_each_overlapping(query_start, query_end, f),
-            Self::Sorted(idx) => idx.for_each_overlapping(query_start, query_end, f),
+        match &self.overlap {
+            OverlapIndex::Bin(idx) => idx.for_each_overlapping(query_start, query_end, f),
+            OverlapIndex::Coitrees(idx) => idx.for_each_overlapping(query_start, query_end, f),
+            OverlapIndex::Sorted(idx) => idx.for_each_overlapping(query_start, query_end, f),
         }
     }
 
     /// Number of transcripts in the index.
     pub fn len(&self) -> usize {
-        match self {
-            Self::Bin(idx) => idx.len(),
-            Self::Coitrees(idx) => idx.len(),
-            Self::Sorted(idx) => idx.len(),
+        match &self.overlap {
+            OverlapIndex::Bin(idx) => idx.len(),
+            OverlapIndex::Coitrees(idx) => idx.len(),
+            OverlapIndex::Sorted(idx) => idx.len(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// The chromosome's protein-coding transcription start sites in ascending
+    /// coordinate order; transcripts sharing a coordinate keep their cache
+    /// order.
+    pub fn tss_points(&self) -> &[TssPoint] {
+        &self.tss
+    }
+}
+
+/// The transcription start sites of the protein-coding transcripts, in
+/// ascending coordinate order and otherwise in the order given, with the
+/// fields Ensembl VEP writes for `--nearest`
+/// (`AnnotationSource/Cache/Transcript.pm:301-305` keeps `protein_coding`
+/// alone; `AnnotationType/Transcript.pm:749-750` takes the start on the forward
+/// strand and the end on the reverse, and the gene stable id when the gene has
+/// no symbol). Ensembl VEP's own tie order is undefined:
+/// `Cache/Transcript.pm:297` reads the shards as the directory lists them.
+fn protein_coding_tss_points(transcripts: &[Transcript]) -> Vec<TssPoint> {
+    let mut points: Vec<TssPoint> = transcripts
+        .iter()
+        .filter(|tx| tx.is_protein_coding())
+        .map(|tx| TssPoint {
+            tss: match tx.strand {
+                Strand::Forward => tx.start,
+                Strand::Reverse => tx.end,
+            },
+            transcript: tx.stable_id.clone(),
+            gene: tx.gene_stable_id.clone(),
+            symbol: tx
+                .gene_symbol
+                .clone()
+                .unwrap_or_else(|| tx.gene_stable_id.clone()),
+        })
+        .collect();
+    points.sort_by_key(|point| point.tss);
+    points
 }
 
 #[inline]
@@ -1315,5 +1373,115 @@ mod tests {
 
         // Repeated gets are stable (memoized slot, not a re-parse with drift).
         assert_eq!(collect_ids(b.get("21").expect("index"), 1, 5_000), warm);
+    }
+
+    /// The rows of the TSS table Ensembl VEP writes on the first `--nearest`
+    /// run (`AnnotationSource/Cache/Transcript.pm:291-305`,
+    /// `AnnotationType/Transcript.pm:747-751`): protein-coding transcripts
+    /// alone, the start on the forward strand and the end on the reverse, the
+    /// gene stable id standing in for a missing symbol. The order is this
+    /// loader's: ascending coordinate, ties as the cache lists them (the shards
+    /// by region, then each shard's records in file order).
+    #[test]
+    fn tss_table_derived_from_shards() {
+        let dir = tempfile::Builder::new()
+            .prefix("vep_tss_")
+            .tempdir()
+            .unwrap();
+        let chr_dir = dir.path().join("transcripts").join("21");
+        std::fs::create_dir_all(&chr_dir).unwrap();
+        let record = |id: &str,
+                      gene: &str,
+                      start: u64,
+                      end: u64,
+                      strand: i32,
+                      biotype: &str,
+                      symbol: &str| {
+            let symbol = if symbol.is_empty() {
+                String::new()
+            } else {
+                format!(r#","gene_symbol":"{symbol}""#)
+            };
+            format!(
+                r#"{{"stable_id":"{id}","gene_stable_id":"{gene}","chr":"21","start":{start},"end":{end},"strand":{strand},"biotype":"{biotype}","source":"ensembl"{symbol}}}"#
+            )
+        };
+        // The second shard's records come first in the table when their TSS is
+        // lower; two forward transcripts share a TSS and keep their file order.
+        std::fs::write(
+            chr_dir.join("1000001-2000000.json"),
+            format!(
+                "[{},{},{},{}]",
+                record(
+                    "ENST_B",
+                    "ENSG_B",
+                    1_500_000,
+                    1_600_000,
+                    1,
+                    "protein_coding",
+                    "B"
+                ),
+                record(
+                    "ENST_B2",
+                    "ENSG_B",
+                    1_500_000,
+                    1_550_000,
+                    1,
+                    "protein_coding",
+                    "B"
+                ),
+                record("ENST_LNC", "ENSG_LNC", 1_200_000, 1_300_000, 1, "lncRNA", "LNC"),
+                record(
+                    "ENST_R",
+                    "ENSG_R",
+                    1_100_000,
+                    1_400_000,
+                    -1,
+                    "protein_coding",
+                    ""
+                ),
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            chr_dir.join("2000001-3000000.json"),
+            format!(
+                "[{}]",
+                record(
+                    "ENST_C",
+                    "ENSG_C",
+                    2_100_000,
+                    2_200_000,
+                    1,
+                    "protein_coding",
+                    "C"
+                ),
+            ),
+        )
+        .unwrap();
+        let lazy = LazyTranscriptIndexes::new(
+            dir.path().to_str().unwrap(),
+            TranscriptIndexImpl::Bin,
+            5_000,
+            5_000,
+        )
+        .unwrap();
+        lazy.prewarm("21").unwrap();
+        let points: Vec<(u64, &str, &str, &str)> = lazy
+            .get("21")
+            .unwrap()
+            .tss_points()
+            .iter()
+            .map(|p| (p.tss, &*p.transcript, &*p.gene, &*p.symbol))
+            .collect();
+        assert_eq!(
+            points,
+            [
+                (1_400_000, "ENST_R", "ENSG_R", "ENSG_R"),
+                (1_500_000, "ENST_B", "ENSG_B", "B"),
+                (1_500_000, "ENST_B2", "ENSG_B", "B"),
+                (2_100_000, "ENST_C", "ENSG_C", "C"),
+            ]
+        );
     }
 }

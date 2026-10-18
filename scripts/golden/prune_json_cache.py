@@ -6,8 +6,10 @@ up/downstream flank (5,000 bp on both sides), overlaps the variant. A fixture ca
 needs exactly those transcripts and nothing else. This script reads one or more VCFs, keeps
 every transcript record of the source cache whose extended span overlaps any record span
 (symbolic alleles use END or SVLEN; breakend mates count as one-base spans on their own
-chromosome), and writes the survivors into shards named exactly as in the source so a
-transcript the source stores in two shards is kept in both. Chromosome directories with no
+chromosome; a record's chromosome name is resolved to the cache's as the runtime resolves it,
+through the cache's `chr_synonyms.txt` and the `chr` prefix), and writes the survivors into
+shards named exactly as in the source so a transcript the source stores in two shards is kept
+in both. Chromosome directories with no
 surviving transcript are omitted. The summary printed at the end counts, per chromosome,
 the transcripts kept and the spans searched: one span per record, one per breakend mate and
 one per same-chromosome breakend pair covering both ends, so a chromosome's spans outnumber
@@ -32,8 +34,10 @@ Ensembl VEP cache's `info.txt` when `--perl-info` names one (every `source_<key>
 becomes a `source_versions` entry, `variation_cols` becomes a list, `cell_types` is dropped), else
 copied from the source cache, else written from `--species`, `--assembly` and
 `--cache-version`. `variation_cols` and `var_type` are kept only when the output carries a
-variation slice, so a cache's metadata never advertises variation data its directory lacks.
-`--info-only` writes just that file.
+variation slice, so a cache's metadata never advertises variation data its directory lacks, and
+`contig_order` names the output's own chromosome directories in the converter's order. A source
+cache's `chr_synonyms.txt` is copied beside `info.json`, kept to the lines that name a
+chromosome the output holds. `--info-only` writes just that file.
 
 Usage:
     prune_json_cache.py --cache <src-dir> --out <dst-dir> --vcf <a.vcf> [--vcf <b.vcf.gz>]
@@ -483,11 +487,29 @@ def has_variation_files(out: Path) -> bool:
 
 
 def write_info(out: Path, info: dict) -> None:
-    """Writes `info.json`, without the variation keys when the output holds no variation file."""
+    """Writes `info.json`, without the variation keys when the output holds no variation file,
+    and with `contig_order` naming the output's own chromosome directories (autosomes by
+    number, then X, Y and MT, then every other contig by name, the converter's order), or
+    without the key when the output holds no transcript directory."""
     info = dict(info)
     if not has_variation_files(out):
         for key in VARIATION_INFO_KEYS:
             info.pop(key, None)
+
+    def contig_key(name: str) -> tuple[int, int, str]:
+        if name.isdigit():
+            return (0, int(name), "")
+        tier = {"X": 1, "Y": 2, "MT": 3}.get(name, 4)
+        return (tier, 0, name)
+
+    transcripts = out / "transcripts"
+    chromosomes: list[str] = []
+    if transcripts.is_dir():
+        chromosomes = [p.name for p in transcripts.iterdir() if p.is_dir()]
+    if chromosomes:
+        info["contig_order"] = sorted(chromosomes, key=contig_key)
+    else:
+        info.pop("contig_order", None)
     (out / "info.json").write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
@@ -551,10 +573,42 @@ def main(argv: list[str] | None = None) -> int:
         except re.error as error:
             print(f"ERROR: [prune_json_cache] --exclude-variation {error.pattern!r}: {error}", file=sys.stderr)
             return 2
+    cache_chromosomes = {p.name for p in (args.cache / "transcripts").iterdir() if p.is_dir()}
+    synonyms_src = args.cache / "chr_synonyms.txt"
+    synonym_lines: list[str] = []
+    if synonyms_src.is_file():
+        synonym_lines = synonyms_src.read_text(encoding="utf-8").splitlines()
+    linked: dict[str, list[str]] = defaultdict(list)
+    for line in synonym_lines:
+        names = line.split()
+        for synonym in names[1:]:
+            linked[names[0]].append(synonym)
+            linked[synonym].append(names[0])
+
+    def cache_name(chrom: str) -> str:
+        """The cache's own name for a record's chromosome, resolved as the runtime resolves an
+        input name (Ensembl VEP's `get_source_chr_name`): the name itself, else a linked synonym
+        the cache holds, else the name with `chr` removed or added, else a bare `M` as `MT`."""
+        if chrom in cache_chromosomes:
+            return chrom
+        for synonym in linked.get(chrom, []):
+            if synonym in cache_chromosomes:
+                return synonym
+        if chrom[:3].lower() == "chr":
+            stripped = chrom[3:]
+            if stripped in cache_chromosomes:
+                return stripped
+            return chrom
+        if f"chr{chrom}" in cache_chromosomes:
+            return f"chr{chrom}"
+        if chrom == "M" and "MT" in cache_chromosomes:
+            return "MT"
+        return chrom
+
     spans: dict[str, list[tuple[int, int]]] = defaultdict(list)
     for vcf in args.vcf:
         for chrom, s in record_spans(vcf).items():
-            spans[chrom].extend(s)
+            spans[cache_name(chrom)].extend(s)
     # Checked before `prune()` writes the transcript shards, so a refused run leaves no partial output.
     if args.variations is not None and not any((args.variations / chrom / "all_vars.gz").is_file() for chrom in spans):
         print(f"ERROR: [prune_json_cache] --variations {args.variations}: no <chr>/all_vars.gz for any chromosome of the records ({', '.join(sorted(spans))})", file=sys.stderr)
@@ -563,6 +617,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.variations is not None:
         summary["variations_per_chromosome"] = prune_variations(
             args.variations, args.out, spans, args.variation_flank, columns, exclude)
+    # The cache's chr_synonyms.txt, kept to the lines naming a chromosome the output holds,
+    # so the slice resolves the same input names for its chromosomes as the whole cache does.
+    if synonyms_src.is_file():
+        kept_chromosomes = set(summary["transcripts_per_chromosome"])
+        kept_lines = [line for line in synonym_lines if any(name in kept_chromosomes for name in line.split())]
+        (args.out / "chr_synonyms.txt").write_text("".join(f"{line}\n" for line in kept_lines), encoding="utf-8")
+        summary["synonym_lines"] = len(kept_lines)
     write_info(args.out, info)
     summary["spans_by_chromosome"] = {c: len(v) for c, v in sorted(spans.items())}
     print(json.dumps(summary))

@@ -1,0 +1,42 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf: the chromosome 21 records of the GRCh38 corpus with the chromosome column rewritten to the names the cache's chr_synonyms.txt links to 21: NC_000021.9 (RefSeq) on 71 records, CM000683.2 (GenBank) on 21 and chr21 on 36, so every record reaches the cache's 21 directory through the synonym table or the chr prefix; Ensembl VEP ran on its own cache, whose chr_synonyms.txt it reads, with no --synonyms flag",
+ "sha256": {
+  "default.txt": "785d0387c4c50b046e15d4928a0f4dc55226551ed3502cf12b6ec4568179e9c6",
+  "tab.txt": "cb0efb38b98c32a05a4119f5743bb640e5c0459ff2190031f1e07c799f5def24",
+  "vcf.vcf": "8b96681558d7f3c73a110cd59c43b8efe2500580460592781a64fff5e3cb10ee",
+  "json.jsonl": "38cbc1ce6adddd628180b0c7c9432e78e42e3d4d894f7b7ab6a447c6af19c6db"
+ },
+ "variants_vcf_sha256": "458050d9ffd7306ad844a0ec03033f531bc468ca711abfb9c640a2b140882891",
+ "generator": "the GRCh38 corpus's chromosome 21 records renamed and annotated with Ensembl VEP, then scripts/golden/build_golden_corpus.py select --k 1 --seed 1 --max-records 120 --cache <converted slice>; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 1, 21 and X slice scripts/data/storable_to_json.pl converted from the Ensembl VEP cache (the breakend mates of two records lie on 1 and X), which keeps the slice's chr_synonyms.txt lines naming 1, 21 or X; scripts/golden/build_golden_corpus.py classify",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "1": 53,
+   "21": 2337,
+   "X": 5
+  },
+  "shards": 31,
+  "synonym_lines": 9,
+  "spans_by_chromosome": {
+   "1": 1,
+   "21": 139,
+   "X": 1
+  }
+ },
+ "runs": {
+  "user-synonyms-replace-cache-file": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --synonyms synonyms_chr_only.txt",
+   "input": "variants.vcf under a user synonyms file that links chr21 alone, so Ensembl VEP reads neither its cache's chr_synonyms.txt nor the accessions: the 36 chr21 records annotate and the 92 NC_000021.9 and CM000683.2 records are skipped with the warning the expected warnings file lists",
+   "sha256": {
+    "synonyms_replaced.txt": "8f1ad9f94c1ee99093d7fd70f5073a96d0f01731faa01d6a1c89de5833fb03fd",
+    "synonyms_replaced_warnings.txt": "76f92fa7b7f0e88165d28cf8869f0402d9ca0bb0b6a601971303412e01fa1aee"
+   }
+  }
+ }
+}

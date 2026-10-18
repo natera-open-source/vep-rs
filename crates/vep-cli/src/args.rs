@@ -257,6 +257,10 @@ pub struct Args {
     #[arg(help_heading = "Cache / Offline", long = "no_fasta")]
     pub no_fasta: bool,
 
+    /// Chromosome synonyms file: on each line, whitespace-separated names of one chromosome, the first the reference name; an input chromosome the cache does not name is looked up through its synonyms. Replaces the cache's own chr_synonyms.txt, which is read when this flag is absent
+    #[arg(help_heading = "Cache / Offline", long, value_name = "FILE")]
+    pub synonyms: Option<String>,
+
     /// Move each insertion or deletion to its most 3' position on the transcript, over
     /// a 1,000-base window of the reference, before its consequence terms, positions,
     /// codons and amino acids are computed (1), or annotate it where the input placed it
@@ -839,6 +843,18 @@ mod tests {
         assert_eq!(args.cache.as_deref(), Some("/opt/vep"));
         let args = Args::parse_from(["vep", "--cache=/opt/vep"]);
         assert_eq!(args.cache.as_deref(), Some("/opt/vep"));
+    }
+
+    /// `--synonyms` takes a file path (`synonyms=s`, Config.pm:250), in either
+    /// spelling, and is absent by default.
+    #[test]
+    fn synonyms_flag_parses() {
+        let args = Args::parse_from(["vep", "--synonyms", "chr_synonyms.txt"]);
+        assert_eq!(args.synonyms.as_deref(), Some("chr_synonyms.txt"));
+        let args = Args::parse_from(["vep", "--synonyms=/data/syn.txt"]);
+        assert_eq!(args.synonyms.as_deref(), Some("/data/syn.txt"));
+        assert!(Args::parse_from(["vep"]).synonyms.is_none());
+        assert!(Args::try_parse_from(["vep", "--synonyms"]).is_err());
     }
 
     #[test]

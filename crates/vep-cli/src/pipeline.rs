@@ -42,12 +42,13 @@ use crate::runner::{
 use crate::transcript_index::LazyTranscriptIndexes;
 use crate::variation_source::ReadFailure;
 use crate::vcf_parser::{parse_vcf_line_with_max_sv_size, vcf_line_is_non_variant};
-use vep_core::coordinate::{normalize_chromosome, parse_pos};
+use vep_core::coordinate::parse_pos;
 use vep_core::sv_record::StructuralRecordError;
 use vep_core::sv_routing::{
     joined, perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string, written_alts,
 };
 use vep_core::sv_span::{structural_end, SpanClass, SpanError};
+use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::InputVariant;
 use vep_core::vcf_info::{info_value, info_value_written};
 use vep_io::output::fields::{ExtraFieldsPlan, Row};
@@ -223,15 +224,60 @@ pub(crate) struct ReaderConfig<'a> {
     /// Warmed per chromosome as the reader first meets it, so a chromosome's
     /// shards parse while the coordinator annotates the batches before it.
     pub transcripts: &'a LazyTranscriptIndexes,
+    /// The chromosome synonyms an input name is resolved through
+    /// ([`name_source_chromosomes`]).
+    pub synonyms: &'a ChromosomeSynonyms,
     /// The input's chromosomes in file order ([`tabix_contig_order`]); the
     /// reader warms the chromosome after the one it has reached. Empty when the
     /// input has no index.
     pub prewarm_order: &'a [String],
 }
 
+/// The name the cache knows an input chromosome by: the input's own when the
+/// cache holds it, else a synonym it holds, else the `chr` spelling it holds
+/// (`BaseVEP.pm:689-738`), else the input's name unchanged, which no cache
+/// lookup then matches.
+pub(crate) fn cache_chr_name(
+    chr: &str,
+    synonyms: &ChromosomeSynonyms,
+    transcripts: &LazyTranscriptIndexes,
+) -> String {
+    synonyms.source_chr_name(chr, |name| transcripts.contains_key(name))
+}
+
+/// Names a variant's chromosome, and a breakend mate's, as the cache names
+/// them: the record from the input's own spelling, which `original_chr` keeps
+/// for the output; the mate from the name the record parser gave it (a `chr`
+/// prefix already removed, `M` already `MT`). Ensembl VEP resolves every
+/// source lookup through `get_source_chr_name` (`BaseVEP.pm:689-738`), a
+/// breakend mate's name as its region is fetched (`AnnotationSource.pm:251-254`,
+/// then `:179`; the parser's own call on `CHR2`, `Parser/VCF.pm:492`, maps
+/// every name to itself, since `BaseVEP.pm:702` reads the parser's hash of
+/// valid names as one list entry), and `_have_chr` (`Parser.pm:770-800`) skips
+/// a record whose name reaches no cache chromosome.
+pub(crate) fn name_source_chromosomes(
+    variant: &mut InputVariant,
+    synonyms: &ChromosomeSynonyms,
+    transcripts: &LazyTranscriptIndexes,
+) {
+    let input_name = if variant.original_chr.is_empty() {
+        variant.chr.as_str()
+    } else {
+        variant.original_chr.as_str()
+    };
+    variant.chr = cache_chr_name(input_name, synonyms, transcripts);
+    if let Some(mate) = variant.mate_chr.as_deref() {
+        variant.mate_chr = Some(cache_chr_name(mate, synonyms, transcripts));
+    }
+}
+
 /// The contigs of a bgzipped input in file order, read from its `.tbi` index
 /// and named as the cache names them; empty when there is no readable index.
-pub(crate) fn tabix_contig_order(input_file: &str) -> Vec<String> {
+pub(crate) fn tabix_contig_order(
+    input_file: &str,
+    synonyms: &ChromosomeSynonyms,
+    transcripts: &LazyTranscriptIndexes,
+) -> Vec<String> {
     let index_path = format!("{input_file}.tbi");
     if !Path::new(&index_path).is_file() {
         return Vec::new();
@@ -246,7 +292,11 @@ pub(crate) fn tabix_contig_order(input_file: &str) -> Vec<String> {
     let mut order: Vec<String> = Vec::new();
     if let Some(header) = index.header() {
         for name in header.reference_sequence_names() {
-            let chr = normalize_chromosome(&String::from_utf8_lossy(name.as_ref()));
+            let chr = cache_chr_name(
+                &String::from_utf8_lossy(name.as_ref()),
+                synonyms,
+                transcripts,
+            );
             if !order.contains(&chr) {
                 order.push(chr);
             }
@@ -263,6 +313,7 @@ pub(crate) fn tabix_contig_order(input_file: &str) -> Vec<String> {
 /// again and meets the same error.
 struct Prewarmer<'env> {
     transcripts: &'env LazyTranscriptIndexes,
+    synonyms: &'env ChromosomeSynonyms,
     order: &'env [String],
     started: HashSet<String>,
     queue: mpsc::Sender<String>,
@@ -272,6 +323,7 @@ impl<'env> Prewarmer<'env> {
     fn spawn<'scope>(
         scope: &'scope thread::Scope<'scope, 'env>,
         transcripts: &'env LazyTranscriptIndexes,
+        synonyms: &'env ChromosomeSynonyms,
         order: &'env [String],
     ) -> Self {
         let (queue, requests) = mpsc::channel::<String>();
@@ -285,16 +337,18 @@ impl<'env> Prewarmer<'env> {
             .expect("spawn the prewarm thread");
         Self {
             transcripts,
+            synonyms,
             order,
             started: HashSet::new(),
             queue,
         }
     }
 
-    /// The reader has reached `chr` (as the cache names it).
-    fn reached(&mut self, chr: &str) {
-        self.start(chr);
-        if let Some(pos) = self.order.iter().position(|c| c == chr) {
+    /// The reader has reached the input chromosome `input_chr`.
+    fn reached(&mut self, input_chr: &str) {
+        let chr = cache_chr_name(input_chr, self.synonyms, self.transcripts);
+        self.start(&chr);
+        if let Some(pos) = self.order.iter().position(|c| *c == chr) {
             if let Some(next) = self.order.get(pos + 1) {
                 self.start(next);
             }
@@ -568,7 +622,7 @@ fn read_vcf(
     buffers_back: Receiver<LineBuffers>,
 ) -> anyhow::Result<()> {
     thread::scope(|scope| {
-        let prewarmer = Prewarmer::spawn(scope, cfg.transcripts, cfg.prewarm_order);
+        let prewarmer = Prewarmer::spawn(scope, cfg.transcripts, cfg.synonyms, cfg.prewarm_order);
         // Dropping the prewarmer closes its queue, so the helper exits once the
         // loads it was asked for are done.
         read_vcf_lines(reader, cfg, tx, buffers_back, prewarmer)
@@ -640,7 +694,7 @@ fn read_vcf_lines(
 
             let chr = head.split('\t').next().unwrap_or(head);
             if chr != last_chr {
-                prewarmer.reached(&normalize_chromosome(chr));
+                prewarmer.reached(chr);
                 last_chr.clear();
                 last_chr.push_str(chr);
             }
@@ -704,6 +758,7 @@ fn read_parsed(
         match parser.next_variant() {
             Some(Ok(mut variant)) => {
                 mark_oversize_sv(&mut variant, cfg.max_sv_size);
+                name_source_chromosomes(&mut variant, cfg.synonyms, cfg.transcripts);
                 if variant.allele_index == 0 {
                     if let Some(start) = open_record.take() {
                         batch.units.push(Unit::Record(start..batch.variants.len()));
@@ -1121,6 +1176,11 @@ fn parse_lines(
                 for variant in &mut alleles {
                     variant.input_record = line_number;
                     mark_oversize_sv(variant, c.max_sv_size);
+                    name_source_chromosomes(
+                        variant,
+                        c.resources.synonyms(),
+                        c.resources.transcripts(),
+                    );
                 }
                 let line = RecordLine {
                     number: line_number,
@@ -1617,6 +1677,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
         };
         for fill in [7, 64, 8192] {
@@ -1677,6 +1738,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
         };
         let batches = line_batches(&input, &cfg, 8192);
@@ -1763,6 +1825,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
         };
         let _in_turn = SKIP_SINK
@@ -1844,6 +1907,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: Some(&fmt),
             transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
         };
         let batches = line_batches(input, &cfg, 8192);
@@ -1895,6 +1959,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
         };
         let batches = line_batches(input, &cfg, 8192);
@@ -2019,11 +2084,51 @@ mod tests {
     fn tabix_contig_order_reads_the_index_in_file_order() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/sv_validation/grch37");
         let input = root.join("09_breakends.vcf.gz");
+        let no_synonyms = ChromosomeSynonyms::new();
+        let transcripts = LazyTranscriptIndexes::empty();
         assert_eq!(
-            tabix_contig_order(input.to_str().unwrap()),
+            tabix_contig_order(input.to_str().unwrap(), &no_synonyms, &transcripts),
             ["1", "2", "21", "3", "4", "5"]
         );
-        assert!(tabix_contig_order("/no/such/input.vcf.gz").is_empty());
+        assert!(tabix_contig_order("/no/such/input.vcf.gz", &no_synonyms, &transcripts).is_empty());
+    }
+
+    /// An input chromosome reaches the cache's name through the synonym table
+    /// (`BaseVEP.pm:706-716`): `NC_000021.9` and a breakend mate named so become
+    /// `21`, `chr21` becomes `21` by the `chr` rule (`:721-730`), `chrM` becomes
+    /// `MT` only through a synonym and otherwise stays unresolved, as Ensembl VEP
+    /// leaves it (`Parser.pm:788-796` strips `chr` to `M` and accepts a bare `M`
+    /// alone), and the input's spelling stays in `original_chr`.
+    #[test]
+    fn name_source_chromosomes_resolves_synonyms_against_the_cache() {
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([
+                ("21".to_string(), Vec::new()),
+                ("MT".to_string(), Vec::new()),
+            ]),
+            crate::transcript_index::TranscriptIndexImpl::default(),
+            0,
+            0,
+        );
+        let table = ChromosomeSynonyms::parse("21\tNC_000021.9\nMT\tchrM\n");
+        let named = |input: &str, mate: Option<&str>, synonyms: &ChromosomeSynonyms| {
+            let mut variant =
+                InputVariant::new(input.to_string(), 100, 100, b"A".to_vec(), b"G".to_vec());
+            variant.mate_chr = mate.map(str::to_string);
+            name_source_chromosomes(&mut variant, synonyms, &transcripts);
+            (variant.chr, variant.original_chr, variant.mate_chr)
+        };
+        let none = ChromosomeSynonyms::new();
+        assert_eq!(
+            named("NC_000021.9", Some("NC_000021.9"), &table),
+            ("21".into(), "NC_000021.9".into(), Some("21".into()))
+        );
+        assert_eq!(named("chr21", None, &none).0, "21");
+        assert_eq!(named("21", None, &none).0, "21");
+        assert_eq!(named("M", None, &none).0, "MT");
+        assert_eq!(named("chrM", None, &table).0, "MT");
+        assert_eq!(named("chrM", None, &none).0, "chrM");
+        assert_eq!(named("NC_000021.9", None, &none).0, "NC_000021.9");
     }
 
     /// Reaching a chromosome starts it and the next one in the input's order,
@@ -2041,9 +2146,10 @@ mod tests {
             })
             .collect();
         let transcripts = LazyTranscriptIndexes::from_indexes(by_chr);
+        let no_synonyms = ChromosomeSynonyms::new();
         let order = ["21".to_string(), "22".to_string(), "X".to_string()];
         let started = thread::scope(|scope| {
-            let mut prewarmer = Prewarmer::spawn(scope, &transcripts, &order);
+            let mut prewarmer = Prewarmer::spawn(scope, &transcripts, &no_synonyms, &order);
             prewarmer.reached("21");
             prewarmer.reached("21");
             prewarmer.reached("22");
@@ -2070,6 +2176,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
         };
         let (tx, rx) = mpsc::sync_channel(64);
@@ -2125,6 +2232,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
         };
         let _in_turn = SKIP_SINK

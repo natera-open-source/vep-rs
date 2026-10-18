@@ -41,6 +41,42 @@ vep -i input.vcf -o output.txt --offline --cache --dir_cache $HOME/.vep --cache_
 vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 ```
 
+## Chromosome names
+
+An input may name a chromosome as the cache does (`21`), with a `chr` prefix (`chr21`), or by
+an accession (`NC_000021.9`, `CM000683.2`). Each name is resolved to the cache's own before any
+lookup, as Ensembl VEP's `get_source_chr_name` resolves it: the name itself when the cache holds
+it, else a synonym of it the cache holds, else the name with a leading `chr` removed or added
+when the cache holds that, else a bare `M` as `MT`; a name that resolves to nothing skips the
+record with Ensembl VEP's warning (`Chromosome NC_000022.11 not found in annotation sources or
+synonyms`). The output keeps the input's spelling in `Location`, the VCF `CHROM` column and the
+JSON `seq_region_name`; Ensembl VEP alone renames a bare `M` to `MT` in `Location` and
+`seq_region_name`. The synonyms come from the cache's `chr_synonyms.txt`, the file the Ensembl
+VEP cache ships and the converter copies (the native builder writes it from the core
+`seq_region_synonym` table with `--core-dumps`), or from `--synonyms <file>`, which replaces the
+cache's file rather than adding to it. The file holds, per line, whitespace-separated names of
+one chromosome, the first the reference name and every other a synonym of it, in both
+directions; a file that cannot be read is `ERROR: [config] Could not read synonyms file <file>:
+<reason>` for a `--synonyms` file and `ERROR: [cache] ...` for the cache's own. A cache without
+the file (a native build without `--core-dumps`, or a conversion made before the converter
+carried it) resolves no synonym, so there `chrM` and an accession are skipped as Ensembl VEP
+skips them on such a cache; convert the cache again, or pass `--synonyms`. Two cases differ from
+Ensembl VEP, which checks a record against the cache's names widened by their synonyms and then
+looks the unwidened name up: a bare `M` on a cache whose file links `chrM` but not `M`, and a
+`chr`-prefixed accession (`chrNC_000021.9`), pass its check and annotate as intergenic; here
+`M` resolves to `MT` and the prefixed accession is skipped. A reference FASTA whose records are
+named by accession is read under the cache's names through the same table, so `--fasta` may
+name a RefSeq or GenBank assembly file beside an Ensembl cache.
+
+`info.json` carries `species` and `assembly` in every cache the converter and the builder write
+(the resolver compares `--assembly` with it), the `sift` and `polyphen` markers only for a tool
+whose matrices the cache holds, `source_versions` (on a native cache the core `meta` table's
+`assembly`, `gencode` and `genebuild`, or the GTF header's; the dbSNP, ClinVar, COSMIC and gnomAD
+versions an Ensembl cache's `info.txt` lists come from the variation database, which the builder
+does not read, so a native cache's headers print none), `variation_cols` only when the cache
+holds variation records, and `contig_order`, the cache's chromosome directories as autosomes by
+number, then X, Y and MT, then every other contig by name.
+
 ## Getting a cache
 
 **Build one natively with `vep-cache-builder`**, with no Perl dependency. It downloads the
@@ -91,7 +127,7 @@ target/release/vep-cache-builder \
   --gff3 Homo_sapiens.GRCh37.87.gff3.gz \
   --core-dumps core_dumps_grch37 \
   --genome-fasta Homo_sapiens.GRCh37.dna.primary_assembly.fa \
-  --output-dir $HOME/.vep/json_cache/homo_sapiens/116_GRCh37
+  --output-dir $HOME/.vep/homo_sapiens/116_GRCh37
 ```
 
 A table missing from the `--core-dumps` directory is downloaded into it: about 520 MB for

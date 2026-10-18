@@ -14,7 +14,7 @@
  },
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --hgvs --fasta reference.fa [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh37",
- "fasta": "GRCh37 chromosome 21, complete, from Homo_sapiens.GRCh37.75.dna.primary_assembly.fa (reference.fa.gz beside this file, with the .fai of the plain file)",
+ "fasta": "GRCh37 chromosome 21, complete, from Homo_sapiens.GRCh37.75.dna.primary_assembly.fa (reference.fa.gz beside this file, with the .fai of the plain file); Ensembl VEP received it as --fasta, and the golden run of vep-rs reads it with no --fasta as the indexed .fa found in its cache directory, where the golden test runner places the decompressed copy (fasta_in_cache in the manifest)",
  "input": "variants.vcf: chromosome 21 records from ClinVar GRCh37 (ID the ClinVar VariationID) and gnomAD v2.1.1, weighted towards the protein-level consequence terms the manifest's focus_terms name; the manifest's records list carries every line",
  "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py classify --field HGVSc --field HGVSp",
  "sha256": {

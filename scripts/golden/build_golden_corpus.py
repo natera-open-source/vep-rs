@@ -819,12 +819,14 @@ def flag_set_shape_error(fs: object) -> str | None:
 
 
 def manifest_shape_error(manifest: dict) -> str | None:
-    """The reason a manifest's `covers`, `flag_sets`, `cache_layout` or sample keys cannot be
-    read: `covers` must be a list of non-empty names, `flag_sets` a list of entries of the shape
-    `flag_set_shape_error` holds them to, with distinct names, `cache_layout`, when present,
-    `ensembl` (the cache at `cache_root/homo_sapiens/<release>_<assembly>`, so `release` and
-    `assembly` must be named) rather than the default `json_cache/`, `keep_samples` a count,
-    and `samples` the names of that many kept samples when the count is above zero."""
+    """The reason a manifest's `covers`, `flag_sets`, `cache_layout`, `fasta_in_cache` or sample
+    keys cannot be read: `covers` must be a list of non-empty names, `flag_sets` a list of entries
+    of the shape `flag_set_shape_error` holds them to, with distinct names, `cache_layout`, when
+    present, `ensembl` (the cache at `cache_root/homo_sapiens/<release>_<assembly>`, so `release`
+    and `assembly` must be named) rather than the default `json_cache/`, `fasta_in_cache`, when
+    present, a boolean that is true only beside a `fasta` (the golden run then finds the reference
+    inside its cache directory instead of receiving `--fasta`), `keep_samples` a count, and
+    `samples` the names of that many kept samples when the count is above zero."""
     if "covers" in manifest and not is_name_list(manifest["covers"]):
         return "covers is not a list of names"
     keep = manifest.get("keep_samples", 0)
@@ -850,6 +852,10 @@ def manifest_shape_error(manifest: dict) -> str | None:
         return f'cache_layout is {json.dumps(manifest["cache_layout"])}, not "ensembl"'
     if manifest.get("cache_layout") == "ensembl" and not all(isinstance(manifest.get(k), str) and manifest[k] for k in ("release", "assembly")):
         return "cache_layout ensembl wants release and assembly"
+    if "fasta_in_cache" in manifest and not isinstance(manifest["fasta_in_cache"], bool):
+        return f'fasta_in_cache is {json.dumps(manifest["fasta_in_cache"])}, not a boolean'
+    if manifest.get("fasta_in_cache") and not (isinstance(manifest.get("fasta"), str) and manifest["fasta"]):
+        return "fasta_in_cache wants fasta"
     return None
 
 

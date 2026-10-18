@@ -16,7 +16,10 @@
 //! binary resolves the directory as Ensembl VEP does. The manifest may also
 //! carry `flags` (extra command-line flags, such as `--hgvs`) and `fasta` (a
 //! gzipped reference beside the manifest with its `.fai`, decompressed once per
-//! run and passed to `--fasta`). Its
+//! run and passed to `--fasta`); with `fasta_in_cache` true the decompressed
+//! reference is placed inside a staged copy of the cache instead, which the run
+//! names as its cache with no `--fasta`, so the run relies on the binary's
+//! detection of an indexed `.fa` in the cache directory. Its
 //! `divergences` list names the (Location, Allele, Feature) keys whose
 //! consequence terms are documented to differ between VEP and vep-rs (with the
 //! corpus record ordinals they belong to), and `vep_rs_only_tuples` the keys
@@ -107,9 +110,31 @@ impl Corpus {
         self.dir.join("cache_root")
     }
 
-    /// The arguments naming the cache for a run: `--json_cache <dir>`, or under the
-    /// Ensembl layout `--cache --dir_cache <root> --cache_version <release>`, so the
-    /// run resolves `<root>/homo_sapiens/<release>_<assembly>` itself.
+    /// Whether the run relies on the binary finding the reference inside the
+    /// cache directory (`fasta_in_cache: true`): the manifest's `fasta` is then
+    /// staged into a copy of the cache and no `--fasta` is passed.
+    pub fn fasta_in_cache(&self) -> bool {
+        match self.manifest.get("fasta_in_cache") {
+            None => false,
+            Some(serde_json::Value::Bool(flag)) => {
+                assert!(
+                    !*flag || self.manifest["fasta"].is_string(),
+                    "{}/{}: fasta_in_cache needs a fasta",
+                    self.release,
+                    self.name
+                );
+                *flag
+            }
+            Some(other) => panic!(
+                "{}/{}: fasta_in_cache is {other}, not a boolean",
+                self.release, self.name
+            ),
+        }
+    }
+
+    /// The arguments naming the committed cache: `--json_cache <dir>`, or under
+    /// the Ensembl layout `--cache --dir_cache <root> --cache_version <release>`,
+    /// so the run resolves `<root>/homo_sapiens/<release>_<assembly>` itself.
     pub fn cache_args(&self) -> Vec<String> {
         if self.ensembl_cache_layout() {
             vec![
@@ -126,6 +151,84 @@ impl Corpus {
             ]
         }
     }
+
+    /// The arguments naming the cache a run under `out_dir` reads: the staged
+    /// copy holding the reference for a `fasta_in_cache` corpus, else
+    /// [`Self::cache_args`].
+    pub fn run_cache_args(&self, out_dir: &Path) -> Vec<String> {
+        if self.fasta_in_cache() {
+            vec![
+                "--json_cache".to_string(),
+                staged_cache(self, out_dir).display().to_string(),
+            ]
+        } else {
+            self.cache_args()
+        }
+    }
+
+    /// The cache directory a run under `out_dir` names: the staged copy holding
+    /// the reference for a `fasta_in_cache` corpus, else the committed directory.
+    pub fn run_cache_dir(&self, out_dir: &Path) -> PathBuf {
+        if self.fasta_in_cache() {
+            staged_cache(self, out_dir)
+        } else {
+            self.cache_dir()
+        }
+    }
+}
+
+/// A copy of the corpus cache in `out_dir` with the decompressed reference and
+/// its `.fai` inside it (made once; later calls reuse it), for a corpus whose
+/// run relies on the cache directory's FASTA detection.
+fn staged_cache(corpus: &Corpus, out_dir: &Path) -> PathBuf {
+    let target = out_dir.join(format!("{}-cache", corpus.name));
+    if !target.is_dir() {
+        // Built under another name and renamed into place, so a copy a failed
+        // run left half-written is never taken for a whole one.
+        let building = out_dir.join(format!("{}-cache.building", corpus.name));
+        let _ = fs::remove_dir_all(&building);
+        copy_dir(&corpus.cache_dir(), &building);
+        decompress_fasta(corpus, &building);
+        fs::rename(&building, &target).unwrap();
+    }
+    target
+}
+
+/// Copies a directory tree.
+fn copy_dir(from: &Path, to: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for entry in fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let destination = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&entry.path(), &destination);
+        } else {
+            fs::copy(entry.path(), destination).unwrap();
+        }
+    }
+}
+
+/// Writes the corpus's `fasta` decompressed into `dir` under its plain name,
+/// with its `.fai` copied beside it.
+fn decompress_fasta(corpus: &Corpus, dir: &Path) {
+    let name = corpus.manifest["fasta"].as_str().expect("a fasta name");
+    let plain_name = name.strip_suffix(".gz").unwrap_or(name);
+    let target = dir.join(plain_name);
+    let src = corpus.dir.join(name);
+    let mut data = Vec::new();
+    if name.ends_with(".gz") {
+        flate2::read::GzDecoder::new(fs::File::open(&src).unwrap())
+            .read_to_end(&mut data)
+            .unwrap();
+    } else {
+        data = fs::read(&src).unwrap();
+    }
+    fs::write(&target, data).unwrap();
+    fs::copy(
+        corpus.dir.join(format!("{plain_name}.fai")),
+        format!("{}.fai", target.display()),
+    )
+    .unwrap();
 }
 
 /// Every corpus under `tests/golden/`, sorted by (release, assembly).
@@ -424,28 +527,20 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
 }
 
 /// The corpus's reference FASTA decompressed into `out_dir` (once; later calls
-/// reuse it), with its `.fai` copied beside it; `None` when the manifest names
-/// no `fasta`.
+/// reuse it), with its `.fai` copied beside it, to be passed as `--fasta`;
+/// `None` when the manifest names no `fasta` or the reference is staged inside
+/// the cache ([`Corpus::fasta_in_cache`]).
 fn corpus_fasta(corpus: &Corpus, out_dir: &Path) -> Option<PathBuf> {
+    if corpus.fasta_in_cache() {
+        return None;
+    }
     let name = corpus.manifest["fasta"].as_str()?;
     let plain_name = name.strip_suffix(".gz").unwrap_or(name);
-    let target = out_dir.join(format!("{}-{plain_name}", corpus.name));
+    let dir = out_dir.join(format!("{}-fasta", corpus.name));
+    let target = dir.join(plain_name);
     if !target.is_file() {
-        let src = corpus.dir.join(name);
-        let mut data = Vec::new();
-        if name.ends_with(".gz") {
-            flate2::read::GzDecoder::new(fs::File::open(&src).unwrap())
-                .read_to_end(&mut data)
-                .unwrap();
-        } else {
-            data = fs::read(&src).unwrap();
-        }
-        fs::write(&target, data).unwrap();
-        fs::copy(
-            corpus.dir.join(format!("{plain_name}.fai")),
-            format!("{}.fai", target.display()),
-        )
-        .unwrap();
+        fs::create_dir_all(&dir).unwrap();
+        decompress_fasta(corpus, &dir);
     }
     Some(target)
 }
@@ -457,7 +552,7 @@ fn corpus_fasta(corpus: &Corpus, out_dir: &Path) -> Option<PathBuf> {
 fn base_args(run: &Run, out_dir: &Path) -> Vec<String> {
     let corpus = run.corpus;
     let mut args = vec!["--offline".to_string()];
-    args.extend(corpus.cache_args());
+    args.extend(corpus.run_cache_args(out_dir));
     args.extend(["--species".to_string(), "homo_sapiens".to_string()]);
     if !run.flags.iter().any(|f| f == "--grch37") {
         args.extend(["--assembly".to_string(), corpus.assembly.clone()]);
@@ -1965,7 +2060,7 @@ pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
 pub fn expand_argv(corpus: &Corpus, argv: &[String], out: &Path, out_dir: &Path) -> Vec<String> {
     let default = default_run(corpus);
     let input = corpus.dir.join("variants.vcf").display().to_string();
-    let cache = corpus.cache_dir().display().to_string();
+    let cache = corpus.run_cache_dir(out_dir).display().to_string();
     let cache_root = corpus.cache_root().display().to_string();
     let corpus_dir = corpus.dir.display().to_string();
     let out = out.display().to_string();

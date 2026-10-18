@@ -1,0 +1,92 @@
+WARNING: line 1 skipped (NC_000021.9 8987026 rs1988325939 AGCCGCGGGGATC...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 3 skipped (NC_000021.9 10414912 rs1600775702 G GTGCTTCATC...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 5 skipped (NC_000021.9 14189087 gnomAD-SV_v3_INS_chr21_ee...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 7 skipped (NC_000021.9 14583071 gnomAD-SV_v3_INS_chr21_7d...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 8 skipped (CM000683.2 14720304 gnomAD-SV_v3_DUP_chr21_215...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 9 skipped (NC_000021.9 14740399 21:14740399:CTAG:C CTAG C...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 10 skipped (NC_000021.9 15477784 rs1601121900 TCA T . PASS...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 12 skipped (NC_000021.9 15575422 21:15575422:A:AT A AT . ....): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 14 skipped (NC_000021.9 18256505 . TCAGGCCA T . AS_VQSR AC...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 16 skipped (NC_000021.9 25585680 gnomAD-SV_v3_INS_chr21_42...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 18 skipped (NC_000021.9 25729793 rs1237301162 ATGCTGATTC A...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 19 skipped (CM000683.2 25954687 synth_cpx_sub_0157 AAC ACA...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 20 skipped (NC_000021.9 26100495 synth_inv_0363 T <INV> . ...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 22 skipped (NC_000021.9 26483402 . TCTCTCCTATC T . AC0;AS_...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 23 skipped (NC_000021.9 26841549 rs761640407 CATTT C . PAS...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 25 skipped (NC_000021.9 26924372 gnomAD-SV_v3_DUP_chr21_9a...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 26 skipped (NC_000021.9 28609769 gnomAD-SV_v3_BND_chr21_aa...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 28 skipped (NC_000021.9 29006350 HGSV_242824 N <INS:ME:ALU...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 29 skipped (CM000683.2 29006645 21:29006645:TCTGAGTC:T TCT...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 32 skipped (NC_000021.9 30881016 gnomAD-SV_v3_DEL_chr21_65...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 34 skipped (NC_000021.9 31659758 synth_ins_me_0118 G <INS:...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 35 skipped (CM000683.2 31659774 synth_ins_alu_0105 C <INS:...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 36 skipped (NC_000021.9 31659780 synth_bnd_inter_0055_A A ...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 38 skipped (NC_000021.9 31659979 synth_mnp_0574 GGTCG AGTT...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 40 skipped (NC_000021.9 31660276 synth_parid_0039_B C C[21...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 41 skipped (NC_000021.9 31661168 synth_bnd_rr_0078_B A A]2...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 43 skipped (NC_000021.9 31663830 synth_bnd_single_0079 G G...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 44 skipped (NC_000021.9 31664607 synth_bnd_rf_0098_B A ]21...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 45 skipped (CM000683.2 32743007 rs1256639203 TAGTC T . PAS...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 46 skipped (NC_000021.9 32764524 gnomAD-SV_v3_BND_chr21_3e...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 47 skipped (NC_000021.9 33072052 rs1327468266 G A . PASS A...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 49 skipped (CM000683.2 33488226 rs1568995364 ATCAAAATGATCG...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 50 skipped (NC_000021.9 33488227 HGSV_243249 N <DEL> 39 PA...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 52 skipped (NC_000021.9 33550379 gnomAD-SV_v3_DEL_chr21_64...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 53 skipped (CM000683.2 33554476 gnomAD-SV_v3_DEL_chr21_401...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 54 skipped (NC_000021.9 33836987 rs1200767520 G GAATC . PA...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 56 skipped (NC_000021.9 33903747 rs1987132913 T TTACCTC . ...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 57 skipped (NC_000021.9 34095173 gnomAD-SV_v3_DEL_chr21_32...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 58 skipped (NC_000021.9 34142409 rs1184816984 T TG . PASS ...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 59 skipped (CM000683.2 34349808 gnomAD-SV_v3_DUP_chr21_c6b...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 61 skipped (NC_000021.9 34448000 gnomAD-SV_v3_DUP_chr21_7a...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 62 skipped (CM000683.2 34879530 gnomAD-SV_v3_BND_chr21_1d0...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 63 skipped (NC_000021.9 35048638 gnomAD-SV_v3_INS_chr21_1b...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 65 skipped (NC_000021.9 36363808 gnomAD-SV_v3_DUP_chr21_a0...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 66 skipped (CM000683.2 36380245 gnomAD-SV_v3_DEL_chr21_7ef...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 68 skipped (CM000683.2 36966470 gnomAD-SV_v3_DEL_chr21_5eb...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 69 skipped (NC_000021.9 37085808 gnomAD-SV_v3_DUP_chr21_1b...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 70 skipped (NC_000021.9 37367279 synth_cn2_0016 T <CN2> . ...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 72 skipped (NC_000021.9 37416607 synth_ins_sym_0730 A <INS...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 73 skipped (CM000683.2 37419144 synth_imprecise_0182 T <DE...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 74 skipped (NC_000021.9 37419334 synth_cnv_0368 G <CNV> . ...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 76 skipped (NC_000021.9 37420631 synth_imprecise_0184 A <I...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 77 skipped (NC_000021.9 38289979 gnomAD-SV_v3_BND_chr21_c9...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 79 skipped (NC_000021.9 39345138 rs10529119 C CACACACACA ....): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 80 skipped (NC_000021.9 39380333 gnomAD-SV_v3_DEL_chr21_cd...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 81 skipped (NC_000021.9 39508997 rs764368542 GGAA G . PASS...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 83 skipped (NC_000021.9 39812500 gnomAD-SV_v3_BND_chr21_0f...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 84 skipped (NC_000021.9 39929109 rs2087638767 T C . PASS A...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 86 skipped (CM000683.2 42084951 HGSV_244022 N <INS:ME:LINE...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 87 skipped (CM000683.2 42426705 rs771158307 C CCTT . PASS ...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 88 skipped (NC_000021.9 42476047 . C CTCTCAGCTCCTGGAGCGTCT...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 90 skipped (NC_000021.9 42482619 408130 ACATGCTCCGCAACTTAC...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 91 skipped (NC_000021.9 42814191 gnomAD-SV_v3_DUP_chr21_83...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 92 skipped (NC_000021.9 42863432 3336333 CCACCTA ACACCTG ....): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 93 skipped (CM000683.2 42907983 gnomAD-SV_v3_DEL_chr21_cc5...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 94 skipped (CM000683.2 43683285 rs755653178 G A . PASS AC=...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 95 skipped (NC_000021.9 43737513 gnomAD-SV_v3_DEL_chr21_79...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 97 skipped (NC_000021.9 43776268 423466 A AAT . . ALLELEID...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 98 skipped (NC_000021.9 43776479 HGSV_244168 N <INS> 312 P...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 99 skipped (CM000683.2 43801711 rs2085093698 CGCGTCAGTGAGG...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 100 skipped (NC_000021.9 43802462 gnomAD-SV_v3_DUP_chr21_d2...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 102 skipped (NC_000021.9 44285982 gnomAD-SV_v3_DEL_chr21_f3...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 103 skipped (NC_000021.9 44321386 gnomAD-SV_v3_DEL_chr21_a9...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 104 skipped (NC_000021.9 44334798 gnomAD-SV_v3_DEL_chr21_9c...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 106 skipped (NC_000021.9 44499780 . GCCTCAGCGTGT G . AS_VQS...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 107 skipped (NC_000021.9 44529793 rs781794878 CTAACCATAGG C...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 109 skipped (NC_000021.9 44551164 gnomAD-SV_v3_DEL_chr21_52...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 110 skipped (CM000683.2 44561560 gnomAD-SV_v3_BND_chr21_a98...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 111 skipped (NC_000021.9 44574692 gnomAD-SV_v3_BND_chr21_cc...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 112 skipped (CM000683.2 44579469 gnomAD-SV_v3_DEL_chr21_b94...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 114 skipped (NC_000021.9 44809112 rs1448853522 ACAAGCCCTGGA...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 115 skipped (NC_000021.9 44817899 gnomAD-SV_v3_INS_chr21_9a...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 116 skipped (CM000683.2 44817965 . ACAT A . AC0;AS_VQSR AC=...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 117 skipped (NC_000021.9 44818051 gnomAD-SV_v3_BND_chr21_63...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 118 skipped (NC_000021.9 45128541 gnomAD-SV_v3_DEL_chr21_fa...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 119 skipped (NC_000021.9 45264462 gnomAD-SV_v3_DUP_chr21_0c...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 121 skipped (NC_000021.9 45595661 rs1282250887 TGTAA T . PA...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 122 skipped (NC_000021.9 46089428 gnomAD-SV_v3_BND_chr21_d6...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 124 skipped (NC_000021.9 46142000 gnomAD-SV_v3_DUP_chr21_ac...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 125 skipped (CM000683.2 46180481 gnomAD-SV_v3_DUP_chr21_c82...): Chromosome CM000683.2 not found in annotation sources or synonyms; chromosome CM000683.2 does not overlap any features
+WARNING: line 126 skipped (NC_000021.9 46321658 gnomAD-SV_v3_DEL_chr21_3f...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features
+WARNING: line 128 skipped (NC_000021.9 46658922 . T TTAAGGAGTTTTTTTCAAAGC...): Chromosome NC_000021.9 not found in annotation sources or synonyms; chromosome NC_000021.9 does not overlap any features

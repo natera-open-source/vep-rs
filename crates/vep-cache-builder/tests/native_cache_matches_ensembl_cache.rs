@@ -379,6 +379,35 @@ fn gtf_cds_flags_join_the_gff3_attributes() {
     assert_eq!(info["source_versions"]["genebuild"], "2025-11");
 }
 
+/// A build with the core dumps writes `chr_synonyms.txt`, the pairs the Ensembl
+/// VEP dump pipeline derives from `seq_region_synonym` (the twelve lines of the
+/// release 116 GRCh38 cache's file among the names of chromosomes 21 and MT),
+/// and an `info.json` whose `contig_order` lists the one chromosome written and
+/// which carries neither prediction marker nor `variation_cols`, since no matrix
+/// and no variation record was written; a build without the dumps writes no
+/// synonyms file.
+#[test]
+fn core_dumps_build_writes_the_synonyms_and_the_contig_order() {
+    let (out, _native) = build(&[("--core-dumps", "")]);
+    let synonyms = std::fs::read_to_string(out.path().join("chr_synonyms.txt")).unwrap();
+    assert_eq!(synonyms.lines().count(), 12);
+    assert!(synonyms.contains("21\tNC_000021.9\n"));
+    assert!(synonyms.contains("MT\tchrM\n"));
+    let info: Value =
+        serde_json::from_str(&std::fs::read_to_string(out.path().join("info.json")).unwrap())
+            .unwrap();
+    assert_eq!(info["contig_order"], serde_json::json!(["21"]));
+    assert_eq!(info["species"], "homo_sapiens");
+    assert_eq!(info["assembly"], "GRCh38");
+    assert_eq!(info["cache_version"], 116);
+    for absent in ["sift", "polyphen", "variation_cols"] {
+        assert!(info.get(absent).is_none(), "{absent} is not advertised");
+    }
+
+    let (out, _native) = build(&[]);
+    assert!(!out.path().join("chr_synonyms.txt").exists());
+}
+
 /// The `--core-dumps` bullet of `docs/cache-setup.md` states the documented
 /// exclusion of a cache built from the GFF3 alone: no symbol source, HGNC id
 /// or mature miRNA arm, and on GRCh37, whose release 87 GFF3 carries no

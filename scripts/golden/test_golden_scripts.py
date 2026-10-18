@@ -495,6 +495,8 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
         ('"covers": ["symbol"], "cache_layout": "perl"', 'cache_layout is "perl", not "ensembl"'),
         ('"covers": ["symbol"], "cache_layout": null', 'cache_layout is null, not "ensembl"'),
         ('"covers": ["symbol"], "cache_layout": "ensembl", "release": "116"', "cache_layout ensembl wants release and assembly"),
+        ('"covers": ["symbol"], "fasta_in_cache": "yes"', 'fasta_in_cache is "yes", not a boolean'),
+        ('"covers": ["symbol"], "fasta_in_cache": true', "fasta_in_cache wants fasta"),
         ('"covers": ["symbol"], "keep_samples": "8"', "keep_samples is not a count"),
         ('"covers": ["symbol"], "keep_samples": -1', "keep_samples is not a count"),
         ('"covers": ["symbol"], "keep_samples": true', "keep_samples is not a count"),
@@ -1217,6 +1219,67 @@ def test_prune_keeps_reachable_transcripts_in_every_shard(tmp_path: Path):
     assert not (out / "transcripts" / "22").exists()
     info = json.loads((out / "info.json").read_text())
     assert info["assembly"] == "GRCh37" and info["cache_version"] == 115
+
+
+def test_prune_writes_contig_order_and_the_kept_chromosomes_synonyms(tmp_path: Path, capsys):
+    """`contig_order` lists the output's own chromosome directories in the converter's order
+    (autosomes by number, X, Y, MT, then the rest by name), whatever the source advertised, and
+    `chr_synonyms.txt` keeps the lines naming a chromosome the output holds."""
+    cache = tmp_path / "cache"
+    for chrom in ["21", "X", "3", "KI270728.1", "MT", "22"]:
+        (cache / "transcripts" / chrom).mkdir(parents=True)
+        (cache / "transcripts" / chrom / "1-1000000.json").write_text(
+            json.dumps([{"stable_id": f"ENST_{chrom}", "start": "100", "end": "150", "dbID": "1"}]))
+    (cache / "info.json").write_text(json.dumps({
+        "species": "homo_sapiens", "assembly": "GRCh38", "cache_version": 116, "source_versions": {},
+        "contig_order": ["1", "2", "3", "21", "22", "X", "Y", "MT", "KI270728.1"]}))
+    (cache / "chr_synonyms.txt").write_text(
+        "21\tNC_000021.9\n21\tchr21\nX\tchrX\n22\tNC_000022.11\nMT\tchrM\nKI270728.1\tchr21_KI270728v1_random\n")
+    vcf = tmp_path / "v.vcf"
+    vcf.write_text("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+                   "X\t120\t.\tA\tG\t.\t.\t.\n21\t120\t.\tA\tG\t.\t.\t.\n3\t120\t.\tA\tG\t.\t.\t.\n"
+                   "KI270728.1\t120\t.\tA\tG\t.\t.\t.\nMT\t120\t.\tA\tG\t.\t.\t.\n")
+    out = tmp_path / "out"
+    assert pjc.main(["--cache", str(cache), "--out", str(out), "--vcf", str(vcf)]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    info = json.loads((out / "info.json").read_text())
+    assert info["contig_order"] == ["3", "21", "X", "MT", "KI270728.1"]
+    assert (out / "chr_synonyms.txt").read_text().splitlines() == [
+        "21\tNC_000021.9", "21\tchr21", "X\tchrX", "MT\tchrM", "KI270728.1\tchr21_KI270728v1_random"]
+    assert summary["synonym_lines"] == 5
+    # A source without the file writes none, and an info-only output names no contig.
+    (cache / "chr_synonyms.txt").unlink()
+    bare = tmp_path / "bare"
+    assert pjc.main(["--cache", str(cache), "--out", str(bare), "--vcf", str(vcf)]) == 0
+    capsys.readouterr()
+    assert not (bare / "chr_synonyms.txt").exists()
+    info_only = tmp_path / "info_only"
+    assert pjc.main(["--info-only", "--out", str(info_only), "--assembly", "GRCh38", "--cache-version", "116"]) == 0
+    assert "contig_order" not in json.loads((info_only / "info.json").read_text())
+
+
+def test_prune_resolves_input_chromosome_names_as_the_runtime_does(tmp_path: Path, capsys):
+    """Records on `NC_000021.9` (a synonym the cache's file links), `chr21` and `CHR21` (the
+    `chr` prefix removed, in any case, with no synonym line naming them), `Y` (the prefix added,
+    for a directory the cache names `chrY`) and `M` (read as `MT`) reach the cache's `21`,
+    `chrY` and `MT` directories; a name that resolves to nothing keeps nothing."""
+    cache = tmp_path / "cache"
+    for chrom in ["21", "chrY", "MT"]:
+        (cache / "transcripts" / chrom).mkdir(parents=True)
+        (cache / "transcripts" / chrom / "1-1000000.json").write_text(
+            json.dumps([{"stable_id": f"ENST_{chrom}", "start": "100", "end": "150", "dbID": "1"},
+                        {"stable_id": f"ENST_{chrom}_far", "start": "900000", "end": "900100", "dbID": "2"}]))
+    (cache / "chr_synonyms.txt").write_text("21\tNC_000021.9\n")
+    vcf = tmp_path / "v.vcf"
+    vcf.write_text("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+                   "NC_000021.9\t120\t.\tA\tG\t.\t.\t.\nchr21\t130\t.\tA\tG\t.\t.\t.\nCHR21\t140\t.\tA\tG\t.\t.\t.\n"
+                   "Y\t120\t.\tA\tG\t.\t.\t.\nM\t120\t.\tA\tG\t.\t.\t.\nNC_000022.11\t120\t.\tA\tG\t.\t.\t.\n")
+    out = tmp_path / "out"
+    assert pjc.main(["--cache", str(cache), "--out", str(out), "--vcf", str(vcf), "--assembly", "GRCh38", "--cache-version", "116"]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["spans_by_chromosome"] == {"21": 3, "MT": 1, "NC_000022.11": 1, "chrY": 1}
+    assert summary["transcripts_per_chromosome"] == {"21": 1, "MT": 1, "chrY": 1}
+    assert [t["stable_id"] for t in json.loads((out / "transcripts" / "21" / "1-1000000.json").read_text())] == ["ENST_21"]
 
 
 def test_breakend_mate_positions_count_as_spans(tmp_path: Path, capsys):

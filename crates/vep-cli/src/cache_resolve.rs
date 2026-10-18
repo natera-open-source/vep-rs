@@ -13,12 +13,17 @@
 //! also match), and an indexed `.fa` inside the directory is picked up unless
 //! `--fasta` or `--no_fasta` is given (`CacheDir.pm:235-251`; Ensembl VEP takes a
 //! `.fa.gz` too when it can read one, and builds a missing index itself, while
-//! the FASTA reader here takes an uncompressed file with its `.fai` only). Every
-//! refusal is a [`CliError`] under the `cache` component.
+//! the FASTA reader here takes an uncompressed file with its `.fai` only). The
+//! chromosome synonyms are read from `--synonyms`, else from the cache's own
+//! `chr_synonyms.txt` (`CacheDir.pm:254`, `Runner.pm:131`). Every refusal is a
+//! [`CliError`]: the cache's under the `cache` component, an unreadable
+//! `--synonyms` file under `config`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use vep_core::cache_info::CacheInfo;
+use vep_core::synonyms::ChromosomeSynonyms;
 
 use crate::config::{CliError, Config};
 
@@ -35,6 +40,10 @@ pub struct ResolvedCache {
     /// An indexed `.fa` found in the cache directory, when neither `--fasta` nor
     /// `--no_fasta` was given.
     pub fasta: Option<String>,
+    /// The chromosome synonyms of the run: the `--synonyms` file, else the
+    /// cache's `chr_synonyms.txt`, else an empty table. A user file replaces the
+    /// cache's; the two are never merged.
+    pub synonyms: Arc<ChromosomeSynonyms>,
 }
 
 /// Perl's `species` parameter spellings that Ensembl VEP refuses as a species
@@ -90,12 +99,47 @@ pub fn resolve(config: &Config) -> Result<ResolvedCache, CliError> {
     } else {
         detect_fasta(&dir)
     };
+    let synonyms = Arc::new(load_synonyms(config.synonyms.as_deref(), &dir)?);
     Ok(ResolvedCache {
         dir,
         info,
         assembly,
         fasta,
+        synonyms,
     })
+}
+
+/// The run's chromosome synonyms: the `--synonyms` file when given, else the
+/// cache's `chr_synonyms.txt` when it exists (`CacheDir.pm:254`), else an empty
+/// table. A file that cannot be read is Ensembl VEP's error
+/// (`BaseVEP.pm:644`), with the reason the operating system gives.
+fn load_synonyms(user_file: Option<&str>, cache_dir: &str) -> Result<ChromosomeSynonyms, CliError> {
+    let cache_file = Path::new(cache_dir).join("chr_synonyms.txt");
+    let (path, component) = match user_file {
+        Some(file) => (PathBuf::from(file), "config"),
+        None if cache_file.exists() => (cache_file, "cache"),
+        None => return Ok(ChromosomeSynonyms::new()),
+    };
+    ChromosomeSynonyms::load_from_file(&path).map_err(|e| {
+        CliError::new(
+            component,
+            format!(
+                "Could not read synonyms file {}: {}",
+                path.display(),
+                os_error_text(&e)
+            ),
+        )
+    })
+}
+
+/// An I/O error's text as the C library words it (`No such file or directory`),
+/// the form Perl's `$!` prints, without the `(os error N)` suffix Rust appends.
+fn os_error_text(error: &std::io::Error) -> String {
+    let text = error.to_string();
+    match text.rfind(" (os error ") {
+        Some(at) if text.ends_with(')') => text[..at].to_string(),
+        _ => text,
+    }
 }
 
 /// The cache directory under the root in Ensembl VEP's layout, with the assembly
@@ -705,6 +749,63 @@ mod tests {
                 .fasta
                 .is_none(),
             "a .fa.gz is never taken"
+        );
+    }
+
+    /// The cache's `chr_synonyms.txt` is read when `--synonyms` is absent
+    /// (`CacheDir.pm:254`); a `--synonyms` file replaces it whole, so a name only
+    /// the cache's file links resolves to nothing under the user's file; a cache
+    /// without the file gives an empty table; and a file that cannot be read is
+    /// Ensembl VEP's error (`BaseVEP.pm:644`) with the system's reason, under the
+    /// component of whoever named the file.
+    #[test]
+    fn synonyms_come_from_the_flag_else_the_cache_file() {
+        let dir = tempfile::tempdir().unwrap();
+        make_leaf(dir.path(), Some(INFO));
+        let path = dir.path().to_str().unwrap();
+        let holds = |name: &str| name == "21";
+        assert!(resolve_flags(&["--json_cache", path])
+            .unwrap()
+            .synonyms
+            .is_empty());
+
+        fs::write(dir.path().join("chr_synonyms.txt"), "21\tNC_000021.9\n").unwrap();
+        let cache_table = resolve_flags(&["--json_cache", path]).unwrap().synonyms;
+        assert_eq!(cache_table.source_chr_name("NC_000021.9", holds), "21");
+
+        let user_file = dir.path().join("mine.txt");
+        fs::write(&user_file, "21 CM000683.2\n").unwrap();
+        let user_table = resolve_flags(&[
+            "--json_cache",
+            path,
+            "--synonyms",
+            user_file.to_str().unwrap(),
+        ])
+        .unwrap()
+        .synonyms;
+        assert_eq!(user_table.source_chr_name("CM000683.2", holds), "21");
+        assert_eq!(
+            user_table.source_chr_name("NC_000021.9", holds),
+            "NC_000021.9",
+            "the cache's file is not merged in"
+        );
+
+        let absent = dir.path().join("absent.txt");
+        assert_eq!(
+            error(&["--json_cache", path, "--synonyms", absent.to_str().unwrap()]),
+            format!(
+                "ERROR: [config] Could not read synonyms file {}: No such file or directory",
+                absent.display()
+            )
+        );
+        fs::remove_file(dir.path().join("chr_synonyms.txt")).unwrap();
+        fs::create_dir(dir.path().join("chr_synonyms.txt")).unwrap();
+        assert_eq!(
+            error(&["--json_cache", path]),
+            format!(
+                "ERROR: [cache] Could not read synonyms file {}/chr_synonyms.txt: Is a directory",
+                path
+            )
         );
     }
 

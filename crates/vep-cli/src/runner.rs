@@ -40,6 +40,7 @@ use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_source::{ReadFailure, VariationSource};
 use vep_builtins::BuiltinRegistry;
 use vep_core::consequence::{Consequence, Impact};
+use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
 use vep_io::output::fields::{ExtraFieldsPlan, FieldOptions, PluginHeader};
 use vep_io::output::json::JsonOutputFormatter;
@@ -493,10 +494,12 @@ impl Runner {
                 debug!("Auto-detected FASTA file in cache directory");
             }
             info!("Using reference FASTA: {}", fasta_path);
-            Some(Arc::new(
-                vep_fasta::IndexedFasta::from_path(fasta_path)
-                    .with_context(|| format!("Failed to open indexed FASTA '{fasta_path}'"))?,
-            ))
+            let mut fasta = vep_fasta::IndexedFasta::from_path(fasta_path)
+                .with_context(|| format!("Failed to open indexed FASTA '{fasta_path}'"))?;
+            // A FASTA named by accession is read under the cache's chromosome
+            // names (Variation/Utils/FastaSequence.pm:380-389).
+            fasta.add_synonyms(&self.cache.synonyms);
+            Some(Arc::new(fasta))
         } else {
             None
         };
@@ -750,6 +753,7 @@ impl Runner {
                 polyphen: self.config.polyphen.clone(),
             },
             transcript_filter,
+            synonyms: Arc::clone(&self.cache.synonyms),
         };
 
         // VCF is read line by line because header passthrough needs the lines;
@@ -781,7 +785,11 @@ impl Runner {
         };
 
         let prewarm_order = if self.config.input_file.ends_with(".gz") {
-            pipeline::tabix_contig_order(&self.config.input_file)
+            pipeline::tabix_contig_order(
+                &self.config.input_file,
+                &self.cache.synonyms,
+                &annotation_resources.transcripts,
+            )
         } else {
             Vec::new()
         };
@@ -795,6 +803,7 @@ impl Runner {
             no_headers: self.config.no_headers,
             vcf_formatter: vcf_formatter.as_ref(),
             transcripts: &annotation_resources.transcripts,
+            synonyms: &self.cache.synonyms,
             prewarm_order: &prewarm_order,
         };
         let write_ctx = pipeline::WriteContext {
@@ -1209,6 +1218,9 @@ pub(crate) struct AnnotationResources {
     /// The `--transcript_filter`, which every transcript passes before its
     /// consequences are computed; `None` without the flag.
     transcript_filter: Option<Arc<FilterSet>>,
+    /// The chromosome synonyms every input name is resolved through before a
+    /// cache lookup ([`ResolvedCache::synonyms`]).
+    synonyms: Arc<ChromosomeSynonyms>,
 }
 
 /// The compiled `--transcript_filter`, `None` without the flag. A filter
@@ -1226,6 +1238,10 @@ fn compile_transcript_filter(filters: &[String]) -> Result<Option<Arc<FilterSet>
 impl AnnotationResources {
     pub(crate) fn transcripts(&self) -> &LazyTranscriptIndexes {
         &self.transcripts
+    }
+
+    pub(crate) fn synonyms(&self) -> &ChromosomeSynonyms {
+        &self.synonyms
     }
 
     /// Whether any plugin runs on a batch; plugins see a whole batch at once.
@@ -1767,6 +1783,7 @@ pub(crate) fn annotate_batch_for_test(
         dylib_plugins: Arc::new(PluginRegistry::new()),
         prediction_config: PredictionConfig::default(),
         transcript_filter: None,
+        synonyms: Arc::default(),
     };
     let stats = PipelineStats {
         variants_processed: AtomicU64::new(0),
@@ -1823,6 +1840,7 @@ pub(crate) fn default_rows_for_test(
         dylib_plugins: Arc::new(PluginRegistry::new()),
         prediction_config: PredictionConfig::default(),
         transcript_filter: None,
+        synonyms: Arc::default(),
     };
     let stats = PipelineStats {
         variants_processed: AtomicU64::new(0),
@@ -2502,6 +2520,7 @@ mod tests {
             dylib_plugins: Arc::new(PluginRegistry::new()),
             prediction_config: PredictionConfig::default(),
             transcript_filter: None,
+            synonyms: Arc::default(),
         }
     }
 
@@ -3011,6 +3030,7 @@ mod tests {
             dylib_plugins: Arc::new(PluginRegistry::new()),
             prediction_config: PredictionConfig::default(),
             transcript_filter: None,
+            synonyms: Arc::default(),
         };
         let stats = PipelineStats {
             variants_processed: AtomicU64::new(0),
@@ -3067,6 +3087,7 @@ mod tests {
             dylib_plugins: Arc::new(PluginRegistry::new()),
             prediction_config: PredictionConfig::default(),
             transcript_filter: None,
+            synonyms: Arc::default(),
         };
         let stats = PipelineStats {
             variants_processed: AtomicU64::new(0),
@@ -3128,6 +3149,7 @@ mod tests {
                 dylib_plugins: Arc::new(PluginRegistry::new()),
                 prediction_config: PredictionConfig::default(),
                 transcript_filter: None,
+                synonyms: Arc::default(),
             };
             let stats = PipelineStats {
                 variants_processed: AtomicU64::new(0),

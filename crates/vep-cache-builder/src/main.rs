@@ -34,6 +34,7 @@ mod download;
 mod fasta;
 mod gff3;
 mod gtf;
+mod info;
 mod mapper;
 pub mod predictions;
 pub mod variation;
@@ -232,34 +233,7 @@ fn main() -> Result<()> {
         stats.transcript_count, stats.chromosome_count, stats.region_file_count
     );
 
-    // Source versions the output headers print: the core `meta` table's, as
-    // Ensembl VEP's own cache info carries them, else the GTF header's.
-    let mut source_versions = core_dumps
-        .as_ref()
-        .map(|d| d.source_versions())
-        .unwrap_or_default();
-    if let Some(tags) = &gtf_tags {
-        if let Some(v) = tags.header.get("genome-build") {
-            source_versions
-                .entry("assembly".to_string())
-                .or_insert_with(|| v.clone());
-        }
-        if let Some(v) = tags.header.get("genebuild-last-updated") {
-            source_versions
-                .entry("genebuild".to_string())
-                .or_insert_with(|| v.clone());
-        }
-    }
-    builder::generate_info_json(
-        &output_dir,
-        &args.species,
-        &args.assembly,
-        args.release,
-        args.include_predictions,
-        source_versions,
-    )
-    .context("Failed to generate info.json")?;
-
+    let mut variation_region_files = 0usize;
     if args.include_variations {
         let variation_inputs = download::resolve_variation_inputs(
             &args.variation_vcf_dir,
@@ -285,7 +259,6 @@ fn main() -> Result<()> {
         };
 
         let mut total_variations = 0usize;
-        let mut total_region_files = 0usize;
 
         for (chrom, path) in &variation_inputs {
             info!("Parsing variation VCF for chr{}: {}", chrom, path.display());
@@ -296,14 +269,47 @@ fn main() -> Result<()> {
                 .with_context(|| format!("Failed to build variation cache for chr{}", chrom))?;
 
             total_variations += stats.variation_count;
-            total_region_files += stats.region_file_count;
+            variation_region_files += stats.region_file_count;
         }
 
         info!(
             "Variation cache built: {} variations across {} region files",
-            total_variations, total_region_files
+            total_variations, variation_region_files
         );
     }
+
+    // Source versions the output headers print: the core `meta` table's, as
+    // Ensembl VEP's own cache info carries them, else the GTF header's.
+    let mut source_versions = core_dumps
+        .as_ref()
+        .map(|d| d.source_versions())
+        .unwrap_or_default();
+    if let Some(tags) = &gtf_tags {
+        if let Some(v) = tags.header.get("genome-build") {
+            source_versions
+                .entry("assembly".to_string())
+                .or_insert_with(|| v.clone());
+        }
+        if let Some(v) = tags.header.get("genebuild-last-updated") {
+            source_versions
+                .entry("genebuild".to_string())
+                .or_insert_with(|| v.clone());
+        }
+    }
+    if let Some(ref dir) = args.core_dumps {
+        info::write_chr_synonyms(&output_dir, Path::new(dir))
+            .context("Failed to write chr_synonyms.txt")?;
+    }
+    info::CacheInfoJson::new(
+        &args.species,
+        &args.assembly,
+        args.release,
+        &stats,
+        variation_region_files > 0,
+        source_versions,
+    )
+    .write(&output_dir)
+    .context("Failed to write info.json")?;
 
     Ok(())
 }

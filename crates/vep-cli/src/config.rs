@@ -481,6 +481,10 @@ pub struct Config {
     pub fasta: Option<String>,
     /// Do not pick up a FASTA file found in the cache directory.
     pub no_fasta: bool,
+    /// The `--synonyms` file, a leading `~` expanded; it replaces the cache's own
+    /// `chr_synonyms.txt` (`CacheDir.pm:254` reads that file only when the flag is
+    /// absent).
+    pub synonyms: Option<String>,
     /// `--shift_3prime 1`: insertions and deletions are moved to their most 3'
     /// position on each transcript before annotation; off under `--shift_hgvs 0`,
     /// which sets it to 0 as `post_setup_checks` does (Runner.pm:792-795).
@@ -806,6 +810,7 @@ impl Config {
             show_cache_info: args.show_cache_info,
             fasta: args.fasta,
             no_fasta: args.no_fasta,
+            synonyms: args.synonyms.as_deref().map(expand_tilde),
             shift_3prime,
             shift_hgvs,
             shift_genomic: args.shift_genomic.as_deref() == Some("1"),

@@ -69,11 +69,11 @@ breakends	VCF.pm	implemented	open
 buffer_size	Config.pm	implemented	open			
 byte_transparent_input	-	implemented	open			
 cache	Config.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::perl_layout_resolves_leaf;crates/vep-cli/tests/cli_run_control.rs::no_cache_is_fatal_before_first_variant	tests/golden/116/GRCh38-run-control	
-cache-chr-synonyms	CacheDir.pm	implemented	open			
+cache-chr-synonyms	CacheDir.pm	implemented	landed:implemented	crates/vep-core/src/synonyms.rs::cache_synonyms_loaded_from_json_cache;crates/vep-cli/src/cache_resolve.rs::synonyms_come_from_the_flag_else_the_cache_file;crates/vep-cache-builder/src/info.rs::chr_synonyms_match_the_ensembl_dumper	tests/golden/116/GRCh38-synonyms	
 cache-clin-sig-allele	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::parses_clin_sig_allele_entries_by_allele	tests/golden/116/GRCh38-colocated	
 cache-clinical-impact	Database/Variation.pm	implemented	open			
 cache-dir-resolution	CacheDir.pm	accepted_noop	open			
-cache-fasta-auto-detection	CacheDir.pm	implemented	open			
+cache-fasta-auto-detection	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::no_fasta_suppresses_autodetect	tests/golden/116/GRCh37-hgvs	
 cache-refseq-merged-tarballs	JoinVEP.pm	documented_subset	open			
 cache-region-files	Dumper.pm	implemented	open			
 cache-transcript-gene-tss	Cache/Transcript.pm	implemented	open			
@@ -98,7 +98,7 @@ check_svs	Config.pm	implemented	open
 chr	Config.pm	implemented	open			
 chromosome-absent-from-cache	Parser.pm	implemented	open			
 chromosome-name-normalisation	Parser.pm	implemented	open			
-chromosome-synonyms	CacheDir.pm	implemented	open			
+chromosome-synonyms	CacheDir.pm	implemented	landed:implemented	crates/vep-core/src/synonyms.rs::nc_accession_resolves_to_cache_name;crates/vep-cli/src/pipeline.rs::name_source_chromosomes_resolves_synonyms_against_the_cache;crates/vep-fasta/src/lib.rs::synonyms_reach_a_record_under_the_cache_name	tests/golden/116/GRCh38-synonyms	
 clin-sig-somatic-pheno-columns	OutputFactory.pm	implemented	open			
 clin_sig	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::clin_sig_column_read_as_comma_list	tests/golden/116/GRCh38-colocated	
 clin_sig_allele	Config.pm	implemented	open			
@@ -254,9 +254,9 @@ info-bam	CacheDir.pm	documented_subset	open
 info-region-size-build	CacheDir.pm	accepted_noop	open			
 info-regulatory-cell-types	CacheDir.pm	documented_subset	open			
 info-sift-polyphen	Cache/Transcript.pm	implemented	open			
-info-source-versions	CacheDir.pm	documented_subset	open			
-info-species-assembly	CacheDir.pm	implemented	open			
-info-var-type-serialiser	CacheDir.pm	documented_subset	open			
+info-source-versions	CacheDir.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/src/info.rs::info_json_markers_follow_the_build;crates/vep-cache-builder/src/core_dumps.rs::source_versions_from_core_meta	tests/golden/116/GRCh38	
+info-species-assembly	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::assembly_mismatch_with_info_json_is_fatal;crates/vep-cache-converter/src/main.rs::info_json_is_validated_and_synonyms_travel_with_it;crates/vep-cache-builder/src/info.rs::info_json_markers_follow_the_build;crates/vep-cache-builder/src/core_dumps.rs::source_versions_from_core_meta	tests/golden/116/GRCh38	
+info-var-type-serialiser	CacheDir.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/json_cache.rs::sereal_cache_without_shards_is_refused;crates/vep-cache-converter/src/main.rs::info_json_is_validated_and_synonyms_travel_with_it	tests/golden/116/GRCh38	
 info-variation-cols	CacheDir.pm	implemented	open			
 input-data-and-id	Config.pm	implemented	open			
 input_data	Runner.pm	implemented	open			
@@ -482,7 +482,7 @@ swissprot-trembl	Database/Transcript.pm	implemented	open
 symbol	OutputFactory.pm	implemented	open			
 symbol-source-hgnc-id-columns	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::native_cache_matches_the_ensembl_cache_with_core_dumps;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::gff3_only_exclusions_are_documented	tests/golden/116/GRCh38-native-builder	
 symbolic-sv-classification	Parser.pm	implemented	landed:implemented	crates/vep-cli/src/vcf_parser.rs::multi_allelic_symbolic_shapes_take_the_record_class;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_multi_allelic_cn_one_variant_per_alt;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_multi_allelic_cn_four_alleles;crates/vep-cli/src/vcf_parser.rs::repeated_cn0_collapses_to_a_deletion;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_mixed_symbolic_uses_svtype_override;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_mixed_symbolic_without_svtype_is_unsupported;crates/vep-cli/src/vcf_parser.rs::all_sequence_multi_allelic_record_ignores_svtype;crates/vep-cli/src/vcf_parser.rs::vep_skip_marks_unsupported_types_only	tests/golden/116/GRCh38-release116	
-synonyms	BaseVEP.pm::chromosome_synonyms	implemented	open			
+synonyms	BaseVEP.pm::chromosome_synonyms	implemented	landed:implemented	crates/vep-cli/src/args.rs::synonyms_flag_parses;crates/vep-core/src/synonyms.rs::whitespace_split_first_token_reference;crates/vep-cli/src/cache_resolve.rs::synonyms_come_from_the_flag_else_the_cache_file	tests/golden/116/GRCh38-synonyms	
 tab	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::tab_with_vcf_or_json_is_perls_error	tests/golden/116/GRCh38-writers	
 tab-column-order-and-placeholder	Tab.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::tab_header_describes_plugin_columns_with_their_own_text	tests/golden/116/GRCh38-writers	
 tabix-and-bigwig-readers	File.pm	documented_subset	open			

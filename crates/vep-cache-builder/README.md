@@ -82,11 +82,18 @@ identifier takes that identifier, as Ensembl VEP's `merge_features` copies it at
 time. The record carries the keys the dumper keeps and none of its own: no exon or
 intron strand, no mapper pair count or map names. The builder bins the transcripts by chromosome and by the 1 Mb
 region of their start and writes each bin as a pretty-printed JSON array to
-`transcripts/<chr>/<start>-<end>.json`; `builder::generate_info_json` closes with
-`info.json`, whose `cache_version` is `--release`, whose `sift` and `polyphen` read `b`
-when predictions were fetched, and whose `source_versions` come from the core `meta`
-table (`assembly`, `gencode`, `genebuild`, as Ensembl VEP's cache info carries them) or,
-without the dumps, from the GTF header.
+`transcripts/<chr>/<start>-<end>.json`; `info::CacheInfoJson` closes with `info.json`,
+whose `cache_version` is `--release`, whose `sift` and `polyphen` read `b` only when a
+matrix of that tool was written, whose `source_versions` come from the core `meta` table
+(`assembly`, `gencode`, `genebuild`, as Ensembl VEP's cache info carries them) or, without
+the dumps, from the GTF header, whose `contig_order` lists the chromosome directories
+written (autosomes by number, X, Y, MT, then the rest by name) and whose `variation_cols`
+names the variation records' keys only when records were written. With `--core-dumps`,
+`info::write_chr_synonyms` writes `chr_synonyms.txt` beside it from the `seq_region` and
+`seq_region_synonym` tables, the pairs Ensembl VEP's dump pipeline writes (each
+sequence region's name against its synonyms, linked one step further through the
+synonyms already recorded), so `NC_000021.9` or `CM000683.2` in an input resolves to the
+cache's `21`.
 
 Without `--core-dumps` the cache states what the GFF3 states and no more: no symbol
 source or HGNC identifier, no gene phenotype count, no MANE accession, no APPRIS, no
@@ -118,6 +125,7 @@ directory (`variation::ClinVarAttribs`); no Ensembl VCF carries them.
 ```text
 <output-dir>/
   info.json
+  chr_synonyms.txt      (with --core-dumps)
   transcripts/
     1/
       1-1000000.json
@@ -134,14 +142,15 @@ carries no `chr` field: the loader takes the chromosome from the directory name.
 
 | Module               | Role                                                                                                                                                                                         |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main.rs`        | The `clap` argument struct and the run order: resolve inputs, resolve and read the core dumps, parse FASTA and GFF3, fetch predictions, load the genome FASTA and GTF, build the transcript cache, write `info.json`, then the variation cache |
+| `src/main.rs`        | The `clap` argument struct and the run order: resolve inputs, resolve and read the core dumps, parse FASTA and GFF3, fetch predictions, load the genome FASTA and GTF, build the transcript cache, then the variation cache, then `chr_synonyms.txt` and `info.json` |
 | `src/download.rs`    | Ensembl FTP URL construction (GRCh37 gene set capped at release 87; the core and variation MySQL dump directories), downloads into the temporary directory with reuse, the `--core-dumps` directory fill, the local variation directory scan and the parallel per-chromosome VCF download |
 | `src/fasta.rs`       | Protein FASTA reader: unversioned transcript identifier to peptide, plain or gzipped                                                                                                         |
 | `src/gff3.rs`        | GFF3 reader into `GeneRecord`, `TranscriptRecord`, `ExonRecord` and `CdsRecord`; chromosome normalisation, attribute URL-decoding, the `tag` codes, `ccdsid`, `transcript_support_level`, the exon phases, the CDS `protein_id` and `version`, and the dumper's `artifact` and readthrough filters |
-| `src/core_dumps.rs`  | The core and variation table dumps: MySQL escape decoding, the joins of `transcript_attrib`, `translation`, `protein_feature`, `xref`, `object_xref`, `gene`, `seq_region_attrib`, `meta`, `phenotype_feature` and `phenotype` into per-transcript and per-gene facts |
+| `src/core_dumps.rs`  | The core and variation table dumps: MySQL escape decoding, the joins of `transcript_attrib`, `translation`, `protein_feature`, `xref`, `object_xref`, `gene`, `seq_region_attrib`, `meta`, `phenotype_feature` and `phenotype` into per-transcript and per-gene facts; the table reader `info.rs` uses for `seq_region_synonym` |
+| `src/info.rs`        | `info.json` (species, assembly, version, the `sift` and `polyphen` markers, source versions, `variation_cols`, `contig_order`) and `chr_synonyms.txt` from the `seq_region_synonym` table |
 | `src/gtf.rs`         | GTF `transcript` lines: the `#!` header keys and the five tags kept as transcript attributes (`basic` and `gencode_basic` both become `gencode_basic`)                                        |
 | `src/mapper.rs`      | cDNA-to-genome mapper pairs, `cdna_coding_start` and `cdna_coding_end` for one transcript, with exon 1's phase as the start phase                                                              |
-| `src/builder.rs`     | The serialised cache types, exon ordering and phases, introns, the spliced cDNA cut into UTRs and `translateable_seq`, the codon table, seq edits, attributes and xref lists from the GFF3 or the dumps, the per-region HGNC identifier copy, 1 Mb binning, the transcript shards and `info.json` |
+| `src/builder.rs`     | The serialised cache types, exon ordering and phases, introns, the spliced cDNA cut into UTRs and `translateable_seq`, the codon table, seq edits, attributes and xref lists from the GFF3 or the dumps, the per-region HGNC identifier copy, 1 Mb binning and the transcript shards |
 | `src/predictions.rs` | SIFT and PolyPhen matrix fetch from Ensembl's MySQL server, keyed by the MD5 of the peptide and stored base64-encoded under the Ensembl matrix object's keys (`analysis`, `sub_analysis`, `translation_md5`) |
 | `src/variation.rs`   | Variation VCF reader (bgzipped or plain) in Ensembl VEP's record form, the ClinVar columns from the variation dumps, the frequency field mapping to `ALT:freq` strings and the variation shards |
 
@@ -160,7 +169,7 @@ the `vep` binary, not this one, so the flags are listed here.
 | `--gff3 <FILE>`               | Local GFF3, plain or gzipped, instead of the download                                                                                                      |
 | `--fasta <FILE>`              | Local protein FASTA instead of the download                                                                                                               |
 | `--gtf <FILE>`                | Ensembl GTF of the same release: the `cds_start_NF` and `cds_end_NF` attributes and the `source_versions` keys that the GFF3 lacks, when no core dumps are read |
-| `--core-dumps <DIR>`          | Directory of the release's core and variation MySQL table dumps (`<table>.txt.gz`, or `<table>.txt`); a table missing from it is downloaded there. Supplies every transcript attribute, xref, protein feature, symbol source, HGNC identifier, codon table, source version and gene phenotype count the GFF3 lacks |
+| `--core-dumps <DIR>`          | Directory of the release's core and variation MySQL table dumps (`<table>.txt.gz`, or `<table>.txt`); a table missing from it is downloaded there. Supplies every transcript attribute, xref, protein feature, symbol source, HGNC identifier, codon table, source version, chromosome synonym and gene phenotype count the GFF3 lacks |
 | `--genome-fasta <FILE>`       | Indexed genome FASTA (`.fa` beside its `.fai`): `translateable_seq` for every coding transcript, the sequence behind codon-level consequences              |
 | `--include-predictions`       | Fetch the SIFT and PolyPhen matrices; `homo_sapiens` on GRCh37 or GRCh38 only                                                                             |
 | `--mysql-host <HOST>`         | Prediction server, default `ensembldb.ensembl.org`                                                                                                        |
