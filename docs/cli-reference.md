@@ -121,7 +121,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--uniprot` | bool | false | Add UniProt cross-references |
 | `--xref_refseq` | bool | false | Add RefSeq transcript cross-references |
 | `--hgvs` | bool | false | Add HGVS coding and protein notations |
-| `--hgvsg` | bool | false | Add the HGVSg column (accepted for VEP compatibility; the value is not computed and stays empty) |
+| `--hgvsg` | bool | false | Add the HGVS genomic notation (HGVSg); needs --fasta |
 | `--sift` | `s`, `p`, `b` | -- | SIFT predictions (p = prediction, s = score, b = both) |
 | `--polyphen` | `s`, `p`, `b` | -- | PolyPhen predictions (p = prediction, s = score, b = both) |
 | `--condel` | String | -- | Accepted without effect: Ensembl VEP declares it and reads nothing from it |

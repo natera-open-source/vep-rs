@@ -3499,5 +3499,27 @@
   "HGVSp"
  ],
  "field_divergences": [],
- "field_divergence_summary": {}
+ "field_divergence_summary": {},
+ "flag_sets": [
+  {
+   "name": "hgvsg",
+   "flags": [
+    "--hgvs",
+    "--hgvsg"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_hgvsg",
+   "covers": [
+    "hgvsg",
+    "hgvsg_shift_full_flank_116"
+   ]
+  }
+ ]
 }

@@ -172,6 +172,10 @@ pub struct InputVariant {
     pub most_severe_consequence: Option<Consequence>,
     /// Co-located known variants (from variation cache).
     pub colocated_variants: Vec<ColocatedVariant>,
+    /// The HGVS genomic notation of this allele (`HGVSg`), computed under
+    /// `--hgvsg` with a reference FASTA; printed on every row of the allele.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hgvsg: Option<String>,
     /// Whether the variant was minimised from a multi-allelic site.
     pub minimised: bool,
     /// Original allele string before minimisation.
@@ -331,6 +335,7 @@ impl Default for InputVariant {
             transcript_consequences: Vec::new(),
             most_severe_consequence: None,
             colocated_variants: Vec::new(),
+            hgvsg: None,
             minimised: false,
             original_allele_string: None,
             original_start: None,
@@ -402,6 +407,7 @@ impl InputVariant {
             transcript_consequences: Vec::new(),
             most_severe_consequence: None,
             colocated_variants: Vec::new(),
+            hgvsg: None,
             minimised: false,
             original_allele_string: None,
             original_start: None,

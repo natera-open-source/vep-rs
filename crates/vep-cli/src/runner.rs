@@ -26,7 +26,9 @@ use rayon::prelude::*;
 use rayon::ThreadPool;
 use tracing::{debug, info};
 
-use crate::annotator::{build_thread_pool, LoadedPlugins, PredictionConfig};
+use crate::annotator::{
+    build_thread_pool, hgvsg_options, LoadedPlugins, PredictionConfig, HGVS_NEEDS_FASTA,
+};
 use crate::cache_resolve::ResolvedCache;
 use crate::config::{CliError, Config};
 use crate::filter_set::FilterSet;
@@ -410,6 +412,9 @@ impl Runner {
         if self.config.shift_3prime && fasta_path.is_none() {
             bail!("--shift_3prime requires --fasta <path> (indexed FASTA: .fa + .fai)");
         }
+        if self.config.hgvsg && fasta_path.is_none() {
+            return Err(CliError::new("cli", HGVS_NEEDS_FASTA).into());
+        }
 
         let reference_fasta = if let Some(fasta_path) = fasta_path {
             if self.config.fasta.is_none() {
@@ -445,6 +450,7 @@ impl Runner {
             compute_hgvs: needs_hgvs_computation(&self.config),
             compute_exon_intron_numbers: needs_exon_intron_numbers(&self.config),
             protein_version: self.config.protein_version,
+            hgvsg: hgvsg_options(&self.config),
         });
 
         let LoadedPlugins { builtin, dylib } = self.load_plugins(plugin_fasta)?;
@@ -1455,6 +1461,8 @@ fn annotate_variant_filtered(
     {
         variant.most_severe_consequence = Some(most_severe);
     }
+
+    vep_effects::hgvsg::annotate(variant, config);
 }
 
 /// Look up SIFT/PolyPhen predictions for a missense consequence.

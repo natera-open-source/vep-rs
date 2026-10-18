@@ -25,6 +25,10 @@ use vep_core::consequence::Consequence;
 use vep_core::variant::{InputVariant, VariantClass};
 use vep_plugin::PluginRegistry;
 
+/// The refusal of `--hgvsg` with no reference FASTA, Ensembl VEP's text
+/// (Runner.pm 759) under the `cli` component.
+pub(crate) const HGVS_NEEDS_FASTA: &str = "Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)";
+
 /// Shared annotation resources that can be reused across batches.
 pub struct AnnotationResources {
     pub transcripts: Arc<LazyTranscriptIndexes>,
@@ -224,16 +228,20 @@ impl Annotator {
         if config.shift_3prime && fasta_path.is_none() {
             anyhow::bail!("--shift_3prime requires --fasta <path> (indexed FASTA: .fa + .fai)");
         }
+        if config.hgvsg && fasta_path.is_none() {
+            return Err(CliError::new("cli", HGVS_NEEDS_FASTA).into());
+        }
 
         let reference_fasta = fasta_path.map(load_reference_fasta).transpose()?;
-        let effects_config = build_effects_config(
+        let effects_config = Arc::new(new_effects_config(
             config.distance,
             reference_fasta.clone(),
             config.shift_3prime,
             crate::runner::needs_hgvs_computation(config),
             crate::runner::needs_exon_intron_numbers(config),
             config.protein_version,
-        );
+            hgvsg_options(config),
+        ));
         let LoadedPlugins { builtin, dylib } = load_plugins(
             &config.plugin,
             &config.dir_plugins,
@@ -500,6 +508,7 @@ pub fn load_reference_fasta(path: &str) -> anyhow::Result<Arc<vep_fasta::Indexed
     ))
 }
 
+/// The effects configuration of an embedding caller, without HGVSg.
 pub fn build_effects_config(
     distance: (u64, u64),
     reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
@@ -508,7 +517,27 @@ pub fn build_effects_config(
     compute_exon_intron_numbers: bool,
     protein_version: bool,
 ) -> Arc<vep_effects::EffectsConfig> {
-    Arc::new(vep_effects::EffectsConfig {
+    Arc::new(new_effects_config(
+        distance,
+        reference_fasta,
+        shift_3prime,
+        compute_hgvs,
+        compute_exon_intron_numbers,
+        protein_version,
+        None,
+    ))
+}
+
+fn new_effects_config(
+    distance: (u64, u64),
+    reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
+    shift_3prime: bool,
+    compute_hgvs: bool,
+    compute_exon_intron_numbers: bool,
+    protein_version: bool,
+    hgvsg: Option<vep_effects::hgvsg::HgvsgOptions>,
+) -> vep_effects::EffectsConfig {
+    vep_effects::EffectsConfig {
         upstream_distance: distance.0,
         downstream_distance: distance.1,
         reference_fasta,
@@ -521,6 +550,17 @@ pub fn build_effects_config(
         compute_hgvs,
         compute_exon_intron_numbers,
         protein_version,
+        hgvsg,
+    }
+}
+
+/// The HGVSg options of a configuration: `None` without `--hgvsg`. Insertions
+/// and deletions are described at their most 3' position, as Ensembl VEP's
+/// default `shift_hgvs` does, and the chromosome is named as the input names it.
+pub(crate) fn hgvsg_options(config: &Config) -> Option<vep_effects::hgvsg::HgvsgOptions> {
+    config.hgvsg.then_some(vep_effects::hgvsg::HgvsgOptions {
+        shift: true,
+        accessions: None,
     })
 }
 
@@ -1240,6 +1280,25 @@ mod tests {
             .err()
             .expect("an empty cache root is refused");
         assert!(err.to_string().starts_with("ERROR: [cache] "), "{err}");
+    }
+
+    /// `from_config` refuses `--hgvsg` with no FASTA as the binary does, with
+    /// Ensembl VEP's message (Runner.pm 759) under the `cli` component.
+    #[test]
+    fn from_config_refuses_hgvsg_without_a_fasta() {
+        let leaf = format!(
+            "{}/../../tests/golden/116/GRCh38-release116/json_cache",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let config =
+            Config::from_argv(["vep", "--fork", "1", "--json_cache", &leaf, "--hgvsg"]).unwrap();
+        let err = Annotator::from_config(&config)
+            .err()
+            .expect("--hgvsg without a FASTA is refused");
+        assert_eq!(
+            CliError::from_run(&err),
+            format!("ERROR: [cli] {HGVS_NEEDS_FASTA}")
+        );
     }
 
     /// The annotator path reaches the same record-level breakend verdict as the CLI:

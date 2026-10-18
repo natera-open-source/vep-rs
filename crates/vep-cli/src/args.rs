@@ -427,7 +427,7 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long)]
     pub hgvs: bool,
 
-    /// Add the HGVSg column (accepted for VEP compatibility; the value is not computed and stays empty)
+    /// Add the HGVS genomic notation (HGVSg); needs --fasta
     #[arg(help_heading = "Output Control", long)]
     pub hgvsg: bool,
 

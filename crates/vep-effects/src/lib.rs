@@ -11,6 +11,7 @@ pub mod coding;
 pub mod consequences;
 pub mod display;
 pub mod hgvs;
+pub mod hgvsg;
 pub mod mapper;
 pub mod overlap;
 pub mod sv;

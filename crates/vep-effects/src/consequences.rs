@@ -69,6 +69,9 @@ pub struct EffectsConfig {
     /// Append the translation's version to the protein identifier
     /// (`ENSP00000286808.3`), as `--protein_version` does.
     pub protein_version: bool,
+    /// Compute `InputVariant::hgvsg` for every sequence variant, as `--hgvsg`
+    /// does; needs `reference_fasta`. `None` leaves the field `None`.
+    pub hgvsg: Option<crate::hgvsg::HgvsgOptions>,
 }
 
 impl Default for EffectsConfig {
@@ -83,6 +86,7 @@ impl Default for EffectsConfig {
             compute_hgvs: false,
             compute_exon_intron_numbers: false,
             protein_version: false,
+            hgvsg: None,
         }
     }
 }
