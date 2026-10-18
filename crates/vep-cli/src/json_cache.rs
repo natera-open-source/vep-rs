@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use rayon::prelude::*;
-use rustc_hash::FxHashMap;
 use serde::Deserialize;
 use tracing::info;
 
@@ -28,7 +27,6 @@ use vep_core::transcript::{
     Attribute, Exon, ExonCoordMapper, Intron, MapperPair, PredictionMatrix, ProteinFeature,
     ProteinFunctionPredictions, SeqEdit, Transcript, TranscriptMapper, TranscriptVEFC, Translation,
 };
-use vep_core::variation::{CachedVariation, ClinVarDetail};
 
 use crate::config::CliError;
 
@@ -1195,378 +1193,13 @@ pub fn load_all_transcripts(
     Ok(by_chr)
 }
 
-/// Deserialize helper for fields that can be "", "0", 0, or 1 in the variation JSON.
-fn deserialize_string_or_num_as_u8<'de, D>(deserializer: D) -> Result<u8, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum StringOrNum {
-        Num(i64),
-        Float(f64),
-        Str(String),
-    }
-    let v: Option<StringOrNum> = Option::deserialize(deserializer)?;
-    match v {
-        None => Ok(0),
-        Some(StringOrNum::Num(n)) => Ok(n as u8),
-        Some(StringOrNum::Float(f)) => Ok(f as u8),
-        Some(StringOrNum::Str(s)) if s.is_empty() => Ok(0),
-        Some(StringOrNum::Str(s)) => s.parse::<u8>().or(Ok(0)),
-    }
-}
-
-fn deserialize_var_start<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Val {
-        Num(u64),
-        Float(f64),
-        Str(String),
-    }
-    match Val::deserialize(deserializer)? {
-        Val::Num(n) => Ok(n),
-        Val::Float(f) => Ok(f as u64),
-        Val::Str(s) => s.parse::<u64>().map_err(serde::de::Error::custom),
-    }
-}
-
-fn deserialize_optional_var_u64<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Val {
-        Num(u64),
-        Float(f64),
-        Str(String),
-    }
-    let v: Option<Val> = Option::deserialize(deserializer)?;
-    match v {
-        None => Ok(None),
-        Some(Val::Str(s)) if s.is_empty() => Ok(None),
-        Some(Val::Str(s)) => s.parse::<u64>().map(Some).map_err(serde::de::Error::custom),
-        Some(Val::Num(n)) => Ok(Some(n)),
-        Some(Val::Float(f)) => Ok(Some(f as u64)),
-    }
-}
-
-fn deserialize_optional_var_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Val {
-        Num(f64),
-        Str(String),
-    }
-    let v: Option<Val> = Option::deserialize(deserializer)?;
-    match v {
-        None => Ok(None),
-        Some(Val::Str(s)) if s.is_empty() => Ok(None),
-        Some(Val::Str(s)) => s.parse::<f64>().map(Some).map_err(serde::de::Error::custom),
-        Some(Val::Num(n)) => Ok(Some(n)),
-    }
-}
-
-fn deserialize_var_strand<'de, D>(deserializer: D) -> Result<i8, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Val {
-        Num(i64),
-        Float(f64),
-        Str(String),
-    }
-    let v: Option<Val> = Option::deserialize(deserializer)?;
-    match v {
-        None => Ok(1),
-        Some(Val::Num(n)) => Ok(n as i8),
-        Some(Val::Float(f)) => Ok(f as i8),
-        Some(Val::Str(s)) if s.is_empty() => Ok(1),
-        Some(Val::Str(s)) => s.parse::<i8>().or(Ok(1)),
-    }
-}
-
-/// JSON representation of a variation record from the converted cache.
-#[derive(Deserialize)]
-#[allow(non_snake_case)] // The cache carries Perl's mixed-case field names (e.g. "gnomADe_AFR")
-struct JsonVariation {
-    #[serde(default)]
-    variation_name: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_string_or_num_as_u8")]
-    failed: u8,
-    #[serde(default, deserialize_with = "deserialize_string_or_num_as_u8")]
-    somatic: u8,
-    #[serde(deserialize_with = "deserialize_var_start")]
-    start: u64,
-    #[serde(default, deserialize_with = "deserialize_optional_var_u64")]
-    end: Option<u64>,
-    #[serde(default)]
-    allele_string: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_var_strand")]
-    strand: i8,
-    #[serde(default)]
-    minor_allele: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_optional_var_f64")]
-    minor_allele_freq: Option<f64>,
-    #[serde(default)]
-    clin_sig: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_string_or_num_as_u8")]
-    phenotype_or_disease: u8,
-    #[serde(default)]
-    clin_sig_allele: Option<String>,
-    #[serde(default)]
-    clin_sig_ref_allele: Option<String>,
-    #[serde(default)]
-    clinical_impact: Option<String>,
-    #[serde(default)]
-    pubmed: Option<String>,
-    #[serde(default)]
-    var_synonyms: Option<String>,
-    #[serde(default, rename = "AF")]
-    af: Option<String>,
-    #[serde(default, rename = "AFR")]
-    afr: Option<String>,
-    #[serde(default, rename = "AMR")]
-    amr: Option<String>,
-    #[serde(default, rename = "EAS")]
-    eas: Option<String>,
-    #[serde(default, rename = "EUR")]
-    eur: Option<String>,
-    #[serde(default, rename = "SAS")]
-    sas: Option<String>,
-    #[serde(default, rename = "AA")]
-    aa: Option<String>,
-    #[serde(default, rename = "EA")]
-    ea: Option<String>,
-    #[serde(default)]
-    gnomADe: Option<String>,
-    #[serde(default)]
-    gnomADe_AFR: Option<String>,
-    #[serde(default)]
-    gnomADe_AMR: Option<String>,
-    #[serde(default)]
-    gnomADe_ASJ: Option<String>,
-    #[serde(default)]
-    gnomADe_EAS: Option<String>,
-    #[serde(default)]
-    gnomADe_FIN: Option<String>,
-    #[serde(default)]
-    gnomADe_MID: Option<String>,
-    #[serde(default)]
-    gnomADe_NFE: Option<String>,
-    #[serde(default)]
-    gnomADe_REMAINING: Option<String>,
-    #[serde(default)]
-    gnomADe_SAS: Option<String>,
-    #[serde(default)]
-    gnomADg: Option<String>,
-    #[serde(default)]
-    gnomADg_AFR: Option<String>,
-    #[serde(default)]
-    gnomADg_AMI: Option<String>,
-    #[serde(default)]
-    gnomADg_AMR: Option<String>,
-    #[serde(default)]
-    gnomADg_ASJ: Option<String>,
-    #[serde(default)]
-    gnomADg_EAS: Option<String>,
-    #[serde(default)]
-    gnomADg_FIN: Option<String>,
-    #[serde(default)]
-    gnomADg_MID: Option<String>,
-    #[serde(default)]
-    gnomADg_NFE: Option<String>,
-    #[serde(default)]
-    gnomADg_REMAINING: Option<String>,
-    #[serde(default)]
-    gnomADg_SAS: Option<String>,
-}
-
-fn convert_variation(jv: JsonVariation) -> CachedVariation {
-    let mut frequencies = HashMap::new();
-
-    macro_rules! insert_freq {
-        ($key:expr, $val:expr) => {
-            if let Some(ref v) = $val {
-                if !v.is_empty() {
-                    frequencies.insert($key.to_string(), v.clone());
-                }
-            }
-        };
-    }
-
-    insert_freq!("AF", jv.af);
-    insert_freq!("AFR", jv.afr);
-    insert_freq!("AMR", jv.amr);
-    insert_freq!("EAS", jv.eas);
-    insert_freq!("EUR", jv.eur);
-    insert_freq!("SAS", jv.sas);
-    insert_freq!("AA", jv.aa);
-    insert_freq!("EA", jv.ea);
-    insert_freq!("gnomADe", jv.gnomADe);
-    insert_freq!("gnomADe_AFR", jv.gnomADe_AFR);
-    insert_freq!("gnomADe_AMR", jv.gnomADe_AMR);
-    insert_freq!("gnomADe_ASJ", jv.gnomADe_ASJ);
-    insert_freq!("gnomADe_EAS", jv.gnomADe_EAS);
-    insert_freq!("gnomADe_FIN", jv.gnomADe_FIN);
-    insert_freq!("gnomADe_MID", jv.gnomADe_MID);
-    insert_freq!("gnomADe_NFE", jv.gnomADe_NFE);
-    insert_freq!("gnomADe_REMAINING", jv.gnomADe_REMAINING);
-    insert_freq!("gnomADe_SAS", jv.gnomADe_SAS);
-    insert_freq!("gnomADg", jv.gnomADg);
-    insert_freq!("gnomADg_AFR", jv.gnomADg_AFR);
-    insert_freq!("gnomADg_AMI", jv.gnomADg_AMI);
-    insert_freq!("gnomADg_AMR", jv.gnomADg_AMR);
-    insert_freq!("gnomADg_ASJ", jv.gnomADg_ASJ);
-    insert_freq!("gnomADg_EAS", jv.gnomADg_EAS);
-    insert_freq!("gnomADg_FIN", jv.gnomADg_FIN);
-    insert_freq!("gnomADg_MID", jv.gnomADg_MID);
-    insert_freq!("gnomADg_NFE", jv.gnomADg_NFE);
-    insert_freq!("gnomADg_REMAINING", jv.gnomADg_REMAINING);
-    insert_freq!("gnomADg_SAS", jv.gnomADg_SAS);
-
-    let start = jv.start;
-    let end = jv.end.unwrap_or(start);
-
-    let clin_sig = jv.clin_sig.filter(|s| !s.is_empty());
-    let clinvar = ClinVarDetail {
-        clin_sig_allele: jv.clin_sig_allele.filter(|s| !s.is_empty()),
-        clin_sig_ref_allele: jv.clin_sig_ref_allele.filter(|s| !s.is_empty()),
-        clinical_impact: jv.clinical_impact.filter(|s| !s.is_empty()),
-    };
-    let clinvar = (clinvar != ClinVarDetail::default()).then(|| Box::new(clinvar));
-    let pubmed = jv.pubmed.filter(|s| !s.is_empty());
-    let minor_allele = jv.minor_allele.filter(|s| !s.is_empty());
-    let var_synonyms = jv.var_synonyms.filter(|s| !s.is_empty());
-
-    CachedVariation {
-        variation_name: jv.variation_name.unwrap_or_default(),
-        failed: jv.failed,
-        somatic: jv.somatic,
-        start,
-        end,
-        allele_string: jv.allele_string.unwrap_or_default(),
-        strand: jv.strand,
-        minor_allele,
-        minor_allele_freq: jv.minor_allele_freq,
-        clin_sig,
-        phenotype_or_disease: jv.phenotype_or_disease,
-        clinvar,
-        pubmed,
-        frequencies,
-        var_synonyms,
-    }
-}
-
-/// Container for loaded variation data with a position index for fast lookup.
-///
-/// The `position_index` maps `(chromosome, position) -> Vec<index>` into the
-/// per-chromosome `variations` vec, enabling O(1) position-based lookups in
-/// the variation matching pipeline.
-pub struct VariationData {
-    /// Variations keyed by chromosome.
-    pub variations: HashMap<String, Vec<CachedVariation>>,
-    /// Position index: chromosome -> (position -> vec of indices into variations vec).
-    pub position_index: HashMap<String, FxHashMap<u64, Vec<usize>>>,
-}
-
-/// Load all variations from the JSON cache directory.
-///
-/// Directory structure: `{json_cache_dir}/variations/{chr}/{start}-{end}.json`
-///
-/// JSON files are parsed in parallel using the rayon thread pool (same
-/// strategy as `load_all_transcripts`).
-pub fn load_all_variations(json_cache_dir: &str) -> anyhow::Result<VariationData> {
-    let mut variations: HashMap<String, Vec<CachedVariation>> = HashMap::new();
-    let mut position_index: HashMap<String, FxHashMap<u64, Vec<usize>>> = HashMap::new();
-    let variations_dir = Path::new(json_cache_dir).join("variations");
-
-    if !variations_dir.exists() {
-        info!(
-            "No variations directory found at {}",
-            variations_dir.display()
-        );
-        return Ok(VariationData {
-            variations,
-            position_index,
-        });
-    }
-
-    let mut files: Vec<(String, PathBuf)> = Vec::new();
-    for chr_entry in std::fs::read_dir(&variations_dir)
-        .with_context(|| format!("Failed to read {}", variations_dir.display()))?
-    {
-        let chr_entry = chr_entry?;
-        // `path().is_dir()` follows a symlinked chromosome directory, which
-        // `DirEntry::file_type` reports as a link.
-        if !chr_entry.path().is_dir() {
-            continue;
-        }
-        let chr = chr_entry.file_name().to_string_lossy().to_string();
-
-        for file_entry in std::fs::read_dir(chr_entry.path())? {
-            let file_entry = file_entry?;
-            let path = file_entry.path();
-            if path.extension().is_none_or(|e| e != "json") {
-                continue;
-            }
-            files.push((chr.clone(), path));
-        }
-    }
-
-    let parsed: Vec<anyhow::Result<(String, Vec<CachedVariation>)>> = files
-        .par_iter()
-        .map(
-            |(chr, path)| -> anyhow::Result<(String, Vec<CachedVariation>)> {
-                let data = std::fs::read(path)
-                    .with_context(|| format!("Failed to read {}", path.display()))?;
-                let json_variations: Vec<JsonVariation> = serde_json::from_slice(&data)
-                    .with_context(|| format!("Failed to parse {}", path.display()))?;
-                let converted: Vec<CachedVariation> =
-                    json_variations.into_iter().map(convert_variation).collect();
-                Ok((chr.clone(), converted))
-            },
-        )
-        .collect();
-
-    for item in parsed {
-        let (chr, converted) = item?;
-        let chr_vars = variations.entry(chr.clone()).or_default();
-        let chr_idx = position_index.entry(chr).or_default();
-        let base_idx = chr_vars.len();
-
-        for (i, cv) in converted.into_iter().enumerate() {
-            let pos = cv.start;
-            chr_idx.entry(pos).or_default().push(base_idx + i);
-            chr_vars.push(cv);
-        }
-    }
-
-    info!("Loaded variations for {} chromosomes", variations.len());
-    for (chr, vars) in &variations {
-        info!("  chr{}: {} variations", chr, vars.len());
-    }
-
-    Ok(VariationData {
-        variations,
-        position_index,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndexImpl};
+    use crate::variation_source::VariationSource;
+    use std::io::Write;
+    use vep_core::variation::CachedVariation;
     use vep_io::output::fields::FieldOptions;
 
     /// A directory without `transcripts/`, or whose `transcripts/` holds no
@@ -1796,66 +1429,6 @@ mod tests {
         assert!(!msg.contains("expected a sequence"), "{msg}");
     }
 
-    #[test]
-    fn test_load_variations_missing_dir() {
-        let result = load_all_variations("/nonexistent/path");
-        assert!(result.is_ok());
-        let data = result.unwrap();
-        assert!(data.variations.is_empty());
-        assert!(data.position_index.is_empty());
-    }
-
-    #[test]
-    fn test_convert_variation_basic() {
-        let json = r#"{
-            "variation_name": "rs123",
-            "start": "100",
-            "allele_string": "A/G",
-            "strand": 1,
-            "failed": "",
-            "somatic": "",
-            "phenotype_or_disease": 0,
-            "end": "",
-            "AFR": "G:0.003",
-            "gnomADe": "G:0.0005"
-        }"#;
-        let jv: JsonVariation = serde_json::from_str(json).unwrap();
-        let cv = convert_variation(jv);
-        assert_eq!(cv.variation_name, "rs123");
-        assert_eq!(cv.start, 100);
-        assert_eq!(cv.allele_string, "A/G");
-        assert_eq!(cv.strand, 1);
-        assert_eq!(cv.failed, 0);
-        assert_eq!(cv.somatic, 0);
-        assert_eq!(cv.frequencies.get("AFR").unwrap(), "G:0.003");
-        assert_eq!(cv.frequencies.get("gnomADe").unwrap(), "G:0.0005");
-    }
-
-    #[test]
-    fn test_convert_variation_empty_optionals() {
-        let json = r#"{
-            "variation_name": "rs456",
-            "start": "200",
-            "allele_string": "C/T",
-            "strand": "",
-            "failed": "",
-            "somatic": "",
-            "phenotype_or_disease": "",
-            "end": "",
-            "clin_sig": "",
-            "pubmed": "",
-            "minor_allele": "",
-            "minor_allele_freq": ""
-        }"#;
-        let jv: JsonVariation = serde_json::from_str(json).unwrap();
-        let cv = convert_variation(jv);
-        assert_eq!(cv.strand, 1); // default for empty
-        assert!(cv.clin_sig.is_none());
-        assert!(cv.pubmed.is_none());
-        assert!(cv.minor_allele.is_none());
-        assert!(cv.minor_allele_freq.is_none());
-    }
-
     /// The numeric helpers accept a JSON number, a float, a string holding a
     /// number and (where optional) an empty string or null, and reject the rest.
     #[test]
@@ -2007,7 +1580,7 @@ mod tests {
     }
 
     /// The default-format rows for a missense SNV at 21:1004 against one transcript.
-    fn missense_rows(transcript_json: &str, variations: Option<Arc<VariationData>>) -> String {
+    fn missense_rows(transcript_json: &str, variations: Option<Arc<VariationSource>>) -> String {
         let jt: JsonTranscript = serde_json::from_str(transcript_json).unwrap();
         let mut raw = HashMap::new();
         raw.insert("21".to_string(), vec![convert_transcript(jt, "21")]);
@@ -2029,23 +1602,60 @@ mod tests {
         )
     }
 
-    /// Variation data for chromosome 21 from a JSON list of records as the cache
-    /// writes them.
-    fn variations_from(json: &str) -> Arc<VariationData> {
-        let records: Vec<JsonVariation> = serde_json::from_str(json).unwrap();
-        let converted: Vec<CachedVariation> = records.into_iter().map(convert_variation).collect();
-        let mut index: FxHashMap<u64, Vec<usize>> = FxHashMap::default();
-        for (i, cv) in converted.iter().enumerate() {
-            index.entry(cv.start).or_default().push(i);
+    /// The fixed columns of a variation record on the region layout, which has
+    /// no chromosome column.
+    const REGION_COLUMNS: &str = "variation_name,failed,somatic,start,end,allele_string,strand,clin_sig,phenotype_or_disease,clin_sig_allele,clin_sig_ref_allele,clinical_impact,pubmed,var_synonyms";
+
+    /// The metadata of a region-layout cache whose records carry the fixed
+    /// columns then `extra_columns`.
+    fn region_cache_info(extra_columns: &[&str]) -> CacheInfo {
+        CacheInfo {
+            variation_cols: REGION_COLUMNS
+                .split(',')
+                .chain(extra_columns.iter().copied())
+                .map(str::to_string)
+                .collect(),
+            ..Default::default()
         }
-        let mut variations = HashMap::new();
-        variations.insert("21".to_string(), converted);
-        let mut position_index = HashMap::new();
-        position_index.insert("21".to_string(), index);
-        Arc::new(VariationData {
-            variations,
-            position_index,
-        })
+    }
+
+    /// Writes `line` as the one record of the gzip region file at `path`.
+    fn write_region_file(path: &Path, line: &str) {
+        let mut encoder = flate2::write::GzEncoder::new(
+            std::fs::File::create(path).unwrap(),
+            flate2::Compression::default(),
+        );
+        writeln!(encoder, "{line}").unwrap();
+        encoder.finish().unwrap();
+    }
+
+    /// A variation source over chromosome 21 holding one record in the
+    /// cache's own `<start>-<end>_var.gz` layout: `extra_columns` extends the
+    /// fixed columns, `extra_fields` the record's cells in the same order. The
+    /// directory must outlive the source, which parses the file on first use.
+    fn variations_from(
+        extra_columns: &[&str],
+        extra_fields: &[&str],
+    ) -> (tempfile::TempDir, Arc<VariationSource>) {
+        let dir = tempfile::tempdir().unwrap();
+        let region_dir = dir.path().join("variations").join("21");
+        std::fs::create_dir_all(&region_dir).unwrap();
+        let mut fields = vec![
+            "rs1", "0", "0", "1004", "", "C/A", "1", "", "0", "", "", "", "", "",
+        ];
+        fields.extend_from_slice(extra_fields);
+        write_region_file(&region_dir.join("1-1000000_var.gz"), &fields.join(" "));
+        let source = VariationSource::open(dir.path(), &region_cache_info(extra_columns), false)
+            .unwrap()
+            .expect("a region file is a variation source");
+        (dir, Arc::new(source))
+    }
+
+    /// The one record of such a source, as the reader parses it.
+    fn only_record(source: &VariationSource) -> CachedVariation {
+        let records = source.records_overlapping("21", 1004, 1004).unwrap();
+        assert_eq!(records.len(), 1);
+        records.into_iter().next().unwrap()
     }
 
     /// A variation record's `AA` and `EA` columns change nothing in the output
@@ -2054,12 +1664,11 @@ mod tests {
     /// and no release-115 or later cache carries the columns.
     #[test]
     fn legacy_esp_columns_change_no_output() {
-        let base = r#""variation_name":"rs1","start":1004,"allele_string":"C/A","strand":1,
-            "failed":0,"somatic":0,"phenotype_or_disease":0,"AFR":"A:0.01""#;
-        let without = variations_from(&format!("[{{{base}}}]"));
-        let with = variations_from(&format!(r#"[{{{base},"AA":"A:0.2","EA":"A:0.3"}}]"#));
-        assert_eq!(with.variations["21"][0].frequencies["AA"], "A:0.2");
-        assert!(!without.variations["21"][0].frequencies.contains_key("AA"));
+        let (_without_dir, without) = variations_from(&["AFR"], &["A:0.01"]);
+        let (_with_dir, with) =
+            variations_from(&["AFR", "AA", "EA"], &["A:0.01", "A:0.2", "A:0.3"]);
+        assert_eq!(only_record(&with).frequencies["AA"], "A:0.2");
+        assert!(!only_record(&without).frequencies.contains_key("AA"));
         let transcript = coding_transcript_json("");
         let rows = missense_rows(&transcript, Some(with));
         assert!(
@@ -2072,17 +1681,17 @@ mod tests {
     /// A variation record's `minor_allele` and `minor_allele_freq` columns change
     /// nothing in the output under `--check_existing`: Ensembl VEP's
     /// `BaseCacheVariation.pm` reads them from a pre-115 cache and no column prints
-    /// them, and no release-115 or later cache carries them.
+    /// them, and no release-115 or later cache carries them. The reader keeps
+    /// them as it keeps every column outside the fixed set, under their names.
     #[test]
     fn minor_allele_columns_change_no_output() {
-        let base = r#""variation_name":"rs1","start":1004,"allele_string":"C/A","strand":1,
-            "failed":0,"somatic":0,"phenotype_or_disease":0"#;
-        let without = variations_from(&format!("[{{{base}}}]"));
-        let with = variations_from(&format!(
-            r#"[{{{base},"minor_allele":"A","minor_allele_freq":"0.12"}}]"#
-        ));
-        assert_eq!(with.variations["21"][0].minor_allele.as_deref(), Some("A"));
-        assert!(without.variations["21"][0].minor_allele.is_none());
+        let (_without_dir, without) = variations_from(&[], &[]);
+        let (_with_dir, with) =
+            variations_from(&["minor_allele", "minor_allele_freq"], &["A", "0.12"]);
+        assert_eq!(only_record(&with).frequencies["minor_allele"], "A");
+        assert!(!only_record(&without)
+            .frequencies
+            .contains_key("minor_allele"));
         let transcript = coding_transcript_json("");
         let rows = missense_rows(&transcript, Some(with));
         assert!(rows.contains("\trs1\t"), "{rows}");
@@ -2580,16 +2189,18 @@ mod tests {
         );
         let real_variations = dir.path().join("real_v21");
         std::fs::create_dir_all(&real_variations).unwrap();
-        std::fs::write(
-            real_variations.join("1-1000000.json"),
-            r#"[{"variation_name":"rs123","start":"100"}]"#,
-        )
-        .unwrap();
+        write_region_file(
+            &real_variations.join("1-1000000_var.gz"),
+            "rs123 0 0 100  A/G 1  0",
+        );
         let variations = dir.path().join("variations");
         std::fs::create_dir_all(&variations).unwrap();
         std::os::unix::fs::symlink(&real_variations, variations.join("21")).unwrap();
-        let data = load_all_variations(dir.path().to_str().unwrap()).unwrap();
-        assert_eq!(data.variations["21"][0].variation_name, "rs123");
+        let source = VariationSource::open(dir.path(), &region_cache_info(&[]), false)
+            .unwrap()
+            .expect("the linked chromosome directory is a variation source");
+        let records = source.records_overlapping("21", 100, 100).unwrap();
+        assert_eq!(records[0].variation_name, "rs123");
     }
 
     /// A cache whose `transcripts` directory holds no shard is refused under
@@ -2639,35 +2250,5 @@ mod tests {
         ));
         assert_eq!(tx.spliced_seq(), Some("GGAATGCCCTAATTT"));
         assert_eq!(transcript_from(&minimal("")).spliced_seq(), None);
-    }
-
-    /// The variation record's ClinVar allele fields and the gnomAD genomes
-    /// Amish frequency load under VEP's column names; an empty string is
-    /// absent, and a record with none of the three carries no ClinVar group.
-    #[test]
-    fn variation_clinical_fields_loaded() {
-        let json = r#"{"variation_name":"rs1","start":100,"allele_string":"A/G","strand":1,
-            "clin_sig":"pathogenic","clin_sig_allele":"G:pathogenic;G:likely_pathogenic","clin_sig_ref_allele":"A",
-            "clinical_impact":"Melanoma(Tier I - Strong);Melanoma(oncogenicity:Oncogenic)","gnomADg_AMI":"G:0.0123"}"#;
-        let cv = convert_variation(serde_json::from_str(json).unwrap());
-        let clinvar = cv.clinvar.as_deref().unwrap();
-        assert_eq!(
-            clinvar.clin_sig_allele.as_deref(),
-            Some("G:pathogenic;G:likely_pathogenic")
-        );
-        assert_eq!(clinvar.clin_sig_ref_allele.as_deref(), Some("A"));
-        assert_eq!(
-            clinvar.clinical_impact.as_deref(),
-            Some("Melanoma(Tier I - Strong);Melanoma(oncogenicity:Oncogenic)")
-        );
-        assert_eq!(
-            cv.frequencies.get("gnomADg_AMI").map(String::as_str),
-            Some("G:0.0123")
-        );
-
-        let empty = r#"{"variation_name":"rs2","start":100,"allele_string":"A/G","clin_sig_allele":"","clin_sig_ref_allele":"","clinical_impact":"","gnomADg_AMI":""}"#;
-        let cv = convert_variation(serde_json::from_str(empty).unwrap());
-        assert!(cv.clinvar.is_none());
-        assert!(!cv.frequencies.contains_key("gnomADg_AMI"));
     }
 }

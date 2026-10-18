@@ -12,12 +12,13 @@ use rayon::ThreadPool;
 use thiserror::Error;
 use tracing::{debug, info};
 
-use crate::config::Config;
+use crate::config::{CliError, Config};
 use crate::json_cache;
 use crate::transcript_index::{
     LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl,
 };
 use crate::variation_matcher;
+use crate::variation_source::{ReadFailure, VariationSource};
 use crate::vcf_parser::parse_vcf_line;
 use vep_builtins::BuiltinRegistry;
 use vep_core::consequence::Consequence;
@@ -27,7 +28,7 @@ use vep_plugin::PluginRegistry;
 /// Shared annotation resources that can be reused across batches.
 pub struct AnnotationResources {
     pub transcripts: Arc<LazyTranscriptIndexes>,
-    pub variation_data: Option<Arc<json_cache::VariationData>>,
+    pub variation_source: Option<Arc<VariationSource>>,
     pub effects_config: Arc<vep_effects::EffectsConfig>,
     pub builtin_plugins: Arc<BuiltinRegistry>,
     /// C-ABI plugins loaded from the `--plugin` arguments no built-in claimed.
@@ -81,8 +82,8 @@ pub enum AnnotationError {
     /// Assembly string did not match a loaded annotator.
     #[error("unsupported assembly: {0}")]
     UnsupportedAssembly(String),
-    /// Engine raised an error mid-annotation. Unused: the annotation hot path
-    /// is infallible, so the variant exists for API stability.
+    /// A variation file of the cache could not be read, so the batch's
+    /// co-located variants are unknown; every row of that batch carries it.
     #[error("annotation engine error: {0}")]
     Annotation(String),
 }
@@ -240,23 +241,12 @@ impl Annotator {
         let dylib_plugins = Arc::new(dylib);
         let transcripts =
             load_transcript_indexes(&cache.dir, &effects_config, config.transcript_index_impl)?;
-        let variation_data = if config.check_existing
-            || config.af
-            || config.af_1kg
-            || config.af_gnomade
-            || config.af_gnomadg
-            || config.max_af
-            || config.pubmed
-        {
-            Some(load_variation_data(&cache.dir)?)
-        } else {
-            None
-        };
+        let variation_source = crate::runner::open_variation_source(config, &cache.dir)?;
 
         Self::new(
             AnnotationResources {
                 transcripts,
-                variation_data,
+                variation_source,
                 effects_config,
                 builtin_plugins,
                 dylib_plugins,
@@ -307,13 +297,32 @@ impl Annotator {
         batch: &mut Vec<InputVariant>,
         use_parallel: bool,
     ) -> AnnotationStats {
+        let (stats, failure) = self.run_batch(batch, use_parallel);
+        // This entry point returns statistics, not a result, so a variation-file
+        // read failure is logged under the error contract's component;
+        // `try_annotate_batch` returns it per row.
+        if let Some(message) = failure {
+            tracing::error!("{}", CliError::new("cache", message));
+        }
+        stats
+    }
+
+    /// Annotates the batch on the annotator's pool; the second value is the
+    /// batch's variation-file read failure, if one occurred.
+    fn run_batch(
+        &self,
+        batch: &mut Vec<InputVariant>,
+        use_parallel: bool,
+    ) -> (AnnotationStats, Option<String>) {
         let resources = &self.inner.resources;
         let pool = &self.inner.pool;
         let use_parallel = use_parallel && pool.current_num_threads() > 1;
+        let failure = ReadFailure::default();
         // No pre-warm pass: `annotate_batch` calls `transcripts.get` inside the
         // rayon closure and `get` never parses, so the index must already be
         // materialized; `Annotator::new` enforces that, hence no per-batch check.
-        pool.install(|| annotate_batch(batch, resources, use_parallel))
+        let stats = pool.install(|| annotate_batch(batch, resources, use_parallel, &failure));
+        (stats, failure.take())
     }
 
     pub fn annotate_variants(&self, batch: &mut Vec<InputVariant>) -> AnnotationStats {
@@ -332,9 +341,10 @@ impl Annotator {
     ///
     /// Mutates each variant in place (same as [`annotate_batch`]) and returns
     /// a parallel `Vec<Result<(), AnnotationError>>` where the i-th entry maps
-    /// to `batch[i]`. The engine is infallible, so every entry is `Ok`; embedding
-    /// consumers code against this signature (see [`AnnotationError::Annotation`]
-    /// for the reserved error path).
+    /// to `batch[i]`. Every entry is `Ok` unless a variation file of the cache
+    /// could not be read, when every entry carries that failure as
+    /// [`AnnotationError::Annotation`]: the rows were annotated without their
+    /// co-located variants.
     pub fn try_annotate_batch(
         &self,
         batch: &mut Vec<InputVariant>,
@@ -348,12 +358,18 @@ impl Annotator {
         use_parallel: bool,
     ) -> Vec<Result<(), AnnotationError>> {
         let len = batch.len();
-        self.annotate_batch_with_parallelism(batch, use_parallel);
-        (0..len).map(|_| Ok(())).collect()
+        let (_, failure) = self.run_batch(batch, use_parallel);
+        let row_result = match failure {
+            Some(message) => Err(AnnotationError::Annotation(message)),
+            None => Ok(()),
+        };
+        vec![row_result; len]
     }
 
     /// Annotate a batch of [`RawRow`]s, producing one annotated `InputVariant`
-    /// per row or an [`AnnotationError`] for rows that fail validation/parse.
+    /// per row or an [`AnnotationError`] for rows that fail validation/parse,
+    /// and for every parsed row when a variation file of the cache could not
+    /// be read.
     ///
     /// This is the high-level per-row entry point intended for embedding consumers
     /// that already speak the simple-allele input shape (chr, pos, ref, alt).
@@ -380,16 +396,22 @@ impl Annotator {
             }
         }
 
-        self.annotate_batch_with_parallelism(&mut batch, use_parallel);
+        let (_, read_failure) = self.run_batch(&mut batch, use_parallel);
 
         let mut batch_iter = batch.into_iter();
         errors
             .into_iter()
             .map(|maybe_err| match maybe_err {
                 Some(err) => Err(err),
-                None => Ok(batch_iter
-                    .next()
-                    .expect("annotated batch length must equal success-row count")),
+                None => {
+                    let variant = batch_iter
+                        .next()
+                        .expect("annotated batch length must equal success-row count");
+                    match &read_failure {
+                        Some(message) => Err(AnnotationError::Annotation(message.clone())),
+                        None => Ok(variant),
+                    }
+                }
             })
             .collect()
     }
@@ -508,22 +530,27 @@ pub fn load_transcript_indexes(
     )))
 }
 
-pub fn load_variation_data(
-    json_cache_path: &str,
-) -> anyhow::Result<Arc<json_cache::VariationData>> {
-    info!("Loading variations from JSON cache: {}", json_cache_path);
-    let data = json_cache::load_all_variations(json_cache_path)?;
-    Ok(Arc::new(data))
-}
-
 /// Annotate a batch of variants, optionally in parallel using rayon.
+///
+/// A failure to read a variation file of the cache lands in `failure`, the
+/// caller's per-batch slot: this function returns statistics, and the lookups
+/// inside the closure have no error channel of their own. A caller that drops
+/// the slot unread annotates the batch without its co-located variants and
+/// never learns it.
 pub fn annotate_batch(
     batch: &mut Vec<InputVariant>,
     resources: &AnnotationResources,
     use_parallel: bool,
+    failure: &ReadFailure,
 ) -> AnnotationStats {
     let batch_len = batch.len();
     let annotation_phase_start = Instant::now();
+    if let Some(source) = &resources.variation_source {
+        if let Err(error) = source.prefetch(batch.iter().map(|v| (v.chr.as_str(), v.start, v.end)))
+        {
+            failure.record(format!("{error:#}"));
+        }
+    }
     let annotate_one = |variant: &mut InputVariant| {
         if variant.no_allele {
             return;
@@ -562,17 +589,8 @@ pub fn annotate_batch(
             &resources.effects_config,
         );
 
-        if let Some(ref vd) = resources.variation_data {
-            if let Some(chr_vars) = vd.variations.get(&variant.chr) {
-                if let Some(chr_idx) = vd.position_index.get(&variant.chr) {
-                    let colocated =
-                        variation_matcher::find_colocated_variants(variant, chr_vars, chr_idx);
-                    for cv in &colocated {
-                        variant.existing_variation.push(cv.id.clone());
-                    }
-                    variant.colocated_variants = colocated;
-                }
-            }
+        if let Some(source) = &resources.variation_source {
+            variation_matcher::annotate_colocated(variant, source, failure);
         }
 
         // A breakend's intergenic verdict is its record's: `apply_record_rules`.
@@ -643,7 +661,7 @@ mod tests {
         let pool = build_thread_pool(1).unwrap();
         let resources = AnnotationResources {
             transcripts,
-            variation_data: None,
+            variation_source: None,
             effects_config: Arc::new(vep_effects::EffectsConfig::default()),
             builtin_plugins: Arc::new(BuiltinRegistry::new()),
             dylib_plugins: Arc::new(PluginRegistry::new()),
@@ -972,6 +990,120 @@ mod tests {
         let results = annotator.try_annotate_batch(&mut batch);
         assert_eq!(results.len(), 2);
         assert!(results.iter().all(|r| r.is_ok()));
+    }
+
+    /// An annotator with no transcripts over the region files under
+    /// `<dir>/variations/<chr>/`, read by the five-column layout, on a pool of
+    /// `threads`.
+    fn annotator_over_variation_files(dir: &std::path::Path, threads: usize) -> Annotator {
+        let info = vep_core::cache_info::CacheInfo {
+            variation_cols: ["variation_name", "failed", "start", "end", "allele_string"]
+                .iter()
+                .map(|name| name.to_string())
+                .collect(),
+            ..Default::default()
+        };
+        let source = crate::variation_source::VariationSource::open(dir, &info, false)
+            .unwrap()
+            .expect("a region file is a variation source");
+        let resources = AnnotationResources {
+            transcripts: Arc::new(LazyTranscriptIndexes::empty()),
+            variation_source: Some(Arc::new(source)),
+            effects_config: Arc::new(vep_effects::EffectsConfig::default()),
+            builtin_plugins: Arc::new(BuiltinRegistry::new()),
+            dylib_plugins: Arc::new(PluginRegistry::new()),
+            prediction_config: PredictionConfig::default(),
+        };
+        Annotator::new(resources, build_thread_pool(threads).unwrap()).unwrap()
+    }
+
+    /// A variation file that cannot be read reaches the per-row API as an
+    /// error on every row of the batch; the statistics API logs it instead.
+    #[test]
+    fn try_annotate_batch_reports_a_variation_read_failure_on_every_row() {
+        let dir = tempfile::tempdir().unwrap();
+        let region = dir
+            .path()
+            .join("variations")
+            .join("21")
+            .join("1-1000000_var.gz");
+        std::fs::create_dir_all(region.parent().unwrap()).unwrap();
+        std::fs::write(&region, "not a gzip body").unwrap();
+        let annotator = annotator_over_variation_files(dir.path(), 1);
+        let mut batch: Vec<InputVariant> = vec![
+            InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec()),
+            InputVariant::new("21".into(), 200, 200, b"C".to_vec(), b"T".to_vec()),
+        ];
+        let results = annotator.try_annotate_batch(&mut batch);
+        assert_eq!(results.len(), 2);
+        for result in &results {
+            match result {
+                Err(AnnotationError::Annotation(message)) => assert!(
+                    message.starts_with(&format!("reading {}: ", region.display())),
+                    "{message}"
+                ),
+                other => panic!("expected the read failure, got {other:?}"),
+            }
+        }
+        let rows = [RawRow {
+            chrom: "21".into(),
+            pos: 100,
+            ref_allele: "A".into(),
+            alt_allele: "G".into(),
+        }];
+        assert!(matches!(
+            annotator.try_annotate_rows(&rows).as_slice(),
+            [Err(AnnotationError::Annotation(_))]
+        ));
+        // The statistics API returns no result, so it logs the failure instead.
+        annotator.annotate_batch(&mut batch);
+    }
+
+    /// The slot a batch records its read failure in is that batch's own: two
+    /// clones annotating at once, one batch on a corrupt region file and the
+    /// other on a sound one, each report their own result, whatever the
+    /// interleaving of their prefetches and lookups on the shared source.
+    #[test]
+    fn concurrent_batches_report_only_their_own_variation_read_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let chromosome = dir.path().join("variations").join("21");
+        std::fs::create_dir_all(&chromosome).unwrap();
+        let corrupt = chromosome.join("1-1000000_var.gz");
+        std::fs::write(&corrupt, "not a gzip body").unwrap();
+        let mut sound = flate2::write::GzEncoder::new(
+            std::fs::File::create(chromosome.join("1000001-2000000_var.gz")).unwrap(),
+            flate2::Compression::default(),
+        );
+        std::io::Write::write_all(&mut sound, b"rs2 0 1500000 1500000 A/G\n").unwrap();
+        sound.finish().unwrap();
+        let annotator = annotator_over_variation_files(dir.path(), 4);
+        let snv = |pos: u64| InputVariant::new("21".into(), pos, pos, b"A".to_vec(), b"G".to_vec());
+        for _ in 0..50 {
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let run = |positions: Vec<u64>| {
+                let annotator = annotator.clone();
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    let mut batch: Vec<InputVariant> = positions.into_iter().map(snv).collect();
+                    barrier.wait();
+                    let results = annotator.try_annotate_batch(&mut batch);
+                    (results, batch)
+                })
+            };
+            let (on_corrupt, on_sound) = (run(vec![500, 700]), run(vec![1_500_000]));
+            let (results, _) = on_corrupt.join().unwrap();
+            assert!(
+                results.iter().all(|result| matches!(
+                    result,
+                    Err(AnnotationError::Annotation(message))
+                        if message.starts_with(&format!("reading {}: ", corrupt.display()))
+                )),
+                "{results:?}"
+            );
+            let (results, batch) = on_sound.join().unwrap();
+            assert!(results.iter().all(Result::is_ok), "{results:?}");
+            assert_eq!(batch[0].existing_variation, ["rs2"]);
+        }
     }
 
     #[test]

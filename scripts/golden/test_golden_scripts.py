@@ -5,7 +5,9 @@ import json
 import hashlib
 import gzip
 import random
+import struct
 import sys
+import zlib
 from pathlib import Path
 
 import pytest
@@ -832,10 +834,205 @@ def test_info_json_from_perl_info_txt(tmp_path: Path):
     info = json.loads((out / "info.json").read_text())
     assert info["species"] == "homo_sapiens" and info["assembly"] == "GRCh37" and info["cache_version"] == 115
     assert info["source_versions"] == {"gencode": "GENCODE 19", "assembly": "GRCh37.p13", "1000genomes": "phase3"}
-    assert info["variation_cols"] == ["chr", "variation_name", "failed"]
+    # No variation slice was written, so the keys that advertise one are dropped.
+    assert "variation_cols" not in info and "var_type" not in info
     assert "cell_types" not in info
-    assert info["regulatory"] is True and info["var_type"] == "tabix" and "build" not in info
+    assert info["regulatory"] is True and "build" not in info
     assert not (out / "transcripts").exists()
+
+
+VAR_COLS = ["chr", "variation_name", "failed", "somatic", "start", "end", "allele_string", "strand", "clin_sig",
+            "phenotype_or_disease", "clin_sig_allele", "clin_sig_ref_allele", "clinical_impact", "pubmed",
+            "var_synonyms", "AF", "gnomADg"]
+
+
+def _all_vars_line(chrom: str, name: str, start: int, alleles: str = "A/G") -> bytes:
+    fields = [chrom, name, ".", ".", str(start), ".", alleles] + ["."] * (len(VAR_COLS) - 7)
+    return ("\t".join(fields) + "\n").encode()
+
+
+def _write_all_vars(path: Path, lines: list[bytes]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as raw:
+        writer = pjc.BgzfWriter(raw)
+        for line in lines:
+            writer.write(line)
+        writer.close()
+
+
+def _bgzf_blocks(path: Path) -> dict[int, bytes]:
+    """Decompressed bgzf blocks by their file offset."""
+    data = path.read_bytes()
+    blocks, offset = {}, 0
+    while offset < len(data):
+        assert data[offset:offset + 4] == b"\x1f\x8b\x08\x04", "a bgzf member with the extra field"
+        block_size = int.from_bytes(data[offset + 16:offset + 18], "little") + 1
+        payload = data[offset + 18:offset + block_size - 8]
+        blocks[offset] = zlib.decompress(payload, -15)
+        offset += block_size
+    return blocks
+
+
+def _read_chunk(blocks: dict[int, bytes], begin: int, end: int) -> bytes:
+    offsets = sorted(blocks)
+    out = b""
+    for block_offset in offsets:
+        if block_offset < begin >> 16 or block_offset > end >> 16:
+            continue
+        block = blocks[block_offset]
+        lo = (begin & 0xFFFF) if block_offset == begin >> 16 else 0
+        hi = (end & 0xFFFF) if block_offset == end >> 16 else len(block)
+        out += block[lo:hi]
+    return out
+
+
+def _parse_csi(path: Path) -> tuple[dict, dict[int, list[tuple[int, int, int]]]]:
+    """The header fields and, for the single reference, bin -> [(loffset, begin, end), ...]."""
+    data = gzip.open(path, "rb").read()
+    assert data[:4] == b"CSI\x01"
+    min_shift, depth, l_aux = struct.unpack("<iii", data[4:16])
+    aux = data[16:16 + l_aux]
+    fmt, seq_col, beg_col, end_col, meta, skip, l_nm = struct.unpack("<7i", aux[:28])
+    names = aux[28:28 + l_nm].split(b"\0")[:-1]
+    offset = 16 + l_aux
+    n_ref, = struct.unpack("<i", data[offset:offset + 4])
+    offset += 4
+    header = {"min_shift": min_shift, "depth": depth, "format": fmt, "seq_col": seq_col, "beg_col": beg_col,
+              "end_col": end_col, "meta": meta, "skip": skip, "names": names, "n_ref": n_ref}
+    bins: dict[int, list[tuple[int, int, int]]] = {}
+    for _ in range(n_ref):
+        n_bin, = struct.unpack("<i", data[offset:offset + 4])
+        offset += 4
+        for _ in range(n_bin):
+            b, loffset, n_chunk = struct.unpack("<IQi", data[offset:offset + 16])
+            offset += 16
+            for _ in range(n_chunk):
+                begin, end = struct.unpack("<QQ", data[offset:offset + 16])
+                offset += 16
+                bins.setdefault(b, []).append((loffset, begin, end))
+    return header, bins
+
+
+def _reg2bins(beg: int, end: int, min_shift: int, depth: int) -> list[int]:
+    found = []
+    for level in range(depth + 1):
+        shift = min_shift + 3 * (depth - level)
+        first = ((1 << (3 * level)) - 1) // 7
+        found.extend(range(first + (beg >> shift), first + ((end - 1) >> shift) + 1))
+    return found
+
+
+def _csi_query(gz: Path, start: int) -> list[str]:
+    """The record names an index-driven reader returns for a one-base query at `start`."""
+    header, bins = _parse_csi(Path(str(gz) + ".csi"))
+    blocks = _bgzf_blocks(gz)
+    names = []
+    for b in _reg2bins(start - 1, start, header["min_shift"], header["depth"]):
+        for _loffset, begin, end in bins.get(b, []):
+            for line in _read_chunk(blocks, begin, end).split(b"\n"):
+                fields = line.split(b"\t")
+                if len(fields) > 4 and int(fields[header["beg_col"] - 1]) == start:
+                    names.append(fields[1].decode())
+    return names
+
+
+def test_prune_variation_slice_reindexes(tmp_path: Path):
+    src = tmp_path / "perl-cache"
+    lines = [_all_vars_line("21", "rs1", 100), _all_vars_line("21", "rs2", 150), _all_vars_line("21", "COSV9900001", 200, "COSMIC_MUTATION"),
+             _all_vars_line("21", "rs3", 200), _all_vars_line("21", "rs3b", 201), _all_vars_line("21", "CM990001", 201, "HGMD_MUTATION"),
+             _all_vars_line("21", "rs4", 202),
+             _all_vars_line("21", "rs5", 5_000_000), _all_vars_line("21", "rs6", 5_000_001), _all_vars_line("21", "rs7", 5_000_003),
+             _all_vars_line("21", "rs8", 9_000_000)]
+    # A long record spans two bgzf blocks, as a record with many synonyms does.
+    long_record = ("\t".join(["21", "rs9", ".", ".", "9000001", ".", "A/T"] + ["."] * 7 + ["x" * 70_000] + ["."] * 2) + "\n").encode()
+    lines.append(long_record)
+    lines.append(_all_vars_line("21", "rs10", 9_000_002))
+    _write_all_vars(src / "21" / "all_vars.gz", lines)
+    _write_all_vars(src / "22" / "all_vars.gz", [_all_vars_line("22", "rs22", 100)])
+    cache = tmp_path / "cache"
+    (cache / "transcripts" / "21").mkdir(parents=True)
+    (cache / "transcripts" / "21" / "1-1000000.json").write_text(json.dumps([{"stable_id": "ENST_A", "start": "150", "end": "250"}]))
+    info_txt = tmp_path / "info.txt"
+    info_txt.write_text("species\thomo_sapiens\nassembly\tGRCh38\nvariation_cols\t" + ",".join(VAR_COLS) + "\nvar_type\ttabix\n")
+    vcf = tmp_path / "v.vcf"
+    vcf.write_text(
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "21\t200\t.\tA\tG\t.\t.\t.\n"
+        "21\t5000002\t.\tA\tG\t.\t.\t.\n"
+        "21\t9000001\t.\tA\tT\t.\t.\t.\n"
+    )
+    out = tmp_path / "out"
+    rc = pjc.main(["--cache", str(cache), "--out", str(out), "--vcf", str(vcf), "--perl-info", str(info_txt), "--cache-version", "116",
+                   "--variations", str(src), "--exclude-variation", r"^COSV\d", "--exclude-variation", r"^C[MID]\d{6}"])
+    assert rc == 0
+    gz = out / "variations" / "21" / "all_vars.gz"
+    kept = [line.split(b"\t")[1].decode() for line in gzip.open(gz, "rb").read().splitlines()]
+    # Starts within one base of a record span survive (199..201, 5000001..5000003, 9000000..9000002),
+    # the COSMIC and HGMD records are dropped, chromosome 22 has no record span.
+    assert kept == ["rs3", "rs3b", "rs6", "rs7", "rs8", "rs9", "rs10"]
+    assert not (out / "variations" / "22").exists()
+    header, bins = _parse_csi(Path(str(gz) + ".csi"))
+    assert header["names"] == [b"21"] and header["n_ref"] == 1
+    assert (header["seq_col"], header["beg_col"], header["end_col"]) == (1, 5, 5), "the index names the start column as both bounds"
+    assert (header["format"], header["meta"], header["skip"]) == (0, ord("#"), 0)
+    assert (header["min_shift"], header["depth"]) == (pjc.CSI_MIN_SHIFT, pjc.CSI_DEPTH)
+    meta_bin = pjc.bin_first(pjc.CSI_DEPTH + 1) + 1
+    assert bins[meta_bin][1][1:] == (7, 0), "the pseudo-bin counts the records written"
+    # The first bin's `loffset` is the first record's virtual offset, 0: htslib's `hts_itr_query`
+    # starts each chunk at the `loffset` of the bin covering the query start, so a later offset
+    # hides the first record from a query at its position.
+    first_bin = pjc.bin_first(pjc.CSI_DEPTH) + (199 >> pjc.CSI_MIN_SHIFT)
+    assert bins[first_bin][0][0] == 0
+    for start, expected in [(200, ["rs3"]), (201, ["rs3b"]), (202, []), (5_000_001, ["rs6"]), (5_000_003, ["rs7"]), (9_000_001, ["rs9"]),
+                            (9_000_002, ["rs10"]), (100, []), (150, [])]:
+        assert _csi_query(gz, start) == expected, start
+    info = json.loads((out / "info.json").read_text())
+    assert info["variation_cols"] == VAR_COLS and info["var_type"] == "tabix"
+    # Without --variations the same run writes no slice and no variation keys.
+    out2 = tmp_path / "out2"
+    assert pjc.main(["--cache", str(cache), "--out", str(out2), "--vcf", str(vcf), "--perl-info", str(info_txt), "--cache-version", "116"]) == 0
+    info2 = json.loads((out2 / "info.json").read_text())
+    assert "variation_cols" not in info2 and "var_type" not in info2 and not (out2 / "variations").exists()
+    # A --variations directory without a file for any record chromosome, and a negative flank,
+    # are refused rather than written as an empty slice.
+    empty = tmp_path / "empty-variations"
+    (empty / "22").mkdir(parents=True)
+    out3 = tmp_path / "out3"
+    assert pjc.main(["--cache", str(cache), "--out", str(out3), "--vcf", str(vcf), "--perl-info", str(info_txt), "--cache-version", "116",
+                     "--variations", str(empty)]) == 2
+    assert not (out3 / "info.json").exists() and not (out3 / "transcripts").exists()
+    assert pjc.main(["--cache", str(cache), "--out", str(out3), "--vcf", str(vcf), "--perl-info", str(info_txt), "--cache-version", "116",
+                     "--variations", str(src), "--variation-flank", "-1"]) == 2
+
+
+def test_bgzf_writer_blocks_and_virtual_offsets(tmp_path: Path):
+    path = tmp_path / "x.gz"
+    with path.open("wb") as raw:
+        writer = pjc.BgzfWriter(raw)
+        assert writer.tell() == 0
+        writer.write(b"a" * 1000)
+        assert writer.tell() == 1000
+        writer.write(b"b" * pjc.BGZF_BLOCK_BYTES)
+        first_block_size = writer.block_offset
+        assert first_block_size > 0 and writer.tell() == (first_block_size << 16) | 1000
+        writer.close()
+    blocks = _bgzf_blocks(path)
+    assert [len(b) for b in blocks.values()] == [pjc.BGZF_BLOCK_BYTES, 1000, 0]
+    assert gzip.open(path, "rb").read() == b"a" * 1000 + b"b" * pjc.BGZF_BLOCK_BYTES
+    assert path.read_bytes().endswith(pjc.BGZF_EOF)
+
+
+def test_reg2bin_follows_the_binning_scheme():
+    # Bins at the finest level start at (8^8 - 1) / 7 and cover 16 kb windows; a span across a
+    # window boundary moves up one level.
+    finest = pjc.bin_first(pjc.CSI_DEPTH)
+    assert pjc.reg2bin(0, 1) == finest
+    assert pjc.reg2bin(16_384, 16_385) == finest + 1
+    assert pjc.reg2bin(16_383, 16_385) == pjc.bin_first(pjc.CSI_DEPTH - 1)
+    assert pjc.bin_level(0) == 0 and pjc.bin_level(finest) == pjc.CSI_DEPTH
+    assert pjc.bin_bottom(finest + 3) == 3 and pjc.bin_bottom(pjc.bin_first(pjc.CSI_DEPTH - 1) + 1) == 8
+    assert pjc.variation_windows([(100, 100), (103, 110), (300, 300)], 1) == [(99, 111), (299, 301)]
+    assert pjc.variation_windows([(1, 5)], 3) == [(1, 8)]
 
 
 def test_gzip_option_writes_gz_shards_readable_as_source(tmp_path: Path):

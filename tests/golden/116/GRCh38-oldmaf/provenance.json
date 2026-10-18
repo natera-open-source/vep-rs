@@ -1,0 +1,34 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf",
+ "sha256": {
+  "default.txt": "cef3d07c782e1e3e1eb5e0b5de2f1cb22bec7944b0ae814544cf4b00ba53d938",
+  "tab.txt": "c7f05608f3841fdf1f7e55ab1ee03f9e7e4e5fd8aa3b759b4d963ff022b49b50",
+  "vcf.vcf": "0c4e746abbf37a5138664e4602cc1a0e6af27d6cef58c308774b0ef6ff06fedc",
+  "json.jsonl": "4cab0e56558826391570ecf8ef58833154d02580e5bf69b5438bf8f2331f2763"
+ },
+ "variants_vcf_sha256": "a0c2c6606b7f4da5dcc412fc91484a0fa360391f515655a5f931087f95606a02",
+ "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "variation_slice": {
+  "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
+  "window": "records whose start lies within one base of an input record's span",
+  "windows": 9,
+  "records_kept": 17,
+  "records_excluded": 1,
+  "excludes": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "sha256": {
+   "all_vars.gz": "96c1c73712827dc5216b26ddf57775eaf21b0efa3a35fa1e11d10653d45f151a",
+   "all_vars.gz.csi": "a184bf4686e17c71a597d37a6ce9b5e78a3ab6cc51bb98d4003c64899ae0c01f"
+  },
+  "slice_check": "Ensembl VEP 116.2 run on this slice and on the full cache with --check_existing --af_1kg --old_maf wrote identical default-format output for every record"
+ }
+}

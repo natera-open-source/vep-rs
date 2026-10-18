@@ -5,9 +5,13 @@
 //!
 //! Two conversion modes:
 //! - **cache** (default): Copy and validate a flat JSON cache directory whose
-//!   region files are named `{chr}_{start}-{end}.json` directly under
-//!   `transcripts/` and `variations/`, writing the per-chromosome runtime layout
+//!   transcript region files are named `{chr}_{start}-{end}.json` directly under
+//!   `transcripts/`, writing the per-chromosome runtime layout
 //!   `transcripts/<chr>/<start>-<end>.json` consumed by vep-cli, plus `info.json`.
+//!   The variation files are the Ensembl VEP dumper's own, copied unchanged to
+//!   `variations/<chr>/`: `all_vars.gz` with its `.csi` or `.tbi`, or
+//!   `{start}-{end}_var.gz`, read from `variations/<chr>/`, or with a `{chr}_`
+//!   prefix from directly under `variations/`.
 //! - **convert-plugin-data**: Convert tabix-indexed plugin data files
 //!   (`.tsv.gz`) to the binary annotation store format (`.vpd` + `.vpdi`)
 //!   for mmap-backed zero-copy lookups.
@@ -34,7 +38,7 @@ struct Cli {
 
     // Top-level args serve the invocation with no subcommand.
     /// Path to a flat JSON cache directory (`{chr}_{start}-{end}.json` region
-    /// files under `transcripts/` and `variations/`).
+    /// files under `transcripts/`, the dumper's variation files under `variations/`).
     #[arg(long)]
     json_dir: Option<String>,
 
@@ -435,16 +439,15 @@ fn convert_cache(json_dir: &Path, output_dir: &str, _region_size: u64) -> Result
         "transcripts",
     )?;
 
-    let (variation_regions, variation_entries) = convert_data_files(
+    let (variation_chromosomes, variation_files) = copy_variation_files(
         &json_dir.join("variations"),
         &output_path.join("variations"),
-        "variations",
     )?;
 
     info!(
         "Conversion complete: {} transcript regions ({} transcripts), \
-         {} variation regions ({} variations)",
-        transcript_regions, transcript_entries, variation_regions, variation_entries
+         {} variation files on {} chromosomes",
+        transcript_regions, transcript_entries, variation_files, variation_chromosomes
     );
 
     Ok(())
@@ -479,7 +482,135 @@ fn copy_info_json(json_dir: &Path, output_path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Convert all JSON files in a data subdirectory (transcripts or variations).
+/// Copy the variation files into the runtime layout `variations/<chr>/`.
+///
+/// Copies, byte for byte, `all_vars.gz` with its `.csi` or `.tbi` and
+/// `{start}-{end}_var.gz` from `src_dir/<chr>/`, and the same names prefixed
+/// `{chr}_` from directly under `src_dir`. Two inputs are refused: a `.json`
+/// file, because the variation source reads the dumper's files only, and an
+/// `all_vars.gz` without its index.
+///
+/// Returns (chromosome_count, file_count).
+fn copy_variation_files(src_dir: &Path, dst_dir: &Path) -> Result<(usize, usize)> {
+    if !src_dir.exists() {
+        warn!("variations directory not found: {}", src_dir.display());
+        return Ok((0, 0));
+    }
+    let mut entries: Vec<_> = fs::read_dir(src_dir)
+        .context("Failed to read variations directory")?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    entries.sort_by_key(|e| e.file_name());
+
+    let mut planned: Vec<(String, String, PathBuf)> = Vec::new();
+    for entry in &entries {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if path.is_dir() {
+            let mut files: Vec<_> = fs::read_dir(&path)
+                .with_context(|| format!("Failed to read {}", path.display()))?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            files.sort_by_key(|e| e.file_name());
+            for file in files {
+                let file_name = file.file_name().to_string_lossy().into_owned();
+                if variation_file_kind(&file_name).is_some() {
+                    planned.push((name.clone(), file_name, file.path()));
+                } else if file_name.ends_with(".json") {
+                    return Err(json_shard_error(&file.path()));
+                } else {
+                    warn!("Skipping file with unexpected name: {}/{}", name, file_name);
+                }
+            }
+        } else if name.ends_with(".json") {
+            return Err(json_shard_error(&path));
+        } else if let Some((chr, file_name)) = split_flat_variation_name(&name) {
+            planned.push((chr, file_name, path));
+        } else {
+            warn!("Skipping file with unexpected name: {}", name);
+        }
+    }
+
+    // Checked before anything is copied, so a refused source leaves no partial output.
+    let chromosomes: std::collections::BTreeSet<&str> =
+        planned.iter().map(|(chr, _, _)| chr.as_str()).collect();
+    for chr in &chromosomes {
+        let kinds: Vec<VariationFileKind> = planned
+            .iter()
+            .filter(|(planned_chr, _, _)| planned_chr == chr)
+            .filter_map(|(_, file_name, _)| variation_file_kind(file_name))
+            .collect();
+        let has_all_vars = kinds.contains(&VariationFileKind::AllVars);
+        let has_index = kinds.contains(&VariationFileKind::Index);
+        if has_all_vars && !has_index {
+            bail!("variations: chr {chr} has all_vars.gz without its .csi or .tbi index");
+        }
+    }
+    for (chr, file_name, src) in &planned {
+        let chr_dir = dst_dir.join(chr);
+        fs::create_dir_all(&chr_dir)
+            .with_context(|| format!("Failed to create directory {}", chr_dir.display()))?;
+        let dst = chr_dir.join(file_name);
+        fs::copy(src, &dst)
+            .with_context(|| format!("Failed to copy {} to {}", src.display(), dst.display()))?;
+        info!("variations: chr {} {}", chr, file_name);
+    }
+    info!(
+        "Total variations: {} files on {} chromosomes",
+        planned.len(),
+        chromosomes.len()
+    );
+    Ok((chromosomes.len(), planned.len()))
+}
+
+/// The error refusing a `.json` file under `variations/`.
+fn json_shard_error(path: &Path) -> anyhow::Error {
+    anyhow::anyhow!(
+        "{} is a JSON variation shard; the variation source reads all_vars.gz or \
+         <start>-<end>_var.gz files only",
+        path.display()
+    )
+}
+
+/// One of the dumper's variation files, told from its name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VariationFileKind {
+    /// `all_vars.gz`.
+    AllVars,
+    /// `all_vars.gz.csi` or `all_vars.gz.tbi`.
+    Index,
+    /// `<start>-<end>_var.gz`.
+    Region,
+}
+
+/// The kind of dumper variation file `name` is, or `None` for any other name.
+fn variation_file_kind(name: &str) -> Option<VariationFileKind> {
+    match name {
+        "all_vars.gz" => Some(VariationFileKind::AllVars),
+        "all_vars.gz.csi" | "all_vars.gz.tbi" => Some(VariationFileKind::Index),
+        _ => {
+            let span = name.strip_suffix("_var.gz")?;
+            let (start, end) = span.split_once('-')?;
+            (start.parse::<u64>().is_ok() && end.parse::<u64>().is_ok())
+                .then_some(VariationFileKind::Region)
+        }
+    }
+}
+
+/// Split a flat variation file name `{chr}_all_vars.gz[.csi|.tbi]` or
+/// `{chr}_{start}-{end}_var.gz` into the chromosome and the file's name under
+/// `variations/<chr>/`. The chromosome may itself carry underscores, so each
+/// `_` is tried as the split until what follows it is a variation file name.
+fn split_flat_variation_name(name: &str) -> Option<(String, String)> {
+    for (underscore, _) in name.match_indices('_') {
+        let chr = &name[..underscore];
+        let file_name = &name[underscore + 1..];
+        if !chr.is_empty() && variation_file_kind(file_name).is_some() {
+            return Some((chr.to_string(), file_name.to_string()));
+        }
+    }
+    None
+}
+
+/// Convert all JSON files in a data subdirectory (transcripts).
 ///
 /// Reads each `{chr}_{start}-{end}.json` file, validates the JSON, and writes
 /// it to `output_dir/{chr}/{start}-{end}.json`.
@@ -607,5 +738,94 @@ mod tests {
         assert_eq!(parse_region_filename("invalid"), None);
         assert_eq!(parse_region_filename("_1-2"), None);
         assert_eq!(parse_region_filename("chr_abc-def"), None);
+    }
+
+    #[test]
+    fn flat_variation_names_split_into_chromosome_and_file() {
+        assert_eq!(
+            split_flat_variation_name("21_all_vars.gz"),
+            Some(("21".to_string(), "all_vars.gz".to_string()))
+        );
+        assert_eq!(
+            split_flat_variation_name("LRG_485_all_vars.gz.csi"),
+            Some(("LRG_485".to_string(), "all_vars.gz.csi".to_string()))
+        );
+        assert_eq!(
+            split_flat_variation_name("X_1000001-2000000_var.gz"),
+            Some(("X".to_string(), "1000001-2000000_var.gz".to_string()))
+        );
+        assert_eq!(split_flat_variation_name("_all_vars.gz"), None);
+        assert_eq!(split_flat_variation_name("21_1-2.json"), None);
+        assert_eq!(
+            variation_file_kind("all_vars.gz.tbi"),
+            Some(VariationFileKind::Index)
+        );
+        assert_eq!(
+            variation_file_kind("1-1000000_var.gz"),
+            Some(VariationFileKind::Region)
+        );
+        assert_eq!(variation_file_kind("1-1000000.json"), None);
+    }
+
+    /// A scratch directory under the system temporary directory, removed on drop.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new() -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let dir = std::env::temp_dir().join(format!(
+                "vep-cache-converter-{}-{nanos}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&dir).unwrap();
+            Self(dir)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn variation_files_pass_through_and_json_shards_are_refused() {
+        let tmp = Scratch::new();
+        let src = tmp.path().join("variations");
+        fs::create_dir_all(src.join("22")).unwrap();
+        fs::write(src.join("21_all_vars.gz"), b"gz").unwrap();
+        fs::write(src.join("21_all_vars.gz.csi"), b"csi").unwrap();
+        fs::write(src.join("22").join("1-1000000_var.gz"), b"region").unwrap();
+        let dst = tmp.path().join("out");
+        assert_eq!(copy_variation_files(&src, &dst).unwrap(), (2, 3));
+        assert_eq!(fs::read(dst.join("21/all_vars.gz")).unwrap(), b"gz");
+        assert_eq!(fs::read(dst.join("21/all_vars.gz.csi")).unwrap(), b"csi");
+        assert_eq!(
+            fs::read(dst.join("22/1-1000000_var.gz")).unwrap(),
+            b"region"
+        );
+
+        let unindexed = tmp.path().join("unindexed");
+        fs::create_dir_all(&unindexed).unwrap();
+        fs::write(unindexed.join("21_all_vars.gz"), b"gz").unwrap();
+        let error = copy_variation_files(&unindexed, &tmp.path().join("out2")).unwrap_err();
+        assert!(error.to_string().contains("without its .csi or .tbi index"));
+        assert!(
+            !tmp.path().join("out2").exists(),
+            "a refused source leaves no partial output"
+        );
+
+        let shards = tmp.path().join("shards");
+        fs::create_dir_all(&shards).unwrap();
+        fs::write(shards.join("21_1-1000000.json"), b"[]").unwrap();
+        let error = copy_variation_files(&shards, &tmp.path().join("out3")).unwrap_err();
+        assert!(error.to_string().contains("JSON variation shard"));
     }
 }

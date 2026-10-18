@@ -144,6 +144,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--af_gnomadg` | bool | false | Add gnomAD genome allele frequencies |
 | `--max_af` | bool | false | Add highest allele frequency across populations |
 | `--pubmed` | bool | false | Add PubMed IDs for co-located variants |
+| `--old_maf` | bool | false | Rewrite the AFR, AMR, ASN and EUR frequency values of each co-located variant as a bare minor-allele frequency: the allele is stripped, the first value kept and a value above 0.5 inverted; the allele-keyed frequency columns then find no allele in them and print empty |
 | `--gene_phenotype` | bool | false | Add gene-phenotype associations |
 
 ### Filtering / Picking
@@ -369,7 +370,7 @@ Environment variables vep-rs reads, which Ensembl VEP has no counterpart for:
 - `1`: a refusal or a failed run. One line `ERROR: [<component>] <message>` is written to standard error, where `<message>` is Ensembl VEP's text where it has one, without its own `ERROR: ` prefix. The components:
   - `cli`: an unsupported flag, or a combination the option rules refuse
   - `output`: the output file or format
-  - `cache`: the transcript cache: nothing resolves at the configured path, its layout or its metadata is unusable, or its assembly disagrees with --assembly or with its own directory name
+  - `cache`: the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read
   - `filter`: a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect
   - `run`: any other failure of the annotation run, with its cause chain
 - `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown flag, a missing value, a value outside an enumeration.

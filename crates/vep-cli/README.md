@@ -18,8 +18,10 @@ genome's sequence file) when `--fasta` names one, loads each `--plugin` argument
 from `vep-builtins` or, when no built-in claims the name, as a C-ABI (application binary
 interface) dynamic library through `vep-plugin`, enumerates the cache's `transcripts/<chr>/`
 shards into a `LazyTranscriptIndexes` that parses a chromosome the first time a variant asks
-for it, and loads the `variations/` shards only when `--check_existing` or a frequency flag
-needs them. The run then proceeds as three stages joined by bounded channels. The reader
+for it, and opens the cache's variation files (`variations/<chr>/all_vars.gz`, one per
+chromosome and read through its index, or `<start>-<end>_var.gz` region files parsed whole)
+only when `--check_existing`, or a flag that implies it such as `--af` or `--pubmed`, needs
+them. The run then proceeds as three stages joined by bounded channels. The reader
 thread scans the input line by line: a `#` line is held for the VCF writer's header block, a
 data line is appended to the current `LineBatch` with its line number, and the first record of
 a new chromosome asks a helper thread to warm that chromosome's transcript index and the next
@@ -52,8 +54,9 @@ has drained.
 | `src/option_rules.rs`       | Ensembl VEP's option rules as data (`Config.pm:327-645`): the lists, option sets, valid values, requirements, incompatibilities and deprecations, and the flag state they are applied to and checked on |
 | `src/runner.rs`             | `Runner::run`: opens input and output, loads FASTA, plugins, transcripts and variations, picks the output formatter, drives the pipeline and finalizes Parquet; owns `annotate_one`, `annotate_batch` and `annotate_variant` |
 | `src/pipeline.rs`           | The three-stage pipeline: reader thread, coordinator and writer thread over bounded channels, the chromosome prewarmer, the fused annotate-render pass and the default-format row writer                                     |
-| `src/annotator.rs`          | The embedding entry point: `Annotator` over `AnnotationResources` and a scoped pool, the `RawRow` simple-allele input, the per-row `AnnotationError`, and the shared loaders for FASTA, plugins, transcripts and variations |
-| `src/json_cache.rs`         | Deserializes the JSON cache: enumerates `transcripts/<chr>/<start>-<end>.json` shards, loads one chromosome's transcripts, and loads `variations/` with a position index                                                     |
+| `src/annotator.rs`          | The embedding entry point: `Annotator` over `AnnotationResources` and a scoped pool, the `RawRow` simple-allele input, the per-row `AnnotationError`, and the shared loaders for FASTA, plugins and transcripts            |
+| `src/json_cache.rs`         | Deserializes the JSON cache: enumerates `transcripts/<chr>/<start>-<end>.json` shards and loads one chromosome's transcripts                                                                                                 |
+| `src/variation_source.rs`   | `VariationSource`: the cache's variation files under `variations/<chr>/`, opened on first use and read through their index for the records a variant's window reaches, with a per-batch prefetch                           |
 | `src/transcript_index.rs`   | Transcript interval indexes (UCSC binning, coitrees, sorted array) behind one `TranscriptIndex` surface; `LazyTranscriptIndexes` loads each chromosome once; `MaterializedTranscriptIndexes` proves every chromosome loaded |
 | `src/vcf_parser.rs`         | Parses one VCF data line into `InputVariant`s: the fixed fields, allele trimming and minimisation per alternate allele, structural records through `vep-core`'s routing, the `--max_sv_size` limit                          |
 | `src/variation_matcher.rs`  | Matches input variants to cached known variants by position, extracts allele frequencies, and writes the Extra column fields (IMPACT, STRAND, the frequency and clinical fields, plugin keys)                                 |

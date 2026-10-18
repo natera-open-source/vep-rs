@@ -101,7 +101,17 @@ matrices; flattened are the UTR objects, to their sequence strings, and each
 protein feature's analysis, to the label Ensembl VEP's `DOMAINS` column prints; dropped are the
 Perl object references (the slice, the gene object, the exon coordinate mapper's trees), the
 per-exon and per-intron strand, which is the transcript's, a sequence edit's description and the
-dump-time flags. A converted cache carries no variation data. A cache written with the Sereal serialiser (`serialiser_type sereal` in its
+dump-time flags. The variation files are copied as they are into `variations/<chr>/`: each
+chromosome's `all_vars.gz` with its tabix index (the bgzip file the Ensembl VEP dumper writes,
+with the chromosome first, `.` for an empty cell and the columns of the cache's
+`variation_cols` line) or, for a cache dumped without the tabix conversion, its
+`<start>-<end>_var.gz` region files. vep-rs opens each chromosome's `all_vars.gz` on first use
+and reads it through its index, or parses a region file whole the first time a variant falls in
+it, so `--check_existing` and the frequency flags read the converted cache as Ensembl VEP reads
+the original; a cache whose `variations/` directory holds no such file warns once that the
+co-location columns stay empty. A conversion made by an earlier release carries no
+`variations/<chr>/all_vars.gz`: convert the cache again, or copy each chromosome's `all_vars.gz`
+and its `.csi` from the Ensembl VEP cache into `variations/<chr>/`. A cache written with the Sereal serialiser (`serialiser_type sereal` in its
 `info.txt`, or `.sereal` shards) is refused with an error naming the serialiser; only Storable
 caches convert, and a run in which any shard fails to read or write stops with an error before
 `info.json` is written.

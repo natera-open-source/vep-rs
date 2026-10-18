@@ -10,34 +10,51 @@
 
 use std::collections::HashMap;
 
-use rustc_hash::FxHashMap;
 use vep_core::variant::{ColocatedVariant, InputVariant};
 use vep_core::variation::CachedVariation;
 
-/// Find co-located known variants for an input variant.
+use crate::variation_source::{ReadFailure, VariationSource};
+
+/// Attaches the co-located known variants of `variant` read from `source`:
+/// its `existing_variation` names and `colocated_variants`.
+///
+/// A failure to read a variation file is recorded in `failure` for the batch
+/// driver to end the run with (`runner::check_variation_reads`): the file is
+/// part of the cache, and a variant annotated without it would read as having
+/// no known co-located variant.
+pub fn annotate_colocated(
+    variant: &mut InputVariant,
+    source: &VariationSource,
+    failure: &ReadFailure,
+) {
+    let candidates = match source.records_overlapping(&variant.chr, variant.start, variant.end) {
+        Ok(candidates) => candidates,
+        Err(error) => {
+            failure.record(format!("{error:#}"));
+            return;
+        }
+    };
+    let colocated = find_colocated_variants(variant, &candidates);
+    for cv in &colocated {
+        variant.existing_variation.push(cv.id.clone());
+    }
+    variant.colocated_variants = colocated;
+}
+
+/// Find co-located known variants for an input variant among the candidates
+/// its window holds.
 ///
 /// Uses simple position-based matching: any cached variant at the same
-/// start position is reported as co-located. This matches the default
-/// Perl VEP behaviour with `--check_existing`.
+/// start position is reported as co-located.
 pub fn find_colocated_variants(
     variant: &InputVariant,
-    variations: &[CachedVariation],
-    position_index: &FxHashMap<u64, Vec<usize>>,
+    candidates: &[CachedVariation],
 ) -> Vec<ColocatedVariant> {
-    let Some(indices) = position_index.get(&variant.start) else {
-        return Vec::new();
-    };
-
-    let mut colocated = Vec::new();
-    for &idx in indices {
-        let cv = &variations[idx];
-        if cv.failed != 0 {
-            continue;
-        }
-        colocated.push(cached_to_colocated(cv, variant));
-    }
-
-    colocated
+    candidates
+        .iter()
+        .filter(|cv| cv.start == variant.start && cv.failed == 0)
+        .map(|cv| cached_to_colocated(cv, variant))
+        .collect()
 }
 
 /// Convert a CachedVariation to a ColocatedVariant, extracting allele-specific
@@ -263,10 +280,7 @@ mod tests {
             ..Default::default()
         }];
 
-        let mut pos_idx = FxHashMap::default();
-        pos_idx.insert(100u64, vec![0usize]);
-
-        let colocated = find_colocated_variants(&var, &cached, &pos_idx);
+        let colocated = find_colocated_variants(&var, &cached);
         assert_eq!(colocated.len(), 1);
         assert_eq!(colocated[0].id, "rs123");
         assert_eq!(colocated[0].frequencies.get("AFR"), Some(&0.003));
@@ -284,10 +298,7 @@ mod tests {
             ..Default::default()
         }];
 
-        let mut pos_idx = FxHashMap::default();
-        pos_idx.insert(100u64, vec![0usize]);
-
-        let colocated = find_colocated_variants(&var, &cached, &pos_idx);
+        let colocated = find_colocated_variants(&var, &cached);
         assert!(colocated.is_empty());
     }
 
@@ -302,10 +313,7 @@ mod tests {
             ..Default::default()
         }];
 
-        let mut pos_idx = FxHashMap::default();
-        pos_idx.insert(100u64, vec![0usize]);
-
-        let colocated = find_colocated_variants(&var, &cached, &pos_idx);
+        let colocated = find_colocated_variants(&var, &cached);
         assert!(colocated.is_empty());
     }
 

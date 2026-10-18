@@ -330,7 +330,7 @@ pub const COMPONENTS: &[(&str, &str)] = &[
     ("output", "the output file or format"),
     (
         "cache",
-        "the transcript cache: nothing resolves at the configured path, its layout or its metadata is unusable, or its assembly disagrees with --assembly or with its own directory name",
+        "the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read",
     ),
     (
         "filter",
@@ -487,6 +487,7 @@ pub struct Config {
     pub af_gnomadg: bool,
     pub max_af: bool,
     pub pubmed: bool,
+    pub old_maf: bool,
     pub gene_phenotype: bool,
     pub mirna: bool,
     pub check_existing: bool,
@@ -717,6 +718,7 @@ impl Config {
             af_gnomadg: on("af_gnomadg"),
             max_af: on("max_af"),
             pubmed: on("pubmed"),
+            old_maf: on("old_maf"),
             gene_phenotype: on("gene_phenotype"),
             mirna: on("mirna"),
             check_existing: on("check_existing"),

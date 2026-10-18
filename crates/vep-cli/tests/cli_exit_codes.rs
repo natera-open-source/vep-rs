@@ -72,6 +72,118 @@ fn run_error_is_1() {
     assert!(!out.exists(), "no output is written for a failed run");
 }
 
+/// A `--check_existing` run and the paths its assertions name: the output
+/// file, the cache's `info.json` and its one region file.
+struct VariationCacheRun {
+    output: Output,
+    out_file: PathBuf,
+    info_json: PathBuf,
+    region_file: PathBuf,
+}
+
+/// Runs `vep --check_existing` over one variant on chromosome 21 against a
+/// cache under `dir` whose only variation file is
+/// `variations/21/1-1000000_var.gz`, holding `region_body`, and whose
+/// `info.json` declares `variation_cols` (a JSON array).
+fn run_against_variation_cache(
+    dir: &Path,
+    region_body: &[u8],
+    variation_cols: &str,
+) -> VariationCacheRun {
+    let cache = dir.join("json_cache");
+    // The cache resolves only with a transcript shard beside the variation files.
+    let shard = cache.join("transcripts").join("21").join("1-1000000.json");
+    std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
+    std::fs::write(&shard, b"[]").unwrap();
+    let region_file = cache.join("variations").join("21").join("1-1000000_var.gz");
+    std::fs::create_dir_all(region_file.parent().unwrap()).unwrap();
+    std::fs::write(&region_file, region_body).unwrap();
+    let info_json = cache.join("info.json");
+    std::fs::write(
+        &info_json,
+        format!(r#"{{"assembly":"GRCh38","variation_cols":{variation_cols}}}"#),
+    )
+    .unwrap();
+    let input = dir.join("in.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t500\t.\tA\tG\t.\t.\t.\n",
+    )
+    .unwrap();
+    let out_file = dir.join("out.txt");
+    let mut args = corpus_args(&out_file);
+    args.extend([
+        "-i".to_string(),
+        input.display().to_string(),
+        "--json_cache".to_string(),
+        cache.display().to_string(),
+        "--check_existing".to_string(),
+    ]);
+    let output = vep().args(args).output().unwrap();
+    VariationCacheRun {
+        output,
+        out_file,
+        info_json,
+        region_file,
+    }
+}
+
+/// A variation file of the cache that cannot be read ends the run under the
+/// `cache` component before the batch that met it is written: no variant
+/// goes out without its co-located variants.
+#[test]
+fn unreadable_variation_file_is_1() {
+    let dir = tempfile::tempdir().unwrap();
+    let run = run_against_variation_cache(
+        dir.path(),
+        b"not a gzip body",
+        r#"["variation_name","failed","start","end","allele_string"]"#,
+    );
+    let err = stderr(&run.output);
+    assert_eq!(run.output.status.code(), Some(1), "{err}");
+    let lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(lines.len(), 1, "{err}");
+    assert!(
+        lines[0].starts_with(&format!(
+            "ERROR: [cache] reading {}: ",
+            run.region_file.display()
+        )),
+        "{err}"
+    );
+    let written = std::fs::read_to_string(&run.out_file).unwrap_or_default();
+    assert!(
+        written.lines().all(|line| line.starts_with('#')),
+        "no variant row is written for the batch that met the failure:\n{written}"
+    );
+}
+
+/// A variation layout the cache's `info.json` contradicts is refused when the
+/// source opens, under the `cache` component, before any output is written.
+#[test]
+fn contradicted_variation_layout_is_1() {
+    let dir = tempfile::tempdir().unwrap();
+    let run = run_against_variation_cache(
+        dir.path(),
+        b"",
+        r#"["variation_name","failed","end","allele_string"]"#,
+    );
+    let err = stderr(&run.output);
+    assert_eq!(run.output.status.code(), Some(1), "{err}");
+    let lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(
+        lines,
+        [format!(
+            "ERROR: [cache] variation_cols of {} names no start column",
+            run.info_json.display()
+        )],
+        "{err}"
+    );
+    assert!(
+        !run.out_file.exists(),
+        "no output is written for a run refused at open"
+    );
+}
+
 /// An argument syntax error is clap's: `error:` prefix, exit 2.
 #[test]
 fn usage_error_is_2() {

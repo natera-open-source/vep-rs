@@ -362,7 +362,7 @@ if [[ -f "$RUNNER" ]]; then
         ok "runner.rs keeps both a parallel and a serial arm over the same batch" ||
         bad "runner.rs has $par_calls parallel and $((ser_calls - par_calls)) serial batch arms; the fork paths may have diverged"
 
-    annotate_one_defs=$(grep -cE '^[[:space:]]*let annotate_one = ' "$RUNNER") || annotate_one_defs=0
+    annotate_one_defs=$(grep -cE '^[[:space:]]*let annotate_one =( |$)' "$RUNNER") || annotate_one_defs=0
     [[ "$annotate_one_defs" -eq 1 ]] &&
         ok "one annotate_one closure serves both fork paths" ||
         bad "$annotate_one_defs annotate_one definitions found; expected exactly 1 shared by both paths"

@@ -149,16 +149,16 @@ pub struct TabixConfig {
 
 /// Batch-oriented tabix query engine.
 ///
-/// Opens a tabix-indexed file and provides two query modes:
+/// Opens a tabix-indexed file and provides three query modes:
 /// - `query_batch`: accepts multiple regions, merges them, and issues minimal
 ///   seeks. This is the primary hot path for plugin execution.
+/// - `query_windows`: sweeps a batch's sorted windows in one pass, keeping the
+///   records inside them alone.
 /// - `query`: single-region convenience method.
 pub struct TabixAnnotator {
     config: TabixConfig,
     /// Column header names parsed from the file header.
     header: Option<Arc<Vec<String>>>,
-    /// Open file handle cloned for per-query readers (avoids repeated open calls).
-    file: std::fs::File,
     /// Loaded once and reused across queries.
     index: Index,
     /// Where `index` was read from, for error messages.
@@ -167,6 +167,14 @@ pub struct TabixAnnotator {
 
 /// A loaded `.tbi` or `.csi` index; the query path is the same for both.
 type Index = Box<dyn BinningIndex + Send + Sync>;
+
+/// Where a line's start falls against the windows of one cluster of
+/// [`TabixAnnotator::query_windows`].
+enum LinePlacement {
+    InWindow,
+    BetweenWindows,
+    PastCluster,
+}
 
 impl TabixAnnotator {
     /// Open a tabix-indexed file with the given configuration.
@@ -184,7 +192,7 @@ impl TabixAnnotator {
         }
 
         let header = parse_header(&file_path, config.start_col)?.map(Arc::new);
-        let file = std::fs::File::open(&file_path).map_err(|e| {
+        std::fs::File::open(&file_path).map_err(|e| {
             PluginError::Init(format!(
                 "failed to open tabix data file {}: {e}",
                 file_path.display()
@@ -201,7 +209,6 @@ impl TabixAnnotator {
         Ok(Self {
             config,
             header,
-            file,
             index,
             index_path,
         })
@@ -254,10 +261,153 @@ impl TabixAnnotator {
         Ok(BatchQueryResult::from_records(all_records))
     }
 
-    /// Query a single region. Convenience wrapper.
+    /// Query a single region. Convenience wrapper. The file is read as tabix
+    /// indexed it, sorted by start within a chromosome, so the scan of a chunk
+    /// ends at the first record past the interval.
     pub fn query(&self, chr: &str, start: u64, end: u64) -> Result<Vec<TabixRecord>, PluginError> {
         let (start, end) = normalize_range_bounds(start, end);
         self.query_tabix_region(chr, start, end)
+    }
+
+    /// The records whose start lies in any of `windows`, sorted and disjoint
+    /// `(start, end)` pairs of one chromosome, read in one pass over the file
+    /// for an index built on the start column alone (`end_col` none or the
+    /// start column; any other index answers window by window).
+    ///
+    /// Windows within `GAP_BRIDGE` bases of each other share one index
+    /// lookup and one scan of its chunks, and the reader stays where the
+    /// previous scan ended when the next chunk holds that position, so a block
+    /// is inflated once however many windows fall in it. A line between two
+    /// windows is skipped by its start alone and nothing between them is kept,
+    /// so a sparse batch holds its own records only.
+    pub fn query_windows(
+        &self,
+        chr: &str,
+        windows: &[(u64, u64)],
+    ) -> Result<Vec<TabixRecord>, PluginError> {
+        let mut records = Vec::new();
+        let start_is_span = self
+            .config
+            .end_col
+            .is_none_or(|end_col| end_col == self.config.start_col);
+        if !start_is_span {
+            for &(start, end) in windows {
+                records.extend(self.query(chr, start, end)?);
+            }
+            return Ok(records);
+        }
+        let Some(idx_header) = self.index.header() else {
+            return Ok(records);
+        };
+        let Some((ref_seq_id, file_chr)) =
+            resolve_reference_sequence(idx_header.reference_sequence_names(), chr)
+        else {
+            return Ok(records);
+        };
+        let file = std::fs::File::open(&self.config.file_path).map_err(|e| self.read_error(e))?;
+        let mut bgzf_reader = bgzf::io::Reader::new(file);
+        let mut line = Vec::new();
+        let mut last_chunk_end: Option<bgzf::VirtualPosition> = None;
+        // The start and text of the line read past the previous cluster's last
+        // window; the next cluster may hold it.
+        let mut pending: Option<(u64, String)> = None;
+        let mut first = 0;
+        while first < windows.len() {
+            let mut past = first + 1;
+            while past < windows.len()
+                && windows[past].0 <= windows[past - 1].1.saturating_add(GAP_BRIDGE)
+            {
+                past += 1;
+            }
+            let cluster = &windows[first..past];
+            first = past;
+            let (start, end) = (cluster[0].0, cluster[cluster.len() - 1].1);
+            let start_pos = Position::try_from(start.max(1) as usize)
+                .map_err(|e| PluginError::Run(format!("invalid start position: {e}")))?;
+            let end_pos = Position::try_from(end.max(1) as usize)
+                .map_err(|e| PluginError::Run(format!("invalid end position: {e}")))?;
+            let chunks = match self.index.query(ref_seq_id, (start_pos..=end_pos).into()) {
+                Ok(chunks) => chunks,
+                // The index refuses a span that ends past its last addressable
+                // position, though the windows short of it may hold records.
+                Err(_) => {
+                    for &(start, end) in cluster {
+                        records.extend(self.query(chr, start, end)?);
+                    }
+                    continue;
+                }
+            };
+            // The window the next line can fall in; the lines come sorted.
+            let mut window = 0;
+            let mut place = |line_start: u64| -> LinePlacement {
+                while window < cluster.len() && cluster[window].1 < line_start {
+                    window += 1;
+                }
+                if window == cluster.len() {
+                    LinePlacement::PastCluster
+                } else if line_start >= cluster[window].0 {
+                    LinePlacement::InWindow
+                } else {
+                    LinePlacement::BetweenWindows
+                }
+            };
+            'cluster: for chunk in chunks {
+                let position = bgzf_reader.virtual_position();
+                let continues = last_chunk_end.is_some_and(|last_end| {
+                    chunk.start() <= position && position <= last_end && last_end <= chunk.end()
+                });
+                if continues {
+                    if let Some((line_start, text)) = pending.take() {
+                        match place(line_start) {
+                            LinePlacement::PastCluster => {
+                                pending = Some((line_start, text));
+                                break 'cluster;
+                            }
+                            LinePlacement::BetweenWindows => {}
+                            LinePlacement::InWindow => {
+                                if let Some(record) = self.record_on(&text, file_chr) {
+                                    records.push(record);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    pending = None;
+                    self.seek_to_chunk_start(&mut bgzf_reader, chunk.start())?;
+                }
+                last_chunk_end = Some(chunk.end());
+                while bgzf_reader.virtual_position() < chunk.end() {
+                    line.clear();
+                    let bytes_read = bgzf_reader
+                        .read_until(b'\n', &mut line)
+                        .map_err(|e| self.read_error(e))?;
+                    if bytes_read == 0 {
+                        break;
+                    }
+                    let text = String::from_utf8_lossy(&line);
+                    let trimmed = text.trim_end();
+                    if trimmed.is_empty() || trimmed.starts_with('#') {
+                        continue;
+                    }
+                    let Some(line_start) = self.line_start(trimmed) else {
+                        continue;
+                    };
+                    match place(line_start) {
+                        LinePlacement::PastCluster => {
+                            pending = Some((line_start, trimmed.to_string()));
+                            break 'cluster;
+                        }
+                        LinePlacement::BetweenWindows => {}
+                        LinePlacement::InWindow => {
+                            if let Some(record) = self.record_on(trimmed, file_chr) {
+                                records.push(record);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(records)
     }
 
     /// Query a region using the tabix index and bgzf reader.
@@ -298,16 +448,23 @@ impl TabixAnnotator {
             return Ok(records);
         }
 
-        let file = self
-            .file
-            .try_clone()
-            .map_err(|e| PluginError::Run(format!("failed to clone bgzf file handle: {e}")))?;
+        // Each query opens its own handle: a duplicated handle shares the file
+        // offset, so two threads seeking the same file would read each other's
+        // blocks.
+        let file = std::fs::File::open(&self.config.file_path).map_err(|e| self.read_error(e))?;
         let mut bgzf_reader = bgzf::io::Reader::new(file);
 
         // No `BufReader` wraps the reader: a bulk fill runs past a chunk's end
         // into bytes the next chunk's seek reads again, so records are returned
         // twice and a line cut at the fill's end is glued to the next chunk's
         // first line.
+
+        // A record is found by its span, so a start-only index (`end_col` the
+        // start column) can drop a line by its start alone.
+        let start_is_span = self
+            .config
+            .end_col
+            .is_none_or(|end_col| end_col == self.config.start_col);
         let mut line = Vec::new();
         for chunk in chunks {
             self.seek_to_chunk_start(&mut bgzf_reader, chunk.start())?;
@@ -324,6 +481,21 @@ impl TabixAnnotator {
                 let text = String::from_utf8_lossy(&line);
                 let trimmed = text.trim_end();
                 if trimmed.is_empty() || trimmed.starts_with('#') {
+                    continue;
+                }
+
+                // A bin of a dense file holds thousands of records, so the
+                // start is read before the record is built: the file is sorted
+                // by start, so the first line past the interval ends the chunk,
+                // as htslib's iterator ends there, and on a start-only index
+                // the lines before it need no record either.
+                let Some(line_start) = self.line_start(trimmed) else {
+                    continue;
+                };
+                if line_start > end {
+                    break;
+                }
+                if start_is_span && line_start < start {
                     continue;
                 }
 
@@ -387,6 +559,18 @@ impl TabixAnnotator {
         ))
     }
 
+    /// The 1-based start of a line, read from its start column alone; `None`
+    /// for a line `parse_line` would reject on that column.
+    fn line_start(&self, line: &str) -> Option<u64> {
+        let field = line.split('\t').nth(self.config.start_col)?;
+        let start: u64 = field.trim_end_matches('\r').parse().ok()?;
+        Some(if self.config.zero_based {
+            start + 1
+        } else {
+            start
+        })
+    }
+
     /// Parse a tab-separated line into a TabixRecord.
     ///
     /// A bare (un-prefixed) header row is rejected naturally: its start-column
@@ -408,13 +592,7 @@ impl TabixAnnotator {
         }
 
         let chr = std::mem::take(&mut columns[self.config.chr_col]);
-        let start_str = &columns[self.config.start_col];
-        let start: u64 = start_str.parse().ok()?;
-        let start = if self.config.zero_based {
-            start + 1
-        } else {
-            start
-        };
+        let start = self.line_start(line)?;
 
         // An end column that is the start column names a single base, as
         // `tabix -b N -e N` does, so it takes the start's zero-based shift too.
@@ -435,6 +613,13 @@ impl TabixAnnotator {
         })
     }
 
+    /// The record of `line` when it lies on `file_chr`: a chunk's bounds alone
+    /// do not keep another chromosome's lines out of a read.
+    fn record_on(&self, line: &str, file_chr: &bstr::BString) -> Option<TabixRecord> {
+        self.parse_line(line)
+            .filter(|record| record.chr.as_bytes() == file_chr.as_slice())
+    }
+
     /// Get the column header names, if available.
     pub fn header(&self) -> Option<&[String]> {
         self.header.as_ref().map(|h| h.as_slice())
@@ -445,6 +630,10 @@ impl TabixAnnotator {
         &self.config
     }
 }
+
+/// A gap of up to this many bases between two regions is read with them: one
+/// longer read beats a second seek, and one index lookup serves them both.
+const GAP_BRIDGE: u64 = 1000;
 
 /// Merge overlapping/adjacent intervals. Input must be sorted by start.
 fn merge_intervals(intervals: &[(u64, u64)]) -> Vec<(u64, u64)> {
@@ -457,7 +646,7 @@ fn merge_intervals(intervals: &[(u64, u64)]) -> Vec<(u64, u64)> {
 
     for &(s, e) in &intervals[1..] {
         // A small gap is bridged too: one longer read beats a second seek.
-        if s <= cur_end.saturating_add(1000) {
+        if s <= cur_end.saturating_add(GAP_BRIDGE) {
             cur_end = cur_end.max(e);
         } else {
             merged.push((cur_start, cur_end));
@@ -1328,6 +1517,80 @@ mod tests {
             &[(0..2, 0), (0..2, past_the_end)],
         );
         refused(&second_chunk_past_the_end);
+    }
+
+    /// The one-pass sweep over a batch's windows answers exactly as the
+    /// per-window query does: windows of one bin, a window straddling the
+    /// 16 kb bin boundary and the bgzf block boundary, windows holding no
+    /// record, and a window past the last record.
+    #[test]
+    fn query_windows_equals_the_per_window_query() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocks = fixture_with_index(dir.path(), "blocks.tsv.gz", "csi");
+        let ann = open(blocks, None);
+        // Records sit at 5010000 + 7i; the 16 kb bin boundary at 5029888 falls
+        // between the rows at 5029887 and 5029894, and the bgzf block boundary
+        // falls at the row at 5031749.
+        let mut windows: Vec<(u64, u64)> = Vec::new();
+        for i in [
+            0u64, 1, 2, 5, 6, 7, 100, 2840, 2841, 2842, 3105, 3106, 3107, 3399,
+        ] {
+            let start = 5_010_000 + 7 * i;
+            windows.push((start - 1, start + 1));
+        }
+        windows.push((5_010_002, 5_010_005)); // between two records
+        windows.push((5_029_885, 5_029_895)); // across the bin boundary
+        windows.push((5_031_745, 5_031_752)); // across the block boundary
+        windows.push((5_033_800, 5_033_900)); // past the last record
+        windows.sort_unstable();
+        // The sweep takes disjoint windows, as a caller merges them.
+        let mut disjoint: Vec<(u64, u64)> = Vec::new();
+        for (start, end) in windows {
+            match disjoint.last_mut() {
+                Some(last) if start <= last.1 => last.1 = last.1.max(end),
+                _ => disjoint.push((start, end)),
+            }
+        }
+        let windows = disjoint;
+        let mut by_query: Vec<String> = Vec::new();
+        for &(start, end) in &windows {
+            by_query.extend(lines(&ann.query("21", start, end).unwrap()));
+        }
+        let by_sweep = lines(&ann.query_windows("21", &windows).unwrap());
+        assert_eq!(by_sweep, by_query);
+        assert!(by_sweep.iter().any(|l| l.starts_with("21\t5029887\t")));
+        assert!(by_sweep.iter().any(|l| l.starts_with("21\t5029894\t")));
+        assert!(by_sweep.iter().any(|l| l.starts_with("21\t5031749\t")));
+        assert_eq!(
+            by_sweep
+                .iter()
+                .filter(|l| l.starts_with("21\t5010000\t"))
+                .count(),
+            1
+        );
+        assert!(ann.query_windows("21", &[]).unwrap().is_empty());
+        assert!(ann.query_windows("22", &windows).unwrap().is_empty());
+    }
+
+    /// A cluster whose span ends past the index's last addressable position
+    /// (2^29 - 1 for a `.tbi`) still answers as the per-window query does: the
+    /// index refuses the span, and the window short of that position holds two
+    /// records.
+    #[test]
+    fn query_windows_answers_a_cluster_the_index_refuses_window_by_window() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocks = fixture_with_index(dir.path(), "blocks.tsv.gz", "tbi");
+        let ann = open(blocks, None);
+        let windows = [(5_010_000, 5_010_010), (5_010_500, 600_000_000)];
+        let mut by_query: Vec<String> = Vec::new();
+        for &(start, end) in &windows {
+            by_query.extend(lines(&ann.query("21", start, end).unwrap()));
+        }
+        assert_eq!(
+            by_query,
+            ["21\t5010000\tA\tC\t0.000", "21\t5010007\tC\tG\t0.919"]
+        );
+        assert_eq!(lines(&ann.query_windows("21", &windows).unwrap()), by_query);
     }
 
     /// A query answered from two chunks returns every record of both, each

@@ -35,11 +35,12 @@ use tracing::{debug, warn};
 
 use crate::pick::{self, FilterConfig};
 use crate::runner::{
-    annotate_batch, annotate_one, apply_record_rules, mark_oversize_sv, prewarm_batch,
-    AnnotationResources, PipelineStats,
+    annotate_batch, annotate_one, apply_record_rules, check_variation_reads, mark_oversize_sv,
+    prewarm_batch, AnnotationResources, PipelineStats,
 };
 use crate::transcript_index::LazyTranscriptIndexes;
 use crate::variation_matcher;
+use crate::variation_source::ReadFailure;
 use crate::vcf_parser::{parse_vcf_line_with_max_sv_size, vcf_line_is_non_variant};
 use vep_core::consequence::Consequence;
 use vep_core::coordinate::normalize_chromosome;
@@ -717,7 +718,7 @@ fn coordinate(
         let render_start;
         let rendered = if fused {
             if !batch.variants.is_empty() {
-                prewarm_batch(&batch.variants, c.resources)?;
+                prewarm_batch(&batch.variants, c.resources, c.pool)?;
             }
             render_start = Instant::now();
             annotate_render_batch(&mut batch, c, &mut spare)?
@@ -916,13 +917,14 @@ fn annotate_render_batch(
     debug_assert!(rest.is_empty(), "every variant belongs to a unit chunk");
 
     let text: &String = text;
+    let failure = ReadFailure::default();
     let results: Vec<(Vec<u8>, u64)> = c.pool.install(|| {
         tasks
             .into_par_iter()
             .map(|(chunk, slice, offset)| -> anyhow::Result<(Vec<u8>, u64)> {
                 let mut csqs = 0u64;
                 for variant in slice.iter_mut() {
-                    csqs += annotate_one(variant, resources);
+                    csqs += annotate_one(variant, resources, &failure);
                     if let Some(filter_config) = filter {
                         pick::apply_filters(variant, filter_config);
                     }
@@ -958,6 +960,9 @@ fn annotate_render_batch(
             })
             .collect::<anyhow::Result<Vec<_>>>()
     })?;
+    // A variation-file read failure the lookups recorded ends the run here,
+    // before the batch's rendered chunks reach the writer.
+    check_variation_reads(&failure)?;
 
     if c.stats_enabled {
         let csqs: u64 = results.iter().map(|(_, n)| *n).sum();

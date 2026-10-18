@@ -30,11 +30,11 @@ use crate::annotator::{build_thread_pool, LoadedPlugins, PredictionConfig};
 use crate::cache_resolve::ResolvedCache;
 use crate::config::{CliError, Config};
 use crate::filter_set::FilterSet;
-use crate::json_cache;
 use crate::pick::FilterConfig;
 use crate::pipeline;
 use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex};
 use crate::variation_matcher;
+use crate::variation_source::{ReadFailure, VariationSource};
 use vep_builtins::BuiltinRegistry;
 use vep_core::consequence::{Consequence, Impact};
 use vep_core::variant::{InputVariant, VariantClass};
@@ -468,19 +468,7 @@ impl Runner {
             effects_config.downstream_distance,
         )?);
 
-        let variation_data: Option<Arc<json_cache::VariationData>> = if self.config.check_existing
-            || self.config.af
-            || self.config.af_1kg
-            || self.config.af_gnomade
-            || self.config.af_gnomadg
-            || self.config.max_af
-            || self.config.pubmed
-        {
-            info!("Loading variations from JSON cache: {}", cache_dir);
-            Some(Arc::new(json_cache::load_all_variations(cache_dir)?))
-        } else {
-            None
-        };
+        let variation_source = open_variation_source(&self.config, cache_dir)?;
 
         // `MultithreadedReader` when decompression_threads > 1: block
         // decompression is the largest single wall-time lever on .vcf.gz input.
@@ -648,7 +636,7 @@ impl Runner {
 
         let annotation_resources = AnnotationResources {
             transcripts,
-            variation_data,
+            variation_source,
             effects_config,
             builtin_plugins,
             dylib_plugins,
@@ -1054,10 +1042,38 @@ fn sql_ident(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
+/// The variation source a run reads its co-located variants from: the
+/// resolved cache's variation files under `--check_existing` (which the
+/// frequency and PubMed flags imply, `Config.pm:449-452`), `None` otherwise.
+/// A cache without variation data warns once, as Ensembl VEP would annotate
+/// silently (`CacheDir.pm:179`), unless `--quiet`.
+pub(crate) fn open_variation_source(
+    config: &Config,
+    cache_dir: &str,
+) -> anyhow::Result<Option<Arc<VariationSource>>> {
+    if !config.check_existing {
+        return Ok(None);
+    }
+    let source = VariationSource::open_json_cache(cache_dir, config.old_maf)
+        .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
+    match source {
+        Some(source) => {
+            info!("Variation cache: {cache_dir} (lazy per-chromosome)");
+            Ok(Some(Arc::new(source)))
+        }
+        None => {
+            if !config.quiet {
+                eprintln!("{}", VariationSource::missing_warning(cache_dir));
+            }
+            Ok(None)
+        }
+    }
+}
+
 /// Shared annotation resources passed to each batch.
 pub(crate) struct AnnotationResources {
     transcripts: Arc<LazyTranscriptIndexes>,
-    variation_data: Option<Arc<json_cache::VariationData>>,
+    variation_source: Option<Arc<VariationSource>>,
     effects_config: Arc<vep_effects::EffectsConfig>,
     builtin_plugins: Arc<BuiltinRegistry>,
     dylib_plugins: Arc<PluginRegistry>,
@@ -1136,17 +1152,10 @@ fn structural_variant_bounds(variant: &InputVariant) -> (u64, u64) {
     (variant_start, variant_end)
 }
 
-/// Annotate a batch of variants, optionally in parallel using rayon.
+/// Materializes every chromosome a batch touches, then reads ahead the batch's
+/// variation records on the pool.
 ///
-/// When `use_parallel` is true, uses `par_iter_mut` to distribute annotation
-/// across the rayon thread pool. The shared data (transcripts, variation_data,
-/// effects_config) is behind `Arc` and only read, so no locking is needed.
-///
-/// After consequence assignment, built-in plugins are invoked via `run_batch`
-/// to annotate the entire buffer in one pass (enabling batched tabix queries).
-/// Materializes every chromosome a batch touches before any pool work.
-///
-/// Three reasons this must not happen inside a parallel closure:
+/// Three reasons the transcript loads must not happen inside a parallel closure:
 ///  1. `load_transcripts_for_chr` parses its shards with rayon. Calling it
 ///     from a worker already inside `pool.install(...)` blocks that worker on
 ///     a job that needs the pool it is occupying: a deadlock.
@@ -1163,6 +1172,7 @@ fn structural_variant_bounds(variant: &InputVariant) -> (u64, u64) {
 pub(crate) fn prewarm_batch(
     batch: &[InputVariant],
     resources: &AnnotationResources,
+    pool: &ThreadPool,
 ) -> anyhow::Result<()> {
     for variant in batch {
         resources.transcripts.prewarm(&variant.chr)?;
@@ -1170,12 +1180,31 @@ pub(crate) fn prewarm_batch(
             resources.transcripts.prewarm(mate_chr)?;
         }
     }
+    if let Some(source) = &resources.variation_source {
+        // The prefetch queries its windows in parallel on the pool `--fork`
+        // sized, never on rayon's global one.
+        pool.install(|| source.prefetch(batch.iter().map(|v| (v.chr.as_str(), v.start, v.end))))
+            .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
+    }
     Ok(())
 }
 
+/// Ends the run on a variation-file read failure a batch's lookups recorded.
+pub(crate) fn check_variation_reads(failure: &ReadFailure) -> anyhow::Result<()> {
+    match failure.take() {
+        Some(message) => Err(CliError::new("cache", message).into()),
+        None => Ok(()),
+    }
+}
+
 /// Annotates one variant against the (already materialized) transcript cache
-/// and variation data; returns its transcript consequence count.
-pub(crate) fn annotate_one(variant: &mut InputVariant, resources: &AnnotationResources) -> u64 {
+/// and variation data; returns its transcript consequence count. A failure to
+/// read a variation file lands in `failure`, the batch's.
+pub(crate) fn annotate_one(
+    variant: &mut InputVariant,
+    resources: &AnnotationResources,
+    failure: &ReadFailure,
+) -> u64 {
     if variant.no_allele {
         return 0;
     }
@@ -1217,17 +1246,8 @@ pub(crate) fn annotate_one(variant: &mut InputVariant, resources: &AnnotationRes
     );
     let csq_count = variant.transcript_consequences.len() as u64;
 
-    if let Some(ref vd) = resources.variation_data {
-        if let Some(chr_vars) = vd.variations.get(&variant.chr) {
-            if let Some(chr_idx) = vd.position_index.get(&variant.chr) {
-                let colocated =
-                    variation_matcher::find_colocated_variants(variant, chr_vars, chr_idx);
-                for cv in &colocated {
-                    variant.existing_variation.push(cv.id.clone());
-                }
-                variant.colocated_variants = colocated;
-            }
-        }
+    if let Some(source) = &resources.variation_source {
+        variation_matcher::annotate_colocated(variant, source, failure);
     }
 
     // Intergenic only when the chromosome has transcripts in the cache: Perl
@@ -1245,6 +1265,14 @@ pub(crate) fn annotate_one(variant: &mut InputVariant, resources: &AnnotationRes
     csq_count
 }
 
+/// Annotate a batch of variants, optionally in parallel using rayon.
+///
+/// When `use_parallel` is true, uses `par_iter_mut` to distribute annotation
+/// across the rayon thread pool. The shared data (transcripts, variation_source,
+/// effects_config) is behind `Arc` and only read, so no locking is needed.
+///
+/// After consequence assignment, built-in plugins are invoked via `run_batch`
+/// to annotate the entire buffer in one pass (enabling batched tabix queries).
 pub(crate) fn annotate_batch(
     batch: &mut Vec<InputVariant>,
     resources: &AnnotationResources,
@@ -1256,9 +1284,11 @@ pub(crate) fn annotate_batch(
     let batch_len = batch.len();
     let annotation_phase_start = Instant::now();
 
-    prewarm_batch(batch, resources)?;
+    prewarm_batch(batch, resources, pool)?;
 
-    let annotate_one = |variant: &mut InputVariant| -> u64 { annotate_one(variant, resources) };
+    let failure = ReadFailure::default();
+    let annotate_one =
+        |variant: &mut InputVariant| -> u64 { annotate_one(variant, resources, &failure) };
 
     if use_parallel {
         if stats_enabled {
@@ -1295,6 +1325,9 @@ pub(crate) fn annotate_batch(
             annotate_one(v);
         });
     }
+    // A read failure the lookups recorded ends the run before this batch is
+    // rendered.
+    check_variation_reads(&failure)?;
     apply_record_rules(batch, resources.transcripts.as_ref());
     let annotation_elapsed = annotation_phase_start.elapsed();
     debug!(
@@ -1570,7 +1603,7 @@ pub(crate) fn annotate_batch_for_test(
 ) -> Vec<Vec<String>> {
     let resources = AnnotationResources {
         transcripts,
-        variation_data: None,
+        variation_source: None,
         effects_config: Arc::new(vep_effects::EffectsConfig {
             upstream_distance: 5_000,
             downstream_distance: 5_000,
@@ -1612,7 +1645,7 @@ pub(crate) fn annotate_batch_for_test(
         .collect()
 }
 
-/// Annotates one VCF line against `transcripts` and `variation_data` and renders
+/// Annotates one VCF line against `transcripts` and `variation_source` and renders
 /// the record in the default format under `options`, for tests in other files that
 /// compare the bytes two caches produce. Test-only, outside `mod tests` so the
 /// `json_cache` tests can reach it.
@@ -1620,12 +1653,12 @@ pub(crate) fn annotate_batch_for_test(
 pub(crate) fn default_rows_for_test(
     vcf_line: &str,
     transcripts: Arc<LazyTranscriptIndexes>,
-    variation_data: Option<Arc<json_cache::VariationData>>,
+    variation_source: Option<Arc<VariationSource>>,
     options: FieldOptions,
 ) -> String {
     let resources = AnnotationResources {
         transcripts,
-        variation_data,
+        variation_source,
         effects_config: Arc::new(vep_effects::EffectsConfig {
             upstream_distance: 5_000,
             downstream_distance: 5_000,
@@ -2029,7 +2062,7 @@ mod tests {
     fn resources_over(transcripts: Arc<LazyTranscriptIndexes>) -> AnnotationResources {
         AnnotationResources {
             transcripts,
-            variation_data: None,
+            variation_source: None,
             effects_config: Arc::new(vep_effects::EffectsConfig {
                 upstream_distance: 5_000,
                 downstream_distance: 5_000,
@@ -2102,6 +2135,75 @@ mod tests {
         assert!(
             msg.contains("chr21"),
             "error must name the chromosome, got: {msg}"
+        );
+    }
+
+    /// A variation file that fails to read ends the run under the `cache`
+    /// component: the batch's pre-warm reads the regions it touches and fails
+    /// there, and a lookup outside the pre-warmed windows, which runs inside
+    /// the annotation closure with no error channel of its own, records the
+    /// failure for the batch driver to surface once, before the batch is
+    /// rendered.
+    #[test]
+    fn test_annotate_batch_surfaces_a_variation_read_failure() {
+        let dir = write_json_cache("corrupt_variation", &[("21", 1_000)]);
+        let region = dir
+            .path()
+            .join("variations")
+            .join("21")
+            .join("1-1000000_var.gz");
+        std::fs::create_dir_all(region.parent().unwrap()).unwrap();
+        std::fs::write(&region, "not a gzip body").unwrap();
+        let info = vep_core::cache_info::CacheInfo {
+            variation_cols: ["variation_name", "failed", "start", "end", "allele_string"]
+                .iter()
+                .map(|name| name.to_string())
+                .collect(),
+            ..Default::default()
+        };
+        let source = VariationSource::open(dir.path(), &info, false)
+            .unwrap()
+            .expect("a region file is a variation source");
+        let transcripts = Arc::new(
+            LazyTranscriptIndexes::new(
+                dir.path().to_str().unwrap(),
+                TranscriptIndexImpl::Bin,
+                5_000,
+                5_000,
+            )
+            .unwrap(),
+        );
+        let mut resources = resources_over(transcripts);
+        resources.variation_source = Some(Arc::new(source));
+        let stats = zero_stats();
+        let pool = build_thread_pool(4).unwrap();
+        let mut batch =
+            parse_vcf_line("21\t1300\trs1\tA\tG\t.\t.\t.", true).expect("parse test variant");
+
+        let err = annotate_batch(&mut batch, &resources, &pool, true, &stats, false)
+            .expect_err("the pre-warm reads the corrupt region and ends the run");
+        let line = CliError::from_run(&err);
+        assert!(
+            line.starts_with(&format!("ERROR: [cache] reading {}: ", region.display())),
+            "{line}"
+        );
+        assert!(batch[0].existing_variation.is_empty());
+
+        // A lookup outside the pre-warmed windows records the failure in the
+        // batch's own slot instead.
+        let source = resources.variation_source.as_ref().unwrap();
+        let failure = ReadFailure::default();
+        variation_matcher::annotate_colocated(&mut batch[0], source, &failure);
+        assert!(batch[0].colocated_variants.is_empty());
+        let err = check_variation_reads(&failure).expect_err("the recorded failure surfaces");
+        let line = CliError::from_run(&err);
+        assert!(
+            line.starts_with(&format!("ERROR: [cache] reading {}: ", region.display())),
+            "{line}"
+        );
+        assert!(
+            check_variation_reads(&failure).is_ok(),
+            "the failure is taken once"
         );
     }
 
@@ -2463,12 +2565,11 @@ mod tests {
         );
 
         let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
-        let variation_data: Option<Arc<json_cache::VariationData>> = None;
         let effects_config = Arc::new(vep_effects::EffectsConfig::default());
         let builtin_plugins = Arc::new(BuiltinRegistry::new());
         let resources = AnnotationResources {
             transcripts,
-            variation_data,
+            variation_source: None,
             effects_config,
             builtin_plugins,
             dylib_plugins: Arc::new(PluginRegistry::new()),
@@ -2519,12 +2620,11 @@ mod tests {
         );
 
         let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
-        let variation_data: Option<Arc<json_cache::VariationData>> = None;
         let effects_config = Arc::new(vep_effects::EffectsConfig::default());
         let builtin_plugins = Arc::new(BuiltinRegistry::new());
         let resources = AnnotationResources {
             transcripts,
-            variation_data,
+            variation_source: None,
             effects_config,
             builtin_plugins,
             dylib_plugins: Arc::new(PluginRegistry::new()),
@@ -2584,7 +2684,7 @@ mod tests {
             );
             let resources = AnnotationResources {
                 transcripts: Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)),
-                variation_data: None,
+                variation_source: None,
                 effects_config: Arc::new(vep_effects::EffectsConfig::default()),
                 builtin_plugins: Arc::new(BuiltinRegistry::new()),
                 dylib_plugins: Arc::new(PluginRegistry::new()),

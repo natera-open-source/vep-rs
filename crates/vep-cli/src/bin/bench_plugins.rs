@@ -37,9 +37,11 @@ use clap::Parser;
 use serde::Serialize;
 
 use vep_builtins::{BuiltinRegistry, PluginTimings};
+use vep_cli::config::CliError;
 use vep_cli::json_cache;
 use vep_cli::transcript_index::TranscriptBinIndex;
 use vep_cli::variation_matcher;
+use vep_cli::variation_source::{ReadFailure, VariationSource};
 use vep_core::allele::trim_alleles;
 use vep_core::consequence::Consequence;
 use vep_core::variant::InputVariant;
@@ -222,14 +224,8 @@ fn main() -> Result<()> {
     }
     let transcripts = Arc::new(indexed);
 
-    let variation_data: Option<Arc<json_cache::VariationData>> = {
-        let vd = json_cache::load_all_variations(&args.json_cache)?;
-        if vd.variations.is_empty() {
-            None
-        } else {
-            Some(Arc::new(vd))
-        }
-    };
+    let variation_source: Option<Arc<VariationSource>> =
+        VariationSource::open_json_cache(&args.json_cache, false)?.map(Arc::new);
 
     let cache_load_ms = cache_start.elapsed().as_millis() as u64;
     eprintln!("Cache loaded in {cache_load_ms} ms");
@@ -277,11 +273,11 @@ fn main() -> Result<()> {
             annotate_consequences(
                 &mut batch,
                 &transcripts,
-                &variation_data,
+                &variation_source,
                 &effects_config,
                 use_parallel,
-            );
-        });
+            )
+        })?;
         let csq_ms = csq_start.elapsed().as_millis() as u64;
 
         let plugin_timings = if registry.plugin_count() > 0 {
@@ -442,15 +438,19 @@ fn parse_vcf_line(line: &str) -> Result<Vec<InputVariant>> {
 }
 
 /// Run consequence annotation on all variants (mirrors annotate_batch in runner.rs).
+///
+/// A variation-file read failure the batch's lookups record ends the run here,
+/// as the runner's batch driver does.
 fn annotate_consequences(
     variants: &mut [InputVariant],
     transcripts: &Arc<HashMap<String, TranscriptBinIndex>>,
-    variation_data: &Option<Arc<json_cache::VariationData>>,
+    variation_source: &Option<Arc<VariationSource>>,
     effects_config: &Arc<vep_effects::EffectsConfig>,
     use_parallel: bool,
-) {
+) -> Result<()> {
     use rayon::prelude::*;
 
+    let failure = ReadFailure::default();
     let annotate_one = |variant: &mut InputVariant| {
         if let Some(chr_transcripts) = transcripts.get(&variant.chr) {
             let variant_start = variant.start.min(variant.end);
@@ -464,17 +464,8 @@ fn annotate_consequences(
             });
         }
 
-        if let Some(ref vd) = variation_data {
-            if let Some(chr_vars) = vd.variations.get(&variant.chr) {
-                if let Some(chr_idx) = vd.position_index.get(&variant.chr) {
-                    let colocated =
-                        variation_matcher::find_colocated_variants(variant, chr_vars, chr_idx);
-                    for cv in &colocated {
-                        variant.existing_variation.push(cv.id.clone());
-                    }
-                    variant.colocated_variants = colocated;
-                }
-            }
+        if let Some(source) = variation_source {
+            variation_matcher::annotate_colocated(variant, source, &failure);
         }
 
         if variant.transcript_consequences.is_empty() && variant.most_severe_consequence.is_none() {
@@ -487,6 +478,10 @@ fn annotate_consequences(
     } else {
         variants.iter_mut().for_each(annotate_one);
     }
+    if let Some(message) = failure.take() {
+        return Err(CliError::new("cache", message).into());
+    }
+    Ok(())
 }
 
 fn build_report(

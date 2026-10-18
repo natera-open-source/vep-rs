@@ -1,11 +1,14 @@
 #!/usr/bin/perl
 # Converts an Ensembl VEP Storable transcript cache into the JSON cache vep-rs
 # reads: transcripts/<chr>/<start>-<end>.json for every chromosome directory,
-# info.json from the cache's info.txt, and its chr_synonyms.txt copied beside
-# them. Every field the cache dumper keeps on a transcript is written under its
-# own or a renamed key, flattened (a UTR object to its sequence, a protein
-# feature's analysis to its display label) or dropped under a rule the parity
-# audit names (the DROPPED table of scripts/concordance/cache_parity_audit.pl).
+# the variation files copied as they are into variations/<chr>/ (all_vars.gz with
+# its index, or the <start>-<end>_var.gz region files of a cache dumped without
+# the tabix conversion), info.json from the cache's info.txt, and its
+# chr_synonyms.txt copied beside them. Every field the cache dumper keeps on a
+# transcript is written under its own or a renamed key, flattened (a UTR object
+# to its sequence, a protein feature's analysis to its display label) or dropped
+# under a rule the parity audit names (the DROPPED table of
+# scripts/concordance/cache_parity_audit.pl).
 use strict;
 use warnings;
 use Storable qw(fd_retrieve);
@@ -389,6 +392,7 @@ unlink "$output_dir/info.json", "$output_dir/chr_synonyms.txt";
 my $total = 0;
 my $ok = 0;
 my $transcripts_total = 0;
+my $variation_files_total = 0;
 
 foreach my $chr (@chr_dirs) {
     my $chr_path = "$cache_dir/$chr";
@@ -451,7 +455,9 @@ foreach my $chr (@chr_dirs) {
         }
     }
     $transcripts_total += $chr_tx;
-    print "  chr$chr: " . scalar(@files) . " files, $chr_tx transcripts\n";
+    my $variation_files = copy_variation_files($chr_path, "$output_dir/variations/$chr", \@entries);
+    $variation_files_total += $variation_files;
+    print "  chr$chr: " . scalar(@files) . " files, $chr_tx transcripts, $variation_files variation files\n";
 }
 fail("no transcript shards (<start>-<end>.gz) under $cache_dir") unless $total;
 my $failed_shards = $total - $ok;
@@ -477,7 +483,31 @@ for my $tool (qw(sift polyphen)) {
 }
 write_info_json($info, "$output_dir/info.json");
 
-print "\nDone. Converted: $ok / $total files, $transcripts_total total transcripts\n";
+print "\nDone. Converted: $ok / $total files, $transcripts_total total transcripts, $variation_files_total variation files copied\n";
+
+# The variation files are read by vep-rs in the dumper's own format
+# (Pipeline/DumpVEP/Dumper/Variation.pm): all_vars.gz with the .csi or .tbi
+# tabix built on it, else every <start>-<end>_var.gz region file. Copied byte
+# for byte, never re-encoded. An all_vars.gz without its index stops the run:
+# the reader queries the index and never scans the file.
+sub copy_variation_files {
+    my ($chr_path, $out_chr, $entries) = @_;
+    my %present = map { $_ => 1 } @{$entries};
+    my @names_to_copy;
+    if ($present{'all_vars.gz'}) {
+        my ($index) = grep { $present{$_} } ('all_vars.gz.csi', 'all_vars.gz.tbi');
+        fail("$chr_path/all_vars.gz has no all_vars.gz.csi or all_vars.gz.tbi beside it") unless $index;
+        @names_to_copy = ('all_vars.gz', $index);
+    } else {
+        @names_to_copy = sort grep { /^\d+-\d+_var\.gz$/ } @{$entries};
+    }
+    return 0 unless @names_to_copy;
+    make_path($out_chr);
+    for my $name (@names_to_copy) {
+        copy("$chr_path/$name", "$out_chr/$name") or fail("copy of $chr_path/$name failed: $!");
+    }
+    return scalar @names_to_copy;
+}
 
 # info.txt is translated the way VEP's own reader does (CacheDir.pm
 # read_cache_info_file): every `source_<key>` line becomes a source version,

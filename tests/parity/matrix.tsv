@@ -70,7 +70,7 @@ buffer_size	Config.pm	implemented	open
 byte_transparent_input	-	implemented	open			
 cache	Config.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::perl_layout_resolves_leaf;crates/vep-cli/tests/cli_run_control.rs::no_cache_is_fatal_before_first_variant	tests/golden/116/GRCh38-run-control	
 cache-chr-synonyms	CacheDir.pm	implemented	open			
-cache-clin-sig-allele	Database/Variation.pm	implemented	open			
+cache-clin-sig-allele	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::parses_clin_sig_allele_entries_by_allele	tests/golden/116/GRCh38-colocated	
 cache-clinical-impact	Database/Variation.pm	implemented	open			
 cache-dir-resolution	CacheDir.pm	accepted_noop	open			
 cache-fasta-auto-detection	CacheDir.pm	implemented	open			
@@ -100,7 +100,7 @@ chromosome-absent-from-cache	Parser.pm	implemented	open
 chromosome-name-normalisation	Parser.pm	implemented	open			
 chromosome-synonyms	CacheDir.pm	implemented	open			
 clin-sig-somatic-pheno-columns	OutputFactory.pm	implemented	open			
-clin_sig	Database/Variation.pm	implemented	open			
+clin_sig	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::clin_sig_column_read_as_comma_list	tests/golden/116/GRCh38-colocated	
 clin_sig_allele	Config.pm	implemented	open			
 clin_sig_allele_revcomp_116	OutputFactory.pm	implemented	open			
 ClinPred	ClinPred.pm	implemented	open			
@@ -211,8 +211,8 @@ gff	Config.pm	error	open
 gff-gtf-transcript-source	BaseGXF.pm	documented_subset	open			
 given-ref-used-ref-columns	OutputFactory.pm	documented_subset	open			
 gnomADc	gnomADc.pm	implemented	open			
-gnomade-columns	OutputFactory.pm	implemented	open			
-gnomadg-columns	OutputFactory.pm	implemented	open			
+gnomade-columns	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::frequency_columns_follow_variation_cols_order	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
+gnomadg-columns	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::gnomadg_ami_column_is_read	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 gnomADMt	gnomADMt.pm	implemented	open			
 GO	GO.pm	error	open			
 gp	Parser/VCF.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::gp_is_refused		
@@ -521,11 +521,11 @@ validate-vf-checks	Parser.pm	documented_subset	open
 var_synonyms	Config.pm	implemented	open			
 variant_class	Config.pm	implemented	open			
 variant_recoder	VariantRecoder.pm::is_vr	documented_subset	open			
-variation-cache-columns	Database/Variation.pm	implemented	open			
+variation-cache-columns	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::columns_come_from_info_json_variation_cols;crates/vep-cli/src/variation_source.rs::every_116_column_is_read_on_both_assemblies	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 variation-coordinates	Database/Variation.pm	implemented	open			
-variation-files-as-input	Cache/Variation.pm	implemented	open			
+variation-files-as-input	Cache/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::reads_all_vars_gz_through_csi;crates/vep-cli/src/variation_source.rs::reads_per_region_var_gz	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 variation-strand	Database/Variation.pm	implemented	open			
-variation_name	Database/Variation.pm	implemented	open			
+variation_name	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::variation_name_is_the_second_column	tests/golden/116/GRCh38-colocated	
 VARITY	VARITY.pm	error	open			
 vcf	Config.pm	implemented	open			
 vcf-csq-info-header	VCF.pm	documented_subset	open			

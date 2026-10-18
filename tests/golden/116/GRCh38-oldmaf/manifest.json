@@ -1,0 +1,149 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "max_span": 1000000,
+ "covers": [
+  "old_maf"
+ ],
+ "excludes": {
+  "variation_records_named": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "reason": "COSMIC and HGMD-PUBLIC identifiers are not redistributed; the input records are chosen so that Ensembl VEP matches none of them"
+ },
+ "suites": {
+  "GRCh38-oldmaf": {
+   "reference": "grch38-oldmaf-default.txt",
+   "input": "grch38-oldmaf.vcf",
+   "rows": 104,
+   "combinations": 7
+  }
+ },
+ "combinations": {
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 4
+  },
+  "intergenic_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 4
+  },
+  "intron_variant": {
+   "observed_rows": 39,
+   "exemplar_records": 3
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 27,
+   "exemplar_records": 3
+  },
+  "missense_variant": {
+   "observed_rows": 9,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 4
+  }
+ },
+ "variant_classes": {
+  "snv": 104
+ },
+ "records": [
+  {
+   "suite": "GRCh38-oldmaf",
+   "vcf": "21\t5131441\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-oldmaf",
+   "vcf": "21\t5131480\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-oldmaf",
+   "vcf": "21\t5161864\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-oldmaf",
+   "vcf": "21\t6138391\t.\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-oldmaf",
+   "vcf": "21\t7759128\t.\tT\tA,G\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-oldmaf",
+   "vcf": "21\t9040338\t.\tT\tA,C\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-oldmaf",
+   "vcf": "21\t14967531\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-oldmaf",
+   "vcf": "21\t14981488\t.\tA\tC,G,T\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-oldmaf",
+   "vcf": "21\t44195140\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-oldmaf",
+   "vcf": "21\t44195140\t.\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 0,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

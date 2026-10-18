@@ -40,9 +40,109 @@ pub struct CacheInfo {
     pub source_versions: BTreeMap<String, String>,
 }
 
+impl CacheInfo {
+    /// Whether the variation files are one indexed `all_vars.gz` per chromosome
+    /// (`var_type tabix`, `CacheDir.pm:184` at release/116.2) rather than one
+    /// `<start>-<end>_var.gz` per region.
+    pub fn variation_is_tabix(&self) -> bool {
+        self.var_type.as_deref() == Some("tabix")
+    }
+
+    /// The column map of the variation files, when the cache declares one.
+    pub fn variation_columns(&self) -> Option<VariationColumns> {
+        (!self.variation_cols.is_empty())
+            .then(|| VariationColumns::new(self.variation_cols.clone()))
+    }
+}
+
+/// The columns Ensembl VEP's variation dumper writes before the population
+/// frequencies (`Database/Variation.pm:70-80` and
+/// `Pipeline/DumpVEP/Dumper/Variation.pm:181-188, 195` at release/116.2); every
+/// other name in `variation_cols` is a population frequency column.
+pub const FIXED_VARIATION_COLUMNS: &[&str] = &[
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms",
+];
+
+/// The column map of a variation cache: the names of its `variation_cols` line
+/// in file order, which is the order of the fields on every record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariationColumns {
+    names: Vec<String>,
+}
+
+impl VariationColumns {
+    pub fn new(names: Vec<String>) -> Self {
+        Self { names }
+    }
+
+    /// The column names in file order.
+    pub fn names(&self) -> &[String] {
+        &self.names
+    }
+
+    /// The 0-based field index of a column.
+    pub fn position(&self, name: &str) -> Option<usize> {
+        self.names.iter().position(|n| n == name)
+    }
+
+    /// The population frequency columns: every name outside
+    /// [`FIXED_VARIATION_COLUMNS`], in file order.
+    pub fn frequency_columns(&self) -> impl Iterator<Item = &str> {
+        self.names
+            .iter()
+            .map(String::as_str)
+            .filter(|name| !FIXED_VARIATION_COLUMNS.contains(name))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The `variation_cols` line of the release-116 GRCh38 cache's `info.txt`:
+    /// the fixed columns, then the 1000 Genomes, gnomAD exome and gnomAD genome
+    /// populations.
+    const RELEASE_116_GRCH38_COLS: &str = "chr,variation_name,failed,somatic,start,end,allele_string,strand,clin_sig,phenotype_or_disease,clin_sig_allele,clin_sig_ref_allele,clinical_impact,pubmed,var_synonyms,AF,AFR,AMR,EAS,EUR,SAS,gnomADe,gnomADe_AFR,gnomADe_AMR,gnomADe_ASJ,gnomADe_EAS,gnomADe_FIN,gnomADe_NFE,gnomADe_REMAINING,gnomADe_SAS,gnomADe_MID,gnomADg,gnomADg_AFR,gnomADg_AMI,gnomADg_AMR,gnomADg_ASJ,gnomADg_EAS,gnomADg_FIN,gnomADg_MID,gnomADg_NFE,gnomADg_REMAINING,gnomADg_SAS";
+
+    #[test]
+    fn variation_columns_split_fixed_from_frequency_names() {
+        let info = CacheInfo {
+            variation_cols: RELEASE_116_GRCH38_COLS
+                .split(',')
+                .map(str::to_string)
+                .collect(),
+            var_type: Some("tabix".to_string()),
+            ..Default::default()
+        };
+        assert!(info.variation_is_tabix());
+        let columns = info.variation_columns().unwrap();
+        assert_eq!(columns.names().len(), 42);
+        assert_eq!(columns.position("chr"), Some(0));
+        assert_eq!(columns.position("start"), Some(4));
+        assert_eq!(columns.position("gnomADg_AMI"), Some(33));
+        assert_eq!(columns.position("ASN"), None);
+        let frequencies: Vec<&str> = columns.frequency_columns().collect();
+        assert_eq!(frequencies.len(), 27);
+        assert_eq!(frequencies[0], "AF");
+        assert_eq!(frequencies[6], "gnomADe");
+        assert_eq!(frequencies[26], "gnomADg_SAS");
+        assert!(CacheInfo::default().variation_columns().is_none());
+        assert!(!CacheInfo::default().variation_is_tabix());
+    }
 
     #[test]
     fn test_cache_info_default() {

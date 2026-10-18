@@ -17,15 +17,28 @@ vep-rs can do without; `peptide` is not one of them (the reference peptide's seq
 are read from it, so a cache without it prints a non-ATG start codon's residue as the codon
 translates rather than as VEP's edited `M`) and is refused.
 
+`--variations <dir>` prunes the variation files beside the transcripts: `<dir>/<chr>/all_vars.gz`
+(an Ensembl VEP cache directory, or a converted cache's `variations/`) is read for every
+chromosome a record touches, and the records whose start lies within `--variation-flank`
+(1 bp by default, the window vep-rs and Ensembl VEP query) of a record span are written as
+`<dst>/variations/<chr>/all_vars.gz`, bgzip-compressed and indexed by a `.csi` on the start
+column, the layout and index the Ensembl VEP dumper writes. The start column is read from
+`variation_cols` of the `info.json` being written. `--exclude-variation <regex>` (repeatable)
+drops every record whose name matches, so a slice can leave out identifiers that are not
+redistributable; the summary counts the records kept and excluded per chromosome.
+
 `info.json` is the cache metadata vep-rs prints in its output headers. It is built from the
 Ensembl VEP cache's `info.txt` when `--perl-info` names one (every `source_<key>` line
 becomes a `source_versions` entry, `variation_cols` becomes a list, `cell_types` is dropped), else
 copied from the source cache, else written from `--species`, `--assembly` and
-`--cache-version`. `--info-only` writes just that file.
+`--cache-version`. `variation_cols` and `var_type` are kept only when the output carries a
+variation slice, so a cache's metadata never advertises variation data its directory lacks.
+`--info-only` writes just that file.
 
 Usage:
     prune_json_cache.py --cache <src-dir> --out <dst-dir> --vcf <a.vcf> [--vcf <b.vcf.gz>]
         [--flank 5000] [--gzip] [--drop sorted_exons ...] [--perl-info <cache>/info.txt]
+        [--variations <dir> [--variation-flank 1] [--exclude-variation <regex> ...]]
         [--species homo_sapiens --assembly GRCh37 --cache-version 116]
     prune_json_cache.py --info-only --out <dst-dir> --perl-info <cache>/info.txt --cache-version 116
 
@@ -38,7 +51,10 @@ import argparse
 import gzip
 import json
 import re
+import struct
 import sys
+import zlib
+from bisect import bisect_right
 from collections import defaultdict
 from pathlib import Path
 
@@ -136,6 +152,272 @@ def prune(cache: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank
     return {"transcripts_per_chromosome": kept, "shards": shards_written}
 
 
+# bgzip writes blocks of at most this many uncompressed bytes.
+BGZF_BLOCK_BYTES = 0xFF00
+# The 28-byte empty block bgzip ends every file with.
+BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
+# The binning parameters of the `.csi` files in the Ensembl VEP variation caches.
+CSI_MIN_SHIFT = 14
+CSI_DEPTH = 8
+# The distance, in compressed-file bytes between the blocks holding a bin's first and last
+# chunk, below which the bin's chunks are folded into its parent bin.
+MIN_MARKER_DIST = 0x10000
+# The tabix header's `format` field for a generic 1-based file (`tabix` without `-0`).
+TABIX_GENERIC_ONE_BASED = 0
+VARIATION_CHR_COLUMN = "chr"
+VARIATION_NAME_COLUMN = "variation_name"
+VARIATION_START_COLUMN = "start"
+VARIATION_COLUMNS_NEEDED = (VARIATION_CHR_COLUMN, VARIATION_NAME_COLUMN, VARIATION_START_COLUMN)
+
+
+def bgzf_block(data: bytes) -> bytes:
+    """One bgzf block: a gzip member with the `BC` extra field holding its own size."""
+    deflater = zlib.compressobj(6, zlib.DEFLATED, -15)
+    payload = deflater.compress(data) + deflater.flush()
+    block_size = 18 + len(payload) + 8
+    header = struct.pack("<4BIBBH2BHH", 0x1F, 0x8B, 8, 4, 0, 0, 0xFF, 6, ord("B"), ord("C"), 2, block_size - 1)
+    return header + payload + struct.pack("<II", zlib.crc32(data) & 0xFFFFFFFF, len(data))
+
+
+class BgzfWriter:
+    """Writes a bgzf file block by block and reports virtual offsets, as `bgzf_tell` does."""
+
+    def __init__(self, handle):
+        self.handle = handle
+        self.buffer = bytearray()
+        self.block_offset = 0
+
+    def tell(self) -> int:
+        """The virtual offset of the next byte: the block's file offset shifted by 16, plus the
+        offset inside the block."""
+        return (self.block_offset << 16) | len(self.buffer)
+
+    def write(self, data: bytes) -> None:
+        self.buffer += data
+        while len(self.buffer) >= BGZF_BLOCK_BYTES:
+            self._flush(BGZF_BLOCK_BYTES)
+
+    def _flush(self, size: int) -> None:
+        block = bgzf_block(bytes(self.buffer[:size]))
+        self.handle.write(block)
+        self.block_offset += len(block)
+        del self.buffer[:size]
+
+    def close(self) -> None:
+        if self.buffer:
+            self._flush(len(self.buffer))
+        self.handle.write(BGZF_EOF)
+
+
+def reg2bin(beg: int, end: int, min_shift: int = CSI_MIN_SHIFT, depth: int = CSI_DEPTH) -> int:
+    """The bin of a 0-based half-open interval (`hts_reg2bin`)."""
+    end -= 1
+    level, shift, offset = depth, min_shift, ((1 << (depth * 3)) - 1) // 7
+    while level > 0:
+        if beg >> shift == end >> shift:
+            return offset + (beg >> shift)
+        level -= 1
+        shift += 3
+        offset -= 1 << (level * 3)
+    return 0
+
+
+def bin_first(level: int) -> int:
+    return ((1 << (level * 3)) - 1) // 7
+
+
+def bin_level(b: int) -> int:
+    level = 0
+    while b:
+        b = (b - 1) >> 3
+        level += 1
+    return level
+
+
+def bin_bottom(b: int, depth: int = CSI_DEPTH) -> int:
+    """The first window, at the finest level, a bin covers (`hts_bin_bot`)."""
+    level = bin_level(b)
+    return (b - bin_first(level)) << ((depth - level) * 3)
+
+
+class CsiBuilder:
+    """Builds the CSI index `tabix -C -s <seq> -b <start> -e <start>` writes for one sequence
+    per file: records keyed by their start alone, binned with `CSI_MIN_SHIFT` and `CSI_DEPTH`,
+    the chunks of consecutive records of one bin merged, small bins folded into their parents,
+    and each bin's `loffset` taken from the linear index the way htslib fills it."""
+
+    def __init__(self, names: list[str], seq_col: int, start_col: int):
+        self.names = names
+        self.seq_col = seq_col
+        self.start_col = start_col
+        # Per reference: bin -> [[chunk_begin, chunk_end], ...], linear index, record count.
+        self.bins: list[dict[int, list[list[int]]]] = [{} for _ in names]
+        # None marks a window no record has reached yet; the first record's virtual offset
+        # is 0, so 0 cannot.
+        self.linear: list[list[int | None]] = [[] for _ in names]
+        self.counts = [0] * len(names)
+        self.first_offset = [None] * len(names)
+        self.open_run: tuple[int, int, int] | None = None  # (tid, bin, run begin offset)
+
+    def _insert_chunk(self, tid: int, b: int, begin: int, end: int) -> None:
+        chunks = self.bins[tid].setdefault(b, [])
+        if chunks and chunks[-1][1] >> 16 == begin >> 16:
+            chunks[-1][1] = end
+        else:
+            chunks.append([begin, end])
+
+    def add(self, tid: int, start: int, offset: int) -> None:
+        """Adds a record at 1-based `start` whose bytes begin at virtual offset `offset`."""
+        beg, end = start - 1, start
+        b = reg2bin(beg, end)
+        linear = self.linear[tid]
+        window = beg >> CSI_MIN_SHIFT
+        if window >= len(linear):
+            linear.extend([None] * (window + 1 - len(linear)))
+        if linear[window] is None:
+            linear[window] = offset
+        if self.open_run is None or self.open_run[:2] != (tid, b):
+            if self.open_run is not None:
+                run_tid, run_bin, run_begin = self.open_run
+                self._insert_chunk(run_tid, run_bin, run_begin, offset)
+            self.open_run = (tid, b, offset)
+        if self.first_offset[tid] is None:
+            self.first_offset[tid] = offset
+        self.counts[tid] += 1
+
+    def finish(self, final_offset: int) -> bytes:
+        if self.open_run is not None:
+            run_tid, run_bin, run_begin = self.open_run
+            self._insert_chunk(run_tid, run_bin, run_begin, final_offset)
+            self.open_run = None
+        n_bins = bin_first(CSI_DEPTH + 1)
+        meta_bin = n_bins + 1
+        out = bytearray(b"CSI\x01")
+        names_blob = b"".join(name.encode() + b"\0" for name in self.names)
+        aux = struct.pack("<7i", TABIX_GENERIC_ONE_BASED, self.seq_col, self.start_col, self.start_col, ord("#"), 0, len(names_blob)) + names_blob
+        out += struct.pack("<iii", CSI_MIN_SHIFT, CSI_DEPTH, len(aux)) + aux
+        out += struct.pack("<i", len(self.names))
+        for tid, bins in enumerate(self.bins):
+            linear = self.linear[tid]
+            for i, entry in enumerate(linear):
+                if entry is None:
+                    linear[i] = linear[i - 1] if i else self.first_offset[tid]
+            loffset = {}
+            for b in bins:
+                bottom = bin_bottom(b)
+                loffset[b] = linear[bottom] if bottom < len(linear) else 0
+            # `compress_binning`: fold a bin whose chunks span less than MIN_MARKER_DIST of
+            # compressed file into its parent, deepest level first, when the parent holds records;
+            # then sort bin 0 and merge adjacent chunks that start in the same block.
+            for level in range(CSI_DEPTH, 0, -1):
+                first, next_first = bin_first(level), bin_first(level + 1)
+                for b in sorted(k for k in bins if first <= k < next_first):
+                    chunks = bins[b]
+                    if level < CSI_DEPTH and len(chunks) > 1:
+                        chunks.sort()
+                    if (chunks[-1][1] >> 16) - (chunks[0][0] >> 16) < MIN_MARKER_DIST:
+                        parent = (b - 1) >> 3
+                        if parent in bins:
+                            bins[parent].extend(chunks)
+                            del bins[b]
+            if 0 in bins:
+                bins[0].sort()
+            for chunks in bins.values():
+                merged = [chunks[0]]
+                for chunk in chunks[1:]:
+                    if merged[-1][1] >> 16 >= chunk[0] >> 16:
+                        merged[-1][1] = max(merged[-1][1], chunk[1])
+                    else:
+                        merged.append(chunk)
+                chunks[:] = merged
+            if self.counts[tid]:
+                bins[meta_bin] = [[self.first_offset[tid], final_offset], [self.counts[tid], 0]]
+            out += struct.pack("<i", len(bins))
+            for b in sorted(bins):
+                chunks = bins[b]
+                out += struct.pack("<IQi", b, loffset.get(b, 0), len(chunks))
+                for begin, end in chunks:
+                    out += struct.pack("<QQ", begin, end)
+        out += struct.pack("<Q", 0)
+        return bytes(out)
+
+
+def variation_windows(spans: list[tuple[int, int]], flank: int) -> list[tuple[int, int]]:
+    """The sorted, merged start windows the spans of one chromosome query."""
+    windows = sorted((max(s - flank, 1), e + flank) for s, e in spans)
+    merged: list[tuple[int, int]] = []
+    for low, high in windows:
+        if merged and low <= merged[-1][1] + 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], high))
+        else:
+            merged.append((low, high))
+    return merged
+
+
+def start_in_windows(start: int, windows: list[tuple[int, int]], lows: list[int]) -> bool:
+    """Whether `start` lies in one of the sorted, disjoint `windows`, whose lower bounds are `lows`."""
+    i = bisect_right(lows, start)
+    return i > 0 and start <= windows[i - 1][1]
+
+
+def prune_variations(src: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank: int,
+                     columns: list[str], exclude: list[re.Pattern]) -> dict:
+    """Writes `<out>/variations/<chr>/all_vars.gz` and its `.csi` for every chromosome of
+    `spans` whose `<src>/<chr>/all_vars.gz` exists: the records whose start lies within `flank`
+    of a span, in file order, minus those whose name matches a pattern of `exclude`. `columns`
+    is the cache's `variation_cols`, which the caller has checked names every column of
+    `VARIATION_COLUMNS_NEEDED`."""
+    chr_col = columns.index(VARIATION_CHR_COLUMN)
+    name_col = columns.index(VARIATION_NAME_COLUMN)
+    start_col = columns.index(VARIATION_START_COLUMN)
+    last_field = max(name_col, start_col)
+    summary: dict[str, dict] = {}
+    for chrom, chrom_spans in sorted(spans.items()):
+        source = src / chrom / "all_vars.gz"
+        if not source.is_file():
+            continue
+        windows = variation_windows(chrom_spans, flank)
+        lows = [w[0] for w in windows]
+        kept = excluded = 0
+        dst_dir = out / "variations" / chrom
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        dst = dst_dir / "all_vars.gz"
+        index_dst = dst_dir / "all_vars.gz.csi"
+        index = CsiBuilder([chrom], chr_col + 1, start_col + 1)
+        with gzip.open(source, "rb") as reader, dst.open("wb") as raw:
+            writer = BgzfWriter(raw)
+            for line in reader:
+                fields = line.split(b"\t", last_field + 1)
+                start = int(fields[start_col])
+                if start > windows[-1][1]:
+                    break
+                if not start_in_windows(start, windows, lows):
+                    continue
+                if any(pattern.search(fields[name_col].decode()) for pattern in exclude):
+                    excluded += 1
+                    continue
+                index.add(0, start, writer.tell())
+                writer.write(line)
+                kept += 1
+            writer.close()
+            final_offset = writer.tell()
+        if kept == 0:
+            dst.unlink()
+            index_dst.unlink(missing_ok=True)
+            if not any(dst_dir.iterdir()):
+                dst_dir.rmdir()
+        else:
+            with index_dst.open("wb") as raw:
+                index_writer = BgzfWriter(raw)
+                index_writer.write(index.finish(final_offset))
+                index_writer.close()
+        summary[chrom] = {"kept": kept, "excluded": excluded, "windows": len(windows)}
+    variations_dir = out / "variations"
+    if variations_dir.is_dir() and not any(variations_dir.iterdir()):
+        variations_dir.rmdir()
+    return summary
+
+
 LIST_KEYS = ("variation_cols",)
 FLAG_KEYS = ("regulatory",)
 # Cell-type names contain commas, so the line cannot be split into a list; VEP stores it as
@@ -164,13 +446,19 @@ def info_from_perl_info_txt(text: str, cache_version: int | None) -> dict:
             info[key] = value not in ("", "0", "-")
         elif value != "-":
             info[key] = value
-    if info.get("cache_version") is None and "cache_version" in info:
+    if cache_version is not None:
+        info["cache_version"] = cache_version
+    elif isinstance(info.get("cache_version"), str):
         info["cache_version"] = int(info["cache_version"])
     return info
 
 
-def write_info(out: Path, args) -> int:
-    dest = out / "info.json"
+VARIATION_INFO_KEYS = ("variation_cols", "var_type")
+
+
+def cache_info(args) -> dict | int:
+    """The `info.json` object for the output: from `--perl-info`, else the source cache's own,
+    else the command line; an exit status when the options do not name one."""
     if args.perl_info is not None:
         info = info_from_perl_info_txt(Path(args.perl_info).read_text(encoding="utf-8"), args.cache_version)
         if args.assembly is not None:
@@ -180,18 +468,27 @@ def write_info(out: Path, args) -> int:
         if info.get("assembly") is None or info.get("cache_version") is None:
             print("ERROR: [prune_json_cache] --perl-info lacks assembly or cache version; pass --assembly/--cache-version", file=sys.stderr)
             return 2
-        dest.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        return 0
+        return info
     info_src = args.cache / "info.json" if args.cache is not None else None
     if info_src is not None and info_src.is_file():
-        dest.write_text(info_src.read_text(encoding="utf-8"), encoding="utf-8")
-        return 0
+        return json.loads(info_src.read_text(encoding="utf-8"))
     if args.assembly is None or args.cache_version is None:
         print("ERROR: [prune_json_cache] source has no info.json; pass --perl-info or --assembly and --cache-version", file=sys.stderr)
         return 2
-    info = {"species": args.species, "assembly": args.assembly, "cache_version": args.cache_version, "source_versions": {}}
-    dest.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return 0
+    return {"species": args.species, "assembly": args.assembly, "cache_version": args.cache_version, "source_versions": {}}
+
+
+def has_variation_files(out: Path) -> bool:
+    return any((out / "variations").glob("*/all_vars.gz")) or any((out / "variations").glob("*/*_var.gz"))
+
+
+def write_info(out: Path, info: dict) -> None:
+    """Writes `info.json`, without the variation keys when the output holds no variation file."""
+    info = dict(info)
+    if not has_variation_files(out):
+        for key in VARIATION_INFO_KEYS:
+            info.pop(key, None)
+    (out / "info.json").write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -207,6 +504,13 @@ def main(argv: list[str] | None = None) -> int:
                          "protein_function_predictions serve only --domains, --sift and --polyphen; "
                          "peptide is refused")
     ap.add_argument("--perl-info", type=Path, default=None, help="Ensembl VEP cache info.txt to derive info.json from")
+    ap.add_argument("--variations", type=Path, default=None,
+                    help="a directory holding <chr>/all_vars.gz: its records within --variation-flank of a record span are "
+                         "written as a bgzip and csi-indexed slice under variations/")
+    ap.add_argument("--variation-flank", type=int, default=1,
+                    help="how far from a record span a variation record's start may lie and still be kept (default 1)")
+    ap.add_argument("--exclude-variation", action="append", default=[], metavar="REGEX",
+                    help="drop every variation record whose name matches (repeatable)")
     ap.add_argument("--info-only", action="store_true", help="write info.json and nothing else")
     ap.add_argument("--species", default="homo_sapiens")
     ap.add_argument("--assembly", default=None)
@@ -216,22 +520,50 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: [prune_json_cache] --drop peptide: vep-rs reads the reference peptide's sequence edits from it", file=sys.stderr)
         return 2
     args.out.mkdir(parents=True, exist_ok=True)
+    info = cache_info(args)
+    if isinstance(info, int):
+        return info
     if args.info_only:
-        return write_info(args.out, args)
+        write_info(args.out, info)
+        return 0
     if args.cache is None or not (args.cache / "transcripts").is_dir():
         print(f"ERROR: [prune_json_cache] {args.cache} has no transcripts/ directory", file=sys.stderr)
         return 2
     if not args.vcf:
         print("ERROR: [prune_json_cache] at least one --vcf is required", file=sys.stderr)
         return 2
+    columns: list[str] = []
+    exclude: list[re.Pattern] = []
+    if args.variations is not None:
+        if args.variation_flank < 0:
+            print(f"ERROR: [prune_json_cache] --variation-flank {args.variation_flank}: a distance is not negative", file=sys.stderr)
+            return 2
+        columns = info.get("variation_cols") or []
+        if not isinstance(columns, list):
+            print(f"ERROR: [prune_json_cache] --variations needs variation_cols as a list of column names in the info being written, not {columns!r}", file=sys.stderr)
+            return 2
+        missing = [name for name in VARIATION_COLUMNS_NEEDED if name not in columns]
+        if missing:
+            print(f"ERROR: [prune_json_cache] --variations needs variation_cols naming {', '.join(missing)} in the info being written (--perl-info or the source info.json)", file=sys.stderr)
+            return 2
+        try:
+            exclude = [re.compile(pattern) for pattern in args.exclude_variation]
+        except re.error as error:
+            print(f"ERROR: [prune_json_cache] --exclude-variation {error.pattern!r}: {error}", file=sys.stderr)
+            return 2
     spans: dict[str, list[tuple[int, int]]] = defaultdict(list)
     for vcf in args.vcf:
         for chrom, s in record_spans(vcf).items():
             spans[chrom].extend(s)
+    # Checked before `prune()` writes the transcript shards, so a refused run leaves no partial output.
+    if args.variations is not None and not any((args.variations / chrom / "all_vars.gz").is_file() for chrom in spans):
+        print(f"ERROR: [prune_json_cache] --variations {args.variations}: no <chr>/all_vars.gz for any chromosome of the records ({', '.join(sorted(spans))})", file=sys.stderr)
+        return 2
     summary = prune(args.cache, args.out, spans, args.flank, args.gzip, tuple(args.drop))
-    rc = write_info(args.out, args)
-    if rc:
-        return rc
+    if args.variations is not None:
+        summary["variations_per_chromosome"] = prune_variations(
+            args.variations, args.out, spans, args.variation_flank, columns, exclude)
+    write_info(args.out, info)
     summary["spans_by_chromosome"] = {c: len(v) for c, v in sorted(spans.items())}
     print(json.dumps(summary))
     return 0

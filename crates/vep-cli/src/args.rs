@@ -488,6 +488,10 @@ pub struct Args {
     #[arg(help_heading = "Allele Frequencies", long)]
     pub pubmed: bool,
 
+    /// Rewrite the AFR, AMR, ASN and EUR frequency values of each co-located variant as a bare minor-allele frequency: the allele is stripped, the first value kept and a value above 0.5 inverted; the allele-keyed frequency columns then find no allele in them and print empty
+    #[arg(help_heading = "Allele Frequencies", long = "old_maf")]
+    pub old_maf: bool,
+
     /// Add gene-phenotype associations
     #[arg(help_heading = "Allele Frequencies", long = "gene_phenotype")]
     pub gene_phenotype: bool,

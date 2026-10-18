@@ -1,0 +1,326 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "max_span": 1000000,
+ "covers": [
+  "variation-files-as-input",
+  "variation-cache-columns",
+  "cache-clin-sig-allele",
+  "gnomade-columns",
+  "gnomadg-columns",
+  "variation_name",
+  "clin_sig"
+ ],
+ "excludes": {
+  "variation_records_named": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "reason": "COSMIC and HGMD-PUBLIC identifiers are not redistributed; the input records are chosen so that Ensembl VEP matches none of them"
+ },
+ "suites": {
+  "GRCh38-colocated": {
+   "reference": "grch38-default.txt",
+   "input": "grch38.vcf",
+   "rows": 181,
+   "combinations": 14
+  }
+ },
+ "combinations": {
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 7
+  },
+  "frameshift_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "intergenic_variant": {
+   "observed_rows": 18,
+   "exemplar_records": 16
+  },
+  "intron_variant": {
+   "observed_rows": 43,
+   "exemplar_records": 5
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 31,
+   "exemplar_records": 4
+  },
+  "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 15,
+   "exemplar_records": 2
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 2
+  },
+  "protein_altering_variant": {
+   "observed_rows": 13,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 4
+  }
+ },
+ "variant_classes": {
+  "deletion": 17,
+  "insertion": 23,
+  "snv": 141
+ },
+ "records": [
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5029945\t.\tGG\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5030192\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5030287\t.\tA\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5030482\t.\tGGGAGGGGTGG\tGG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5030602\t.\tA\tAA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5030602\t.\tA\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5030625\t.\tGCAT\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5030633\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5030664\t.\tA\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5031926\t.\tT\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5032970\t.\tT\tTCAGTGAG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5033370\t.\tC\tCA,CT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5131441\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5131480\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5161864\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5230609\t.\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t6138391\t.\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t7759128\t.\tT\tA,G\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t9040338\t.\tT\tA,C\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t10503115\t.\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t10541121\t.\tG\tA,T\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant",
+    "intron_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t10602054\t.\tATA\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
+    "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t13610458\t.\tC\tA,G,T\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t14967531\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t14981488\t.\tA\tC,G,T\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t38403526\t.\tT\tTTCC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "protein_altering_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t44195140\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t44195140\t.\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t44293150\t.\tTGTGTGTG\tTGTGTG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 0,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

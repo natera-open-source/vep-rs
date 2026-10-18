@@ -1,0 +1,34 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf",
+ "sha256": {
+  "default.txt": "87828bf1b7ba721db9d3c4f47f3fb9f29ea08de4bb4521421ced363627ef5e80",
+  "tab.txt": "985c9722f8d672573eb3720b45d1a39c3f22ffcc5ad11784660865d6431c5499",
+  "vcf.vcf": "2da79ab5de37f6026304d05b5c55ff7eec7c69ed08dbdf4997cf2f9257e504ba",
+  "json.jsonl": "242fecd5c7a2a69c9ecac44c0538f9814daec1aba309b562f55da9f2c01287cf"
+ },
+ "variants_vcf_sha256": "2d664d2a59a0c5c4166d5514742200be6e5988fee135c634049707dbb8e67619",
+ "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "variation_slice": {
+  "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
+  "window": "records whose start lies within one base of an input record's span",
+  "windows": 27,
+  "records_kept": 78,
+  "records_excluded": 5,
+  "excludes": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "sha256": {
+   "all_vars.gz": "eaeb2826c44c0c888bf095ca28a3132603a818019dbd91e568ced4a2f5f18865",
+   "all_vars.gz.csi": "e6385368be589e50fdcb5ce33c848c9b794d3e2c846194ae0cdd3ce8a4b3ae95"
+  },
+  "slice_check": "Ensembl VEP 116.2 run on this slice and on the full cache with --check_existing --af --af_1kg --af_gnomade --af_gnomadg --max_af --pubmed --var_synonyms --clinvar_somatic_classification --failed 1 wrote identical default-format output for every record"
+ }
+}

@@ -21,6 +21,7 @@ use std::time::Duration;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use vep_cli::json_cache;
+use vep_cli::variation_source::VariationSource;
 
 /// Root of the JSON cache (relative to workspace root).
 const CACHE_DIR: &str = "tmp/concordance/cache_json";
@@ -94,7 +95,7 @@ fn bench_load_variations(c: &mut Criterion) {
 
     c.bench_function("cache_loading/variations", |b| {
         b.iter(|| {
-            json_cache::load_all_variations(&dir).expect("variation loading failed");
+            VariationSource::open_json_cache(&dir, false).expect("variation source failed");
         });
     });
 }
