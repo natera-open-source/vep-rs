@@ -473,27 +473,32 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long)]
     pub canonical: bool,
 
-    /// Add MANE Select and MANE Plus Clinical flags
+    /// Add the MANE, MANE_SELECT and MANE_PLUS_CLINICAL columns: the MANE sets the transcript
+    /// belongs to and the RefSeq accession each set names (switches on --mane_select)
     #[arg(help_heading = "Output Control", long)]
     pub mane: bool,
 
-    /// Add MANE Select flag only
+    /// Add the MANE and MANE_SELECT columns alone: MANE lists MANE_Select on a MANE Select
+    /// transcript and MANE_SELECT carries its RefSeq accession
     #[arg(help_heading = "Output Control", long = "mane_select")]
     pub mane_select: bool,
 
-    /// Add Transcript Support Level
+    /// Add the TSL column: the digit of the transcript's support level, empty for tslNA (the GRCh37
+    /// gene set carries no level)
     #[arg(help_heading = "Output Control", long)]
     pub tsl: bool,
 
-    /// Add APPRIS isoform annotation
+    /// Add the APPRIS column with the grade abbreviated as Ensembl VEP prints it: principal1 is P1,
+    /// alternative2 is A2, principalM is PM
     #[arg(help_heading = "Output Control", long)]
     pub appris: bool,
 
-    /// Add CCDS transcript ID
+    /// Add the CCDS column: the transcript's CCDS identifier (a native cache carries it from the
+    /// GFF3; no RefSeq or merged cache is built natively)
     #[arg(help_heading = "Output Control", long)]
     pub ccds: bool,
 
-    /// Add Ensembl protein ID
+    /// Add the ENSP column: the Ensembl protein identifier
     #[arg(help_heading = "Output Control", long)]
     pub protein: bool,
 
@@ -501,13 +506,25 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long = "protein_version")]
     pub protein_version: bool,
 
-    /// Add UniProt cross-references
+    /// Add the SWISSPROT, TREMBL, UNIPARC and UNIPROT_ISOFORM columns: the translation's UniProt
+    /// cross-references (a native cache carries them only when built with --core-dumps)
     #[arg(help_heading = "Output Control", long)]
     pub uniprot: bool,
 
-    /// Add RefSeq transcript cross-references
+    /// Add the RefSeq column: the RefSeq mRNA identifiers cross-referenced to the transcript (a
+    /// native cache carries them only when built with --core-dumps)
     #[arg(help_heading = "Output Control", long = "xref_refseq")]
     pub xref_refseq: bool,
+
+    /// Append the transcript's version to the Feature column (ENST00000366667.4) unless the
+    /// identifier already ends in one
+    #[arg(help_heading = "Output Control", long = "transcript_version")]
+    pub transcript_version: bool,
+
+    /// Append the gene's version to the Gene column (ENSG00000142168.14) unless the identifier
+    /// already ends in one
+    #[arg(help_heading = "Output Control", long = "gene_version")]
+    pub gene_version: bool,
 
     /// Add HGVS coding and protein notations; needs a FASTA named with --fasta or found in the cache directory and stops the run without one
     #[arg(help_heading = "Output Control", long)]
@@ -658,7 +675,8 @@ pub struct Args {
     #[arg(help_heading = "Allele Frequencies", long = "old_maf")]
     pub old_maf: bool,
 
-    /// Add gene-phenotype associations
+    /// Add the GENE_PHENO column: 1 on a transcript whose gene the cache associates with a
+    /// phenotype, disease or trait, empty otherwise
     #[arg(help_heading = "Allele Frequencies", long = "gene_phenotype")]
     pub gene_phenotype: bool,
 
@@ -861,7 +879,9 @@ pub struct Args {
     #[arg(help_heading = "Miscellaneous", long = "allow_non_variant")]
     pub allow_non_variant: bool,
 
-    /// Add the miRNA column (accepted for VEP compatibility; the value is not computed and stays empty)
+    /// Add the miRNA column: the secondary-structure elements of a miRNA transcript the variant
+    /// overlaps, as the SO terms miRNA_stem and miRNA_loop (a native cache carries the structure
+    /// only when built with --core-dumps)
     #[arg(help_heading = "Miscellaneous", long)]
     pub mirna: bool,
 
@@ -1146,6 +1166,51 @@ mod tests {
             Config::from_argv(["vep", "--protein_version", "--mask_header_cache_path"]).unwrap();
         assert!(config.protein_version);
         assert!(config.mask_header_cache_path);
+    }
+
+    /// `--transcript_version` and `--gene_version` parse as the version flags
+    /// (Config.pm:191-192 at release/116.2), and `--mane` sets
+    /// `mane_plus_clinical` as its option set does (Config.pm:580-586) while
+    /// `--mane_select` alone leaves it off.
+    #[test]
+    fn version_flags_and_mane_option_set_parse() {
+        let versioned =
+            Config::from_argv(["vep", "--transcript_version", "--gene_version"]).unwrap();
+        assert!(versioned.transcript_version && versioned.gene_version);
+        let plain = Config::from_argv(["vep"]).unwrap();
+        assert!(!plain.transcript_version && !plain.gene_version && !plain.mane_plus_clinical);
+        let mane = Config::from_argv(["vep", "--mane"]).unwrap();
+        assert!(mane.mane && mane.mane_select && mane.mane_plus_clinical);
+        let select = Config::from_argv(["vep", "--mane_select"]).unwrap();
+        assert!(select.mane_select && !select.mane && !select.mane_plus_clinical);
+    }
+
+    /// The help of the attribute flags whose column Ensembl VEP fills from a
+    /// source some caches lack states the exclusion the CLI reference prints:
+    /// `--tsl` the GRCh37 gene set, `--uniprot`, `--xref_refseq` and `--mirna`
+    /// a native cache built without `--core-dumps`, `--ccds` the RefSeq and
+    /// merged cache types no native build produces.
+    #[test]
+    fn attribute_flags_state_their_documented_exclusions() {
+        let mut command = Args::command_with_error_table();
+        command.build();
+        let help = |flag: &str| {
+            command
+                .get_arguments()
+                .find(|a| a.get_long() == Some(flag))
+                .and_then(|a| a.get_long_help().or(a.get_help()))
+                .map(|h| h.to_string())
+                .unwrap()
+        };
+        assert!(help("tsl").contains("GRCh37 gene set carries no level"));
+        for flag in ["uniprot", "xref_refseq", "mirna"] {
+            let text = help(flag);
+            assert!(
+                text.contains("only when built with --core-dumps"),
+                "{flag}: {text}"
+            );
+        }
+        assert!(help("ccds").contains("no RefSeq or merged cache is built natively"));
     }
 
     /// `--regulatory_gff` is refused: regulatory annotation is not supported.

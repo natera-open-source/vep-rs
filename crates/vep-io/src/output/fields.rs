@@ -17,7 +17,7 @@
 use std::collections::BTreeSet;
 
 use vep_core::consequence::{Consequence, TranscriptConsequence};
-use vep_core::sv_routing::perl_true;
+use vep_core::sv_routing::{perl_split, perl_true};
 use vep_core::terms::Vocabulary;
 use vep_core::variant::{colocated_in_output_order, ColocatedVariant, InputVariant, VariantClass};
 use vep_core::variation::reverse_comp;
@@ -59,8 +59,14 @@ pub struct FieldOptions {
     pub symbol: bool,
     pub biotype: bool,
     pub canonical: bool,
+    /// `--mane_select`, which `--mane` implies: `MANE` lists `MANE_Select` and
+    /// `MANE_SELECT` carries the accession.
     pub mane_select: bool,
+    /// `--mane` alone adds the `MANE_PLUS_CLINICAL` column.
     pub mane: bool,
+    /// Set by `--mane` and by no flag of its own: `MANE` lists
+    /// `MANE_Plus_Clinical` and `MANE_PLUS_CLINICAL` carries the accession.
+    pub mane_plus_clinical: bool,
     pub tsl: bool,
     pub gencode_primary: bool,
     pub appris: bool,
@@ -100,6 +106,10 @@ pub struct FieldOptions {
     pub shift_genomic: bool,
     pub var_synonyms: bool,
     pub regulatory: bool,
+    /// `--transcript_version`: `Feature` carries the transcript's `.<version>`.
+    pub transcript_version: bool,
+    /// `--gene_version`: `Gene` carries the gene's `.<version>`.
+    pub gene_version: bool,
     pub ambiguity: bool,
     /// VEP's `--no_escape` (implied by `--json`): HGVSp keeps its `=` instead of
     /// the `%3D` the text formats print, and a gene symbol's whitespace stays in
@@ -807,6 +817,53 @@ pub fn format_freq(f: f64) -> String {
     out
 }
 
+/// The version `--transcript_version` and `--gene_version` append to a stable
+/// id as `.<version>` (OutputFactory.pm:1465 and :1469 at release/116.2):
+/// `Some` only for a non-empty id with a known, non-zero version that does not
+/// already end in `.<digits>`.
+pub fn version_suffix(id: &str, version: Option<u32>) -> Option<u32> {
+    let version = version.filter(|v| *v != 0)?;
+    if id.is_empty() {
+        return None;
+    }
+    let already_versioned = id
+        .rsplit_once('.')
+        .is_some_and(|(_, tail)| !tail.is_empty() && tail.bytes().all(|b| b.is_ascii_digit()));
+    (!already_versioned).then_some(version)
+}
+
+/// `id`, with `.<version>` appended when `flag` is on and [`version_suffix`]
+/// yields one.
+fn versioned_id(id: &str, version: Option<u32>, flag: bool) -> String {
+    if !flag {
+        return id.to_string();
+    }
+    match version_suffix(id, version) {
+        Some(version) => format!("{id}.{version}"),
+        None => id.to_string(),
+    }
+}
+
+/// A cache identifier field as Ensembl VEP reads it: the cache's `-` stands for
+/// no value and sets nothing (OutputFactory.pm:1525-1572 at release/116.2), and
+/// a comma-separated list of accessions is split as Perl's `split` splits it
+/// ([`perl_split`]: a trailing comma adds no element), which the formats join
+/// with their own separator.
+fn identifier_list(value: Option<&str>, list_sep: &str) -> String {
+    match value {
+        None | Some("-") => String::new(),
+        Some(v) => perl_split(v, &[',']).collect::<Vec<_>>().join(list_sep),
+    }
+}
+
+/// A cache identifier field that is one value: the `-` sentinel prints nothing.
+fn identifier(value: Option<&str>) -> String {
+    match value {
+        None | Some("-") => String::new(),
+        Some(v) => v.to_string(),
+    }
+}
+
 /// The value of one named field for one row, or an empty string when the field
 /// is absent on this row. `list_sep` joins list-valued fields (`,` in the default
 /// and tab formats, `&` inside a VCF CSQ entry). Field names not in the table are
@@ -875,16 +932,20 @@ fn row_field_value(
                     .map(|c| c.impact().to_string())
             })
             .unwrap_or_else(|| Consequence::IntergenicVariant.impact().to_string()),
-        "SYMBOL" => tc
-            .and_then(|x| x.gene_symbol.as_deref())
-            .unwrap_or("")
-            .to_string(),
-        "Gene" => tc.map(|x| x.gene_id.as_ref()).unwrap_or("").to_string(),
+        "SYMBOL" => identifier(tc.and_then(|x| x.gene_symbol.as_deref())),
+        "Gene" => tc
+            .map(|x| versioned_id(&x.gene_id, x.gene_version, options.gene_version))
+            .unwrap_or_default(),
         "Feature_type" => tc.map(|x| x.feature_type.to_string()).unwrap_or_default(),
         "Feature" => tc
-            .map(|x| x.transcript_id.as_ref())
-            .unwrap_or("")
-            .to_string(),
+            .map(|x| {
+                versioned_id(
+                    &x.transcript_id,
+                    x.transcript_version,
+                    options.transcript_version,
+                )
+            })
+            .unwrap_or_default(),
         "BIOTYPE" => tc
             .and_then(|x| x.biotype.as_deref())
             .unwrap_or("")
@@ -974,14 +1035,8 @@ fn row_field_value(
                 String::new()
             }
         }
-        "SYMBOL_SOURCE" => tc
-            .and_then(|x| x.gene_symbol_source.as_deref())
-            .unwrap_or("")
-            .to_string(),
-        "HGNC_ID" => tc
-            .and_then(|x| x.hgnc_id.as_deref())
-            .unwrap_or("")
-            .to_string(),
+        "SYMBOL_SOURCE" => identifier(tc.and_then(|x| x.gene_symbol_source.as_deref())),
+        "HGNC_ID" => identifier(tc.and_then(|x| x.hgnc_id.as_deref())),
         "CANONICAL" => {
             if tc.map(|x| x.canonical).unwrap_or(false) {
                 "YES".to_string()
@@ -989,20 +1044,29 @@ fn row_field_value(
                 String::new()
             }
         }
+        // The MANE sets the transcript belongs to, each listed under its own
+        // flag state (OutputFactory.pm:1587-1601): `--mane_select` alone never
+        // lists `MANE_Plus_Clinical`.
         "MANE" => {
             let mut sets = Vec::new();
-            if tc.and_then(|x| x.mane_select.as_ref()).is_some() {
+            if options.mane_select && tc.is_some_and(|x| x.mane_select.is_some()) {
                 sets.push("MANE_Select");
             }
-            if tc.and_then(|x| x.mane_plus_clinical.as_ref()).is_some() {
+            if options.mane_plus_clinical && tc.is_some_and(|x| x.mane_plus_clinical.is_some()) {
                 sets.push("MANE_Plus_Clinical");
             }
             sets.join(list_sep)
         }
-        "MANE_SELECT" => tc.and_then(|x| x.mane_select.clone()).unwrap_or_default(),
+        "MANE_SELECT" => tc
+            .and_then(|x| x.mane_select.as_deref())
+            .filter(|v| perl_true(v))
+            .unwrap_or("")
+            .to_string(),
         "MANE_PLUS_CLINICAL" => tc
-            .and_then(|x| x.mane_plus_clinical.clone())
-            .unwrap_or_default(),
+            .and_then(|x| x.mane_plus_clinical.as_deref())
+            .filter(|v| perl_true(v))
+            .unwrap_or("")
+            .to_string(),
         "TSL" => tc
             .and_then(|x| x.tsl.map(|t| t.to_string()))
             .unwrap_or_default(),
@@ -1013,24 +1077,35 @@ fn row_field_value(
                 String::new()
             }
         }
-        "APPRIS" => tc.and_then(|x| x.appris.clone()).unwrap_or_default(),
-        "CCDS" => tc.and_then(|x| x.ccds.clone()).unwrap_or_default(),
-        "ENSP" => tc
-            .and_then(|x| x.protein_id.as_deref())
-            .unwrap_or("")
-            .to_string(),
-        "SWISSPROT" => tc.and_then(|x| x.swissprot.clone()).unwrap_or_default(),
-        "TREMBL" => tc.and_then(|x| x.trembl.clone()).unwrap_or_default(),
+        // `s/principal/P/; s/alternative/A/` (OutputFactory.pm:1616-1622): one
+        // substitution each, the rest of the value kept, so `principalM` is `PM`.
+        "APPRIS" => tc
+            .and_then(|x| x.appris.as_deref())
+            .filter(|v| perl_true(v))
+            .map(|v| {
+                v.replacen("principal", "P", 1)
+                    .replacen("alternative", "A", 1)
+            })
+            .unwrap_or_default(),
+        "CCDS" => identifier(tc.and_then(|x| x.ccds.as_deref())),
+        "ENSP" => identifier(tc.and_then(|x| x.protein_id.as_deref())),
+        "SWISSPROT" => identifier_list(tc.and_then(|x| x.swissprot.as_deref()), list_sep),
+        "TREMBL" => identifier_list(tc.and_then(|x| x.trembl.as_deref()), list_sep),
+        "UNIPARC" => identifier_list(tc.and_then(|x| x.uniparc.as_deref()), list_sep),
+        "UNIPROT_ISOFORM" => {
+            identifier_list(tc.and_then(|x| x.uniprot_isoform.as_deref()), list_sep)
+        }
         "HGVSg" => variant.hgvsg.clone().unwrap_or_default(),
-        "UNIPARC" | "UNIPROT_ISOFORM" | "miRNA" | "CHECK_REF" => String::new(),
-        "RefSeq" => tc.and_then(|x| x.refseq.clone()).unwrap_or_default(),
+        "CHECK_REF" => String::new(),
+        "RefSeq" => identifier_list(tc.and_then(|x| x.refseq.as_deref()), list_sep),
         "GENE_PHENO" => {
-            if options.gene_phenotype && variant.colocated_variants.iter().any(|cv| cv.phenotype) {
+            if tc.is_some_and(|x| x.gene_phenotype) {
                 "1".to_string()
             } else {
                 String::new()
             }
         }
+        "miRNA" => tc.map(|x| x.mirna.join(list_sep)).unwrap_or_default(),
         "DOMAINS" => tc
             .map(|x| {
                 x.domains
@@ -1984,6 +2059,414 @@ mod tests {
             field_description("GENCODE_PRIMARY"),
             Some("Reports if transcript is GENCODE primary")
         );
+    }
+
+    /// A transcript row of the attributes corpus: the NDUFV3 transcript
+    /// ENST00000354250 as Ensembl VEP 116.2 reports it for `21 42893293 C T`
+    /// under the attribute flags (`MANE=MANE_Select;MANE_SELECT=NM_021075.4;
+    /// TSL=1;APPRIS=PM;CCDS=CCDS33572.1;...;SWISSPROT=P56181.185;
+    /// UNIPARC=UPI000037848B;UNIPROT_ISOFORM=P56181-2;RefSeq=NM_021075.4`),
+    /// with the cache's raw attribute values on the consequence.
+    fn ndufv3_consequence() -> TranscriptConsequence {
+        TranscriptConsequence {
+            transcript_id: std::sync::Arc::from("ENST00000354250"),
+            gene_id: std::sync::Arc::from("ENSG00000160194"),
+            transcript_version: Some(7),
+            gene_version: Some(20),
+            gene_symbol: Some("NDUFV3".into()),
+            biotype: Some("protein_coding".into()),
+            canonical: true,
+            mane_select: Some("NM_021075.4".to_string()),
+            tsl: Some(1),
+            appris: Some("principalM".to_string()),
+            ccds: Some("CCDS33572.1".to_string()),
+            protein_id: Some("ENSP00000346196".into()),
+            swissprot: Some("P56181.185".to_string()),
+            trembl: Some("-".to_string()),
+            uniparc: Some("UPI000037848B".to_string()),
+            uniprot_isoform: Some("P56181-2".to_string()),
+            refseq: Some("NM_021075.4".to_string()),
+            gene_phenotype: false,
+            ..Default::default()
+        }
+    }
+
+    fn attribute_options() -> FieldOptions {
+        FieldOptions {
+            symbol: true,
+            biotype: true,
+            canonical: true,
+            mane: true,
+            mane_select: true,
+            mane_plus_clinical: true,
+            tsl: true,
+            appris: true,
+            ccds: true,
+            protein: true,
+            uniprot: true,
+            xref_refseq: true,
+            gene_phenotype: true,
+            mirna: true,
+            transcript_version: true,
+            gene_version: true,
+            ..Default::default()
+        }
+    }
+
+    fn value(field: &str, tc: &TranscriptConsequence, options: &FieldOptions) -> String {
+        let v = InputVariant::new(
+            "21".into(),
+            42_893_293,
+            42_893_293,
+            b"C".to_vec(),
+            b"T".to_vec(),
+        );
+        field_value(field, &v, Some(tc), options, ",")
+    }
+
+    /// `s/principal/P/` and `s/alternative/A/` (OutputFactory.pm:1616-1622 at
+    /// release/116.2) abbreviate the grade and keep the rest, so `principalM` is
+    /// `PM` (ENST00000354250 above) and `alternativeM` is `AM` (its neighbour
+    /// ENST00000340344 on the same record: `APPRIS=AM`); `principal1` is `P1`,
+    /// `alternative2` is `A2`, and an empty value sets nothing.
+    #[test]
+    fn appris_prints_p_and_a_prefixes() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("APPRIS", &tc, &options), "PM");
+        for (raw, printed) in [
+            ("alternativeM", "AM"),
+            ("principal1", "P1"),
+            ("alternative2", "A2"),
+            ("principal4", "P4"),
+        ] {
+            tc.appris = Some(raw.to_string());
+            assert_eq!(value("APPRIS", &tc, &options), printed, "{raw}");
+        }
+        tc.appris = Some(String::new());
+        assert_eq!(value("APPRIS", &tc, &options), "");
+        tc.appris = None;
+        assert_eq!(value("APPRIS", &tc, &options), "");
+    }
+
+    /// `CANONICAL` is the literal `YES` on the canonical transcript and absent
+    /// otherwise (OutputFactory.pm:1577; `CANONICAL=YES` on ENST00000354250 and
+    /// no key on ENST00000340344).
+    #[test]
+    fn canonical_prints_yes() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("CANONICAL", &tc, &options), "YES");
+        tc.canonical = false;
+        assert_eq!(value("CANONICAL", &tc, &options), "");
+    }
+
+    /// `BIOTYPE` is the transcript's biotype under `--biotype`
+    /// (OutputFactory.pm:1580; `BIOTYPE=protein_coding` above) and is not a
+    /// column without the flag.
+    #[test]
+    fn biotype_column_under_flag() {
+        let tc = ndufv3_consequence();
+        assert_eq!(
+            value("BIOTYPE", &tc, &attribute_options()),
+            "protein_coding"
+        );
+        assert!(flag_fields(&attribute_options()).contains(&"BIOTYPE"));
+        assert!(!flag_fields(&FieldOptions::default()).contains(&"BIOTYPE"));
+    }
+
+    /// The cache writes `-` where a transcript has no CCDS identifier; Ensembl
+    /// VEP sets `CCDS` only for a value other than `-` (OutputFactory.pm:1534-1537),
+    /// so the default format's Extra column carries no `CCDS=-`.
+    #[test]
+    fn ccds_dash_sentinel_suppressed() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("CCDS", &tc, &options), "CCDS33572.1");
+        tc.ccds = Some("-".to_string());
+        assert_eq!(value("CCDS", &tc, &options), "");
+        tc.ccds = None;
+        assert_eq!(value("CCDS", &tc, &options), "");
+    }
+
+    /// `SWISSPROT`, `TREMBL`, `UNIPARC` and `UNIPROT_ISOFORM` each print nothing
+    /// for the cache's `-` (OutputFactory.pm:1568-1574 reads `-` as undefined):
+    /// the row above carries `SWISSPROT`, `UNIPARC` and `UNIPROT_ISOFORM` and no
+    /// `TREMBL`, whose cache value is `-`.
+    #[test]
+    fn uniprot_dash_sentinel_suppressed() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("TREMBL", &tc, &options), "");
+        assert_eq!(value("SWISSPROT", &tc, &options), "P56181.185");
+        tc.swissprot = Some("-".to_string());
+        tc.uniparc = Some("-".to_string());
+        tc.uniprot_isoform = Some("-".to_string());
+        for field in ["SWISSPROT", "TREMBL", "UNIPARC", "UNIPROT_ISOFORM"] {
+            assert_eq!(value(field, &tc, &options), "", "{field}");
+        }
+    }
+
+    /// `UNIPARC` and `UNIPROT_ISOFORM` carry the cache's values
+    /// (`UNIPARC=UPI000037848B;UNIPROT_ISOFORM=P56181-2` above); a
+    /// comma-separated accession list is a list in every format, joined by the
+    /// format's separator (`TREMBL=L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN` on the
+    /// GRCh37 APP transcript ENST00000346798 for `21 27253471 A G`; `&` inside
+    /// a VCF entry).
+    #[test]
+    fn uniparc_and_isoform_columns_populated() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("UNIPARC", &tc, &options), "UPI000037848B");
+        assert_eq!(value("UNIPROT_ISOFORM", &tc, &options), "P56181-2");
+        tc.trembl = Some("L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN".to_string());
+        assert_eq!(
+            value("TREMBL", &tc, &options),
+            "L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN"
+        );
+        let v = InputVariant::new(
+            "21".into(),
+            27_253_471,
+            27_253_471,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        );
+        assert_eq!(
+            field_value("TREMBL", &v, Some(&tc), &options, "&"),
+            "L7XE61_HUMAN&L7XCZ9_HUMAN&B7Z313_HUMAN"
+        );
+        tc.trembl = Some("A,,B,".to_string());
+        assert_eq!(value("TREMBL", &tc, &options), "A,,B");
+        let fields = flag_fields(&options);
+        let at = |name: &str| fields.iter().position(|f| *f == name).unwrap();
+        assert!(at("SWISSPROT") < at("TREMBL") && at("TREMBL") < at("UNIPARC"));
+        assert!(at("UNIPARC") < at("UNIPROT_ISOFORM"));
+    }
+
+    /// `RefSeq` is the comma-separated list of RefSeq transcript ids split into
+    /// a list (`[split(',', $tr->{_refseq})]`, OutputFactory.pm:1540-1543;
+    /// `RefSeq=NM_198996.4,NM_001302998.2` on the LIPI transcript
+    /// ENST00000681601 for `21 14108946 C T`) and absent for the cache's `-`.
+    #[test]
+    fn refseq_dash_sentinel_suppressed() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        tc.refseq = Some("NM_198996.4,NM_001302998.2".to_string());
+        assert_eq!(value("RefSeq", &tc, &options), "NM_198996.4,NM_001302998.2");
+        tc.refseq = Some("-".to_string());
+        assert_eq!(value("RefSeq", &tc, &options), "");
+        tc.refseq = None;
+        assert_eq!(value("RefSeq", &tc, &options), "");
+    }
+
+    /// `GENE_PHENO` is the literal `1` when the transcript's gene has a
+    /// phenotype association count above zero and absent otherwise
+    /// (OutputFactory.pm:1586 reads `$tr->{_gene_phenotype}` for truth;
+    /// `GENE_PHENO=1` on the COL6A2 transcript ENST00000397763 for
+    /// `21 46098139 T C`, no key on NDUFV3's ENST00000354250 above); the
+    /// co-located variants play no part.
+    #[test]
+    fn gene_pheno_from_transcript_count() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("GENE_PHENO", &tc, &options), "");
+        tc.gene_phenotype = true;
+        assert_eq!(value("GENE_PHENO", &tc, &options), "1");
+        let mut v = InputVariant::new("21".into(), 1, 1, b"A".to_vec(), b"G".to_vec());
+        v.colocated_variants
+            .push(vep_core::variant::ColocatedVariant {
+                id: "rs1".to_string(),
+                phenotype: true,
+                ..Default::default()
+            });
+        tc.gene_phenotype = false;
+        assert_eq!(field_value("GENE_PHENO", &v, Some(&tc), &options, ","), "");
+    }
+
+    /// `--gene_version` appends `.<version>` to the Gene column
+    /// (OutputFactory.pm:1469: `ENSG00000160194.20` above); nothing is appended
+    /// without the flag, without a version, or to an id already ending in
+    /// `.<digits>`.
+    #[test]
+    fn gene_version_suffix_on_gene_column() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("Gene", &tc, &options), "ENSG00000160194.20");
+        let off = FieldOptions {
+            gene_version: false,
+            ..attribute_options()
+        };
+        assert_eq!(value("Gene", &tc, &off), "ENSG00000160194");
+        tc.gene_version = None;
+        assert_eq!(value("Gene", &tc, &options), "ENSG00000160194");
+        tc.gene_version = Some(0);
+        assert_eq!(value("Gene", &tc, &options), "ENSG00000160194");
+        tc.gene_id = std::sync::Arc::from("ENSG00000160194.3");
+        tc.gene_version = Some(20);
+        assert_eq!(value("Gene", &tc, &options), "ENSG00000160194.3");
+        assert_eq!(version_suffix("NM_001.2", Some(5)), None);
+        assert_eq!(version_suffix("NM_001.a", Some(5)), Some(5));
+        assert_eq!(version_suffix("", Some(5)), None);
+    }
+
+    /// `--transcript_version` appends `.<version>` to the Feature column
+    /// (OutputFactory.pm:1465: `ENST00000354250.7` above) under the same rule.
+    #[test]
+    fn transcript_version_suffix_on_feature() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("Feature", &tc, &options), "ENST00000354250.7");
+        let off = FieldOptions {
+            transcript_version: false,
+            ..attribute_options()
+        };
+        assert_eq!(value("Feature", &tc, &off), "ENST00000354250");
+        tc.transcript_id = std::sync::Arc::from("NM_021075.4");
+        assert_eq!(value("Feature", &tc, &options), "NM_021075.4");
+    }
+
+    /// Under `--mane`, `MANE` lists `MANE_Select` for a MANE Select transcript
+    /// and `MANE_Plus_Clinical` for a MANE Plus Clinical one, in that order when
+    /// a transcript carries both, and `MANE_SELECT` and `MANE_PLUS_CLINICAL`
+    /// carry the attribute values (OutputFactory.pm:1587-1601;
+    /// `MANE=MANE_Select;MANE_SELECT=NM_021075.4` above and
+    /// `MANE=MANE_Plus_Clinical;MANE_PLUS_CLINICAL=NM_058174.3` on COL6A2's
+    /// ENST00000397763 for `21 46098139 T C`). Inside a VCF entry the list
+    /// joins with `&`.
+    #[test]
+    fn mane_lists_select_then_plus_clinical() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("MANE", &tc, &options), "MANE_Select");
+        assert_eq!(value("MANE_SELECT", &tc, &options), "NM_021075.4");
+        assert_eq!(value("MANE_PLUS_CLINICAL", &tc, &options), "");
+        tc.mane_select = None;
+        tc.mane_plus_clinical = Some("NM_058174.3".to_string());
+        assert_eq!(value("MANE", &tc, &options), "MANE_Plus_Clinical");
+        assert_eq!(value("MANE_SELECT", &tc, &options), "");
+        assert_eq!(value("MANE_PLUS_CLINICAL", &tc, &options), "NM_058174.3");
+        tc.mane_select = Some("NM_021075.4".to_string());
+        assert_eq!(
+            value("MANE", &tc, &options),
+            "MANE_Select,MANE_Plus_Clinical"
+        );
+        let v = InputVariant::new("21".into(), 1, 1, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(
+            field_value("MANE", &v, Some(&tc), &options, "&"),
+            "MANE_Select&MANE_Plus_Clinical"
+        );
+        tc.mane_select = None;
+        tc.mane_plus_clinical = None;
+        assert_eq!(value("MANE", &tc, &options), "");
+    }
+
+    /// `MANE_SELECT` is the `MANE_Select` attribute's value as the cache spells
+    /// it, a RefSeq accession with its version (`NM_021075.4` above;
+    /// `NR_185847.1` is the attribute a non-coding MANE Select transcript of the
+    /// GRCh38 cache carries), never the transcript's own name; an attribute
+    /// present with an empty or `0` value still lists the set but sets no
+    /// accession (OutputFactory.pm:1588-1592).
+    #[test]
+    fn mane_select_value_is_attribute_verbatim() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("MANE_SELECT", &tc, &options), "NM_021075.4");
+        tc.mane_select = Some("NR_185847.1".to_string());
+        assert_eq!(value("MANE_SELECT", &tc, &options), "NR_185847.1");
+        tc.mane_select = Some(String::new());
+        assert_eq!(value("MANE_SELECT", &tc, &options), "");
+        assert_eq!(value("MANE", &tc, &options), "MANE_Select");
+        tc.mane_select = Some("0".to_string());
+        assert_eq!(value("MANE_SELECT", &tc, &options), "");
+        assert_eq!(value("MANE", &tc, &options), "MANE_Select");
+    }
+
+    /// `--mane_select` alone sets Ensembl VEP's `mane_select` and not
+    /// `mane_plus_clinical` (Config.pm:580-586 ties the pair to `--mane`), so a
+    /// MANE Plus Clinical transcript gets no `MANE` list entry and the
+    /// `MANE_PLUS_CLINICAL` column is not produced (Constants.pm:88).
+    #[test]
+    fn mane_select_alone_omits_plus_clinical() {
+        let options = FieldOptions {
+            mane_select: true,
+            ..Default::default()
+        };
+        let mut tc = ndufv3_consequence();
+        tc.mane_plus_clinical = Some("NM_058174.3".to_string());
+        assert_eq!(value("MANE", &tc, &options), "MANE_Select");
+        tc.mane_select = None;
+        assert_eq!(value("MANE", &tc, &options), "");
+        assert_eq!(
+            flag_fields(&options),
+            vec![
+                "IMPACT",
+                "DISTANCE",
+                "STRAND",
+                "FLAGS",
+                "MANE",
+                "MANE_SELECT"
+            ]
+        );
+        assert!(!field_is_produced("MANE_PLUS_CLINICAL", &options));
+        let both = FieldOptions {
+            mane: true,
+            mane_select: true,
+            mane_plus_clinical: true,
+            ..Default::default()
+        };
+        assert_eq!(value("MANE", &tc, &both), "MANE_Plus_Clinical");
+        assert!(field_is_produced("MANE_PLUS_CLINICAL", &both));
+    }
+
+    /// `TSL` prints the digits alone (`TSL=1` for `tsl1`, and for
+    /// `tsl1 (assigned to previous version 4)` on the TPTE transcript
+    /// ENST00000618007; OutputFactory.pm:1609-1613 keeps `$1` of `m/tsl(\d+)/`
+    /// when it is not zero) and nothing for `tslNA`, which the loader leaves
+    /// `None`.
+    #[test]
+    fn tsl_prints_digit_only() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("TSL", &tc, &options), "1");
+        tc.tsl = Some(5);
+        assert_eq!(value("TSL", &tc, &options), "5");
+        tc.tsl = None;
+        assert_eq!(value("TSL", &tc, &options), "");
+    }
+
+    /// The `miRNA` column joins the structure terms the consequence carries with
+    /// the format's separator (`miRNA=miRNA_loop,miRNA_stem` on the MIR6724-2
+    /// transcript ENST00000616483 for the deletion `21 8249508 TGCG T`; `&`
+    /// inside a VCF entry) and is empty when the consequence carries none.
+    #[test]
+    fn mirna_column_joins_the_terms() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        assert_eq!(value("miRNA", &tc, &options), "");
+        tc.mirna = vec!["miRNA_loop".to_string(), "miRNA_stem".to_string()];
+        assert_eq!(value("miRNA", &tc, &options), "miRNA_loop,miRNA_stem");
+        let v = InputVariant::new("21".into(), 1, 1, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(
+            field_value("miRNA", &v, Some(&tc), &options, "&"),
+            "miRNA_loop&miRNA_stem"
+        );
+        assert!(flag_fields(&options).contains(&"miRNA"));
+        assert!(!field_is_produced("miRNA", &FieldOptions::default()));
+    }
+
+    /// `SYMBOL`, `SYMBOL_SOURCE`, `HGNC_ID` and `ENSP` print nothing for the
+    /// cache's `-` (OutputFactory.pm:1525-1530, 1556-1559).
+    #[test]
+    fn identifier_columns_read_dash_as_absent() {
+        let options = attribute_options();
+        let mut tc = ndufv3_consequence();
+        tc.gene_symbol = Some("-".into());
+        tc.gene_symbol_source = Some("-".into());
+        tc.hgnc_id = Some("-".into());
+        tc.protein_id = Some("-".into());
+        for field in ["SYMBOL", "SYMBOL_SOURCE", "HGNC_ID", "ENSP"] {
+            assert_eq!(value(field, &tc, &options), "", "{field}");
+        }
     }
 
     #[test]

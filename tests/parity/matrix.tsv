@@ -1,12 +1,12 @@
 item	perl_reference	target	state	test1	test2	interim
 _ccds	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/gff3.rs::ccdsid_becomes_ccds;crates/vep-cache-builder/src/core_dumps.rs::ccds_and_refseq_from_transcript_xrefs	tests/golden/116/GRCh38-native-builder	
 _gene_hgnc_id	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/core_dumps.rs::hgnc_id_from_display_xref;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::native_cache_matches_the_ensembl_cache_with_core_dumps	tests/golden/116/GRCh38-native-builder	
-_gene_phenotype	Database/Transcript.pm	implemented	open			
+_gene_phenotype	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/core_dumps.rs::gene_phenotype_count_from_phenotype_feature;crates/vep-cache-builder/src/core_dumps.rs::gene_phenotype_unknown_without_variation_tables	tests/golden/116/GRCh38-native-builder	
 _gene_symbol	Database/Transcript.pm	implemented	open			
 _gene_symbol_source	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/core_dumps.rs::symbol_source_from_xref_external_db;crates/vep-cache-builder/src/core_dumps.rs::symbol_source_rfam_and_entrezgene	tests/golden/116/GRCh38-native-builder	
-_gene_version	Database/Transcript.pm	implemented	open			
-_uniparc	Database/Transcript.pm	implemented	open			
-_uniprot_isoform	Database/Transcript.pm	implemented	open			
+_gene_version	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/gff3.rs::gene_version_from_gff3;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::native_cache_matches_the_ensembl_cache_with_core_dumps;crates/vep-cli/src/json_cache.rs::gene_version_loaded	tests/golden/116/GRCh38-native-builder	
+_uniparc	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/core_dumps.rs::uniparc_from_translation_xref	tests/golden/116/GRCh38-native-builder	
+_uniprot_isoform	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/core_dumps.rs::ccds_and_refseq_from_transcript_xrefs;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::native_cache_matches_the_ensembl_cache_with_core_dumps;crates/vep-cli/src/json_cache.rs::uniprot_isoform_loaded	tests/golden/116/GRCh38-native-builder	
 aa-ea-esp-columns	-	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::legacy_esp_columns_change_no_output		
 af	Config.pm	implemented	open			
 af-1kg-columns	OutputFactory.pm	implemented	open			
@@ -41,15 +41,15 @@ api-remote-tabix-files	BaseVepTabixPlugin.pm	accepted_noop	open
 api-run-perl-plugin	BaseVepPlugin.pm	error	open			
 api-safe	Config.pm	implemented	open			
 api-unknown-plugin-name	Runner.pm	error	open			
-appris	OutputFactory.pm	implemented	open			
+appris	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::appris_prints_p_and_a_prefixes	tests/golden/116/GRCh38-attributes	
 assembly	CacheDir.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/cache_resolve.rs::assembly_mismatch_with_info_json_is_fatal;crates/vep-cli/src/cache_resolve.rs::assembly_inferred_from_cache_feeds_plugin_hint	tests/golden/116/GRCh38-run-control	
-attribute-appris	OutputFactory.pm	implemented	open			
+attribute-appris	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::appris_derived_from_attribute	tests/golden/116/GRCh38-attributes	
 attribute-gencode-basic	AnnotationType/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/gff3.rs::gencode_basic_tag_both_spellings	tests/golden/116/GRCh38-native-builder	
 attribute-gencode-primary	AnnotationType/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/gff3.rs::gencode_primary_tag_from_gff3	tests/golden/116/GRCh38-native-builder	
-attribute-mane-plus-clinical	OutputFactory.pm	implemented	open			
+attribute-mane-plus-clinical	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::mane_plus_clinical_derived_from_attribute	tests/golden/116/GRCh38-attributes	
 attribute-mane-select	OutputFactory.pm	implemented	open			
-attribute-mirna	VariationEffect.pm	documented_subset	open			
-attribute-ncrna	OutputFactory.pm	implemented	open			
+attribute-mirna	VariationEffect.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/src/core_dumps.rs::mirna_attribute_from_transcript_attrib;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::gff3_only_exclusions_are_documented	tests/golden/116/GRCh38-native-builder	
+attribute-ncrna	OutputFactory.pm	implemented	landed:implemented	crates/vep-cache-builder/src/core_dumps.rs::ncrna_structure_from_transcript_attrib	tests/golden/116/GRCh38-native-builder	
 attribute-tsl	OutputFactory.pm	implemented	landed:implemented	crates/vep-cache-builder/src/gff3.rs::tsl_from_transcript_support_level;crates/vep-cache-builder/src/core_dumps.rs::kept_attributes_in_table_order	tests/golden/116/GRCh38-native-builder	
 attributes-cds-start-end-nf	OutputFactory.pm	implemented	landed:implemented	crates/vep-cache-builder/src/core_dumps.rs::cds_nf_from_transcript_attrib;crates/vep-cache-builder/src/core_dumps.rs::cds_start_nf_precedes_cds_end_nf;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::gtf_cds_flags_join_the_gff3_attributes	tests/golden/116/GRCh38-native-builder	
 attributes-rseq-refseq-compare	OutputFactory.pm	documented_subset	open			
@@ -62,7 +62,7 @@ BayesDel	BayesDel.pm	implemented	open
 bcf-input	-	error	landed:error	crates/vep-cli/tests/cli_errors.rs::bcf_input_is_refused		
 bigwig	Config.pm	implemented	open			
 bioconda-distribution	-	implemented	open			
-biotype	OutputFactory.pm	implemented	open			
+biotype	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::biotype_column_under_flag	tests/golden/116/GRCh38	
 Blosum62	Blosum62.pm	error	open			
 bnd_intergenic_rows_116	Variation/StructuralVariationOverlap.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::breakend_record_with_both_sides_intergenic_writes_two_intergenic_rows;crates/vep-cli/src/runner.rs::breakend_record_whose_mate_is_genic_writes_no_intergenic_row;crates/vep-cli/src/runner.rs::single_breakend_record_with_no_transcript_writes_one_intergenic_row;crates/vep-cli/src/runner.rs::genic_breakend_record_with_intergenic_mate_names_its_own_allele_n_dot;crates/vep-cli/src/runner.rs::breakend_intergenic_verdict_is_per_record;crates/vep-cli/src/annotator.rs::annotator_applies_the_breakend_record_verdict;crates/vep-cli/src/vcf_parser.rs::bracket_breakend_without_mateid_names_its_own_allele_n_dot	tests/golden/116/GRCh38-release116	
 breakends	VCF.pm	implemented	open			
@@ -81,10 +81,10 @@ cache-valid-chromosomes	CacheDir.pm	implemented	landed:implemented	crates/vep-cl
 cache_version	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::cache_version_selects_directory	tests/golden/116/GRCh38-run-control	
 CADD	CADD.pm	implemented	open			
 caid-input-format	CAID.pm	error	landed:error	crates/vep-io/src/input/detect.rs::caid_line_is_detected;crates/vep-cli/tests/cli_errors.rs::format_caid_is_refused		
-canonical	OutputFactory.pm	implemented	open			
+canonical	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::canonical_prints_yes	tests/golden/116/GRCh38-attributes	
 CAPICE	CAPICE.pm	error	open			
 Carol	Carol.pm	error	open			
-ccds	OutputFactory.pm	documented_subset	open			
+ccds	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/fields.rs::ccds_dash_sentinel_suppressed;crates/vep-cli/src/variation_matcher.rs::extra_column_skips_the_dash_sentinel;crates/vep-cli/src/args.rs::attribute_flags_state_their_documented_exclusions	tests/golden/116/GRCh38-attributes	
 CCDSFilter	CCDSFilter.pm	error	open			
 cdna-and-coding-region-bounds	-	implemented	open			
 cell-type-header-and-field-group	Constants.pm	implemented	open			
@@ -201,8 +201,8 @@ gencode_basic	AnnotationType/Transcript.pm	implemented	landed:implemented	crates
 gencode_primary	AnnotationType/Transcript.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::gencode_primary_filters_transcript_set;crates/vep-cli/src/config.rs::gencode_primary_refuses_gencode_basic	tests/golden/116/GRCh38-gencode-primary	
 gene-stable-id-and-gene	Database/Transcript.pm	implemented	open			
 gene-symbol-id	Database/Transcript.pm	accepted_noop	open			
-gene_phenotype	OutputFactory.pm	implemented	open			
-gene_version	OutputFactory.pm	implemented	open			
+gene_phenotype	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::gene_pheno_from_transcript_count	tests/golden/116/GRCh38-attributes	
+gene_version	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::gene_version_suffix_on_gene_column;crates/vep-cli/src/render.rs::default_format_appends_the_versions_under_their_flags	tests/golden/116/GRCh38-attributes	
 GeneBe	GeneBe.pm	error	open			
 GeneSplicer	GeneSplicer.pm	error	open			
 Geno2MP	Geno2MP.pm	error	open			
@@ -263,7 +263,7 @@ input_data	Runner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_inp
 input_file	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_input.rs::stdin_literal_is_case_insensitive;crates/vep-cli/tests/cli_input.rs::missing_input_file_is_fatal	tests/golden/116/GRCh38-run-control	
 install-pl-auto	INSTALL.pl	implemented	open			
 IntAct	IntAct.pm	error	open			
-is_canonical	Database/Transcript.pm	implemented	open			
+is_canonical	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::is_canonical_from_int_or_bool	tests/golden/116/GRCh38-attributes	
 is_multispecies	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::is_multispecies_is_refused		
 iupac-alleles	Parser.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::iupac_allele_is_annotated_not_skipped		
 json	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::json_with_vcf_or_tab_is_perls_error;crates/vep-cli/src/runner.rs::json_flag_implies_no_escape	tests/golden/116/GRCh38-writers	
@@ -282,9 +282,9 @@ lookup_ref	Parser.pm	implemented	open
 LOVD	LOVD.pm	error	open			
 lowercase-alleles	Parser.pm	implemented	open			
 lrg	Parser.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::lrg_is_refused		
-mane	OutputFactory.pm	implemented	open			
-mane-alternative-id-values	OutputFactory.pm	implemented	open			
-mane_select	OutputFactory.pm	implemented	open			
+mane	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::mane_lists_select_then_plus_clinical	tests/golden/116/GRCh38-attributes	
+mane-alternative-id-values	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::mane_select_value_is_attribute_verbatim	tests/golden/116/GRCh38-attributes	
+mane_select	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::mane_select_alone_omits_plus_clinical;crates/vep-cli/src/args.rs::version_flags_and_mane_option_set_parse	tests/golden/116/GRCh38-mane-select	
 mask_header_cache_path	Config.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::mask_header_cache_path_masks_every_header_surface;crates/vep-cli/src/runner.rs::collapse_paths_follows_mask_data_paths;crates/vep-cli/src/args.rs::protein_version_and_mask_header_cache_path_parse	tests/golden/116/GRCh38-release116	
 Mastermind	Mastermind.pm	error	open			
 MaveDB	MaveDB.pm	error	open			
@@ -298,7 +298,7 @@ memory_footprint_statement	-	documented_subset	open
 merged	CacheDir.pm	documented_subset	open			
 minimal	Config.pm	implemented	open			
 minor-allele-columns	BaseCacheVariation.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::minor_allele_columns_change_no_output		
-mirna	OutputFactory.pm	implemented	open			
+mirna	OutputFactory.pm	implemented	landed:implemented	crates/vep-effects/src/consequences.rs::mirna_stem_and_loop_from_structure;crates/vep-io/src/output/fields.rs::mirna_column_joins_the_terms;crates/vep-io/src/output/json.rs::mirna_and_mane_are_arrays	tests/golden/116/GRCh38-attributes	
 most-severe-summary-output-shape	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/render.rs::most_severe_row_prints_dash_allele_feature_columns_and_extra;crates/vep-io/src/output/fields.rs::summary_row_tab_cells_are_dashes;crates/vep-io/src/output/json.rs::summary_entry_is_intergenic_consequences_with_consequence_terms_only	tests/golden/116/GRCh38-pick-summary	
 most-severe-summary-regulatory-terms	OutputFactory.pm	implemented	open			
 most-severe-with-regulatory	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/pick.rs::most_severe_documents_the_regulatory_exclusion	tests/golden/116/GRCh38-pick-summary	
@@ -375,7 +375,7 @@ PrimateAI	PrimateAI.pm	implemented	open
 process_ref_homs	Parser/VCF.pm	implemented	open			
 progress-line	-	implemented	open			
 PromoterAI	PromoterAI.pm	error	open			
-protein	OutputFactory.pm	implemented	open			
+protein	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::protein_version_prints_only_with_protein;crates/vep-io/src/output/fields.rs::identifier_columns_read_dash_as_absent	tests/golden/116/GRCh38-release116	
 protein-id	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/gff3.rs::protein_id_and_version_from_cds_line;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::native_cache_matches_the_ensembl_cache_with_core_dumps	tests/golden/116/GRCh38-native-builder	
 protein_version	Config.pm	implemented	landed:implemented	crates/vep-effects/src/consequences.rs::protein_version_appends_the_translation_version;crates/vep-effects/src/consequences.rs::protein_version_leaves_a_versioned_or_unversioned_identifier_alone;crates/vep-cli/src/runner.rs::protein_version_prints_only_with_protein;crates/vep-cli/src/args.rs::protein_version_and_mask_header_cache_path_parse	tests/golden/116/GRCh38-release116	
 ProteinSeqs	ProteinSeqs.pm	error	open			
@@ -478,8 +478,8 @@ SubsetVCF	SubsetVCF.pm	error	open
 summary	Config.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::summary_lists_unique_terms_of_the_record_in_rank_order;crates/vep-cli/src/config.rs::summary_refuses_its_incompatible_flags	tests/golden/116/GRCh38-pick-summary	
 sv-coordinates	BaseVCF4.pm	implemented	open			
 sv_json_coordinates_116	OutputFactory/JSON.pm	implemented	landed:implemented	crates/vep-io/src/output/json.rs::undefined_end_writes_the_start_alone;crates/vep-io/src/output/json.rs::undefined_start_writes_the_end_alone;crates/vep-io/src/output/json.rs::defined_range_writes_both_ends;crates/vep-io/src/output/json.rs::single_position_writes_both_ends;crates/vep-io/src/output/json.rs::total_length_forms_follow_the_perl_split	tests/golden/116/GRCh38-release116	
-swissprot-trembl	Database/Transcript.pm	implemented	open			
-symbol	OutputFactory.pm	implemented	open			
+swissprot-trembl	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/core_dumps.rs::swissprot_trembl_from_translation_xrefs	tests/golden/116/GRCh38-native-builder	
+symbol	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/vcf_output.rs::symbol_whitespace_escapes_percent20;crates/vep-io/src/output/fields.rs::identifier_columns_read_dash_as_absent	tests/golden/116/GRCh38	
 symbol-source-hgnc-id-columns	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::native_cache_matches_the_ensembl_cache_with_core_dumps;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::gff3_only_exclusions_are_documented	tests/golden/116/GRCh38-native-builder	
 symbolic-sv-classification	Parser.pm	implemented	landed:implemented	crates/vep-cli/src/vcf_parser.rs::multi_allelic_symbolic_shapes_take_the_record_class;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_multi_allelic_cn_one_variant_per_alt;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_multi_allelic_cn_four_alleles;crates/vep-cli/src/vcf_parser.rs::repeated_cn0_collapses_to_a_deletion;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_mixed_symbolic_uses_svtype_override;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_mixed_symbolic_without_svtype_is_unsupported;crates/vep-cli/src/vcf_parser.rs::all_sequence_multi_allelic_record_ignores_svtype;crates/vep-cli/src/vcf_parser.rs::vep_skip_marks_unsupported_types_only	tests/golden/116/GRCh38-release116	
 synonyms	BaseVEP.pm::chromosome_synonyms	implemented	landed:implemented	crates/vep-cli/src/args.rs::synonyms_flag_parses;crates/vep-core/src/synonyms.rs::whitespace_split_first_token_reference;crates/vep-cli/src/cache_resolve.rs::synonyms_come_from_the_flag_else_the_cache_file	tests/golden/116/GRCh38-synonyms	
@@ -498,18 +498,18 @@ transcript-coordinates	Database/Transcript.pm	implemented	open
 transcript-dbid	AnnotationType/Transcript.pm	implemented	open			
 transcript-filter-grammar	FilterSet.pm	implemented	landed:implemented	crates/vep-cli/src/filter_set.rs::parses_the_perl_examples;crates/vep-cli/src/filter_set.rs::in_reads_a_one_value_per_line_file;crates/vep-cli/src/filter_set.rs::ambiguous_prefix_is_an_error;crates/vep-cli/src/filter_set.rs::is_child_walks_the_so_parent_table;crates/vep-cli/src/filter_set.rs::unsupported_regex_syntax_exits_naming_the_pattern;crates/vep-cli/src/filter_set.rs::perl_parse_errors_keep_their_text;crates/vep-cli/src/filter_set.rs::caret_never_reaches_a_pattern;crates/vep-cli/src/filter_set.rs::mixed_values_compare_through_their_number;crates/vep-core/src/so_ontology.rs::descendants_follow_every_is_a_path	tests/golden/116/GRCh38-transcript-filter	
 transcript-source	Core.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::transcript_source_changes_no_output		
-transcript-stable-id-version	OutputFactory.pm	implemented	open			
+transcript-stable-id-version	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::version_from_number_or_string	tests/golden/116/GRCh38-attributes	
 transcript_filter	AnnotationSource.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::filtered_transcripts_are_invisible_downstream;crates/vep-cli/src/args.rs::transcript_filter_repeats;crates/vep-cli/tests/integration_test.rs::transcript_filter_refusal_is_one_error_line_and_exit_1;crates/vep-cli/src/filter_set.rs::transcript_keys_read_the_transcript;crates/vep-cli/src/filter_set.rs::repeated_filters_are_joined_by_and	tests/golden/116/GRCh38-transcript-filter	
 transcript_index_impl	-	removed	open			
-transcript_version	OutputFactory.pm	implemented	open			
+transcript_version	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::transcript_version_suffix_on_feature;crates/vep-cli/src/render.rs::default_format_appends_the_versions_under_their_flags	tests/golden/116/GRCh38-attributes	
 TranscriptAnnotator	TranscriptAnnotator.pm	implemented	open			
 translation-object	Core.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::translation_exon_fields_change_no_output		
-tsl	OutputFactory.pm	documented_subset	open			
+tsl	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/src/gff3.rs::tsl_from_transcript_support_level;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::gff3_only_exclusions_are_documented;crates/vep-io/src/output/fields.rs::tsl_prints_digit_only;crates/vep-cli/src/json_cache.rs::tsl_leading_digits_with_assigned_suffix;crates/vep-cli/src/args.rs::attribute_flags_state_their_documented_exclusions	tests/golden/116/GRCh38-native-builder	
 TSSDistance	TSSDistance.pm	error	open			
 ucsc_assembly	Config.pm	implemented	open			
 ucsc_data_root	Config.pm	implemented	open			
-uniparc-uniprot-isoform-columns	OutputFactory.pm	implemented	open			
-uniprot	OutputFactory.pm	documented_subset	open			
+uniparc-uniprot-isoform-columns	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::uniparc_and_isoform_columns_populated;crates/vep-io/src/output/json.rs::uniprot_columns_are_arrays	tests/golden/116/GRCh38-attributes	
+uniprot	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/fields.rs::uniprot_dash_sentinel_suppressed;crates/vep-cli/src/args.rs::attribute_flags_state_their_documented_exclusions	tests/golden/116/GRCh38-attributes	
 unsorted-input	InputBuffer.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::unsorted_input_is_annotated_in_input_order		
 uploaded_allele	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::uploaded_allele_prints_the_record_allele_string;crates/vep-core/src/variant.rs::uploaded_allele_follows_perls_two_sources;crates/vep-cli/src/config.rs::uploaded_allele_and_ambiguity_are_plain_switches	tests/golden/116/GRCh37-output-flags	
 uploaded_variation_naming_116	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/vcf_parser.rs::uploaded_variation_is_the_id_when_the_record_carries_one;crates/vep-cli/src/vcf_parser.rs::dot_id_names_an_snv_by_its_line;crates/vep-cli/src/vcf_parser.rs::dot_id_names_an_indel_by_its_line;crates/vep-cli/src/vcf_parser.rs::minimised_copy_is_named_by_its_line;crates/vep-cli/src/vcf_parser.rs::dot_id_names_a_multi_allelic_record_by_its_line;crates/vep-cli/src/vcf_parser.rs::dot_id_names_a_symbolic_record_by_its_line;crates/vep-cli/src/vcf_parser.rs::an_id_equal_to_the_generated_name_yields_the_line_name;crates/vep-io/src/input/ensembl.rs::id_less_line_is_named_by_its_lower_coordinate_and_allele_column;crates/vep-cli/src/vcf_parser.rs::a_dot_empty_or_zero_first_id_names_the_record_by_its_line;crates/vep-core/src/variant.rs::a_perl_false_or_dot_name_yields_the_line_name_and_the_generated_json_id;crates/vep-core/src/variant.rs::first_vcf_id_takes_the_first_element_as_written;crates/vep-io/src/input/ensembl.rs::an_ensembl_format_id_column_is_kept_whole	tests/golden/116/GRCh37-hgvs	
@@ -549,4 +549,4 @@ verbose	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_co
 verbose-and-v	Config.pm	implemented	open			
 version	-	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::version_prints_crate_version_and_exits_0	tests/golden/116/GRCh38-run-control	
 warning_file	BaseVEP.pm::warning_msg	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::warnings_file_is_written_by_default;crates/vep-cli/tests/cli_run_control.rs::warning_file_stderr_literal;crates/vep-cli/tests/cli_run_control.rs::warnings_deduplicate_ignoring_line_number;crates/vep-cli/tests/cli_run_control.rs::unwritable_warnings_file_fails_the_run;crates/vep-cli/src/warnings.rs::warning_prefix_follows_warning_msg;crates/vep-cli/src/warnings.rs::warnings_deduplicate_ignoring_a_trailing_line_number;crates/vep-cli/src/warnings.rs::warnings_file_is_opened_at_the_first_warning;crates/vep-cli/src/config.rs::warning_file_defaults_beside_the_output_as_spelled	tests/golden/116/GRCh38-run-control	
-xref_refseq	OutputFactory.pm	documented_subset	open			
+xref_refseq	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/fields.rs::refseq_dash_sentinel_suppressed;crates/vep-io/src/output/json.rs::refseq_transcript_ids_is_array;crates/vep-cli/src/args.rs::attribute_flags_state_their_documented_exclusions	tests/golden/116/GRCh38-attributes;tests/golden/116/GRCh38-native-builder	

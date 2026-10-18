@@ -12,7 +12,9 @@ use std::borrow::Cow;
 use vep_core::consequence::Consequence;
 use vep_core::terms::Vocabulary;
 use vep_core::variant::InputVariant;
-use vep_io::output::fields::{field_value, record_rows_into, rendered_terms, ExtraFieldsPlan, Row};
+use vep_io::output::fields::{
+    field_value, record_rows_into, rendered_terms, version_suffix, ExtraFieldsPlan, Row,
+};
 use vep_io::OutputFormatter;
 
 /// Renders one input record: the alleles split from one line, written together
@@ -39,6 +41,19 @@ pub(crate) fn render_record<'a>(
         }
     }
     Ok(())
+}
+
+/// Writes a stable id, then `.<version>` when the version flag is on and the id
+/// has one to add ([`version_suffix`]).
+fn write_versioned_id(out: &mut Vec<u8>, id: &str, version: Option<u32>, flag: bool) {
+    out.extend_from_slice(id.as_bytes());
+    if !flag {
+        return;
+    }
+    if let Some(version) = version_suffix(id, version) {
+        out.push(b'.');
+        out.extend_from_slice(version.to_string().as_bytes());
+    }
 }
 
 /// The columns of the default format that depend on the allele alone.
@@ -139,9 +154,14 @@ pub(crate) fn render_default_record<'a>(
             (Some(tc), _) => {
                 out.extend_from_slice(allele_text.as_bytes());
                 out.push(b'\t');
-                out.extend_from_slice(tc.gene_id.as_bytes());
+                write_versioned_id(out, &tc.gene_id, tc.gene_version, plan.options.gene_version);
                 out.push(b'\t');
-                out.extend_from_slice(tc.transcript_id.as_bytes());
+                write_versioned_id(
+                    out,
+                    &tc.transcript_id,
+                    tc.transcript_version,
+                    plan.options.transcript_version,
+                );
                 out.push(b'\t');
                 out.extend_from_slice(tc.feature_type.as_str().as_bytes());
                 out.push(b'\t');
@@ -191,7 +211,66 @@ fn write_terms(out: &mut Vec<u8>, terms: &[Consequence], vocabulary: Vocabulary)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vep_core::consequence::TranscriptConsequence;
     use vep_io::output::fields::FieldOptions;
+
+    /// The columns of the one default-format row `tc` renders to under `options`.
+    fn default_row_columns(options: FieldOptions, tc: TranscriptConsequence) -> Vec<String> {
+        let mut variant = InputVariant::new(
+            "21".into(),
+            42_893_293,
+            42_893_293,
+            b"C".to_vec(),
+            b"T".to_vec(),
+        );
+        variant.transcript_consequences = vec![tc];
+        let plan = ExtraFieldsPlan::new(options);
+        let mut out = Vec::new();
+        let mut rows = Vec::new();
+        render_default_record(&mut out, &[&variant], &plan, &mut rows).unwrap();
+        let line = String::from_utf8(out).unwrap();
+        line.trim_end().split('\t').map(str::to_string).collect()
+    }
+
+    /// The default format's Gene and Feature columns carry `.<version>` under
+    /// `--gene_version` and `--transcript_version` (OutputFactory.pm:1465, 1469
+    /// at release/116.2: `ENSG00000160194.20` and `ENST00000354250.7` on the
+    /// NDUFV3 row Ensembl VEP 116.2 writes for `21 42893293 C T`), the bare ids
+    /// without the flags, and an id already versioned or a transcript without a
+    /// version stays as it is.
+    #[test]
+    fn default_format_appends_the_versions_under_their_flags() {
+        const GENE: usize = 3;
+        const FEATURE: usize = 4;
+        let tc = TranscriptConsequence {
+            transcript_id: std::sync::Arc::from("ENST00000354250"),
+            gene_id: std::sync::Arc::from("ENSG00000160194"),
+            transcript_version: Some(7),
+            gene_version: Some(20),
+            ..Default::default()
+        };
+        let both = FieldOptions {
+            gene_version: true,
+            transcript_version: true,
+            ..Default::default()
+        };
+        let columns = default_row_columns(both.clone(), tc.clone());
+        assert_eq!(columns[GENE], "ENSG00000160194.20");
+        assert_eq!(columns[FEATURE], "ENST00000354250.7");
+
+        let columns = default_row_columns(FieldOptions::default(), tc.clone());
+        assert_eq!(columns[GENE], "ENSG00000160194");
+        assert_eq!(columns[FEATURE], "ENST00000354250");
+
+        let versioned = TranscriptConsequence {
+            transcript_id: std::sync::Arc::from("NM_021075.4"),
+            transcript_version: None,
+            ..tc
+        };
+        let columns = default_row_columns(both, versioned);
+        assert_eq!(columns[GENE], "ENSG00000160194.20");
+        assert_eq!(columns[FEATURE], "NM_021075.4");
+    }
 
     /// The `--most_severe` row of the default format is the record's hash
     /// (`VariationFeature_to_output_hash`, OutputFactory.pm:883-1025): `-` in the

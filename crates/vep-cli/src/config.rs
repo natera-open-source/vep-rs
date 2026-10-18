@@ -547,6 +547,8 @@ pub struct Config {
     pub canonical: bool,
     pub mane: bool,
     pub mane_select: bool,
+    /// Set by `--mane`'s option set (Config.pm:580-586); no flag of its own.
+    pub mane_plus_clinical: bool,
     pub tsl: bool,
     pub appris: bool,
     pub ccds: bool,
@@ -555,6 +557,10 @@ pub struct Config {
     pub protein_version: bool,
     pub uniprot: bool,
     pub xref_refseq: bool,
+    /// Append the transcript version to the Feature column (`--transcript_version`).
+    pub transcript_version: bool,
+    /// Append the gene version to the Gene column (`--gene_version`).
+    pub gene_version: bool,
     pub hgvs: bool,
     pub hgvsg: bool,
     /// `--hgvsp_use_prediction`: HGVSp's description after `p.` is parenthesised.
@@ -908,6 +914,7 @@ impl Config {
             canonical: on("canonical"),
             mane: on("mane"),
             mane_select: on("mane_select"),
+            mane_plus_clinical: on("mane_plus_clinical"),
             tsl: on("tsl"),
             appris: on("appris"),
             ccds: on("ccds"),
@@ -915,6 +922,8 @@ impl Config {
             protein_version: args.protein_version,
             uniprot: on("uniprot"),
             xref_refseq: args.xref_refseq,
+            transcript_version: args.transcript_version,
+            gene_version: args.gene_version,
             hgvs: on("hgvs"),
             hgvsg: args.hgvsg,
             hgvsp_use_prediction: args.hgvsp_use_prediction,
@@ -1150,7 +1159,7 @@ mod tests {
         assert_eq!(implied, expected);
 
         let c = config(&["vep", "--everything"]);
-        let flags: [(&str, bool); 29] = [
+        let flags = [
             ("ccds", c.ccds),
             ("hgvs", c.hgvs),
             ("symbol", c.symbol),
@@ -1169,6 +1178,7 @@ mod tests {
             ("uniprot", c.uniprot),
             ("mane", c.mane),
             ("mane_select", c.mane_select),
+            ("mane_plus_clinical", c.mane_plus_clinical),
             ("tsl", c.tsl),
             ("appris", c.appris),
             ("variant_class", c.variant_class),
@@ -1179,6 +1189,8 @@ mod tests {
             ("allele_number", c.allele_number),
             ("xref_refseq", c.xref_refseq),
             ("protein_version", c.protein_version),
+            ("transcript_version", c.transcript_version),
+            ("gene_version", c.gene_version),
             ("minimal", c.minimal),
         ];
         for (flag, on) in flags {

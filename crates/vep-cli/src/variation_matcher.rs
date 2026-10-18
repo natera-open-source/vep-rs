@@ -1443,4 +1443,36 @@ mod tests {
             "IMPACT=LOW;STRAND=1;APlugin=x;ZPlugin=a=b%3Bc"
         );
     }
+
+    /// Ensembl VEP sets the identifier keys only for a cache value other than
+    /// `-` (OutputFactory.pm:1534-1574 at release/116.2), so the Extra column of
+    /// a transcript with no CCDS, RefSeq or UniProt cross-reference carries no
+    /// `CCDS=-`, `RefSeq=-`, `SWISSPROT=-`, `TREMBL=-`, `UNIPARC=-` or
+    /// `UNIPROT_ISOFORM=-`; the values present print in VEP's key order, lists
+    /// joined by `,`.
+    #[test]
+    fn extra_column_skips_the_dash_sentinel() {
+        let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let tc = TranscriptConsequence {
+            impact: Impact::LOW,
+            strand: 1,
+            ccds: Some("-".to_string()),
+            refseq: Some("-".to_string()),
+            swissprot: Some("-".to_string()),
+            trembl: Some("L7XE61_HUMAN,L7XCZ9_HUMAN".to_string()),
+            uniparc: Some("UPI000002DB1C".to_string()),
+            uniprot_isoform: Some("-".to_string()),
+            ..Default::default()
+        };
+        let options = FieldOptions {
+            ccds: true,
+            uniprot: true,
+            xref_refseq: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            extra(&variant, Some(&tc), &options),
+            "IMPACT=LOW;STRAND=1;TREMBL=L7XE61_HUMAN,L7XCZ9_HUMAN;UNIPARC=UPI000002DB1C"
+        );
+    }
 }

@@ -18,6 +18,8 @@
   "vefc-runtime-only-keys",
   "vefc-seq-edits",
   "engine_identity_lines",
+  "symbol",
+  "biotype",
   "info-species-assembly",
   "info-source-versions",
   "info-var-type-serialiser"

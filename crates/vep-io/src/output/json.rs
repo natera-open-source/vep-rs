@@ -274,16 +274,25 @@ impl JsonOutputFormatter {
                         .collect();
                     obj.insert("domains".to_string(), Value::Array(doms));
                 }
-                "FLAGS" | "MANE" => {
-                    obj.insert(
-                        json_key(name),
-                        Value::Array(
-                            value
-                                .split(',')
-                                .map(|t| Value::String(t.to_string()))
-                                .collect(),
-                        ),
-                    );
+                // The fields VEP's output hash holds as lists (OutputFactory.pm:1478,
+                // 1540, 1572, 1592-1600, 1662 at release/116.2), encoded as arrays;
+                // the one undefined element VEP can produce, the miRNA structure
+                // read one past its end, is `null`, while an empty element of a
+                // split accession list stays an empty string.
+                "FLAGS" | "MANE" | "RefSeq" | "SWISSPROT" | "TREMBL" | "UNIPARC"
+                | "UNIPROT_ISOFORM" | "miRNA" => {
+                    let empty_element_is_null = name == "miRNA";
+                    let elements = value
+                        .split(',')
+                        .map(|element| {
+                            if element.is_empty() && empty_element_is_null {
+                                Value::Null
+                            } else {
+                                Value::String(element.to_string())
+                            }
+                        })
+                        .collect();
+                    obj.insert(json_key(name), Value::Array(elements));
                 }
                 _ => {
                     let key = json_key(name);
@@ -1197,6 +1206,87 @@ mod tests {
         a.colocated_variants[0].frequencies.clear();
         let parsed = fmt(FieldOptions::default()).format_record_value(&[&a, &b]);
         assert!(parsed["colocated_variants"][0].get("frequencies").is_none());
+    }
+
+    /// The consequence object of the annotated variant under the attribute
+    /// flags, with the given cross-reference values on its transcript.
+    fn attribute_object(edit: impl Fn(&mut TranscriptConsequence)) -> Value {
+        let mut v = make_annotated_variant();
+        edit(&mut v.transcript_consequences[0]);
+        let options = FieldOptions {
+            uniprot: true,
+            xref_refseq: true,
+            mirna: true,
+            mane: true,
+            mane_select: true,
+            mane_plus_clinical: true,
+            ..Default::default()
+        };
+        fmt(options).format_variant_value(&v)["transcript_consequences"][0].clone()
+    }
+
+    /// `SWISSPROT`, `TREMBL`, `UNIPARC` and `UNIPROT_ISOFORM` are arrays in
+    /// Ensembl VEP's JSON (`[split(',', $id)]`, OutputFactory.pm:1572 at
+    /// release/116.2, encoded as is by `JSON.pm`), one element per
+    /// comma-separated accession, and a `-` value sets no key: the GRCh37 APP
+    /// transcript's `TREMBL=L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN` is a
+    /// three-element array.
+    #[test]
+    fn uniprot_columns_are_arrays() {
+        let tc = attribute_object(|tc| {
+            tc.swissprot = Some("A4_HUMAN".to_string());
+            tc.trembl = Some("L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN".to_string());
+            tc.uniparc = Some("UPI000002DB1C".to_string());
+            tc.uniprot_isoform = Some("-".to_string());
+        });
+        assert_eq!(tc["swissprot"], json!(["A4_HUMAN"]));
+        assert_eq!(
+            tc["trembl"],
+            json!(["L7XE61_HUMAN", "L7XCZ9_HUMAN", "B7Z313_HUMAN"])
+        );
+        assert_eq!(tc["uniparc"], json!(["UPI000002DB1C"]));
+        assert!(tc.get("uniprot_isoform").is_none(), "{tc}");
+        let empty_element = attribute_object(|tc| tc.trembl = Some("A,,B".to_string()));
+        assert_eq!(empty_element["trembl"], json!(["A", "", "B"]));
+    }
+
+    /// `RefSeq` is renamed `refseq_transcript_ids` (JSON.pm:106) and is the
+    /// array of the comma-separated ids (OutputFactory.pm:1540):
+    /// `RefSeq=NM_198996.4,NM_001302998.2` on the LIPI transcript
+    /// ENST00000681601 is a two-element array.
+    #[test]
+    fn refseq_transcript_ids_is_array() {
+        let tc = attribute_object(|tc| {
+            tc.refseq = Some("NM_198996.4,NM_001302998.2".to_string());
+        });
+        assert_eq!(
+            tc["refseq_transcript_ids"],
+            json!(["NM_198996.4", "NM_001302998.2"])
+        );
+        assert!(tc.get("refseq").is_none());
+        let dash = attribute_object(|tc| tc.refseq = Some("-".to_string()));
+        assert!(dash.get("refseq_transcript_ids").is_none());
+    }
+
+    /// `mirna` is the array of structure terms (OutputFactory.pm:1662), `mane`
+    /// the array of set names (:1592, :1600); an undefined element is `null`.
+    #[test]
+    fn mirna_and_mane_are_arrays() {
+        let tc = attribute_object(|tc| {
+            tc.mirna = vec!["miRNA_loop".to_string(), "miRNA_stem".to_string()];
+            tc.mane_select = Some("NM_021075.4".to_string());
+            tc.mane_plus_clinical = Some("NM_058174.3".to_string());
+        });
+        assert_eq!(tc["mirna"], json!(["miRNA_loop", "miRNA_stem"]));
+        assert_eq!(tc["mane"], json!(["MANE_Select", "MANE_Plus_Clinical"]));
+        assert_eq!(tc["mane_select"], "NM_021075.4");
+        assert_eq!(tc["mane_plus_clinical"], "NM_058174.3");
+        let past_the_end = attribute_object(|tc| {
+            tc.mirna = vec![String::new(), "miRNA_stem".to_string()];
+        });
+        assert_eq!(past_the_end["mirna"], json!([null, "miRNA_stem"]));
+        let none = attribute_object(|_| {});
+        assert!(none.get("mirna").is_none());
     }
 
     #[test]

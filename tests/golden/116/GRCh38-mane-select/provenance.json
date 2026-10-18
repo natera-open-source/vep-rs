@@ -1,0 +1,36 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --mane_select [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "16 small-variant records on chromosome 21 chosen so that the rows of one record cover a MANE Select transcript, a MANE Plus Clinical transcript of the same gene (COL6A2) and transcripts of neither set, under --mane_select alone",
+ "sha256": {
+  "default.txt": "ae9b4da168c2731b2a6b95a7458c896d82279163b2dcc9ee735c890e6937e279",
+  "tab.txt": "08cd87e745e5372b1d9db748e5ce83c08ac4b06ba5861562f5146cbdb16cfd7a",
+  "vcf.vcf": "b81109654513f7c5f42a67ec250a6b79e3b60a968e319d1c9276160c5171ba81",
+  "json.jsonl": "bc6243481b23bfd264877e736a2fa4ff738a72dfca2f859437a47a3f1c84052d"
+ },
+ "variants_vcf_sha256": "f6463318d31780c83ef2f3990ce1d5cef3c044cc3f92593d8f97cb6fc210993f",
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "703eb184caba0adfbc2d5cc448efe0aa",
+  "arch": "aarch64",
+  "flags_passed": [
+   "--mane_select"
+  ]
+ },
+ "generator": "candidate records annotated with Ensembl VEP under the corpus flags, then scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite attrs38=<reference>=<candidates> --k 2 --seed 1 --cache <converted slice> --family-columns MANE=,MANE_SELECT --covers ... --matrix tests/parity/matrix.tsv --flag=--mane_select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 780
+  },
+  "shards": 14,
+  "spans_by_chromosome": {
+   "21": 16
+  }
+ }
+}

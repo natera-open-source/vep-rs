@@ -190,7 +190,7 @@ mod tests {
     /// when populated.
     #[test]
     fn consequence_json_carries_every_documented_key_and_nothing_else() {
-        const ALWAYS: [&str; 40] = [
+        const ALWAYS: [&str; 46] = [
             "transcript_id",
             "gene_id",
             "gene_symbol",
@@ -227,7 +227,13 @@ mod tests {
             "gencode_primary",
             "swissprot",
             "trembl",
+            "uniparc",
+            "uniprot_isoform",
             "refseq",
+            "transcript_version",
+            "gene_version",
+            "gene_phenotype",
+            "mirna",
             "cdna_length",
             "feature_start",
             "feature_end",

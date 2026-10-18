@@ -30,7 +30,9 @@
   "vefc-mapper",
   "vefc-sorted-exons",
   "trans-exon-array",
-  "engine_identity_lines"
+  "engine_identity_lines",
+  "tsl",
+  "canonical"
  ],
  "flag_sets": [
   {
@@ -375,6 +377,664 @@
    "expected_dir": "expected_flag_gencode_primary",
    "covers": [
     "attribute-gencode-primary"
+   ],
+   "divergences": [
+    {
+     "location": "21:34613795-34613797",
+     "allele": "-",
+     "feature": "ENST00000399272",
+     "feature_type": "Transcript",
+     "record_indices": [
+      43
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000866134",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001002268",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001111227",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001131501",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "MT:14747-14748",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      157
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 7
+   },
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "gene_version",
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--gene_version"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_gene_version",
+   "covers": [
+    "_gene_version",
+    "gene_version"
+   ],
+   "divergences": [
+    {
+     "location": "21:34613795-34613797",
+     "allele": "-",
+     "feature": "ENST00000399272",
+     "feature_type": "Transcript",
+     "record_indices": [
+      43
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000866134",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001002268",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001111227",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001131501",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "MT:14747-14748",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      157
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 7
+   },
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "uniprot",
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--uniprot"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_uniprot",
+   "covers": [
+    "_uniparc",
+    "_uniprot_isoform",
+    "swissprot-trembl",
+    "uniprot",
+    "uniparc-uniprot-isoform-columns"
+   ],
+   "divergences": [
+    {
+     "location": "21:34613795-34613797",
+     "allele": "-",
+     "feature": "ENST00000399272",
+     "feature_type": "Transcript",
+     "record_indices": [
+      43
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000866134",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001002268",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001111227",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001131501",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "MT:14747-14748",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      157
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 7
+   },
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "mirna",
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--mirna"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_mirna",
+   "covers": [
+    "attribute-mirna",
+    "attribute-ncrna",
+    "mirna"
+   ],
+   "divergences": [
+    {
+     "location": "21:34613795-34613797",
+     "allele": "-",
+     "feature": "ENST00000399272",
+     "feature_type": "Transcript",
+     "record_indices": [
+      43
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000866134",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001002268",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001111227",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001131501",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "MT:14747-14748",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      157
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 7
+   },
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "gene_phenotype",
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--gene_phenotype"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_gene_phenotype",
+   "covers": [
+    "_gene_phenotype",
+    "gene_phenotype"
+   ],
+   "divergences": [
+    {
+     "location": "21:34613795-34613797",
+     "allele": "-",
+     "feature": "ENST00000399272",
+     "feature_type": "Transcript",
+     "record_indices": [
+      43
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000866134",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001002268",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001111227",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001131501",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "MT:14747-14748",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      157
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 7
+   },
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "xref_refseq",
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--xref_refseq"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_xref_refseq",
+   "covers": [
+    "xref_refseq"
    ],
    "divergences": [
     {

@@ -106,6 +106,101 @@
     "vcf.vcf": "d5fb363c186bb0a6914827365ab296cde2b9ba02568d952b2b846a35a5b18c4d",
     "json.jsonl": "cf49b46a3dbccc518137ed6378e6839ea90cb9f5fe6e5116fabc82208aca39d8"
    }
+  },
+  "gene_version": {
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--gene_version"
+   ],
+   "expected_dir": "expected_gene_version",
+   "sha256": {
+    "default.txt": "5d542e53f64d10881470391d5de0689eb94a63c73be462c7314b5d2734f2efa0",
+    "tab.txt": "86ed1453722ae4cfcd7aeb25ef40c1bb536ac622497971a8302a6194cfa9299d",
+    "vcf.vcf": "4efbe9fc33df5d94bd715c6589977af3cf05bd8574fb4a78f4e1864c6e849eef",
+    "json.jsonl": "66aa004c6ca2dd7c05cab7c0c837cd6e6bb2b63e99179f342542af4b6060105b"
+   }
+  },
+  "uniprot": {
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--uniprot"
+   ],
+   "expected_dir": "expected_uniprot",
+   "sha256": {
+    "default.txt": "5e49d07b105470f9cf346918ba8a97ab57dd6ee7599fc2bb8cd515edae49e66e",
+    "tab.txt": "c7bad810dd9a2225237fd198badc6c308efdacb7b7a7f15e2176907cf75c5699",
+    "vcf.vcf": "ed4883acbdd09ce212d6f13c31733ab215cf513cf8fb77d20e8673fa6c7375e5",
+    "json.jsonl": "1101cd5c512d8c38982178ed065a456f2b24ee4536a4a1182c738a2635c44904"
+   }
+  },
+  "mirna": {
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--mirna"
+   ],
+   "expected_dir": "expected_mirna",
+   "sha256": {
+    "default.txt": "404bcfab9ef31c7b3a682891bef77e0f7254364d7f9697431ce24f30eed66b04",
+    "tab.txt": "cf8dd90264b266ad424fcfcbe560f69ee7be26addffbc8080957b839d37f5476",
+    "vcf.vcf": "86c0be8b420c162a5eab4b9918e988f5de1feb3f01644d67658587d3685b0ef2",
+    "json.jsonl": "b8e55f0eceeb2063477b76c05b188ca6f1846c504c7ba9ca3e00cbe7da9c4a5c"
+   }
+  },
+  "gene_phenotype": {
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--gene_phenotype"
+   ],
+   "expected_dir": "expected_gene_phenotype",
+   "sha256": {
+    "default.txt": "fe08d23200809c38af047b63401fc5a2218b744ae0d649dcba4e39b6005ebbad",
+    "tab.txt": "07c2ea3521ad1954051a354a043e8a4a2c72f971d0ad06b8aa98b6b005a08ab7",
+    "vcf.vcf": "57101ed174a55982eb9448944c2b3e0d30fccb7f06dfffc2ff5b82e6ae512ac3",
+    "json.jsonl": "71b18c730c2f626518ffed7d6570933e373a1e41fb9d1026ab3e8f275ad9e001"
+   }
+  },
+  "xref_refseq": {
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--xref_refseq"
+   ],
+   "expected_dir": "expected_xref_refseq",
+   "sha256": {
+    "default.txt": "c8e659199ee68859eb1b24400d49d4e08bdd773623041cc1d0bdf2f8c030ee89",
+    "tab.txt": "7ed095203d150620f9af66524c299f2c91a1c6eda5dba3d86d043aca94fa8542",
+    "vcf.vcf": "87835c80911cfceeb85be0891b9f97b46172c27ad8c3aaa4e0a3216a0297f72c",
+    "json.jsonl": "8c4835d3a17241011ba4a07f6c90ba75b94a6ff2ae821636bdf6617e9a08fe1c"
+   }
   }
  }
 }

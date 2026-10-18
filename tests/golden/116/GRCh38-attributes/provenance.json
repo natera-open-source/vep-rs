@@ -1,0 +1,50 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --appris --ccds --protein --protein_version --uniprot --xref_refseq --gene_phenotype --mirna --transcript_version --gene_version [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "159 small-variant records on chromosome 21 chosen for the transcript attributes within 5 kb: exonic positions on transcripts of every MANE Select and MANE Plus Clinical, APPRIS grade (the M grades included), transcript support level shape (a digit, NA, and the values assigned to a previous version), CCDS, RefSeq (single and list), UniProt Swiss-Prot, TrEMBL (single and list), UniParc and UniProt isoform class (a value or the cache's `-`), gene phenotype count (zero and non-zero), canonical and symbol class seen on the chromosome, plus a stem position, a loop position, a deletion across a stem/loop boundary and an insertion on miRNA transcripts carrying an ncRNA structure; the chromosome 21 records of the GRCh38 golden corpus are candidates too; the reference base is the GRCh38 primary assembly's",
+ "sha256": {
+  "default.txt": "a3455652a4f594a20e09e3d25c6036b039e46ad2f968a91a9b5f320a0cf0c99d",
+  "tab.txt": "548094efecb106664c6a1b2f1aa93f1c6c1c58977c41a655b50eb80d45efe082",
+  "vcf.vcf": "bd280651ab2bafd79f60cfb450fef8150a5db3be9ceb9ba1f994881ca9af9911",
+  "json.jsonl": "d5b6a73926b236bf7643dc3d591dc903183e212c2af49f7b8b8d945002a088aa"
+ },
+ "variants_vcf_sha256": "e4f16a168e8dd338b8092643db2670ed96ea819678e027482307986abb471a25",
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "703eb184caba0adfbc2d5cc448efe0aa",
+  "arch": "aarch64",
+  "flags_passed": [
+   "--symbol",
+   "--biotype",
+   "--canonical",
+   "--mane",
+   "--tsl",
+   "--appris",
+   "--ccds",
+   "--protein",
+   "--protein_version",
+   "--uniprot",
+   "--xref_refseq",
+   "--gene_phenotype",
+   "--mirna",
+   "--transcript_version",
+   "--gene_version"
+  ]
+ },
+ "generator": "candidate records annotated with Ensembl VEP under the corpus flags, then scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite attrs38=<reference>=<candidates> --k 2 --seed 1 --cache <converted slice> --family-columns MANE=,APPRIS=,TSL=,CCDS,SWISSPROT,TREMBL,UNIPARC,UNIPROT_ISOFORM,RefSeq,GENE_PHENO,miRNA= --covers ... --matrix tests/parity/matrix.tsv --flag=--symbol --flag=--biotype --flag=--canonical --flag=--mane --flag=--tsl --flag=--appris --flag=--ccds --flag=--protein --flag=--protein_version --flag=--uniprot --flag=--xref_refseq --flag=--gene_phenotype --flag=--mirna --flag=--transcript_version --flag=--gene_version; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 3110
+  },
+  "shards": 36,
+  "spans_by_chromosome": {
+   "21": 159
+  }
+ }
+}

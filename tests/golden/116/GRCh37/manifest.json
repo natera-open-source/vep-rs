@@ -18,7 +18,9 @@
   "vefc-peptide",
   "vefc-runtime-only-keys",
   "vefc-seq-edits",
-  "engine_identity_lines"
+  "engine_identity_lines",
+  "symbol",
+  "biotype"
  ],
  "flags": [
   "--grch37"

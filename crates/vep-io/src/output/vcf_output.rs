@@ -211,17 +211,34 @@ pub(crate) fn build_csq_field_list(
     fields
 }
 
-/// Escape one CSQ subfield value the way VEP does: `,` and `|` become `&`, `;`
-/// becomes `%3B`, whitespace becomes `_`.
+/// Perl's `\s` on a byte string, as the output modules match it (no
+/// `unicode_strings` pragma): the six ASCII whitespace characters, vertical tab
+/// included. `char::is_ascii_whitespace` omits the vertical tab, and
+/// `char::is_whitespace` adds the Unicode spaces, which Perl leaves as they are.
+fn is_perl_whitespace(c: char) -> bool {
+    c.is_ascii_whitespace() || c == '\x0B'
+}
+
+/// Escape one CSQ subfield value the way VEP does (`OutputFactory/VCF.pm:401-404`):
+/// `,` and `|` become `&`, `;` becomes `%3B`, a run of ASCII whitespace becomes
+/// one `_`.
 fn vcf_encode(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
+    let mut in_whitespace = false;
     for ch in value.chars() {
-        match ch {
-            ';' => out.push_str("%3B"),
-            ',' | '|' => out.push('&'),
-            c if c.is_whitespace() => out.push('_'),
-            c => out.push(c),
+        let whitespace = is_perl_whitespace(ch);
+        if whitespace {
+            if !in_whitespace {
+                out.push('_');
+            }
+        } else {
+            match ch {
+                ';' => out.push_str("%3B"),
+                ',' | '|' => out.push('&'),
+                c => out.push(c),
+            }
         }
+        in_whitespace = whitespace;
     }
     out
 }
@@ -257,7 +274,7 @@ fn format_csq_entry(
             if v == "-" && field != "Allele" {
                 String::new()
             } else if field == "SYMBOL" && !options.no_escape {
-                vcf_encode(&v.replace(char::is_whitespace, "%20"))
+                vcf_encode(&v.replace(is_perl_whitespace, "%20"))
             } else {
                 vcf_encode(&v)
             }
@@ -743,6 +760,70 @@ mod tests {
         assert!(csq_entries[1].contains("intron_variant"));
     }
 
+    /// A VCF `SYMBOL` has each ASCII whitespace character written `%20`
+    /// (OutputFactory.pm:1527 at release/116.2, before the subfield encoding
+    /// turns whitespace into `_`), unless `--no_escape`, under which the
+    /// subfield encoding's `_` stands; every other subfield keeps `_`, and a
+    /// Unicode space, outside Perl's `\s` on a byte string, stays at both sites.
+    #[test]
+    fn symbol_whitespace_escapes_percent20() {
+        let mut v = annotated_variant();
+        v.transcript_consequences[0].gene_symbol = Some("GENE 1\t X\u{A0}Y".into());
+        v.transcript_consequences[0]
+            .plugin_data
+            .insert("Note".to_string(), "a b".to_string());
+        let formatter = VcfOutputFormatter::new(
+            "CSQ".to_string(),
+            vcf_options(),
+            vec![("Note".to_string(), "a plugin field".to_string())],
+            None,
+        );
+        let line = formatter.format_record(&[&v]).unwrap().remove(0);
+        let csq = info_of(&line).split("CSQ=").nth(1).unwrap();
+        let fields: Vec<&str> = csq.split('|').collect();
+        assert_eq!(fields[3], "GENE%201%20%20X\u{A0}Y", "{csq}");
+        assert_eq!(*fields.last().unwrap(), "a_b", "{csq}");
+
+        let unescaped = VcfOutputFormatter::new(
+            "CSQ".to_string(),
+            VcfFieldOptions {
+                no_escape: true,
+                ..vcf_options()
+            },
+            Vec::new(),
+            None,
+        );
+        let line = unescaped.format_record(&[&v]).unwrap().remove(0);
+        let csq = info_of(&line).split("CSQ=").nth(1).unwrap();
+        assert_eq!(csq.split('|').nth(3).unwrap(), "GENE_1_X\u{A0}Y", "{csq}");
+    }
+
+    /// The cache's `-` sentinel is an empty subfield, as Ensembl VEP never sets
+    /// the key (OutputFactory.pm:1534-1537), and a comma-separated accession
+    /// list joins with `&` inside the entry.
+    #[test]
+    fn dash_sentinel_is_an_empty_subfield_and_lists_join_with_ampersand() {
+        let mut v = annotated_variant();
+        v.transcript_consequences[0].ccds = Some("-".into());
+        v.transcript_consequences[0].refseq = Some("NM_1.1,NM_2.2".into());
+        let formatter = VcfOutputFormatter::new(
+            "CSQ".to_string(),
+            VcfFieldOptions {
+                ccds: true,
+                xref_refseq: true,
+                ..vcf_options()
+            },
+            Vec::new(),
+            None,
+        );
+        let line = formatter.format_record(&[&v]).unwrap().remove(0);
+        let csq = info_of(&line).split("CSQ=").nth(1).unwrap();
+        let fields: Vec<&str> = csq.split('|').collect();
+        let at = |name: &str| formatter.fields.iter().position(|f| f == name).unwrap();
+        assert_eq!(fields[at("CCDS")], "", "{csq}");
+        assert_eq!(fields[at("RefSeq")], "NM_1.1&NM_2.2", "{csq}");
+    }
+
     #[test]
     fn test_vcf_encoding() {
         assert_eq!(vcf_encode("a,b"), "a&b");
@@ -752,6 +833,10 @@ mod tests {
         assert_eq!(vcf_encode("p.Pro336="), "p.Pro336=");
         assert_eq!(vcf_encode("a b"), "a_b");
         assert_eq!(vcf_encode("a\tb"), "a_b");
+        assert_eq!(vcf_encode("a \t b"), "a_b");
+        assert_eq!(vcf_encode(" \na\r\n"), "_a_");
+        assert_eq!(vcf_encode("a\x0B\x0Cb"), "a_b");
+        assert_eq!(vcf_encode("a\u{A0}b"), "a\u{A0}b");
         assert_eq!(vcf_encode("normal"), "normal");
     }
 

@@ -595,8 +595,35 @@ pub struct TranscriptConsequence {
     pub swissprot: Option<String>,
     /// UniProtKB/TrEMBL accession(s).
     pub trembl: Option<String>,
+    /// UniParc accession(s), comma-separated as the cache carries them.
+    #[serde(default)]
+    pub uniparc: Option<String>,
+    /// UniProtKB isoform accession(s), comma-separated as the cache carries them.
+    #[serde(default)]
+    pub uniprot_isoform: Option<String>,
     /// RefSeq transcript ID.
     pub refseq: Option<String>,
+    /// The transcript's stable-id version: the `.<version>` suffix of the
+    /// `Feature` column under `--transcript_version`.
+    #[serde(default)]
+    pub transcript_version: Option<u32>,
+    /// The gene's stable-id version: the `.<version>` suffix of the `Gene`
+    /// column under `--gene_version`.
+    #[serde(default)]
+    pub gene_version: Option<u32>,
+    /// The gene has at least one phenotype association: the `GENE_PHENO`
+    /// column under `--gene_phenotype`.
+    #[serde(default)]
+    pub gene_phenotype: bool,
+    /// The miRNA secondary-structure elements the variant overlaps on a
+    /// `miRNA` transcript, as the SO terms `miRNA_loop` and `miRNA_stem`: the
+    /// `miRNA` column under `--mirna`. The terms come sorted, one per distinct
+    /// structure character, so a span over both bracket kinds lists
+    /// `miRNA_stem` twice, and a span reaching one position past the
+    /// structure's end lists an empty term. Empty on every other transcript
+    /// and when the variant lies outside the structure.
+    #[serde(default)]
+    pub mirna: Vec<String>,
     /// Length of the transcript's translateable sequence as the cache stores it,
     /// `None` for a transcript without a translation. The `length` pick
     /// criterion reads it (OutputFactory.pm:743-748 at release/116.2).
@@ -721,7 +748,13 @@ impl Default for TranscriptConsequence {
             gencode_primary: false,
             swissprot: None,
             trembl: None,
+            uniparc: None,
+            uniprot_isoform: None,
             refseq: None,
+            transcript_version: None,
+            gene_version: None,
+            gene_phenotype: false,
+            mirna: Vec::new(),
             cds_length: None,
             cdna_length: 0,
             source_cache: None,
@@ -783,7 +816,13 @@ impl TranscriptConsequence {
             gencode_primary: transcript.gencode_primary,
             swissprot: transcript.swissprot.clone(),
             trembl: transcript.trembl.clone(),
+            uniparc: transcript.uniparc.clone(),
+            uniprot_isoform: transcript.uniprot_isoform.clone(),
             refseq: transcript.refseq.clone(),
+            transcript_version: transcript.version,
+            gene_version: transcript.gene_version,
+            gene_phenotype: transcript.gene_phenotype.is_some_and(|count| count > 0),
+            mirna: Vec::new(),
             cds_length: transcript.cds_length(),
             cdna_length: transcript.spliced_length(),
             source_cache: None,
@@ -817,6 +856,7 @@ impl TranscriptConsequence {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::coordinate::Strand;
     use crate::transcript::Exon;
 
     fn exon(start: u64, end: u64, rank: u32) -> Exon {
@@ -828,6 +868,82 @@ mod tests {
             phase: -1,
             end_phase: -1,
         }
+    }
+
+    /// A one-exon forward transcript carrying the given phenotype count,
+    /// stable-id versions and UniProt cross-references; every other field is
+    /// empty.
+    fn annotated_transcript(gene_phenotype: Option<u32>) -> Transcript {
+        Transcript {
+            stable_id: "ENST00000000001".into(),
+            version: Some(7),
+            db_id: None,
+            gene_stable_id: "ENSG00000000001".into(),
+            gene_version: Some(12),
+            chr: "1".into(),
+            start: 100,
+            end: 200,
+            strand: Strand::Forward,
+            biotype: "protein_coding".into(),
+            source: "Ensembl".into(),
+            description: None,
+            gene_symbol: None,
+            gene_symbol_source: None,
+            hgnc_id: None,
+            gene_phenotype,
+            canonical: false,
+            mane_select: None,
+            mane_plus_clinical: None,
+            tsl: None,
+            appris: None,
+            ccds: None,
+            protein_id: None,
+            refseq: None,
+            swissprot: None,
+            trembl: None,
+            uniparc: Some("UPI0000000001".to_string()),
+            uniprot_isoform: Some("P00001-2,P00001-3".to_string()),
+            exons: vec![exon(100, 200, 1)],
+            introns: vec![],
+            cdna_coding_start: None,
+            cdna_coding_end: None,
+            coding_region_start: None,
+            coding_region_end: None,
+            translation_start: None,
+            translation_end: None,
+            translation: None,
+            cdna_sequence: None,
+            protein_sequence: None,
+            flags: Arc::from([]),
+            gencode_basic: false,
+            gencode_primary: false,
+            attributes: vec![],
+            vefc: None,
+            derived: Default::default(),
+            id_rank: 0,
+        }
+    }
+
+    /// The versions and UniProt cross-references copy over as the cache
+    /// carries them, the miRNA terms wait for the variant, and `GENE_PHENO`
+    /// follows Perl truthiness on the cached phenotype count
+    /// (`$hash->{GENE_PHENO} = 1 if $self->{gene_phenotype} && $tr->{_gene_phenotype}`,
+    /// OutputFactory.pm:1586 at release/116.2): a count of zero reads as no
+    /// association.
+    #[test]
+    fn for_transcript_copies_versions_xrefs_and_phenotype_flag() {
+        let tc = TranscriptConsequence::for_transcript(&annotated_transcript(Some(3)));
+        assert_eq!(tc.transcript_version, Some(7));
+        assert_eq!(tc.gene_version, Some(12));
+        assert_eq!(tc.uniparc.as_deref(), Some("UPI0000000001"));
+        assert_eq!(tc.uniprot_isoform.as_deref(), Some("P00001-2,P00001-3"));
+        assert!(tc.gene_phenotype);
+        assert!(tc.mirna.is_empty());
+
+        let zero = TranscriptConsequence::for_transcript(&annotated_transcript(Some(0)));
+        assert!(!zero.gene_phenotype);
+        let unknown = TranscriptConsequence::for_transcript(&annotated_transcript(None));
+        assert!(!unknown.gene_phenotype);
     }
 
     #[test]

@@ -7,6 +7,7 @@
 //! (`Bio/EnsEMBL/Variation/...`); the `VEP::...` modules are in ensembl-vep release/115.
 
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use smallvec::{smallvec, SmallVec};
@@ -206,7 +207,146 @@ pub fn calculate_consequences(
     if config.protein_version {
         append_translation_version(&mut tc, transcript);
     }
+    tc.mirna = mirna_structure_terms(analysed, transcript);
     Some(tc)
+}
+
+/// The `miRNA` column's terms (OutputFactory.pm:1624-1664 at release/116.2).
+///
+/// On a transcript of biotype `miRNA` whose first `ncRNA` attribute reads
+/// `<start>:<end> <structure>` (three fields split on whitespace or `:`), the
+/// dot-bracket structure is expanded (`.7(16` is seven `.` then sixteen `(`)
+/// and every cDNA position from the variant's cDNA start to its end (an
+/// insertion's two flanking bases, put in order) that falls inside the
+/// structure contributes its element's term: `miRNA_stem` for a bracket,
+/// `miRNA_loop` for a dot. The terms come sorted, one per distinct structure
+/// character, so a span over both an opening and a closing bracket lists
+/// `miRNA_stem` twice. Nothing is produced when the attribute lacks a
+/// structure, when either cDNA end is undefined (the variant starts or ends in
+/// an intron or outside the transcript) or when the variant lies outside
+/// `<start>..<end>`.
+///
+/// Ensembl VEP's index test reads one position past the structure's end as an
+/// undefined element, which sorts first; it is kept as an empty term, which
+/// beside another term the text formats print as an empty list element and
+/// the JSON format as `null`. A list of that term alone joins to an empty
+/// value, which the writers drop as they drop every empty value, where
+/// Ensembl VEP prints an empty `miRNA=`, an empty tab cell and `[null]`; no
+/// Ensembl structure is shorter than its span, so the case is not reached on
+/// its caches.
+fn mirna_structure_terms(variant: &InputVariant, transcript: &Transcript) -> Vec<String> {
+    if &*transcript.biotype != "miRNA" {
+        return Vec::new();
+    }
+    let Some(attribute) = transcript.attributes.iter().find(|a| a.code == "ncRNA") else {
+        return Vec::new();
+    };
+    let fields = ncrna_fields(&attribute.value);
+    let (Some(start), Some(end), Some(structure)) = (
+        fields.first().and_then(|f| f.parse::<i64>().ok()),
+        fields.get(1).and_then(|f| f.parse::<i64>().ok()),
+        fields.get(2).copied(),
+    ) else {
+        return Vec::new();
+    };
+    if start == 0 || end == 0 || !structure.contains(['(', '.', ')']) {
+        return Vec::new();
+    }
+    let Some((cdna_start, cdna_end)) = cdna_span(variant, transcript) else {
+        return Vec::new();
+    };
+    let overlaps_structure = end >= cdna_start && start <= cdna_end;
+    if cdna_start == 0 || cdna_end == 0 || !overlaps_structure {
+        return Vec::new();
+    }
+    let (cdna_start, cdna_end) = (cdna_start.min(cdna_end), cdna_start.max(cdna_end));
+
+    let mut elements: Vec<char> = Vec::with_capacity(structure.len());
+    let mut chars = structure.chars().peekable();
+    while let Some(c) = chars.next() {
+        if !matches!(c, '(' | '.' | ')') {
+            continue;
+        }
+        let mut digits = String::new();
+        while let Some(d) = chars.next_if(|d| d.is_ascii_digit()) {
+            digits.push(d);
+        }
+        let count = digits.parse::<usize>().unwrap_or(1).max(1);
+        elements.extend(std::iter::repeat_n(c, count));
+    }
+
+    // `sort map {$map{$_}} keys %chars` (OutputFactory.pm:1662): the set is of
+    // structure characters, not of terms, so `(` and `)` each yield a `miRNA_stem`.
+    let mut overlapped: BTreeSet<Option<char>> = BTreeSet::new();
+    for position in cdna_start..=cdna_end {
+        let offset = position - start;
+        if offset < 0 || offset > elements.len() as i64 {
+            continue;
+        }
+        overlapped.insert(elements.get(offset as usize).copied());
+    }
+    let mut terms: Vec<String> = overlapped
+        .into_iter()
+        .map(|element| match element {
+            Some('.') => "miRNA_loop".to_string(),
+            Some(_) => "miRNA_stem".to_string(),
+            None => String::new(),
+        })
+        .collect();
+    terms.sort();
+    terms
+}
+
+/// The first three fields of an `ncRNA` attribute value, split as Perl's
+/// `split /\s+|\:/` splits it: a colon or a run of whitespace ends a field, so
+/// a colon beside whitespace leaves an empty field between them.
+fn ncrna_fields(value: &str) -> Vec<&str> {
+    let mut fields = Vec::with_capacity(3);
+    let mut field_start = 0;
+    let bytes = value.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && fields.len() < 3 {
+        let separator_len = if bytes[i] == b':' {
+            1
+        } else if bytes[i].is_ascii_whitespace() {
+            bytes[i..]
+                .iter()
+                .take_while(|b| b.is_ascii_whitespace())
+                .count()
+        } else {
+            i += 1;
+            continue;
+        };
+        fields.push(&value[field_start..i]);
+        i += separator_len;
+        field_start = i;
+    }
+    if fields.len() < 3 && field_start < value.len() {
+        fields.push(&value[field_start..]);
+    }
+    fields
+}
+
+/// The variant's cDNA start and end on the transcript as `BaseTranscriptVariation`'s
+/// `cdna_start` and `cdna_end` give them: the first mapped segment's start and
+/// the last's end, `None` when either segment is a gap. An insertion maps its
+/// two flanking bases, so its start exceeds its end.
+fn cdna_span(variant: &InputVariant, transcript: &Transcript) -> Option<(i64, i64)> {
+    use crate::display::Segment;
+    let mapper = transcript.vefc.as_ref()?.mapper.as_ref()?;
+    let segments = crate::display::genomic2cdna(
+        mapper,
+        variant.start as i64,
+        variant.end as i64,
+        transcript.strand.as_i8(),
+    );
+    let Segment::Coord { start, .. } = segments.first()? else {
+        return None;
+    };
+    let Segment::Coord { end, .. } = segments.last()? else {
+        return None;
+    };
+    Some((*start, *end))
 }
 
 /// The span an insertion or deletion is annotated at under `--shift_3prime 1`:
@@ -3690,6 +3830,157 @@ mod tests {
     use super::*;
     use crate::test_helpers::make_test_transcript;
     use vep_core::consequence::FeatureType;
+
+    /// A one-exon 85-base miRNA transcript at 1000-1084 carrying the `ncRNA`
+    /// structure of ENST00000612014 in the Ensembl VEP 116 GRCh38 cache,
+    /// `1:85 .7(16.(4.(3.2(4.10)4.2)3.).)14.6)5`: cDNA positions 1-7 are loop,
+    /// 8-23 stem, 24 loop, 25-28 stem and so on. On the forward strand cDNA
+    /// position `c` is genomic `999 + c`; on the reverse strand it is `1085 - c`.
+    fn mirna_transcript(strand: vep_core::coordinate::Strand, structure: &str) -> Transcript {
+        use vep_core::transcript::{
+            Attribute, Exon, ExonCoordMapper, MapperPair, TranscriptMapper,
+        };
+        let mut tx = make_test_transcript();
+        tx.stable_id = "ENST00000612014".into();
+        tx.biotype = "miRNA".into();
+        tx.strand = strand;
+        tx.start = 1000;
+        tx.end = 1084;
+        tx.exons = vec![Exon {
+            stable_id: None,
+            start: 1000,
+            end: 1084,
+            rank: 1,
+            phase: -1,
+            end_phase: -1,
+        }];
+        tx.introns = Vec::new();
+        tx.translation = None;
+        tx.protein_id = None;
+        tx.cdna_coding_start = None;
+        tx.cdna_coding_end = None;
+        tx.coding_region_start = None;
+        tx.coding_region_end = None;
+        tx.translation_start = None;
+        tx.translation_end = None;
+        tx.attributes = vec![Attribute {
+            code: "ncRNA".to_string(),
+            value: structure.to_string(),
+        }];
+        let vefc = tx.vefc.as_mut().unwrap();
+        vefc.translateable_seq = None;
+        vefc.introns = Vec::new();
+        vefc.sorted_exons = tx.exons.clone();
+        vefc.mapper = Some(TranscriptMapper {
+            start_phase: -1,
+            cdna_coding_start: 0,
+            cdna_coding_end: 0,
+            exon_coord_mapper: ExonCoordMapper::new(vec![MapperPair {
+                from_start: 1,
+                from_end: 85,
+                to_start: 1000,
+                to_end: 1084,
+                ori: strand.as_i8(),
+            }]),
+        });
+        tx
+    }
+
+    const HAIRPIN: &str = "1:85 .7(16.(4.(3.2(4.10)4.2)3.).)14.6)5";
+
+    fn snv(pos: u64) -> InputVariant {
+        InputVariant::new("21".into(), pos, pos, b"A".to_vec(), b"G".to_vec())
+    }
+
+    fn terms(variant: &InputVariant, tx: &Transcript) -> Vec<String> {
+        mirna_structure_terms(variant, tx)
+    }
+
+    /// `miRNA` reads the structure element under each cDNA position of the
+    /// variant (OutputFactory.pm:1624-1664 at release/116.2): a base in a run
+    /// of dots is `miRNA_loop`, a base in a bracket run `miRNA_stem`, a
+    /// deletion across the boundary both, sorted (Ensembl VEP 116.2 writes
+    /// `miRNA=miRNA_loop,miRNA_stem` for the deletion `21 8249508 TGCG T` on
+    /// MIR6724-2 and `miRNA=miRNA_stem` for the insertion `21 8249510 C CTTA`,
+    /// whose two flanking bases are both stem). A deletion from one arm across
+    /// the terminal loop into the other arm (cDNA 35-52, `(4.10)4`) lists
+    /// `miRNA_stem` once per bracket kind, as the Perl `sort map` over the
+    /// distinct characters does. The same cDNA positions decide on the reverse
+    /// strand; a variant outside the transcript, a transcript of another
+    /// biotype, and an attribute without a structure give nothing.
+    #[test]
+    fn mirna_stem_and_loop_from_structure() {
+        use vep_core::coordinate::Strand;
+        let forward = mirna_transcript(Strand::Forward, HAIRPIN);
+        assert_eq!(terms(&snv(1003), &forward), ["miRNA_loop"]);
+        assert_eq!(terms(&snv(1010), &forward), ["miRNA_stem"]);
+        let deletion = InputVariant::new("21".into(), 1006, 1008, b"ACG".to_vec(), b"-".to_vec());
+        assert_eq!(terms(&deletion, &forward), ["miRNA_loop", "miRNA_stem"]);
+        let insertion = InputVariant::new("21".into(), 1010, 1009, b"-".to_vec(), b"TTA".to_vec());
+        assert_eq!(terms(&insertion, &forward), ["miRNA_stem"]);
+        let arm_to_arm = InputVariant::new(
+            "21".into(),
+            1034,
+            1051,
+            b"ACGTACGTACGTACGTAC".to_vec(),
+            b"-".to_vec(),
+        );
+        assert_eq!(
+            terms(&arm_to_arm, &forward),
+            ["miRNA_loop", "miRNA_stem", "miRNA_stem"]
+        );
+        assert!(terms(&snv(990), &forward).is_empty());
+        assert!(terms(&snv(1090), &forward).is_empty());
+
+        let reverse = mirna_transcript(Strand::Reverse, HAIRPIN);
+        assert_eq!(terms(&snv(1084), &reverse), ["miRNA_loop"]);
+        assert_eq!(terms(&snv(1075), &reverse), ["miRNA_stem"]);
+
+        let mut snorna = mirna_transcript(Strand::Forward, HAIRPIN);
+        snorna.biotype = "snoRNA".into();
+        assert!(terms(&snv(1003), &snorna).is_empty());
+        let bare = mirna_transcript(Strand::Forward, "1:85");
+        assert!(terms(&snv(1003), &bare).is_empty());
+        let no_structure = mirna_transcript(Strand::Forward, "1:85 x");
+        assert!(terms(&snv(1003), &no_structure).is_empty());
+
+        let config = EffectsConfig::default();
+        let tc = calculate_consequences(&deletion, &forward, &config).unwrap();
+        assert_eq!(tc.mirna, ["miRNA_loop", "miRNA_stem"]);
+        assert!(
+            calculate_consequences(&snv(1010), &make_test_transcript(), &config)
+                .is_none_or(|tc| tc.mirna.is_empty())
+        );
+    }
+
+    /// Ensembl VEP's index test skips an offset below zero or above the
+    /// structure's length, so the element one past a structure shorter than
+    /// its `<start>..<end>` span is read as undefined, which the list keeps as
+    /// an empty first term; a variant outside the span contributes nothing.
+    #[test]
+    fn mirna_structure_read_past_its_end_keeps_the_undefined_term() {
+        use vep_core::coordinate::Strand;
+        let short = mirna_transcript(Strand::Forward, "1:85 .7(16.(4.(3.2(4.10)4.2)3.).)14.6)4");
+        assert_eq!(terms(&snv(1084), &short), [""]);
+        let span = InputVariant::new("21".into(), 1083, 1084, b"AC".to_vec(), b"-".to_vec());
+        assert_eq!(terms(&span, &short), ["", "miRNA_stem"]);
+        let offset = mirna_transcript(Strand::Forward, "10:85 .7(16.(4.(3.2(4.10)4.2)3.).)14.6)5");
+        assert!(terms(&snv(1003), &offset).is_empty());
+        assert_eq!(terms(&snv(1012), &offset), ["miRNA_loop"]);
+    }
+
+    /// `split /\s+|\:/`: a colon or a whitespace run ends a field, a colon
+    /// beside whitespace leaves an empty field, and only the first three fields
+    /// are read.
+    #[test]
+    fn ncrna_fields_split_on_colon_or_whitespace_run() {
+        assert_eq!(ncrna_fields("1:85 .7(16"), ["1", "85", ".7(16"]);
+        assert_eq!(ncrna_fields("1:85  .7(16 more"), ["1", "85", ".7(16"]);
+        assert_eq!(ncrna_fields("1: 85 x"), ["1", "", "85"]);
+        assert_eq!(ncrna_fields(" 1:85 x"), ["", "1", "85"]);
+        assert_eq!(ncrna_fields("1:85"), ["1", "85"]);
+        assert_eq!(ncrna_fields("1:85 "), ["1", "85"]);
+    }
 
     #[test]
     fn test_upstream_variant() {

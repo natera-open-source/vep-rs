@@ -1,0 +1,23 @@
+{
+  "assembly": "GRCh37",
+  "cache_version": 116,
+  "polyphen": "b",
+  "regulatory": true,
+  "sift": "b",
+  "source_versions": {
+    "1000genomes": "phase3",
+    "COSMIC": "98",
+    "ClinVar": "202306",
+    "HGMD-PUBLIC": "20204",
+    "assembly": "GRCh37.p13",
+    "dbSNP": "156",
+    "gencode": "GENCODE 19",
+    "genebuild": "2011-04",
+    "gnomADe": "v4.1",
+    "gnomADg": "v4.1",
+    "polyphen": "2.2.2",
+    "regbuild": "1.0",
+    "sift": "sift5.2.2"
+  },
+  "species": "homo_sapiens"
+}

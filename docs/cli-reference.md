@@ -120,15 +120,17 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--symbol` | bool | false | Add gene symbol to output |
 | `--biotype` | bool | false | Add transcript biotype to output |
 | `--canonical` | bool | false | Flag canonical transcripts |
-| `--mane` | bool | false | Add MANE Select and MANE Plus Clinical flags |
-| `--mane_select` | bool | false | Add MANE Select flag only |
-| `--tsl` | bool | false | Add Transcript Support Level |
-| `--appris` | bool | false | Add APPRIS isoform annotation |
-| `--ccds` | bool | false | Add CCDS transcript ID |
-| `--protein` | bool | false | Add Ensembl protein ID |
+| `--mane` | bool | false | Add the MANE, MANE_SELECT and MANE_PLUS_CLINICAL columns: the MANE sets the transcript belongs to and the RefSeq accession each set names (switches on --mane_select) |
+| `--mane_select` | bool | false | Add the MANE and MANE_SELECT columns alone: MANE lists MANE_Select on a MANE Select transcript and MANE_SELECT carries its RefSeq accession |
+| `--tsl` | bool | false | Add the TSL column: the digit of the transcript's support level, empty for tslNA (the GRCh37 gene set carries no level) |
+| `--appris` | bool | false | Add the APPRIS column with the grade abbreviated as Ensembl VEP prints it: principal1 is P1, alternative2 is A2, principalM is PM |
+| `--ccds` | bool | false | Add the CCDS column: the transcript's CCDS identifier (a native cache carries it from the GFF3; no RefSeq or merged cache is built natively) |
+| `--protein` | bool | false | Add the ENSP column: the Ensembl protein identifier |
 | `--protein_version` | bool | false | Add the translation version to the Ensembl protein ID (ENSP00000286808.3); needs --protein |
-| `--uniprot` | bool | false | Add UniProt cross-references |
-| `--xref_refseq` | bool | false | Add RefSeq transcript cross-references |
+| `--uniprot` | bool | false | Add the SWISSPROT, TREMBL, UNIPARC and UNIPROT_ISOFORM columns: the translation's UniProt cross-references (a native cache carries them only when built with --core-dumps) |
+| `--xref_refseq` | bool | false | Add the RefSeq column: the RefSeq mRNA identifiers cross-referenced to the transcript (a native cache carries them only when built with --core-dumps) |
+| `--transcript_version` | bool | false | Append the transcript's version to the Feature column (ENST00000366667.4) unless the identifier already ends in one |
+| `--gene_version` | bool | false | Append the gene's version to the Gene column (ENSG00000142168.14) unless the identifier already ends in one |
 | `--hgvs` | bool | false | Add HGVS coding and protein notations; needs a FASTA named with --fasta or found in the cache directory and stops the run without one |
 | `--hgvsg` | bool | false | Add the HGVS genomic notation (HGVSg); needs a FASTA named with --fasta or found in the cache directory and stops the run without one |
 | `--hgvsp_use_prediction` | bool | false | Write HGVSp in the predicted form, the description after p. in parentheses (ENSP00000286808.3:p.(Arg97Ter)); the = of a synonymous description is still escaped as %3D in the text formats |
@@ -165,7 +167,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--max_af` | bool | false | Add highest allele frequency across populations |
 | `--pubmed` | bool | false | Add PubMed IDs for co-located variants |
 | `--old_maf` | bool | false | Rewrite the AFR, AMR, ASN and EUR frequency values of each co-located variant as a bare minor-allele frequency: the allele is stripped, the first value kept and a value above 0.5 inverted; the allele-keyed frequency columns then find no allele in them and print empty |
-| `--gene_phenotype` | bool | false | Add gene-phenotype associations |
+| `--gene_phenotype` | bool | false | Add the GENE_PHENO column: 1 on a transcript whose gene the cache associates with a phenotype, disease or trait, empty otherwise |
 
 ### Filtering / Picking
 
@@ -231,7 +233,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | --- | --- | --- | --- |
 | `--dont_skip` | bool | false | Abort the run on a variant that fails parsing instead of skipping it (VEP keeps the variant) |
 | `--allow_non_variant` | bool | false | Process non-variant lines in VCF (e.g., reference-only calls) |
-| `--mirna` | bool | false | Add the miRNA column (accepted for VEP compatibility; the value is not computed and stays empty) |
+| `--mirna` | bool | false | Add the miRNA column: the secondary-structure elements of a miRNA transcript the variant overlaps, as the SO terms miRNA_stem and miRNA_loop (a native cache carries the structure only when built with --core-dumps) |
 | `--lrg` | bool | false | Refused with an error: --lrg is not supported: LRG mapping needs the Ensembl core database (Ensembl VEP: Cannot map to LRGs in offline mode) |
 | `--tmpdir` | String | -- | Accepted without effect: no module of Ensembl VEP reads it, and vep-rs writes its Parquet intermediate beside the output file |
 
