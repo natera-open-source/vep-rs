@@ -2,11 +2,21 @@
 
 vep-rs supports five output formats, selected via `--output_format` or the shorthand flags `--vcf`, `--json`, `--tab`:
 
-- `vep` (default): VEP's default tab-delimited format with an `Extra` column
+- `vep` (default): VEP's default tab-delimited format with an `Extra` column; `ensembl` is Ensembl VEP's other name for it
 - `tab`: VEP's `--tab` format, every Extra key as its own named column
 - `vcf`: the input VCF with a CSQ INFO field appended
 - `json`: line-delimited JSON, one object per input record
-- `parquet`: a Hive-partitioned Parquet directory produced via a `duckdb` subprocess (see [Parquet Format](#parquet-format) below)
+- `parquet`: a Hive-partitioned Parquet directory produced via a `duckdb` subprocess (see [Parquet Format](#parquet-format) below); vep-rs's own, with no Ensembl VEP counterpart
+
+The `--output_format` value is matched in any case (`VCF`, `Json`), as Ensembl VEP lower-cases it; a value outside the six is an argument error listing them. `--vcf`, `--json` and `--tab` refuse one another with Ensembl VEP's message (`Can't use --json and --vcf together`), and `--vcf` with `--most_severe` or `--summary` is refused the same way ([CLI reference](cli-reference.md#incompatible-flags-configpm615-632)).
+
+### Compressed output
+
+`--compress_output gzip` writes the output as one gzip member and `--compress_output bgzip` as a BGZF stream (gzip members of at most 64 KiB ending in the empty end-of-file member, the form `bgzip`, `tabix` and `samtools` read), to the output file under the name given, or to standard output under `-o STDOUT`. Ensembl VEP pipes its output through the external `gzip -c` or `bgzip -c`; vep-rs encodes in process, so the decompressed text is the same output and the compressed bytes are the encoder's. The flag applies to the default, `tab`, `vcf` and `json` formats and is refused with `parquet`, whose files carry their own compression. The golden corpus `GRCh38-writers` runs both encoders in every text format and compares the decompressed output with Ensembl VEP's.
+
+### Headers
+
+Every text format opens with a header block, and `--no_headers` suppresses it whole, the column line included, in the default, `tab` and `vcf` formats (`json` has none); the Parquet TSV intermediate keeps its column line, which DuckDB reads as the schema, whatever the flag. The default and `tab` headers are Ensembl VEP's `##` block: the version line, the time, the cache path, the API line, one `## <source> version <value>` line per source version of the cache, the column descriptions, the command line and the column line. Two kinds of line Ensembl VEP prints there have no counterpart: the Perl API component versions (`## ensembl version 116.0d85231`, `## ensembl-variation version ...`), since no Perl API runs here, and the `## Connected to <database>` line of a database run, since vep-rs reads a local cache only; the `## <short name> : [PATH]/<file>` lines of `--custom` sources are not written, since custom annotation sources are not supported. The VCF header's `##INFO` definition and plugin lines follow the same rule, below.
 
 ## Parity with Ensembl VEP
 
@@ -72,7 +82,7 @@ One line per (allele, transcript) consequence, plus one intergenic line per alle
 #Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
 ```
 
-The source-version lines come from the cache's `info.json` (`source_versions`, written by `scripts/data/storable_to_json.pl` and `vep-cache-builder`, or by `scripts/golden/prune_json_cache.py --perl-info` from a VEP cache's `info.txt`). The `Using cache in` line prints the cache directory as given; `--mask_header_cache_path` prints it as `[PATH]/<leaf>`, its last component alone, here, in the `--tab` header, in the VCF `cache=` token and in the Parquet footer. The `Extra column keys` block lists every key the active flags can produce (plugin keys are not listed). `--no_headers` suppresses the whole block, column line included.
+The source-version lines come from the cache's `info.json` (`source_versions`, written by `scripts/data/storable_to_json.pl` and `vep-cache-builder`, or by `scripts/golden/prune_json_cache.py --perl-info` from a VEP cache's `info.txt`). The `Using cache in` line prints the cache directory as given; `--mask_header_cache_path` prints it as `[PATH]/<leaf>`, its last component alone, here, in the `--tab` header, in the VCF `cache=` token and in the Parquet footer. The `Extra column keys` block lists every key the active flags can produce, then one `## <KEY> : <description>` line per field of each loaded built-in plugin, with the plugin's own text, as Ensembl VEP lists its plugins' header info. `--no_headers` suppresses the whole block, column line included. `--fields` changes nothing here: the default format keeps its thirteen columns and its `Extra` column whatever the list names, as in Ensembl VEP.
 
 ### Columns
 
@@ -112,15 +122,19 @@ Two records of the GRCh37 golden corpus as Ensembl VEP 116.2 wrote them (`tests/
 
 ## Tab Format
 
-Selected with `--tab` or `--output_format tab`. The 13 default columns followed by one column per Extra key the active flags can produce, in the Extra key order above, then one per built-in plugin field; `-` for an absent value, lists joined by `,`. The header repeats the default format's block with a `## <column> : <description>` line for every column and no `Extra column keys` block, and its column line names every column.
+Selected with `--tab` or `--output_format tab`. The 13 default columns followed by one column per Extra key the active flags can produce, in the Extra key order above, then one per built-in plugin field; `-` for an absent value, lists joined by `,`. The header repeats the default format's block with a `## <column> : <description>` line for every column (a plugin column takes the plugin's own description) and no `Extra column keys` block, and its column line names every column.
+
+### Choosing the columns (`--fields`)
+
+`--fields` names the columns, comma-separated, and the list stands in for the whole default set, defaults included, in the order given: `--fields Location,Allele,Feature,Consequence,SYMBOL` writes exactly those five columns, each with its description line. Any field a flag or a plugin produces is a valid name (a field whose flag is off prints `-`, so `SYMBOL` needs `--symbol`), and a name nothing produces prints `-` in every row under a `## <name> : ?` description line, as Ensembl VEP writes it. Nothing is trimmed and a trailing comma opens no column. An empty list writes the tab header block and no data line, as Ensembl VEP's output loop does (every row is the empty string, which ends it); the VCF output's entries are then empty (`CSQ=,,`) on both engines. That loop also ends at a row whose whole line is `0`, so `--tab --fields SIFT` makes Ensembl VEP stop at the first SIFT score of `0` and lose every later row; vep-rs writes every row. The list applies to the `tab` and `vcf` outputs; the default and JSON formats ignore it, as Ensembl VEP's do, and `--output_format parquet` refuses it, since the Parquet column set is fixed (`ERROR: [output] --fields applies to --tab and --vcf output; the Parquet column set is fixed`). The `GRCh38-writers` corpus runs a list that reorders the columns and names both a field whose flag is off and a field nothing produces, in every format.
 
 ## VCF Format
 
-Selected with `--vcf` or `--output_format vcf`, either of which also switches on `--symbol`, `--biotype` and `--numbers` (in VEP only the `--vcf` flag does). One line per input record: the record's own columns, with every allele's consequences comma-joined into the CSQ INFO field; an earlier CSQ entry is replaced.
+Selected with `--vcf` or `--output_format vcf`, either of which also switches on `--symbol`, `--biotype` and `--numbers` (in VEP only the `--vcf` flag does). One line per input record: the record's own columns, with every allele's consequences comma-joined into the INFO field named by `--vcf_info_field` (`CSQ` by default); an earlier entry under that name is replaced, unless `--keep_csq` keeps it.
 
 ### Header
 
-The input's meta lines are kept (minus any earlier CSQ definition, `##VEP` or `##vep-rs` line), a `##fileformat` line is added when the input lacks one, then:
+The input's meta lines are kept (minus any earlier definition of the INFO field and any `##VEP` or `##vep-rs` line), a `##fileformat` line is added when the input lacks one, then the `##VEP=` line, the `##vep-rs=<version>` line, the field's `##INFO` definition, one `##<KEY>=<description>` line per field of each loaded built-in plugin, the command line and the column line:
 
 ```
 ##VEP="v116.2" API="v116" time="[TIME]" cache="[PATH]/116" 1000genomes="phase3" COSMIC="98" ...
@@ -130,9 +144,15 @@ The input's meta lines are kept (minus any earlier CSQ definition, `##VEP` or `#
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
 ```
 
+Ensembl VEP's `##VEP=` line also carries its Perl API component versions (`ensembl=116.0d85231 ...`), which have no counterpart here, and its `##INFO=<ID=<short>_<field>,...>` lines for `--custom` sources are not written, since custom annotation sources are not supported.
+
+### Keeping an earlier annotation (`--keep_csq`)
+
+An input that Ensembl VEP or vep-rs annotated before carries a `CSQ=` entry and the header lines that describe it. Without `--keep_csq` the first entry under the field's name is removed from each line and its `##INFO` and `##VEP` header lines are dropped, so the output describes one annotation. With `--keep_csq` every input header line stays and the new entry is appended under the same name, so the header carries two `##INFO=<ID=CSQ,...>` lines (the old Format list and the new one) and two `##VEP=` lines, and a line's INFO column carries two `CSQ=` keys, the old entry first: this is Ensembl VEP's own output, reproduced as is, and a reader that keeps one value per INFO key sees only one of them. `--vcf_info_field ANN` names the new entry `ANN` and the new header line `##INFO=<ID=ANN,...>`; an earlier `CSQ=` entry is then another key, kept beside it whether or not `--keep_csq` is given. The `keep-csq` and `keep-csq-ann` sets of the `GRCh38-writers` corpus run both on an input Ensembl VEP 116.2 annotated first.
+
 ### CSQ Field Structure
 
-The Format list is VEP's fixed prefix (`Allele` to `Existing_variation`) followed by the active flag fields and the built-in plugin fields. With the `--vcf` implied flags the default list is the one above.
+The Format list is VEP's fixed prefix (`Allele` to `Existing_variation`) followed by the active flag fields and the built-in plugin fields, or the `--fields` list alone in its own order (a name nothing produces is an empty subfield). With the `--vcf` implied flags the default list is the one above.
 
 The CSQ value of record 806345 above, from the corpus's `expected/vcf.vcf.gz`; the file joins its four entries with `,` on one line:
 
@@ -252,13 +272,17 @@ An allele gets an `intergenic_consequences` entry only when it overlaps no trans
 - Column renames: `Consequence` to `consequence_terms` (array), `Gene` to `gene_id`, `Allele` to `variant_allele`, `Feature` to `transcript_id`, `SYMBOL` to `gene_symbol`, `OverlapBP` to `bp_overlap`, `OverlapPC` to `percentage_overlap`, `ENSP` to `protein_id` (`ENSP00000286808.3` under `--protein_version`), `RefSeq` to `refseq_transcript_ids`; `Feature_type` is dropped; `YES` flags become `1`.
 - Positions split into `*_start` and `*_end`, each written only when defined: `390-?` gives `cds_start` 390 alone and `?-335` gives `cdna_end` 335 alone, as Ensembl VEP 116 writes them. A single position fills both keys. SIFT and PolyPhen split into `*_prediction` and `*_score`.
 - Numeric-looking values are numbers except identifier keys; a zero fraction prints as an integer (`100`, not `100.0`).
-- `gene_symbol`, `gene_symbol_source`, `biotype`, `variant_class` and the other flag-gated keys appear only under their flags. Absent or `-` values are omitted.
+- `gene_symbol`, `gene_symbol_source`, `biotype`, `variant_class` and the other flag-gated keys appear only under their flags. Absent or `-` values are omitted. `--fields` does not apply: every key the flags produce is written, as in Ensembl VEP.
 - Plugin fields, built-in or dylib, sit inside each consequence object; none is written at the record level.
 - `vep_rs_version` names the vep-rs release that wrote the object, on every object; Ensembl VEP writes no such key ([Engine identity](#engine-identity)).
 
+### Key set
+
+The object's keys are Ensembl VEP's with two exceptions. A `colocated_variants` entry carries `id`, `allele_string`, `start`, `end`, `strand`, `clin_sig`, `somatic`, `phenotype_or_disease`, `pubmed` and one `frequencies` object keyed by population, where Ensembl VEP nests the frequencies under the allele and adds `var_synonyms`; the record-level `existing_variation` array beside it is vep-rs's own. `custom_annotations`, the record-level object Ensembl VEP writes for `--custom` sources, is never written, since custom annotation sources are not supported.
+
 ## Parquet Format
 
-Selected with `--output_format parquet`. Writes a TSV intermediate (one row per allele x transcript consequence, in VEP's row order) at `<output>.tsv.tmp` and post-processes it to Parquet via the `duckdb` CLI; the intermediate is deleted on success unless the hidden `--keep_intermediate` is given. The output is a directory, so `-o STDOUT` is refused (`ERROR: [output] --output_format parquet needs a file path`).
+Selected with `--output_format parquet`. Writes a TSV intermediate (one row per allele x transcript consequence, in VEP's row order) at `<output>.tsv.tmp` and post-processes it to Parquet via the `duckdb` CLI; the intermediate is deleted on success unless the hidden `--keep_intermediate` is given. The output is a directory, so `-o STDOUT` is refused (`ERROR: [output] --output_format parquet needs a file path`); `--fields` and `--compress_output` are refused with it too (the column set is fixed, and the files carry their own compression), and `--no_headers` leaves the intermediate's column line in place, since DuckDB reads the schema from it.
 
 **Requires `duckdb` 1.2 or newer on PATH.** Install via `brew install duckdb` (macOS) or the CLI archive from <https://duckdb.org/docs/installation/> (Linux: the `duckdb_cli-linux-*.zip` release asset). vep-rs checks for it after the FASTA, plugins and variation cache are loaded and before the first variant is read, and fails there if `duckdb` is missing or too old, so no annotation is spent on a run it cannot finalize.
 
@@ -277,7 +301,7 @@ Read it with `read_parquet('out.parquet/**/*.parquet', hive_partitioning=false)`
 
 ### Schema
 
-Five key columns, then exactly the `--tab` columns in `--tab` order:
+Five key columns, then exactly the default `--tab` columns in `--tab` order:
 
 | Column                                       | Type     | Notes                                         |
 | -------------------------------------------- | -------- | --------------------------------------------- |

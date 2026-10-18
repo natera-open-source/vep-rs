@@ -42,6 +42,7 @@ pub mod dylib_plugins;
 pub mod filter_set;
 pub mod json_cache;
 pub mod option_rules;
+pub mod output_compress;
 pub mod pick;
 pub(crate) mod pipeline;
 pub(crate) mod render;

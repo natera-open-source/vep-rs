@@ -106,8 +106,8 @@ clin_sig_allele_revcomp_116	OutputFactory.pm	implemented	open
 ClinPred	ClinPred.pm	implemented	open			
 clinvar_somatic_classification	Config.pm	documented_subset	open			
 coding_only	OutputFactory.pm	implemented	open			
-compress-output-gzip-vs-bgzip	BaseRunner.pm	implemented	open			
-compress_output	Config.pm	implemented	open			
+compress-output-gzip-vs-bgzip	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/output_compress.rs::bgzip_output_is_bgzf_and_gzip_output_is_plain_gzip	tests/golden/116/GRCh38-writers	
+compress_output	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::compress_output_rejects_unknown_value_with_perls_message;crates/vep-cli/tests/integration_test.rs::compress_output_writes_gzip_and_bgzip_streams_of_the_plain_output;crates/vep-cli/src/config.rs::parquet_with_compress_output_is_refused	tests/golden/116/GRCh38-writers	
 condel	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::condel_is_accepted_without_effect		
 config	Config.pm::read_config_from_file	implemented	open			
 config-file	Config.pm	implemented	open			
@@ -131,7 +131,7 @@ dbscSNV	dbscSNV.pm	implemented	open
 dead-input-code	-	removed	open			
 debug	Config.pm	accepted_noop	open			
 decompression_threads	-	implemented	open			
-default-format-header-lines	BaseTab.pm	documented_subset	open			
+default-format-header-lines	BaseTab.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/fields.rs::default_header_lists_plugin_key_descriptions	tests/golden/116/GRCh38-writers	
 del-star-allele	VCF.pm	implemented	open			
 delimiter	Config.pm	implemented	open			
 DeNovo	DeNovo.pm	error	open			
@@ -169,8 +169,8 @@ fasta-download-and-indexing	INSTALL.pl	implemented	open
 fasta_dir	BaseVEP.pm	implemented	open			
 FATHMM	FATHMM.pm	error	open			
 FATHMM_MKL	FATHMM_MKL.pm	error	open			
-fields	Config.pm	implemented	open			
-fields-grammar	Config.pm	implemented	open			
+fields	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::fields_replace_the_tab_columns_in_the_given_order;crates/vep-io/src/output/vcf_output.rs::fields_replace_the_csq_format;crates/vep-io/src/output/fields.rs::inactive_flag_field_named_by_fields_prints_dash;crates/vep-cli/src/config.rs::parquet_with_fields_is_refused	tests/golden/116/GRCh38-writers	
+fields-grammar	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::unknown_field_prints_dash_and_question_mark_description;crates/vep-cli/src/config.rs::fields_split_follows_perl	tests/golden/116/GRCh38-writers	
 fileformat-version-check	BaseVCF4.pm	accepted_noop	open			
 filter-vep	filter_vep	implemented	open			
 filter-vep-ontology	filter_vep	documented_subset	open			
@@ -266,12 +266,12 @@ IntAct	IntAct.pm	error	open
 is_canonical	Database/Transcript.pm	implemented	open			
 is_multispecies	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::is_multispecies_is_refused		
 iupac-alleles	Parser.pm	accepted_noop	open			
-json	Config.pm	implemented	open			
-json-output-key-set	JSON.pm	documented_subset	open			
+json	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::json_with_vcf_or_tab_is_perls_error;crates/vep-cli/src/runner.rs::json_flag_implies_no_escape	tests/golden/116/GRCh38-writers	
+json-output-key-set	JSON.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/json.rs::total_length_json_keeps_perls_split_strings	tests/golden/116/GRCh38-writers	
 json-regulatory-consequences	OutputFactory/JSON.pm	documented_subset	open			
 json_cache	-	documented_subset	landed:documented_subset	crates/vep-cli/src/cache_resolve.rs::json_cache_missing_transcripts_is_fatal;crates/vep-cli/src/cache_resolve.rs::json_cache_missing_info_json_is_fatal;crates/vep-cli/src/cache_resolve.rs::json_cache_typo_path_is_fatal	tests/golden/116/GRCh38-run-control	
 keep_ann	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::keep_ann_is_accepted_without_effect		
-keep_csq	Config.pm	implemented	open			
+keep_csq	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/vcf_output.rs::keep_csq_keeps_the_old_info_line_and_the_old_entry;crates/vep-cli/src/config.rs::keep_csq_is_read_and_keep_ann_is_not	tests/golden/116/GRCh38-writers	
 keep_intermediate	-	removed	open			
 LD	LD.pm	error	open			
 library-embedding	Runner.pm	implemented	open			
@@ -321,7 +321,7 @@ no_check_alleles	Config.pm	implemented	open
 no_check_variants_order	InputBuffer.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::no_check_variants_order_is_accepted_without_effect		
 no_escape	Config.pm	implemented	open			
 no_fasta	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::no_fasta_suppresses_autodetect	tests/golden/116/GRCh38-run-control	
-no_headers	Config.pm	implemented	open			
+no_headers	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/integration_test.rs::no_headers_writes_no_hash_line_in_default_tab_and_vcf	tests/golden/116/GRCh38-writers	
 no_intergenic	OutputFactory.pm	implemented	open			
 no_progress	Config.pm	implemented	open			
 no_stats	BaseRunner.pm	implemented	open			
@@ -335,7 +335,7 @@ option-prefix-abbreviation	Config.pm	implemented	open
 option_rule_tables	Config.pm	implemented	landed:implemented	crates/vep-cli/src/option_rules.rs::incompatible_pairs_match_config_pm;crates/vep-cli/src/option_rules.rs::requires_match_config_pm;crates/vep-cli/src/option_rules.rs::option_sets_match_config_pm;crates/vep-cli/src/option_rules.rs::repeated_plugin_and_custom_accumulate;crates/vep-cli/src/option_rules.rs::list_flags_split_on_comma;crates/vep-cli/src/option_rules.rs::output_format_validated	tests/golden/116/GRCh38-run-control	
 os_and_architecture_matrix	-	documented_subset	open			
 output_file	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::stdout_literal_is_case_insensitive;crates/vep-cli/tests/cli_run_control.rs::repeated_output_file_keeps_last_with_warning;crates/vep-cli/tests/cli_run_control.rs::existing_output_is_refused_with_ensembl_veps_text	tests/golden/116/GRCh38-run-control	
-output_format	Config.pm	documented_subset	open			
+output_format	Config.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/config.rs::output_format_is_lower_cased_validated_and_ensembl_is_vep	tests/golden/116/GRCh38-writers	
 overlapbp-overlappc-sv	OutputFactory.pm::StructuralVariationOverlapAllele_to_output_hash	documented_subset	landed:documented_subset	crates/vep-effects/src/sv/deletion.rs::test_overlap_bp_and_pc;crates/vep-effects/src/sv/mod.rs::documented_subset_names_the_regulatory_sv_rows;crates/vep-cli/tests/format_parity.rs::overlaps_adds_overlapbp_overlappc_columns_to_tab_and_vcf	tests/golden/116/GRCh38;tests/golden/116/GRCh37	
 overlaps	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/tests/format_parity.rs::overlaps_adds_overlapbp_overlappc_columns_to_tab_and_vcf	tests/golden/116/GRCh38;tests/golden/116/GRCh37	
 Paralogues	Paralogues.pm	error	open			
@@ -483,8 +483,8 @@ symbol	OutputFactory.pm	implemented	open
 symbol-source-hgnc-id-columns	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::native_cache_matches_the_ensembl_cache_with_core_dumps;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::gff3_only_exclusions_are_documented	tests/golden/116/GRCh38-native-builder	
 symbolic-sv-classification	Parser.pm	implemented	landed:implemented	crates/vep-cli/src/vcf_parser.rs::multi_allelic_symbolic_shapes_take_the_record_class;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_multi_allelic_cn_one_variant_per_alt;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_multi_allelic_cn_four_alleles;crates/vep-cli/src/vcf_parser.rs::repeated_cn0_collapses_to_a_deletion;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_mixed_symbolic_uses_svtype_override;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_mixed_symbolic_without_svtype_is_unsupported;crates/vep-cli/src/vcf_parser.rs::all_sequence_multi_allelic_record_ignores_svtype;crates/vep-cli/src/vcf_parser.rs::vep_skip_marks_unsupported_types_only	tests/golden/116/GRCh38-release116	
 synonyms	BaseVEP.pm::chromosome_synonyms	implemented	open			
-tab	Config.pm	implemented	open			
-tab-column-order-and-placeholder	Tab.pm	implemented	open			
+tab	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::tab_with_vcf_or_json_is_perls_error	tests/golden/116/GRCh38-writers	
+tab-column-order-and-placeholder	Tab.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::tab_header_describes_plugin_columns_with_their_own_text	tests/golden/116/GRCh38-writers	
 tabix-and-bigwig-readers	File.pm	documented_subset	open			
 tandem-repeats-cnv-tr	VCF.pm	documented_subset	open			
 terms	Config.pm	implemented	open			
@@ -527,10 +527,10 @@ variation-files-as-input	Cache/Variation.pm	implemented	landed:implemented	crate
 variation-strand	Database/Variation.pm	implemented	open			
 variation_name	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::variation_name_is_the_second_column	tests/golden/116/GRCh38-colocated	
 VARITY	VARITY.pm	error	open			
-vcf	Config.pm	implemented	open			
-vcf-csq-info-header	VCF.pm	documented_subset	open			
+vcf	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::vcf_with_json_or_tab_is_perls_error;crates/vep-cli/src/config.rs::vcf_with_most_severe_is_perls_error	tests/golden/116/GRCh38-writers	
+vcf-csq-info-header	VCF.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/vcf_output.rs::header_carries_plugin_key_lines_and_the_fields_format	tests/golden/116/GRCh38-writers	
 vcf-short-records	VCF.pm	implemented	open			
-vcf_info_field	Config.pm	implemented	open			
+vcf_info_field	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/vcf_output.rs::vcf_info_field_ann_names_header_strip_and_key	tests/golden/116/GRCh38-writers	
 vcf_output_from_non_vcf_input	Variation/VariationFeature.pm::to_VCF_record	implemented	open			
 vefc-codon-table	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/builder.rs::codon_table_2_on_mt	tests/golden/116/GRCh38-native-builder	
 vefc-five-prime-utr	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/builder.rs::utr_sequences_written_from_fasta	tests/golden/116/GRCh38-native-builder	

@@ -310,11 +310,15 @@ impl BuiltinRegistry {
         self.plugins.is_empty()
     }
 
-    /// Returns header info from all loaded plugins.
+    /// Returns header info from all loaded plugins: plugin by plugin in load
+    /// order, each plugin's fields sorted by name, the order Ensembl VEP's
+    /// `OutputFactory.pm` `get_plugin_headers` gives its plugin columns.
     pub fn all_header_info(&self) -> Vec<(String, String)> {
         let mut headers = Vec::new();
         for plugin in &self.plugins {
-            headers.extend(plugin.header_info());
+            let mut fields = plugin.header_info();
+            fields.sort_by(|a, b| a.0.cmp(&b.0));
+            headers.extend(fields);
         }
         headers
     }
@@ -555,5 +559,72 @@ mod tests {
         assert_eq!(variants[0].plugin_data.get("PluginA_ran").unwrap(), "true");
         assert_eq!(variants[0].plugin_data.get("PluginB_ran").unwrap(), "true");
         assert_eq!(variants[0].plugin_data.get("fallback_ran").unwrap(), "true");
+    }
+
+    /// A plugin whose only behaviour is the header fields it declares, in the
+    /// order it declares them.
+    struct MockHeaderPlugin {
+        name: &'static str,
+        fields: Vec<(&'static str, &'static str)>,
+    }
+
+    impl BuiltinPlugin for MockHeaderPlugin {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn header_info(&self) -> Vec<(String, String)> {
+            self.fields
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        }
+        fn init(&mut self, _params: &[String]) -> Result<(), PluginError> {
+            Ok(())
+        }
+        fn run(
+            &self,
+            _consequence: &TranscriptConsequence,
+            _variant: &InputVariant,
+        ) -> Result<IndexMap<String, String>, PluginError> {
+            Ok(IndexMap::new())
+        }
+    }
+
+    /// `OutputFactory.pm` `get_plugin_headers` walks the plugins in load order and
+    /// each plugin's header hash by `sort keys`, Perl's byte-order `cmp`, so an
+    /// upper-case name precedes a lower-case one and the second plugin's fields
+    /// follow the first's whatever the plugin or field names.
+    #[test]
+    fn header_info_is_sorted_within_each_plugin_in_load_order() {
+        let mut registry = BuiltinRegistry::new();
+        registry.plugins.push(Box::new(MockHeaderPlugin {
+            name: "Zulu",
+            fields: vec![
+                ("zeta", "last letter"),
+                ("alpha", "first letter"),
+                ("Mu", "upper"),
+            ],
+        }));
+        registry.plugins.push(Box::new(MockHeaderPlugin {
+            name: "Alfa",
+            fields: vec![("beta", "second letter"), ("Alpha", "upper first")],
+        }));
+
+        let headers = registry.all_header_info();
+
+        let pairs: Vec<(&str, &str)> = headers
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        assert_eq!(
+            pairs,
+            [
+                ("Mu", "upper"),
+                ("alpha", "first letter"),
+                ("zeta", "last letter"),
+                ("Alpha", "upper first"),
+                ("beta", "second letter"),
+            ]
+        );
     }
 }

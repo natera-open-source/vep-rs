@@ -10,7 +10,8 @@
 //!
 //! ## Columns
 //!
-//! Five key columns first, then exactly the `--tab` columns in `--tab` order:
+//! Five key columns first, then exactly the default `--tab` columns in `--tab`
+//! order (`--fields` is refused with this format):
 //!
 //! 1. `chrom`: the input chromosome name
 //! 2. `pos`: the record's VEP start
@@ -53,7 +54,7 @@ pub struct ParquetOutputFormatter {
 impl ParquetOutputFormatter {
     pub fn new(options: FieldOptions, plugin_fields: Vec<String>) -> Self {
         Self {
-            tab_columns: fields::tab_columns(&options, &plugin_fields),
+            tab_columns: fields::tab_columns(&options, &plugin_fields, None),
             options,
         }
     }

@@ -80,13 +80,14 @@ pub struct Args {
     )]
     pub output_file: Vec<String>,
 
-    /// Output format. `parquet` writes a TSV intermediate and post-processes it
+    /// Output format, matched in any case; `ensembl` is another name for the default `vep` format. `parquet` is vep-rs's own: it writes a TSV intermediate and post-processes it
     /// to Parquet through a `duckdb` CLI subprocess; the `duckdb` binary must be on PATH
     #[arg(
         help_heading = "Output",
         long = "output_format",
         default_value = "vep",
-        value_parser = ["vep", "vcf", "json", "tab", "parquet"]
+        ignore_case = true,
+        value_parser = ["vep", "ensembl", "vcf", "json", "tab", "parquet"]
     )]
     pub output_format: String,
 
@@ -137,7 +138,7 @@ pub struct Args {
     #[arg(help_heading = "Output", long)]
     pub tab: bool,
 
-    /// Compress output file (accepted for VEP compatibility; not implemented, output is written uncompressed)
+    /// Compress the output, STDOUT included: `gzip` writes a single-member gzip stream, `bgzip` a BGZF stream (a gzip file that bgzip, tabix and samtools read); the output file keeps the name given. Not accepted with --output_format parquet, which carries its own compression
     #[arg(help_heading = "Output", long = "compress_output", value_parser = ["gzip", "bgzip"])]
     pub compress_output: Option<String>,
 
@@ -175,7 +176,7 @@ pub struct Args {
     )]
     pub skipped_variants_file: Option<String>,
 
-    /// Accepted for VEP compatibility; not implemented (the columns follow the field flags)
+    /// The columns of the --tab output and the subfields of the VCF CSQ entry, comma-separated, in this order and replacing the whole default list; any field name a flag or a plugin produces is valid, and a name nothing produces prints `-` (tab) or an empty subfield (VCF) under a `?` description. The default and JSON formats ignore it; --output_format parquet refuses it
     #[arg(help_heading = "Output", long)]
     pub fields: Option<String>,
 
@@ -186,6 +187,10 @@ pub struct Args {
         default_value = "CSQ"
     )]
     pub vcf_info_field: String,
+
+    /// Keep an input VCF's existing annotation: its `##INFO` and `##VEP` header lines and the INFO entry under --vcf_info_field's name stay, and the new entry is appended under the same name, so the line carries both
+    #[arg(help_heading = "Output", long = "keep_csq")]
+    pub keep_csq: bool,
 
     #[arg(help_heading = "Output", long = "keep_ann")]
     pub keep_ann: bool,

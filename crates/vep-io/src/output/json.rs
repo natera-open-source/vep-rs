@@ -705,6 +705,22 @@ mod tests {
         assert_eq!(position_bounds("?-430/1234"), (None, None));
     }
 
+    /// `OutputFactory/JSON.pm:333-343` (release 116.2) on `--total_length` values:
+    /// a point `428/1200` is split on `-` into one part, so `cdna_start` and
+    /// `cdna_end` are both the string `"428/1200"` (`numberify` leaves a value with
+    /// a `/` alone); a range `900-901/1200` has an end that fails `^\d+$`, so
+    /// `cds_end` falls back to the start `900` while `cds_start` is the number.
+    #[test]
+    fn total_length_json_keeps_perls_split_strings() {
+        let tc = positions("428/1200", "900-901/1200", "122/400");
+        assert_eq!(tc["cdna_start"], json!("428/1200"));
+        assert_eq!(tc["cdna_end"], json!("428/1200"));
+        assert_eq!(tc["cds_start"], json!(900));
+        assert_eq!(tc["cds_end"], json!(900));
+        assert_eq!(tc["protein_start"], json!("122/400"));
+        assert_eq!(tc["protein_end"], json!("122/400"));
+    }
+
     #[test]
     fn no_header_for_json() {
         let mut f = fmt(FieldOptions::default());

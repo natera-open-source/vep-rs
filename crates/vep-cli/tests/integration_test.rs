@@ -426,10 +426,10 @@ fn transcript_filter_refusal_is_one_error_line_and_exit_1() {
     }
 }
 
-/// Annotates one VCF record in the given format against the release 116 golden
-/// corpus's own pruned cache, which unlike `VEP_RS_TEST_CACHE` is always
-/// present, and returns the output's data lines.
-fn annotate_record(record: &str, format_flags: &[&str], extra: &[&str]) -> Vec<String> {
+/// Annotates one VCF record against the release 116 golden corpus's own pruned
+/// cache, which unlike `VEP_RS_TEST_CACHE` is always present, and returns the
+/// output file's bytes.
+fn annotate_record_bytes(record: &str, flags: &[&str]) -> Vec<u8> {
     let dir = tempfile::tempdir().unwrap();
     let input = dir.path().join("in.vcf");
     std::fs::write(
@@ -444,21 +444,87 @@ fn annotate_record(record: &str, format_flags: &[&str], extra: &[&str]) -> Vec<S
         .args(["--json_cache", &corpus_cache()])
         .args(["--offline", "--assembly", "GRCh38"])
         .args(["--force_overwrite", "--no_stats", "--quiet"])
-        .args(format_flags)
-        .args(extra)
+        .args(flags)
         .output()
         .unwrap();
     assert!(
         result.status.success(),
-        "{format_flags:?} {extra:?}: {}",
+        "{flags:?}: {}",
         String::from_utf8_lossy(&result.stderr)
     );
-    std::fs::read_to_string(&output)
+    std::fs::read(&output).unwrap()
+}
+
+/// The data lines of an output: every line not opening with `#`.
+fn data_lines(output: &[u8]) -> Vec<String> {
+    std::str::from_utf8(output)
         .unwrap()
         .lines()
         .filter(|l| !l.starts_with('#'))
         .map(str::to_string)
         .collect()
+}
+
+/// Annotates one VCF record in the given format and returns the output's data lines.
+fn annotate_record(record: &str, format_flags: &[&str], extra: &[&str]) -> Vec<String> {
+    let flags: Vec<&str> = format_flags.iter().chain(extra).copied().collect();
+    data_lines(&annotate_record_bytes(record, &flags))
+}
+
+/// A record of the release 116 corpus with transcript rows, for the output-flag tests.
+const CODING_RECORD: &str = "21\t30289183\tstop_ins1_lost_rev\tC\tCG\t.\t.\t.";
+
+/// `Runner.pm:run` 204-206 (release 116.2) prints the output factory's headers
+/// unless `--no_headers`, so under the flag the default, tab and VCF outputs open
+/// with their first data line; the data lines are those of the run with headers.
+#[test]
+fn no_headers_writes_no_hash_line_in_default_tab_and_vcf() {
+    for format in [&[][..], &["--tab"], &["--vcf"]] {
+        let with_headers = String::from_utf8(annotate_record_bytes(CODING_RECORD, format)).unwrap();
+        assert!(with_headers.starts_with('#'), "{format:?}: {with_headers}");
+        let flags: Vec<&str> = format.iter().copied().chain(["--no_headers"]).collect();
+        let bare = String::from_utf8(annotate_record_bytes(CODING_RECORD, &flags)).unwrap();
+        assert!(
+            !bare.lines().any(|l| l.starts_with('#')),
+            "{format:?}: {bare}"
+        );
+        let data = data_lines(with_headers.as_bytes());
+        assert_eq!(bare.lines().collect::<Vec<_>>(), data, "{format:?}");
+        assert!(!data.is_empty(), "{format:?}");
+    }
+}
+
+/// `BaseRunner.pm:get_output_file_handle` 207-219 (release 116.2) pipes the
+/// output through `gzip -c` or `bgzip -c` under `--compress_output`; the file
+/// written here is a gzip stream (one member) or a BGZF stream (gzip members
+/// ending in the empty end-of-file member) whose contents are the plain output.
+#[test]
+fn compress_output_writes_gzip_and_bgzip_streams_of_the_plain_output() {
+    use std::io::Read;
+    // The header's time and command-line lines differ between runs; the data
+    // lines are the comparison.
+    let plain = data_lines(&annotate_record_bytes(CODING_RECORD, &["--tab"]));
+    assert!(!plain.is_empty());
+    for kind in ["gzip", "bgzip"] {
+        let compressed =
+            annotate_record_bytes(CODING_RECORD, &["--tab", "--compress_output", kind]);
+        assert_eq!(&compressed[..2], &[0x1f, 0x8b], "{kind}");
+        let mut back = Vec::new();
+        flate2::read::MultiGzDecoder::new(&compressed[..])
+            .read_to_end(&mut back)
+            .unwrap();
+        assert_eq!(data_lines(&back), plain, "{kind}");
+        let extra_field = compressed[3] & 0x04 != 0;
+        assert_eq!(extra_field, kind == "bgzip", "{kind}: FEXTRA");
+        if kind == "bgzip" {
+            assert_eq!(&compressed[12..14], b"BC");
+            let mut back = Vec::new();
+            noodles_bgzf::io::Reader::new(&compressed[..])
+                .read_to_end(&mut back)
+                .unwrap();
+            assert_eq!(data_lines(&back), plain);
+        }
+    }
 }
 
 /// The Location, Allele and Consequence columns of the default-format rows that

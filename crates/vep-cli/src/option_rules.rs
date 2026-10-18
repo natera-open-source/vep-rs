@@ -358,16 +358,32 @@ pub struct OwnRule {
 }
 
 /// Rules vep-rs adds for behaviour Ensembl VEP has no flag for.
-pub const OWN_RULES: &[OwnRule] = &[OwnRule {
-    component: "output",
-    message: "--output_format parquet needs a file path: Parquet cannot be written to STDOUT",
-    applies: |state| {
-        state.scalar("output_format") == Some("parquet")
-            && state
-                .last("output_file")
-                .is_some_and(|f| f.eq_ignore_ascii_case("STDOUT"))
+pub const OWN_RULES: &[OwnRule] = &[
+    OwnRule {
+        component: "output",
+        message: "--output_format parquet needs a file path: Parquet cannot be written to STDOUT",
+        applies: |state| {
+            state.scalar("output_format") == Some("parquet")
+                && state
+                    .last("output_file")
+                    .is_some_and(|f| f.eq_ignore_ascii_case("STDOUT"))
+        },
     },
-}];
+    OwnRule {
+        component: "output",
+        message: "--fields applies to --tab and --vcf output; the Parquet column set is fixed",
+        applies: |state| {
+            state.scalar("output_format") == Some("parquet") && state.is_active("fields")
+        },
+    },
+    OwnRule {
+        component: "output",
+        message: "--compress_output applies to the default, tab, VCF and JSON outputs; Parquet output is compressed by its own codec",
+        applies: |state| {
+            state.scalar("output_format") == Some("parquet") && state.is_active("compress_output")
+        },
+    },
+];
 
 /// A flag's value as the Perl configuration hash holds it: a scalar, or the
 /// list a repeatable or comma-separated flag becomes.
@@ -1193,7 +1209,8 @@ our %DEPRECATED = (
 
     /// Every `%VALID` flag vep-rs declares carries the Perl list as its clap
     /// value enumeration, so a value outside it is refused at parse time, and
-    /// `--output_format`, vep-rs's own, is an enumeration as well.
+    /// `--output_format`, vep-rs's own, is an enumeration as well: Ensembl VEP's
+    /// `%FORMAT_MAP` names (`ensembl` and `vep` the same format) plus `parquet`.
     #[test]
     fn output_format_validated() {
         let mut command = Args::command();
@@ -1222,7 +1239,10 @@ our %DEPRECATED = (
             .iter()
             .map(|p| p.get_name().to_string())
             .collect();
-        assert_eq!(possible, ["vep", "vcf", "json", "tab", "parquet"]);
+        assert_eq!(
+            possible,
+            ["vep", "ensembl", "vcf", "json", "tab", "parquet"]
+        );
         let err = Args::try_parse_from(["vep", "--output_format", "xml"]).unwrap_err();
         assert_eq!(err.kind(), clap::error::ErrorKind::InvalidValue);
         let err = Args::try_parse_from(["vep", "--format", "caid"]).unwrap_err();

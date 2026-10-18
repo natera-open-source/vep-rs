@@ -1810,6 +1810,7 @@ mod tests {
             "CSQ".to_string(),
             vep_io::output::fields::FieldOptions::default(),
             vec![],
+            None,
         );
         let cfg = ReaderConfig {
             batch_size: 5000,

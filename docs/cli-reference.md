@@ -35,21 +35,22 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--output_file`, `-o` | String (repeatable) | `variant_effect_output.txt` | Output file path (use "STDOUT" for standard output, in any case); the last of several wins |
-| `--output_format` | `vep`, `vcf`, `json`, `tab`, `parquet` | `vep` | Output format. `parquet` writes a TSV intermediate and post-processes it to Parquet through a `duckdb` CLI subprocess; the `duckdb` binary must be on PATH |
+| `--output_format` | `vep`, `ensembl`, `vcf`, `json`, `tab`, `parquet` | `vep` | Output format, matched in any case; `ensembl` is another name for the default `vep` format. `parquet` is vep-rs's own: it writes a TSV intermediate and post-processes it to Parquet through a `duckdb` CLI subprocess; the `duckdb` binary must be on PATH |
 | `--parquet_shape` | `nested`, `flat` | `nested` | Parquet row shape (only effective when --output_format=parquet). nested (default): one row per variant, CSQ subfields are LIST<T>. flat: one row per (variant × transcript-consequence) tuple, CSQ subfields are scalar |
 | `--keep_intermediate` (hidden) | bool | false | Keep the Parquet intermediate TSV after DuckDB finalize succeeds. Debug aid: normally the intermediate is deleted once the Parquet directory is written |
 | `--parquet_row_group_size` (hidden) | u64 | `122880` | Rows per Parquet row group (only effective when --output_format=parquet). Rounded up to a multiple of 2,048, DuckDB's vector size, which is also the dictionary size limit. Test aid for producing several row groups from a small input |
 | `--vcf` | bool | false | Shorthand for --output_format vcf; also switches on --symbol, --biotype and --numbers |
 | `--json` | bool | false | Shorthand for --output_format json |
 | `--tab` | bool | false | Shorthand for --output_format tab |
-| `--compress_output` | `gzip`, `bgzip` | -- | Compress output file (accepted for VEP compatibility; not implemented, output is written uncompressed) |
+| `--compress_output` | `gzip`, `bgzip` | -- | Compress the output, STDOUT included: `gzip` writes a single-member gzip stream, `bgzip` a BGZF stream (a gzip file that bgzip, tabix and samtools read); the output file keeps the name given. Not accepted with --output_format parquet, which carries its own compression |
 | `--force_overwrite`, `--force` | bool | false | Overwrite output file if it already exists |
 | `--no_headers` | bool | false | Suppress header lines in output |
 | `--mask_header_cache_path` | bool | false | Print the cache directory in the output headers as [PATH]/<leaf> |
 | `--warning_file` | String | -- | File the warnings of the run are written to, created at the first warning; default <output_file>_warnings.txt beside the output (STDOUT_warnings.txt in the working directory for -o STDOUT). STDERR, in any case, keeps them on standard error alone. A warning is also echoed on standard error unless --quiet |
 | `--skipped_variants_file` | String | -- | File listing every input record the run skipped: a header line naming the input, then one line per record with its line number, the record's first 40 characters and the reason. An existing file is refused before the run without --force_overwrite; the file is written when the run ends |
-| `--fields` | String | -- | Accepted for VEP compatibility; not implemented (the columns follow the field flags) |
+| `--fields` | String | -- | The columns of the --tab output and the subfields of the VCF CSQ entry, comma-separated, in this order and replacing the whole default list; any field name a flag or a plugin produces is valid, and a name nothing produces prints `-` (tab) or an empty subfield (VCF) under a `?` description. The default and JSON formats ignore it; --output_format parquet refuses it |
 | `--vcf_info_field` | String | `CSQ` | VCF INFO field name for VEP annotation |
+| `--keep_csq` | bool | false | Keep an input VCF's existing annotation: its `##INFO` and `##VEP` header lines and the INFO entry under --vcf_info_field's name stay, and the new entry is appended under the same name, so the line carries both |
 | `--keep_ann` | bool | false | Accepted without effect: Ensembl VEP declares it as a synonym of --keep_csq and reads nothing from it |
 | `--solr` | bool | false | Accepted without effect: Ensembl VEP declares it and writes no Solr output |
 | `--convert` | String | -- | Refused with an error: --convert has been deprecated |
@@ -318,6 +319,8 @@ A declared flag carries its list as a value enumeration, so a value outside it i
 ### Rules of vep-rs's own
 
 - `ERROR: [output] --output_format parquet needs a file path: Parquet cannot be written to STDOUT`
+- `ERROR: [output] --fields applies to --tab and --vcf output; the Parquet column set is fixed`
+- `ERROR: [output] --compress_output applies to the default, tab, VCF and JSON outputs; Parquet output is compressed by its own codec`
 
 ### Where `Config.pm` is not followed
 

@@ -250,6 +250,31 @@ impl ExtraFieldsPlan {
     }
 }
 
+/// Groups whose flag adds a column without guarding the value: VEP writes
+/// `OverlapBP` and `OverlapPC` on every structural row that overlaps its
+/// feature and `CHECK_REF` on every failed check, flag or no flag
+/// (`OutputFactory.pm` `StructuralVariationOverlapAllele_to_output_hash`,
+/// `VariationFeature_to_output_hash`).
+const UNGUARDED_GROUPS: [&str; 2] = ["overlaps", "dont_skip"];
+
+/// Whether a configuration produces the field: a flag field when one of its
+/// groups is on or unguarded (`UNGUARDED_GROUPS`), every other name always.
+/// VEP sets a guarded flag field's key in the row hash only under its flag, so
+/// a `--fields` list naming an inactive field prints `-` or an empty subfield
+/// for it.
+pub fn field_is_produced(field: &str, options: &FieldOptions) -> bool {
+    let mut listed = false;
+    for (group, fields) in FLAG_FIELD_GROUPS {
+        if fields.contains(&field) {
+            if UNGUARDED_GROUPS.contains(group) || options.group_active(group) {
+                return true;
+            }
+            listed = true;
+        }
+    }
+    !listed
+}
+
 /// The optional fields a configuration emits, in VEP's order, each name once.
 pub fn flag_fields(options: &FieldOptions) -> Vec<&'static str> {
     let mut seen: BTreeSet<&str> = BTreeSet::new();
@@ -928,10 +953,39 @@ pub fn extra_keys_with<'a>(
     keys
 }
 
+/// A field a loaded plugin adds to the output: its name and the description the
+/// headers print for it.
+pub type PluginHeader = (String, String);
+
+/// The names of a plugin header list, in its order.
+pub fn plugin_field_names(plugin_headers: &[PluginHeader]) -> Vec<String> {
+    plugin_headers
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect()
+}
+
+/// The description a header prints for a column: the field table's, else the
+/// plugin's own, else `?` for a name nothing produces (`OutputFactory/Tab.pm`
+/// `description_headers`).
+fn column_description<'a>(column: &str, plugin_headers: &'a [PluginHeader]) -> &'a str {
+    field_description(column)
+        .or_else(|| {
+            plugin_headers
+                .iter()
+                .find(|(name, _)| name == column)
+                .map(|(_, description)| description.as_str())
+        })
+        .unwrap_or("?")
+}
+
 /// The header lines of the default format, in VEP's order, ending with the
-/// column line. `--no_headers` callers write none of them.
+/// column line: the flag fields' keys, then one `## <KEY> : <description>` line
+/// per plugin field (`OutputFactory/VEP_output.pm` `description_headers`).
+/// `--no_headers` callers write none of them.
 pub fn default_format_header(
     options: &FieldOptions,
+    plugin_headers: &[PluginHeader],
     cache_dir: &str,
     cache_info: Option<&vep_core::cache_info::CacheInfo>,
     command_line: &str,
@@ -953,28 +1007,37 @@ pub fn default_format_header(
             field_description(key).unwrap_or("?")
         ));
     }
+    for (name, description) in plugin_headers {
+        lines.push(format!("## {name} : {description}"));
+    }
     lines.push(format!("## VEP command-line: {}", command_line));
     lines.push(format!("#{}\tExtra", DEFAULT_OUTPUT_COLS.join("\t")));
     lines
 }
 
-/// The header lines of the tab format: every column, flag fields included, gets
-/// a description line, and the column line names them all.
+/// The header lines of the tab format: every column, flag and plugin fields
+/// included, gets a description line, and the column line names them all.
+/// `selected_fields` is the `--fields` list, which replaces the columns.
 pub fn tab_header(
     options: &FieldOptions,
-    plugin_fields: &[String],
+    plugin_headers: &[PluginHeader],
+    selected_fields: Option<&[String]>,
     cache_dir: &str,
     cache_info: Option<&vep_core::cache_info::CacheInfo>,
     command_line: &str,
 ) -> Vec<String> {
-    let cols = tab_columns(options, plugin_fields);
+    let cols = tab_columns(
+        options,
+        &plugin_field_names(plugin_headers),
+        selected_fields,
+    );
     let mut lines = common_header_prefix(cache_dir, cache_info);
     lines.push("## Column descriptions:".to_string());
     for col in &cols {
         lines.push(format!(
             "## {} : {}",
             col,
-            field_description(col).unwrap_or("?")
+            column_description(col, plugin_headers)
         ));
     }
     lines.push(format!("## VEP command-line: {}", command_line));
@@ -982,8 +1045,17 @@ pub fn tab_header(
     lines
 }
 
-/// The tab format's columns: the thirteen defaults, the flag fields, then plugin fields.
-pub fn tab_columns(options: &FieldOptions, plugin_fields: &[String]) -> Vec<String> {
+/// The tab format's columns: the thirteen defaults, the flag fields, then plugin
+/// fields; or, under `--fields`, that list in its own order and nothing else
+/// (`OutputFactory/Tab.pm` `fields`, where the flag's value pre-empts the list).
+pub fn tab_columns(
+    options: &FieldOptions,
+    plugin_fields: &[String],
+    selected_fields: Option<&[String]>,
+) -> Vec<String> {
+    if let Some(selected_fields) = selected_fields {
+        return selected_fields.to_vec();
+    }
     let mut cols: Vec<String> = DEFAULT_OUTPUT_COLS.iter().map(|s| s.to_string()).collect();
     cols.extend(flag_fields(options).into_iter().map(String::from));
     for p in plugin_fields {
@@ -1240,7 +1312,7 @@ mod tests {
 
     #[test]
     fn header_ends_with_the_column_line() {
-        let lines = default_format_header(&FieldOptions::default(), "/c", None, "vep -i x");
+        let lines = default_format_header(&FieldOptions::default(), &[], "/c", None, "vep -i x");
         assert!(lines[0].starts_with("## ENSEMBL VARIANT EFFECT PREDICTOR v"));
         assert_eq!(lines[1], format!("## vep-rs {VEP_RS_VERSION}"));
         assert!(lines.contains(&"## Column descriptions:".to_string()));
@@ -1250,5 +1322,227 @@ mod tests {
             lines.last().unwrap(),
             "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra"
         );
+    }
+
+    fn plugin_headers() -> Vec<PluginHeader> {
+        vec![
+            (
+                "CADD_PHRED".to_string(),
+                "CADD PHRED-scaled pathogenicity score".to_string(),
+            ),
+            (
+                "CADD_RAW".to_string(),
+                "CADD raw pathogenicity score".to_string(),
+            ),
+        ]
+    }
+
+    /// `OutputFactory/Tab.pm` `fields` (release 116.2): the `--fields` value stands
+    /// in for the whole list, defaults included, in the order given, so
+    /// `Feature,Allele,SYMBOL,Location` is the column line and nothing else
+    /// follows, while without it the thirteen defaults, the flag fields and the
+    /// plugin fields come in that order.
+    #[test]
+    fn fields_replace_the_tab_columns_in_the_given_order() {
+        let options = FieldOptions {
+            symbol: true,
+            ..Default::default()
+        };
+        let plugins = plugin_field_names(&plugin_headers());
+        let chosen: Vec<String> = ["Feature", "Allele", "SYMBOL", "Location"]
+            .map(str::to_string)
+            .to_vec();
+        assert_eq!(tab_columns(&options, &plugins, Some(&chosen)), chosen);
+        let lines = tab_header(
+            &options,
+            &plugin_headers(),
+            Some(&chosen),
+            "/c",
+            None,
+            "vep -i x",
+        );
+        assert_eq!(lines.last().unwrap(), "#Feature\tAllele\tSYMBOL\tLocation");
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|l| l.starts_with("## ") && l.contains(" : "))
+                .count(),
+            4
+        );
+        let default = tab_columns(&options, &plugins, None);
+        assert_eq!(&default[..13], &DEFAULT_OUTPUT_COLS);
+        assert_eq!(
+            &default[13..],
+            &[
+                "IMPACT",
+                "DISTANCE",
+                "STRAND",
+                "FLAGS",
+                "SYMBOL",
+                "SYMBOL_SOURCE",
+                "HGNC_ID",
+                "CADD_PHRED",
+                "CADD_RAW"
+            ]
+        );
+    }
+
+    /// `OutputFactory/Tab.pm` `description_headers` prints `## <name> : ?` for a
+    /// field neither the field table nor a plugin describes, and
+    /// `output_hash_to_line` prints `-` where the row has no such key; Ensembl VEP
+    /// 116.2 under `--tab --fields Location,Allele,NOT_A_FIELD` writes the
+    /// `## NOT_A_FIELD : ?` line and `-` in every row.
+    #[test]
+    fn unknown_field_prints_dash_and_question_mark_description() {
+        let chosen: Vec<String> = ["Location", "Allele", "NOT_A_FIELD"]
+            .map(str::to_string)
+            .to_vec();
+        let lines = tab_header(
+            &FieldOptions::default(),
+            &[],
+            Some(&chosen),
+            "/c",
+            None,
+            "vep -i x",
+        );
+        assert!(
+            lines.contains(&"## NOT_A_FIELD : ?".to_string()),
+            "{lines:?}"
+        );
+        let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(
+            field_value("NOT_A_FIELD", &v, None, &FieldOptions::default(), ","),
+            ""
+        );
+        let tab = crate::output::tab::TabOutputFormatter::new(
+            FieldOptions::default(),
+            Vec::new(),
+            Some(chosen),
+            Vec::new(),
+            true,
+        );
+        let mut v = v;
+        v.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        assert_eq!(
+            crate::OutputFormatter::format_record(&tab, &[&v]).unwrap(),
+            vec!["21:100\tG\t-"]
+        );
+    }
+
+    /// `OutputFactory.pm` sets a flag field's key only under its flag (`BIOTYPE`
+    /// under `--biotype`, `SYMBOL` under `--symbol`, `AF` under `--af` or
+    /// `--af_1kg`), so a `--fields` list naming an inactive field prints `-` in
+    /// the tab output and an empty subfield in the VCF; the thirteen default
+    /// columns, the `user` group, the overlap and check-ref keys VEP writes
+    /// without their flag, and a plugin or unknown name are produced whatever
+    /// the flags. Ensembl VEP 116.2 under `--tab --fields Location,BIOTYPE`
+    /// prints `-` for BIOTYPE on every row of the writers corpus.
+    #[test]
+    fn inactive_flag_field_named_by_fields_prints_dash() {
+        let off = FieldOptions::default();
+        let on = FieldOptions {
+            biotype: true,
+            af_1kg: true,
+            ..Default::default()
+        };
+        assert!(!field_is_produced("BIOTYPE", &off));
+        assert!(field_is_produced("BIOTYPE", &on));
+        assert!(!field_is_produced("AF", &off));
+        assert!(
+            field_is_produced("AF", &on),
+            "AF is in the af_1kg group too"
+        );
+        for always in [
+            "Location",
+            "Allele",
+            "IMPACT",
+            "STRAND",
+            "OverlapBP",
+            "CHECK_REF",
+            "CADD_PHRED",
+            "NOT_A_FIELD",
+        ] {
+            assert!(field_is_produced(always, &off), "{always}");
+        }
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.transcript_consequences = vec![TranscriptConsequence {
+            transcript_id: std::sync::Arc::from("ENST1"),
+            biotype: Some("protein_coding".into()),
+            ..Default::default()
+        }];
+        let chosen: Vec<String> = ["Feature", "BIOTYPE"].map(str::to_string).to_vec();
+        let tab = crate::output::tab::TabOutputFormatter::new(
+            off.clone(),
+            Vec::new(),
+            Some(chosen.clone()),
+            Vec::new(),
+            true,
+        );
+        assert_eq!(
+            crate::OutputFormatter::format_record(&tab, &[&v]).unwrap(),
+            vec!["ENST1\t-"]
+        );
+        let tab = crate::output::tab::TabOutputFormatter::new(
+            on.clone(),
+            Vec::new(),
+            Some(chosen),
+            Vec::new(),
+            true,
+        );
+        assert_eq!(
+            crate::OutputFormatter::format_record(&tab, &[&v]).unwrap(),
+            vec!["ENST1\tprotein_coding"]
+        );
+    }
+
+    /// `OutputFactory/VEP_output.pm` `description_headers` (release 116.2) lists
+    /// the plugin keys after the flag fields' `Extra column keys` as
+    /// `## <KEY> : <description>`, the plugin's own text, before the command line.
+    #[test]
+    fn default_header_lists_plugin_key_descriptions() {
+        let lines = default_format_header(
+            &FieldOptions::default(),
+            &plugin_headers(),
+            "/c",
+            None,
+            "vep -i x",
+        );
+        let position = |text: &str| lines.iter().position(|l| l == text).unwrap();
+        let flags = position("## FLAGS : Transcript quality flags");
+        let phred = position("## CADD_PHRED : CADD PHRED-scaled pathogenicity score");
+        let raw = position("## CADD_RAW : CADD raw pathogenicity score");
+        let command = lines
+            .iter()
+            .position(|l| l.starts_with("## VEP command-line: "))
+            .unwrap();
+        assert!(flags < phred && phred < raw && raw < command, "{lines:?}");
+        // The default format keeps its fixed column line whatever the plugins add.
+        assert!(lines
+            .last()
+            .unwrap()
+            .ends_with("\tExisting_variation\tExtra"));
+    }
+
+    /// `OutputFactory/Tab.pm` `description_headers` describes a plugin column with
+    /// the plugin's own text (`%other_descs`), not `?`.
+    #[test]
+    fn tab_header_describes_plugin_columns_with_their_own_text() {
+        let lines = tab_header(
+            &FieldOptions::default(),
+            &plugin_headers(),
+            None,
+            "/c",
+            None,
+            "vep -i x",
+        );
+        assert!(
+            lines.contains(&"## CADD_PHRED : CADD PHRED-scaled pathogenicity score".to_string())
+        );
+        assert!(lines.contains(&"## CADD_RAW : CADD raw pathogenicity score".to_string()));
+        assert!(!lines.iter().any(|l| l.ends_with(" : ?")), "{lines:?}");
+        assert!(lines
+            .last()
+            .unwrap()
+            .ends_with("\tFLAGS\tCADD_PHRED\tCADD_RAW"));
     }
 }

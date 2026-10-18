@@ -32,6 +32,7 @@ use crate::annotator::{
 use crate::cache_resolve::ResolvedCache;
 use crate::config::{CliError, Config};
 use crate::filter_set::FilterSet;
+use crate::output_compress::{CompressedOutput, OutputCompression};
 use crate::pick::FilterConfig;
 use crate::pipeline;
 use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex};
@@ -40,7 +41,7 @@ use crate::variation_source::{ReadFailure, VariationSource};
 use vep_builtins::BuiltinRegistry;
 use vep_core::consequence::{Consequence, Impact};
 use vep_core::variant::{InputVariant, VariantClass};
-use vep_io::output::fields::{ExtraFieldsPlan, FieldOptions};
+use vep_io::output::fields::{ExtraFieldsPlan, FieldOptions, PluginHeader};
 use vep_io::output::json::JsonOutputFormatter;
 use vep_io::output::parquet::ParquetOutputFormatter;
 use vep_io::output::tab::TabOutputFormatter;
@@ -540,6 +541,20 @@ impl Runner {
             })?;
             Box::new(BufWriter::with_capacity(OUTPUT_BUFFER_BYTES, f))
         };
+        // The option rules refuse the flag with Parquet, so a compressed writer is
+        // never the DuckDB intermediate.
+        let mut compressed_output: Option<CompressedOutput> = None;
+        if let Some(value) = self.config.compress_output.as_deref() {
+            let compression = OutputCompression::parse(value).ok_or_else(|| {
+                CliError::new(
+                    "output",
+                    format!("\"{value}\" is not a valid value for --compress_output"),
+                )
+            })?;
+            let (compressed, handle) = compression.open(writer);
+            writer = compressed;
+            compressed_output = Some(handle);
+        }
 
         let format = self.detect_format(&self.config.format);
         debug!("detected input format: {}", format);
@@ -562,11 +577,8 @@ impl Runner {
         let mut json_formatter: Option<JsonOutputFormatter> = None;
         let mut parquet_formatter: Option<ParquetOutputFormatter> = None;
         let mut tab_formatter: Option<TabOutputFormatter> = None;
-        let plugin_fields = builtin_plugins
-            .all_header_info()
-            .into_iter()
-            .map(|(name, _)| name)
-            .collect::<Vec<_>>();
+        let plugin_headers = builtin_plugins.all_header_info();
+        let plugin_fields = vep_io::output::fields::plugin_field_names(&plugin_headers);
         let options = self.field_options();
         let extra_plan = ExtraFieldsPlan::new(options.clone());
 
@@ -576,8 +588,10 @@ impl Runner {
                     VcfOutputFormatter::new(
                         self.config.vcf_info_field.clone(),
                         options,
-                        plugin_fields,
+                        plugin_headers.clone(),
+                        self.config.fields.clone(),
                     )
+                    .with_keep_csq(self.config.keep_csq)
                     .with_run_info(
                         &self.header_cache_dir(),
                         Some(&self.cache.info),
@@ -595,7 +609,8 @@ impl Runner {
             "tab" => {
                 let header = vep_io::output::fields::tab_header(
                     &options,
-                    &plugin_fields,
+                    &plugin_headers,
+                    self.config.fields.as_deref(),
                     &self.header_cache_dir(),
                     Some(&self.cache.info),
                     &self.command_line,
@@ -603,6 +618,7 @@ impl Runner {
                 tab_formatter = Some(TabOutputFormatter::new(
                     options,
                     plugin_fields,
+                    self.config.fields.clone(),
                     header,
                     self.config.no_headers,
                 ));
@@ -637,7 +653,7 @@ impl Runner {
                     }
                 }
                 _ => {
-                    self.write_header(&mut writer)?;
+                    self.write_header(&mut writer, &plugin_headers)?;
                 }
             }
         }
@@ -736,6 +752,17 @@ impl Runner {
 
         // The writer thread flushes and closes the output before this returns.
         let variant_count = pipeline::run(input, &reader_cfg, &coordinator, writer)?;
+        if let Some(handle) = compressed_output {
+            handle.finish().map_err(|e| {
+                CliError::new(
+                    "output",
+                    format!(
+                        "Could not finish the compressed output '{}': {e}",
+                        self.config.output_file
+                    ),
+                )
+            })?;
+        }
 
         // Runner.pm:176-182: the skipped-variants file is written and the warnings
         // file closed once the output is complete.
@@ -827,10 +854,15 @@ impl Runner {
     }
 
     /// Write the default-format header lines VEP writes, then the column line.
-    fn write_header(&self, writer: &mut dyn Write) -> anyhow::Result<()> {
+    fn write_header(
+        &self,
+        writer: &mut dyn Write,
+        plugin_headers: &[PluginHeader],
+    ) -> anyhow::Result<()> {
         let options = self.field_options();
         for line in vep_io::output::fields::default_format_header(
             &options,
+            plugin_headers,
             &self.header_cache_dir(),
             Some(&self.cache.info),
             &self.command_line,
@@ -1920,6 +1952,27 @@ mod tests {
         assert!(flag_fields(&both.field_options()).contains(&"ENSP"));
     }
 
+    /// `--json` switches on `rest`, and `rest` switches on `no_escape`
+    /// (Config.pm:484-498), so a JSON output keeps the HGVSp `=` raw; vep-rs reads
+    /// the rule off the resolved format, so `--output_format json` does the same,
+    /// and the text formats keep the `%3D` escape.
+    #[test]
+    fn json_flag_implies_no_escape() {
+        let cache = write_json_cache("escape", &[("21", 1_000)]);
+        assert!(runner_over(&cache, &["--json"]).field_options().no_escape);
+        assert!(
+            runner_over(&cache, &["--output_format", "json"])
+                .field_options()
+                .no_escape
+        );
+        for flags in [&[][..], &["--tab"], &["--vcf"]] {
+            assert!(
+                !runner_over(&cache, flags).field_options().no_escape,
+                "{flags:?}"
+            );
+        }
+    }
+
     /// A configuration whose cache resolves to nothing never becomes a runner:
     /// `Runner::new` fails under the cache component before any file is opened.
     #[test]
@@ -2003,9 +2056,9 @@ mod tests {
         let dir = masked.header_cache_dir();
         assert_eq!(dir, "[PATH]/116_GRCh38");
         let options = masked.field_options();
-        assert!(default_format_header(&options, &dir, None, "vep")
+        assert!(default_format_header(&options, &[], &dir, None, "vep")
             .contains(&"## Using cache in [PATH]/116_GRCh38".to_string()));
-        assert!(tab_header(&options, &[], &dir, None, "vep")
+        assert!(tab_header(&options, &[], None, &dir, None, "vep")
             .contains(&"## Using cache in [PATH]/116_GRCh38".to_string()));
         assert!(vcf_vep_meta_line(&dir, None).contains(" cache=\"[PATH]/116_GRCh38\""));
         assert!(masked

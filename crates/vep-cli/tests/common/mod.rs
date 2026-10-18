@@ -237,6 +237,33 @@ impl Run<'_> {
         self.formats.iter().any(|f| f == format)
     }
 
+    /// Whether the run's flags carry `flag`, as a word or as `flag=value`.
+    pub fn has_flag(&self, flag: &str) -> bool {
+        self.flags
+            .iter()
+            .any(|f| f == flag || f.starts_with(&format!("{flag}=")))
+    }
+
+    /// The value of a `flag value` or `flag=value` pair in the run's flags.
+    fn flag_value(&self, flag: &str) -> Option<&str> {
+        let prefix = format!("{flag}=");
+        self.flags.iter().enumerate().find_map(|(i, f)| {
+            if let Some(value) = f.strip_prefix(&prefix) {
+                Some(value)
+            } else if f == flag {
+                self.flags.get(i + 1).map(String::as_str)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// The INFO field the run's VCF output writes its annotation under:
+    /// `--vcf_info_field`, else `CSQ`.
+    pub fn vcf_info_field(&self) -> &str {
+        self.flag_value("--vcf_info_field").unwrap_or("CSQ")
+    }
+
     /// The expected output `name` (or its `.gz`) in the run's expected directory.
     pub fn expected(&self, name: &str) -> String {
         read_maybe_gz(&self.corpus.dir.join(&self.expected_dir).join(name))
@@ -501,7 +528,10 @@ pub fn output_path(run: &Run, format: &str, out_dir: &Path) -> PathBuf {
 }
 
 /// Runs the `vep` binary for the run in one output format and returns the
-/// output file's text. `format` is `default`, `tab`, `vcf` or `json`.
+/// output file's text; a run under `--compress_output` is decompressed first
+/// (gzip or BGZF, both multi-member gzip streams), since the compressed bytes
+/// are the encoder's and the text is what the reference compares. `format` is
+/// `default`, `tab`, `vcf` or `json`.
 pub fn run_vep(run: &Run, format: &str, out_dir: &Path, extra: &[&str]) -> String {
     let out = output_path(run, format, out_dir);
     let mut cmd = vep_command(run, out_dir);
@@ -521,6 +551,19 @@ pub fn run_vep(run: &Run, format: &str, out_dir: &Path, extra: &[&str]) -> Strin
         run.label(),
         String::from_utf8_lossy(&output.stderr)
     );
+    if run.has_flag("--compress_output") {
+        let bytes = fs::read(&out).unwrap();
+        assert!(
+            bytes.starts_with(&[0x1f, 0x8b]),
+            "{}: --compress_output wrote no gzip stream",
+            run.label()
+        );
+        let mut text = String::new();
+        flate2::read::MultiGzDecoder::new(&bytes[..])
+            .read_to_string(&mut text)
+            .unwrap();
+        return text;
+    }
     fs::read_to_string(&out).unwrap()
 }
 
@@ -653,12 +696,23 @@ fn vcf_line_key(line: &str) -> String {
 /// eight fixed columns with the CSQ removed from INFO. A line matching no input
 /// record is keyed by its output ordinal.
 pub fn parse_vcf(text: &str, inputs: &[String]) -> Vec<Entry> {
+    parse_vcf_info(text, inputs, "CSQ")
+}
+
+/// [`parse_vcf`] for an output whose annotation is under `info_field`
+/// (`--vcf_info_field`). The chunks parsed are the line's last entry under that
+/// key, whose subfields the last `##INFO=<ID=<field>,` header line names (the
+/// annotation this run wrote); an earlier entry kept by `--keep_csq`, and the
+/// earlier header lines, stay in `INFO_without_CSQ` and the header comparison.
+pub fn parse_vcf_info(text: &str, inputs: &[String], info_field: &str) -> Vec<Entry> {
+    let info_header = format!("##INFO=<ID={info_field},");
+    let info_key = format!("{info_field}=");
     let mut csq_fields: Vec<String> = Vec::new();
     let mut entries = Vec::new();
     let mut index = InputIndex::new(inputs, vcf_line_key);
     let mut lines_seen = 0usize;
     for line in text.lines() {
-        if line.starts_with("##INFO=<ID=CSQ") {
+        if line.starts_with(&info_header) {
             let fmt = line.split("Format: ").nth(1).unwrap();
             let fmt = fmt.trim_end_matches("\">");
             csq_fields = fmt.split('|').map(str::to_string).collect();
@@ -674,15 +728,15 @@ pub fn parse_vcf(text: &str, inputs: &[String]) -> Vec<Entry> {
             .map(|r| format!("rec{r}"))
             .unwrap_or(format!("line{lines_seen}"));
         lines_seen += 1;
-        let mut info_rest = Vec::new();
-        let mut csq = None;
-        for kv in cols[7].split(';') {
-            if let Some(v) = kv.strip_prefix("CSQ=") {
-                csq = Some(v.to_string());
-            } else {
-                info_rest.push(kv.to_string());
-            }
-        }
+        let kvs: Vec<&str> = cols[7].split(';').collect();
+        let annotation = kvs.iter().rposition(|kv| kv.starts_with(&info_key));
+        let csq = annotation.map(|i| kvs[i][info_key.len()..].to_string());
+        let info_rest: Vec<String> = kvs
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| Some(*i) != annotation)
+            .map(|(_, kv)| kv.to_string())
+            .collect();
         let mut fields = BTreeMap::new();
         for (name, val) in ["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER"]
             .iter()
@@ -1435,10 +1489,36 @@ pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
     String::new()
 }
 
+/// Compares two outputs written under `--no_headers` line by line: neither may
+/// carry a `#` line, and the data lines must be the same in the same order.
+/// Returns the first difference, or an empty string. A headed output's entry
+/// comparison reads every column of every row, so on a run without documented
+/// divergences the two comparisons agree; this one needs no column line.
+pub fn compare_headerless(expected: &str, actual: &str) -> String {
+    for (side, text) in [("reference", expected), ("vep-rs", actual)] {
+        if let Some(line) = text.lines().find(|l| l.starts_with('#')) {
+            return format!("{side} writes a header line under --no_headers: {line:?}");
+        }
+    }
+    let exp: Vec<&str> = expected.lines().collect();
+    let act: Vec<&str> = actual.lines().collect();
+    for (i, (e, a)) in exp.iter().zip(act.iter()).enumerate() {
+        if e != a {
+            return format!("line {}: expected {e:?}, got {a:?}", i + 1);
+        }
+    }
+    if exp.len() != act.len() {
+        return format!("line count: expected {}, got {}", exp.len(), act.len());
+    }
+    String::new()
+}
+
 /// Runs the `vep` binary for the run in one output format and compares the
 /// output with the run's expected file for it: the header report (for JSON,
 /// which has no header, the identity-key report), then the entry report, each
-/// empty when the two agree. `format` is `default`, `tab`, `vcf` or `json`.
+/// empty when the two agree; a run under `--no_headers` compares its text
+/// outputs line by line, since no column line names their columns. `format` is
+/// `default`, `tab`, `vcf` or `json`.
 pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) {
     let expected = run.expected(match format {
         "default" => "default.txt",
@@ -1449,6 +1529,14 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
     });
     let actual = run_vep(run, format, out_dir, &[]);
     let documented = run.documented();
+    if format != "json" && run.has_flag("--no_headers") {
+        assert!(
+            documented.is_empty(),
+            "{}: a --no_headers run compares line by line and documents no divergence",
+            run.label()
+        );
+        return (String::new(), compare_headerless(&expected, &actual));
+    }
     match format {
         "default" | "tab" => (
             compare_tab_headers(&expected, &actual),
@@ -1460,11 +1548,12 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
         ),
         "vcf" => {
             let inputs = run.input_records();
+            let info_field = run.vcf_info_field();
             (
                 compare_vcf_headers(&expected, &actual),
                 compare_entries(
-                    &parse_vcf(&expected, &inputs),
-                    &parse_vcf(&actual, &inputs),
+                    &parse_vcf_info(&expected, &inputs, info_field),
+                    &parse_vcf_info(&actual, &inputs, info_field),
                     &documented,
                 ),
             )

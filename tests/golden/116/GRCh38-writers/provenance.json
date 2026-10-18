@@ -1,0 +1,128 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "70701f98ff35b97e1ecb50a83b3bb6c1",
+  "arch": "arm64",
+  "flags_passed": []
+ },
+ "vep_command": "vep -i <input> -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [<set flags>] [--tab|--vcf|--json]; a --compress_output run's file is decompressed before it is stored",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "32 records at 32 chromosome 21 loci, exemplars of the 21 consequence sets a 116-record candidate file produced: coding SNVs, 1 bp and 3 bp deletions and 2 bp insertions inside the coding sequence, an intronic and an upstream SNV of each of 16 canonical protein-coding transcripts spread along the chromosome, three records with two alternate alleles and two intergenic records 10 kb or more from any transcript; the reference base is the GRCh38 primary assembly's. annotated.vcf is the default --vcf output of Ensembl VEP 116.2 on variants.vcf with the time token of its ##VEP line replaced by [TIME], the --keep_csq sets' input",
+ "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite writers=<reference>=<candidates> --k 2 --seed 1 --cache <chr21 json cache> --covers vcf --covers json --covers tab --covers default-format-header-lines --covers vcf-csq-info-header --covers tab-column-order-and-placeholder --covers json-output-key-set --matrix tests/parity/matrix.tsv --out tests/golden/116/GRCh38-writers; scripts/golden/prune_json_cache.py --gzip --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py flag-set (one per flag set) and classify (the manifest's run and each flag set)",
+ "sha256": {
+  "default.txt": "5918d9ce7227c891af5332a789cad26ff6bfcf6074e7e7ad9567f75d7f9a990a",
+  "tab.txt": "4036bcf9f03c7f7e49f482a0c7d47eefca9cb74084cd77cee11aef08700e38db",
+  "vcf.vcf": "3497911a1f0526aef7692a3c63f0ac991ab71862d5ca933e15b6215f63ab3227",
+  "json.jsonl": "1290faade2c5934a400f4fcebd155cf84d88bc9d90932299400aa74c1d323a39"
+ },
+ "variants_vcf_sha256": "9ef5f53e9bc8ad9687744889f747a02bced5cb511dbb8606e41b59893055d2e8",
+ "annotated_vcf_sha256": "7a0338c3baf491c9f8c038540e324d3e93104b90e294dc8645fe028794e9f3aa",
+ "flag_sets": {
+  "fields-tab": {
+   "flags": [
+    "--symbol",
+    "--fields",
+    "Location,Allele,Feature,Consequence,SYMBOL,BIOTYPE,IMPACT,STRAND,Uploaded_variation,NOT_A_FIELD"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_fields-tab",
+   "sha256": {
+    "default.txt": "ec11b09ef1018480055729d973df1eaa37736be43f245b66cf5cec018f02ff28",
+    "tab.txt": "7c07fb79bd0c9181e3764d3fe719734e293873f6b02a3de7b9392779e3052a62",
+    "vcf.vcf": "4888406ee2fc9829ef22aa6800685f1e44b0148f11f794917f39c4ea8188ee32",
+    "json.jsonl": "819117709d3c35f97dc74ebb98d2f5623e6762d4d12ea46fe50626b9c8a0c496"
+   }
+  },
+  "fields-vcf": {
+   "flags": [
+    "--fields",
+    "Allele,Consequence,IMPACT,Feature,Feature_type,BIOTYPE,STRAND,Location,Uploaded_variation"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_fields-vcf",
+   "sha256": {
+    "vcf.vcf": "d94399b50cf57ad6cd1d2612da1a4fe5dbb21b253a27c89738e0851767f82f41"
+   }
+  },
+  "keep-csq": {
+   "flags": [
+    "--keep_csq"
+   ],
+   "input": "annotated.vcf",
+   "expected_dir": "expected_keep-csq",
+   "sha256": {
+    "vcf.vcf": "8dda75e705c7f5b7e181f9513b03bddd857e74066722219566958e5953616ab7"
+   }
+  },
+  "keep-csq-ann": {
+   "flags": [
+    "--vcf_info_field",
+    "ANN",
+    "--keep_csq"
+   ],
+   "input": "annotated.vcf",
+   "expected_dir": "expected_keep-csq-ann",
+   "sha256": {
+    "vcf.vcf": "49ec11cff6febd76a29996b6c2b1bb01de65014c9b94043c28eae78786d83b2b"
+   }
+  },
+  "compress-gzip": {
+   "flags": [
+    "--compress_output",
+    "gzip"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_compress-gzip",
+   "sha256": {
+    "default.txt": "0eb43653e007fc358de52dd1180c08a8df45eaf7078c91bcf2bd51f5f3a6af98",
+    "tab.txt": "6530d00ca2338aefb00437193ba8828c268b1013b8153e02933195a249e79791",
+    "vcf.vcf": "b008262dd9d830f69772938a52a03aeaaa3da815df908c17d15fc5cc1a1e5608",
+    "json.jsonl": "ae2f769b64dcdbbc189922a38532e2b4aa9308ad50fb844bb954bf8cb778fffd"
+   }
+  },
+  "compress-bgzip": {
+   "flags": [
+    "--compress_output",
+    "bgzip"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_compress-bgzip",
+   "sha256": {
+    "default.txt": "574e139431b57156d55cfa352e374b0b023d24c8440c68f18b990a1a16215708",
+    "tab.txt": "2f7636e0d41935a9a8a5fdcd2e6634d08389de53b520666e1b5ea11ef04f00f4",
+    "vcf.vcf": "6b7a2be290999ce1d488f9afd7c75b884fb8a319d658e1a518d07d4bd9cdb3d0",
+    "json.jsonl": "a025ecca7b668e72f0a342e05a9db86b8023610e9da412634b4df76afdb644fd"
+   }
+  },
+  "no-headers": {
+   "flags": [
+    "--no_headers"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_no-headers",
+   "sha256": {
+    "default.txt": "e0c4e52f4bfc56ed7f8a6ebac4ef381cf9edf26858d3e6c815807925cc6fd540",
+    "tab.txt": "15fd21d55b21a4a1426bf02e04c956d8989e881a10fb73d297cbfcbb88639d7c",
+    "vcf.vcf": "f86d32d90585614cefab43ec9280aa932f26cb9a18277e791f42e037c1922c1c",
+    "json.jsonl": "1acde07d6a3f3a4524548ae66af0cf5c0f12eab77196687ecb6bc6fdb09927bc"
+   }
+  },
+  "output-format-ensembl": {
+   "flags": [
+    "--output_format",
+    "ensembl"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_output-format-ensembl",
+   "sha256": {
+    "default.txt": "0c49bd987d594c8c9379fa2036400f308ba3804d66b9333c22ab114ce83c0333"
+   }
+  }
+ }
+}

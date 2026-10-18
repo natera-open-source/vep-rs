@@ -5,10 +5,10 @@
 //!
 //! One line per input record: every allele's consequences become comma-joined
 //! CSQ entries on that record's line, as VEP writes them. The CSQ subfields are
-//! VEP's `@VCF_COLS` followed by the active flag fields and plugin fields
-//! ([`build_csq_field_list`]); values inside an entry are escaped as VEP escapes
-//! them (`,` and `|` to `&`, `;` to `%3B`, whitespace to `_`), lists join with `&`,
-//! and an absent value is empty.
+//! VEP's `@VCF_COLS` followed by the active flag fields and plugin fields, or the
+//! `--fields` list alone (`build_csq_field_list`); values inside an entry are
+//! escaped as VEP escapes them (`,` and `|` to `&`, `;` to `%3B`, whitespace to
+//! `_`), lists join with `&`, and an absent value is empty.
 
 use std::io::Write;
 
@@ -17,7 +17,7 @@ use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
 
-use super::fields::{self, FieldOptions};
+use super::fields::{self, FieldOptions, PluginHeader};
 use super::OutputFormatter;
 
 /// The field-selection options, shared with every other format.
@@ -34,8 +34,17 @@ pub struct VcfOutputFormatter {
     pub info_field_name: String,
     /// Sub-field names within the CSQ value.
     pub fields: Vec<String>,
+    /// Per subfield, whether the configuration produces it; a `--fields` name
+    /// whose flag is off is an empty subfield in every entry.
+    produced: Vec<bool>,
     /// Runtime field-selection options mirroring CLI flags.
     options: FieldOptions,
+    /// The plugin fields and their descriptions, one `##<KEY>=<description>`
+    /// header line each.
+    plugin_headers: Vec<PluginHeader>,
+    /// `--keep_csq`: an input's existing annotation stays, header lines and INFO
+    /// entry, beside the new one.
+    keep_csq: bool,
     /// The `##VEP=` meta line (version, time, cache and source versions).
     vep_meta_line: String,
     /// The invocation for the `##VEP-command-line=` meta line.
@@ -43,15 +52,40 @@ pub struct VcfOutputFormatter {
 }
 
 impl VcfOutputFormatter {
-    pub fn new(info_field_name: String, options: FieldOptions, plugin_fields: Vec<String>) -> Self {
-        let fields = build_csq_field_list(&options, plugin_fields);
+    /// `selected_fields` is the `--fields` list, which replaces the CSQ subfields.
+    pub fn new(
+        info_field_name: String,
+        options: FieldOptions,
+        plugin_headers: Vec<PluginHeader>,
+        selected_fields: Option<Vec<String>>,
+    ) -> Self {
+        let fields = build_csq_field_list(
+            &options,
+            &fields::plugin_field_names(&plugin_headers),
+            selected_fields.as_deref(),
+        );
+        let produced = fields
+            .iter()
+            .map(|f| fields::field_is_produced(f, &options))
+            .collect();
         Self {
             info_field_name,
             fields,
+            produced,
             options,
+            plugin_headers,
+            keep_csq: false,
             vep_meta_line: fields::vcf_vep_meta_line("", None),
             command_line: String::new(),
         }
+    }
+
+    /// Keeps an input VCF's existing annotation (`--keep_csq`): its `##INFO`,
+    /// `##VEP` and `##vep-rs` header lines and its INFO entry under the field's
+    /// name stay, and the new entry is appended under the same name.
+    pub fn with_keep_csq(mut self, keep_csq: bool) -> Self {
+        self.keep_csq = keep_csq;
+        self
     }
 
     /// Sets the run description the meta lines carry: the cache directory,
@@ -70,9 +104,11 @@ impl VcfOutputFormatter {
     /// The header block VEP writes for a VCF output given the input's own
     /// header lines (`##` metas and the `#CHROM` line, in order; empty when the
     /// input was not a VCF): a `##fileformat` line when the input lacks one, the
-    /// input metas minus any earlier CSQ definition, `##VEP` or `##vep-rs` line,
-    /// the `##VEP=` line, the `##vep-rs=<version>` line, the CSQ `##INFO`
-    /// definition, the command line, then the column line.
+    /// input metas minus any earlier definition of the INFO field, `##VEP` or
+    /// `##vep-rs` line (every input meta under `--keep_csq`), the `##VEP=` line,
+    /// the `##vep-rs=<version>` line, the field's `##INFO` definition, one
+    /// `##<KEY>=<description>` line per plugin field, the command line, then the
+    /// column line (`OutputFactory/VCF.pm` `headers`).
     pub fn header_lines(&self, input_headers: &[String]) -> Vec<String> {
         let mut lines: Vec<String> = Vec::new();
         let mut col_heading = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO".to_string();
@@ -91,9 +127,10 @@ impl VcfOutputFormatter {
                 col_heading = heading.clone();
             }
             for h in metas {
-                if h.to_ascii_lowercase().contains(&csq_marker)
-                    || h.starts_with("##VEP")
-                    || h.starts_with(VCF_IDENTITY_KEY)
+                if !self.keep_csq
+                    && (h.to_ascii_lowercase().contains(&csq_marker)
+                        || h.starts_with("##VEP")
+                        || h.starts_with(VCF_IDENTITY_KEY))
                 {
                     continue;
                 }
@@ -103,6 +140,9 @@ impl VcfOutputFormatter {
         lines.push(self.vep_meta_line.clone());
         lines.push(format!("{VCF_IDENTITY_KEY}{}", fields::VEP_RS_VERSION));
         lines.push(self.info_line());
+        for (name, description) in &self.plugin_headers {
+            lines.push(format!("##{name}={description}"));
+        }
         lines.push(format!("##VEP-command-line='{}'", self.command_line));
         lines.push(col_heading);
         lines
@@ -119,7 +159,7 @@ impl VcfOutputFormatter {
 
 impl Default for VcfOutputFormatter {
     fn default() -> Self {
-        Self::new("CSQ".to_string(), FieldOptions::default(), Vec::new())
+        Self::new("CSQ".to_string(), FieldOptions::default(), Vec::new(), None)
     }
 }
 
@@ -146,11 +186,17 @@ const VCF_COLS: [&str; 18] = [
 ];
 
 /// The CSQ subfields: `@VCF_COLS`, then the active flag fields not already in
-/// it, then plugin fields, each name once.
+/// it, then plugin fields, each name once; or, under `--fields`, that list in its
+/// own order and nothing else (`OutputFactory/VCF.pm` `fields`, where the flag's
+/// value pre-empts the list).
 pub(crate) fn build_csq_field_list(
     options: &FieldOptions,
-    plugin_fields: Vec<String>,
+    plugin_fields: &[String],
+    selected_fields: Option<&[String]>,
 ) -> Vec<String> {
+    if let Some(selected_fields) = selected_fields {
+        return selected_fields.to_vec();
+    }
     let mut fields: Vec<String> = VCF_COLS.iter().map(|s| s.to_string()).collect();
     for f in fields::flag_fields(options) {
         if !fields.iter().any(|x| x == f) {
@@ -158,8 +204,8 @@ pub(crate) fn build_csq_field_list(
         }
     }
     for f in plugin_fields {
-        if !fields.contains(&f) {
-            fields.push(f);
+        if !fields.contains(f) {
+            fields.push(f.clone());
         }
     }
     fields
@@ -191,13 +237,18 @@ pub(crate) fn value_for_field(
 
 fn format_csq_entry(
     fields: &[String],
+    produced: &[bool],
     variant: &InputVariant,
     tc: Option<&TranscriptConsequence>,
     options: &FieldOptions,
 ) -> String {
     fields
         .iter()
-        .map(|field| {
+        .zip(produced)
+        .map(|(field, produced)| {
+            if !produced {
+                return String::new();
+            }
             let v = value_for_field(field, variant, tc, options);
             if v == "-" && field != "Allele" {
                 String::new()
@@ -250,18 +301,21 @@ impl OutputFormatter for VcfOutputFormatter {
         while cols.len() < 8 {
             cols.push(".".to_string());
         }
-        // An existing CSQ entry from an earlier annotation is removed whether or
-        // not new consequences follow, as OutputFactory/VCF.pm:323-331 clears the
-        // field before it looks for anything to append.
+        // An earlier annotation's first entry under the field's name is removed
+        // whether or not new consequences follow, as OutputFactory/VCF.pm:323-331
+        // clears the field (one substitution, one entry) before it looks for
+        // anything to append; --keep_csq keeps it beside the new one.
         let csq_key = format!("{}=", self.info_field_name);
         let info: String = if cols[7] == "." {
             String::new()
+        } else if self.keep_csq {
+            cols[7].clone()
         } else {
-            cols[7]
-                .split(';')
-                .filter(|kv| !kv.starts_with(&csq_key))
-                .collect::<Vec<_>>()
-                .join(";")
+            let mut entries: Vec<&str> = cols[7].split(';').collect();
+            if let Some(first) = entries.iter().position(|kv| kv.starts_with(&csq_key)) {
+                entries.remove(first);
+            }
+            entries.join(";")
         };
         let carried_without_csq = record
             .iter()
@@ -271,7 +325,9 @@ impl OutputFormatter for VcfOutputFormatter {
         } else {
             fields::record_rows(record)
                 .into_iter()
-                .map(|(variant, tc)| format_csq_entry(&self.fields, variant, tc, &self.options))
+                .map(|(variant, tc)| {
+                    format_csq_entry(&self.fields, &self.produced, variant, tc, &self.options)
+                })
                 .collect()
         };
         // A record with no consequences is carried through without the field, as
@@ -306,6 +362,19 @@ mod tests {
 
         assert!(header.starts_with("##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: "));
         assert!(header.contains("Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation"));
+    }
+
+    fn plugin_headers() -> Vec<PluginHeader> {
+        vec![
+            (
+                "CADD_PHRED".to_string(),
+                "CADD PHRED-scaled pathogenicity score".to_string(),
+            ),
+            (
+                "REVEL_score".to_string(),
+                "REVEL pathogenicity score".to_string(),
+            ),
+        ]
     }
 
     /// The identity meta follows the `##VEP=` line in the key-value form of
@@ -349,7 +418,8 @@ mod tests {
                 variant_class: true,
                 ..Default::default()
             },
-            vec!["CADD_PHRED".to_string(), "REVEL_score".to_string()],
+            plugin_headers(),
+            None,
         );
         let mut buf = Vec::new();
         formatter.write_header(&mut buf).unwrap();
@@ -360,9 +430,221 @@ mod tests {
         assert!(header.contains("REVEL_score"));
     }
 
+    /// A one-transcript variant whose raw line carries an earlier annotation.
+    fn annotated_variant() -> InputVariant {
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.raw_input = Some("21\t100\trs1\tA\tG\t.\t.\tDP=3;CSQ=G|old|entry".into());
+        v.id = Some("rs1".into());
+        v.transcript_consequences = vec![TranscriptConsequence {
+            transcript_id: "ENST1".into(),
+            gene_id: "ENSG1".into(),
+            gene_symbol: Some("GENE1".into()),
+            consequences: smallvec![Consequence::MissenseVariant],
+            impact: Impact::MODERATE,
+            feature_type: FeatureType::Transcript,
+            strand: 1,
+            distance: None,
+            ..Default::default()
+        }];
+        v
+    }
+
+    fn info_of(line: &str) -> &str {
+        line.split('\t').nth(7).unwrap()
+    }
+
+    /// The options a VCF output runs with: the `vcf` option set switches on
+    /// symbol, biotype and numbers, so the fixed CSQ columns are produced.
+    fn vcf_options() -> VcfFieldOptions {
+        VcfFieldOptions {
+            symbol: true,
+            biotype: true,
+            numbers: true,
+            ..Default::default()
+        }
+    }
+
+    /// `OutputFactory/VCF.pm` `fields` (release 116.2): the `--fields` value stands
+    /// in for the whole subfield list, `@VCF_COLS` included, in the order given, so
+    /// the `##INFO` Format string and every entry follow it; a name nothing
+    /// produces is an empty subfield (`output_hash_to_vcf_info_chunk` pushes `''`
+    /// for a key the hash lacks).
+    #[test]
+    fn fields_replace_the_csq_format() {
+        let chosen: Vec<String> = ["Feature", "Allele", "SYMBOL", "STRAND", "NOT_A_FIELD"]
+            .map(str::to_string)
+            .to_vec();
+        let formatter = VcfOutputFormatter::new(
+            "CSQ".to_string(),
+            VcfFieldOptions {
+                symbol: true,
+                ..Default::default()
+            },
+            plugin_headers(),
+            Some(chosen.clone()),
+        );
+        assert_eq!(formatter.fields, chosen);
+        let header = formatter.header_lines(&[]);
+        assert!(
+            header.contains(
+                &"##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Feature|Allele|SYMBOL|STRAND|NOT_A_FIELD\">".to_string()
+            ),
+            "{header:?}"
+        );
+        let lines = formatter.format_record(&[&annotated_variant()]).unwrap();
+        assert_eq!(info_of(&lines[0]), "DP=3;CSQ=ENST1|G|GENE1|1|");
+        // A named field whose flag is off is an empty subfield: VEP's row hash
+        // carries no SYMBOL key without --symbol.
+        let off = VcfOutputFormatter::new(
+            "CSQ".to_string(),
+            VcfFieldOptions::default(),
+            Vec::new(),
+            Some(["Feature", "SYMBOL", "Allele"].map(str::to_string).to_vec()),
+        );
+        let lines = off.format_record(&[&annotated_variant()]).unwrap();
+        assert_eq!(info_of(&lines[0]), "DP=3;CSQ=ENST1||G");
+        let default = VcfOutputFormatter::new(
+            "CSQ".to_string(),
+            VcfFieldOptions::default(),
+            plugin_headers(),
+            None,
+        );
+        assert_eq!(&default.fields[..18], &VCF_COLS);
+        assert_eq!(
+            &default.fields[18..],
+            &["DISTANCE", "STRAND", "FLAGS", "CADD_PHRED", "REVEL_score"]
+        );
+    }
+
+    /// `OutputFactory/VCF.pm` `headers` 215-223 and `get_all_lines_by_InputBuffer`
+    /// 327-331 (release 116.2): under `--keep_csq` every input header line is
+    /// kept, the earlier `##INFO=<ID=CSQ` and `##VEP` lines included, and the
+    /// line's existing `CSQ=` entry stays while the new one is appended under the
+    /// same key, so the INFO column carries two `CSQ=` keys; without the flag the
+    /// earlier definition and entry are removed.
+    #[test]
+    fn keep_csq_keeps_the_old_info_line_and_the_old_entry() {
+        let input_headers = vec![
+            "##fileformat=VCFv4.2".to_string(),
+            "##VEP=\"v116.2\" API=\"v116\" time=\"2026-01-01 00:00:00\"".to_string(),
+            "##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Allele|Consequence\">".to_string(),
+            "##VEP-command-line='vep --vcf'".to_string(),
+            "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">".to_string(),
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO".to_string(),
+        ];
+        let kept = VcfOutputFormatter::new("CSQ".to_string(), vcf_options(), Vec::new(), None)
+            .with_keep_csq(true);
+        let header = kept.header_lines(&input_headers);
+        assert_eq!(&header[..5], &input_headers[..5]);
+        assert_eq!(
+            header
+                .iter()
+                .filter(|l| l.starts_with("##INFO=<ID=CSQ,"))
+                .count(),
+            2
+        );
+        assert_eq!(header.iter().filter(|l| l.starts_with("##VEP=")).count(), 2);
+        assert_eq!(header.last().unwrap(), &input_headers[5]);
+        let info = kept.format_record(&[&annotated_variant()]).unwrap();
+        let info = info_of(&info[0]).to_string();
+        assert!(
+            info.starts_with("DP=3;CSQ=G|old|entry;CSQ=G|missense_variant|MODERATE|GENE1|ENSG1|"),
+            "{info}"
+        );
+        assert_eq!(info.matches("CSQ=").count(), 2);
+
+        let replaced = VcfOutputFormatter::new("CSQ".to_string(), vcf_options(), Vec::new(), None);
+        let header = replaced.header_lines(&input_headers);
+        assert_eq!(
+            &header[..2],
+            &input_headers[..1]
+                .iter()
+                .chain([&input_headers[4]])
+                .cloned()
+                .collect::<Vec<_>>()[..]
+        );
+        assert_eq!(
+            header
+                .iter()
+                .filter(|l| l.starts_with("##INFO=<ID=CSQ,"))
+                .count(),
+            1
+        );
+        let info = replaced.format_record(&[&annotated_variant()]).unwrap();
+        let info = info_of(&info[0]).to_string();
+        assert!(info.starts_with("DP=3;CSQ=G|missense_variant|"), "{info}");
+        assert_eq!(info.matches("CSQ=").count(), 1);
+    }
+
+    /// `OutputFactory/VCF.pm` `headers` 266-273 (release 116.2): after the `##INFO`
+    /// definition, whose Format string is the `--fields` list when one is given,
+    /// one `##<KEY>=<description>` line per plugin field, then the command line
+    /// and the column line.
+    #[test]
+    fn header_carries_plugin_key_lines_and_the_fields_format() {
+        let chosen: Vec<String> = ["Allele", "Consequence", "CADD_PHRED"]
+            .map(str::to_string)
+            .to_vec();
+        let formatter = VcfOutputFormatter::new(
+            "CSQ".to_string(),
+            VcfFieldOptions::default(),
+            plugin_headers(),
+            Some(chosen),
+        )
+        .with_run_info("/c", None, "vep --vcf");
+        let header = formatter.header_lines(&[]);
+        let tail: Vec<&str> = header.iter().map(String::as_str).skip(3).collect();
+        assert_eq!(
+            tail,
+            [
+                "##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Allele|Consequence|CADD_PHRED\">",
+                "##CADD_PHRED=CADD PHRED-scaled pathogenicity score",
+                "##REVEL_score=REVEL pathogenicity score",
+                "##VEP-command-line='vep --vcf'",
+                "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+            ]
+        );
+        assert_eq!(header[0], "##fileformat=VCFv4.1");
+        assert!(header[1].starts_with("##VEP=\"v"));
+        assert!(header[2].starts_with(VCF_IDENTITY_KEY));
+    }
+
+    /// `--vcf_info_field ANN` (`VCF.pm` 147, 221, 267, 328, 349): the `##INFO`
+    /// definition and the INFO key take the name, an input header defining `ANN`
+    /// is removed while one defining `CSQ` stays, and an existing `CSQ=` entry on
+    /// the line stays beside the new `ANN=` entry, since only the named field's
+    /// entry is replaced.
+    #[test]
+    fn vcf_info_field_ann_names_header_strip_and_key() {
+        let formatter = VcfOutputFormatter::new(
+            "ANN".to_string(),
+            VcfFieldOptions::default(),
+            Vec::new(),
+            None,
+        );
+        let input_headers = vec![
+            "##fileformat=VCFv4.2".to_string(),
+            "##INFO=<ID=ANN,Number=.,Type=String,Description=\"old\">".to_string(),
+            "##INFO=<ID=CSQ,Number=.,Type=String,Description=\"other\">".to_string(),
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO".to_string(),
+        ];
+        let header = formatter.header_lines(&input_headers);
+        assert!(!header.iter().any(|l| l.contains("Description=\"old\"")));
+        assert!(header.contains(&input_headers[2]));
+        assert!(header
+            .iter()
+            .any(|l| l.starts_with("##INFO=<ID=ANN,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Allele|")));
+        let lines = formatter.format_record(&[&annotated_variant()]).unwrap();
+        let info = info_of(&lines[0]);
+        assert!(
+            info.starts_with("DP=3;CSQ=G|old|entry;ANN=G|missense_variant|"),
+            "{info}"
+        );
+    }
+
     #[test]
     fn test_format_variant_with_one_consequence() {
-        let formatter = VcfOutputFormatter::default();
+        let formatter = VcfOutputFormatter::new("CSQ".to_string(), vcf_options(), Vec::new(), None);
         let mut variant = InputVariant::new(
             "21".into(),
             25585733,
@@ -519,7 +801,7 @@ mod tests {
     }
 
     /// A record carried through without consequences loses a stale `CSQ=` as an
-    /// annotated one does (OutputFactory/VCF.pm:326-330 strips the field before
+    /// annotated one does (OutputFactory/VCF.pm:327-331 strips the field before
     /// it looks for chunks): the rest of INFO survives, and `.` stands in when the
     /// stale field was all of it. A `vep_skip` mark reaches the same line even
     /// with a consequence attached.

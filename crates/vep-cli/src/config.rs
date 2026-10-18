@@ -565,12 +565,36 @@ pub struct Config {
     pub gencode_basic: bool,
 
     pub vcf_info_field: String,
+    /// Keep an input VCF's existing annotation beside the new one (`--keep_csq`).
+    pub keep_csq: bool,
 
     pub json_cache: Option<String>,
 
+    /// The `--fields` list: the columns of the tab output and the subfields of
+    /// the VCF entry, replacing the whole default list; `None` keeps the defaults.
     pub fields: Option<Vec<String>>,
     pub dont_skip: bool,
     pub allow_non_variant: bool,
+}
+
+/// The output format as the writers name it: `OutputFactory.pm:229-231` lower-cases
+/// the value and its `%FORMAT_MAP` (`:97-103`) reads `ensembl` as the default `vep`
+/// format.
+pub fn canonical_output_format(value: &str) -> String {
+    match value.to_ascii_lowercase().as_str() {
+        "ensembl" => "vep".to_string(),
+        lower => lower.to_string(),
+    }
+}
+
+/// A `@LIST_FLAGS` value split as `Config.pm:757-762` splits it, with Perl's
+/// `split`: an inner empty field stays, trailing empty fields are dropped.
+fn split_list_flag(value: &str) -> Vec<String> {
+    let mut parts: Vec<String> = value.split(',').map(str::to_string).collect();
+    while parts.last().is_some_and(String::is_empty) {
+        parts.pop();
+    }
+    parts
 }
 
 /// The user-visible notice for `--regulatory`, which vep-rs accepts for Perl VEP
@@ -625,6 +649,10 @@ impl Config {
             if state.is_given(entry.flag) {
                 return Err(CliError::new(component, message));
             }
+        }
+        if let Some(format) = state.scalar("output_format") {
+            let canonical = canonical_output_format(format);
+            state.set("output_format", &canonical);
         }
         state.apply_option_sets();
         state
@@ -688,11 +716,7 @@ impl Config {
 
         let cache_version = args.cache_version.unwrap_or(vep_core::VEP_VERSION);
 
-        let fields = args.fields.map(|f| {
-            f.split(',')
-                .map(|s| s.trim().to_string())
-                .collect::<Vec<_>>()
-        });
+        let fields = args.fields.as_deref().map(split_list_flag);
 
         if let Some(notice) = regulatory_unimplemented_notice(args.regulatory, args.everything) {
             tracing::warn!("{}", notice);
@@ -797,6 +821,7 @@ impl Config {
             merged: args.merged,
             gencode_basic: args.gencode_basic,
             vcf_info_field: args.vcf_info_field,
+            keep_csq: args.keep_csq,
             json_cache: args.json_cache.as_deref().map(expand_tilde),
             fields,
             dont_skip: args.dont_skip,
@@ -895,6 +920,14 @@ mod tests {
         match Config::from_argv(argv).unwrap_err() {
             ParseFailure::Refused(e) => e.to_string(),
             ParseFailure::Usage(e) => panic!("usage error, not a refusal: {e}"),
+        }
+    }
+
+    /// A clap usage error's message, for a command line the parser refuses.
+    fn usage_error(argv: &[&str]) -> String {
+        match Config::from_argv(argv).unwrap_err() {
+            ParseFailure::Usage(e) => e.to_string(),
+            ParseFailure::Refused(e) => panic!("refused, not a usage error: {e}"),
         }
     }
 
@@ -1064,6 +1097,206 @@ mod tests {
     #[test]
     fn test_tab_shorthand() {
         assert_eq!(config(&["vep", "--tab"]).output_format, "tab");
+    }
+
+    /// `OutputFactory.pm:229-231` lower-cases `--output_format` and its `%FORMAT_MAP`
+    /// (`:97-103`) names `ensembl` and `vep` as one format; a value outside the map is
+    /// refused (`Unknown or unsupported output format`), which here is the value
+    /// enumeration's syntax error listing the six values, `parquet` being vep-rs's
+    /// own. The canonical name is what the option rules read, so `PARQUET` meets the
+    /// Parquet rules.
+    #[test]
+    fn output_format_is_lower_cased_validated_and_ensembl_is_vep() {
+        assert_eq!(
+            config(&["vep", "--output_format", "VCF"]).output_format,
+            "vcf"
+        );
+        assert_eq!(
+            config(&["vep", "--output_format", "Json"]).output_format,
+            "json"
+        );
+        for spelling in ["ensembl", "Ensembl", "ENSEMBL", "vep", "VEP"] {
+            assert_eq!(
+                config(&["vep", "--output_format", spelling]).output_format,
+                "vep",
+                "{spelling}"
+            );
+        }
+        let message = usage_error(&["vep", "--output_format", "xml"]);
+        assert!(
+            message.contains("invalid value 'xml' for '--output_format")
+                && message.contains("[possible values: vep, ensembl, vcf, json, tab, parquet]"),
+            "{message}"
+        );
+        assert_eq!(
+            refusal(&["vep", "--output_format", "PARQUET", "-o", "STDOUT"]),
+            "ERROR: [output] --output_format parquet needs a file path: Parquet cannot be written to STDOUT"
+        );
+        // `--output_format VCF` fills the CSQ columns as `--vcf` does.
+        assert!(config(&["vep", "--output_format", "VCF"]).symbol);
+    }
+
+    /// `--json` refuses `--vcf` and `--tab` (Config.pm:623); the pair is named in the
+    /// incompatibility table's order, `json` before `vcf` and `tab`, where Ensembl
+    /// VEP iterates a hash (`:962`) and names either flag first from run to run.
+    #[test]
+    fn json_with_vcf_or_tab_is_perls_error() {
+        assert_eq!(
+            refusal(&["vep", "--json", "--vcf"]),
+            "ERROR: [cli] Can't use --json and --vcf together"
+        );
+        assert_eq!(
+            refusal(&["vep", "--json", "--tab"]),
+            "ERROR: [cli] Can't use --json and --tab together"
+        );
+        assert_eq!(config(&["vep", "--json"]).output_format, "json");
+    }
+
+    /// `--vcf` refuses `--json` and `--tab` (Config.pm:624). With `--json` the `json`
+    /// row of the table fires first, so the line reads `--json and --vcf`.
+    #[test]
+    fn vcf_with_json_or_tab_is_perls_error() {
+        assert_eq!(
+            refusal(&["vep", "--vcf", "--json"]),
+            "ERROR: [cli] Can't use --json and --vcf together"
+        );
+        assert_eq!(
+            refusal(&["vep", "--vcf", "--tab"]),
+            "ERROR: [cli] Can't use --vcf and --tab together"
+        );
+    }
+
+    /// `--most_severe` lists `vcf` among its incompatibilities (Config.pm:616), and
+    /// the `vcf` option set has switched on `biotype`, the row's first entry, by the
+    /// time the checks run (`:766-769`), so the line names that pair; `--most_severe`
+    /// alone with `--vcf` cannot be reached. The rule keys on the flag: Ensembl VEP
+    /// accepts `--output_format vcf --most_severe`, and so does vep-rs.
+    #[test]
+    fn vcf_with_most_severe_is_perls_error() {
+        assert_eq!(
+            refusal(&["vep", "--vcf", "--most_severe"]),
+            "ERROR: [cli] Can't use --most_severe and --biotype together"
+        );
+        let mut state = FlagState::default();
+        state.set("most_severe", "1");
+        state.set("vcf", "1");
+        assert_eq!(
+            state.check(false).unwrap_err(),
+            "Can't use --most_severe and --vcf together"
+        );
+        assert!(Config::from_argv(["vep", "--output_format", "vcf", "--most_severe"]).is_ok());
+    }
+
+    /// `--tab` refuses `--vcf` and `--json` (Config.pm:625); both other rows precede
+    /// the `tab` row, so each line names the other flag first.
+    #[test]
+    fn tab_with_vcf_or_json_is_perls_error() {
+        assert_eq!(
+            refusal(&["vep", "--tab", "--vcf"]),
+            "ERROR: [cli] Can't use --vcf and --tab together"
+        );
+        assert_eq!(
+            refusal(&["vep", "--tab", "--json"]),
+            "ERROR: [cli] Can't use --json and --tab together"
+        );
+    }
+
+    /// `--fields` has no Parquet column set to replace: the pair is refused under the
+    /// output component, while `--tab` and `--vcf` take the list.
+    #[test]
+    fn parquet_with_fields_is_refused() {
+        assert_eq!(
+            refusal(&[
+                "vep",
+                "--output_format",
+                "parquet",
+                "--fields",
+                "Allele,Gene",
+                "-o",
+                "x.parquet"
+            ]),
+            "ERROR: [output] --fields applies to --tab and --vcf output; the Parquet column set is fixed"
+        );
+        assert_eq!(
+            config(&["vep", "--tab", "--fields", "Allele,Gene"]).fields,
+            Some(vec!["Allele".to_string(), "Gene".to_string()])
+        );
+        assert!(Config::from_argv(["vep", "--vcf", "--fields", "Allele"]).is_ok());
+    }
+
+    /// Parquet output is compressed by its own codec, so `--compress_output` is
+    /// refused with it and accepted with every text format.
+    #[test]
+    fn parquet_with_compress_output_is_refused() {
+        assert_eq!(
+            refusal(&[
+                "vep",
+                "--output_format",
+                "parquet",
+                "--compress_output",
+                "gzip",
+                "-o",
+                "x.parquet"
+            ]),
+            "ERROR: [output] --compress_output applies to the default, tab, VCF and JSON outputs; Parquet output is compressed by its own codec"
+        );
+        for format in ["vep", "tab", "vcf", "json"] {
+            let c = config(&[
+                "vep",
+                "--output_format",
+                format,
+                "--compress_output",
+                "bgzip",
+            ]);
+            assert_eq!(c.compress_output.as_deref(), Some("bgzip"), "{format}");
+        }
+    }
+
+    /// `%VALID` holds `gzip` and `bgzip` for `--compress_output` (Config.pm:603) and
+    /// `check_config` (`:945-957`) refuses another value with Perl's two-line
+    /// message; the declared flag carries the same list as a value enumeration, so
+    /// on the command line the refusal is the syntax error listing both values.
+    #[test]
+    fn compress_output_rejects_unknown_value_with_perls_message() {
+        let mut state = FlagState::default();
+        state.set("compress_output", "zip");
+        assert_eq!(
+            state.check(false).unwrap_err(),
+            "\"zip\" is not a valid value for --compress_output\nValid values: gzip, bgzip"
+        );
+        let message = usage_error(&["vep", "--compress_output", "zip"]);
+        assert!(
+            message.contains("invalid value 'zip' for '--compress_output")
+                && message.contains("[possible values: gzip, bgzip]"),
+            "{message}"
+        );
+        assert_eq!(
+            config(&["vep", "--compress_output", "gzip"])
+                .compress_output
+                .as_deref(),
+            Some("gzip")
+        );
+        assert_eq!(config(&["vep"]).compress_output, None);
+    }
+
+    /// `--fields` is a `@LIST_FLAGS` value (Config.pm:327-336), split on commas as
+    /// Perl's `split` does: nothing is trimmed, an inner empty field stays and a
+    /// trailing comma opens no field.
+    #[test]
+    fn fields_split_follows_perl() {
+        let fields = |value: &str| config(&["vep", "--tab", "--fields", value]).fields.unwrap();
+        assert_eq!(fields("Allele,Gene,"), ["Allele", "Gene"]);
+        assert_eq!(fields("Allele, Gene"), ["Allele", " Gene"]);
+        assert_eq!(fields("Allele,,Gene"), ["Allele", "", "Gene"]);
+        assert_eq!(config(&["vep", "--tab"]).fields, None);
+    }
+
+    /// `--keep_csq` is read; `--keep_ann`, its synonym Ensembl VEP never reads, is not.
+    #[test]
+    fn keep_csq_is_read_and_keep_ann_is_not() {
+        assert!(config(&["vep", "--vcf", "--keep_csq"]).keep_csq);
+        assert!(!config(&["vep", "--vcf", "--keep_ann"]).keep_csq);
+        assert!(!config(&["vep", "--vcf"]).keep_csq);
     }
 
     /// `--minimal` switches on `--allele_number` (the option set at Config.pm:524-529).
