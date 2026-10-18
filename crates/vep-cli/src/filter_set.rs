@@ -66,15 +66,14 @@ pub trait FilterData {
 /// The keys of a transcript as Ensembl VEP's cache stores them, the fields a
 /// `--transcript_filter` can name and the set its prefixes resolve over. The
 /// first twenty are the scalar fields of `AnnotationSource/Database/Transcript.pm`
-/// and of the transcript itself; `dbID`, `cdna_coding_start`, `cdna_coding_end`
-/// and `translation` are read from the transcript too. `slice`, `attributes`,
-/// `_gene`, `_trans_exon_array` and `_variation_effect_feature_cache` hold an
-/// object in the cache and `_vep_lazy_loaded` is `1` on every transcript the
-/// filter sees, so each is defined and only `exists` and `nex` read it
+/// and of the transcript itself; `dbID`, `cdna_coding_start`, `cdna_coding_end`,
+/// `translation` and `_gene_version` are read from the transcript too. `slice`,
+/// `attributes`, `_gene`, `_trans_exon_array` and `_variation_effect_feature_cache`
+/// hold an object in the cache and `_vep_lazy_loaded` is `1` on every transcript
+/// the filter sees, so each is defined and only `exists` and `nex` read it
 /// meaningfully. `description`, `coding_region_start` and `coding_region_end`
-/// are undefined, as the cache stores them; `_gene_version` is undefined
-/// because the transcript loader does not read it, and `_uniprot_isoform`
-/// because the converted cache does not carry it. `_source_cache` is absent,
+/// are undefined, as the cache stores them, and `_uniprot_isoform` because the
+/// converted cache does not carry it. `_source_cache` is absent,
 /// as it is from every cache but a merged one (`Transcript.pm:278`), so `_s`
 /// names `_swissprot` alone. `display_xref`, `external_db`,
 /// `external_display_name`, `external_name` and `external_status` are left
@@ -135,6 +134,7 @@ impl FilterData for Transcript {
             "is_canonical" => self.canonical.then_some(Cow::Borrowed("1")),
             "source" => Some(Cow::Borrowed(&self.source)),
             "_gene_stable_id" => Some(Cow::Borrowed(&*self.gene_stable_id)),
+            "_gene_version" => self.gene_version.map(|v| Cow::Owned(v.to_string())),
             "_gene_symbol" => self.gene_symbol.as_deref().map(Cow::Borrowed),
             "_gene_symbol_source" => self.gene_symbol_source.as_deref().map(Cow::Borrowed),
             "_gene_hgnc_id" => self.hgnc_id.as_deref().map(Cow::Borrowed),
@@ -1021,7 +1021,7 @@ mod tests {
             flags: Vec::new().into(),
             gencode_primary: false,
             gencode_basic: false,
-            gene_version: None,
+            gene_version: Some(17),
             uniprot_isoform: None,
             attributes: Vec::new(),
             vefc: Some(vep_core::transcript::TranscriptVEFC::default()),
@@ -1029,14 +1029,22 @@ mod tests {
             id_rank: 0,
         };
         let filter = |s: &str| FilterSet::transcript_filter(&[s]).unwrap();
+        // `gene_version` resolves to `_gene_version` through the `_` prefix
+        // (`FilterSet.pm:562-564`), the gene's version as the loader reads it.
+        assert!(
+            filter("gene_version exists and gene_version is 17 and gene_version > 16")
+                .evaluate(&tx)
+        );
         assert!(
             filter("dbID is 4201747 and cdna_coding_start < 300 and cdna_coding_end > 10000")
                 .evaluate(&tx)
         );
         assert!(filter("translation exists and translation match Translation and gene exists and slice exists and attributes exists and trans_exon_array exists and variation_effect_feature_cache exists and vep_lazy_loaded is 1").evaluate(&tx));
-        // The cache leaves the coding region and the description undefined; the
-        // loader reads no gene version.
-        assert!(filter("coding_region_start nex and coding_region_end nex and description nex and gene_version nex").evaluate(&tx));
+        // The cache leaves the coding region and the description undefined.
+        assert!(
+            filter("coding_region_start nex and coding_region_end nex and description nex")
+                .evaluate(&tx)
+        );
         // Perl numifies a reference as its address, and `get_input` reads an
         // unblessed `ARRAY(0x…)` as `0` against a non-zero number alone.
         assert!(

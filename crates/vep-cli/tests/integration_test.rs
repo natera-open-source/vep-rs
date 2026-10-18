@@ -426,6 +426,47 @@ fn transcript_filter_refusal_is_one_error_line_and_exit_1() {
     }
 }
 
+/// `gene_version` names the cache's `_gene_version` through the `_` prefix
+/// (`FilterSet.pm:562-564`), which the transcript loader fills from the gene's
+/// version, so `gene_version exists` passes every transcript of the
+/// transcript-filter corpus and the run writes the unfiltered rows, not an
+/// intergenic row per record.
+#[test]
+fn transcript_filter_reads_the_gene_version() {
+    let corpus = format!(
+        "{}/../../tests/golden/116/GRCh38-transcript-filter",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let run = |extra: &[&str]| {
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path().join("out");
+        let result = vep_binary()
+            .args(["-i", &format!("{corpus}/variants.vcf")])
+            .args(["-o", output.to_str().unwrap()])
+            .args(["--json_cache", &format!("{corpus}/json_cache")])
+            .args(["--offline", "--assembly", "GRCh38"])
+            .args(["--force_overwrite", "--no_stats", "--quiet"])
+            .args(extra)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{extra:?}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        data_lines(&std::fs::read(&output).unwrap())
+    };
+    let unfiltered = run(&[]);
+    let filtered = run(&["--transcript_filter", "gene_version exists"]);
+    assert!(unfiltered.iter().any(|l| l.contains("\tENST")));
+    assert_eq!(filtered, unfiltered);
+    let none_pass = run(&["--transcript_filter", "gene_version > 1000000"]);
+    assert!(!none_pass.is_empty());
+    assert!(none_pass
+        .iter()
+        .all(|l| l.contains("\tintergenic_variant\t")));
+}
+
 /// Annotates one VCF record against the release 116 golden corpus's own pruned
 /// cache, which unlike `VEP_RS_TEST_CACHE` is always present, and returns the
 /// output file's bytes.

@@ -166,6 +166,56 @@
     "tab.txt": "9c7e7edc0fc1e822af1476ab6b194c6fffcaecffede2b81189d27d2410becb14",
     "json.jsonl": "5153e5b4a8dac9629bb2a216d8aba82ea4eebc5558d13f5afef32796bfa810e2"
    }
+  },
+  "coding-only": {
+   "flags": [
+    "--coding_only"
+   ],
+   "expected_dir": "expected_coding-only",
+   "sha256": {
+    "default.txt": "df9ede2a3660afacdf129c4c4584d293ab8bb0eb2722aab4632c97c96f01f6b8",
+    "tab.txt": "cf182281a01d23f9df1777acc64f86e0d6b5fcfd076e053d4a4324d998a489cb",
+    "vcf.vcf": "0a45ab7561004277fac520d74ae9c000be8b474701d316988f6eefe31623236f",
+    "json.jsonl": "e9f997a21907246855f7137ddfc8975a21f58ffc57d53da0a0bfad1f0adf6d54"
+   }
+  },
+  "no-intergenic": {
+   "flags": [
+    "--no_intergenic"
+   ],
+   "expected_dir": "expected_no-intergenic",
+   "sha256": {
+    "default.txt": "fe53f1130b885b8da37021b47bda66eba933ff692685b168f58e1633cf2ebb35",
+    "tab.txt": "6158bdb1927bddef846456295e765f9525db556ab40d63e5f55b3a3480d48a0c",
+    "vcf.vcf": "1bbeddc517c630103c6ca1fe3179977555e662a643567b49ddbb1cecfe84d4b1",
+    "json.jsonl": "3d0f062a6e8e1a7b2e5f889e72cf77bf890088f853c24c22ce305efee6a5b56f"
+   }
+  },
+  "coding-only-pick": {
+   "flags": [
+    "--coding_only",
+    "--pick"
+   ],
+   "expected_dir": "expected_coding-only-pick",
+   "sha256": {
+    "default.txt": "be4927f05281afddd4c6cdfb3a0ae8b1f5bc161560128cb4f9c866ddce475781",
+    "tab.txt": "4e9f3527c5b16a6e0a0abd1649c0f1d007b241acddb0d5e0eab04ae0e75fea3b",
+    "vcf.vcf": "0fc8df6ec5f08a06fdbaf2a2d01903579b4b03dbcd2299bbe24a7ff5f486a33d",
+    "json.jsonl": "dce2a8b1efcd958ca79e0cbb660d182a5faa298a9ed1f839f249c6d207d6f93d"
+   }
+  },
+  "coding-only-structural": {
+   "flags": [
+    "--coding_only"
+   ],
+   "input": "structural.vcf",
+   "expected_dir": "expected_coding-only-structural",
+   "sha256": {
+    "default.txt": "6db7a7caeab8862e3c748d59d96dab7b12a60c73eb74020c0ca88fd5516774c5",
+    "tab.txt": "e88c9cf65a45a824d18092dcb7153b4d2250aea2cd4f95ccbca90e07a7c1aca0",
+    "vcf.vcf": "313b7348f0fad9b04499f1dfc200c83bd6c4e81783ae7870bc1cca1ec39661b0",
+    "json.jsonl": "31827df15a3a0d55c678151d26714e26aecf410aa9f8c34a50876d999649a4bb"
+   }
   }
  },
  "pruned_cache": {
@@ -176,5 +226,7 @@
   "spans_by_chromosome": {
    "21": 35
   }
- }
+ },
+ "structural_vcf_sha256": "dfb2d2ca36a98da441c705449ac48f7c703b0651b536e992c33efd7026b2419a",
+ "structural_input": "35 synthetic structural and large-deletion records over chromosome 21, the coding-only-structural set's input: a deletion, a duplication and an inversion covering one protein-coding transcript whole, a deletion over one coding exon with intronic ends, a deletion inside an intron, a deletion of 70 bases over the same coding exon, a deletion from the coding sequence into an intron, a deletion from the 5' untranslated exon segment across the whole coding sequence into the 3' untranslated one, a deletion from the 3' untranslated exon segment over the stop codon into an intron, a deletion at an intergenic locus, and a 2 kb deletion centred on 25 of the corpus's loci; the reference allele is a placeholder (N, or A for one deletion), so the records run without a FASTA. The set compares under --coding_only alone: the pruned cache carries every transcript a record overlaps but not every transcript within the flanking distance of one, and the filter drops those upstream and downstream rows on both sides"
 }

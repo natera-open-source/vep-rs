@@ -589,11 +589,16 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long = "var_synonyms")]
     pub var_synonyms: bool,
 
-    /// Accepted for VEP compatibility; not implemented
+    /// Keep only the rows whose allele lies in a transcript's coding sequence (a
+    /// CDS position or a coding consequence term, a variant covering a translated
+    /// transcript whole included); intergenic and non-coding rows go, and a record
+    /// left with no row is written as an unannotated one
     #[arg(help_heading = "Output Control", long = "coding_only")]
     pub coding_only: bool,
 
-    /// Accepted for VEP compatibility; not implemented
+    /// Write no row for a record that overlaps no transcript: no intergenic row
+    /// in the default and tab formats, the VCF line without a CSQ entry, and in
+    /// JSON a most_severe_consequence of "?" with no intergenic_consequences
     #[arg(help_heading = "Output Control", long = "no_intergenic")]
     pub no_intergenic: bool,
 
@@ -698,15 +703,14 @@ pub struct Args {
     /// case, without the leading `_`, or by a unique prefix: `stable_id`,
     /// `version`, `biotype`, `start`, `end`, `strand`, `is_canonical`, `source`,
     /// `dbID`, `cdna_coding_start`, `cdna_coding_end`, `_gene_stable_id`,
-    /// `_gene_symbol`, `_gene_symbol_source`, `_gene_hgnc_id`, `_ccds`,
-    /// `_refseq`, `_protein`, `_swissprot`, `_trembl`, `_uniparc`,
+    /// `_gene_version`, `_gene_symbol`, `_gene_symbol_source`, `_gene_hgnc_id`,
+    /// `_ccds`, `_refseq`, `_protein`, `_swissprot`, `_trembl`, `_uniparc`,
     /// `_gene_phenotype`; the object keys `translation` (coding transcripts),
     /// `slice`, `attributes`, `_gene`, `_trans_exon_array`,
     /// `_variation_effect_feature_cache` and `_vep_lazy_loaded`, which are defined
     /// and read meaningfully by `exists` and `nex` alone; and `description`,
-    /// `coding_region_start`, `coding_region_end`, `_gene_version` and
-    /// `_uniprot_isoform`, which are undefined (the cache leaves the first three
-    /// undefined, the transcript loader does not read the gene version, and the
+    /// `coding_region_start`, `coding_region_end` and `_uniprot_isoform`, which
+    /// are undefined (the cache leaves the first three undefined and the
     /// converted cache does not carry the isoform list).
     /// `_source_cache` is absent, as it is from every cache but a merged one. The
     /// operators are `is` (`eq`, `=`), `ne` (`!=`), `>`, `<`, `>=`, `<=`, `exists`

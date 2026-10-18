@@ -21,6 +21,7 @@ pub use annotator::{
 };
 pub use config::Config;
 pub use pick::{apply_to_batch, apply_to_record, FilterConfig, PickCriterion};
+pub use row_filter::RowFilters;
 pub use transcript_index::{
     LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl, TranscriptSet,
 };
@@ -47,6 +48,7 @@ pub mod output_compress;
 pub mod pick;
 pub(crate) mod pipeline;
 pub(crate) mod render;
+pub mod row_filter;
 pub mod runner;
 pub mod transcript_index;
 pub mod variation_matcher;

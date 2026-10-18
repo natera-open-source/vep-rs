@@ -23,6 +23,8 @@ use smallvec::SmallVec;
 use vep_core::consequence::{Consequence, ConsequenceList, SourceCache, TranscriptConsequence};
 use vep_core::variant::InputVariant;
 
+use crate::row_filter::{self, RowFilters};
+
 /// One `--pick_order` criterion, in Ensembl VEP's spelling (`Config.pm:601`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PickCriterion {
@@ -117,10 +119,12 @@ pub fn pick_order(tokens: Option<&[String]>) -> Result<Vec<PickCriterion>, Strin
         .collect()
 }
 
-/// The pick family and summary flags of a run, each a command-line flag, and
-/// the criteria `pick_worst` compares in order.
+/// The row filters, the pick family and the summary flags of a run, each a
+/// command-line flag, and the criteria `pick_worst` compares in order.
 #[derive(Debug, Clone)]
 pub struct FilterConfig {
+    /// `--coding_only` and `--no_intergenic`, applied before the pick family.
+    pub row_filters: RowFilters,
     pub pick: bool,
     pub pick_allele: bool,
     pub per_gene: bool,
@@ -138,6 +142,7 @@ pub struct FilterConfig {
 impl Default for FilterConfig {
     fn default() -> Self {
         Self {
+            row_filters: RowFilters::default(),
             pick: false,
             pick_allele: false,
             per_gene: false,
@@ -153,9 +158,10 @@ impl Default for FilterConfig {
 }
 
 impl FilterConfig {
-    /// Whether any step of this module changes a record.
+    /// Whether any record-level step, a row filter included, changes a record.
     pub fn any_active(&self) -> bool {
-        self.pick
+        self.row_filters.any_active()
+            || self.pick
             || self.pick_allele
             || self.per_gene
             || self.pick_allele_gene
@@ -180,12 +186,14 @@ pub fn apply_to_batch(batch: &mut [InputVariant], config: &FilterConfig) {
 }
 
 /// Applies the record-level steps to the alleles of one input record in Ensembl
-/// VEP's order (`OutputFactory.pm:476-514`, then `:387`): the pick family over
-/// the record's rows, then the summary of the rows left.
+/// VEP's order (`OutputFactory.pm:477-516`, then `:387`): the row filters
+/// (`:482`, `:490-502`), the pick family over the rows they leave (`:514`),
+/// then the summary of the rows left.
 pub fn apply_to_record(record: &mut [InputVariant], config: &FilterConfig) {
     if !config.any_active() {
         return;
     }
+    row_filter::apply_to_record(record, config.row_filters);
     pick_family(record, config);
     if config.most_severe || config.summary {
         summarise(record, config.most_severe);
@@ -540,13 +548,7 @@ fn retain_rows(record: &mut [InputVariant], rows: &[Row], picked: &[usize]) {
             index += 1;
             keep
         });
-        variant.most_severe_consequence = Consequence::most_severe(
-            &variant
-                .transcript_consequences
-                .iter()
-                .flat_map(|tc| tc.consequences.iter().copied())
-                .collect::<Vec<_>>(),
-        );
+        row_filter::settle_verdict(variant);
     }
 }
 

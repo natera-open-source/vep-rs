@@ -36,6 +36,7 @@ use crate::filter_set::FilterSet;
 use crate::output_compress::{CompressedOutput, OutputCompression};
 use crate::pick::FilterConfig;
 use crate::pipeline;
+use crate::row_filter::RowFilters;
 use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex, TranscriptSet};
 use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_source::{ReadFailure, VariationSource};
@@ -669,6 +670,10 @@ impl Runner {
         debug!("detected input format: {}", format);
 
         let filter_config = FilterConfig {
+            row_filters: RowFilters {
+                coding_only: self.config.coding_only,
+                no_intergenic: self.config.no_intergenic,
+            },
             pick: self.config.pick,
             pick_allele: self.config.pick_allele,
             per_gene: self.config.per_gene,
@@ -1274,7 +1279,9 @@ pub(crate) struct AnnotationResources {
 /// The compiled `--transcript_filter`, `None` without the flag. A filter
 /// Ensembl VEP would refuse ends the run before any input is read, under the
 /// `filter` component of the error contract with Ensembl VEP's own message.
-fn compile_transcript_filter(filters: &[String]) -> Result<Option<Arc<FilterSet>>, CliError> {
+pub(crate) fn compile_transcript_filter(
+    filters: &[String],
+) -> Result<Option<Arc<FilterSet>>, CliError> {
     if filters.is_empty() {
         return Ok(None);
     }
@@ -1327,7 +1334,9 @@ pub(crate) fn needs_raw_input_capture(config: &Config) -> bool {
         .any(|fmt| config.output_format == *fmt)
 }
 
-fn structural_variant_bounds(variant: &InputVariant) -> (u64, u64) {
+/// The genomic span an allele is annotated over: its own coordinates, or the
+/// structural variant's span up to `sv_end`, ordered.
+pub(crate) fn structural_variant_bounds(variant: &InputVariant) -> (u64, u64) {
     let variant_start = variant.start.min(variant.end);
     let variant_end = variant
         .sv_end
@@ -1412,7 +1421,7 @@ pub(crate) fn annotate_one(
     let transcript_filter = resources.transcript_filter.as_deref();
     if !is_interchrom_paired_breakend {
         if let Some(chr_transcripts) = resources.transcripts.get(&variant.chr) {
-            annotate_variant_filtered(
+            annotate_variant(
                 variant,
                 chr_transcripts,
                 &resources.effects_config,
@@ -1422,7 +1431,7 @@ pub(crate) fn annotate_one(
         }
     }
 
-    append_bnd_mate_consequences_filtered(
+    append_bnd_mate_consequences(
         variant,
         resources.transcripts.as_ref(),
         &resources.effects_config,
@@ -1564,21 +1573,12 @@ pub(crate) fn annotate_batch(
 
 /// Annotate a variant with transcript consequences and optional SIFT/PolyPhen
 /// predictions: the one implementation, which the library path (`annotator.rs`)
-/// calls too, so the two paths cannot diverge on a record.
+/// calls too, so the two paths cannot diverge on a record. Under a
+/// `--transcript_filter` a transcript that fails the filter is never seen, as
+/// Ensembl VEP skips it before any TranscriptVariation exists
+/// (`AnnotationType/Transcript.pm:116`), so a record whose every transcript
+/// fails is intergenic.
 pub(crate) fn annotate_variant(
-    variant: &mut InputVariant,
-    transcripts: &TranscriptIndex,
-    config: &vep_effects::EffectsConfig,
-    prediction_config: &PredictionConfig,
-) {
-    annotate_variant_filtered(variant, transcripts, config, prediction_config, None);
-}
-
-/// [`annotate_variant`] under a `--transcript_filter`: a transcript that fails
-/// the filter is never seen, as Ensembl VEP skips it before any
-/// TranscriptVariation exists (`AnnotationType/Transcript.pm:116`), so a
-/// record whose every transcript fails is intergenic.
-fn annotate_variant_filtered(
     variant: &mut InputVariant,
     transcripts: &TranscriptIndex,
     config: &vep_effects::EffectsConfig,
@@ -1706,21 +1706,12 @@ fn lookup_predictions(
     }
 }
 
-/// Append the mate-side consequences of a paired BND, in place.
+/// Append the mate-side consequences of a paired BND, in place; the mate's
+/// transcripts pass the `--transcript_filter` as the local ones do.
 ///
 /// The single implementation: `annotator.rs` calls this rather than carrying its
 /// own, because two implementations of one behaviour diverge.
 pub(crate) fn append_bnd_mate_consequences(
-    variant: &mut InputVariant,
-    transcripts_by_chr: &LazyTranscriptIndexes,
-    config: &vep_effects::EffectsConfig,
-) {
-    append_bnd_mate_consequences_filtered(variant, transcripts_by_chr, config, None);
-}
-
-/// [`append_bnd_mate_consequences`] under a `--transcript_filter`, which the
-/// mate's transcripts pass as the local ones do.
-fn append_bnd_mate_consequences_filtered(
     variant: &mut InputVariant,
     transcripts_by_chr: &LazyTranscriptIndexes,
     config: &vep_effects::EffectsConfig,
@@ -2944,6 +2935,7 @@ mod tests {
             by_chr.get("1").unwrap(),
             &config,
             &PredictionConfig::default(),
+            None,
         );
         assert_eq!(variant.transcript_consequences.len(), 1);
 
@@ -2951,6 +2943,7 @@ mod tests {
             &mut variant,
             &LazyTranscriptIndexes::from_indexes(by_chr),
             &config,
+            None,
         );
 
         assert_eq!(variant.transcript_consequences.len(), 2);
@@ -2993,11 +2986,13 @@ mod tests {
             by_chr.get("1").unwrap(),
             &config,
             &PredictionConfig::default(),
+            None,
         );
         append_bnd_mate_consequences(
             &mut variant,
             &LazyTranscriptIndexes::from_indexes(by_chr),
             &config,
+            None,
         );
 
         assert_eq!(variant.transcript_consequences.len(), 1);
@@ -3036,6 +3031,7 @@ mod tests {
             by_chr.get("1").unwrap(),
             &config,
             &PredictionConfig::default(),
+            None,
         );
         assert_eq!(variant.transcript_consequences.len(), 1);
 
@@ -3043,6 +3039,7 @@ mod tests {
             &mut variant,
             &LazyTranscriptIndexes::from_indexes(by_chr),
             &config,
+            None,
         );
 
         assert_eq!(variant.transcript_consequences.len(), 1);
@@ -3464,6 +3461,7 @@ mod tests {
             &transcripts,
             &config,
             &PredictionConfig::default(),
+            None,
         );
         let features: Vec<&str> = variant
             .transcript_consequences

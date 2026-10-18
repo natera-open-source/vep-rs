@@ -13,6 +13,7 @@ use thiserror::Error;
 use tracing::{debug, info};
 
 use crate::config::{CliError, Config};
+use crate::filter_set::FilterSet;
 use crate::json_cache;
 use crate::transcript_index::{
     LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl, TranscriptSet,
@@ -40,6 +41,10 @@ pub struct AnnotationResources {
     /// C-ABI plugins loaded from the `--plugin` arguments no built-in claimed.
     pub dylib_plugins: Arc<PluginRegistry>,
     pub prediction_config: PredictionConfig,
+    /// The compiled `--transcript_filter`, which every transcript passes before
+    /// its consequences are computed, as in the `vep` binary; `None` filters
+    /// nothing.
+    pub transcript_filter: Option<Arc<FilterSet>>,
 }
 
 /// Build a scoped rayon thread pool sized for one annotator.
@@ -228,6 +233,13 @@ impl Annotator {
     /// `--hgvs` without a FASTA is refused.
     pub fn from_config_with_pool(config: &Config, pool: Arc<ThreadPool>) -> anyhow::Result<Self> {
         let cache = crate::cache_resolve::resolve(config)?;
+        // After the cache and before the notices and the FASTA, as the binary
+        // orders them (`Runner::new` resolves the cache; `Runner::run` compiles
+        // the filter, prints the configuration notices, then opens the FASTA and
+        // runs its checks): with a missing cache, a bad filter and a missing
+        // FASTA together, both paths report them in that order.
+        let transcript_filter =
+            crate::runner::compile_transcript_filter(&config.transcript_filter)?;
         log_notices(&config.notices);
         let reference_fasta = crate::runner::open_fasta(config, &cache)?;
         let checks = crate::runner::fasta_setup_checks(config, reference_fasta.is_some())?;
@@ -273,6 +285,7 @@ impl Annotator {
                     sift: config.sift.clone(),
                     polyphen: config.polyphen.clone(),
                 },
+                transcript_filter,
             },
             pool,
         )
@@ -654,6 +667,7 @@ pub fn annotate_batch(
                 .as_deref()
                 .map(|mate_chr| mate_chr != variant.chr)
                 .unwrap_or(false);
+        let transcript_filter = resources.transcript_filter.as_deref();
         if !is_interchrom_paired_breakend {
             if let Some(chr_transcripts) = resources.transcripts.get(&variant.chr) {
                 crate::runner::annotate_variant(
@@ -661,6 +675,7 @@ pub fn annotate_batch(
                     chr_transcripts,
                     &resources.effects_config,
                     &resources.prediction_config,
+                    transcript_filter,
                 );
             }
         }
@@ -671,6 +686,7 @@ pub fn annotate_batch(
             variant,
             resources.transcripts.as_ref(),
             &resources.effects_config,
+            transcript_filter,
         );
 
         if let Some(source) = &resources.variation_source {
@@ -753,6 +769,7 @@ mod tests {
             builtin_plugins: Arc::new(BuiltinRegistry::new()),
             dylib_plugins: Arc::new(PluginRegistry::new()),
             prediction_config: PredictionConfig::default(),
+            transcript_filter: None,
         };
         Annotator::new(resources, pool)
     }
@@ -1118,6 +1135,7 @@ mod tests {
             builtin_plugins: Arc::new(BuiltinRegistry::new()),
             dylib_plugins: Arc::new(PluginRegistry::new()),
             prediction_config: PredictionConfig::default(),
+            transcript_filter: None,
         };
         Annotator::new(resources, build_thread_pool(threads).unwrap()).unwrap()
     }
@@ -1415,6 +1433,100 @@ mod tests {
         );
     }
 
+    /// `from_config` compiles the `--transcript_filter` before it opens the
+    /// FASTA and runs its checks, as the binary does (`Runner::run`): `--hgvs`
+    /// with no FASTA and a filter Ensembl VEP would refuse reports the `filter`
+    /// component, not `fasta`.
+    #[test]
+    fn from_config_refuses_a_bad_transcript_filter_before_a_missing_fasta() {
+        let leaf = format!(
+            "{}/../../tests/golden/116/GRCh38-release116/json_cache",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let config = Config::from_argv([
+            "vep",
+            "--fork",
+            "1",
+            "--json_cache",
+            &leaf,
+            "--hgvs",
+            "--transcript_filter",
+            "biotype equals x",
+        ])
+        .unwrap();
+        let err = Annotator::from_config(&config)
+            .err()
+            .expect("a filter Ensembl VEP would refuse is refused");
+        assert_eq!(
+            CliError::from_run(&err),
+            "ERROR: [filter] No such operator \"equals\""
+        );
+    }
+
+    /// `from_config` compiles the `--transcript_filter` and the batch path applies
+    /// it as the binary does: over the transcript-filter corpus under
+    /// `biotype is protein_coding`, the embedding caller's rows, by record, allele
+    /// and feature, are exactly the rows of Ensembl VEP 116.2's reference output
+    /// for that flag set, intergenic rows for the records every transcript of
+    /// which fails included, and fewer than the unfiltered rows.
+    #[test]
+    fn from_config_applies_the_transcript_filter_as_the_binary_does() {
+        use std::io::Read as _;
+        let corpus = format!(
+            "{}/../../tests/golden/116/GRCh38-transcript-filter",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let cache = format!("{corpus}/json_cache");
+        let rows = |filter: &[&str]| -> Vec<(String, String, String)> {
+            let mut argv = vec!["vep", "--fork", "1", "--json_cache", &cache];
+            argv.extend_from_slice(filter);
+            let annotator = Annotator::from_config(&Config::from_argv(argv).unwrap()).unwrap();
+            let vcf = std::fs::read_to_string(format!("{corpus}/variants.vcf")).unwrap();
+            let mut batch: Vec<InputVariant> = vcf
+                .lines()
+                .filter(|l| !l.starts_with('#'))
+                .flat_map(|l| parse_vcf_line(l, false).unwrap())
+                .collect();
+            let _ = annotator.annotate_batch(&mut batch);
+            let mut out = Vec::new();
+            for v in &batch {
+                for tc in &v.transcript_consequences {
+                    out.push((
+                        v.uploaded_variation(),
+                        v.display_allele(),
+                        tc.transcript_id.to_string(),
+                    ));
+                }
+                if v.transcript_consequences.is_empty() && v.most_severe_consequence.is_some() {
+                    out.push((v.uploaded_variation(), v.display_allele(), "-".to_string()));
+                }
+            }
+            out.sort();
+            out
+        };
+        let filtered = rows(&["--transcript_filter", "biotype is protein_coding"]);
+        let unfiltered = rows(&[]);
+        assert!(filtered.len() < unfiltered.len());
+
+        let mut reference = String::new();
+        flate2::read::GzDecoder::new(
+            std::fs::File::open(format!("{corpus}/expected_filter-biotype/default.txt.gz"))
+                .unwrap(),
+        )
+        .read_to_string(&mut reference)
+        .unwrap();
+        let mut expected: Vec<(String, String, String)> = reference
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .map(|l| {
+                let f: Vec<&str> = l.split('\t').collect();
+                (f[0].to_string(), f[2].to_string(), f[4].to_string())
+            })
+            .collect();
+        expected.sort();
+        assert_eq!(filtered, expected);
+    }
+
     /// `from_config` lands every HGVS-related field of the effects configuration
     /// as the binary's run computes it from the same configuration, on the
     /// GRCh38-identifiers corpus with its reference: `--hgvsg` gives the shifted
@@ -1428,24 +1540,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR")
         );
         let cache = format!("{corpus}/json_cache");
-        // The reader opens a plain FASTA beside its `.fai`.
-        let fasta_dir = tempfile::tempdir().unwrap();
-        let fasta = fasta_dir.path().join("reference.fa");
-        let mut bases = Vec::new();
-        std::io::Read::read_to_end(
-            &mut flate2::read::GzDecoder::new(
-                std::fs::File::open(format!("{corpus}/reference.fa.gz")).unwrap(),
-            ),
-            &mut bases,
-        )
-        .unwrap();
-        std::fs::write(&fasta, bases).unwrap();
-        std::fs::copy(
-            format!("{corpus}/reference.fa.fai"),
-            fasta_dir.path().join("reference.fa.fai"),
-        )
-        .unwrap();
-        let fasta = fasta.to_str().unwrap();
+        let fasta = format!("{corpus}/reference.fa.gz");
         let effects = |flags: &[&str]| {
             let mut argv = vec![
                 "vep",
@@ -1454,7 +1549,7 @@ mod tests {
                 "--json_cache",
                 &cache,
                 "--fasta",
-                fasta,
+                &fasta,
             ];
             argv.extend_from_slice(flags);
             let config = Config::from_argv(argv).unwrap();

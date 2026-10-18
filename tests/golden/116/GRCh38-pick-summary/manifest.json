@@ -771,6 +771,84 @@
    "vep_rs_only_tuples": [],
    "divergence_summary": {},
    "vep_rs_only_summary": {}
+  },
+  {
+   "name": "coding-only",
+   "flags": [
+    "--coding_only"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_coding-only",
+   "covers": [
+    "coding_only"
+   ]
+  },
+  {
+   "name": "no-intergenic",
+   "flags": [
+    "--no_intergenic"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_no-intergenic",
+   "covers": [
+    "no_intergenic"
+   ]
+  },
+  {
+   "name": "coding-only-pick",
+   "flags": [
+    "--coding_only",
+    "--pick"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_coding-only-pick",
+   "covers": [
+    "coding_only",
+    "pick"
+   ]
+  },
+  {
+   "name": "coding-only-structural",
+   "flags": [
+    "--coding_only"
+   ],
+   "input": "structural.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_coding-only-structural",
+   "covers": [
+    "coding_only"
+   ]
   }
  ],
  "divergences": [],

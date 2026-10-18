@@ -105,7 +105,7 @@ clin_sig_allele	Config.pm	implemented	landed:implemented	crates/vep-io/src/outpu
 clin_sig_allele_revcomp_116	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::clin_sig_entries_reverse_complemented_when_ref_allele_differs;crates/vep-io/src/output/fields.rs::empty_allele_entry_matches_nothing	tests/golden/116/GRCh38-colocated	
 ClinPred	ClinPred.pm	implemented	open			
 clinvar_somatic_classification	Config.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/fields.rs::clinvar_somatic_classification_prints_cache_string;crates/vep-io/src/output/fields.rs::documented_subset_is_stated	tests/golden/116/GRCh38-colocated	
-coding_only	OutputFactory.pm	implemented	open			
+coding_only	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/row_filter.rs::coding_only_keeps_cds_rows_and_writes_no_intergenic_row;crates/vep-cli/src/row_filter.rs::coding_only_keeps_a_coding_term_row_without_a_cds_position;crates/vep-cli/src/row_filter.rs::coding_only_keeps_a_variant_covering_a_translated_transcript_whole;crates/vep-cli/src/row_filter.rs::coding_only_drops_regulatory_and_motif_rows	tests/golden/116/GRCh38-pick-summary	
 compress-output-gzip-vs-bgzip	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/output_compress.rs::bgzip_output_is_bgzf_and_gzip_output_is_plain_gzip	tests/golden/116/GRCh38-writers	
 compress_output	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::compress_output_rejects_unknown_value_with_perls_message;crates/vep-cli/tests/integration_test.rs::compress_output_writes_gzip_and_bgzip_streams_of_the_plain_output;crates/vep-cli/src/config.rs::parquet_with_compress_output_is_refused	tests/golden/116/GRCh38-writers	
 condel	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::condel_is_accepted_without_effect		
@@ -322,7 +322,7 @@ no_check_variants_order	InputBuffer.pm	accepted_noop	landed:accepted_noop	crates
 no_escape	Config.pm	implemented	open			
 no_fasta	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::no_fasta_suppresses_autodetect	tests/golden/116/GRCh38-run-control	
 no_headers	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/integration_test.rs::no_headers_writes_no_hash_line_in_default_tab_and_vcf	tests/golden/116/GRCh38-writers	
-no_intergenic	OutputFactory.pm	implemented	open			
+no_intergenic	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/row_filter.rs::no_intergenic_suppresses_the_intergenic_row_in_every_format	tests/golden/116/GRCh38-pick-summary	
 no_progress	Config.pm	implemented	open			
 no_stats	BaseRunner.pm	implemented	open			
 non-variant-records	VCF.pm	implemented	open			
