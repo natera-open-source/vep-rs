@@ -22,12 +22,15 @@ use rustc_hash::FxHashMap;
 use serde::Deserialize;
 use tracing::info;
 
+use vep_core::cache_info::CacheInfo;
 use vep_core::coordinate::Strand;
 use vep_core::transcript::{
     Attribute, Exon, ExonCoordMapper, Intron, MapperPair, PredictionMatrix, ProteinFeature,
     ProteinFunctionPredictions, SeqEdit, Transcript, TranscriptMapper, TranscriptVEFC, Translation,
 };
-use vep_core::variation::CachedVariation;
+use vep_core::variation::{CachedVariation, ClinVarDetail};
+
+use crate::config::CliError;
 
 /// Visitors for the numeric fields a Storable-derived cache may store as a JSON number
 /// or as a string holding one.
@@ -292,6 +295,8 @@ struct JsonTranscript {
     db_id: Option<u64>,
     #[serde(deserialize_with = "deserialize_arc_str")]
     gene_stable_id: Arc<str>,
+    #[serde(default, deserialize_with = "deserialize_optional_u32")]
+    gene_version: Option<u32>,
     #[serde(default)]
     chr: Option<String>,
     #[serde(deserialize_with = "deserialize_string_or_number")]
@@ -347,6 +352,8 @@ struct JsonTranscript {
     trembl: Option<String>,
     #[serde(default)]
     uniparc: Option<String>,
+    #[serde(default)]
+    uniprot_isoform: Option<String>,
     #[serde(default)]
     exons: Vec<JsonExon>,
     #[serde(default, deserialize_with = "deserialize_optional_string_or_number")]
@@ -531,8 +538,10 @@ struct JsonProteinFeature {
     analysis: Option<String>,
 }
 
-/// Deserialize `analysis` which may be a string (vep-cache-builder / GRCh37 Storable)
-/// or an object with `display_label` (raw Storable conversion).
+/// Deserialize `analysis`, the protein feature's display label: a string, or
+/// the Storable `Bio::EnsEMBL::Analysis` object the dumper reduces to its one
+/// `_display_label` key (`display_label` is the same key as the API's accessor
+/// spells it).
 fn deserialize_analysis<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -544,7 +553,7 @@ where
         type Value = Option<String>;
 
         fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            f.write_str("a string, null, or an object with display_label")
+            f.write_str("a string, null, or an object with display_label or _display_label")
         }
 
         fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
@@ -575,8 +584,8 @@ where
             let mut display_label: Option<String> = None;
             while let Some(key) = map.next_key::<String>()? {
                 let val: serde_json::Value = map.next_value()?;
-                if key == "display_label" {
-                    display_label = val.as_str().map(|s| s.to_string());
+                if key == "display_label" || key == "_display_label" {
+                    display_label = val.as_str().filter(|s| !s.is_empty()).map(str::to_string);
                 }
             }
             Ok(display_label)
@@ -631,11 +640,6 @@ fn convert_intron(ji: JsonIntron, rank_fallback: u32) -> Intron {
     }
 }
 
-fn attribute_value_is_true(value: &str) -> bool {
-    let normalized = value.trim().to_ascii_lowercase();
-    matches!(normalized.as_str(), "" | "1" | "true" | "yes")
-}
-
 /// Transcript flags are the codes of every `cds_` attribute, whatever its value:
 /// VEP prints them that way (OutputFactory.pm) and its consequence predicates
 /// test the attribute's presence, not its value (VariationEffect.pm
@@ -650,11 +654,35 @@ fn derive_flags_from_attributes(attributes: &[Attribute]) -> Vec<String> {
     flags
 }
 
-fn derive_gencode_primary(attributes: &[Attribute]) -> bool {
-    attributes.iter().any(|a| {
-        (a.code == "gencode_primary" || a.code == "gencode_basic")
-            && attribute_value_is_true(&a.value)
-    })
+/// The value of the first attribute carrying `code`: VEP reads MANE, TSL and
+/// APPRIS from the attribute list with a `grep` on the code that keeps its
+/// first match (OutputFactory.pm `BaseTranscriptVariationAllele_to_output_hash`),
+/// so a later duplicate is never read.
+fn attribute_value<'a>(attributes: &'a [Attribute], code: &str) -> Option<&'a str> {
+    attributes
+        .iter()
+        .find(|a| a.code == code)
+        .map(|a| a.value.as_str())
+}
+
+/// Whether any attribute carries `code`, whatever its value.
+fn has_attribute(attributes: &[Attribute], code: &str) -> bool {
+    attributes.iter().any(|a| a.code == code)
+}
+
+/// The support level a `TSL` attribute's value carries: VEP's `m/tsl(\d+)/`
+/// followed by `if $1`, so `tsl1 (assigned to previous version 8)` is 1, and
+/// `tslNA` and a zero are none. The first `tsl` followed by a digit is the
+/// match, as the regex's is; a zero there is none and no later run is read.
+fn tsl_from_attribute_value(value: &str) -> Option<u8> {
+    let digits = value.match_indices("tsl").find_map(|(at, tsl)| {
+        let rest = &value[at + tsl.len()..];
+        let digit_run_len = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+        (digit_run_len > 0).then_some(&rest[..digit_run_len])
+    })?;
+    digits.parse::<u8>().ok().filter(|&level| level != 0)
 }
 
 fn convert_transcript(jt: JsonTranscript, chr_override: &str) -> Transcript {
@@ -697,19 +725,29 @@ fn convert_transcript(jt: JsonTranscript, chr_override: &str) -> Transcript {
         })
         .collect();
     let flags = derive_flags_from_attributes(&attributes);
-    let gencode_primary = derive_gencode_primary(&attributes);
 
-    let tsl = jt.tsl.or_else(|| {
-        attributes.iter().find_map(|a| {
-            if a.code == "TSL" {
-                a.value
-                    .strip_prefix("tsl")
-                    .and_then(|n| n.parse::<u8>().ok())
-            } else {
-                None
-            }
-        })
-    });
+    // GENCODE set membership is the presence of the attribute, whatever its value:
+    // VEP's transcript filter and its `GENCODE_PRIMARY` column test
+    // `grep {$_->{code} eq 'gencode_basic'}` and `'gencode_primary'` alone
+    // (AnnotationType/Transcript.pm `filter_transcript`), and the dumped values
+    // are the labels `GENCODE basic` and `GENCODE primary`.
+    let gencode_basic = has_attribute(&attributes, "gencode_basic");
+    let gencode_primary = has_attribute(&attributes, "gencode_primary");
+
+    // A Storable-derived cache carries MANE, TSL and APPRIS only as transcript
+    // attributes; a top-level key, when a cache writes one, is read first.
+    let tsl = jt
+        .tsl
+        .or_else(|| attribute_value(&attributes, "TSL").and_then(tsl_from_attribute_value));
+    let mane_select = jt
+        .mane_select
+        .or_else(|| attribute_value(&attributes, "MANE_Select").map(str::to_string));
+    let mane_plus_clinical = jt
+        .mane_plus_clinical
+        .or_else(|| attribute_value(&attributes, "MANE_Plus_Clinical").map(str::to_string));
+    let appris = jt
+        .appris
+        .or_else(|| attribute_value(&attributes, "appris").map(str::to_string));
 
     // The transcript-level `introns` field prefers VEFC introns over the
     // exon-derived ones, which are only computed when needed.
@@ -811,6 +849,7 @@ fn convert_transcript(jt: JsonTranscript, chr_override: &str) -> Transcript {
         version: jt.version,
         db_id: jt.db_id,
         gene_stable_id: jt.gene_stable_id,
+        gene_version: jt.gene_version,
         chr,
         start: jt.start,
         end: jt.end,
@@ -823,16 +862,17 @@ fn convert_transcript(jt: JsonTranscript, chr_override: &str) -> Transcript {
         hgnc_id: jt.hgnc_id,
         gene_phenotype: jt.gene_phenotype,
         canonical: jt.canonical,
-        mane_select: jt.mane_select,
-        mane_plus_clinical: jt.mane_plus_clinical,
+        mane_select,
+        mane_plus_clinical,
         tsl,
-        appris: jt.appris,
+        appris,
         ccds: jt.ccds,
         protein_id: jt.protein_id,
         refseq: jt.refseq,
         swissprot: jt.swissprot,
         trembl: jt.trembl,
         uniparc: jt.uniparc,
+        uniprot_isoform: jt.uniprot_isoform,
         exons,
         introns,
         cdna_coding_start: jt.cdna_coding_start,
@@ -845,6 +885,7 @@ fn convert_transcript(jt: JsonTranscript, chr_override: &str) -> Transcript {
         cdna_sequence: None,
         protein_sequence: None,
         flags: flags.into(),
+        gencode_basic,
         gencode_primary,
         attributes,
         vefc,
@@ -929,7 +970,10 @@ fn compute_coding_region(mapper: &JsonMapper) -> (Option<u64>, Option<u64>) {
 /// lazy loader must therefore be able to answer "is this chromosome in the
 /// cache?" without parsing it, which this function provides.
 ///
-/// Returns an empty map when the directory is absent.
+/// Returns an empty map when the directory is absent. A `transcripts`
+/// directory under which no chromosome holds a shard is refused under the error
+/// contract, naming the cache's serialiser: a Sereal cache converts to no
+/// shard at all, and a copy that landed no shard reads the same.
 ///
 /// A chromosome directory holding no `.json` shards yields no key. The
 /// distinction is load-bearing rather than cosmetic: `contains_key` gates the
@@ -983,7 +1027,29 @@ pub fn enumerate_transcript_shards(
         }
     }
 
+    if by_chr.is_empty() {
+        return Err(CliError::new(
+            "cache",
+            format!(
+                "no transcript shards under {} (serialiser_type {})",
+                transcripts_dir.display(),
+                cache_serialiser_type(json_cache_dir)
+            ),
+        )
+        .into());
+    }
+
     Ok(by_chr)
+}
+
+/// The `serialiser_type` the cache's `info.json` declares; a cache that
+/// declares none was written by Storable.
+fn cache_serialiser_type(json_cache_dir: &str) -> String {
+    std::fs::read_to_string(Path::new(json_cache_dir).join("info.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<CacheInfo>(&text).ok())
+        .and_then(|info| info.serialiser_type)
+        .unwrap_or_else(|| "storable".to_string())
 }
 
 /// A shard is `<start>-<end>.json`, optionally gzip-compressed as `.json.gz`.
@@ -1255,6 +1321,12 @@ struct JsonVariation {
     #[serde(default, deserialize_with = "deserialize_string_or_num_as_u8")]
     phenotype_or_disease: u8,
     #[serde(default)]
+    clin_sig_allele: Option<String>,
+    #[serde(default)]
+    clin_sig_ref_allele: Option<String>,
+    #[serde(default)]
+    clinical_impact: Option<String>,
+    #[serde(default)]
     pubmed: Option<String>,
     #[serde(default)]
     var_synonyms: Option<String>,
@@ -1298,6 +1370,8 @@ struct JsonVariation {
     gnomADg: Option<String>,
     #[serde(default)]
     gnomADg_AFR: Option<String>,
+    #[serde(default)]
+    gnomADg_AMI: Option<String>,
     #[serde(default)]
     gnomADg_AMR: Option<String>,
     #[serde(default)]
@@ -1349,6 +1423,7 @@ fn convert_variation(jv: JsonVariation) -> CachedVariation {
     insert_freq!("gnomADe_SAS", jv.gnomADe_SAS);
     insert_freq!("gnomADg", jv.gnomADg);
     insert_freq!("gnomADg_AFR", jv.gnomADg_AFR);
+    insert_freq!("gnomADg_AMI", jv.gnomADg_AMI);
     insert_freq!("gnomADg_AMR", jv.gnomADg_AMR);
     insert_freq!("gnomADg_ASJ", jv.gnomADg_ASJ);
     insert_freq!("gnomADg_EAS", jv.gnomADg_EAS);
@@ -1362,6 +1437,12 @@ fn convert_variation(jv: JsonVariation) -> CachedVariation {
     let end = jv.end.unwrap_or(start);
 
     let clin_sig = jv.clin_sig.filter(|s| !s.is_empty());
+    let clinvar = ClinVarDetail {
+        clin_sig_allele: jv.clin_sig_allele.filter(|s| !s.is_empty()),
+        clin_sig_ref_allele: jv.clin_sig_ref_allele.filter(|s| !s.is_empty()),
+        clinical_impact: jv.clinical_impact.filter(|s| !s.is_empty()),
+    };
+    let clinvar = (clinvar != ClinVarDetail::default()).then(|| Box::new(clinvar));
     let pubmed = jv.pubmed.filter(|s| !s.is_empty());
     let minor_allele = jv.minor_allele.filter(|s| !s.is_empty());
     let var_synonyms = jv.var_synonyms.filter(|s| !s.is_empty());
@@ -1378,6 +1459,7 @@ fn convert_variation(jv: JsonVariation) -> CachedVariation {
         minor_allele_freq: jv.minor_allele_freq,
         clin_sig,
         phenotype_or_disease: jv.phenotype_or_disease,
+        clinvar,
         pubmed,
         frequencies,
         var_synonyms,
@@ -1557,10 +1639,12 @@ mod tests {
     }
 
     /// A cache converted from VEP's region files carries a gene's transcripts in
-    /// every shard the gene overlaps. The loader must keep one copy, and the copy
-    /// it keeps must not depend on directory listing order.
+    /// every shard the gene overlaps. The loader keeps one copy per `dbID`, as
+    /// VEP's cache reader does, and keys a transcript without one on its stable
+    /// id and version; the copy it keeps does not depend on directory listing
+    /// order.
     #[test]
-    fn a_transcript_present_in_two_shards_loads_once() {
+    fn dedup_by_dbid_then_stable_id_version() {
         let dir = tempfile::Builder::new()
             .prefix("vep_jc_dedup_")
             .tempdir()
@@ -1856,7 +1940,7 @@ mod tests {
     /// written over them; a cache written without the key loads with none and keeps
     /// the cached-translation reading of the reference peptide.
     #[test]
-    fn loaded_transcript_carries_its_seq_edits_and_tolerates_their_absence() {
+    fn seq_edits_loaded() {
         let with_edits = r#"{"stable_id":"ENST1","gene_stable_id":"ENSG1","start":100,"end":300,
             "strand":1,"biotype":"protein_coding","source":"ensembl",
             "exons":[{"start":100,"end":300}],
@@ -1907,18 +1991,491 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_derive_gencode_primary_from_attributes() {
-        let attrs = vec![Attribute {
-            code: "gencode_basic".into(),
-            value: "1".into(),
-        }];
-        assert!(derive_gencode_primary(&attrs));
+    /// A transcript parsed from one JSON object, filed under chromosome `21`.
+    fn transcript_from(json: &str) -> Transcript {
+        let jt: JsonTranscript = serde_json::from_str(json).unwrap_or_else(|e| panic!("{e}"));
+        convert_transcript(jt, "21")
+    }
 
-        let attrs_false = vec![Attribute {
-            code: "gencode_primary".into(),
-            value: "0".into(),
-        }];
-        assert!(!derive_gencode_primary(&attrs_false));
+    /// The smallest transcript object the loader accepts, with `extra` JSON
+    /// members spliced in after `source`.
+    fn minimal(extra: &str) -> String {
+        format!(
+            r#"{{"stable_id":"ENST00000400375","gene_stable_id":"ENSG00000215455","start":44538981,"end":44540195,"strand":-1,"biotype":"protein_coding","source":"havana"{extra}}}"#
+        )
+    }
+
+    /// One `attributes` member from `(code, value)` pairs, each as the cache
+    /// writes it (with the `name` the loader ignores).
+    fn attributes(pairs: &[(&str, &str)]) -> String {
+        let items: Vec<String> = pairs
+            .iter()
+            .map(|(code, value)| {
+                format!(r#"{{"code":"{code}","name":"{code} name","value":"{value}"}}"#)
+            })
+            .collect();
+        format!(r#","attributes":[{}]"#, items.join(","))
+    }
+
+    /// A cache directory holding one chromosome directory per `(chr, body)`
+    /// pair, each with one shard of that body.
+    fn cache_with_shards(prefix: &str, shards: &[(&str, &str)]) -> tempfile::TempDir {
+        let dir = tempfile::Builder::new().prefix(prefix).tempdir().unwrap();
+        for (chr, body) in shards {
+            let chr_dir = dir.path().join("transcripts").join(chr);
+            std::fs::create_dir_all(&chr_dir).unwrap();
+            std::fs::write(chr_dir.join("1-1000000.json"), body).unwrap();
+        }
+        dir
+    }
+
+    /// `TSL` follows VEP's `m/tsl(\d+)/` with `$hash->{TSL} = $1 if $1`
+    /// (OutputFactory.pm `BaseTranscriptVariationAllele_to_output_hash`, the
+    /// same rule the pick order reads): `tsl1 (assigned to previous version 8)`
+    /// is 1, `tslNA` with or without a suffix is none, and a zero is none.
+    #[test]
+    fn tsl_leading_digits_with_assigned_suffix() {
+        let tsl = |value: &str| transcript_from(&minimal(&attributes(&[("TSL", value)]))).tsl;
+        assert_eq!(tsl("tsl1 (assigned to previous version 8)"), Some(1));
+        assert_eq!(tsl("tsl5"), Some(5));
+        assert_eq!(tsl("tsl3 (assigned to previous version 2)"), Some(3));
+        assert_eq!(tsl("tslNA"), None);
+        assert_eq!(tsl("tslNA (assigned to previous version 4)"), None);
+        assert_eq!(tsl("tsl0"), None);
+        // The first digit-bearing match is the only one read, as the regex's is.
+        assert_eq!(tsl("tsl0 (assigned to previous version tsl3)"), None);
+        assert_eq!(tsl("tslNA then tsl4"), Some(4));
+        assert_eq!(tsl_from_attribute_value("tsl2"), Some(2));
+        assert_eq!(tsl_from_attribute_value(""), None);
+
+        // A cache writing the level as a top-level number is read as such.
+        assert_eq!(transcript_from(&minimal(r#","tsl":2"#)).tsl, Some(2));
+        assert_eq!(transcript_from(&minimal("")).tsl, None);
+    }
+
+    /// `appris` is the attribute's value as the cache spells it: VEP rewrites
+    /// `principal` to `P` and `alternative` to `A` only when it prints the
+    /// column, and its pick order reads the spelled value's letter and digit.
+    #[test]
+    fn appris_derived_from_attribute() {
+        let appris =
+            |value: &str| transcript_from(&minimal(&attributes(&[("appris", value)]))).appris;
+        assert_eq!(appris("principal1").as_deref(), Some("principal1"));
+        assert_eq!(appris("alternative2").as_deref(), Some("alternative2"));
+        assert_eq!(appris("principalM").as_deref(), Some("principalM"));
+        assert_eq!(transcript_from(&minimal("")).appris, None);
+        // A top-level key is read before the attribute.
+        let both = minimal(&format!(
+            r#","appris":"principal3"{}"#,
+            attributes(&[("appris", "alternative1")])
+        ));
+        assert_eq!(transcript_from(&both).appris.as_deref(), Some("principal3"));
+    }
+
+    /// The `MANE_Select` attribute's value, VEP's `MANE_SELECT` column, is a
+    /// RefSeq accession; the field is `Some` on the attribute's presence,
+    /// which is what lists `MANE_Select` under `MANE`.
+    #[test]
+    fn mane_select_derived_from_attribute() {
+        let tx = transcript_from(&minimal(&attributes(&[("MANE_Select", "NM_198691.3")])));
+        assert_eq!(tx.mane_select.as_deref(), Some("NM_198691.3"));
+        assert_eq!(tx.mane_plus_clinical, None);
+        assert_eq!(transcript_from(&minimal("")).mane_select, None);
+        let empty = transcript_from(&minimal(&attributes(&[("MANE_Select", "")])));
+        assert_eq!(empty.mane_select.as_deref(), Some(""));
+    }
+
+    /// `MANE_Plus_Clinical` is read beside `MANE_Select` from its own attribute
+    /// (OutputFactory.pm lists `MANE_Plus_Clinical` under `MANE` on its presence
+    /// and prints the value as `MANE_PLUS_CLINICAL`); a transcript may carry
+    /// both.
+    #[test]
+    fn mane_plus_clinical_derived_from_attribute() {
+        let tx = transcript_from(&minimal(&attributes(&[
+            ("MANE_Plus_Clinical", "NM_001005484.2"),
+            ("MANE_Select", "NM_001005484.3"),
+        ])));
+        assert_eq!(tx.mane_plus_clinical.as_deref(), Some("NM_001005484.2"));
+        assert_eq!(tx.mane_select.as_deref(), Some("NM_001005484.3"));
+        let select_only = transcript_from(&minimal(&attributes(&[("MANE_Select", "NM_1.1")])));
+        assert_eq!(select_only.mane_plus_clinical, None);
+        // The first attribute of a code is the one read, as VEP's grep takes it.
+        let twice = transcript_from(&minimal(&attributes(&[
+            ("MANE_Plus_Clinical", "NM_2.1"),
+            ("MANE_Plus_Clinical", "NM_3.1"),
+        ])));
+        assert_eq!(twice.mane_plus_clinical.as_deref(), Some("NM_2.1"));
+    }
+
+    /// GENCODE set membership is the presence of the `gencode_basic` and
+    /// `gencode_primary` attributes, whose dumped values are the labels
+    /// `GENCODE basic` and `GENCODE primary` (AnnotationType/Transcript.pm
+    /// `filter_transcript` greps the codes alone); one set does not imply the
+    /// other.
+    #[test]
+    fn gencode_basic_and_primary_by_presence() {
+        let both = transcript_from(&minimal(&attributes(&[
+            ("gencode_basic", "GENCODE basic"),
+            ("gencode_primary", "GENCODE primary"),
+        ])));
+        assert!(both.gencode_basic && both.gencode_primary);
+        let basic = transcript_from(&minimal(&attributes(&[("gencode_basic", "GENCODE basic")])));
+        assert!(basic.gencode_basic && !basic.gencode_primary);
+        let numeric = transcript_from(&minimal(&attributes(&[("gencode_primary", "1")])));
+        assert!(!numeric.gencode_basic && numeric.gencode_primary);
+        let neither = transcript_from(&minimal(&attributes(&[("TSL", "tsl1")])));
+        assert!(!neither.gencode_basic && !neither.gencode_primary);
+    }
+
+    /// Every chromosome directory under `transcripts/` is a chromosome of the
+    /// cache, patches, alternate loci, scaffolds and `LRG_` regions included, in
+    /// the sorted order of VEP's `valid_chromosomes` (CacheDir.pm reads the
+    /// cache directory's subdirectory names); each transcript is stamped with its
+    /// directory's name.
+    #[test]
+    fn alt_contig_directory_loads() {
+        let tx = |id: &str| {
+            format!(
+                r#"[{{"stable_id":"{id}","gene_stable_id":"ENSG_{id}","start":100,"end":900,"strand":1,"biotype":"protein_coding","source":"ensembl"}}]"#
+            )
+        };
+        let dir = cache_with_shards(
+            "vep_jc_alt_",
+            &[
+                ("HG1012_PATCH", &tx("ENST_PATCH")),
+                ("21", &tx("ENST_21")),
+                ("GL000008.2", &tx("ENST_GL")),
+                ("LRG_1", &tx("ENST_LRG")),
+                ("KI270728.1", &tx("ENST_KI")),
+            ],
+        );
+        let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
+        let mut chromosomes: Vec<&String> = shards.keys().collect();
+        chromosomes.sort();
+        assert_eq!(
+            chromosomes,
+            ["21", "GL000008.2", "HG1012_PATCH", "KI270728.1", "LRG_1"]
+        );
+        for (chr, id) in [("HG1012_PATCH", "ENST_PATCH"), ("LRG_1", "ENST_LRG")] {
+            let txs = load_transcripts_for_chr(chr, &shards[chr]).unwrap();
+            assert_eq!(txs.len(), 1);
+            assert_eq!(&*txs[0].stable_id, id);
+            assert_eq!(txs[0].chr, chr);
+        }
+    }
+
+    /// `is_canonical` is the dumped flag (Database/Transcript.pm sets it to 1
+    /// on the gene's canonical transcript and leaves it undefined otherwise),
+    /// read as an integer or a boolean.
+    #[test]
+    fn is_canonical_from_int_or_bool() {
+        assert!(transcript_from(&minimal(r#","is_canonical":1"#)).canonical);
+        assert!(transcript_from(&minimal(r#","is_canonical":true"#)).canonical);
+        assert!(!transcript_from(&minimal(r#","is_canonical":0"#)).canonical);
+        assert!(!transcript_from(&minimal(r#","is_canonical":false"#)).canonical);
+        assert!(!transcript_from(&minimal("")).canonical);
+    }
+
+    /// The gene identifiers VEP prefetches under `_gene_symbol`,
+    /// `_gene_symbol_source` and `_gene_hgnc_id` arrive under the converter's
+    /// unprefixed names; a transcript of an unnamed gene carries none.
+    #[test]
+    fn gene_symbol_loaded_from_renamed_key() {
+        let tx = transcript_from(&minimal(
+            r#","gene_symbol":"KRTAP10-1","gene_symbol_source":"HGNC","gene_hgnc_id":"HGNC:22966""#,
+        ));
+        assert_eq!(tx.gene_symbol.as_deref(), Some("KRTAP10-1"));
+        assert_eq!(tx.gene_symbol_source.as_deref(), Some("HGNC"));
+        assert_eq!(tx.hgnc_id.as_deref(), Some("HGNC:22966"));
+        let unnamed = transcript_from(&minimal(""));
+        assert!(unnamed.gene_symbol.is_none() && unnamed.gene_symbol_source.is_none());
+        assert!(unnamed.hgnc_id.is_none());
+    }
+
+    /// `gene_stable_id` (VEP's `_gene_stable_id`) is required: a shard whose
+    /// transcript lacks it fails to parse, and the loaded transcript carries
+    /// it; the gene's `_gene` object is not in the cache and nothing reads it.
+    #[test]
+    fn gene_stable_id_required() {
+        assert_eq!(
+            &*transcript_from(&minimal("")).gene_stable_id,
+            "ENSG00000215455"
+        );
+        let without = r#"{"stable_id":"ENST1","start":1,"end":9,"strand":1,"biotype":"lncRNA","source":"ensembl"}"#;
+        let err = serde_json::from_str::<JsonTranscript>(without)
+            .err()
+            .unwrap();
+        assert!(err.to_string().contains("gene_stable_id"), "{err}");
+    }
+
+    /// `biotype` is required and read verbatim.
+    #[test]
+    fn biotype_required() {
+        assert_eq!(&*transcript_from(&minimal("")).biotype, "protein_coding");
+        let without = r#"{"stable_id":"ENST1","gene_stable_id":"ENSG1","start":1,"end":9,"strand":1,"source":"ensembl"}"#;
+        let err = serde_json::from_str::<JsonTranscript>(without)
+            .err()
+            .unwrap();
+        assert!(err.to_string().contains("biotype"), "{err}");
+    }
+
+    /// A Storable-derived transcript carries no chromosome of its own (the
+    /// dumper keeps the slice, the converter drops it), so the shard directory
+    /// names it; a `chr` key is kept when present. Coordinates are read from
+    /// numbers or strings, and a negative strand is the reverse strand.
+    #[test]
+    fn chr_falls_back_to_shard_directory() {
+        let tx = transcript_from(&minimal(""));
+        assert_eq!(tx.chr, "21");
+        assert_eq!((tx.start, tx.end), (44538981, 44540195));
+        assert_eq!(tx.strand, Strand::Reverse);
+        let named = transcript_from(
+            r#"{"stable_id":"ENST1","gene_stable_id":"ENSG1","chr":"X","start":"100","end":"900","strand":"1","biotype":"lncRNA","source":"ensembl"}"#,
+        );
+        assert_eq!(named.chr, "X");
+        assert_eq!((named.start, named.end), (100, 900));
+        assert_eq!(named.strand, Strand::Forward);
+    }
+
+    /// The transcript `version` arrives as a number or a string holding one.
+    #[test]
+    fn version_from_number_or_string() {
+        assert_eq!(
+            transcript_from(&minimal(r#","version":3"#)).version,
+            Some(3)
+        );
+        assert_eq!(
+            transcript_from(&minimal(r#","version":"3""#)).version,
+            Some(3)
+        );
+        assert_eq!(transcript_from(&minimal("")).version, None);
+        assert_eq!(transcript_from(&minimal(r#","version":"""#)).version, None);
+    }
+
+    /// `gene_version` (VEP's `_gene_version`, the `.version` suffix of the Gene
+    /// column under `--gene_version`) arrives as a number or a string.
+    #[test]
+    fn gene_version_loaded() {
+        assert_eq!(
+            transcript_from(&minimal(r#","gene_version":4"#)).gene_version,
+            Some(4)
+        );
+        assert_eq!(
+            transcript_from(&minimal(r#","gene_version":"12""#)).gene_version,
+            Some(12)
+        );
+        assert_eq!(transcript_from(&minimal("")).gene_version, None);
+    }
+
+    /// `uniprot_isoform` (VEP's `_uniprot_isoform`) is read as the cache writes
+    /// it, the `-` VEP stores for a translation without one included; the
+    /// column suppresses the sentinel.
+    #[test]
+    fn uniprot_isoform_loaded() {
+        assert_eq!(
+            transcript_from(&minimal(r#","uniprot_isoform":"P60331-2""#))
+                .uniprot_isoform
+                .as_deref(),
+            Some("P60331-2")
+        );
+        assert_eq!(
+            transcript_from(&minimal(r#","uniprot_isoform":"-""#))
+                .uniprot_isoform
+                .as_deref(),
+            Some("-")
+        );
+        assert_eq!(transcript_from(&minimal("")).uniprot_isoform, None);
+    }
+
+    /// The VEFC intron list (VEP's `get_all_Introns`) is the transcript's intron
+    /// list when present, even where it disagrees with the gaps between exons;
+    /// without one the gaps are derived.
+    #[test]
+    fn vefc_introns_preferred_over_derived() {
+        let exons = r#","exons":[{"start":100,"end":200},{"start":301,"end":400}]"#;
+        let with_vefc = transcript_from(&minimal(&format!(
+            r#"{exons},"variation_effect_feature_cache":{{"introns":[{{"start":"201","end":"299"}}]}}"#
+        )));
+        let introns: Vec<(u64, u64)> = with_vefc.introns.iter().map(|i| (i.start, i.end)).collect();
+        assert_eq!(introns, vec![(201, 299)]);
+        assert_eq!(with_vefc.vefc.unwrap().introns.len(), 1);
+
+        let derived = transcript_from(&minimal(exons));
+        let introns: Vec<(u64, u64)> = derived.introns.iter().map(|i| (i.start, i.end)).collect();
+        assert_eq!(introns, vec![(201, 300)]);
+    }
+
+    /// `peptide` (the translation's sequence with its edits applied) loads on a
+    /// translated transcript and is absent on one without a translation.
+    #[test]
+    fn peptide_loaded_when_translated() {
+        let coding = transcript_from(&minimal(
+            r#","translation":{"stable_id":"ENSP00000383226","start":46,"end":894},"variation_effect_feature_cache":{"peptide":"MAASTMSVC","translateable_seq":"ATGGCCGCG"}"#,
+        ));
+        assert_eq!(coding.vefc.unwrap().peptide.as_deref(), Some("MAASTMSVC"));
+        let non_coding = transcript_from(&minimal(
+            r#","variation_effect_feature_cache":{"translateable_seq":""}"#,
+        ));
+        assert_eq!(non_coding.vefc.unwrap().peptide, None);
+    }
+
+    /// The runtime-only keys VEP's `BaseTranscriptVariation` writes into a live
+    /// transcript's cache, and any key the loader has no use for, are ignored
+    /// rather than refused.
+    #[test]
+    fn unknown_vefc_keys_ignored() {
+        let tx = transcript_from(&minimal(
+            r#","description":"keratin associated protein 10-1","variation_effect_feature_cache":{"_exon_interval_tree":{},"_intron_numbers":"1-2","_has_frameshift_intron":0,"translation_md5":"4fb6e2a4930c8b5aa1ac86f88fbc545b","spliced_seq":"ATG","codon_table":"2","bam":{}}"#,
+        ));
+        assert_eq!(tx.vefc.unwrap().codon_table, 2);
+    }
+
+    /// A protein feature's `analysis` is its display label: a string, or the
+    /// dumped `Bio::EnsEMBL::Analysis` object reduced to `_display_label`
+    /// (Database/Transcript.pm keeps that key alone); an object without a label
+    /// yields none.
+    #[test]
+    fn protein_feature_label_from_display_label() {
+        let tx = transcript_from(&minimal(
+            r#","variation_effect_feature_cache":{"protein_features":[
+                {"start":"1","end":"282","hseqname":"AF-P60331-F1","analysis":"AFDB-ENSP mappings"},
+                {"start":22,"end":282,"hseqname":"PF00080","analysis":{"_display_label":"Pfam"}},
+                {"start":5,"end":9,"hseqname":"PTHR24416","analysis":{"display_label":"PANTHER"}},
+                {"start":5,"end":9,"hseqname":"orphan","analysis":{}},
+                {"start":5,"end":9,"hseqname":"blank","analysis":""}]}"#,
+        ));
+        let labels: Vec<Option<&str>> = tx
+            .vefc
+            .as_ref()
+            .unwrap()
+            .protein_features
+            .iter()
+            .map(|pf| pf.analysis.as_deref())
+            .collect();
+        assert_eq!(
+            labels,
+            vec![
+                Some("AFDB-ENSP mappings"),
+                Some("Pfam"),
+                Some("PANTHER"),
+                None,
+                None
+            ]
+        );
+    }
+
+    /// A prediction matrix arrives as base64 of the Storable `matrix` blob: a
+    /// gzip stream over `VEP` and 20 little-endian 16-bit cells per residue,
+    /// each the category in its top two bits over the score times 1000
+    /// (ProteinFunctionPredictionMatrix.pm `pack 'v'`); a cell of all ones is
+    /// no prediction, and a tool's empty object is no matrix.
+    #[test]
+    fn storable_matrix_decodes() {
+        use base64::Engine;
+        use std::io::Write as _;
+        use vep_core::prediction::AnalysisType;
+
+        let mut raw = b"VEP".to_vec();
+        raw.extend(std::iter::repeat_n(0xFFu8, 2 * 20 * 40));
+        // Residue 2, amino acid C (column 1): SIFT category 1 (deleterious),
+        // score 0.01.
+        let cell = ((1u16) << 14 | 10).to_le_bytes();
+        let offset = 3 + (20 + 1) * 2;
+        raw[offset..offset + 2].copy_from_slice(&cell);
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(&raw).unwrap();
+        let blob = base64::engine::general_purpose::STANDARD.encode(gz.finish().unwrap());
+
+        let tx = transcript_from(&minimal(&format!(
+            r#","variation_effect_feature_cache":{{"protein_function_predictions":{{"sift":{{"analysis":"sift","translation_md5":"4fb6e2a4930c8b5aa1ac86f88fbc545b","predictions_data":"{blob}"}},"polyphen_humvar":{{}},"polyphen_humdiv":{{}}}}}}"#
+        )));
+        let predictions = tx.vefc.unwrap().protein_function_predictions.unwrap();
+        let sift = predictions.sift.unwrap();
+        assert_eq!(sift.analysis, "sift");
+        assert_eq!(sift.peptide_length, 0);
+        let hit = sift.lookup(2, b'C', AnalysisType::Sift).unwrap();
+        assert_eq!((hit.label.as_str(), hit.score), ("deleterious", 0.01));
+        assert!(sift.lookup(1, b'A', AnalysisType::Sift).is_none());
+        assert!(predictions.polyphen_humvar.is_none());
+        assert!(predictions.polyphen_humdiv.is_none());
+    }
+
+    /// A cache whose `transcripts` directory holds no shard is refused under
+    /// the error contract, naming the serialiser `info.json` declares: a Sereal
+    /// cache converts to no shard. A cache without an `info.json` is a Storable
+    /// one.
+    #[test]
+    fn sereal_cache_without_shards_is_refused() {
+        let dir = tempfile::Builder::new()
+            .prefix("vep_jc_sereal_")
+            .tempdir()
+            .unwrap();
+        let chr_dir = dir.path().join("transcripts").join("21");
+        std::fs::create_dir_all(&chr_dir).unwrap();
+        std::fs::write(chr_dir.join("1-1000000.sereal"), b"=srl").unwrap();
+        std::fs::write(
+            dir.path().join("info.json"),
+            r#"{"species":"homo_sapiens","assembly":"GRCh38","serialiser_type":"sereal"}"#,
+        )
+        .unwrap();
+        let root = dir.path().to_str().unwrap();
+        let err = enumerate_transcript_shards(root).unwrap_err();
+        assert_eq!(
+            CliError::from_run(&err),
+            format!(
+                "ERROR: [cache] no transcript shards under {}/transcripts (serialiser_type sereal)",
+                root
+            )
+        );
+
+        std::fs::remove_file(dir.path().join("info.json")).unwrap();
+        let err = enumerate_transcript_shards(root).unwrap_err();
+        assert!(
+            CliError::from_run(&err).ends_with("(serialiser_type storable)"),
+            "{err}"
+        );
+    }
+
+    /// The spliced cDNA of a coding transcript is assembled from the cached
+    /// UTRs and translateable sequence as the transcript is read.
+    #[test]
+    fn spliced_seq_assembled_for_coding_transcript() {
+        let tx = transcript_from(&minimal(
+            r#","translation":{"stable_id":"ENSP1","start":4,"end":12},"exons":[{"start":44538981,"end":44538995}],
+            "variation_effect_feature_cache":{"five_prime_utr":"GGA","translateable_seq":"ATGCCCTAA","three_prime_utr":"TTT",
+            "mapper":{"start_phase":-1,"cdna_coding_start":4,"cdna_coding_end":12,"pairs":[{"from_start":1,"from_end":15,"to_start":44538981,"to_end":44538995,"ori":-1}]}}"#,
+        ));
+        assert_eq!(tx.spliced_seq(), Some("GGAATGCCCTAATTT"));
+        assert_eq!(transcript_from(&minimal("")).spliced_seq(), None);
+    }
+
+    /// The variation record's ClinVar allele fields and the gnomAD genomes
+    /// Amish frequency load under VEP's column names; an empty string is
+    /// absent, and a record with none of the three carries no ClinVar group.
+    #[test]
+    fn variation_clinical_fields_loaded() {
+        let json = r#"{"variation_name":"rs1","start":100,"allele_string":"A/G","strand":1,
+            "clin_sig":"pathogenic","clin_sig_allele":"G:pathogenic;G:likely_pathogenic","clin_sig_ref_allele":"A",
+            "clinical_impact":"Melanoma(Tier I - Strong);Melanoma(oncogenicity:Oncogenic)","gnomADg_AMI":"G:0.0123"}"#;
+        let cv = convert_variation(serde_json::from_str(json).unwrap());
+        let clinvar = cv.clinvar.as_deref().unwrap();
+        assert_eq!(
+            clinvar.clin_sig_allele.as_deref(),
+            Some("G:pathogenic;G:likely_pathogenic")
+        );
+        assert_eq!(clinvar.clin_sig_ref_allele.as_deref(), Some("A"));
+        assert_eq!(
+            clinvar.clinical_impact.as_deref(),
+            Some("Melanoma(Tier I - Strong);Melanoma(oncogenicity:Oncogenic)")
+        );
+        assert_eq!(
+            cv.frequencies.get("gnomADg_AMI").map(String::as_str),
+            Some("G:0.0123")
+        );
+
+        let empty = r#"{"variation_name":"rs2","start":100,"allele_string":"A/G","clin_sig_allele":"","clin_sig_ref_allele":"","clinical_impact":"","gnomADg_AMI":""}"#;
+        let cv = convert_variation(serde_json::from_str(empty).unwrap());
+        assert!(cv.clinvar.is_none());
+        assert!(!cv.frequencies.contains_key("gnomADg_AMI"));
     }
 }

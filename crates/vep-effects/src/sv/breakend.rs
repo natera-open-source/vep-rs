@@ -1252,6 +1252,7 @@ mod tests {
             version: Some(1),
             db_id: None,
             gene_stable_id: "ENSG_MIRNA_001".into(),
+            gene_version: None,
             chr: "21".into(),
             start: 1000,
             end: 1100,
@@ -1274,6 +1275,7 @@ mod tests {
             swissprot: None,
             trembl: None,
             uniparc: None,
+            uniprot_isoform: None,
             exons,
             introns: vec![],
             cdna_coding_start: None,
@@ -1286,6 +1288,7 @@ mod tests {
             cdna_sequence: None,
             protein_sequence: None,
             flags: Arc::from([]),
+            gencode_basic: false,
             gencode_primary: false,
             attributes: vec![Attribute {
                 code: "miRNA".into(),

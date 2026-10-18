@@ -7,7 +7,16 @@
  "max_span": 1000000,
  "cache_cost_flank": 5000,
  "covers": [
-  "flag_matrix_concordance"
+  "flag_matrix_concordance",
+  "_gene_symbol",
+  "gene-stable-id-and-gene",
+  "transcript-biotype",
+  "transcript-coordinates",
+  "transcript-dbid",
+  "vefc-introns",
+  "vefc-peptide",
+  "vefc-runtime-only-keys",
+  "vefc-seq-edits"
  ],
  "suites": {
   "s02": {

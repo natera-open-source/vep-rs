@@ -158,6 +158,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--flag_pick_allele` | bool | false | Flag non-picked consequences per allele |
 | `--flag_pick_allele_gene` | bool | false | Flag non-picked consequences per allele per gene |
 | `--pick_order` | `mane_select`, `mane_plus_clinical`, `canonical`, `appris`, `tsl`, `biotype`, `ccds`, `rank`, `length`, `ensembl`, `refseq` (comma-separated) | -- | Accepted for VEP compatibility; not implemented (the pick order is fixed to VEP's default) |
+| `--transcript_filter` | String (repeatable) | -- | Annotate only the transcripts that pass a filter, in Ensembl VEP's filter grammar: units of `field operator value` joined by `and` and `or`, grouped by parentheses and inverted by `not`; repeated flags are joined by `and`. The fields are the cache's transcript keys, named exactly, in another case, without the leading `_`, or by a unique prefix: `stable_id`, `version`, `biotype`, `start`, `end`, `strand`, `is_canonical`, `source`, `dbID`, `cdna_coding_start`, `cdna_coding_end`, `_gene_stable_id`, `_gene_symbol`, `_gene_symbol_source`, `_gene_hgnc_id`, `_ccds`, `_refseq`, `_protein`, `_swissprot`, `_trembl`, `_uniparc`, `_gene_phenotype`; the object keys `translation` (coding transcripts), `slice`, `attributes`, `_gene`, `_trans_exon_array`, `_variation_effect_feature_cache` and `_vep_lazy_loaded`, which are defined and read meaningfully by `exists` and `nex` alone; and `description`, `coding_region_start`, `coding_region_end`, `_gene_version` and `_uniprot_isoform`, which are undefined (the cache leaves the first three undefined, the transcript loader does not read the gene version, and the converted cache does not carry the isoform list). `_source_cache` is absent, as it is from every cache but a merged one. The operators are `is` (`eq`, `=`), `ne` (`!=`), `>`, `<`, `>=`, `<=`, `exists` (`defined`, the default), `nex`, `match` (`matches`, `regex`, `re`), `nre`, `in` (a comma-separated list or a file with one value per line) and `is_child`. `match` and `nre` take the `regex` crate's dialect, case-insensitive and unanchored: a back-reference or an escape the crate lacks is an error naming the pattern. A record whose every transcript is filtered out is intergenic |
 | `--allele_number` | bool | false | Add allele number from input VCF |
 | `--show_ref_allele` | bool | false | Show reference allele in output |
 | `--minimal` | bool | false | Convert alleles to minimal representation; switches on --allele_number as in Ensembl VEP |
@@ -366,6 +367,8 @@ Environment variables vep-rs reads, which Ensembl VEP has no counterpart for:
 - `1`: a refusal or a failed run. One line `ERROR: [<component>] <message>` is written to standard error, where `<message>` is Ensembl VEP's text where it has one, without its own `ERROR: ` prefix. The components:
   - `cli`: an unsupported flag, or a combination the option rules refuse
   - `output`: the output file or format
+  - `cache`: the transcript cache: its layout or its metadata
+  - `filter`: a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect
   - `run`: any other failure of the annotation run, with its cause chain
 - `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown flag, a missing value, a value outside an enumeration.
 

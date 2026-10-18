@@ -77,7 +77,7 @@ cache-fasta-auto-detection	CacheDir.pm	implemented	open
 cache-refseq-merged-tarballs	JoinVEP.pm	documented_subset	open			
 cache-region-files	Dumper.pm	implemented	open			
 cache-transcript-gene-tss	Cache/Transcript.pm	implemented	open			
-cache-valid-chromosomes	CacheDir.pm	implemented	open			
+cache-valid-chromosomes	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::alt_contig_directory_loads	tests/golden/116/GRCh38-alt-contigs	
 cache_version	CacheDir.pm	implemented	open			
 CADD	CADD.pm	implemented	open			
 caid-input-format	CAID.pm	error	open			
@@ -496,10 +496,10 @@ trans-exon-array	Core.pm	implemented	open
 transcript-biotype	OutputFactory.pm	implemented	open			
 transcript-coordinates	Database/Transcript.pm	implemented	open			
 transcript-dbid	AnnotationType/Transcript.pm	implemented	open			
-transcript-filter-grammar	FilterSet.pm	implemented	open			
+transcript-filter-grammar	FilterSet.pm	implemented	landed:implemented	crates/vep-cli/src/filter_set.rs::parses_the_perl_examples;crates/vep-cli/src/filter_set.rs::in_reads_a_one_value_per_line_file;crates/vep-cli/src/filter_set.rs::ambiguous_prefix_is_an_error;crates/vep-cli/src/filter_set.rs::is_child_walks_the_so_parent_table;crates/vep-cli/src/filter_set.rs::unsupported_regex_syntax_exits_naming_the_pattern;crates/vep-cli/src/filter_set.rs::perl_parse_errors_keep_their_text;crates/vep-cli/src/filter_set.rs::caret_never_reaches_a_pattern;crates/vep-cli/src/filter_set.rs::mixed_values_compare_through_their_number;crates/vep-core/src/so_ontology.rs::descendants_follow_every_is_a_path	tests/golden/116/GRCh38-transcript-filter	
 transcript-source	Core.pm	accepted_noop	open			
 transcript-stable-id-version	OutputFactory.pm	implemented	open			
-transcript_filter	AnnotationSource.pm	implemented	open			
+transcript_filter	AnnotationSource.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::filtered_transcripts_are_invisible_downstream;crates/vep-cli/src/args.rs::transcript_filter_repeats;crates/vep-cli/tests/integration_test.rs::transcript_filter_refusal_is_one_error_line_and_exit_1;crates/vep-cli/src/filter_set.rs::transcript_keys_read_the_transcript;crates/vep-cli/src/filter_set.rs::repeated_filters_are_joined_by_and	tests/golden/116/GRCh38-transcript-filter	
 transcript_index_impl	-	removed	open			
 transcript_version	OutputFactory.pm	implemented	open			
 TranscriptAnnotator	TranscriptAnnotator.pm	implemented	open			

@@ -324,6 +324,7 @@ pub const COMPONENTS: &[(&str, &str)] = &[
         "an unsupported flag, or a combination the option rules refuse",
     ),
     ("output", "the output file or format"),
+    ("cache", "the transcript cache: its layout or its metadata"),
     (
         "filter",
         "a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect",

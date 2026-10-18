@@ -28,6 +28,8 @@ pub struct Transcript {
     pub db_id: Option<u64>,
     /// Gene stable ID (e.g., "ENSG00000142168").
     pub gene_stable_id: Arc<str>,
+    /// Gene stable ID version.
+    pub gene_version: Option<u32>,
     /// Chromosome.
     pub chr: String,
     /// 1-based start position.
@@ -54,13 +56,15 @@ pub struct Transcript {
     pub gene_phenotype: Option<u32>,
     /// Whether this is the canonical transcript for the gene.
     pub canonical: bool,
-    /// MANE Select transcript ID.
+    /// The `MANE_Select` attribute's value (a RefSeq accession), `Some` when the
+    /// attribute is present, empty when it carries no value.
     pub mane_select: Option<String>,
-    /// MANE Plus Clinical transcript ID.
+    /// The `MANE_Plus_Clinical` attribute's value, `Some` on presence as above.
     pub mane_plus_clinical: Option<String>,
-    /// Transcript Support Level (1-5, NA).
+    /// Transcript Support Level: the digits of a `TSL` attribute's `tsl<N>`
+    /// value when they are not zero; `tslNA` carries none.
     pub tsl: Option<u8>,
-    /// APPRIS annotation.
+    /// APPRIS annotation as the cache spells it (`principal1`, `alternativeM`).
     pub appris: Option<String>,
     /// CCDS ID.
     pub ccds: Option<String>,
@@ -74,6 +78,8 @@ pub struct Transcript {
     pub trembl: Option<String>,
     /// UniParc accession(s).
     pub uniparc: Option<String>,
+    /// UniProt isoform accession(s).
+    pub uniprot_isoform: Option<String>,
     /// Exons.
     pub exons: Vec<Exon>,
     /// Introns from the cache's intron list, else the gaps between exons, filled at load time.
@@ -98,7 +104,9 @@ pub struct Transcript {
     pub protein_sequence: Option<Vec<u8>>,
     /// Transcript flags (e.g., "cds_start_NF", "cds_end_NF").
     pub flags: Arc<[String]>,
-    /// GENCODE primary flag.
+    /// A `gencode_basic` attribute is present.
+    pub gencode_basic: bool,
+    /// A `gencode_primary` attribute is present.
     pub gencode_primary: bool,
     /// Transcript attributes (code/value pairs from the Perl cache).
     pub attributes: Vec<Attribute>,
@@ -106,18 +114,20 @@ pub struct Transcript {
     pub vefc: Option<TranscriptVEFC>,
     /// Facts derived from the fields above, filled on first use and read by
     /// every later row against this transcript ([`Transcript::facts`],
-    /// [`Transcript::feature_ordinals`]).
+    /// [`Transcript::feature_ordinals`], [`Transcript::spliced_seq`]).
     #[serde(skip)]
     pub derived: TranscriptDerived,
 }
 
-/// The lazily filled cells behind [`Transcript::facts`] and
-/// [`Transcript::feature_ordinals`]. A fresh or cloned transcript starts empty,
-/// so a transcript edited after construction is read as edited.
+/// The lazily filled cells behind [`Transcript::facts`],
+/// [`Transcript::feature_ordinals`] and [`Transcript::spliced_seq`]. A fresh or
+/// cloned transcript starts empty, so a transcript edited after construction is
+/// read as edited.
 #[derive(Debug, Default)]
 pub struct TranscriptDerived {
     facts: OnceLock<TranscriptFacts>,
     ordinals: OnceLock<Box<FeatureOrdinals>>,
+    spliced_seq: OnceLock<Option<Box<str>>>,
 }
 
 impl Clone for TranscriptDerived {
@@ -520,6 +530,49 @@ impl Transcript {
             .get_or_init(|| Box::new(FeatureOrdinals::compute(self)))
     }
 
+    /// The spliced cDNA of a coding transcript, assembled on the first call
+    /// from the cached 5' UTR, translateable sequence and 3' UTR and shared by
+    /// every later one; `None` for a transcript without a coding model or
+    /// whose cached pieces do not fit together.
+    ///
+    /// The cache holds the three pieces Ensembl's `Transcript::translateable_seq`
+    /// and the two UTR accessors cut from one spliced sequence, so their
+    /// concatenation is that sequence once the `N` padding the translateable
+    /// sequence starts with (one `N` per base of the start exon's phase) is
+    /// removed. The padding's length is the excess of the cached sequence over
+    /// the coding span, so no exon rule is needed to find it; a cache whose 5'
+    /// UTR does not end at the coding start, or whose padding is not 0 to 2
+    /// bases, yields `None`. A non-coding transcript's cDNA is not in the
+    /// cache.
+    pub fn spliced_seq(&self) -> Option<&str> {
+        self.derived
+            .spliced_seq
+            .get_or_init(|| self.assemble_spliced_seq().map(String::into_boxed_str))
+            .as_deref()
+    }
+
+    fn assemble_spliced_seq(&self) -> Option<String> {
+        if !self.facts().has_coding_model {
+            return None;
+        }
+        let vefc = self.vefc.as_ref()?;
+        let mapper = vefc.mapper.as_ref()?;
+        let coding = vefc.translateable_seq.as_deref()?;
+        let five = vefc.five_prime_utr.as_deref().unwrap_or("");
+        let three = vefc.three_prime_utr.as_deref().unwrap_or("");
+        let coding_len =
+            usize::try_from(mapper.cdna_coding_end - mapper.cdna_coding_start + 1).ok()?;
+        let padding = coding.len().checked_sub(coding_len)?;
+        if padding > 2 || five.len() as u64 != mapper.cdna_coding_start - 1 {
+            return None;
+        }
+        let mut seq = String::with_capacity(five.len() + coding_len + three.len());
+        seq.push_str(five);
+        seq.push_str(&coding[padding..]);
+        seq.push_str(three);
+        Some(seq)
+    }
+
     /// Length of the transcript on the genome.
     pub fn genomic_length(&self) -> u64 {
         if self.end >= self.start {
@@ -703,6 +756,7 @@ mod tests {
             version: None,
             db_id: None,
             gene_stable_id: "ENSG00000000001".into(),
+            gene_version: None,
             chr: "1".into(),
             start: exons.iter().map(|e| e.start).min().unwrap_or(1),
             end: exons.iter().map(|e| e.end).max().unwrap_or(1),
@@ -725,6 +779,7 @@ mod tests {
             swissprot: None,
             trembl: None,
             uniparc: None,
+            uniprot_isoform: None,
             exons,
             introns,
             cdna_coding_start: None,
@@ -737,6 +792,7 @@ mod tests {
             cdna_sequence: None,
             protein_sequence: None,
             flags: Arc::from([]),
+            gencode_basic: false,
             gencode_primary: false,
             attributes: vec![],
             vefc: None,
@@ -863,8 +919,85 @@ mod tests {
 
     /// The empty cells every loaded transcript carries, touched or not.
     #[test]
-    fn derived_cells_cost_at_most_32_bytes_per_transcript() {
-        assert!(std::mem::size_of::<TranscriptDerived>() <= 32);
+    fn derived_cells_cost_at_most_56_bytes_per_transcript() {
+        assert!(std::mem::size_of::<TranscriptDerived>() <= 56);
+    }
+
+    /// A coding transcript with a translation and a mapper over `cds`, the
+    /// cached translateable sequence padded with `padding` leading `N`s as
+    /// Ensembl pads a start exon of that phase.
+    fn coding_transcript(five: &str, cds: &str, three: &str, padding: usize) -> Transcript {
+        let mut tx = transcript(
+            Strand::Forward,
+            vec![exon(
+                100,
+                100 + (five.len() + cds.len() + three.len()) as u64 - 1,
+                0,
+            )],
+            vec![],
+        );
+        tx.translation = Some(Translation {
+            stable_id: "ENSP00000000001".into(),
+            version: None,
+            db_id: None,
+            start: 1,
+            end: cds.len() as u64,
+            start_exon_index: 0,
+            end_exon_index: 0,
+            seq: None,
+        });
+        let cdna_coding_start = five.len() as u64 + 1;
+        tx.vefc = Some(TranscriptVEFC {
+            five_prime_utr: (!five.is_empty()).then(|| five.to_string()),
+            three_prime_utr: (!three.is_empty()).then(|| three.to_string()),
+            translateable_seq: Some(format!("{}{cds}", "N".repeat(padding))),
+            mapper: Some(TranscriptMapper {
+                start_phase: padding as i8,
+                cdna_coding_start,
+                cdna_coding_end: cdna_coding_start + cds.len() as u64 - 1,
+                exon_coord_mapper: ExonCoordMapper::new(vec![]),
+            }),
+            ..Default::default()
+        });
+        tx
+    }
+
+    /// The cDNA is the 5' UTR, the translateable sequence without its
+    /// start-phase padding, and the 3' UTR, in that order: Ensembl's
+    /// `translateable_seq` prepends one `N` per base of the start exon's phase
+    /// to the coding span it cuts from `spliced_seq`.
+    #[test]
+    fn spliced_seq_joins_the_utrs_around_the_unpadded_coding_sequence() {
+        let tx = coding_transcript("GGAAC", "ATGCCCTAA", "TTTAAACC", 0);
+        assert_eq!(tx.spliced_seq(), Some("GGAACATGCCCTAATTTAAACC"));
+
+        let padded = coding_transcript("", "TGCCCTAA", "TTT", 2);
+        assert_eq!(
+            padded.vefc.as_ref().unwrap().translateable_seq.as_deref(),
+            Some("NNTGCCCTAA")
+        );
+        assert_eq!(padded.spliced_seq(), Some("TGCCCTAATTT"));
+
+        let no_utrs = coding_transcript("", "ATGTAA", "", 0);
+        assert_eq!(no_utrs.spliced_seq(), Some("ATGTAA"));
+    }
+
+    /// A transcript without a coding model has no cached cDNA, and cached
+    /// pieces that do not fit together (a 5' UTR not ending at the coding
+    /// start, more than two bases of padding) yield none rather than a
+    /// sequence with shifted coordinates.
+    #[test]
+    fn spliced_seq_is_none_without_a_coding_model_or_with_pieces_that_do_not_fit() {
+        let non_coding = transcript(Strand::Forward, vec![exon(100, 200, -1)], vec![]);
+        assert_eq!(non_coding.spliced_seq(), None);
+
+        let mut utr_too_short = coding_transcript("GGAAC", "ATGCCCTAA", "TTT", 0);
+        utr_too_short.vefc.as_mut().unwrap().five_prime_utr = Some("GGA".into());
+        assert_eq!(utr_too_short.spliced_seq(), None);
+
+        let mut over_padded = coding_transcript("", "ATGCCCTAA", "TTT", 0);
+        over_padded.vefc.as_mut().unwrap().translateable_seq = Some("NNNATGCCCTAA".into());
+        assert_eq!(over_padded.spliced_seq(), None);
     }
 
     #[test]

@@ -8,7 +8,16 @@
  "multi_allelic_per_suite": 4,
  "covers": [
   "flag_matrix_concordance",
-  "grch37"
+  "grch37",
+  "_gene_symbol",
+  "gene-stable-id-and-gene",
+  "transcript-biotype",
+  "transcript-coordinates",
+  "transcript-dbid",
+  "vefc-introns",
+  "vefc-peptide",
+  "vefc-runtime-only-keys",
+  "vefc-seq-edits"
  ],
  "flags": [
   "--grch37"

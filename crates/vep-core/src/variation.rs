@@ -33,6 +33,9 @@ pub struct CachedVariation {
     pub clin_sig: Option<String>,
     /// Phenotype or disease association flag: 0 or 1.
     pub phenotype_or_disease: u8,
+    /// The ClinVar allele and somatic fields, present on the few records that
+    /// carry any of them; boxed so the records without them pay one pointer.
+    pub clinvar: Option<Box<ClinVarDetail>>,
     /// PubMed IDs (comma-separated).
     pub pubmed: Option<String>,
     /// Population allele frequencies.
@@ -40,6 +43,17 @@ pub struct CachedVariation {
     pub frequencies: HashMap<String, String>,
     /// Variant synonyms (encoded string from cache).
     pub var_synonyms: Option<String>,
+}
+
+/// The ClinVar fields of a variation record beyond `clin_sig`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ClinVarDetail {
+    /// Significance per risk allele, `allele:term` pairs joined by `;`.
+    pub clin_sig_allele: Option<String>,
+    /// The reference allele behind `clin_sig_allele`.
+    pub clin_sig_ref_allele: Option<String>,
+    /// Somatic classification, `phenotype(classification)` entries joined by `;`.
+    pub clinical_impact: Option<String>,
 }
 
 #[cfg(test)]
@@ -60,6 +74,7 @@ mod tests {
         assert!(v.minor_allele_freq.is_none());
         assert!(v.clin_sig.is_none());
         assert_eq!(v.phenotype_or_disease, 0);
+        assert!(v.clinvar.is_none());
         assert!(v.pubmed.is_none());
         assert!(v.frequencies.is_empty());
         assert!(v.var_synonyms.is_none());

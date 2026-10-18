@@ -1,0 +1,40 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "141c279b991c0a64716d1a109c3bbe98",
+  "arch": "arm64",
+  "flags_passed": []
+ },
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "records on four non-primary contigs of the GRCh38 cache: the assembly patch HG1012_PATCH, the alternate haplotype HSCHR17_1_CTG1, the unplaced scaffold KI270728.1 and the LRG region LRG_1; positions placed from the contigs' transcript models (exon boundaries, splice sites, codons, UTRs, introns, 5 kb flanks) with the reference alleles read from the GRCh38 assembly sequence of each contig",
+ "sha256": {
+  "default.txt": "845fda02368f148f721e49425fbd83db6b32c7dd38cc4b93507f488848c4f977",
+  "tab.txt": "9ce4d00e6f590b09ff6e2f6de676d7242f490140465c5273263b969ca2cb8562",
+  "vcf.vcf": "3bc6823d93dfc1c0b74c4e7699b29a7d08d7250690ef5701c8ef20aa43c977af",
+  "json.jsonl": "fc24a2f79d0eebd17179b821558ade5eedc5595229ab1a85134a6836a80ce4eb"
+ },
+ "variants_vcf_sha256": "2a8ff673f1f8cb210a5df88ce4bfbbfeb969e009e27cc42e52381435bfe86321",
+ "generator": "candidate records on five non-primary contigs annotated with Ensembl VEP, then scripts/golden/build_golden_corpus.py select --k 1 --seed 1 --max-records 300 --cache <converted slice>; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the slice scripts/data/storable_to_json.pl converted from the Ensembl VEP cache's HG1012_PATCH, HSCHR17_1_CTG1, KI270728.1, GL000008.2 and LRG_1 directories (no GL000008.2 record was selected); scripts/golden/build_golden_corpus.py classify",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "HG1012_PATCH": 83,
+   "HSCHR17_1_CTG1": 30,
+   "KI270728.1": 66,
+   "LRG_1": 1
+  },
+  "shards": 5,
+  "spans_by_chromosome": {
+   "HG1012_PATCH": 75,
+   "HSCHR17_1_CTG1": 16,
+   "KI270728.1": 32,
+   "LRG_1": 11
+  }
+ }
+}
