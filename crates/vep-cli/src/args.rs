@@ -249,9 +249,13 @@ pub struct Args {
     #[arg(help_heading = "Cache / Offline", long = "show_cache_info")]
     pub show_cache_info: bool,
 
-    /// FASTA file for reference sequence lookup; without it, the first .fa by name in the cache directory that has its .fai beside it is used
+    /// FASTA file for reference sequence lookup: plain with its .fai, or bgzipped with the .fai and .gzi that samtools faidx writes; a gzip file that is not BGZF is refused and no index is built. A directory stands for every indexed .fa and .fa.gz in it, read together. Without the flag, the first indexed .fa or .fa.gz by name in the cache directory is used
     #[arg(help_heading = "Cache / Offline", long, visible_alias = "fa")]
     pub fasta: Option<String>,
+
+    /// Directory holding FASTA files of several species or assemblies: the .fa or .fa.gz whose name carries --species and the assembly is used, a toplevel file before any other and a bgzipped file before a plain one, in place of --fasta and of the cache directory's FASTA; when none qualifies the run warns and falls back to --fasta or the cache directory's FASTA
+    #[arg(help_heading = "Cache / Offline", long = "fasta_dir")]
+    pub fasta_dir: Option<String>,
 
     /// Do not use a FASTA file found in the cache directory
     #[arg(help_heading = "Cache / Offline", long = "no_fasta")]

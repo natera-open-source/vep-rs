@@ -6,7 +6,6 @@
 //! reference, for records of the corpus and for multi-allelic records built on
 //! it, in every output format.
 
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -17,13 +16,20 @@ fn corpus(name: &str) -> PathBuf {
 }
 
 /// `--hgvsg` with no FASTA, named or auto-detected, exits 1 with Ensembl VEP's
-/// message (Runner.pm 759) under the `fasta` component, before any input is read.
+/// message (Runner.pm 759) under the `fasta` component, once the input is open
+/// (Runner.pm 136 before 138) and before any record is read or the output is
+/// created.
 #[test]
 fn hgvsg_without_fasta_exits_with_vep_message() {
-    let cache = corpus("GRCh38-release116").join("json_cache");
+    let dir = corpus("GRCh38-release116");
+    let out = tempfile::tempdir().unwrap();
+    let out_file = out.path().join("out.txt");
     let output = Command::new(env!("CARGO_BIN_EXE_vep"))
-        .args(["--hgvsg", "--json_cache", cache.to_str().unwrap()])
-        .args(["-i", "/nonexistent/input.vcf", "--quiet"])
+        .args(["--hgvsg", "--json_cache"])
+        .arg(dir.join("json_cache"))
+        .arg("-i")
+        .arg(dir.join("variants.vcf"))
+        .args(["--quiet", "-o", out_file.to_str().unwrap()])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
@@ -31,6 +37,7 @@ fn hgvsg_without_fasta_exits_with_vep_message() {
         String::from_utf8_lossy(&output.stderr),
         "ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)\n"
     );
+    assert!(!out_file.exists());
 }
 
 /// Records of `tests/golden/116/GRCh37-hgvs/variants.vcf` (CHROM, POS, ID, REF,
@@ -97,21 +104,10 @@ const MULTI_ALLELIC_RECORDS: &[(&str, &[(&str, &str)])] = &[
     ),
 ];
 
-/// The corpus reference decompressed beside its index, as `--fasta` reads it.
-fn decompressed_fasta(dir: &Path) -> PathBuf {
-    let corpus_dir = corpus("GRCh37-hgvs");
-    let fasta = dir.join("reference.fa");
-    let mut bytes = Vec::new();
-    flate2::read::GzDecoder::new(std::fs::File::open(corpus_dir.join("reference.fa.gz")).unwrap())
-        .read_to_end(&mut bytes)
-        .unwrap();
-    std::fs::write(&fasta, bytes).unwrap();
-    std::fs::copy(
-        corpus_dir.join("reference.fa.fai"),
-        dir.join("reference.fa.fai"),
-    )
-    .unwrap();
-    fasta
+/// The corpus reference, bgzipped beside its `.fai` and `.gzi`, as `--fasta`
+/// reads it.
+fn corpus_fasta() -> PathBuf {
+    corpus("GRCh37-hgvs").join("reference.fa.gz")
 }
 
 /// Every record line of the two tables.
@@ -189,7 +185,7 @@ fn record_id(record: &str) -> &str {
 #[test]
 fn hgvsg_matches_vep_on_grch37_corpus_records_in_every_format() {
     let dir = tempfile::tempdir().unwrap();
-    let fasta = decompressed_fasta(dir.path());
+    let fasta = corpus_fasta();
 
     for format in ["default", "tab"] {
         let rows = annotate(dir.path(), &fasta, format);
@@ -330,8 +326,7 @@ fn three_prime_offset(allele: &[u8], post: &[u8], bound: usize) -> usize {
 /// the same distance under both bounds.
 #[test]
 fn grch37_hgvs_corpus_carries_a_full_flank_shift_record() {
-    let dir = tempfile::tempdir().unwrap();
-    let fasta = vep_fasta::IndexedFasta::from_path(decompressed_fasta(dir.path())).unwrap();
+    let fasta = vep_fasta::IndexedFasta::from_path(corpus_fasta()).unwrap();
     let mut differing = Vec::new();
     for line in std::fs::read_to_string(corpus("GRCh37-hgvs").join("variants.vcf"))
         .unwrap()

@@ -2,7 +2,8 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Run control through the `vep` binary: help and version, the output file and
-//! `STDOUT`, the cache resolved before anything runs, the warnings file and the
+//! `STDOUT`, the cache resolved before anything runs, the FASTA and the HGVS
+//! flags settled before the output opens, the warnings file and the
 //! skipped-variants file, `--quiet`, `--verbose`, `--safe`, the plugin loading
 //! rules, and the `runs` every golden-corpus manifest declares.
 
@@ -12,6 +13,8 @@ use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+
+use noodles_bgzf::gzi;
 
 use common::{corpora, execute_manifest_run, manifest_runs, warning_entries, Corpus, WarningEntry};
 
@@ -388,7 +391,9 @@ fn no_cache_is_fatal_before_first_variant() {
 /// lines sorted by key and exits 0 (vep:39-43 prints them in hash order), with
 /// the cache resolved by the same flags as a run; a named input file that does
 /// not exist is refused first (BaseRunner.pm:406, Parser.pm:239), and an
-/// existing one is not read.
+/// existing one is not read. The info prints before `post_setup_checks` would
+/// run (vep:39-46 exits before `run()`), so `--hgvs` with no FASTA in reach does
+/// not stop it.
 #[test]
 fn show_cache_info_prints_info_json_and_exits_0() {
     let dir = corpus_dir();
@@ -407,7 +412,7 @@ fn show_cache_info_prints_info_json_and_exits_0() {
     let expected = expected.join("\n") + "\n";
     let output = vep()
         .args(corpus_args())
-        .arg("--show_cache_info")
+        .args(["--show_cache_info", "--hgvs"])
         .stdin(Stdio::null())
         .output()
         .unwrap();
@@ -1297,6 +1302,366 @@ some other line
     .map(|(number, description)| (number, description.to_string()))
     .collect();
     assert_eq!(warning_entries(lines), expected);
+}
+
+/// The GRCh37-hgvs corpus, the one committed with a reference FASTA.
+fn hgvs_corpus_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh37-hgvs")
+}
+
+/// The GRCh37-hgvs corpus's bgzipped FASTA, indexed with its `.fai` and `.gzi`.
+fn hgvs_corpus_fasta() -> PathBuf {
+    hgvs_corpus_dir().join("reference.fa.gz")
+}
+
+/// A directory holding the corpus FASTA and its indexes under the name Ensembl
+/// gives a chromosome file, which carries the species and the assembly.
+fn ensembl_named_fasta_dir(parent: &Path) -> PathBuf {
+    let dir = parent.join("fasta_dir");
+    std::fs::create_dir_all(&dir).unwrap();
+    let source = hgvs_corpus_fasta();
+    for suffix in ["", ".fai", ".gzi"] {
+        std::fs::copy(
+            format!("{}{suffix}", source.display()),
+            dir.join(format!(
+                "Homo_sapiens.GRCh37.dna.chromosome.21.fa.gz{suffix}"
+            )),
+        )
+        .unwrap();
+    }
+    dir
+}
+
+/// The GRCh37-hgvs corpus's own arguments without its FASTA and its `--hgvs`,
+/// output path left to the caller.
+fn hgvs_corpus_args() -> Vec<String> {
+    let dir = hgvs_corpus_dir();
+    vec![
+        "-i".to_string(),
+        dir.join("variants.vcf").display().to_string(),
+        "--offline".to_string(),
+        "--json_cache".to_string(),
+        dir.join("json_cache").display().to_string(),
+        "--assembly".to_string(),
+        "GRCh37".to_string(),
+        "--force_overwrite".to_string(),
+        "--no_stats".to_string(),
+    ]
+}
+
+/// Runs `vep` with `args` writing to `out`, standard input closed.
+fn run_with(args: &[String], extra: &[&str], out: &Path) -> Output {
+    vep()
+        .args(args)
+        .args(extra)
+        .args(["-o", out.to_str().unwrap()])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap()
+}
+
+/// The line a run asking for HGVS notations with no FASTA ends with.
+const HGVS_REFUSAL: &str = "ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)";
+
+/// `--hgvs` or `--hgvsg` with no FASTA in reach (none named, none in the cache
+/// directory) is refused under the fasta component with Ensembl VEP's text
+/// (Runner.pm:757-759) before the output is created, and before an existing
+/// output file is refused (Runner.pm:200-202 opens the FASTA and runs its checks
+/// in init(), ahead of the output handle), as a `--fasta` path that is not there
+/// is (Utils/FastaSequence.pm:187); an input file that is not there is refused
+/// ahead of the HGVS check, as init() opens the input between the two
+/// (Runner.pm:134-138). With a FASTA the same flags annotate.
+#[test]
+fn hgvs_without_fasta_is_fatal() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    for flags in [
+        &["--hgvs"][..],
+        &["--hgvsg"][..],
+        &["--hgvs", "--hgvsg"][..],
+    ] {
+        let mut extra = flags.to_vec();
+        extra.push("--quiet");
+        let refused = run_with(&corpus_args(), &extra, &out);
+        assert_eq!(refused.status.code(), Some(1), "{flags:?}");
+        assert_eq!(text(&refused.stderr).trim_end(), HGVS_REFUSAL, "{flags:?}");
+        assert!(refused.stdout.is_empty(), "{flags:?}");
+        assert!(!out.exists(), "{flags:?}: an output file was created");
+    }
+
+    std::fs::write(&out, "kept\n").unwrap();
+    let mut args = corpus_args();
+    args.retain(|a| a != "--force_overwrite");
+    let refused = run_with(&args, &["--hgvs", "--quiet"], &out);
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(text(&refused.stderr).trim_end(), HGVS_REFUSAL);
+    assert_eq!(std::fs::read_to_string(&out).unwrap(), "kept\n");
+    let missing = dir.path().join("absent.fa");
+    let refused = run_with(
+        &args,
+        &["--quiet", "--fasta", missing.to_str().unwrap()],
+        &out,
+    );
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(
+        text(&refused.stderr).trim_end(),
+        format!(
+            "ERROR: [fasta] Specified FASTA file/directory {} not found",
+            missing.display()
+        )
+    );
+    assert_eq!(std::fs::read_to_string(&out).unwrap(), "kept\n");
+    let absent_input = dir.path().join("absent.vcf");
+    let refused = run_with(
+        &corpus_args_with_input(&absent_input),
+        &["--hgvs", "--quiet"],
+        &out,
+    );
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(
+        text(&refused.stderr).starts_with(&format!(
+            "ERROR: [run] Failed to open input file '{}'",
+            absent_input.display()
+        )),
+        "{}",
+        text(&refused.stderr)
+    );
+
+    let fasta = hgvs_corpus_fasta().display().to_string();
+    let annotated = run_with(
+        &hgvs_corpus_args(),
+        &["--hgvs", "--hgvsg", "--quiet", "--fasta", &fasta],
+        &out,
+    );
+    assert_eq!(
+        annotated.status.code(),
+        Some(0),
+        "{}",
+        text(&annotated.stderr)
+    );
+    let output = std::fs::read_to_string(&out).unwrap();
+    assert!(output.contains("## HGVSc : HGVS coding sequence name"));
+    assert!(
+        data_lines(&output).iter().any(|l| l.contains("HGVSc=")),
+        "no HGVSc value in the output"
+    );
+}
+
+/// `--everything` without a FASTA prints `INFO: Disabling --hgvs; using --offline
+/// and no FASTA file found` on standard error and drops the HGVS notations it
+/// switched on, so the output carries no HGVSc or HGVSp (Runner.pm:745-754);
+/// `--quiet` withholds the notice as status_msg does (BaseVEP.pm:782); `--hgvsg`
+/// is not in the set the notice clears, so `--everything --hgvsg` is still
+/// refused; with a FASTA nothing is disabled.
+#[test]
+fn everything_without_fasta_prints_info_and_disables_hgvs() {
+    const NOTICE: &str = "INFO: Disabling --hgvs; using --offline and no FASTA file found";
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let disabled = run_with(&corpus_args(), &["--everything"], &out);
+    assert_eq!(
+        disabled.status.code(),
+        Some(0),
+        "{}",
+        text(&disabled.stderr)
+    );
+    let stderr = text(&disabled.stderr);
+    assert!(
+        stderr.lines().any(|l| l == NOTICE),
+        "the notice is a line of its own:\n{stderr}"
+    );
+    let output = std::fs::read_to_string(&out).unwrap();
+    assert!(!output.contains("HGVSc"), "HGVSc survived the notice");
+    assert!(!output.contains("HGVSp"), "HGVSp survived the notice");
+    assert!(output.contains("## SYMBOL"), "the rest of the set is on");
+
+    let quiet = run_with(&corpus_args(), &["--everything", "--quiet"], &out);
+    assert_eq!(quiet.status.code(), Some(0), "{}", text(&quiet.stderr));
+    assert!(!text(&quiet.stderr).contains("INFO: Disabling"));
+
+    let refused = run_with(
+        &corpus_args(),
+        &["--everything", "--hgvsg", "--quiet"],
+        &out,
+    );
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(text(&refused.stderr).trim_end(), HGVS_REFUSAL);
+
+    let fasta = hgvs_corpus_fasta().display().to_string();
+    let with_fasta = run_with(
+        &hgvs_corpus_args(),
+        &["--everything", "--fasta", &fasta],
+        &out,
+    );
+    assert_eq!(
+        with_fasta.status.code(),
+        Some(0),
+        "{}",
+        text(&with_fasta.stderr)
+    );
+    assert!(!text(&with_fasta.stderr).contains("INFO: Disabling"));
+    let output = std::fs::read_to_string(&out).unwrap();
+    assert!(output.contains("## HGVSc : HGVS coding sequence name"));
+}
+
+/// A `.gzi` that misstates one block's length is refused at open; a damaged
+/// block, whose ISIZE field and the index agree while its payload inflates to
+/// another length, opens but makes every read of that block "no reference", so
+/// the run reports it once and exits 1 under the fasta component once its reads
+/// are done, and the output written meanwhile is not taken for the file's
+/// annotation. Both fixtures are the committed FASTA with the block whose
+/// sequence most of the corpus's variants read (entry 544 ends it) altered.
+#[test]
+fn misdescribed_block_fails_the_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let source = hgvs_corpus_fasta();
+    let staged = dir.path().join("reference.fa.gz");
+    std::fs::copy(&source, &staged).unwrap();
+    std::fs::copy(
+        format!("{}.fai", source.display()),
+        format!("{}.fai", staged.display()),
+    )
+    .unwrap();
+    let source_gzi = format!("{}.gzi", source.display());
+    let staged_gzi = format!("{}.gzi", staged.display());
+    let index: Vec<(u64, u64)> = gzi::fs::read(&source_gzi).unwrap().as_ref().to_vec();
+    assert!(
+        index.len() > 600,
+        "the corpus index has {} entries",
+        index.len()
+    );
+    let flags = ["--hgvs", "--quiet", "--fasta", staged.to_str().unwrap()];
+
+    let mut misstated = index.clone();
+    misstated[544].1 += 1;
+    gzi::fs::write(&staged_gzi, &gzi::Index::from(misstated)).unwrap();
+    let refused = run_with(&hgvs_corpus_args(), &flags, &out);
+    assert_eq!(refused.status.code(), Some(1));
+    let stderr = text(&refused.stderr);
+    assert!(
+        stderr.starts_with(&format!(
+            "ERROR: [fasta] BGZF index {staged_gzi} does not describe {} (the block at byte {} ends at byte",
+            staged.display(),
+            index[543].0
+        )),
+        "{stderr}"
+    );
+    assert!(!out.exists(), "refused before the output opened");
+
+    let mut damaged = std::fs::read(&source).unwrap();
+    let isize_at = index[544].0 as usize - 4;
+    let isize = u32::from_le_bytes(damaged[isize_at..isize_at + 4].try_into().unwrap());
+    damaged[isize_at..isize_at + 4].copy_from_slice(&(isize + 1).to_le_bytes());
+    std::fs::write(&staged, &damaged).unwrap();
+    let mut agreeing = index.clone();
+    for entry in &mut agreeing[544..] {
+        entry.1 += 1;
+    }
+    gzi::fs::write(&staged_gzi, &gzi::Index::from(agreeing)).unwrap();
+    let failed = run_with(&hgvs_corpus_args(), &flags, &out);
+    assert_eq!(failed.status.code(), Some(1));
+    let stderr = text(&failed.stderr);
+    assert!(
+        stderr.trim_end().ends_with(&format!(
+            "ERROR: [fasta] BGZF index {staged_gzi} does not describe {} (a block did not read as the index says): index the file again with samtools faidx",
+            staged.display()
+        )),
+        "{stderr}"
+    );
+    assert!(
+        out.exists(),
+        "the output was written before the reads were judged"
+    );
+
+    std::fs::copy(&source, &staged).unwrap();
+    std::fs::copy(&source_gzi, &staged_gzi).unwrap();
+    let annotated = run_with(&hgvs_corpus_args(), &flags, &out);
+    assert_eq!(
+        annotated.status.code(),
+        Some(0),
+        "{}",
+        text(&annotated.stderr)
+    );
+}
+
+/// `--fasta_dir` supplies the FASTA whose name carries the species and the
+/// assembly (BaseVEP.pm:495-513), so a run with it annotates as the same run
+/// with `--fasta` does; a directory holding no such file (the corpus directory,
+/// whose `reference.fa.gz` names neither; one holding another species' file)
+/// warns and leaves the run without a FASTA (:516), and one that cannot be
+/// opened is passed over without a word (:496).
+#[test]
+fn fasta_dir_selects_the_species_and_assembly_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let corpus = hgvs_corpus_dir().display().to_string();
+    let fasta = hgvs_corpus_fasta().display().to_string();
+    let by_file = run_with(
+        &hgvs_corpus_args(),
+        &["--hgvs", "--quiet", "--fasta", &fasta],
+        &out,
+    );
+    assert_eq!(by_file.status.code(), Some(0), "{}", text(&by_file.stderr));
+    let expected = std::fs::read_to_string(&out).unwrap();
+
+    let named = ensembl_named_fasta_dir(dir.path()).display().to_string();
+    let by_dir = run_with(
+        &hgvs_corpus_args(),
+        &["--hgvs", "--quiet", "--fasta_dir", &named],
+        &out,
+    );
+    assert_eq!(by_dir.status.code(), Some(0), "{}", text(&by_dir.stderr));
+    let actual = std::fs::read_to_string(&out).unwrap();
+    assert_eq!(data_lines(&actual), data_lines(&expected));
+    assert!(data_lines(&actual).iter().any(|l| l.contains("HGVSc=")));
+
+    let warned = run_with(
+        &hgvs_corpus_args(),
+        &["--hgvs", "--fasta_dir", &corpus],
+        &out,
+    );
+    assert_eq!(warned.status.code(), Some(1));
+    let stderr = text(&warned.stderr);
+    assert!(
+        stderr.contains(&format!("No compatible FASTA files found in {corpus}")),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("ERROR: [fasta] Cannot generate HGVS coordinates"),
+        "{stderr}"
+    );
+
+    let other_species = run_with(
+        &hgvs_corpus_args(),
+        &["--hgvs", "--fasta_dir", &named, "--species", "mus_musculus"],
+        &out,
+    );
+    assert_eq!(other_species.status.code(), Some(1));
+    assert!(
+        text(&other_species.stderr)
+            .contains(&format!("No compatible FASTA files found in {named}")),
+        "{}",
+        text(&other_species.stderr)
+    );
+
+    let unreadable = dir.path().join("absent").display().to_string();
+    let passed_over = run_with(
+        &hgvs_corpus_args(),
+        &["--hgvs", "--fasta_dir", &unreadable, "--fasta", &fasta],
+        &out,
+    );
+    assert_eq!(
+        passed_over.status.code(),
+        Some(0),
+        "{}",
+        text(&passed_over.stderr)
+    );
+    assert!(!text(&passed_over.stderr).contains("No compatible FASTA files"));
+    assert_eq!(
+        data_lines(&std::fs::read_to_string(&out).unwrap()),
+        data_lines(&expected)
+    );
 }
 
 /// Every `runs` entry of every corpus manifest behaves as its `expect` block says.

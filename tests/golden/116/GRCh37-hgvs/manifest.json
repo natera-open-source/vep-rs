@@ -30,7 +30,109 @@
   "flag_matrix_concordance",
   "hgvs-offset-field",
   "engine_identity_lines",
-  "cache-fasta-auto-detection"
+  "cache-fasta-auto-detection",
+  "fasta",
+  "fasta_dir"
+ ],
+ "runs": [
+  {
+   "name": "fasta-directory",
+   "argv": [
+    "{golden}",
+    "--fasta",
+    "{corpus}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "fasta-dir",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--json_cache",
+    "{cache}",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "--fasta_dir",
+    "{fasta_dir}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "fasta-dir-without-a-match",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--json_cache",
+    "{cache}",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "{flags}",
+    "--fasta_dir",
+    "{cache}",
+    "--fasta",
+    "{corpus}/reference.fa.gz",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "stderr_contains": "No compatible FASTA files found in "
+   }
+  },
+  {
+   "name": "hgvs-without-fasta",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--json_cache",
+    "{corpus}/json_cache",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)"
+   }
+  }
  ],
  "suites": {
   "GRCh37-hgvs": {

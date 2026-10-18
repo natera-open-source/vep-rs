@@ -67,7 +67,8 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--cache_version` | u32 | -- | Cache version: the prefix of the cache directory under the species directory (defaults to the VEP release) |
 | `--json_cache`, `--full_cache_dir` | String | -- | The cache directory itself, the one holding info.json and transcripts/ (built by vep-cache-builder or converted from a Perl VEP cache); it is read in place of the --dir_cache layout, and only --assembly is checked against its info.json |
 | `--show_cache_info` | bool | false | Print the cache's source versions as sorted key<TAB>value lines and exit |
-| `--fasta`, `--fa` | String | -- | FASTA file for reference sequence lookup; without it, the first .fa by name in the cache directory that has its .fai beside it is used |
+| `--fasta`, `--fa` | String | -- | FASTA file for reference sequence lookup: plain with its .fai, or bgzipped with the .fai and .gzi that samtools faidx writes; a gzip file that is not BGZF is refused and no index is built. A directory stands for every indexed .fa and .fa.gz in it, read together. Without the flag, the first indexed .fa or .fa.gz by name in the cache directory is used |
+| `--fasta_dir` | String | -- | Directory holding FASTA files of several species or assemblies: the .fa or .fa.gz whose name carries --species and the assembly is used, a toplevel file before any other and a bgzipped file before a plain one, in place of --fasta and of the cache directory's FASTA; when none qualifies the run warns and falls back to --fasta or the cache directory's FASTA |
 | `--no_fasta` | bool | false | Do not use a FASTA file found in the cache directory |
 | `--synonyms` | String | -- | Chromosome synonyms file: on each line, whitespace-separated names of one chromosome, the first the reference name; an input chromosome the cache does not name is looked up through its synonyms. Replaces the cache's own chr_synonyms.txt, which is read when this flag is absent |
 | `--shift_3prime` | `0`, `1` | -- | Move each insertion or deletion to its most 3' position on the transcript, over a 1,000-base window of the reference, before its consequence terms, positions, codons and amino acids are computed (1), or annotate it where the input placed it (0); needs a FASTA and stops the run without one. The HGVS notations shift under --shift_hgvs, not this flag. The shift runs along the genome only: a transcript whose cached sequence is edited away from the genome is not shifted again along its own sequence |
@@ -403,7 +404,7 @@ plugin LoFtool,/data/LoFtool_scores.txt
 
 Environment variables vep-rs reads outside this mechanism, which Ensembl VEP has no counterpart for:
 
-- `VEP_FASTA_STORAGE`: how the FASTA is held: `mmap` (default) maps the file, `memory` reads it into RAM; any other value is an error.
+- `VEP_FASTA_STORAGE`: how the FASTA is held: `mmap` (default) maps the file and inflates a bgzipped one block by block as queries need them, `memory` reads it into RAM, a bgzipped one inflated whole; any other value is an error.
 
 ### Option spellings (`Config.pm:62`)
 
@@ -419,8 +420,8 @@ Getopt::Long's defaults apply to the command line: a long option is read in any 
   - `output`: the output file or format, the warnings file or the skipped-variants file
   - `plugin`: under --safe, a plugin that cannot be loaded or a plugins directory that does not exist
   - `cache`: the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read
+  - `fasta`: the reference FASTA: the file or directory named cannot be read as an indexed FASTA, or a flag that reads it (`--hgvs`, `--hgvsg`, `--shift_3prime 1`) was given and none was named or found in the cache directory
   - `filter`: a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect
-  - `fasta`: the reference FASTA: a flag that reads it (`--hgvs`, `--hgvsg`, `--shift_3prime 1`) was given and none was named or found in the cache directory
   - `config`: the `--config` file, or a `vep.ini` that is a file, cannot be read; or a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer
   - `run`: any other failure of the annotation run, with its cause chain
 - `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown flag, a prefix of several flags, a missing value, a value outside an enumeration.

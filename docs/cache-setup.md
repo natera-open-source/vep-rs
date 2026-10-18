@@ -26,12 +26,40 @@ Storable cache or a mistyped path fails rather than annotating nothing.
 
 `--assembly` is compared exactly and case-sensitively, as Ensembl VEP compares it, with one
 addition: `hg19` and `hg38` are read as `GRCh37` and `GRCh38`. When `--fasta` is absent, the
-first `.fa` by name inside the cache directory that has its `.fai` index beside it is used as
-the reference, unless `--no_fasta` is given; a `.fa.gz` or an unindexed `.fa` there is not read
-(Ensembl VEP reads a `.fa.gz` through Bio::DB::HTS and builds a missing index itself).
-`--show_cache_info` resolves the cache by the same flags, refuses a named input file that does
-not exist as Ensembl VEP does, prints the cache's source versions as `<key>\t<value>` lines
-sorted by key, and exits without reading the input.
+first `.fa` or `.fa.gz` by name inside the cache directory that has its indexes beside it is
+used as the reference, unless `--no_fasta` is given; an unindexed file there is not read
+(Ensembl VEP builds a missing index itself). `--show_cache_info` resolves the cache by the same
+flags, refuses a named input file that does not exist as Ensembl VEP does, prints the cache's
+source versions as `<key>\t<value>` lines sorted by key, and exits without reading the input.
+
+## Reference FASTA
+
+`--fasta` takes a plain FASTA with the `.fai` that `samtools faidx` writes, or a FASTA
+compressed with `bgzip` with the `.fai` and `.gzi` that `samtools faidx` writes for it: Ensembl's
+`dna_index/` files are of that shape. A gzip file that is not BGZF is refused with
+`ERROR: [fasta] <file> is gzip but not BGZF: recompress with bgzip and index with samtools faidx`,
+because its `.fai` offsets cannot be reached without inflating the whole file; no index is built
+(Ensembl VEP builds one). The `.gzi` is checked against the file's block layout when it is opened,
+so a file recompressed without being indexed again is refused rather than read. A directory given
+to `--fasta` is read as Ensembl VEP's Bio::DB::Fasta reads one, every indexed `.fa` in it (and the
+`.fa.gz` vep-rs adds, which Bio::DB::Fasta does not read), their sequences together; two files naming
+the same sequence are refused (Ensembl VEP with Bio::DB::HTS installed takes a file only). Under
+`VEP_FASTA_STORAGE=memory` a bgzipped FASTA is inflated whole into memory.
+
+`--fasta_dir <dir>` chooses, as Ensembl VEP does, the `.fa` or `.fa.gz` of the directory whose
+name carries the species and the assembly (case-insensitively), a file named `toplevel` before
+any other and a compressed file before a plain one; the choice stands in for `--fasta` and for
+the cache directory's FASTA. A directory holding no such file leaves those in force and warns
+`WARNING: No compatible FASTA files found in <dir>`, written to the run's warnings file and echoed
+on standard error unless `--quiet`; one that cannot be opened is passed over without a message, as
+Ensembl VEP passes it over.
+
+`--hgvs` or `--hgvsg` with no FASTA in reach exits 1 with
+`ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)`,
+Ensembl VEP's offline refusal. `--everything` without a FASTA instead prints
+`INFO: Disabling --hgvs; using --offline and no FASTA file found` on standard error (withheld
+under `--quiet`) and drops the HGVS notations it switched on, as Ensembl VEP does; an explicit
+`--hgvsg` beside it is still refused.
 
 ```bash
 # Ensembl VEP's layout: $HOME/.vep/homo_sapiens/116_GRCh38

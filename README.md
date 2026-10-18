@@ -256,7 +256,7 @@ target/release/vep \
 
 - **Output formats.** VEP default (the tab-delimited text format with the `Extra` column), `--vcf` (annotations in the `CSQ` INFO field), `--json` (one object per variant) and `--tab` match Perl VEP's layouts. `--parquet` is a vep-rs extension written through the `duckdb` CLI (1.2 or newer on PATH). Field-level specs are in [docs/output-formats.md](docs/output-formats.md).
 - **Plugins.** `--plugin <Name>,<params>` resolves one of the eleven built-in plugins first (ten with supported data), and otherwise loads a C-ABI dynamic library from `--dir_plugins`. Support is per reference genome: `--assembly` selects the right column and refuses a data file whose own assembly contradicts it. The support matrix, the data files and how to write a plugin are in [docs/plugins.md](docs/plugins.md).
-- **HGVS.** `--fasta` takes an uncompressed, `faidx`-indexed genome and gives `--hgvs` the reference context for the 3' shifting of indels.
+- **HGVS.** `--fasta` takes a `samtools faidx`-indexed genome, plain or compressed with `bgzip` (Ensembl's `dna_index` files), and gives `--hgvs` the reference context for the 3' shifting of indels; `--hgvs` without a FASTA is refused, as Ensembl VEP refuses it offline.
 - **All flags.** [docs/cli-reference.md](docs/cli-reference.md) is the complete flag reference, including the flags accepted for Perl VEP compatibility but not implemented.
 
 ## Documentation

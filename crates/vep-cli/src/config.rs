@@ -318,7 +318,7 @@ pub const CACHE_FLAG_ALONE: &str = "1";
 /// Environment variables vep-rs reads that Ensembl VEP has no counterpart for.
 pub const ENVIRONMENT: &[(&str, &str)] = &[(
     "VEP_FASTA_STORAGE",
-    "how the FASTA is held: `mmap` (default) maps the file, `memory` reads it into RAM; any other value is an error",
+    "how the FASTA is held: `mmap` (default) maps the file and inflates a bgzipped one block by block as queries need them, `memory` reads it into RAM, a bgzipped one inflated whole; any other value is an error",
 )];
 
 /// The components an `ERROR: [<component>]` line names, with their meaning.
@@ -340,12 +340,12 @@ pub const COMPONENTS: &[(&str, &str)] = &[
         "the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read",
     ),
     (
-        "filter",
-        "a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect",
+        "fasta",
+        "the reference FASTA: the file or directory named cannot be read as an indexed FASTA, or a flag that reads it (`--hgvs`, `--hgvsg`, `--shift_3prime 1`) was given and none was named or found in the cache directory",
     ),
     (
-        "fasta",
-        "the reference FASTA: a flag that reads it (`--hgvs`, `--hgvsg`, `--shift_3prime 1`) was given and none was named or found in the cache directory",
+        "filter",
+        "a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect",
     ),
     (
         "config",
@@ -479,6 +479,8 @@ pub struct Config {
     /// Print the cache's source versions and exit.
     pub show_cache_info: bool,
     pub fasta: Option<String>,
+    /// A directory of FASTA files to pick the species' and assembly's from.
+    pub fasta_dir: Option<String>,
     /// Do not pick up a FASTA file found in the cache directory.
     pub no_fasta: bool,
     /// The `--synonyms` file, a leading `~` expanded; it replaces the cache's own
@@ -809,6 +811,7 @@ impl Config {
             cache_version,
             show_cache_info: args.show_cache_info,
             fasta: args.fasta,
+            fasta_dir: args.fasta_dir,
             no_fasta: args.no_fasta,
             synonyms: args.synonyms.as_deref().map(expand_tilde),
             shift_3prime,
@@ -1844,7 +1847,7 @@ mod tests {
         let names: std::collections::BTreeSet<&str> =
             COMPONENTS.iter().map(|(name, _)| *name).collect();
         assert_eq!(names.len(), COMPONENTS.len(), "{COMPONENTS:?}");
-        for component in ["cli", "output", "cache", "filter", "fasta", "config", "run"] {
+        for component in ["cli", "output", "cache", "fasta", "filter", "config", "run"] {
             assert!(names.contains(component), "{component}");
         }
     }

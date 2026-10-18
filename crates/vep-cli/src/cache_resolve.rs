@@ -10,11 +10,11 @@
 //! the directory must hold `transcripts/` and `info.json`, `--assembly` must
 //! agree with the cache (`CacheDir.pm:347` against the directory name, `:404-408`
 //! against the cache's metadata, which the directory name's own assembly must
-//! also match), and an indexed `.fa` inside the directory is picked up unless
-//! `--fasta` or `--no_fasta` is given (`CacheDir.pm:235-251`; Ensembl VEP takes a
-//! `.fa.gz` too when it can read one, and builds a missing index itself, while
-//! the FASTA reader here takes an uncompressed file with its `.fai` only). The
-//! chromosome synonyms are read from `--synonyms`, else from the cache's own
+//! also match), and an indexed `.fa` or `.fa.gz` inside the directory is picked
+//! up unless `--fasta` or `--no_fasta` is given (`CacheDir.pm:235-251`; Ensembl
+//! VEP builds a missing index itself, while the FASTA reader here needs the
+//! `.fai`, and the `.gzi` of a compressed file, beside it). The chromosome
+//! synonyms are read from `--synonyms`, else from the cache's own
 //! `chr_synonyms.txt` (`CacheDir.pm:254`, `Runner.pm:131`). Every refusal is a
 //! [`CliError`]: the cache's under the `cache` component, an unreadable
 //! `--synonyms` file under `config`.
@@ -37,8 +37,8 @@ pub struct ResolvedCache {
     /// The assembly of the run: the cache's own, else the one the directory name
     /// carries, else `--assembly` read as a canonical name.
     pub assembly: Option<String>,
-    /// An indexed `.fa` found in the cache directory, when neither `--fasta` nor
-    /// `--no_fasta` was given.
+    /// An indexed `.fa` or `.fa.gz` found in the cache directory, when neither
+    /// `--fasta` nor `--no_fasta` was given.
     pub fasta: Option<String>,
     /// The chromosome synonyms of the run: the `--synonyms` file, else the
     /// cache's `chr_synonyms.txt`, else an empty table. A user file replaces the
@@ -269,17 +269,10 @@ fn read_info(dir: &str) -> Result<CacheInfo, CliError> {
     serde_json::from_value(value).map_err(|e| file_error(&e))
 }
 
-/// The first `.fa` of the cache directory, by name, that has its `.fai` beside it
-/// (`CacheDir.pm:244`, the branch without a compressed-FASTA reader).
+/// The first `.fa` or `.fa.gz` of the cache directory, by name, that has its
+/// indexes beside it (`CacheDir.pm:241`).
 fn detect_fasta(dir: &str) -> Option<String> {
-    let dir = Path::new(dir);
-    let first_by_name = std::fs::read_dir(dir)
-        .ok()?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .filter(|name| name.ends_with(".fa") && dir.join(format!("{name}.fai")).is_file())
-        .min()?;
-    Some(dir.join(first_by_name).display().to_string())
+    vep_fasta::first_indexed_fasta(Path::new(dir)).map(|path| path.display().to_string())
 }
 
 #[cfg(test)]
@@ -701,17 +694,16 @@ mod tests {
         );
     }
 
-    /// The first indexed `.fa` of the cache directory, by name, is the run's FASTA
-    /// (`CacheDir.pm:235-249`), unless `--fasta` names one or `--no_fasta` is given;
-    /// a `.fa.gz` (which Ensembl VEP takes only with a compressed-FASTA reader,
-    /// `:240-245`) and a `.fa` without its `.fai` (which Ensembl VEP indexes itself)
-    /// are left alone, since the reader here takes neither.
+    /// The first indexed `.fa` or `.fa.gz` of the cache directory, by name, is the
+    /// run's FASTA (`CacheDir.pm:235-249`), unless `--fasta` names one or
+    /// `--no_fasta` is given; a `.fa` without its `.fai` and a bgzipped `.fa.gz`
+    /// without its `.gzi` (which Ensembl VEP indexes itself) are left alone, since
+    /// the reader here takes neither.
     #[test]
     fn no_fasta_suppresses_autodetect() {
         let dir = tempfile::tempdir().unwrap();
         make_leaf(dir.path(), Some(INFO));
         for name in [
-            "0.fa.gz",
             "0.fa.gz.fai",
             "a.fa",
             "a.fa.fai",
@@ -721,11 +713,24 @@ mod tests {
         ] {
             fs::write(dir.path().join(name), "").unwrap();
         }
+        // The scan reads the bytes, not the name, for the .gzi requirement, so
+        // this file is a BGZF stream (its EOF block alone) where the others are
+        // empty.
+        let bgzf = noodles::bgzf::io::Writer::new(Vec::new()).finish().unwrap();
+        fs::write(dir.path().join("0.fa.gz"), bgzf).unwrap();
         let path = dir.path().to_str().unwrap();
         assert_eq!(
             resolve_flags(&["--json_cache", path]).unwrap().fasta,
-            Some(dir.path().join("a.fa").display().to_string())
+            Some(dir.path().join("a.fa").display().to_string()),
+            "a bgzipped .fa.gz without its .gzi is skipped"
         );
+        fs::write(dir.path().join("0.fa.gz.gzi"), "").unwrap();
+        assert_eq!(
+            resolve_flags(&["--json_cache", path]).unwrap().fasta,
+            Some(dir.path().join("0.fa.gz").display().to_string()),
+            "an indexed .fa.gz is taken by name"
+        );
+        fs::remove_file(dir.path().join("0.fa.gz.gzi")).unwrap();
         assert!(resolve_flags(&["--json_cache", path, "--no_fasta"])
             .unwrap()
             .fasta
@@ -748,7 +753,7 @@ mod tests {
                 .unwrap()
                 .fasta
                 .is_none(),
-            "a .fa.gz is never taken"
+            "nothing indexed is left"
         );
     }
 

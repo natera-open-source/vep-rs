@@ -164,9 +164,9 @@ exit-codes-and-error-text	vep	implemented	landed:implemented	crates/vep-cli/test
 extended_promoters	Config.pm	implemented	open			crates/vep-cli/src/args.rs::extended_promoters_is_refused;crates/vep-cli/tests/integration_test.rs::refused_flags_exit_with_their_message
 extra-key-order-and-percent-encoding	VEP_output.pm	implemented	open			
 failed	Config.pm	implemented	landed:implemented	crates/vep-cli/src/args.rs::failed_takes_an_integer;crates/vep-cli/src/variation_matcher.rs::failed_threshold_admits_failed_records	tests/golden/116/GRCh38-colocated	
-fasta	BaseVEP.pm	documented_subset	open			
+fasta	BaseVEP.pm	documented_subset	landed:documented_subset	crates/vep-fasta/src/lib.rs::bgzf_fasta_with_gzi_matches_plain;crates/vep-fasta/src/lib.rs::plain_gzip_fasta_is_refused;crates/vep-fasta/src/lib.rs::directory_opens_every_indexed_fasta;crates/vep-fasta/src/lib.rs::gzi_of_another_file_is_refused;crates/vep-cli/tests/cli_run_control.rs::hgvs_without_fasta_is_fatal;crates/vep-cli/tests/cli_run_control.rs::misdescribed_block_fails_the_run	tests/golden/116/GRCh37-hgvs	
 fasta-download-and-indexing	INSTALL.pl	implemented	open			
-fasta_dir	BaseVEP.pm	implemented	open			
+fasta_dir	BaseVEP.pm	implemented	landed:implemented	crates/vep-fasta/src/lib.rs::fasta_dir_prefers_toplevel_then_bgzf;crates/vep-fasta/src/lib.rs::fasta_dir_ties_break_by_name;crates/vep-cli/tests/cli_run_control.rs::fasta_dir_selects_the_species_and_assembly_file	tests/golden/116/GRCh37-hgvs	
 FATHMM	FATHMM.pm	error	open			
 FATHMM_MKL	FATHMM_MKL.pm	error	open			
 fields	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::fields_replace_the_tab_columns_in_the_given_order;crates/vep-io/src/output/vcf_output.rs::fields_replace_the_csq_format;crates/vep-io/src/output/fields.rs::inactive_flag_field_named_by_fields_prints_dash;crates/vep-cli/src/config.rs::parquet_with_fields_is_refused	tests/golden/116/GRCh38-writers	

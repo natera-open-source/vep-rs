@@ -56,12 +56,10 @@ pub struct EffectsConfig {
     /// that are then discarded. When off, `TranscriptConsequence.hgvsc`,
     /// `.hgvsp` and `.hgvs_offset` stay `None`.
     ///
-    /// Callers must enable this whenever the consumer reads the fields without
-    /// consulting `--hgvs`. The VCF and Parquet CSQ field lists carry
-    /// `HGVSc`/`HGVSp` unconditionally and the JSON formatter emits them
-    /// whenever they are `Some`, so `vep-cli` turns this on for those output
-    /// formats regardless of the flag (`runner::needs_hgvs_computation`). Embedders
-    /// that always populate HGVS should likewise pass `true`.
+    /// Callers enable this when the consumer prints the fields: `vep-cli` turns
+    /// it on under `--hgvs` with a reference FASTA present, the condition under
+    /// which Ensembl VEP fills `HGVSc`/`HGVSp` in every output format. Embedders
+    /// that always populate HGVS pass `true`.
     pub compute_hgvs: bool,
     /// Compute the `EXON` and `INTRON` ordinals for each transcript consequence.
     ///
@@ -4904,11 +4902,6 @@ mod tests {
 
     #[test]
     fn test_hgvs_suppressed_when_compute_hgvs_off() {
-        // The default (compute_hgvs: false) skips HGVS generation entirely, so
-        // both fields stay None while the consequence set is unaffected. Callers
-        // whose output format emits HGVS without consulting --hgvs (VCF/JSON/
-        // Parquet CSQ) must therefore set compute_hgvs themselves; vep-cli does
-        // this via runner::needs_hgvs_computation.
         let tx = make_test_transcript();
         let variant = InputVariant::new(
             "21".into(),

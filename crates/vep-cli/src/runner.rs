@@ -24,7 +24,7 @@ use anyhow::{bail, Context};
 use noodles::bgzf;
 use rayon::prelude::*;
 use rayon::ThreadPool;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::annotator::{
     build_thread_pool, hgvsg_options, LoadedPlugins, PredictionConfig, HGVS_NEEDS_FASTA,
@@ -74,6 +74,47 @@ impl PipelineStats {
     }
 }
 
+/// The reference FASTA of a run, as `BaseVEP.pm:488-529` settles it: the file
+/// `--fasta_dir` holds for the species and assembly, else `--fasta`, else the
+/// one found in the cache directory (`CacheDir.pm:235-251`). A `--fasta_dir`
+/// with no qualifying file warns and leaves the other two in force; one that
+/// cannot be opened is passed over without a word, as there.
+fn fasta_source(config: &Config, cache: &ResolvedCache) -> Option<String> {
+    if let Some(dir) = &config.fasta_dir {
+        match vep_fasta::fasta_dir_match(Path::new(dir), &config.species, cache.assembly.as_deref())
+        {
+            Ok(Some(path)) => return Some(path.display().to_string()),
+            Ok(None) => warn!("No compatible FASTA files found in {dir}"),
+            Err(_) => {}
+        }
+    }
+    config.fasta.clone().or_else(|| cache.fasta.clone())
+}
+
+/// Opens the run's reference FASTA, if it has one (`Runner.pm:134`,
+/// `BaseVEP.pm:521-528`); a file that cannot be read as an indexed FASTA is a
+/// refusal under the `fasta` component.
+pub(crate) fn open_fasta(
+    config: &Config,
+    cache: &ResolvedCache,
+) -> Result<Option<Arc<vep_fasta::IndexedFasta>>, CliError> {
+    let Some(path) = fasta_source(config, cache) else {
+        return Ok(None);
+    };
+    if config.fasta.is_none() && cache.fasta.as_deref() == Some(path.as_str()) {
+        debug!("Auto-detected FASTA file in cache directory");
+    }
+    let mut opened = vep_fasta::IndexedFasta::from_path(&path)
+        .map_err(|e| CliError::new("fasta", e.to_string()))?;
+    for file in opened.files() {
+        info!("Using reference FASTA: {}", file.display());
+    }
+    // A FASTA named by accession is read under the cache's chromosome names
+    // (Variation/Utils/FastaSequence.pm:380-389).
+    opened.add_synonyms(&cache.synonyms);
+    Ok(Some(Arc::new(opened)))
+}
+
 /// Pipeline runner for VEP.
 pub struct Runner {
     config: Config,
@@ -83,13 +124,10 @@ pub struct Runner {
     cache: ResolvedCache,
     /// The invocation as VEP prints it in `## VEP command-line:`.
     command_line: String,
-    /// The `INFO:` lines `post_setup_checks` prints once the FASTA is known
-    /// (Runner.pm:752, 793), written to standard error before the run unless
-    /// `--quiet`.
-    notices: Vec<&'static str>,
 }
 
 /// What the FASTA checks of `post_setup_checks` decide for a run.
+#[derive(Debug)]
 pub(crate) struct FastaChecks {
     /// Whether HGVSc and HGVSp are computed: the `--hgvs` that `--everything`
     /// switched on is dropped when no FASTA is found.
@@ -98,13 +136,14 @@ pub(crate) struct FastaChecks {
     pub(crate) notices: Vec<&'static str>,
 }
 
-/// The FASTA checks of `post_setup_checks` (Runner.pm:742-798) on the resolved
-/// configuration, every run being an offline run here. `--everything` without a
-/// FASTA drops the HGVS flags it switched on with an `INFO:` line (:745-754);
-/// an explicit `--hgvs` or `--hgvsg` without one is refused with Ensembl VEP's
-/// text (:759); `--shift_3prime 1` without one is refused too, since the shift
-/// reads the reference; `--shift_hgvs 0` reports that it set `shift_3prime` to
-/// 0 (:792-795).
+/// The FASTA checks of `post_setup_checks` (Runner.pm:742-798), run once the
+/// FASTA is opened or found absent, every run being an offline run here.
+/// `--everything` without a FASTA drops the HGVS flags it switched on with an
+/// `INFO:` line (:745-754); an explicit `--hgvs` or `--hgvsg` without one is
+/// refused with Ensembl VEP's text (:759); `--shift_3prime 1` without one is
+/// refused as well, since the shift reads the reference; `--shift_hgvs 0`
+/// reports that it set `shift_3prime` to 0 (:792-795). The caller prints the
+/// notices unless `--quiet`, as `status_msg` does (BaseVEP.pm:782).
 pub(crate) fn fasta_setup_checks(
     config: &Config,
     fasta_found: bool,
@@ -280,26 +319,13 @@ impl Runner {
     /// Resolves the cache the configuration names (`AnnotationSourceAdaptor.pm:120-132`
     /// builds it before the parser), so a run with no cache fails here, before the
     /// input or the output is opened.
-    pub fn new(mut config: Config) -> anyhow::Result<Self> {
+    pub fn new(config: Config) -> anyhow::Result<Self> {
         let cache = crate::cache_resolve::resolve(&config)?;
-        let fasta_found = config.fasta.is_some() || cache.fasta.is_some();
-        // `vep` answers --show_cache_info and exits before `run()` (vep:39-46), so
-        // such a run never reaches `post_setup_checks`.
-        let checks = if config.show_cache_info {
-            FastaChecks {
-                hgvs: config.hgvs,
-                notices: Vec::new(),
-            }
-        } else {
-            fasta_setup_checks(&config, fasta_found)?
-        };
-        config.hgvs = checks.hgvs;
         let command_line = vep_command_line(std::env::args().skip(1));
         Ok(Self {
             config,
             cache,
             command_line,
-            notices: checks.notices,
         })
     }
 
@@ -313,14 +339,20 @@ impl Runner {
         Ok(())
     }
 
-    /// The reference FASTA of the run: `--fasta`, else the file found in the cache
-    /// directory (`CacheDir.pm:235-251`).
-    fn fasta_path(&self) -> Option<&str> {
-        self.config.fasta.as_deref().or(self.cache.fasta.as_deref())
+    /// Opens the input file, or returns `None` for standard input; the parser
+    /// opens it in Ensembl VEP's init() (`Runner.pm:136`, `Parser.pm:239`).
+    fn open_input(&self) -> anyhow::Result<Option<File>> {
+        if self.config.input_file == "STDIN" {
+            return Ok(None);
+        }
+        let file = File::open(&self.config.input_file)
+            .with_context(|| format!("Failed to open input file '{}'", self.config.input_file))?;
+        Ok(Some(file))
     }
 
     /// Which optional output fields the configuration switches on, shared by
-    /// every output format.
+    /// every output format; `run` replaces `hgvs` with the value
+    /// [`fasta_setup_checks`] settled once the FASTA is known.
     fn field_options(&self) -> FieldOptions {
         let c = &self.config;
         FieldOptions {
@@ -450,10 +482,14 @@ impl Runner {
             return self.write_cache_info(&mut io::stdout().lock());
         }
 
-        // `post_setup_checks` prints its lines in `init()` (Runner.pm:138), before
-        // the output file is opened (:202).
+        // Runner.pm:133-138 and :200-202: init() opens the FASTA, then the input
+        // through the parser, then runs post_setup_checks, whose lines print
+        // there; the output opens after.
+        let reference_fasta = open_fasta(&self.config, &self.cache)?;
+        let input_file = self.open_input()?;
+        let checks = fasta_setup_checks(&self.config, reference_fasta.is_some())?;
         if !self.config.quiet {
-            for notice in &self.notices {
+            for notice in &checks.notices {
                 eprintln!("{notice}");
             }
         }
@@ -489,21 +525,6 @@ impl Runner {
             info!("Using {} threads for annotation", num_threads);
         }
 
-        let reference_fasta = if let Some(fasta_path) = self.fasta_path() {
-            if self.config.fasta.is_none() {
-                debug!("Auto-detected FASTA file in cache directory");
-            }
-            info!("Using reference FASTA: {}", fasta_path);
-            let mut fasta = vep_fasta::IndexedFasta::from_path(fasta_path)
-                .with_context(|| format!("Failed to open indexed FASTA '{fasta_path}'"))?;
-            // A FASTA named by accession is read under the cache's chromosome
-            // names (Variation/Utils/FastaSequence.pm:380-389).
-            fasta.add_synonyms(&self.cache.synonyms);
-            Some(Arc::new(fasta))
-        } else {
-            None
-        };
-
         let needs_loftee_context = self.config.plugin.iter().any(|arg| {
             arg.split(',')
                 .next()
@@ -517,11 +538,11 @@ impl Runner {
         let effects_config = Arc::new(vep_effects::EffectsConfig {
             upstream_distance: self.config.distance.0,
             downstream_distance: self.config.distance.1,
-            reference_fasta,
+            reference_fasta: reference_fasta.clone(),
             enable_indel_3prime_shift: self.config.shift_3prime,
             shift_hgvs: self.config.shift_hgvs,
             populate_loftee_context: needs_loftee_context,
-            compute_hgvs: needs_hgvs_computation(&self.config),
+            compute_hgvs: checks.hgvs,
             compute_exon_intron_numbers: needs_exon_intron_numbers(&self.config),
             protein_version: self.config.protein_version,
             hgvsg: hgvsg_options(&self.config),
@@ -563,25 +584,23 @@ impl Runner {
         // so they take no `BufReader` of their own; the buffer sits under them,
         // where the block reader would otherwise issue two small reads per
         // compressed block.
-        let reader: Box<dyn BufRead + Send> = if self.config.input_file == "STDIN" {
-            Box::new(BufReader::with_capacity(INPUT_BUFFER_BYTES, io::stdin()))
-        } else {
-            let f = File::open(&self.config.input_file).with_context(|| {
-                format!("Failed to open input file '{}'", self.config.input_file)
-            })?;
-            let f = BufReader::with_capacity(INPUT_BUFFER_BYTES, f);
-            if self.config.input_file.ends_with(".gz") {
-                match std::num::NonZeroUsize::new(self.config.decompression_threads) {
-                    // The block reader starts its worker threads at the first read,
-                    // on the pipeline's reader thread, whose Linux thread name they
-                    // then carry.
-                    Some(n) if n.get() > 1 => {
-                        Box::new(bgzf::io::MultithreadedReader::with_worker_count(n, f))
+        let reader: Box<dyn BufRead + Send> = match input_file {
+            None => Box::new(BufReader::with_capacity(INPUT_BUFFER_BYTES, io::stdin())),
+            Some(f) => {
+                let f = BufReader::with_capacity(INPUT_BUFFER_BYTES, f);
+                if self.config.input_file.ends_with(".gz") {
+                    match std::num::NonZeroUsize::new(self.config.decompression_threads) {
+                        // The block reader starts its worker threads at the first read,
+                        // on the pipeline's reader thread, whose Linux thread name they
+                        // then carry.
+                        Some(n) if n.get() > 1 => {
+                            Box::new(bgzf::io::MultithreadedReader::with_worker_count(n, f))
+                        }
+                        _ => Box::new(bgzf::io::Reader::new(f)),
                     }
-                    _ => Box::new(bgzf::io::Reader::new(f)),
+                } else {
+                    Box::new(f)
                 }
-            } else {
-                Box::new(f)
             }
         };
 
@@ -652,7 +671,8 @@ impl Runner {
         let mut tab_formatter: Option<TabOutputFormatter> = None;
         let plugin_headers = builtin_plugins.all_header_info();
         let plugin_fields = vep_io::output::fields::plugin_field_names(&plugin_headers);
-        let options = self.field_options();
+        let mut options = self.field_options();
+        options.hgvs = checks.hgvs;
         let extra_plan = ExtraFieldsPlan::new(options.clone());
 
         match output_format {
@@ -726,7 +746,7 @@ impl Runner {
                     }
                 }
                 _ => {
-                    self.write_header(&mut writer, &plugin_headers)?;
+                    self.write_header(&mut writer, &extra_plan.options, &plugin_headers)?;
                 }
             }
         }
@@ -852,6 +872,15 @@ impl Runner {
             eprint!("\r");
         }
 
+        // A block the .gzi misdescribed answered its reads as "no reference",
+        // so the output written from them is not the file's annotation.
+        if let Some(error) = reference_fasta
+            .as_ref()
+            .and_then(|fasta| fasta.corruption())
+        {
+            return Err(CliError::new("fasta", error.to_string()).into());
+        }
+
         if let Some(intermediate) = parquet_intermediate_path {
             finalize_parquet_output(
                 &intermediate,
@@ -937,11 +966,11 @@ impl Runner {
     fn write_header(
         &self,
         writer: &mut dyn Write,
+        options: &FieldOptions,
         plugin_headers: &[PluginHeader],
     ) -> anyhow::Result<()> {
-        let options = self.field_options();
         for line in vep_io::output::fields::default_format_header(
-            &options,
+            options,
             plugin_headers,
             &self.header_cache_dir(),
             Some(&self.cache.info),
@@ -1248,14 +1277,6 @@ impl AnnotationResources {
     pub(crate) fn plugins_active(&self) -> bool {
         !self.builtin_plugins.is_empty() || self.dylib_plugins.plugin_count() > 0
     }
-}
-
-/// Whether HGVSc/HGVSp must be computed for this run: only under `--hgvs`.
-/// VEP fills the HGVS fields of every format, the VCF CSQ columns included, only
-/// when the flag is set, so without it the columns stay empty and the computation
-/// (which needs the reference sequence) is skipped.
-pub(crate) fn needs_hgvs_computation(config: &Config) -> bool {
-    config.hgvs
 }
 
 /// Whether the `EXON`/`INTRON` ordinals must be computed for this run: under
@@ -2028,21 +2049,25 @@ mod tests {
         }
     }
 
+    /// The HGVS notations are computed only under `--hgvs` with a FASTA present,
+    /// whatever the output format (VEP fills the HGVS fields of every format, the
+    /// VCF CSQ columns included, only when the flag is set), and `--hgvs` without
+    /// a FASTA is refused under every format.
     #[test]
     fn hgvs_is_computed_only_under_the_flag() {
+        let hgvs = |argv: &[&str], fasta: bool| fasta_setup_checks(&config_from(argv), fasta);
         for fmt in ["vep", "tab", "vcf", "json", "parquet"] {
-            assert!(!needs_hgvs_computation(&config_from(&[
-                "--output_format",
-                fmt
-            ])));
-            assert!(needs_hgvs_computation(&config_from(&[
-                "--hgvs",
-                "--output_format",
-                fmt
-            ])));
+            assert!(!hgvs(&["--output_format", fmt], true).unwrap().hgvs);
+            assert!(!hgvs(&["--output_format", fmt], false).unwrap().hgvs);
+            assert!(
+                hgvs(&["--hgvs", "--output_format", fmt], true)
+                    .unwrap()
+                    .hgvs
+            );
+            assert!(hgvs(&["--hgvs", "--output_format", fmt], false).is_err());
         }
-        assert!(!needs_hgvs_computation(&config_from(&["--vcf"])));
-        assert!(needs_hgvs_computation(&config_from(&["--hgvs"])));
+        assert!(!hgvs(&["--vcf"], true).unwrap().hgvs);
+        assert!(hgvs(&["--everything"], true).unwrap().hgvs);
     }
 
     /// A runner over a one-transcript cache in a temporary directory, with the
@@ -2143,42 +2168,34 @@ mod tests {
     }
 
     /// `post_setup_checks` (Runner.pm:757-759): an explicit `--hgvs` or `--hgvsg`
-    /// with no FASTA named or found is refused with Ensembl VEP's text, before the
-    /// input is opened; `--shift_3prime 1` without one is refused in the same shape.
+    /// with no FASTA named or found is refused with Ensembl VEP's text;
+    /// `--shift_3prime 1` without one is refused in the same shape; a FASTA
+    /// satisfies the checks and leaves nothing to print.
     #[test]
     fn hgvs_without_fasta_offline_exits_with_vep_message() {
-        let cache = write_json_cache("nofasta", &[("21", 1_000)]);
-        let dir = cache.path().to_str().unwrap();
         for flags in [
             &["--hgvs"][..],
             &["--hgvsg"][..],
             &["--hgvs", "--offline"][..],
         ] {
-            let mut argv = vec!["--json_cache", dir];
-            argv.extend_from_slice(flags);
-            let Err(error) = Runner::new(config_from(&argv)) else {
-                panic!("{flags:?} without a FASTA made a runner");
+            let Err(error) = fasta_setup_checks(&config_from(flags), false) else {
+                panic!("{flags:?} without a FASTA passed the checks");
             };
             assert_eq!(
-                crate::config::CliError::from_run(&error),
+                error.to_string(),
                 "ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)"
             );
         }
-        let Err(error) = Runner::new(config_from(&["--json_cache", dir, "--shift_3prime", "1"]))
-        else {
-            panic!("--shift_3prime 1 without a FASTA made a runner");
-        };
+        let error = fasta_setup_checks(&config_from(&["--shift_3prime", "1"]), false)
+            .expect_err("--shift_3prime 1 without a FASTA passed the checks");
         assert_eq!(
-            crate::config::CliError::from_run(&error),
+            error.to_string(),
             "ERROR: [fasta] Cannot shift variants (--shift_3prime 1) without a FASTA file (see --fasta)"
         );
-        // A FASTA named with --fasta satisfies the checks.
-        let (_fasta_dir, fasta) = fasta_of_a_runs(&[]);
-        assert!(runner_over(&cache, &["--hgvs", "--fasta", &fasta])
-            .notices
-            .is_empty());
-        // --show_cache_info answers before the checks would run.
-        runner_over(&cache, &["--show_cache_info", "--hgvs"]);
+        let satisfied =
+            fasta_setup_checks(&config_from(&["--hgvs", "--shift_3prime", "1"]), true).unwrap();
+        assert!(satisfied.hgvs);
+        assert!(satisfied.notices.is_empty());
     }
 
     /// `post_setup_checks` (Runner.pm:745-754): the `--hgvs` that `--everything`
@@ -2186,32 +2203,24 @@ mod tests {
     /// run goes on without HGVS; `--shift_hgvs 0` adds its own line (:792-795).
     #[test]
     fn everything_without_fasta_prints_info_and_clears_hgvs() {
-        let cache = write_json_cache("everything", &[("21", 1_000)]);
-        let runner = runner_over(&cache, &["--everything"]);
+        let checks = fasta_setup_checks(&config_from(&["--everything"]), false).unwrap();
         assert_eq!(
-            runner.notices,
+            checks.notices,
             ["INFO: Disabling --hgvs; using --offline and no FASTA file found"]
         );
-        assert!(!runner.config.hgvs);
-        assert!(!runner.field_options().hgvs);
-        assert!(!needs_hgvs_computation(&runner.config));
+        assert!(!checks.hgvs);
         // --everything --hgvsg still names a flag the checks refuse.
-        let Err(error) = Runner::new(config_from(&[
-            "--json_cache",
-            cache.path().to_str().unwrap(),
-            "--everything",
-            "--hgvsg",
-        ])) else {
-            panic!("--everything --hgvsg without a FASTA made a runner");
-        };
-        assert!(crate::config::CliError::from_run(&error)
+        let error = fasta_setup_checks(&config_from(&["--everything", "--hgvsg"]), false)
+            .expect_err("--everything --hgvsg without a FASTA passed the checks");
+        assert!(error
+            .to_string()
             .starts_with("ERROR: [fasta] Cannot generate HGVS"));
-        let runner = runner_over(&cache, &["--shift_hgvs", "0"]);
+        let config = config_from(&["--shift_hgvs", "0"]);
         assert_eq!(
-            runner.notices,
+            fasta_setup_checks(&config, false).unwrap().notices,
             ["INFO: --shift_hgvs has been set to zero, setting shift_3prime to 0"]
         );
-        assert!(!runner.config.shift_3prime);
+        assert!(!config.shift_3prime);
     }
 
     /// A reference FASTA of chromosome 21 whose bases are `C` except an `A` at

@@ -222,17 +222,18 @@ impl Annotator {
         Self::from_config_with_pool(config, pool)
     }
 
-    /// Resolves the cache the configuration names, as the `vep` binary does, so a
-    /// configuration with no cache is an error here too rather than an empty index.
+    /// Resolves the cache and the FASTA the configuration names and settles the
+    /// HGVS flags, as the `vep` binary does, so a configuration with no cache is
+    /// an error here too rather than an empty index, `--fasta_dir` is read, and
+    /// `--hgvs` without a FASTA is refused.
     pub fn from_config_with_pool(config: &Config, pool: Arc<ThreadPool>) -> anyhow::Result<Self> {
         let cache = crate::cache_resolve::resolve(config)?;
-        let fasta_path = config.fasta.as_deref().or(cache.fasta.as_deref());
-        let checks = crate::runner::fasta_setup_checks(config, fasta_path.is_some())?;
+        let reference_fasta = crate::runner::open_fasta(config, &cache)?;
+        let checks = crate::runner::fasta_setup_checks(config, reference_fasta.is_some())?;
         for notice in &checks.notices {
             info!("{}", notice.trim_start_matches("INFO: "));
         }
 
-        let reference_fasta = fasta_path.map(load_reference_fasta).transpose()?;
         let mut effects = new_effects_config(
             config.distance,
             reference_fasta.clone(),
@@ -505,14 +506,6 @@ pub(crate) fn load_plugins(
     let dylib = crate::dylib_plugins::load_unresolved(&unresolved, dir_plugins, safe)?;
 
     Ok(LoadedPlugins { builtin, dylib })
-}
-
-pub fn load_reference_fasta(path: &str) -> anyhow::Result<Arc<vep_fasta::IndexedFasta>> {
-    info!("Using reference FASTA: {}", path);
-    Ok(Arc::new(
-        vep_fasta::IndexedFasta::from_path(path)
-            .with_context(|| format!("Failed to open indexed FASTA '{path}'"))?,
-    ))
 }
 
 /// The effects configuration of an embedding caller, without HGVSg.
