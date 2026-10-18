@@ -231,28 +231,33 @@ pub fn classify_symbolic_alt(alt: &str, svtype: Option<&str>) -> VariantClass {
     VariantClass::ComplexStructural
 }
 
+/// The type string `create_StructuralVariationFeatures` hands to `get_SO_term` and
+/// tests for a deletion when no term answers (Parser/VCF.pm:469-481): the ALTs joined
+/// by `/`, replaced by INFO/SVTYPE when that is true and the joined string does not
+/// open with a VCF 4.4 form, `/^<?(DEL|INS|DUP|INV|CNV|CN=?[0-9]+)/` without `/i`
+/// (`:473`), so a lowercase `<del>` is outside the forms and SVTYPE names its type.
+pub fn sv_type_string(joined_alts: &str, svtype: Option<&str>) -> String {
+    let bare = joined_alts.strip_prefix('<').unwrap_or(joined_alts);
+    let follows_vcf44 = ["DEL", "INS", "DUP", "INV", "CNV"]
+        .iter()
+        .any(|form| bare.starts_with(form))
+        || bare
+            .strip_prefix("CN")
+            .map(|rest| rest.strip_prefix('=').unwrap_or(rest))
+            .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()));
+    match svtype {
+        Some(svtype) if perl_true(svtype) && !follows_vcf44 => svtype.to_string(),
+        _ => joined_alts.to_string(),
+    }
+}
+
 /// The structural variant type abbreviation VEP derives for a record: the port of
 /// `Parser::get_SO_term` (ensembl-vep) applied to every ALT joined by `/`, with
 /// INFO/SVTYPE replacing a joined string that opens outside the VCF 4.4 forms
 /// (`Parser/VCF.pm`). Identical parts collapse to one (`<INS>/<INS>` reads `INS`),
 /// and a string naming both DEL and DUP, `<DEL>/<DUP:TANDEM>` included, is `CNV`.
 pub fn sv_type_abbreviation(joined_alts: &str, svtype: Option<&str>) -> String {
-    let svtype = svtype.filter(|v| perl_true(v));
-    // Parser/VCF.pm:473, `/^<?(DEL|INS|DUP|INV|CNV|CN=?[0-9]+)/` without `/i`: a
-    // lowercase `<del>` is outside the VCF 4.4 forms, so SVTYPE names its type.
-    let follows_vcf44 = {
-        let t = joined_alts.strip_prefix('<').unwrap_or(joined_alts);
-        ["DEL", "INS", "DUP", "INV", "CNV"]
-            .iter()
-            .any(|p| t.starts_with(p))
-            || t.strip_prefix("CN")
-                .map(|c| c.strip_prefix('=').unwrap_or(c))
-                .is_some_and(|c| c.starts_with(|ch: char| ch.is_ascii_digit()))
-    };
-    let mut kind = match svtype {
-        Some(st) if !follows_vcf44 => st.to_string(),
-        _ => joined_alts.to_string(),
-    };
+    let mut kind = sv_type_string(joined_alts, svtype);
     // Repeated parts collapse to the first as written (Parser.pm:668-681): each part is
     // trimmed, loses one leading `<` and one trailing `>` (`s/^\<|\>$//g`) and is
     // compared in upper case, so `<<DEL>>/<DEL>` stays a list; a trailing empty part is
@@ -386,6 +391,29 @@ pub fn sv_so_term_and_class(abbrev: &str) -> Option<(&'static str, VariantClass)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The type string Ensembl VEP tests for a deletion (Parser/VCF.pm:469-475): the
+    /// joined ALTs, replaced by a true INFO/SVTYPE unless they open with a VCF 4.4
+    /// form, which is read case-sensitively.
+    #[test]
+    fn sv_type_string_replaces_the_alts_with_svtype_outside_the_vcf44_forms() {
+        assert_eq!(sv_type_string("<FOO:DEL>", None), "<FOO:DEL>");
+        assert_eq!(sv_type_string("<FOO:DEL>", Some("BND")), "BND");
+        assert_eq!(sv_type_string("N/<DEL>", Some("XDEL")), "XDEL");
+        assert_eq!(sv_type_string("<del>", Some("BND")), "BND");
+        assert_eq!(sv_type_string("<del>", Some("0")), "<del>");
+        for vcf44 in [
+            "<DEL>",
+            "INS",
+            "<DUP:TANDEM>",
+            "<INV>",
+            "<CNV:TR>",
+            "<CN=3>",
+            "CN0",
+        ] {
+            assert_eq!(sv_type_string(vcf44, Some("BND")), vcf44);
+        }
+    }
 
     fn term(alts: &str, svtype: Option<&str>) -> Option<&'static str> {
         sv_so_term_and_class(&sv_type_abbreviation(alts, svtype)).map(|(term, _)| term)

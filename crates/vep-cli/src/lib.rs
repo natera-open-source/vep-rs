@@ -49,5 +49,6 @@ pub mod transcript_index;
 pub mod variation_matcher;
 pub mod variation_source;
 pub mod vcf_parser;
+pub mod warnings;
 
 pub mod args;

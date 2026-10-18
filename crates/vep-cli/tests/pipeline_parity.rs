@@ -7,6 +7,7 @@
 
 mod common;
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -187,11 +188,36 @@ fn fork_1_matches_fork_4_on_every_format() {
     }
 }
 
+/// The records of a corpus the reference dropped before annotation and vep-rs
+/// writes nothing for either: `reference_rows` 0 with no `vep_rs_only_tuples`
+/// entry naming the record (the entries name the dropped records vep-rs still
+/// annotates, a documented divergence).
+fn dropped_by_both(corpus: &Corpus) -> BTreeSet<usize> {
+    let manifest = &corpus.manifest;
+    let named: BTreeSet<usize> = manifest["vep_rs_only_tuples"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|t| t["record_indices"].as_array().into_iter().flatten())
+        .filter_map(|r| r.as_u64().map(|r| r as usize))
+        .collect();
+    manifest["records"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .filter(|(i, r)| r["reference_rows"].as_u64() == Some(0) && !named.contains(i))
+        .map(|(i, _)| i)
+        .collect()
+}
+
 /// The corpus VCF with a non-variant (`ALT=.`) copy of every third record
 /// inserted after it, so `.` lines fall on and around batch boundaries at
-/// every small buffer size.
+/// every small buffer size. A record both engines drop ([`dropped_by_both`])
+/// stays in the input, is expected in no output, and gets no copy.
 fn with_non_variant_lines(corpus: &Corpus, dir: &Path) -> (std::path::PathBuf, Vec<String>) {
     let text = fs::read_to_string(corpus.dir.join("variants.vcf")).unwrap();
+    let dropped = dropped_by_both(corpus);
     let mut out = String::new();
     let mut expected_order: Vec<String> = Vec::new();
     let mut data_seen = 0usize;
@@ -203,8 +229,12 @@ fn with_non_variant_lines(corpus: &Corpus, dir: &Path) -> (std::path::PathBuf, V
         }
         out.push_str(line);
         out.push('\n');
-        expected_order.push(record_key(line));
+        let record = data_seen;
         data_seen += 1;
+        if dropped.contains(&record) {
+            continue;
+        }
+        expected_order.push(record_key(line));
         if data_seen.is_multiple_of(3) {
             let fields: Vec<&str> = line.split('\t').collect();
             let mut nv = fields.clone();
@@ -322,8 +352,10 @@ fn dont_skip_reports_the_malformed_line_in_a_later_batch_and_exits() {
     );
     let mut lines: Vec<String> = header.iter().map(|l| l.to_string()).collect();
     lines.extend(data[..25].iter().map(|l| l.to_string()));
-    // Line 26 of the data, in the third batch of 10, with a non-numeric POS.
-    let bad_line_number = header.len() + 26;
+    // Data record 26, in the third batch of 10, with a non-numeric POS; the
+    // number reported is the record's, as Ensembl VEP counts lines
+    // (Parser/VCF.pm:228), header lines not counted.
+    let bad_line_number = 26;
     lines.push("21\tnot_a_position\t.\tA\tG\t.\tPASS\t.".to_string());
     lines.extend(data[26..30].iter().map(|l| l.to_string()));
     let input = tmp.path().join("malformed.vcf");

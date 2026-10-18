@@ -6,7 +6,7 @@
  "divergences_classified_against": {
   "engine": "vep-rs",
   "source": "the tree this corpus is committed with",
-  "binary_md5": "df06a7d3d2bbbaa60b024563570d3ecc",
+  "binary_md5": "8dabc649cfe058d105e78d15b150fde2",
   "arch": "arm64",
   "flags_passed": [
    "--protein",
@@ -20,7 +20,7 @@
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "the 39 hand-built records of GRCh38-release116 followed by two records Ensembl VEP skips before annotation: one on a chromosome absent from the cache (Parser.pm validate_vf, the offline branch) and one whose alleles X/Y carry no ACGTN run (the allele-string check); both get no row in any format",
- "generator": "copied from tests/golden/116/GRCh38-release116 with the two records appended; scripts/golden/build_golden_corpus.py classify; the vep-rs-only key of the unknown-chromosome record (a VCF CSQ and a JSON object with no feature) is written by hand, since classify reads the default format, in which vep-rs writes no row for it",
+ "generator": "copied from tests/golden/116/GRCh38-release116 with the two records appended; scripts/golden/build_golden_corpus.py classify over the default output of the tree this corpus is committed with, which writes no row for either appended record",
  "sha256": {
   "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
   "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
@@ -39,5 +39,6 @@
    "22": 2
   }
  },
- "expected_outputs": "the GRCh38-release116 reference outputs: the same 39 annotated records against the same cache under the same flags, and the two appended records are skipped before annotation, so the four files are identical"
+ "expected_outputs": "the GRCh38-release116 reference outputs: the same 39 annotated records against the same cache under the same flags, and the two appended records are skipped before annotation, so the four files are identical; default.txt_warnings.txt and skipped.txt carry the five records Ensembl VEP skips (the reference_warning of each record, recorded from its run) rendered as BaseVEP.pm:840-863 renders a warning (the input line collapsed to single spaces and cut to 50 characters) and BaseRunner.pm:364-380 the skipped-variants file (Line %-5s, the line to 40 characters, the reason), the header naming variants.vcf; the plugin_*_warnings.txt files are the same five lines plus the plugin-loading lines their run expects, paths masked as <path>",
+ "plugin_data": "LoFtool_scores.slice.txt: the first 20 lines (the header and 19 genes) of LoFtool_scores.txt from the Ensembl VEP_plugins repository at release/116 (Apache License 2.0), line endings normalised; the plugin-loftool-column run expects the LoFtool_percentile column, not its values"
 }

@@ -327,7 +327,14 @@ pub const COMPONENTS: &[(&str, &str)] = &[
         "cli",
         "an unsupported flag, or a combination the option rules refuse",
     ),
-    ("output", "the output file or format"),
+    (
+        "output",
+        "the output file or format, the warnings file or the skipped-variants file",
+    ),
+    (
+        "plugin",
+        "under --safe, a plugin that cannot be loaded or a plugins directory that does not exist",
+    ),
     (
         "cache",
         "the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read",
@@ -345,6 +352,22 @@ pub const COMPONENTS: &[(&str, &str)] = &[
 /// The error table's entry for a flag, when it has one.
 pub fn error_table_entry(flag: &str) -> Option<&'static ErrorTableEntry> {
     ERROR_TABLE.iter().find(|e| e.flag == flag)
+}
+
+/// Where a command line's warnings go: `--warning_file`, else
+/// `<output_file>_warnings.txt` beside the last `-o` value as the user spelled it
+/// (BaseVEP.pm:890); readable before the configuration is resolved, so the sink
+/// can take the warnings the resolution itself raises.
+pub fn warning_file_for(args: &Args) -> String {
+    match &args.warning_file {
+        Some(file) => file.clone(),
+        None => crate::warnings::default_warning_file(
+            args.output_file
+                .last()
+                .map(String::as_str)
+                .unwrap_or("variant_effect_output.txt"),
+        ),
+    }
 }
 
 /// A parsed command line: the argument struct and the flag state clap saw.
@@ -426,6 +449,11 @@ pub struct Config {
     pub no_headers: bool,
     /// Print the cache directory in the output headers as `[PATH]/<leaf>`.
     pub mask_header_cache_path: bool,
+    /// Where the run's warnings go: the `--warning_file` value, else
+    /// `<output_file>_warnings.txt` with the output file as the user spelled it;
+    /// `stderr` in any case names standard error (BaseVEP.pm:878-897).
+    pub warning_file: String,
+    pub skipped_variants_file: Option<String>,
 
     pub cache: bool,
     pub offline: bool,
@@ -433,7 +461,12 @@ pub struct Config {
     /// The cache root the Ensembl VEP layout is resolved under: `--dir_cache`,
     /// else a directory given to `--cache`, else `--dir`.
     pub dir_cache: String,
-    pub dir_plugins: Option<String>,
+    /// The plugins directory: `--dir_plugins`, else `<dir>/Plugins`
+    /// (Runner.pm:907), a leading `~` expanded.
+    pub dir_plugins: String,
+    /// `--safe`: a plugin that cannot be loaded or a missing plugins directory is
+    /// an error rather than a warning (Runner.pm:912-916, 929-953).
+    pub safe: bool,
     pub cache_version: u32,
     /// Print the cache's source versions and exit.
     pub show_cache_info: bool,
@@ -618,6 +651,7 @@ impl Config {
             .last()
             .cloned()
             .unwrap_or_else(|| "variant_effect_output.txt".to_string());
+        let warning_file = warning_file_for(&args);
         let output_file = if last.eq_ignore_ascii_case("STDOUT") {
             "STDOUT".to_string()
         } else {
@@ -640,6 +674,10 @@ impl Config {
             .map(|d| expand_tilde(&d))
             .or(cache_dir_value)
             .unwrap_or_else(|| dir.clone());
+        let dir_plugins = args
+            .dir_plugins
+            .map(|d| expand_tilde(&d))
+            .unwrap_or_else(|| format!("{dir}/Plugins"));
 
         let cache_version = args.cache_version.unwrap_or(vep_core::VEP_VERSION);
 
@@ -668,11 +706,14 @@ impl Config {
             force_overwrite: args.force_overwrite,
             no_headers: args.no_headers,
             mask_header_cache_path: args.mask_header_cache_path,
+            warning_file,
+            skipped_variants_file: args.skipped_variants_file,
             cache: on("cache"),
             offline: on("offline"),
             dir,
             dir_cache,
-            dir_plugins: args.dir_plugins,
+            dir_plugins,
+            safe: on("safe"),
             cache_version,
             show_cache_info: args.show_cache_info,
             fasta: args.fasta,
@@ -1303,5 +1344,60 @@ mod tests {
         assert_eq!(CliError::from_run(&plain), "ERROR: [run] outer: inner");
         let refused: anyhow::Error = CliError::new("output", "no").into();
         assert_eq!(CliError::from_run(&refused), "ERROR: [output] no");
+    }
+
+    /// The plugins directory is `--dir_plugins`, else `<dir>/Plugins`
+    /// (Runner.pm:907), a leading `~` expanded as `glob` expands it (`:908`).
+    #[test]
+    fn dir_plugins_defaults_to_dir_slash_plugins() {
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(config(&["vep"]).dir_plugins, format!("{home}/.vep/Plugins"));
+        assert_eq!(
+            config(&["vep", "--dir", "/data/vep"]).dir_plugins,
+            "/data/vep/Plugins"
+        );
+        assert_eq!(
+            config(&["vep", "--dir", "/data/vep", "--dir_plugins", "/p"]).dir_plugins,
+            "/p"
+        );
+        assert_eq!(
+            config(&["vep", "--dir_plugins", "~/plugins"]).dir_plugins,
+            format!("{home}/plugins")
+        );
+        assert!(!config(&["vep"]).safe);
+        assert!(config(&["vep", "--safe"]).safe);
+    }
+
+    /// The warnings file is `--warning_file`, else `<output_file>_warnings.txt`
+    /// with the output file as the user spelled it, `STDOUT` included
+    /// (BaseVEP.pm:890 reads the `output_file` parameter as given).
+    #[test]
+    fn warning_file_defaults_beside_the_output_as_spelled() {
+        assert_eq!(
+            config(&["vep"]).warning_file,
+            "variant_effect_output.txt_warnings.txt"
+        );
+        assert_eq!(
+            config(&["vep", "-o", "out/x.txt"]).warning_file,
+            "out/x.txt_warnings.txt"
+        );
+        assert_eq!(
+            config(&["vep", "-o", "stdout"]).warning_file,
+            "stdout_warnings.txt"
+        );
+        assert_eq!(
+            config(&["vep", "-o", "a", "-o", "b"]).warning_file,
+            "b_warnings.txt"
+        );
+        assert_eq!(
+            config(&["vep", "-o", "x", "--warning_file", "w.txt"]).warning_file,
+            "w.txt"
+        );
+        assert_eq!(
+            config(&["vep", "--skipped_variants_file", "s.txt"])
+                .skipped_variants_file
+                .as_deref(),
+            Some("s.txt")
+        );
     }
 }

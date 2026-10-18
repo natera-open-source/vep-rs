@@ -10,8 +10,12 @@
 
 use std::ffi::OsString;
 
+use tracing_subscriber::filter::filter_fn;
+use tracing_subscriber::prelude::*;
+
 use vep_cli::args;
 use vep_cli::config::{self, CliError, ParseFailure};
+use vep_cli::warnings;
 
 /// The annotation path allocates and frees per (variant x transcript
 /// consequence), and glibc malloc dominates its profile; mimalloc's
@@ -49,7 +53,10 @@ fn run(argv: Vec<OsString>) -> i32 {
         );
     }
 
-    let level = if parsed.args.verbose {
+    // Every warning goes to the sink instead of the status layer, whatever the
+    // level, so --quiet keeps it in the warnings file (BaseVEP.pm:821 drops the
+    // standard-error copy alone).
+    let status_level = if parsed.args.verbose {
         tracing::Level::DEBUG
     } else if parsed.args.quiet {
         tracing::Level::ERROR
@@ -57,12 +64,24 @@ fn run(argv: Vec<OsString>) -> i32 {
         tracing::Level::INFO
     };
     let quiet = parsed.args.quiet;
-
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(level)
+    let status = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)
-        .finish();
-    tracing::subscriber::set_global_default(subscriber).expect("failed to set tracing subscriber");
+        .with_filter(filter_fn(move |metadata| {
+            *metadata.level() != tracing::Level::WARN && *metadata.level() <= status_level
+        }));
+    let warnings_layer = warnings::WarningLayer.with_filter(filter_fn(|metadata| {
+        *metadata.level() == tracing::Level::WARN
+    }));
+    tracing_subscriber::registry()
+        .with(status)
+        .with(warnings_layer)
+        .init();
+    // Configured before the resolution, whose own warnings are the run's too.
+    warnings::global().configure(
+        warnings::target_for(&config::warning_file_for(&parsed.args)),
+        quiet,
+        parsed.args.input_data.is_some(),
+    );
 
     let config = match config::Config::from_parsed(parsed) {
         Ok(config) => config,

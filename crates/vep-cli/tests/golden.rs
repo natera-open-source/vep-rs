@@ -19,10 +19,13 @@ use std::io::Write;
 use std::path::Path;
 
 use common::{
-    compare_run, corpora, parse_default, parse_json, parse_vcf, read_expected, runs, Corpus,
-    REFERENCE_SKIPPED_RECORD,
+    compare_run, compare_warnings, corpora, parse_default, parse_json, parse_vcf, read_expected,
+    runs, Corpus, REFERENCE_SKIPPED_RECORD,
 };
 
+/// Every run's default-format output matches the reference, and the warnings
+/// file the run writes beside it names the records the reference skipped, with
+/// their reasons (the manifest's `reference_warning` strings), and no other.
 #[test]
 fn default_output_matches_vep_on_every_corpus() {
     let corpora = corpora();
@@ -35,6 +38,13 @@ fn default_output_matches_vep_on_every_corpus() {
             if !header.is_empty() || !body.is_empty() {
                 failures.push(format!(
                     "== corpus {} (default format)\n{header}{body}",
+                    run.label()
+                ));
+            }
+            let warnings = compare_warnings(run, tmp.path());
+            if !warnings.is_empty() {
+                failures.push(format!(
+                    "== corpus {} (warnings file)\n{warnings}",
                     run.label()
                 ));
             }

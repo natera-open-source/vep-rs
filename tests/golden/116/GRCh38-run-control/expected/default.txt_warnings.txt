@@ -1,0 +1,5 @@
+WARNING: line 13 skipped (21 30165800 multi_ins_del N <INS>,<DEL> . . EN...): INS/DEL is not a supported structural variant type
+WARNING: line 14 skipped (21 30165820 multi_inv_dup N <INV>,<DUP> . . EN...): INV/DUP is not a supported structural variant type
+WARNING: line 16 skipped (21 30165850 del_without_end N <DEL> . . SVTYPE=DEL): deletion looks incomplete
+WARNING: line 40 skipped (Z 1000 unknown_chromosome A G . . .): Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features
+WARNING: line 41 skipped (21 30165901 invalid_alleles X Y . . .): Invalid allele string X/Y or possible parsing error

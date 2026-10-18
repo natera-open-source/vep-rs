@@ -1,0 +1,6 @@
+[VEP skipped the following variants from variants.vcf]
+Line 13   	21 30165800 multi_ins_del N <INS>,<DEL> 	INS/DEL is not a supported structural variant type
+Line 14   	21 30165820 multi_inv_dup N <INV>,<DUP> 	INV/DUP is not a supported structural variant type
+Line 16   	21 30165850 del_without_end N <DEL> . . 	deletion looks incomplete
+Line 40   	Z 1000 unknown_chromosome A G . . .     	Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features
+Line 41   	21 30165901 invalid_alleles X Y . . .   	Invalid allele string X/Y or possible parsing error

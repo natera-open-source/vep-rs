@@ -234,57 +234,47 @@ impl OutputFormatter for VcfOutputFormatter {
         if record.is_empty() {
             return Ok(Vec::new());
         }
-        let raw_line = record_line(record);
-        if record
-            .iter()
-            .any(|v| v.vep_skip || v.oversize_sv || v.no_allele)
-        {
-            // VEP carries the line through without consequences.
-            let mut cols: Vec<String> = raw_line.split('\t').map(str::to_string).collect();
-            while cols.len() < 8 {
-                cols.push(".".to_string());
-            }
-            if cols[7].is_empty() {
-                cols[7] = ".".to_string();
-            }
-            return Ok(vec![cols.join("\t")]);
-        }
-        let mut csq_parts: Vec<String> = fields::record_rows(record)
-            .into_iter()
-            .map(|(variant, tc)| format_csq_entry(&self.fields, variant, tc, &self.options))
+        let mut cols: Vec<String> = record_line(record)
+            .split('\t')
+            .map(str::to_string)
             .collect();
-        if csq_parts.is_empty() {
-            // No feature and no intergenic verdict: the record is still re-emitted,
-            // with one intergenic entry per allele, so the VCF loses no line.
-            csq_parts = record
-                .iter()
-                .map(|variant| format_csq_entry(&self.fields, variant, None, &self.options))
-                .collect();
+        while cols.len() < 8 {
+            cols.push(".".to_string());
         }
-        let csq_value = csq_parts.join(",");
-
-        let mut output_fields: Vec<String> = raw_line.split('\t').map(|f| f.to_string()).collect();
-        // An existing CSQ entry from an earlier annotation is replaced, as VEP does.
-        let strip = |info: &str| -> String {
-            info.split(';')
-                .filter(|kv| !kv.starts_with(&format!("{}=", self.info_field_name)))
+        // An existing CSQ entry from an earlier annotation is removed whether or
+        // not new consequences follow, as OutputFactory/VCF.pm:323-331 clears the
+        // field before it looks for anything to append.
+        let csq_key = format!("{}=", self.info_field_name);
+        let info: String = if cols[7] == "." {
+            String::new()
+        } else {
+            cols[7]
+                .split(';')
+                .filter(|kv| !kv.starts_with(&csq_key))
                 .collect::<Vec<_>>()
                 .join(";")
         };
-        if output_fields.len() > 7 {
-            let info = strip(&output_fields[7]);
-            if info == "." || info.is_empty() {
-                output_fields[7] = format!("{}={}", self.info_field_name, csq_value);
-            } else {
-                output_fields[7] = format!("{};{}={}", info, self.info_field_name, csq_value);
-            }
+        let carried_without_csq = record
+            .iter()
+            .any(|v| v.vep_skip || v.oversize_sv || v.no_allele);
+        let csq_parts: Vec<String> = if carried_without_csq {
+            Vec::new()
         } else {
-            while output_fields.len() < 7 {
-                output_fields.push(".".to_string());
-            }
-            output_fields.push(format!("{}={}", self.info_field_name, csq_value));
-        }
-        Ok(vec![output_fields.join("\t")])
+            fields::record_rows(record)
+                .into_iter()
+                .map(|(variant, tc)| format_csq_entry(&self.fields, variant, tc, &self.options))
+                .collect()
+        };
+        // A record with no consequences is carried through without the field, as
+        // Ensembl VEP writes a record it annotates nothing for (OutputFactory/VCF.pm:341-353
+        // appends the field only when there is a chunk and leaves `.` otherwise).
+        cols[7] = match (csq_parts.is_empty(), info.is_empty()) {
+            (true, true) => ".".to_string(),
+            (true, false) => info,
+            (false, true) => format!("{csq_key}{}", csq_parts.join(",")),
+            (false, false) => format!("{info};{csq_key}{}", csq_parts.join(",")),
+        };
+        Ok(vec![cols.join("\t")])
     }
 
     fn finish(&mut self, _writer: &mut dyn Write) -> Result<(), IoError> {
@@ -487,6 +477,44 @@ mod tests {
         assert_eq!(info.matches("CSQ=").count(), 1);
     }
 
+    /// A record carried through without consequences loses a stale `CSQ=` as an
+    /// annotated one does (OutputFactory/VCF.pm:326-330 strips the field before
+    /// it looks for chunks): the rest of INFO survives, and `.` stands in when the
+    /// stale field was all of it. A `vep_skip` mark reaches the same line even
+    /// with a consequence attached.
+    #[test]
+    fn a_carried_record_drops_a_stale_csq_entry() {
+        let formatter = VcfOutputFormatter::default();
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.raw_input = Some("21\t100\t.\tA\tG\t.\t.\tDP=3;CSQ=old|stuff".into());
+        assert_eq!(
+            formatter.format_record(&[&v]).unwrap(),
+            ["21\t100\t.\tA\tG\t.\t.\tDP=3"]
+        );
+
+        v.raw_input = Some("21\t100\t.\tA\tG\t.\t.\tCSQ=old|stuff".into());
+        assert_eq!(
+            formatter.format_record(&[&v]).unwrap(),
+            ["21\t100\t.\tA\tG\t.\t.\t."]
+        );
+
+        v.raw_input = Some("21\t100\t.\tA\tG\t.\t.\tCSQ=old|stuff;DP=3".into());
+        v.vep_skip = true;
+        v.transcript_consequences = vec![TranscriptConsequence {
+            transcript_id: "ENST1".into(),
+            consequences: smallvec![Consequence::MissenseVariant],
+            ..Default::default()
+        }];
+        assert_eq!(
+            formatter.format_record(&[&v]).unwrap(),
+            ["21\t100\t.\tA\tG\t.\t.\tDP=3"]
+        );
+    }
+
+    /// A record the pipeline judged intergenic (`most_severe_consequence` set,
+    /// no transcript consequence) gets one intergenic CSQ entry; a record with
+    /// neither a consequence nor a verdict is carried through without a CSQ
+    /// field, as OutputFactory/VCF.pm:341-353 writes a record it has no chunk for.
     #[test]
     fn test_format_intergenic_variant() {
         let formatter = VcfOutputFormatter::default();
@@ -499,6 +527,10 @@ mod tests {
         );
         variant.raw_input = Some("21\t25000100\t.\tA\tG\t.\t.\t.".into());
 
+        let lines = formatter.format_variant(&variant).unwrap();
+        assert_eq!(lines, ["21\t25000100\t.\tA\tG\t.\t.\t."]);
+
+        variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
         let lines = formatter.format_variant(&variant).unwrap();
         assert_eq!(lines.len(), 1);
 
@@ -520,6 +552,7 @@ mod tests {
             b"G".to_vec(),
         );
         variant.raw_input = Some("21\t25000100\t.\tA\tG\t100\tPASS\tDP=50".into());
+        variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
 
         let lines = formatter.format_variant(&variant).unwrap();
         let fields: Vec<&str> = lines[0].split('\t').collect();
@@ -549,6 +582,7 @@ mod tests {
             b"G".to_vec(),
         );
         variant.raw_input = Some("21\t25000100\trs99\tA\tG\t99\tPASS\tDP=30".into());
+        variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
 
         let lines = formatter.format_variant(&variant).unwrap();
         let fields: Vec<&str> = lines[0].split('\t').collect();
@@ -582,6 +616,7 @@ mod tests {
             b"G".to_vec(),
         );
         variant.id = Some("rs99".into());
+        variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
         assert!(variant.raw_input.is_none(), "capture is off in this case");
 
         let lines = formatter.format_variant(&variant).unwrap();

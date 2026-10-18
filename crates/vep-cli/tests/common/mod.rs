@@ -43,8 +43,14 @@
 //! run whose expectations are about the process rather than the annotation: each
 //! [`ManifestRun`] names `argv` (with the placeholders [`expand_argv`] lists),
 //! `env`, `stdin` and an `expect` block of exit status, output file compared as
-//! the default run is, and text standard output starts with or standard error
-//! contains.
+//! the default run is, text standard output starts with or contains or standard
+//! error contains, and the warnings and skipped-variants files compared as
+//! entry sets ([`warning_entries`]).
+//!
+//! Every run's warnings file is compared with the warnings the reference wrote
+//! for the corpus ([`compare_warnings`]): the manifest's `records[].reference_warning`
+//! strings, each at its record's ordinal, with paths masked and the quoted input
+//! line left out.
 //!
 //! The VCF and JSON formats carry no `Location`, so their entries are keyed by
 //! the corpus record ordinal, found by matching each output record to its
@@ -488,10 +494,16 @@ pub fn run_output(run: &Run, cmd: &mut Command) -> Output {
     output_with_stdin(cmd, input)
 }
 
+/// The output path [`run_vep`] writes for a run in one format; the run's
+/// warnings file sits beside it as `<path>_warnings.txt`.
+pub fn output_path(run: &Run, format: &str, out_dir: &Path) -> PathBuf {
+    out_dir.join(format!("{}-{}-{format}.out", run.corpus.name, run.name))
+}
+
 /// Runs the `vep` binary for the run in one output format and returns the
 /// output file's text. `format` is `default`, `tab`, `vcf` or `json`.
 pub fn run_vep(run: &Run, format: &str, out_dir: &Path, extra: &[&str]) -> String {
-    let out = out_dir.join(format!("{}-{}-{format}.out", run.corpus.name, run.name));
+    let out = output_path(run, format, out_dir);
     let mut cmd = vep_command(run, out_dir);
     cmd.arg("-o").arg(&out);
     match format {
@@ -1424,6 +1436,184 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
 }
 
 // --------------------------------------------------------------------------
+// Warnings and skipped-variants files.
+
+/// One entry of a warnings or skipped-variants file: the input line number the
+/// entry names, if any, and its description with every path masked.
+pub type WarningEntry = (Option<u64>, String);
+
+/// A description with every space-delimited token that is a path (opening with
+/// `/`, `~/`, `./` or `../`) replaced by `<path>`, so a message naming a file
+/// compares across machines.
+fn mask_paths(description: &str) -> String {
+    description
+        .split(' ')
+        .map(|token| {
+            let is_path = token.starts_with('/')
+                || token.starts_with("~/")
+                || token.starts_with("./")
+                || token.starts_with("../");
+            if is_path {
+                "<path>"
+            } else {
+                token
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_string()
+}
+
+/// The entries of a warnings file or a skipped-variants file, one per line
+/// ([`warning_entry`]); a blank line and the header line of a skipped-variants
+/// file are left out.
+pub fn warning_entries(text: &str) -> BTreeSet<WarningEntry> {
+    text.lines()
+        .map(str::trim_end)
+        .filter(|line| {
+            !line.trim().is_empty() && !line.starts_with("[VEP skipped the following variants from")
+        })
+        .map(warning_entry)
+        .collect()
+}
+
+/// The entry of one line, in the line shapes of BaseVEP.pm:802-863 and
+/// BaseRunner.pm:364-380: `WARNING: line N skipped (<line>): <description>` (or
+/// `variant skipped`), `Line N\t<line>\t<description>`, and any other `WARNING:
+/// <description>`, whose trailing `line N` is its number. The quoted input line
+/// is not compared, and a line of any other shape is an entry of its own.
+fn warning_entry(line: &str) -> WarningEntry {
+    if let Some(rest) = line.strip_prefix("Line ") {
+        let parts: Vec<&str> = rest.splitn(3, '\t').collect();
+        if let [number, _quoted, description] = parts[..] {
+            return (number.trim().parse().ok(), mask_paths(description));
+        }
+    }
+    let Some(rest) = line.strip_prefix("WARNING:") else {
+        return (None, mask_paths(line));
+    };
+    let rest = rest.trim_start();
+    let skipped = if let Some(after_line) = rest.strip_prefix("line ") {
+        after_line
+            .split_once(" skipped")
+            .map(|(digits, tail)| (digits.parse::<u64>().ok(), tail))
+    } else {
+        rest.strip_prefix("variant skipped")
+            .map(|tail| (None, tail))
+    };
+    if let Some((number, tail)) = skipped {
+        let description = match tail.trim_start().strip_prefix('(') {
+            Some(quoted) => quoted.split_once("): ").map_or(quoted, |(_, d)| d),
+            None => tail.trim_start(),
+        };
+        return (number, mask_paths(description));
+    }
+    match rest.rsplit_once(" line ") {
+        Some((head, digits))
+            if digits.bytes().all(|b| b.is_ascii_digit()) && !digits.is_empty() =>
+        {
+            (
+                digits.parse::<u64>().ok(),
+                mask_paths(head.trim_end_matches(" on")),
+            )
+        }
+        _ => (None, mask_paths(rest)),
+    }
+}
+
+/// Compares two warnings (or skipped-variants) files as entry sets and returns
+/// a report of every entry on one side alone, or an empty string.
+pub fn compare_warning_sets(expected: &str, actual: &str) -> String {
+    let expected = warning_entries(expected);
+    let actual = warning_entries(actual);
+    let mut report = String::new();
+    for (number, description) in expected.difference(&actual) {
+        report.push_str(&format!(
+            "  MISSING in vep-rs: line {number:?}: {description}\n"
+        ));
+    }
+    for (number, description) in actual.difference(&expected) {
+        report.push_str(&format!(
+            "  UNEXPECTED in vep-rs: line {number:?}: {description}\n"
+        ));
+    }
+    report
+}
+
+/// The warnings Ensembl VEP wrote for the run's records, from the manifest: one
+/// entry per record carrying `reference_warning`, at the record's 1-based
+/// ordinal, which is the line number Ensembl VEP reports (header lines are not
+/// counted).
+pub fn reference_warnings(manifest: &serde_json::Value) -> BTreeSet<WarningEntry> {
+    manifest["records"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .filter_map(|(i, record)| {
+            record["reference_warning"]
+                .as_str()
+                .map(|w| (Some(i as u64 + 1), mask_paths(w)))
+        })
+        .collect()
+}
+
+/// The warnings file a run leaves beside its output: `<output>_warnings.txt`.
+fn warnings_file_beside(output: &Path) -> PathBuf {
+    PathBuf::from(format!("{}_warnings.txt", output.display()))
+}
+
+/// Compares the warnings file the run's default-format output left beside it
+/// (`run_vep` in the `default` format must have run first) with the reference's
+/// warnings, which are the manifest's `reference_warning` entries and, when the
+/// run's expected directory holds `default.txt_warnings.txt`, that file, whose
+/// entries must agree with the manifest's. Returns a report, or an empty string.
+pub fn compare_warnings(run: &Run, out_dir: &Path) -> String {
+    let path = warnings_file_beside(&output_path(run, "default", out_dir));
+    let actual = warning_entries(&fs::read_to_string(&path).unwrap_or_default());
+    let expected = reference_warnings(&run.corpus.manifest);
+    let mut report = String::new();
+    let stored = run
+        .corpus
+        .dir
+        .join(&run.expected_dir)
+        .join("default.txt_warnings.txt");
+    if stored.is_file() {
+        let stored_entries = warning_entries(&fs::read_to_string(&stored).unwrap());
+        if stored_entries != expected {
+            report.push_str(&format!(
+                "{}: {} disagrees with the manifest's reference_warning entries\n",
+                run.label(),
+                stored.display()
+            ));
+        }
+    }
+    for (number, description) in expected.difference(&actual) {
+        report.push_str(&format!(
+            "{}: reference warning missing from {}: line {number:?}: {description}\n",
+            run.label(),
+            path.display()
+        ));
+    }
+    for (number, description) in actual.difference(&expected) {
+        report.push_str(&format!(
+            "{}: warning not in the reference: line {number:?}: {description}\n",
+            run.label()
+        ));
+    }
+    report
+}
+
+/// The value following `flag` in an argument list.
+fn value_after<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
+    argv.iter()
+        .position(|t| t == flag)
+        .and_then(|i| argv.get(i + 1))
+        .map(String::as_str)
+}
+
+// --------------------------------------------------------------------------
 // Manifest runs: command lines with process-level expectations.
 
 /// What a manifest run expects of the process.
@@ -1436,7 +1626,15 @@ pub struct Expect {
     /// The format `output` is compared in: `default`, `tab`, `vcf` or `json`.
     pub format: String,
     pub stdout_starts_with: Option<String>,
+    pub stdout_contains: Option<String>,
     pub stderr_contains: Option<String>,
+    /// An expected warnings file (under `expected/`) compared with the run's
+    /// warnings file, the one `--warning_file` names or `{out}_warnings.txt`, as
+    /// the set of (line number, description) its lines carry, paths masked.
+    pub warnings_file: Option<String>,
+    /// An expected skipped-variants file (under `expected/`) compared the same
+    /// way with the file the run's `--skipped_variants_file` names.
+    pub skipped_file: Option<String>,
 }
 
 /// One entry of a manifest's `runs` list.
@@ -1451,22 +1649,26 @@ pub struct ManifestRun {
 }
 
 /// The keys an `expect` block may carry.
-const EXPECT_KEYS: [&str; 5] = [
+const EXPECT_KEYS: [&str; 8] = [
     "exit",
     "output",
     "format",
     "stdout_starts_with",
+    "stdout_contains",
     "stderr_contains",
+    "warnings_file",
+    "skipped_file",
 ];
 const RUN_KEYS: [&str; 5] = ["name", "argv", "env", "stdin", "expect"];
 
 /// The manifest's `runs`, each held to one shape: a plain unique name, `argv` a
 /// list of strings, `env` an object of strings, `stdin` a file inside the
 /// corpus, and an `expect` block with an integer `exit` and at least one of
-/// `output` (a file under `expected/`), `stdout_starts_with` and
-/// `stderr_contains`, each a non-empty string, so an entry that expects nothing
-/// cannot certify the rows the manifest covers. An unknown key anywhere is
-/// refused rather than ignored.
+/// `output`, `warnings_file` and `skipped_file` (files under `expected/`),
+/// `stdout_starts_with`, `stdout_contains` and `stderr_contains`, each a
+/// non-empty string, so an entry that expects nothing cannot certify the rows
+/// the manifest covers; a `skipped_file` needs `--skipped_variants_file` in the
+/// argv. An unknown key anywhere is refused rather than ignored.
 pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
     let label = format!("{}/{}", corpus.release, corpus.name);
     let mut out: Vec<ManifestRun> = Vec::new();
@@ -1544,22 +1746,38 @@ pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
                 }
             }
         };
-        let output = text("output");
-        if let Some(output) = &output {
-            assert!(
-                inside_corpus(output),
-                "{label} run {name}: output {output:?} is not a path inside the corpus"
-            );
-        }
+        let expected_file = |key: &str| -> Option<String> {
+            let file = text(key);
+            if let Some(file) = &file {
+                assert!(
+                    inside_corpus(file),
+                    "{label} run {name}: {key} {file:?} is not a path inside the corpus"
+                );
+            }
+            file
+        };
+        let output = expected_file("output");
+        let warnings_file = expected_file("warnings_file");
+        let skipped_file = expected_file("skipped_file");
+        assert!(
+            skipped_file.is_none() || argv.iter().any(|t| t == "--skipped_variants_file"),
+            "{label} run {name}: skipped_file needs --skipped_variants_file in argv"
+        );
         let format = text("format").unwrap_or_else(|| "default".to_string());
         assert!(
             ALL_FORMATS.contains(&format.as_str()),
             "{label} run {name}: unknown format {format}"
         );
         let stdout_starts_with = text("stdout_starts_with");
+        let stdout_contains = text("stdout_contains");
         let stderr_contains = text("stderr_contains");
         assert!(
-            output.is_some() || stdout_starts_with.is_some() || stderr_contains.is_some(),
+            output.is_some()
+                || stdout_starts_with.is_some()
+                || stdout_contains.is_some()
+                || stderr_contains.is_some()
+                || warnings_file.is_some()
+                || skipped_file.is_some(),
             "{label} run {name}: expects nothing beyond the exit status"
         );
         out.push(ManifestRun {
@@ -1572,7 +1790,10 @@ pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
                 output,
                 format,
                 stdout_starts_with,
+                stdout_contains,
                 stderr_contains,
+                warnings_file,
+                skipped_file,
             },
         });
     }
@@ -1655,10 +1876,50 @@ pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) 
             ));
         }
     }
+    if let Some(needle) = &run.expect.stdout_contains {
+        if !stdout.contains(needle) {
+            report.push_str(&format!(
+                "{label}: stdout does not contain {needle:?}:\n{}\n",
+                stdout.lines().take(3).collect::<Vec<_>>().join("\n")
+            ));
+        }
+    }
     if let Some(needle) = &run.expect.stderr_contains {
         if !stderr.contains(needle) {
             report.push_str(&format!(
                 "{label}: stderr does not contain {needle:?}:\n{stderr}"
+            ));
+        }
+    }
+    if let Some(expected_name) = &run.expect.warnings_file {
+        let path = value_after(&argv, "--warning_file")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| warnings_file_beside(&out));
+        let actual = fs::read_to_string(&path).unwrap_or_default();
+        let differences = compare_warning_sets(&read_expected(&corpus.dir, expected_name), &actual);
+        if !differences.is_empty() {
+            report.push_str(&format!(
+                "{label}: warnings file {} differs from {expected_name}\n{differences}",
+                path.display()
+            ));
+        }
+    }
+    if let Some(expected_name) = &run.expect.skipped_file {
+        let path = value_after(&argv, "--skipped_variants_file")
+            .map(PathBuf::from)
+            .expect("manifest_runs requires --skipped_variants_file in the argv");
+        let actual = fs::read_to_string(&path).unwrap_or_else(|e| {
+            report.push_str(&format!(
+                "{label}: no skipped-variants file at {}: {e}\n",
+                path.display()
+            ));
+            String::new()
+        });
+        let differences = compare_warning_sets(&read_expected(&corpus.dir, expected_name), &actual);
+        if !differences.is_empty() {
+            report.push_str(&format!(
+                "{label}: skipped-variants file {} differs from {expected_name}\n{differences}",
+                path.display()
             ));
         }
     }

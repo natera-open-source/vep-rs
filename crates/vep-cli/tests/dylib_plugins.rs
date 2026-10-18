@@ -9,8 +9,9 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+/// The warning an unresolvable name writes, up to the plugins directory it names.
 const SKIPPED_WARNING: &str =
-    "plugin 'NoSuchPlugin' not found as a built-in or as a dylib under --dir_plugins; skipped";
+    "WARNING: Failed to load plugin NoSuchPlugin: NoSuchPlugin is not a built-in plugin and no libNoSuchPlugin.so or libNoSuchPlugin.dylib is under ";
 
 fn corpus_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh37")

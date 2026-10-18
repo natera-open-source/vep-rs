@@ -5,7 +5,7 @@
 //! running the loaded plugins over a batch so their JSON results land in
 //! `TranscriptConsequence::plugin_data`.
 //!
-//! Perl citations name modules of ensembl-vep release/115 (`Bio/EnsEMBL/VEP/...`).
+//! Perl citations name modules of ensembl-vep release/116.2 (`Bio/EnsEMBL/VEP/...`).
 
 use anyhow::{bail, Context};
 use serde_json::Value;
@@ -17,26 +17,31 @@ use vep_plugin::{PluginError, PluginRegistry};
 /// Loads every `--plugin` argument that matched no built-in as a dylib.
 ///
 /// A name that resolves to no file, neither as a path nor as `lib<name>.so` /
-/// `lib<name>.dylib` under `dir_plugins`, is warned about and dropped: Ensembl VEP
-/// continues without a plugin module that fails to load unless `--safe` is given
-/// (`Runner.pm` `get_all_Plugins`). A file that exists but does not open, reports
-/// another ABI version, or fails `init` is an error, because the user named a
-/// real plugin and it will not run.
+/// `lib<name>.dylib` under `dir_plugins`, is written to the warnings file and
+/// dropped, or is an error under `safe`: Ensembl VEP continues without a plugin
+/// module that fails to compile unless `--safe` is given (Runner.pm:929-939). A
+/// file that exists but does not open, reports another ABI version, or fails
+/// `init` is an error, because the user named a real plugin and it will not run.
 pub fn load_unresolved(
     unresolved: &[String],
-    dir_plugins: Option<&str>,
+    dir_plugins: &str,
+    safe: bool,
 ) -> anyhow::Result<PluginRegistry> {
     let mut registry = PluginRegistry::new();
     for arg in unresolved {
         let name = arg.split(',').next().unwrap_or(arg);
-        match registry.load_from_args(std::slice::from_ref(arg), dir_plugins) {
+        match registry.load_from_args(std::slice::from_ref(arg), Some(dir_plugins)) {
             Ok(()) => {}
             // The registry reports an unresolvable name with exactly this message;
             // any other `Load` text comes from a file that exists.
             Err(PluginError::Load(msg)) if msg == format!("plugin '{name}' not found") => {
-                tracing::warn!(
-                    "plugin '{name}' not found as a built-in or as a dylib under --dir_plugins; skipped"
+                let message = format!(
+                    "Failed to load plugin {name}: {name} is not a built-in plugin and no lib{name}.so or lib{name}.dylib is under {dir_plugins}"
                 );
+                if safe {
+                    return Err(crate::config::CliError::new("plugin", message).into());
+                }
+                crate::warnings::global().warn(&message);
             }
             Err(e) => {
                 return Err(
@@ -155,19 +160,25 @@ mod tests {
         assert!(err.to_string().contains("echo"), "{err}");
     }
 
+    /// An unknown name is dropped and the registry stays empty; under `safe` it is
+    /// the plugin component's error naming the plugin and the directory searched
+    /// (Runner.pm:929-939: `Failed to compile plugin`, thrown under `--safe`).
     #[test]
-    fn load_unresolved_skips_an_unknown_name_and_returns_an_empty_registry() {
-        let registry = load_unresolved(&["NoSuchPlugin,param".to_string()], None).unwrap();
-        assert!(registry.is_empty());
+    fn load_unresolved_skips_an_unknown_name_and_dies_under_safe() {
         let registry =
-            load_unresolved(&["NoSuchPlugin".to_string()], Some("/no/such/dir")).unwrap();
+            load_unresolved(&["NoSuchPlugin,param".to_string()], "/no/such/dir", false).unwrap();
         assert!(registry.is_empty());
+        let err = load_unresolved(&["NoSuchPlugin".to_string()], "/no/such/dir", true).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<crate::config::CliError>().unwrap().to_string(),
+            "ERROR: [plugin] Failed to load plugin NoSuchPlugin: NoSuchPlugin is not a built-in plugin and no libNoSuchPlugin.so or libNoSuchPlugin.dylib is under /no/such/dir"
+        );
     }
 
     #[test]
     fn load_unresolved_fails_on_a_file_that_is_not_a_plugin() {
         let not_a_dylib = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
-        let err = load_unresolved(&[not_a_dylib.to_string()], None).unwrap_err();
+        let err = load_unresolved(&[not_a_dylib.to_string()], "/no/such/dir", false).unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains(not_a_dylib), "{msg}");
         assert!(msg.contains("failed to load"), "{msg}");

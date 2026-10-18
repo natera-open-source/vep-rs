@@ -157,6 +157,24 @@ pub struct Args {
     #[arg(help_heading = "Output", long = "mask_header_cache_path")]
     pub mask_header_cache_path: bool,
 
+    /// File the warnings of the run are written to, created at the first warning;
+    /// default <output_file>_warnings.txt beside the output (STDOUT_warnings.txt in the
+    /// working directory for -o STDOUT). STDERR, in any case, keeps them on standard
+    /// error alone. A warning is also echoed on standard error unless --quiet
+    #[arg(help_heading = "Output", long = "warning_file", value_name = "FILE")]
+    pub warning_file: Option<String>,
+
+    /// File listing every input record the run skipped: a header line naming the
+    /// input, then one line per record with its line number, the record's first 40
+    /// characters and the reason. An existing file is refused before the run without
+    /// --force_overwrite; the file is written when the run ends
+    #[arg(
+        help_heading = "Output",
+        long = "skipped_variants_file",
+        value_name = "FILE"
+    )]
+    pub skipped_variants_file: Option<String>,
+
     /// Accepted for VEP compatibility; not implemented (the columns follow the field flags)
     #[arg(help_heading = "Output", long)]
     pub fields: Option<String>,
@@ -612,9 +630,16 @@ pub struct Args {
     #[arg(help_heading = "Plugins", long = "custom_suppress_filter")]
     pub custom_suppress_filter: bool,
 
-    /// Plugin directory
-    #[arg(help_heading = "Plugins", long = "dir_plugins")]
+    /// Directory the plugin libraries are looked up in; default <--dir>/Plugins. A
+    /// directory that does not exist is warned about when --plugin names a plugin
+    /// (an error under --safe)
+    #[arg(help_heading = "Plugins", long = "dir_plugins", value_name = "DIR")]
     pub dir_plugins: Option<String>,
+
+    /// Make a plugin that cannot be loaded, or a missing plugins directory, an error
+    /// instead of a warning, and skip the check of incompatible flag pairs
+    #[arg(help_heading = "Plugins", long)]
+    pub safe: bool,
 
     /// Reads the cache under the species directory suffixed _refseq (the transcripts annotated are that cache's contents); no effect under --json_cache
     #[arg(help_heading = "Transcript Sets", long)]
@@ -647,7 +672,8 @@ pub struct Args {
     #[arg(help_heading = "Verbosity", short = 'v', long)]
     pub verbose: bool,
 
-    /// Suppress status/progress messages
+    /// Suppress the status and progress lines and the standard-error copy of each
+    /// warning; the warnings file is still written
     #[arg(help_heading = "Verbosity", short = 'q', long)]
     pub quiet: bool,
 
@@ -797,8 +823,10 @@ mod tests {
         assert!(args.tab);
     }
 
+    /// `--plugin` accumulates (`plugin=s@`, Config.pm:271) and the plugins load in
+    /// command-line order (Runner.pm:925 iterates the list as given).
     #[test]
-    fn test_repeated_plugin_flags() {
+    fn repeated_plugin_flags_load_in_order() {
         let args = Args::parse_from([
             "vep",
             "--plugin",
@@ -806,7 +834,31 @@ mod tests {
             "--plugin",
             "dbNSFP,/path/to/dbnsfp.gz",
         ]);
-        assert_eq!(args.plugin.len(), 2);
+        assert_eq!(
+            args.plugin,
+            ["CADD,/path/to/cadd.tsv.gz", "dbNSFP,/path/to/dbnsfp.gz"]
+        );
+    }
+
+    /// The warning sink's flags parse: `--safe` (Config.pm:272), `--warning_file`
+    /// (`:173`), `--skipped_variants_file` (`:174`).
+    #[test]
+    fn warning_sink_flags_parse() {
+        let args = Args::parse_from([
+            "vep",
+            "--safe",
+            "--warning_file",
+            "w.txt",
+            "--skipped_variants_file",
+            "s.txt",
+        ]);
+        assert!(args.safe);
+        assert_eq!(args.warning_file.as_deref(), Some("w.txt"));
+        assert_eq!(args.skipped_variants_file.as_deref(), Some("s.txt"));
+        let args = Args::parse_from(["vep"]);
+        assert!(!args.safe);
+        assert!(args.warning_file.is_none());
+        assert!(args.skipped_variants_file.is_none());
     }
 
     #[test]

@@ -1296,9 +1296,11 @@ fn test_dont_skip_fails_on_invalid_vcf_line() {
         !result.status.success(),
         "Expected VEP to fail with --dont_skip on invalid VCF line"
     );
+    // The number is the data record's ordinal, as Ensembl VEP counts its records
+    // (Parser/VCF.pm:228), not the file line.
     let stderr = String::from_utf8_lossy(&result.stderr);
     assert!(
-        stderr.contains("ERROR: [run] line 3: parse error"),
+        stderr.contains("ERROR: [run] line 1: parse error"),
         "{stderr}"
     );
 }
@@ -1359,10 +1361,11 @@ fn test_unknown_plugin_warns_but_does_not_fail() {
     );
 }
 
+/// A built-in plugin name resolves without the unknown-plugin warning, on
+/// standard error or in the warnings file beside the output; with no data-file
+/// parameter the run fails at the plugin's init instead.
 #[test]
 fn test_builtin_plugin_names_are_recognized() {
-    // A builtin plugin name resolves without an unknown-plugin warning; with no
-    // data-file params it fails at init with a plugin error instead.
     let dir = tempfile::tempdir().unwrap();
     let output_path = dir.path().join("output.txt");
 
@@ -1370,17 +1373,23 @@ fn test_builtin_plugin_names_are_recognized() {
         .args(["-i", &test_input_vcf()])
         .args(["-o", output_path.to_str().unwrap()])
         .args(["--json_cache", &corpus_cache()])
-        .args(["--force", "--quiet", "--offline"])
+        .args(["--force", "--offline"])
         .args(["--plugin", "CADD"])
         .output()
         .unwrap();
 
     let stderr = String::from_utf8_lossy(&result.stderr);
-    // CADD requires file params, so it should fail with an init error
-    // containing "CADD" (not "not found as a built-in").
+    let warnings =
+        std::fs::read_to_string(dir.path().join("output.txt_warnings.txt")).unwrap_or_default();
+    let unknown = "Failed to load plugin CADD";
     assert!(
-        !stderr.contains("not found as a built-in"),
-        "CADD should be recognized as a builtin plugin"
+        !stderr.contains(unknown) && !warnings.contains(unknown),
+        "CADD should be recognized as a builtin plugin:\n{stderr}\n{warnings}"
+    );
+    assert!(
+        !result.status.success()
+            && stderr.contains("CADD requires at least one file path parameter"),
+        "CADD without a data file should fail at init:\n{stderr}"
     );
 }
 

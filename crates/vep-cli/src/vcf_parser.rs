@@ -20,7 +20,7 @@ use vep_core::allele::trim_alleles;
 use vep_core::coordinate::parse_pos;
 use vep_core::sv_record::{structural_variants, DEFAULT_MAX_SV_SIZE};
 use vep_core::sv_routing::{perl_true, routes_to_structural, variant_alts, written_alts};
-use vep_core::variant::{first_vcf_id, id_names_record, InputVariant, VariantClass};
+use vep_core::variant::{first_vcf_id, id_names_record, InputVariant};
 use vep_core::vcf_info::info_value;
 
 /// Parse a VCF data line into one or more `InputVariant`s.
@@ -202,18 +202,6 @@ pub fn parse_vcf_line_with_max_sv_size(
             max_sv_size,
             explicit_id,
         )?;
-        if variants
-            .iter()
-            .any(|v| v.variant_class == VariantClass::ReferenceBlock)
-        {
-            tracing::warn!(
-                "{}:{} {}: NON_REF is not a supported structural variant type; \
-                 a reference-confidence block is written as one intergenic row",
-                chr,
-                pos,
-                alt_field
-            );
-        }
         for variant in &mut variants {
             variant.raw_input = raw_input.clone();
             variant.id = record_id.clone();

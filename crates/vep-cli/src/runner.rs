@@ -198,9 +198,14 @@ pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: Option<u
 /// `StructuralVariationOverlap::new`, which admits every allele of an
 /// `IntergenicStructuralVariation`). An allele whose own breakend reached nothing
 /// while a mate's did gets no row, which is why the verdict is the record's and
-/// not the allele's. The same cache condition as the small-variant fallback
-/// applies: a chromosome with no transcripts yields no row at all.
-pub(crate) fn apply_record_rules(batch: &mut [InputVariant], transcripts: &LazyTranscriptIndexes) {
+/// not the allele's. With `loaded` given, a record on a chromosome it does not
+/// hold gets no verdict (the library path, which has no skip step and leaves such
+/// a record to its caller); the binary's records reach here only when the skip
+/// rules kept them, so it passes `None`.
+pub(crate) fn apply_record_rules(
+    batch: &mut [InputVariant],
+    loaded: Option<&LazyTranscriptIndexes>,
+) {
     fn same_record(a: &InputVariant, b: &InputVariant) -> bool {
         if a.input_record != 0 || b.input_record != 0 {
             return a.input_record == b.input_record;
@@ -216,7 +221,7 @@ pub(crate) fn apply_record_rules(batch: &mut [InputVariant], transcripts: &LazyT
             v.variant_class == VariantClass::Translocation
                 && v.transcript_consequences.is_empty()
                 && v.most_severe_consequence.is_none()
-                && transcripts.contains_key(&v.chr)
+                && loaded.is_none_or(|t| t.contains_key(&v.chr))
         });
         if intergenic_breakend_record {
             for v in alleles.iter_mut() {
@@ -383,6 +388,10 @@ impl Runner {
                 )
                 .into());
             }
+        }
+        let sink = crate::warnings::global();
+        if let Some(path) = &self.config.skipped_variants_file {
+            sink.reserve_skipped_variants_file(path, self.config.force_overwrite)?;
         }
 
         info!("input: {}", self.config.input_file);
@@ -719,6 +728,10 @@ impl Runner {
         // The writer thread flushes and closes the output before this returns.
         let variant_count = pipeline::run(input, &reader_cfg, &coordinator, writer)?;
 
+        // Runner.pm:176-182: the skipped-variants file is written and the warnings
+        // file closed once the output is complete.
+        sink.finish(&self.config.input_file)?;
+
         if !self.config.quiet && variant_count >= 10000 {
             eprint!("\r");
         }
@@ -767,9 +780,9 @@ impl Runner {
     }
 
     /// Load the `--plugin` CLI arguments: each as a built-in when one claims the
-    /// name, otherwise as a C-ABI dylib resolved by path or under `--dir_plugins`.
-    /// A name that resolves to neither is warned about and skipped, which is
-    /// Ensembl VEP's default without `--safe`.
+    /// name, otherwise as a C-ABI dylib resolved by path or under the plugins
+    /// directory. A name that resolves to neither is warned about and skipped, or
+    /// is an error under `--safe` ([`crate::annotator::load_plugins`]).
     ///
     /// The run's assembly (`--assembly`, else the cache's) is passed through so
     /// assembly-sensitive plugins (REVEL's dual coordinate columns, LoFTEE's
@@ -782,7 +795,8 @@ impl Runner {
     ) -> anyhow::Result<LoadedPlugins> {
         crate::annotator::load_plugins(
             &self.config.plugin,
-            self.config.dir_plugins.as_deref(),
+            &self.config.dir_plugins,
+            self.config.safe,
             reference_fasta,
             crate::annotator::resolve_assembly(self.cache.assembly.as_deref()),
         )
@@ -1250,13 +1264,14 @@ pub(crate) fn annotate_one(
         variation_matcher::annotate_colocated(variant, source, failure);
     }
 
-    // Intergenic only when the chromosome has transcripts in the cache: Perl
-    // VEP silently drops variants on chromosomes it never loaded. A breakend's
-    // intergenic verdict is its record's: `apply_record_rules`.
+    // A record on a chromosome the cache lacks reaches annotation only under
+    // `--dont_skip` (the skip rules drop it otherwise, with Ensembl VEP's
+    // warning), and a kept record with no feature is intergenic as Ensembl VEP
+    // writes it. A breakend's intergenic verdict is its record's:
+    // `apply_record_rules`.
     let is_bnd = variant.variant_class == VariantClass::Translocation;
     if variant.transcript_consequences.is_empty()
         && variant.most_severe_consequence.is_none()
-        && resources.transcripts.contains_key(&variant.chr)
         && !is_bnd
     {
         variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
@@ -1328,7 +1343,7 @@ pub(crate) fn annotate_batch(
     // A read failure the lookups recorded ends the run before this batch is
     // rendered.
     check_variation_reads(&failure)?;
-    apply_record_rules(batch, resources.transcripts.as_ref());
+    apply_record_rules(batch, None);
     let annotation_elapsed = annotation_phase_start.elapsed();
     debug!(
         batch_size = batch_len,

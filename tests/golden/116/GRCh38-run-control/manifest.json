@@ -19,6 +19,16 @@
   "stdout-output",
   "fork",
   "threads",
+  "warning_file",
+  "skipped_variants_file",
+  "quiet",
+  "verbose",
+  "safe",
+  "force_overwrite",
+  "skipped-variant-warning-lines",
+  "dir_plugins",
+  "plugin",
+  "plugin-argument-parsing",
   "cache",
   "dir",
   "dir_cache",
@@ -499,19 +509,6 @@
  ],
  "vep_rs_only_tuples": [
   {
-   "location": "Z:1000",
-   "allele": "G",
-   "feature": "-",
-   "feature_type": "-",
-   "record_indices": [
-    39
-   ],
-   "vep_rs_consequence_sets": [
-    "intergenic_variant"
-   ],
-   "expected_divergence": "reference_skipped_record"
-  },
-  {
    "location": "21:30165801-30166000",
    "allele": "deletion",
    "feature": "ENST00000286808",
@@ -575,26 +572,13 @@
     "3_prime_UTR_variant,feature_truncation"
    ],
    "expected_divergence": "reference_skipped_record"
-  },
-  {
-   "location": "21:30165901",
-   "allele": "Y",
-   "feature": "ENST00000286808",
-   "feature_type": "Transcript",
-   "record_indices": [
-    40
-   ],
-   "vep_rs_consequence_sets": [
-    "3_prime_UTR_variant"
-   ],
-   "expected_divergence": "reference_skipped_record"
   }
  ],
  "divergence_summary": {
   "breakend_mate_local_read": 2
  },
  "vep_rs_only_summary": {
-  "reference_skipped_record": 7
+  "reference_skipped_record": 5
  },
  "runs": [
   {
@@ -771,6 +755,210 @@
    "expect": {
     "exit": 0,
     "output": "default.txt"
+   }
+  },
+  {
+   "name": "warnings-file-default",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "warnings_file": "default.txt_warnings.txt"
+   }
+  },
+  {
+   "name": "warning-file-named",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--warning_file",
+    "{out}.warn.txt"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "warnings_file": "default.txt_warnings.txt"
+   }
+  },
+  {
+   "name": "warning-file-stderr",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--warning_file",
+    "stderr"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "stderr_contains": "WARNING: line 40 skipped (Z 1000 unknown_chromosome A G . . .): Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features"
+   }
+  },
+  {
+   "name": "skipped-variants-file",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--skipped_variants_file",
+    "{out}.skipped.txt"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "skipped_file": "skipped.txt"
+   }
+  },
+  {
+   "name": "quiet-and-verbose",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--verbose"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [cli] Can't use --quiet and --verbose together"
+   }
+  },
+  {
+   "name": "safe-skips-incompatible-pair",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--verbose",
+    "--safe"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "plugin-unknown",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "NoSuchPlugin"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "warnings_file": "plugin_unknown_warnings.txt"
+   }
+  },
+  {
+   "name": "plugin-unknown-safe",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "NoSuchPlugin",
+    "--safe"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [plugin] Failed to load plugin NoSuchPlugin: NoSuchPlugin is not a built-in plugin and no libNoSuchPlugin.so or libNoSuchPlugin.dylib is under "
+   }
+  },
+  {
+   "name": "plugins-two-unknown",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "NoSuchPlugin",
+    "--plugin",
+    "AlsoMissing"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "warnings_file": "plugins_two_unknown_warnings.txt"
+   }
+  },
+  {
+   "name": "plugins-dir-missing",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--dir_plugins",
+    "/nonexistent",
+    "--plugin",
+    "NoSuchPlugin"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "warnings_file": "plugins_dir_missing_warnings.txt"
+   }
+  },
+  {
+   "name": "plugins-dir-missing-alone",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--dir_plugins",
+    "/nonexistent"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "warnings_file": "default.txt_warnings.txt"
+   }
+  },
+  {
+   "name": "plugins-dir-missing-safe",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--dir_plugins",
+    "/nonexistent",
+    "--plugin",
+    "NoSuchPlugin",
+    "--safe"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [plugin] Plugins directory '/nonexistent' not found."
+   }
+  },
+  {
+   "name": "plugin-loftool-column",
+   "argv": [
+    "{golden}",
+    "-o",
+    "stdout",
+    "--tab",
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "LoFtool,{corpus}/LoFtool_scores.slice.txt"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": "\tLoFtool_percentile"
    }
   },
   {

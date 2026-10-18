@@ -233,7 +233,8 @@ impl Annotator {
         );
         let LoadedPlugins { builtin, dylib } = load_plugins(
             &config.plugin,
-            config.dir_plugins.as_deref(),
+            &config.dir_plugins,
+            config.safe,
             reference_fasta,
             resolve_assembly(cache.assembly.as_deref()),
         )?;
@@ -443,10 +444,14 @@ pub(crate) struct LoadedPlugins {
     pub(crate) dylib: PluginRegistry,
 }
 
-/// Load the `--plugin` arguments: each as a built-in when one claims the name,
-/// otherwise as a dylib resolved by path or under `dir_plugins`
-/// ([`crate::dylib_plugins::load_unresolved`], which skips a name that resolves
-/// to no file).
+/// Load the `--plugin` arguments as `get_all_Plugins` does (Runner.pm:901-960):
+/// a plugins directory that does not exist is warned about when a plugin is named,
+/// an error under `safe` (`:911-918`); each argument is `Name,param,param`
+/// (`:928`), loaded as a built-in when one claims the name, otherwise as a dylib
+/// resolved by path or under the directory ([`crate::dylib_plugins::load_unresolved`]);
+/// a name that resolves to neither is warned about and dropped, an error under
+/// `safe` (`:929-939`). A built-in or a dylib that fails to initialise is an error
+/// with or without `safe`, where Ensembl VEP warns and drops the plugin (`:943-951`).
 ///
 /// The assembly is load-bearing rather than advisory: REVEL picks which of its two
 /// coordinate columns tabix indexed from it, LoFTEE picks between a bigWig and a
@@ -455,7 +460,8 @@ pub(crate) struct LoadedPlugins {
 /// guards inert, so a wrong-assembly file annotates nothing and still exits 0.
 pub(crate) fn load_plugins(
     plugin_args: &[String],
-    dir_plugins: Option<&str>,
+    dir_plugins: &str,
+    safe: bool,
     reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
     assembly: Option<vep_core::assembly::Assembly>,
 ) -> anyhow::Result<LoadedPlugins> {
@@ -467,10 +473,18 @@ pub(crate) fn load_plugins(
         });
     }
 
+    if !std::path::Path::new(dir_plugins).is_dir() {
+        let message = format!("Plugins directory '{dir_plugins}' not found.");
+        if safe {
+            return Err(crate::config::CliError::new("plugin", message).into());
+        }
+        crate::warnings::global().warn(&message);
+    }
+
     let unresolved = builtin
         .load_from_args_with_context(plugin_args, reference_fasta, assembly)
         .map_err(|e| anyhow::anyhow!("plugin loading failed: {}", e))?;
-    let dylib = crate::dylib_plugins::load_unresolved(&unresolved, dir_plugins)?;
+    let dylib = crate::dylib_plugins::load_unresolved(&unresolved, dir_plugins, safe)?;
 
     Ok(LoadedPlugins { builtin, dylib })
 }
@@ -625,7 +639,7 @@ pub fn annotate_batch(
         }
         stats
     };
-    crate::runner::apply_record_rules(batch, resources.transcripts.as_ref());
+    crate::runner::apply_record_rules(batch, Some(resources.transcripts.as_ref()));
     let annotation_elapsed = annotation_phase_start.elapsed();
     debug!(
         batch_size = batch_len,
@@ -1252,5 +1266,59 @@ mod tests {
         assert!(genic_mate[0].transcript_consequences.is_empty());
         assert_eq!(genic_mate[0].most_severe_consequence, None);
         assert_eq!(genic_mate[1].transcript_consequences.len(), 1);
+    }
+
+    /// A plugins directory that does not exist is fatal under `--safe` when a
+    /// plugin is named (Runner.pm:911-916), the plugin component naming the
+    /// directory with Ensembl VEP's text; with no plugin named it is not looked at.
+    #[test]
+    fn missing_plugins_dir_dies_under_safe() {
+        let err = load_plugins(
+            &["NoSuchPlugin".to_string()],
+            "/no/such/dir",
+            true,
+            None,
+            None,
+        )
+        .err()
+        .expect("a missing plugins directory is fatal under --safe");
+        assert_eq!(
+            err.downcast_ref::<crate::config::CliError>()
+                .unwrap()
+                .to_string(),
+            "ERROR: [plugin] Plugins directory '/no/such/dir' not found."
+        );
+        let loaded = load_plugins(&[], "/no/such/dir", true, None, None).unwrap();
+        assert_eq!(loaded.builtin.plugin_count(), 0);
+    }
+
+    /// `Name,param,param` splits on every comma (Runner.pm:928: `split /,/`), the
+    /// first part the plugin, the rest its parameters in order: LoFtool reads its
+    /// scores file from the first parameter, so the file it fails to open names
+    /// the parameter the split gave it.
+    #[test]
+    fn plugin_name_and_params_split_as_perl_does() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap();
+        for (arg, first_param) in [
+            ("LoFtool,/no/such/scores.txt", "/no/such/scores.txt"),
+            ("LoFtool,/no/such/first,second,third", "/no/such/first"),
+        ] {
+            let err = load_plugins(&[arg.to_string()], dir_path, false, None, None)
+                .err()
+                .expect("a scores file that does not exist fails init");
+            let message = format!("{err:#}");
+            assert!(
+                message.contains(&format!("LoFtool: failed to open {first_param}:")),
+                "{arg}: {message}"
+            );
+        }
+        let err = load_plugins(&["LoFtool".to_string()], dir_path, false, None, None)
+            .err()
+            .expect("LoFtool without a parameter fails init");
+        assert!(
+            format!("{err:#}").contains("LoFtool requires a path to the scores file"),
+            "{err:#}"
+        );
     }
 }
