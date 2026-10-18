@@ -108,6 +108,10 @@ JSON_CONSEQUENCE_LISTS = (
     ("regulatory_feature_consequences", "regulatory_feature"),
     ("motif_feature_consequences", "motif_feature"),
 )
+# The engine identity vep-rs writes in every JSON object and Ensembl VEP never writes, set
+# aside like ``input`` rather than compared; its header forms (``## vep-rs <version>``,
+# ``##vep-rs=<version>``) fall with the other ``##`` lines the text parsers skip.
+JSON_IDENTITY_KEY = "vep_rs_version"
 # Columns the default format prints on every row of a record while the JSON format
 # carries them once per record, in colocated_variants or at the top level.
 RECORD_LEVEL_COLUMNS = {
@@ -440,16 +444,17 @@ def json_record_label(index: InputIndex, n: int, obj: dict) -> tuple[int | None,
 
 
 def parse_json(text: str, inputs: list[str]) -> list[Entry]:
-    """The JSON format: one record entry per object (the top-level scalars, keyed by the
-    input record the ``input`` line names) and one entry per element of each consequence
-    list, keyed by the record, ``variant_allele``, the feature id and the list's feature
-    type. An object whose ``input`` matches no record is keyed by its output ordinal."""
+    """The JSON format: one record entry per object (the top-level scalars other than the
+    engine identity, keyed by the input record the ``input`` line names) and one entry per
+    element of each consequence list, keyed by the record, ``variant_allele``, the feature id
+    and the list's feature type. An object whose ``input`` matches no record is keyed by its
+    output ordinal."""
     index = InputIndex(inputs, lambda s: s)
     entries: list[Entry] = []
-    list_names = {name for name, _ in JSON_CONSEQUENCE_LISTS}
+    set_aside = {name for name, _ in JSON_CONSEQUENCE_LISTS} | {"input", JSON_IDENTITY_KEY}
     for n, obj in json_objects(text):
         record, rec_label = json_record_label(index, n, obj)
-        fields = {k: json_scalar(v) for k, v in obj.items() if k not in list_names and k != "input"}
+        fields = {k: json_scalar(v) for k, v in obj.items() if k not in set_aside}
         entries.append(
             Entry(
                 key=f"{rec_label}|record",

@@ -136,6 +136,23 @@ def test_parse_json_reads_the_committed_reference(texts, inputs):
     assert {(e.record, e.allele, e.feature) for e in entries} == vcf_keys
 
 
+def test_parse_json_sets_aside_the_engine_identity_key(texts, inputs):
+    """vep-rs writes ``JSON_IDENTITY_KEY`` on every JSON object, the input-only object of a
+    skipped record included; the reference writes none, so the key is set aside and the
+    entries read the same as the reference's."""
+    reference = cvf.parse_json(texts["json"], inputs)
+    identity = {cvf.JSON_IDENTITY_KEY: "0.5.0"}
+    json_lines = [json.dumps({**json.loads(line), **identity}) for line in cvf.text_lines(texts["json"]) if line]
+    json_lines.append(json.dumps({"input": "21\t1\tskipped\tA\tG\t.\t.\t.", **identity}))
+    entries = cvf.parse_json("\n".join(json_lines) + "\n", inputs)
+    annotated, skipped = entries[: len(reference)], entries[len(reference) :]
+    assert [(e.key, e.fields) for e in annotated] == [(e.key, e.fields) for e in reference]
+    assert all(cvf.JSON_IDENTITY_KEY not in e.fields for e in entries)
+    assert [e.key for e in skipped] == [f"obj{RECORDS}|record"]
+    assert skipped[0].fields == {}
+    assert cvf.compare_entries(reference, annotated, no_documented())["verdict"] == "green"
+
+
 def test_json_scalar_renders_like_the_rust_comparator():
     assert cvf.json_scalar("x") == "x"
     assert cvf.json_scalar(["a", "b"]) == "a,b"

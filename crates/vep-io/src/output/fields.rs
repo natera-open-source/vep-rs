@@ -19,6 +19,12 @@ use std::collections::BTreeSet;
 use vep_core::consequence::{Consequence, TranscriptConsequence};
 use vep_core::variant::{InputVariant, VariantClass};
 
+/// The vep-rs release every output names beside the Ensembl VEP header lines:
+/// `## vep-rs <version>` in the default and tab headers, `##vep-rs=<version>`
+/// in the VCF header and `vep_rs_version` in every JSON object. Every crate of
+/// the workspace carries the release as its version.
+pub const VEP_RS_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// The thirteen fixed columns of the default and tab formats, in order.
 pub const DEFAULT_OUTPUT_COLS: [&str; 13] = [
     "Uploaded_variation",
@@ -1013,6 +1019,9 @@ pub fn vcf_vep_meta_line(
     line
 }
 
+/// The header lines the default and tab formats share, in VEP's order, with
+/// the vep-rs identity line second so a reader of the first line still sees
+/// the Ensembl VEP banner.
 fn common_header_prefix(
     cache_dir: &str,
     cache_info: Option<&vep_core::cache_info::CacheInfo>,
@@ -1023,6 +1032,7 @@ fn common_header_prefix(
             vep_core::VEP_VERSION,
             vep_core::VEP_SUB_VERSION
         ),
+        format!("## vep-rs {VEP_RS_VERSION}"),
         format!("## Output produced at {}", timestamp()),
         format!("## Using cache in {}", cache_dir),
         format!(
@@ -1233,6 +1243,7 @@ mod tests {
     fn header_ends_with_the_column_line() {
         let lines = default_format_header(&FieldOptions::default(), "/c", None, "vep -i x");
         assert!(lines[0].starts_with("## ENSEMBL VARIANT EFFECT PREDICTOR v"));
+        assert_eq!(lines[1], format!("## vep-rs {VEP_RS_VERSION}"));
         assert!(lines.contains(&"## Column descriptions:".to_string()));
         assert!(lines.contains(&"## Extra column keys:".to_string()));
         assert!(lines.contains(&"## FLAGS : Transcript quality flags".to_string()));

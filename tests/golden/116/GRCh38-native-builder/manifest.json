@@ -29,7 +29,8 @@
   "vefc-translateable-seq",
   "vefc-mapper",
   "vefc-sorted-exons",
-  "trans-exon-array"
+  "trans-exon-array",
+  "engine_identity_lines"
  ],
  "flag_sets": [
   {

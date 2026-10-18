@@ -10,7 +10,7 @@ vep-rs supports five output formats, selected via `--output_format` or the short
 
 ## Parity with Ensembl VEP
 
-With the default flag set and `--tab`, `--vcf` or `--json`, the default, `tab`, `vcf` and `json` outputs match what Ensembl VEP 116.2 writes field for field: every column of every row and, for JSON, every key of every object compared as text (VEP writes JSON keys in Perl hash order, so the JSON is not byte-identical and key order is not compared). Header lines that carry a time, a cache path or the command line are compared by shape, and VEP's Perl API component version lines have no counterpart. The contract is enforced by the golden corpora under `tests/golden/<release>/<assembly>/` (`crates/vep-cli/tests/golden.rs` and `format_parity.rs`): every consequence-set combination observed on the benchmark datasets, annotated with the corpus's own pruned cache and compared with VEP's committed output in all four formats, plus the Parquet round trip. Consequence terms themselves are governed by the concordance measurement ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)). The corpus manifest records the (Location, Allele, Feature) keys whose terms differ between the engines (117 of the 17,556 GRCh37 rows, 4 of the 2,818 GRCh37-hgvs rows, 323 of the 20,623 GRCh38 rows and 2 of the 977 GRCh38-release116 rows, none of them `unexplained_residual`) and the rows only one engine emits, each under its divergence class; for a recorded key the parity tests check only that the row's consequence set is one of the recorded sets, compare none of its other columns, and skip the record's `most_severe_consequence` in JSON. Outside the tested flag set there are known differences: `--regulatory` adds its (always empty) fields to the headers and columns and warns that regulatory annotation is not implemented, `--overlaps` does not exist, `--output_format vcf` switches on the same fields as `--vcf` (VEP ties them to the flag alone), and under `--check_existing` a row none of whose co-located variants is somatic or phenotype-linked prints `SOMATIC=0` and `PHENO=0` where VEP prints neither key.
+With the default flag set and `--tab`, `--vcf` or `--json`, the default, `tab`, `vcf` and `json` outputs match what Ensembl VEP 116.2 writes field for field: every column of every row and, for JSON, every key of every object compared as text (VEP writes JSON keys in Perl hash order, so the JSON is not byte-identical and key order is not compared). Header lines that carry a time, a cache path or the command line are compared by shape, and VEP's Perl API component version lines have no counterpart. Every format also names the engine that wrote it, which Ensembl VEP's output does not: the line `## vep-rs <version>` second in the default and tab headers, the meta line `##vep-rs=<version>` after `##VEP=` in the VCF header, and the key `vep_rs_version` in every JSON object (see [Engine identity](#engine-identity)); the comparators set aside exactly one such line per header, and the key on every object, and compare everything else. The contract is enforced by the golden corpora under `tests/golden/<release>/<assembly>/` (`crates/vep-cli/tests/golden.rs` and `format_parity.rs`): every consequence-set combination observed on the benchmark datasets, annotated with the corpus's own pruned cache and compared with VEP's committed output in all four formats, plus the Parquet round trip. Consequence terms themselves are governed by the concordance measurement ([scripts/README.md](../scripts/README.md#reproducing-the-published-concordance)). The corpus manifest records the (Location, Allele, Feature) keys whose terms differ between the engines (117 of the 17,556 GRCh37 rows, 4 of the 2,818 GRCh37-hgvs rows, 323 of the 20,623 GRCh38 rows and 2 of the 977 GRCh38-release116 rows, none of them `unexplained_residual`) and the rows only one engine emits, each under its divergence class; for a recorded key the parity tests check only that the row's consequence set is one of the recorded sets, compare none of its other columns, and skip the record's `most_severe_consequence` in JSON. Outside the tested flag set there are known differences: `--regulatory` adds its (always empty) fields to the headers and columns and warns that regulatory annotation is not implemented, `--overlaps` does not exist, `--output_format vcf` switches on the same fields as `--vcf` (VEP ties them to the flag alone), and under `--check_existing` a row none of whose co-located variants is somatic or phenotype-linked prints `SOMATIC=0` and `PHENO=0` where VEP prints neither key.
 
 The golden-corpus flag set is `--offline --json_cache <dir> --species homo_sapiens --assembly <assembly> --buffer_size 5000 --no_stats --quiet` (or, for a corpus whose cache sits in Ensembl VEP's `cache_root/homo_sapiens/<release>_<assembly>` layout, `--offline --cache --dir_cache <root> --cache_version <release>` in place of `--json_cache <dir>`) plus one format flag and the corpus manifest's own flags; under it the default, `--tab`, `--vcf` and `--json` data rows match Ensembl VEP 116.2 apart from the consequence-term divergences the manifests document, and header lines that carry a time, a path, the command line or Perl API component versions match in shape. `--vcf` also switches on `--symbol`, `--biotype` and `--numbers`, as in VEP, and `--json` output is unescaped (VEP's `--no_escape` behavior; vep-rs has no `--no_escape` flag). `--everything` switches on exactly Ensembl VEP's set ([CLI reference](cli-reference.md#option-sets-configpm351-593)), so the header keys agree; the regulatory columns it implies through `--regulatory` are not produced, and no RegulatoryFeature or MotifFeature row is written.
 
@@ -29,6 +29,19 @@ The rules the formatters follow are VEP's own, cited to their Perl sources in `c
 - **Breakends.** A breakend in bracket notation is a point record whose Location is the base after POS; a dot-notation breakend (`N.`, `.N`) is the same point with or without INFO/SVTYPE. A record with a parsed breakend is one breakpoint whatever its other ALTs: `<BND>,<DEL>` with `SVTYPE=BND` writes every allele as a `chromosome_breakpoint` at the point, its END unread. A `<BND>` spans POS+1 to POS+|SVLEN| when INFO carries SVLEN and is otherwise the single base at POS+1 (INFO/END never ends a breakpoint's span, as in Ensembl VEP 116; a breakpoint whose END is `0` or empty is skipped, as Ensembl VEP skips it); it names a mate only through `INFO/CHR2` written with a value and `END2`, else `END` (POS2 is never read), and its alleles are evaluated over the span. The mate allele is written `N[CHR2:END2[` with both values as written (`N[chr21:00030425700[`), whatever the reference base, and the record's own breakend takes the reference base (`A.`); an END2 that is not a run of digits (`-7`, `abc`) names no mate, and the record's allele string still carries the text (`N/N[21:-7[`); whitespace around a bracket, the chromosome or the colon is read through, as Ensembl VEP's breakend regex reads it (`N[ 21 : 30425700 [` names the mate `21:30425700`), and an INFO value ends at a second `=` (`END2=30425700=5` is 30425700). A dot-bounded ALT beside a bracket ALT (`.N,N[21:30425700[`) lends the own breakend its base and writes no row of its own. A `<BND>` that names no mate is one `chromosome_breakpoint` allele over its span or point, with the region terms and no `feature_truncation`. A paired breakend has two alleles in the output: its local end, printed as a single breakend (`.A`) and annotated against the transcripts at the record's own position, and the bracket allele (`]21:27307377]A`), which gets a row for a transcript only when the mate coordinate lies within the up- or downstream distance of that transcript, as VEP's `_close_to_feature` admits it. On the mate chromosome the bracket allele's rows describe the mate breakend at the mate coordinate: `feature_truncation` with the region term when the mate lies inside the transcript, `upstream_gene_variant` or `downstream_gene_variant` with the distance when it lies outside, and the `EXON` and `INTRON` of that coordinate. A transcript the local rows already name is not repeated on the mate side. The record's own breakend is written `N.` or `.N` (REF base, dot on the side of the bracket mate) whether or not `INFO/MATEID` is present; `chromosome_breakpoint` is the Allele of a record without a bracket mate, a single breakend (`.N`) or a bare `<BND>` with neither `CHR2` nor a span, as `class_SO_term` is Ensembl VEP's Allele for an allele without a breakend string. A breakend record none of whose breakends lies within the up- or downstream distance of a transcript is intergenic, as Ensembl VEP 116 writes it: one `intergenic_variant` row per allele (`N.` and the bracket mate, or the single `chromosome_breakpoint`), Feature `-`, `IMPACT=MODIFIER`, in every format; when either breakend reaches a transcript the record gets no intergenic row, and an allele of it that reached nothing gets no row. `NMD_transcript_variant` on a breakend row follows the record's own position, so a mate inside an NMD transcript earns `feature_truncation` without it.
 - **ENSP.** Under `--protein` every transcript row of a transcript with a translation carries its ENSP, structural-variant rows (`transcript_ablation`, `feature_truncation`, breakends) included.
 
+## Engine identity
+
+The Ensembl-shaped header lines stay as Ensembl VEP writes them, so a parser written for VEP output reads vep-rs output unchanged; each format adds one item naming the vep-rs version (the release, `0.5.0` in the examples below, read from the crate version `vep --version` prints):
+
+| format | where | form |
+| --- | --- | --- |
+| default, `--tab` | the second header line, after the `## ENSEMBL VARIANT EFFECT PREDICTOR` banner | `## vep-rs 0.5.0` |
+| `--vcf` | the meta line after `##VEP=`, in the `##key=value` form VCF 4.3 section 1.4 defines (a bare `## vep-rs` line is not valid VCF) | `##vep-rs=0.5.0` |
+| `--json` | a key of every object, an unannotated record's input-only object included | `"vep_rs_version": "0.5.0"` |
+| Parquet | the footer's key-value metadata | `vep_rs_version` |
+
+`--no_headers` drops the default, tab and VCF lines with the rest of the header. Re-annotating a VCF that vep-rs wrote replaces its `##vep-rs=` line along with the earlier `##VEP` lines, as a re-annotation by Ensembl VEP replaces its own. The golden-corpus comparators (`crates/vep-cli/tests/common/mod.rs`) set aside exactly one identity line or key of the version under test and report a missing, repeated or differently versioned one as a header difference.
+
 ## VEP Default Format
 
 One line per (allele, transcript) consequence, plus one intergenic line per allele that overlaps no feature.
@@ -37,6 +50,7 @@ One line per (allele, transcript) consequence, plus one intergenic line per alle
 
 ```
 ## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
+## vep-rs 0.5.0
 ## Output produced at [TIME]
 ## Using cache in [PATH]/116
 ## Using API version 116, DB version ?
@@ -105,10 +119,11 @@ Selected with `--vcf` or `--output_format vcf`, either of which also switches on
 
 ### Header
 
-The input's meta lines are kept (minus any earlier CSQ definition or `##VEP` line), a `##fileformat` line is added when the input lacks one, then:
+The input's meta lines are kept (minus any earlier CSQ definition, `##VEP` or `##vep-rs` line), a `##fileformat` line is added when the input lacks one, then:
 
 ```
 ##VEP="v116.2" API="v116" time="[TIME]" cache="[PATH]/116" 1000genomes="phase3" COSMIC="98" ...
+##vep-rs=0.5.0
 ##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|DISTANCE|STRAND|FLAGS|SYMBOL_SOURCE|HGNC_ID">
 ##VEP-command-line='vep --assembly GRCh37 ...'
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
@@ -139,7 +154,7 @@ Selected with `--json` or `--output_format json`. JSON Lines, one object per inp
 
 ### Schema
 
-The two corpus records above as Ensembl VEP 116.2 wrote them (`expected/json.jsonl.gz`), pretty-printed with the keys in the order vep-rs emits them; VEP's key order is Perl hash order and varies from object to object. The `input` value is the record's own VCF line; the first one's INFO column is abridged here.
+The two corpus records above as vep-rs writes them, pretty-printed with the keys in reading order (vep-rs itself writes the keys of an object sorted; VEP's key order is Perl hash order and varies from object to object). Ensembl VEP 116.2's committed objects (`expected/json.jsonl.gz`) carry the same keys and values except `vep_rs_version`, which only vep-rs writes. The `input` value is the record's own VCF line; the first one's INFO column is abridged here.
 
 ```json
 {
@@ -203,7 +218,8 @@ The two corpus records above as Ensembl VEP 116.2 wrote them (`expected/json.jso
       "strand": 1
     }
   ],
-  "most_severe_consequence": "missense_variant"
+  "most_severe_consequence": "missense_variant",
+  "vep_rs_version": "0.5.0"
 }
 ```
 
@@ -221,7 +237,8 @@ The two corpus records above as Ensembl VEP 116.2 wrote them (`expected/json.jso
     { "variant_allele": "G", "consequence_terms": ["intergenic_variant"], "impact": "MODIFIER" },
     { "variant_allele": "T", "consequence_terms": ["intergenic_variant"], "impact": "MODIFIER" }
   ],
-  "most_severe_consequence": "intergenic_variant"
+  "most_severe_consequence": "intergenic_variant",
+  "vep_rs_version": "0.5.0"
 }
 ```
 
@@ -236,6 +253,7 @@ An allele gets an `intergenic_consequences` entry only when it overlaps no trans
 - Numeric-looking values are numbers except identifier keys; a zero fraction prints as an integer (`100`, not `100.0`).
 - `gene_symbol`, `gene_symbol_source`, `biotype`, `variant_class` and the other flag-gated keys appear only under their flags. Absent or `-` values are omitted.
 - Plugin fields, built-in or dylib, sit inside each consequence object; none is written at the record level.
+- `vep_rs_version` names the vep-rs release that wrote the object, on every object; Ensembl VEP writes no such key ([Engine identity](#engine-identity)).
 
 ## Parquet Format
 

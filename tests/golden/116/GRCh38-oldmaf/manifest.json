@@ -6,7 +6,8 @@
  "exemplars_per_combination": 100,
  "max_span": 1000000,
  "covers": [
-  "old_maf"
+  "old_maf",
+  "engine_identity_lines"
  ],
  "excludes": {
   "variation_records_named": [

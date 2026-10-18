@@ -23,6 +23,11 @@ use super::OutputFormatter;
 /// The field-selection options, shared with every other format.
 pub type VcfFieldOptions = FieldOptions;
 
+/// The key of the engine identity meta line, `##vep-rs=<version>`: a
+/// `##key=value` line as VCF 4.3 section 1.4 defines meta-information, where
+/// the `## vep-rs <version>` form of the text formats would be malformed.
+const VCF_IDENTITY_KEY: &str = "##vep-rs=";
+
 /// VCF output formatter that adds a CSQ INFO field to original VCF lines.
 pub struct VcfOutputFormatter {
     /// Name of the INFO field (default "CSQ").
@@ -65,9 +70,9 @@ impl VcfOutputFormatter {
     /// The header block VEP writes for a VCF output given the input's own
     /// header lines (`##` metas and the `#CHROM` line, in order; empty when the
     /// input was not a VCF): a `##fileformat` line when the input lacks one, the
-    /// input metas minus any earlier CSQ definition or `##VEP` line, the
-    /// `##VEP=` line, the CSQ `##INFO` definition, the command line, then the
-    /// column line.
+    /// input metas minus any earlier CSQ definition, `##VEP` or `##vep-rs` line,
+    /// the `##VEP=` line, the `##vep-rs=<version>` line, the CSQ `##INFO`
+    /// definition, the command line, then the column line.
     pub fn header_lines(&self, input_headers: &[String]) -> Vec<String> {
         let mut lines: Vec<String> = Vec::new();
         let mut col_heading = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO".to_string();
@@ -86,13 +91,17 @@ impl VcfOutputFormatter {
                 col_heading = heading.clone();
             }
             for h in metas {
-                if h.to_ascii_lowercase().contains(&csq_marker) || h.starts_with("##VEP") {
+                if h.to_ascii_lowercase().contains(&csq_marker)
+                    || h.starts_with("##VEP")
+                    || h.starts_with(VCF_IDENTITY_KEY)
+                {
                     continue;
                 }
                 lines.push(h.clone());
             }
         }
         lines.push(self.vep_meta_line.clone());
+        lines.push(format!("{VCF_IDENTITY_KEY}{}", fields::VEP_RS_VERSION));
         lines.push(self.info_line());
         lines.push(format!("##VEP-command-line='{}'", self.command_line));
         lines.push(col_heading);
@@ -297,6 +306,38 @@ mod tests {
 
         assert!(header.starts_with("##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: "));
         assert!(header.contains("Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation"));
+    }
+
+    /// The identity meta follows the `##VEP=` line in the key-value form of
+    /// VCF 4.3 section 1.4, and a re-annotation replaces an earlier one along
+    /// with the earlier `##VEP` lines rather than keeping both.
+    #[test]
+    fn identity_meta_follows_the_vep_line_and_replaces_an_earlier_one() {
+        let formatter = VcfOutputFormatter::default();
+        let identity = format!("##vep-rs={}", fields::VEP_RS_VERSION);
+        let lines = formatter.header_lines(&[]);
+        assert_eq!(lines[0], "##fileformat=VCFv4.1");
+        assert!(lines[1].starts_with("##VEP=\"v"));
+        assert_eq!(lines[2], identity);
+        assert!(lines[3].starts_with("##INFO=<ID=CSQ,"));
+        assert_eq!(
+            lines.iter().filter(|l| l.starts_with("##vep-rs=")).count(),
+            1
+        );
+
+        let input = [
+            "##fileformat=VCFv4.2".to_string(),
+            "##VEP=\"v116.2\" API=\"v116\"".to_string(),
+            "##vep-rs=0.4.0".to_string(),
+            "##source=keep".to_string(),
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO".to_string(),
+        ];
+        let lines = formatter.header_lines(&input);
+        assert_eq!(lines[0], "##fileformat=VCFv4.2");
+        assert_eq!(lines[1], "##source=keep");
+        assert!(lines[2].starts_with("##VEP=\"v"));
+        assert_eq!(lines[3], identity);
+        assert!(!lines.contains(&"##vep-rs=0.4.0".to_string()));
     }
 
     #[test]

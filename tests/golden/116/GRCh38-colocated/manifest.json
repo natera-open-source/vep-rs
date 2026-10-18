@@ -12,7 +12,8 @@
   "gnomade-columns",
   "gnomadg-columns",
   "variation_name",
-  "clin_sig"
+  "clin_sig",
+  "engine_identity_lines"
  ],
  "excludes": {
   "variation_records_named": [

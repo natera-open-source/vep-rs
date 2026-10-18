@@ -8,7 +8,8 @@
  "cache_cost_flank": 5000,
  "covers": [
   "cache-valid-chromosomes",
-  "flag_matrix_concordance"
+  "flag_matrix_concordance",
+  "engine_identity_lines"
  ],
  "suites": {
   "alt": {

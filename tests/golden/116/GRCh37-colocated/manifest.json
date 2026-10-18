@@ -12,7 +12,8 @@
   "variation-files-as-input",
   "variation-cache-columns",
   "gnomade-columns",
-  "gnomadg-columns"
+  "gnomadg-columns",
+  "engine_identity_lines"
  ],
  "excludes": {
   "variation_records_named": [

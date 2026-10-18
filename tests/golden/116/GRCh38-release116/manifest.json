@@ -21,7 +21,8 @@
   "breakends",
   "incomplete-del",
   "skipped-variant-semantics",
-  "flag_matrix_concordance"
+  "flag_matrix_concordance",
+  "engine_identity_lines"
  ],
  "suites": {
   "GRCh38-release116": {

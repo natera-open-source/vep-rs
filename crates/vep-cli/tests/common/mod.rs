@@ -750,7 +750,8 @@ fn json_scalar(v: &serde_json::Value) -> String {
 }
 
 /// Parses the JSON format: one record-level entry per object (top-level
-/// scalars, keyed by the corpus record the `input` line names) and one entry per
+/// scalars, keyed by the corpus record the `input` line names, the vep-rs
+/// identity key set aside for [`compare_json_identity`]) and one entry per
 /// `transcript_consequences` / `intergenic_consequences` element. An object
 /// whose `input` matches no record is keyed by its output ordinal.
 pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
@@ -768,7 +769,11 @@ pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
             .unwrap_or(format!("obj{n}"));
         let mut fields = BTreeMap::new();
         for (k, v) in obj.as_object().unwrap() {
-            if k == "transcript_consequences" || k == "intergenic_consequences" || k == "input" {
+            if k == "transcript_consequences"
+                || k == "intergenic_consequences"
+                || k == "input"
+                || k == "vep_rs_version"
+            {
                 continue;
             }
             fields.insert(k.clone(), json_scalar(v));
@@ -1272,6 +1277,41 @@ const VOLATILE_PREFIXES: [&str; 3] = [
     "## VEP command-line: ",
 ];
 
+/// The engine identity vep-rs writes beside Ensembl VEP's header lines, which
+/// the reference lacks: `## vep-rs <version>` in the default and tab headers,
+/// `##vep-rs=<version>` in the VCF header and `vep_rs_version` in every JSON
+/// object. The binary under test is this crate's version, so the comparators
+/// set aside exactly one line of exactly this text and nothing else.
+const VEP_RS_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Removes the identity line from a vep-rs header, or describes its absence.
+fn take_identity_line(actual: &mut Vec<&str>, identity: &str) -> Result<(), String> {
+    let Some(at) = actual.iter().position(|line| *line == identity) else {
+        return Err(format!("vep-rs writes no {identity:?} header line"));
+    };
+    actual.remove(at);
+    Ok(())
+}
+
+/// The JSON format's identity check: every object carries `vep_rs_version`
+/// naming this version; returns the first object that does not, or an empty
+/// string.
+pub fn compare_json_identity(actual: &str) -> String {
+    for (n, line) in actual.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let obj: serde_json::Value = serde_json::from_str(line).unwrap();
+        let found = obj.get("vep_rs_version").and_then(|v| v.as_str());
+        if found != Some(VEP_RS_VERSION) {
+            return format!(
+                "JSON object {n}: vep_rs_version is {found:?}, expected {VEP_RS_VERSION:?}"
+            );
+        }
+    }
+    String::new()
+}
+
 /// Version lines of the Ensembl Perl API components, which vep-rs has no
 /// counterpart for; they may be absent.
 fn is_api_component_line(line: &str) -> bool {
@@ -1286,11 +1326,15 @@ fn is_api_component_line(line: &str) -> bool {
     .any(|c| line.starts_with(&format!("## {c} version ")))
 }
 
-/// Compares the `#`-prefixed header lines of a default or tab output; returns a
-/// description of the first difference, or an empty string.
+/// Compares the `#`-prefixed header lines of a default or tab output, the
+/// vep-rs identity line set aside; returns a description of the first
+/// difference, or an empty string.
 pub fn compare_tab_headers(expected: &str, actual: &str) -> String {
     let exp: Vec<&str> = expected.lines().filter(|l| l.starts_with('#')).collect();
-    let act: Vec<&str> = actual.lines().filter(|l| l.starts_with('#')).collect();
+    let mut act: Vec<&str> = actual.lines().filter(|l| l.starts_with('#')).collect();
+    if let Err(missing) = take_identity_line(&mut act, &format!("## vep-rs {VEP_RS_VERSION}")) {
+        return missing;
+    }
     let mut ai = 0usize;
     for (i, e) in exp.iter().enumerate() {
         if is_api_component_line(e) {
@@ -1326,7 +1370,8 @@ pub fn compare_tab_headers(expected: &str, actual: &str) -> String {
 
 /// Compares VCF meta lines: `##fileformat` and `##INFO` exact, the `##VEP=`
 /// line with its `time`, `cache` and API-component tokens removed, the
-/// command line by prefix; the `#CHROM` line exact.
+/// command line by prefix, the `##vep-rs=` identity line set aside; the
+/// `#CHROM` line exact.
 pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
     fn normalise_vep_line(line: &str) -> String {
         // Tokens are `key=value` or `key="quoted value"`; quoted values may hold spaces.
@@ -1360,7 +1405,10 @@ pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
         tokens.join(" ")
     }
     let exp: Vec<&str> = expected.lines().filter(|l| l.starts_with('#')).collect();
-    let act: Vec<&str> = actual.lines().filter(|l| l.starts_with('#')).collect();
+    let mut act: Vec<&str> = actual.lines().filter(|l| l.starts_with('#')).collect();
+    if let Err(missing) = take_identity_line(&mut act, &format!("##vep-rs={VEP_RS_VERSION}")) {
+        return missing;
+    }
     if exp.len() != act.len() {
         return format!(
             "header line count: expected {}, got {}\nexpected:\n{}\nactual:\n{}",
@@ -1388,9 +1436,9 @@ pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
 }
 
 /// Runs the `vep` binary for the run in one output format and compares the
-/// output with the run's expected file for it: the header report, then the
-/// entry report, each empty when the two agree (the JSON format has no header
-/// to compare). `format` is `default`, `tab`, `vcf` or `json`.
+/// output with the run's expected file for it: the header report (for JSON,
+/// which has no header, the identity-key report), then the entry report, each
+/// empty when the two agree. `format` is `default`, `tab`, `vcf` or `json`.
 pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) {
     let expected = run.expected(match format {
         "default" => "default.txt",
@@ -1424,7 +1472,7 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
         _ => {
             let inputs = run.input_records();
             (
-                String::new(),
+                compare_json_identity(&actual),
                 compare_entries(
                     &parse_json(&expected, &inputs),
                     &parse_json(&actual, &inputs),
@@ -1953,7 +2001,7 @@ pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) 
                 ),
             ),
             _ => (
-                String::new(),
+                compare_json_identity(&actual),
                 compare_entries(
                     &parse_json(&expected, &inputs),
                     &parse_json(&actual, &inputs),

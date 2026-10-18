@@ -1,0 +1,150 @@
+// Copyright (c) 2026-present Natera, Inc.
+// Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+//! Engine identity: every output format names the vep-rs version beside the
+//! Ensembl VEP header lines it reproduces (`## vep-rs <version>` in the default
+//! and tab headers, `##vep-rs=<version>` in the VCF header, `vep_rs_version` in
+//! every JSON object), and the golden-corpus comparators set aside exactly those
+//! lines, so an output that lacks one, repeats one or names another version is
+//! reported like any other header difference.
+
+mod common;
+
+use common::{
+    compare_json_identity, compare_tab_headers, compare_vcf_headers, corpora, default_run,
+    read_expected, run_vep,
+};
+
+/// The version the binary under test was built from: every crate of the
+/// workspace carries the release as its version, this test crate included.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn header_lines(text: &str) -> Vec<&str> {
+    text.lines().filter(|l| l.starts_with('#')).collect()
+}
+
+#[test]
+fn default_tab_vcf_json_carry_vep_rs_version() {
+    let corpus = corpora()
+        .into_iter()
+        .find(|c| c.name == "GRCh38-release116")
+        .expect("the GRCh38-release116 corpus is committed");
+    let run = default_run(&corpus);
+    let tmp = tempfile::tempdir().unwrap();
+
+    let tab_identity = format!("## vep-rs {VERSION}");
+    for format in ["default", "tab"] {
+        let text = run_vep(&run, format, tmp.path(), &[]);
+        let lines = header_lines(&text);
+        assert!(
+            lines[0].starts_with("## ENSEMBL VARIANT EFFECT PREDICTOR v"),
+            "{format}: the Ensembl VEP banner stays the first line"
+        );
+        assert_eq!(
+            lines[1], tab_identity,
+            "{format}: the identity line is second"
+        );
+        assert_eq!(
+            lines.iter().filter(|l| **l == tab_identity).count(),
+            1,
+            "{format}: one identity line"
+        );
+    }
+
+    let vcf = run_vep(&run, "vcf", tmp.path(), &[]);
+    let lines = header_lines(&vcf);
+    let vep_at = lines
+        .iter()
+        .position(|l| l.starts_with("##VEP="))
+        .expect("the ##VEP= line");
+    assert_eq!(lines[vep_at + 1], format!("##vep-rs={VERSION}"));
+    assert_eq!(
+        lines.iter().filter(|l| l.starts_with("##vep-rs=")).count(),
+        1
+    );
+
+    let json = run_vep(&run, "json", tmp.path(), &[]);
+    let objects: Vec<serde_json::Value> = json
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(
+        objects.len(),
+        corpus.manifest["records"].as_array().unwrap().len(),
+        "one object per record"
+    );
+    for obj in &objects {
+        assert_eq!(obj["vep_rs_version"], VERSION, "{obj}");
+    }
+}
+
+/// The comparators accept exactly one identity line of exactly this version
+/// and report everything else: a missing line, a repeated one, another
+/// version, and an object without the key.
+#[test]
+fn comparators_set_aside_exactly_the_identity_lines() {
+    let corpus = corpora()
+        .into_iter()
+        .find(|c| c.name == "GRCh38-release116")
+        .expect("the GRCh38-release116 corpus is committed");
+    let run = default_run(&corpus);
+    let tmp = tempfile::tempdir().unwrap();
+
+    let tab_identity = format!("## vep-rs {VERSION}");
+    let expected = read_expected(&corpus.dir, "tab.txt");
+    let actual = run_vep(&run, "tab", tmp.path(), &[]);
+    assert_eq!(compare_tab_headers(&expected, &actual), "");
+    assert_eq!(
+        compare_tab_headers(
+            &expected,
+            &actual.replacen(&tab_identity, "## vep-rs 0.0.0", 1)
+        ),
+        format!("vep-rs writes no {tab_identity:?} header line")
+    );
+    assert_eq!(
+        compare_tab_headers(&expected, &actual.replacen(&tab_identity, "", 1)),
+        format!("vep-rs writes no {tab_identity:?} header line")
+    );
+    let doubled = actual.replacen(&tab_identity, &format!("{tab_identity}\n{tab_identity}"), 1);
+    assert_eq!(
+        compare_tab_headers(&expected, &doubled),
+        format!("header line 2: expected prefix \"## Output produced at \", got {tab_identity:?}"),
+        "a repeated identity line is an extra line"
+    );
+
+    let vcf_identity = format!("##vep-rs={VERSION}");
+    let expected = read_expected(&corpus.dir, "vcf.vcf");
+    let actual = run_vep(&run, "vcf", tmp.path(), &[]);
+    assert_eq!(compare_vcf_headers(&expected, &actual), "");
+    assert_eq!(
+        compare_vcf_headers(
+            &expected,
+            &actual.replacen(&vcf_identity, "##vep-rs=0.0.0", 1)
+        ),
+        format!("vep-rs writes no {vcf_identity:?} header line")
+    );
+    let doubled = actual.replacen(&vcf_identity, &format!("{vcf_identity}\n{vcf_identity}"), 1);
+    assert!(
+        compare_vcf_headers(&expected, &doubled).starts_with("header line count:"),
+        "a repeated identity line is an extra line"
+    );
+
+    let actual = run_vep(&run, "json", tmp.path(), &[]);
+    assert_eq!(compare_json_identity(&actual), "");
+    let version_key = format!("\"vep_rs_version\":\"{VERSION}\"");
+    assert!(
+        actual.contains(&version_key),
+        "{version_key} is in every object"
+    );
+    let other = actual.replacen(&version_key, "\"vep_rs_version\":\"0.0.0\"", 1);
+    assert_eq!(
+        compare_json_identity(&other),
+        format!("JSON object 0: vep_rs_version is Some(\"0.0.0\"), expected {VERSION:?}")
+    );
+    let without = actual.replacen(&format!(",{version_key}"), "", 1);
+    assert_eq!(
+        compare_json_identity(&without),
+        format!("JSON object 0: vep_rs_version is None, expected {VERSION:?}")
+    );
+}

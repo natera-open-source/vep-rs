@@ -38,7 +38,8 @@
   "json_cache",
   "full_cache_dir",
   "show_cache_info",
-  "no_fasta"
+  "no_fasta",
+  "engine_identity_lines"
  ],
  "suites": {
   "GRCh38-run-control": {

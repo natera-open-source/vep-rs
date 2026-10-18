@@ -26,7 +26,8 @@
   "uploaded_variation_naming_116",
   "hgvsc_clamp_116",
   "hgvsp_extter_116",
-  "flag_matrix_concordance"
+  "flag_matrix_concordance",
+  "engine_identity_lines"
  ],
  "suites": {
   "GRCh37-hgvs": {

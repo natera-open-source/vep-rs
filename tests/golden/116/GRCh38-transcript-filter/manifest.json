@@ -6,7 +6,8 @@
  "exemplars_per_combination": 100,
  "max_span": 1000000,
  "covers": [
-  "transcript_filter"
+  "transcript_filter",
+  "engine_identity_lines"
  ],
  "suites": {
   "tf": {

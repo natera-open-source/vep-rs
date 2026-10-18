@@ -47,8 +47,13 @@ impl JsonOutputFormatter {
     }
 
     /// The JSON value for one input record (all alleles split from one line).
+    /// Every object, an unannotated record's included, carries `vep_rs_version`.
     pub fn format_record_value(&self, record: &[&InputVariant]) -> Value {
         let mut root: IndexMap<String, Value> = IndexMap::new();
+        root.insert(
+            "vep_rs_version".to_string(),
+            Value::String(fields::VEP_RS_VERSION.to_string()),
+        );
         let first = record[0];
         if record.iter().any(|v| v.vep_skip) {
             // VEP emits the unannotated record as its input line alone.
@@ -493,11 +498,23 @@ mod tests {
         assert_eq!(parsed["assembly_name"], "GRCh37");
         assert_eq!(parsed["input"], "21\t25000100\trs123\tA\tG\t.\t.\t.");
         assert_eq!(parsed["most_severe_consequence"], "synonymous_variant");
+        assert_eq!(parsed["vep_rs_version"], fields::VEP_RS_VERSION);
         assert!(
             parsed.get("variant_class").is_none(),
             "variant_class needs its flag"
         );
         assert!(parsed.get("existing_variation").is_none());
+    }
+
+    /// An unannotated record keeps VEP's input-only shape plus the identity key.
+    #[test]
+    fn skipped_record_is_its_input_line_and_the_version() {
+        let mut v = make_annotated_variant();
+        v.vep_skip = true;
+        let parsed = fmt(FieldOptions::default()).format_variant_value(&v);
+        let keys: Vec<&String> = parsed.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["input", "vep_rs_version"]);
+        assert_eq!(parsed["vep_rs_version"], fields::VEP_RS_VERSION);
     }
 
     #[test]
