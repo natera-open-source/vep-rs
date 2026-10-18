@@ -178,32 +178,50 @@ pub struct Args {
     #[arg(help_heading = "Output", long, value_name = "FORMAT")]
     pub convert: Option<String>,
 
-    /// Accepted for VEP compatibility; no effect (the annotation cache is --json_cache)
-    #[arg(help_heading = "Cache / Offline", long)]
-    pub cache: bool,
+    /// Annotate from the local cache, which vep-rs always does; a directory value is the cache root, as --dir_cache, when that flag is absent
+    #[arg(
+        help_heading = "Cache / Offline",
+        long,
+        num_args = 0..=1,
+        default_missing_value = crate::config::CACHE_FLAG_ALONE,
+        value_name = "DIR"
+    )]
+    pub cache: Option<String>,
 
     #[arg(help_heading = "Cache / Offline", long)]
     pub offline: bool,
 
-    /// Top-level VEP data directory (accepted for VEP compatibility; nothing is loaded from it, it only heads the cache path in the output header)
+    /// Top-level VEP data directory: the cache root when neither --dir_cache nor a --cache directory is given
     #[arg(help_heading = "Cache / Offline", long, default_value = "~/.vep")]
     pub dir: String,
 
-    /// Cache directory (defaults to --dir; accepted for VEP compatibility, nothing is loaded from it, it only names the cache path in the output header)
+    /// Cache root: the cache read is <dir_cache>/<species>[_refseq|_merged]/<cache_version>_<assembly>, as Ensembl VEP lays it out (defaults to --dir)
     #[arg(help_heading = "Cache / Offline", long = "dir_cache")]
     pub dir_cache: Option<String>,
 
-    /// Cache version named in the output header's cache path (defaults to the VEP release; selects no cache)
+    /// Cache version: the prefix of the cache directory under the species directory (defaults to the VEP release)
     #[arg(help_heading = "Cache / Offline", long = "cache_version")]
     pub cache_version: Option<u32>,
 
-    /// Path to the JSON transcript cache directory (built by vep-cache-builder or converted from a Perl VEP cache)
-    #[arg(help_heading = "Cache / Offline", long = "json_cache")]
+    /// The cache directory itself, the one holding info.json and transcripts/ (built by vep-cache-builder or converted from a Perl VEP cache); it is read in place of the --dir_cache layout, and only --assembly is checked against its info.json
+    #[arg(
+        help_heading = "Cache / Offline",
+        long = "json_cache",
+        visible_alias = "full_cache_dir"
+    )]
     pub json_cache: Option<String>,
 
-    /// FASTA file for reference sequence lookup
+    /// Print the cache's source versions as sorted key<TAB>value lines and exit
+    #[arg(help_heading = "Cache / Offline", long = "show_cache_info")]
+    pub show_cache_info: bool,
+
+    /// FASTA file for reference sequence lookup; without it, the first .fa by name in the cache directory that has its .fai beside it is used
     #[arg(help_heading = "Cache / Offline", long, visible_alias = "fa")]
     pub fasta: Option<String>,
+
+    /// Do not use a FASTA file found in the cache directory
+    #[arg(help_heading = "Cache / Offline", long = "no_fasta")]
+    pub no_fasta: bool,
 
     /// Enable 3' shifting of insertions/deletions (requires --fasta)
     #[arg(help_heading = "Cache / Offline", long = "shift_3prime")]
@@ -212,7 +230,7 @@ pub struct Args {
     #[arg(help_heading = "Cache / Offline", long)]
     pub sereal: bool,
 
-    /// Species named in the output header's cache path (the annotated data is the --json_cache contents)
+    /// Species: names the cache directory under --dir_cache; the Latin name only, with no alias such as human
     #[arg(
         help_heading = "Species / Assembly",
         short = 's',
@@ -221,7 +239,7 @@ pub struct Args {
     )]
     pub species: String,
 
-    /// Genome assembly (e.g., GRCh38)
+    /// Genome assembly (e.g., GRCh38): chooses among several caches of one version and must equal the cache's own name exactly; hg19 and hg38 are read as GRCh37 and GRCh38
     #[arg(help_heading = "Species / Assembly", short = 'a', long)]
     pub assembly: Option<String>,
 
@@ -594,11 +612,11 @@ pub struct Args {
     #[arg(help_heading = "Plugins", long = "dir_plugins")]
     pub dir_plugins: Option<String>,
 
-    /// Suffixes the species directory of the output header's cache path with _refseq when --json_cache is absent (accepted for VEP compatibility; selects no transcript set, which is the --json_cache contents)
+    /// Reads the cache under the species directory suffixed _refseq (the transcripts annotated are that cache's contents); no effect under --json_cache
     #[arg(help_heading = "Transcript Sets", long)]
     pub refseq: bool,
 
-    /// Suffixes the species directory of the output header's cache path with _merged when --json_cache is absent (accepted for VEP compatibility; selects no transcript set, which is the --json_cache contents)
+    /// Reads the cache under the species directory suffixed _merged (the transcripts annotated are that cache's contents); no effect under --json_cache
     #[arg(help_heading = "Transcript Sets", long)]
     pub merged: bool,
 
@@ -681,9 +699,22 @@ mod tests {
         assert_eq!(args.species, "homo_sapiens");
         assert_eq!(args.buffer_size, 5000);
         assert_eq!(args.fork, 0);
-        assert!(!args.cache);
+        assert!(args.cache.is_none());
         assert!(!args.offline);
         assert!(!args.everything);
+    }
+
+    /// `--cache` takes an optional value (`cache:s`, Config.pm:238): alone it is
+    /// on, and a following path is its directory.
+    #[test]
+    fn cache_takes_an_optional_directory() {
+        let args = Args::parse_from(["vep", "--cache", "--offline"]);
+        assert_eq!(args.cache.as_deref(), Some("1"));
+        assert!(args.offline);
+        let args = Args::parse_from(["vep", "--cache", "/opt/vep", "--offline"]);
+        assert_eq!(args.cache.as_deref(), Some("/opt/vep"));
+        let args = Args::parse_from(["vep", "--cache=/opt/vep"]);
+        assert_eq!(args.cache.as_deref(), Some("/opt/vep"));
     }
 
     #[test]
@@ -699,7 +730,7 @@ mod tests {
         ]);
         assert_eq!(args.input_file, "test.vcf");
         assert_eq!(args.output_file, ["out.txt"]);
-        assert!(args.cache);
+        assert_eq!(args.cache.as_deref(), Some("1"));
         assert!(args.offline);
     }
 

@@ -7,7 +7,7 @@ _gene_symbol_source	Database/Transcript.pm	implemented	open
 _gene_version	Database/Transcript.pm	implemented	open			
 _uniparc	Database/Transcript.pm	implemented	open			
 _uniprot_isoform	Database/Transcript.pm	implemented	open			
-aa-ea-esp-columns	-	accepted_noop	open			
+aa-ea-esp-columns	-	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::legacy_esp_columns_change_no_output		
 af	Config.pm	implemented	open			
 af-1kg-columns	OutputFactory.pm	implemented	open			
 af_1kg	Config.pm	implemented	open			
@@ -42,7 +42,7 @@ api-run-perl-plugin	BaseVepPlugin.pm	error	open
 api-safe	Config.pm	implemented	open			
 api-unknown-plugin-name	Runner.pm	error	open			
 appris	OutputFactory.pm	implemented	open			
-assembly	CacheDir.pm	documented_subset	open			
+assembly	CacheDir.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/cache_resolve.rs::assembly_mismatch_with_info_json_is_fatal;crates/vep-cli/src/cache_resolve.rs::assembly_inferred_from_cache_feeds_plugin_hint	tests/golden/116/GRCh38-run-control	
 attribute-appris	OutputFactory.pm	implemented	open			
 attribute-gencode-basic	AnnotationType/Transcript.pm	implemented	open			
 attribute-gencode-primary	AnnotationType/Transcript.pm	implemented	open			
@@ -68,7 +68,7 @@ bnd_intergenic_rows_116	Variation/StructuralVariationOverlap.pm	implemented	land
 breakends	VCF.pm	implemented	open			
 buffer_size	Config.pm	implemented	open			
 byte_transparent_input	-	implemented	open			
-cache	Config.pm	implemented	open			
+cache	Config.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::perl_layout_resolves_leaf;crates/vep-cli/tests/cli_run_control.rs::no_cache_is_fatal_before_first_variant	tests/golden/116/GRCh38-run-control	
 cache-chr-synonyms	CacheDir.pm	implemented	open			
 cache-clin-sig-allele	Database/Variation.pm	implemented	open			
 cache-clinical-impact	Database/Variation.pm	implemented	open			
@@ -78,7 +78,7 @@ cache-refseq-merged-tarballs	JoinVEP.pm	documented_subset	open
 cache-region-files	Dumper.pm	implemented	open			
 cache-transcript-gene-tss	Cache/Transcript.pm	implemented	open			
 cache-valid-chromosomes	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::alt_contig_directory_loads	tests/golden/116/GRCh38-alt-contigs	
-cache_version	CacheDir.pm	implemented	open			
+cache_version	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::cache_version_selects_directory	tests/golden/116/GRCh38-run-control	
 CADD	CADD.pm	implemented	open			
 caid-input-format	CAID.pm	error	open			
 canonical	OutputFactory.pm	implemented	open			
@@ -135,8 +135,8 @@ default-format-header-lines	BaseTab.pm	documented_subset	open
 del-star-allele	VCF.pm	implemented	open			
 delimiter	Config.pm	implemented	open			
 DeNovo	DeNovo.pm	error	open			
-dir	Config.pm	implemented	open			
-dir_cache	AnnotationSourceAdaptor.pm	implemented	open			
+dir	Config.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::dir_is_the_default_cache_root	tests/golden/116/GRCh38-run-control	
+dir_cache	AnnotationSourceAdaptor.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::dir_cache_overrides_dir;crates/vep-cli/src/cache_resolve.rs::missing_species_dir_is_fatal	tests/golden/116/GRCh38-run-control	
 dir_plugins	Runner.pm	implemented	open			
 distance	BaseRunner.pm	implemented	open			
 docker-image	INSTALL.pl	implemented	open			
@@ -192,7 +192,7 @@ freq_freq	Config.pm	implemented	open
 freq_gt_lt	Config.pm	implemented	open			
 freq_pop	Config.pm	implemented	open			
 freqs-column	OutputFactory.pm	implemented	open			
-full_cache_dir	AnnotationSourceAdaptor.pm	implemented	open			
+full_cache_dir	AnnotationSourceAdaptor.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::full_cache_dir_is_json_cache_alias;crates/vep-cli/src/cache_resolve.rs::leaf_without_transcripts_dir_is_fatal	tests/golden/116/GRCh38-run-control	
 FunMotifs	FunMotifs.pm	error	open			
 G2P	G2P.pm	error	open			
 ga4gh_vrs	OutputFactory.pm	implemented	open			
@@ -269,7 +269,7 @@ iupac-alleles	Parser.pm	accepted_noop	open
 json	Config.pm	implemented	open			
 json-output-key-set	JSON.pm	documented_subset	open			
 json-regulatory-consequences	OutputFactory/JSON.pm	documented_subset	open			
-json_cache	-	documented_subset	open			
+json_cache	-	documented_subset	landed:documented_subset	crates/vep-cli/src/cache_resolve.rs::json_cache_missing_transcripts_is_fatal;crates/vep-cli/src/cache_resolve.rs::json_cache_missing_info_json_is_fatal;crates/vep-cli/src/cache_resolve.rs::json_cache_typo_path_is_fatal	tests/golden/116/GRCh38-run-control	
 keep_ann	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::keep_ann_is_accepted_without_effect		
 keep_csq	Config.pm	implemented	open			
 keep_intermediate	-	removed	open			
@@ -297,7 +297,7 @@ MechPredict	MechPredict.pm	error	open
 memory_footprint_statement	-	documented_subset	open			
 merged	CacheDir.pm	documented_subset	open			
 minimal	Config.pm	implemented	open			
-minor-allele-columns	BaseCacheVariation.pm	accepted_noop	open			
+minor-allele-columns	BaseCacheVariation.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::minor_allele_columns_change_no_output		
 mirna	OutputFactory.pm	implemented	open			
 most-severe-summary-output-shape	OutputFactory.pm	implemented	open			
 most-severe-summary-regulatory-terms	OutputFactory.pm	implemented	open			
@@ -320,7 +320,7 @@ NMD	NMD.pm	implemented	open
 no_check_alleles	Config.pm	implemented	open			
 no_check_variants_order	InputBuffer.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::no_check_variants_order_is_accepted_without_effect		
 no_escape	Config.pm	implemented	open			
-no_fasta	CacheDir.pm	implemented	open			
+no_fasta	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::no_fasta_suppresses_autodetect	tests/golden/116/GRCh38-run-control	
 no_headers	Config.pm	implemented	open			
 no_intergenic	OutputFactory.pm	implemented	open			
 no_progress	Config.pm	implemented	open			
@@ -419,7 +419,7 @@ shift_3prime	AnnotationType/Transcript.pm	documented_subset	open
 shift_genomic	OutputFactory.pm	implemented	open			
 shift_hgvs	BaseRunner.pm	implemented	open			
 shift_length	OutputFactory.pm	implemented	open			
-show_cache_info	vep	implemented	open			
+show_cache_info	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::show_cache_info_prints_info_json_and_exits_0	tests/golden/116/GRCh38-run-control	
 show_ref_allele	Config.pm	implemented	open			
 sift	Config.pm	documented_subset	open			
 sift-polyphen-value-grammar	Config.pm	documented_subset	open			
@@ -437,7 +437,7 @@ source_regbuild	Database/RegFeat.pm	implemented	open
 spanning-deletion-allele	VCF.pm	implemented	open			
 spdi	OutputFactory.pm	implemented	open			
 spdi-input-format	SPDI.pm	implemented	open			
-species	CacheDir.pm	implemented	open			
+species	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::species_names_the_directory;crates/vep-cli/src/cache_resolve.rs::species_refseq_suffix_is_refused	tests/golden/116/GRCh38-run-control	
 species_statement	-	documented_subset	open			
 SpliceAI	SpliceAI.pm	implemented	open			
 SpliceRegion	SpliceRegion.pm	error	open			
@@ -497,13 +497,13 @@ transcript-biotype	OutputFactory.pm	implemented	open
 transcript-coordinates	Database/Transcript.pm	implemented	open			
 transcript-dbid	AnnotationType/Transcript.pm	implemented	open			
 transcript-filter-grammar	FilterSet.pm	implemented	landed:implemented	crates/vep-cli/src/filter_set.rs::parses_the_perl_examples;crates/vep-cli/src/filter_set.rs::in_reads_a_one_value_per_line_file;crates/vep-cli/src/filter_set.rs::ambiguous_prefix_is_an_error;crates/vep-cli/src/filter_set.rs::is_child_walks_the_so_parent_table;crates/vep-cli/src/filter_set.rs::unsupported_regex_syntax_exits_naming_the_pattern;crates/vep-cli/src/filter_set.rs::perl_parse_errors_keep_their_text;crates/vep-cli/src/filter_set.rs::caret_never_reaches_a_pattern;crates/vep-cli/src/filter_set.rs::mixed_values_compare_through_their_number;crates/vep-core/src/so_ontology.rs::descendants_follow_every_is_a_path	tests/golden/116/GRCh38-transcript-filter	
-transcript-source	Core.pm	accepted_noop	open			
+transcript-source	Core.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::transcript_source_changes_no_output		
 transcript-stable-id-version	OutputFactory.pm	implemented	open			
 transcript_filter	AnnotationSource.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::filtered_transcripts_are_invisible_downstream;crates/vep-cli/src/args.rs::transcript_filter_repeats;crates/vep-cli/tests/integration_test.rs::transcript_filter_refusal_is_one_error_line_and_exit_1;crates/vep-cli/src/filter_set.rs::transcript_keys_read_the_transcript;crates/vep-cli/src/filter_set.rs::repeated_filters_are_joined_by_and	tests/golden/116/GRCh38-transcript-filter	
 transcript_index_impl	-	removed	open			
 transcript_version	OutputFactory.pm	implemented	open			
 TranscriptAnnotator	TranscriptAnnotator.pm	implemented	open			
-translation-object	Core.pm	accepted_noop	open			
+translation-object	Core.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::translation_exon_fields_change_no_output		
 tsl	OutputFactory.pm	documented_subset	open			
 TSSDistance	TSSDistance.pm	error	open			
 ucsc_assembly	Config.pm	implemented	open			

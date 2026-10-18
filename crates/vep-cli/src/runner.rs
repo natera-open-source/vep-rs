@@ -27,6 +27,7 @@ use rayon::ThreadPool;
 use tracing::{debug, info};
 
 use crate::annotator::{build_thread_pool, LoadedPlugins, PredictionConfig};
+use crate::cache_resolve::ResolvedCache;
 use crate::config::{CliError, Config};
 use crate::filter_set::FilterSet;
 use crate::json_cache;
@@ -72,9 +73,10 @@ impl PipelineStats {
 /// Pipeline runner for VEP.
 pub struct Runner {
     config: Config,
-    /// The cache's `info.json`, when the JSON cache carries one; it supplies the
-    /// header's `## <source> version` lines and the JSON `assembly_name`.
-    cache_info: Option<vep_core::cache_info::CacheInfo>,
+    /// The cache the run reads, resolved before the input is opened; its
+    /// `info.json` supplies the header's `## <source> version` lines and the JSON
+    /// `assembly_name`.
+    cache: ResolvedCache,
     /// The invocation as VEP prints it in `## VEP command-line:`.
     command_line: String,
 }
@@ -225,18 +227,33 @@ pub(crate) fn apply_record_rules(batch: &mut [InputVariant], transcripts: &LazyT
 }
 
 impl Runner {
-    pub fn new(config: Config) -> Self {
-        let cache_info = config
-            .json_cache
-            .as_deref()
-            .and_then(|dir| std::fs::read_to_string(Path::new(dir).join("info.json")).ok())
-            .and_then(|text| serde_json::from_str(&text).ok());
+    /// Resolves the cache the configuration names (`AnnotationSourceAdaptor.pm:120-132`
+    /// builds it before the parser), so a run with no cache fails here, before the
+    /// input or the output is opened.
+    pub fn new(config: Config) -> anyhow::Result<Self> {
+        let cache = crate::cache_resolve::resolve(&config)?;
         let command_line = vep_command_line(std::env::args().skip(1));
-        Self {
+        Ok(Self {
             config,
-            cache_info,
+            cache,
             command_line,
+        })
+    }
+
+    /// Writes the cache's source versions as `<key>\t<value>` lines, sorted by key
+    /// (vep:39-43 prints the same entries in hash order).
+    fn write_cache_info(&self, out: &mut dyn Write) -> anyhow::Result<()> {
+        for (key, value) in &self.cache.info.source_versions {
+            writeln!(out, "{key}\t{value}")?;
         }
+        out.flush()?;
+        Ok(())
+    }
+
+    /// The reference FASTA of the run: `--fasta`, else the file found in the cache
+    /// directory (`CacheDir.pm:235-251`).
+    fn fasta_path(&self) -> Option<&str> {
+        self.config.fasta.as_deref().or(self.cache.fasta.as_deref())
     }
 
     /// Which optional output fields the configuration switches on, shared by
@@ -289,7 +306,6 @@ impl Runner {
         }
     }
 
-    /// The assembly VEP names in JSON output: the flag, else the cache's.
     /// The run's identity for the Parquet footer: version, assembly, cache and
     /// the command line as the headers print it.
     fn parquet_kv_metadata(&self) -> Vec<(String, String)> {
@@ -308,39 +324,51 @@ impl Runner {
         if let Some(asm) = self.assembly_name() {
             kv.push(("assembly".to_string(), asm));
         }
-        if let Some(info) = &self.cache_info {
-            for (k, v) in &info.source_versions {
-                kv.push((format!("source_{k}"), v.clone()));
-            }
+        for (k, v) in &self.cache.info.source_versions {
+            kv.push((format!("source_{k}"), v.clone()));
         }
         kv
     }
 
-    /// The cache directory as the output headers print it: the path itself, or
+    /// The cache directory as the output headers print it: the resolved path, or
     /// `[PATH]/<leaf>` under `--mask_header_cache_path` (BaseRunner.pm
     /// `get_output_header_info`).
     fn header_cache_dir(&self) -> String {
-        let dir = self.config.cache_dir_path();
         if self.config.mask_header_cache_path {
-            collapse_paths(&dir)
+            collapse_paths(&self.cache.dir)
         } else {
-            dir
+            self.cache.dir.clone()
         }
     }
 
+    /// The assembly VEP names in JSON output and the Parquet footer: the resolved
+    /// cache's.
     fn assembly_name(&self) -> Option<String> {
-        self.config
-            .assembly
-            .clone()
-            .or_else(|| self.cache_info.as_ref().map(|i| i.assembly.clone()))
-            .filter(|a| !a.is_empty())
+        self.cache.assembly.clone()
     }
 
     /// Execute the full VEP pipeline.
     pub fn run(&self) -> anyhow::Result<()> {
         let start = Instant::now();
 
+        // Ensembl VEP compiles the filter while it builds the annotation sources
+        // the cache info is read from (BaseRunner.pm:415, AnnotationSource.pm:87-89),
+        // so a refused filter ends a --show_cache_info run before it prints.
         let transcript_filter = compile_transcript_filter(&self.config.transcript_filter)?;
+
+        if self.config.show_cache_info {
+            // The input parser opens before the info prints (BaseRunner.pm:406),
+            // and a named file that is not there is refused with Ensembl VEP's
+            // text (Parser.pm:239); the input is otherwise not read.
+            if self.config.input_file != "STDIN" && !Path::new(&self.config.input_file).exists() {
+                return Err(CliError::new(
+                    "run",
+                    format!("File \"{}\" does not exist", self.config.input_file),
+                )
+                .into());
+            }
+            return self.write_cache_info(&mut io::stdout().lock());
+        }
 
         // BaseRunner.pm:203-204, with Ensembl VEP's text.
         if self.config.output_file != "STDOUT" {
@@ -369,11 +397,15 @@ impl Runner {
             info!("Using {} threads for annotation", num_threads);
         }
 
-        if self.config.shift_3prime && self.config.fasta.is_none() {
+        let fasta_path = self.fasta_path();
+        if self.config.shift_3prime && fasta_path.is_none() {
             bail!("--shift_3prime requires --fasta <path> (indexed FASTA: .fa + .fai)");
         }
 
-        let reference_fasta = if let Some(ref fasta_path) = self.config.fasta {
+        let reference_fasta = if let Some(fasta_path) = fasta_path {
+            if self.config.fasta.is_none() {
+                debug!("Auto-detected FASTA file in cache directory");
+            }
             info!("Using reference FASTA: {}", fasta_path);
             Some(Arc::new(
                 vep_fasta::IndexedFasta::from_path(fasta_path)
@@ -422,23 +454,19 @@ impl Runner {
         // Indexed lazily per chromosome: the key set comes from a `read_dir`
         // walk, so the Perl-parity presence predicates are complete immediately,
         // while a chromosome's JSON parses only when a variant queries it.
-        let transcripts: Arc<LazyTranscriptIndexes> =
-            if let Some(ref json_cache_path) = self.config.json_cache {
-                let index_impl = self.config.transcript_index_impl;
-                info!(
-                    "Transcript cache: {} (lazy per-chromosome, index impl={})",
-                    json_cache_path,
-                    index_impl.name()
-                );
-                Arc::new(LazyTranscriptIndexes::new(
-                    json_cache_path,
-                    index_impl,
-                    effects_config.upstream_distance,
-                    effects_config.downstream_distance,
-                )?)
-            } else {
-                Arc::new(LazyTranscriptIndexes::empty())
-            };
+        let cache_dir = self.cache.dir.as_str();
+        let index_impl = self.config.transcript_index_impl;
+        info!(
+            "Transcript cache: {} (lazy per-chromosome, index impl={})",
+            cache_dir,
+            index_impl.name()
+        );
+        let transcripts = Arc::new(LazyTranscriptIndexes::new(
+            cache_dir,
+            index_impl,
+            effects_config.upstream_distance,
+            effects_config.downstream_distance,
+        )?);
 
         let variation_data: Option<Arc<json_cache::VariationData>> = if self.config.check_existing
             || self.config.af
@@ -448,13 +476,8 @@ impl Runner {
             || self.config.max_af
             || self.config.pubmed
         {
-            if let Some(ref json_cache_path) = self.config.json_cache {
-                info!("Loading variations from JSON cache: {}", json_cache_path);
-                let data = json_cache::load_all_variations(json_cache_path)?;
-                Some(Arc::new(data))
-            } else {
-                None
-            }
+            info!("Loading variations from JSON cache: {}", cache_dir);
+            Some(Arc::new(json_cache::load_all_variations(cache_dir)?))
         } else {
             None
         };
@@ -551,7 +574,7 @@ impl Runner {
                     )
                     .with_run_info(
                         &self.header_cache_dir(),
-                        self.cache_info.as_ref(),
+                        Some(&self.cache.info),
                         &self.command_line,
                     ),
                 );
@@ -568,7 +591,7 @@ impl Runner {
                     &options,
                     &plugin_fields,
                     &self.header_cache_dir(),
-                    self.cache_info.as_ref(),
+                    Some(&self.cache.info),
                     &self.command_line,
                 );
                 tab_formatter = Some(TabOutputFormatter::new(
@@ -760,10 +783,11 @@ impl Runner {
     /// A name that resolves to neither is warned about and skipped, which is
     /// Ensembl VEP's default without `--safe`.
     ///
-    /// The resolved `--assembly` is passed through so assembly-sensitive plugins
-    /// (REVEL's dual coordinate columns, LoFTEE's per-assembly GERP format) can
-    /// select the right column and reader, and so plugins carrying an assembly
-    /// marker in their data file can reject a mismatched one.
+    /// The run's assembly (`--assembly`, else the cache's) is passed through so
+    /// assembly-sensitive plugins (REVEL's dual coordinate columns, LoFTEE's
+    /// per-assembly GERP format) can select the right column and reader, and so
+    /// plugins carrying an assembly marker in their data file can reject a
+    /// mismatched one.
     fn load_plugins(
         &self,
         reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
@@ -772,7 +796,7 @@ impl Runner {
             &self.config.plugin,
             self.config.dir_plugins.as_deref(),
             reference_fasta,
-            crate::annotator::resolve_assembly(self.config.assembly.as_deref()),
+            crate::annotator::resolve_assembly(self.cache.assembly.as_deref()),
         )
     }
 
@@ -797,7 +821,7 @@ impl Runner {
         for line in vep_io::output::fields::default_format_header(
             &options,
             &self.header_cache_dir(),
-            self.cache_info.as_ref(),
+            Some(&self.cache.info),
             &self.command_line,
         ) {
             writeln!(writer, "{}", line)?;
@@ -1588,6 +1612,44 @@ pub(crate) fn annotate_batch_for_test(
         .collect()
 }
 
+/// Annotates one VCF line against `transcripts` and `variation_data` and renders
+/// the record in the default format under `options`, for tests in other files that
+/// compare the bytes two caches produce. Test-only, outside `mod tests` so the
+/// `json_cache` tests can reach it.
+#[cfg(test)]
+pub(crate) fn default_rows_for_test(
+    vcf_line: &str,
+    transcripts: Arc<LazyTranscriptIndexes>,
+    variation_data: Option<Arc<json_cache::VariationData>>,
+    options: FieldOptions,
+) -> String {
+    let resources = AnnotationResources {
+        transcripts,
+        variation_data,
+        effects_config: Arc::new(vep_effects::EffectsConfig {
+            upstream_distance: 5_000,
+            downstream_distance: 5_000,
+            ..Default::default()
+        }),
+        builtin_plugins: Arc::new(BuiltinRegistry::new()),
+        dylib_plugins: Arc::new(PluginRegistry::new()),
+        prediction_config: PredictionConfig::default(),
+        transcript_filter: None,
+    };
+    let stats = PipelineStats {
+        variants_processed: AtomicU64::new(0),
+        consequences_calculated: AtomicU64::new(0),
+    };
+    let pool = build_thread_pool(1).unwrap();
+    let mut batch = crate::vcf_parser::parse_vcf_line(vcf_line, true).expect("parse test VCF line");
+    annotate_batch(&mut batch, &resources, &pool, false, &stats, false).expect("annotate");
+    let alleles: Vec<&InputVariant> = batch.iter().collect();
+    let plan = ExtraFieldsPlan::new(options);
+    let mut out = Vec::new();
+    crate::pipeline::render_default_record(&mut out, &alleles, &plan, &mut Vec::new()).unwrap();
+    String::from_utf8(out).unwrap()
+}
+
 /// Two-exon test transcript on `chr` at `start` (1 kb span), shared by the runner
 /// and annotator tests so both batch paths are pinned against the same fixture.
 #[cfg(test)]
@@ -1776,17 +1838,55 @@ mod tests {
         assert!(needs_hgvs_computation(&config_from(&["--hgvs"])));
     }
 
+    /// A runner over a one-transcript cache in a temporary directory, with the
+    /// given flags after `--json_cache`.
+    fn runner_over(cache: &tempfile::TempDir, flags: &[&str]) -> Runner {
+        let mut argv = vec!["--json_cache", cache.path().to_str().unwrap()];
+        argv.extend_from_slice(flags);
+        Runner::new(config_from(&argv)).unwrap()
+    }
+
     /// OutputFactory.pm sets ENSP only under `--protein`, so `--protein_version`
     /// alone prints no protein identifier; with both, the versioned identifier
     /// is what the consequence carries.
     #[test]
     fn protein_version_prints_only_with_protein() {
         use vep_io::output::fields::flag_fields;
-        let alone = Runner::new(config_from(&["--protein_version"]));
+        let cache = write_json_cache("ensp", &[("21", 1_000)]);
+        let alone = runner_over(&cache, &["--protein_version"]);
         assert!(alone.config.protein_version);
         assert!(!flag_fields(&alone.field_options()).contains(&"ENSP"));
-        let both = Runner::new(config_from(&["--protein", "--protein_version"]));
+        let both = runner_over(&cache, &["--protein", "--protein_version"]);
         assert!(flag_fields(&both.field_options()).contains(&"ENSP"));
+    }
+
+    /// A configuration whose cache resolves to nothing never becomes a runner:
+    /// `Runner::new` fails under the cache component before any file is opened.
+    #[test]
+    fn runner_refuses_a_missing_cache_before_running() {
+        let missing = tempfile::tempdir().unwrap();
+        let dir = missing.path().join("none");
+        let Err(error) = Runner::new(config_from(&["--json_cache", dir.to_str().unwrap()])) else {
+            panic!("a missing cache made a runner");
+        };
+        assert_eq!(
+            crate::config::CliError::from_run(&error),
+            format!("ERROR: [cache] Directory {} does not exist", dir.display())
+        );
+    }
+
+    /// `--show_cache_info` writes the cache's source versions as sorted
+    /// `<key>\t<value>` lines and nothing else (vep:39-43).
+    #[test]
+    fn show_cache_info_writes_sorted_source_versions() {
+        let cache = write_json_cache("info", &[("21", 1_000)]);
+        let runner = runner_over(&cache, &["--show_cache_info"]);
+        let mut out = Vec::new();
+        runner.write_cache_info(&mut out).unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "assembly\tGRCh38.p14\ndbSNP\t156\n"
+        );
     }
 
     /// Config.pm `mask_data_paths`: a trailing slash keeps its place after the
@@ -1828,13 +1928,18 @@ mod tests {
     #[test]
     fn mask_header_cache_path_masks_every_header_surface() {
         use vep_io::output::fields::{default_format_header, tab_header, vcf_vep_meta_line};
-        let plain = Runner::new(config_from(&["--json_cache", "/caches/116_GRCh38"]));
-        assert_eq!(plain.header_cache_dir(), "/caches/116_GRCh38");
+        let root = tempfile::tempdir().unwrap();
+        let leaf = root.path().join("homo_sapiens").join("116_GRCh38");
+        write_json_cache_at(&leaf, &[("21", 1_000)]);
+        let leaf_s = leaf.to_str().unwrap();
+        let plain = Runner::new(config_from(&["--json_cache", leaf_s])).unwrap();
+        assert_eq!(plain.header_cache_dir(), leaf_s);
         let masked = Runner::new(config_from(&[
             "--json_cache",
-            "/caches/116_GRCh38",
+            leaf_s,
             "--mask_header_cache_path",
-        ]));
+        ]))
+        .unwrap();
         let dir = masked.header_cache_dir();
         assert_eq!(dir, "[PATH]/116_GRCh38");
         let options = masked.field_options();
@@ -1846,6 +1951,15 @@ mod tests {
         assert!(masked
             .parquet_kv_metadata()
             .contains(&("cache".to_string(), "[PATH]/116_GRCh38".to_string())));
+        // The layout resolution names the same leaf, so the header reads the same.
+        let resolved = Runner::new(config_from(&[
+            "--dir_cache",
+            root.path().to_str().unwrap(),
+            "--mask_header_cache_path",
+        ]))
+        .unwrap();
+        assert_eq!(resolved.header_cache_dir(), "[PATH]/116_GRCh38");
+        assert_eq!(resolved.assembly_name().as_deref(), Some("GRCh38"));
     }
 
     /// The exon/intron ordinals reach the output only under `--numbers`; a VCF
@@ -1878,14 +1992,28 @@ mod tests {
     }
 
     /// Write a JSON cache holding one 1,000 bp transcript per `(chr, start)`, in
-    /// the array format `vep-cache-builder` emits. Self-cleaning on drop.
+    /// the array format `vep-cache-builder` emits, with a GRCh38 `info.json`.
+    /// Self-cleaning on drop.
     fn write_json_cache(tag: &str, entries: &[(&str, u64)]) -> tempfile::TempDir {
         let dir = tempfile::Builder::new()
             .prefix(&format!("vep_runner_{tag}_"))
             .tempdir()
             .unwrap();
+        write_json_cache_at(dir.path(), entries);
+        dir
+    }
+
+    /// The cache of [`write_json_cache`] written into `dir`, created as needed.
+    fn write_json_cache_at(dir: &Path, entries: &[(&str, u64)]) {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(
+            dir.join("info.json"),
+            r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116,
+                "source_versions":{"dbSNP":"156","assembly":"GRCh38.p14"}}"#,
+        )
+        .unwrap();
         for (chr, start) in entries {
-            let chr_dir = dir.path().join("transcripts").join(chr);
+            let chr_dir = dir.join("transcripts").join(chr);
             std::fs::create_dir_all(&chr_dir).unwrap();
             std::fs::write(
                 chr_dir.join("0-1000.json"),
@@ -1896,7 +2024,6 @@ mod tests {
             )
             .unwrap();
         }
-        dir
     }
 
     fn resources_over(transcripts: Arc<LazyTranscriptIndexes>) -> AnnotationResources {

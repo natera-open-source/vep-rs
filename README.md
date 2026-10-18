@@ -31,8 +31,8 @@ The ten built-in plugin databases are CADD, REVEL, gnomADc, AlphaMissense, dbscS
 
 vep-rs takes the same input files and flag names as Perl VEP and writes the same output layouts. Two things differ:
 
-- **The transcript cache.** `--json_cache` names a directory built by `vep-cache-builder` or converted from a Perl VEP cache ([docs/cache-setup.md](docs/cache-setup.md)). `--cache`, `--offline`, `--dir_cache`, `--cache_version` and `--species` are accepted but don't locate a cache, and vep-rs never contacts a database.
-- **Some flags are accepted but not implemented.** Among them are `--regulatory`, `--custom`, `--refseq`, `--merged`, `--coding_only`, `--pick_order` and the statistics flags (vep-rs writes no summary file). [docs/cli-reference.md](docs/cli-reference.md) marks every such flag.
+- **The transcript cache.** The cache is a directory built by `vep-cache-builder` or converted from a Perl VEP cache ([docs/cache-setup.md](docs/cache-setup.md)), found under `--dir_cache`, `--species` and `--cache_version` in Perl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout or named directly with `--json_cache`; a run with no cache stops with an error, and vep-rs never contacts a database.
+- **Some flags are accepted but not implemented.** Among them are `--regulatory`, `--custom`, `--coding_only`, `--pick_order` and the statistics flags (vep-rs writes no summary file); `--refseq` and `--merged` select the `_refseq` or `_merged` species directory and nothing more. [docs/cli-reference.md](docs/cli-reference.md) marks every such flag.
 
 ## Current release: v0.4.0
 

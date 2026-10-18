@@ -311,6 +311,10 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     ),
 ];
 
+/// The value `--cache` carries when given without a directory
+/// ([`Args::cache`]'s `default_missing_value`).
+pub const CACHE_FLAG_ALONE: &str = "1";
+
 /// Environment variables vep-rs reads that Ensembl VEP has no counterpart for.
 pub const ENVIRONMENT: &[(&str, &str)] = &[(
     "VEP_FASTA_STORAGE",
@@ -324,7 +328,10 @@ pub const COMPONENTS: &[(&str, &str)] = &[
         "an unsupported flag, or a combination the option rules refuse",
     ),
     ("output", "the output file or format"),
-    ("cache", "the transcript cache: its layout or its metadata"),
+    (
+        "cache",
+        "the transcript cache: nothing resolves at the configured path, its layout or its metadata is unusable, or its assembly disagrees with --assembly or with its own directory name",
+    ),
     (
         "filter",
         "a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect",
@@ -423,10 +430,16 @@ pub struct Config {
     pub cache: bool,
     pub offline: bool,
     pub dir: String,
+    /// The cache root the Ensembl VEP layout is resolved under: `--dir_cache`,
+    /// else a directory given to `--cache`, else `--dir`.
     pub dir_cache: String,
     pub dir_plugins: Option<String>,
     pub cache_version: u32,
+    /// Print the cache's source versions and exit.
+    pub show_cache_info: bool,
     pub fasta: Option<String>,
+    /// Do not pick up a FASTA file found in the cache directory.
+    pub no_fasta: bool,
     pub shift_3prime: bool,
 
     pub species: String,
@@ -611,9 +624,20 @@ impl Config {
         };
 
         let dir = expand_tilde(&args.dir);
+        // A directory given to --cache stands for --dir_cache when that flag is
+        // absent (Config.pm:716-718); any other value of --cache only switches it on.
+        // The bare flag's stand-in value is never a directory: Perl's bare `cache:s`
+        // is the empty string.
+        let cache_dir_value = args
+            .cache
+            .as_deref()
+            .filter(|value| *value != CACHE_FLAG_ALONE)
+            .map(expand_tilde)
+            .filter(|value| std::path::Path::new(value).is_dir());
         let dir_cache = args
             .dir_cache
             .map(|d| expand_tilde(&d))
+            .or(cache_dir_value)
             .unwrap_or_else(|| dir.clone());
 
         let cache_version = args.cache_version.unwrap_or(vep_core::VEP_VERSION);
@@ -649,7 +673,9 @@ impl Config {
             dir_cache,
             dir_plugins: args.dir_plugins,
             cache_version,
+            show_cache_info: args.show_cache_info,
             fasta: args.fasta,
+            no_fasta: args.no_fasta,
             shift_3prime: args.shift_3prime,
             species: args.species,
             assembly: state.scalar("assembly").map(str::to_string),
@@ -722,46 +748,11 @@ impl Config {
             merged: args.merged,
             gencode_basic: args.gencode_basic,
             vcf_info_field: args.vcf_info_field,
-            json_cache: args.json_cache,
+            json_cache: args.json_cache.as_deref().map(expand_tilde),
             fields,
             dont_skip: args.dont_skip,
             allow_non_variant: on("allow_non_variant"),
         }
-    }
-
-    /// The cache directory the output headers name: the JSON cache when one is
-    /// given, else Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout
-    /// (CacheDir.pm:315 and :368), the species directory suffixed `_refseq` or
-    /// `_merged` under those flags (:312), `<version>` alone when no assembly is set,
-    /// consecutive `/` collapsed to one (:373), so a `--dir_cache` ending in `/` adds none.
-    pub fn cache_dir_path(&self) -> String {
-        if let Some(json_cache) = &self.json_cache {
-            return json_cache.clone();
-        }
-        let mut species_dir = self.species.clone();
-        if self.refseq {
-            species_dir.push_str("_refseq");
-        }
-        if self.merged {
-            species_dir.push_str("_merged");
-        }
-        let assembly_suffix = self
-            .assembly
-            .as_deref()
-            .map(|a| format!("_{}", a))
-            .unwrap_or_default();
-        let joined = format!(
-            "{}/{}/{}{}",
-            self.dir_cache, species_dir, self.cache_version, assembly_suffix
-        );
-        let mut path = String::with_capacity(joined.len());
-        for c in joined.chars() {
-            if c == '/' && path.ends_with('/') {
-                continue;
-            }
-            path.push(c);
-        }
-        path
     }
 }
 
@@ -1213,37 +1204,70 @@ mod tests {
         );
     }
 
-    /// Ensembl VEP's `CacheDir.pm` appends the species directory (:315), suffixed
-    /// `_refseq` or `_merged` under those flags (:312), and then
-    /// `<version>_<assembly>` (:368), and collapses consecutive `/` (:373), so
-    /// `--dir_cache /opt/vep --assembly GRCh38` names
-    /// `/opt/vep/homo_sapiens/<version>_GRCh38`, as do `--dir_cache /opt/vep/` and
-    /// `--dir_cache /opt//vep`; `--refseq` names
-    /// `/opt/vep/homo_sapiens_refseq/<version>_GRCh38` and `--merged`
-    /// `/opt/vep/homo_sapiens_merged/<version>_GRCh38`.
+    /// A directory given to `--cache` is the cache root when `--dir_cache` is
+    /// absent (Config.pm:717); `--dir_cache` wins over it, and a value that is not
+    /// a directory leaves the root at `--dir`.
     #[test]
-    fn test_cache_dir_path() {
-        let path = |flags: &[&str]| {
-            let mut argv = vec!["vep", "--dir_cache", "/opt/vep", "--assembly", "GRCh38"];
-            argv.extend_from_slice(flags);
-            config(&argv).cache_dir_path()
-        };
-        let version = vep_core::VEP_VERSION;
-        assert_eq!(path(&[]), format!("/opt/vep/homo_sapiens/{version}_GRCh38"));
+    fn cache_directory_value_stands_for_dir_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+        assert_eq!(config(&["vep", "--cache", path]).dir_cache, path);
         assert_eq!(
-            path(&["--refseq"]),
-            format!("/opt/vep/homo_sapiens_refseq/{version}_GRCh38")
+            config(&["vep", "--cache", path, "--dir_cache", "/elsewhere"]).dir_cache,
+            "/elsewhere"
         );
         assert_eq!(
-            path(&["--merged"]),
-            format!("/opt/vep/homo_sapiens_merged/{version}_GRCh38")
+            config(&["vep", "--cache", "no-such-directory", "--dir", "/data/vep"]).dir_cache,
+            "/data/vep"
         );
-        for dir_cache in ["/opt/vep/", "/opt//vep"] {
+        let plain = config(&["vep", "--cache", "--dir", "/data/vep"]);
+        assert!(plain.cache);
+        assert_eq!(plain.dir_cache, "/data/vep");
+        // The bare flag's stand-in value names no directory even when one of that
+        // name exists in the working directory.
+        struct RemoveOnDrop(Option<std::path::PathBuf>);
+        impl Drop for RemoveOnDrop {
+            fn drop(&mut self) {
+                if let Some(path) = &self.0 {
+                    let _ = std::fs::remove_dir(path);
+                }
+            }
+        }
+        let marker = std::env::current_dir().unwrap().join(CACHE_FLAG_ALONE);
+        // A directory an interrupted test run left behind is reused.
+        let created_here = !marker.exists();
+        std::fs::create_dir_all(&marker).expect("a directory named for the stand-in value");
+        let _marker = RemoveOnDrop(created_here.then_some(marker));
+        assert_eq!(
+            config(&["vep", "--cache", "--dir", "/data/vep"]).dir_cache,
+            "/data/vep"
+        );
+    }
+
+    /// `--json_cache` is tilde-expanded like the other cache paths.
+    #[test]
+    fn json_cache_is_tilde_expanded() {
+        if let Ok(home) = std::env::var("HOME") {
             assert_eq!(
-                config(&["vep", "--dir_cache", dir_cache, "--assembly", "GRCh38"]).cache_dir_path(),
-                format!("/opt/vep/homo_sapiens/{version}_GRCh38"),
-                "{dir_cache}"
+                config(&["vep", "--json_cache", "~/caches/116"]).json_cache,
+                Some(format!("{home}/caches/116"))
             );
+        }
+        assert_eq!(
+            config(&["vep", "--json_cache", "/caches/116"]).json_cache,
+            Some("/caches/116".to_string())
+        );
+    }
+
+    /// Every component an `ERROR: [<component>]` line can name has one row, so
+    /// the rendered reference carries one meaning per component.
+    #[test]
+    fn components_are_unique() {
+        let names: std::collections::BTreeSet<&str> =
+            COMPONENTS.iter().map(|(name, _)| *name).collect();
+        assert_eq!(names.len(), COMPONENTS.len(), "{COMPONENTS:?}");
+        for component in ["cli", "output", "cache", "filter", "run"] {
+            assert!(names.contains(component), "{component}");
         }
     }
 

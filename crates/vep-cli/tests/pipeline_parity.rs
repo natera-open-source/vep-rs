@@ -45,7 +45,7 @@ fn vep(input: &Path, json_cache: &Path, assembly: &str, out: &Path, args: &[&str
 fn run_corpus(corpus: &Corpus, out: &Path, args: &[&str]) -> Run {
     vep(
         &corpus.dir.join("variants.vcf"),
-        &corpus.dir.join("json_cache"),
+        &corpus.cache_dir(),
         &corpus.assembly,
         out,
         args,
@@ -239,7 +239,7 @@ fn allow_non_variant_lines_stay_in_input_order_at_every_buffer_size() {
                 .join(format!("nv_{}_{buffer}.vcf", corpus.assembly));
             let run = vep(
                 &input,
-                &corpus.dir.join("json_cache"),
+                &corpus.cache_dir(),
                 &corpus.assembly,
                 &out,
                 &[
@@ -337,7 +337,7 @@ fn dont_skip_reports_the_malformed_line_in_a_later_batch_and_exits() {
         .arg(&out)
         .arg("--offline")
         .arg("--json_cache")
-        .arg(corpus.dir.join("json_cache"))
+        .arg(corpus.cache_dir())
         .args(["--species", "homo_sapiens", "--assembly", &corpus.assembly])
         .args(["--force_overwrite", "--no_stats", "--quiet", "--dont_skip"])
         .args(["--buffer_size", "10", "--fork", "4"]);
@@ -368,7 +368,7 @@ fn unwritable_output_fails_instead_of_hanging() {
         .arg("/dev/full")
         .arg("--offline")
         .arg("--json_cache")
-        .arg(corpus.dir.join("json_cache"))
+        .arg(corpus.cache_dir())
         .args(["--species", "homo_sapiens", "--assembly", &corpus.assembly])
         .args(["--force_overwrite", "--no_stats", "--quiet"])
         .args(["--buffer_size", "50", "--fork", "4"]);

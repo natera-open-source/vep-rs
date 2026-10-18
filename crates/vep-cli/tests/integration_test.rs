@@ -19,6 +19,15 @@ fn test_input_vcf() -> String {
     )
 }
 
+/// The committed GRCh38 golden corpus cache, for runs whose assertion is not
+/// about the annotation: a run with no cache at all is refused.
+fn corpus_cache() -> String {
+    format!(
+        "{}/../../tests/golden/116/GRCh38-release116/json_cache",
+        env!("CARGO_MANIFEST_DIR")
+    )
+}
+
 /// A JSON transcript cache named by `VEP_RS_TEST_CACHE`; `None` when the
 /// variable is unset or the directory is absent, and the caller skips.
 fn json_cache_path() -> Option<String> {
@@ -287,6 +296,7 @@ fn test_missing_input_file() {
     let result = vep_binary()
         .args(["-i", "/nonexistent/file.vcf"])
         .args(["-o", output_path.to_str().unwrap()])
+        .args(["--json_cache", &corpus_cache()])
         .args(["--offline", "--force", "--quiet"])
         .output()
         .unwrap();
@@ -294,6 +304,11 @@ fn test_missing_input_file() {
     assert!(
         !result.status.success(),
         "Expected VEP to fail with nonexistent input file"
+    );
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        stderr.contains("ERROR: [run] Failed to open input file '/nonexistent/file.vcf'"),
+        "{stderr}"
     );
 }
 
@@ -379,6 +394,7 @@ fn transcript_filter_refusal_is_one_error_line_and_exit_1() {
     ] {
         let result = vep_binary()
             .args(["--transcript_filter", filter])
+            .args(["--json_cache", &corpus_cache()])
             .args(["-i", "/nonexistent/file.vcf", "--quiet"])
             .output()
             .unwrap();
@@ -404,14 +420,10 @@ fn annotate_record(record: &str, format_flags: &[&str], extra: &[&str]) -> Vec<S
     )
     .unwrap();
     let output = dir.path().join("out");
-    let cache = format!(
-        "{}/../../tests/golden/116/GRCh38-release116/json_cache",
-        env!("CARGO_MANIFEST_DIR")
-    );
     let result = vep_binary()
         .args(["-i", input.to_str().unwrap()])
         .args(["-o", output.to_str().unwrap()])
-        .args(["--json_cache", &cache])
+        .args(["--json_cache", &corpus_cache()])
         .args(["--offline", "--assembly", "GRCh38"])
         .args(["--force_overwrite", "--no_stats", "--quiet"])
         .args(format_flags)
@@ -1208,10 +1220,6 @@ fn a_refused_record_is_skipped_with_a_visible_warning() {
     )
     .unwrap();
     let output = dir.path().join("out");
-    let cache = format!(
-        "{}/../../tests/golden/116/GRCh38-release116/json_cache",
-        env!("CARGO_MANIFEST_DIR")
-    );
     let result = vep_binary()
         .args([
             "-i",
@@ -1219,7 +1227,8 @@ fn a_refused_record_is_skipped_with_a_visible_warning() {
             "-o",
             output.to_str().unwrap(),
         ])
-        .args(["--json_cache", &cache, "--offline", "--assembly", "GRCh38"])
+        .args(["--json_cache", &corpus_cache()])
+        .args(["--offline", "--assembly", "GRCh38"])
         .args(["--force_overwrite", "--no_stats"])
         .output()
         .unwrap();
@@ -1278,6 +1287,7 @@ fn test_dont_skip_fails_on_invalid_vcf_line() {
     let result = vep_binary()
         .args(["-i", input_path.to_str().unwrap()])
         .args(["-o", output_path.to_str().unwrap()])
+        .args(["--json_cache", &corpus_cache()])
         .args(["--dont_skip", "--quiet"])
         .output()
         .unwrap();
@@ -1285,6 +1295,11 @@ fn test_dont_skip_fails_on_invalid_vcf_line() {
     assert!(
         !result.status.success(),
         "Expected VEP to fail with --dont_skip on invalid VCF line"
+    );
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        stderr.contains("ERROR: [run] line 3: parse error"),
+        "{stderr}"
     );
 }
 
@@ -1304,6 +1319,7 @@ fn test_allow_non_variant_passthrough_vcf() {
     let result = vep_binary()
         .args(["-i", input_path.to_str().unwrap()])
         .args(["-o", output_path.to_str().unwrap()])
+        .args(["--json_cache", &corpus_cache()])
         .args(["--vcf", "--allow_non_variant", "--force", "--quiet"])
         .output()
         .unwrap();
@@ -1330,6 +1346,7 @@ fn test_unknown_plugin_warns_but_does_not_fail() {
     let result = vep_binary()
         .args(["-i", &test_input_vcf()])
         .args(["-o", output_path.to_str().unwrap()])
+        .args(["--json_cache", &corpus_cache()])
         .args(["--force", "--quiet", "--offline"])
         .args(["--plugin", "NonExistentPlugin,param1"])
         .output()
@@ -1352,6 +1369,7 @@ fn test_builtin_plugin_names_are_recognized() {
     let result = vep_binary()
         .args(["-i", &test_input_vcf()])
         .args(["-o", output_path.to_str().unwrap()])
+        .args(["--json_cache", &corpus_cache()])
         .args(["--force", "--quiet", "--offline"])
         .args(["--plugin", "CADD"])
         .output()

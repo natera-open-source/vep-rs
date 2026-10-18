@@ -227,18 +227,16 @@ def test_classify_names_the_mate_side_local_read(tmp_path: Path):
     """A point breakend's mate-side Transcript row: VEP reads it at the local coordinate
     (`feature_truncation` alone when the local coordinate lands nowhere near the mate
     transcript), vep-rs at the mate (`feature_truncation,intron_variant` for a mate in
-    intron 1 of a transcript filed in the corpus cache)."""
-    corpus = tmp_path / "c"
-    (corpus / "json_cache" / "transcripts" / "21").mkdir(parents=True)
-    (corpus / "json_cache" / "transcripts" / "21" / "33000001-34000000.json").write_text(json.dumps([{
+    intron 1 of a transcript filed in the corpus cache), under either cache layout the
+    manifest's `cache_layout` names."""
+    shard = json.dumps([{
         "stable_id": "ENST1", "start": 33031935, "end": 33041244, "strand": 1, "biotype": "protein_coding",
         "exons": [{"start": 33031935, "end": 33032154}, {"start": 33036103, "end": 33036199}],
         "variation_effect_feature_cache": {"mapper": {"pairs": [
             {"from_start": 1, "from_end": 220, "to_start": 33031935, "to_end": 33032154, "ori": 1},
             {"from_start": 221, "from_end": 317, "to_start": 33036103, "to_end": 33036199, "ori": 1},
         ], "pair_count": 2, "cdna_coding_start": 50, "cdna_coding_end": 300}},
-    }]), encoding="utf-8")
-    (corpus / "manifest.json").write_text(json.dumps({"records": []}), encoding="utf-8")
+    }])
     vep = tmp_path / "vep.txt"
     rs = tmp_path / "rs.txt"
     vep.write_text(
@@ -251,13 +249,22 @@ def test_classify_names_the_mate_side_local_read(tmp_path: Path):
         + _row("b2", "1:14374334", "]21:33034355]A", "ENST2", "feature_truncation,intron_variant"),
         encoding="utf-8",
     )
-    rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)])
-    assert rc == 0
-    m = json.loads((corpus / "manifest.json").read_text())
-    by_feature = {d["feature"]: d["expected_divergence"] for d in m["divergences"]}
-    assert by_feature["ENST1"] == "breakend_mate_local_read"
-    # a transcript the corpus cache does not carry is not adjudicated
-    assert by_feature["ENST2"] == "unexplained_residual"
+    layouts = [
+        (tmp_path / "c", Path("json_cache"), {"records": []}),
+        (tmp_path / "e", Path("cache_root", "homo_sapiens", "116_GRCh38"),
+         {"release": "116", "assembly": "GRCh38", "cache_layout": "ensembl", "records": []}),
+    ]
+    for corpus, cache, manifest in layouts:
+        (corpus / cache / "transcripts" / "21").mkdir(parents=True)
+        (corpus / cache / "transcripts" / "21" / "33000001-34000000.json").write_text(shard, encoding="utf-8")
+        (corpus / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)])
+        assert rc == 0
+        m = json.loads((corpus / "manifest.json").read_text())
+        by_feature = {d["feature"]: d["expected_divergence"] for d in m["divergences"]}
+        assert by_feature["ENST1"] == "breakend_mate_local_read", cache
+        # a transcript the corpus cache does not carry is not adjudicated
+        assert by_feature["ENST2"] == "unexplained_residual", cache
 
 
 def test_select_focus_terms_take_more_exemplars(tmp_path: Path):
@@ -480,6 +487,9 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "formats": []}]', "flag set a formats is not a non-empty subset of default,tab,vcf,json"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "formats": "vcf"}]', "flag set a formats is not a non-empty subset of default,tab,vcf,json"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "stdin": true, "flags": ["--pick"]}]', "flag set a runs on stdin without --format among its flags"),
+        ('"covers": ["symbol"], "cache_layout": "perl"', 'cache_layout is "perl", not "ensembl"'),
+        ('"covers": ["symbol"], "cache_layout": null', 'cache_layout is null, not "ensembl"'),
+        ('"covers": ["symbol"], "cache_layout": "ensembl", "release": "116"', "cache_layout ensembl wants release and assembly"),
     ]
     for body, reason in shapes:
         manifest.write_text('{"records": [], ' + body + "}", encoding="utf-8")
@@ -882,22 +892,39 @@ def test_committed_expected_files_match_their_provenance_digests(corpus: Path):
     # The directory is the assembly, optionally suffixed (`GRCh37-hgvs`).
     assembly = corpus.name.split("-", 1)[0]
     assert manifest["release"] == corpus.parent.name and manifest["assembly"] == assembly
-    info = json.loads((corpus / "json_cache" / "info.json").read_text(encoding="utf-8"))
+    cache = corpus / "json_cache"
+    if manifest.get("cache_layout") == "ensembl":
+        cache = corpus / "cache_root" / "homo_sapiens" / f"{manifest['release']}_{manifest['assembly']}"
+    info = json.loads((cache / "info.json").read_text(encoding="utf-8"))
     assert info["assembly"] == assembly and info["source_versions"], "info.json must carry the cache source versions"
     if "fasta" in manifest:
         assert (corpus / manifest["fasta"]).is_file() and (corpus / (manifest["fasta"].removesuffix(".gz") + ".fai")).is_file()
 
 
 def _corpora_with_peptides() -> list[Path]:
-    return [p for p in _corpora() if (p / "json_cache" / "transcripts").is_dir()]
+    """The corpora whose cache directory, located by the manifest's `cache_layout`, holds
+    `transcripts/`."""
+    corpora = []
+    for corpus in _corpora():
+        manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
+        cache = corpus / "json_cache"
+        if manifest.get("cache_layout") == "ensembl":
+            cache = corpus / "cache_root" / "homo_sapiens" / f"{manifest['release']}_{manifest['assembly']}"
+        if (cache / "transcripts").is_dir():
+            corpora.append(corpus)
+    return corpora
 
 
 @pytest.mark.parametrize("corpus", _corpora_with_peptides(), ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_committed_caches_carry_a_peptide_for_every_coding_transcript(corpus: Path):
     """Every committed golden cache carries the peptide beside each CDS, so the format-parity
     tests exercise the sequence-edit overlay the measurement caches exercise."""
+    manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
+    cache = corpus / "json_cache"
+    if manifest.get("cache_layout") == "ensembl":
+        cache = corpus / "cache_root" / "homo_sapiens" / f"{manifest['release']}_{manifest['assembly']}"
     missing = 0
-    for shard in (corpus / "json_cache" / "transcripts").glob("*/*"):
+    for shard in (cache / "transcripts").glob("*/*"):
         for t in pjc.read_shard(shard):
             v = (t or {}).get("variation_effect_feature_cache") or {}
             if v.get("translateable_seq") and not v.get("peptide"):

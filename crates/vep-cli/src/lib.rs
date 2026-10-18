@@ -36,6 +36,7 @@ pub use vep_core::variant::InputVariant;
 pub use vep_io::output::json::JsonOutputFormatter;
 
 pub mod annotator;
+pub mod cache_resolve;
 pub mod config;
 pub mod dylib_plugins;
 pub mod filter_set;

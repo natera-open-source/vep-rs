@@ -212,16 +212,16 @@ impl Annotator {
         Self::from_config_with_pool(config, pool)
     }
 
+    /// Resolves the cache the configuration names, as the `vep` binary does, so a
+    /// configuration with no cache is an error here too rather than an empty index.
     pub fn from_config_with_pool(config: &Config, pool: Arc<ThreadPool>) -> anyhow::Result<Self> {
-        if config.shift_3prime && config.fasta.is_none() {
+        let cache = crate::cache_resolve::resolve(config)?;
+        let fasta_path = config.fasta.as_deref().or(cache.fasta.as_deref());
+        if config.shift_3prime && fasta_path.is_none() {
             anyhow::bail!("--shift_3prime requires --fasta <path> (indexed FASTA: .fa + .fai)");
         }
 
-        let reference_fasta = config
-            .fasta
-            .as_deref()
-            .map(load_reference_fasta)
-            .transpose()?;
+        let reference_fasta = fasta_path.map(load_reference_fasta).transpose()?;
         let effects_config = build_effects_config(
             config.distance,
             reference_fasta.clone(),
@@ -234,19 +234,12 @@ impl Annotator {
             &config.plugin,
             config.dir_plugins.as_deref(),
             reference_fasta,
-            resolve_assembly(config.assembly.as_deref()),
+            resolve_assembly(cache.assembly.as_deref()),
         )?;
         let builtin_plugins = Arc::new(builtin);
         let dylib_plugins = Arc::new(dylib);
-        let transcripts = if let Some(ref json_cache_path) = config.json_cache {
-            load_transcript_indexes(
-                json_cache_path,
-                &effects_config,
-                config.transcript_index_impl,
-            )?
-        } else {
-            Arc::new(LazyTranscriptIndexes::empty())
-        };
+        let transcripts =
+            load_transcript_indexes(&cache.dir, &effects_config, config.transcript_index_impl)?;
         let variation_data = if config.check_existing
             || config.af
             || config.af_1kg
@@ -255,11 +248,7 @@ impl Annotator {
             || config.max_af
             || config.pubmed
         {
-            config
-                .json_cache
-                .as_deref()
-                .map(load_variation_data)
-                .transpose()?
+            Some(load_variation_data(&cache.dir)?)
         } else {
             None
         };
@@ -1058,6 +1047,33 @@ mod tests {
                 library[0]
             );
         }
+    }
+
+    /// `from_config` resolves the cache as the `vep` binary does: a root in Ensembl
+    /// VEP's layout and a `--json_cache` leaf both load the leaf's transcripts, and
+    /// a root holding no cache is an error, not an empty index.
+    #[test]
+    fn from_config_resolves_the_cache_as_the_binary_does() {
+        let golden = format!("{}/../../tests/golden/116", env!("CARGO_MANIFEST_DIR"));
+        let root = format!("{golden}/GRCh38-run-control/cache_root");
+        let leaf = format!("{golden}/GRCh38-release116/json_cache");
+        let config = |flags: &[&str]| {
+            let mut argv = vec!["vep", "--fork", "1"];
+            argv.extend_from_slice(flags);
+            Config::from_argv(argv).unwrap()
+        };
+        for flags in [&["--dir_cache", &root][..], &["--json_cache", &leaf][..]] {
+            let annotator = Annotator::from_config(&config(flags)).unwrap();
+            assert!(
+                annotator.resources().transcripts.contains_key("21"),
+                "{flags:?}"
+            );
+        }
+        let empty = tempfile::tempdir().unwrap();
+        let err = Annotator::from_config(&config(&["--dir_cache", empty.path().to_str().unwrap()]))
+            .err()
+            .expect("an empty cache root is refused");
+        assert!(err.to_string().starts_with("ERROR: [cache] "), "{err}");
     }
 
     /// The annotator path reaches the same record-level breakend verdict as the CLI:

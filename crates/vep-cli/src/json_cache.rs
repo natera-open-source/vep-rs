@@ -970,7 +970,8 @@ fn compute_coding_region(mapper: &JsonMapper) -> (Option<u64>, Option<u64>) {
 /// lazy loader must therefore be able to answer "is this chromosome in the
 /// cache?" without parsing it, which this function provides.
 ///
-/// Returns an empty map when the directory is absent. A `transcripts`
+/// A cache directory without `transcripts/` is an error: an empty map would
+/// annotate every variant as intergenic and exit 0. A `transcripts`
 /// directory under which no chromosome holds a shard is refused under the error
 /// contract, naming the cache's serialiser: a Sereal cache converts to no
 /// shard at all, and a copy that landed no shard reads the same.
@@ -989,19 +990,20 @@ pub fn enumerate_transcript_shards(
     let mut by_chr: HashMap<String, Vec<PathBuf>> = HashMap::new();
     let transcripts_dir = Path::new(json_cache_dir).join("transcripts");
 
-    if !transcripts_dir.exists() {
-        info!(
-            "No transcripts directory found at {}",
+    if !transcripts_dir.is_dir() {
+        anyhow::bail!(
+            "no cache found at {json_cache_dir}: no transcripts directory ({})",
             transcripts_dir.display()
         );
-        return Ok(by_chr);
     }
 
     for chr_entry in std::fs::read_dir(&transcripts_dir)
         .with_context(|| format!("Failed to read {}", transcripts_dir.display()))?
     {
         let chr_entry = chr_entry?;
-        if !chr_entry.file_type()?.is_dir() {
+        // `path().is_dir()` follows a symlinked chromosome directory, which
+        // `DirEntry::file_type` reports as a link.
+        if !chr_entry.path().is_dir() {
             continue;
         }
         let chr = chr_entry.file_name().to_string_lossy().to_string();
@@ -1505,7 +1507,9 @@ pub fn load_all_variations(json_cache_dir: &str) -> anyhow::Result<VariationData
         .with_context(|| format!("Failed to read {}", variations_dir.display()))?
     {
         let chr_entry = chr_entry?;
-        if !chr_entry.file_type()?.is_dir() {
+        // `path().is_dir()` follows a symlinked chromosome directory, which
+        // `DirEntry::file_type` reports as a link.
+        if !chr_entry.path().is_dir() {
             continue;
         }
         let chr = chr_entry.file_name().to_string_lossy().to_string();
@@ -1562,12 +1566,30 @@ pub fn load_all_variations(json_cache_dir: &str) -> anyhow::Result<VariationData
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndexImpl};
+    use vep_io::output::fields::FieldOptions;
 
+    /// A directory without `transcripts/`, or whose `transcripts/` holds no
+    /// shard, loads nothing and says so: an empty transcript set would annotate
+    /// every variant as intergenic and exit 0.
     #[test]
     fn test_load_cache_missing_dir() {
-        let result = load_all_transcripts("/nonexistent/path");
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let error = load_all_transcripts("/nonexistent/path").unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .starts_with("no cache found at /nonexistent/path: no transcripts directory"),
+            "{error}"
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+        assert!(load_all_transcripts(path).is_err());
+        std::fs::create_dir(dir.path().join("transcripts")).unwrap();
+        let error = load_all_transcripts(path).unwrap_err();
+        assert!(
+            error.to_string().contains("no transcript shards under"),
+            "{error}"
+        );
     }
 
     /// The parallel outer loop must produce the same map a serial one would.
@@ -1966,6 +1988,141 @@ mod tests {
             .unwrap()
             .seq_edits
             .is_empty());
+    }
+
+    /// A one-exon coding transcript on chromosome 21 at 1000-1029, ten codons
+    /// `ATG GCT x8 TGA`, in the JSON the cache converter writes, with
+    /// `translation_extra` spliced into its translation object.
+    fn coding_transcript_json(translation_extra: &str) -> String {
+        format!(
+            r#"{{"stable_id":"ENST1","gene_stable_id":"ENSG1","chr":"21","start":1000,"end":1029,
+            "strand":1,"biotype":"protein_coding","source":"ensembl","is_canonical":1,
+            "exons":[{{"start":1000,"end":1029,"rank":1,"phase":0,"end_phase":0}}],
+            "translation":{{"stable_id":"ENSP1","start":1,"end":30{translation_extra}}},
+            "variation_effect_feature_cache":{{"codon_table":1,
+              "translateable_seq":"ATGGCTGCTGCTGCTGCTGCTGCTGCTTGA","peptide":"MAAAAAAAA",
+              "mapper":{{"start_phase":0,"cdna_coding_start":1,"cdna_coding_end":30,
+                "pairs":[{{"from_start":1,"from_end":30,"to_start":1000,"to_end":1029,"ori":1}}]}}}}}}"#
+        )
+    }
+
+    /// The default-format rows for a missense SNV at 21:1004 against one transcript.
+    fn missense_rows(transcript_json: &str, variations: Option<Arc<VariationData>>) -> String {
+        let jt: JsonTranscript = serde_json::from_str(transcript_json).unwrap();
+        let mut raw = HashMap::new();
+        raw.insert("21".to_string(), vec![convert_transcript(jt, "21")]);
+        let transcripts = Arc::new(LazyTranscriptIndexes::from_loaded(
+            raw,
+            TranscriptIndexImpl::default(),
+            5_000,
+            5_000,
+        ));
+        let options = FieldOptions {
+            check_existing: variations.is_some(),
+            ..Default::default()
+        };
+        crate::runner::default_rows_for_test(
+            "21\t1004\tsnv\tC\tA\t.\t.\t.",
+            transcripts,
+            variations,
+            options,
+        )
+    }
+
+    /// Variation data for chromosome 21 from a JSON list of records as the cache
+    /// writes them.
+    fn variations_from(json: &str) -> Arc<VariationData> {
+        let records: Vec<JsonVariation> = serde_json::from_str(json).unwrap();
+        let converted: Vec<CachedVariation> = records.into_iter().map(convert_variation).collect();
+        let mut index: FxHashMap<u64, Vec<usize>> = FxHashMap::default();
+        for (i, cv) in converted.iter().enumerate() {
+            index.entry(cv.start).or_default().push(i);
+        }
+        let mut variations = HashMap::new();
+        variations.insert("21".to_string(), converted);
+        let mut position_index = HashMap::new();
+        position_index.insert("21".to_string(), index);
+        Arc::new(VariationData {
+            variations,
+            position_index,
+        })
+    }
+
+    /// A variation record's `AA` and `EA` columns change nothing in the output
+    /// under `--check_existing`, the flag that reads a co-located record:
+    /// Ensembl VEP's `OutputFactory.pm` `%FREQUENCY_KEYS` has no AA or EA entry,
+    /// and no release-115 or later cache carries the columns.
+    #[test]
+    fn legacy_esp_columns_change_no_output() {
+        let base = r#""variation_name":"rs1","start":1004,"allele_string":"C/A","strand":1,
+            "failed":0,"somatic":0,"phenotype_or_disease":0,"AFR":"A:0.01""#;
+        let without = variations_from(&format!("[{{{base}}}]"));
+        let with = variations_from(&format!(r#"[{{{base},"AA":"A:0.2","EA":"A:0.3"}}]"#));
+        assert_eq!(with.variations["21"][0].frequencies["AA"], "A:0.2");
+        assert!(!without.variations["21"][0].frequencies.contains_key("AA"));
+        let transcript = coding_transcript_json("");
+        let rows = missense_rows(&transcript, Some(with));
+        assert!(
+            rows.contains("missense_variant") && rows.contains("\trs1\t"),
+            "{rows}"
+        );
+        assert_eq!(rows, missense_rows(&transcript, Some(without)));
+    }
+
+    /// A variation record's `minor_allele` and `minor_allele_freq` columns change
+    /// nothing in the output under `--check_existing`: Ensembl VEP's
+    /// `BaseCacheVariation.pm` reads them from a pre-115 cache and no column prints
+    /// them, and no release-115 or later cache carries them.
+    #[test]
+    fn minor_allele_columns_change_no_output() {
+        let base = r#""variation_name":"rs1","start":1004,"allele_string":"C/A","strand":1,
+            "failed":0,"somatic":0,"phenotype_or_disease":0"#;
+        let without = variations_from(&format!("[{{{base}}}]"));
+        let with = variations_from(&format!(
+            r#"[{{{base},"minor_allele":"A","minor_allele_freq":"0.12"}}]"#
+        ));
+        assert_eq!(with.variations["21"][0].minor_allele.as_deref(), Some("A"));
+        assert!(without.variations["21"][0].minor_allele.is_none());
+        let transcript = coding_transcript_json("");
+        let rows = missense_rows(&transcript, Some(with));
+        assert!(rows.contains("\trs1\t"), "{rows}");
+        assert_eq!(rows, missense_rows(&transcript, Some(without)));
+    }
+
+    /// A transcript's `source` names the set it came from; Ensembl VEP reads it
+    /// only to resolve two transcripts sharing a stable ID under `--refseq` or
+    /// `--merged` to the `ensembl` one (`AnnotationType/Transcript.pm:313-339` at
+    /// release/116.2), and the SOURCE column prints the separate `_source_cache`
+    /// key (`OutputFactory.pm:1583` at release/116.2), so at the default flags two
+    /// caches differing only there annotate alike.
+    #[test]
+    fn transcript_source_changes_no_output() {
+        let ensembl = coding_transcript_json("");
+        let refseq = ensembl.replace(r#""source":"ensembl""#, r#""source":"RefSeq""#);
+        assert_ne!(ensembl, refseq);
+        let rows = missense_rows(&ensembl, None);
+        assert!(rows.contains("missense_variant"), "{rows}");
+        assert_eq!(rows, missense_rows(&refseq, None));
+    }
+
+    /// The translation object's `start_exon` and `end_exon` objects and its
+    /// exon-relative offsets (the `Bio::EnsEMBL::Translation` fields the Storable
+    /// cache keeps, `Pipeline/DumpVEP/Dumper/Core.pm:226-235` at release/116.2
+    /// stripping only the translation's attributes, protein features, dates,
+    /// cross-references and adaptor) are not read: the coding region comes from
+    /// the exon coordinate mapper, so a cache with or without them annotates alike.
+    #[test]
+    fn translation_exon_fields_change_no_output() {
+        let plain = coding_transcript_json("");
+        let with_exons = coding_transcript_json(
+            r#","start_exon":{"start":1000,"end":1029,"stable_id":"ENSE1"},"end_exon":{"start":1000,"end":1029,"stable_id":"ENSE1"}"#,
+        );
+        let shifted = plain.replace(r#""start":1,"end":30"#, r#""start":7,"end":12"#);
+        assert_ne!(plain, shifted);
+        let rows = missense_rows(&plain, None);
+        assert!(rows.contains("missense_variant"), "{rows}");
+        assert_eq!(rows, missense_rows(&with_exons, None));
+        assert_eq!(rows, missense_rows(&shifted, None));
     }
 
     #[test]
@@ -2398,6 +2555,41 @@ mod tests {
         assert!(sift.lookup(1, b'A', AnalysisType::Sift).is_none());
         assert!(predictions.polyphen_humvar.is_none());
         assert!(predictions.polyphen_humdiv.is_none());
+    }
+
+    /// A chromosome directory reached through a symlink loads like a real one
+    /// in both walks: a skipped link would leave the transcript cache refused
+    /// as shard-less and the variations silently absent.
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_chromosome_directory_is_walked() {
+        let dir = tempfile::Builder::new()
+            .prefix("vep_jc_symlink_")
+            .tempdir()
+            .unwrap();
+        let real = dir.path().join("real_21");
+        std::fs::create_dir_all(&real).unwrap();
+        std::fs::write(real.join("1-1000000.json"), b"[]").unwrap();
+        let transcripts = dir.path().join("transcripts");
+        std::fs::create_dir_all(&transcripts).unwrap();
+        std::os::unix::fs::symlink(&real, transcripts.join("21")).unwrap();
+        let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(
+            shards["21"],
+            vec![transcripts.join("21").join("1-1000000.json")]
+        );
+        let real_variations = dir.path().join("real_v21");
+        std::fs::create_dir_all(&real_variations).unwrap();
+        std::fs::write(
+            real_variations.join("1-1000000.json"),
+            r#"[{"variation_name":"rs123","start":"100"}]"#,
+        )
+        .unwrap();
+        let variations = dir.path().join("variations");
+        std::fs::create_dir_all(&variations).unwrap();
+        std::os::unix::fs::symlink(&real_variations, variations.join("21")).unwrap();
+        let data = load_all_variations(dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(data.variations["21"][0].variation_name, "rs123");
     }
 
     /// A cache whose `transcripts` directory holds no shard is refused under

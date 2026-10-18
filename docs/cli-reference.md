@@ -56,13 +56,15 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--cache` | bool | false | Accepted for VEP compatibility; no effect (the annotation cache is --json_cache) |
+| `--cache` | String | -- | Annotate from the local cache, which vep-rs always does; a directory value is the cache root, as --dir_cache, when that flag is absent |
 | `--offline` | bool | false | Accepted without effect: vep-rs always runs offline and never contacts a database |
-| `--dir` | String | `~/.vep` | Top-level VEP data directory (accepted for VEP compatibility; nothing is loaded from it, it only heads the cache path in the output header) |
-| `--dir_cache` | String | -- | Cache directory (defaults to --dir; accepted for VEP compatibility, nothing is loaded from it, it only names the cache path in the output header) |
-| `--cache_version` | u32 | -- | Cache version named in the output header's cache path (defaults to the VEP release; selects no cache) |
-| `--json_cache` | String | -- | Path to the JSON transcript cache directory (built by vep-cache-builder or converted from a Perl VEP cache) |
-| `--fasta`, `--fa` | String | -- | FASTA file for reference sequence lookup |
+| `--dir` | String | `~/.vep` | Top-level VEP data directory: the cache root when neither --dir_cache nor a --cache directory is given |
+| `--dir_cache` | String | -- | Cache root: the cache read is <dir_cache>/<species>[_refseq\|_merged]/<cache_version>_<assembly>, as Ensembl VEP lays it out (defaults to --dir) |
+| `--cache_version` | u32 | -- | Cache version: the prefix of the cache directory under the species directory (defaults to the VEP release) |
+| `--json_cache`, `--full_cache_dir` | String | -- | The cache directory itself, the one holding info.json and transcripts/ (built by vep-cache-builder or converted from a Perl VEP cache); it is read in place of the --dir_cache layout, and only --assembly is checked against its info.json |
+| `--show_cache_info` | bool | false | Print the cache's source versions as sorted key<TAB>value lines and exit |
+| `--fasta`, `--fa` | String | -- | FASTA file for reference sequence lookup; without it, the first .fa by name in the cache directory that has its .fai beside it is used |
+| `--no_fasta` | bool | false | Do not use a FASTA file found in the cache directory |
 | `--shift_3prime` | bool | false | Enable 3' shifting of insertions/deletions (requires --fasta) |
 | `--sereal` | bool | false | Accepted without effect: the cache's serialiser is read from its own metadata |
 
@@ -70,8 +72,8 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--species`, `-s` | String | `homo_sapiens` | Species named in the output header's cache path (the annotated data is the --json_cache contents) |
-| `--assembly`, `-a` | String | -- | Genome assembly (e.g., GRCh38) |
+| `--species`, `-s` | String | `homo_sapiens` | Species: names the cache directory under --dir_cache; the Latin name only, with no alias such as human |
+| `--assembly`, `-a` | String | -- | Genome assembly (e.g., GRCh38): chooses among several caches of one version and must equal the cache's own name exactly; hg19 and hg38 are read as GRCh37 and GRCh38 |
 | `--grch37` | bool | false | Annotate against GRCh37: sets --assembly GRCh37, over an explicit --assembly, as Ensembl VEP's option set does |
 
 ### Database
@@ -177,8 +179,8 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--refseq` | bool | false | Suffixes the species directory of the output header's cache path with _refseq when --json_cache is absent (accepted for VEP compatibility; selects no transcript set, which is the --json_cache contents) |
-| `--merged` | bool | false | Suffixes the species directory of the output header's cache path with _merged when --json_cache is absent (accepted for VEP compatibility; selects no transcript set, which is the --json_cache contents) |
+| `--refseq` | bool | false | Reads the cache under the species directory suffixed _refseq (the transcripts annotated are that cache's contents); no effect under --json_cache |
+| `--merged` | bool | false | Reads the cache under the species directory suffixed _merged (the transcripts annotated are that cache's contents); no effect under --json_cache |
 | `--gencode_basic` | bool | false | Accepted for VEP compatibility; not implemented (the transcript set is the --json_cache contents) |
 | `--use_given_ref` | bool | false | Accepted without effect: vep-rs always uses the reference allele the input gives |
 
@@ -367,7 +369,7 @@ Environment variables vep-rs reads, which Ensembl VEP has no counterpart for:
 - `1`: a refusal or a failed run. One line `ERROR: [<component>] <message>` is written to standard error, where `<message>` is Ensembl VEP's text where it has one, without its own `ERROR: ` prefix. The components:
   - `cli`: an unsupported flag, or a combination the option rules refuse
   - `output`: the output file or format
-  - `cache`: the transcript cache: its layout or its metadata
+  - `cache`: the transcript cache: nothing resolves at the configured path, its layout or its metadata is unusable, or its assembly disagrees with --assembly or with its own directory name
   - `filter`: a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect
   - `run`: any other failure of the annotation run, with its cause chain
 - `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown flag, a missing value, a value outside an enumeration.

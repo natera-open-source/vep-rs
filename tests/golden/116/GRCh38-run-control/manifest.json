@@ -1,6 +1,7 @@
 {
  "release": "116",
  "assembly": "GRCh38",
+ "cache_layout": "ensembl",
  "generator_version": "2",
  "flags": [
   "--protein",
@@ -17,7 +18,17 @@
   "output_file",
   "stdout-output",
   "fork",
-  "threads"
+  "threads",
+  "cache",
+  "dir",
+  "dir_cache",
+  "cache_version",
+  "species",
+  "assembly",
+  "json_cache",
+  "full_cache_dir",
+  "show_cache_info",
+  "no_fasta"
  ],
  "suites": {
   "GRCh38-run-control": {
@@ -760,6 +771,197 @@
    "expect": {
     "exit": 0,
     "output": "default.txt"
+   }
+  },
+  {
+   "name": "dir-as-cache-root",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--cache",
+    "--dir",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "cache-directory-value",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "full-cache-dir",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--full_cache_dir",
+    "{cache}",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "show-cache-info",
+   "argv": [
+    "{golden}",
+    "--show_cache_info"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_starts_with": "1000genomes\tphase3\nCOSMIC\t102\nClinVar\t202509\nHGMD-PUBLIC\t20204\nassembly\tGRCh38.p14\n"
+   }
+  },
+  {
+   "name": "no-fasta",
+   "argv": [
+    "{golden}",
+    "--no_fasta",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "assembly-hg38-alias",
+   "argv": [
+    "{golden}",
+    "--assembly",
+    "hg38",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "cache-root-missing",
+   "argv": [
+    "{golden}",
+    "--dir_cache",
+    "{corpus}/no-such-root",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [cache] Cache directory "
+   }
+  },
+  {
+   "name": "cache-version-absent",
+   "argv": [
+    "{golden}",
+    "--cache_version",
+    "115",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [cache] No cache found for homo_sapiens, version 115"
+   }
+  },
+  {
+   "name": "assembly-mismatch",
+   "argv": [
+    "{golden}",
+    "--assembly",
+    "GRCh37",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [cache] Cache assembly version (GRCh38) and database or selected assembly version (GRCh37) do not match"
+   }
+  },
+  {
+   "name": "species-alias-refused",
+   "argv": [
+    "{golden}",
+    "--species",
+    "human",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "/cache_root/human not found"
+   }
+  },
+  {
+   "name": "json-cache-missing",
+   "argv": [
+    "{golden}",
+    "--json_cache",
+    "{corpus}/json_cache",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "/json_cache does not exist"
    }
   }
  ]

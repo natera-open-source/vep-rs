@@ -82,7 +82,7 @@ fn run(argv: Vec<OsString>) -> i32 {
         eprintln!("-------------------- -------------------- --------------------");
     }
 
-    match vep_cli::runner::Runner::new(config).run() {
+    match vep_cli::runner::Runner::new(config).and_then(|runner| runner.run()) {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("{}", CliError::from_run(&error));

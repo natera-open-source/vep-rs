@@ -6,12 +6,17 @@
 //! into comparable entries, and rendering every mismatch in one report.
 //!
 //! A corpus lives at `tests/golden/<release>/<name>/` with `variants.vcf`,
-//! `manifest.json`, `json_cache/` and `expected/{default.txt,tab.txt,vcf.vcf,
+//! `manifest.json`, its cache and `expected/{default.txt,tab.txt,vcf.vcf,
 //! json.jsonl}[.gz]`; `<name>` is the assembly, optionally suffixed
 //! (`GRCh37-hgvs`), and the manifest's `assembly` is what the run passes to
-//! `--assembly`. The manifest may also carry `flags` (extra command-line flags,
-//! such as `--hgvs`) and `fasta` (a gzipped reference beside the manifest with
-//! its `.fai`, decompressed once per run and passed to `--fasta`). Its
+//! `--assembly`. The cache is `json_cache/`, passed with `--json_cache`, unless
+//! the manifest's `cache_layout` is `ensembl`: then it sits at
+//! `cache_root/homo_sapiens/<release>_<assembly>/` and every run passes
+//! `--cache --dir_cache <corpus>/cache_root --cache_version <release>`, so the
+//! binary resolves the directory as Ensembl VEP does. The manifest may also
+//! carry `flags` (extra command-line flags, such as `--hgvs`) and `fasta` (a
+//! gzipped reference beside the manifest with its `.fai`, decompressed once per
+//! run and passed to `--fasta`). Its
 //! `divergences` list names the (Location, Allele, Feature) keys whose
 //! consequence terms are documented to differ between VEP and vep-rs (with the
 //! corpus record ordinals they belong to), and `vep_rs_only_tuples` the keys
@@ -62,6 +67,57 @@ pub struct Corpus {
     pub assembly: String,
     pub dir: PathBuf,
     pub manifest: serde_json::Value,
+}
+
+impl Corpus {
+    /// Whether the cache sits in Ensembl VEP's layout under `cache_root/`
+    /// (`cache_layout: "ensembl"`) rather than at `json_cache/`.
+    pub fn ensembl_cache_layout(&self) -> bool {
+        match self.manifest.get("cache_layout") {
+            None => false,
+            Some(serde_json::Value::String(layout)) if layout == "ensembl" => true,
+            Some(other) => panic!(
+                "{}/{}: cache_layout is {other}, not \"ensembl\"",
+                self.release, self.name
+            ),
+        }
+    }
+
+    /// The cache directory itself: `json_cache/`, or the leaf of the Ensembl layout.
+    pub fn cache_dir(&self) -> PathBuf {
+        if self.ensembl_cache_layout() {
+            self.cache_root()
+                .join("homo_sapiens")
+                .join(format!("{}_{}", self.release, self.assembly))
+        } else {
+            self.dir.join("json_cache")
+        }
+    }
+
+    /// The cache root of the Ensembl layout, `cache_root/`.
+    pub fn cache_root(&self) -> PathBuf {
+        self.dir.join("cache_root")
+    }
+
+    /// The arguments naming the cache for a run: `--json_cache <dir>`, or under the
+    /// Ensembl layout `--cache --dir_cache <root> --cache_version <release>`, so the
+    /// run resolves `<root>/homo_sapiens/<release>_<assembly>` itself.
+    pub fn cache_args(&self) -> Vec<String> {
+        if self.ensembl_cache_layout() {
+            vec![
+                "--cache".to_string(),
+                "--dir_cache".to_string(),
+                self.cache_root().display().to_string(),
+                "--cache_version".to_string(),
+                self.release.clone(),
+            ]
+        } else {
+            vec![
+                "--json_cache".to_string(),
+                self.cache_dir().display().to_string(),
+            ]
+        }
+    }
 }
 
 /// Every corpus under `tests/golden/`, sorted by (release, assembly).
@@ -357,13 +413,9 @@ fn corpus_fasta(corpus: &Corpus, out_dir: &Path) -> Option<PathBuf> {
 /// alone, so the option set, not `--assembly`, selects it.
 fn base_args(run: &Run, out_dir: &Path) -> Vec<String> {
     let corpus = run.corpus;
-    let mut args = vec![
-        "--offline".to_string(),
-        "--json_cache".to_string(),
-        corpus.dir.join("json_cache").display().to_string(),
-        "--species".to_string(),
-        "homo_sapiens".to_string(),
-    ];
+    let mut args = vec!["--offline".to_string()];
+    args.extend(corpus.cache_args());
+    args.extend(["--species".to_string(), "homo_sapiens".to_string()]);
     if !run.flags.iter().any(|f| f == "--grch37") {
         args.extend(["--assembly".to_string(), corpus.assembly.clone()]);
     }
@@ -1530,12 +1582,14 @@ pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
 /// Expands a run's `argv`: the token `{golden}` becomes the default run's
 /// arguments (`-i <input>` and [`base_args`]), `{flags}` the manifest's own
 /// flags; inside a token `{input}` is the corpus input path, `{cache}` the
-/// corpus cache, `{corpus}` the corpus directory, `{assembly}` the assembly and
-/// `{out}` the output path the caller chose.
+/// corpus cache directory itself, `{cache_root}` the root of the Ensembl layout,
+/// `{corpus}` the corpus directory, `{assembly}` the assembly and `{out}` the
+/// output path the caller chose.
 pub fn expand_argv(corpus: &Corpus, argv: &[String], out: &Path, out_dir: &Path) -> Vec<String> {
     let default = default_run(corpus);
     let input = corpus.dir.join("variants.vcf").display().to_string();
-    let cache = corpus.dir.join("json_cache").display().to_string();
+    let cache = corpus.cache_dir().display().to_string();
+    let cache_root = corpus.cache_root().display().to_string();
     let corpus_dir = corpus.dir.display().to_string();
     let out = out.display().to_string();
     let mut expanded = Vec::new();
@@ -1550,6 +1604,7 @@ pub fn expand_argv(corpus: &Corpus, argv: &[String], out: &Path, out_dir: &Path)
             _ => expanded.push(
                 token
                     .replace("{input}", &input)
+                    .replace("{cache_root}", &cache_root)
                     .replace("{cache}", &cache)
                     .replace("{corpus}", &corpus_dir)
                     .replace("{assembly}", &corpus.assembly)

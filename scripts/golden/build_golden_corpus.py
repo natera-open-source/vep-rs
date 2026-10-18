@@ -625,9 +625,11 @@ def flag_set_shape_error(fs: object) -> str | None:
 
 
 def manifest_shape_error(manifest: dict) -> str | None:
-    """The reason a manifest's `covers` or `flag_sets` cannot be read: `covers` must be a list of
-    non-empty names and `flag_sets` a list of entries of the shape `flag_set_shape_error` holds
-    them to, with distinct names."""
+    """The reason a manifest's `covers`, `flag_sets` or `cache_layout` cannot be read: `covers`
+    must be a list of non-empty names, `flag_sets` a list of entries of the shape
+    `flag_set_shape_error` holds them to, with distinct names, and `cache_layout`, when present,
+    `ensembl` (the cache at `cache_root/homo_sapiens/<release>_<assembly>`, so `release` and
+    `assembly` must be named) rather than the default `json_cache/`."""
     if "covers" in manifest and not is_name_list(manifest["covers"]):
         return "covers is not a list of names"
     flag_sets = manifest.get("flag_sets", [])
@@ -641,12 +643,16 @@ def manifest_shape_error(manifest: dict) -> str | None:
         if fs["name"] in names:
             return f"names flag set {fs['name']} twice"
         names.add(fs["name"])
+    if "cache_layout" in manifest and manifest["cache_layout"] != "ensembl":
+        return f'cache_layout is {json.dumps(manifest["cache_layout"])}, not "ensembl"'
+    if manifest.get("cache_layout") == "ensembl" and not all(isinstance(manifest.get(k), str) and manifest[k] for k in ("release", "assembly")):
+        return "cache_layout ensembl wants release and assembly"
     return None
 
 
 def read_manifest(corpus: Path) -> dict:
-    """The corpus manifest, refused unless it is a JSON object whose `covers` and `flag_sets`
-    have the shapes `manifest_shape_error` describes."""
+    """The corpus manifest, refused unless it is a JSON object whose `covers`, `flag_sets` and
+    `cache_layout` have the shapes `manifest_shape_error` describes."""
     path = corpus / "manifest.json"
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -948,11 +954,16 @@ def classify_mate_side_pair(
 
 
 def load_corpus_models(corpus: Path) -> dict:
-    """The corpus's pruned cache as `breakend_mate_context` transcript models."""
+    """The corpus's pruned cache, located by the manifest's `cache_layout`, as
+    `breakend_mate_context` transcript models."""
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "validation"))
     import breakend_mate_context as bmc  # noqa: E402
 
-    return bmc.load_transcript_models(corpus / "json_cache")
+    manifest = read_manifest(corpus)
+    cache = corpus / "json_cache"
+    if manifest.get("cache_layout") == "ensembl":
+        cache = corpus / "cache_root" / "homo_sapiens" / f"{manifest['release']}_{manifest['assembly']}"
+    return bmc.load_transcript_models(cache)
 
 
 def cmd_classify(args: argparse.Namespace) -> int:

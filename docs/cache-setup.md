@@ -1,6 +1,47 @@
 # Cache setup: building or converting the JSON transcript cache
 
-vep-rs annotates from a JSON transcript cache passed as a directory with `--json_cache`: the directory that holds `info.json` and `transcripts/` (for example `$HOME/.vep/json_cache/homo_sapiens/116_GRCh38` itself, not its parent). There are two ways to get one.
+vep-rs annotates from a JSON transcript cache: a directory that holds `info.json` and `transcripts/` (for example `$HOME/.vep/homo_sapiens/116_GRCh38`). There are two ways to name it and two ways to get one.
+
+## Naming the cache
+
+Ensembl VEP's cache flags select the directory the way Ensembl VEP does, so a command line
+written for it works unchanged. The cache root is `--dir_cache`, else a directory given to
+`--cache`, else `--dir` (default `$HOME/.vep`); under it the species directory is `--species`
+(default `homo_sapiens`, the Latin name only), suffixed `_refseq` or `_merged` under those
+flags; under that, the directory named `<cache_version>_<assembly>`, where `--cache_version`
+defaults to the VEP release. When one directory of that version exists, it is the cache and its
+assembly is read from its name; when several exist, `--assembly` chooses; an `--assembly` that
+disagrees with the directory name, or a directory name or `--assembly` that disagrees with the
+cache's own `info.json`, is an error. Every
+failure to resolve a cache exits 1 before the input is opened with one `ERROR: [cache] ...`
+line, in Ensembl VEP's words where it has them (`Cache directory <dir> not found`, `No cache
+found for homo_sapiens, version 116`, `Multiple assemblies found for cache version 116 ...`,
+the assemblies listed in name order; the metadata mismatch names `info.json`, the file a
+JSON cache carries where a Storable cache has `info.txt`).
+
+`--json_cache <dir>` (alias `--full_cache_dir`) names the cache directory itself instead,
+whatever `--dir_cache`, `--species` and `--cache_version` say; only `--assembly` is checked
+against its `info.json`. Either way the directory must hold `transcripts/` and `info.json`, so a
+Storable cache or a mistyped path fails rather than annotating nothing.
+
+`--assembly` is compared exactly and case-sensitively, as Ensembl VEP compares it, with one
+addition: `hg19` and `hg38` are read as `GRCh37` and `GRCh38`. When `--fasta` is absent, the
+first `.fa` by name inside the cache directory that has its `.fai` index beside it is used as
+the reference, unless `--no_fasta` is given; a `.fa.gz` or an unindexed `.fa` there is not read
+(Ensembl VEP reads a `.fa.gz` through Bio::DB::HTS and builds a missing index itself).
+`--show_cache_info` resolves the cache by the same flags, refuses a named input file that does
+not exist as Ensembl VEP does, prints the cache's source versions as `<key>\t<value>` lines
+sorted by key, and exits without reading the input.
+
+```bash
+# Ensembl VEP's layout: $HOME/.vep/homo_sapiens/116_GRCh38
+vep -i input.vcf -o output.txt --offline --cache --dir_cache $HOME/.vep --cache_version 116 --assembly GRCh38
+
+# The directory itself
+vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
+```
+
+## Getting a cache
 
 **Build one natively with `vep-cache-builder`**, with no Perl dependency. It downloads the
 release's Ensembl GFF3 and protein FASTA, or reads local copies passed with `--gff3` and

@@ -2,7 +2,8 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Run control through the `vep` binary: help and version, the output file and
-//! `STDOUT`, and the `runs` every golden-corpus manifest declares.
+//! `STDOUT`, the cache resolved before anything runs, and the `runs` every
+//! golden-corpus manifest declares.
 
 mod common;
 
@@ -258,6 +259,163 @@ fn existing_output_is_refused_with_ensembl_veps_text() {
     assert!(data_lines(&std::fs::read_to_string(&out).unwrap()).len() > 30);
 }
 
+/// A run whose cache resolves to nothing exits 1 under the cache component before
+/// the input is read or the output created: a cache root with no species
+/// directory (`CacheDir.pm:318`), a species directory with no cache of the
+/// version (`:336`), and a `--json_cache` directory that is no cache.
+#[test]
+fn no_cache_is_fatal_before_first_variant() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let input = dir.path().join("variants.vcf");
+    std::fs::write(&input, "21\t30165801\trs_ok\tA\tG\t.\t.\t.\n").unwrap();
+    let missing_species = dir.path().join("empty-root");
+    std::fs::create_dir_all(&missing_species).unwrap();
+    let missing_version = dir.path().join("root");
+    std::fs::create_dir_all(missing_version.join("homo_sapiens")).unwrap();
+    let no_cache = dir.path().join("not-a-cache");
+    std::fs::create_dir_all(&no_cache).unwrap();
+    let cases = [
+        (
+            ["--dir_cache", missing_species.to_str().unwrap()],
+            format!(
+                "ERROR: [cache] Cache directory {}/homo_sapiens not found",
+                missing_species.display()
+            ),
+        ),
+        (
+            ["--dir_cache", missing_version.to_str().unwrap()],
+            "ERROR: [cache] No cache found for homo_sapiens, version 116".to_string(),
+        ),
+        (
+            ["--json_cache", no_cache.to_str().unwrap()],
+            format!(
+                "ERROR: [cache] no cache found at {}: no transcripts directory",
+                no_cache.display()
+            ),
+        ),
+    ];
+    for (cache_flags, expected) in cases {
+        let output = vep()
+            .args(["-i", input.to_str().unwrap(), "-o", out.to_str().unwrap()])
+            .args(["--offline", "--assembly", "GRCh38", "--quiet"])
+            .args(cache_flags)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1), "{cache_flags:?}");
+        assert_eq!(text(&output.stderr).trim_end(), expected, "{cache_flags:?}");
+        assert!(output.stdout.is_empty(), "{cache_flags:?}");
+        assert!(!out.exists(), "{cache_flags:?}: an output file was created");
+    }
+    // A run with no input file at all is refused for its cache first.
+    let output = vep()
+        .args(["-i", "/no/such/input.vcf", "--json_cache"])
+        .arg(&no_cache)
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        text(&output.stderr).contains("ERROR: [cache] no cache found at"),
+        "{}",
+        text(&output.stderr)
+    );
+}
+
+/// `--show_cache_info` prints the cache's source versions as `<key>\t<value>`
+/// lines sorted by key and exits 0 (vep:39-43 prints them in hash order), with
+/// the cache resolved by the same flags as a run; a named input file that does
+/// not exist is refused first (BaseRunner.pm:406, Parser.pm:239), and an
+/// existing one is not read.
+#[test]
+fn show_cache_info_prints_info_json_and_exits_0() {
+    let dir = corpus_dir();
+    let info: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("json_cache").join("info.json")).unwrap(),
+    )
+    .unwrap();
+    let mut expected: Vec<String> = info["source_versions"]
+        .as_object()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| format!("{k}\t{}", v.as_str().unwrap()))
+        .collect();
+    expected.sort();
+    assert!(expected.len() > 5, "{expected:?}");
+    let expected = expected.join("\n") + "\n";
+    let output = vep()
+        .args(corpus_args())
+        .arg("--show_cache_info")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert_eq!(text(&output.stdout), expected);
+    let mut args = corpus_args();
+    let input_flag = args.iter().position(|a| a == "-i").unwrap();
+    args[input_flag + 1] = "/no/such/input.vcf".to_string();
+    let refused = vep()
+        .args(&args)
+        .args(["--show_cache_info", "--quiet"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(
+        text(&refused.stderr).trim_end(),
+        "ERROR: [run] File \"/no/such/input.vcf\" does not exist"
+    );
+    assert!(refused.stdout.is_empty());
+    // Under the Ensembl layout the same flags that select a cache print its info.
+    let root = tempfile::tempdir().unwrap();
+    let leaf = root.path().join("homo_sapiens").join("116_GRCh38");
+    std::fs::create_dir_all(leaf.join("transcripts")).unwrap();
+    std::fs::write(
+        leaf.join("info.json"),
+        r#"{"assembly":"GRCh38","source_versions":{"dbSNP":"156","assembly":"GRCh38.p14"}}"#,
+    )
+    .unwrap();
+    let output = vep()
+        .args(["--show_cache_info", "--cache", "--dir_cache"])
+        .arg(root.path())
+        .args(["--species", "homo_sapiens", "--cache_version", "116"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert_eq!(text(&output.stdout), "assembly\tGRCh38.p14\ndbSNP\t156\n");
+    let refused = vep()
+        .args(["--show_cache_info", "--quiet", "--dir_cache"])
+        .arg(root.path())
+        .args(["--assembly", "GRCh37"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(
+        text(&refused.stderr).trim_end(),
+        "ERROR: [cache] Cache assembly version (GRCh38) and database or selected assembly version (GRCh37) do not match"
+    );
+    assert!(refused.stdout.is_empty());
+    // A refused --transcript_filter ends the run before the info prints: Ensembl
+    // VEP compiles it while building the sources the info is read from
+    // (BaseRunner.pm:415, AnnotationSource.pm:87-89).
+    let refused = vep()
+        .args(["--show_cache_info", "--quiet", "--cache", "--dir_cache"])
+        .arg(root.path())
+        .args(["--transcript_filter", "biotype equals protein_coding"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(
+        text(&refused.stderr).trim_end(),
+        "ERROR: [filter] No such operator \"equals\""
+    );
+    assert!(refused.stdout.is_empty());
+}
+
 /// Parquet is a directory and cannot stream to STDOUT: the pair is refused
 /// before anything runs.
 #[test]
@@ -433,4 +591,79 @@ fn manifest_runs_refuses_the_entries_that_expect_nothing_or_are_malformed() {
     assert_eq!(accepted[0].expect.format, "default");
     assert_eq!(accepted[1].expect.format, "tab");
     assert_eq!(accepted[1].stdin.as_deref(), Some("variants.vcf"));
+}
+
+/// A manifest's `cache_layout` selects the cache directory and the arguments
+/// naming it: absent, `json_cache/` through `--json_cache`; `ensembl`, the
+/// committed leaf `cache_root/homo_sapiens/<release>_<assembly>` through
+/// `--cache --dir_cache <root> --cache_version <release>`. Any other value,
+/// `null` included, is refused with the corpus named rather than read as either.
+#[test]
+fn cache_layout_selects_the_cache_directory_and_refuses_another_value() {
+    let source = corpora()
+        .into_iter()
+        .find(|c| c.name == "GRCh38-run-control")
+        .expect("the GRCh38-run-control corpus is committed");
+    let with_layout = |layout: Option<serde_json::Value>| {
+        let mut manifest = source.manifest.clone();
+        match layout {
+            Some(value) => manifest["cache_layout"] = value,
+            None => {
+                manifest.as_object_mut().unwrap().remove("cache_layout");
+            }
+        }
+        Corpus {
+            release: source.release.clone(),
+            name: source.name.clone(),
+            assembly: source.assembly.clone(),
+            dir: source.dir.clone(),
+            manifest,
+        }
+    };
+    let root = source.dir.join("cache_root");
+    let ensembl = with_layout(Some(serde_json::json!("ensembl")));
+    assert!(ensembl.ensembl_cache_layout());
+    assert_eq!(
+        ensembl.cache_dir(),
+        root.join("homo_sapiens").join("116_GRCh38")
+    );
+    assert!(ensembl.cache_dir().join("info.json").is_file());
+    assert_eq!(
+        ensembl.cache_args(),
+        [
+            "--cache",
+            "--dir_cache",
+            root.to_str().unwrap(),
+            "--cache_version",
+            "116"
+        ]
+    );
+    let json_cache = source.dir.join("json_cache");
+    let json = with_layout(None);
+    assert!(!json.ensembl_cache_layout());
+    assert_eq!(json.cache_dir(), json_cache);
+    assert_eq!(
+        json.cache_args(),
+        ["--json_cache", json_cache.to_str().unwrap()]
+    );
+    for (value, shown) in [
+        (serde_json::json!("json"), "\"json\""),
+        (serde_json::json!("Ensembl"), "\"Ensembl\""),
+        (serde_json::Value::Null, "null"),
+    ] {
+        let corpus = with_layout(Some(value));
+        let outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| corpus.cache_args()));
+        let message = outcome
+            .err()
+            .and_then(|panic| panic.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        assert_eq!(
+            message,
+            format!(
+                "{}/{}: cache_layout is {shown}, not \"ensembl\"",
+                source.release, source.name
+            )
+        );
+    }
 }
