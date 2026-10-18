@@ -1,0 +1,104 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "9abed7defb533bdcc9a9e085b054adec",
+  "arch": "arm64",
+  "flags_passed": []
+ },
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--transcript_filter <filter> ...] [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "one SNV per locus at 32 chromosome 21 loci chosen from the cache's transcript set so that each 5 kb window holds transcripts of several biotypes, canonical and non-canonical, on both strands, with loci whose window holds no protein-coding transcript and loci above 40 Mb; three records carry two alternate alleles; the reference base is the GRCh38 primary assembly's",
+ "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite tf=<reference>=<input> --k 100 --seed 1 --covers transcript_filter --matrix tests/parity/matrix.tsv --out tests/golden/116/GRCh38-transcript-filter; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py flag-set (one per flag set) and classify (the manifest's run and each flag set)",
+ "sha256": {
+  "default.txt": "f4fecb31f3ac89a0c8eeb20e13b3abc03a3e7b5b9d4e7cfb1437fefa4bda5b7c",
+  "tab.txt": "0c92866aba8efc9b4b664c937ed8475f42f08830654604a0b2a5a8f4c968dbbd",
+  "vcf.vcf": "aa91eecd9afe506b67729736aec23173853ebbe36e4e24f9efe3b5b48c74a77d",
+  "json.jsonl": "9c1421634b3fb3f6d21eb9313123af90c77cd0ba51b00451fd825713ca83d8da"
+ },
+ "variants_vcf_sha256": "0b1c50517456e8fa6394ede64ebf001ac8f56d643a43420520246e06df6c59dc",
+ "transcript_ids_txt_sha256": "de15886471d3f2d444553fd1701f27fad7af744bcea990d48480320276c1612a",
+ "flag_sets": {
+  "filter-biotype": {
+   "flags": [
+    "--transcript_filter",
+    "biotype is protein_coding"
+   ],
+   "expected_dir": "expected_filter-biotype",
+   "sha256": {
+    "default.txt": "955ac4a104b825e2d4870b4be0ae128cd82aa0291bb344057de14ce659fe5fda",
+    "tab.txt": "4350ce750ca67885f7197a6c945a402713dec5a94b13f1eb531f1889078e0141",
+    "vcf.vcf": "d80c7bfe4a82ff84eb2f87720c764ac96982fbc12664c6e74d37bd1086b07a3c",
+    "json.jsonl": "a4bb9e503058e0d5c315dd5d6cb2dbedd7645ecc14be6c2b59cf881cd5d53b43"
+   }
+  },
+  "filter-not-match": {
+   "flags": [
+    "--transcript_filter",
+    "not biotype match pseudogene"
+   ],
+   "expected_dir": "expected_filter-not-match",
+   "sha256": {
+    "default.txt": "7e2ec3d5112c2a52e29b7fd533e1100acff5ca1f317f77b2b719e11f5eaf29fe",
+    "tab.txt": "f5cf3fa36273654dc51ed26442d7a98d4ef95d1e9ecc7eb126dbdf3237e50514",
+    "vcf.vcf": "e483e8db4730496085ea234dac19d32ae421042dd5400f0f42dc32ab50676d22",
+    "json.jsonl": "ff3affa3665064f1db0705bb47d82c789d16823b7ce2c0205e19b37e52806128"
+   }
+  },
+  "filter-in-file": {
+   "flags": [
+    "--transcript_filter",
+    "stable_id in transcript_ids.txt"
+   ],
+   "expected_dir": "expected_filter-in-file",
+   "sha256": {
+    "default.txt": "3804d369d512839cde699311c9841013e121f2e04fcd860c6b1aa4ad64ab7e0b",
+    "tab.txt": "9eba9bedbbede0dc9e38b94c3883be15b467cce16d24d9349907057848e429bd",
+    "vcf.vcf": "79b057d2925c49c633e6be4155b99021231b594a343c22dfde3666360d457ffe",
+    "json.jsonl": "37a1dec656927c47bb2037de59c79c6b5884ae6c6a490244fe1bccfbbc68cd06"
+   }
+  },
+  "filter-parens": {
+   "flags": [
+    "--transcript_filter",
+    "(biotype is protein_coding and is_canonical) or start > 40000000"
+   ],
+   "expected_dir": "expected_filter-parens",
+   "sha256": {
+    "default.txt": "72bc874a99ea4176ac761b8fcd398892a956c83977a0ea4b34c187206cd8c8ce",
+    "tab.txt": "e97ff0c9417b93d8f610f3b908e62edd39515380631d5718de72d38e682c590b",
+    "vcf.vcf": "a84b3e190a102f57cb7e3c9d68662875914cc4537cb4f6600473a4218f5c3273",
+    "json.jsonl": "dac1fcc9069381f423326b77cc787eb453d58c1abd7885b9393794f620ab8427"
+   }
+  },
+  "filter-repeated": {
+   "flags": [
+    "--transcript_filter",
+    "biotype is protein_coding",
+    "--transcript_filter",
+    "not is_canonical"
+   ],
+   "expected_dir": "expected_filter-repeated",
+   "sha256": {
+    "default.txt": "1b1434e5d9622d1e1bbed064bd20dc2b5823b89beb4076bcb480d48bf191f94c",
+    "tab.txt": "19d8154f93efa842edfd2f6b95a7e13f2d57be919510e3ce430c6ad77241a805",
+    "vcf.vcf": "204245fda4285e1f57dd142b2305edf1b12c495b63951f6cf92e201f2fc68244",
+    "json.jsonl": "1a59db2a04ce2e3a527d46fe6916e46c1355e3e2d8c488cc47617ac5e52633d1"
+   }
+  }
+ },
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 880
+  },
+  "shards": 23,
+  "spans_by_chromosome": {
+   "21": 32
+  }
+ }
+}

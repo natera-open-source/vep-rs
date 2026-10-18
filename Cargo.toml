@@ -66,6 +66,9 @@ libloading = "0.8"
 # Encoding
 base64 = "0.22"
 
+# Text
+regex = "1"
+
 # Allocator: the `vep` binary's default global allocator (vep-cli feature
 # `mimalloc`, on by default). Opt out with
 # `cargo build -p vep-cli --no-default-features --bin vep`; the package must

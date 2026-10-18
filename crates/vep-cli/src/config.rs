@@ -325,6 +325,10 @@ pub const COMPONENTS: &[(&str, &str)] = &[
     ),
     ("output", "the output file or format"),
     (
+        "filter",
+        "a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect",
+    ),
+    (
         "run",
         "any other failure of the annotation run, with its cause chain",
     ),
@@ -485,6 +489,9 @@ pub struct Config {
     pub flag_pick_allele: bool,
     pub flag_pick_allele_gene: bool,
     pub pick_order: Option<Vec<String>>,
+    /// The `--transcript_filter` strings, in command-line order; empty when
+    /// none was passed.
+    pub transcript_filter: Vec<String>,
     pub allele_number: bool,
     pub show_ref_allele: bool,
     pub minimal: bool,
@@ -698,6 +705,7 @@ impl Config {
             flag_pick_allele: args.flag_pick_allele,
             flag_pick_allele_gene: args.flag_pick_allele_gene,
             pick_order: args.pick_order,
+            transcript_filter: args.transcript_filter,
             allele_number: on("allele_number"),
             show_ref_allele: args.show_ref_allele,
             minimal: args.minimal,

@@ -531,6 +531,38 @@ pub struct Args {
     )]
     pub pick_order: Option<Vec<String>>,
 
+    /// Annotate only the transcripts that pass a filter, in Ensembl VEP's filter
+    /// grammar: units of `field operator value` joined by `and` and `or`, grouped
+    /// by parentheses and inverted by `not`; repeated flags are joined by `and`.
+    /// The fields are the cache's transcript keys, named exactly, in another
+    /// case, without the leading `_`, or by a unique prefix: `stable_id`,
+    /// `version`, `biotype`, `start`, `end`, `strand`, `is_canonical`, `source`,
+    /// `dbID`, `cdna_coding_start`, `cdna_coding_end`, `_gene_stable_id`,
+    /// `_gene_symbol`, `_gene_symbol_source`, `_gene_hgnc_id`, `_ccds`,
+    /// `_refseq`, `_protein`, `_swissprot`, `_trembl`, `_uniparc`,
+    /// `_gene_phenotype`; the object keys `translation` (coding transcripts),
+    /// `slice`, `attributes`, `_gene`, `_trans_exon_array`,
+    /// `_variation_effect_feature_cache` and `_vep_lazy_loaded`, which are defined
+    /// and read meaningfully by `exists` and `nex` alone; and `description`,
+    /// `coding_region_start`, `coding_region_end`, `_gene_version` and
+    /// `_uniprot_isoform`, which are undefined (the cache leaves the first three
+    /// undefined, the transcript loader does not read the gene version, and the
+    /// converted cache does not carry the isoform list).
+    /// `_source_cache` is absent, as it is from every cache but a merged one. The
+    /// operators are `is` (`eq`, `=`), `ne` (`!=`), `>`, `<`, `>=`, `<=`, `exists`
+    /// (`defined`, the default), `nex`, `match` (`matches`, `regex`, `re`), `nre`,
+    /// `in` (a comma-separated list or a file with one value per line) and
+    /// `is_child`. `match` and `nre` take the `regex` crate's dialect,
+    /// case-insensitive and unanchored: a back-reference or an escape the crate
+    /// lacks is an error naming the pattern. A record whose every transcript is
+    /// filtered out is intergenic.
+    #[arg(
+        help_heading = "Filtering / Picking",
+        long = "transcript_filter",
+        value_name = "FILTER"
+    )]
+    pub transcript_filter: Vec<String>,
+
     /// Add allele number from input VCF
     #[arg(help_heading = "Filtering / Picking", long = "allele_number")]
     pub allele_number: bool,
@@ -839,6 +871,27 @@ mod tests {
              source's FILTER column out of the output unless the --custom source's fields \
              argument names it, and custom annotation is not supported"
         );
+    }
+
+    /// `--transcript_filter` repeats, each value a whole filter string with its
+    /// spaces, as Ensembl VEP's `transcript_filter=s@` takes it.
+    #[test]
+    fn transcript_filter_repeats() {
+        let args = Args::parse_from([
+            "vep",
+            "--transcript_filter",
+            "biotype is protein_coding",
+            "--transcript_filter",
+            "not stable_id match ENST0000040",
+        ]);
+        assert_eq!(
+            args.transcript_filter,
+            [
+                "biotype is protein_coding",
+                "not stable_id match ENST0000040"
+            ]
+        );
+        assert!(Args::parse_from(["vep"]).transcript_filter.is_empty());
     }
 
     #[test]

@@ -356,6 +356,42 @@ fn refused_flags_exit_with_their_message() {
     }
 }
 
+/// A `--transcript_filter` Ensembl VEP would refuse ends the run before any
+/// input is read, with one `ERROR: [filter] <message>` line on stderr and exit
+/// status 1: Ensembl VEP's message for a missing list file and an unknown
+/// operator (`FilterSet.pm` 415 and 276), the pattern named for a regular
+/// expression outside the supported dialect.
+#[test]
+fn transcript_filter_refusal_is_one_error_line_and_exit_1() {
+    for (filter, message) in [
+        (
+            "biotype in no_such_list.txt",
+            "Could not find/parse list no_such_list.txt",
+        ),
+        (
+            "biotype equals protein_coding",
+            "No such operator \"equals\"",
+        ),
+        (
+            r"stable_id match ENST\Z",
+            r#"pattern "ENST\Z" is not supported: unrecognized escape sequence"#,
+        ),
+    ] {
+        let result = vep_binary()
+            .args(["--transcript_filter", filter])
+            .args(["-i", "/nonexistent/file.vcf", "--quiet"])
+            .output()
+            .unwrap();
+        assert_eq!(result.status.code(), Some(1), "{filter:?}");
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert_eq!(
+            stderr.trim_end(),
+            format!("ERROR: [filter] {message}"),
+            "{filter:?}"
+        );
+    }
+}
+
 /// Annotates one VCF record in the given format against the release 116 golden
 /// corpus's own pruned cache, which unlike `VEP_RS_TEST_CACHE` is always
 /// present, and returns the output's data lines.

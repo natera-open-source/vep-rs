@@ -38,6 +38,7 @@ pub use vep_io::output::json::JsonOutputFormatter;
 pub mod annotator;
 pub mod config;
 pub mod dylib_plugins;
+pub mod filter_set;
 pub mod json_cache;
 pub mod option_rules;
 pub mod pick;

@@ -387,10 +387,13 @@ fn base_args(run: &Run, out_dir: &Path) -> Vec<String> {
 /// The `vep` invocation a run starts from: the run's input (`-i STDIN` when it
 /// is piped) and the corpus cache, the fixed arguments, then the run's `flags`
 /// and the corpus `fasta`. The caller adds the output path and format and runs
-/// it through [`run_output`], which pipes the input when the run says so.
+/// it through [`run_output`], which pipes the input when the run says so. The
+/// process runs in the corpus directory, so a relative path inside a flag (a
+/// `--transcript_filter` list file beside the manifest) names a corpus file.
 pub fn vep_command(run: &Run, out_dir: &Path) -> Command {
     let corpus = run.corpus;
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    cmd.current_dir(&corpus.dir);
     cmd.arg("-i");
     if run.stdin {
         cmd.arg("STDIN").stdin(Stdio::piped());

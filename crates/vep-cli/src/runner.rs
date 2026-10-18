@@ -27,7 +27,8 @@ use rayon::ThreadPool;
 use tracing::{debug, info};
 
 use crate::annotator::{build_thread_pool, LoadedPlugins, PredictionConfig};
-use crate::config::Config;
+use crate::config::{CliError, Config};
+use crate::filter_set::FilterSet;
 use crate::json_cache;
 use crate::pick::FilterConfig;
 use crate::pipeline;
@@ -339,6 +340,8 @@ impl Runner {
     pub fn run(&self) -> anyhow::Result<()> {
         let start = Instant::now();
 
+        let transcript_filter = compile_transcript_filter(&self.config.transcript_filter)?;
+
         // BaseRunner.pm:203-204, with Ensembl VEP's text.
         if self.config.output_file != "STDOUT" {
             let path = Path::new(&self.config.output_file);
@@ -630,6 +633,7 @@ impl Runner {
                 sift: self.config.sift.clone(),
                 polyphen: self.config.polyphen.clone(),
             },
+            transcript_filter,
         };
 
         // VCF is read line by line because header passthrough needs the lines;
@@ -1034,6 +1038,21 @@ pub(crate) struct AnnotationResources {
     builtin_plugins: Arc<BuiltinRegistry>,
     dylib_plugins: Arc<PluginRegistry>,
     prediction_config: PredictionConfig,
+    /// The `--transcript_filter`, which every transcript passes before its
+    /// consequences are computed; `None` without the flag.
+    transcript_filter: Option<Arc<FilterSet>>,
+}
+
+/// The compiled `--transcript_filter`, `None` without the flag. A filter
+/// Ensembl VEP would refuse ends the run before any input is read, under the
+/// `filter` component of the error contract with Ensembl VEP's own message.
+fn compile_transcript_filter(filters: &[String]) -> Result<Option<Arc<FilterSet>>, CliError> {
+    if filters.is_empty() {
+        return Ok(None);
+    }
+    FilterSet::transcript_filter(filters)
+        .map(|filter| Some(Arc::new(filter)))
+        .map_err(|e| CliError::new("filter", e.to_string()))
 }
 
 impl AnnotationResources {
@@ -1153,21 +1172,24 @@ pub(crate) fn annotate_one(variant: &mut InputVariant, resources: &AnnotationRes
             .as_deref()
             .map(|mate_chr| mate_chr != variant.chr)
             .unwrap_or(false);
+    let transcript_filter = resources.transcript_filter.as_deref();
     if !is_interchrom_paired_breakend {
         if let Some(chr_transcripts) = resources.transcripts.get(&variant.chr) {
-            annotate_variant(
+            annotate_variant_filtered(
                 variant,
                 chr_transcripts,
                 &resources.effects_config,
                 &resources.prediction_config,
+                transcript_filter,
             );
         }
     }
 
-    append_bnd_mate_consequences(
+    append_bnd_mate_consequences_filtered(
         variant,
         resources.transcripts.as_ref(),
         &resources.effects_config,
+        transcript_filter,
     );
     let csq_count = variant.transcript_consequences.len() as u64;
 
@@ -1285,12 +1307,29 @@ pub(crate) fn annotate_variant(
     config: &vep_effects::EffectsConfig,
     prediction_config: &PredictionConfig,
 ) {
+    annotate_variant_filtered(variant, transcripts, config, prediction_config, None);
+}
+
+/// [`annotate_variant`] under a `--transcript_filter`: a transcript that fails
+/// the filter is never seen, as Ensembl VEP skips it before any
+/// TranscriptVariation exists (`AnnotationType/Transcript.pm:116`), so a
+/// record whose every transcript fails is intergenic.
+fn annotate_variant_filtered(
+    variant: &mut InputVariant,
+    transcripts: &TranscriptIndex,
+    config: &vep_effects::EffectsConfig,
+    prediction_config: &PredictionConfig,
+    transcript_filter: Option<&FilterSet>,
+) {
     let (variant_start, variant_end) = structural_variant_bounds(variant);
     let has_predictions = prediction_config.sift.is_some() || prediction_config.polyphen.is_some();
 
     // For structural variants, use sv_end to query the full SV span so all
     // overlapping transcripts are found (not just those at the 1bp anchor).
     transcripts.for_each_overlapping(variant_start, variant_end, |transcript| {
+        if transcript_filter.is_some_and(|filter| !filter.evaluate(transcript)) {
+            return;
+        }
         if let Some(mut tc) = vep_effects::calculate_consequences(variant, transcript, config) {
             if has_predictions && tc.consequences.contains(&Consequence::MissenseVariant) {
                 lookup_predictions(&mut tc, transcript, prediction_config);
@@ -1410,6 +1449,17 @@ pub(crate) fn append_bnd_mate_consequences(
     transcripts_by_chr: &LazyTranscriptIndexes,
     config: &vep_effects::EffectsConfig,
 ) {
+    append_bnd_mate_consequences_filtered(variant, transcripts_by_chr, config, None);
+}
+
+/// [`append_bnd_mate_consequences`] under a `--transcript_filter`, which the
+/// mate's transcripts pass as the local ones do.
+fn append_bnd_mate_consequences_filtered(
+    variant: &mut InputVariant,
+    transcripts_by_chr: &LazyTranscriptIndexes,
+    config: &vep_effects::EffectsConfig,
+    transcript_filter: Option<&FilterSet>,
+) {
     // One row per transcript within the selection window of the mate coordinate,
     // describing the mate breakend at that coordinate (`calculate_paired_mate`).
     // Only applies to paired BND alleles (not single-breakend forms).
@@ -1441,6 +1491,9 @@ pub(crate) fn append_bnd_mate_consequences(
     let mut mate_consequences = Vec::new();
     let paired: &InputVariant = variant;
     chr_transcripts.for_each_overlapping(mate_pos, mate_pos, |transcript| {
+        if transcript_filter.is_some_and(|filter| !filter.evaluate(transcript)) {
+            return;
+        }
         if let Some(tc) =
             vep_effects::sv::breakend::calculate_paired_mate(paired, transcript, config)
         {
@@ -1502,6 +1555,7 @@ pub(crate) fn annotate_batch_for_test(
         builtin_plugins: Arc::new(BuiltinRegistry::new()),
         dylib_plugins: Arc::new(PluginRegistry::new()),
         prediction_config: PredictionConfig::default(),
+        transcript_filter: None,
     };
     let stats = PipelineStats {
         variants_processed: AtomicU64::new(0),
@@ -1854,6 +1908,7 @@ mod tests {
             builtin_plugins: Arc::new(BuiltinRegistry::new()),
             dylib_plugins: Arc::new(PluginRegistry::new()),
             prediction_config: PredictionConfig::default(),
+            transcript_filter: None,
         }
     }
 
@@ -2288,6 +2343,7 @@ mod tests {
             builtin_plugins,
             dylib_plugins: Arc::new(PluginRegistry::new()),
             prediction_config: PredictionConfig::default(),
+            transcript_filter: None,
         };
         let stats = PipelineStats {
             variants_processed: AtomicU64::new(0),
@@ -2343,6 +2399,7 @@ mod tests {
             builtin_plugins,
             dylib_plugins: Arc::new(PluginRegistry::new()),
             prediction_config: PredictionConfig::default(),
+            transcript_filter: None,
         };
         let stats = PipelineStats {
             variants_processed: AtomicU64::new(0),
@@ -2402,6 +2459,7 @@ mod tests {
                 builtin_plugins: Arc::new(BuiltinRegistry::new()),
                 dylib_plugins: Arc::new(PluginRegistry::new()),
                 prediction_config: PredictionConfig::default(),
+                transcript_filter: None,
             };
             let stats = PipelineStats {
                 variants_processed: AtomicU64::new(0),
@@ -2463,6 +2521,114 @@ mod tests {
         Arc::new(LazyTranscriptIndexes::from_indexes(by_chr))
     }
 
+    /// [`make_runner_test_transcript`] on chromosome 21 with the cDNA mapper of its
+    /// two exons, which the consequence calculator needs before it yields a row.
+    fn mapped_runner_test_transcript(
+        stable_id: &str,
+        gene_id: &str,
+        start: u64,
+    ) -> vep_core::transcript::Transcript {
+        use vep_core::transcript::{ExonCoordMapper, MapperPair, TranscriptMapper, TranscriptVEFC};
+        let mut tx = make_runner_test_transcript(stable_id, gene_id, "21", start);
+        tx.vefc = Some(TranscriptVEFC {
+            introns: tx.introns.clone(),
+            sorted_exons: tx.exons.clone(),
+            mapper: Some(TranscriptMapper {
+                start_phase: -1,
+                cdna_coding_start: 0,
+                cdna_coding_end: 0,
+                exon_coord_mapper: ExonCoordMapper::new(vec![
+                    MapperPair {
+                        from_start: 1,
+                        from_end: 200,
+                        to_start: start,
+                        to_end: start + 199,
+                        ori: 1,
+                    },
+                    MapperPair {
+                        from_start: 201,
+                        from_end: 400,
+                        to_start: start + 800,
+                        to_end: start + 999,
+                        ori: 1,
+                    },
+                ]),
+            }),
+            ..Default::default()
+        });
+        tx
+    }
+
+    /// Under `--transcript_filter` a transcript that fails the filter yields no
+    /// row, and a record whose every transcript fails is `intergenic_variant`,
+    /// as a record with no transcript in reach is: Ensembl VEP skips the
+    /// transcript before any TranscriptVariation exists
+    /// (`AnnotationType/Transcript.pm:116`), and repeated filters are joined by
+    /// `and` (`AnnotationSource.pm:87-89`).
+    #[test]
+    fn filtered_transcripts_are_invisible_downstream() {
+        // Two transcripts of one shape over 21:1000-1999, neither with a coding
+        // region, so the record in their intron gets a row from each.
+        let mut protein_coding = mapped_runner_test_transcript("ENSTCODING", "ENSGTEST", 1_000);
+        protein_coding.biotype = "protein_coding".into();
+        let mut lncrna = mapped_runner_test_transcript("ENSTLNC", "ENSGTEST", 1_000);
+        lncrna.canonical = false;
+        let mut by_chr = HashMap::new();
+        by_chr.insert(
+            "21".to_string(),
+            TranscriptIndex::new(
+                TranscriptIndexImpl::Bin,
+                vec![protein_coding, lncrna],
+                5_000,
+                5_000,
+            ),
+        );
+        let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
+        let annotate = |filters: &[&str]| {
+            let mut resources = resources_over(Arc::clone(&transcripts));
+            if !filters.is_empty() {
+                resources.transcript_filter =
+                    Some(Arc::new(FilterSet::transcript_filter(filters).unwrap()));
+            }
+            let mut batch = parse_vcf_line("21\t1500\tsnv\tA\tG\t.\t.\t.", true).unwrap();
+            let pool = build_thread_pool(1).unwrap();
+            annotate_batch(&mut batch, &resources, &pool, false, &zero_stats(), false).unwrap();
+            batch.remove(0)
+        };
+        let features = |variant: &InputVariant| -> Vec<String> {
+            variant
+                .transcript_consequences
+                .iter()
+                .map(|tc| tc.transcript_id.to_string())
+                .collect()
+        };
+
+        let unfiltered = annotate(&[]);
+        assert_eq!(features(&unfiltered), ["ENSTCODING", "ENSTLNC"]);
+
+        let coding_only = annotate(&["biotype is protein_coding"]);
+        assert_eq!(features(&coding_only), ["ENSTCODING"]);
+        assert_eq!(
+            coding_only.most_severe_consequence,
+            Some(Consequence::IntronVariant)
+        );
+
+        let joined = annotate(&["biotype is protein_coding", "not is_canonical"]);
+        assert!(features(&joined).is_empty());
+        assert_eq!(
+            joined.most_severe_consequence,
+            Some(Consequence::IntergenicVariant)
+        );
+        let plan = ExtraFieldsPlan::new(FieldOptions::default());
+        let mut out = Vec::new();
+        crate::pipeline::render_default_record(&mut out, &[&joined], &plan, &mut Vec::new())
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "snv\t21:1500\tG\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
+        );
+    }
+
     /// A `<NON_REF>` record spanning a transcript yields no transcript row and one
     /// `intergenic_variant` row over the block, rendered exactly as VEP renders the
     /// record when its batch loads no cache region for it (`vep_skip`): the span
@@ -2502,34 +2668,7 @@ mod tests {
     /// in its intron, `non_coding_transcript_exon_variant` in its exon.
     #[test]
     fn test_annotate_batch_star_allele_keeps_transcript_rows() {
-        use vep_core::transcript::{ExonCoordMapper, MapperPair, TranscriptMapper, TranscriptVEFC};
-        let mut tx = make_runner_test_transcript("ENSTSTAR", "ENSGSTAR", "21", 1_000);
-        tx.vefc = Some(TranscriptVEFC {
-            introns: tx.introns.clone(),
-            sorted_exons: tx.exons.clone(),
-            mapper: Some(TranscriptMapper {
-                start_phase: -1,
-                cdna_coding_start: 0,
-                cdna_coding_end: 0,
-                exon_coord_mapper: ExonCoordMapper::new(vec![
-                    MapperPair {
-                        from_start: 1,
-                        from_end: 200,
-                        to_start: 1_000,
-                        to_end: 1_199,
-                        ori: 1,
-                    },
-                    MapperPair {
-                        from_start: 201,
-                        from_end: 400,
-                        to_start: 1_800,
-                        to_end: 1_999,
-                        ori: 1,
-                    },
-                ]),
-            }),
-            ..Default::default()
-        });
+        let tx = mapped_runner_test_transcript("ENSTSTAR", "ENSGSTAR", 1_000);
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "21".to_string(),
