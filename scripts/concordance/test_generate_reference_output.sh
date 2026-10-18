@@ -224,6 +224,9 @@ rc=$?
 out=$(run_gen --dry-run --flags "--fasta=/x.fa" 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q -- '--flags carries --fasta=/x.fa' <<<"$out" && ok "the --flag=value shape of an owned flag is refused too" || bad "--flags with --fasta=/x.fa exited $rc"
+run_gen --dry-run --flags "--nearest symbol" --suites s01 >"$TMP/flags_near.out" 2>/dev/null
+grep -q -- "-v $CACHE:/work/cache " "$TMP/flags_near.out" && ! grep -q -- "-v $CACHE:/work/cache:ro" "$TMP/flags_near.out" && ok "a --nearest family mounts the cache writable" || bad "--nearest family cache mount: $(grep -o -- "-v $CACHE:/work/cache[^ ]*" "$TMP/flags_near.out" | head -1)"
+grep -q -- "-v $CACHE:/work/cache:ro" "$TMP/flags_vcf.out" && ok "a family without --nearest keeps the read-only cache mount" || bad "a family without --nearest lost the read-only mount"
 out=$(run_gen --dry-run --flags "--vcf_info_field" 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'no field name' <<<"$out" && ok "a trailing --vcf_info_field without its name is refused" || bad "--flags \"--vcf_info_field\" exited $rc"

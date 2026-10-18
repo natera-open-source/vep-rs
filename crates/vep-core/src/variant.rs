@@ -181,6 +181,12 @@ pub struct InputVariant {
     /// `--hgvsg` with a reference FASTA; printed on every row of the allele.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hgvsg: Option<String>,
+    /// The `NEAREST` values under `--nearest`: the identifiers of the
+    /// protein-coding transcription start sites nearest the record, each once,
+    /// printed on every row of the record; `None` without the flag, empty on a
+    /// chromosome with no such site.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nearest: Option<Vec<String>>,
     /// The SPDI notation of this allele (`SPDI`), computed under `--spdi` or
     /// `--ga4gh_vrs` from the record's alleles and span as written; a row prints
     /// it when its `Allele` is the allele it describes.
@@ -283,7 +289,8 @@ pub struct InputVariant {
     /// upstream deletion covers: Ensembl VEP builds the feature over the reference
     /// bases with the allele string `N/*` and no allele to annotate, writes no row in
     /// the default and tab formats, carries the VCF line without CSQ and writes the
-    /// JSON object with `most_severe_consequence` `?`. Nothing annotates it.
+    /// JSON object with `most_severe_consequence` `?`. No feature annotates it;
+    /// `--nearest` still sets [`Self::nearest`].
     #[serde(default)]
     pub no_allele: bool,
     /// Optional annotation target chromosome override.
@@ -389,6 +396,7 @@ impl Default for InputVariant {
             most_severe_consequence: None,
             colocated_variants: Vec::new(),
             hgvsg: None,
+            nearest: None,
             spdi: None,
             ga4gh_vrs: None,
             sibling_spdi: Vec::new(),
@@ -468,6 +476,7 @@ impl InputVariant {
             most_severe_consequence: None,
             colocated_variants: Vec::new(),
             hgvsg: None,
+            nearest: None,
             spdi: None,
             ga4gh_vrs: None,
             sibling_spdi: Vec::new(),
@@ -509,8 +518,8 @@ impl InputVariant {
 
     /// The record of a line whose every ALT is `*` (`N *`, `N *,*`): the reference
     /// bases from `pos`, the allele string REF and every ALT joined by `/`, and
-    /// [`Self::no_allele`] set, so nothing annotates it and every writer carries it as
-    /// Ensembl VEP carries its `N/*` feature.
+    /// [`Self::no_allele`] set, so no feature annotates it and every writer carries it
+    /// as Ensembl VEP carries its `N/*` feature.
     pub fn without_allele<'a>(
         chr: String,
         pos: u64,

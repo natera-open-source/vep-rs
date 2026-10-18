@@ -32,7 +32,9 @@
 //! consequence entry on it must still be a documented vep-rs-only key.
 //! `field_divergences` names keys whose terms agree but whose named field (an
 //! HGVS string) is documented to differ, with the value vep-rs prints; every
-//! other field of such a key compares exactly.
+//! other field of such a key compares exactly. A run under `--nearest transcript`
+//! compares its `NEAREST` values as the coordinates of the named transcripts'
+//! start sites ([`nearest_as_coordinates`]).
 //!
 //! A corpus is run once per [`Run`]: the manifest's own run (its `flags`,
 //! `variants.vcf`, every format, `expected/`) and once per `flag_sets` entry,
@@ -398,6 +400,90 @@ impl Run<'_> {
     pub fn documented(&self) -> Documented {
         Documented::from_manifest(self.documented)
     }
+
+    /// Whether the run's `NEAREST` values compare as transcription start
+    /// coordinates: under `--nearest transcript` Ensembl VEP names one transcript
+    /// per winning coordinate, whichever its interval tree held first, and vep-rs
+    /// names every transcript at the coordinate, so the two agree on the
+    /// coordinates and not on the ids ([`nearest_as_coordinates`]).
+    pub fn nearest_by_coordinate(&self) -> bool {
+        self.flag_value("--nearest") == Some("transcript")
+    }
+}
+
+/// Rewrites every `NEAREST` value (the default, tab and VCF field, the JSON
+/// record's `nearest`) from transcript ids to the coordinates of their start
+/// sites, each coordinate once in order; an id the cache's protein-coding
+/// transcripts lack stays as written, so it still mismatches. The default
+/// format's raw `Extra` text is rewritten with it.
+pub fn nearest_as_coordinates(entries: &mut [Entry], sites: &HashMap<String, u64>) {
+    let resolve = |value: &str| -> String {
+        let mut out: Vec<String> = Vec::new();
+        for id in value.split(['&', ',']).filter(|s| !s.is_empty()) {
+            let coordinate = sites
+                .get(id)
+                .map(u64::to_string)
+                .unwrap_or_else(|| id.to_string());
+            if out.last() != Some(&coordinate) {
+                out.push(coordinate);
+            }
+        }
+        out.join(",")
+    };
+    for entry in entries {
+        for key in ["NEAREST", "nearest"] {
+            let Some(value) = entry.fields.get(key).cloned() else {
+                continue;
+            };
+            let resolved = resolve(&value);
+            if let Some(extra) = entry.fields.get_mut("Extra") {
+                *extra = extra.replace(&format!("NEAREST={value}"), &format!("NEAREST={resolved}"));
+            }
+            entry.fields.insert(key.to_string(), resolved);
+        }
+    }
+}
+
+/// The transcription start site of every protein-coding transcript of the
+/// corpus cache, by stable id: the start on the forward strand, the end on the
+/// reverse (`AnnotationType/Transcript.pm:749`).
+pub fn protein_coding_start_sites(corpus: &Corpus) -> HashMap<String, u64> {
+    fn integer(v: &serde_json::Value) -> Option<u64> {
+        v.as_u64().or_else(|| v.as_str()?.parse().ok())
+    }
+    let mut sites = HashMap::new();
+    let transcripts = corpus.cache_dir().join("transcripts");
+    for chromosome in fs::read_dir(&transcripts)
+        .unwrap_or_else(|e| panic!("{}: {e}", transcripts.display()))
+        .flatten()
+    {
+        for shard in fs::read_dir(chromosome.path()).unwrap().flatten() {
+            let path = shard.path();
+            let plain = path.to_str().unwrap().trim_end_matches(".gz");
+            let text = read_maybe_gz(Path::new(plain));
+            let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+            // A converted cache wraps its transcripts in a range-keyed map.
+            let records: Vec<&serde_json::Value> = match &parsed {
+                serde_json::Value::Array(items) => items.iter().collect(),
+                serde_json::Value::Object(map) => map
+                    .values()
+                    .filter_map(|v| v.as_array())
+                    .flatten()
+                    .filter(|v| !v.is_null())
+                    .collect(),
+                other => panic!("{}: {other}", path.display()),
+            };
+            for t in records {
+                if t["biotype"].as_str() != Some("protein_coding") {
+                    continue;
+                }
+                let forward = t["strand"].as_i64() == Some(1) || t["strand"].as_str() == Some("1");
+                let site = integer(&t[if forward { "start" } else { "end" }]).unwrap();
+                sites.insert(t["stable_id"].as_str().unwrap().to_string(), site);
+            }
+        }
+    }
+    sites
 }
 
 fn strings(value: &serde_json::Value) -> Vec<String> {
@@ -1734,46 +1820,39 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
         );
         return (String::new(), compare_headerless(&expected, &actual));
     }
-    match format {
-        "default" | "tab" => (
-            if run.perl_mode == "database" {
-                compare_column_descriptions(&expected, &actual)
-            } else {
-                compare_tab_headers(&expected, &actual)
-            },
-            compare_entries(
-                &parse_default(&expected),
-                &parse_default(&actual),
-                &documented,
-                !run.unordered,
-            ),
-        ),
-        "vcf" => {
-            let inputs = run.input_records();
-            let info_field = run.vcf_info_field();
-            (
-                compare_vcf_headers(&expected, &actual),
-                compare_entries(
-                    &parse_vcf_info(&expected, &inputs, info_field),
-                    &parse_vcf_info(&actual, &inputs, info_field),
-                    &documented,
-                    !run.unordered,
-                ),
-            )
+    let inputs = run.input_records();
+    let info_field = run.vcf_info_field();
+    let parse = |text: &str| -> Vec<Entry> {
+        match format {
+            "default" | "tab" => parse_default(text),
+            "vcf" => parse_vcf_info(text, &inputs, info_field),
+            _ => parse_json(text, &inputs),
         }
-        _ => {
-            let inputs = run.input_records();
-            (
-                compare_json_identity(&actual),
-                compare_entries(
-                    &parse_json(&expected, &inputs),
-                    &parse_json(&actual, &inputs),
-                    &documented,
-                    !run.unordered,
-                ),
-            )
-        }
+    };
+    let mut expected_entries = parse(&expected);
+    let mut actual_entries = parse(&actual);
+    if run.nearest_by_coordinate() {
+        let sites = protein_coding_start_sites(run.corpus);
+        nearest_as_coordinates(&mut expected_entries, &sites);
+        nearest_as_coordinates(&mut actual_entries, &sites);
     }
+    let headers = match format {
+        "default" | "tab" if run.perl_mode == "database" => {
+            compare_column_descriptions(&expected, &actual)
+        }
+        "default" | "tab" => compare_tab_headers(&expected, &actual),
+        "vcf" => compare_vcf_headers(&expected, &actual),
+        _ => compare_json_identity(&actual),
+    };
+    (
+        headers,
+        compare_entries(
+            &expected_entries,
+            &actual_entries,
+            &documented,
+            !run.unordered,
+        ),
+    )
 }
 
 // --------------------------------------------------------------------------

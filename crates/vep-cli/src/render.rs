@@ -214,6 +214,33 @@ mod tests {
     use vep_core::consequence::TranscriptConsequence;
     use vep_io::output::fields::FieldOptions;
 
+    /// `NEAREST` prints in the Extra column of every row of the record, the
+    /// `--most_severe` row included, and the empty list prints as `NEAREST=`
+    /// (`VEP_output.pm:117` prints every key the record hash holds).
+    #[test]
+    fn nearest_prints_in_extra_on_every_row_and_empty_as_a_bare_key() {
+        let plan = ExtraFieldsPlan::new(FieldOptions {
+            nearest: true,
+            ..Default::default()
+        });
+        let render = |v: &InputVariant| {
+            let mut rows = Vec::new();
+            let mut out = Vec::new();
+            render_default_record(&mut out, &[v], &plan, &mut rows).unwrap();
+            String::from_utf8(out).unwrap()
+        };
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.id = Some("rs1".into());
+        v.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        v.nearest = Some(vec!["GENE1".into(), "GENE2".into()]);
+        assert!(render(&v).ends_with("\tIMPACT=MODIFIER;NEAREST=GENE1,GENE2\n"));
+        v.nearest = Some(Vec::new());
+        assert!(render(&v).ends_with("\tIMPACT=MODIFIER;NEAREST=\n"));
+        v.nearest = Some(vec!["GENE1".into()]);
+        v.summary_terms = Some(smallvec::smallvec![Consequence::IntergenicVariant]);
+        assert!(render(&v).ends_with("\t-\tNEAREST=GENE1\n"));
+    }
+
     /// The columns of the one default-format row `tc` renders to under `options`.
     fn default_row_columns(options: FieldOptions, tc: TranscriptConsequence) -> Vec<String> {
         let mut variant = InputVariant::new(

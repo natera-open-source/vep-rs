@@ -248,6 +248,94 @@
    ],
    "field_divergences": [],
    "field_divergence_summary": {}
+  },
+  {
+   "name": "nearest-transcript",
+   "flags": [
+    "--nearest",
+    "transcript"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_nearest-transcript",
+   "covers": [
+    "nearest",
+    "nearest-algorithm",
+    "cache-transcript-gene-tss"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "nearest-gene",
+   "flags": [
+    "--nearest",
+    "gene"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_nearest-gene",
+   "covers": [
+    "nearest",
+    "nearest-algorithm",
+    "cache-transcript-gene-tss"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "NEAREST"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  },
+  {
+   "name": "nearest-symbol",
+   "flags": [
+    "--nearest",
+    "symbol"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_nearest-symbol",
+   "covers": [
+    "nearest",
+    "nearest-algorithm",
+    "cache-transcript-gene-tss"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "NEAREST"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
   }
  ],
  "suites": {

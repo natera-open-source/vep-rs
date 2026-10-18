@@ -37,7 +37,12 @@
 # harness's flags and before the format flag, so a reference for one Ensembl VEP flag
 # family is the harness's invocation plus that family. A word this script already sets
 # (-i, -o, --fork, --fasta, --tab, --no_stats, ...) is refused rather than passed twice,
-# in the single-dash and abbreviated spellings vep's option parser accepts as well.
+# in the single-dash and abbreviated spellings vep's option parser accepts as well. A
+# family carrying --nearest mounts the Ensembl cache writable: Ensembl VEP writes
+# transcript_gene_tss.txt into the cache directory on its first --nearest run and keeps
+# the file, built under that run's transcript filters, for every later run; a run on a
+# cache that lacks the file scans every region file once, so the first --nearest run on
+# a cache goes alone.
 #
 # STATS. --stats keeps Ensembl VEP's statistics report beside each output as
 # <stem>.summary.log instead of passing --no_stats. The run passes --stats_text, because
@@ -694,8 +699,14 @@ docker_cmd() {
 	argv=(docker run --rm
 		--user "$(id -u):$(id -g)"
 		-v "${in_vcf}:${in_mount}:ro"
-		-v "${out_dir}:/work/perl_out"
-		-v "${PERL_CACHE_DIR}:/work/cache:ro")
+		-v "${out_dir}:/work/perl_out")
+	# Ensembl VEP's first --nearest run writes transcript_gene_tss.txt into the cache
+	# directory and dies on a read-only one (AnnotationSource/Cache/Transcript.pm:288-289).
+	if [[ " $EXTRA_FLAGS " == *" --nearest "* || " $EXTRA_FLAGS " == *" --nearest="* ]]; then
+		argv+=(-v "${PERL_CACHE_DIR}:/work/cache")
+	else
+		argv+=(-v "${PERL_CACHE_DIR}:/work/cache:ro")
+	fi
 	if [[ -n "$fasta" ]]; then
 		argv+=(-v "${fasta}:/work/ref.fa:ro" -v "${fasta}.fai:/work/ref.fa.fai:ro")
 		fasta_in="/work/ref.fa"

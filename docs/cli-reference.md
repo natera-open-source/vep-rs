@@ -141,6 +141,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--sift` | `s`, `p`, `b` | -- | SIFT predictions (p = prediction, s = score, b = both) |
 | `--polyphen` | `s`, `p`, `b` | -- | PolyPhen predictions (p = prediction, s = score, b = both) |
 | `--condel` | String | -- | Accepted without effect: Ensembl VEP declares it and reads nothing from it |
+| `--nearest` | `transcript`, `gene`, `symbol` | -- | Add the NEAREST column: the protein-coding transcription start site(s) nearest each variant as a transcript stable id, gene stable id or gene symbol; the site above the variant and the site below are measured to the nearer end of the variant, both are reported when they tie, and every transcript starting at a reported site is listed in stable-id order where Ensembl VEP lists one |
 | `--numbers` | bool | false | Add exon/intron numbers |
 | `--domains` | bool | false | Add overlapping protein domain information |
 | `--regulatory` | bool | false | Accepted for VEP compatibility; regulatory-feature annotation is not implemented and the flag warns |

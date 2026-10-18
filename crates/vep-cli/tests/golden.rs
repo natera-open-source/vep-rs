@@ -19,8 +19,8 @@ use std::io::Write;
 use std::path::Path;
 
 use common::{
-    compare_run, compare_warnings, corpora, parse_default, parse_json, parse_vcf, read_expected,
-    runs, Corpus, REFERENCE_SKIPPED_RECORD,
+    compare_run, compare_warnings, corpora, nearest_as_coordinates, parse_default, parse_json,
+    parse_vcf, protein_coding_start_sites, read_expected, runs, Corpus, REFERENCE_SKIPPED_RECORD,
 };
 
 /// Every run's default-format output matches the reference, and the warnings
@@ -462,4 +462,54 @@ fn each_corpus_fits_its_size_budget() {
             BUDGET_BYTES
         );
     }
+}
+
+/// Under `--nearest transcript` a run's `NEAREST` values compare as the start
+/// sites of the named transcripts: the reference names one transcript at a
+/// winning site and the output every transcript there, so the ids differ where
+/// the sites agree; a transcript starting at another site, and one the cache
+/// lacks, still differ. The identifiers corpus's `nearest-transcript` set carries
+/// such records (GRIK1's seven transcripts share the start site at 29940022).
+#[test]
+fn nearest_transcript_values_compare_by_start_site() {
+    let corpus = corpora()
+        .into_iter()
+        .find(|c| c.release == "116" && c.name == "GRCh38-identifiers")
+        .expect("the identifiers corpus");
+    let sites = protein_coding_start_sites(&corpus);
+    assert_eq!(sites.get("ENST00000389125"), Some(&29_940_022));
+    assert_eq!(sites.get("ENST00000399914"), Some(&29_940_022));
+    let set = runs(&corpus)
+        .into_iter()
+        .find(|r| r.name == "nearest-transcript")
+        .expect("the nearest-transcript set");
+    assert!(set.nearest_by_coordinate());
+    assert!(!common::default_run(&corpus).nearest_by_coordinate());
+
+    let header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n";
+    let row = |nearest: &str| {
+        format!(
+            "{header}del25\t21:30000001-30000025\t-\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;NEAREST={nearest}\n"
+        )
+    };
+    let resolved = |nearest: &str| {
+        let mut entries = parse_default(&row(nearest));
+        nearest_as_coordinates(&mut entries, &sites);
+        (
+            entries[0].fields["NEAREST"].clone(),
+            entries[0].fields["Extra"].clone(),
+        )
+    };
+    let one = resolved("ENST00000399914");
+    let all = resolved(
+        "ENST00000389124,ENST00000389125,ENST00000399907,ENST00000399909,ENST00000399913,ENST00000399914,ENST00001131791",
+    );
+    assert_eq!(one, all);
+    assert_eq!(one.0, "29940022");
+    assert_eq!(one.1, "IMPACT=MODIFIER;NEAREST=29940022");
+    // The VCF format joins the ids with `&`.
+    let (two, _) = resolved("ENST00000389125&ENST00000400546");
+    assert_eq!(two, format!("29940022,{}", sites["ENST00000400546"]));
+    assert_ne!(resolved("ENST00000400546").0, one.0);
+    assert_eq!(resolved("ENST_UNKNOWN").0, "ENST_UNKNOWN");
 }

@@ -103,6 +103,9 @@ impl JsonOutputFormatter {
         // copies `VariationFeature_to_output_hash` onto the record and builds
         // the entries from an empty hash).
         for name in &self.vf_level_fields {
+            if *name == "NEAREST" {
+                continue;
+            }
             let value = fields::field_value(name, first, None, &self.options, ",");
             if !value.is_empty() {
                 let key = json_key(name);
@@ -110,6 +113,16 @@ impl JsonOutputFormatter {
                 root.insert(key, v);
             }
         }
+        // `nearest` is the one record key that is a list (`JSON.pm:262` writes the
+        // record hash's array as is), so the loop above skips it and it is written
+        // here as an array, the empty list included.
+        if let Some(nearest) = &first.nearest {
+            root.insert(
+                "nearest".to_string(),
+                Value::Array(nearest.iter().map(|s| Value::String(s.clone())).collect()),
+            );
+        }
+
         let mut buckets: IndexMap<String, Vec<Value>> = IndexMap::new();
         let mut all_terms: Vec<Consequence> = Vec::new();
         for (variant, tc) in fields::record_rows(record) {
@@ -232,7 +245,7 @@ impl JsonOutputFormatter {
                         ),
                     );
                 }
-                "Feature_type" => {}
+                "Feature_type" | "NEAREST" => {}
                 "Feature" => {
                     let key = format!(
                         "{}_id",
@@ -693,6 +706,30 @@ mod tests {
             "variant_class needs its flag"
         );
         assert!(parsed.get("existing_variation").is_none());
+    }
+
+    /// `nearest` is a top-level array (`JSON.pm:262` lower-cases the record's
+    /// keys at the top level), absent from every consequence object and from a run
+    /// without the flag; the empty list is written.
+    #[test]
+    fn nearest_is_a_top_level_array_and_the_empty_list_is_written() {
+        let options = FieldOptions {
+            nearest: true,
+            ..Default::default()
+        };
+        let mut v = make_annotated_variant();
+        assert!(fmt(options.clone())
+            .format_variant_value(&v)
+            .get("nearest")
+            .is_none());
+        v.nearest = Some(vec!["ENST1".into(), "ENST2".into()]);
+        let parsed = fmt(options.clone()).format_variant_value(&v);
+        assert_eq!(parsed["nearest"], json!(["ENST1", "ENST2"]));
+        let tc = &parsed["transcript_consequences"][0];
+        assert!(tc.get("nearest").is_none(), "{tc}");
+        v.nearest = Some(Vec::new());
+        let parsed = fmt(options).format_variant_value(&v);
+        assert_eq!(parsed["nearest"], json!([]));
     }
 
     /// Under `--spdi --ga4gh_vrs` a consequence entry carries `spdi` as a string

@@ -81,6 +81,12 @@ name=$(basename "$out")
 target="$host_out/$name"
 if [[ -n "${STUB_PERL_SLEEP:-}" ]]; then
     [[ -z "${STUB_PERL_PIDFILE:-}" ]] || echo "$$" >>"$STUB_PERL_PIDFILE"
+    if [[ -n "${STUB_PERL_TIMES:-}" ]]; then
+        start=$(date +%s.%N)
+        sleep "$STUB_PERL_SLEEP"
+        echo "$start $(date +%s.%N)" >>"$STUB_PERL_TIMES"
+        exit 0
+    fi
     exec sleep "$STUB_PERL_SLEEP"
 fi
 [[ "${STUB_PERL_RC:-0}" -eq 0 ]] || exit "${STUB_PERL_RC}"
@@ -177,6 +183,7 @@ T1="$TMP/t1.tsv"
     row c-four fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - "$CORPUS_FLAGS" default,tab,vcf,json,warnings "$IMAGE" offline 116.2 - - -
     row c-db fixture "$CORPUS_INPUT" 116_GRCh37 - "--format hgvs" default "$IMAGE" database 116.2 breakend_mate_local_read IMPACT=3,Feature=2 "IMPACT=LOW=>HIGH;Consequence=a=>b"
     row c-pq fixture "$CORPUS_INPUT" 116_GRCh38 - - tab,parquet "$IMAGE" offline 116.2 - - -
+    row c-near fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - "--nearest symbol" default,tab "$IMAGE" offline 116.2 - - -
     row GRCh38-release116 population "$CORPUS_INPUT" 116_GRCh38 - - default "$IMAGE" offline 116.2 - - -
 } >"$T1"
 dry "$T1" "$TMP/d1.out"
@@ -227,6 +234,11 @@ dcc=$(cmd_second 'DRY-RUN c-db stub default' "$TMP/d1.out")
 wc_=$(cmd_after 'DRY-RUN c-four stub warnings' "$TMP/d1.out")
 [[ "$wc_" == *"--warnings --expected $TMP/never/work/cases/c-four/perl/default.txt_warnings.txt --actual $TMP/never/work/cases/c-four/candidates/stub/default.txt_warnings.txt --report $TMP/never/stub/c-four/warnings.json" ]] &&
     ok "warnings compares the default runs' _warnings.txt files" || bad "warnings command: $wc_"
+nc=$(cmd_after 'DRY-RUN c-near perl default' "$TMP/d1.out")
+[[ "$nc" == *"-v $DATA/caches/perl/vep-cache:/work/cache "* && "$nc" != *":/work/cache:ro"* ]] && ok "a --nearest case mounts the Ensembl cache writable" || bad "nearest cache mount: $nc"
+[[ "$pc" == *":/work/cache:ro"* && "$tc" != *"--nearest-sites"* ]] && ok "a case without --nearest keeps the read-only mount and passes no --nearest-sites" || bad "nearest leaked: $pc / $tc"
+ncc=$(cmd_second 'DRY-RUN c-near stub tab' "$TMP/d1.out")
+[[ "$ncc" == *"--nearest-sites $CORPUS/json_cache" ]] && ok "a --nearest case passes the candidate's JSON cache as --nearest-sites" || bad "nearest sites: $ncc"
 [[ ! -e "$TMP/never" ]] && ok "a dry run writes nothing" || bad "a dry run created the output directory"
 
 dry "$T1" "$TMP/d2.out" --perl-fork 3 --fork 2
@@ -582,6 +594,32 @@ run_oracle "$T8" --out "$TMP/out-jobs" --candidates "$STUBDIR/vep" --candidate-p
 rc=$?
 [[ "$rc" -eq 0 && "$(cut -f1,3 "$TMP/out-jobs/status.tsv" | tail -n +2 | tr '\n\t' '  ')" == "c-a green c-b green " ]] && ok "--jobs 2 runs both cases and reports both verdicts in table order" || bad "--jobs 2: rc=$rc $(tr '\n' ' ' <"$TMP/out-jobs/status.tsv")"
 grep -q '^\[.*\] \[c-a\] ' "$TMP/jobs.out" && grep -q '^\[.*\] \[c-b\] ' "$TMP/jobs.out" && ok "each case's log lines carry its case name" || bad "case names missing from the log"
+# Two --nearest cases on a slice without transcript_gene_tss.txt run Ensembl VEP one after
+# the other (the stub records each run's start and end); a slice that has the file takes no lock.
+T_NEAR="$TMP/t-near.tsv"
+{
+    echo "$HEADER"
+    row c-near-a fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - "--nearest symbol" default "$IMAGE" offline 116.2 - - -
+    row c-near-b fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - "--nearest gene" default "$IMAGE" offline 116.2 - - -
+} >"$T_NEAR"
+TSS_FILE="$DATA/caches/perl/vep-cache/homo_sapiens/116_GRCh38/transcript_gene_tss.txt"
+if command -v flock >/dev/null; then
+    STUB_PERL_SLEEP=1.5 STUB_PERL_TIMES="$TMP/near.times" run_oracle "$T_NEAR" --out "$TMP/out-near" --candidates "$STUBDIR/vep" --candidate-pins p1 --jobs 2 --keep-outputs >/dev/null 2>&1 || true
+    [[ -e "$TMP/out-near/work/locks/homo_sapiens_116_GRCh38.tss.lock" ]] && ok "two --nearest cases on a slice without the tree file take the slice's lock" || bad "lock file missing under $TMP/out-near/work/locks"
+    overlap=$(sort -n "$TMP/near.times" | awk 'NR > 1 && $1 < prev_end {o = 1} {prev_end = $2} END {print o + 0}')
+    [[ "$(wc -l <"$TMP/near.times")" -eq 2 && "$overlap" -eq 0 ]] && ok "their Ensembl VEP runs do not overlap" || bad "nearest runs overlapped: $(tr '\n' ' ' <"$TMP/near.times")"
+    : >"$TSS_FILE"
+    STUB_PERL_SLEEP=0.1 STUB_PERL_TIMES="$TMP/near2.times" run_oracle "$T_NEAR" --out "$TMP/out-near2" --candidates "$STUBDIR/vep" --candidate-pins p1 --jobs 2 --keep-outputs >/dev/null 2>&1 || true
+    [[ "$(wc -l <"$TMP/near2.times")" -eq 2 && ! -e "$TMP/out-near2/work/locks" ]] && ok "a slice that has the tree file runs its --nearest cases without the lock" || bad "lock taken with the tree file present"
+    rm -f "$TSS_FILE"
+else
+    run_oracle "$T_NEAR" --out "$TMP/out-near" --candidates "$STUBDIR/vep" --candidate-pins p1 --jobs 2 >/dev/null 2>"$TMP/near.err"
+    rc=$?
+    [[ "$rc" -ne 0 && ! -e "$TMP/out-near" ]] && grep -q 'flock is required to run the --nearest cases of .*116_GRCh38 under --jobs 2' "$TMP/near.err" && ok "without flock, two --nearest cases on a slice without the tree file refuse --jobs 2 before anything runs" || bad "without flock at --jobs 2: rc=$rc $(tr '\n' ' ' <"$TMP/near.err")"
+    run_oracle "$T_NEAR" --out "$TMP/out-near1" --candidates "$STUBDIR/vep" --candidate-pins p1 --keep-outputs >/dev/null 2>&1
+    rc=$?
+    [[ "$rc" -eq 0 && "$(cut -f3 "$TMP/out-near1/status.tsv" | tail -n +2 | tr '\n' ' ')" == "green green " && ! -e "$TMP/out-near1/work/locks" ]] && ok "without flock, --jobs 1 runs the same cases one after the other and takes no lock" || bad "without flock at --jobs 1: rc=$rc $(tr '\n' ' ' <"$TMP/out-near1/status.tsv")"
+fi
 run_oracle "$T2" --out "$TMP/out-fa" --candidates "$STUBDIR/vep" --candidate-pins p1 --keep-outputs >/dev/null 2>"$TMP/fa.err"
 rc=$?
 [[ -f "$TMP/out-fa/work/fasta/reference.fa" && -f "$TMP/out-fa/work/fasta/reference.fa.fai" && "$(head -c 1 "$TMP/out-fa/work/fasta/reference.fa")" == ">" ]] &&
@@ -706,29 +744,34 @@ server=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["perl_s
 # job of the main shell) and under --jobs 2 (the engines are children of case
 # subshells), and leaves no status table. The stub engine sleeps 30 s; a run that only
 # died after the sleep would take 30 s, so the elapsed time is asserted too.
-interrupt_run() { # interrupt_run <jobs>: ok lines for one --jobs value
-    local jobs="$1" runner started elapsed alive=0 spid n
+interrupt_run() { # interrupt_run <jobs> [table] [expected engines]: ok lines for one --jobs value
+    local jobs="$1" table="${2:-$T8}" expected_engines="${3:-$1}" runner started elapsed alive=0 spid n
     rm -rf "$TMP/out-int" "$TMP/sleepers"
     mkdir -p "$TMP/out-int"
     echo "stale" >"$TMP/out-int/status.tsv"
     started=$SECONDS
-    STUB_PERL_SLEEP=30 STUB_PERL_PIDFILE="$TMP/sleepers" PATH="$STUBDIR:$PATH" bash "$ORACLE" --cases "$T8" --data-dir "$DATA" --out "$TMP/out-int" --candidates "$STUBDIR/vep" --candidate-pins p1 --jobs "$jobs" >"$TMP/int.out" 2>&1 &
+    STUB_PERL_SLEEP=30 STUB_PERL_PIDFILE="$TMP/sleepers" PATH="$STUBDIR:$PATH" bash "$ORACLE" --cases "$table" --data-dir "$DATA" --out "$TMP/out-int" --candidates "$STUBDIR/vep" --candidate-pins p1 --jobs "$jobs" >"$TMP/int.out" 2>&1 &
     runner=$!
     for _ in 1 2 3 4 5 6 7 8 9 10; do
-        [[ -s "$TMP/sleepers" && "$(wc -l <"$TMP/sleepers" | tr -d ' ')" -ge "$jobs" ]] && break
+        [[ -s "$TMP/sleepers" && "$(wc -l <"$TMP/sleepers" | tr -d ' ')" -ge "$expected_engines" ]] && break
         sleep 1
     done
+    # The engines running when the signal lands; a lock holder's death lets a waiting
+    # case's engine start for an instant before it too is stopped, so the count precedes the kill.
+    n=$(wc -l <"$TMP/sleepers" | tr -d ' ')
     kill -TERM "$runner" 2>/dev/null
     wait "$runner" 2>/dev/null
     elapsed=$((SECONDS - started))
     sleep 1
     while read -r spid; do kill -0 "$spid" 2>/dev/null && alive=$((alive + 1)); done <"$TMP/sleepers"
-    n=$(wc -l <"$TMP/sleepers" | tr -d ' ')
-    [[ "$alive" -eq 0 && "$elapsed" -lt 15 ]] && ok "SIGTERM to a --jobs $jobs run stops its $n running stub engine(s) at once (${elapsed}s, not after the 30 s sleep)" || bad "--jobs $jobs: $alive engine(s) alive, exited after ${elapsed}s"
+    [[ "$n" -eq "$expected_engines" && "$alive" -eq 0 && "$elapsed" -lt 15 ]] && ok "SIGTERM to a --jobs $jobs run stops its $n running stub engine(s) at once (${elapsed}s, not after the 30 s sleep)" || bad "--jobs $jobs: $n engine(s) running at the signal (expected $expected_engines), $alive alive after it, exited after ${elapsed}s"
     [[ ! -e "$TMP/out-int/status.tsv" ]] && ok "an interrupted --jobs $jobs run leaves no status.tsv (the stale one was removed at start)" || bad "a status.tsv survived the interrupted --jobs $jobs run"
 }
 interrupt_run 1
 interrupt_run 2
+# A first --nearest case holds its slice's lock while it runs, so under --jobs 2 the second
+# waits and one engine is running when the signal lands; the lock holder is the engine itself.
+if command -v flock >/dev/null; then interrupt_run 2 "$T_NEAR" 1; fi
 
 echo
 echo "BOUNDARIES: path spellings, masked-only cases, a broken provenance, a preflight failure"

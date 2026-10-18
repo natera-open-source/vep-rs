@@ -19,7 +19,16 @@
 #                      =<dir> suffix names the candidate's JSON cache instead
 #   fasta              - or an indexed FASTA given to both engines (its .fai beside it; a
 #                      .gz is decompressed once per run, as the golden tests do)
-#   flags              whitespace-separated flags appended verbatim to both engines, or -
+#   flags              whitespace-separated flags appended verbatim to both engines, or -;
+#                      a --nearest case mounts the Ensembl cache writable, since Ensembl
+#                      VEP writes transcript_gene_tss.txt there on its first run (a scan
+#                      of every region file) and keeps the file, built under that run's
+#                      transcript filters, for every later run; while a slice lacks the
+#                      file, its --nearest runs take turns under one lock, because the
+#                      temporary file is named after the process id, which is the same
+#                      in every container; its comparisons settle NEAREST by start site
+#                      through the candidate's JSON cache (compare_vep_formats.py
+#                      --nearest-sites)
 #   formats            comma-separated subset of default,tab,vcf,json,parquet,warnings;
 #                      warnings compares the default run's `_warnings.txt` files and so
 #                      needs default
@@ -585,9 +594,12 @@ pf_error() {
 	PREFLIGHT_FAILED=1
 }
 # FASTA_SOURCES: every FASTA path, one per line; FASTA_NAMES: the decompressed name of
-# every .gz source, which share one directory under the work tree.
+# every .gz source, which share one directory under the work tree. TSS_SLICES: the cache
+# slice of every offline --nearest case whose first Ensembl VEP run writes
+# transcript_gene_tss.txt, one line per case.
 FASTA_SOURCES=""
 FASTA_NAMES=""
+TSS_SLICES=""
 IMAGES=""
 CACHE_RE='^[0-9]+_[A-Za-z0-9]+$'
 FORMAT_SPEC_RE='^[a-z,]+$'
@@ -617,6 +629,9 @@ while IFS= read -r line; do
 	offline)
 		if [[ -z "$REFERENCE_DIR" && ! -d "$C_PERL_SLICE" ]]; then
 			pf_error "Ensembl VEP cache slice not found: $C_PERL_SLICE"
+		elif [[ -z "$REFERENCE_DIR" && ! -e "$C_PERL_SLICE/transcript_gene_tss.txt" ]] && has_flag --nearest; then
+			TSS_SLICES="${TSS_SLICES}${C_PERL_SLICE}
+"
 		fi
 		;;
 	database) ;;
@@ -656,6 +671,12 @@ while IFS= read -r line; do
 	done
 done <<<"$SELECTED"
 [[ "$PREFLIGHT_FAILED" -eq 0 ]] || die "preflight failed; nothing ran"
+# Without flock, run_perl cannot make the --nearest cases of one slice take turns, and two
+# first runs at once would tear transcript_gene_tss.txt; one such case per slice needs no turn.
+if [[ "$JOBS" -gt 1 && "$DRY_RUN" != "true" ]] && ! command -v flock >/dev/null 2>&1; then
+	slice=$(printf '%s' "$TSS_SLICES" | awk 'seen[$0]++ {print; exit}')
+	[[ -z "$slice" ]] || die "flock is required to run the --nearest cases of $slice under --jobs $JOBS while the slice lacks transcript_gene_tss.txt (install flock, or pass --jobs 1)"
+fi
 
 # Commands
 
@@ -668,7 +689,13 @@ perl_cmd() {
 		-v "${C_INPUT_PATH}:/work/input/${in_name}:ro"
 		-v "${out_dir}:/work/out")
 	if [[ "$C_PERL_MODE" == "offline" ]]; then
-		CMD+=(-v "${PERL_CACHE_DIR}:/work/cache:ro")
+		# Ensembl VEP's first --nearest run writes transcript_gene_tss.txt into the cache
+		# directory and dies on a read-only one (AnnotationSource/Cache/Transcript.pm:288-289).
+		if has_flag --nearest; then
+			CMD+=(-v "${PERL_CACHE_DIR}:/work/cache")
+		else
+			CMD+=(-v "${PERL_CACHE_DIR}:/work/cache:ro")
+		fi
 	fi
 	if [[ -n "$fasta" ]]; then
 		CMD+=(-v "${fasta}:/work/ref.fa:ro" -v "${fasta}.fai:/work/ref.fa.fai:ro")
@@ -718,6 +745,11 @@ compare_cmd() {
 	[[ "$C_MASKS" == "-" ]] || CMD+=(--masks "$C_MASKS")
 	[[ "$C_FLOORS" == "-" ]] || CMD+=(--floors "$C_FLOORS")
 	[[ "$C_FIELD_PAIRS" == "-" ]] || CMD+=(--field-pairs "$C_FIELD_PAIRS")
+	# NEAREST compares by transcription start site: Ensembl VEP names one transcript at a
+	# winning site and the candidate every transcript there (compare_vep_formats.py).
+	if has_flag --nearest; then
+		CMD+=(--nearest-sites "$C_JSON_CACHE")
+	fi
 }
 warnings_cmd() {
 	CMD=("$PYTHON" "$COMPARATOR" --warnings --expected "$1" --actual "$2" --report "$3")
@@ -852,6 +884,26 @@ run_engine() {
 	shift
 	run_waited "$errlog.out" "$errlog" "$@"
 }
+# run_perl <log file>: runs CMD, the Ensembl VEP command. Its first --nearest run on a
+# cache slice writes transcript_gene_tss.txt through a temporary file named after the
+# process id (AnnotationSource/Cache/Transcript.pm:288, 317), which is the same in every
+# container, so two first runs would tear one file: while the slice lacks it, the
+# --nearest runs of this invocation hold one lock per slice. flock execs the engine
+# (--no-fork) so that on_signal's pkill of a case's children reaches it; without flock
+# the run is unlocked, which preflight allows only under --jobs 1 or where no two such
+# cases share a slice.
+run_perl() {
+	local errlog="$1" slice_name lock
+	if has_flag --nearest && [[ "$C_PERL_MODE" == "offline" && ! -e "$C_PERL_SLICE/transcript_gene_tss.txt" ]] &&
+		command -v flock >/dev/null 2>&1; then
+		mkdir -p "$WORK_DIR/locks"
+		slice_name="$(basename "$(dirname "$C_PERL_SLICE")")_$(basename "$C_PERL_SLICE")"
+		lock="$WORK_DIR/locks/$slice_name.tss.lock"
+		run_engine "$errlog" flock --no-fork "$lock" "${CMD[@]}"
+	else
+		run_engine "$errlog" "${CMD[@]}"
+	fi
+}
 # run_waited <stdout file> <stderr file> <cmd...>: runs the command as a job and waits for
 # it, so a signal reaches the trap at once; returns the command's status.
 run_waited() {
@@ -975,7 +1027,7 @@ run_case() {
 			perl_cmd "$f" "$perl_dir" "$fasta"
 			log "[$C_ID] Ensembl VEP $f ($C_PERL_MODE${C_PERL_SERVER:+ $C_PERL_SERVER})"
 			rc=0
-			run_engine "$case_work/perl.$f.stderr" "${CMD[@]}" || rc=$?
+			run_perl "$case_work/perl.$f.stderr" || rc=$?
 			if [[ "$rc" -ne 0 ]]; then
 				perl_errors="${perl_errors}${f}	$(error_text "Ensembl VEP" "$rc" "$case_work/perl.$f.stderr")
 "

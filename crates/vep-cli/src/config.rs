@@ -16,6 +16,7 @@ use clap::FromArgMatches;
 use vep_core::terms::Vocabulary;
 
 use crate::args::Args;
+use crate::nearest::NearestType;
 use crate::option_rules::{FlagState, OWN_RULES};
 use crate::transcript_index::TranscriptIndexImpl;
 
@@ -581,6 +582,9 @@ pub struct Config {
     pub regulatory: bool,
     pub variant_class: bool,
     pub overlaps: bool,
+    /// `--nearest <type>`: the NEAREST column names the nearest protein-coding
+    /// transcription start sites by this identifier; `None` without the flag.
+    pub nearest: Option<NearestType>,
     pub af: bool,
     pub af_1kg: bool,
     pub af_gnomade: bool,
@@ -945,6 +949,8 @@ impl Config {
             regulatory: on("regulatory"),
             variant_class: on("variant_class"),
             overlaps: args.overlaps,
+            // A value here passed clap's list and `VALID`, so it parses.
+            nearest: state.scalar("nearest").and_then(|v| v.parse().ok()),
             af: on("af"),
             af_1kg: on("af_1kg"),
             af_gnomade: on("af_gnomade"),

@@ -582,6 +582,19 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long, value_name = "CONDEL")]
     pub condel: Option<String>,
 
+    /// Add the NEAREST column: the protein-coding transcription start site(s) nearest each
+    /// variant as a transcript stable id, gene stable id or gene symbol; the site above the
+    /// variant and the site below are measured to the nearer end of the variant, both are
+    /// reported when they tie, and every transcript starting at a reported site is listed in
+    /// stable-id order where Ensembl VEP lists one
+    #[arg(
+        help_heading = "Output Control",
+        long,
+        value_name = "TYPE",
+        value_parser = ["transcript", "gene", "symbol"]
+    )]
+    pub nearest: Option<String>,
+
     /// Add exon/intron numbers
     #[arg(help_heading = "Output Control", long)]
     pub numbers: bool,
@@ -1388,6 +1401,30 @@ mod tests {
             &["vep", "--shift_3prime", "2"][..],
             &["vep", "--shift_genomic"][..],
             &["vep", "--shift_genomic", "-1"][..],
+        ] {
+            let err = Args::try_parse_from(argv).unwrap_err();
+            assert_eq!(err.exit_code(), 2, "{argv:?}: {err}");
+        }
+    }
+
+    /// `nearest=s` takes one of `transcript`, `gene` and `symbol` (Config.pm:149,
+    /// 602); any other value, and the bare flag, is a syntax error.
+    #[test]
+    fn nearest_rejects_other_values() {
+        for value in ["transcript", "gene", "symbol"] {
+            assert_eq!(
+                Args::parse_from(["vep", "--nearest", value])
+                    .nearest
+                    .as_deref(),
+                Some(value)
+            );
+        }
+        assert!(Args::parse_from(["vep"]).nearest.is_none());
+        for argv in [
+            &["vep", "--nearest"][..],
+            &["vep", "--nearest", "Symbol"][..],
+            &["vep", "--nearest", "exon"][..],
+            &["vep", "--nearest=1"][..],
         ] {
             let err = Args::try_parse_from(argv).unwrap_err();
             assert_eq!(err.exit_code(), 2, "{argv:?}: {err}");

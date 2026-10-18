@@ -76,7 +76,7 @@ cache-dir-resolution	CacheDir.pm	accepted_noop	open
 cache-fasta-auto-detection	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::no_fasta_suppresses_autodetect	tests/golden/116/GRCh37-hgvs	
 cache-refseq-merged-tarballs	JoinVEP.pm	documented_subset	open			
 cache-region-files	Dumper.pm	implemented	open			
-cache-transcript-gene-tss	Cache/Transcript.pm	implemented	open			
+cache-transcript-gene-tss	Cache/Transcript.pm	implemented	landed:implemented	crates/vep-cli/src/transcript_index.rs::tss_table_derived_from_shards;crates/vep-cli/src/nearest.rs::only_protein_coding_tss_enter_the_array	tests/golden/116/GRCh38-identifiers	
 cache-valid-chromosomes	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::alt_contig_directory_loads	tests/golden/116/GRCh38-alt-contigs	
 cache_version	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::cache_version_selects_directory	tests/golden/116/GRCh38-run-control	
 CADD	CADD.pm	implemented	open			
@@ -310,8 +310,8 @@ MTR	MTR.pm	error	open
 multi-allelic-splitting	VCF.pm	implemented	open			
 multiple-ids	BaseVCF4.pm	implemented	open			
 mutfunc	mutfunc.pm	error	open			
-nearest	AnnotationType/Transcript.pm::get_nearest	implemented	open			
-nearest-algorithm	TranscriptTree.pm::_get_obj_start_end	implemented	open			
+nearest	AnnotationType/Transcript.pm::get_nearest	implemented	landed:implemented	crates/vep-cli/src/nearest.rs::nearest_symbol_gene_transcript_on_a_hand_built_cache;crates/vep-cli/src/nearest.rs::transcripts_sharing_a_tss_are_all_reported_in_stable_id_order;crates/vep-cli/src/nearest.rs::genes_sharing_a_site_are_all_reported;crates/vep-cli/src/nearest.rs::a_structural_variant_spans_to_its_end;crates/vep-cli/src/args.rs::nearest_rejects_other_values;crates/vep-cli/src/runner.rs::nearest_is_set_on_a_record_with_no_allele;crates/vep-cli/src/annotator.rs::the_library_path_sets_nearest_on_a_record_with_no_allele;crates/vep-io/src/output/fields.rs::nearest_prints_on_every_row_and_its_empty_list_is_a_written_value;crates/vep-io/src/output/tab.rs::nearest_column_prints_the_list_and_an_empty_cell_for_the_empty_list;crates/vep-io/src/output/json.rs::nearest_is_a_top_level_array_and_the_empty_list_is_written;crates/vep-cli/src/render.rs::nearest_prints_in_extra_on_every_row_and_empty_as_a_bare_key	tests/golden/116/GRCh38-identifiers	
+nearest-algorithm	TranscriptTree.pm::_get_obj_start_end	implemented	landed:implemented	crates/vep-cli/src/nearest.rs::ties_at_equal_distance_are_all_returned;crates/vep-cli/src/nearest.rs::a_site_the_span_covers_is_reported;crates/vep-cli/src/nearest.rs::only_protein_coding_tss_enter_the_array;crates/vep-cli/src/nearest.rs::a_site_one_base_above_the_start_is_not_the_up_candidate;crates/vep-cli/tests/golden.rs::nearest_transcript_values_compare_by_start_site	tests/golden/116/GRCh38-identifiers	
 NearestExonJB	NearestExonJB.pm	error	open			
 NearestGene	NearestGene.pm	error	open			
 nextflow-nf-core-drop-in	-	documented_subset	open			

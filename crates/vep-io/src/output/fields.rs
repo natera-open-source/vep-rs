@@ -100,6 +100,9 @@ pub struct FieldOptions {
     pub check_svs: bool,
     pub dont_skip: bool,
     pub overlaps: bool,
+    /// `--nearest`: the NEAREST field lists each record's nearest protein-coding
+    /// transcription start sites ([`InputVariant::nearest`]).
+    pub nearest: bool,
     /// `--shift_length`: the SHIFT_LENGTH field is listed; its value is written
     /// only under `shift_3prime` (OutputFactory.pm:1695).
     pub shift_length: bool,
@@ -201,6 +204,7 @@ const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
     ),
     group("xref_refseq", &["RefSeq"]),
     group("gene_phenotype", &["GENE_PHENO"]),
+    vf_group("nearest", &["NEAREST"]),
     vf_group("ambiguity", &["AMBIGUITY"]),
     group("sift", &["SIFT"]),
     group("polyphen", &["PolyPhen"]),
@@ -311,6 +315,7 @@ impl FieldOptions {
             "check_svs" => self.check_svs,
             "dont_skip" => self.dont_skip,
             "overlaps" => self.overlaps,
+            "nearest" => self.nearest,
             "shift_length" => self.shift_length,
             "var_synonyms" => self.var_synonyms,
             "regulatory" => self.regulatory,
@@ -684,6 +689,10 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "GENE_PHENO",
         "Indicates if gene is associated with a phenotype, disease or trait",
+    ),
+    (
+        "NEAREST",
+        "Identifier(s) of nearest transcription start site",
     ),
     (
         "MINIMISED",
@@ -1158,6 +1167,11 @@ fn row_field_value(
             identifier_list(tc.and_then(|x| x.uniprot_isoform.as_deref()), list_sep)
         }
         "HGVSg" => variant.hgvsg.clone().unwrap_or_default(),
+        "NEAREST" => variant
+            .nearest
+            .as_deref()
+            .map(|values| values.join(list_sep))
+            .unwrap_or_default(),
         "SPDI" => row_spdi(variant, tc, options)
             .map(|(spdi, _)| spdi.to_string())
             .unwrap_or_default(),
@@ -1420,6 +1434,16 @@ fn sv_overlap(variant: &InputVariant, tc: Option<&TranscriptConsequence>) -> Opt
     // `StructuralVariationOverlapAllele_to_output_hash`), so an insertion pair
     // (`start == end + 1`) has an overlap length of 0 and carries neither field.
     tc?.feature_overlap(variant.start, variant.end)
+}
+
+/// Whether a field whose value is empty is still written, as `NEAREST=` in the
+/// default format and an empty tab column: on a chromosome with no
+/// protein-coding transcription start site Ensembl VEP sets `NEAREST` to an
+/// empty list, which is a value (`OutputFactory.pm:1017`), and the default and
+/// tab writers print every key set (`VEP_output.pm:117`, `Tab.pm:128`). Every
+/// other empty value stands for an absent key.
+pub fn empty_value_is_written(field: &str, variant: &InputVariant) -> bool {
+    field == "NEAREST" && variant.nearest.as_ref().is_some_and(Vec::is_empty)
 }
 
 /// The keys of a row's `Extra` column in VEP's order: the active flag fields
@@ -2038,6 +2062,55 @@ mod tests {
         assert_eq!(sv_overlap(&pair, Some(&tc)), None);
         assert!(!extra_keys(&pair, Some(&tc), &FieldOptions::default()).contains(&"OverlapBP"));
         assert_eq!(pair.location(), "21:1500-1501");
+    }
+
+    /// `NEAREST` is a record-level key: its value joins the list with the
+    /// format's separator on a transcript row, an intergenic row and the
+    /// `--summary` row alike, and the empty list is a written value
+    /// (`OutputFactory.pm:1017` sets the key whenever the list exists), unlike an
+    /// absent key, which prints nothing.
+    #[test]
+    fn nearest_prints_on_every_row_and_its_empty_list_is_a_written_value() {
+        let options = FieldOptions {
+            nearest: true,
+            ..Default::default()
+        };
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(field_value("NEAREST", &v, None, &options, ","), "");
+        assert!(
+            !empty_value_is_written("NEAREST", &v),
+            "no list: an absent key"
+        );
+        v.nearest = Some(vec!["GENE1".into(), "GENE2".into()]);
+        assert_eq!(
+            field_value("NEAREST", &v, None, &options, ","),
+            "GENE1,GENE2"
+        );
+        let tc = TranscriptConsequence::default();
+        assert_eq!(
+            field_value("NEAREST", &v, Some(&tc), &options, ","),
+            "GENE1,GENE2",
+            "a transcript row carries the record-level key"
+        );
+        assert_eq!(
+            field_value("NEAREST", &v, None, &options, "&"),
+            "GENE1&GENE2"
+        );
+        assert!(!empty_value_is_written("NEAREST", &v));
+        v.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(
+            field_value("NEAREST", &v, None, &options, ","),
+            "GENE1,GENE2",
+            "the summary row carries the record-level key"
+        );
+        assert_eq!(field_value("IMPACT", &v, None, &options, ","), "");
+        v.summary_terms = None;
+        v.nearest = Some(Vec::new());
+        assert_eq!(field_value("NEAREST", &v, None, &options, ","), "");
+        assert!(empty_value_is_written("NEAREST", &v));
+        assert!(!empty_value_is_written("VARIANT_CLASS", &v));
+        assert!(flag_fields(&options).contains(&"NEAREST"));
+        assert!(!flag_fields(&FieldOptions::default()).contains(&"NEAREST"));
     }
 
     /// A `--summary` row is the record's hash alone (OutputFactory.pm:426-458

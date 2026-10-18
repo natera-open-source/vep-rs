@@ -16,6 +16,7 @@ use tracing::{debug, info};
 use crate::config::{CliError, Config};
 use crate::filter_set::FilterSet;
 use crate::json_cache;
+use crate::nearest::NearestType;
 use crate::transcript_index::{
     LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl, TranscriptSet,
 };
@@ -43,6 +44,10 @@ pub struct AnnotationResources {
     /// C-ABI plugins loaded from the `--plugin` arguments no built-in claimed.
     pub dylib_plugins: Arc<PluginRegistry>,
     pub prediction_config: PredictionConfig,
+    /// The identifier `--nearest` reports for each record's nearest
+    /// protein-coding transcription start sites; `None` leaves
+    /// [`InputVariant::nearest`] unset.
+    pub nearest: Option<NearestType>,
     /// The compiled `--transcript_filter`, which every transcript passes before
     /// its consequences are computed, as in the `vep` binary; `None` filters
     /// nothing.
@@ -288,6 +293,7 @@ impl Annotator {
                     sift: config.sift.clone(),
                     polyphen: config.polyphen.clone(),
                 },
+                nearest: config.nearest,
                 transcript_filter,
             },
             pool,
@@ -683,6 +689,7 @@ pub fn annotate_batch(
         }
     }
     let annotate_one = |variant: &mut InputVariant| {
+        crate::nearest::annotate(variant, resources.transcripts.as_ref(), resources.nearest);
         if variant.no_allele {
             return;
         }
@@ -794,6 +801,13 @@ mod tests {
     use super::*;
 
     fn annotator_over(transcripts: Arc<LazyTranscriptIndexes>) -> anyhow::Result<Annotator> {
+        annotator_with_nearest(transcripts, None)
+    }
+
+    fn annotator_with_nearest(
+        transcripts: Arc<LazyTranscriptIndexes>,
+        nearest: Option<NearestType>,
+    ) -> anyhow::Result<Annotator> {
         let pool = build_thread_pool(1).unwrap();
         let resources = AnnotationResources {
             transcripts,
@@ -803,6 +817,7 @@ mod tests {
             builtin_plugins: Arc::new(BuiltinRegistry::new()),
             dylib_plugins: Arc::new(PluginRegistry::new()),
             prediction_config: PredictionConfig::default(),
+            nearest,
             transcript_filter: None,
         };
         Annotator::new(resources, pool)
@@ -1169,6 +1184,7 @@ mod tests {
             builtin_plugins: Arc::new(BuiltinRegistry::new()),
             dylib_plugins: Arc::new(PluginRegistry::new()),
             prediction_config: PredictionConfig::default(),
+            nearest: None,
             transcript_filter: None,
         };
         Annotator::new(resources, build_thread_pool(threads).unwrap()).unwrap()
@@ -1334,6 +1350,42 @@ mod tests {
                 library[0].iter().any(|row| row == EXPECTED_ROW),
                 "{record}: {:?}",
                 library[0]
+            );
+        }
+    }
+
+    /// The library path sets NEAREST on a record whose only ALT is `*`, the
+    /// fixture and value of `runner::tests::nearest_is_set_on_a_record_with_no_allele`,
+    /// so the two paths agree on the record Ensembl VEP annotates against nothing.
+    #[test]
+    fn the_library_path_sets_nearest_on_a_record_with_no_allele() {
+        use crate::runner::make_runner_test_transcript;
+        use crate::transcript_index::TranscriptIndex;
+        use std::collections::HashMap;
+
+        let mut coding = make_runner_test_transcript("ENSTCODING", "ENSGCODING", "21", 10_000);
+        coding.biotype = "protein_coding".into();
+        let mut by_chr = HashMap::new();
+        by_chr.insert(
+            "21".to_string(),
+            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![coding], 5_000, 5_000),
+        );
+        let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
+        let annotator = annotator_with_nearest(transcripts, Some(NearestType::Gene)).unwrap();
+
+        let mut batch = parse_vcf_line("21\t20000\tr_star\tA\t*\t.\t.\t.", true).unwrap();
+        batch.extend(parse_vcf_line("21\t20000\trs1\tA\tG\t.\t.\t.", true).unwrap());
+        let _ = annotator.annotate_batch(&mut batch);
+
+        assert!(batch[0].no_allele);
+        assert!(batch[0].transcript_consequences.is_empty());
+        assert!(batch[0].most_severe_consequence.is_none());
+        for variant in &batch {
+            assert_eq!(
+                variant.nearest,
+                Some(vec!["ENSGCODING".to_string()]),
+                "{:?}",
+                variant.id
             );
         }
     }

@@ -36,6 +36,12 @@ Masks, floors and field pairs (comparison mode):
   must reach ``MIN`` on both sides.
 * ``--field-pairs 'COL=EXPECTED=>ACTUAL;...'`` (repeatable): a value pair accepted as
   agreeing wherever it occurs in ``COL``.
+* ``--nearest-sites <json_cache>``: ``NEAREST`` values (and the JSON ``nearest``) agree
+  through the candidate cache's protein-coding transcription start sites when every expected
+  value is among the actual values and every actual value starts at a site of an expected
+  value. Ensembl VEP names one transcript per winning site, whichever its interval tree held
+  first, and the candidate names every transcript at the site, so the ids differ where the
+  sites agree.
 
 A comparison is green when no expected entry is missing, no actual entry is unexpected
 (the two one-sided key counts), every compared field agrees after masks and field pairs,
@@ -120,6 +126,7 @@ RECORD_LEVEL_COLUMNS = {
     "Existing_variation",
     "VARIANT_CLASS",
     "MINIMISED",
+    "NEAREST",
     "CLIN_SIG",
     "SOMATIC",
     "PHENO",
@@ -730,6 +737,99 @@ def extra_pairs(extra: str) -> dict[str, str]:
     return dict(kv.partition("=")[::2] for kv in extra.split(";"))
 
 
+NEAREST_FIELDS = ("NEAREST", "nearest")
+
+
+def nearest_list(value: str) -> list[str]:
+    """The values of a ``NEAREST`` field as every format joins them (``,`` or ``&``)."""
+    if value in ("-", ABSENT):
+        return []
+    return [v for v in re.split(r"[,&]", value) if v]
+
+
+class NearestSites:
+    """The protein-coding transcription start sites of a candidate JSON cache, by transcript
+    stable id, gene stable id and gene symbol: a transcript's site is its start on the forward
+    strand and its end on the reverse (``AnnotationType/Transcript.pm:749``), a gene's or
+    symbol's the sites of its transcripts."""
+
+    def __init__(self, sites: dict[str, set[int]]) -> None:
+        self.sites = sites
+
+    @classmethod
+    def from_cache(cls, cache: Path) -> NearestSites:
+        transcripts = cache / "transcripts"
+        if not transcripts.is_dir():
+            raise ComparatorError(f"--nearest-sites: {cache} has no transcripts/ directory")
+        sites: dict[str, set[int]] = defaultdict(set)
+        for shard in sorted(transcripts.glob("*/*.json")) + sorted(transcripts.glob("*/*.json.gz")):
+            try:
+                parsed = json.loads(read_text(shard))
+            except ValueError as exc:
+                raise ComparatorError(f"{shard} is not JSON: {exc}") from exc
+            for t in cls.shard_transcripts(shard, parsed):
+                if t.get("biotype") != "protein_coding":
+                    continue
+                forward = str(t.get("strand", "1")) == "1"
+                site = cls.coordinate(shard, t, "start" if forward else "end")
+                for key in ("stable_id", "gene_stable_id", "gene_symbol"):
+                    value = t.get(key)
+                    if value:
+                        sites[value].add(site)
+        return cls(dict(sites))
+
+    @staticmethod
+    def shard_transcripts(shard: Path, parsed: object) -> list[dict]:
+        """The transcript objects of a parsed shard: a bare array, or a converted cache's
+        range-keyed map of arrays; a ``null`` in either is a placeholder and is dropped."""
+        if isinstance(parsed, dict):
+            if not all(isinstance(wrapped, list) for wrapped in parsed.values()):
+                raise ComparatorError(f"{shard}: a range-keyed map value is not a transcript array")
+            parsed = [t for wrapped in parsed.values() for t in wrapped]
+        if not isinstance(parsed, list):
+            raise ComparatorError(f"{shard} is neither a transcript array nor a range-keyed map")
+        transcripts = [t for t in parsed if t is not None]
+        if not all(isinstance(t, dict) for t in transcripts):
+            raise ComparatorError(f"{shard}: a transcript is not an object")
+        return transcripts
+
+    @staticmethod
+    def coordinate(shard: Path, transcript: dict, key: str) -> int:
+        """The ``key`` coordinate of a transcript, an integer or a string of digits."""
+        value = transcript.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, str)) or not str(value).isdecimal():
+            raise ComparatorError(f"{shard}: transcript {transcript.get('stable_id')!r} has no integer {key}")
+        return int(value)
+
+    def agree(self, expected: str, actual: str) -> bool:
+        """Whether two ``NEAREST`` values name the same winning sites: every expected value is
+        among the actual values and every actual value starts at a site of an expected value;
+        a value the cache lacks starts nowhere, so it never agrees."""
+        expected_values = nearest_list(expected)
+        actual_values = nearest_list(actual)
+        if not expected_values or not actual_values:
+            return expected == actual
+        if any(e not in actual_values for e in expected_values):
+            return False
+        expected_sites = set().union(*(self.sites.get(e, set()) for e in expected_values))
+        return all(self.sites.get(a, set()) & expected_sites for a in actual_values)
+
+
+def extra_nearest_accepted(expected: str, actual: str, sites: NearestSites) -> bool:
+    """Whether ``actual`` is ``expected`` with an agreeing ``NEAREST`` value substituted on its
+    ``key=value`` pairs, the keys and their order kept."""
+    ap = extra_pairs(actual)
+    if "NEAREST" not in ap:
+        return False
+    rewritten = []
+    for kv in expected.split(";"):
+        k, sep, v = kv.partition("=")
+        if sep and k == "NEAREST" and sites.agree(v, ap[k]):
+            kv = f"{k}={ap[k]}"
+        rewritten.append(kv)
+    return ";".join(rewritten) == actual
+
+
 def extra_pairs_accepted(expected: str, actual: str, field_pairs: dict[str, set[tuple[str, str]]]) -> bool:
     """Whether ``actual`` is ``expected`` with an accepted field pair substituted on its
     ``key=value`` pairs, the keys and their order kept; a difference in order alone is
@@ -752,6 +852,7 @@ def compare_entries(
     field_pairs: dict[str, set[tuple[str, str]]] | None = None,
     check_order: bool = True,
     examples: int = EXAMPLES_PER_GROUP,
+    nearest_sites: NearestSites | None = None,
 ) -> dict:
     """Compares expected against actual entries and returns the format's report: the
     one-sided key counts, every field with its differing count and examples grouped by the
@@ -767,6 +868,7 @@ def compare_entries(
     mismatches: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     mismatch_totals: Counter[str] = Counter()
     pairs_accepted: Counter[str] = Counter()
+    nearest_accepted: Counter[str] = Counter()
     stale: list[str] = []
     compared = skipped_documented = annotated_without_reference = 0
 
@@ -818,6 +920,12 @@ def compare_entries(
             ):
                 pairs_accepted[name] += 1
                 continue
+            if nearest_sites is not None and (
+                (name in NEAREST_FIELDS and nearest_sites.agree(ev, av))
+                or (name == "Extra" and extra_nearest_accepted(ev, av, nearest_sites))
+            ):
+                nearest_accepted[name] += 1
+                continue
             mismatch_totals[name] += 1
             group = mismatches[name][e.consequence]
             if len(group) < examples:
@@ -859,6 +967,7 @@ def compare_entries(
             "actual_populated": actual_count,
             "differing": mismatch_totals.get(name, 0),
             "pairs_accepted": pairs_accepted.get(name, 0),
+            "nearest_accepted": nearest_accepted.get(name, 0),
             "floor": floor,
             "floor_met": floor_met,
         }
@@ -923,6 +1032,7 @@ def compare_files(
     floors: dict[str, int],
     field_pairs: dict[str, set[tuple[str, str]]],
     examples: int,
+    nearest_sites: NearestSites | None = None,
 ) -> dict:
     """The comparison-mode report for one format."""
     expected_format = "tab" if fmt == "parquet" else fmt
@@ -936,6 +1046,7 @@ def compare_files(
         field_pairs=field_pairs,
         check_order=fmt != "parquet",
         examples=examples,
+        nearest_sites=nearest_sites,
     )
     report.update(
         {
@@ -950,6 +1061,7 @@ def compare_files(
                 "available": dict(sorted(documented.available.items())),
             },
             "field_pairs": {name: sorted(pairs) for name, pairs in sorted(field_pairs.items())},
+            "nearest_sites": None if nearest_sites is None else len(nearest_sites.sites),
         }
     )
     return report
@@ -1597,6 +1709,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--masks", help="comma-separated intended-divergence classes applied from the manifest")
     ap.add_argument("--floors", help="COL=MIN,... minimum populated counts per column, both sides")
     ap.add_argument("--field-pairs", action="append", help="COL=EXPECTED=>ACTUAL[;...] value pairs accepted as equal")
+    ap.add_argument(
+        "--nearest-sites", type=Path, help="the candidate JSON cache whose start sites settle NEAREST values"
+    )
     ap.add_argument("--default", type=Path, help="self-parity: the default-format output")
     ap.add_argument("--tab", type=Path, help="self-parity: the --tab output")
     ap.add_argument("--vcf", type=Path, help="self-parity: the --vcf output")
@@ -1639,6 +1754,9 @@ def run(args: argparse.Namespace) -> dict:
     masks = parse_masks(args.masks)
     documented = Documented.from_manifest(load_manifest(args.manifest), masks)
     inputs = input_records(args.input) if args.input is not None else None
+    floors = parse_floors(args.floors)
+    field_pairs = parse_field_pairs(args.field_pairs)
+    nearest_sites = NearestSites.from_cache(args.nearest_sites) if args.nearest_sites is not None else None
     return compare_files(
         args.format,
         args.expected,
@@ -1646,9 +1764,10 @@ def run(args: argparse.Namespace) -> dict:
         inputs,
         documented,
         masks,
-        parse_floors(args.floors),
-        parse_field_pairs(args.field_pairs),
+        floors,
+        field_pairs,
         args.examples,
+        nearest_sites,
     )
 
 

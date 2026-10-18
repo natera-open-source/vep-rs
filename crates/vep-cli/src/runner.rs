@@ -33,6 +33,7 @@ use crate::annotator::{
 use crate::cache_resolve::ResolvedCache;
 use crate::config::{CliError, Config};
 use crate::filter_set::FilterSet;
+use crate::nearest::NearestType;
 use crate::output_compress::{CompressedOutput, OutputCompression};
 use crate::pick::FilterConfig;
 use crate::pipeline;
@@ -609,6 +610,7 @@ impl Runner {
             check_svs: false,
             dont_skip: c.dont_skip,
             overlaps: c.overlaps,
+            nearest: c.nearest.is_some(),
             shift_length: c.shift_length,
             shift_3prime: c.shift_3prime,
             shift_genomic: c.shift_genomic,
@@ -977,6 +979,7 @@ impl Runner {
             },
             transcript_filter,
             synonyms: Arc::clone(&self.cache.synonyms),
+            nearest: self.config.nearest,
         };
 
         // A non-VCF input has no header lines of its own, so the VCF output's
@@ -1518,6 +1521,8 @@ pub(crate) struct AnnotationResources {
     /// The chromosome synonyms every input name is resolved through before a
     /// cache lookup ([`ResolvedCache::synonyms`]).
     synonyms: Arc<ChromosomeSynonyms>,
+    /// The identifier `--nearest` reports; `None` without the flag.
+    nearest: Option<NearestType>,
 }
 
 /// The compiled `--transcript_filter`, `None` without the flag. A filter
@@ -1642,6 +1647,9 @@ pub(crate) fn annotate_one(
     resources: &AnnotationResources,
     failure: &ReadFailure,
 ) -> u64 {
+    // Every record of the buffer, a breakend on its own chromosome and a record
+    // with no allele to annotate included (AnnotationType/Transcript.pm:170-174).
+    crate::nearest::annotate(variant, resources.transcripts.as_ref(), resources.nearest);
     if variant.no_allele {
         return 0;
     }
@@ -2060,6 +2068,7 @@ pub(crate) fn annotate_batch_for_test(
         prediction_config: PredictionConfig::default(),
         transcript_filter: None,
         synonyms: Arc::default(),
+        nearest: None,
     };
     let stats = PipelineStats {
         variants_processed: AtomicU64::new(0),
@@ -2117,6 +2126,7 @@ pub(crate) fn default_rows_for_test(
         prediction_config: PredictionConfig::default(),
         transcript_filter: None,
         synonyms: Arc::default(),
+        nearest: None,
     };
     let stats = PipelineStats {
         variants_processed: AtomicU64::new(0),
@@ -2913,7 +2923,39 @@ mod tests {
             prediction_config: PredictionConfig::default(),
             transcript_filter: None,
             synonyms: Arc::default(),
+            nearest: None,
         }
+    }
+
+    /// NEAREST is set on every record of the buffer (AnnotationType/Transcript.pm:170-174),
+    /// a record whose only ALT is `*` included: it is annotated against nothing, yet
+    /// Ensembl VEP writes its `nearest` beside the other record keys.
+    #[test]
+    fn nearest_is_set_on_a_record_with_no_allele() {
+        let mut coding = make_runner_test_transcript("ENSTCODING", "ENSGCODING", "21", 10_000);
+        coding.biotype = "protein_coding".into();
+        let mut by_chr = HashMap::new();
+        by_chr.insert(
+            "21".to_string(),
+            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![coding], 5_000, 5_000),
+        );
+        let mut resources = resources_over(Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)));
+        resources.nearest = Some(NearestType::Gene);
+        let failure = ReadFailure::default();
+
+        let mut star = parse_vcf_line("21\t20000\tr_star\tA\t*\t.\t.\t.", true).expect("parse");
+        assert!(star[0].no_allele);
+        annotate_one(&mut star[0], &resources, &failure);
+        assert_eq!(star[0].nearest, Some(vec!["ENSGCODING".to_string()]));
+
+        let mut snv = parse_vcf_line("21\t20000\trs1\tA\tG\t.\t.\t.", true).expect("parse");
+        annotate_one(&mut snv[0], &resources, &failure);
+        assert_eq!(snv[0].nearest, Some(vec!["ENSGCODING".to_string()]));
+
+        resources.nearest = None;
+        let mut plain = parse_vcf_line("21\t20000\trs1\tA\tG\t.\t.\t.", true).expect("parse");
+        annotate_one(&mut plain[0], &resources, &failure);
+        assert_eq!(plain[0].nearest, None);
     }
 
     fn zero_stats() -> PipelineStats {
@@ -3429,6 +3471,7 @@ mod tests {
             prediction_config: PredictionConfig::default(),
             transcript_filter: None,
             synonyms: Arc::default(),
+            nearest: None,
         };
         let stats = PipelineStats {
             variants_processed: AtomicU64::new(0),
@@ -3486,6 +3529,7 @@ mod tests {
             prediction_config: PredictionConfig::default(),
             transcript_filter: None,
             synonyms: Arc::default(),
+            nearest: None,
         };
         let stats = PipelineStats {
             variants_processed: AtomicU64::new(0),
@@ -3548,6 +3592,7 @@ mod tests {
                 prediction_config: PredictionConfig::default(),
                 transcript_filter: None,
                 synonyms: Arc::default(),
+                nearest: None,
             };
             let stats = PipelineStats {
                 variants_processed: AtomicU64::new(0),

@@ -43,6 +43,7 @@ pub mod config;
 pub mod dylib_plugins;
 pub mod filter_set;
 pub mod json_cache;
+pub mod nearest;
 pub mod option_rules;
 pub mod output_compress;
 pub mod pick;

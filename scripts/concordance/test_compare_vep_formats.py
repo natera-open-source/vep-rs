@@ -367,7 +367,7 @@ def test_floor_failure(texts):
     assert met["verdict"] == "green"
     assert met["columns"]["IMPACT"] == {
         "expected_populated": ROWS, "actual_populated": ROWS, "differing": 0, "pairs_accepted": 0,
-        "floor": ROWS, "floor_met": True,
+        "nearest_accepted": 0, "floor": ROWS, "floor_met": True,
     }
     empty = cvf.compare_entries(expected, actual, no_documented(), floors={"HGVSc": 1})
     assert empty["verdict"] == "red"
@@ -727,6 +727,117 @@ def test_field_pairs_reach_the_extra_column(texts):
     pairs = {"OverlapPC": {("100.00", "100")}}
     assert cvf.extra_pairs_accepted("IMPACT=HIGH;OverlapPC=100.00", "IMPACT=HIGH;OverlapPC=100", pairs)
     assert not cvf.extra_pairs_accepted("IMPACT=HIGH;OverlapPC=100.00", "OverlapPC=100;IMPACT=HIGH", pairs)
+
+
+NEAREST_CORPUS = HERE.parent.parent / "tests" / "golden" / "116" / "GRCh38-identifiers"
+
+
+def test_nearest_sites_agree_on_the_winning_sites_not_the_ids():
+    """Ensembl VEP names one transcript at a winning site; the candidate names every transcript
+    there. Transcripts A and B of gene G1 share the site 1000; R of G2 starts at 5000; F of G3
+    at 9000."""
+    sites = cvf.NearestSites({"A": {1000}, "B": {1000}, "R": {5000}, "F": {9000},
+                              "G1": {1000}, "G2": {5000}, "G3": {9000}, "SYM1": {1000}, "SYM3": {9000}})
+    assert sites.agree("A", "A,B")
+    assert sites.agree("B", "A,B")
+    assert sites.agree("A", "A&B")
+    assert sites.agree("R,F", "R,F")
+    assert sites.agree("G1", "G1")
+    assert not sites.agree("A", "B"), "the reference's transcript must be among the candidate's"
+    assert not sites.agree("A", "A,R"), "a candidate transcript at another site is a difference"
+    assert not sites.agree("R", "R,F"), "the candidate adding the other side's site is a difference"
+    assert not sites.agree("A", "A,X"), "a transcript the cache lacks starts nowhere"
+    assert not sites.agree("X", "X"), "a transcript the cache lacks never agrees, even with itself"
+    assert sites.agree("-", "-") and sites.agree(cvf.ABSENT, cvf.ABSENT)
+    assert not sites.agree("A", "-") and not sites.agree("-", "A")
+    assert not sites.agree("-", cvf.ABSENT), "an empty value and a missing field stay a difference"
+    assert cvf.nearest_list("A&B") == ["A", "B"] and cvf.nearest_list("-") == []
+    assert cvf.extra_nearest_accepted("IMPACT=HIGH;NEAREST=A", "IMPACT=HIGH;NEAREST=A,B", sites)
+    assert not cvf.extra_nearest_accepted("IMPACT=HIGH;NEAREST=A", "NEAREST=A,B;IMPACT=HIGH", sites)
+    assert not cvf.extra_nearest_accepted("IMPACT=HIGH;NEAREST=A", "IMPACT=LOW;NEAREST=A,B", sites)
+    assert not cvf.extra_nearest_accepted("IMPACT=HIGH", "IMPACT=HIGH", sites)
+
+
+def test_nearest_sites_from_cache_settle_the_identifiers_corpus():
+    """The nearest-transcript set of the identifiers corpus: every record where Ensembl VEP's
+    one transcript is one of several at the winning site differs by id and agrees by site;
+    the gene and symbol sets agree verbatim."""
+    sites = cvf.NearestSites.from_cache(NEAREST_CORPUS / "json_cache")
+    assert sites.sites["ENST00000389125"] == {29940022}
+    assert sites.sites["ENST00000399914"] == {29940022}
+    assert sites.sites["GRIK1"] >= {29940022} and sites.sites["ENSG00000171189"] >= {29940022}
+    assert sites.agree("ENST00000399914", "ENST00000389124,ENST00000389125,ENST00000399907,ENST00000399909,"
+                                           "ENST00000399913,ENST00000399914,ENST00001131791")
+    text = cvf.read_text(NEAREST_CORPUS / "expected_nearest-transcript" / "default.txt.gz")
+    expected = cvf.parse_default(text)
+    rows = data_lines(text)
+    widened = [r.replace("NEAREST=ENST00000399914", "NEAREST=ENST00000389125,ENST00000399914") for r in rows]
+    changed = sum(1 for r in rows if "NEAREST=ENST00000399914" in r)
+    assert changed > 0
+    actual = cvf.parse_default(rebuild(text, widened))
+    plain = cvf.compare_entries(expected, actual, no_documented())
+    assert plain["verdict"] == "red" and plain["columns"]["NEAREST"]["differing"] == changed
+    settled = cvf.compare_entries(expected, actual, no_documented(), nearest_sites=sites)
+    assert settled["verdict"] == "green", settled["reasons"]
+    assert settled["columns"]["NEAREST"]["nearest_accepted"] == changed
+    assert settled["columns"]["Extra"]["nearest_accepted"] == changed
+    wrong = [r.replace("NEAREST=ENST00000399914", "NEAREST=ENST00000400546") for r in rows]
+    report = cvf.compare_entries(expected, cvf.parse_default(rebuild(text, wrong)), no_documented(), nearest_sites=sites)
+    assert report["verdict"] == "red" and report["columns"]["NEAREST"]["differing"] == changed
+    with pytest.raises(cvf.ComparatorError):
+        cvf.NearestSites.from_cache(NEAREST_CORPUS / "expected")
+
+
+def one_shard_cache(root: Path, shard: object) -> Path:
+    (root / "transcripts" / "1").mkdir(parents=True)
+    (root / "transcripts" / "1" / "1-1000000.json").write_text(json.dumps(shard), encoding="utf-8")
+    return root
+
+
+def test_nearest_sites_from_cache_rejects_a_shard_of_another_shape(tmp_path, capsys):
+    """A shard that parses as neither a transcript array nor a range-keyed map of arrays, or
+    that holds an element other than an object or ``null``, is a read failure: the comparator's
+    error line naming the shard and exit 2, not a traceback."""
+    other_shapes = ("x", 7, None, [7], ["x"], [[]], {"1-1000000": "x"}, {"1-1000000": {"a": 1}})
+    for n, shard in enumerate(other_shapes):
+        with pytest.raises(cvf.ComparatorError, match=r"1-1000000\.json"):
+            cvf.NearestSites.from_cache(one_shard_cache(tmp_path / f"shape{n}", shard))
+    assert cvf.NearestSites.from_cache(one_shard_cache(tmp_path / "empty_array", [])).sites == {}
+    assert cvf.NearestSites.from_cache(one_shard_cache(tmp_path / "empty_map", {})).sites == {}
+    code = cvf.main([
+        "--format", "default", "--expected", str(EXPECTED / "default.txt.gz"), "--actual", str(EXPECTED / "default.txt.gz"),
+        "--nearest-sites", str(one_shard_cache(tmp_path / "cli", "x")),
+    ])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert err.startswith("ERROR: [compare_vep_formats] ")
+    assert "1-1000000.json" in err
+    assert err.count("\n") == 1
+
+
+def test_nearest_sites_from_cache_drops_nulls_and_rejects_a_coordinate_that_is_not_an_integer(tmp_path):
+    """A ``null`` is a placeholder in either shard shape and is dropped. A protein-coding
+    transcript's site is its start on the forward strand and its end on the reverse, an integer
+    or a string of digits; one that is missing or of another kind is a read failure, while
+    another biotype's coordinates are never read."""
+    plus = {"biotype": "protein_coding", "strand": 1, "start": 10, "end": 20, "stable_id": "P", "gene_stable_id": "G", "gene_symbol": "S"}
+    minus = {"biotype": "protein_coding", "strand": -1, "start": "30", "end": "40", "stable_id": "M", "gene_stable_id": "G"}
+    other = {"biotype": "lncRNA", "strand": 1, "stable_id": "L"}
+    sites = {"P": {10}, "M": {40}, "G": {10, 40}, "S": {10}}
+    assert cvf.NearestSites.from_cache(one_shard_cache(tmp_path / "array", [None, plus, None, minus, other])).sites == sites
+    wrapped = {"1-1000000": [None, plus], "1000001-2000000": [minus, None, other]}
+    assert cvf.NearestSites.from_cache(one_shard_cache(tmp_path / "map", wrapped)).sites == sites
+    without_an_integer_site = (
+        {"biotype": "protein_coding", "strand": 1, "end": 20, "stable_id": "P"},
+        {"biotype": "protein_coding", "strand": -1, "start": 10, "stable_id": "P"},
+        {"biotype": "protein_coding", "strand": 1, "start": "abc", "end": 20, "stable_id": "P"},
+        {"biotype": "protein_coding", "strand": 1, "start": 12.5, "end": 20, "stable_id": "P"},
+        {"biotype": "protein_coding", "strand": 1, "start": True, "end": 20, "stable_id": "P"},
+        {"biotype": "protein_coding", "strand": 1, "start": None, "end": 20, "stable_id": "P"},
+    )
+    for n, transcript in enumerate(without_an_integer_site):
+        with pytest.raises(cvf.ComparatorError, match=r"1-1000000\.json: transcript 'P' has no integer (start|end)$"):
+            cvf.NearestSites.from_cache(one_shard_cache(tmp_path / f"bad{n}", [transcript]))
 
 
 def test_unreadable_inputs_and_an_unwritable_report_exit_2(tmp_path, capsys):

@@ -130,9 +130,48 @@
     "vcf.vcf": "f103c9c1787da8901cab65fb912f9454eb4bf8eb0b9bd8b4cd7be7d606a86e1d",
     "json.jsonl": "765aa195d57579577940d0f73407a1d713c6dfd2965ef94be2aa52a4f4a00fba"
    }
+  },
+  "nearest-transcript": {
+   "flags": [
+    "--nearest",
+    "transcript"
+   ],
+   "expected_dir": "expected_nearest-transcript",
+   "sha256": {
+    "default.txt": "248cf33d78e036be274ebab1c8e0df22f1019ac51349a1b60a86658c681c3a9a",
+    "tab.txt": "7a02ca5c4211ae38085140f8b7c7abfc44815a3ffd1bb6a79126852964ab762c",
+    "vcf.vcf": "7db48adbf10237b449468beab2fd003468703bc4dbbdc7bdce777568ee4e27dc",
+    "json.jsonl": "c9534d89116b66732b721f0295d6a89ef221d26e2216d8ea6f294831ea565eca"
+   }
+  },
+  "nearest-gene": {
+   "flags": [
+    "--nearest",
+    "gene"
+   ],
+   "expected_dir": "expected_nearest-gene",
+   "sha256": {
+    "default.txt": "9b69da0ff7ff13a2bc1bb0eb4122f97ea19c077f1e1ed517512b33a5c6e897f3",
+    "tab.txt": "400994210452f180f32452fddb82c8b6f589b0cb12e5e1f233979612bd6cb88d",
+    "vcf.vcf": "4a9b48a38e26256b64f51a227285028885064fd4df527777673ed02cc23013fb",
+    "json.jsonl": "e77684b9b9b4265340cdd6a8b069e07b444fc46c4626ef98a0c99b7d2ef07c3a"
+   }
+  },
+  "nearest-symbol": {
+   "flags": [
+    "--nearest",
+    "symbol"
+   ],
+   "expected_dir": "expected_nearest-symbol",
+   "sha256": {
+    "default.txt": "b2d02e76b38215f2bc4e73e7a24c5a2a50082667dc3a9243a8e5c68cf4cfb8cc",
+    "tab.txt": "7f9b64b1f74a6cdb18c5f49ce56bc0627b225b7b859632bace12f2c6a9f4802c",
+    "vcf.vcf": "38c8e0e692b314196ff545ab3b6145f80062fff9415b4375210eebd1de81e828",
+    "json.jsonl": "19842beff2ddeb9e7f235078f5f35bc18ab4e1e391a205e64ad479bbe66be8a4"
+   }
   }
  },
- "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite identifiers=<reference>=<candidates> --k 100 --seed 1 --covers hgvs --covers hgvs-offset-field --matrix tests/parity/matrix.tsv --flag=--hgvs --fasta-name reference.fa.gz --out tests/golden/116/GRCh38-identifiers; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 (the record spans plus one anchor at every record's nearest protein-coding transcription start on either side); scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and each flag set); scripts/golden/build_golden_corpus.py flag-set (one per flag set) and classify --field HGVSc --field HGVSp (the manifest's run and each flag set)",
+ "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite identifiers=<reference>=<candidates> --k 100 --seed 1 --covers hgvs --covers hgvs-offset-field --matrix tests/parity/matrix.tsv --flag=--hgvs --fasta-name reference.fa.gz --out tests/golden/116/GRCh38-identifiers; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 (the record spans plus one anchor at every record's nearest protein-coding transcription start on either side); scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and each flag set); scripts/golden/build_golden_corpus.py flag-set (one per flag set) and classify --field HGVSc --field HGVSp (the manifest's run and the HGVS flag sets), --field NEAREST (the nearest-gene and nearest-symbol sets) and without --field (the nearest-transcript set, whose NEAREST compares by start site)",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "21": 726

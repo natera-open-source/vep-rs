@@ -93,7 +93,11 @@ impl OutputFormatter for TabOutputFormatter {
                     continue;
                 }
                 let v = fields::field_value(col, variant, tc, &self.options, ",");
-                line.push_str(if v.is_empty() { "-" } else { &v });
+                if v.is_empty() && !fields::empty_value_is_written(col, variant) {
+                    line.push('-');
+                } else {
+                    line.push_str(&v);
+                }
             }
             lines.push(line);
         }
@@ -144,6 +148,33 @@ mod tests {
             lines,
             vec!["rs1\t21:100\tG\tENSG1\tENST1\tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\tMODIFIER\t42\t-1\tcds_end_NF"]
         );
+    }
+
+    /// Under `--nearest` the NEAREST column prints the joined list, and a record
+    /// on a chromosome with no protein-coding start site prints an empty cell
+    /// rather than `-` (`Tab.pm:128`: a defined empty list is the empty string).
+    #[test]
+    fn nearest_column_prints_the_list_and_an_empty_cell_for_the_empty_list() {
+        let options = FieldOptions {
+            nearest: true,
+            ..Default::default()
+        };
+        let f = TabOutputFormatter::new(options, vec![], None, vec![], true);
+        assert!(f.columns().join("\t").ends_with("\tFLAGS\tNEAREST"));
+        let mut v = variant();
+        v.nearest = Some(vec!["ENST9".into(), "ENST8".into()]);
+        let lines = f.format_record(&[&v]).unwrap();
+        assert!(
+            lines[0].ends_with("\tcds_end_NF\tENST9,ENST8"),
+            "{}",
+            lines[0]
+        );
+        v.nearest = Some(Vec::new());
+        let lines = f.format_record(&[&v]).unwrap();
+        assert!(lines[0].ends_with("\tcds_end_NF\t"), "{}", lines[0]);
+        v.nearest = None;
+        let lines = f.format_record(&[&v]).unwrap();
+        assert!(lines[0].ends_with("\tcds_end_NF\t-"), "{}", lines[0]);
     }
 
     /// Ensembl VEP 116.2 under `--tab --fields ""` writes the header block, a bare
