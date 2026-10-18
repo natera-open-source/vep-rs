@@ -138,7 +138,7 @@ DeNovo	DeNovo.pm	error	open
 dir	Config.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::dir_is_the_default_cache_root	tests/golden/116/GRCh38-run-control	
 dir_cache	AnnotationSourceAdaptor.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::dir_cache_overrides_dir;crates/vep-cli/src/cache_resolve.rs::missing_species_dir_is_fatal	tests/golden/116/GRCh38-run-control	
 dir_plugins	Runner.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::dir_plugins_defaults_to_dir_slash_plugins;crates/vep-cli/tests/cli_run_control.rs::missing_plugins_dir_warns_only_when_a_plugin_is_named;crates/vep-cli/src/annotator.rs::missing_plugins_dir_dies_under_safe	tests/golden/116/GRCh38-run-control	
-distance	BaseRunner.pm	implemented	open			
+distance	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::distance_pair_with_zero_downstream_uses_upstream;crates/vep-cli/src/config.rs::distance_non_numeric_is_an_error;crates/vep-cli/tests/integration_test.rs::distance_non_numeric_exits_with_the_error_line	tests/golden/116/GRCh38-release116	
 docker-image	INSTALL.pl	implemented	open			
 domains	OutputFactory.pm	implemented	open			
 domains-value-format	OutputFactory.pm	implemented	open			
@@ -336,8 +336,8 @@ option_rule_tables	Config.pm	implemented	landed:implemented	crates/vep-cli/src/o
 os_and_architecture_matrix	-	documented_subset	open			
 output_file	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::stdout_literal_is_case_insensitive;crates/vep-cli/tests/cli_run_control.rs::repeated_output_file_keeps_last_with_warning;crates/vep-cli/tests/cli_run_control.rs::existing_output_is_refused_with_ensembl_veps_text	tests/golden/116/GRCh38-run-control	
 output_format	Config.pm	documented_subset	open			
-overlapbp-overlappc-sv	OutputFactory.pm::StructuralVariationOverlapAllele_to_output_hash	documented_subset	open			
-overlaps	OutputFactory.pm	implemented	open			
+overlapbp-overlappc-sv	OutputFactory.pm::StructuralVariationOverlapAllele_to_output_hash	documented_subset	landed:documented_subset	crates/vep-effects/src/sv/deletion.rs::test_overlap_bp_and_pc;crates/vep-effects/src/sv/mod.rs::documented_subset_names_the_regulatory_sv_rows;crates/vep-cli/tests/format_parity.rs::overlaps_adds_overlapbp_overlappc_columns_to_tab_and_vcf	tests/golden/116/GRCh38;tests/golden/116/GRCh37	
+overlaps	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/tests/format_parity.rs::overlaps_adds_overlapbp_overlappc_columns_to_tab_and_vcf	tests/golden/116/GRCh38;tests/golden/116/GRCh37	
 Paralogues	Paralogues.pm	error	open			
 parquet_row_group_size	-	removed	open			
 parquet_shape	-	removed	open			

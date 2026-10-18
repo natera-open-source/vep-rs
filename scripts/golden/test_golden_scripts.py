@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 import hashlib
 import gzip
+import os
 import random
 import struct
+import subprocess
 import sys
 import zlib
 from pathlib import Path
@@ -492,6 +494,14 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
         ('"covers": ["symbol"], "cache_layout": "perl"', 'cache_layout is "perl", not "ensembl"'),
         ('"covers": ["symbol"], "cache_layout": null', 'cache_layout is null, not "ensembl"'),
         ('"covers": ["symbol"], "cache_layout": "ensembl", "release": "116"', "cache_layout ensembl wants release and assembly"),
+        ('"covers": ["symbol"], "keep_samples": "8"', "keep_samples is not a count"),
+        ('"covers": ["symbol"], "keep_samples": -1', "keep_samples is not a count"),
+        ('"covers": ["symbol"], "keep_samples": true', "keep_samples is not a count"),
+        ('"covers": ["symbol"], "keep_samples": 2', "samples does not name 2 kept samples"),
+        ('"covers": ["symbol"], "keep_samples": 2, "samples": ["a"]', "samples does not name 2 kept samples"),
+        ('"covers": ["symbol"], "keep_samples": 1, "samples": [""]', "samples does not name 1 kept samples"),
+        ('"covers": ["symbol"], "required_genotype_classes": "het"', "required_genotype_classes is not a list of genotype classes"),
+        ('"covers": ["symbol"], "required_genotype_classes": ["het", "ghost"]', "required_genotype_classes is not a list of genotype classes"),
     ]
     for body, reason in shapes:
         manifest.write_text('{"records": [], ' + body + "}", encoding="utf-8")
@@ -628,6 +638,412 @@ def test_family_columns_stratify_exemplars(tmp_path: Path, capsys):
     plain_capped = tmp_path / "plain-capped"
     assert _select(ref, vcf, plain_capped, "--covers", "symbol", "--k", "3", "--max-records", "3") == 0
     assert len(json.loads((plain_capped / "manifest.json").read_text())["records"]) == 3
+
+
+def test_genotype_labels_follow_vep_genotype_reading():
+    """Each GT's classes follow how Ensembl VEP reads a genotype for `--individual`: the bits
+    split on `|` when the GT has one, else on `/` (BaseVCF4.pm 944-949; the `\\` of
+    Parser/VCF.pm 627 never meets one, so `1\\2` is a single bit and no allele index), `.` bits
+    dropped before translation (BaseVCF4.pm 946-949), so `./1` is a one-allele genotype (HOM,
+    not HET) and `./.` yields nothing, an allele containing `*` outside the non-reference set
+    (Parser/VCF.pm 635) so an individual whose only non-reference allele is `*` or `<*>` is
+    reference-homozygous, a haploid `1` HOM, and an index read as a number (`00` is `0`)."""
+    labels = bgc.genotype_labels
+    assert labels("0|1", ["G"], "r") == {"het"}
+    assert labels("1/0", ["G"], "r") == {"het"}
+    assert labels("1|1", ["G"], "r") == {"hom_alt"}
+    assert labels("0/0", ["G"], "r") == {"hom_ref"}
+    assert labels("./.", ["G"], "r") == {"missing"}
+    assert labels(".", ["G"], "r") == {"missing"}
+    assert labels("./1", ["G"], "r") == {"partially_missing", "hom_alt"}
+    assert labels(".|0", ["G"], "r") == {"partially_missing", "hom_ref"}
+    assert labels("1", ["G"], "r") == {"haploid", "hom_alt"}
+    assert labels("0", ["G"], "r") == {"haploid", "hom_ref"}
+    assert labels("1/2", ["G", "T"], "r") == {"multi_allelic"}
+    assert labels("0/1/2", ["G", "T"], "r") == {"multi_allelic"}
+    assert labels("1/1/1", ["G", "T"], "r") == {"hom_alt"}
+    assert labels("0/00", ["G"], "r") == {"hom_ref"}
+    assert labels("01/1", ["G", "T"], "r") == {"hom_alt"}
+    assert labels("0/2", ["G", "*"], "r") == {"star", "hom_ref"}
+    assert labels("2/2", ["G", "*"], "r") == {"star", "hom_ref"}
+    assert labels("1/2", ["G", "*"], "r") == {"star", "het"}
+    assert labels("2", ["G", "*"], "r") == {"haploid", "star", "hom_ref"}
+    assert labels("./2", ["G", "*"], "r") == {"partially_missing", "star", "hom_ref"}
+    assert labels("0/2", ["G", "<*>"], "r") == {"star", "hom_ref"}
+    for gt in ("0/3", "a/b", "0/-1", "1/", "", "1\\2", "0/1|2"):
+        with pytest.raises(SystemExit) as refusal:
+            labels(gt, ["G", "T"], "21 100 rs1 A G,T")
+        assert str(refusal.value) == f"ERROR: [build_golden_corpus] record 21 100 rs1 A G,T has a GT {gt!r} outside its alleles"
+
+
+def test_genotype_labels_refuse_a_non_ascii_digit():
+    """A GT bit is an ASCII allele index. `str.isdigit` alone accepts a superscript `²` or a
+    circled `①`, for which `int` raises, and an Arabic-Indic `٣`, which `int` reads as 3 (inside
+    three alleles); each is refused as a bit outside the record's alleles, never a traceback,
+    through `genotype_labels` and through a record's kept sample."""
+    record = "21 100 rs1 A G,T,C"
+    for gt in ("0/²", "①", "٣/0"):
+        with pytest.raises(SystemExit) as refusal:
+            bgc.genotype_labels(gt, ["G", "T", "C"], record)
+        assert str(refusal.value) == f"ERROR: [build_golden_corpus] record {record} has a GT {gt!r} outside its alleles"
+    with pytest.raises(SystemExit) as refusal:
+        bgc.record_genotype_classes(["21", "100", "rs1", "A", "G,T,C", ".", "PASS", ".", "GT", "0/0", "0/²"], 2)
+    assert str(refusal.value) == f"ERROR: [build_golden_corpus] record {record} has a GT '0/²' outside its alleles"
+
+
+def test_record_genotype_classes_add_the_record_shapes():
+    """A record shows every class any kept sample shows, plus the shapes of the whole kept set:
+    every genotype missing (Ensembl VEP's per-individual list is then empty and the record
+    yields nothing, Parser/VCF.pm 370-376), no non-reference carrier (every individual copy
+    is reference-homozygous, 640-650), and one reference-homozygous sample with the rest
+    missing (`individual_zyg`'s `hom_ref_samples` has that one entry, 723-725). GT is read at
+    its FORMAT index, a bare `.` sample is missing, and columns past the kept ones are not read.
+    A record Ensembl VEP reads as a structural variant (alleles not all plain bases, with a
+    valued INFO `SVTYPE` or a symbolic, breakend or single-breakend allele, Parser/VCF.pm
+    236-244) is annotated before the per-individual step and shows no class; `<*>` is not such
+    an allele, and a bare `SVTYPE` flag or `SVTYPE=` is not such a value
+    (`test_structural_record_reads_svtype_as_ensembl_vep_does`)."""
+    classes = bgc.record_genotype_classes
+    fixed = ["21", "100", "rs1", "A", "G", ".", "PASS", "."]
+    structural = [
+        ["21", "100", "sv1", "A", "<CN0>", ".", "PASS", ".", "GT", "0|1", "1|1"],
+        ["21", "100", "sv2", "N", "<INS:ME:ALU>", ".", "PASS", "SVTYPE=INS", "GT", "0/1", "0/0"],
+        ["21", "100", "sv3", "A", "N", ".", "PASS", "SVTYPE=DEL;END=5000", "GT", "0/1", "0/0"],
+        ["21", "100", "b1", "A", "A[21:200[", ".", "PASS", ".", "GT", "0/1", "0/0"],
+        ["21", "100", "b2", "A", ".G", ".", "PASS", ".", "GT", "0/1", "0/0"],
+    ]
+    assert [classes(f, 2) for f in structural] == [set()] * 5
+    assert classes(["21", "100", "sv5", "A", "G", ".", "PASS", "SVTYPE=DEL", "GT", "0/1", "0/0"], 2) == {"het", "hom_ref"}, "plain bases: no structural variant"
+    assert classes(["21", "100", "sv6", "N", "NC", ".", "PASS", "SVTYPE=", "GT", "0/1", "0/0"], 2) == {"het", "hom_ref"}, "an empty SVTYPE is none"
+    assert classes(["21", "100", "sv4", "N", "NC", ".", "PASS", "SVTYPE", "GT", "0/1", "0/0"], 2) == {"het", "hom_ref"}, "a bare SVTYPE flag is none"
+    assert classes(["21", "100", "g1", "A", "G,<*>", ".", "PASS", ".", "GT", "0/2", "1/2"], 2) == {"star", "hom_ref", "het"}
+    assert classes([*fixed, "GT", "./.", "./.", "./."], 3) == {"missing", "all_missing"}
+    assert classes([*fixed, "GT", "0/0", "./.", "./."], 3) == {"hom_ref", "missing", "no_carrier", "one_hom_ref_rest_missing"}
+    assert classes([*fixed, "GT", "0/0", "0/0", "./."], 3) == {"hom_ref", "missing", "no_carrier"}
+    assert classes([*fixed, "GT", "0/0", "0/1", "./."], 3) == {"hom_ref", "het", "missing"}
+    assert classes([*fixed, "GT:DP", "0/0:9", "0/0:9", "0/1:9"], 2) == {"hom_ref", "no_carrier"}, "the third sample is not kept"
+    assert classes([*fixed, "DP:GT", "9:1", ".:.", ".", "9:0"], 4) == {"haploid", "hom_alt", "hom_ref", "missing"}
+    assert classes([*fixed, "GT", "0/0", "0/0"], 2) == {"hom_ref", "no_carrier"}
+    with pytest.raises(SystemExit) as refusal:
+        classes([*fixed, "DP", "9", "9"], 2)
+    assert str(refusal.value) == "ERROR: [build_golden_corpus] record 21 100 rs1 A G has no GT in its FORMAT"
+    with pytest.raises(SystemExit) as refusal:
+        classes([*fixed, "GT", "0/0"], 2)
+    assert str(refusal.value) == "ERROR: [build_golden_corpus] record 21 100 rs1 A G has 1 sample columns, 2 are kept"
+    with pytest.raises(SystemExit) as refusal:
+        classes(fixed, 1)
+    assert str(refusal.value) == "ERROR: [build_golden_corpus] record 21 100 rs1 A G has 0 sample columns, 1 are kept"
+
+
+def test_structural_record_reads_svtype_as_ensembl_vep_does():
+    """`SVTYPE` makes a record structural only with a value Perl reads as true. ensembl-io's
+    `get_info` (BaseVCF4.pm 576-589) splits each INFO item on `=` and stores the second piece,
+    so a bare `SVTYPE` flag and `SVTYPE=` store nothing, `SVTYPE=0` stores Perl's false `0`,
+    and of a repeated key the last one counts; `SVTYPE=0.0` is true. Plain `ACGT` alleles are
+    never structural, and the allele test runs on the comma-joined ALT string, so a single
+    breakend counts at that string's ends only."""
+    structural = bgc.is_structural_record
+    for info in ("SVTYPE", "END=5;SVTYPE", "SVTYPE=", "SVTYPE==", "SVTYPE=0", "SVTYPE=0=X", "SVTYPE=DEL;SVTYPE=0", "."):
+        assert not structural("N", ["NC"], info), info
+    for info in ("SVTYPE=DEL", "SVTYPE=DEL=X", "SVTYPE=0.0", "SVTYPE=0;SVTYPE=DEL", "END=5;SVTYPE=INS"):
+        assert structural("N", ["NC"], info), info
+    assert not structural("A", ["G"], "SVTYPE=DEL")
+    assert structural("A", ["<CN0>"], ".") and not structural("A", ["<*>"], ".")
+    assert structural("A", [".T", "G"], ".") and not structural("A", ["G", ".T"], ".")
+    assert structural("A", ["G", "T."], ".") and not structural("A", ["T.", "G"], ".")
+
+
+SAMPLES = [f"S{i}" for i in range(1, 13)]
+
+
+def _sample_vcf(path: Path, samples: list[str] = SAMPLES) -> Path:
+    """Twelve-sample records whose first eight samples show every genotype class, with a
+    het carried only by the dropped samples (rs8) and GT second in one FORMAT (rs7)."""
+
+    def rec(pos: int, vid: str, ref: str, alt: str, fmt: str, kept: str, dropped: str = "0/0") -> str:
+        """One record: eight kept genotypes, space-separated, then four of `dropped`."""
+        return "\t".join(["21", str(pos), vid, ref, alt, ".", "PASS", ".", fmt, *kept.split(" "), *[dropped] * 4]) + "\n"
+
+    body = (
+        rec(100, "rs1", "A", "G", "GT:DP", "0|1:9 1|1:9 0|0:9 ./.:. ./1:9 0|0:9 0|0:9 0|0:9")
+        + rec(200, "rs2", "C", "T", "GT", "0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0")
+        + rec(300, "rs3", "A", "G,T", "GT", "1/2 0/0 0/0 ./. ./. 0/0 0/0 0/0")
+        + rec(400, "rs4", "G", "A,*", "GT", "0/2 1/2 2/2 0/0 0/0 0/0 0/0 0/0")
+        + rec(500, "rs5", "T", "C", "GT", "./. ./. ./. ./. ./. ./. ./. ./.")
+        + rec(600, "rs6", "G", "C", "GT", "./. 0/0 ./. ./. ./. ./. ./. ./.")
+        + rec(700, "rs7", "A", "T", "DP:GT", "9:1 9:0 9:1 .:. 9:1 9:0 9:0 9:0", "9:0")
+        + rec(800, "rs8", "C", "A", "GT", "0/0 0/0 0/0 0/0 0/0 0/0 0/0 0/0", "0/1")
+    )
+    path.write_text("##fileformat=VCFv4.2\n" + "\t".join([*bgc.FIXED_COLUMNS, "FORMAT", *samples]) + "\n" + body, encoding="utf-8")
+    return path
+
+
+def test_select_keeps_samples_and_every_genotype_class(tmp_path: Path, capsys):
+    """With `--keep-samples 8` every record and the header keep `FORMAT` and the first eight
+    samples; the reference's two exemplars show six classes and the other five each take a
+    record no consequence set selected; every record lists its classes; without the option
+    the corpus carries the eight fixed columns, the two exemplars and no genotype key."""
+    ref = tmp_path / "ref.txt"
+    ref.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant") + _row("rs2", "21:200", "T", "ENST2", "intron_variant"), encoding="utf-8")
+    vcf = _sample_vcf(tmp_path / "in.vcf")
+    out = tmp_path / "corpus"
+    assert _select(ref, vcf, out, "--covers", "individual", "--keep-samples", "8", "--genotype-exemplars", "1") == 0
+    assert capsys.readouterr().out.splitlines()[-1].endswith(", genotype classes observed 11, covered 11")
+    body = (out / "variants.vcf").read_text(encoding="utf-8").splitlines()
+    assert body[1] == "\t".join([*bgc.FIXED_COLUMNS, "FORMAT", *SAMPLES[:8]])
+    assert [len(line.split("\t")) for line in body[2:]] == [17] * 7
+    m = json.loads((out / "manifest.json").read_text())
+    assert (m["keep_samples"], m["samples"], m["genotype_exemplars_per_class"], m["required_genotype_classes"]) == (8, SAMPLES[:8], 1, [])
+    keys = list(m)
+    assert keys.index("cache_cost_flank" if "cache_cost_flank" in m else "max_span") < keys.index("keep_samples") < keys.index("covers")
+    assert keys.index("variant_classes") < keys.index("genotype_classes") < keys.index("records")
+    by_id = {r["vcf"].split("\t")[2]: r for r in m["records"]}
+    assert list(by_id) == ["rs1", "rs2", "rs3", "rs4", "rs5", "rs6", "rs7"], "rs8 shows nothing the others lack"
+    assert by_id["rs1"]["vcf"] == "21\t100\trs1\tA\tG\t.\tPASS\t.\tGT:DP\t0|1:9\t1|1:9\t0|0:9\t./.:.\t./1:9\t0|0:9\t0|0:9\t0|0:9"
+    assert by_id["rs1"]["combinations"] == ["missense_variant"]
+    assert by_id["rs1"]["genotype_classes"] == ["het", "hom_alt", "hom_ref", "missing", "partially_missing"]
+    assert by_id["rs2"]["genotype_classes"] == ["hom_ref", "no_carrier"]
+    assert by_id["rs3"]["genotype_classes"] == ["hom_ref", "missing", "multi_allelic"]
+    assert by_id["rs4"]["genotype_classes"] == ["het", "hom_ref", "star"]
+    assert by_id["rs5"]["genotype_classes"] == ["all_missing", "missing"]
+    assert by_id["rs6"]["genotype_classes"] == ["hom_ref", "missing", "no_carrier", "one_hom_ref_rest_missing"]
+    assert by_id["rs7"]["genotype_classes"] == ["haploid", "hom_alt", "hom_ref", "missing"]
+    assert all(by_id[i]["combinations"] == [] for i in ("rs3", "rs4", "rs5", "rs6", "rs7"))
+    assert m["genotype_classes"] == {
+        "all_missing": 1, "haploid": 1, "het": 2, "hom_alt": 2, "hom_ref": 6, "missing": 5, "multi_allelic": 1,
+        "no_carrier": 2, "one_hom_ref_rest_missing": 1, "partially_missing": 1, "star": 1,
+    }
+    assert set(m["genotype_classes"]) == set(bgc.GENOTYPE_CLASSES)
+    assert m["uncovered_genotype_classes"] == [] and keys.index("uncovered_combinations") < keys.index("uncovered_genotype_classes")
+    check = ["check", "--corpus", str(out), "--suite", f"s01={ref}={vcf}"]
+    assert bgc.main(check) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == "genotype classes observed 11, covered by corpus 11, missing 0"
+    # Two records per class where the inputs have them; a class's sole record survives the cap.
+    two = tmp_path / "two"
+    assert _select(ref, vcf, two, "--covers", "individual", "--keep-samples", "8", "--genotype-exemplars", "2") == 0
+    m2 = json.loads((two / "manifest.json").read_text())
+    assert m2["genotype_exemplars_per_class"] == 2 and 7 <= len(m2["records"]) <= 8
+    source_records = {"het": 2, "hom_alt": 2, "hom_ref": 7, "missing": 5, "no_carrier": 3}
+    for c, n in source_records.items():
+        assert m2["genotype_classes"][c] >= min(n, 2), c
+    assert all(m2["genotype_classes"][c] == 1 for c in ("all_missing", "haploid", "multi_allelic", "one_hom_ref_rest_missing", "partially_missing", "star"))
+    capped = tmp_path / "capped"
+    assert _select(ref, vcf, capped, "--covers", "individual", "--keep-samples", "8", "--genotype-exemplars", "1", "--max-records", "3") == 0
+    assert len(json.loads((capped / "manifest.json").read_text())["records"]) == 7
+    plain = tmp_path / "plain"
+    assert _select(ref, vcf, plain, "--covers", "individual") == 0
+    assert capsys.readouterr().out.splitlines()[-1].endswith("variant classes 1 (snv 2)")
+    body = (plain / "variants.vcf").read_text(encoding="utf-8").splitlines()
+    assert body[1] == "\t".join(bgc.FIXED_COLUMNS) and [len(line.split("\t")) for line in body[2:]] == [8, 8]
+    mp = json.loads((plain / "manifest.json").read_text())
+    assert [r["vcf"].split("\t")[2] for r in mp["records"]] == ["rs1", "rs2"]
+    assert not any(k in mp for k in ("keep_samples", "samples", "genotype_classes", "uncovered_genotype_classes"))
+    assert "genotype_classes" not in mp["records"][0]
+
+
+def test_select_with_kept_samples_is_the_same_under_every_hash_seed(tmp_path: Path):
+    """The genotype-class reservoirs draw from the one seeded generator in a fixed class order,
+    so interpreters with different string-hash seeds (`PYTHONHASHSEED`) write the same corpus
+    from the same inputs and `--seed`; here five classes have several candidate records and no
+    exemplar, so a draw order that followed set iteration would pick different records."""
+    rng = random.Random(7)
+    genotypes = ["0/0", "0/0", "0/0", "0/1", "1/1", "./.", "1/2", "0/2"]
+    records = []
+    for i in range(300):
+        alt = "G,T" if i % 5 == 0 else "G"
+        gts = [rng.choice(genotypes if alt == "G,T" else genotypes[:6]) for _ in range(8)]
+        records.append("\t".join(["21", str(1000 + i * 10), f"v{i}", "A", alt, ".", "PASS", ".", "GT", *gts]))
+    vcf = tmp_path / "in.vcf"
+    vcf.write_text("##fileformat=VCFv4.2\n" + "\t".join([*bgc.FIXED_COLUMNS, "FORMAT", *SAMPLES[:8]]) + "\n" + "\n".join(records) + "\n", encoding="utf-8")
+    ref = tmp_path / "ref.txt"
+    ref.write_text(_row("v3", "21:1030", "G", "ENST1", "missense_variant") + _row("v8", "21:1080", "G", "ENST2", "intron_variant"), encoding="utf-8")
+    outputs = set()
+    for hash_seed in ("0", "1", "2"):
+        out = tmp_path / f"corpus-{hash_seed}"
+        argv = [sys.executable, str(HERE / "build_golden_corpus.py"), "select", "--release", "116", "--assembly", "GRCh38",
+                "--suite", f"s01={ref}={vcf}", "--out", str(out), "--k", "1", "--seed", "1", "--multi-allelic-per-suite", "0",
+                "--covers", "individual", "--keep-samples", "8", "--genotype-exemplars", "2"]
+        run = subprocess.run(argv, env={**os.environ, "PYTHONHASHSEED": hash_seed}, capture_output=True, text=True, check=False)
+        assert run.returncode == 0, run.stderr
+        outputs.add(((out / "variants.vcf").read_bytes(), (out / "manifest.json").read_bytes()))
+    assert len(outputs) == 1
+    m = json.loads((tmp_path / "corpus-0" / "manifest.json").read_text())
+    assert m["uncovered_genotype_classes"] == [] and len(m["records"]) > 2, "the class fill chose records beyond the two exemplars"
+
+
+def test_check_refuses_a_corpus_lacking_a_genotype_class_or_its_sample_columns(tmp_path: Path, capsys):
+    """`check` recomputes the classes the inputs show among the manifest's samples and names
+    each one no record shows; a required class is missing only when no record shows it; and
+    `variants.vcf` must carry `FORMAT` and the manifest's samples on its header and on every
+    record."""
+    ref = tmp_path / "ref.txt"
+    ref.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    vcf = _sample_vcf(tmp_path / "in.vcf")
+    out = tmp_path / "corpus"
+    assert _select(ref, vcf, out, "--covers", "individual", "--keep-samples", "8", "--genotype-exemplars", "1") == 0
+    check = ["check", "--corpus", str(out), "--suite", f"s01={ref}={vcf}"]
+    assert bgc.main(check) == 0
+    capsys.readouterr()
+    manifest = out / "manifest.json"
+    m = json.loads(manifest.read_text())
+    m["records"] = [r for r in m["records"] if r["vcf"].split("\t")[2] not in ("rs5", "rs7")]
+    manifest.write_text(json.dumps(m), encoding="utf-8")
+    missing_report = [
+        "genotype classes observed 11, covered by corpus 9, missing 2",
+        "  MISSING genotype class all_missing",
+        "  MISSING genotype class haploid",
+    ]
+    assert bgc.main(check) == 1
+    assert capsys.readouterr().out.splitlines()[-3:] == missing_report
+    assert bgc.main([*check, "--require-genotype-class", "haploid", "--require-genotype-class", "star"]) == 1
+    assert capsys.readouterr().out.splitlines()[-3:] == missing_report, "a required class the corpus shows is not missing"
+    with pytest.raises(SystemExit) as refusal:
+        bgc.main([*check, "--require-genotype-class", "hom-ref"])
+    assert str(refusal.value) == f"ERROR: [build_golden_corpus] --require-genotype-class wants one of {', '.join(bgc.GENOTYPE_CLASSES)}, got 'hom-ref'"
+    variants = out / "variants.vcf"
+    lines = variants.read_text(encoding="utf-8").splitlines()
+    lines[1] = "\t".join(lines[1].split("\t")[:16])
+    lines[2] = "\t".join(lines[2].split("\t")[:9])
+    variants.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    assert bgc.main(check) == 1
+    captured = capsys.readouterr()
+    assert captured.err == (
+        "ERROR: [build_golden_corpus] variants.vcf header names FORMAT S1 S2 S3 S4 S5 S6 S7, the manifest keeps FORMAT S1 S2 S3 S4 S5 S6 S7 S8\n"
+        "ERROR: [build_golden_corpus] variants.vcf record 21 100 rs1 A G has 9 columns, the header 17\n"
+    )
+    variants.write_text("##fileformat=VCFv4.2\n" + "\n".join(lines[2:]) + "\n", encoding="utf-8")
+    assert bgc.main(check) == 1
+    assert capsys.readouterr().err == (
+        "ERROR: [build_golden_corpus] variants.vcf record 21 100 rs1 A G has 9 columns, the header 17\n"
+        "ERROR: [build_golden_corpus] variants.vcf has no #CHROM header line\n"
+    )
+    # An input that keeps other samples than the manifest's cannot be the corpus's source.
+    other = _sample_vcf(tmp_path / "other.vcf", [*SAMPLES[:7], "X8", *SAMPLES[8:]])
+    with pytest.raises(SystemExit) as refusal:
+        bgc.main(["check", "--corpus", str(out), "--suite", f"s01={ref}={other}"])
+    assert str(refusal.value) == (
+        f"ERROR: [build_golden_corpus] {other} keeps samples S1,S2,S3,S4,S5,S6,S7,X8 where the manifest keeps "
+        "S1,S2,S3,S4,S5,S6,S7,S8: every input must keep the same samples"
+    )
+    # A plain corpus has no sample columns to check and refuses a required class.
+    plain = tmp_path / "plain"
+    assert _select(ref, vcf, plain, "--covers", "individual") == 0
+    with pytest.raises(SystemExit) as refusal:
+        bgc.main(["check", "--corpus", str(plain), "--suite", f"s01={ref}={vcf}", "--require-genotype-class", "het"])
+    assert str(refusal.value) == "ERROR: [build_golden_corpus] --require-genotype-class wants a corpus built with --keep-samples"
+
+
+def test_check_names_an_unreadable_variants_vcf(tmp_path: Path, capsys):
+    """A VCF the tool cannot read, the corpus's `variants.vcf` or a suite input, is one error
+    naming the file, never a traceback, under `check` and under `select`; the errors `check`
+    found before the refusal are printed ahead of it. A `.gz` input that is not gzip, or is
+    cut short, fails on its first line rather than at the open and is refused the same way."""
+    ref = tmp_path / "ref.txt"
+    ref.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    vcf = _sample_vcf(tmp_path / "in.vcf")
+    out = tmp_path / "corpus"
+    assert _select(ref, vcf, out, "--covers", "individual", "--keep-samples", "8", "--genotype-exemplars", "1") == 0
+    capsys.readouterr()
+    variants = out / "variants.vcf"
+    variants.unlink()
+    check = ["check", "--corpus", str(out), "--suite", f"s01={ref}={vcf}"]
+    for shape in ("missing", "directory"):
+        if shape == "directory":
+            variants.mkdir()
+        with pytest.raises(SystemExit) as refusal:
+            bgc.main(check)
+        assert str(refusal.value).startswith(f"ERROR: [build_golden_corpus] {variants} is not a readable text file ("), shape
+    variants.rmdir()
+    variants.write_text(vcf.read_text(encoding="utf-8").replace("\tS8\t", "\tX8\t"), encoding="utf-8")
+    with pytest.raises(SystemExit) as refusal:
+        bgc.main(["check", "--corpus", str(out), "--suite", f"s01={ref}={tmp_path / 'absent.vcf'}"])
+    assert str(refusal.value).startswith(f"ERROR: [build_golden_corpus] {tmp_path / 'absent.vcf'} is not a readable text file (")
+    assert capsys.readouterr().err == (
+        "ERROR: [build_golden_corpus] variants.vcf header names FORMAT S1 S2 S3 S4 S5 S6 S7 X8 S9 S10 S11 S12, "
+        "the manifest keeps FORMAT S1 S2 S3 S4 S5 S6 S7 S8\n"
+        + "".join(f"ERROR: [build_golden_corpus] variants.vcf record 21 {pos} rs{i} {ref_alt} has 21 columns, the header 17\n"
+                  for i, (pos, ref_alt) in enumerate([(100, "A G"), (200, "C T"), (300, "A G,T"), (400, "G A,*"), (500, "T C"), (600, "G C"), (700, "A T"), (800, "C A")], start=1))
+    ), "the column errors come before the refusal"
+    with pytest.raises(SystemExit) as refusal:
+        _select(ref, tmp_path / "absent.vcf", tmp_path / "none", "--covers", "individual")
+    assert str(refusal.value).startswith(f"ERROR: [build_golden_corpus] {tmp_path / 'absent.vcf'} is not a readable text file (")
+    gzipped = gzip.compress(vcf.read_bytes())
+    for name, blob in (("plain.vcf.gz", vcf.read_bytes()), ("cut.vcf.gz", gzipped[: len(gzipped) // 2])):
+        bad = tmp_path / name
+        bad.write_bytes(blob)
+        with pytest.raises(SystemExit) as refusal:
+            _select(ref, bad, tmp_path / "none", "--covers", "individual", "--keep-samples", "8")
+        assert str(refusal.value).startswith(f"ERROR: [build_golden_corpus] {bad} is not a readable text file ("), name
+        with pytest.raises(SystemExit) as refusal:
+            bgc.main(["check", "--corpus", str(out), "--suite", f"s01={ref}={bad}"])
+        assert str(refusal.value).startswith(f"ERROR: [build_golden_corpus] {bad} is not a readable text file ("), name
+        capsys.readouterr()
+    assert not (tmp_path / "none").exists()
+
+
+def test_select_requires_named_genotype_classes_and_one_sample_set(tmp_path: Path, capsys):
+    """A required class the inputs never show leaves `select` red with the class listed, as a
+    required class does on `check`; a second input keeping other samples, an input with too few,
+    an unknown class, a negative count and a requirement without kept samples are refused
+    before anything is written."""
+    ref = tmp_path / "ref.txt"
+    ref.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    vcf = tmp_path / "in.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA\tB\n"
+        "21\t100\trs1\tA\tG\t.\tPASS\t.\tGT\t0/1\t0/0\n21\t200\trs2\tC\tT\t.\tPASS\t.\tGT\t1/1\t./.\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "corpus"
+    assert _select(ref, vcf, out, "--covers", "individual", "--keep-samples", "2", "--require-genotype-class", "haploid",
+                   "--require-genotype-class", "het", "--require-genotype-class", "haploid") == 1
+    assert capsys.readouterr().out.splitlines()[-1].endswith(", genotype classes observed 4, covered 4")
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["required_genotype_classes"] == ["haploid", "het"] and m["uncovered_genotype_classes"] == ["haploid"]
+    assert m["genotype_classes"] == {"het": 1, "hom_alt": 1, "hom_ref": 1, "missing": 1}
+    check = ["check", "--corpus", str(out), "--suite", f"s01={ref}={vcf}"]
+    assert bgc.main(check) == 1
+    assert capsys.readouterr().out.splitlines()[-2:] == ["genotype classes observed 4, covered by corpus 4, missing 1", "  MISSING genotype class haploid"]
+    m["required_genotype_classes"] = []
+    (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+    assert bgc.main(check) == 0
+    before = {p.name: p.read_text() for p in out.iterdir()}
+    other = tmp_path / "other.vcf"
+    other.write_text(vcf.read_text().replace("\tA\tB\n", "\tA\tC\n"), encoding="utf-8")
+    refusals = [
+        (["--suite", f"s02={ref}={other}", "--keep-samples", "2"],
+         f"{other} keeps samples A,C where an earlier input keeps A,B: every input must keep the same samples"),
+        (["--keep-samples", "3"], f"{vcf} has 2 sample columns, 3 are kept"),
+        (["--keep-samples", "-1"], "--keep-samples wants a count of sample columns, got -1"),
+        (["--keep-samples", "2", "--genotype-exemplars", "-1"], "--genotype-exemplars wants a count of records per class, got -1"),
+        (["--keep-samples", "2", "--require-genotype-class", "hom-ref"],
+         f"--require-genotype-class wants one of {', '.join(bgc.GENOTYPE_CLASSES)}, got 'hom-ref'"),
+        (["--require-genotype-class", "het"], "--require-genotype-class wants --keep-samples: a corpus without sample columns shows no genotype"),
+    ]
+    headerless = tmp_path / "headerless.vcf"
+    headerless.write_text("21\t100\trs1\tA\tG\t.\tPASS\t.\tGT\t0/1\t0/0\n", encoding="utf-8")
+    no_format = tmp_path / "no_format.vcf"
+    no_format.write_text(vcf.read_text(encoding="utf-8").replace("\tFORMAT\tA\tB\n", "\tA\tB\tC\n"), encoding="utf-8")
+    # A header-less input beside a headed one, and a header without FORMAT, bind no sample to
+    # a name: each is refused by name, in either position.
+    refusals += [
+        (["--suite", f"s02={ref}={headerless}", "--keep-samples", "2"], f"{headerless} has no #CHROM header line naming its samples"),
+        (["--suite", f"s02={ref}={no_format}", "--keep-samples", "2"], f"{no_format} has no FORMAT column, so no sample columns"),
+    ]
+    for extra, message in refusals:
+        with pytest.raises(SystemExit) as refusal:
+            _select(ref, vcf, out, "--covers", "individual", *extra)
+        assert str(refusal.value) == f"ERROR: [build_golden_corpus] {message}"
+    assert {p.name: p.read_text() for p in out.iterdir()} == before
+    with pytest.raises(SystemExit) as refusal:
+        _select(ref, headerless, tmp_path / "none", "--covers", "individual", "--keep-samples", "2", "--suite", f"s02={ref}={vcf}")
+    assert str(refusal.value) == f"ERROR: [build_golden_corpus] {headerless} has no #CHROM header line naming its samples"
+    empty = tmp_path / "empty.vcf"
+    empty.write_text("##fileformat=VCFv4.2\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as refusal:
+        _select(ref, empty, tmp_path / "none", "--covers", "individual", "--keep-samples", "2")
+    assert str(refusal.value) == "ERROR: [build_golden_corpus] no input has a #CHROM header line naming its samples"
+    assert not (tmp_path / "none").exists()
 
 
 def test_flag_set_subcommand_writes_an_entry(tmp_path: Path, capsys):

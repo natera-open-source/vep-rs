@@ -101,7 +101,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--fork`, `--threads` | usize | `0` | Number of parallel annotation worker threads (Ensembl VEP forks processes; vep-rs runs threads and is parallel by default). Default 0 = auto: uses the number of available logical CPUs, capped at 32 (wall time stops improving past that and rises on wider hosts). Set to 1 to force single-threaded annotation, or any positive value to pin the worker count; user-supplied values are not capped |
 | `--decompression_threads` | usize | `0` | Number of BGZF decompression worker threads for .gz/.bgz VCF inputs. Default 0 = auto: uses the number of available logical CPUs, capped at 10 (measured sweet-spot: throughput plateaus around 4-10 threads and is flat past that). User-supplied positive values are not capped: pass any integer to pin the worker count, e.g. `--decompression_threads=1` for single-threaded |
 | `--transcript_index_impl` (hidden) | `bin`, `coitrees`, `sorted` | `bin` | Transcript overlap index implementation (hidden, for A/B benchmarking). Options: bin (UCSC binning, default), coitrees (implicit interval tree), sorted (sorted array + suffix_max_end). All three must produce identical overlap sets; any difference between implementations indicates a bug |
-| `--distance` | String | `5000` | Upstream/downstream distance in bp (or "up,down" for asymmetric) |
+| `--distance` | String | `5000` | Upstream and downstream distance in bp: one integer, or the pair "up,down" (a downstream part written 0 reads as the upstream value) |
 
 ### Output Control
 
@@ -131,6 +131,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--regulatory_gff` | String | -- | Refused with an error: --regulatory_gff is not supported: it would annotate regulatory features and motifs from a GFF3 file in place of the cache, and regulatory annotation is not supported |
 | `--extended_promoters` | bool | false | Refused with an error: --extended_promoters is not supported: it would widen the promoters read with --regulatory_gff to their extended bounds, and regulatory annotation is not supported |
 | `--variant_class` | bool | false | Add variant class from SO |
+| `--overlaps` | bool | false | Add the OverlapBP and OverlapPC columns to the tab, VCF and Parquet outputs: the bases of a structural variant inside the transcript and the percentage of the transcript they cover (transcript rows only; regulatory features are not annotated) |
 | `--check_existing` | bool | false | Check for co-located known variants |
 | `--coding_only` | bool | false | Accepted for VEP compatibility; not implemented |
 | `--no_intergenic` | bool | false | Accepted for VEP compatibility; not implemented |
@@ -376,6 +377,7 @@ Environment variables vep-rs reads, which Ensembl VEP has no counterpart for:
   - `plugin`: under --safe, a plugin that cannot be loaded or a plugins directory that does not exist
   - `cache`: the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read
   - `filter`: a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect
+  - `config`: a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer
   - `run`: any other failure of the annotation run, with its cause chain
 - `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown flag, a missing value, a value outside an enumeration.
 

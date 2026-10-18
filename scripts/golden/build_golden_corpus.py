@@ -23,7 +23,11 @@ Subcommands:
             `flag_sets` (each set's run definition and
             `covers`; the divergence keys `classify --flag-set` wrote describe the old
             records and are dropped, as the manifest's own are), and a run with neither
-            writes nothing.
+            writes nothing. `--keep-samples N` keeps `FORMAT` and the first N sample
+            columns of every record and of the `#CHROM` header, and adds records until
+            every genotype class the inputs show among those samples has
+            `--genotype-exemplars` records (`--require-genotype-class` names a class the
+            corpus must carry whether or not the inputs show it).
   classify  Compare a VEP default-format output for `variants.vcf` with a vep-rs output for
             the same file and record, per exemplar row VEP emits that vep-rs does not, the
             documented divergence class that explains it (or `unexplained_residual`), so the
@@ -40,7 +44,11 @@ Subcommands:
             when a combination has no exemplar in the manifest; with `--matrix` fail when a
             `covers` name (the manifest's or a flag set's) is not a matrix row; with
             `--family-columns` fail when a family stratum the references show has no
-            exemplar among the corpus's records.
+            exemplar among the corpus's records; on a corpus built with `--keep-samples`
+            fail when `variants.vcf` does not carry `FORMAT` and the manifest's samples on
+            its header and every record, or when a genotype class the inputs show among
+            those samples (or one the manifest or `--require-genotype-class` requires) has
+            no record in the corpus.
   covers    List (`--list`) or extend (`--add <item>`, repeatable) the `covers` of a corpus,
             or of one of its flag sets (`--flag-set <name>`); a name that is not a row of
             `--matrix` is refused and nothing is written.
@@ -63,6 +71,16 @@ class: a bare name (`HGVSc`) classes a row by the column's presence (`HGVSc+`, `
 name ending in `=` (`IMPACT=`) by its value (`IMPACT=HIGH`); `check --family-columns`
 asserts every stratum the references show is covered, which is the per-family coverage
 claim behind a flag family's corpus.
+
+The genotype classes of `--keep-samples` are read from the kept samples' GT values as
+Ensembl VEP reads a genotype for `--individual` (ensembl-io BaseVCF4.pm 941-951 and
+Parser/VCF.pm 627-651 at release 116): per sample `het`, `hom_alt`, `hom_ref`, `missing`,
+`partially_missing`, `haploid`, `star` and `multi_allelic`; per record `all_missing`,
+`no_carrier` and `one_hom_ref_rest_missing` (`genotype_labels` and
+`record_genotype_classes` define each; a structural record shows none, since Ensembl VEP
+annotates it without genotypes). A record shows every class any kept sample shows, the
+manifest lists each record's classes and the count of records per class, and `check`
+asserts every class the inputs show is covered.
 
 Selection is deterministic under `--seed`: reservoir sampling bounds the candidates kept per
 combination and the same seed reproduces the same corpus from the same references.
@@ -94,6 +112,7 @@ DEFAULT_COLUMNS = (
     "Consequence", "cDNA_position", "CDS_position", "Protein_position", "Amino_acids",
     "Codons", "Existing_variation", "Extra",
 )
+FIXED_COLUMNS = ("#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO")
 
 
 def opener(path: Path):
@@ -162,6 +181,152 @@ def family_classes(extra: dict[str, str], specs: list[str]) -> tuple[str, ...]:
             present = spec in extra and extra[spec] not in ("", "-")
             classes.append(f"{spec}{'+' if present else '-'}")
     return tuple(classes)
+
+
+SAMPLE_CLASSES = ("het", "hom_alt", "hom_ref", "missing", "partially_missing", "haploid", "star", "multi_allelic")
+RECORD_CLASSES = ("all_missing", "no_carrier", "one_hom_ref_rest_missing")
+GENOTYPE_CLASSES = SAMPLE_CLASSES + RECORD_CLASSES
+STRUCTURAL_ALLELE = re.compile(r"[<\[\]][^*]+[>\]\[]|^\.\w+|\w+\.$")
+
+
+def genotype_labels(gt: str, alts: list[str], record: str) -> set[str]:
+    """The classes one sample's GT shows at a record, read as Ensembl VEP reads a genotype
+    for `--individual` (ensembl-io BaseVCF4.pm 941-951 and Parser/VCF.pm 627-651, release
+    116): the bits split on `|` when the GT has one, else on `/`; `.` bits dropped before
+    anything else is read; an allele containing `*` outside the non-reference set. `missing`
+    (no called bit) stands alone; otherwise `partially_missing` when a bit was dropped,
+    `haploid` for a one-bit genotype, `star` for a `*` allele, and one of `multi_allelic`
+    (two or more distinct non-reference alleles), `hom_ref` (none), `hom_alt` (one, every
+    called bit the same) or `het`. A bit that is not an index of the record's alleles is
+    refused, naming `record`."""
+    bits = gt.split("|") if "|" in gt else gt.split("/")
+    called_bits = [b for b in bits if b != "."]
+    if not called_bits:
+        return {"missing"}
+    for b in called_bits:
+        # str.isdigit alone accepts a superscript such as "²", which int() rejects.
+        if not (b.isascii() and b.isdigit()) or int(b) > len(alts):
+            raise failure(f"record {record} has a GT {gt!r} outside its alleles")
+    labels: set[str] = set()
+    if len(called_bits) < len(bits):
+        labels.add("partially_missing")
+    if len(bits) == 1:
+        labels.add("haploid")
+    called = {int(b) for b in called_bits}
+    star = {i + 1 for i, a in enumerate(alts) if "*" in a}
+    if star & called:
+        labels.add("star")
+    non_ref = called - {0} - star
+    if len(non_ref) > 1:
+        labels.add("multi_allelic")
+    elif not non_ref:
+        labels.add("hom_ref")
+    elif len(called) == 1:
+        labels.add("hom_alt")
+    else:
+        labels.add("het")
+    return labels
+
+
+def is_structural_record(ref: str, alts: list[str], info: str) -> bool:
+    """Whether Ensembl VEP reads a record as a structural variant, which it annotates before
+    the per-individual step and so without any individual's genotype (Parser/VCF.pm 236-244):
+    its alleles are not all plain bases and it carries an INFO `SVTYPE` whose value Perl reads
+    as true, or a symbolic, breakend or single-breakend allele (`<*>` is none of these). The
+    value is read as ensembl-io's `get_info` stores it (BaseVCF4.pm 576-589): the piece after
+    the first `=`, so a bare `SVTYPE` flag and `SVTYPE=` hold none, `SVTYPE=0` holds Perl's
+    false `0`, and of a repeated key the last one counts. The allele test runs on the
+    comma-joined ALT string as Ensembl VEP's does, so a single-breakend allele counts only at
+    the string's start or end."""
+    if re.fullmatch(r"[ACGT]+", "".join([ref, *alts])):
+        return False
+    svtype = ""
+    for part in info.split(";"):
+        pieces = part.split("=")
+        if pieces[0] == "SVTYPE":
+            svtype = pieces[1] if len(pieces) > 1 else ""
+    if svtype not in ("", "0"):
+        return True
+    return STRUCTURAL_ALLELE.search(",".join(alts)) is not None
+
+
+def record_genotype_classes(fields: list[str], keep: int) -> set[str]:
+    """The genotype classes one record shows among its first `keep` samples: every kept
+    sample's `genotype_labels`, plus `all_missing` (no kept sample has a called bit),
+    `no_carrier` (a called bit somewhere but no non-reference allele in any kept sample)
+    and `one_hom_ref_rest_missing` (one kept sample `hom_ref`, every other one `missing`).
+    A structural record shows no class (`is_structural_record`)."""
+    record = " ".join(fields[:5])
+    if len(fields) < 9 + keep:
+        raise failure(f"record {record} has {max(len(fields) - 9, 0)} sample columns, {keep} are kept")
+    alts = fields[4].split(",")
+    if is_structural_record(fields[3], alts, fields[7]):
+        return set()
+    keys = fields[8].split(":")
+    if "GT" not in keys:
+        raise failure(f"record {record} has no GT in its FORMAT")
+    gt_index = keys.index("GT")
+    classes: set[str] = set()
+    missing = hom_ref = 0
+    for sample in fields[9:9 + keep]:
+        values = sample.split(":")
+        labels = genotype_labels(values[gt_index] if gt_index < len(values) else ".", alts, record)
+        classes |= labels
+        missing += "missing" in labels
+        hom_ref += "hom_ref" in labels
+    if missing == keep:
+        classes.add("all_missing")
+    elif missing + hom_ref == keep:
+        classes.add("no_carrier")
+        if hom_ref == 1:
+            classes.add("one_hom_ref_rest_missing")
+    return classes
+
+
+def genotype_class_names(names: list[str] | None) -> list[str]:
+    """The `--require-genotype-class` names of a command line, each a genotype class, in order
+    and without repeats."""
+    names = list(dict.fromkeys(names or []))
+    for n in names:
+        if n not in GENOTYPE_CLASSES:
+            raise failure(f"--require-genotype-class wants one of {', '.join(GENOTYPE_CLASSES)}, got {n!r}")
+    return names
+
+
+def vcf_lines(path: Path, columns: int | None = None) -> Iterator[tuple[bool, list[str]]]:
+    """Every `#CHROM` header line (`True`, every column) and every record of at least eight
+    fields (`False`) of a VCF, split on tabs; `##` lines are skipped. With `columns` a record
+    is split into that many fields and one more holding the rest of the line, so a source of
+    thousands of samples is not split beyond the columns read. A file that cannot be opened
+    or read (a `.gz` that is not gzip fails on its first line, not at the open) is refused
+    with its path."""
+    try:
+        with opener(path)(path, "rt", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if line.startswith("##"):
+                    continue
+                if line.startswith("#"):
+                    yield True, line.rstrip("\n").split("\t")
+                    continue
+                fields = line.rstrip("\n").split("\t", -1 if columns is None else columns)
+                if len(fields) >= 8:
+                    yield False, fields
+    except (OSError, EOFError, zlib.error) as exc:
+        raise failure(f"{path} is not a readable text file ({exc})") from None
+
+
+def kept_samples(header: list[str], keep: int, path: Path, samples: list[str], source: str = "an earlier input") -> list[str]:
+    """The first `keep` sample names of a `#CHROM` header line, refused when the line lacks
+    `FORMAT` or that many samples, or when `samples` (the names `source` keeps) names others."""
+    if len(header) < 9 or header[8] != "FORMAT":
+        raise failure(f"{path} has no FORMAT column, so no sample columns")
+    if len(header) < 9 + keep:
+        raise failure(f"{path} has {len(header) - 9} sample columns, {keep} are kept")
+    kept = header[9:9 + keep]
+    if samples and kept != samples:
+        raise failure(f"{path} keeps samples {','.join(kept)} where {source} keeps {','.join(samples)}: "
+                      "every input must keep the same samples")
+    return kept
 
 
 @dataclass
@@ -313,6 +478,17 @@ class CacheCost:
 
 
 # ----------------------------------------------------------------------------- select
+def reservoir_step(rng: random.Random, bucket: list, item, offered: int, capacity: int) -> None:
+    """One reservoir step: `bucket` stays a uniform sample of at most `capacity` of the
+    `offered` items seen so far for its key."""
+    if len(bucket) < capacity:
+        bucket.append(item)
+    else:
+        j = rng.randrange(offered)
+        if j < capacity:
+            bucket[j] = item
+
+
 def reservoir_pass(
     suites: list[tuple[str, Path, Path]], seed: int, family_specs: list[str] | None = None
 ) -> tuple[dict[str, list[Row]], Counter[str], dict[str, Counter[str]], dict[str, list[Row]]]:
@@ -325,27 +501,16 @@ def reservoir_pass(
     per_suite: dict[str, Counter[str]] = defaultdict(Counter)
     families: dict[str, list[Row]] = defaultdict(list)
     family_seen: Counter[str] = Counter()
-
-    def sample(bucket: list[Row], row: Row, offered: int, capacity: int) -> None:
-        """One reservoir step: `bucket` stays a uniform sample of at most `capacity` of the
-        `offered` rows seen so far for its key."""
-        if len(bucket) < capacity:
-            bucket.append(row)
-        else:
-            j = rng.randrange(offered)
-            if j < capacity:
-                bucket[j] = row
-
     for sid, ref, _inp in suites:
         for row in iter_rows(ref, sid, family_specs):
             c = row.consequence_set
             seen[c] += 1
             per_suite[sid][c] += 1
-            sample(reservoir[c], row, seen[c], RESERVOIR)
+            reservoir_step(rng, reservoir[c], row, seen[c], RESERVOIR)
             if family_specs:
                 stratum = row.family_stratum
                 family_seen[stratum] += 1
-                sample(families[stratum], row, family_seen[stratum], FAMILY_RESERVOIR)
+                reservoir_step(rng, families[stratum], row, family_seen[stratum], FAMILY_RESERVOIR)
     return reservoir, seen, per_suite, families
 
 
@@ -504,61 +669,87 @@ def multi_allelic_stratum(ref: str, alts: list[str]) -> str:
     return "multi_allelic_indel"
 
 
+@dataclass
+class ResolvedInputs:
+    """What one scan of the input VCFs yields: per suite the record lines whose
+    Uploaded_variation (ID, or VEP's auto-name) was wanted; the `#CHROM` header line the
+    corpus writes (eight columns, or `FORMAT` and the kept samples after them); per suite
+    and multi-allelic stratum a uniform sample of records; and, with kept samples, the names
+    kept, how many records show each genotype class and a uniform sample of records per
+    class."""
+    found: dict[str, dict[tuple[str, str], list[str]]]
+    header: str
+    multi: dict[str, dict[str, list[str]]]
+    samples: list[str]
+    genotype_seen: Counter[str]
+    genotype_pool: dict[str, list[tuple[str, str]]]
+
+
 def resolve_records(
-    inputs: Iterable[tuple[str, Path]],
+    inputs: list[tuple[str, Path]],
     wanted: dict[str, set[str]],
     multi_per_suite: int = 0,
     seed: int = 1,
-) -> tuple[dict[str, dict[tuple[str, str], list[str]]], list[str], dict[str, dict[str, list[str]]]]:
-    """Scan each input VCF once; return per suite the record lines whose Uploaded_variation
-    (ID, or VEP's auto-name) is wanted, the VCF header of each input, and a uniform sample
-    of `multi_per_suite` multi-allelic sequence records per suite and stratum (SNV-only
-    alleles; alleles of differing length), which no consequence set can select for and
-    which exercise VEP's treatment of a multi-allelic record as one variant."""
+    keep_samples: int = 0,
+    genotype_per_class: int = 0,
+) -> ResolvedInputs:
+    """Scan each input VCF once. A record line is its first eight columns, or with
+    `keep_samples` its first eight, `FORMAT` and the first `keep_samples` sample columns.
+    The multi-allelic sample (`multi_per_suite` sequence records per suite and stratum:
+    SNV-only alleles; alleles of differing length) and the genotype-class sample
+    (`genotype_per_class` records per class the kept samples show) are records no
+    consequence set can select for: the first exercises VEP's treatment of a multi-allelic
+    record as one variant, the second the genotype shapes of `--individual`."""
     rng = random.Random(seed)
     found: dict[str, dict[tuple[str, str], list[str]]] = defaultdict(lambda: defaultdict(list))
     multi: dict[str, dict[str, list[str]]] = defaultdict(lambda: {k: [] for k in MULTI_ALLELIC_STRATA})
     multi_seen: Counter[tuple[str, str]] = Counter()
-    headers: list[str] = []
+    header: str | None = None
+    samples: list[str] = []
+    genotype_seen: Counter[str] = Counter()
+    genotype_pool: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    kept_columns = 9 + keep_samples if keep_samples else 8
     for sid, path in inputs:
         want = wanted.get(sid, set())
-        if not want and not multi_per_suite:
+        if not want and not multi_per_suite and not keep_samples:
             continue
-        with opener(path)(path, "rt", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                if line.startswith("##"):
-                    continue
-                if line.startswith("#"):
-                    if not headers:
-                        headers.append(line.rstrip("\n"))
-                    continue
-                f = line.rstrip("\n").split("\t")
-                if len(f) < 8:
-                    continue
-                chrom, pos, vid, ref, alt = f[0], int(f[1]), f[2], f[3], f[4]
-                alts = alt.split(",")
-                record = "\t".join(f[:8])
-                if multi_per_suite and len(alts) > 1 and not any(a.startswith("<") or "[" in a or "]" in a or a == "*" for a in alts):
-                    stratum = multi_allelic_stratum(ref, alts)
-                    multi_seen[(sid, stratum)] += 1
-                    bucket = multi[sid][stratum]
-                    if len(bucket) < multi_per_suite:
-                        bucket.append(record)
-                    else:
-                        j = rng.randrange(multi_seen[(sid, stratum)])
-                        if j < multi_per_suite:
-                            bucket[j] = record
-                if not want:
-                    continue
-                names: list[str] = []
-                if vid != ".":
-                    names.append(vid.split(";")[0])
-                names.extend(vep_auto_names(chrom, pos, ref, alts))
-                for n in names:
-                    if n in want:
-                        found[sid][(n, chrom)].append(record)
-                        break
-    return found, headers, multi
+        named = False
+        for is_header, f in vcf_lines(path, kept_columns):
+            if is_header:
+                if keep_samples:
+                    samples = kept_samples(f, keep_samples, path, samples)
+                    named = True
+                if header is None:
+                    header = "\t".join(f[:kept_columns])
+                continue
+            if keep_samples and not named:
+                raise failure(f"{path} has no #CHROM header line naming its samples")
+            chrom, pos, vid, ref, alt = f[0], int(f[1]), f[2], f[3], f[4]
+            alts = alt.split(",")
+            record = "\t".join(f[:kept_columns])
+            if keep_samples:
+                # Sorted so the draws fall on the classes in one order in every interpreter.
+                for c in sorted(record_genotype_classes(f, keep_samples)):
+                    genotype_seen[c] += 1
+                    if genotype_per_class:
+                        reservoir_step(rng, genotype_pool[c], (sid, record), genotype_seen[c], genotype_per_class)
+            if multi_per_suite and len(alts) > 1 and not any(a.startswith("<") or "[" in a or "]" in a or a == "*" for a in alts):
+                stratum = multi_allelic_stratum(ref, alts)
+                multi_seen[(sid, stratum)] += 1
+                reservoir_step(rng, multi[sid][stratum], record, multi_seen[(sid, stratum)], multi_per_suite)
+            if not want:
+                continue
+            names: list[str] = []
+            if vid != ".":
+                names.append(vid.split(";")[0])
+            names.extend(vep_auto_names(chrom, pos, ref, alts))
+            for n in names:
+                if n in want:
+                    found[sid][(n, chrom)].append(record)
+                    break
+    if keep_samples and not samples:
+        raise failure("no input has a #CHROM header line naming its samples")
+    return ResolvedInputs(found, header or "\t".join(FIXED_COLUMNS), multi, samples, genotype_seen, genotype_pool)
 
 
 def run_options(args: argparse.Namespace) -> dict:
@@ -625,13 +816,22 @@ def flag_set_shape_error(fs: object) -> str | None:
 
 
 def manifest_shape_error(manifest: dict) -> str | None:
-    """The reason a manifest's `covers`, `flag_sets` or `cache_layout` cannot be read: `covers`
-    must be a list of non-empty names, `flag_sets` a list of entries of the shape
-    `flag_set_shape_error` holds them to, with distinct names, and `cache_layout`, when present,
+    """The reason a manifest's `covers`, `flag_sets`, `cache_layout` or sample keys cannot be
+    read: `covers` must be a list of non-empty names, `flag_sets` a list of entries of the shape
+    `flag_set_shape_error` holds them to, with distinct names, `cache_layout`, when present,
     `ensembl` (the cache at `cache_root/homo_sapiens/<release>_<assembly>`, so `release` and
-    `assembly` must be named) rather than the default `json_cache/`."""
+    `assembly` must be named) rather than the default `json_cache/`, `keep_samples` a count,
+    and `samples` the names of that many kept samples when the count is above zero."""
     if "covers" in manifest and not is_name_list(manifest["covers"]):
         return "covers is not a list of names"
+    keep = manifest.get("keep_samples", 0)
+    if not isinstance(keep, int) or isinstance(keep, bool) or keep < 0:
+        return "keep_samples is not a count"
+    if keep and not (is_name_list(manifest.get("samples")) and len(manifest["samples"]) == keep):
+        return f"samples does not name {keep} kept samples"
+    required = manifest.get("required_genotype_classes", [])
+    if not (isinstance(required, list) and all(c in GENOTYPE_CLASSES for c in required)):
+        return "required_genotype_classes is not a list of genotype classes"
     flag_sets = manifest.get("flag_sets", [])
     if not isinstance(flag_sets, list):
         return "flag_sets is not a list"
@@ -742,6 +942,14 @@ def cmd_select(args: argparse.Namespace) -> int:
         if errors:
             return 1
     family_specs = parse_family_columns(args.family_columns)
+    keep_samples = args.keep_samples
+    required = genotype_class_names(args.require_genotype_class)
+    if keep_samples < 0:
+        raise failure(f"--keep-samples wants a count of sample columns, got {keep_samples}")
+    if args.genotype_exemplars < 0:
+        raise failure(f"--genotype-exemplars wants a count of records per class, got {args.genotype_exemplars}")
+    if required and not keep_samples:
+        raise failure("--require-genotype-class wants --keep-samples: a corpus without sample columns shows no genotype")
     rng = random.Random(args.seed)
     reservoir, seen, per_suite, families = reservoir_pass(suites, args.seed, family_specs)
     cost = CacheCost(Path(args.cache), args.flank).row_cost if args.cache else None
@@ -753,15 +961,16 @@ def cmd_select(args: argparse.Namespace) -> int:
     for combo, rows in chosen.items():
         for r in rows:
             wanted[r.suite].add(r.uploaded_variation)
-    found, headers, multi = resolve_records(
-        [(sid, inp) for sid, _ref, inp in suites], wanted, args.multi_allelic_per_suite, args.seed
+    resolved = resolve_records(
+        [(sid, inp) for sid, _ref, inp in suites], wanted, args.multi_allelic_per_suite, args.seed,
+        keep_samples, args.genotype_exemplars,
     )
     records: dict[str, dict] = {}
     missing: list[str] = []
     for combo, rows in chosen.items():
         for r in rows:
             chrom = r.location.split(":", 1)[0]
-            lines = found.get(r.suite, {}).get((r.uploaded_variation, chrom), [])
+            lines = resolved.found.get(r.suite, {}).get((r.uploaded_variation, chrom), [])
             if not lines:
                 missing.append(f"{r.suite}\t{r.uploaded_variation}\t{r.location}")
                 continue
@@ -775,15 +984,29 @@ def cmd_select(args: argparse.Namespace) -> int:
                     "feature": r.feature, "variant_class": r.klass, "strand": r.strand,
                     **({"family_stratum": r.family_stratum} if family_specs else {}),
                 })
-    for sid in sorted(multi):
-        for stratum, lines in sorted(multi[sid].items()):
+    for sid in sorted(resolved.multi):
+        for stratum, lines in sorted(resolved.multi[sid].items()):
             for line in lines:
                 key = f"{sid}\t{line}"
                 rec = records.setdefault(key, {"suite": sid, "vcf": line, "combinations": [], "exemplar_rows": []})
                 rec.setdefault("strata", []).append(stratum)
+    if keep_samples:
+        for rec in records.values():
+            rec["genotype_classes"] = sorted(record_genotype_classes(rec["vcf"].split("\t"), keep_samples))
+        showing = Counter(c for rec in records.values() for c in rec["genotype_classes"])
+        for c in sorted(resolved.genotype_seen):
+            for sid, line in resolved.genotype_pool[c]:
+                if showing[c] >= args.genotype_exemplars:
+                    break
+                key = f"{sid}\t{line}"
+                if key not in records:
+                    classes = sorted(record_genotype_classes(line.split("\t"), keep_samples))
+                    records[key] = {"suite": sid, "vcf": line, "combinations": [], "exemplar_rows": [], "genotype_classes": classes}
+                    showing.update(classes)
     if len(records) > args.max_records:
-        # The first record of every combination and family stratum survives the cap, which the
-        # groups alone may exceed; the rest fill in sorted record order, so the cut is deterministic.
+        # The first record of every combination, family stratum and genotype class survives the
+        # cap, which the groups alone may exceed; the rest fill in sorted record order, so the
+        # cut is deterministic.
         by_group: dict[str, list[str]] = defaultdict(list)
         for key, rec in records.items():
             for c in rec["combinations"]:
@@ -791,6 +1014,8 @@ def cmd_select(args: argparse.Namespace) -> int:
             for row in rec["exemplar_rows"]:
                 if "family_stratum" in row:
                     by_group[f"stratum {row['family_stratum']}"].append(key)
+            for c in rec.get("genotype_classes", ()):
+                by_group[f"genotype class {c}"].append(key)
         keep = {keys[0] for keys in by_group.values()}
         for key in sorted(records):
             if len(keep) >= args.max_records:
@@ -806,13 +1031,14 @@ def cmd_select(args: argparse.Namespace) -> int:
 
     ordered = sorted(records.items(), key=sort_key)
     out.mkdir(parents=True, exist_ok=True)
-    header = headers[0] if headers else "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
     with (out / "variants.vcf").open("w", encoding="utf-8", newline="\n") as fh:
         fh.write("##fileformat=VCFv4.2\n")
-        fh.write(header.split("\tFORMAT")[0] + "\n")
+        fh.write(resolved.header + "\n")
         for _key, rec in ordered:
             fh.write(rec["vcf"] + "\n")
     covered = {c for _k, rec in ordered for c in rec["combinations"]}
+    genotype_classes = Counter(c for _k, rec in ordered for c in rec.get("genotype_classes", ()))
+    uncovered_genotype_classes = sorted((set(resolved.genotype_seen) | set(required)) - set(genotype_classes))
     manifest = {
         "release": args.release,
         "assembly": args.assembly,
@@ -822,6 +1048,8 @@ def cmd_select(args: argparse.Namespace) -> int:
         **({"focus_terms": sorted(args.focus_term), "focus_exemplars_per_combination": args.focus_k} if args.focus_term else {}),
         "max_span": args.max_span,
         **({"cache_cost_flank": args.flank} if args.cache else {}),
+        **({"keep_samples": keep_samples, "samples": resolved.samples, "genotype_exemplars_per_class": args.genotype_exemplars,
+            "required_genotype_classes": required} if keep_samples else {}),
         **run_options(args),
         "covers": covers,
         **({"flag_sets": flag_sets} if flag_sets else {}),
@@ -833,20 +1061,26 @@ def cmd_select(args: argparse.Namespace) -> int:
         **({"family_columns": family_specs,
             "family_strata": dict(sorted(Counter(r.family_stratum for rows in chosen.values() for r in rows).items()))}
            if family_specs else {}),
+        **({"genotype_classes": dict(sorted(genotype_classes.items()))} if keep_samples else {}),
         "records": [
-            {"suite": rec["suite"], "vcf": rec["vcf"], "combinations": sorted(rec["combinations"]), **({"strata": rec["strata"]} if rec.get("strata") else {})}
+            {"suite": rec["suite"], "vcf": rec["vcf"], "combinations": sorted(rec["combinations"]),
+             **({"strata": rec["strata"]} if rec.get("strata") else {}),
+             **({"genotype_classes": rec["genotype_classes"]} if keep_samples else {})}
             for _k, rec in ordered
         ],
         "multi_allelic_per_suite": args.multi_allelic_per_suite,
         "uncovered_combinations": sorted(set(seen) - covered),
+        **({"uncovered_genotype_classes": uncovered_genotype_classes} if keep_samples else {}),
         "unresolved_exemplars": missing,
     }
     write_manifest(out, manifest)
     classes = manifest["variant_classes"]
     class_counts = ", ".join(f"{k} {v}" for k, v in classes.items())
+    genotype_note = (f", genotype classes observed {len(resolved.genotype_seen)}, covered {len(genotype_classes)}"
+                     if keep_samples else "")
     print(f"combinations observed {len(seen)}, covered {len(covered)}, records {len(ordered)}, unresolved exemplars {len(missing)}, "
-          f"variant classes {len(classes)} ({class_counts})")
-    return 0 if not missing and not manifest["uncovered_combinations"] else 1
+          f"variant classes {len(classes)} ({class_counts}){genotype_note}")
+    return 0 if not missing and not manifest["uncovered_combinations"] and not uncovered_genotype_classes else 1
 
 
 # --------------------------------------------------------------------------- classify
@@ -1069,6 +1303,47 @@ def cmd_classify(args: argparse.Namespace) -> int:
 
 
 # ------------------------------------------------------------------------------ check
+def sample_column_errors(corpus: Path, manifest: dict) -> list[str]:
+    """One line per way `variants.vcf` fails to carry the manifest's kept samples: a `#CHROM`
+    line whose columns are not the eight fixed ones, `FORMAT` and the manifest's `samples`, or
+    a record whose column count differs from that header's; a file that cannot be read is
+    refused by `vcf_lines`."""
+    keep = manifest["keep_samples"]
+    expected = [*FIXED_COLUMNS, "FORMAT", *manifest["samples"]]
+    errors: list[str] = []
+    has_header = False
+    for is_header, f in vcf_lines(corpus / "variants.vcf"):
+        if is_header:
+            has_header = True
+            if f != expected:
+                errors.append(f"variants.vcf header names {' '.join(f[8:]) or 'no sample columns'}, the manifest keeps FORMAT {' '.join(manifest['samples'])}")
+        elif len(f) != 9 + keep:
+            errors.append(f"variants.vcf record {' '.join(f[:5])} has {len(f)} columns, the header {9 + keep}")
+    if not has_header:
+        errors.append("variants.vcf has no #CHROM header line")
+    return errors
+
+
+def genotype_coverage(
+    suites: list[tuple[str, Path, Path]], manifest: dict, required: list[str]
+) -> tuple[set[str], set[str], list[str]]:
+    """The genotype classes the suite inputs show among the manifest's kept samples, the ones
+    the corpus records show, and those of the first set or of `required` the corpus lacks."""
+    keep = manifest["keep_samples"]
+    observed: set[str] = set()
+    for _sid, _ref, inp in suites:
+        samples: list[str] = []
+        for is_header, f in vcf_lines(inp, 9 + keep):
+            if is_header:
+                samples = kept_samples(f, keep, inp, manifest["samples"], "the manifest")
+            else:
+                observed |= record_genotype_classes(f, keep)
+        if not samples:
+            raise failure(f"{inp} has no #CHROM header line naming its samples")
+    covered = {c for rec in manifest["records"] for c in record_genotype_classes(rec["vcf"].split("\t"), keep)}
+    return observed, covered, sorted((observed | set(required)) - covered)
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     corpus = Path(args.corpus)
     manifest = read_manifest(corpus)
@@ -1080,6 +1355,9 @@ def cmd_check(args: argparse.Namespace) -> int:
             errors += names_outside_matrix(names, items, matrix, owner)
     suites = [parse_suite_arg(s) for s in args.suite]
     family_specs = parse_family_columns(args.family_columns)
+    required = genotype_class_names(args.require_genotype_class)
+    if required and not manifest.get("keep_samples"):
+        raise failure("--require-genotype-class wants a corpus built with --keep-samples")
     by_name = record_name_index(manifest["records"])
     records = manifest["records"]
 
@@ -1109,9 +1387,25 @@ def cmd_check(args: argparse.Namespace) -> int:
               f"missing {len(missing_strata)}")
         for m in missing_strata[:50]:
             print("  MISSING family stratum", m)
+    missing_classes: list[str] = []
+    if manifest.get("keep_samples"):
+        try:
+            errors += sample_column_errors(corpus, manifest)
+            observed_classes, covered_classes, missing_classes = genotype_coverage(
+                suites, manifest, [*manifest.get("required_genotype_classes", []), *required]
+            )
+        except SystemExit:
+            # The refusal that ends the run comes after the errors found before it.
+            for e in errors:
+                print(f"ERROR: [build_golden_corpus] {e}", file=sys.stderr)
+            raise
+        print(f"genotype classes observed {len(observed_classes)}, covered by corpus {len(covered_classes)}, "
+              f"missing {len(missing_classes)}")
+        for m in missing_classes:
+            print("  MISSING genotype class", m)
     for e in errors:
         print(f"ERROR: [build_golden_corpus] {e}", file=sys.stderr)
-    return 1 if missing or missing_strata or errors else 0
+    return 1 if missing or missing_strata or missing_classes or errors else 0
 
 
 def cmd_covers(args: argparse.Namespace) -> int:
@@ -1248,6 +1542,13 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--family-columns", default=None,
                    help="Extra columns of the family key, comma-separated: NAME stratifies by presence, NAME= by value; "
                         "every stratum seen keeps an exemplar")
+    s.add_argument("--keep-samples", type=int, default=0,
+                   help="keep FORMAT and the first N sample columns of every record and of the #CHROM header "
+                        "(default: none), and sample records by the genotype classes those samples show")
+    s.add_argument("--genotype-exemplars", type=int, default=8,
+                   help="records showing each genotype class the inputs show among the kept samples, when they have that many")
+    s.add_argument("--require-genotype-class", action="append", metavar="CLASS",
+                   help=f"a genotype class the corpus must carry, shown by the inputs or not (repeatable; one of {', '.join(GENOTYPE_CLASSES)})")
     s.add_argument("--matrix", default=None, help=MATRIX_HELP)
     add_run_options(s)
     s.set_defaults(fn=cmd_select)
@@ -1267,6 +1568,8 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("--matrix", default=None, help=MATRIX_HELP)
     k.add_argument("--family-columns", default=None,
                    help="the family key (see select); every stratum the suites show must have an exemplar")
+    k.add_argument("--require-genotype-class", action="append", metavar="CLASS",
+                   help="a genotype class the corpus must carry, beside the manifest's required_genotype_classes (repeatable)")
     k.set_defaults(fn=cmd_check)
     v = sub.add_parser("covers")
     v.add_argument("corpus")

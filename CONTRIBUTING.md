@@ -93,9 +93,14 @@ write the four expected outputs and `provenance.json` with
 expected files' sha256 are recorded for you, and `--force` regenerates an existing
 corpus), then run `build_golden_corpus.py classify` against the pinned vep-rs
 binary and commit the new directory; older directories stay until their release
-is dropped. Each corpus must stay under 15 MB on
-disk (`each_corpus_fits_its_size_budget`), every flag set's expected directory
-included; prefer narrower exemplars
+is dropped. A corpus for Ensembl VEP's per-sample flags (`--individual`,
+`--individual_zyg`, `--process_ref_homs`) is selected with `--keep-samples N`, which
+keeps `FORMAT` and the first N sample columns and adds records until every genotype
+class those samples show in the source has exemplars (`check` refuses a corpus
+missing one); a class the corpus must carry whether or not the source shows it is
+named with `--require-genotype-class`, which `select` and `check` both enforce.
+Each corpus must stay under 15 MB on disk (`each_corpus_fits_its_size_budget`),
+every flag set's expected directory included; prefer narrower exemplars
 (`--max-span`) and, with `select --cache <json cache>`, the exemplars whose
 transcripts add the fewest bytes to the pruned cache, over a larger cache.
 
