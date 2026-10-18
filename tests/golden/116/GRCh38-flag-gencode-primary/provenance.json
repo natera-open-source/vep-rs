@@ -1,0 +1,38 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --flag_gencode_primary [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "52 small-variant records on chromosomes 21 and 22 (48 on 21, 4 on 22) chosen for the GENCODE sets of the transcripts within 5 kb: regions holding transcripts of the basic set alone, of both the basic and the primary set, of the primary set alone and of neither, regions whose every transcript is outside the basic set (no row survives --gencode_basic) and regions whose every transcript is outside the primary set (no row survives --gencode_primary); records taken from the GRCh38 golden corpus, the native-builder corpus and the transcript-filter corpus, plus exon, intron and flank positions placed on such transcripts with the reference base read from the GRCh38 primary assembly",
+ "sha256": {
+  "default.txt": "60990979bbc00ec7d8f0a03ef64fc53486fb4f3177ad33d2f9891df798be26d6",
+  "tab.txt": "aa74370fa021225a274c511e2a9ea1470d1568c8ca0bb3bd969460afc31e6d8e",
+  "vcf.vcf": "52d31edbe9f43f716b67753c13616e5bb09b6165706935dcd2cca5c47df5883a",
+  "json.jsonl": "503d0503483227133f51dfead919e7a0c9a8e4b47521fe74251470f7c5590f09"
+ },
+ "variants_vcf_sha256": "18a174a1ef15c0ef381b7d651f7c8d727a285c7e3d47de8af99da8348f0014c6",
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "c812d90ae8969f6e29eeb9a16587b614",
+  "arch": "aarch64",
+  "flags_passed": [
+   "--flag_gencode_primary"
+  ]
+ },
+ "generator": "candidate records annotated with Ensembl VEP under the corpus flag, then scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite gencode=<reference>=<candidates> --k 100 --seed 1 --cache <converted slice> --covers ... --matrix tests/parity/matrix.tsv --flag=--flag_gencode_primary --family-columns GENCODE_PRIMARY; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 and 22 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 589,
+   "22": 121
+  },
+  "shards": 23,
+  "spans_by_chromosome": {
+   "21": 48,
+   "22": 4
+  }
+ }
+}

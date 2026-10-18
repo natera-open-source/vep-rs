@@ -563,6 +563,8 @@ pub struct Config {
     pub refseq: bool,
     pub merged: bool,
     pub gencode_basic: bool,
+    pub gencode_primary: bool,
+    pub flag_gencode_primary: bool,
 
     pub vcf_info_field: String,
     /// Keep an input VCF's existing annotation beside the new one (`--keep_csq`).
@@ -627,6 +629,30 @@ pub(crate) fn regulatory_unimplemented_notice(
     }
 }
 
+/// The GENCODE primary set exists for human GRCh38 alone, so `--gencode_primary`
+/// and `--flag_gencode_primary` are each warned about when `--assembly` names
+/// another assembly (Config.pm:722-729), `hg38` read as the GRCh38 it stands
+/// for here. Ensembl VEP reads the assembly before its option sets apply, so
+/// `--grch37` alone, which sets the assembly through one, raises no warning; it
+/// also prints the text on standard output, where vep-rs routes it through the
+/// warning sink.
+fn gencode_primary_assembly_warnings(state: &FlagState) -> Vec<String> {
+    let other_assembly = state
+        .scalar("assembly")
+        .map(crate::cache_resolve::canonical_assembly)
+        .is_some_and(|assembly| !assembly.eq_ignore_ascii_case("grch38"));
+    if !other_assembly {
+        return Vec::new();
+    }
+    ["gencode_primary", "flag_gencode_primary"]
+        .into_iter()
+        .filter(|flag| state.is_active(flag))
+        .map(|flag| {
+            format!("--{flag} option is currently only available for human on the GRCh38 assembly")
+        })
+        .collect()
+}
+
 impl Config {
     /// Parses a command line (the binary name first) and resolves it.
     pub fn from_argv<I, T>(argv: I) -> Result<Self, ParseFailure>
@@ -649,6 +675,9 @@ impl Config {
             if state.is_given(entry.flag) {
                 return Err(CliError::new(component, message));
             }
+        }
+        for warning in gencode_primary_assembly_warnings(&state) {
+            tracing::warn!("{}", warning);
         }
         if let Some(format) = state.scalar("output_format") {
             let canonical = canonical_output_format(format);
@@ -820,6 +849,8 @@ impl Config {
             refseq: args.refseq,
             merged: args.merged,
             gencode_basic: args.gencode_basic,
+            gencode_primary: args.gencode_primary,
+            flag_gencode_primary: args.flag_gencode_primary,
             vcf_info_field: args.vcf_info_field,
             keep_csq: args.keep_csq,
             json_cache: args.json_cache.as_deref().map(expand_tilde),
@@ -1323,6 +1354,80 @@ mod tests {
             refusal(&["vep", "--refseq", "--merged"]),
             "ERROR: [cli] Can't use --refseq and --merged together"
         );
+    }
+
+    /// `%INCOMPATIBLE` pairs `gencode_primary` with `gencode_basic` and `refseq`
+    /// (Config.pm:621-622), so the two GENCODE sets cannot be combined; either
+    /// alone, and `--flag_gencode_primary` beside `--gencode_basic`, resolve.
+    #[test]
+    fn gencode_primary_refuses_gencode_basic() {
+        assert_eq!(
+            refusal(&["vep", "--gencode_primary", "--gencode_basic"]),
+            "ERROR: [cli] Can't use --gencode_primary and --gencode_basic together"
+        );
+        assert_eq!(
+            refusal(&["vep", "--gencode_primary", "--refseq"]),
+            "ERROR: [cli] Can't use --gencode_primary and --refseq together"
+        );
+        assert!(config(&["vep", "--gencode_basic"]).gencode_basic);
+        assert!(config(&["vep", "--gencode_primary"]).gencode_primary);
+        let flagged = config(&["vep", "--flag_gencode_primary", "--gencode_basic"]);
+        assert!(flagged.flag_gencode_primary && flagged.gencode_basic);
+    }
+
+    /// `--flag_gencode_primary` switches the `GENCODE_PRIMARY` column on without
+    /// restricting the transcript set, and `--gencode_primary` restricts the set
+    /// without adding the column (Config.pm:100, 116: two flags, no option set
+    /// joining them).
+    #[test]
+    fn flag_gencode_primary_sets_column() {
+        let column = config(&["vep", "--flag_gencode_primary"]);
+        assert!(column.flag_gencode_primary);
+        assert!(!column.gencode_primary);
+        let set = config(&["vep", "--gencode_primary"]);
+        assert!(set.gencode_primary);
+        assert!(!set.flag_gencode_primary);
+        assert!(FlagState::implied_by("flag_gencode_primary").is_empty());
+        assert!(FlagState::implied_by("gencode_primary").is_empty());
+    }
+
+    /// Each GENCODE primary flag is warned about when `--assembly` names an
+    /// assembly other than GRCh38, in Ensembl VEP's words (Config.pm:722-729),
+    /// read before the option sets apply (`:766`), so `--grch37` alone raises
+    /// none; the `hg38` and `hg19` spellings count as the assemblies they name.
+    #[test]
+    fn gencode_primary_warns_off_grch38() {
+        let warnings = |argv: &[&str]| {
+            gencode_primary_assembly_warnings(&parse_command_line(argv).unwrap().state)
+        };
+        assert_eq!(
+            warnings(&["vep", "--gencode_primary", "--assembly", "GRCh37"]),
+            ["--gencode_primary option is currently only available for human on the GRCh38 assembly"]
+        );
+        assert_eq!(
+            warnings(&["vep", "--flag_gencode_primary", "--assembly", "grch37"]),
+            ["--flag_gencode_primary option is currently only available for human on the GRCh38 assembly"]
+        );
+        assert_eq!(
+            warnings(&[
+                "vep",
+                "--gencode_primary",
+                "--flag_gencode_primary",
+                "--assembly",
+                "GRCh37"
+            ])
+            .len(),
+            2
+        );
+        assert!(warnings(&["vep", "--gencode_primary", "--assembly", "grch38"]).is_empty());
+        assert!(warnings(&["vep", "--gencode_primary", "--assembly", "hg38"]).is_empty());
+        assert_eq!(
+            warnings(&["vep", "--gencode_primary", "--assembly", "hg19"]).len(),
+            1
+        );
+        assert!(warnings(&["vep", "--gencode_primary"]).is_empty());
+        assert!(warnings(&["vep", "--gencode_primary", "--grch37"]).is_empty());
+        assert!(warnings(&["vep", "--assembly", "GRCh37"]).is_empty());
     }
 
     /// Every refused entry of the error table is refused with exactly its line,

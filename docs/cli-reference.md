@@ -187,7 +187,9 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | --- | --- | --- | --- |
 | `--refseq` | bool | false | Reads the cache under the species directory suffixed _refseq (the transcripts annotated are that cache's contents); no effect under --json_cache |
 | `--merged` | bool | false | Reads the cache under the species directory suffixed _merged (the transcripts annotated are that cache's contents); no effect under --json_cache |
-| `--gencode_basic` | bool | false | Accepted for VEP compatibility; not implemented (the transcript set is the --json_cache contents) |
+| `--gencode_basic` | bool | false | Annotate against the GENCODE basic transcript set alone: a transcript without a gencode_basic attribute is dropped as the cache loads, before the transcript index is built |
+| `--gencode_primary` | bool | false | Annotate against the GENCODE primary transcript set alone: a transcript without a gencode_primary attribute is dropped as the cache loads; the set exists for human GRCh38 only, so --assembly naming another assembly is warned about |
+| `--flag_gencode_primary` | bool | false | Add the GENCODE_PRIMARY column: 1 on a transcript of the GENCODE primary set, empty otherwise; the set exists for human GRCh38 only, so --assembly naming another assembly is warned about |
 | `--use_given_ref` | bool | false | Accepted without effect: vep-rs always uses the reference allele the input gives |
 
 ### Statistics

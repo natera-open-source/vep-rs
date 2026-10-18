@@ -909,6 +909,18 @@ mod tests {
         assert_eq!(result.feature_type, FeatureType::Transcript);
     }
 
+    /// The row carries the transcript's `gencode_primary` bit, which the
+    /// `GENCODE_PRIMARY` column prints as `1` (OutputFactory.pm:1604-1606 at
+    /// release/116.2) on a structural-variant row as on any other.
+    #[test]
+    fn test_gencode_primary_carried_from_transcript() {
+        let v = make_del("21", 24_999_000, 25_007_000);
+        assert!(!calculate(&v, &tx(), 5000, 5000).unwrap().gencode_primary);
+        let mut t = tx();
+        t.gencode_primary = true;
+        assert!(calculate(&v, &t, 5000, 5000).unwrap().gencode_primary);
+    }
+
     #[test]
     fn test_different_chromosome_is_not_checked_here() {
         let v = make_del("1", 25_000_000, 25_006_000);

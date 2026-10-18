@@ -544,7 +544,7 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
         "CHECK_REF",
         "Reports variants where the input reference does not match the expected reference",
     ),
-    ("GENCODE_PRIMARY", "Indicates if transcript is a GENCODE Primary transcript"),
+    ("GENCODE_PRIMARY", "Reports if transcript is GENCODE primary"),
 ];
 
 /// One output row: an allele of the record and the transcript consequence it is
@@ -788,6 +788,13 @@ pub fn field_value(
         "TSL" => tc
             .and_then(|x| x.tsl.map(|t| t.to_string()))
             .unwrap_or_default(),
+        "GENCODE_PRIMARY" => {
+            if tc.is_some_and(|x| x.gencode_primary) {
+                "1".to_string()
+            } else {
+                String::new()
+            }
+        }
         "APPRIS" => tc.and_then(|x| x.appris.clone()).unwrap_or_default(),
         "CCDS" => tc.and_then(|x| x.ccds.clone()).unwrap_or_default(),
         "ENSP" => tc
@@ -797,7 +804,7 @@ pub fn field_value(
         "SWISSPROT" => tc.and_then(|x| x.swissprot.clone()).unwrap_or_default(),
         "TREMBL" => tc.and_then(|x| x.trembl.clone()).unwrap_or_default(),
         "HGVSg" => variant.hgvsg.clone().unwrap_or_default(),
-        "UNIPARC" | "UNIPROT_ISOFORM" | "GENCODE_PRIMARY" | "miRNA" | "CHECK_REF" => String::new(),
+        "UNIPARC" | "UNIPROT_ISOFORM" | "miRNA" | "CHECK_REF" => String::new(),
         "RefSeq" => tc.and_then(|x| x.refseq.clone()).unwrap_or_default(),
         "GENE_PHENO" => {
             if options.gene_phenotype && variant.colocated_variants.iter().any(|cv| cv.phenotype) {
@@ -1294,6 +1301,42 @@ mod tests {
         assert_eq!(
             extra_keys_with(&plan.flag_fields, &v, None, &options),
             extra_keys(&v, None, &options)
+        );
+    }
+
+    /// `GENCODE_PRIMARY` is the literal `1` on a transcript carrying the
+    /// `gencode_primary` attribute and empty otherwise (OutputFactory.pm:1604-1606
+    /// at release/116.2: `$hash->{GENCODE_PRIMARY} = 1` on the attribute's
+    /// presence); the column exists under `--flag_gencode_primary` alone, and its
+    /// header text is Ensembl VEP's (Constants.pm:265).
+    #[test]
+    fn gencode_primary_column_is_1_on_presence() {
+        let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let primary = TranscriptConsequence {
+            gencode_primary: true,
+            ..Default::default()
+        };
+        let other = TranscriptConsequence::default();
+        let options = FieldOptions {
+            gencode_primary: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("GENCODE_PRIMARY", &v, Some(&primary), &options, ","),
+            "1"
+        );
+        assert_eq!(
+            field_value("GENCODE_PRIMARY", &v, Some(&other), &options, ","),
+            ""
+        );
+        assert_eq!(field_value("GENCODE_PRIMARY", &v, None, &options, ","), "");
+        assert!(extra_keys(&v, Some(&primary), &options).contains(&"GENCODE_PRIMARY"));
+        assert!(
+            !extra_keys(&v, Some(&primary), &FieldOptions::default()).contains(&"GENCODE_PRIMARY")
+        );
+        assert_eq!(
+            field_description("GENCODE_PRIMARY"),
+            Some("Reports if transcript is GENCODE primary")
         );
     }
 

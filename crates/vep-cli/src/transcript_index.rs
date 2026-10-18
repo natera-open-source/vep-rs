@@ -448,6 +448,36 @@ impl TranscriptSortedIndex {
     }
 }
 
+/// The transcript set a run annotates against: every transcript of the cache,
+/// or the GENCODE basic or primary set under `--gencode_basic` or
+/// `--gencode_primary`. A transcript outside the set never enters an index, as
+/// Ensembl VEP drops it when the cache region is read
+/// (`AnnotationType/Transcript.pm:223-230`), so no consequence, distance or
+/// pick ever sees it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TranscriptSet {
+    /// Keep the transcripts carrying a `gencode_basic` attribute alone.
+    pub gencode_basic: bool,
+    /// Keep the transcripts carrying a `gencode_primary` attribute alone.
+    pub gencode_primary: bool,
+}
+
+impl TranscriptSet {
+    /// The set a configuration's `--gencode_basic` and `--gencode_primary` name.
+    pub fn from_config(config: &crate::config::Config) -> Self {
+        Self {
+            gencode_basic: config.gencode_basic,
+            gencode_primary: config.gencode_primary,
+        }
+    }
+
+    /// Whether `transcript` belongs to the set.
+    pub fn accepts(&self, transcript: &Transcript) -> bool {
+        (!self.gencode_basic || transcript.gencode_basic)
+            && (!self.gencode_primary || transcript.gencode_primary)
+    }
+}
+
 /// Per-chromosome transcript indexes, materialized on first query.
 ///
 /// The cache directory is enumerated eagerly (a `read_dir` walk, no parsing), so
@@ -484,6 +514,7 @@ pub struct LazyTranscriptIndexes {
     impl_kind: TranscriptIndexImpl,
     upstream_distance: u64,
     downstream_distance: u64,
+    transcript_set: TranscriptSet,
 }
 
 impl LazyTranscriptIndexes {
@@ -510,7 +541,14 @@ impl LazyTranscriptIndexes {
             impl_kind,
             upstream_distance,
             downstream_distance,
+            transcript_set: TranscriptSet::default(),
         })
+    }
+
+    /// Restricts every index this set materializes to `transcript_set`.
+    pub fn with_transcript_set(mut self, transcript_set: TranscriptSet) -> Self {
+        self.transcript_set = transcript_set;
+        self
     }
 
     /// An empty set (no cache configured). Every `get` returns `None` and every
@@ -523,6 +561,7 @@ impl LazyTranscriptIndexes {
             impl_kind: TranscriptIndexImpl::default(),
             upstream_distance: 0,
             downstream_distance: 0,
+            transcript_set: TranscriptSet::default(),
         }
     }
 
@@ -561,6 +600,7 @@ impl LazyTranscriptIndexes {
             impl_kind,
             upstream_distance,
             downstream_distance,
+            transcript_set: TranscriptSet::default(),
         }
     }
 
@@ -589,6 +629,7 @@ impl LazyTranscriptIndexes {
             impl_kind: TranscriptIndexImpl::default(),
             upstream_distance: 0,
             downstream_distance: 0,
+            transcript_set: TranscriptSet::default(),
         }
     }
 
@@ -678,8 +719,9 @@ impl LazyTranscriptIndexes {
         if slot.get().is_some() {
             return Ok(());
         }
-        let txs = crate::json_cache::load_transcripts_for_chr(chr, shards)
+        let mut txs = crate::json_cache::load_transcripts_for_chr(chr, shards)
             .with_context(|| format!("chr{chr} transcript load failed"))?;
+        txs.retain(|tx| self.transcript_set.accepts(tx));
         tracing::info!("  chr{}: {} transcripts", chr, txs.len());
         let built = TranscriptIndex::new(
             self.impl_kind,
@@ -1056,6 +1098,7 @@ mod tests {
             impl_kind: TranscriptIndexImpl::Bin,
             upstream_distance: 5_000,
             downstream_distance: 5_000,
+            transcript_set: TranscriptSet::default(),
         };
 
         assert!(desynced.contains_key("21"), "advertised as present");

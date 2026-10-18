@@ -22,7 +22,7 @@ pub use annotator::{
 pub use config::Config;
 pub use pick::{apply_filters, FilterConfig};
 pub use transcript_index::{
-    LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl,
+    LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl, TranscriptSet,
 };
 
 // The per-variant data type and core consequence types are re-exported so

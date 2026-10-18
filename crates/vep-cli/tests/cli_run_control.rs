@@ -527,6 +527,41 @@ fn warnings_file_is_written_by_default() {
     );
 }
 
+/// `--gencode_primary` or `--flag_gencode_primary` with an `--assembly` other
+/// than GRCh38 is warned about in Ensembl VEP's words as the configuration
+/// resolves (Config.pm:722-729), so the warning reaches the warnings file and
+/// standard error before the cache is opened; here the GRCh38 cache then
+/// refuses the GRCh37 assembly (CacheDir.pm:331-369) and the run exits 1.
+#[test]
+fn gencode_primary_assembly_warning_precedes_the_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let corpus = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-gencode-basic");
+    let mut args = args_for(&corpus);
+    let assembly = args.iter().position(|a| a == "--assembly").unwrap();
+    args[assembly + 1] = "GRCh37".to_string();
+    args.extend(["--gencode_primary", "-o", out.to_str().unwrap()].map(str::to_string));
+    let output = vep().args(&args).stdin(Stdio::null()).output().unwrap();
+    let warning =
+        "WARNING: --gencode_primary option is currently only available for human on the GRCh38 assembly\n";
+    assert_eq!(output.status.code(), Some(1), "{}", text(&output.stderr));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("out.txt_warnings.txt")).unwrap(),
+        warning
+    );
+    let stderr = text(&output.stderr);
+    assert_eq!(warning_lines(&stderr), [warning.trim_end()]);
+    assert!(
+        stderr
+            .lines()
+            .last()
+            .unwrap()
+            .starts_with("ERROR: [cache] Mismatch in assembly versions"),
+        "{stderr}"
+    );
+}
+
 /// `--warning_file` names the file; the literal `stderr` in any case
 /// (BaseVEP.pm:884 `/^stderr$/i`) keeps the warnings on standard error, once
 /// each, and writes no file, `--quiet` or not.

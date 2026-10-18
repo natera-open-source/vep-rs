@@ -44,8 +44,8 @@ api-unknown-plugin-name	Runner.pm	error	open
 appris	OutputFactory.pm	implemented	open			
 assembly	CacheDir.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/cache_resolve.rs::assembly_mismatch_with_info_json_is_fatal;crates/vep-cli/src/cache_resolve.rs::assembly_inferred_from_cache_feeds_plugin_hint	tests/golden/116/GRCh38-run-control	
 attribute-appris	OutputFactory.pm	implemented	open			
-attribute-gencode-basic	AnnotationType/Transcript.pm	implemented	open			
-attribute-gencode-primary	AnnotationType/Transcript.pm	implemented	open			
+attribute-gencode-basic	AnnotationType/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/gff3.rs::gencode_basic_tag_both_spellings	tests/golden/116/GRCh38-native-builder	
+attribute-gencode-primary	AnnotationType/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/gff3.rs::gencode_primary_tag_from_gff3	tests/golden/116/GRCh38-native-builder	
 attribute-mane-plus-clinical	OutputFactory.pm	implemented	open			
 attribute-mane-select	OutputFactory.pm	implemented	open			
 attribute-mirna	VariationEffect.pm	documented_subset	open			
@@ -177,7 +177,7 @@ filter-vep-ontology	filter_vep	documented_subset	open
 filter_common	Config.pm	implemented	open			
 filterset-in-run-filter	Config.pm	implemented	open			
 final-summary-line	-	implemented	open			
-flag_gencode_primary	OutputFactory.pm	implemented	open			
+flag_gencode_primary	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::flag_gencode_primary_sets_column;crates/vep-io/src/output/fields.rs::gencode_primary_column_is_1_on_presence	tests/golden/116/GRCh38-flag-gencode-primary	
 flag_matrix_concordance	-	implemented	open			
 flag_pick	OutputFactory.pm	implemented	open			
 flag_pick_allele	OutputFactory.pm	implemented	open			
@@ -196,9 +196,9 @@ full_cache_dir	AnnotationSourceAdaptor.pm	implemented	landed:implemented	crates/
 FunMotifs	FunMotifs.pm	error	open			
 G2P	G2P.pm	error	open			
 ga4gh_vrs	OutputFactory.pm	implemented	open			
-gencode-flags-in-cache	Dumper/Core.pm	implemented	open			
-gencode_basic	AnnotationType/Transcript.pm	implemented	open			
-gencode_primary	AnnotationType/Transcript.pm	implemented	open			
+gencode-flags-in-cache	Dumper/Core.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::gencode_basic_and_primary_by_presence	tests/golden/116/GRCh38-gencode-primary	
+gencode_basic	AnnotationType/Transcript.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::gencode_basic_filters_transcript_set	tests/golden/116/GRCh38-gencode-basic	
+gencode_primary	AnnotationType/Transcript.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::gencode_primary_filters_transcript_set;crates/vep-cli/src/config.rs::gencode_primary_refuses_gencode_basic	tests/golden/116/GRCh38-gencode-primary	
 gene-stable-id-and-gene	Database/Transcript.pm	implemented	open			
 gene-symbol-id	Database/Transcript.pm	accepted_noop	open			
 gene_phenotype	OutputFactory.pm	implemented	open			

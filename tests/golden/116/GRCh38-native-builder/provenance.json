@@ -18,7 +18,7 @@
   "source": "built by vep-cache-builder from the release 116 GRCh38 GFF3 (the chromosome 21 and MT lines), the peptide FASTA, the chromosome 21 and MT genome FASTA and the core and variation MySQL table dumps (--core-dumps), then pruned to the records' transcripts with scripts/golden/prune_json_cache.py --gzip (no key dropped)",
   "info_json": "derived from the Ensembl VEP cache's info.txt as every corpus's is, so the version header the format tests compare matches; the native build's own info.json carries the assembly, gencode and genebuild versions alone"
  },
- "generator": "vep-cache-builder --release 116 --assembly GRCh38 --gff3 <chr21+MT lines of Homo_sapiens.GRCh38.116.gff3.gz> --fasta Homo_sapiens.GRCh38.pep.all.fa.gz --core-dumps <dir> --genome-fasta <chr21+MT .fa> --output-dir <cache>; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite u6=<reference>=<designed and chr21 records> --suite u7=<reference>=<frame records> --k 1 --seed 1 --cache <cache> --family-columns SYMBOL=,SYMBOL_SOURCE=,HGNC_ID,TSL,MANE_SELECT,CANONICAL,FLAGS=,ENSP,BIOTYPE= --covers ... --matrix tests/parity/matrix.tsv --flag=--symbol ... --out tests/golden/116/GRCh38-native-builder; scripts/golden/prune_json_cache.py --cache <cache> --out <corpus>/json_cache --vcf <corpus>/variants.vcf --gzip; scripts/golden/prune_json_cache.py --info-only --perl-info <perl cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus <corpus> --perl-cache-dir <dir>; scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and the ccds set)",
+ "generator": "vep-cache-builder --release 116 --assembly GRCh38 --gff3 <chr21+MT lines of Homo_sapiens.GRCh38.116.gff3.gz> --fasta Homo_sapiens.GRCh38.pep.all.fa.gz --core-dumps <dir> --genome-fasta <chr21+MT .fa> --output-dir <cache>; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<designed and chr21 records> --suite <id>=<reference>=<frame records> --k 1 --seed 1 --cache <cache> --family-columns SYMBOL=,SYMBOL_SOURCE=,HGNC_ID,TSL,MANE_SELECT,CANONICAL,FLAGS=,ENSP,BIOTYPE= --covers ... --matrix tests/parity/matrix.tsv --flag=--symbol ... --out tests/golden/116/GRCh38-native-builder; scripts/golden/prune_json_cache.py --cache <cache> --out <corpus>/json_cache --vcf <corpus>/variants.vcf --gzip; scripts/golden/prune_json_cache.py --info-only --perl-info <perl cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus <corpus> --perl-cache-dir <dir>; scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and the ccds, gencode_basic, gencode_primary and flag_gencode_primary sets; each set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags)",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "21": 936,
@@ -48,6 +48,63 @@
     "tab.txt": "08ca3a4901be4053cb337fde9e37093e94e24c8c3db288bee98d66e5d457feeb",
     "vcf.vcf": "dec7429ef48000104733b2527cd300a77885b1ee9e3d07891cf910c476402e0b",
     "json.jsonl": "cec783036f479cf65758cde4dd5bc520a689923f48fced73d7c61df4829c6289"
+   }
+  },
+  "gencode_basic": {
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--gencode_basic"
+   ],
+   "expected_dir": "expected_gencode_basic",
+   "sha256": {
+    "default.txt": "a7e04d9f81ca426125bbc8352b0aff0f78020c9bfc368132d4822665d0afd576",
+    "tab.txt": "f40ebc18f08c47d040eee0a9a8ddf52f65f69b50352fed1b110e7e76cb30f48f",
+    "vcf.vcf": "a031490a2fc7fb68959fb22e22e8cf8f26935e8ece692dc21d14e57c52acde87",
+    "json.jsonl": "7295bf4df0ec732c283b2f082ea74b89bea36dd503b1d5c43ab0ed614efdeeaf"
+   }
+  },
+  "gencode_primary": {
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--gencode_primary"
+   ],
+   "expected_dir": "expected_gencode_primary",
+   "sha256": {
+    "default.txt": "42e98a6684577eea51f4164240e0235920a98cb63025579ed4d8c5b45f9d4422",
+    "tab.txt": "c1627d26fa324957adc930bbcdc7f6de1a71fb36323f5c15dbba1b75e5935148",
+    "vcf.vcf": "441285e54cece5893e090c54049cfde3e98c5613e680b0650b30565cf4a280ed",
+    "json.jsonl": "7a57afc30f2953c1ca1ac0c2fe35a65a351d891e1a81c964ec14cebf018224eb"
+   }
+  },
+  "flag_gencode_primary": {
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--flag_gencode_primary"
+   ],
+   "expected_dir": "expected_flag_gencode_primary",
+   "sha256": {
+    "default.txt": "fa70e28494794a3ec65316ed760ff2cc7e04d1cd6b87acbbbd4771d9be244378",
+    "tab.txt": "98175c7cff4767bcaae7efcd73f2560cd43af591c4ccd99a10f194988027279e",
+    "vcf.vcf": "d5fb363c186bb0a6914827365ab296cde2b9ba02568d952b2b846a35a5b18c4d",
+    "json.jsonl": "cf49b46a3dbccc518137ed6378e6839ea90cb9f5fe6e5116fabc82208aca39d8"
    }
   }
  }

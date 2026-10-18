@@ -47,7 +47,7 @@ fn cache_error(message: impl Into<String>) -> CliError {
 
 /// `hg19` and `hg38` are accepted for `--assembly` as the canonical names they
 /// stand for; every other value is compared as written, as Ensembl VEP compares it.
-fn canonical_assembly(value: &str) -> &str {
+pub(crate) fn canonical_assembly(value: &str) -> &str {
     match value {
         "hg19" => "GRCh37",
         "hg38" => "GRCh38",

@@ -35,7 +35,7 @@ use crate::filter_set::FilterSet;
 use crate::output_compress::{CompressedOutput, OutputCompression};
 use crate::pick::FilterConfig;
 use crate::pipeline;
-use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex};
+use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex, TranscriptSet};
 use crate::variation_matcher;
 use crate::variation_source::{ReadFailure, VariationSource};
 use vep_builtins::BuiltinRegistry;
@@ -286,7 +286,7 @@ impl Runner {
             mane_select: c.mane_select,
             mane: c.mane,
             tsl: c.tsl,
-            gencode_primary: false,
+            gencode_primary: c.flag_gencode_primary,
             appris: c.appris,
             ccds: c.ccds,
             protein: c.protein,
@@ -353,6 +353,23 @@ impl Runner {
     /// cache's.
     fn assembly_name(&self) -> Option<String> {
         self.cache.assembly.clone()
+    }
+
+    /// The cache's transcript indexes, one lazy slot per chromosome, each
+    /// restricted to the run's [`TranscriptSet`] as it loads, before the index
+    /// is built over it.
+    fn transcript_indexes(
+        &self,
+        upstream_distance: u64,
+        downstream_distance: u64,
+    ) -> anyhow::Result<LazyTranscriptIndexes> {
+        let indexes = LazyTranscriptIndexes::new(
+            &self.cache.dir,
+            self.config.transcript_index_impl,
+            upstream_distance,
+            downstream_distance,
+        )?;
+        Ok(indexes.with_transcript_set(TranscriptSet::from_config(&self.config)))
     }
 
     /// Execute the full VEP pipeline.
@@ -477,9 +494,7 @@ impl Runner {
             cache_dir,
             index_impl.name()
         );
-        let transcripts = Arc::new(LazyTranscriptIndexes::new(
-            cache_dir,
-            index_impl,
+        let transcripts = Arc::new(self.transcript_indexes(
             effects_config.upstream_distance,
             effects_config.downstream_distance,
         )?);
@@ -1936,6 +1951,81 @@ mod tests {
         let mut argv = vec!["--json_cache", cache.path().to_str().unwrap()];
         argv.extend_from_slice(flags);
         Runner::new(config_from(&argv)).unwrap()
+    }
+
+    /// A one-shard chromosome 21 cache holding three transcripts: one in the
+    /// GENCODE basic set alone, one in both sets, one in neither.
+    fn write_gencode_cache(tag: &str) -> tempfile::TempDir {
+        let dir = write_json_cache(tag, &[]);
+        let chr_dir = dir.path().join("transcripts").join("21");
+        std::fs::create_dir_all(&chr_dir).unwrap();
+        let transcript = |id: &str, attributes: &str| {
+            format!(
+                r#"{{"stable_id":"{id}","gene_stable_id":"ENSG21","chr":"21","start":1000,"end":1999,"strand":1,"biotype":"lncRNA","source":"Ensembl","attributes":[{attributes}]}}"#
+            )
+        };
+        let basic =
+            r#"{"code":"gencode_basic","name":"GENCODE basic annotation","value":"GENCODE basic"}"#;
+        let primary = r#"{"code":"gencode_primary","name":"GENCODE primary annotation","value":"GENCODE primary"}"#;
+        std::fs::write(
+            chr_dir.join("0-1000000.json"),
+            format!(
+                "[{},{},{}]",
+                transcript("ENST_BASIC", basic),
+                transcript("ENST_BOTH", &format!("{basic},{primary}")),
+                transcript("ENST_NEITHER", "")
+            ),
+        )
+        .unwrap();
+        dir
+    }
+
+    /// The chromosome 21 transcripts a runner's indexes hold, sorted.
+    fn indexed_transcripts(runner: &Runner) -> Vec<String> {
+        let indexes = runner.transcript_indexes(5_000, 5_000).unwrap();
+        indexes.prewarm("21").unwrap();
+        let mut ids = Vec::new();
+        indexes
+            .get("21")
+            .unwrap()
+            .for_each_overlapping(1, 1_000_000, |tx| ids.push(tx.stable_id.to_string()));
+        ids.sort();
+        ids
+    }
+
+    /// `--gencode_basic` keeps the transcripts carrying a `gencode_basic`
+    /// attribute (AnnotationType/Transcript.pm:223-225), dropped as the
+    /// chromosome loads, so the index never holds the rest; without the flag
+    /// every transcript loads.
+    #[test]
+    fn gencode_basic_filters_transcript_set() {
+        let cache = write_gencode_cache("gencode_basic");
+        assert_eq!(
+            indexed_transcripts(&runner_over(&cache, &[])),
+            ["ENST_BASIC", "ENST_BOTH", "ENST_NEITHER"]
+        );
+        assert_eq!(
+            indexed_transcripts(&runner_over(&cache, &["--gencode_basic"])),
+            ["ENST_BASIC", "ENST_BOTH"]
+        );
+    }
+
+    /// `--gencode_primary` keeps the transcripts carrying a `gencode_primary`
+    /// attribute (AnnotationType/Transcript.pm:228-230); `--flag_gencode_primary`
+    /// restricts nothing and switches the `GENCODE_PRIMARY` column on.
+    #[test]
+    fn gencode_primary_filters_transcript_set() {
+        use vep_io::output::fields::flag_fields;
+        let cache = write_gencode_cache("gencode_primary");
+        let set = runner_over(&cache, &["--gencode_primary"]);
+        assert_eq!(indexed_transcripts(&set), ["ENST_BOTH"]);
+        assert!(!flag_fields(&set.field_options()).contains(&"GENCODE_PRIMARY"));
+        let flagged = runner_over(&cache, &["--flag_gencode_primary"]);
+        assert_eq!(
+            indexed_transcripts(&flagged),
+            ["ENST_BASIC", "ENST_BOTH", "ENST_NEITHER"]
+        );
+        assert!(flag_fields(&flagged.field_options()).contains(&"GENCODE_PRIMARY"));
     }
 
     /// OutputFactory.pm sets ENSP only under `--protein`, so `--protein_version`

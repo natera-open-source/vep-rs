@@ -661,9 +661,23 @@ pub struct Args {
     #[arg(help_heading = "Transcript Sets", long)]
     pub merged: bool,
 
-    /// Accepted for VEP compatibility; not implemented (the transcript set is the --json_cache contents)
+    /// Annotate against the GENCODE basic transcript set alone: a transcript without a
+    /// gencode_basic attribute is dropped as the cache loads, before the transcript index
+    /// is built
     #[arg(help_heading = "Transcript Sets", long = "gencode_basic")]
     pub gencode_basic: bool,
+
+    /// Annotate against the GENCODE primary transcript set alone: a transcript without a
+    /// gencode_primary attribute is dropped as the cache loads; the set exists for human
+    /// GRCh38 only, so --assembly naming another assembly is warned about
+    #[arg(help_heading = "Transcript Sets", long = "gencode_primary")]
+    pub gencode_primary: bool,
+
+    /// Add the GENCODE_PRIMARY column: 1 on a transcript of the GENCODE primary set, empty
+    /// otherwise; the set exists for human GRCh38 only, so --assembly naming another
+    /// assembly is warned about
+    #[arg(help_heading = "Transcript Sets", long = "flag_gencode_primary")]
+    pub flag_gencode_primary: bool,
 
     #[arg(help_heading = "Transcript Sets", long = "use_given_ref")]
     pub use_given_ref: bool,

@@ -189,7 +189,7 @@ mod tests {
     /// `plugin_data` and `loftee_ctx` present only when populated.
     #[test]
     fn consequence_json_carries_every_documented_key_and_nothing_else() {
-        const ALWAYS: [&str; 37] = [
+        const ALWAYS: [&str; 38] = [
             "transcript_id",
             "gene_id",
             "gene_symbol",
@@ -222,6 +222,7 @@ mod tests {
             "mane_plus_clinical",
             "appris",
             "ccds",
+            "gencode_primary",
             "swissprot",
             "trembl",
             "refseq",

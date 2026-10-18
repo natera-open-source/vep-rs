@@ -571,6 +571,10 @@ pub struct TranscriptConsequence {
     pub appris: Option<String>,
     /// CCDS ID.
     pub ccds: Option<String>,
+    /// The transcript carries a `gencode_primary` attribute: the
+    /// `GENCODE_PRIMARY` column under `--flag_gencode_primary`.
+    #[serde(default)]
+    pub gencode_primary: bool,
     /// UniProtKB/Swiss-Prot accession(s).
     pub swissprot: Option<String>,
     /// UniProtKB/TrEMBL accession(s).
@@ -670,6 +674,7 @@ impl Default for TranscriptConsequence {
             mane_plus_clinical: None,
             appris: None,
             ccds: None,
+            gencode_primary: false,
             swissprot: None,
             trembl: None,
             refseq: None,
@@ -724,6 +729,7 @@ impl TranscriptConsequence {
             mane_plus_clinical: transcript.mane_plus_clinical.clone(),
             appris: transcript.appris.clone(),
             ccds: transcript.ccds.clone(),
+            gencode_primary: transcript.gencode_primary,
             swissprot: transcript.swissprot.clone(),
             trembl: transcript.trembl.clone(),
             refseq: transcript.refseq.clone(),

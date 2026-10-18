@@ -15,7 +15,7 @@ use tracing::{debug, info};
 use crate::config::{CliError, Config};
 use crate::json_cache;
 use crate::transcript_index::{
-    LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl,
+    LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl, TranscriptSet,
 };
 use crate::variation_matcher;
 use crate::variation_source::{ReadFailure, VariationSource};
@@ -251,8 +251,12 @@ impl Annotator {
         )?;
         let builtin_plugins = Arc::new(builtin);
         let dylib_plugins = Arc::new(dylib);
-        let transcripts =
-            load_transcript_indexes(&cache.dir, &effects_config, config.transcript_index_impl)?;
+        let transcripts = load_transcript_indexes(
+            &cache.dir,
+            &effects_config,
+            config.transcript_index_impl,
+            TranscriptSet::from_config(config),
+        )?;
         let variation_source = crate::runner::open_variation_source(config, &cache.dir)?;
 
         Self::new(
@@ -564,7 +568,8 @@ pub(crate) fn hgvsg_options(config: &Config) -> Option<vep_effects::hgvsg::Hgvsg
     })
 }
 
-/// Load and index every chromosome up front.
+/// Load and index every chromosome up front, keeping the transcripts of
+/// `transcript_set` alone.
 ///
 /// The lazy path (`LazyTranscriptIndexes::new`) is right for one-shot file runs,
 /// which typically touch a fraction of the cache. This eager path is right for
@@ -575,9 +580,13 @@ pub fn load_transcript_indexes(
     json_cache_path: &str,
     effects_config: &vep_effects::EffectsConfig,
     index_impl: TranscriptIndexImpl,
+    transcript_set: TranscriptSet,
 ) -> anyhow::Result<Arc<LazyTranscriptIndexes>> {
     info!("Loading transcripts from JSON cache: {}", json_cache_path);
-    let raw = json_cache::load_all_transcripts(json_cache_path)?;
+    let mut raw = json_cache::load_all_transcripts(json_cache_path)?;
+    for transcripts in raw.values_mut() {
+        transcripts.retain(|transcript| transcript_set.accepts(transcript));
+    }
     info!("Building transcript index with impl={}", index_impl.name());
     Ok(Arc::new(LazyTranscriptIndexes::from_loaded(
         raw,
@@ -1253,6 +1262,57 @@ mod tests {
                 library[0]
             );
         }
+    }
+
+    /// The eager loader keeps the transcript set's members alone, the same
+    /// transcripts the lazy path keeps chromosome by chromosome
+    /// (AnnotationType/Transcript.pm:223-230): on the GENCODE corpus the primary
+    /// set holds fewer transcripts than the basic set, which holds fewer than
+    /// the cache.
+    #[test]
+    fn eager_indexes_keep_the_transcript_set_alone() {
+        const CHROMOSOMES: [&str; 2] = ["21", "22"];
+        let cache = format!(
+            "{}/../../tests/golden/116/GRCh38-gencode-basic/json_cache",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let effects = vep_effects::EffectsConfig {
+            upstream_distance: 5_000,
+            downstream_distance: 5_000,
+            ..Default::default()
+        };
+        let indexed = |indexes: &LazyTranscriptIndexes| {
+            CHROMOSOMES
+                .iter()
+                .map(|chr| indexes.get(chr).map_or(0, |index| index.len()))
+                .sum::<usize>()
+        };
+        let count = |set: TranscriptSet| {
+            let eager =
+                load_transcript_indexes(&cache, &effects, TranscriptIndexImpl::Bin, set).unwrap();
+            let lazy = LazyTranscriptIndexes::new(&cache, TranscriptIndexImpl::Bin, 5_000, 5_000)
+                .unwrap()
+                .with_transcript_set(set);
+            for chr in CHROMOSOMES {
+                lazy.prewarm(chr).unwrap();
+            }
+            let eager_count = indexed(&eager);
+            assert_eq!(eager_count, indexed(&lazy), "{set:?}");
+            eager_count
+        };
+        let every = count(TranscriptSet::default());
+        let basic = count(TranscriptSet {
+            gencode_basic: true,
+            gencode_primary: false,
+        });
+        let primary = count(TranscriptSet {
+            gencode_basic: false,
+            gencode_primary: true,
+        });
+        assert!(
+            primary > 0 && primary < basic && basic < every,
+            "{primary} {basic} {every}"
+        );
     }
 
     /// `from_config` resolves the cache as the `vep` binary does: a root in Ensembl

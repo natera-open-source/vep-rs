@@ -9,7 +9,7 @@
 //! removing non-picked consequences and flag-only modes that annotate the pick
 //! without discarding other transcripts.
 //!
-//! Perl citations name modules of ensembl-vep release/115 (`Bio/EnsEMBL/VEP/...`).
+//! Perl citations name modules of ensembl-vep release/116.2 (`Bio/EnsEMBL/VEP/...`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -73,69 +73,54 @@ pub fn apply_filters(variant: &mut InputVariant, config: &FilterConfig) {
     }
 }
 
-/// Encode an APPRIS attribute string as a numeric rank (lower = better).
+/// The APPRIS pick tier of an attribute value as the cache spells it
+/// (`principal1`, `alternative2`, `principalM`): lower is better, 100 when the
+/// value yields no grade (`OutputFactory.pm:757-767` at release/116.2).
 ///
-/// Mirrors Perl VEP `Bio::EnsEMBL::VEP::OutputFactory::pick_worst_VariationFeatureOverlapAllele`
-/// (release 115.2, OutputFactory.pm:756-765):
-/// - regex `/([A-Za-z]).+(\d+)/` extracts a leading letter + trailing digit
-/// - `principal{N}` → `N` (so `principal1` → 1, `principal2` → 2, …)
-/// - `alternative{N}` → `N + 10` (so `alternative1` → 11, `alternative2` → 12, …)
-/// - missing or unparseable → 100 (Perl's default for `appris` slot)
-///
-/// Storable-derived JSON caches typically store the raw attribute string
-/// (e.g. `"principal1"` / `"alternative2"`) so this regex-equivalent parser
-/// works directly on `transcript.appris` as plumbed into `TranscriptConsequence`.
+/// Perl matches `m/([A-Za-z]).+(\d+)/`: the first letter of the value, at
+/// least one further character, then a digit. With `.+` greedy, the digit
+/// captured is the last one in the value, alone, so `principal1` grades 1 and
+/// a two-digit tail would grade by its last digit; a value whose only digit
+/// sits right after the letter, such as `P1`, does not match. The grade gains
+/// 10 when the captured letter is a lowercase `a` (`substr($type, 0, 1) eq
+/// 'a'`), then is kept only when non-zero (`$info->{appris} = $grade if
+/// $grade`), so `alternative0` is 10 and `principal0` stays 100. `principalM`
+/// and `alternativeM` carry no digit and stay 100.
 fn appris_rank(appris: Option<&str>) -> u32 {
-    let Some(s) = appris else { return 100 };
-    // Mirrors Perl regex `/([A-Za-z]).+(\d+)/` (`OutputFactory.pm:758`): a
-    // leading ASCII letter, at least one char, then a digit run. Anything else
-    // scores 100 ("missing"), which rejects short forms like "P1".
-    let bytes = s.as_bytes();
-    let Some(letter_pos) = bytes.iter().position(|b| b.is_ascii_alphabetic()) else {
+    let Some(bytes) = appris.map(str::as_bytes) else {
         return 100;
     };
-    let mut digits_end = bytes.len();
-    while digits_end > 0 && !bytes[digits_end - 1].is_ascii_digit() {
-        digits_end -= 1;
-    }
-    let mut digits_start = digits_end;
-    while digits_start > 0 && bytes[digits_start - 1].is_ascii_digit() {
-        digits_start -= 1;
-    }
-    if digits_start == digits_end {
-        return 100;
-    }
-    // Perl `.+` requires ≥1 char between the letter and the digits.
-    if digits_start <= letter_pos + 1 {
-        return 100;
-    }
-    let Ok(grade_str) = std::str::from_utf8(&bytes[digits_start..digits_end]) else {
+    let Some(letter) = bytes.iter().position(|b| b.is_ascii_alphabetic()) else {
         return 100;
     };
-    let Ok(grade) = grade_str.parse::<u32>() else {
+    let Some(digit) = bytes
+        .iter()
+        .rposition(|b| b.is_ascii_digit())
+        .filter(|&digit| digit >= letter + 2)
+    else {
         return 100;
     };
+    let mut grade = u32::from(bytes[digit] - b'0');
+    if bytes[letter] == b'a' {
+        grade += 10;
+    }
     if grade == 0 {
-        // Perl: `$info->{appris} = $grade if $grade;` assigns only when truthy.
         return 100;
     }
-    let bump = if bytes[letter_pos].eq_ignore_ascii_case(&b'a') {
-        10
-    } else {
-        0
-    };
-    grade + bump
+    grade
 }
 
 /// Compute the pick score for a transcript consequence.
 /// Lower score = higher priority (gets picked).
 ///
 /// Mirrors Perl VEP's documented `pick_order`
-/// (`Bio/EnsEMBL/VEP/Config.pm:306` release 115.2):
+/// (`Bio/EnsEMBL/VEP/Config.pm:311`):
 ///   `mane_select, mane_plus_clinical, canonical, appris, tsl, biotype, ccds, rank, length`
 ///
 /// Encoding lifted directly from
-/// `Bio/EnsEMBL/VEP/OutputFactory.pm::pick_worst_VariationFeatureOverlapAllele`:
+/// `Bio/EnsEMBL/VEP/OutputFactory.pm::pick_worst_VariationFeatureOverlapAllele`
+/// (`:703-812`; the per-transcript values at `:736-767`), reading the attribute
+/// values as the cache spells them (slot 3 through [`appris_rank`]):
 ///
 /// | Slot | Field                | Encoding                                          | Default |
 /// |------|----------------------|---------------------------------------------------|---------|
@@ -143,7 +128,7 @@ fn appris_rank(appris: Option<&str>) -> u32 {
 /// | 1    | `mane_plus_clinical` | `0` if Some(_), else `1`                          | 1       |
 /// | 2    | `canonical`          | `0` if true, else `1`                             | 1       |
 /// | 3    | `appris`             | `principal{N}`→N, `alternative{N}`→N+10, else 100 | 100     |
-/// | 4    | `tsl`                | `tsl.unwrap_or(100)` (Perl: missing → 100)        | 100     |
+/// | 4    | `tsl`                | the `tsl(\d+)` digits, `100` when none or zero   | 100     |
 /// | 5    | `biotype`            | `0` if `protein_coding`, else `1`                 | 1       |
 /// | 6    | `ccds`               | `0` if Some(_) and not `"-"`, else `1`            | 1       |
 /// | 7    | `rank`               | min consequence rank across `consequences`        | n/a     |
@@ -153,22 +138,15 @@ fn appris_rank(appris: Option<&str>) -> u32 {
 /// plumbed onto `TranscriptConsequence`, so two transcripts tied on slots 0-7
 /// pick the first iterated where Perl's pick is length-deterministic.
 ///
-/// Slot 3 (APPRIS) note: Perl regex `m/([A-Za-z]).+(\d+)/` matches both
-/// `principal1` and `alternative1` as the same digit; the +10 offset for
-/// alternatives is applied via `$grade += 10 if substr($type, 0, 1) eq 'a'`.
-/// `principal1..9 → 1..9`, `alternative1..9 → 11..19`, missing → 100.
-///
-/// Slot 4 (TSL) note: Perl matches `m/tsl(\d+)/` so `tsl1` → 1, `tsl5` → 5.
-/// If the cache already parsed the value to an integer, use it as-is. Default 100.
+/// Slot 4 (TSL) note: Perl matches `m/tsl(\d+)/` and keeps the digits only
+/// when non-zero (`$info->{tsl} = $1 if $1`, `:752-753`); the loader applies
+/// the same rule, so `tsl1 (assigned to previous version 8)` is 1 and `tslNA`
+/// is none, here 100.
 ///
 /// Slot 8 (length) note: Perl computes `0 - length(translateable_seq)` for
 /// coding transcripts and `0 - length(transcript)` otherwise. The `i64`
 /// inversion lets a 2400-aa protein (`-2400`) win over an 800-aa protein
 /// (`-800`).
-///
-/// Source: `ensemblorg/ensembl-vep:release_115.2`,
-/// `Bio/EnsEMBL/VEP/OutputFactory.pm:702-770`. Pick order follows
-/// `Bio/EnsEMBL/VEP/Config.pm:306`.
 fn pick_score(tc: &TranscriptConsequence) -> (u32, u32, u32, u32, u32, u32, u32, u32, i64) {
     let mane_select_score = if tc.mane_select.is_some() { 0 } else { 1 };
     let mane_plus_clinical_score = if tc.mane_plus_clinical.is_some() {
@@ -178,8 +156,10 @@ fn pick_score(tc: &TranscriptConsequence) -> (u32, u32, u32, u32, u32, u32, u32,
     };
     let canonical_score = if tc.canonical { 0 } else { 1 };
     let appris_score = appris_rank(tc.appris.as_deref());
-    // Perl treats missing TSL as 100 (worst), not 0 (OutputFactory.pm:702-720).
-    let tsl_score: u32 = tc.tsl.map(u32::from).unwrap_or(100);
+    let tsl_score: u32 = match tc.tsl {
+        Some(digits) if digits > 0 => u32::from(digits),
+        _ => 100,
+    };
     let biotype_score = if tc.biotype.as_deref() == Some("protein_coding") {
         0
     } else {
@@ -763,6 +743,49 @@ mod tests {
         // "p_1" exercises the regex's `.+` (one or more chars between letter
         // and digit). Lowercase 'p' is principal; expected rank = 1.
         assert_eq!(appris_rank(Some("p_1")), 1);
+    }
+
+    /// The APPRIS tier follows `m/([A-Za-z]).+(\d+)/`, `$grade += 10` for a
+    /// lowercase `a` and `if $grade` (OutputFactory.pm:759-767 at
+    /// release/116.2), run on the cache's own spellings: `principalM` and
+    /// `alternativeM` carry no digit and keep the default 100; the digit
+    /// captured is the value's last, alone; the bump is case-sensitive; a zero
+    /// grade is kept only once bumped.
+    #[test]
+    fn appris_rank_principal_m_is_100() {
+        assert_eq!(appris_rank(Some("principalM")), 100);
+        assert_eq!(appris_rank(Some("alternativeM")), 100);
+        assert_eq!(appris_rank(Some("principal12")), 2);
+        assert_eq!(appris_rank(Some("Alternative3")), 3);
+        assert_eq!(appris_rank(Some("alternative0")), 10);
+        assert_eq!(appris_rank(Some("principal0")), 100);
+    }
+
+    /// The TSL tier reads the digits the loader took from the `TSL` attribute
+    /// with `m/tsl(\d+)/` and keeps only when non-zero (OutputFactory.pm:750-754
+    /// at release/116.2): `tsl1 (assigned to previous version 8)` loads as 1
+    /// and scores 1, `tslNA` loads as none and scores the default 100, as does
+    /// a zero.
+    #[test]
+    fn tsl_tier_reads_attribute_digits() {
+        let scored = |tsl: Option<u8>| {
+            pick_score(&make_tc_pick(
+                "ENST00000000001",
+                false,
+                "protein_coding",
+                smallvec![Consequence::MissenseVariant],
+                None,
+                None,
+                None,
+                tsl,
+                None,
+            ))
+            .4
+        };
+        assert_eq!(scored(Some(1)), 1);
+        assert_eq!(scored(Some(5)), 5);
+        assert_eq!(scored(None), 100);
+        assert_eq!(scored(Some(0)), 100);
     }
 
     #[test]
