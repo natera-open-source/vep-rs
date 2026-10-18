@@ -47,7 +47,8 @@ pub struct Args {
     #[arg(help_heading = "Input", long, value_name = "FILE")]
     pub config: Option<String>,
 
-    /// Input file path (use "STDIN" for standard input)
+    /// Input file path, or "STDIN" (in any case) for standard input, which needs --format.
+    /// A gzip or BGZF file is decompressed whatever its name; BCF is refused
     #[arg(
         help_heading = "Input",
         short = 'i',
@@ -56,11 +57,12 @@ pub struct Args {
     )]
     pub input_file: String,
 
-    /// Input data string (accepted for VEP compatibility; not implemented, input is read from --input_file)
-    #[arg(help_heading = "Input", long = "input_data")]
+    /// Input records as a string, read in place of --input_file; one record per line, the format detected as for a file
+    #[arg(help_heading = "Input", long = "input_data", visible_alias = "id")]
     pub input_data: Option<String>,
 
-    /// Input file format ("guess" = auto-detect)
+    /// Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record.
+    /// ID, SPDI and CAid input resolve through Ensembl's database and are refused; a region input needs --fasta
     #[arg(
         help_heading = "Input",
         long,
@@ -418,7 +420,8 @@ pub struct Args {
     )]
     pub fork: usize,
 
-    /// Number of BGZF decompression worker threads for .gz/.bgz VCF inputs.
+    /// Number of BGZF decompression worker threads for a BGZF-compressed input
+    /// (a plain gzip input is decompressed on one thread).
     /// Default 0 = auto: uses the number of available logical CPUs, capped
     /// at 10 (measured sweet-spot: throughput plateaus around 4-10 threads
     /// and is flat past that). User-supplied positive

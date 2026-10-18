@@ -330,6 +330,10 @@ pub const COMPONENTS: &[(&str, &str)] = &[
         "an unsupported flag, or a combination the option rules refuse",
     ),
     (
+        "input",
+        "the input: a file that does not exist, standard input without --format, a first data line of no known format, BCF input, or a format (ID, SPDI, CAid) Ensembl VEP resolves through its database and a region input without --fasta",
+    ),
+    (
         "output",
         "the output file or format, the warnings file or the skipped-variants file",
     ),
@@ -362,6 +366,15 @@ pub const COMPONENTS: &[(&str, &str)] = &[
 /// The error table's entry for a flag, when it has one.
 pub fn error_table_entry(flag: &str) -> Option<&'static ErrorTableEntry> {
     ERROR_TABLE.iter().find(|e| e.flag == flag)
+}
+
+/// The `--input_data` string the run reads in place of its input file: the
+/// flag's value when it is true in Perl (Runner.pm:818 reads it under `if`), so
+/// an empty string or `0` is no input data and the input file stands.
+pub fn input_data_for(args: &Args) -> Option<&str> {
+    args.input_data
+        .as_deref()
+        .filter(|data| !data.is_empty() && *data != "0")
 }
 
 /// Where a command line's warnings go: `--warning_file`, else
@@ -519,7 +532,7 @@ pub struct Config {
     /// and omits it from the JSON output (`docs/intended-divergences.md`).
     pub max_sv_size: Option<u64>,
     pub fork: usize,
-    /// BGZF decompression worker threads for gzipped VCF inputs (1 = single-threaded).
+    /// BGZF decompression worker threads for a BGZF input in any format (1 = single-threaded; a plain gzip input decompresses on one thread).
     pub decompression_threads: usize,
     pub distance: (u64, u64),
     /// Transcript-overlap index implementation (A/B benchmarking flag).
@@ -776,6 +789,7 @@ impl Config {
     /// from the arguments.
     fn resolve(args: Args, state: &FlagState, distance: (u64, u64)) -> Self {
         let on = |flag: &str| state.is_active(flag);
+        let input_data = input_data_for(&args).map(str::to_string);
         let output_format = state.scalar("output_format").unwrap_or("vep").to_string();
         // The VCF CSQ layout names SYMBOL, BIOTYPE, EXON and INTRON whatever the
         // flags, so a VCF output fills them by either route; Ensembl VEP's `vcf`
@@ -826,14 +840,21 @@ impl Config {
             tracing::warn!("{}", notice);
         }
 
+        // `uc($file) eq 'STDIN'` (Parser.pm:235): the literal in any case.
+        let input_file = if args.input_file.eq_ignore_ascii_case("STDIN") {
+            "STDIN".to_string()
+        } else {
+            args.input_file
+        };
+
         // `shift_hgvs` is a setting only as 0 or 1 (BaseRunner.pm:498), and 0 sets
         // `shift_3prime` to 0 whatever the command line said (Runner.pm:792-795).
         let shift_hgvs = args.shift_hgvs.as_deref() != Some("0");
         let shift_3prime = shift_hgvs && args.shift_3prime.as_deref() == Some("1");
 
         Config {
-            input_file: args.input_file,
-            input_data: args.input_data,
+            input_file,
+            input_data,
             format: state.scalar("format").unwrap_or("guess").to_string(),
             output_file,
             output_format,
@@ -2011,7 +2032,9 @@ mod tests {
         let names: std::collections::BTreeSet<&str> =
             COMPONENTS.iter().map(|(name, _)| *name).collect();
         assert_eq!(names.len(), COMPONENTS.len(), "{COMPONENTS:?}");
-        for component in ["cli", "output", "cache", "fasta", "filter", "config", "run"] {
+        for component in [
+            "cli", "input", "output", "cache", "fasta", "filter", "config", "run",
+        ] {
             assert!(names.contains(component), "{component}");
         }
     }

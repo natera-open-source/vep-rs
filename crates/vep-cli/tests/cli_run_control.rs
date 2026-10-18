@@ -10,7 +10,7 @@
 mod common;
 
 use std::collections::BTreeSet;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
@@ -70,6 +70,26 @@ fn corpus_args_with_input(input: &Path) -> Vec<String> {
     let input_flag = args.iter().position(|a| a == "-i").unwrap();
     args[input_flag + 1] = input.display().to_string();
     args
+}
+
+/// The GRCh37-hgvs corpus's reference FASTA decompressed into `dir` with its
+/// index beside it: an indexed FASTA a run can name, for a format that needs one.
+fn decompressed_fasta(dir: &Path) -> PathBuf {
+    let corpus =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh37-hgvs");
+    let compressed = std::fs::File::open(corpus.join("reference.fa.gz")).unwrap();
+    let mut data = Vec::new();
+    flate2::read::GzDecoder::new(compressed)
+        .read_to_end(&mut data)
+        .unwrap();
+    let target = dir.join("reference.fa");
+    std::fs::write(&target, data).unwrap();
+    std::fs::copy(
+        corpus.join("reference.fa.fai"),
+        dir.join("reference.fa.fai"),
+    )
+    .unwrap();
+    target
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -430,7 +450,7 @@ fn show_cache_info_prints_info_json_and_exits_0() {
     assert_eq!(refused.status.code(), Some(1));
     assert_eq!(
         text(&refused.stderr).trim_end(),
-        "ERROR: [run] File \"/no/such/input.vcf\" does not exist"
+        "ERROR: [input] File \"/no/such/input.vcf\" does not exist"
     );
     assert!(refused.stdout.is_empty());
     // Under the Ensembl layout the same flags that select a cache print its info.
@@ -703,10 +723,11 @@ fn dont_skip_keeps_an_absent_chromosome_record_as_intergenic() {
 /// Parser/Region.pm:167, Parser/HGVS.pm:151), so two records skipped for one
 /// reason are two warnings. The quoted line Ensembl VEP adds from its parser's
 /// `current_block` (BaseVEP.pm:846-851) is absent: these parsers expose no line
-/// text.
+/// text. The region run names a FASTA, which the format needs (Parser/Region.pm:115).
 #[test]
 fn non_vcf_skips_carry_the_record_number() {
     let dir = tempfile::tempdir().unwrap();
+    let fasta = decompressed_fasta(dir.path());
     for (format, records) in [
         (
             "ensembl",
@@ -733,12 +754,18 @@ fn non_vcf_skips_carry_the_record_number() {
         let input = dir.path().join(format!("in.{format}"));
         std::fs::write(&input, records).unwrap();
         let out = dir.path().join(format!("out.{format}"));
-        let output = vep()
-            .args(corpus_args_with_input(&input))
-            .args(["--format", format, "-o", out.to_str().unwrap(), "--quiet"])
-            .stdin(Stdio::null())
-            .output()
-            .unwrap();
+        let mut command = vep();
+        command.args(corpus_args_with_input(&input)).args([
+            "--format",
+            format,
+            "-o",
+            out.to_str().unwrap(),
+            "--quiet",
+        ]);
+        if format == "region" {
+            command.arg("--fasta").arg(&fasta);
+        }
+        let output = command.stdin(Stdio::null()).output().unwrap();
         assert_eq!(
             output.status.code(),
             Some(0),
@@ -855,7 +882,8 @@ fn skipped_line_writes_the_vep_warning_line_to_stderr_and_the_warnings_file() {
 /// The allele-string check reads the working string after the anchor chop and the
 /// minimisation (Parser.pm:554-556 runs on the post-processed feature): an indel
 /// whose shared leading base is not a nucleotide minimises to `X/-`, which carries
-/// a `-` and is annotated, while `X/Y` is skipped.
+/// a `-` and is annotated, while `X/Y` is skipped. The format is named: a first
+/// data line whose REF is `XX` is of no shape `check_format` knows.
 #[test]
 fn allele_string_check_reads_the_minimised_string() {
     let dir = tempfile::tempdir().unwrap();
@@ -870,7 +898,7 @@ fn allele_string_check_reads_the_minimised_string() {
     let out = dir.path().join("out.txt");
     let output = vep()
         .args(corpus_args_with_input(&input))
-        .args(["-o", out.to_str().unwrap(), "--quiet"])
+        .args(["-o", out.to_str().unwrap(), "--quiet", "--format", "vcf"])
         .stdin(Stdio::null())
         .output()
         .unwrap();
@@ -1022,7 +1050,8 @@ fn safe_skips_incompatible_check() {
 }
 
 /// `--verbose` prints the status lines of the run, the detected input format
-/// among them; without it the format is not reported.
+/// among them in Ensembl VEP's words (Parser.pm:147); without it the format is
+/// not reported.
 #[test]
 fn verbose_prints_the_detected_format() {
     let dir = tempfile::tempdir().unwrap();
@@ -1030,12 +1059,101 @@ fn verbose_prints_the_detected_format() {
     let verbose = run_control(&["-o", out.to_str().unwrap(), "--verbose"], dir.path());
     assert_eq!(verbose.status.code(), Some(0), "{}", text(&verbose.stderr));
     assert!(
-        text(&verbose.stderr).contains("detected input format: vcf"),
+        text(&verbose.stderr).contains("No input file format specified - detected vcf format"),
         "{}",
         text(&verbose.stderr)
     );
     let plain = run_control(&["-o", out.to_str().unwrap()], dir.path());
-    assert!(!text(&plain.stderr).contains("detected input format"));
+    assert!(!text(&plain.stderr).contains("detected vcf format"));
+}
+
+/// `--buffer_size` (Config.pm:118, default 5000 at :300) sets how many records
+/// are annotated per batch and changes nothing in the output: 1, 7 and the
+/// default write byte-identical rows for the run-control corpus. Ensembl VEP's
+/// buffer never spans two chromosomes (InputBuffer.pm:181-267); a vep-rs batch
+/// may, which is likewise invisible in the output.
+#[test]
+fn buffer_size_changes_no_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut outputs = Vec::new();
+    for size in ["1", "7", "5000"] {
+        let out = dir.path().join(format!("out-{size}.txt"));
+        let output = run_control(
+            &["-o", out.to_str().unwrap(), "--buffer_size", size],
+            dir.path(),
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{size}: {}",
+            text(&output.stderr)
+        );
+        let rows = data_lines(&std::fs::read_to_string(&out).unwrap())
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        assert!(rows.len() > 30, "{size}: the run annotates");
+        outputs.push(rows);
+    }
+    assert_eq!(
+        outputs[0], outputs[2],
+        "--buffer_size 1 against the default"
+    );
+    assert_eq!(
+        outputs[1], outputs[2],
+        "--buffer_size 7 against the default"
+    );
+}
+
+/// `--decompression_threads` sets the BGZF block reader's worker count and
+/// changes nothing in the output: a BGZF copy of the run-control input annotates
+/// to the same rows with one worker, four, and the auto count, and to the
+/// uncompressed file's rows.
+#[test]
+fn decompression_threads_changes_no_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let plain = dir.path().join("plain.txt");
+    let output = run_control(&["-o", plain.to_str().unwrap()], dir.path());
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let reference = std::fs::read_to_string(&plain).unwrap();
+    let reference = data_lines(&reference);
+
+    let mut writer = noodles::bgzf::io::Writer::new(Vec::new());
+    writer
+        .write_all(&std::fs::read(run_control_dir().join("variants.vcf")).unwrap())
+        .unwrap();
+    let bgzf = dir.path().join("variants.vcf.gz");
+    std::fs::write(&bgzf, writer.finish().unwrap()).unwrap();
+    for threads in ["1", "4", "0"] {
+        let out = dir.path().join(format!("out-{threads}.txt"));
+        let mut args = args_for(&run_control_dir());
+        let input_flag = args.iter().position(|a| a == "-i").unwrap();
+        args[input_flag + 1] = bgzf.display().to_string();
+        let output = vep()
+            .args(&args)
+            .args([
+                "-o",
+                out.to_str().unwrap(),
+                "--decompression_threads",
+                threads,
+            ])
+            .current_dir(dir.path())
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{threads}: {}",
+            text(&output.stderr)
+        );
+        let rows = std::fs::read_to_string(&out).unwrap();
+        assert_eq!(
+            data_lines(&rows),
+            reference,
+            "--decompression_threads {threads}"
+        );
+    }
 }
 
 /// The line `--var_synonyms` without `--check_existing` prints (Runner.pm:117-120).
@@ -1159,7 +1277,7 @@ fn var_synonyms_notice_precedes_a_failed_fasta_or_input_open() {
             absent_input_args,
             vec!["--var_synonyms"],
             format!(
-                "ERROR: [run] Failed to open input file '{}'",
+                "ERROR: [input] File \"{}\" does not exist",
                 missing_input.display()
             ),
         ),
@@ -1566,7 +1684,7 @@ fn hgvs_without_fasta_is_fatal() {
     assert_eq!(refused.status.code(), Some(1));
     assert!(
         text(&refused.stderr).starts_with(&format!(
-            "ERROR: [run] Failed to open input file '{}'",
+            "ERROR: [input] File \"{}\" does not exist",
             absent_input.display()
         )),
         "{}",

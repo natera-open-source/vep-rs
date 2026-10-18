@@ -498,7 +498,7 @@ fn short_flags_unchanged() {
         .unwrap();
     assert_eq!(output.status.code(), Some(1), "{}", text(&output.stderr));
     assert!(
-        text(&output.stderr).contains("Failed to open input file '-cache'"),
+        text(&output.stderr).contains("ERROR: [input] File \"-cache\" does not exist"),
         "{}",
         text(&output.stderr)
     );

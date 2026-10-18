@@ -17,4 +17,8 @@ pub enum IoError {
     /// An unimplemented format.
     #[error("format not implemented: {0}")]
     NotImplemented(String),
+
+    /// Input refused by design, with the reason as the whole message.
+    #[error("{0}")]
+    Unsupported(String),
 }

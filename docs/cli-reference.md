@@ -23,9 +23,9 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--config` | String | -- | Configuration file, one flag per line as `<name> <value>` without the dashes (`format vcf`, `offline 1`); a flag the command line also gives keeps the command line's value |
-| `--input_file`, `-i` | String | `STDIN` | Input file path (use "STDIN" for standard input) |
-| `--input_data` | String | -- | Input data string (accepted for VEP compatibility; not implemented, input is read from --input_file) |
-| `--format` | `ensembl`, `vcf`, `hgvs`, `id`, `spdi`, `region`, `guess` | `guess` | Input file format ("guess" = auto-detect) |
+| `--input_file`, `-i` | String | `STDIN` | Input file path, or "STDIN" (in any case) for standard input, which needs --format. A gzip or BGZF file is decompressed whatever its name; BCF is refused |
+| `--input_data`, `--id` | String | -- | Input records as a string, read in place of --input_file; one record per line, the format detected as for a file |
+| `--format` | `ensembl`, `vcf`, `hgvs`, `id`, `spdi`, `region`, `guess` | `guess` | Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record. ID, SPDI and CAid input resolve through Ensembl's database and are refused; a region input needs --fasta |
 | `--gp` | bool | false | Refused with an error: --gp is not supported: it reads 1000 Genomes pilot coordinates from INFO/GP, which no current VCF carries |
 | `--ambiguous_hgvs` | bool | false | Refused with an error: --ambiguous_hgvs is not supported: it resolves an HGVSp input to every matching variant through the Ensembl database; HGVS input is genomic (g.) only |
 | `--phased` | bool | false | Accepted without effect: Ensembl VEP marks the genotypes as phased and nothing reads the mark |
@@ -108,7 +108,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--buffer_size` | usize | `5000` | Number of variants to process per batch |
 | `--max_sv_size` | i64 | `10000000` | A structural variant spanning more than this many bases is oversize; -1 lifts the limit, as in Ensembl VEP 116. A <CNV:TR> record whose repeat sequence is longer than this stays symbolic rather than reading a direction of change (under -1 every one does), as in Ensembl VEP 116. Ensembl VEP 116 drops an oversize record before annotation and writes nothing for it in any format; vep-rs annotates it: rows in the default, tab and parquet outputs, its VCF line without consequences, no JSON object (docs/output-formats.md and docs/intended-divergences.md describe the divergence) |
 | `--fork`, `--threads` | usize | `0` | Number of parallel annotation worker threads (Ensembl VEP forks processes; vep-rs runs threads and is parallel by default). Default 0 = auto: uses the number of available logical CPUs, capped at 32 (wall time stops improving past that and rises on wider hosts). Set to 1 to force single-threaded annotation, or any positive value to pin the worker count; user-supplied values are not capped |
-| `--decompression_threads` | usize | `0` | Number of BGZF decompression worker threads for .gz/.bgz VCF inputs. Default 0 = auto: uses the number of available logical CPUs, capped at 10 (measured sweet-spot: throughput plateaus around 4-10 threads and is flat past that). User-supplied positive values are not capped: pass any integer to pin the worker count, e.g. `--decompression_threads=1` for single-threaded |
+| `--decompression_threads` | usize | `0` | Number of BGZF decompression worker threads for a BGZF-compressed input (a plain gzip input is decompressed on one thread). Default 0 = auto: uses the number of available logical CPUs, capped at 10 (measured sweet-spot: throughput plateaus around 4-10 threads and is flat past that). User-supplied positive values are not capped: pass any integer to pin the worker count, e.g. `--decompression_threads=1` for single-threaded |
 | `--transcript_index_impl` (hidden) | `bin`, `coitrees`, `sorted` | `bin` | Transcript overlap index implementation (hidden, for A/B benchmarking). Options: bin (UCSC binning, default), coitrees (implicit interval tree), sorted (sorted array + suffix_max_end). All three must produce identical overlap sets; any difference between implementations indicates a bug |
 | `--distance` | String | `5000` | Upstream and downstream distance in bp: one integer, or the pair "up,down" (a downstream part written 0 reads as the upstream value) |
 
@@ -426,6 +426,7 @@ Getopt::Long's defaults apply to the command line: a long option is read in any 
 - `0`: the run completed; also `--help`, `--version` and an empty command line.
 - `1`: a refusal or a failed run. One line `ERROR: [<component>] <message>` is written to standard error, where `<message>` is Ensembl VEP's text where it has one, without its own `ERROR: ` prefix. The components:
   - `cli`: an unsupported flag, or a combination the option rules refuse
+  - `input`: the input: a file that does not exist, standard input without --format, a first data line of no known format, BCF input, or a format (ID, SPDI, CAid) Ensembl VEP resolves through its database and a region input without --fasta
   - `output`: the output file or format, the warnings file or the skipped-variants file
   - `plugin`: under --safe, a plugin that cannot be loaded or a plugins directory that does not exist
   - `cache`: the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read

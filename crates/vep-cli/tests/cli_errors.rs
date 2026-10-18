@@ -3,8 +3,12 @@
 
 //! Flags vep-rs declares and refuses, through the `vep` binary: each exits 1
 //! with exactly one line `ERROR: [cli] <message>` on standard error, before any
-//! input is read. The messages are the error table's (`vep_cli::config`).
+//! input is read. The messages are the error table's (`vep_cli::config`). The
+//! inputs refused by content (BCF, a CAid line) exit 1 the same way under the
+//! `input` component, before any record is annotated.
 
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use vep_cli::config::{error_table_entry, Treatment, ERROR_TABLE};
@@ -182,6 +186,129 @@ fn lrg_is_refused() {
         &["--lrg"],
         "--lrg is not supported: LRG mapping needs the Ensembl core database (Ensembl VEP: Cannot map to LRGs in offline mode)",
     );
+}
+
+/// Runs the binary on `input` against the release-116 cache, so a refusal of the
+/// input's content comes after the cache resolves and before any row is written.
+fn input_refusal(input: &Path, out: &Path) -> (Option<i32>, String) {
+    let cache = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-release116/json_cache");
+    let output = Command::new(env!("CARGO_BIN_EXE_vep"))
+        .arg("-i")
+        .arg(input)
+        .arg("-o")
+        .arg(out)
+        .arg("--json_cache")
+        .arg(cache)
+        .args(["--assembly", "GRCh38", "--quiet"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    (
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+fn assert_input_refused(input: &Path, out: &Path, message: &str) {
+    let (code, stderr) = input_refusal(input, out);
+    assert_eq!(code, Some(1), "{}: {stderr}", input.display());
+    assert_eq!(
+        stderr,
+        format!("ERROR: [input] {message}\n"),
+        "{}",
+        input.display()
+    );
+    assert!(!out.exists(), "{}: no output is written", input.display());
+}
+
+/// `--format` takes Ensembl VEP's `%VALID{format}` values (Config.pm:597) as a
+/// clap enumeration: any other value is a usage error, exit 2, listing them, as
+/// Ensembl VEP lists them after `is not a valid value for --format`
+/// (Config.pm:949-955).
+#[test]
+fn format_invalid_value_lists_valid_values() {
+    let (code, stderr) = refusal(&["--format", "foo"]);
+    assert_eq!(code, Some(2), "{stderr}");
+    assert!(
+        stderr.contains("error: invalid value 'foo' for '--format <FORMAT>'"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("[possible values: ensembl, vcf, hgvs, id, spdi, region, guess]"),
+        "{stderr}"
+    );
+}
+
+/// A first data line of the CAid shape (`^CA\d+$`, ensembl-variation
+/// Utils/VEP.pm:412-415) detects the `caid` format, which resolves through the
+/// ClinGen allele registry; Ensembl VEP refuses it offline (Parser/CAID.pm:103)
+/// and vep-rs refuses it by name. `--format caid` is not a value the flag
+/// takes, as `%VALID{format}` (Config.pm:597) lacks it.
+#[test]
+fn format_caid_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("caid.txt");
+    std::fs::write(&input, "CA9985736\n").unwrap();
+    assert_input_refused(
+        &input,
+        &dir.path().join("out.txt"),
+        "CAid input (CA...) resolves through the ClinGen allele registry, a remote service; vep-rs does not resolve it",
+    );
+    let (code, stderr) = refusal(&["--format", "caid"]);
+    assert_eq!(code, Some(2), "{stderr}");
+    assert!(
+        stderr.contains("error: invalid value 'caid' for '--format <FORMAT>'"),
+        "{stderr}"
+    );
+}
+
+/// An HGVS input with an r. notation is refused by name when the line is read,
+/// however many lines follow it, and no record is annotated: Ensembl VEP's own
+/// parser dies on the type (ensembl-variation DBSQL/VariationFeatureAdaptor.pm:1989,
+/// `HGVS type r not recognised`), and HGVS input itself is refused offline
+/// (Parser/HGVS.pm:104).
+#[test]
+fn hgvs_rna_input_is_refused() {
+    let expected_stderr =
+        "ERROR: [input] HGVS r. notation is not supported (Ensembl VEP refuses it too: HGVS type r not recognised)\n";
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("rna.hgvs");
+    std::fs::write(&input, "ENST00000366667:r.803C>T\n21:g.30165851A>G\n").unwrap();
+    let out = dir.path().join("out.txt");
+    let (code, stderr) = input_refusal(&input, &out);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert_eq!(stderr, expected_stderr);
+    let written = std::fs::read_to_string(&out).unwrap_or_default();
+    let rows = written.lines().filter(|l| !l.starts_with('#')).count();
+    assert_eq!(rows, 0, "no record is annotated: {written:?}");
+
+    // The refusal ends a run whose earlier records were read.
+    let later = dir.path().join("rna_later.hgvs");
+    std::fs::write(&later, "21:g.30165851A>G\nENST00000366667:r.803C>T\n").unwrap();
+    let (code, stderr) = input_refusal(&later, &dir.path().join("later.txt"));
+    assert_eq!(code, Some(1), "{stderr}");
+    assert_eq!(stderr, expected_stderr);
+}
+
+/// A BCF stream (the magic `BCF` and version 2, raw or inside its BGZF blocks)
+/// is refused on its first bytes, before any line is read: Ensembl VEP's
+/// `%FORMAT_MAP` (Parser.pm:88-96) names text formats only.
+#[test]
+fn bcf_input_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let message =
+        "BCF input is not supported: write a VCF with bcftools view -Oz and pass it with -i";
+    let bcf = b"BCF\x02\x02\x10\x00\x00\x00##fileformat=VCFv4.2\n";
+    let raw = dir.path().join("raw.bcf");
+    std::fs::write(&raw, bcf).unwrap();
+    assert_input_refused(&raw, &dir.path().join("raw.txt"), message);
+
+    let mut writer = noodles::bgzf::io::Writer::new(Vec::new());
+    writer.write_all(bcf).unwrap();
+    let compressed = dir.path().join("records.vcf");
+    std::fs::write(&compressed, writer.finish().unwrap()).unwrap();
+    assert_input_refused(&compressed, &dir.path().join("compressed.txt"), message);
 }
 
 /// An option-rule violation is refused under the same contract with Ensembl

@@ -14,13 +14,13 @@
 //! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`).
 
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Cursor, Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{bail, Context};
+use anyhow::Context;
 use noodles::bgzf;
 use rayon::prelude::*;
 use rayon::ThreadPool;
@@ -44,6 +44,7 @@ use vep_builtins::BuiltinRegistry;
 use vep_core::consequence::{Consequence, Impact};
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
+use vep_io::input::detect::{self, InputFormat};
 use vep_io::output::fields::{ClinSigAllele, ExtraFieldsPlan, FieldOptions, PluginHeader};
 use vep_io::output::json::JsonOutputFormatter;
 use vep_io::output::parquet::ParquetOutputFormatter;
@@ -59,6 +60,204 @@ const INPUT_BUFFER_BYTES: usize = 1 << 20;
 /// Write buffer over the output file: annotated rows come out in batches of
 /// several megabytes, so the default 8 KiB would flush hundreds of times per batch.
 const OUTPUT_BUFFER_BYTES: usize = 4 << 20;
+
+/// The first bytes of a BCF2 stream: the magic `BCF` and the major version.
+const BCF_MAGIC: &[u8] = b"BCF\x02";
+
+/// The gzip magic and compression method (deflate), the first three header bytes.
+const GZIP_MAGIC: [u8; 3] = [0x1f, 0x8b, 0x08];
+
+/// The gzip header's FEXTRA flag: an extra field follows the fixed header.
+const GZIP_FEXTRA: u8 = 0x04;
+
+/// The fixed gzip header (magic, method, flags, mtime, xfl, os: ten bytes) and
+/// the two-byte length of the extra field that follows it when FEXTRA is set.
+const GZIP_HEADER_BYTES: usize = 12;
+
+/// The input as [`Runner::open_input`] leaves it: the source the reader stage
+/// consumes and whether the input is a BGZF file, whose `.tbi` index may name its
+/// contigs in file order.
+struct OpenedInput {
+    source: pipeline::InputSource,
+    bgzf_file: bool,
+}
+
+/// Refuses a named input file that is not there with Ensembl VEP's text
+/// (Parser.pm:239); `--input_data` and `STDIN` name no file to check.
+fn check_input_file_exists(config: &Config) -> Result<(), CliError> {
+    if config.input_data.is_some() || config.input_file == "STDIN" {
+        return Ok(());
+    }
+    if Path::new(&config.input_file).exists() {
+        return Ok(());
+    }
+    Err(CliError::new(
+        "input",
+        format!("File \"{}\" does not exist", config.input_file),
+    ))
+}
+
+/// Reads up to `n` bytes from `reader` and returns them together with a reader
+/// over the whole input, the bytes read put back in front.
+fn peek_bytes<R: BufRead + Send + 'static>(
+    mut reader: R,
+    n: usize,
+) -> io::Result<(Vec<u8>, Box<dyn BufRead + Send>)> {
+    let mut prefix = vec![0u8; n];
+    let mut filled = 0;
+    while filled < n {
+        let read = reader.read(&mut prefix[filled..])?;
+        if read == 0 {
+            break;
+        }
+        filled += read;
+    }
+    prefix.truncate(filled);
+    Ok((prefix.clone(), Box::new(Cursor::new(prefix).chain(reader))))
+}
+
+/// Whether a gzip extra field carries the BGZF subfield (RFC 1952 extra
+/// subfields: `SI1 SI2 LEN(le16) data`; BGZF's is `BC` with a two-byte length,
+/// SAM specification section 4.1).
+fn has_bgzf_subfield(mut extra: &[u8]) -> bool {
+    while extra.len() >= 4 {
+        let len = u16::from_le_bytes([extra[2], extra[3]]) as usize;
+        if extra[0] == b'B' && extra[1] == b'C' && len == 2 {
+            return true;
+        }
+        extra = extra.get(4 + len..).unwrap_or(&[]);
+    }
+    false
+}
+
+/// The multithreaded BGZF reader with its end of input checked. `MultithreadedReader`
+/// reports a frame its reader thread cannot complete (a file cut inside a block)
+/// as the end of the stream and holds the error for `finish`, so a plain read
+/// takes a truncated file for a short one. The first empty fill finishes the
+/// reader and returns that error; every later fill is empty, because the
+/// finished reader panics when read again.
+struct CheckedBgzfReader<R: Read + Send + 'static> {
+    inner: Option<bgzf::io::MultithreadedReader<R>>,
+}
+
+impl<R: Read + Send + 'static> Read for CheckedBgzfReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let mut available = self.fill_buf()?;
+        let read = available.read(buf)?;
+        self.consume(read);
+        Ok(read)
+    }
+}
+
+impl<R: Read + Send + 'static> BufRead for CheckedBgzfReader<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        let empty = match self.inner.as_mut() {
+            Some(inner) => inner.fill_buf()?.is_empty(),
+            None => return Ok(&[]),
+        };
+        if empty {
+            if let Some(mut finished) = self.inner.take() {
+                finished.finish()?;
+            }
+            return Ok(&[]);
+        }
+        match self.inner.as_mut() {
+            Some(inner) => inner.fill_buf(),
+            None => Ok(&[]),
+        }
+    }
+
+    fn consume(&mut self, amt: usize) {
+        if let Some(inner) = self.inner.as_mut() {
+            inner.consume(amt);
+        }
+    }
+}
+
+/// A gunzip over every gzip member of a stream, as `gzip -dc` reads one, the
+/// program Ensembl VEP decompresses its input through (Utils.pm:436-443): the
+/// stream ends at the first bytes after a complete member that are not another
+/// member's magic, so a trailer after the last member is ignored rather than
+/// read as a malformed member.
+struct MemberwiseGunzip {
+    decoder: Option<flate2::bufread::GzDecoder<Box<dyn BufRead + Send>>>,
+}
+
+impl Read for MemberwiseGunzip {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        loop {
+            let Some(decoder) = self.decoder.as_mut() else {
+                return Ok(0);
+            };
+            let read = decoder.read(buf)?;
+            if read > 0 || buf.is_empty() {
+                return Ok(read);
+            }
+            // A read of zero is the end of the member, its trailer consumed.
+            let mut inner = self.decoder.take().expect("decoder present").into_inner();
+            if another_member_follows(&mut inner)? {
+                self.decoder = Some(flate2::bufread::GzDecoder::new(inner));
+            }
+        }
+    }
+}
+
+/// Whether the next two bytes of `reader` are the gzip magic, looked at in its
+/// buffer so the bytes stay unread; a buffer boundary that leaves only the first
+/// of them buffered is bridged by reading both and replaying them.
+fn another_member_follows(reader: &mut Box<dyn BufRead + Send>) -> io::Result<bool> {
+    let buffered = reader.fill_buf()?;
+    if buffered.len() >= 2 {
+        return Ok(buffered[..2] == GZIP_MAGIC[..2]);
+    }
+    if buffered.is_empty() {
+        return Ok(false);
+    }
+    let (magic, replayed) = peek_bytes(std::mem::replace(reader, Box::new(io::empty())), 2)?;
+    *reader = replayed;
+    Ok(magic == GZIP_MAGIC[..2])
+}
+
+/// The input's text: `reader` itself when it does not open with the gzip magic,
+/// else its decompressed stream, through the BGZF block reader when the first
+/// member carries the BGZF subfield (`MultithreadedReader` with `threads` workers
+/// above one: block decompression is the largest single wall-time lever on
+/// compressed input), else through a gunzip over every member. The flag says
+/// which: a BGZF file may have a tabix index beside it. Both bgzf readers are
+/// `BufRead` over their decompressed block; the gunzip is buffered here.
+fn decompressed<R: BufRead + Send + 'static>(
+    reader: R,
+    threads: usize,
+) -> io::Result<(Box<dyn BufRead + Send>, bool)> {
+    let (header, mut reader) = peek_bytes(reader, GZIP_HEADER_BYTES)?;
+    if !header.starts_with(&GZIP_MAGIC) {
+        return Ok((reader, false));
+    }
+    let mut bgzf = false;
+    if header.len() == GZIP_HEADER_BYTES && header[3] & GZIP_FEXTRA != 0 {
+        let extra_len = u16::from_le_bytes([header[10], header[11]]) as usize;
+        let (header, replayed) = peek_bytes(reader, GZIP_HEADER_BYTES + extra_len)?;
+        reader = replayed;
+        bgzf = has_bgzf_subfield(header.get(GZIP_HEADER_BYTES..).unwrap_or(&[]));
+    }
+    if !bgzf {
+        let gunzip = MemberwiseGunzip {
+            decoder: Some(flate2::bufread::GzDecoder::new(reader)),
+        };
+        let buffered = BufReader::with_capacity(INPUT_BUFFER_BYTES, gunzip);
+        return Ok((Box::new(buffered), false));
+    }
+    let block_reader: Box<dyn BufRead + Send> = match std::num::NonZeroUsize::new(threads) {
+        // The block reader starts its worker threads at its first read, not
+        // when it is built, so they carry the Linux thread name of whichever
+        // thread reads first.
+        Some(n) if n.get() > 1 => Box::new(CheckedBgzfReader {
+            inner: Some(bgzf::io::MultithreadedReader::with_worker_count(n, reader)),
+        }),
+        _ => Box::new(bgzf::io::Reader::new(reader)),
+    };
+    Ok((block_reader, true))
+}
 
 /// Atomic counters for pipeline statistics.
 pub(crate) struct PipelineStats {
@@ -181,9 +380,17 @@ pub(crate) fn fasta_setup_checks(
 
 /// Renders the invocation as VEP prints it in `## VEP command-line:`
 /// (Config.pm `full_command`): `vep` then every option sorted by name, a value
-/// after its flag, and each path collapsed to `[PATH]/<basename>`. Short flags
-/// print under their long names.
+/// after its flag, and each path collapsed to `[PATH]/<basename>`. Each option
+/// prints under the key Ensembl VEP stores it as (Config.pm:734 walks the
+/// resolved keys), so a short, an alias, a prefix or another case of a name
+/// prints as the long name: Getopt::Long's reading of `@VEP_PARAMS` first, so
+/// `full_cache_dir` keeps Ensembl VEP's own key, then the parser's names for a
+/// flag only vep-rs has; `--input_data` is left out under every spelling (:732).
 fn vep_command_line(args: impl Iterator<Item = String>) -> String {
+    let mut command = crate::args::Args::command_with_error_table();
+    command.build();
+    let declared = crate::argv::parser_options(&command);
+    let perl = crate::argv::perl_options();
     let args: Vec<String> = args.collect();
     let mut options: Vec<(String, Option<String>)> = Vec::new();
     let mut i = 0;
@@ -197,14 +404,13 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
             i += 1;
             continue;
         }
-        let long = match name.as_str() {
-            "-i" => "input_file",
-            "-o" => "output_file",
-            "-a" => "assembly",
-            "--force" => "force_overwrite",
-            other => other.trim_start_matches('-'),
-        }
-        .to_string();
+        let written = name.trim_start_matches('-');
+        let resolved = crate::argv::resolve(written, &perl)
+            .or_else(|| crate::argv::resolve(written, &declared));
+        let long = match resolved {
+            Some(option) => option.canonical.clone(),
+            None => written.to_string(),
+        };
         let value = match inline_value {
             Some(v) => Some(v),
             None if i + 1 < args.len() && is_option_value(&args[i + 1]) => {
@@ -213,7 +419,9 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
             }
             None => None,
         };
-        options.push((long, value.map(|v| collapse_paths(&v))));
+        if long != "input_data" {
+            options.push((long, value.map(|v| collapse_paths(&v))));
+        }
         i += 1;
     }
     options.sort_by(|a, b| a.0.cmp(&b.0));
@@ -339,17 +547,6 @@ impl Runner {
         }
         out.flush()?;
         Ok(())
-    }
-
-    /// Opens the input file, or returns `None` for standard input; the parser
-    /// opens it in Ensembl VEP's init() (`Runner.pm:136`, `Parser.pm:239`).
-    fn open_input(&self) -> anyhow::Result<Option<File>> {
-        if self.config.input_file == "STDIN" {
-            return Ok(None);
-        }
-        let file = File::open(&self.config.input_file)
-            .with_context(|| format!("Failed to open input file '{}'", self.config.input_file))?;
-        Ok(Some(file))
     }
 
     /// Prints each notice to stderr unless `--quiet`, as `status_msg` does
@@ -497,13 +694,7 @@ impl Runner {
             // The input parser opens before the info prints (BaseRunner.pm:406),
             // and a named file that is not there is refused with Ensembl VEP's
             // text (Parser.pm:239); the input is otherwise not read.
-            if self.config.input_file != "STDIN" && !Path::new(&self.config.input_file).exists() {
-                return Err(CliError::new(
-                    "run",
-                    format!("File \"{}\" does not exist", self.config.input_file),
-                )
-                .into());
-            }
+            check_input_file_exists(&self.config)?;
             return self.write_cache_info(&mut io::stdout().lock());
         }
 
@@ -513,8 +704,12 @@ impl Runner {
         // output opens after.
         self.print_notices(&self.config.notices);
         let reference_fasta = open_fasta(&self.config, &self.cache)?;
-        let input_file = self.open_input()?;
-        let checks = fasta_setup_checks(&self.config, reference_fasta.is_some())?;
+        let fasta_found = reference_fasta.is_some();
+        let OpenedInput {
+            source: input,
+            bgzf_file,
+        } = self.open_input(fasta_found)?;
+        let checks = fasta_setup_checks(&self.config, fasta_found)?;
         self.print_notices(&checks.notices);
 
         // BaseRunner.pm:203-204, with Ensembl VEP's text.
@@ -536,7 +731,11 @@ impl Runner {
             sink.reserve_skipped_variants_file(path, self.config.force_overwrite)?;
         }
 
-        info!("input: {}", self.config.input_file);
+        if self.config.input_data.is_some() {
+            info!("input: the --input_data string");
+        } else {
+            info!("input: {}", self.config.input_file);
+        }
         info!("output: {}", self.config.output_file);
         info!("output format: {}", self.config.output_format);
 
@@ -601,32 +800,6 @@ impl Runner {
 
         let variation_source = open_variation_source(&self.config, cache_dir)?;
 
-        // `MultithreadedReader` when decompression_threads > 1: block
-        // decompression is the largest single wall-time lever on .vcf.gz input.
-        // Both bgzf readers are already `BufRead` over their decompressed block,
-        // so they take no `BufReader` of their own; the buffer sits under them,
-        // where the block reader would otherwise issue two small reads per
-        // compressed block.
-        let reader: Box<dyn BufRead + Send> = match input_file {
-            None => Box::new(BufReader::with_capacity(INPUT_BUFFER_BYTES, io::stdin())),
-            Some(f) => {
-                let f = BufReader::with_capacity(INPUT_BUFFER_BYTES, f);
-                if self.config.input_file.ends_with(".gz") {
-                    match std::num::NonZeroUsize::new(self.config.decompression_threads) {
-                        // The block reader starts its worker threads at the first read,
-                        // on the pipeline's reader thread, whose Linux thread name they
-                        // then carry.
-                        Some(n) if n.get() > 1 => {
-                            Box::new(bgzf::io::MultithreadedReader::with_worker_count(n, f))
-                        }
-                        _ => Box::new(bgzf::io::Reader::new(f)),
-                    }
-                } else {
-                    Box::new(f)
-                }
-            }
-        };
-
         // Parquet: a TSV intermediate at `<output_file>.tsv.tmp`, converted by a
         // DuckDB subprocess after the write loop.
         let parquet_intermediate_path: Option<String> =
@@ -668,9 +841,6 @@ impl Runner {
             writer = compressed;
             compressed_output = Some(handle);
         }
-
-        let format = self.detect_format(&self.config.format);
-        debug!("detected input format: {}", format);
 
         let filter_config = FilterConfig {
             row_filters: RowFilters {
@@ -803,35 +973,20 @@ impl Runner {
             synonyms: Arc::clone(&self.cache.synonyms),
         };
 
-        // VCF is read line by line because header passthrough needs the lines;
-        // every other format goes through its parser.
-        let input = match format {
-            "vcf" => pipeline::InputSource::Vcf(reader),
-            _ => {
-                let parser: Box<dyn vep_io::InputParser> = match format {
-                    "ensembl" => Box::new(vep_io::input::ensembl::EnsemblParser::new(reader)),
-                    "region" => Box::new(vep_io::input::region::RegionParser::new(reader)),
-                    "hgvs" => Box::new(vep_io::input::hgvs::HgvsParser::new(reader)),
-                    other => {
-                        bail!(
-                            "Input format '{}' is not supported. Supported formats: vcf, ensembl, region, hgvs.",
-                            other
-                        );
-                    }
-                };
-                if output_format == "vcf" && !self.config.no_headers {
-                    // A non-VCF input has no header lines of its own.
-                    if let Some(ref fmt) = vcf_formatter {
-                        for h in fmt.header_lines(&[]) {
-                            writeln!(writer, "{}", h)?;
-                        }
-                    }
+        // A non-VCF input has no header lines of its own, so the VCF output's
+        // header block is written here rather than at the input's #CHROM line.
+        if matches!(input, pipeline::InputSource::Parser(_))
+            && output_format == "vcf"
+            && !self.config.no_headers
+        {
+            if let Some(ref fmt) = vcf_formatter {
+                for h in fmt.header_lines(&[]) {
+                    writeln!(writer, "{}", h)?;
                 }
-                pipeline::InputSource::Parser(parser)
             }
-        };
+        }
 
-        let prewarm_order = if self.config.input_file.ends_with(".gz") {
+        let prewarm_order = if bgzf_file {
             pipeline::tabix_contig_order(
                 &self.config.input_file,
                 &self.cache.synonyms,
@@ -974,19 +1129,99 @@ impl Runner {
         )
     }
 
-    /// Detect the input format from the `--format` flag or the input file's extension.
-    fn detect_format<'a>(&self, format: &'a str) -> &'a str {
-        if format != "guess" {
-            return format;
+    /// Opens the input as Ensembl VEP's parser does (Parser.pm:122-160, 227-249):
+    /// `--input_data` as an in-memory file (Runner.pm:817-821), `STDIN` as standard
+    /// input, else the named file, which must exist; a gzip stream is decompressed
+    /// whatever the file is called, BGZF through the block reader (with
+    /// `--decompression_threads` workers) and any other member layout through a
+    /// streaming gunzip (`get_compressed_filehandle`, Utils.pm:429-453); BCF is
+    /// refused before any line is read. The format is `--format`'s, or detected
+    /// from the first data line, which standard input cannot give (Parser.pm:377).
+    /// A format Ensembl VEP resolves through its database (ID, SPDI, CAid) is
+    /// refused as it refuses them offline, and a region input needs the run's
+    /// FASTA (Parser/Region.pm:115). Opened where Ensembl VEP's init() builds
+    /// the parser (Runner.pm:136), before `post_setup_checks`.
+    fn open_input(&self, fasta_found: bool) -> anyhow::Result<OpenedInput> {
+        let config = &self.config;
+        let input_error = |message: &str| anyhow::Error::from(CliError::new("input", message));
+        let read_failed = || format!("Failed to read input '{}'", config.input_file);
+        let named_format = InputFormat::from_flag(&config.format);
+        check_input_file_exists(config)?;
+
+        let (mut reader, bgzf_file): (Box<dyn BufRead + Send>, bool) = match &config.input_data {
+            Some(data) => (Box::new(Cursor::new(data.clone().into_bytes())), false),
+            None if config.input_file == "STDIN" => {
+                if named_format.is_none() {
+                    return Err(input_error(
+                        "Cannot detect format from STDIN - specify format with --format [format]",
+                    ));
+                }
+                let stdin = BufReader::with_capacity(INPUT_BUFFER_BYTES, io::stdin());
+                let (reader, _) =
+                    decompressed(stdin, config.decompression_threads).with_context(read_failed)?;
+                (reader, false)
+            }
+            None => {
+                let file = File::open(&config.input_file).with_context(|| {
+                    format!("Failed to open input file '{}'", config.input_file)
+                })?;
+                let file = BufReader::with_capacity(INPUT_BUFFER_BYTES, file);
+                decompressed(file, config.decompression_threads).with_context(read_failed)?
+            }
+        };
+
+        let (head, replayed) = peek_bytes(reader, BCF_MAGIC.len()).with_context(read_failed)?;
+        reader = replayed;
+        if head == BCF_MAGIC {
+            return Err(input_error(
+                "BCF input is not supported: write a VCF with bcftools view -Oz and pass it with -i",
+            ));
         }
-        let input = &self.config.input_file;
-        if input.ends_with(".vcf") || input.ends_with(".vcf.gz") || input.ends_with(".bcf") {
-            return "vcf";
-        }
-        if input.ends_with(".hgvs") {
-            return "hgvs";
-        }
-        "vcf"
+
+        let format = match named_format {
+            Some(format) => format,
+            None => {
+                let detection = detect::detect_format(&mut reader).with_context(read_failed)?;
+                reader = Box::new(Cursor::new(detection.consumed).chain(reader));
+                let Some(format) = detection.format else {
+                    return Err(input_error("Can't detect input format"));
+                };
+                debug!("No input file format specified - detected {format} format");
+                format
+            }
+        };
+
+        // VCF is read line by line because header passthrough needs the lines;
+        // every other format goes through its parser.
+        let source = match format {
+            InputFormat::Vcf => pipeline::InputSource::Vcf(reader),
+            InputFormat::Ensembl => pipeline::InputSource::Parser(Box::new(
+                vep_io::input::ensembl::EnsemblParser::new(reader),
+            )),
+            InputFormat::Hgvs => pipeline::InputSource::Parser(Box::new(
+                vep_io::input::hgvs::HgvsParser::new(reader),
+            )),
+            InputFormat::Region => {
+                if !fasta_found {
+                    return Err(input_error(
+                        "Cannot use Region format in offline mode without a FASTA file",
+                    ));
+                }
+                pipeline::InputSource::Parser(Box::new(
+                    vep_io::input::region::RegionParser::new(reader),
+                ))
+            }
+            InputFormat::Id => return Err(input_error("Cannot use ID format in offline mode")),
+            InputFormat::Spdi => {
+                return Err(input_error("Cannot use SPDI format in offline mode"))
+            }
+            InputFormat::Caid => {
+                return Err(input_error(
+                    "CAid input (CA...) resolves through the ClinGen allele registry, a remote service; vep-rs does not resolve it",
+                ))
+            }
+        };
+        Ok(OpenedInput { source, bgzf_file })
     }
 
     /// Write the default-format header lines VEP writes, then the column line.
@@ -1991,6 +2226,74 @@ mod tests {
         assert_eq!(parquet_row_group_rows(0), 2_048);
     }
 
+    /// A BGZF stream cut inside a block delivers the blocks before the cut and
+    /// then a read error, under the single-threaded reader and the multithreaded
+    /// one alike; a cut read as the end of the stream would annotate a truncated
+    /// file as a complete one.
+    #[test]
+    fn truncated_bgzf_is_a_read_error_under_every_thread_count() {
+        let mut writer = bgzf::io::Writer::new(Vec::new());
+        writer.write_all(b"first block\n").unwrap();
+        writer.flush().unwrap();
+        writer.write_all(b"second block\n").unwrap();
+        let mut bytes = writer.finish().unwrap();
+        // Drops the 28-byte empty end-of-file block (SAM specification section
+        // 4.1.2) and the last byte of the second block.
+        bytes.truncate(bytes.len() - 29);
+        for threads in [1, 4] {
+            let (mut reader, bgzf) = decompressed(Cursor::new(bytes.clone()), threads).unwrap();
+            assert!(bgzf, "{threads} threads");
+            let mut text = Vec::new();
+            let error = reader.read_to_end(&mut text).unwrap_err();
+            assert_eq!(
+                error.kind(),
+                io::ErrorKind::UnexpectedEof,
+                "{threads} threads: {error}"
+            );
+            assert_eq!(text, b"first block\n", "{threads} threads");
+        }
+    }
+
+    /// A plain gzip input is read member by member as `gzip -dc` reads it: two
+    /// members decode in sequence, and bytes after the last member that are not
+    /// another member's magic (a text trailer, a run of zeros) end the stream
+    /// instead of failing it; a stream cut inside a member still fails.
+    #[test]
+    fn plain_gzip_reads_every_member_and_ignores_a_trailer() {
+        fn member(text: &str) -> Vec<u8> {
+            let mut encoder =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            encoder.write_all(text.as_bytes()).unwrap();
+            encoder.finish().unwrap()
+        }
+        let two_members = [member("first member\n"), member("second member\n")].concat();
+        for trailer in [&b""[..], b"GARBAGE TRAILER\n", &[0u8; 512]] {
+            let bytes = [two_members.as_slice(), trailer].concat();
+            let (mut reader, bgzf) = decompressed(Cursor::new(bytes), 1).unwrap();
+            assert!(!bgzf);
+            let mut text = String::new();
+            reader.read_to_string(&mut text).unwrap();
+            assert_eq!(text, "first member\nsecond member\n", "{trailer:?}");
+        }
+        // Twelve bytes short: the second member loses its eight-byte trailer and
+        // the end of its deflate data.
+        let cut = &two_members[..two_members.len() - 12];
+        let (mut reader, _) = decompressed(Cursor::new(cut.to_vec()), 1).unwrap();
+        let mut text = String::new();
+        assert!(reader.read_to_string(&mut text).is_err());
+        assert!(text.starts_with("first member\n"), "{text:?}");
+        // Every read-buffer size, so a member boundary falls at every offset of
+        // a buffer fill, the one that leaves a single byte of the next magic
+        // buffered included.
+        for capacity in 1..=two_members.len() {
+            let buffered = BufReader::with_capacity(capacity, Cursor::new(two_members.clone()));
+            let (mut reader, _) = decompressed(buffered, 1).unwrap();
+            let mut text = String::new();
+            reader.read_to_string(&mut text).unwrap();
+            assert_eq!(text, "first member\nsecond member\n", "capacity {capacity}");
+        }
+    }
+
     #[test]
     fn command_line_prints_like_vep() {
         let args = [
@@ -2008,6 +2311,42 @@ mod tests {
             vep_command_line(args.iter().map(|s| s.to_string())),
             "vep --force_overwrite --input_file [PATH]/sample.vcf --json_cache [PATH]/grch37 \
              --offline --output_file out.txt --species homo_sapiens"
+        );
+    }
+
+    /// `full_command` reads the resolved keys (Config.pm:732-734), so every
+    /// spelling the pre-pass accepts for `input_data` leaves the string out, a
+    /// prefix or another case of a name prints as the long name, Ensembl VEP's
+    /// own key wins where vep-rs declares the option under another name
+    /// (`full_cache_dir`, which names `json_cache` here), a prefix only
+    /// Ensembl VEP resolves (`ve`, which `verbose` and `version` share here)
+    /// prints as Ensembl VEP prints it, and a name the parser lacks prints as
+    /// written.
+    #[test]
+    fn command_line_prints_each_option_under_its_resolved_name() {
+        for spelling in ["--input_data", "--id", "-id", "--input_d", "--INPUT_DATA"] {
+            let args = [spelling, "21 100 . A G\n21 200 . C T", "--offl", "--Force"];
+            assert_eq!(
+                vep_command_line(args.iter().map(|s| s.to_string())),
+                "vep --force_overwrite --offline",
+                "{spelling}"
+            );
+        }
+        let args = [
+            "--full_cache_dir",
+            "/caches/grch38",
+            "--json_cache",
+            "/caches/grch37",
+            "--ve",
+            "--no_such_flag",
+            "value",
+            "--buffer_s",
+            "7",
+        ];
+        assert_eq!(
+            vep_command_line(args.iter().map(|s| s.to_string())),
+            "vep --buffer_size 7 --full_cache_dir [PATH]/grch38 --json_cache [PATH]/grch37 \
+             --no_such_flag value --verbose"
         );
     }
 

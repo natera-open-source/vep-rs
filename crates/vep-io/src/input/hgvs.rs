@@ -44,11 +44,16 @@ impl<R: BufRead> HgvsParser<R> {
             return Ok(None);
         }
 
-        if line.contains(":c.")
-            || line.contains(":p.")
-            || line.contains(":n.")
-            || line.contains(":r.")
-        {
+        // Ensembl VEP's HGVS parser knows the types c, g, m, n and p; an r.
+        // notation dies with `HGVS type r not recognised` (ensembl-variation
+        // DBSQL/VariationFeatureAdaptor.pm:1989).
+        if line.contains(":r.") {
+            return Err(IoError::Unsupported(
+                "HGVS r. notation is not supported (Ensembl VEP refuses it too: HGVS type r not recognised)"
+                    .into(),
+            ));
+        }
+        if line.contains(":c.") || line.contains(":p.") || line.contains(":n.") {
             return Err(IoError::NotImplemented(
                 "transcript HGVS is not supported".into(),
             ));
@@ -282,6 +287,23 @@ mod tests {
             let err = parser.next_variant().unwrap().unwrap_err().to_string();
             assert!(err.contains(expected), "{err}");
         }
+    }
+
+    /// An r. notation fails its line with the refusal variant and a message
+    /// naming the type, as Ensembl VEP's `HGVS type r not recognised` does
+    /// (DBSQL/VariationFeatureAdaptor.pm:1989); the parser itself reads on, so
+    /// the caller decides the run's fate.
+    #[test]
+    fn rna_hgvs_is_refused_naming_r() {
+        let data = "ENST00000366667:r.803C>T\n21:g.25585733A>G\n";
+        let mut parser = HgvsParser::new(Cursor::new(data.as_bytes()));
+        let err = parser.next_variant().unwrap().unwrap_err();
+        assert!(matches!(err, IoError::Unsupported(_)), "{err:?}");
+        assert_eq!(
+            err.to_string(),
+            "HGVS r. notation is not supported (Ensembl VEP refuses it too: HGVS type r not recognised)"
+        );
+        assert!(parser.next_variant().unwrap().is_ok());
     }
 
     #[test]

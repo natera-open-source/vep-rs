@@ -53,7 +53,7 @@ fn success_is_0() {
 }
 
 /// A run that fails after parsing exits 1 with one contract line: here the
-/// input file cannot be opened.
+/// input file does not exist (Parser.pm:239).
 #[test]
 fn run_error_is_1() {
     let dir = tempfile::tempdir().unwrap();
@@ -65,8 +65,8 @@ fn run_error_is_1() {
     let err = stderr(&output);
     let lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
     assert_eq!(lines.len(), 1, "{err}");
-    assert!(
-        lines[0].starts_with("ERROR: [run] Failed to open input file '/nonexistent/input.vcf'"),
+    assert_eq!(
+        lines[0], "ERROR: [input] File \"/nonexistent/input.vcf\" does not exist",
         "{err}"
     );
     assert!(!out.exists(), "no output is written for a failed run");

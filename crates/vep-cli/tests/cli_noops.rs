@@ -149,6 +149,59 @@ fn offline_changes_no_output() {
     assert_no_effect(&["--offline", "--cache"]);
 }
 
+/// The VCF `##fileformat` version is not checked: a header naming VCFv3.3, or
+/// VCFv4.5, annotates to the rows a VCFv4.2 header does. Ensembl VEP's
+/// ensembl-io parser dies on a major version other than its own
+/// (BaseVCF4.pm:116-131); vep-rs reads the header lines as text.
+#[test]
+fn vcf_fileformat_major_version_is_not_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let reference = write_input(dir.path(), RECORDS);
+    let (expected, _) = annotate(dir.path(), &reference, "default", &[]);
+    let expected: Vec<&str> = expected.lines().filter(|l| !l.starts_with('#')).collect();
+    assert!(expected.len() >= 5);
+    for version in ["VCFv3.3", "VCFv4.5"] {
+        let path = dir.path().join(format!("{version}.vcf"));
+        std::fs::write(
+            &path,
+            format!(
+                "##fileformat={version}\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n{RECORDS}"
+            ),
+        )
+        .unwrap();
+        let (text, stderr) = annotate(dir.path(), &path, "default", &[]);
+        let rows: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
+        assert_eq!(rows, expected, "{version}");
+        assert!(!stderr.contains("WARNING"), "{version}: {stderr}");
+    }
+}
+
+/// An IUPAC ambiguity code in an allele is annotated, not skipped: Ensembl
+/// VEP's allele check (Parser.pm:556-560) is unanchored, so `A/R` passes on its
+/// `A` and only a string with no `ACGTN-` run at all is skipped; vep-rs applies
+/// the same test. The record gets rows under the allele `R` and no warning.
+#[test]
+fn iupac_allele_is_annotated_not_skipped() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write_input(
+        dir.path(),
+        "21\t30348411\tiupac_r\tA\tR\t.\t.\t.\n21\t30348411\tno_run\tX\tY\t.\t.\t.\n",
+    );
+    let (text, stderr) = annotate(dir.path(), &input, "default", &[]);
+    let rows: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
+    assert!(!rows.is_empty(), "the IUPAC record annotates:\n{text}");
+    for row in &rows {
+        let columns: Vec<&str> = row.split('\t').collect();
+        assert_eq!(columns[0], "iupac_r", "{row}");
+        assert_eq!(columns[2], "R", "{row}");
+    }
+    assert!(!stderr.contains("iupac_r"), "{stderr}");
+    assert!(
+        stderr.contains("Invalid allele string X/Y or possible parsing error"),
+        "{stderr}"
+    );
+}
+
 /// An unsorted input is annotated in input order with no order check: Ensembl
 /// VEP's `InputBuffer.pm:189-258` aborts after 100 records more than 100 bp
 /// behind their predecessor, vep-rs never does, with or without

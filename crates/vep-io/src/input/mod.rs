@@ -1,8 +1,10 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Input parsers for variant formats.
+//! Input parsers for variant formats, and the detection of a format from the
+//! first data line ([`detect`]).
 
+pub mod detect;
 pub mod ensembl;
 pub mod hgvs;
 pub mod region;

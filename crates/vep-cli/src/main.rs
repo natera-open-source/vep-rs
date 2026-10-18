@@ -91,7 +91,7 @@ fn run(argv: Vec<OsString>) -> i32 {
     warnings::global().configure(
         warnings::target_for(&config::warning_file_for(&parsed.args)),
         quiet,
-        parsed.args.input_data.is_some(),
+        config::input_data_for(&parsed.args).is_some(),
     );
 
     // Cache shards parse on rayon's global pool, whose threads would otherwise

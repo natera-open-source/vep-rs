@@ -1,0 +1,47 @@
+## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
+## Output produced at 2026-10-08 04:08:47
+## Using cache in [PATH]/116_GRCh38
+## Using API version 116, DB version ?
+## ensembl version 116.0d85231
+## ensembl-compara version 116.dc107cc
+## ensembl-funcgen version 116.90049ea
+## ensembl-io version 116.6afb5dc
+## ensembl-variation version 116.db7394a
+## 1000genomes version phase3
+## COSMIC version 102
+## ClinVar version 202509
+## HGMD-PUBLIC version 20204
+## assembly version GRCh38.p14
+## dbSNP version 156
+## gencode version GENCODE 50
+## genebuild version GENCODE50
+## gnomADe version v4.1
+## gnomADg version v4.1
+## polyphen version 2.2.3
+## regbuild version 1.0
+## sift version 6.2.1
+## Column descriptions:
+## Uploaded_variation : Identifier of uploaded variant
+## Location : Location of variant in standard coordinate format (chr:start or chr:start-end)
+## Allele : The variant allele used to calculate the consequence
+## Gene : Stable ID of affected gene
+## Feature : Stable ID of feature
+## Feature_type : Type of feature - Transcript, RegulatoryFeature or MotifFeature
+## Consequence : Consequence type
+## cDNA_position : Relative position of base pair in cDNA sequence
+## CDS_position : Relative position of base pair in coding sequence
+## Protein_position : Relative position of amino acid in protein
+## Amino_acids : Reference and variant amino acids
+## Codons : Reference and variant codon sequence
+## Existing_variation : Identifier(s) of co-located known variants
+## Extra column keys:
+## IMPACT : Subjective impact classification of consequence type
+## DISTANCE : Shortest distance from variant to transcript
+## STRAND : Strand of the feature (1/-1)
+## FLAGS : Transcript quality flags
+## ENSP : Protein identifer
+## VEP command-line: vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache /cache --dir_plugins /plugins --force_overwrite --fork --format vcf --input_file [PATH]/variants.vcf --mask_header_cache_path --max_sv_size -1 --no_stats --offline --output_file [PATH]/default.txt --protein --protein_version --quiet
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+stop_del2_lost_rev	21:30348410-30348411	-	ENSG00000186980	ENST00000334160	Transcript	stop_lost	196-197	196-197	66	*/X	TAg/g	-	IMPACT=HIGH;STRAND=-1;ENSP=ENSP00000346536.3
+stop_ins5_newstop_fwd	21:30430756-30430757	CCTAA	ENSG00000186971	ENST00000334068	Transcript	stop_lost,inframe_insertion	537-538	481-482	161	*/S*X	taa/tCCTAAaa	-	IMPACT=HIGH;STRAND=1;ENSP=ENSP00000334834.2
+stop_ins5_newstop_fwd	21:30430756-30430757	CCTAA	ENSG00000240432	ENST00000390690	Transcript	upstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=4830;STRAND=-1;ENSP=ENSP00000375109.2

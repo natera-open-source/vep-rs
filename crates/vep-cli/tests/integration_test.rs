@@ -307,7 +307,7 @@ fn test_missing_input_file() {
     );
     let stderr = String::from_utf8_lossy(&result.stderr);
     assert!(
-        stderr.contains("ERROR: [run] Failed to open input file '/nonexistent/file.vcf'"),
+        stderr.contains("ERROR: [input] File \"/nonexistent/file.vcf\" does not exist"),
         "{stderr}"
     );
 }
@@ -469,7 +469,8 @@ fn transcript_filter_reads_the_gene_version() {
 
 /// Annotates one VCF record against the release 116 golden corpus's own pruned
 /// cache, which unlike `VEP_RS_TEST_CACHE` is always present, and returns the
-/// output file's bytes.
+/// output file's bytes. The format is named: a record whose POS is spelled `3e7`
+/// or `30425949.0` is of no shape `check_format` detects.
 fn annotate_record_bytes(record: &str, flags: &[&str]) -> Vec<u8> {
     let dir = tempfile::tempdir().unwrap();
     let input = dir.path().join("in.vcf");
@@ -480,7 +481,7 @@ fn annotate_record_bytes(record: &str, flags: &[&str]) -> Vec<u8> {
     .unwrap();
     let output = dir.path().join("out");
     let result = vep_binary()
-        .args(["-i", input.to_str().unwrap()])
+        .args(["-i", input.to_str().unwrap(), "--format", "vcf"])
         .args(["-o", output.to_str().unwrap()])
         .args(["--json_cache", &corpus_cache()])
         .args(["--offline", "--assembly", "GRCh38"])
@@ -1409,8 +1410,10 @@ fn test_dont_skip_fails_on_invalid_vcf_line() {
                21\t100\t.\tA\n";
     std::fs::write(&input_path, vcf).unwrap();
 
+    // The format is named: a four-column line is of no shape `check_format`
+    // detects.
     let result = vep_binary()
-        .args(["-i", input_path.to_str().unwrap()])
+        .args(["-i", input_path.to_str().unwrap(), "--format", "vcf"])
         .args(["-o", output_path.to_str().unwrap()])
         .args(["--json_cache", &corpus_cache()])
         .args(["--dont_skip", "--quiet"])

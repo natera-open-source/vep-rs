@@ -40,11 +40,85 @@
   "show_cache_info",
   "no_fasta",
   "engine_identity_lines",
+  "format",
+  "input_file",
+  "input_data",
+  "buffer_size",
   "config",
   "config-file",
   "vep-environment-variables",
   "option-prefix-abbreviation",
   "single-dash-long-options"
+ ],
+ "flag_sets": [
+  {
+   "name": "bgzf-input",
+   "input": "variants.vcf.gz",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "gzip-bgzip-input",
+    "input_file",
+    "decompression_threads"
+   ]
+  },
+  {
+   "name": "bgzf-input-one-thread",
+   "input": "variants.vcf.gz",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--decompression_threads",
+    "1"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "gzip-bgzip-input",
+    "decompression_threads"
+   ]
+  },
+  {
+   "name": "gzip-input",
+   "input": "variants.plain-gzip.vcf.gz",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "gzip-bgzip-input"
+   ]
+  },
+  {
+   "name": "stdin-vcf",
+   "stdin": true,
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--format",
+    "vcf"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "stdin-when-input-file-absent",
+    "format"
+   ]
+  }
  ],
  "suites": {
   "GRCh38-run-control": {
@@ -657,7 +731,7 @@
    ],
    "expect": {
     "exit": 1,
-    "stderr_contains": "ERROR: [run] Failed to open input file '"
+    "stderr_contains": "ERROR: [input] File \""
    }
   },
   {
@@ -1156,6 +1230,213 @@
    "expect": {
     "exit": 1,
     "stderr_contains": "/json_cache does not exist"
+   }
+  },
+  {
+   "name": "format-guess-ensembl",
+   "argv": [
+    "-i",
+    "{corpus}/variants.ensembl.txt",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "ensembl_input.txt",
+    "warnings_file": "ensembl_input_warnings.txt"
+   }
+  },
+  {
+   "name": "stdin-without-format",
+   "argv": [
+    "-i",
+    "STDIN",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "stdin": "variants.vcf",
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [input] Cannot detect format from STDIN - specify format with --format [format]"
+   }
+  },
+  {
+   "name": "stdin-lowercase",
+   "argv": [
+    "-i",
+    "stdin",
+    "--format",
+    "vcf",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "stdin": "variants.vcf",
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "input-data-vcf",
+   "argv": [
+    "--input_data",
+    "21\t30348409\tstop_del2_lost_rev\tCTA\tC\t.\t.\t.\n21\t30430756\tstop_ins5_newstop_fwd\tT\tTCCTAA\t.\t.\t.",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "input_data.txt"
+   }
+  },
+  {
+   "name": "input-data-ensembl",
+   "argv": [
+    "--id",
+    "21 30348410 30348411 TA/- 1 stop_del2_lost_rev\n21 30430757 30430756 -/CCTAA 1 stop_ins5_newstop_fwd",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "input_data.txt"
+   }
+  },
+  {
+   "name": "buffer-size-1",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--buffer_size",
+    "1"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "buffer-size-7",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--buffer_size",
+    "7"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "undetectable-input",
+   "argv": [
+    "-i",
+    "{corpus}/LoFtool_scores.slice.txt",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [input] Can't detect input format"
    }
   },
   {

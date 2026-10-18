@@ -1,0 +1,2 @@
+WARNING: line 20 skipped (Z 1000 1000 A/G 1 unknown_chromosome): Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features
+WARNING: line 21 skipped (21 30165901 30165901 X/Y 1 invalid_alleles): Invalid allele string X/Y or possible parsing error

@@ -25,7 +25,9 @@
   "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
   "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
   "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
-  "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+  "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2",
+  "ensembl_input.txt": "a796a4ec5aa9ec87fb33716518cbea849bf0136c20795879d1d17fa6a23d2e7a",
+  "input_data.txt": "6b971006af0658377ee0469a344710a4a4fa04139f50f0e4e08d031856417688"
  },
  "variants_vcf_sha256": "e890fad35fd3e8922a840754ccc1cc93dea33d57a430fc4010c83bb3e9683b9f",
  "pruned_cache": {
@@ -39,6 +41,86 @@
    "22": 2
   }
  },
- "expected_outputs": "the GRCh38-release116 reference outputs: the same 39 annotated records against the same cache under the same flags, and the two appended records are skipped before annotation, so the four files are identical; default.txt_warnings.txt and skipped.txt carry the five records Ensembl VEP skips (the reference_warning of each record, recorded from its run) rendered as BaseVEP.pm:840-863 renders a warning (the input line collapsed to single spaces and cut to 50 characters) and BaseRunner.pm:364-380 the skipped-variants file (Line %-5s, the line to 40 characters, the reason), the header naming variants.vcf; the plugin_*_warnings.txt files are the same five lines plus the plugin-loading lines their run expects, paths masked as <path>",
- "plugin_data": "LoFtool_scores.slice.txt: the first 20 lines (the header and 19 genes) of LoFtool_scores.txt from the Ensembl VEP_plugins repository at release/116 (Apache License 2.0), line endings normalised; the plugin-loftool-column run expects the LoFtool_percentile column, not its values"
+ "expected_outputs": "the GRCh38-release116 reference outputs: the same 39 annotated records against the same cache under the same flags, and the two appended records are skipped before annotation, so the four files are identical; default.txt_warnings.txt and skipped.txt carry the five records Ensembl VEP skips (the reference_warning of each record, recorded from its run) rendered as BaseVEP.pm:840-863 renders a warning (the input line collapsed to single spaces and cut to 50 characters) and BaseRunner.pm:364-380 the skipped-variants file (Line %-5s, the line to 40 characters, the reason), the header naming variants.vcf; the plugin_*_warnings.txt files are the same five lines plus the plugin-loading lines their run expects, paths masked as <path>; ensembl_input.txt is default.txt's header and the 124 rows of its 19 records named in variants.ensembl.txt, which Ensembl VEP writes alike for the two shapes of one variant (Parser/VCF.pm derives the start, end and allele string the Ensembl line states, and the identifier column names the variant as the VCF ID does), and ensembl_input_warnings.txt the two skips it reports for that input at their record numbers; input_data.txt is default.txt's header and the 3 rows of the two records the input-data runs pass as a string",
+ "plugin_data": "LoFtool_scores.slice.txt: the first 20 lines (the header and 19 genes) of LoFtool_scores.txt from the Ensembl VEP_plugins repository at release/116 (Apache License 2.0), line endings normalised; the plugin-loftool-column run expects the LoFtool_percentile column, not its values",
+ "input_twins": {
+  "variants.vcf.gz": "variants.vcf as BGZF: one gzip member per block of at most 65280 bytes, each with the BC extra subfield, then the empty end-of-file block; the same 41 records, so the twin's expected outputs are the default run's",
+  "variants.plain-gzip.vcf.gz": "variants.vcf as one plain gzip member (gzip -9 -n), no extra field; the same 41 records, so the twin's expected outputs are the default run's",
+  "variants.ensembl.txt": "the 19 sequence-variant records of variants.vcf in Ensembl's format, tab-delimited (chromosome, start, end, allele string, strand 1, the VCF ID as the identifier; the VCF anchor base dropped, an insertion's start one past its end), followed by the chromosome Z record and the X/Y record; the breakend and symbolic structural records have no Ensembl-format shape and are left out",
+  "sha256": {
+   "variants.vcf.gz": "c49f6195c59386f48d4ca42dda6930f96cb8864f5c7dcda2d3a74252fd605671",
+   "variants.plain-gzip.vcf.gz": "5f1eb9d66138978558c4b8121816e1d2b84616130cd35c010d1719cdd5202822",
+   "variants.ensembl.txt": "9a088c8c486fb52d1b5f6b9da4411d35802c50be8c129bcb06724f8e47c5ac51"
+  }
+ },
+ "flag_sets": {
+  "bgzf-input": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf.gz -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf.gz",
+   "expected_outputs": "the default run's four files (expected/): the twin carries the 41 records of variants.vcf byte for byte, so Ensembl VEP's output for it is the output for variants.vcf",
+   "sha256": {
+    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
+    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
+    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
+    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+   }
+  },
+  "bgzf-input-one-thread": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf.gz -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 --decompression_threads 1 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf.gz",
+   "expected_outputs": "the default run's four files (expected/): the twin carries the 41 records of variants.vcf byte for byte, so Ensembl VEP's output for it is the output for variants.vcf",
+   "sha256": {
+    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
+    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
+    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
+    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+   }
+  },
+  "gzip-input": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.plain-gzip.vcf.gz -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.plain-gzip.vcf.gz",
+   "expected_outputs": "the default run's four files (expected/): the twin carries the 41 records of variants.vcf byte for byte, so Ensembl VEP's output for it is the output for variants.vcf",
+   "sha256": {
+    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
+    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
+    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
+    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+   }
+  },
+  "stdin-vcf": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i STDIN -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 --format vcf [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf on standard input",
+   "expected_outputs": "the default run's four files (expected/): the twin carries the 41 records of variants.vcf byte for byte, so Ensembl VEP's output for it is the output for variants.vcf",
+   "sha256": {
+    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
+    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
+    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
+    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
+   }
+  }
+ }
 }

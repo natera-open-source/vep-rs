@@ -789,6 +789,9 @@ fn read_parsed(
                 cfg.transcripts.prewarm(&variant.chr)?;
                 batch.variants.push(variant);
             }
+            Some(Err(vep_io::IoError::Unsupported(message))) => {
+                return Err(crate::config::CliError::new("input", message).into());
+            }
             Some(Err(e)) => {
                 record_count += 1;
                 if cfg.dont_skip {
