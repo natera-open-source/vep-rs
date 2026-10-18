@@ -7,6 +7,7 @@
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form",
  "input": "variants.vcf: 47 hand-placed chromosome 21 records, named in the ID column by their design: insertions and deletions inside homopolymer, dinucleotide and trinucleotide runs in coding exons, introns near splice sites, untranslated regions and intergenic space on both strands (the 3' shift moves each by the run's remainder), runs spanning an exon boundary and a transcript start, a 55-base homopolymer insertion before a 52-base run and a 2-base deletion at the start of a 53-base run (the whole-flank shift), deletions of 24 and 25 bases, substitutions in coding, intronic, flanking and intergenic positions, a 2-base substitution, a 2-to-3 delins and four multi-allelic records, two of them in a 53-base run where a record whose alleles all insert shifts and one that mixes a deletion with a shorter deletion does not; the reference base is the GRCh38 primary assembly's",
+ "chr_synonyms": "json_cache/chr_synonyms.txt: the six lines of the Ensembl GRCh38 cache's chr_synonyms.txt that link chromosome 21's names (21, chr21, NC_000021.9, CM000683.2) to one another, copied whole; scripts/golden/prune_json_cache.py keeps only the lines naming a kept chromosome literally (the three starting with 21), which would leave chr21 without its NC_000021.9 synonym, the hop --hgvsg_use_accession takes from an input named chr21 (--ga4gh_vrs takes it from the cache's name, 21, which the pruned lines keep)",
  "sha256": {
   "default.txt": "5f02f68c3817d5e2a39b63695b519b406e05c1e2f985ce67fd7bc57301000d95",
   "tab.txt": "1445509a65c5a8898efec444c948e92b86846a8895f6fc9da330658a3f1e1594",
@@ -59,6 +60,61 @@
     "tab.txt": "79688ce2b8444d28c938b8adec28820f60204dd54cb9ea99827969cff5d522a2",
     "vcf.vcf": "4f0e88f46b309d129ad9e61ef0ed441d4ebe44c045cffe8320b4f01670597a86",
     "json.jsonl": "2f2cb45de7dcb96b8b23116913436837cf6f0c73d134917b6bab0a9ca3c90732"
+   }
+  },
+  "spdi": {
+   "flags": [
+    "--spdi"
+   ],
+   "expected_dir": "expected_spdi",
+   "sha256": {
+    "default.txt": "4bfe4dbd55b7761d8e9554ae30bf38149bce1bce0af3d38a09584a548fcf0d71",
+    "tab.txt": "13f6b8cb0b7e3175f01325205f3f185a07fea4abb3d4946fb25af24f94313532",
+    "vcf.vcf": "bc6e7825e19978105f086a2aec41e098e519503fe73598822ce3df753ad86904",
+    "json.jsonl": "68400325db27ab5da88f95fe21570e273a47a04b39ea97e180cddff65a5c0cf6"
+   }
+  },
+  "spdi-shiftgenomic": {
+   "flags": [
+    "--spdi",
+    "--shift_3prime",
+    "1",
+    "--shift_genomic",
+    "1"
+   ],
+   "expected_dir": "expected_spdi-shiftgenomic",
+   "sha256": {
+    "default.txt": "5ad74395c6b34ed6a8d8dfda44d73cabe33bf71a72421ed4106f75ced5f172b8",
+    "tab.txt": "e3519eafea1b7f274bcfab4b9d1249de96d830e9de97d00fce450fb173518eb2",
+    "vcf.vcf": "f9b4887d5a99ce3bbd8edf210f1de3bd54e5cee6229e4779dc63300786cfe936",
+    "json.jsonl": "ffe7ca6d821fb33fed25f457d19d92e944df444d89e288c180583178e9a15da0"
+   }
+  },
+  "accession": {
+   "flags": [
+    "--hgvsg",
+    "--hgvsg_use_accession"
+   ],
+   "expected_dir": "expected_accession",
+   "sha256": {
+    "default.txt": "4f7f0ae3a968223160ef25068fb2eff4da51b929da29dbc47292d35813b9c769",
+    "tab.txt": "9260082da8d4dbfc527197a48a3317b15461e268978e81843b3ad5b2b9ca7ec7",
+    "vcf.vcf": "a453075fe898b3a1be85e72f69ec9813eaf5bea2f9032698b5d3a35193e4575e",
+    "json.jsonl": "263dc987b2df532e43311ba1c629fdb1bf92f6f809d86bc5fb17bfa0da18ca45"
+   }
+  },
+  "vrs-db": {
+   "flags": [
+    "--ga4gh_vrs"
+   ],
+   "expected_dir": "expected_vrs-db",
+   "perl_mode": "database",
+   "vep_command": "vep -i variants.vcf -o <out> --database --host useastdb.ensembl.org --db_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --ga4gh_vrs [--tab|--json]",
+   "database": "Connected to homo_sapiens_core_116_38 on useastdb.ensembl.org",
+   "sha256": {
+    "default.txt": "f89a8493694a47ae7646831c15c1375f31e4914e92a04cad13df9447fde3252f",
+    "tab.txt": "528de43c0f0d4de76548983e1dcbafb4ad19a8760f6999d374eb329ababa8429",
+    "json.jsonl": "51074192c88d2883e1983f199ebc0bf2d41be0076a6cc29e2bd3da0d4eaffbea"
    }
   },
   "hgvsp-forms": {

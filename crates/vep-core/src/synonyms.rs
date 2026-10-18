@@ -80,6 +80,11 @@ impl ChromosomeSynonyms {
         self.synonyms.is_empty()
     }
 
+    /// Every name the table records a synonym for, each once, in no order.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.synonyms.keys().map(String::as_str)
+    }
+
     /// The name a source knows `chr` by, given which names the source holds
     /// (`BaseVEP.pm:697-734`): `chr` itself when the source holds it; else the
     /// first of its synonyms the source holds; else `chr` with a leading `chr`
@@ -171,7 +176,7 @@ mod tests {
     /// reference, every later token its synonym, both directions, so a
     /// three-token line links each name to the reference and the reference to
     /// both; the two synonyms are not linked to each other, and a comment line
-    /// is a line whose first token is `#`.
+    /// is a line whose first token is `#`. `names` lists each linked name once.
     #[test]
     fn whitespace_split_first_token_reference() {
         let table = ChromosomeSynonyms::parse("21  NC_000021.9\tCM000683.2\n\n# chr21\nX\n");
@@ -183,6 +188,9 @@ mod tests {
         assert!(table.synonyms_of("Y").is_empty());
         assert!(!table.is_empty());
         assert!(ChromosomeSynonyms::parse("").is_empty());
+        let mut names: Vec<&str> = table.names().collect();
+        names.sort_unstable();
+        assert_eq!(names, ["#", "21", "CM000683.2", "NC_000021.9", "chr21"]);
     }
 
     /// `BaseVEP.pm:706-731`: `NC_000021.9` is not a cache chromosome, its synonym

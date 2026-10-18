@@ -39,10 +39,12 @@
 //! which names its own `flags` (the whole list for that run), `input` (a file in
 //! the corpus, `variants.vcf` by default), `stdin` (the input piped on standard
 //! input with `-i STDIN`), `formats` (the formats compared, all four by default),
-//! `expected_dir` (`expected_<name>` by default) and `unordered` (the entries
+//! `expected_dir` (`expected_<name>` by default), `unordered` (the entries
 //! compared without their order, for a set whose rows the reference emits in
-//! hash order). An entry carrying its own `divergences` documents its run; one
-//! without inherits the manifest's lists.
+//! hash order) and `perl_mode` (`offline` by default; `database` for a reference
+//! Ensembl VEP wrote connected to its database, whose default and tab headers
+//! compare by their column descriptions alone). An entry carrying its own
+//! `divergences` documents its run; one without inherits the manifest's lists.
 //!
 //! A manifest may also carry `runs`, command lines executed after the default
 //! run whose expectations are about the process rather than the annotation: each
@@ -329,6 +331,12 @@ pub struct Run<'a> {
     /// buckets from a Perl hash), so the run compares the entries and their
     /// fields, not the order of the entries.
     pub unordered: bool,
+    /// How the reference was generated: `offline` (Ensembl VEP on its cache,
+    /// the default) or `database` (Ensembl VEP connected to the Ensembl
+    /// database, for a column it writes only with one). A database reference's
+    /// preamble describes a connection rather than a cache, so its default and
+    /// tab headers compare by their column descriptions and column line alone.
+    pub perl_mode: String,
     /// The manifest object whose divergence lists apply to this run.
     documented: &'a serde_json::Value,
 }
@@ -412,6 +420,7 @@ pub fn default_run(corpus: &Corpus) -> Run<'_> {
         formats: ALL_FORMATS.iter().map(|f| f.to_string()).collect(),
         expected_dir: "expected".to_string(),
         unordered: false,
+        perl_mode: "offline".to_string(),
         documented: &corpus.manifest,
     }
 }
@@ -475,6 +484,12 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
         typed("expected_dir", set["expected_dir"].is_string());
         typed("stdin", set["stdin"].is_boolean());
         typed("unordered", set["unordered"].is_boolean());
+        typed("perl_mode", set["perl_mode"].is_string());
+        let perl_mode = set["perl_mode"].as_str().unwrap_or("offline").to_string();
+        assert!(
+            matches!(perl_mode.as_str(), "offline" | "database"),
+            "{label} flag set {name}: perl_mode is offline or database, not {perl_mode:?}"
+        );
         let formats = if set["formats"].is_array() {
             strings(&set["formats"])
         } else {
@@ -519,6 +534,7 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
             formats,
             expected_dir,
             unordered: set["unordered"].as_bool().unwrap_or(false),
+            perl_mode,
             documented: if set.get("divergences").is_some() {
                 set
             } else {
@@ -723,8 +739,19 @@ fn dedup_keys(entries: &mut [Entry]) {
     }
 }
 
+/// A JSON object written with its keys sorted, or `text` as it is when it is
+/// not JSON. Ensembl VEP encodes the `GA4GH_VRS` object with its keys in hash
+/// order, which differs from row to row, so the text formats compare the parsed
+/// object, as the JSON format's nested object does.
+fn canonical_json(text: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(text)
+        .map(|value| value.to_string())
+        .unwrap_or_else(|_| text.to_string())
+}
+
 /// Parses the default format: 13 named columns plus `Extra`, whose `key=value`
-/// pairs become fields of their own (and `Extra` keeps the raw text).
+/// pairs become fields of their own (and `Extra` keeps the raw text, its
+/// `GA4GH_VRS` value in [`canonical_json`] form).
 pub fn parse_default(text: &str) -> Vec<Entry> {
     let mut cols: Vec<String> = Vec::new();
     let mut entries = Vec::new();
@@ -742,12 +769,22 @@ pub fn parse_default(text: &str) -> Vec<Entry> {
             .cloned()
             .zip(vals.iter().map(|v| v.to_string()))
             .collect();
+        if let Some(vrs) = fields.get_mut("GA4GH_VRS") {
+            *vrs = canonical_json(vrs);
+        }
         if let Some(extra) = fields.get("Extra").cloned() {
             if extra != "-" {
+                let mut extra_text = extra.clone();
                 for kv in extra.split(';') {
                     let (k, v) = kv.split_once('=').unwrap_or((kv, ""));
-                    fields.insert(k.to_string(), v.to_string());
+                    let mut v = v.to_string();
+                    if k == "GA4GH_VRS" {
+                        v = canonical_json(&v);
+                        extra_text = extra_text.replace(kv, &format!("{k}={v}"));
+                    }
+                    fields.insert(k.to_string(), v);
                 }
+                fields.insert("Extra".to_string(), extra_text);
             }
         }
         let get = |c: &str| fields.get(c).cloned().unwrap_or_default();
@@ -1545,6 +1582,43 @@ pub fn compare_tab_headers(expected: &str, actual: &str) -> String {
     String::new()
 }
 
+/// Compares the column descriptions (`## <field> : <text>`, with the two lines
+/// that introduce them) and the column line of a default or tab output, the
+/// vep-rs identity line set aside, and nothing else of the preamble: a reference
+/// generated against the Ensembl database names its connection and API version
+/// where a cache run names its cache and source versions. Returns a description
+/// of the first difference, or an empty string.
+pub fn compare_column_descriptions(expected: &str, actual: &str) -> String {
+    fn described(line: &str) -> bool {
+        !line.starts_with("##")
+            || line == "## Column descriptions:"
+            || line == "## Extra column keys:"
+            || line.contains(" : ")
+    }
+    let exp: Vec<&str> = expected
+        .lines()
+        .filter(|l| l.starts_with('#') && described(l))
+        .collect();
+    let mut act: Vec<&str> = actual.lines().filter(|l| l.starts_with('#')).collect();
+    if let Err(missing) = take_identity_line(&mut act, &format!("## vep-rs {VEP_RS_VERSION}")) {
+        return missing;
+    }
+    act.retain(|l| described(l));
+    for (i, (e, a)) in exp.iter().zip(act.iter()).enumerate() {
+        if a != e {
+            return format!("header line {}: expected {e:?}, got {a:?}", i + 1);
+        }
+    }
+    if exp.len() != act.len() {
+        return format!(
+            "header column lines: expected {}, vep-rs writes {}",
+            exp.len(),
+            act.len()
+        );
+    }
+    String::new()
+}
+
 /// Compares VCF meta lines: `##fileformat` and `##INFO` exact, the `##VEP=`
 /// line with its `time`, `cache` and API-component tokens removed, the
 /// command line by prefix, the `##vep-rs=` identity line set aside; the
@@ -1662,7 +1736,11 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
     }
     match format {
         "default" | "tab" => (
-            compare_tab_headers(&expected, &actual),
+            if run.perl_mode == "database" {
+                compare_column_descriptions(&expected, &actual)
+            } else {
+                compare_tab_headers(&expected, &actual)
+            },
             compare_entries(
                 &parse_default(&expected),
                 &parse_default(&actual),

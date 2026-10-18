@@ -691,12 +691,27 @@ impl IndexedFasta {
     }
 
     fn record_for(&self, chr: &str) -> Option<&FaiRecord> {
-        if let Some(rec) = self.records.get(chr) {
-            return Some(rec);
-        }
-        let key = chr.to_ascii_lowercase();
-        let canon = self.aliases.get(&key)?;
-        self.records.get(canon)
+        self.record(chr).map(|(_, record)| record)
+    }
+
+    /// The name the FASTA gives the record `chr` reaches: `chr` itself when a
+    /// record carries it, else the record its alias (a `chr` spelling or a
+    /// synonym) names; `None` when no record is reached.
+    pub fn record_name(&self, chr: &str) -> Option<&str> {
+        self.record(chr).map(|(name, _)| name)
+    }
+
+    /// The record `chr` reaches ([`Self::record_name`]) with the name the FASTA
+    /// gives it.
+    fn record(&self, chr: &str) -> Option<(&str, &FaiRecord)> {
+        let (name, record) = match self.records.get_key_value(chr) {
+            Some(found) => found,
+            None => {
+                let canonical = self.aliases.get(&chr.to_ascii_lowercase())?;
+                self.records.get_key_value(canonical)?
+            }
+        };
+        Some((name.as_str(), record))
     }
 
     /// Registers, for each record, the names a chromosome synonym table gives
@@ -1653,7 +1668,7 @@ mod tests {
     /// once the synonym table is added, and under the `chr` spelling of that
     /// name, as `FastaSequence.pm:380-389` reaches it; a name no synonym links
     /// stays unresolved, and the table changes nothing for a record it does not
-    /// mention.
+    /// mention. `record_name` tells which record a query reaches.
     #[test]
     fn synonyms_reach_a_record_under_the_cache_name() {
         let dir = tempdir().unwrap();
@@ -1673,5 +1688,10 @@ mod tests {
         assert_eq!(idx.base("CM000683.2", 1), None);
         assert_eq!(idx.base("X", 1), Some(b'G'));
         assert_eq!(idx.base("chrX", 6), Some(b'T'));
+        assert_eq!(idx.record_name("21"), Some("NC_000021.9"));
+        assert_eq!(idx.record_name("chr21"), Some("NC_000021.9"));
+        assert_eq!(idx.record_name("NC_000021.9"), Some("NC_000021.9"));
+        assert_eq!(idx.record_name("chrX"), Some("X"));
+        assert_eq!(idx.record_name("CM000683.2"), None);
     }
 }

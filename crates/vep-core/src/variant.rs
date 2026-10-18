@@ -181,6 +181,22 @@ pub struct InputVariant {
     /// `--hgvsg` with a reference FASTA; printed on every row of the allele.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hgvsg: Option<String>,
+    /// The SPDI notation of this allele (`SPDI`), computed under `--spdi` or
+    /// `--ga4gh_vrs` from the record's alleles and span as written; a row prints
+    /// it when its `Allele` is the allele it describes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spdi: Option<String>,
+    /// The GA4GH VRS allele of this allele (`GA4GH_VRS`), computed under
+    /// `--ga4gh_vrs` from the SPDI named by the chromosome's RefSeq accession;
+    /// `None` when the synonyms table pairs the chromosome with no `NC_` name.
+    /// Printed on the rows that print the SPDI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ga4gh_vrs: Option<crate::spdi::VrsAllele>,
+    /// The notations of the record's other alternate alleles, for a row whose
+    /// `Allele` a genomic shift rotated onto one of them (`--shift_genomic 1`);
+    /// empty for a bi-allelic record.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sibling_spdi: Vec<crate::spdi::SiblingSpdi>,
     /// Whether the variant was minimised from a multi-allelic site.
     pub minimised: bool,
     /// Original allele string before minimisation.
@@ -373,6 +389,9 @@ impl Default for InputVariant {
             most_severe_consequence: None,
             colocated_variants: Vec::new(),
             hgvsg: None,
+            spdi: None,
+            ga4gh_vrs: None,
+            sibling_spdi: Vec::new(),
             minimised: false,
             original_allele_string: None,
             original_start: None,
@@ -449,6 +468,9 @@ impl InputVariant {
             most_severe_consequence: None,
             colocated_variants: Vec::new(),
             hgvsg: None,
+            spdi: None,
+            ga4gh_vrs: None,
+            sibling_spdi: Vec::new(),
             minimised: false,
             original_allele_string: None,
             original_start: None,

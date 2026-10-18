@@ -60,9 +60,11 @@ Subcommands:
             STDIN), `unordered` (the reference's rows within a record come out in
             Ensembl VEP's hash order, so the golden tests compare the rows and not
             their order), `formats` (the output formats compared, all four by default),
-            `expected_dir` (`expected_<name>` by default) and `covers`; `input` and
-            `expected_dir` are paths inside the corpus directory. A set that exists is
-            rewritten from the options, so `classify --flag-set` runs after it.
+            `expected_dir` (`expected_<name>` by default), `perl_mode` (written as
+            `database` when the reference was generated against the Ensembl database
+            rather than offline) and `covers`; `input` and `expected_dir` are paths inside
+            the corpus directory. A set that exists is rewritten from the options, so
+            `classify --flag-set` runs after it.
 
 Row keys follow `compare_vep_outputs.py`: (Location, Allele, Feature, Feature_type,
 consequence set), consequence terms sorted and comma-joined. A record is identified by
@@ -106,6 +108,7 @@ RESERVOIR = 64
 FAMILY_RESERVOIR = 8
 SEQUENCE_CLASSES = ("snv", "deletion", "insertion", "mnv_or_complex")
 OUTPUT_FORMATS = ("default", "tab", "vcf", "json")
+PERL_MODES = ("offline", "database")
 DEFAULT_INPUT = "variants.vcf"
 CLASSIFY_KEYS = ("divergences", "vep_rs_only_tuples", "divergence_summary", "vep_rs_only_summary",
                  "fields_compared", "field_divergences", "field_divergence_summary")
@@ -813,6 +816,8 @@ def flag_set_shape_error(fs: object) -> str | None:
         return f"flag set {name} formats is not a non-empty subset of {','.join(OUTPUT_FORMATS)}"
     if fs.get("stdin") and not names_format(fs.get("flags") or []):
         return f"flag set {name} runs on stdin without --format among its flags"
+    if "perl_mode" in fs and fs["perl_mode"] not in PERL_MODES:
+        return f"flag set {name} perl_mode is not one of {', '.join(PERL_MODES)}"
     if "covers" in fs and not is_name_list(fs["covers"]):
         return f"flag set {name} covers is not a list of names"
     return None
@@ -1500,6 +1505,8 @@ def cmd_flag_set(args: argparse.Namespace) -> int:
         "expected_dir": expected_dir,
         "covers": covers,
     }
+    if args.perl_mode != "offline":
+        entry["perl_mode"] = args.perl_mode
     for i, fs in enumerate(sets):
         if fs["name"] == args.name:
             sets[i] = entry
@@ -1508,7 +1515,8 @@ def cmd_flag_set(args: argparse.Namespace) -> int:
         sets.append(entry)
     write_manifest(corpus, manifest)
     print(f"flag set {args.name}: {len(entry['flags'])} flags, input {entry['input']}"
-          f"{' on stdin' if entry['stdin'] else ''}{', unordered' if entry['unordered'] else ''}, "
+          f"{' on stdin' if entry['stdin'] else ''}{', unordered' if entry['unordered'] else ''}"
+          f"{', reference from the database' if 'perl_mode' in entry else ''}, "
           f"formats {','.join(formats)}, expected {entry['expected_dir']}, "
           f"covers {len(covers)}")
     return 0
@@ -1599,6 +1607,10 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--unordered", action="store_true",
                    help="the reference's row order within a record is Ensembl VEP's hash order (--per_gene gene "
                         "buckets, --pick_allele allele buckets), so the runner compares the entry set and not the order")
+    f.add_argument("--perl-mode", default="offline", choices=PERL_MODES,
+                   help="how the set's reference was generated: offline (Ensembl VEP on its cache, the default) "
+                        "or database (connected to the Ensembl database, for a column Ensembl VEP writes only with "
+                        "one; the default and tab headers then compare by their column descriptions alone)")
     f.add_argument("--format", default=None, help=f"the output formats compared, comma-separated (default: all of {','.join(OUTPUT_FORMATS)})")
     f.add_argument("--expected-dir", default=None, help="the directory of the set's expected outputs")
     f.add_argument("--covers", action="append", help="a parity-matrix row the set exercises (repeatable)")

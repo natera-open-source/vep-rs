@@ -166,6 +166,76 @@ def test_json_scalar_renders_like_the_rust_comparator():
     assert cvf.json_scalar([{"id": "rs1", "af": 0.25}]) == '{"af":0.25,"id":"rs1"}'
 
 
+def test_ga4gh_vrs_compares_as_a_parsed_object():
+    """Ensembl VEP writes the ``GA4GH_VRS`` object with its keys in hash order, so two rows whose
+    objects agree compare equal whatever the order of their keys, in the default format's
+    ``Extra`` and as a tab column alike; a value that is not JSON is compared as written."""
+    perl = ('{"type":"Allele","state":{"sequence":"C","type":"SequenceState"},'
+            '"location":{"type":"SequenceLocation","sequence_id":"refseq:NC_000021.9",'
+            '"interval":{"type":"SimpleInterval","end":10538885,"start":"10538884"}}}')
+    rust = ('{"location":{"type":"SequenceLocation","interval":{"type":"SimpleInterval",'
+            '"start":"10538884","end":10538885},"sequence_id":"refseq:NC_000021.9"},'
+            '"state":{"type":"SequenceState","sequence":"C"},"type":"Allele"}')
+    assert cvf.canonical_json_text(perl) == cvf.canonical_json_text(rust)
+    assert cvf.canonical_json_text("21:10538884:A:C") == "21:10538884:A:C"
+    assert cvf.canonical_json_text("-") == "-"
+    assert cvf.canonical_json_text("1e5") == "1e5"
+    header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n"
+    row = "rs1\t21:10538885\tC\tG1\tT1\tTranscript\tintron_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;GA4GH_VRS={};STRAND=1\n"
+    perl_entry = cvf.parse_default(header + row.format(perl))[0]
+    rust_entry = cvf.parse_default(header + row.format(rust))[0]
+    assert perl_entry.fields["GA4GH_VRS"] == rust_entry.fields["GA4GH_VRS"] == cvf.canonical_json_text(perl)
+    assert perl_entry.fields["Extra"] == rust_entry.fields["Extra"]
+    assert perl_entry.fields["STRAND"] == "1"
+    # A pair whose value is not an object, and a bare key, are rebuilt as written.
+    dash_row = row.format("-")
+    bare_key_row = row.replace("GA4GH_VRS={};", "GA4GH_VRS;")
+    dash_entry, bare_key_entry = cvf.parse_default(header + dash_row + bare_key_row)
+    assert dash_entry.fields["Extra"] == "IMPACT=MODIFIER;GA4GH_VRS=-;STRAND=1"
+    assert dash_entry.fields["GA4GH_VRS"] == "-"
+    assert bare_key_entry.fields["Extra"] == "IMPACT=MODIFIER;GA4GH_VRS;STRAND=1"
+    assert bare_key_entry.fields["GA4GH_VRS"] == ""
+    tab_header = "#Uploaded_variation\tLocation\tAllele\tGA4GH_VRS\n"
+    tab_row = "rs1\t21:10538885\tC\t{}\n"
+    perl_tab = cvf.parse_tab(tab_header + tab_row.format(perl))[0]
+    rust_tab = cvf.parse_tab(tab_header + tab_row.format(rust))[0]
+    assert perl_tab.fields["GA4GH_VRS"] == rust_tab.fields["GA4GH_VRS"]
+    # Self-parity: the JSON format nests the object with both bounds numbers, where the text
+    # formats carry the start as a string; the VCF format is refused with --ga4gh_vrs, so its
+    # CSQ declares no such column.
+    nested = json.loads(rust)
+    nested["location"]["interval"]["start"] = 10538884
+    assert cvf.numberified_json_text(perl) == cvf.json_compact(nested)
+    assert cvf.numberified_json_text("21:10538884:A:C") == "21:10538884:A:C"
+    # A superscript digit is isdigit() but not a decimal int() accepts; it stays a string.
+    assert cvf.numberified_json_text('{"start":"\u00b2"}') == '{"start":"\u00b2"}'
+    csq = ("Allele", "Consequence", "IMPACT", "Gene", "Feature_type", "Feature", "STRAND")
+    vcf = (
+        '##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from Ensembl VEP. Format: '
+        + "|".join(csq) + '">\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
+        + "21\t10538885\trs1\tA\tC\t.\t.\tCSQ=C|intron_variant|MODIFIER|G1|Transcript|T1|1\n"
+    )
+    obj = {
+        "input": "21\t10538885\trs1\tA\tC\t.\t.\t.", "id": "rs1", "seq_region_name": "21",
+        "start": 10538885, "end": 10538885, "strand": 1, "allele_string": "A/C",
+        "most_severe_consequence": "intron_variant",
+        "transcript_consequences": [{
+            "variant_allele": "C", "gene_id": "G1", "transcript_id": "T1", "consequence_terms": ["intron_variant"],
+            "impact": "MODIFIER", "strand": 1, "ga4gh_vrs": nested,
+        }],
+    }
+    tab = (
+        tab_header.rstrip("\n") + "\tGene\tFeature\tFeature_type\tConsequence\tIMPACT\tSTRAND\n"
+        + tab_row.format(rust).rstrip("\n") + "\tG1\tT1\tTranscript\tintron_variant\tMODIFIER\t1\n"
+    )
+    report = cvf.SelfParity(header + row.format(rust), tab, vcf, json.dumps(obj) + "\n").run()
+    assert report["verdict"] == "green", report["reasons"]
+    assert "GA4GH_VRS" in report["pairs"]["json"]["columns_compared"]
+    nested["location"]["interval"]["end"] = 10538886
+    report = cvf.SelfParity(header + row.format(rust), tab, vcf, json.dumps(obj) + "\n").run()
+    assert sorted(report["pairs"]["json"]["differing"]) == ["GA4GH_VRS"]
+
+
 def test_dedup_keys_counts_exact_duplicates():
     entries = [cvf.Entry("k", None, None, "", "", "", {}) for _ in range(3)]
     entries.append(cvf.Entry("other", None, None, "", "", "", {}))

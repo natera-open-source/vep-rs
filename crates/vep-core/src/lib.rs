@@ -15,6 +15,7 @@ pub mod consequence;
 pub mod coordinate;
 pub mod prediction;
 pub mod so_ontology;
+pub mod spdi;
 pub mod sv_record;
 pub mod sv_routing;
 pub mod sv_span;

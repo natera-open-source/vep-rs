@@ -118,6 +118,105 @@
    "field_divergence_summary": {}
   },
   {
+   "name": "spdi",
+   "flags": [
+    "--spdi"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_spdi",
+   "covers": [
+    "spdi"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "spdi-shiftgenomic",
+   "flags": [
+    "--spdi",
+    "--shift_3prime",
+    "1",
+    "--shift_genomic",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_spdi-shiftgenomic",
+   "covers": [
+    "spdi",
+    "shift_genomic"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "accession",
+   "flags": [
+    "--hgvsg",
+    "--hgvsg_use_accession"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_accession",
+   "covers": [
+    "hgvsg_use_accession",
+    "hgvsg"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "vrs-db",
+   "flags": [
+    "--ga4gh_vrs"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "json"
+   ],
+   "expected_dir": "expected_vrs-db",
+   "covers": [
+    "ga4gh_vrs"
+   ],
+   "perl_mode": "database",
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
    "name": "hgvsp-forms",
    "flags": [
     "--hgvs",

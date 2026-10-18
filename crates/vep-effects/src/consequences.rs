@@ -75,6 +75,11 @@ pub struct EffectsConfig {
     /// Compute `InputVariant::hgvsg` for every sequence variant, as `--hgvsg`
     /// does; needs `reference_fasta`. `None` leaves the field `None`.
     pub hgvsg: Option<crate::hgvsg::HgvsgOptions>,
+    /// Compute `InputVariant::spdi`, and the GA4GH VRS allele the options ask
+    /// for, for every sequence variant, as `--spdi` and `--ga4gh_vrs` do;
+    /// `reference_fasta` names the chromosome of a variant overlapping no
+    /// transcript when it is set. `None` leaves both fields `None`.
+    pub spdi: Option<crate::spdi::SpdiOptions>,
 }
 
 impl Default for EffectsConfig {
@@ -90,6 +95,7 @@ impl Default for EffectsConfig {
             compute_exon_intron_numbers: false,
             protein_version: false,
             hgvsg: None,
+            spdi: None,
         }
     }
 }

@@ -27,7 +27,7 @@ use rayon::ThreadPool;
 use tracing::{debug, info, warn};
 
 use crate::annotator::{
-    build_thread_pool, hgvs_options, hgvsg_options, LoadedPlugins, PredictionConfig,
+    build_thread_pool, hgvs_options, hgvsg_options, spdi_options, LoadedPlugins, PredictionConfig,
     HGVS_NEEDS_FASTA,
 };
 use crate::cache_resolve::ResolvedCache;
@@ -596,6 +596,8 @@ impl Runner {
             mirna: c.mirna,
             hgvs: c.hgvs,
             hgvsg: c.hgvsg,
+            spdi: c.spdi,
+            ga4gh_vrs: c.ga4gh_vrs,
             af: c.af,
             af_1kg: c.af_1kg,
             af_gnomade: c.af_gnomade,
@@ -770,7 +772,8 @@ impl Runner {
             compute_hgvs: checks.hgvs,
             compute_exon_intron_numbers: needs_exon_intron_numbers(&self.config),
             protein_version: self.config.protein_version,
-            hgvsg: hgvsg_options(&self.config),
+            hgvsg: hgvsg_options(&self.config, &self.cache.synonyms),
+            spdi: spdi_options(&self.config, &self.cache.synonyms),
         });
 
         let LoadedPlugins { builtin, dylib } = self.load_plugins(plugin_fasta)?;
@@ -1887,6 +1890,7 @@ pub(crate) fn annotate_variant(
     }
 
     vep_effects::hgvsg::annotate(variant, config);
+    vep_effects::spdi::annotate(variant, config);
 }
 
 /// Look up SIFT/PolyPhen predictions for a missense consequence.

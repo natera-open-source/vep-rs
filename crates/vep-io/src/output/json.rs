@@ -294,6 +294,14 @@ impl JsonOutputFormatter {
                         .collect();
                     obj.insert(json_key(name), Value::Array(elements));
                 }
+                "GA4GH_VRS" => {
+                    // The object is nested rather than encoded, and `numberify`
+                    // makes both interval bounds numbers (OutputFactory.pm:1409,
+                    // JSON.pm:288); the text formats keep `start` a string.
+                    if let Some(vrs) = fields::row_ga4gh_vrs(variant, tc, &self.options) {
+                        obj.insert("ga4gh_vrs".to_string(), vrs_object(vrs));
+                    }
+                }
                 _ => {
                     let key = json_key(name);
                     let v = if value == "YES" {
@@ -307,6 +315,19 @@ impl JsonOutputFormatter {
         }
         serde_json::Map::from_iter(obj)
     }
+}
+
+/// A GA4GH VRS allele as the JSON format nests it.
+fn vrs_object(vrs: &vep_core::spdi::VrsAllele) -> Value {
+    serde_json::json!({
+        "location": {
+            "type": "SequenceLocation",
+            "interval": {"type": "SimpleInterval", "start": vrs.start, "end": vrs.end},
+            "sequence_id": format!("refseq:{}", vrs.sequence_id),
+        },
+        "state": {"type": "SequenceState", "sequence": vrs.sequence},
+        "type": "Allele",
+    })
 }
 
 /// Splits a position column into the JSON `*_start` and `*_end` values as
@@ -672,6 +693,46 @@ mod tests {
             "variant_class needs its flag"
         );
         assert!(parsed.get("existing_variation").is_none());
+    }
+
+    /// Under `--spdi --ga4gh_vrs` a consequence entry carries `spdi` as a string
+    /// and `ga4gh_vrs` as the object itself, both interval bounds numbers, as
+    /// Ensembl VEP 116.2 writes with a database for `21 10538885 A C`
+    /// (OutputFactory.pm:1409, JSON.pm:288); an allele with no object has no key.
+    #[test]
+    fn ga4gh_vrs_is_a_nested_object_with_numeric_bounds() {
+        let mut v = make_annotated_variant();
+        v.spdi = Some("21:25000099:A:G".to_string());
+        let options = FieldOptions {
+            spdi: true,
+            ga4gh_vrs: true,
+            ..Default::default()
+        };
+        let tc = &fmt(options.clone()).format_variant_value(&v)["transcript_consequences"][0];
+        assert_eq!(tc["spdi"], "21:25000099:A:G");
+        assert!(tc.get("ga4gh_vrs").is_none());
+        v.ga4gh_vrs = Some(vep_core::spdi::VrsAllele {
+            sequence_id: "NC_000021.9".to_string(),
+            start: 25000099,
+            end: 25000100,
+            sequence: "G".to_string(),
+        });
+        let tc = &fmt(options).format_variant_value(&v)["transcript_consequences"][0];
+        assert_eq!(
+            tc["ga4gh_vrs"],
+            json!({
+                "location": {
+                    "type": "SequenceLocation",
+                    "interval": {"type": "SimpleInterval", "start": 25000099, "end": 25000100},
+                    "sequence_id": "refseq:NC_000021.9"
+                },
+                "state": {"type": "SequenceState", "sequence": "G"},
+                "type": "Allele"
+            })
+        );
+        let plain =
+            &fmt(FieldOptions::default()).format_variant_value(&v)["transcript_consequences"][0];
+        assert!(plain.get("spdi").is_none() && plain.get("ga4gh_vrs").is_none());
     }
 
     /// An unannotated record keeps VEP's input-only shape plus the identity key.

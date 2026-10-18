@@ -209,6 +209,7 @@ fn main() -> Result<()> {
         compute_exon_intron_numbers: true,
         protein_version: false,
         hgvsg: None,
+        spdi: None,
     });
 
     let raw_transcripts = json_cache::load_all_transcripts(&args.json_cache)?;

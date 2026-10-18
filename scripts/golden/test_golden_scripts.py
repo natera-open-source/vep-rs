@@ -1051,8 +1051,9 @@ def test_select_requires_named_genotype_classes_and_one_sample_set(tmp_path: Pat
 
 def test_flag_set_subcommand_writes_an_entry(tmp_path: Path, capsys):
     """An entry carries the whole flag list of its run, its input, stdin and unordered modes,
-    the formats compared, its expected directory and its covers; a set is rewritten by name; the
-    inputs the harness cannot run are refused before anything is written."""
+    the formats compared, its expected directory, its covers and, for a reference generated
+    against the Ensembl database, its `perl_mode`; a set is rewritten by name; the inputs the
+    harness cannot run are refused before anything is written."""
     ref, vcf = _two_record_suite(tmp_path)
     out = tmp_path / "corpus"
     matrix = _matrix(tmp_path, "symbol", "pick", "per_gene")
@@ -1084,11 +1085,23 @@ def test_flag_set_subcommand_writes_an_entry(tmp_path: Path, capsys):
     # `--format=<format>` is the other spelling of the format a stdin run must name.
     assert bgc.main(["flag-set", str(out), "--name", "eq", "--flag=--format=vcf", "--stdin", "--matrix", str(matrix)]) == 0
     capsys.readouterr()
+    # A reference generated against the Ensembl database is marked, and only then.
+    assert bgc.main(["flag-set", str(out), "--name", "db", "--flag=--ga4gh_vrs", "--format", "default,tab,json",
+                     "--perl-mode", "database", "--matrix", str(matrix)]) == 0
+    assert capsys.readouterr().out == ("flag set db: 1 flags, input variants.vcf, reference from the database, "
+                                       "formats default,tab,json, expected expected_db, covers 0\n")
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["flag_sets"][3]["perl_mode"] == "database"
+    assert "perl_mode" not in m["flag_sets"][2]
+    assert bgc.manifest_shape_error(m) is None
+    m["flag_sets"][3]["perl_mode"] = "cache"
+    assert bgc.manifest_shape_error(m) == "flag set db perl_mode is not one of offline, database"
     assert bgc.main(["flag-set", str(out), "--list"]) == 0
     assert capsys.readouterr().out == (
         "pick\t--per_gene\tvariants.vcf\tfalse\ttrue\tdefault,tab,vcf,json\texpected_pick\tper_gene\n"
         "ensembl-stdin\t--format ensembl\tvariants.ensembl\ttrue\tfalse\tdefault,json\texpected_ens\t\n"
         "eq\t--format=vcf\tvariants.vcf\ttrue\tfalse\tdefault,tab,vcf,json\texpected_eq\t\n"
+        "db\t--ga4gh_vrs\tvariants.vcf\tfalse\tfalse\tdefault,tab,json\texpected_db\t\n"
     )
     before = (out / "manifest.json").read_text()
     refused = [

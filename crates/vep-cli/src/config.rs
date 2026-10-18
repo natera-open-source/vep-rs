@@ -563,6 +563,13 @@ pub struct Config {
     pub gene_version: bool,
     pub hgvs: bool,
     pub hgvsg: bool,
+    /// `--hgvsg_use_accession`: HGVSg names the chromosome by the `NC_` synonym
+    /// of the input name, when the synonyms table has one.
+    pub hgvsg_use_accession: bool,
+    /// `--spdi`: the SPDI column.
+    pub spdi: bool,
+    /// `--ga4gh_vrs`: the GA4GH_VRS column, refused with `--vcf`.
+    pub ga4gh_vrs: bool,
     /// `--hgvsp_use_prediction`: HGVSp's description after `p.` is parenthesised.
     pub hgvsp_use_prediction: bool,
     /// `--remove_hgvsp_version`: HGVSp's reference name carries no version.
@@ -926,6 +933,9 @@ impl Config {
             gene_version: args.gene_version,
             hgvs: on("hgvs"),
             hgvsg: args.hgvsg,
+            hgvsg_use_accession: args.hgvsg_use_accession,
+            spdi: args.spdi,
+            ga4gh_vrs: args.ga4gh_vrs,
             hgvsp_use_prediction: args.hgvsp_use_prediction,
             remove_hgvsp_version: args.remove_hgvsp_version,
             sift: state.scalar("sift").map(str::to_string),
@@ -2088,6 +2098,35 @@ mod tests {
             "ERROR: [cli] Can't use --shift_hgvs and --shift_genomic together"
         );
         assert!(Config::from_argv(["vep", "--shift_hgvs", "0", "--shift_genomic", "0"]).is_ok());
+    }
+
+    /// `--ga4gh_vrs` with `--vcf` is the pair Ensembl VEP refuses (Config.pm:629,
+    /// `ERROR: Can't use --ga4gh_vrs and --vcf together`); with the other formats,
+    /// and `--spdi` and `--hgvsg_use_accession` anywhere, the flags are plain
+    /// switches that default off.
+    #[test]
+    fn ga4gh_vrs_with_vcf_is_an_error() {
+        assert_eq!(
+            refusal(&["vep", "--ga4gh_vrs", "--vcf"]),
+            "ERROR: [cli] Can't use --ga4gh_vrs and --vcf together"
+        );
+        assert_eq!(
+            refusal(&["vep", "--vcf", "--spdi", "--ga4gh_vrs"]),
+            "ERROR: [cli] Can't use --ga4gh_vrs and --vcf together"
+        );
+        let c = config(&["vep", "--ga4gh_vrs", "--tab"]);
+        assert!(c.ga4gh_vrs && !c.spdi);
+        let c = config(&[
+            "vep",
+            "--ga4gh_vrs",
+            "--json",
+            "--spdi",
+            "--hgvsg_use_accession",
+        ]);
+        assert!(c.ga4gh_vrs && c.spdi && c.hgvsg_use_accession);
+        assert!(Config::from_argv(["vep", "--spdi", "--vcf"]).is_ok());
+        let plain = config(&["vep"]);
+        assert!(!plain.spdi && !plain.ga4gh_vrs && !plain.hgvsg_use_accession);
     }
 
     #[test]

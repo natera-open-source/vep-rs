@@ -17,6 +17,7 @@
 use std::collections::BTreeSet;
 
 use vep_core::consequence::{Consequence, TranscriptConsequence};
+use vep_core::spdi::VrsAllele;
 use vep_core::sv_routing::{perl_split, perl_true};
 use vep_core::terms::Vocabulary;
 use vep_core::variant::{colocated_in_output_order, ColocatedVariant, InputVariant, VariantClass};
@@ -82,6 +83,12 @@ pub struct FieldOptions {
     pub mirna: bool,
     pub hgvs: bool,
     pub hgvsg: bool,
+    /// `--spdi`: the SPDI column, the allele's notation on the rows whose
+    /// Allele is the allele it describes (OutputFactory.pm:1400-1401).
+    pub spdi: bool,
+    /// `--ga4gh_vrs`: the GA4GH_VRS column, the allele's VRS object on the
+    /// same rows, JSON-encoded in the text formats (:1403-1410).
+    pub ga4gh_vrs: bool,
     pub af: bool,
     pub af_1kg: bool,
     pub af_gnomade: bool,
@@ -172,6 +179,8 @@ const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
     group("include_pick", &["PICK"]),
     vf_group("variant_class", &["VARIANT_CLASS"]),
     vf_group("minimal", &["MINIMISED"]),
+    group("spdi", &["SPDI"]),
+    group("ga4gh_vrs", &["GA4GH_VRS"]),
     group(
         "clinvar_somatic_classification",
         &["CLINVAR_SOMATIC_CLASSIFICATION"],
@@ -289,6 +298,8 @@ impl FieldOptions {
             "mirna" => self.mirna,
             "hgvs" => self.hgvs,
             "hgvsg" => self.hgvsg,
+            "spdi" => self.spdi,
+            "ga4gh_vrs" => self.ga4gh_vrs,
             "af" => self.af,
             "af_1kg" => self.af_1kg,
             "af_gnomade" => self.af_gnomade,
@@ -489,6 +500,11 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     ("HGVSc", "HGVS coding sequence name"),
     ("HGVSp", "HGVS protein sequence name"),
     ("HGVSg", "HGVS genomic sequence name"),
+    ("SPDI", "Genomic SPDI notation"),
+    (
+        "GA4GH_VRS",
+        "GA4GH Variation Representation Specification",
+    ),
     ("SIFT", "SIFT prediction and/or score"),
     ("PolyPhen", "PolyPhen prediction and/or score"),
     ("EXON", "Exon number(s) / total"),
@@ -716,6 +732,55 @@ fn genomic_shift(
     (shift > 0).then_some((shift, strand))
 }
 
+/// The row's `Allele`: the allele as the record gives it, or, under
+/// `--shift_3prime 1 --shift_genomic 1`, rotated along the row's shift
+/// (OutputFactory.pm:1347-1352).
+fn row_allele(
+    variant: &InputVariant,
+    tc: Option<&TranscriptConsequence>,
+    options: &FieldOptions,
+) -> String {
+    match genomic_shift(variant, tc, options) {
+        Some((shift, strand)) => variant.display_allele_shifted(shift, strand),
+        None => variant.display_allele(),
+    }
+}
+
+/// The SPDI and GA4GH VRS allele the row prints: VEP keeps the record's
+/// notations by allele and reads them by the row's Allele
+/// (OutputFactory.pm:1396-1400), so a row prints its own allele's, a row whose
+/// Allele a genomic shift rotated onto a sibling allele of the record prints
+/// the sibling's, and a row whose rotated Allele is no allele of the record
+/// carries neither column.
+fn row_spdi<'a>(
+    variant: &'a InputVariant,
+    tc: Option<&TranscriptConsequence>,
+    options: &FieldOptions,
+) -> Option<(&'a str, Option<&'a VrsAllele>)> {
+    let allele = row_allele(variant, tc, options);
+    if allele == variant.display_allele() {
+        return variant
+            .spdi
+            .as_deref()
+            .map(|spdi| (spdi, variant.ga4gh_vrs.as_ref()));
+    }
+    variant
+        .sibling_spdi
+        .iter()
+        .find(|sibling| sibling.allele == allele)
+        .map(|sibling| (sibling.spdi.as_str(), sibling.ga4gh_vrs.as_ref()))
+}
+
+/// The GA4GH VRS allele the row prints ([`row_spdi`]), for the JSON format to
+/// nest as an object.
+pub fn row_ga4gh_vrs<'a>(
+    variant: &'a InputVariant,
+    tc: Option<&TranscriptConsequence>,
+    options: &FieldOptions,
+) -> Option<&'a VrsAllele> {
+    row_spdi(variant, tc, options).and_then(|(_, vrs)| vrs)
+}
+
 /// One output row: an allele of the record and the transcript consequence it is
 /// reported against, or `None` for the record's intergenic row or its `--summary`
 /// or `--most_severe` row (the allele carrying [`InputVariant::summary_terms`]).
@@ -911,10 +976,7 @@ fn row_field_value(
             Some((shift, strand)) => variant.location_shifted(shift, strand),
             None => variant.location(),
         },
-        "Allele" => match genomic_shift(variant, tc, options) {
-            Some((shift, strand)) => variant.display_allele_shifted(shift, strand),
-            None => variant.display_allele(),
-        },
+        "Allele" => row_allele(variant, tc, options),
         "Consequence" => match tc {
             Some(x) => consequence_string(x, options),
             None => {
@@ -1096,6 +1158,12 @@ fn row_field_value(
             identifier_list(tc.and_then(|x| x.uniprot_isoform.as_deref()), list_sep)
         }
         "HGVSg" => variant.hgvsg.clone().unwrap_or_default(),
+        "SPDI" => row_spdi(variant, tc, options)
+            .map(|(spdi, _)| spdi.to_string())
+            .unwrap_or_default(),
+        "GA4GH_VRS" => row_ga4gh_vrs(variant, tc, options)
+            .map(VrsAllele::encoded)
+            .unwrap_or_default(),
         "CHECK_REF" => String::new(),
         "RefSeq" => identifier_list(tc.and_then(|x| x.refseq.as_deref()), list_sep),
         "GENE_PHENO" => {
@@ -1687,6 +1755,175 @@ mod tests {
                 "21:2000-2001"
             );
         }
+    }
+
+    /// `--spdi` and `--ga4gh_vrs` list their columns after `MINIMISED` and before
+    /// `SYMBOL` (Constants.pm:79-85); the values are the allele's notation and
+    /// the encoded object (OutputFactory.pm:1400-1410), on a transcript row and
+    /// on an intergenic row alike, and an allele with no object prints an empty
+    /// `GA4GH_VRS`. Both are set in the overlap-allele hash alone, never by
+    /// `VariationFeature_to_output_hash` (:883-932), so neither is a
+    /// variant-level field and a `--summary` or `--most_severe` row carries
+    /// neither column.
+    #[test]
+    fn spdi_and_ga4gh_vrs_print_the_allele_notation_and_the_encoded_object() {
+        let both = FieldOptions {
+            minimal: true,
+            spdi: true,
+            ga4gh_vrs: true,
+            symbol: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            &flag_fields(&both)[4..8],
+            &["MINIMISED", "SPDI", "GA4GH_VRS", "SYMBOL"]
+        );
+        assert!(!flag_fields(&FieldOptions::default()).contains(&"SPDI"));
+        let mut snv = InputVariant::new(
+            "21".into(),
+            10538885,
+            10538885,
+            b"A".to_vec(),
+            b"C".to_vec(),
+        );
+        snv.spdi = Some("21:10538884:A:C".to_string());
+        let tc = TranscriptConsequence::default();
+        assert_eq!(
+            field_value("SPDI", &snv, Some(&tc), &both, ","),
+            "21:10538884:A:C"
+        );
+        assert_eq!(
+            field_value("SPDI", &snv, None, &both, ","),
+            "21:10538884:A:C"
+        );
+        assert_eq!(field_value("GA4GH_VRS", &snv, Some(&tc), &both, ","), "");
+        snv.ga4gh_vrs = Some(vep_core::spdi::VrsAllele {
+            sequence_id: "NC_000021.9".to_string(),
+            start: 10538884,
+            end: 10538885,
+            sequence: "C".to_string(),
+        });
+        let encoded = concat!(
+            r#"{"location":{"type":"SequenceLocation","interval":{"type":"SimpleInterval","#,
+            r#""start":"10538884","end":10538885},"sequence_id":"refseq:NC_000021.9"},"#,
+            r#""state":{"type":"SequenceState","sequence":"C"},"type":"Allele"}"#
+        );
+        assert_eq!(field_value("GA4GH_VRS", &snv, None, &both, ","), encoded);
+        let bare = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"C".to_vec());
+        assert_eq!(field_value("SPDI", &bare, Some(&tc), &both, ","), "");
+
+        assert_eq!(vf_level_flag_fields(&both), ["MINIMISED"]);
+        let mut summary = snv.clone();
+        summary.most_severe_consequence = Some(Consequence::MissenseVariant);
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(field_value("SPDI", &summary, None, &both, ","), "");
+        assert_eq!(field_value("GA4GH_VRS", &summary, None, &both, ","), "");
+        assert_eq!(
+            field_value("SPDI", &summary, Some(&tc), &both, ","),
+            "21:10538884:A:C"
+        );
+        assert_eq!(
+            field_value("GA4GH_VRS", &summary, Some(&tc), &both, ","),
+            encoded
+        );
+    }
+
+    /// Ensembl VEP looks the SPDI up by the row's Allele among the record's
+    /// alleles as written (OutputFactory.pm:1400): under `--shift_3prime 1
+    /// --shift_genomic 1` a row whose inserted bases a shift rotated
+    /// (`21 13620283 G GTCA` moved 10 bases prints `CAT`) carries no `SPDI` and no
+    /// `GA4GH_VRS`, unless the rotation lands on a sibling allele of the record
+    /// (`21 13620283 G GTCA,GCAT`), whose notations it then prints as Ensembl VEP
+    /// does (`21:13620283::CAT`); a row whose rotation returns the bases as given
+    /// (`21 10451779 A ATA` moved 6) and every unshifted row carry their own.
+    #[test]
+    fn spdi_is_absent_on_a_row_whose_allele_a_genomic_shift_rotated() {
+        let options = FieldOptions {
+            spdi: true,
+            ga4gh_vrs: true,
+            shift_3prime: true,
+            shift_genomic: true,
+            ..Default::default()
+        };
+        let mut tri = InputVariant::new(
+            "21".into(),
+            13620284,
+            13620283,
+            b"-".to_vec(),
+            b"TCA".to_vec(),
+        );
+        tri.spdi = Some("21:13620283::TCA".to_string());
+        tri.ga4gh_vrs = Some(vep_core::spdi::VrsAllele {
+            sequence_id: "NC_000021.9".to_string(),
+            start: 13620283,
+            end: 13620283,
+            sequence: "TCA".to_string(),
+        });
+        let moved_ten = TranscriptConsequence {
+            strand: 1,
+            shift_length: 10,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("Allele", &tri, Some(&moved_ten), &options, ","),
+            "CAT"
+        );
+        assert_eq!(
+            field_value("SPDI", &tri, Some(&moved_ten), &options, ","),
+            ""
+        );
+        assert_eq!(
+            field_value("GA4GH_VRS", &tri, Some(&moved_ten), &options, ","),
+            ""
+        );
+        let unmoved = TranscriptConsequence::default();
+        assert_eq!(
+            field_value("SPDI", &tri, Some(&unmoved), &options, ","),
+            "21:13620283::TCA"
+        );
+        tri.sibling_spdi = vec![vep_core::spdi::SiblingSpdi {
+            allele: "CAT".to_string(),
+            spdi: "21:13620283::CAT".to_string(),
+            ga4gh_vrs: Some(vep_core::spdi::VrsAllele {
+                sequence_id: "NC_000021.9".to_string(),
+                start: 13620283,
+                end: 13620283,
+                sequence: "CAT".to_string(),
+            }),
+        }];
+        assert_eq!(
+            field_value("SPDI", &tri, Some(&moved_ten), &options, ","),
+            "21:13620283::CAT"
+        );
+        assert!(
+            field_value("GA4GH_VRS", &tri, Some(&moved_ten), &options, ",")
+                .contains("\"sequence\":\"CAT\""),
+        );
+        assert_eq!(
+            field_value("SPDI", &tri, Some(&unmoved), &options, ","),
+            "21:13620283::TCA"
+        );
+        let mut di = InputVariant::new(
+            "21".into(),
+            10451780,
+            10451779,
+            b"-".to_vec(),
+            b"TA".to_vec(),
+        );
+        di.spdi = Some("21:10451779::TA".to_string());
+        let moved_six = TranscriptConsequence {
+            strand: 1,
+            shift_length: 6,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("Allele", &di, Some(&moved_six), &options, ","),
+            "TA"
+        );
+        assert_eq!(
+            field_value("SPDI", &di, Some(&moved_six), &options, ","),
+            "21:10451779::TA"
+        );
     }
 
     /// A `--summary` or `--most_severe` row is the record's hash

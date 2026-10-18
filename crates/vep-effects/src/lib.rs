@@ -14,6 +14,7 @@ pub mod hgvs;
 pub mod hgvsg;
 pub mod mapper;
 pub mod overlap;
+pub mod spdi;
 pub mod sv;
 
 pub use consequences::{calculate_consequences, shift_indel_3prime, shift_motif, EffectsConfig};

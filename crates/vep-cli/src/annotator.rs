@@ -3,6 +3,7 @@
 
 //! Reusable annotation engine for file-based and service-based entrypoints.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -23,6 +24,7 @@ use crate::variation_source::{ReadFailure, VariationSource};
 use crate::vcf_parser::parse_vcf_line;
 use vep_builtins::BuiltinRegistry;
 use vep_core::consequence::Consequence;
+use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
 use vep_plugin::PluginRegistry;
 
@@ -254,7 +256,8 @@ impl Annotator {
             crate::runner::needs_exon_intron_numbers(config),
             config.protein_version,
         );
-        effects.hgvsg = hgvsg_options(config);
+        effects.hgvsg = hgvsg_options(config, &cache.synonyms);
+        effects.spdi = spdi_options(config, &cache.synonyms);
         let effects_config = Arc::new(effects);
         let LoadedPlugins { builtin, dylib } = load_plugins(
             &config.plugin,
@@ -550,8 +553,8 @@ pub fn build_effects_config(
     ))
 }
 
-/// The effects configuration without HGVSg; `Annotator::from_config_with_pool`
-/// sets `hgvsg` on the result.
+/// The effects configuration without HGVSg or SPDI; `Annotator::from_config_with_pool`
+/// sets `hgvsg` and `spdi` on the result.
 fn new_effects_config(
     distance: (u64, u64),
     reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
@@ -574,6 +577,7 @@ fn new_effects_config(
         compute_exon_intron_numbers,
         protein_version,
         hgvsg: None,
+        spdi: None,
     }
 }
 
@@ -590,13 +594,43 @@ pub(crate) fn hgvs_options(config: &Config) -> vep_effects::hgvs::HgvsOptions {
 /// The HGVSg options of a configuration: `None` without `--hgvsg`. Insertions
 /// and deletions are described at their most 3' position unless `--shift_hgvs 0`,
 /// the one setting that gates every HGVS shift (`shift_hgvs_variants_3prime`,
-/// VariationFeature.pm 1981-1988), and the chromosome is named as the input
-/// names it.
-pub(crate) fn hgvsg_options(config: &Config) -> Option<vep_effects::hgvsg::HgvsgOptions> {
-    config.hgvsg.then_some(vep_effects::hgvsg::HgvsgOptions {
+/// VariationFeature.pm 1981-1988); the chromosome is named as the input names
+/// it, or under `--hgvsg_use_accession` by the first `NC_` name among the input
+/// name's own synonyms (OutputFactory.pm 1367-1377).
+pub(crate) fn hgvsg_options(
+    config: &Config,
+    synonyms: &ChromosomeSynonyms,
+) -> Option<vep_effects::hgvsg::HgvsgOptions> {
+    config.hgvsg.then(|| vep_effects::hgvsg::HgvsgOptions {
         shift: config.shift_hgvs,
-        accessions: None,
+        accessions: config.hgvsg_use_accession.then(|| nc_accessions(synonyms)),
     })
+}
+
+/// The SPDI options of a configuration: `None` without `--spdi` or `--ga4gh_vrs`;
+/// the GA4GH VRS allele is built under `--ga4gh_vrs` from the `NC_` accession
+/// each chromosome's synonyms carry.
+pub(crate) fn spdi_options(
+    config: &Config,
+    synonyms: &ChromosomeSynonyms,
+) -> Option<vep_effects::spdi::SpdiOptions> {
+    (config.spdi || config.ga4gh_vrs).then(|| vep_effects::spdi::SpdiOptions {
+        vrs_accessions: config.ga4gh_vrs.then(|| nc_accessions(synonyms)),
+    })
+}
+
+/// Every name of the synonyms table with an `NC_` synonym, mapped to the first
+/// such synonym in the table's order ([`vep_effects::hgvsg::nc_accession`]).
+fn nc_accessions(synonyms: &ChromosomeSynonyms) -> HashMap<String, String> {
+    synonyms
+        .names()
+        .filter_map(|name| {
+            let accession = vep_effects::hgvsg::nc_accession(
+                synonyms.synonyms_of(name).iter().map(String::as_str),
+            )?;
+            Some((name.to_string(), accession.to_string()))
+        })
+        .collect()
 }
 
 /// Load and index every chromosome up front, keeping the transcripts of
@@ -1414,6 +1448,65 @@ mod tests {
         );
     }
 
+    /// The HGVSg options follow the flags: the shift is off under `--shift_hgvs 0`,
+    /// and `--hgvsg_use_accession` maps every name of the synonyms table that has
+    /// an `NC_` synonym to the first one (`21` and `MT` here, `chr21` to nothing,
+    /// as its one synonym is `21`). The SPDI options carry the same map for the
+    /// VRS object under `--ga4gh_vrs` and none under `--spdi` alone.
+    #[test]
+    fn hgvsg_and_spdi_options_take_the_accessions_from_the_synonyms() {
+        let table = ChromosomeSynonyms::parse(
+            "21\tNC_000021.9\n21\tchr21\n21\tCM000683.2\nMT\tchrM\nMT\tNC_012920.1\n",
+        );
+        let accessions = HashMap::from([
+            ("21".to_string(), "NC_000021.9".to_string()),
+            ("MT".to_string(), "NC_012920.1".to_string()),
+        ]);
+        let config = Config::from_argv(["vep", "--hgvsg", "--hgvsg_use_accession"]).unwrap();
+        assert_eq!(
+            hgvsg_options(&config, &table),
+            Some(vep_effects::hgvsg::HgvsgOptions {
+                shift: true,
+                accessions: Some(accessions.clone()),
+            })
+        );
+        let config = Config::from_argv(["vep", "--hgvsg", "--shift_hgvs", "0"]).unwrap();
+        assert_eq!(
+            hgvsg_options(&config, &table),
+            Some(vep_effects::hgvsg::HgvsgOptions {
+                shift: false,
+                accessions: None,
+            })
+        );
+        let config = Config::from_argv(["vep", "--hgvsg_use_accession"]).unwrap();
+        assert_eq!(hgvsg_options(&config, &table), None);
+
+        let config = Config::from_argv(["vep", "--ga4gh_vrs", "--tab"]).unwrap();
+        assert_eq!(
+            spdi_options(&config, &table),
+            Some(vep_effects::spdi::SpdiOptions {
+                vrs_accessions: Some(accessions),
+            })
+        );
+        let config = Config::from_argv(["vep", "--spdi"]).unwrap();
+        assert_eq!(
+            spdi_options(&config, &table),
+            Some(vep_effects::spdi::SpdiOptions {
+                vrs_accessions: None,
+            })
+        );
+        assert_eq!(
+            spdi_options(&Config::from_argv(["vep"]).unwrap(), &table),
+            None
+        );
+        let empty = ChromosomeSynonyms::new();
+        let config = Config::from_argv(["vep", "--ga4gh_vrs", "--tab"]).unwrap();
+        assert_eq!(
+            spdi_options(&config, &empty).unwrap().vrs_accessions,
+            Some(HashMap::new())
+        );
+    }
+
     /// `from_config` refuses `--hgvsg` with no FASTA as the binary does, with
     /// Ensembl VEP's message (Runner.pm 759) under the `fasta` component.
     #[test]
@@ -1556,7 +1649,13 @@ mod tests {
             let annotator = Annotator::from_config(&config).unwrap();
             let effects = Arc::clone(&annotator.resources().effects_config);
             assert_eq!(effects.hgvs, hgvs_options(&config), "{flags:?}");
-            assert_eq!(effects.hgvsg, hgvsg_options(&config), "{flags:?}");
+            // No flag here asks for an accession, so the table does not enter
+            // the options.
+            assert_eq!(
+                effects.hgvsg,
+                hgvsg_options(&config, &ChromosomeSynonyms::new()),
+                "{flags:?}"
+            );
             assert_eq!(
                 effects.compute_hgvs,
                 crate::runner::fasta_setup_checks(&config, true)
@@ -1617,15 +1716,22 @@ mod tests {
             argv.extend_from_slice(flags);
             Config::from_argv(argv).unwrap()
         };
+        let no_table = ChromosomeSynonyms::new();
         let default = config(&[]);
-        assert_eq!(hgvsg_options(&default).map(|o| o.shift), Some(true));
+        assert_eq!(
+            hgvsg_options(&default, &no_table).map(|o| o.shift),
+            Some(true)
+        );
         assert_eq!(
             hgvs_options(&default),
             vep_effects::hgvs::HgvsOptions::default()
         );
 
         let unshifted = config(&["--shift_hgvs", "0"]);
-        assert_eq!(hgvsg_options(&unshifted).map(|o| o.shift), Some(false));
+        assert_eq!(
+            hgvsg_options(&unshifted, &no_table).map(|o| o.shift),
+            Some(false)
+        );
         assert!(!hgvs_options(&unshifted).shift_hgvs);
 
         let forms = config(&["--hgvsp_use_prediction", "--remove_hgvsp_version"]);

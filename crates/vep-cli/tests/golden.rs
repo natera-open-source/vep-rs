@@ -320,6 +320,14 @@ fn runs_refuses_the_flag_set_entries_the_corpus_tool_refuses() {
             serde_json::json!([{"name": "x", "flags": "--symbol"}]),
             format!("{label} flag set x: flags is not of its type"),
         ),
+        (
+            serde_json::json!([{"name": "x", "perl_mode": true}]),
+            format!("{label} flag set x: perl_mode is not of its type"),
+        ),
+        (
+            serde_json::json!([{"name": "x", "perl_mode": "cache"}]),
+            format!("{label} flag set x: perl_mode is offline or database, not \"cache\""),
+        ),
     ];
     let mut wrong = Vec::new();
     for (flag_sets, reason) in refused {
@@ -342,8 +350,12 @@ fn runs_refuses_the_flag_set_entries_the_corpus_tool_refuses() {
     let corpus = with_flag_sets(serde_json::json!([
         {"name": "x1_-", "flags": ["--format", "vcf"], "stdin": true, "formats": ["vcf"], "expected_dir": "expected"},
         {"name": "eq", "flags": ["--format=vcf"], "stdin": true},
+        {"name": "db", "flags": ["--ga4gh_vrs"], "formats": ["default", "tab", "json"], "perl_mode": "database"},
     ]));
-    assert_eq!(runs(&corpus).len(), 3);
+    let runs = runs(&corpus);
+    assert_eq!(runs.len(), 4);
+    assert_eq!(runs[3].perl_mode, "database");
+    assert_eq!(runs[1].perl_mode, "offline");
 }
 
 /// The records the reference dropped before annotation are marked consistently

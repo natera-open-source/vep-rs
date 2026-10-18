@@ -237,9 +237,48 @@ def dedup_keys(entries: list[Entry]) -> None:
             e.key = f"{e.key}#{n}"
 
 
+def canonical_json_text(text: str) -> str:
+    """A JSON object's text with its members sorted (``json_compact``), or ``text`` as it is
+    when it is not a JSON object. Ensembl VEP encodes the ``GA4GH_VRS`` object with its keys
+    in hash order, which differs from row to row, so the text formats compare the parsed
+    object, as the JSON format's nested object does."""
+    try:
+        value = json.loads(text)
+    except ValueError:
+        return text
+    return json_compact(value) if isinstance(value, dict) else text
+
+
+def numberified_json_text(text: str) -> str:
+    """``canonical_json_text`` with every string member that is a whole number made a number:
+    the ``GA4GH_VRS`` object of the text formats carries its ``start`` as a string, and the
+    JSON format's nested object has both bounds as numbers (``OutputFactory/JSON.pm:288``,
+    ``numberify``)."""
+    try:
+        value = json.loads(text)
+    except ValueError:
+        return text
+    if not isinstance(value, dict):
+        return text
+
+    def numberify(v):
+        if isinstance(v, dict):
+            return {k: numberify(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [numberify(x) for x in v]
+        return int(v) if isinstance(v, str) and v.isdecimal() else v
+
+    return json_compact(numberify(value))
+
+
+# The fields whose text is a JSON object, compared in canonical form.
+JSON_OBJECT_FIELDS = ("GA4GH_VRS",)
+
+
 def parse_default(text: str) -> list[Entry]:
     """The default format: the columns of the ``#`` header line, the ``Extra`` column's
-    ``key=value`` pairs becoming fields of their own while ``Extra`` keeps its raw text."""
+    ``key=value`` pairs becoming fields of their own while ``Extra`` keeps its raw text, a
+    ``JSON_OBJECT_FIELDS`` value in canonical form in both."""
     cols: list[str] = []
     entries: list[Entry] = []
     for line in text_lines(text):
@@ -251,11 +290,20 @@ def parse_default(text: str) -> list[Entry]:
         if len(vals) != len(cols):
             raise ComparatorError(f"column count on line: {line}")
         fields = dict(zip(cols, vals))
+        for name in JSON_OBJECT_FIELDS:
+            if name in fields:
+                fields[name] = canonical_json_text(fields[name])
         extra = fields.get("Extra")
         if extra is not None and extra != "-":
+            pairs: list[str] = []
             for kv in extra.split(";"):
-                k, _, v = kv.partition("=")
+                k, sep, v = kv.partition("=")
+                if sep and k in JSON_OBJECT_FIELDS:
+                    v = canonical_json_text(v)
+                    kv = f"{k}={v}"
                 fields[k] = v
+                pairs.append(kv)
+            fields["Extra"] = ";".join(pairs)
         location = fields.get("Location", "")
         allele = fields.get("Allele", "")
         feature = fields.get("Feature", "")
@@ -1275,6 +1323,13 @@ class SelfParity:
                     got = o.fields.get("domains")
                     if (want is None) != (got is None) or (want is not None and ",".join(want) != got):
                         yield column, f"default {raw!r}, json domains={got!r}"
+                    continue
+                if column in JSON_OBJECT_FIELDS:
+                    remaining.discard(key)
+                    want = None if raw in ("-", "") else numberified_json_text(raw)
+                    got = o.fields.get(key)
+                    if want != got:
+                        yield column, f"default {raw!r}, json {key}={got!r}"
                     continue
                 jkey = f"{kind}_id" if key == "feature" else JSON_RENAME.get(key, key)
                 remaining.discard(jkey)

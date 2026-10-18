@@ -71,8 +71,11 @@ parity-matrix rows the corpus exercises (`covers`, written by `select --covers`
 or `covers --add`; `covers --add`, `flag-set --covers` and `select --matrix` refuse
 a name that is not a row of `tests/parity/matrix.tsv`) and, under
 `flag_sets`, the further runs of the same records under other flags, each with
-its own `flags`, input, formats, expected directory and `covers`, and `unordered`
-when Ensembl VEP emits the record's rows in hash order (`flag-set`).
+its own `flags`, input, formats, expected directory and `covers`, `unordered`
+when Ensembl VEP emits the record's rows in hash order, and `perl_mode`
+(`database`) when its reference came from Ensembl VEP connected to a database
+rather than reading the cache, so its default and tab headers compare by their
+column descriptions alone (`flag-set`, `flag-set --perl-mode`).
 `cargo test -p vep-cli --test golden --test format_parity` annotates each corpus
 once per run and compares every column of every format (the Parquet round trip
 needs the `duckdb` CLI; without it that one test skips). A failure lists every mismatch

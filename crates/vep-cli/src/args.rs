@@ -534,6 +534,32 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long)]
     pub hgvsg: bool,
 
+    /// Name the chromosome in HGVSg by its RefSeq accession: the first NC_ name among
+    /// the input name's own synonyms in the chromosome synonyms table (one hop: only a
+    /// line pairing the name as written with the accession renames it); an input name
+    /// with no NC_ synonym keeps its own name, where Ensembl VEP stops with an error
+    #[arg(help_heading = "Output Control", long = "hgvsg_use_accession")]
+    pub hgvsg_use_accession: bool,
+
+    /// Add the SPDI column: each allele in Sequence Position Deletion Insertion
+    /// notation, the position 0-based, the deleted bases (their count when more than
+    /// 20) and the inserted bases, as the input wrote the record; the chromosome is
+    /// named as the cache names it, and on a row overlapping no transcript as the
+    /// FASTA names it. Ensembl VEP needs a FASTA for those rows; this reads none
+    #[arg(help_heading = "Output Control", long)]
+    pub spdi: bool,
+
+    /// Add the GA4GH_VRS column: the allele's SPDI as a GA4GH Variation Representation
+    /// Specification Allele object on the sequence refseq:<NC_ accession>, the accession
+    /// being the first NC_ synonym of the cache's chromosome name in the chromosome
+    /// synonyms table (Ensembl VEP writes the object only where its SPDI is named by an
+    /// NC_ accession: with a database, or on a row overlapping no transcript whose FASTA
+    /// record carries that name; a chromosome with no NC_ synonym gets none);
+    /// JSON-encoded in the text outputs, nested in the JSON output. Cannot be combined
+    /// with --vcf
+    #[arg(help_heading = "Output Control", long = "ga4gh_vrs")]
+    pub ga4gh_vrs: bool,
+
     /// Write HGVSp in the predicted form, the description after p. in parentheses
     /// (ENSP00000286808.3:p.(Arg97Ter)); the = of a synonymous description is still
     /// escaped as %3D in the text formats

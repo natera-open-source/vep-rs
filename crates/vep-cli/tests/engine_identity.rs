@@ -11,8 +11,8 @@
 mod common;
 
 use common::{
-    compare_json_identity, compare_tab_headers, compare_vcf_headers, corpora, default_run,
-    read_expected, run_vep,
+    compare_column_descriptions, compare_json_identity, compare_tab_headers, compare_vcf_headers,
+    corpora, default_run, read_expected, run_vep, runs,
 };
 
 /// The version the binary under test was built from: every crate of the
@@ -146,5 +146,67 @@ fn comparators_set_aside_exactly_the_identity_lines() {
     assert_eq!(
         compare_json_identity(&without),
         format!("JSON object 0: vep_rs_version is None, expected {VERSION:?}")
+    );
+}
+
+/// The `vrs-db` flag set of the GRCh38-identifiers corpus has a database
+/// reference, whose tab header compares by its column descriptions and column
+/// line alone (`compare_column_descriptions`): silent on the committed pair, and
+/// a report for a missing identity line, a changed description, a changed
+/// column line and a dropped column line.
+#[test]
+fn column_descriptions_comparator_reports_each_difference() {
+    let corpus = corpora()
+        .into_iter()
+        .find(|c| c.name == "GRCh38-identifiers")
+        .expect("the GRCh38-identifiers corpus is committed");
+    let run = runs(&corpus)
+        .into_iter()
+        .find(|r| r.name == "vrs-db")
+        .expect("the vrs-db flag set is in the manifest");
+    assert_eq!(run.perl_mode, "database");
+    let tmp = tempfile::tempdir().unwrap();
+
+    let expected = run.expected("tab.txt");
+    let actual = run_vep(&run, "tab", tmp.path(), &[]);
+    assert_eq!(compare_column_descriptions(&expected, &actual), "");
+
+    let tab_identity = format!("## vep-rs {VERSION}");
+    assert_eq!(
+        compare_column_descriptions(&expected, &actual.replacen(&tab_identity, "", 1)),
+        format!("vep-rs writes no {tab_identity:?} header line")
+    );
+
+    let strand_description = "## STRAND : Strand of the feature (1/-1)";
+    assert!(
+        actual.contains(strand_description),
+        "the tab header describes STRAND"
+    );
+    let changed_description = actual.replacen(strand_description, "## STRAND : Strand", 1);
+    let report = compare_column_descriptions(&expected, &changed_description);
+    assert!(
+        report.starts_with("header line ")
+            && report.contains(&format!(
+                "expected {strand_description:?}, got \"## STRAND : Strand\""
+            )),
+        "{report}"
+    );
+
+    let changed_columns = actual.replacen("\tGA4GH_VRS", "\tGA4GH_VRX", 1);
+    let report = compare_column_descriptions(&expected, &changed_columns);
+    assert!(
+        report.starts_with("header line ") && report.contains("GA4GH_VRX"),
+        "{report}"
+    );
+
+    let without_columns: String = actual
+        .lines()
+        .filter(|l| !l.starts_with("#Uploaded_variation"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    let report = compare_column_descriptions(&expected, &without_columns);
+    assert!(
+        report.starts_with("header column lines: expected "),
+        "{report}"
     );
 }
