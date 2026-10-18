@@ -13,13 +13,14 @@
 //!     ...
 //! ```
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
 use tracing::info;
 
+use crate::core_dumps::{CoreDumps, TranslationFacts};
 use crate::gff3::GeneRecord;
 use crate::mapper;
 
@@ -53,6 +54,8 @@ struct CacheTranscript {
     db_id: Option<u64>,
     gene_stable_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    gene_version: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     chr: Option<String>,
     start: u64,
     end: u64,
@@ -67,20 +70,29 @@ struct CacheTranscript {
     gene_symbol_source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "gene_hgnc_id")]
     hgnc_id: Option<String>,
+    /// The gene's significant phenotype feature count.
     #[serde(skip_serializing_if = "Option::is_none")]
-    gene_phenotype: Option<u8>,
-    #[serde(rename = "is_canonical")]
-    canonical: u8,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    mane_select: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    mane_plus_clinical: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tsl: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    appris: Option<String>,
+    gene_phenotype: Option<u32>,
+    /// `1` on the gene's canonical transcript; the Ensembl cache carries no
+    /// key on the others.
+    #[serde(rename = "is_canonical", skip_serializing_if = "Option::is_none")]
+    canonical: Option<u8>,
+    /// The first CCDS xref's display label, or the dumper's `-` sentinel.
+    ccds: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     protein: Option<String>,
+    /// Comma-joined xref labels, or the dumper's `-` sentinel; absent when
+    /// no core dumps were read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    refseq: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    swissprot: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trembl: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    uniparc: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    uniprot_isoform: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     exons: Vec<CacheExon>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -155,12 +167,15 @@ struct CachePredictions {
     polyphen_humvar: Option<CachePredictionMatrix>,
 }
 
-/// A single prediction matrix in JSON-serializable form.
+/// A single prediction matrix in JSON-serializable form: the keys of the
+/// Ensembl matrix object, with the gzip blob base64-encoded as
+/// `predictions_data`.
 #[derive(Serialize)]
 struct CachePredictionMatrix {
     analysis: String,
-    peptide_length: usize,
-    /// Base64-encoded gzip-compressed binary matrix.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sub_analysis: Option<String>,
+    translation_md5: String,
     predictions_data: String,
 }
 
@@ -211,12 +226,23 @@ pub fn build_cache(
     prediction_data: Option<&HashMap<String, crate::predictions::PeptidePredictions>>,
     genome_fasta: Option<&vep_fasta::IndexedFasta>,
     gtf_tags: Option<&crate::gtf::GtfTags>,
+    core_dumps: Option<&CoreDumps>,
 ) -> Result<BuildStats> {
     let mut by_chr: HashMap<String, Vec<CacheTranscript>> = HashMap::new();
     let mut transcript_count = 0usize;
 
+    let mut readthrough_dropped = 0usize;
     for gene in genes.values() {
         for tr in &gene.transcripts {
+            // The dumper drops a readthrough transcript by its attribute; the
+            // GRCh37 release-87 GFF3 has no tag for it, the core dumps do.
+            if core_dumps
+                .and_then(|d| d.transcript(&tr.transcript_id))
+                .is_some_and(|f| f.readthrough)
+            {
+                readthrough_dropped += 1;
+                continue;
+            }
             let cache_tr = build_transcript(
                 gene,
                 tr,
@@ -224,10 +250,26 @@ pub fn build_cache(
                 prediction_data,
                 genome_fasta,
                 gtf_tags,
+                core_dumps,
             );
             by_chr.entry(tr.chr.clone()).or_default().push(cache_tr);
             transcript_count += 1;
         }
+    }
+    if readthrough_dropped > 0 {
+        info!(
+            "Dropped {} readthrough transcripts named by the core dumps",
+            readthrough_dropped
+        );
+    }
+
+    // Position order: the dumper's region fetch returns genes that way, the
+    // same-named HGNC copy below depends on it, and the shards then come out
+    // the same on every build.
+    for transcripts in by_chr.values_mut() {
+        transcripts
+            .sort_by(|a, b| (a.start, a.end, &a.stable_id).cmp(&(b.start, b.end, &b.stable_id)));
+        copy_hgnc_ids_by_symbol(transcripts);
     }
 
     let transcripts_dir = output_dir.join("transcripts");
@@ -275,6 +317,42 @@ pub fn build_cache(
     })
 }
 
+/// Ensembl VEP's dumper writes each 1 Mb region through `merge_features`
+/// (AnnotationType/Transcript.pm), which gives every transcript whose gene
+/// symbol matches that of a transcript carrying an HGNC id, among the
+/// transcripts overlapping the region, that HGNC id; a gene whose display
+/// xref is EntrezGene so prints the HGNC id of a same-named HGNC gene nearby.
+/// The map is built from the transcripts overlapping each region, in the
+/// order given (a later transcript's id wins, as in `merge_features`), and
+/// applied to the transcripts the region's shard holds.
+fn copy_hgnc_ids_by_symbol(transcripts: &mut [CacheTranscript]) {
+    let mut by_region: HashMap<u64, HashMap<String, String>> = HashMap::new();
+    for tr in transcripts.iter() {
+        let (Some(symbol), Some(hgnc_id)) = (&tr.gene_symbol, &tr.hgnc_id) else {
+            continue;
+        };
+        let mut region = region_start(tr.start);
+        while region <= tr.end {
+            by_region
+                .entry(region)
+                .or_default()
+                .insert(symbol.clone(), hgnc_id.clone());
+            region += REGION_SIZE;
+        }
+    }
+    for tr in transcripts.iter_mut() {
+        let Some(symbol) = &tr.gene_symbol else {
+            continue;
+        };
+        if let Some(hgnc_id) = by_region
+            .get(&region_start(tr.start))
+            .and_then(|m| m.get(symbol))
+        {
+            tr.hgnc_id = Some(hgnc_id.clone());
+        }
+    }
+}
+
 /// Generate `info.json` in the output directory.
 ///
 /// This file describes the cache contents and is read by `vep-cli` to
@@ -285,7 +363,7 @@ pub fn generate_info_json(
     assembly: &str,
     cache_version: u32,
     include_predictions: bool,
-    source_versions: HashMap<String, String>,
+    source_versions: BTreeMap<String, String>,
 ) -> Result<()> {
     let info = CacheInfoJson {
         species: species.to_string(),
@@ -340,7 +418,7 @@ struct CacheInfoJson {
     polyphen: Option<String>,
     regulatory: bool,
     variation_cols: Vec<String>,
-    source_versions: HashMap<String, String>,
+    source_versions: BTreeMap<String, String>,
 }
 
 /// Build a single CacheTranscript from parsed GFF3 data.
@@ -351,8 +429,12 @@ fn build_transcript(
     prediction_data: Option<&HashMap<String, crate::predictions::PeptidePredictions>>,
     genome_fasta: Option<&vep_fasta::IndexedFasta>,
     gtf_tags: Option<&crate::gtf::GtfTags>,
+    core_dumps: Option<&CoreDumps>,
 ) -> CacheTranscript {
     let strand = tr.strand;
+    let facts = core_dumps.and_then(|d| d.transcript(&tr.transcript_id));
+    let gene_facts = core_dumps.and_then(|d| d.gene(&gene.gene_id));
+    let translation_facts = facts.and_then(|f| f.translation.as_ref());
 
     let mapper_result = mapper::build_mapper(&tr.exons, &tr.cds_regions, strand);
 
@@ -368,18 +450,26 @@ fn build_transcript(
 
     let peptide = protein_sequences.get(&tr.transcript_id).cloned();
 
-    let protein_id = if !tr.cds_regions.is_empty() {
-        derive_protein_id(&tr.transcript_id)
-    } else {
-        None
-    };
+    // The translation's stable identifier and version are the CDS line's
+    // `protein_id` and `version`; every CDS segment of a transcript carries
+    // the same pair.
+    let protein_id = tr
+        .cds_regions
+        .iter()
+        .find_map(|c| c.protein_id.clone())
+        .or_else(|| translation_facts.map(|t| t.stable_id.clone()));
+    let protein_version = tr
+        .cds_regions
+        .iter()
+        .find_map(|c| c.protein_version)
+        .or_else(|| translation_facts.and_then(|t| t.version));
 
     let translation = if !tr.cds_regions.is_empty() {
         let cdna_start = mapper_result.cdna_coding_start.unwrap_or(1);
         let cdna_end = mapper_result.cdna_coding_end.unwrap_or(1);
         Some(CacheTranslation {
             stable_id: protein_id.clone().unwrap_or_default(),
-            version: None,
+            version: protein_version,
             db_id: None,
             start: cdna_start,
             end: cdna_end,
@@ -412,45 +502,70 @@ fn build_transcript(
         None
     };
 
-    let gene_symbol_source = gene.name.as_ref().map(|_| {
-        // Ensembl GFF3 doesn't explicitly provide symbol source;
-        // most human gene symbols come from HGNC.
-        "HGNC".to_string()
-    });
+    // Attribute codes and values as Ensembl VEP's cache dumper keeps them
+    // (Pipeline/DumpVEP/Dumper/Core.pm `clean_transcript`): the core dumps'
+    // kept transcript attributes verbatim when read, else what the GFF3 and
+    // the GTF state.
+    let attributes: Vec<CacheAttribute> = match facts {
+        Some(f) => f
+            .attributes
+            .iter()
+            .map(|a| CacheAttribute {
+                code: a.code.clone(),
+                value: a.value.clone(),
+            })
+            .collect(),
+        None => gff3_attributes(tr, gtf_tags),
+    };
 
-    // Attribute codes as VEP's cache dumper keeps them: `gencode_basic` from
-    // the GFF3 `basic` tag, and the GTF's `cds_start_NF` / `cds_end_NF` /
-    // `gencode_primary` when a GTF is given (the GFF3 lacks them).
-    let mut attributes = Vec::new();
-    let mut codes: Vec<&str> = Vec::new();
-    if tr.gencode_basic {
-        codes.push("gencode_basic");
-    }
-    if let Some(gtf) = gtf_tags {
-        for code in gtf.kept_attribute_codes(&tr.transcript_id) {
-            if !codes.contains(&code) {
-                codes.push(code);
-            }
+    // Xref lists as `prefetch_transcript_ids` and `prefetch_translation_ids`
+    // store them: comma-joined labels, `-` when there are none. Without the
+    // core dumps the transcript's are unknown; `ccds` is on the GFF3.
+    let xref_list = |labels: &[String]| -> String {
+        if labels.is_empty() {
+            "-".to_string()
+        } else {
+            labels.join(",")
         }
-    }
-    for code in codes {
-        attributes.push(CacheAttribute {
-            code: code.to_string(),
-            value: "1".to_string(),
-        });
-    }
-    if let Some(tsl) = tr.tsl {
-        attributes.push(CacheAttribute {
-            code: "TSL".to_string(),
-            value: format!("tsl{tsl}"),
-        });
-    }
-    if let Some(ref appris) = tr.appris {
-        attributes.push(CacheAttribute {
-            code: "appris".to_string(),
-            value: appris.clone(),
-        });
-    }
+    };
+    let ccds = facts
+        .and_then(|f| f.ccds.clone())
+        .or_else(|| tr.ccds.clone())
+        .unwrap_or_else(|| "-".to_string());
+    let refseq = facts.map(|f| xref_list(&f.refseq));
+    let translation_xrefs = |pick: fn(&TranslationFacts) -> &[String]| -> Option<String> {
+        if tr.cds_regions.is_empty() || facts.is_none() {
+            return None;
+        }
+        match translation_facts {
+            Some(t) => Some(xref_list(pick(t))),
+            None => Some("-".to_string()),
+        }
+    };
+
+    let protein_features = translation_facts
+        .map(|t| {
+            t.protein_features
+                .iter()
+                .map(|pf| CacheProteinFeature {
+                    start: pf.start,
+                    end: pf.end,
+                    hseqname: pf.hseqname.clone(),
+                    analysis: pf.display_label.clone(),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let (gene_symbol, gene_symbol_source, hgnc_id, gene_phenotype) = match gene_facts {
+        Some(g) => (
+            g.symbol.clone(),
+            g.symbol_source.clone(),
+            g.hgnc_id.clone(),
+            g.phenotype_count,
+        ),
+        None => (gene.name.clone(), None, None, None),
+    };
 
     let translateable_seq = genome_fasta
         .and_then(|fasta| compute_translateable_seq(&tr.chr, &tr.cds_regions, strand, fasta));
@@ -460,6 +575,7 @@ fn build_transcript(
         version: tr.version,
         db_id: None,
         gene_stable_id: gene.gene_id.clone(),
+        gene_version: gene.version,
         chr: None, // Not emitted; derived from directory structure.
         start: tr.start,
         end: tr.end,
@@ -467,38 +583,84 @@ fn build_transcript(
         biotype: tr.biotype.clone(),
         source: tr.source.clone(),
         description: gene.description.clone(),
-        gene_symbol: gene.name.clone(),
+        gene_symbol,
         gene_symbol_source,
-        hgnc_id: gene.hgnc_id.clone(),
-        gene_phenotype: Some(0),
-        canonical: if tr.is_canonical { 1 } else { 0 },
-        mane_select: tr.mane_select.clone(),
-        mane_plus_clinical: tr.mane_plus_clinical.clone(),
-        tsl: tr.tsl,
-        appris: tr.appris.clone(),
+        hgnc_id,
+        gene_phenotype,
+        canonical: (tr.is_canonical || facts.is_some_and(|f| f.is_canonical)).then_some(1),
+        ccds,
         protein: protein_id,
+        refseq,
+        swissprot: translation_xrefs(|t| &t.swissprot),
+        trembl: translation_xrefs(|t| &t.trembl),
+        uniparc: translation_xrefs(|t| &t.uniparc),
+        uniprot_isoform: translation_xrefs(|t| &t.uniprot_isoform),
         exons,
         cdna_coding_start: mapper_result.cdna_coding_start,
         cdna_coding_end: mapper_result.cdna_coding_end,
         translation,
         attributes,
         variation_effect_feature_cache: CacheVEFC {
-            codon_table: 1,
+            // The sequence region's `codon_table` attribute, 2 on MT, else the
+            // standard table (Database/Transcript.pm `prefetch_transcript_data`).
+            codon_table: core_dumps.and_then(|d| d.codon_table(&tr.chr)).unwrap_or(1),
             introns,
             mapper: cache_mapper,
             peptide,
             translateable_seq,
             sorted_exons,
-            // Protein features (InterPro domains, Pfam) are absent from Ensembl GFF3
-            // and would need a separate source (Ensembl BioMart/REST, InterPro GFF3,
-            // or the Perl VEP cache's domain data), so this stays empty and DOMAINS
-            // is not annotated.
-            protein_features: Vec::new(),
+            protein_features,
             protein_function_predictions: prediction_data
                 .and_then(|pd| pd.get(&tr.transcript_id))
                 .map(convert_predictions),
         },
     }
+}
+
+/// The transcript attributes a build without the core dumps can state, each
+/// code once: the GFF3's GENCODE set labels, the GTF's `cds_start_NF`,
+/// `cds_end_NF` and `gencode_primary` when a GTF is given, the `TSL` value
+/// with its `tsl` prefix, and a MANE membership whose accession the GFF3 does
+/// not carry (the attribute present, its value empty).
+fn gff3_attributes(
+    tr: &crate::gff3::TranscriptRecord,
+    gtf_tags: Option<&crate::gtf::GtfTags>,
+) -> Vec<CacheAttribute> {
+    let mut attributes: Vec<CacheAttribute> = Vec::new();
+    let mut push_attribute = |code: &str, value: &str| {
+        if !attributes.iter().any(|a| a.code == code) {
+            attributes.push(CacheAttribute {
+                code: code.to_string(),
+                value: value.to_string(),
+            });
+        }
+    };
+    if tr.gencode_basic {
+        push_attribute("gencode_basic", "GENCODE basic");
+    }
+    if tr.gencode_primary {
+        push_attribute("gencode_primary", "GENCODE primary");
+    }
+    if let Some(gtf) = gtf_tags {
+        for code in gtf.kept_attribute_codes(&tr.transcript_id) {
+            let value = match code {
+                "gencode_basic" => "GENCODE basic",
+                "gencode_primary" => "GENCODE primary",
+                _ => "1",
+            };
+            push_attribute(code, value);
+        }
+    }
+    if let Some(tsl) = &tr.tsl {
+        push_attribute("TSL", &format!("tsl{tsl}"));
+    }
+    if tr.mane_select {
+        push_attribute("MANE_Select", "");
+    }
+    if tr.mane_plus_clinical {
+        push_attribute("MANE_Plus_Clinical", "");
+    }
+    attributes
 }
 
 /// Compute the translateable (CDS) nucleotide sequence from the reference genome FASTA.
@@ -551,7 +713,8 @@ fn convert_predictions(preds: &crate::predictions::PeptidePredictions) -> CacheP
     fn convert_blob(blob: &crate::predictions::PredictionBlob) -> CachePredictionMatrix {
         CachePredictionMatrix {
             analysis: blob.analysis.clone(),
-            peptide_length: blob.peptide_length,
+            sub_analysis: blob.sub_analysis.clone(),
+            translation_md5: blob.translation_md5.clone(),
             predictions_data: blob.base64_data.clone(),
         }
     }
@@ -653,30 +816,9 @@ fn build_introns(exons: &[CacheExon], strand: i8) -> Vec<CacheIntron> {
         .collect()
 }
 
-/// Derive a protein (ENSP) ID from a transcript (ENST) ID.
-///
-/// Convention: replace the ENST prefix with ENSP. Ensembl assigns ENSP accessions
-/// independently of ENST accessions, so this derived id is a placeholder.
-fn derive_protein_id(transcript_id: &str) -> Option<String> {
-    if transcript_id.starts_with("ENST") {
-        Some(transcript_id.replacen("ENST", "ENSP", 1))
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_derive_protein_id() {
-        assert_eq!(
-            derive_protein_id("ENST00000309812"),
-            Some("ENSP00000309812".to_string())
-        );
-        assert_eq!(derive_protein_id("NM_001234"), None);
-    }
 
     #[test]
     fn test_region_binning() {
@@ -694,7 +836,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmpdir);
         std::fs::create_dir_all(&tmpdir).unwrap();
 
-        let versions = HashMap::from([("assembly".to_string(), "GRCh37.p13".to_string())]);
+        let versions = BTreeMap::from([("assembly".to_string(), "GRCh37.p13".to_string())]);
         generate_info_json(&tmpdir, "homo_sapiens", "GRCh37", 115, false, versions).unwrap();
 
         let info_path = tmpdir.join("info.json");

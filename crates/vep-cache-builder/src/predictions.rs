@@ -15,9 +15,12 @@
 //!
 //! ## Matrix format
 //!
-//! Each matrix blob is a gzip-compressed binary. See [`vep_core::prediction`]
-//! for the full format specification. The blobs are stored in the JSON cache
-//! as base64-encoded strings.
+//! Each matrix blob is a gzip-compressed binary, the `prediction_matrix`
+//! column as Ensembl stores it and as `Bio::EnsEMBL::Variation::ProteinFunctionPredictionMatrix`
+//! holds it in its `matrix` key. See [`vep_core::prediction`] for the layout.
+//! The cache stores each blob base64-encoded under the object's other keys
+//! (`analysis`, `sub_analysis`, `translation_md5`), so a converted Ensembl
+//! cache and a native one read through one decoder.
 
 use std::collections::HashMap;
 
@@ -42,18 +45,23 @@ struct FetchedMatrix {
 }
 
 /// Per-peptide prediction data: up to 3 matrices (sift, polyphen_humvar, polyphen_humdiv).
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PeptidePredictions {
     pub sift: Option<PredictionBlob>,
     pub polyphen_humvar: Option<PredictionBlob>,
     pub polyphen_humdiv: Option<PredictionBlob>,
 }
 
-/// A prediction matrix blob ready for JSON serialization.
-#[derive(Debug)]
+/// A prediction matrix blob ready for JSON serialization, with the keys of
+/// the Ensembl matrix object: the analysis attribute `polyphen_humvar` is the
+/// analysis `polyphen` with the sub-analysis `humvar`, and `sift` has none
+/// (`ProteinFunctionPredictionMatrixAdaptor` `_objs_from_sth`).
+#[derive(Debug, Clone)]
 pub struct PredictionBlob {
     pub analysis: String,
-    pub peptide_length: usize,
+    pub sub_analysis: Option<String>,
+    /// The MD5 of the peptide the matrix was computed for.
+    pub translation_md5: String,
     /// Base64-encoded gzip-compressed binary matrix.
     pub base64_data: String,
 }
@@ -81,14 +89,12 @@ pub fn fetch_predictions(
     }
 
     let mut md5_to_transcripts: HashMap<String, Vec<String>> = HashMap::new();
-    let mut md5_to_peptide_length: HashMap<String, usize> = HashMap::new();
     for (tx_id, peptide) in peptide_by_transcript {
         let md5 = format!("{:x}", md5::compute(peptide));
         md5_to_transcripts
-            .entry(md5.clone())
+            .entry(md5)
             .or_default()
             .push(tx_id.clone());
-        md5_to_peptide_length.insert(md5, peptide.len());
     }
 
     info!(
@@ -140,39 +146,14 @@ pub fn fetch_predictions(
 
     let mut result: HashMap<String, PeptidePredictions> = HashMap::new();
     for (md5, tx_ids) in &md5_to_transcripts {
-        let pep_len = md5_to_peptide_length.get(md5).copied().unwrap_or(0);
-        let predictions = build_peptide_predictions(
-            by_md5.get(md5).map(|v| v.as_slice()).unwrap_or(&[]),
-            pep_len,
-        );
+        let matrices = by_md5.get(md5).map(|v| v.as_slice()).unwrap_or(&[]);
+        let predictions = build_peptide_predictions(matrices, md5);
         for tx_id in tx_ids {
             result.insert(tx_id.clone(), predictions.clone());
         }
     }
 
     Ok(result)
-}
-
-impl Clone for PeptidePredictions {
-    fn clone(&self) -> Self {
-        PeptidePredictions {
-            sift: self.sift.as_ref().map(|b| PredictionBlob {
-                analysis: b.analysis.clone(),
-                peptide_length: b.peptide_length,
-                base64_data: b.base64_data.clone(),
-            }),
-            polyphen_humvar: self.polyphen_humvar.as_ref().map(|b| PredictionBlob {
-                analysis: b.analysis.clone(),
-                peptide_length: b.peptide_length,
-                base64_data: b.base64_data.clone(),
-            }),
-            polyphen_humdiv: self.polyphen_humdiv.as_ref().map(|b| PredictionBlob {
-                analysis: b.analysis.clone(),
-                peptide_length: b.peptide_length,
-                base64_data: b.base64_data.clone(),
-            }),
-        }
-    }
 }
 
 /// Resolve analysis_attrib_id values for sift, polyphen_humvar, polyphen_humdiv.
@@ -259,7 +240,7 @@ fn batch_fetch_matrices(
 /// Convert fetched matrices into a PeptidePredictions struct.
 fn build_peptide_predictions(
     matrices: &[FetchedMatrix],
-    peptide_length: usize,
+    translation_md5: &str,
 ) -> PeptidePredictions {
     let mut predictions = PeptidePredictions::default();
 
@@ -267,9 +248,16 @@ fn build_peptide_predictions(
         // The blob is already gzip-compressed; base64 is for JSON storage.
         let base64_data = base64::engine::general_purpose::STANDARD.encode(&matrix.blob);
 
+        let (analysis, sub_analysis) = match matrix.analysis.split_once('_') {
+            Some((analysis, sub_analysis)) => {
+                (analysis.to_string(), Some(sub_analysis.to_string()))
+            }
+            None => (matrix.analysis.clone(), None),
+        };
         let blob = PredictionBlob {
-            analysis: matrix.analysis.clone(),
-            peptide_length,
+            analysis,
+            sub_analysis,
+            translation_md5: translation_md5.to_string(),
             base64_data,
         };
 
@@ -282,4 +270,37 @@ fn build_peptide_predictions(
     }
 
     predictions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The matrix object's keys follow the Ensembl adaptor: the analysis
+    /// attribute value `polyphen_humvar` splits into the analysis `polyphen`
+    /// and the sub-analysis `humvar`; `sift` has no sub-analysis; the blob is
+    /// stored as it was fetched, base64-encoded.
+    #[test]
+    fn matrix_object_keys_follow_the_ensembl_adaptor() {
+        let fetched = vec![
+            FetchedMatrix {
+                analysis: "polyphen_humvar".into(),
+                blob: vec![0x1f, 0x8b, 1, 2],
+            },
+            FetchedMatrix {
+                analysis: "sift".into(),
+                blob: vec![0x1f, 0x8b, 3],
+            },
+        ];
+        let p = build_peptide_predictions(&fetched, "d41d8cd98f00b204e9800998ecf8427e");
+        let humvar = p.polyphen_humvar.as_ref().unwrap();
+        assert_eq!(humvar.analysis, "polyphen");
+        assert_eq!(humvar.sub_analysis.as_deref(), Some("humvar"));
+        assert_eq!(humvar.translation_md5, "d41d8cd98f00b204e9800998ecf8427e");
+        assert_eq!(humvar.base64_data, "H4sBAg==");
+        let sift = p.sift.as_ref().unwrap();
+        assert_eq!(sift.analysis, "sift");
+        assert_eq!(sift.sub_analysis, None);
+        assert!(p.polyphen_humdiv.is_none());
+    }
 }

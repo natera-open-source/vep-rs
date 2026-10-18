@@ -1,0 +1,6 @@
+#!genome-build GRCh38.p14
+#!genome-version GRCh38
+#!genebuild-last-updated 2025-11
+21	ensembl_havana	transcript	18269116	18403785	.	-	.	gene_id "ENSG00000154646"; gene_version "9"; transcript_id "ENST00000284885"; transcript_version "8"; gene_name "TMPRSS15"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS13571"; tag "gencode_basic"; tag "gencode_primary"; tag "MANE_Select"; tag "Ensembl_canonical"; transcript_support_level "1 (assigned to previous version 7)";
+21	havana	transcript	18365140	18485879	.	-	.	gene_id "ENSG00000154646"; gene_version "9"; transcript_id "ENST00000422787"; transcript_version "1"; gene_name "TMPRSS15"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_source "havana"; transcript_biotype "protein_coding"; tag "cds_end_NF"; tag "mRNA_end_NF"; transcript_support_level "5";
+21	havana	transcript	18365241	18460731	.	-	.	gene_id "ENSG00000154646"; gene_version "9"; transcript_id "ENST00000474775"; transcript_version "1"; gene_name "TMPRSS15"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_source "havana"; transcript_biotype "protein_coding"; tag "cds_end_NF"; tag "mRNA_end_NF"; transcript_support_level "5";

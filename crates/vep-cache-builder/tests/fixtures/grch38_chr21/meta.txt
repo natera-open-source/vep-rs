@@ -1,0 +1,8 @@
+2	\N	schema_version	116
+16	1	genebuild.last_geneset_update	2025-11
+21	1	assembly.name	GRCh38.p14
+22	1	assembly.default	GRCh38
+27	1	genebuild.initial_release_date	2014-07
+300	1	gencode.version	GENCODE 50
+6651	1	species.production_name	homo_sapiens
+6410	1	genebuild.version	GENCODE50

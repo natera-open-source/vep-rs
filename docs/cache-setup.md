@@ -45,12 +45,32 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 
 **Build one natively with `vep-cache-builder`**, with no Perl dependency. It downloads the
 release's Ensembl GFF3 and protein FASTA, or reads local copies passed with `--gff3` and
-`--fasta`, and writes the cache directory. For GRCh37 the download fetches the release-87 gene set, the one Ensembl publishes for GRCh37 from release 88 onward, so the GFF3 it retrieves is `Homo_sapiens.GRCh37.87.gff3.gz` whatever `--release` says. Two more inputs decide what the cache can express:
+`--fasta`, and writes the cache directory. For GRCh37 the download fetches the release-87 gene set, the one Ensembl publishes for GRCh37 from release 88 onward, so for any such `--release` the GFF3 it retrieves is `Homo_sapiens.GRCh37.87.gff3.gz`. The GFF3 alone gives each transcript its
+exons, CDS and ENSP identifier, its biotype, CCDS identifier and transcript support level,
+its GENCODE basic and primary, canonical and MANE memberships, and the gene's symbol and
+version; Ensembl VEP's own dumper drops `artifact` and readthrough transcripts, and so
+does the builder. Three more inputs decide what else the cache can express:
 
-- `--gtf`, the Ensembl GTF of the same release, is the only source of the `cds_start_NF`
-  and `cds_end_NF` transcript attributes (the `FLAGS` output field), which the GFF3 does
-  not carry; without it the cache has no FLAGS. The GTF header also supplies the
-  `assembly` and `genebuild` source versions the output headers print.
+- `--core-dumps`, a directory of the release's Ensembl core and variation MySQL table
+  dumps (`https://ftp.ensembl.org/pub/release-<N>/mysql/homo_sapiens_core_<N>_38/` and
+  `homo_sapiens_variation_<N>_38/` for release `<N>`, under `pub/grch37/release-<N>/`
+  with `_37` for GRCh37; any table missing from the directory is downloaded into it),
+  supplies what the GFF3 does not carry: the MANE Select and MANE Plus Clinical accessions, APPRIS, the
+  `cds_start_NF` and `cds_end_NF` flags, the mature miRNA arms and the `ncRNA`
+  structure, the RefSeq, UniProt, TrEMBL, UniParc and UniProt isoform identifiers, the
+  protein features behind `DOMAINS`, the gene symbol's source and HGNC identifier, the
+  codon table of each sequence region, the `source_versions` of the output headers and
+  the gene phenotype count behind `GENE_PHENO`. Without it the `SYMBOL_SOURCE`, `HGNC_ID`,
+  `MANE_SELECT`, `MANE_PLUS_CLINICAL`, `APPRIS`, `miRNA`, `RefSeq`, `SWISSPROT`,
+  `TREMBL`, `UNIPARC`, `UNIPROT_ISOFORM`, `DOMAINS` and `GENE_PHENO` columns are empty on
+  a native cache, and on GRCh37, whose release-87 GFF3 carries no
+  `transcript_support_level` and no `Ensembl_canonical` tag, so are `TSL` and
+  `CANONICAL`. A native cache lists a translation's protein features by feature
+  identifier where the Ensembl cache keeps the database's row order, so `DOMAINS` may
+  name the same features in another order.
+- `--gtf`, the Ensembl GTF of the same release, supplies, when no core dumps are read,
+  the `cds_start_NF` and `cds_end_NF` transcript attributes (the `FLAGS` output field)
+  and, from its header, the `assembly` and `genebuild` source versions.
 - `--genome-fasta`, the primary-assembly genome (decompressed, with a `samtools faidx`
   index beside it), supplies the CDS sequence behind every codon-level consequence
   (`missense_variant`, `synonymous_variant`, `stop_gained`, HGVSp and the rest); without
@@ -69,10 +89,15 @@ from 88 onward. Local copies can be passed instead, as below.
 target/release/vep-cache-builder \
   --species homo_sapiens --assembly GRCh37 --release 116 \
   --gff3 Homo_sapiens.GRCh37.87.gff3.gz \
-  --gtf Homo_sapiens.GRCh37.87.gtf.gz \
+  --core-dumps core_dumps_grch37 \
   --genome-fasta Homo_sapiens.GRCh37.dna.primary_assembly.fa \
   --output-dir $HOME/.vep/json_cache/homo_sapiens/116_GRCh37
 ```
+
+A table missing from the `--core-dumps` directory is downloaded into it: about 520 MB for
+GRCh38 and 1.6 GB for GRCh37, whose `phenotype_feature.txt` Ensembl publishes
+uncompressed (1.5 GB). The tables are read once per build, in about half a minute and
+3 GB of memory for GRCh38.
 
 Variation data, which `--check_existing` and the `--af*` flags read, is optional
 (`--include-variations`). The builder downloads Ensembl's per-chromosome variation VCFs
@@ -126,8 +151,8 @@ annotation time), and vep-rs applies them the same way. A cache converted withou
 published conversions among them, still loads, but on it a variant at codon 1 of a transcript
 with an alternative initiation codon is called from the cached peptide rather than from the edit;
 convert such a cache again to get VEP's call. A natively built cache carries no edit list either:
-its peptide is the protein FASTA's sequence, with the edits already applied, and none of the
-builder's inputs carries the list.
+its peptide is the protein FASTA's sequence, with the edits already applied, and the builder
+writes none.
 
 ## SIFT and PolyPhen predictions
 

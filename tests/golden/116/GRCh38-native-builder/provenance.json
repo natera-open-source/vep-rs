@@ -1,0 +1,54 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "65 chromosome 21 and MT records: 54 SNVs, deletions, insertions and MNVs taken from the GRCh38 golden corpus's chromosome 21 records, plus 11 records placed on a Mt_tRNA, the MT-ND1 CDS (codon table 2), an intron of a cds_start_NF transcript, an exon of a readthrough transcript, the MIR548X miRNA, the Y_RNA gene named by RFAM, the CYP4F29P gene named by EntrezGene, the TMPRSS15 and CHODL coding sequences and a lncRNA without a symbol; the reference base is the GRCh38 primary assembly's",
+ "sha256": {
+  "default.txt": "9de32abb2019e864f47ad2ff659269ba542a15f590dd7180342f24d2173edbf9",
+  "tab.txt": "4e0b07c359cbb00bcbece1409a5e9f4b9ba2cf4d4d6287b3fb71b804905c8bca",
+  "vcf.vcf": "1b90f60170deb196adc2fb5fcdd1ed1b923f2accf7f596f126de12b285d208a5",
+  "json.jsonl": "73350abae33c5a2763da03aaea0bc98fcb47336a9473ab072ae4ba9d044db79e"
+ },
+ "variants_vcf_sha256": "dcf250f1fecbfd62038846296656e5878a2fdb462fe008b8301a78d2a00246c2",
+ "json_cache": {
+  "source": "built by vep-cache-builder from the release 116 GRCh38 GFF3 (the chromosome 21 and MT lines), the peptide FASTA, the chromosome 21 and MT genome FASTA and the core and variation MySQL table dumps (--core-dumps), then pruned to the records' transcripts with scripts/golden/prune_json_cache.py --gzip (no key dropped)",
+  "info_json": "derived from the Ensembl VEP cache's info.txt as every corpus's is, so the version header the format tests compare matches; the native build's own info.json carries the assembly, gencode and genebuild versions alone"
+ },
+ "generator": "vep-cache-builder --release 116 --assembly GRCh38 --gff3 <chr21+MT lines of Homo_sapiens.GRCh38.116.gff3.gz> --fasta Homo_sapiens.GRCh38.pep.all.fa.gz --core-dumps <dir> --genome-fasta <chr21+MT .fa> --output-dir <cache>; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite nb=<reference>=<designed.vcf> --suite g21=<reference>=<golden chr21 small variants> --k 1 --seed 1 --cache <cache> --family-columns SYMBOL=,SYMBOL_SOURCE=,HGNC_ID,TSL,MANE_SELECT,CANONICAL,FLAGS=,ENSP,BIOTYPE= --covers ... --matrix tests/parity/matrix.tsv --flag=--symbol ... --out tests/golden/116/GRCh38-native-builder; scripts/golden/prune_json_cache.py --cache <cache> --out <corpus>/json_cache --vcf <corpus>/variants.vcf --gzip; scripts/golden/prune_json_cache.py --info-only --perl-info <perl cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus <corpus> --perl-cache-dir <dir>; scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and the ccds set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 896,
+   "MT": 21
+  },
+  "shards": 28,
+  "spans_by_chromosome": {
+   "21": 63,
+   "MT": 2
+  }
+ },
+ "flag_sets": {
+  "ccds": {
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--ccds"
+   ],
+   "expected_dir": "expected_ccds",
+   "sha256": {
+    "default.txt": "7e1cf2d0b44a1bb96f04e0f383ffe89a051de295420926aaa53f503546227536",
+    "tab.txt": "444966d7d144faa4fa3e29eb2cf036684bf9997765907b6fda33f7300d6add43",
+    "vcf.vcf": "3b149fd7c35496e8257574f74bb73eb1597d7e5bd215132665f4fae204939ccc",
+    "json.jsonl": "a8a5d27a49ea1599464d78222b052fbc75d49e2878ef59d4c388373ea2cc0eda"
+   }
+  }
+ }
+}

@@ -157,6 +157,8 @@ mod tests {
             end,
             strand,
             rank: None,
+            ensembl_phase: None,
+            ensembl_end_phase: None,
         }
     }
 
@@ -166,6 +168,8 @@ mod tests {
             end,
             strand,
             phase,
+            protein_id: None,
+            protein_version: None,
         }
     }
 

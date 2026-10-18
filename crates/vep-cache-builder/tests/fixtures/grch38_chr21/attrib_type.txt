@@ -1,0 +1,30 @@
+3	synonym	Synonym	\N
+4	name	Name	\N
+11	codon_table	Codon Table	\N
+15	miRNA	Micro RNA	\N
+54	remark	Remark	\N
+62	ncRNA	Structure	\N
+124	mRNA_start_NF	mRNA start not found	\N
+125	mRNA_end_NF	mRNA end not found	\N
+126	cds_start_NF	CDS start not found	\N
+127	cds_end_NF	CDS end not found	\N
+164	IsoPoint	Isoelectric point	\N
+165	Charge	Charge	\N
+166	MolecularWeight	Molecular weight	\N
+167	NumResidues	Number of residues	\N
+168	AvgResWeight	Ave. residue weight	\N
+174	upstream_ATG	upstream ATG	\N
+218	readthrough_tra	readthrough transcript	\N
+318	split_tscript	split_tscript	\N
+380	havana_cv	Havana CV term	\N
+395	xref_id	Xref ID	\N
+417	gencode_basic	GENCODE basic annotation	\N
+427	appris	APPRIS	\N
+428	TSL	Transcript Support Level	\N
+468	ccds_transcript	CCDS transcript	\N
+535	MANE_Select	MANE Select	\N
+537	TAGENE_transcript	TAGENE pipeline transcript	\N
+538	legacy_biotype	Legacy biotype	\N
+554	is_canonical	Ensembl Canonical	\N
+576	gencode_primary	GENCODE primary annotation	\N
+584	ens_canon_extended	Ensembl Canonical Extended	\N

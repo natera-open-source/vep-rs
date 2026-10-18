@@ -7,6 +7,15 @@
 //! Ensembl and produces the JSON cache directory structure consumed by
 //! `vep-cli`'s `json_cache.rs` loader.
 //!
+//! ## Core table dumps
+//!
+//! With `--core-dumps <DIR>`, the Ensembl core and variation MySQL table
+//! dumps of the release supply what the GFF3 lacks: the MANE accessions,
+//! APPRIS, every kept transcript attribute, the CCDS, RefSeq and UniProt
+//! xrefs, the gene symbol's source and HGNC id, the protein features and
+//! the gene phenotype count. A table missing from the directory is
+//! downloaded into it.
+//!
 //! ## SIFT/PolyPhen predictions
 //!
 //! With `--include-predictions`, connects to Ensembl's public MySQL server
@@ -20,6 +29,7 @@ use clap::Parser;
 use tracing::info;
 
 mod builder;
+mod core_dumps;
 mod download;
 mod fasta;
 mod gff3;
@@ -61,6 +71,13 @@ struct Args {
     /// does not carry
     #[arg(long)]
     gtf: Option<String>,
+
+    /// Directory of the release's Ensembl core and variation MySQL table dumps
+    /// (`<table>.txt.gz`); a table missing from it is downloaded there. Supplies
+    /// the transcript attributes, xrefs, protein features and gene phenotype
+    /// counts the GFF3 lacks
+    #[arg(long)]
+    core_dumps: Option<String>,
 
     /// Include variation data in the cache
     #[arg(long)]
@@ -110,6 +127,16 @@ fn main() -> Result<()> {
         &args.species,
     )
     .context("Failed to resolve input files")?;
+
+    let core_dumps = if let Some(ref dir) = args.core_dumps {
+        let dir = Path::new(dir);
+        download::resolve_core_dumps(dir, args.release, &args.assembly, &args.species)
+            .context("Failed to resolve the core table dumps")?;
+        info!("Reading core table dumps: {}", dir.display());
+        Some(core_dumps::CoreDumps::load(dir).context("Failed to read the core table dumps")?)
+    } else {
+        None
+    };
 
     info!("Parsing protein FASTA: {}", fasta_path.display());
     let protein_sequences =
@@ -170,6 +197,7 @@ fn main() -> Result<()> {
         prediction_data.as_ref(),
         genome_fasta.as_ref(),
         gtf_tags.as_ref(),
+        core_dumps.as_ref(),
     )
     .context("Failed to build cache")?;
     info!(
@@ -177,14 +205,22 @@ fn main() -> Result<()> {
         stats.transcript_count, stats.chromosome_count, stats.region_file_count
     );
 
-    // Source versions the output headers print, from the GTF header when given.
-    let mut source_versions = std::collections::HashMap::new();
+    // Source versions the output headers print: the core `meta` table's, as
+    // Ensembl VEP's own cache info carries them, else the GTF header's.
+    let mut source_versions = core_dumps
+        .as_ref()
+        .map(|d| d.source_versions())
+        .unwrap_or_default();
     if let Some(tags) = &gtf_tags {
         if let Some(v) = tags.header.get("genome-build") {
-            source_versions.insert("assembly".to_string(), v.clone());
+            source_versions
+                .entry("assembly".to_string())
+                .or_insert_with(|| v.clone());
         }
         if let Some(v) = tags.header.get("genebuild-last-updated") {
-            source_versions.insert("genebuild".to_string(), v.clone());
+            source_versions
+                .entry("genebuild".to_string())
+                .or_insert_with(|| v.clone());
         }
     }
     builder::generate_info_json(

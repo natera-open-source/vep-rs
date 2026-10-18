@@ -1,14 +1,17 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Download Ensembl GFF3, protein FASTA, and variation VCF files, or resolve local paths.
+//! Download Ensembl GFF3, protein FASTA, variation VCF and MySQL table dump
+//! files, or resolve local paths.
 
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use rayon::prelude::*;
-use tracing::info;
+use tracing::{info, warn};
+
+use crate::core_dumps::{table_path, CORE_TABLES, VARIATION_TABLES};
 
 /// Resolve input file paths: download from Ensembl FTP if not provided locally.
 ///
@@ -80,6 +83,86 @@ fn protein_fasta_url(release: u32, assembly: &str, species: &str) -> String {
             release, species, species_cap, assembly
         )
     }
+}
+
+/// The MySQL directory of one database on the Ensembl FTP site:
+/// `pub/release-N/mysql/<species>_<kind>_N_<assembly number>/`, under
+/// `pub/grch37/` for GRCh37, where the assembly number is the trailing digits
+/// of the assembly name (`GRCh38` is 38, `GRCh37` 37).
+fn mysql_dir_url(release: u32, assembly: &str, species: &str, kind: &str) -> Result<String> {
+    let name_without_digits = assembly.trim_end_matches(|c: char| c.is_ascii_digit());
+    let digits = &assembly[name_without_digits.len()..];
+    if digits.is_empty() {
+        bail!("Assembly {assembly} has no trailing number to name its MySQL database");
+    }
+    let tree = if assembly == "GRCh37" {
+        "pub/grch37"
+    } else {
+        "pub"
+    };
+    Ok(format!(
+        "https://ftp.ensembl.org/{tree}/release-{release}/mysql/{species}_{kind}_{release}_{digits}/"
+    ))
+}
+
+/// The URL of one core table dump (`<table>.txt.gz`).
+pub fn core_dump_url(release: u32, assembly: &str, species: &str, table: &str) -> Result<String> {
+    Ok(format!(
+        "{}{table}.txt.gz",
+        mysql_dir_url(release, assembly, species, "core")?
+    ))
+}
+
+/// The URL of one variation table dump (`<table>.txt.gz`); a release may
+/// publish the GRCh37 tables uncompressed, so a caller falls back to `.txt`.
+pub fn variation_dump_url(
+    release: u32,
+    assembly: &str,
+    species: &str,
+    table: &str,
+) -> Result<String> {
+    Ok(format!(
+        "{}{table}.txt.gz",
+        mysql_dir_url(release, assembly, species, "variation")?
+    ))
+}
+
+/// Make `dir` hold every table dump the cache build reads: a core table
+/// missing from it is downloaded (an error when that fails), and a missing
+/// variation table is downloaded as `.txt.gz`, then as `.txt` when the first
+/// is a 404, and left absent with a warning when both are 404, so a species
+/// without a variation database still builds. Any other failure stops the
+/// build.
+pub fn resolve_core_dumps(dir: &Path, release: u32, assembly: &str, species: &str) -> Result<()> {
+    std::fs::create_dir_all(dir).with_context(|| format!("Failed to create {}", dir.display()))?;
+    for table in CORE_TABLES {
+        if table_path(dir, table).is_some() {
+            continue;
+        }
+        let url = core_dump_url(release, assembly, species, table)?;
+        download_file(&url, &dir.join(format!("{table}.txt.gz")))
+            .with_context(|| format!("Failed to download core table {table}"))?;
+    }
+    for table in VARIATION_TABLES {
+        if table_path(dir, table).is_some() {
+            continue;
+        }
+        let gz_url = variation_dump_url(release, assembly, species, table)?;
+        match download_file(&gz_url, &dir.join(format!("{table}.txt.gz"))) {
+            Ok(()) => continue,
+            Err(e) if is_not_found(&e) => {}
+            Err(e) => return Err(e.context(format!("Failed to download variation table {table}"))),
+        }
+        let txt_url = gz_url.trim_end_matches(".gz");
+        match download_file(txt_url, &dir.join(format!("{table}.txt"))) {
+            Ok(()) => {}
+            Err(e) if is_not_found(&e) => warn!(
+                "Variation table {table} is not published for this release and assembly; gene_phenotype is not written"
+            ),
+            Err(e) => return Err(e.context(format!("Failed to download variation table {table}"))),
+        }
+    }
+    Ok(())
 }
 
 /// Capitalize species name for Ensembl file naming (e.g., "homo_sapiens" -> "Homo_sapiens").
@@ -294,33 +377,93 @@ pub fn download_variation_vcfs(
     Ok(results)
 }
 
-/// Download a file from a URL to a local path.
-fn download_file(url: &str, dest: &PathBuf) -> Result<()> {
+/// An HTTP response status other than success, kept as a typed error so a
+/// caller can tell a missing file (404) from a failed transfer.
+#[derive(Debug)]
+struct HttpStatus(reqwest::StatusCode);
+
+impl std::fmt::Display for HttpStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "HTTP status {}", self.0)
+    }
+}
+
+impl std::error::Error for HttpStatus {}
+
+/// Whether an error is an HTTP 404 from [`download_file`].
+fn is_not_found(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<HttpStatus>()
+        .is_some_and(|status| status.0 == reqwest::StatusCode::NOT_FOUND)
+}
+
+/// Download a file from a URL to a local path, streaming the body into
+/// `<dest>.part` and renaming it at the end, so an interrupted transfer never
+/// leaves a truncated file under the final name (the part file is removed).
+/// The client has a connect timeout, TCP keepalive against a dead peer and a
+/// four-hour bound on the whole transfer, a 1.5 GB table dump at 100 KB/s.
+fn download_file(url: &str, dest: &Path) -> Result<()> {
     info!("Downloading: {}", url);
 
-    let response =
-        reqwest::blocking::get(url).with_context(|| format!("Failed to download {}", url))?;
-
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(60))
+        .tcp_keepalive(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(4 * 3600))
+        .build()
+        .context("Failed to build the HTTP client")?;
+    let mut response = client
+        .get(url)
+        .send()
+        .with_context(|| format!("Failed to download {}", url))?;
     if !response.status().is_success() {
-        bail!("Download failed with status {}: {}", response.status(), url);
+        return Err(anyhow::Error::new(HttpStatus(response.status()))
+            .context(format!("Download failed: {}", url)));
     }
 
-    let bytes = response
-        .bytes()
-        .with_context(|| format!("Failed to read response from {}", url))?;
+    let part = dest.with_file_name(format!(
+        "{}.part",
+        dest.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("download")
+    ));
+    let mut file = std::fs::File::create(&part)
+        .with_context(|| format!("Failed to create {}", part.display()))?;
+    let written = response
+        .copy_to(&mut file)
+        .with_context(|| format!("Failed to read response from {}", url))
+        .and_then(|bytes| {
+            file.flush()
+                .with_context(|| format!("Failed to write {}", part.display()))?;
+            Ok(bytes)
+        });
+    let bytes = match written {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            let _ = std::fs::remove_file(&part);
+            return Err(e);
+        }
+    };
+    std::fs::rename(&part, dest)
+        .with_context(|| format!("Failed to move {} into place", part.display()))?;
 
-    let mut file = std::fs::File::create(dest)
-        .with_context(|| format!("Failed to create {}", dest.display()))?;
-    file.write_all(&bytes)
-        .with_context(|| format!("Failed to write {}", dest.display()))?;
-
-    info!("Downloaded {} ({} bytes)", dest.display(), bytes.len());
+    info!("Downloaded {} ({} bytes)", dest.display(), bytes);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_404_reads_as_not_found() {
+        let not_found = anyhow::Error::new(HttpStatus(reqwest::StatusCode::NOT_FOUND))
+            .context("Download failed: x");
+        assert!(is_not_found(&not_found));
+        let forbidden = anyhow::Error::new(HttpStatus(reqwest::StatusCode::FORBIDDEN))
+            .context("Download failed: x");
+        assert!(!is_not_found(&forbidden));
+        assert!(!is_not_found(&anyhow::anyhow!("connection reset")));
+    }
 
     #[test]
     fn test_gff3_url_grch38() {
@@ -361,6 +504,27 @@ mod tests {
             url,
             "https://ftp.ensembl.org/pub/grch37/release-115/fasta/homo_sapiens/pep/Homo_sapiens.GRCh37.pep.all.fa.gz"
         );
+    }
+
+    #[test]
+    fn core_and_variation_dump_urls() {
+        assert_eq!(
+            core_dump_url(116, "GRCh38", "homo_sapiens", "transcript_attrib").unwrap(),
+            "https://ftp.ensembl.org/pub/release-116/mysql/homo_sapiens_core_116_38/transcript_attrib.txt.gz"
+        );
+        assert_eq!(
+            core_dump_url(116, "GRCh37", "homo_sapiens", "gene").unwrap(),
+            "https://ftp.ensembl.org/pub/grch37/release-116/mysql/homo_sapiens_core_116_37/gene.txt.gz"
+        );
+        assert_eq!(
+            variation_dump_url(116, "GRCh38", "homo_sapiens", "phenotype_feature").unwrap(),
+            "https://ftp.ensembl.org/pub/release-116/mysql/homo_sapiens_variation_116_38/phenotype_feature.txt.gz"
+        );
+        assert_eq!(
+            core_dump_url(116, "GRCm39", "mus_musculus", "meta").unwrap(),
+            "https://ftp.ensembl.org/pub/release-116/mysql/mus_musculus_core_116_39/meta.txt.gz"
+        );
+        assert!(core_dump_url(116, "hg", "homo_sapiens", "meta").is_err());
     }
 
     #[test]

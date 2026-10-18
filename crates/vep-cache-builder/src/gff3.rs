@@ -2,6 +2,24 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! Parse Ensembl GFF3 files into gene -> transcript -> exon/CDS hierarchy.
+//!
+//! The attributes read here are the ones the Ensembl core API writes on each
+//! line (`Feature.pm`, `Gene.pm`, `Transcript.pm`, `Exon.pm` and `CDS.pm`
+//! `summary_as_hash`): the feature `version`, the transcript `tag` list,
+//! `ccdsid` and `transcript_support_level`, the exon `ensembl_phase` and
+//! `ensembl_end_phase`, and the CDS `protein_id` and translation `version`.
+//! A gene is any line whose `ID` is `gene:<id>` and a transcript any line
+//! whose `ID` is `transcript:<id>`, whatever the Sequence Ontology term in
+//! the type column, because the term follows the biotype (`gene`,
+//! `ncRNA_gene`, `pseudogene`; `mRNA`, `lnc_RNA`, `pseudogenic_transcript`
+//! and the rest) and the GRCh37 release-87 file uses `pseudogene` for both
+//! a gene and a transcript line.
+//!
+//! Two transcripts never reach the cache, as Ensembl VEP's own dumper drops
+//! them (`AnnotationSource/Database/Transcript.pm` `get_features_by_regions_uncached`):
+//! a transcript of biotype `artifact` and a readthrough transcript, tagged
+//! `readthrough_tra` by the core API's attribute code and
+//! `readthrough_transcript` on the release-116 GRCh38 file.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
@@ -9,7 +27,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
-use tracing::debug;
+use tracing::{debug, info};
 
 /// A parsed gene record with its child transcripts.
 #[derive(Debug)]
@@ -21,9 +39,11 @@ pub struct GeneRecord {
     pub end: u64,
     pub strand: i8,
     pub biotype: String,
+    /// The gene's `Name`, its display xref's label.
     pub name: Option<String>,
     pub description: Option<String>,
-    pub hgnc_id: Option<String>,
+    /// The gene line's `version`.
+    pub version: Option<u32>,
     pub transcripts: Vec<TranscriptRecord>,
 }
 
@@ -39,13 +59,23 @@ pub struct TranscriptRecord {
     pub biotype: String,
     pub source: String,
     pub version: Option<u32>,
+    /// `Ensembl_canonical` in `tag`.
     pub is_canonical: bool,
-    pub mane_select: Option<String>,
-    pub mane_plus_clinical: Option<String>,
-    pub tsl: Option<u8>,
-    pub appris: Option<String>,
-    /// Whether the GFF3 `tag` attribute lists `basic` (GENCODE basic set).
+    /// `MANE_Select` in `tag`: the membership only. The RefSeq accession is
+    /// the `MANE_Select` transcript attribute, which the GFF3 does not carry.
+    pub mane_select: bool,
+    /// `MANE_Plus_Clinical` in `tag`, the membership only.
+    pub mane_plus_clinical: bool,
+    /// `gencode_basic` in `tag`, or `basic`, the GRCh37 release-87 spelling.
     pub gencode_basic: bool,
+    /// `gencode_primary` in `tag`.
+    pub gencode_primary: bool,
+    /// `transcript_support_level`: the `TSL` attribute's value with its `tsl`
+    /// prefix removed (`Transcript.pm` `tsl`), so `1`, `NA` or
+    /// `5 (assigned to previous version 6)`.
+    pub tsl: Option<String>,
+    /// `ccdsid`, the first CCDS xref's display label.
+    pub ccds: Option<String>,
     pub exons: Vec<ExonRecord>,
     pub cds_regions: Vec<CdsRecord>,
 }
@@ -59,6 +89,11 @@ pub struct ExonRecord {
     pub end: u64,
     pub strand: i8,
     pub rank: Option<u32>,
+    /// `ensembl_phase`, the exon's own phase (`Exon.pm` `summary_as_hash`):
+    /// -1 outside the coding sequence.
+    pub ensembl_phase: Option<i8>,
+    /// `ensembl_end_phase`.
+    pub ensembl_end_phase: Option<i8>,
 }
 
 /// A parsed CDS record.
@@ -69,11 +104,29 @@ pub struct CdsRecord {
     pub end: u64,
     pub strand: i8,
     pub phase: i8,
+    /// `protein_id`, the translation's stable identifier (`CDS.pm`
+    /// `summary_as_hash`).
+    pub protein_id: Option<String>,
+    /// `version`, the translation's version; the GRCh37 release-87 file
+    /// carries none.
+    pub protein_version: Option<u32>,
+}
+
+/// Whether Ensembl VEP's dumper writes a transcript to its cache: it skips
+/// one of biotype `artifact` and one carrying a `readthrough_tra` attribute
+/// (`AnnotationSource/Database/Transcript.pm`).
+fn is_dumped(biotype: &str, tags: &[&str]) -> bool {
+    biotype != "artifact"
+        && !tags
+            .iter()
+            .any(|t| *t == "readthrough_tra" || *t == "readthrough_transcript")
 }
 
 /// Parse a GFF3 file (optionally gzipped) into a gene map.
 ///
-/// Returns `HashMap<gene_id, GeneRecord>`.
+/// Returns `HashMap<gene_id, GeneRecord>`. Fails when the file cannot be
+/// opened or read, and on a `start` or `end` column that is not a number,
+/// naming the column and the value.
 pub fn parse_gff3(path: &Path) -> Result<HashMap<String, GeneRecord>> {
     let file =
         std::fs::File::open(path).with_context(|| format!("Cannot open {}", path.display()))?;
@@ -88,7 +141,7 @@ pub fn parse_gff3(path: &Path) -> Result<HashMap<String, GeneRecord>> {
     let mut transcript_map: HashMap<String, TranscriptRecord> = HashMap::new();
     let mut exons_by_transcript: HashMap<String, Vec<ExonRecord>> = HashMap::new();
     let mut cds_by_transcript: HashMap<String, Vec<CdsRecord>> = HashMap::new();
-    let mut transcript_to_gene: HashMap<String, String> = HashMap::new();
+    let mut dropped = 0usize;
 
     for line in reader.lines() {
         let line = line.context("Failed to read GFF3 line")?;
@@ -104,164 +157,106 @@ pub fn parse_gff3(path: &Path) -> Result<HashMap<String, GeneRecord>> {
 
         let chr = normalize_chr(fields[0]);
         let feature_type = fields[2];
-        let start: u64 = fields[3].parse().unwrap_or(0);
-        let end: u64 = fields[4].parse().unwrap_or(0);
+        let start = parse_coordinate("start", fields[3])?;
+        let end = parse_coordinate("end", fields[4])?;
         let strand: i8 = match fields[6] {
             "-" => -1,
             _ => 1,
         };
         let phase: i8 = fields[7].parse().unwrap_or(-1);
         let attrs = parse_attributes(fields[8]);
+        let id = attrs.get("ID").map(String::as_str).unwrap_or("");
 
-        match feature_type {
-            "gene" | "pseudogene" => {
-                if let Some(raw_id) = attrs.get("ID") {
-                    let gene_id = strip_prefix(raw_id, "gene:");
-                    let biotype = attrs.get("biotype").cloned().unwrap_or_default();
-                    let name = attrs.get("Name").cloned();
-                    let description = attrs.get("description").cloned();
-                    let hgnc_id = extract_hgnc_id(&attrs);
-
-                    genes.insert(
-                        gene_id.clone(),
-                        GeneRecord {
-                            gene_id: gene_id.clone(),
-                            chr: chr.to_string(),
-                            start,
-                            end,
-                            strand,
-                            biotype,
-                            name,
-                            description,
-                            hgnc_id,
-                            transcripts: Vec::new(),
-                        },
-                    );
-                }
-            }
-            "mRNA"
-            | "transcript"
-            | "lnc_RNA"
-            | "miRNA"
-            | "ncRNA"
-            | "rRNA"
-            | "snRNA"
-            | "snoRNA"
-            | "scRNA"
-            | "tRNA"
-            | "pseudogenic_transcript"
-            | "unconfirmed_transcript"
-            | "mRNA_TE_gene"
-            | "V_gene_segment"
-            | "D_gene_segment"
-            | "J_gene_segment"
-            | "C_gene_segment"
-            | "NMD_transcript_variant"
-            | "pre_miRNA" => {
-                if let Some(raw_id) = attrs.get("ID") {
-                    let transcript_id = strip_prefix(raw_id, "transcript:");
-                    let parent = attrs
-                        .get("Parent")
-                        .map(|p| strip_prefix(p, "gene:"))
-                        .unwrap_or_default();
-                    let biotype = attrs.get("biotype").cloned().unwrap_or_default();
-                    let source = fields[1].to_string();
-                    let version = attrs.get("version").and_then(|v| v.parse::<u32>().ok());
-                    let tag = attrs.get("tag").cloned().unwrap_or_default();
-                    let is_canonical = tag.contains("Ensembl_canonical");
-                    let mane_select = if tag.contains("MANE_Select") {
-                        extract_mane_id(&attrs, "MANE_Select")
-                    } else {
-                        None
-                    };
-                    let mane_plus_clinical = if tag.contains("MANE_Plus_Clinical") {
-                        extract_mane_id(&attrs, "MANE_Plus_Clinical")
-                    } else {
-                        None
-                    };
-                    let tsl = extract_tsl(&tag);
-                    let appris = extract_appris(&tag);
-                    let gencode_basic = tag.split(',').any(|t| t == "basic");
-
-                    transcript_to_gene.insert(transcript_id.clone(), parent.clone());
-                    transcript_map.insert(
-                        transcript_id.clone(),
-                        TranscriptRecord {
-                            transcript_id: transcript_id.clone(),
-                            gene_id: parent,
-                            chr: chr.to_string(),
-                            start,
-                            end,
-                            strand,
-                            biotype,
-                            source,
-                            version,
-                            is_canonical,
-                            mane_select,
-                            mane_plus_clinical,
-                            tsl,
-                            appris,
-                            gencode_basic,
-                            exons: Vec::new(),
-                            cds_regions: Vec::new(),
-                        },
-                    );
-                }
-            }
-            "exon" => {
-                let parent_transcripts = attrs
-                    .get("Parent")
-                    .map(|p| {
-                        p.split(',')
-                            .map(|s| strip_prefix(s, "transcript:"))
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                let exon_id = attrs.get("Name").cloned();
-                let rank = attrs.get("rank").and_then(|r| r.parse::<u32>().ok());
-
-                let exon = ExonRecord {
-                    exon_id,
+        if let Some(gene_id) = id.strip_prefix("gene:") {
+            genes.insert(
+                gene_id.to_string(),
+                GeneRecord {
+                    gene_id: gene_id.to_string(),
+                    chr: chr.to_string(),
                     start,
                     end,
                     strand,
-                    rank,
-                };
-
-                for parent in parent_transcripts {
-                    exons_by_transcript
-                        .entry(parent)
-                        .or_default()
-                        .push(exon.clone());
-                }
+                    biotype: attrs.get("biotype").cloned().unwrap_or_default(),
+                    name: attrs.get("Name").cloned(),
+                    description: attrs.get("description").cloned(),
+                    version: parse_version(&attrs),
+                    transcripts: Vec::new(),
+                },
+            );
+        } else if let Some(transcript_id) = id.strip_prefix("transcript:") {
+            let biotype = attrs.get("biotype").cloned().unwrap_or_default();
+            let tags: Vec<&str> = attrs
+                .get("tag")
+                .map(|t| t.split(',').map(str::trim).collect())
+                .unwrap_or_default();
+            if !is_dumped(&biotype, &tags) {
+                dropped += 1;
+                continue;
             }
-            "CDS" => {
-                let parent_transcripts = attrs
-                    .get("Parent")
-                    .map(|p| {
-                        p.split(',')
-                            .map(|s| strip_prefix(s, "transcript:"))
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-
-                let cds = CdsRecord {
+            let parent = attrs
+                .get("Parent")
+                .map(|p| strip_prefix(p, "gene:"))
+                .unwrap_or_default();
+            transcript_map.insert(
+                transcript_id.to_string(),
+                TranscriptRecord {
+                    transcript_id: transcript_id.to_string(),
+                    gene_id: parent,
+                    chr: chr.to_string(),
                     start,
                     end,
                     strand,
-                    phase,
-                };
-
-                for parent in parent_transcripts {
-                    cds_by_transcript
-                        .entry(parent)
-                        .or_default()
-                        .push(cds.clone());
-                }
+                    biotype,
+                    source: fields[1].to_string(),
+                    version: parse_version(&attrs),
+                    is_canonical: tags.contains(&"Ensembl_canonical"),
+                    mane_select: tags.contains(&"MANE_Select"),
+                    mane_plus_clinical: tags.contains(&"MANE_Plus_Clinical"),
+                    gencode_basic: tags.contains(&"gencode_basic") || tags.contains(&"basic"),
+                    gencode_primary: tags.contains(&"gencode_primary"),
+                    tsl: attrs.get("transcript_support_level").cloned(),
+                    ccds: attrs.get("ccdsid").cloned(),
+                    exons: Vec::new(),
+                    cds_regions: Vec::new(),
+                },
+            );
+        } else if feature_type == "exon" {
+            let exon = ExonRecord {
+                exon_id: attrs.get("Name").cloned(),
+                start,
+                end,
+                strand,
+                rank: attrs.get("rank").and_then(|r| r.parse::<u32>().ok()),
+                ensembl_phase: attrs
+                    .get("ensembl_phase")
+                    .and_then(|p| p.parse::<i8>().ok()),
+                ensembl_end_phase: attrs
+                    .get("ensembl_end_phase")
+                    .and_then(|p| p.parse::<i8>().ok()),
+            };
+            for parent in parent_transcripts(&attrs) {
+                exons_by_transcript
+                    .entry(parent)
+                    .or_default()
+                    .push(exon.clone());
             }
-            _ => {
-                debug!("Skipping feature type: {}", feature_type);
+        } else if feature_type == "CDS" {
+            let cds = CdsRecord {
+                start,
+                end,
+                strand,
+                phase,
+                protein_id: attrs.get("protein_id").cloned(),
+                protein_version: parse_version(&attrs),
+            };
+            for parent in parent_transcripts(&attrs) {
+                cds_by_transcript
+                    .entry(parent)
+                    .or_default()
+                    .push(cds.clone());
             }
+        } else {
+            debug!("Skipping feature type: {}", feature_type);
         }
     }
 
@@ -280,8 +275,18 @@ pub fn parse_gff3(path: &Path) -> Result<HashMap<String, GeneRecord>> {
 
         if let Some(gene) = genes.get_mut(&transcript.gene_id) {
             gene.transcripts.push(transcript);
+        } else {
+            debug!(
+                "Transcript {} has no gene line for {}",
+                tid, transcript.gene_id
+            );
         }
     }
+
+    info!(
+        "Dropped {} artifact or readthrough transcripts, as the Ensembl VEP dumper does",
+        dropped
+    );
 
     Ok(genes)
 }
@@ -296,9 +301,35 @@ fn normalize_chr(chr: &str) -> &str {
     }
 }
 
+/// The `start` or `end` column as a number; a value that is not one is an
+/// error naming the column and the value.
+fn parse_coordinate(column: &str, value: &str) -> Result<u64> {
+    value
+        .parse()
+        .with_context(|| format!("GFF3 {column} {value:?} is not a number"))
+}
+
 /// Strip a known prefix (e.g., "gene:", "transcript:") from an ID.
 fn strip_prefix(s: &str, prefix: &str) -> String {
     s.strip_prefix(prefix).unwrap_or(s).to_string()
+}
+
+/// The `version` attribute as a number.
+fn parse_version(attrs: &HashMap<String, String>) -> Option<u32> {
+    attrs.get("version").and_then(|v| v.parse::<u32>().ok())
+}
+
+/// The transcripts an exon or CDS line belongs to: its comma-separated
+/// `Parent` list without the `transcript:` prefix.
+fn parent_transcripts(attrs: &HashMap<String, String>) -> Vec<String> {
+    attrs
+        .get("Parent")
+        .map(|p| {
+            p.split(',')
+                .map(|s| strip_prefix(s, "transcript:"))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
 }
 
 /// Parse GFF3 attribute column (key=value pairs separated by semicolons).
@@ -323,74 +354,41 @@ fn parse_attributes(attrs_str: &str) -> HashMap<String, String> {
     map
 }
 
-/// Extract HGNC ID from GFF3 gene attributes.
-///
-/// Ensembl GFF3 gene records include `Dbxref=GeneID:123,HGNC:HGNC:12345`.
-/// The numeric HGNC ID (e.g., "HGNC:12345") is extracted from this attribute.
-fn extract_hgnc_id(attrs: &HashMap<String, String>) -> Option<String> {
-    let dbxref = attrs.get("Dbxref")?;
-    for entry in dbxref.split(',') {
-        // Format: "HGNC:HGNC:12345"; the first "HGNC:" is the Dbxref source
-        // prefix, the second is part of the identifier.
-        if let Some(rest) = entry.strip_prefix("HGNC:") {
-            return Some(rest.to_string());
-        }
-    }
-    None
-}
-
-/// Extract Transcript Support Level from GFF3 tag attribute.
-///
-/// Ensembl GFF3 transcript tags include values like `tsl:1`, `tsl:2`, etc.
-/// The TSL is a numeric value 1-5 (or NA).
-fn extract_tsl(tag: &str) -> Option<u8> {
-    for part in tag.split(',') {
-        let part = part.trim();
-        if let Some(rest) = part.strip_prefix("tsl:") {
-            if let Ok(level) = rest.parse::<u8>() {
-                return Some(level);
-            }
-        }
-    }
-    None
-}
-
-/// Extract APPRIS annotation from GFF3 tag attribute.
-///
-/// Ensembl GFF3 transcript tags include values like `appris_principal_1`,
-/// `appris_alternative_1`, etc., returned in VEP short form (e.g., "P1", "A1").
-fn extract_appris(tag: &str) -> Option<String> {
-    for part in tag.split(',') {
-        let part = part.trim();
-        if part.starts_with("appris_") {
-            if let Some(rest) = part.strip_prefix("appris_principal_") {
-                return Some(format!("P{rest}"));
-            } else if let Some(rest) = part.strip_prefix("appris_alternative_") {
-                return Some(format!("A{rest}"));
-            } else if let Some(rest) = part.strip_prefix("appris_candidate_longest_") {
-                return Some(format!("CL{rest}"));
-            } else if let Some(rest) = part.strip_prefix("appris_candidate_") {
-                return Some(format!("C{rest}"));
-            }
-            return Some(part.to_string());
-        }
-    }
-    None
-}
-
-/// The value stored for a MANE-tagged transcript: its GFF3 `Name` attribute.
-///
-/// Ensembl GFF3 marks MANE membership in `tag` (`MANE_Select`,
-/// `MANE_Plus_Clinical`) and carries the RefSeq identifier (e.g.
-/// `NM_001005484.2`) elsewhere, so `Name` is what this builder records for
-/// both MANE columns.
-fn extract_mane_id(attrs: &HashMap<String, String>, _mane_type: &str) -> Option<String> {
-    attrs.get("Name").cloned()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Parses `lines` (GFF3 body lines, no header) from a temporary file.
+    fn try_parse(lines: &str) -> Result<HashMap<String, GeneRecord>> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.gff3");
+        std::fs::write(&path, lines).unwrap();
+        parse_gff3(&path)
+    }
+
+    fn parse(lines: &str) -> HashMap<String, GeneRecord> {
+        try_parse(lines).unwrap()
+    }
+
+    fn transcript<'a>(genes: &'a HashMap<String, GeneRecord>, id: &str) -> &'a TranscriptRecord {
+        genes
+            .values()
+            .flat_map(|g| g.transcripts.iter())
+            .find(|t| t.transcript_id == id)
+            .unwrap_or_else(|| panic!("transcript {id} not parsed"))
+    }
+
+    // Lines of Homo_sapiens.GRCh38.116.gff3.gz, chromosome 21 (the transcript `Name`
+    // attribute, which is not read, left out).
+    const TPTE_GENE: &str = "21\tensembl_havana\tgene\t10521553\t10606140\t.\t+\t.\tID=gene:ENSG00000274391;Name=TPTE;biotype=protein_coding;description=transmembrane phosphatase with tensin homology [Source:HGNC Symbol%3BAcc:HGNC:12023];gene_id=ENSG00000274391;logic_name=ensembl_havana_gene_homo_sapiens;version=6\n";
+    const TPTE_205: &str = "21\tensembl_havana\tmRNA\t10521553\t10606140\t.\t+\t.\tID=transcript:ENST00000622113;Parent=gene:ENSG00000274391;biotype=protein_coding;ccdsid=CCDS74772.1;tag=gencode_basic,gencode_primary;transcript_id=ENST00000622113;transcript_support_level=1;version=4\n";
+    const TPTE_205_CDS: &str = "21\tensembl_havana\tCDS\t10538724\t10538734\t.\t+\t0\tID=CDS:ENSP00000482040;Parent=transcript:ENST00000622113;protein_id=ENSP00000482040;version=1\n\
+21\tensembl_havana\tCDS\t10541112\t10541165\t.\t+\t1\tID=CDS:ENSP00000482040;Parent=transcript:ENST00000622113;protein_id=ENSP00000482040;version=1\n";
+
+    // Lines of Homo_sapiens.GRCh37.87.gff3.gz, chromosome 21: a `pseudogene`
+    // gene line and a `pseudogene` transcript line, the transcript tagged `basic`.
+    const GRCH37_PSEUDOGENE: &str = "21\thavana\tpseudogene\t10872119\t10872429\t.\t+\t.\tID=gene:ENSG00000235476;Name=AF254982.2;biotype=pseudogene;gene_id=ENSG00000235476;logic_name=havana;version=1\n\
+21\thavana\tpseudogene\t10872119\t10872429\t.\t+\t.\tID=transcript:ENST00000411878;Parent=gene:ENSG00000235476;Name=AF254982.2-001;biotype=unprocessed_pseudogene;havana_transcript=OTTHUMT00000157411;havana_version=1;tag=basic;transcript_id=ENST00000411878;version=1\n";
 
     #[test]
     fn test_normalize_chr() {
@@ -425,50 +423,230 @@ mod tests {
         assert_eq!(attrs.get("description").unwrap(), "Gene name, variant");
     }
 
+    /// `ccdsid` is the first CCDS xref's display label (`Transcript.pm`
+    /// `summary_as_hash` through `ccds`), the same entry Ensembl VEP stores
+    /// as `_ccds` (`Database/Transcript.pm` `prefetch_transcript_ids`), so
+    /// `CCDS74772.1` on ENST00000622113 is the cache's `ccds`.
     #[test]
-    fn test_extract_hgnc_id() {
-        let attrs = parse_attributes("ID=gene:ENSG00000139618;Dbxref=GeneID:675,HGNC:HGNC:1100");
-        assert_eq!(extract_hgnc_id(&attrs), Some("HGNC:1100".to_string()));
+    fn ccdsid_becomes_ccds() {
+        let genes = parse(&format!("{TPTE_GENE}{TPTE_205}"));
+        let tr = transcript(&genes, "ENST00000622113");
+        assert_eq!(tr.ccds.as_deref(), Some("CCDS74772.1"));
+        let no_ccds = TPTE_205.replace("ccdsid=CCDS74772.1;", "");
+        let genes = parse(&format!("{TPTE_GENE}{no_ccds}"));
+        assert_eq!(transcript(&genes, "ENST00000622113").ccds, None);
     }
 
+    /// The gene line's `version` (`Feature.pm` `summary_as_hash`) is the
+    /// `_gene_version` Ensembl VEP appends to `Gene` under `--gene_version`:
+    /// `6` for ENSG00000274391.
     #[test]
-    fn test_extract_hgnc_id_no_hgnc() {
-        let attrs = parse_attributes("ID=gene:ENSG00000139618;Dbxref=GeneID:675");
-        assert_eq!(extract_hgnc_id(&attrs), None);
+    fn gene_version_from_gff3() {
+        let genes = parse(TPTE_GENE);
+        let gene = &genes["ENSG00000274391"];
+        assert_eq!(gene.version, Some(6));
+        assert_eq!(gene.name.as_deref(), Some("TPTE"));
+        assert_eq!(gene.biotype, "protein_coding");
+        let unversioned = TPTE_GENE.replace(";version=6", "");
+        assert_eq!(parse(&unversioned)["ENSG00000274391"].version, None);
     }
 
+    /// A `start` or `end` column that is not a number fails the whole parse
+    /// with an error naming the column and the value, so a malformed line is
+    /// never binned at position 0.
     #[test]
-    fn test_extract_hgnc_id_no_dbxref() {
-        let attrs = parse_attributes("ID=gene:ENSG00000139618;Name=BRCA2");
-        assert_eq!(extract_hgnc_id(&attrs), None);
+    fn non_numeric_coordinate_fails_the_parse() {
+        for (lines, message) in [
+            (
+                TPTE_GENE.replace("\t10521553\t", "\tabc\t"),
+                "GFF3 start \"abc\" is not a number",
+            ),
+            (
+                TPTE_GENE.replace("\t10606140\t", "\t1060614x\t"),
+                "GFF3 end \"1060614x\" is not a number",
+            ),
+        ] {
+            let err = try_parse(&lines).unwrap_err();
+            assert!(format!("{err:#}").contains(message), "{err:#}");
+        }
     }
 
+    /// The GENCODE basic tag is `gencode_basic` on the GRCh38 file (the
+    /// attribute code, `Transcript.pm` `summary_as_hash`) and `basic` on the
+    /// GRCh37 release-87 file; either marks the transcript.
     #[test]
-    fn test_extract_tsl() {
-        assert_eq!(extract_tsl("basic,Ensembl_canonical,tsl:1"), Some(1));
-        assert_eq!(extract_tsl("basic,tsl:5"), Some(5));
-        assert_eq!(extract_tsl("basic,Ensembl_canonical"), None);
-        assert_eq!(extract_tsl("tsl:NA"), None);
+    fn gencode_basic_tag_both_spellings() {
+        let genes = parse(&format!("{TPTE_GENE}{TPTE_205}"));
+        assert!(transcript(&genes, "ENST00000622113").gencode_basic);
+
+        let genes = parse(GRCH37_PSEUDOGENE);
+        let tr = transcript(&genes, "ENST00000411878");
+        assert!(tr.gencode_basic);
+        assert!(!tr.gencode_primary);
+
+        let untagged = TPTE_205.replace("tag=gencode_basic,gencode_primary;", "");
+        let genes = parse(&format!("{TPTE_GENE}{untagged}"));
+        assert!(!transcript(&genes, "ENST00000622113").gencode_basic);
     }
 
+    /// `gencode_primary` in `tag` is the GENCODE primary attribute's code
+    /// (`Transcript.pm` `summary_as_hash`).
     #[test]
-    fn test_extract_appris() {
+    fn gencode_primary_tag_from_gff3() {
+        let genes = parse(&format!("{TPTE_GENE}{TPTE_205}"));
+        assert!(transcript(&genes, "ENST00000622113").gencode_primary);
+        let basic_only =
+            TPTE_205.replace("tag=gencode_basic,gencode_primary;", "tag=gencode_basic;");
+        let genes = parse(&format!("{TPTE_GENE}{basic_only}"));
+        let tr = transcript(&genes, "ENST00000622113");
+        assert!(tr.gencode_basic);
+        assert!(!tr.gencode_primary);
+    }
+
+    /// `transcript_support_level` is the `TSL` attribute value without its
+    /// `tsl` prefix (`Transcript.pm` `tsl`): `1` here, and the `assigned to
+    /// previous version` suffix is kept verbatim, as it is in the attribute
+    /// Ensembl VEP prints the digit from (`OutputFactory.pm` `m/tsl(\d+)/`).
+    #[test]
+    fn tsl_from_transcript_support_level() {
+        let genes = parse(&format!("{TPTE_GENE}{TPTE_205}"));
         assert_eq!(
-            extract_appris("basic,appris_principal_1,Ensembl_canonical"),
-            Some("P1".to_string())
+            transcript(&genes, "ENST00000622113").tsl.as_deref(),
+            Some("1")
         );
+
+        let col6a2 = "21\tensembl_havana\tgene\t46096722\t46132851\t.\t+\t.\tID=gene:ENSG00000142173;Name=COL6A2;biotype=protein_coding;description=collagen type VI alpha 2 chain [Source:HGNC Symbol%3BAcc:HGNC:2212];gene_id=ENSG00000142173;logic_name=ensembl_havana_gene_homo_sapiens;version=19\n\
+21\thavana\tmRNA\t46098112\t46129801\t.\t+\t.\tID=transcript:ENST00000397763;Parent=gene:ENSG00000142173;Name=COL6A2-202;biotype=protein_coding;ccdsid=CCDS13729.1;tag=gencode_basic,gencode_primary,MANE_Plus_Clinical;transcript_id=ENST00000397763;transcript_support_level=5 (assigned to previous version 5);version=6\n";
+        let genes = parse(col6a2);
+        let tr = transcript(&genes, "ENST00000397763");
         assert_eq!(
-            extract_appris("basic,appris_alternative_2"),
-            Some("A2".to_string())
+            tr.tsl.as_deref(),
+            Some("5 (assigned to previous version 5)")
         );
+        assert!(tr.mane_plus_clinical);
+        assert!(!tr.mane_select);
+        assert!(!tr.is_canonical);
+
+        let no_tsl = TPTE_205.replace("transcript_support_level=1;", "");
+        let genes = parse(&format!("{TPTE_GENE}{no_tsl}"));
+        assert_eq!(transcript(&genes, "ENST00000622113").tsl, None);
+    }
+
+    /// A CDS line carries `protein_id`, the translation's stable identifier,
+    /// and `version`, the translation's version (`CDS.pm` `summary_as_hash`):
+    /// ENSP00000482040 version 1 for ENST00000622113, the identifier Ensembl
+    /// VEP stores as `_protein` (`Database/Transcript.pm`
+    /// `prefetch_translation_ids`). The GRCh37 release-87 file has no
+    /// `version` on its CDS lines.
+    #[test]
+    fn protein_id_and_version_from_cds_line() {
+        let genes = parse(&format!("{TPTE_GENE}{TPTE_205}{TPTE_205_CDS}"));
+        let tr = transcript(&genes, "ENST00000622113");
+        assert_eq!(tr.cds_regions.len(), 2);
+        for cds in &tr.cds_regions {
+            assert_eq!(cds.protein_id.as_deref(), Some("ENSP00000482040"));
+            assert_eq!(cds.protein_version, Some(1));
+        }
+        assert_eq!(tr.cds_regions[0].phase, 0);
+        assert_eq!(tr.cds_regions[1].phase, 1);
+
+        let grch37_cds = TPTE_205_CDS.replace(";version=1", "");
+        let genes = parse(&format!("{TPTE_GENE}{TPTE_205}{grch37_cds}"));
+        let cds = &transcript(&genes, "ENST00000622113").cds_regions[0];
+        assert_eq!(cds.protein_id.as_deref(), Some("ENSP00000482040"));
+        assert_eq!(cds.protein_version, None);
+    }
+
+    /// Ensembl VEP's dumper skips a transcript of biotype `artifact` and a
+    /// readthrough transcript (`Database/Transcript.pm`
+    /// `get_features_by_regions_uncached`, `next if $tr->{biotype} eq
+    /// 'artifact'` and `next if @{$tr->get_all_Attributes("readthrough_tra")}`).
+    /// The GRCh38 release-116 file spells the readthrough tag
+    /// `readthrough_transcript`; the core API's attribute code is
+    /// `readthrough_tra`, and both are dropped.
+    #[test]
+    fn readthrough_and_artifact_transcripts_dropped() {
+        let lines = "21\tensembl_havana\tgene\t5022531\t5036771\t.\t+\t.\tID=gene:ENSG00000277117;biotype=artifact;description=novel protein%2C similar to inducible T-cell co-stimulator ligand ICOSLG;gene_id=ENSG00000277117;logic_name=ensembl_havana_gene_homo_sapiens;version=6\n\
+21\thavana\ttranscript\t5022531\t5036771\t.\t+\t.\tID=transcript:ENST00000623960;Parent=gene:ENSG00000277117;biotype=artifact;tag=gencode_basic,gencode_primary,Ensembl_canonical;transcript_id=ENST00000623960;transcript_support_level=1 (assigned to previous version 3);version=4\n\
+21\thavana\texon\t5022531\t5022693\t.\t+\t.\tParent=transcript:ENST00000623960;Name=ENSE00003755585;constitutive=1;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00003755585;rank=1;version=1\n\
+21\thavana\tncRNA_gene\t10482738\t10605716\t.\t+\t.\tID=gene:ENSG00000273840;biotype=lncRNA;description=novel transcript;gene_id=ENSG00000273840;logic_name=havana_homo_sapiens;version=2\n\
+21\thavana\tlnc_RNA\t10482738\t10605716\t.\t+\t.\tID=transcript:ENST00000612267;Parent=gene:ENSG00000273840;biotype=lncRNA;tag=gencode_basic,gencode_primary,Ensembl_canonical,readthrough_transcript;transcript_id=ENST00000612267;transcript_support_level=5;version=1\n\
+21\thavana\tlnc_RNA\t10482738\t10500000\t.\t+\t.\tID=transcript:ENST00000000001;Parent=gene:ENSG00000273840;biotype=lncRNA;tag=gencode_basic,readthrough_tra;transcript_id=ENST00000000001;version=1\n\
+21\thavana\tlnc_RNA\t10482738\t10490000\t.\t+\t.\tID=transcript:ENST00000000002;Parent=gene:ENSG00000273840;biotype=lncRNA;tag=gencode_basic;transcript_id=ENST00000000002;version=1\n";
+        let genes = parse(lines);
+        assert!(genes["ENSG00000277117"].transcripts.is_empty());
+        let kept: Vec<&str> = genes["ENSG00000273840"]
+            .transcripts
+            .iter()
+            .map(|t| t.transcript_id.as_str())
+            .collect();
+        assert_eq!(kept, vec!["ENST00000000002"]);
+    }
+
+    /// A gene is any line whose `ID` is `gene:<id>`, so a lncRNA gene's
+    /// `ncRNA_gene` line and a `pseudogene` gene line are genes; a
+    /// transcript is any `transcript:<id>` line, so a `pseudogenic_transcript`
+    /// line is a transcript, as is the GRCh37 release-87 file's `pseudogene`
+    /// transcript line.
+    #[test]
+    fn gene_and_transcript_lines_by_id_prefix() {
+        let lines = "21\thavana\tncRNA_gene\t5232668\t5243903\t.\t-\t.\tID=gene:ENSG00000279669;biotype=lncRNA;description=novel transcript;gene_id=ENSG00000279669;logic_name=havana_homo_sapiens;version=2\n\
+21\thavana_tagene\tlnc_RNA\t5232668\t5243903\t.\t-\t.\tID=transcript:ENST00000623753;Parent=gene:ENSG00000279669;biotype=lncRNA;tag=gencode_basic,gencode_primary,Ensembl_canonical;transcript_id=ENST00000623753;transcript_support_level=3 (assigned to previous version 1);version=2\n\
+21\tensembl_havana\tpseudogene\t9068414\t9073609\t.\t-\t.\tID=gene:ENSG00000188681;Name=TEKT4P2;biotype=transcribed_unprocessed_pseudogene;description=tektin 4 pseudogene 2 [Source:HGNC Symbol%3BAcc:HGNC:40046];gene_id=ENSG00000188681;logic_name=ensembl_havana_gene_homo_sapiens;version=14\n\
+21\thavana\tpseudogenic_transcript\t9068414\t9073609\t.\t-\t.\tID=transcript:ENST00000559466;Parent=gene:ENSG00000188681;Name=TEKT4P2-201;biotype=transcribed_unprocessed_pseudogene;tag=gencode_basic,gencode_primary,Ensembl_canonical;transcript_id=ENST00000559466;transcript_support_level=NA;version=1\n\
+21\t.\tbiological_region\t5000000\t5000100\t.\t+\t.\tlogic_name=cpg\n";
+        let genes = parse(lines);
+        assert_eq!(genes.len(), 2);
+        let lnc = transcript(&genes, "ENST00000623753");
+        assert_eq!(lnc.biotype, "lncRNA");
+        assert!(lnc.is_canonical);
+        assert_eq!(lnc.source, "havana_tagene");
         assert_eq!(
-            extract_appris("basic,appris_candidate_longest_1"),
-            Some("CL1".to_string())
+            lnc.tsl.as_deref(),
+            Some("3 (assigned to previous version 1)")
         );
+        assert_eq!(genes["ENSG00000279669"].version, Some(2));
+        assert_eq!(genes["ENSG00000279669"].name, None);
+        let pseudo = transcript(&genes, "ENST00000559466");
+        assert_eq!(pseudo.gene_id, "ENSG00000188681");
+        assert_eq!(pseudo.tsl.as_deref(), Some("NA"));
+        assert_eq!(genes["ENSG00000188681"].name.as_deref(), Some("TEKT4P2"));
+
+        let genes = parse(GRCH37_PSEUDOGENE);
+        assert_eq!(genes.len(), 1);
         assert_eq!(
-            extract_appris("basic,appris_candidate_3"),
-            Some("C3".to_string())
+            transcript(&genes, "ENST00000411878").biotype,
+            "unprocessed_pseudogene"
         );
-        assert_eq!(extract_appris("basic,Ensembl_canonical"), None);
+    }
+
+    /// An exon line's `ensembl_phase` and `ensembl_end_phase` are the exon's
+    /// own phases (`Exon.pm` `summary_as_hash`), the values the Ensembl
+    /// transcript cache stores on each exon: -1 on a non-coding exon, and on
+    /// ENST00000622113 exon 4 starts in the 5' UTR (-1) and ends in frame 2.
+    #[test]
+    fn ensembl_phases_read_from_exon_line() {
+        let lines = format!(
+            "{TPTE_GENE}{TPTE_205}\
+21\tensembl_havana\texon\t10521553\t10521694\t.\t+\t.\tParent=transcript:ENST00000622113;Name=ENSE00003729301;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00003729301;rank=1;version=1\n\
+21\tensembl_havana\texon\t10538681\t10538734\t.\t+\t.\tParent=transcript:ENST00000622113;Name=ENSE00003735534;constitutive=0;ensembl_end_phase=2;ensembl_phase=-1;exon_id=ENSE00003735534;rank=4;version=1\n\
+21\tensembl_havana\texon\t10541112\t10541165\t.\t+\t.\tParent=transcript:ENST00000622113;Name=ENSE00002295075;constitutive=0;ensembl_end_phase=2;ensembl_phase=2;exon_id=ENSE00002295075;rank=5;version=2\n"
+        );
+        let genes = parse(&lines);
+        let exons = &transcript(&genes, "ENST00000622113").exons;
+        let phases: Vec<(Option<i8>, Option<i8>)> = exons
+            .iter()
+            .map(|e| (e.ensembl_phase, e.ensembl_end_phase))
+            .collect();
+        assert_eq!(
+            phases,
+            vec![
+                (Some(-1), Some(-1)),
+                (Some(-1), Some(2)),
+                (Some(2), Some(2))
+            ]
+        );
+        assert_eq!(exons[1].exon_id.as_deref(), Some("ENSE00003735534"));
+        assert_eq!(exons[1].rank, Some(4));
     }
 }

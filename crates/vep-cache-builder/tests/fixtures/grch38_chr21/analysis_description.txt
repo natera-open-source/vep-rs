@@ -1,0 +1,17 @@
+10300	\N	AFDB-ENSP mappings	1	\N
+10278	\N	CDD	1	\N
+10281	\N	Gene3D	1	\N
+10279	\N	PANTHER	1	\N
+10289	\N	MobiDB lite	1	\N
+10282	\N	Pfam	1	\N
+10285	\N	PROSITE profiles	1	\N
+10297	\N	Phobius	1	\N
+10283	\N	PIRSF	1	\N
+10292	\N	Prints	1	\N
+10284	\N	PROSITE patterns	1	\N
+10298	\N	Low complexity (Seg)	1	\N
+8633	\N	PDB-ENSP mappings	1	\N
+10294	\N	Cleavage site (Signalp)	1	\N
+10287	\N	SMART	1	\N
+10286	\N	Superfamily	1	\N
+10293	\N	Transmembrane helices	1	\N
