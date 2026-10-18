@@ -561,7 +561,7 @@ pub fn parse_record(
             continue;
         }
         match name.as_str() {
-            "chr" => {}
+            "chr" => record.chr = Some(value.to_string()),
             "variation_name" => record.variation_name = value.to_string(),
             "failed" => record.failed = value.parse().unwrap_or(0),
             "somatic" => record.somatic = value.parse().unwrap_or(0),

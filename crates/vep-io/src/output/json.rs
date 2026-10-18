@@ -17,6 +17,7 @@ use indexmap::IndexMap;
 use serde_json::Value;
 
 use vep_core::consequence::{Consequence, TranscriptConsequence};
+use vep_core::sv_routing::perl_true;
 use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
@@ -98,19 +99,6 @@ impl JsonOutputFormatter {
                 Value::String(first.variant_class.so_term().to_string()),
             );
         }
-        if !first.existing_variation.is_empty() {
-            root.insert(
-                "existing_variation".to_string(),
-                Value::Array(
-                    first
-                        .existing_variation
-                        .iter()
-                        .map(|s| Value::String(s.clone()))
-                        .collect(),
-                ),
-            );
-        }
-
         let mut buckets: IndexMap<String, Vec<Value>> = IndexMap::new();
         let mut all_terms: Vec<Consequence> = Vec::new();
         for (variant, tc) in fields::record_rows(record) {
@@ -146,7 +134,7 @@ impl JsonOutputFormatter {
             let cvs: Vec<Value> = first
                 .colocated_variants
                 .iter()
-                .map(|cv| Value::Object(build_colocated_variant_json(cv)))
+                .map(|cv| Value::Object(colocated_variant_object(cv, record)))
                 .collect();
             root.insert("colocated_variants".to_string(), Value::Array(cvs));
         }
@@ -200,8 +188,11 @@ impl JsonOutputFormatter {
                 _ => true,
             })
             .collect();
+        // The co-located variant and frequency fields are stubbed out of the
+        // consequence hash by the JSON factory (OutputFactory/JSON.pm:493-515) and
+        // written under `colocated_variants` instead.
         for k in fields::extra_keys(variant, tc, &self.options) {
-            if !names.contains(&k) {
+            if !names.contains(&k) && !fields::colocated_field(k) {
                 names.push(k);
             }
         }
@@ -269,7 +260,7 @@ impl JsonOutputFormatter {
                         .collect();
                     obj.insert("domains".to_string(), Value::Array(doms));
                 }
-                "FLAGS" | "MANE" | "CLIN_SIG" | "PUBMED" => {
+                "FLAGS" | "MANE" => {
                     obj.insert(
                         json_key(name),
                         Value::Array(
@@ -390,44 +381,85 @@ fn parse_prediction_score(value: &str) -> (Option<String>, Option<f64>) {
     (Some(value.to_string()), value.parse::<f64>().ok())
 }
 
-/// Build a JSON object for a co-located variant.
-fn build_colocated_variant_json(
+/// The populations whose matched-allele frequencies a `colocated_variants`
+/// entry nests under `frequencies` (`@FREQ_FIELDS`, OutputFactory/JSON.pm:130-136),
+/// each written under its lower-cased name.
+const FREQ_FIELDS: &[&str] = &[
+    "AF",
+    "AFR",
+    "AMR",
+    "ASN",
+    "EAS",
+    "SAS",
+    "EUR",
+    "AA",
+    "EA",
+    "ExAC",
+    "ExAC_Adj",
+    "ExAC_AFR",
+    "ExAC_AMR",
+    "ExAC_EAS",
+    "ExAC_FIN",
+    "ExAC_NFE",
+    "ExAC_OTH",
+    "ExAC_SAS",
+    "gnomADe",
+    "gnomADe_AFR",
+    "gnomADe_AMR",
+    "gnomADe_ASJ",
+    "gnomADe_EAS",
+    "gnomADe_FIN",
+    "gnomADe_MID",
+    "gnomADe_NFE",
+    "gnomADe_REMAINING",
+    "gnomADe_SAS",
+    "gnomADg",
+    "gnomADg_AFR",
+    "gnomADg_AMI",
+    "gnomADg_AMR",
+    "gnomADg_ASJ",
+    "gnomADg_EAS",
+    "gnomADg_FIN",
+    "gnomADg_MID",
+    "gnomADg_NFE",
+    "gnomADg_REMAINING",
+    "gnomADg_SAS",
+];
+
+/// One `colocated_variants` entry, as `add_colocated_variant_info_JSON`
+/// (OutputFactory/JSON.pm:407-476 at release/116.2) writes the record's hash:
+/// every cache column that is set, not empty and not `0` (:433-435), the
+/// `failed` and matched-allele bookkeeping dropped, `chr` as `seq_region_name`
+/// and `variation_name` as `id`
+/// (:98-112), `clin_sig` and `pubmed` as lists, `var_synonyms` as
+/// `{source: [ids]}` split on `--`, `::` and `,` (:449-471), `clinical_impact` as
+/// the raw string under `clinvar_somatic_classification`, and the frequency
+/// columns replaced by `frequencies`: for each alternate allele of the record
+/// the values of the record allele matched to it, keyed by the lower-cased
+/// population (:419-431). Every value is numberified except the identifiers
+/// (:288, `%NUMBERIFY_EXEMPT`).
+///
+/// `record` is every allele split from the input line; the record's copy of the
+/// variant on allele `a` carries the frequencies matched to `a`.
+fn colocated_variant_object(
     cv: &vep_core::variant::ColocatedVariant,
+    record: &[&InputVariant],
 ) -> serde_json::Map<String, Value> {
     let mut obj: IndexMap<String, Value> = IndexMap::new();
-    obj.insert("id".to_string(), Value::String(cv.id.clone()));
-    if let Some(ref as_str) = cv.allele_string {
-        obj.insert("allele_string".to_string(), Value::String(as_str.clone()));
+    if let Some(chr) = &cv.chr {
+        obj.insert("seq_region_name".to_string(), Value::String(chr.clone()));
     }
+    obj.insert("id".to_string(), Value::String(cv.id.clone()));
     obj.insert("start".to_string(), Value::Number(cv.start.into()));
     obj.insert("end".to_string(), Value::Number(cv.end.into()));
     obj.insert(
         "strand".to_string(),
         Value::Number((cv.strand as i64).into()),
     );
-    if !cv.frequencies.is_empty() {
-        let mut freq_map = IndexMap::new();
-        for (key, &val) in &cv.frequencies {
-            if let Some(n) = serde_json::Number::from_f64(val) {
-                freq_map.insert(key.clone(), Value::Number(n));
-            }
-        }
-        if !freq_map.is_empty() {
-            obj.insert(
-                "frequencies".to_string(),
-                Value::Object(serde_json::Map::from_iter(freq_map)),
-            );
-        }
-    }
-    if !cv.clin_sig.is_empty() {
+    if let Some(allele_string) = cv.allele_string.as_deref().filter(|s| perl_true(s)) {
         obj.insert(
-            "clin_sig".to_string(),
-            Value::Array(
-                cv.clin_sig
-                    .iter()
-                    .map(|s| Value::String(s.clone()))
-                    .collect(),
-            ),
+            "allele_string".to_string(),
+            numberify("allele_string", allele_string.to_string()),
         );
     }
     if cv.somatic {
@@ -436,13 +468,95 @@ fn build_colocated_variant_json(
     if cv.phenotype {
         obj.insert("phenotype_or_disease".to_string(), Value::Number(1.into()));
     }
+    if !cv.clin_sig.is_empty() {
+        obj.insert("clin_sig".to_string(), numberified_list(&cv.clin_sig));
+    }
     if !cv.pubmed.is_empty() {
+        obj.insert("pubmed".to_string(), numberified_list(&cv.pubmed));
+    }
+    if let Some(clinvar) = cv.clinvar.as_deref() {
+        for (key, value) in [
+            ("clin_sig_allele", &clinvar.clin_sig_allele),
+            ("clin_sig_ref_allele", &clinvar.clin_sig_ref_allele),
+            ("clinvar_somatic_classification", &clinvar.clinical_impact),
+        ] {
+            if let Some(value) = value.as_deref().filter(|v| perl_true(v)) {
+                obj.insert(key.to_string(), numberify(key, value.to_string()));
+            }
+        }
+    }
+    if let Some(synonyms) = cv.var_synonyms.as_deref().filter(|s| perl_true(s)) {
+        obj.insert("var_synonyms".to_string(), var_synonyms_by_source(synonyms));
+    }
+    let mut frequencies: IndexMap<String, Value> = IndexMap::new();
+    for allele in record {
+        let copy = allele
+            .colocated_variants
+            .iter()
+            .find(|c| c.id == cv.id && c.start == cv.start && c.end == cv.end);
+        let Some(copy) = copy.filter(|c| !c.frequencies.is_empty()) else {
+            continue;
+        };
+        let mut by_population: IndexMap<String, Value> = IndexMap::new();
+        for population in FREQ_FIELDS {
+            if let Some(&value) = copy.frequencies.get(*population) {
+                by_population.insert(
+                    population.to_lowercase(),
+                    numberify("frequency", value.to_string()),
+                );
+            }
+        }
+        if !by_population.is_empty() {
+            frequencies.insert(
+                allele.display_allele(),
+                Value::Object(serde_json::Map::from_iter(by_population)),
+            );
+        }
+    }
+    if !frequencies.is_empty() {
         obj.insert(
-            "pubmed".to_string(),
-            Value::Array(cv.pubmed.iter().map(|s| Value::String(s.clone())).collect()),
+            "frequencies".to_string(),
+            Value::Object(serde_json::Map::from_iter(frequencies)),
         );
     }
     serde_json::Map::from_iter(obj)
+}
+
+/// A `,`-split list field as the JSON factory writes it (OutputFactory/JSON.pm:469),
+/// every element numberified (`Utils.pm:235-243` runs over array elements with no
+/// exemption).
+fn numberified_list(values: &[String]) -> Value {
+    Value::Array(
+        values
+            .iter()
+            .map(|value| numberify("", value.clone()))
+            .collect(),
+    )
+}
+
+/// `var_synonyms` as the JSON factory nests it (OutputFactory/JSON.pm:451-460):
+/// the cache string split on `--` into `source::id,id` groups, each a key holding
+/// the `,`-split ids of its second `::` field; a group without `::` holds no id,
+/// and a repeated source keeps its last group.
+fn var_synonyms_by_source(synonyms: &str) -> Value {
+    let mut by_source: IndexMap<String, Value> = IndexMap::new();
+    for group in perl_split(synonyms, "--") {
+        let mut parts = perl_split(&group, "::").into_iter();
+        let source = parts.next().unwrap_or_default();
+        let ids = perl_split(&parts.next().unwrap_or_default(), ",");
+        by_source.insert(source, numberified_list(&ids));
+    }
+    Value::Object(serde_json::Map::from_iter(by_source))
+}
+
+/// Perl's list-context `split` on a literal separator: trailing empty fields are
+/// dropped, so an empty string yields no field.
+fn perl_split(text: &str, separator: &str) -> Vec<String> {
+    let mut fields: Vec<String> = text.split(separator).map(str::to_string).collect();
+    while fields.last().is_some_and(String::is_empty) {
+        fields.pop();
+    }
+    fields
 }
 
 impl OutputFormatter for JsonOutputFormatter {
@@ -836,6 +950,159 @@ mod tests {
         assert_eq!(tc["cds_end"], json!(900));
         assert_eq!(tc["protein_start"], json!("122/400"));
         assert_eq!(tc["protein_end"], json!("122/400"));
+    }
+
+    /// A `colocated_variants` entry as `add_colocated_variant_info_JSON` writes
+    /// it (OutputFactory/JSON.pm:407-476): `var_synonyms` nested by source with
+    /// its ids split on `,` and numberified where they look like numbers,
+    /// `clin_sig` and `pubmed` as lists, `clin_sig_allele` and
+    /// `clin_sig_ref_allele` as written, `clinical_impact` as the raw string
+    /// under `clinvar_somatic_classification`, `chr` as `seq_region_name`, the
+    /// zero flags left out, whatever the flags; the consequence objects carry none
+    /// of the text formats' co-located keys (:493-515), and the record carries no
+    /// `existing_variation`. Ensembl VEP 116.2 writes
+    /// `{"var_synonyms": {"ClinVar": ["RCV000886041", "VCV000713837"]}, "clin_sig":
+    /// ["likely_benign"], "clin_sig_allele": "T:likely_benign", "clin_sig_ref_allele":
+    /// "G", "phenotype_or_disease": 1, "id": "rs374325784", "seq_region_name": "21",
+    /// "start": 10541121, "end": 10541121, "strand": 1, "allele_string": "G/A/C/T"}`
+    /// for `21 10541121 G A` of the `GRCh38-colocated-alt` corpus.
+    #[test]
+    fn var_synonyms_nested_by_source() {
+        let mut v = make_annotated_variant();
+        v.colocated_variants = vec![vep_core::variant::ColocatedVariant {
+            chr: Some("21".into()),
+            id: "rs374325784".into(),
+            start: 10_541_121,
+            end: 10_541_121,
+            allele_string: Some("G/A/C/T".into()),
+            strand: 1,
+            clin_sig: vec!["likely_benign".into()],
+            phenotype: true,
+            pubmed: vec!["26076356".into(), "11524731".into()],
+            clinvar: Some(Box::new(vep_core::variation::ClinVarDetail {
+                clin_sig_allele: Some("T:likely_benign".into()),
+                clin_sig_ref_allele: Some("G".into()),
+                clinical_impact: Some("Neoplasm(Tier I - Strong)".into()),
+            })),
+            var_synonyms: Some(
+                "ClinVar::RCV000886041,VCV000713837--OMIM::605717.0001--UniProt::VAR_089699".into(),
+            ),
+            ..Default::default()
+        }];
+        v.existing_variation = vec!["rs374325784".into()];
+        let options = FieldOptions {
+            check_existing: true,
+            pubmed: true,
+            ..Default::default()
+        };
+        let parsed = fmt(options).format_variant_value(&v);
+        assert_eq!(
+            parsed["colocated_variants"][0],
+            json!({
+                "seq_region_name": "21",
+                "id": "rs374325784",
+                "start": 10541121,
+                "end": 10541121,
+                "strand": 1,
+                "allele_string": "G/A/C/T",
+                "phenotype_or_disease": 1,
+                "clin_sig": ["likely_benign"],
+                "pubmed": [26076356, 11524731],
+                "clin_sig_allele": "T:likely_benign",
+                "clin_sig_ref_allele": "G",
+                "clinvar_somatic_classification": "Neoplasm(Tier I - Strong)",
+                "var_synonyms": {
+                    "ClinVar": ["RCV000886041", "VCV000713837"],
+                    "OMIM": [605717.0001],
+                    "UniProt": ["VAR_089699"]
+                }
+            })
+        );
+        assert!(parsed.get("existing_variation").is_none());
+        let tc = &parsed["transcript_consequences"][0];
+        for key in [
+            "clin_sig",
+            "pheno",
+            "somatic",
+            "pubmed",
+            "existing_variation",
+        ] {
+            assert!(tc.get(key).is_none(), "{key} in a consequence object");
+        }
+        // A germline record without ClinVar fields or synonyms carries the
+        // coordinates, alleles and name alone (:433-435 removes the rest).
+        v.colocated_variants = vec![vep_core::variant::ColocatedVariant {
+            chr: Some("21".into()),
+            id: "rs1300916113".into(),
+            start: 5_030_602,
+            end: 5_030_602,
+            allele_string: Some("A/C".into()),
+            strand: 1,
+            ..Default::default()
+        }];
+        let parsed = fmt(FieldOptions::default()).format_variant_value(&v);
+        assert_eq!(
+            parsed["colocated_variants"][0],
+            json!({
+                "seq_region_name": "21",
+                "id": "rs1300916113",
+                "start": 5030602,
+                "end": 5030602,
+                "strand": 1,
+                "allele_string": "A/C"
+            })
+        );
+        assert_eq!(
+            var_synonyms_by_source("A::1,2--B--A::3--"),
+            json!({"A": [3], "B": []}),
+            "a repeated source keeps its last group, a group without `::` holds no id, a trailing empty group is no group"
+        );
+    }
+
+    /// `frequencies` nests, under each alternate allele of the record, the
+    /// matched record allele's values keyed by the lower-cased population
+    /// (OutputFactory/JSON.pm:419-431): an allele the variant was not matched to
+    /// has no entry, and a record without matched frequencies carries no
+    /// `frequencies` key.
+    #[test]
+    fn colocated_frequencies_nest_per_allele() {
+        let mut a = make_annotated_variant();
+        a.allele_index = 0;
+        a.record_allele_string_multi = Some("A/G/T".into());
+        let mut g_copy = vep_core::variant::ColocatedVariant {
+            chr: Some("21".into()),
+            id: "rs1".into(),
+            start: 25000100,
+            end: 25000100,
+            allele_string: Some("A/G/T".into()),
+            strand: 1,
+            ..Default::default()
+        };
+        g_copy
+            .frequencies
+            .insert("gnomADg_AFR".to_string(), 6.875e-5);
+        g_copy.frequencies.insert("AF".to_string(), 1.0);
+        a.colocated_variants = vec![g_copy.clone()];
+        let mut b = a.clone();
+        b.alt_alleles = vec![b"T".to_vec()];
+        b.allele_string = "A/T".into();
+        b.allele_index = 1;
+        let mut t_copy = g_copy.clone();
+        t_copy.frequencies.clear();
+        t_copy.frequencies.insert("gnomADg_AFR".to_string(), 0.0);
+        b.colocated_variants = vec![t_copy];
+        let parsed = fmt(FieldOptions::default()).format_record_value(&[&a, &b]);
+        assert_eq!(
+            parsed["colocated_variants"][0]["frequencies"],
+            json!({
+                "G": {"af": 1, "gnomadg_afr": 6.875e-5},
+                "T": {"gnomadg_afr": 0}
+            })
+        );
+        b.colocated_variants[0].frequencies.clear();
+        a.colocated_variants[0].frequencies.clear();
+        let parsed = fmt(FieldOptions::default()).format_record_value(&[&a, &b]);
+        assert!(parsed["colocated_variants"][0].get("frequencies").is_none());
     }
 
     #[test]

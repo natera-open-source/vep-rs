@@ -1038,6 +1038,152 @@ fn verbose_prints_the_detected_format() {
     assert!(!text(&plain.stderr).contains("detected input format"));
 }
 
+/// The line `--var_synonyms` without `--check_existing` prints (Runner.pm:117-120).
+const VAR_SYNONYMS_NOTICE: &str =
+    "INFO: Colocated variants will be provided when using --var_synonyms";
+
+/// `--var_synonyms` without `--check_existing` prints `INFO: Colocated variants
+/// will be provided when using --var_synonyms` on standard error as a line of its
+/// own and switches co-location on (Runner.pm:117-120), so the output carries the
+/// `VAR_SYNONYMS` key and Existing_variation; `--quiet` withholds the notice as
+/// `status_msg` does (BaseVEP.pm:782), and `--check_existing` given beside the
+/// flag leaves nothing to switch on and no notice. A refused command line prints
+/// its error alone: `Config.pm:769` refuses it before the runner's implication.
+#[test]
+fn var_synonyms_prints_the_notice_and_switches_check_existing_on() {
+    const NOTICE: &str = VAR_SYNONYMS_NOTICE;
+    let colocated =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-colocated");
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let run = |extra: &[&str]| {
+        vep()
+            .args(args_for(&colocated))
+            .args(["-o", out.to_str().unwrap()])
+            .args(extra)
+            .current_dir(dir.path())
+            .stdin(Stdio::null())
+            .output()
+            .unwrap()
+    };
+    let implied = run(&["--var_synonyms"]);
+    assert_eq!(implied.status.code(), Some(0), "{}", text(&implied.stderr));
+    let stderr = text(&implied.stderr);
+    assert!(
+        stderr.lines().any(|l| l == NOTICE),
+        "the notice is a line of its own:\n{stderr}"
+    );
+    let output = std::fs::read_to_string(&out).unwrap();
+    assert!(output.contains("## VAR_SYNONYMS : List of known variation synonyms and their sources"));
+    assert!(
+        output.contains("VAR_SYNONYMS=ClinVar::RCV000886041,VCV000713837"),
+        "{output}"
+    );
+    assert!(
+        data_lines(&output)
+            .iter()
+            .any(|l| l.split('\t').nth(12) == Some("rs374325784")),
+        "co-location is on"
+    );
+
+    // The configuration's notice precedes the lines of `post_setup_checks`, as
+    // `init` prints them (Runner.pm:117-120, then :138).
+    let ordered = run(&["--var_synonyms", "--shift_hgvs", "0"]);
+    assert_eq!(ordered.status.code(), Some(0), "{}", text(&ordered.stderr));
+    let stderr = text(&ordered.stderr);
+    let lines: Vec<&str> = stderr.lines().collect();
+    let notice_at = lines
+        .iter()
+        .position(|l| *l == NOTICE)
+        .unwrap_or_else(|| panic!("no var_synonyms notice:\n{stderr}"));
+    let shift_at = lines
+        .iter()
+        .position(|l| *l == "INFO: --shift_hgvs has been set to zero, setting shift_3prime to 0")
+        .unwrap_or_else(|| panic!("no shift_hgvs line:\n{stderr}"));
+    assert!(notice_at < shift_at, "{stderr}");
+
+    let quiet = run(&["--var_synonyms", "--quiet"]);
+    assert_eq!(quiet.status.code(), Some(0), "{}", text(&quiet.stderr));
+    assert!(!text(&quiet.stderr).contains("INFO: Colocated"));
+    assert!(std::fs::read_to_string(&out)
+        .unwrap()
+        .contains("VAR_SYNONYMS=ClinVar::RCV000886041,VCV000713837"));
+
+    let explicit = run(&["--var_synonyms", "--check_existing"]);
+    assert_eq!(
+        explicit.status.code(),
+        Some(0),
+        "{}",
+        text(&explicit.stderr)
+    );
+    assert!(!text(&explicit.stderr).contains("INFO: Colocated"));
+
+    let refused = vep()
+        .args(["--var_synonyms", "--json", "--vcf"])
+        .current_dir(dir.path())
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(
+        text(&refused.stderr),
+        "ERROR: [cli] Can't use --json and --vcf together\n"
+    );
+}
+
+/// A run that cannot open its FASTA or its input has printed the `--var_synonyms`
+/// notice by then: `init` prints it (Runner.pm:117-120) before `fasta_db` (:134)
+/// and the parser's open (:136), so the notice is the line before the error, the
+/// error is the last line, and no output file is created.
+#[test]
+fn var_synonyms_notice_precedes_a_failed_fasta_or_input_open() {
+    let colocated =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-colocated");
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let missing_fasta = dir.path().join("absent.fa");
+    let missing_input = dir.path().join("absent.vcf");
+    let mut absent_input_args = args_for(&colocated);
+    let input_flag = absent_input_args.iter().position(|a| a == "-i").unwrap();
+    absent_input_args[input_flag + 1] = missing_input.display().to_string();
+    for (args, extra, error) in [
+        (
+            args_for(&colocated),
+            vec!["--var_synonyms", "--fasta", missing_fasta.to_str().unwrap()],
+            format!(
+                "ERROR: [fasta] Specified FASTA file/directory {} not found",
+                missing_fasta.display()
+            ),
+        ),
+        (
+            absent_input_args,
+            vec!["--var_synonyms"],
+            format!(
+                "ERROR: [run] Failed to open input file '{}'",
+                missing_input.display()
+            ),
+        ),
+    ] {
+        let refused = run_with(&args, &extra, &out);
+        let stderr = text(&refused.stderr);
+        assert_eq!(refused.status.code(), Some(1), "{extra:?}:\n{stderr}");
+        let lines: Vec<&str> = stderr.lines().collect();
+        let notice_at = lines
+            .iter()
+            .position(|l| *l == VAR_SYNONYMS_NOTICE)
+            .unwrap_or_else(|| panic!("{extra:?}: no var_synonyms notice:\n{stderr}"));
+        assert!(
+            lines
+                .get(notice_at + 1)
+                .is_some_and(|l| l.starts_with(&error)),
+            "{extra:?}: the notice is not the line before the error:\n{stderr}"
+        );
+        assert_eq!(notice_at + 2, lines.len(), "{extra:?}:\n{stderr}");
+        assert!(refused.stdout.is_empty(), "{extra:?}");
+        assert!(!out.exists(), "{extra:?}: an output file was created");
+    }
+}
+
 /// An unknown plugin name is a warnings-file line and the run goes on without it
 /// (Runner.pm:929-939 warns on a compile failure); under `--safe` it is the
 /// plugin component's error, before any output is written.

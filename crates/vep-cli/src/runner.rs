@@ -43,7 +43,7 @@ use vep_builtins::BuiltinRegistry;
 use vep_core::consequence::{Consequence, Impact};
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
-use vep_io::output::fields::{ExtraFieldsPlan, FieldOptions, PluginHeader};
+use vep_io::output::fields::{ClinSigAllele, ExtraFieldsPlan, FieldOptions, PluginHeader};
 use vep_io::output::json::JsonOutputFormatter;
 use vep_io::output::parquet::ParquetOutputFormatter;
 use vep_io::output::tab::TabOutputFormatter;
@@ -351,6 +351,17 @@ impl Runner {
         Ok(Some(file))
     }
 
+    /// Prints each notice to stderr unless `--quiet`, as `status_msg` does
+    /// (BaseVEP.pm:782).
+    fn print_notices(&self, notices: &[&str]) {
+        if self.config.quiet {
+            return;
+        }
+        for notice in notices {
+            eprintln!("{notice}");
+        }
+    }
+
     /// Which optional output fields the configuration switches on, shared by
     /// every output format; `run` replaces `hgvs` with the value
     /// [`fasta_setup_checks`] settled once the FASTA is known.
@@ -365,6 +376,7 @@ impl Runner {
             include_pick: c.flag_pick || c.flag_pick_allele || c.flag_pick_allele_gene,
             variant_class: c.variant_class,
             minimal: c.minimal,
+            clinvar_somatic_classification: c.clinvar_somatic_classification,
             symbol: c.symbol,
             biotype: c.biotype,
             canonical: c.canonical,
@@ -390,15 +402,23 @@ impl Runner {
             af_gnomade: c.af_gnomade,
             af_gnomadg: c.af_gnomadg,
             max_af: c.max_af,
+            check_frequency: false,
             check_existing: c.check_existing,
             pubmed: c.pubmed,
+            check_svs: false,
             dont_skip: c.dont_skip,
             overlaps: c.overlaps,
             shift_length: c.shift_length,
             shift_3prime: c.shift_3prime,
             shift_genomic: c.shift_genomic,
+            var_synonyms: c.var_synonyms,
             regulatory: c.regulatory,
             no_escape: c.output_format == "json",
+            clin_sig_allele: if c.clin_sig_allele {
+                ClinSigAllele::PerAllele
+            } else {
+                ClinSigAllele::WholeVariant
+            },
         }
     }
 
@@ -483,17 +503,15 @@ impl Runner {
             return self.write_cache_info(&mut io::stdout().lock());
         }
 
-        // Runner.pm:133-138 and :200-202: init() opens the FASTA, then the input
-        // through the parser, then runs post_setup_checks, whose lines print
-        // there; the output opens after.
+        // Runner.pm:117-120, :133-138 and :200-202: init() prints the
+        // configuration's notice, opens the FASTA, then the input through the
+        // parser, then runs post_setup_checks, whose lines print there; the
+        // output opens after.
+        self.print_notices(&self.config.notices);
         let reference_fasta = open_fasta(&self.config, &self.cache)?;
         let input_file = self.open_input()?;
         let checks = fasta_setup_checks(&self.config, reference_fasta.is_some())?;
-        if !self.config.quiet {
-            for notice in &checks.notices {
-                eprintln!("{notice}");
-            }
-        }
+        self.print_notices(&checks.notices);
 
         // BaseRunner.pm:203-204, with Ensembl VEP's text.
         if self.config.output_file != "STDOUT" {
@@ -2222,6 +2240,30 @@ mod tests {
             ["INFO: --shift_hgvs has been set to zero, setting shift_3prime to 0"]
         );
         assert!(!config.shift_3prime);
+    }
+
+    /// The configuration's `--var_synonyms` notice (Runner.pm:117-120) is the
+    /// configuration's to carry and `post_setup_checks`' lines the FASTA checks';
+    /// `run()` prints the first before the second. Beside `--check_existing` the
+    /// configuration owes none.
+    #[test]
+    fn var_synonyms_notice_is_the_configurations() {
+        let cache = write_json_cache("var_synonyms", &[("21", 1_000)]);
+        let runner = runner_over(&cache, &["--var_synonyms", "--shift_hgvs", "0"]);
+        assert_eq!(
+            runner.config.notices,
+            ["INFO: Colocated variants will be provided when using --var_synonyms"]
+        );
+        assert!(runner.config.check_existing);
+        assert_eq!(
+            fasta_setup_checks(&runner.config, false).unwrap().notices,
+            ["INFO: --shift_hgvs has been set to zero, setting shift_3prime to 0"]
+        );
+        let runner = runner_over(
+            &cache,
+            &["--var_synonyms", "--check_existing", "--shift_hgvs", "0"],
+        );
+        assert!(runner.config.notices.is_empty());
     }
 
     /// A reference FASTA of chromosome 21 whose bases are `C` except an `A` at

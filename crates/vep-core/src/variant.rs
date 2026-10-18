@@ -883,6 +883,10 @@ pub fn classify_variant(ref_allele: &[u8], alt_allele: &[u8]) -> VariantClass {
 /// A known variant from the variation cache that co-locates with an input variant.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ColocatedVariant {
+    /// The chromosome column of the start-indexed variation file, the file's own
+    /// chromosome; `None` for a record of the per-region layout, which has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chr: Option<String>,
     /// Variant identifier (e.g., "rs699").
     pub id: String,
     /// Start position.

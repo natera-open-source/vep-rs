@@ -305,5 +305,33 @@
  "divergences": [],
  "vep_rs_only_tuples": [],
  "divergence_summary": {},
- "vep_rs_only_summary": {}
+ "vep_rs_only_summary": {},
+ "flag_sets": [
+  {
+   "name": "colocated-alt",
+   "flags": [
+    "--check_existing",
+    "--no_check_alleles",
+    "--exclude_null_alleles",
+    "--clin_sig_allele",
+    "0",
+    "--failed",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_colocated-alt",
+   "covers": [
+    "clin_sig_allele",
+    "clin-sig-somatic-pheno-columns"
+   ]
+  }
+ ]
 }

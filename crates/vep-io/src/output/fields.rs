@@ -8,8 +8,8 @@
 //! columns and folds every other key into `Extra` as `KEY=VALUE` pairs, `--tab`
 //! prints every key as its own column, VCF joins the CSQ subfields with `|`, and
 //! JSON lowercases the keys. Which keys exist is decided by the command-line
-//! flags in a fixed order (`@FLAG_FIELDS` in `Bio/EnsEMBL/VEP/Constants.pm`,
-//! ensembl-vep release/115), and the `user` group (IMPACT, DISTANCE, STRAND,
+//! flags in a fixed order (`@FLAG_FIELDS` in `Bio/EnsEMBL/VEP/Constants.pm:60-138`,
+//! ensembl-vep release/116.2), and the `user` group (IMPACT, DISTANCE, STRAND,
 //! FLAGS) is always on. This module is that table: the column names, their
 //! descriptions, the flag-to-field order, the value of any field for a row, and
 //! the order in which one input record's rows come out.
@@ -17,7 +17,9 @@
 use std::collections::BTreeSet;
 
 use vep_core::consequence::{Consequence, TranscriptConsequence};
-use vep_core::variant::{InputVariant, VariantClass};
+use vep_core::sv_routing::perl_true;
+use vep_core::variant::{colocated_in_output_order, ColocatedVariant, InputVariant, VariantClass};
+use vep_core::variation::reverse_comp;
 
 /// The vep-rs release every output names beside the Ensembl VEP header lines:
 /// `## vep-rs <version>` in the default and tab headers, `##vep-rs=<version>`
@@ -52,6 +54,7 @@ pub struct FieldOptions {
     pub include_pick: bool,
     pub variant_class: bool,
     pub minimal: bool,
+    pub clinvar_somatic_classification: bool,
     pub symbol: bool,
     pub biotype: bool,
     pub canonical: bool,
@@ -77,8 +80,10 @@ pub struct FieldOptions {
     pub af_gnomade: bool,
     pub af_gnomadg: bool,
     pub max_af: bool,
+    pub check_frequency: bool,
     pub check_existing: bool,
     pub pubmed: bool,
+    pub check_svs: bool,
     pub dont_skip: bool,
     pub overlaps: bool,
     /// `--shift_length`: the SHIFT_LENGTH field is listed; its value is written
@@ -92,10 +97,26 @@ pub struct FieldOptions {
     /// allele of each row under `shift_3prime` (OutputFactory.pm:1349-1352,
     /// 1702-1706, 1992-1998).
     pub shift_genomic: bool,
+    pub var_synonyms: bool,
     pub regulatory: bool,
     /// VEP's `--no_escape` (implied by `--json`): HGVSp keeps its `=` instead of
     /// the `%3D` the text formats print.
     pub no_escape: bool,
+    /// `--clin_sig_allele`: which ClinVar entries CLIN_SIG reports.
+    pub clin_sig_allele: ClinSigAllele,
+}
+
+/// Which ClinVar significance CLIN_SIG reports for a co-located variant that
+/// carries allele-specific entries (`--clin_sig_allele`, Config.pm:151, on by
+/// default at :316).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ClinSigAllele {
+    /// `--clin_sig_allele 1`: the entries of the row's own allele
+    /// (OutputFactory.pm:1097-1122, 1143-1144).
+    #[default]
+    PerAllele,
+    /// `--clin_sig_allele 0`: the variant's terms whatever the allele (:1125).
+    WholeVariant,
 }
 
 /// The flag-driven field groups in VEP's order (`@FLAG_FIELDS`). The `user`
@@ -108,6 +129,10 @@ const FLAG_FIELD_GROUPS: &[(&str, &[&str])] = &[
     ("include_pick", &["PICK"]),
     ("variant_class", &["VARIANT_CLASS"]),
     ("minimal", &["MINIMISED"]),
+    (
+        "clinvar_somatic_classification",
+        &["CLINVAR_SOMATIC_CLASSIFICATION"],
+    ),
     ("symbol", &["SYMBOL", "SYMBOL_SOURCE", "HGNC_ID"]),
     ("biotype", &["BIOTYPE"]),
     ("canonical", &["CANONICAL"]),
@@ -168,11 +193,14 @@ const FLAG_FIELD_GROUPS: &[(&str, &[&str])] = &[
         ],
     ),
     ("max_af", &["MAX_AF", "MAX_AF_POPS"]),
+    ("check_frequency", &["FREQS"]),
     ("check_existing", &["CLIN_SIG", "SOMATIC", "PHENO"]),
     ("pubmed", &["PUBMED"]),
+    ("check_svs", &["SV"]),
     ("dont_skip", &["CHECK_REF"]),
     ("overlaps", &["OverlapBP", "OverlapPC"]),
     ("shift_length", &["SHIFT_LENGTH"]),
+    ("var_synonyms", &["VAR_SYNONYMS"]),
     (
         "regulatory",
         &[
@@ -195,6 +223,7 @@ impl FieldOptions {
             "include_pick" => self.include_pick,
             "variant_class" => self.variant_class,
             "minimal" => self.minimal,
+            "clinvar_somatic_classification" => self.clinvar_somatic_classification,
             "symbol" => self.symbol,
             "biotype" => self.biotype,
             "canonical" => self.canonical,
@@ -220,11 +249,14 @@ impl FieldOptions {
             "af_gnomade" => self.af_gnomade,
             "af_gnomadg" => self.af_gnomadg,
             "max_af" => self.max_af,
+            "check_frequency" => self.check_frequency,
             "check_existing" => self.check_existing,
             "pubmed" => self.pubmed,
+            "check_svs" => self.check_svs,
             "dont_skip" => self.dont_skip,
             "overlaps" => self.overlaps,
             "shift_length" => self.shift_length,
+            "var_synonyms" => self.var_synonyms,
             "regulatory" => self.regulatory,
             _ => false,
         }
@@ -512,10 +544,20 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
         "MAX_AF_POPS",
         "Populations in which maximum allele frequency was observed",
     ),
+    ("SV", "IDs of overlapping structural variants"),
+    ("FREQS", "Frequencies of overlapping variants used in filtering"),
     ("DISTANCE", "Shortest distance from variant to transcript"),
     ("CLIN_SIG", "ClinVar clinical significance of the dbSNP variant"),
+    (
+        "CLINVAR_SOMATIC_CLASSIFICATION",
+        "ClinVar somatic classification of the dbSNP variant",
+    ),
     ("BIOTYPE", "Biotype of transcript or regulatory feature"),
     ("PUBMED", "Pubmed ID(s) of publications that cite existing variant"),
+    (
+        "VAR_SYNONYMS",
+        "List of known variation synonyms and their sources",
+    ),
     (
         "ALLELE_NUM",
         "Allele number from input; 0 is reference, 1 is first alternate etc",
@@ -668,16 +710,6 @@ pub fn format_freq(f: f64) -> String {
         out = out.trim_end_matches('0').trim_end_matches('.').to_string();
     }
     out
-}
-
-fn joined_unique(values: impl IntoIterator<Item = String>, sep: &str) -> String {
-    let mut seen: Vec<String> = Vec::new();
-    for v in values {
-        if !v.is_empty() && v != "." && !seen.contains(&v) {
-            seen.push(v);
-        }
-    }
-    seen.join(sep)
 }
 
 /// The value of one named field for one row, or an empty string when the field
@@ -909,38 +941,13 @@ fn row_field_value(
             tc.map(|x| x.shift_length.to_string()).unwrap_or_default()
         }
         "SHIFT_LENGTH" => String::new(),
-        "CLIN_SIG" => joined_unique(
-            variant
-                .colocated_variants
-                .iter()
-                .flat_map(|cv| cv.clin_sig.iter().cloned()),
-            list_sep,
-        ),
-        "SOMATIC" => {
-            if variant.colocated_variants.is_empty() {
-                String::new()
-            } else if variant.colocated_variants.iter().any(|cv| cv.somatic) {
-                "1".to_string()
-            } else {
-                "0".to_string()
-            }
-        }
-        "PHENO" => {
-            if variant.colocated_variants.is_empty() {
-                String::new()
-            } else if variant.colocated_variants.iter().any(|cv| cv.phenotype) {
-                "1".to_string()
-            } else {
-                "0".to_string()
-            }
-        }
-        "PUBMED" => joined_unique(
-            variant
-                .colocated_variants
-                .iter()
-                .flat_map(|cv| cv.pubmed.iter().cloned()),
-            list_sep,
-        ),
+        "CLIN_SIG"
+        | "SOMATIC"
+        | "PHENO"
+        | "PUBMED"
+        | "VAR_SYNONYMS"
+        | "CLINVAR_SOMATIC_CLASSIFICATION" => colocated_column(field, variant, options, list_sep),
+        "SV" => variant.overlapping_svs.join(list_sep),
         "SIFT" => tc.and_then(|x| x.sift.clone()).unwrap_or_default(),
         "PolyPhen" => tc.and_then(|x| x.polyphen.clone()).unwrap_or_default(),
         "MOTIF_NAME"
@@ -987,6 +994,154 @@ fn row_field_value(
             .or_else(|| variant.plugin_data.get(field))
             .cloned()
             .unwrap_or_default(),
+    }
+}
+
+/// The fields `add_colocated_variant_info` (OutputFactory.pm:1041-1167 at
+/// release/116.2) and `add_colocated_frequency_data` (:1185-1278) set on a row:
+/// the co-located variant columns and the fields of the frequency groups
+/// (`%FREQUENCY_KEYS`, :107-113, and `--max_af`). The JSON factory stubs both
+/// out (OutputFactory/JSON.pm:493-515) and writes the data under
+/// `colocated_variants` instead; a plugin's field is never one of them.
+pub fn colocated_field(field: &str) -> bool {
+    const FREQUENCY_GROUPS: [&str; 5] = ["af", "af_1kg", "af_gnomade", "af_gnomadg", "max_af"];
+    matches!(
+        field,
+        "Existing_variation"
+            | "CLIN_SIG"
+            | "SOMATIC"
+            | "PHENO"
+            | "PUBMED"
+            | "VAR_SYNONYMS"
+            | "CLINVAR_SOMATIC_CLASSIFICATION"
+            | "FREQS"
+    ) || FLAG_FIELD_GROUPS
+        .iter()
+        .any(|(group, fields)| FREQUENCY_GROUPS.contains(group) && fields.contains(&field))
+}
+
+/// One co-located variant column of a row, as `add_colocated_variant_info`
+/// (OutputFactory.pm:1041-1167 at release/116.2) fills it from the variants
+/// that print on the row: every matched variant in output order, a variant
+/// matched by allele only on the rows of an allele it matched (:1081-1083).
+///
+/// `SOMATIC` and `PHENO` list one `0` or `1` per variant and are dropped when
+/// every value is `0` (:1129-1138); `PUBMED` lists every id of every variant,
+/// duplicates kept (:1126); `VAR_SYNONYMS` joins the variants' synonym strings
+/// with `--` (:1090, 1141); `CLINVAR_SOMATIC_CLASSIFICATION` is the last
+/// variant's `clinical_impact` string (:1093-1095). `CLIN_SIG` under
+/// [`ClinSigAllele::PerAllele`] is the row's allele's own entries, `;`-joined
+/// across variants and `,`-joined within one, when any variant carries entries
+/// for it (:1097-1122, 1143-1144); otherwise, and under
+/// [`ClinSigAllele::WholeVariant`], the terms of the variants read before the
+/// first one with allele-specific entries, duplicates kept (:1125). Every
+/// entry allele of a variant whose `clin_sig_ref_allele` differs from the
+/// input's reference allele is reverse-complemented first (:1049, 1100-1112).
+fn colocated_column(
+    field: &str,
+    variant: &InputVariant,
+    options: &FieldOptions,
+    list_sep: &str,
+) -> String {
+    if variant.colocated_variants.is_empty() {
+        return String::new();
+    }
+    let allele = variant.display_allele();
+    let mut ordered = colocated_in_output_order(&variant.colocated_variants);
+    ordered.retain(|cv| cv.applies_to_allele(&allele));
+    match field {
+        "CLIN_SIG" => clin_sig_column(variant, &allele, &ordered, options, list_sep),
+        "SOMATIC" => zero_one_list(ordered.iter().map(|cv| cv.somatic), list_sep),
+        "PHENO" => zero_one_list(ordered.iter().map(|cv| cv.phenotype), list_sep),
+        "PUBMED" if options.pubmed => ordered
+            .iter()
+            .flat_map(|cv| cv.pubmed.iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join(list_sep),
+        "VAR_SYNONYMS" if options.var_synonyms => ordered
+            .iter()
+            .filter_map(|cv| cv.var_synonyms.as_deref().filter(|s| perl_true(s)))
+            .collect::<Vec<_>>()
+            .join("--"),
+        "CLINVAR_SOMATIC_CLASSIFICATION" if options.clinvar_somatic_classification => ordered
+            .iter()
+            .filter_map(|cv| cv.clinvar.as_deref()?.clinical_impact.as_deref())
+            .next_back()
+            .unwrap_or_default()
+            .to_string(),
+        _ => String::new(),
+    }
+}
+
+/// `0` or `1` per value joined by `list_sep`, or nothing when every value is
+/// false (OutputFactory.pm:1129-1138).
+fn zero_one_list(values: impl Iterator<Item = bool> + Clone, list_sep: &str) -> String {
+    if !values.clone().any(|value| value) {
+        return String::new();
+    }
+    values
+        .map(|value| if value { "1" } else { "0" })
+        .collect::<Vec<_>>()
+        .join(list_sep)
+}
+
+/// The `CLIN_SIG` of a row over the variants that print on it, in order
+/// (`colocated_column`).
+fn clin_sig_column(
+    variant: &InputVariant,
+    allele: &str,
+    ordered: &[&ColocatedVariant],
+    options: &FieldOptions,
+    list_sep: &str,
+) -> String {
+    let ref_allele = String::from_utf8_lossy(&variant.ref_allele);
+    let per_allele = options.clin_sig_allele == ClinSigAllele::PerAllele;
+    let mut terms: Vec<&str> = Vec::new();
+    let mut by_allele: Vec<String> = Vec::new();
+    let mut allele_entries_seen = false;
+    for cv in ordered {
+        let allele_specific = cv
+            .clinvar
+            .as_deref()
+            .filter(|clinvar| per_allele && clinvar.clin_sig_allele.is_some());
+        if let Some(clinvar) = allele_specific {
+            let flip = clinvar
+                .clin_sig_ref_allele
+                .as_deref()
+                .is_some_and(|ref_entry| perl_true(ref_entry) && ref_entry != ref_allele);
+            // Perl's `%cs_hash` joins each entry allele's terms with `,` in entry
+            // order and is read at the row's allele alone, so only that allele's
+            // terms are gathered.
+            let mut row_allele_terms = String::new();
+            let mut row_allele_entry_found = false;
+            for (entry_allele, term) in clinvar.clin_sig_allele_entries() {
+                let key = if flip {
+                    reverse_comp(entry_allele)
+                } else {
+                    entry_allele.to_string()
+                };
+                if key != allele {
+                    continue;
+                }
+                if !row_allele_terms.is_empty() {
+                    row_allele_terms.push(',');
+                }
+                row_allele_terms.push_str(term);
+                row_allele_entry_found = true;
+            }
+            if row_allele_entry_found && !by_allele.contains(&row_allele_terms) {
+                by_allele.push(row_allele_terms);
+            }
+            allele_entries_seen = true;
+        }
+        if !allele_entries_seen {
+            terms.extend(cv.clin_sig.iter().map(String::as_str));
+        }
+    }
+    if by_allele.is_empty() {
+        terms.join(list_sep)
+    } else {
+        by_allele.join(";")
     }
 }
 
@@ -1237,6 +1392,8 @@ fn timestamp() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vep_core::variant::MatchedAllele;
+    use vep_core::variation::ClinVarDetail;
 
     #[test]
     fn user_group_fields_come_first_and_once() {
@@ -1905,6 +2062,590 @@ mod tests {
             .last()
             .unwrap()
             .ends_with("\tExisting_variation\tExtra"));
+    }
+
+    /// A known variant matched to the input alleles `matched` (input allele,
+    /// record allele), with the ClinVar fields `clinvar`.
+    fn known(
+        id: &str,
+        allele_string: &str,
+        matched: &[(&str, &str)],
+        clin_sig: &[&str],
+        clinvar: Option<ClinVarDetail>,
+    ) -> ColocatedVariant {
+        ColocatedVariant {
+            id: id.to_string(),
+            allele_string: Some(allele_string.to_string()),
+            strand: 1,
+            clin_sig: clin_sig.iter().map(|t| t.to_string()).collect(),
+            matched_alleles: matched
+                .iter()
+                .enumerate()
+                .map(|(i, (input, record))| MatchedAllele {
+                    input_allele: input.to_string(),
+                    input_index: i,
+                    record_allele: record.to_string(),
+                    record_index: i,
+                })
+                .collect(),
+            clinvar: clinvar.map(Box::new),
+            ..Default::default()
+        }
+    }
+
+    /// The alleles of a record, each an `InputVariant` carrying the record's
+    /// whole co-located list, as the matcher leaves them.
+    fn record(ref_allele: &str, alts: &[&str], known: Vec<ColocatedVariant>) -> Vec<InputVariant> {
+        alts.iter()
+            .enumerate()
+            .map(|(i, alt)| {
+                let mut v = InputVariant::new(
+                    "21".into(),
+                    10_541_121,
+                    10_541_121,
+                    ref_allele.as_bytes().to_vec(),
+                    alt.as_bytes().to_vec(),
+                );
+                v.allele_index = i;
+                v.colocated_variants = known.clone();
+                v
+            })
+            .collect()
+    }
+
+    fn with_check_existing(set: impl FnOnce(&mut FieldOptions)) -> FieldOptions {
+        let mut options = FieldOptions {
+            check_existing: true,
+            ..Default::default()
+        };
+        set(&mut options);
+        options
+    }
+
+    /// `rs374325784` of the release-116 GRCh38 cache: `G/A/C/T`, `clin_sig`
+    /// `likely_benign`, `clin_sig_allele` `T:likely_benign`, `clin_sig_ref_allele`
+    /// `G`, phenotype-linked, one ClinVar synonym group.
+    fn rs374325784(matched: &[(&str, &str)]) -> ColocatedVariant {
+        let mut cv = known(
+            "rs374325784",
+            "G/A/C/T",
+            matched,
+            &["likely_benign"],
+            Some(ClinVarDetail {
+                clin_sig_allele: Some("T:likely_benign".into()),
+                clin_sig_ref_allele: Some("G".into()),
+                clinical_impact: None,
+            }),
+        );
+        cv.phenotype = true;
+        cv.var_synonyms = Some("ClinVar::RCV000886041,VCV000713837".into());
+        cv
+    }
+
+    /// `SOMATIC` and `PHENO` are one `0` or `1` per co-located variant in output
+    /// order (germline first) and absent when every value is `0`
+    /// (OutputFactory.pm:1069-1071, 1129-1138). Ensembl VEP 116.2 prints neither
+    /// key for `21_5230609_A/C` of the `GRCh38-colocated` corpus (`rs1979841086`
+    /// and `rs373402393`, both germline and unlinked) and `SOMATIC=1;PHENO=1` for
+    /// `21_38403526_T/TTCC` (`rs2517045861`, somatic and phenotype-linked).
+    #[test]
+    fn somatic_and_pheno_are_per_variant_lists_dropped_when_all_zero() {
+        let options = with_check_existing(|_| {});
+        let unlinked = record(
+            "A",
+            &["C"],
+            vec![
+                known("rs1979841086", "dbSNP_novariation", &[], &[], None),
+                known("rs373402393", "A/C", &[("C", "C")], &[], None),
+            ],
+        );
+        assert_eq!(
+            field_value("SOMATIC", &unlinked[0], None, &options, ","),
+            ""
+        );
+        assert_eq!(field_value("PHENO", &unlinked[0], None, &options, ","), "");
+        assert_eq!(
+            field_value("Existing_variation", &unlinked[0], None, &options, ","),
+            "",
+            "the matcher fills Existing_variation; the renderer prints it as given"
+        );
+
+        let mut somatic = known("rs2517045861", "-/TCC", &[("TCC", "TCC")], &[], None);
+        somatic.somatic = true;
+        somatic.phenotype = true;
+        let linked = record("-", &["TCC"], vec![somatic.clone()]);
+        assert_eq!(field_value("SOMATIC", &linked[0], None, &options, ","), "1");
+        assert_eq!(field_value("PHENO", &linked[0], None, &options, ","), "1");
+
+        // A germline phenotype-linked variant beside a somatic unlinked one: the
+        // germline variant sorts first whatever the cache order, so the lists read
+        // `0,1` and `1,0`; `&` joins them inside a VCF CSQ entry.
+        somatic.phenotype = false;
+        let mut germline = known("rs1", "-/TCC", &[("TCC", "TCC")], &[], None);
+        germline.phenotype = true;
+        let both = record("-", &["TCC"], vec![somatic, germline]);
+        assert_eq!(field_value("SOMATIC", &both[0], None, &options, ","), "0,1");
+        assert_eq!(field_value("PHENO", &both[0], None, &options, "&"), "1&0");
+        assert!(!FieldOptions::default().check_existing);
+        assert!(flag_fields(&options).ends_with(&["CLIN_SIG", "SOMATIC", "PHENO"]));
+    }
+
+    /// `CLIN_SIG` without allele-specific entries lists every term of every
+    /// co-located variant, duplicates kept (OutputFactory.pm:1125 pushes each
+    /// variant's `split(',', clin_sig)` and nothing deduplicates it).
+    #[test]
+    fn clin_sig_keeps_duplicates() {
+        let options = with_check_existing(|_| {});
+        let alleles = record(
+            "A",
+            &["G"],
+            vec![
+                known(
+                    "rs1",
+                    "A/G",
+                    &[("G", "G")],
+                    &["benign", "likely_benign"],
+                    None,
+                ),
+                known("rs2", "A/G", &[("G", "G")], &["benign"], None),
+            ],
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &alleles[0], None, &options, ","),
+            "benign,likely_benign,benign"
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &alleles[0], None, &options, "&"),
+            "benign&likely_benign&benign"
+        );
+    }
+
+    /// Under the default `--clin_sig_allele 1`, a variant with allele-specific
+    /// entries contributes the entries of the row's own allele and suppresses its
+    /// record-level terms (OutputFactory.pm:1097-1125, 1143-1144). Ensembl VEP
+    /// 116.2 on `21 10541121 G A,T` of the `GRCh38-colocated` corpus writes
+    /// `CLIN_SIG=likely_benign;PHENO=1;VAR_SYNONYMS=ClinVar::RCV000886041,VCV000713837`
+    /// on the `T` rows and `PHENO=1;VAR_SYNONYMS=ClinVar::RCV000886041,VCV000713837`
+    /// on the `A` rows (`rs374325784`, entries `T:likely_benign`).
+    #[test]
+    fn clin_sig_allele_default_reports_this_alleles_entries() {
+        let options = with_check_existing(|o| o.var_synonyms = true);
+        let alleles = record(
+            "G",
+            &["A", "T"],
+            vec![rs374325784(&[("A", "A"), ("T", "T")])],
+        );
+        let (a, t) = (&alleles[0], &alleles[1]);
+        assert_eq!(field_value("CLIN_SIG", a, None, &options, ","), "");
+        assert_eq!(
+            field_value("CLIN_SIG", t, None, &options, ","),
+            "likely_benign"
+        );
+        for row in [a, t] {
+            assert_eq!(field_value("PHENO", row, None, &options, ","), "1");
+            assert_eq!(
+                field_value("VAR_SYNONYMS", row, None, &options, ","),
+                "ClinVar::RCV000886041,VCV000713837"
+            );
+        }
+        // A record-level term read before the first allele-specific variant
+        // survives when no entry names the row's allele (:1125 runs per variant).
+        let mut earlier = known("rs1", "G/A/T", &[("A", "A"), ("T", "T")], &["benign"], None);
+        earlier.phenotype = false;
+        let alleles = record(
+            "G",
+            &["A", "T"],
+            vec![earlier, rs374325784(&[("A", "A"), ("T", "T")])],
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &alleles[0], None, &options, ","),
+            "benign"
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &alleles[1], None, &options, ","),
+            "likely_benign",
+            "the allele's own entries replace the record-level terms (:1144)"
+        );
+        // Two variants with entries for the row's allele: `;`-joined, each
+        // variant's `,`-joined terms once (:1114-1116, 1120, 1144).
+        let mut other = known("rs2", "G/A/T", &[("A", "A"), ("T", "T")], &[], None);
+        other.clinvar = Some(Box::new(ClinVarDetail {
+            clin_sig_allele: Some("T:pathogenic;T:risk_factor;A:benign".into()),
+            clin_sig_ref_allele: Some("G".into()),
+            clinical_impact: None,
+        }));
+        let alleles = record(
+            "G",
+            &["A", "T"],
+            vec![rs374325784(&[("A", "A"), ("T", "T")]), other],
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &alleles[1], None, &options, ","),
+            "likely_benign;pathogenic,risk_factor"
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &alleles[1], None, &options, "&"),
+            "likely_benign;pathogenic,risk_factor",
+            "the VCF writer encodes the separators itself"
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &alleles[0], None, &options, ","),
+            "benign"
+        );
+    }
+
+    /// `--clin_sig_allele 0` ignores the allele-specific entries: every
+    /// co-located variant's record-level terms print on every row
+    /// (OutputFactory.pm:1097 is skipped, :1125 pushes each variant's terms).
+    /// Ensembl VEP 116.2 on `21 10541121 G A` of the `GRCh38-colocated-alt`
+    /// corpus under `--clin_sig_allele 0` writes `CLIN_SIG=likely_benign` for the
+    /// `A` allele, which the default run leaves without CLIN_SIG.
+    #[test]
+    fn clin_sig_allele_zero_reports_locus_terms() {
+        let options = with_check_existing(|o| o.clin_sig_allele = ClinSigAllele::WholeVariant);
+        let alleles = record("G", &["A"], vec![rs374325784(&[("A", "A")])]);
+        assert_eq!(
+            field_value("CLIN_SIG", &alleles[0], None, &options, ","),
+            "likely_benign"
+        );
+        let default = with_check_existing(|_| {});
+        assert_eq!(default.clin_sig_allele, ClinSigAllele::PerAllele);
+        assert_eq!(
+            field_value("CLIN_SIG", &alleles[0], None, &default, ","),
+            ""
+        );
+    }
+
+    /// When a variant's `clin_sig_ref_allele` differs from the input's reference
+    /// allele, every entry allele is reverse-complemented before the row's allele
+    /// is looked up (OutputFactory.pm:1049, 1100-1112): an entry `A:pathogenic`
+    /// recorded against reference `G` names the `T` row of a `C/T` input. With
+    /// the reference alleles equal, or none recorded, the entries are read as
+    /// written.
+    #[test]
+    fn clin_sig_entries_reverse_complemented_when_ref_allele_differs() {
+        let options = with_check_existing(|_| {});
+        let entries = |ref_allele: Option<&str>| {
+            let mut cv = known("rs1", "C/T", &[("T", "T")], &["pathogenic"], None);
+            cv.clinvar = Some(Box::new(ClinVarDetail {
+                clin_sig_allele: Some("A:pathogenic;C:benign".into()),
+                clin_sig_ref_allele: ref_allele.map(str::to_string),
+                clinical_impact: None,
+            }));
+            record("C", &["T"], vec![cv])
+        };
+        assert_eq!(
+            field_value("CLIN_SIG", &entries(Some("G"))[0], None, &options, ","),
+            "pathogenic",
+            "A reverse-complemented is T, the row's allele"
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &entries(Some("C"))[0], None, &options, ","),
+            "",
+            "read as written, A names no row and the record-level term is suppressed"
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &entries(None)[0], None, &options, ","),
+            ""
+        );
+        // The complement of `C:benign` is `G:benign`, which the `T` row never reads.
+        let mut flipped = entries(Some("G"));
+        flipped[0].colocated_variants[0]
+            .clinvar
+            .as_mut()
+            .unwrap()
+            .clin_sig_allele = Some("C:benign".into());
+        assert_eq!(
+            field_value("CLIN_SIG", &flipped[0], None, &options, ","),
+            ""
+        );
+    }
+
+    /// An entry without an allele (`:pathogenic`) is keyed by the empty string,
+    /// which no row's allele equals, and still marks the variant as carrying
+    /// allele-specific entries, so its record-level terms are suppressed too
+    /// (OutputFactory.pm:1106-1125).
+    #[test]
+    fn empty_allele_entry_matches_nothing() {
+        let options = with_check_existing(|_| {});
+        let mut cv = known("rs1", "C/T", &[("T", "T")], &["pathogenic"], None);
+        cv.clinvar = Some(Box::new(ClinVarDetail {
+            clin_sig_allele: Some(":pathogenic".into()),
+            clin_sig_ref_allele: Some("C".into()),
+            clinical_impact: None,
+        }));
+        let alleles = record("C", &["T"], vec![cv]);
+        assert_eq!(
+            field_value("CLIN_SIG", &alleles[0], None, &options, ","),
+            ""
+        );
+    }
+
+    /// `CLINVAR_SOMATIC_CLASSIFICATION` is the cache's `clinical_impact` string
+    /// as written, the last co-located variant's in output order
+    /// (OutputFactory.pm:1093-1095), under `--clinvar_somatic_classification`
+    /// alone (Constants.pm:82), described as Ensembl VEP describes it (:240).
+    #[test]
+    fn clinvar_somatic_classification_prints_cache_string() {
+        let classification = |id: &str, text: &str| {
+            let mut cv = known(id, "C/T", &[("T", "T")], &[], None);
+            cv.clinvar = Some(Box::new(ClinVarDetail {
+                clin_sig_allele: None,
+                clin_sig_ref_allele: None,
+                clinical_impact: Some(text.into()),
+            }));
+            cv
+        };
+        let alleles = record(
+            "C",
+            &["T"],
+            vec![
+                classification("rs1", "Neoplasm(Tier I - Strong)"),
+                classification("rs2", "Carcinoma(oncogenicity:Oncogenic)"),
+            ],
+        );
+        let options = with_check_existing(|o| o.clinvar_somatic_classification = true);
+        assert_eq!(
+            field_value(
+                "CLINVAR_SOMATIC_CLASSIFICATION",
+                &alleles[0],
+                None,
+                &options,
+                ","
+            ),
+            "Carcinoma(oncogenicity:Oncogenic)"
+        );
+        assert!(flag_fields(&options).contains(&"CLINVAR_SOMATIC_CLASSIFICATION"));
+        let without = with_check_existing(|_| {});
+        assert_eq!(
+            field_value(
+                "CLINVAR_SOMATIC_CLASSIFICATION",
+                &alleles[0],
+                None,
+                &without,
+                ","
+            ),
+            ""
+        );
+        assert!(!flag_fields(&without).contains(&"CLINVAR_SOMATIC_CLASSIFICATION"));
+        assert_eq!(
+            field_description("CLINVAR_SOMATIC_CLASSIFICATION"),
+            Some("ClinVar somatic classification of the dbSNP variant")
+        );
+    }
+
+    /// The output-formats page states the subset: the cache's classification
+    /// string as written, which Ensembl VEP builds from ClinVar's somatic
+    /// records when it dumps the cache or reads a database and vep-rs never
+    /// rebuilds.
+    #[test]
+    fn documented_subset_is_stated() {
+        let page = std::fs::read_to_string(format!(
+            "{}/../../docs/output-formats.md",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
+        let paragraph = page
+            .lines()
+            .find(|l| {
+                l.contains(
+                    "`CLINVAR_SOMATIC_CLASSIFICATION` (under `--clinvar_somatic_classification`)",
+                )
+            })
+            .expect("docs/output-formats.md describes CLINVAR_SOMATIC_CLASSIFICATION");
+        for phrase in [
+            "the cache's classification string as written",
+            "Ensembl VEP builds that string from ClinVar's somatic records",
+            "vep-rs reads a cache only",
+        ] {
+            assert!(
+                paragraph.contains(phrase),
+                "the CLINVAR_SOMATIC_CLASSIFICATION paragraph lacks {phrase:?}: {paragraph}"
+            );
+        }
+    }
+
+    /// `PUBMED` lists every id of every co-located variant in output order,
+    /// duplicates kept (OutputFactory.pm:1126), under `--pubmed` alone. Ensembl
+    /// VEP 116.2 writes `PUBMED=26076356` for `21_10602054_ATA/A` of the
+    /// `GRCh38-colocated` corpus (`rs149363218`).
+    #[test]
+    fn pubmed_keeps_duplicates_across_variants() {
+        let cited = |id: &str, ids: &[&str]| {
+            let mut cv = known(id, "ATA/A", &[("-", "-")], &[], None);
+            cv.pubmed = ids.iter().map(|i| i.to_string()).collect();
+            cv
+        };
+        let options = with_check_existing(|o| o.pubmed = true);
+        let one = record("TA", &["-"], vec![cited("rs149363218", &["26076356"])]);
+        assert_eq!(
+            field_value("PUBMED", &one[0], None, &options, ","),
+            "26076356"
+        );
+        let two = record(
+            "TA",
+            &["-"],
+            vec![
+                cited("rs1", &["26076356", "11111111"]),
+                cited("rs2", &["26076356"]),
+            ],
+        );
+        assert_eq!(
+            field_value("PUBMED", &two[0], None, &options, ","),
+            "26076356,11111111,26076356"
+        );
+        assert_eq!(
+            field_value("PUBMED", &two[0], None, &options, "&"),
+            "26076356&11111111&26076356"
+        );
+        let without = with_check_existing(|_| {});
+        assert_eq!(field_value("PUBMED", &two[0], None, &without, ","), "");
+    }
+
+    /// `VAR_SYNONYMS` joins each co-located variant's synonym string with `--`
+    /// (OutputFactory.pm:1090, 1141) under `--var_synonyms` alone (Constants.pm:133).
+    /// Ensembl VEP 116.2 writes `VAR_SYNONYMS=ClinVar::RCV000886041,VCV000713837`
+    /// for `21_10541121_G/A/T` of the `GRCh38-colocated` corpus (`rs374325784`).
+    #[test]
+    fn var_synonyms_joined_with_double_dash() {
+        let options = with_check_existing(|o| o.var_synonyms = true);
+        let one = record("G", &["A"], vec![rs374325784(&[("A", "A")])]);
+        assert_eq!(
+            field_value("VAR_SYNONYMS", &one[0], None, &options, ","),
+            "ClinVar::RCV000886041,VCV000713837"
+        );
+        let mut other = known("rs2", "G/A", &[("A", "A")], &[], None);
+        other.var_synonyms = Some("OMIM::605717.0001--UniProt::VAR_089699".into());
+        let two = record("G", &["A"], vec![rs374325784(&[("A", "A")]), other]);
+        assert_eq!(
+            field_value("VAR_SYNONYMS", &two[0], None, &options, "&"),
+            "ClinVar::RCV000886041,VCV000713837--OMIM::605717.0001--UniProt::VAR_089699",
+            "the cache string is joined as written; the VCF writer encodes its commas"
+        );
+        assert!(flag_fields(&options).contains(&"VAR_SYNONYMS"));
+        let without = with_check_existing(|_| {});
+        assert_eq!(
+            field_value("VAR_SYNONYMS", &two[0], None, &without, ","),
+            ""
+        );
+        assert!(!flag_fields(&without).contains(&"VAR_SYNONYMS"));
+        assert_eq!(
+            field_description("VAR_SYNONYMS"),
+            Some("List of known variation synonyms and their sources")
+        );
+    }
+
+    /// A variant matched on another allele of the record prints none of its
+    /// columns on this allele's rows (OutputFactory.pm:1081-1083); one matched on
+    /// its span alone prints on every row.
+    #[test]
+    fn colocated_columns_follow_the_row_allele_gate() {
+        let options = with_check_existing(|o| o.pubmed = true);
+        let mut on_t = known("rs1", "G/T", &[("T", "T")], &["benign"], None);
+        on_t.pubmed = vec!["1".into()];
+        on_t.phenotype = true;
+        let mut span_only = known("rs2", "dbSNP_novariation", &[], &["pathogenic"], None);
+        span_only.somatic = true;
+        let alleles = record("G", &["A", "T"], vec![on_t, span_only]);
+        let (a, t) = (&alleles[0], &alleles[1]);
+        assert_eq!(
+            field_value("CLIN_SIG", a, None, &options, ","),
+            "pathogenic"
+        );
+        assert_eq!(field_value("PUBMED", a, None, &options, ","), "");
+        assert_eq!(field_value("SOMATIC", a, None, &options, ","), "1");
+        assert_eq!(field_value("PHENO", a, None, &options, ","), "");
+        assert_eq!(
+            field_value("CLIN_SIG", t, None, &options, ","),
+            "benign,pathogenic"
+        );
+        assert_eq!(field_value("PUBMED", t, None, &options, ","), "1");
+        assert_eq!(field_value("SOMATIC", t, None, &options, ","), "0,1");
+        assert_eq!(field_value("PHENO", t, None, &options, ","), "1,0");
+    }
+
+    /// The field groups of `@FLAG_FIELDS` (Constants.pm:60-138) that the
+    /// co-located variant flags add, in Ensembl VEP's order.
+    #[test]
+    fn colocated_flag_groups_sit_in_ensembl_veps_order() {
+        let options = FieldOptions {
+            variant_class: true,
+            clinvar_somatic_classification: true,
+            symbol: true,
+            max_af: true,
+            check_frequency: true,
+            check_existing: true,
+            pubmed: true,
+            check_svs: true,
+            overlaps: true,
+            var_synonyms: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            flag_fields(&options)[4..],
+            [
+                "VARIANT_CLASS",
+                "CLINVAR_SOMATIC_CLASSIFICATION",
+                "SYMBOL",
+                "SYMBOL_SOURCE",
+                "HGNC_ID",
+                "MAX_AF",
+                "MAX_AF_POPS",
+                "FREQS",
+                "CLIN_SIG",
+                "SOMATIC",
+                "PHENO",
+                "PUBMED",
+                "SV",
+                "OverlapBP",
+                "OverlapPC",
+                "VAR_SYNONYMS",
+            ]
+        );
+        for field in ["SV", "FREQS"] {
+            assert!(field_description(field).is_some(), "{field}");
+        }
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.overlapping_svs = vec!["esv1".into(), "nsv2".into()];
+        assert_eq!(field_value("SV", &v, None, &options, ","), "esv1,nsv2");
+        assert_eq!(field_value("SV", &v, None, &options, "&"), "esv1&nsv2");
+    }
+
+    /// The fields the JSON factory stubs out of the consequence hash
+    /// (OutputFactory/JSON.pm:493-515): every co-located variant and frequency key.
+    #[test]
+    fn colocated_fields_are_the_stubbed_keys() {
+        for field in [
+            "Existing_variation",
+            "CLIN_SIG",
+            "SOMATIC",
+            "PHENO",
+            "PUBMED",
+            "VAR_SYNONYMS",
+            "CLINVAR_SOMATIC_CLASSIFICATION",
+            "FREQS",
+            "AF",
+            "AFR_AF",
+            "gnomADg_AMI_AF",
+            "MAX_AF",
+            "MAX_AF_POPS",
+        ] {
+            assert!(colocated_field(field), "{field}");
+        }
+        for field in [
+            "Allele",
+            "IMPACT",
+            "SV",
+            "VARIANT_CLASS",
+            "CADD_RAW",
+            "HGVSc",
+            "gnomAD_AF",
+        ] {
+            assert!(
+                !colocated_field(field),
+                "{field} is a plugin's or the row's own"
+            );
+        }
     }
 
     /// `OutputFactory/Tab.pm` `description_headers` describes a plugin column with

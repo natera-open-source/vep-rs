@@ -228,5 +228,33 @@
  "divergences": [],
  "vep_rs_only_tuples": [],
  "divergence_summary": {},
- "vep_rs_only_summary": {}
+ "vep_rs_only_summary": {},
+ "flag_sets": [
+  {
+   "name": "colocated",
+   "flags": [
+    "--grch37",
+    "--check_existing",
+    "--pubmed",
+    "--var_synonyms",
+    "--clinvar_somatic_classification",
+    "--failed",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf"
+   ],
+   "expected_dir": "expected_colocated",
+   "covers": [
+    "clin-sig-somatic-pheno-columns",
+    "pubmed",
+    "var_synonyms"
+   ]
+  }
+ ]
 }

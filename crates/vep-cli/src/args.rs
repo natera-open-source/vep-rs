@@ -568,6 +568,27 @@ pub struct Args {
     )]
     pub failed: i64,
 
+    /// Report the ClinVar significance of the row's own allele where a co-located variant carries allele-specific entries (1, the default); 0 reports every variant's significance whatever the allele
+    #[arg(
+        help_heading = "Output Control",
+        long = "clin_sig_allele",
+        value_name = "INT",
+        default_value_t = 1,
+        allow_negative_numbers = true
+    )]
+    pub clin_sig_allele: i64,
+
+    /// Add the ClinVar somatic classification of co-located variants (CLINVAR_SOMATIC_CLASSIFICATION), the cache's string as written
+    #[arg(
+        help_heading = "Output Control",
+        long = "clinvar_somatic_classification"
+    )]
+    pub clinvar_somatic_classification: bool,
+
+    /// Add the known synonyms of co-located variants and their sources (VAR_SYNONYMS); switches on --check_existing
+    #[arg(help_heading = "Output Control", long = "var_synonyms")]
+    pub var_synonyms: bool,
+
     /// Accepted for VEP compatibility; not implemented
     #[arg(help_heading = "Output Control", long = "coding_only")]
     pub coding_only: bool,

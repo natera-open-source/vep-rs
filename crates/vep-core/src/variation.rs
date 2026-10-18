@@ -14,6 +14,9 @@ use std::collections::HashMap;
 /// whatever populations the cache declares.
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CachedVariation {
+    /// The chromosome column of the start-indexed layout, the file's own
+    /// chromosome; `None` on the per-region layout, which has no such column.
+    pub chr: Option<String>,
     /// Variation name / identifier (e.g., "rs699").
     pub variation_name: String,
     /// Failed status: 0 = not failed.
@@ -45,27 +48,13 @@ pub struct CachedVariation {
 }
 
 impl CachedVariation {
-    /// The `(allele, term)` pairs of `clin_sig_allele`, in the cache's order.
-    ///
-    /// An entry is `allele:term`; the allele is the text before its first `:`
-    /// and the term the text between the first and the second (`OutputFactory.pm:1106-1108`
-    /// at release/116.2), so an entry with no `:` has an empty term.
+    /// [`ClinVarDetail::clin_sig_allele_entries`] of the record's ClinVar
+    /// fields; empty when it carries none.
     pub fn clin_sig_allele_entries(&self) -> Vec<(&str, &str)> {
-        let Some(entries) = self
-            .clinvar
+        self.clinvar
             .as_deref()
-            .and_then(|clinvar| clinvar.clin_sig_allele.as_deref())
-        else {
-            return Vec::new();
-        };
-        entries
-            .split(';')
-            .map(|entry| {
-                let (allele, rest) = entry.split_once(':').unwrap_or((entry, ""));
-                let term = rest.split(':').next().unwrap_or("");
-                (allele, term)
-            })
-            .collect()
+            .map(ClinVarDetail::clin_sig_allele_entries)
+            .unwrap_or_default()
     }
 }
 
@@ -80,6 +69,65 @@ pub struct ClinVarDetail {
     pub clinical_impact: Option<String>,
 }
 
+impl ClinVarDetail {
+    /// The `(allele, term)` pairs of `clin_sig_allele`, in the cache's order.
+    ///
+    /// An entry is `allele:term`; the allele is the text before its first `:`
+    /// and the term the text between the first and the second (`OutputFactory.pm:1106-1108`
+    /// at release/116.2), so an entry with no `:` has an empty term.
+    pub fn clin_sig_allele_entries(&self) -> Vec<(&str, &str)> {
+        let Some(entries) = self.clin_sig_allele.as_deref() else {
+            return Vec::new();
+        };
+        entries
+            .split(';')
+            .map(|entry| {
+                let (allele, rest) = entry.split_once(':').unwrap_or((entry, ""));
+                let term = rest.split(':').next().unwrap_or("");
+                (allele, term)
+            })
+            .collect()
+    }
+}
+
+/// `reverse_comp` of ensembl's `Utils/Sequence.pm`: the sequence reversed and
+/// complemented over `ACGT`, the IUPAC codes `RYMKSWHBVDNX` and their lower-case
+/// forms, every other character kept. `S`, `W`, `N` and `X` are their own
+/// complement, so they need no arm of their own.
+pub fn reverse_comp(sequence: &str) -> String {
+    sequence
+        .chars()
+        .rev()
+        .map(|base| match base {
+            'a' => 't',
+            'c' => 'g',
+            'g' => 'c',
+            't' => 'a',
+            'r' => 'y',
+            'y' => 'r',
+            'm' => 'k',
+            'k' => 'm',
+            'h' => 'd',
+            'b' => 'v',
+            'v' => 'b',
+            'd' => 'h',
+            'A' => 'T',
+            'C' => 'G',
+            'G' => 'C',
+            'T' => 'A',
+            'R' => 'Y',
+            'Y' => 'R',
+            'M' => 'K',
+            'K' => 'M',
+            'H' => 'D',
+            'B' => 'V',
+            'V' => 'B',
+            'D' => 'H',
+            other => other,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,6 +135,7 @@ mod tests {
     #[test]
     fn test_cached_variation_default() {
         let v = CachedVariation::default();
+        assert!(v.chr.is_none());
         assert_eq!(v.variation_name, "");
         assert_eq!(v.failed, 0);
         assert_eq!(v.somatic, 0);
@@ -131,5 +180,19 @@ mod tests {
             odd.clin_sig_allele_entries(),
             vec![("", "pathogenic"), ("C", "a"), ("G", "")]
         );
+    }
+
+    /// `reverse_comp` of ensembl's `Utils/Sequence.pm` over the bases, the IUPAC
+    /// codes in both cases and characters outside the table, which are kept and
+    /// reversed: `ACGTN-` is `-NACGT`, `RYMKSWHBVDX` is `XHBVDWSMKRY`, lower case
+    /// likewise, and `COSMIC_MUTATION` is `NOIATAUK_GIKSOG`.
+    #[test]
+    fn reverse_comp_matches_ensembl() {
+        assert_eq!(reverse_comp("ACGTN-"), "-NACGT");
+        assert_eq!(reverse_comp("acgtn"), "nacgt");
+        assert_eq!(reverse_comp("RYMKSWHBVDX"), "XHBVDWSMKRY");
+        assert_eq!(reverse_comp("rymkswhbvdx"), "xhbvdwsmkry");
+        assert_eq!(reverse_comp("COSMIC_MUTATION"), "NOIATAUK_GIKSOG");
+        assert_eq!(reverse_comp("GAT-"), "-ATC");
     }
 }

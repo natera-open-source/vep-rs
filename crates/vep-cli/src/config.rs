@@ -564,6 +564,11 @@ pub struct Config {
     /// `--failed <int>`: the highest `failed` value a known variant may carry and
     /// still co-locate; Ensembl VEP's default is 0.
     pub failed: i64,
+    /// `--clin_sig_allele`: CLIN_SIG reports the row's allele's own ClinVar
+    /// entries (true, Ensembl VEP's default) or every variant's terms (false).
+    pub clin_sig_allele: bool,
+    pub clinvar_somatic_classification: bool,
+    pub var_synonyms: bool,
     pub coding_only: bool,
     pub no_intergenic: bool,
 
@@ -591,6 +596,10 @@ pub struct Config {
 
     pub verbose: bool,
     pub quiet: bool,
+    /// The `INFO:` lines the resolution owes the run, in Ensembl VEP's order
+    /// (`Runner.pm:117-120` before `post_setup_checks`), printed by the runner
+    /// unless `--quiet`.
+    pub notices: Vec<&'static str>,
 
     pub plugin: Vec<String>,
     pub custom: Vec<String>,
@@ -688,6 +697,18 @@ fn gencode_primary_assembly_warnings(state: &FlagState) -> Vec<String> {
         .collect()
 }
 
+/// `--var_synonyms` switches `check_existing` on when it is off, with the
+/// notice Ensembl VEP's runner prints as it does so (`Runner.pm:117-120` at
+/// release/116.2, a status message `--quiet` withholds); the notice is returned
+/// when the flag was switched on here, `None` otherwise, for [`Config::notices`].
+fn var_synonyms_implies_check_existing(state: &mut FlagState) -> Option<&'static str> {
+    if !state.is_active("var_synonyms") || state.is_active("check_existing") {
+        return None;
+    }
+    state.set("check_existing", "1");
+    Some("INFO: Colocated variants will be provided when using --var_synonyms")
+}
+
 impl Config {
     /// Parses a command line (the binary name first) and resolves it.
     pub fn from_argv<I, T>(argv: I) -> Result<Self, ParseFailure>
@@ -729,7 +750,15 @@ impl Config {
         }
         let distance =
             parse_distance(&args.distance).map_err(|message| CliError::new("config", message))?;
-        Ok(Config::resolve(args, &state, distance))
+        // After every refusal: Ensembl VEP's `Runner.pm:117-120` runs once
+        // `Config.pm:769` has checked the command line, so a refused one prints
+        // its error alone.
+        let notices = var_synonyms_implies_check_existing(&mut state)
+            .into_iter()
+            .collect();
+        let mut config = Config::resolve(args, &state, distance);
+        config.notices = notices;
+        Ok(config)
     }
 
     /// The configuration from the arguments and the flag state after the option
@@ -873,6 +902,9 @@ impl Config {
             no_check_alleles: args.no_check_alleles,
             exclude_null_alleles: args.exclude_null_alleles,
             failed: args.failed,
+            clin_sig_allele: args.clin_sig_allele != 0,
+            clinvar_somatic_classification: args.clinvar_somatic_classification,
+            var_synonyms: on("var_synonyms"),
             coding_only: args.coding_only,
             no_intergenic: args.no_intergenic,
             pick: args.pick,
@@ -895,6 +927,7 @@ impl Config {
             stats_text: args.stats_text,
             verbose: args.verbose,
             quiet: args.quiet,
+            notices: Vec::new(),
             plugin: args.plugin,
             custom: state.list("custom"),
             refseq: args.refseq,
@@ -1386,6 +1419,67 @@ mod tests {
     fn minimal_implies_allele_number() {
         assert!(config(&["vep", "--minimal"]).allele_number);
         assert!(!config(&["vep"]).allele_number);
+    }
+
+    /// `--var_synonyms` without `--check_existing` switches the latter on and owes
+    /// the notice `Runner.pm:117-120` (release/116.2) prints as it does so; given
+    /// beside `--check_existing`, or with the flag off, nothing is switched and
+    /// no notice is due. The notice is a status message, so `--quiet` withholds
+    /// it (BaseVEP.pm:782) while the implication stands. A refused command line
+    /// is refused as it is without the flag: `Config.pm:769` checks it before
+    /// the runner's implication runs.
+    #[test]
+    fn var_synonyms_implies_check_existing_with_info_line() {
+        const NOTICE: &str = "INFO: Colocated variants will be provided when using --var_synonyms";
+        let implied = config(&["vep", "--var_synonyms"]);
+        assert!(implied.var_synonyms && implied.check_existing);
+        assert_eq!(implied.notices, [NOTICE]);
+        let quiet = config(&["vep", "--var_synonyms", "--quiet"]);
+        assert!(quiet.var_synonyms && quiet.check_existing);
+        assert_eq!(quiet.notices, [NOTICE], "the runner withholds it");
+        let off = config(&["vep", "--check_existing"]);
+        assert!(!off.var_synonyms && off.check_existing);
+        assert!(off.notices.is_empty());
+        assert!(!config(&["vep"]).check_existing);
+        assert!(config(&["vep", "--var_synonyms", "--check_existing"])
+            .notices
+            .is_empty());
+        assert_eq!(
+            refusal(&["vep", "--var_synonyms", "--json", "--vcf"]),
+            "ERROR: [cli] Can't use --json and --vcf together"
+        );
+
+        let state_after_option_sets = |argv: &[&str]| {
+            let mut state = parse_command_line(argv).unwrap().state;
+            state.apply_option_sets();
+            state
+        };
+        let mut state = state_after_option_sets(&["vep", "--var_synonyms"]);
+        assert_eq!(
+            var_synonyms_implies_check_existing(&mut state),
+            Some(NOTICE)
+        );
+        assert!(state.is_active("check_existing"));
+        let mut state = state_after_option_sets(&["vep", "--var_synonyms", "--check_existing"]);
+        assert_eq!(var_synonyms_implies_check_existing(&mut state), None);
+        let mut state = state_after_option_sets(&["vep", "--pubmed"]);
+        assert_eq!(var_synonyms_implies_check_existing(&mut state), None);
+    }
+
+    /// `--clin_sig_allele` is Ensembl VEP's `clin_sig_allele=i` (Config.pm:151),
+    /// on by default (:316): any integer parses and `0` alone switches the
+    /// allele-specific significance off; `--clinvar_somatic_classification` and
+    /// `--var_synonyms` are bare flags (:152, :230).
+    #[test]
+    fn clin_sig_allele_takes_an_integer_and_defaults_on() {
+        assert!(config(&["vep"]).clin_sig_allele);
+        assert!(!config(&["vep", "--clin_sig_allele", "0"]).clin_sig_allele);
+        assert!(config(&["vep", "--clin_sig_allele", "1"]).clin_sig_allele);
+        assert!(config(&["vep", "--clin_sig_allele=2"]).clin_sig_allele);
+        assert!(usage_error(&["vep", "--clin_sig_allele", "yes"]).contains("invalid value"));
+        let flags = config(&["vep", "--clinvar_somatic_classification", "--var_synonyms"]);
+        assert!(flags.clinvar_somatic_classification && flags.var_synonyms);
+        assert!(!config(&["vep"]).clinvar_somatic_classification);
     }
 
     /// Two output-format shorthands together are Ensembl VEP's incompatibility

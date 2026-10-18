@@ -228,11 +228,10 @@ impl Annotator {
     /// `--hgvs` without a FASTA is refused.
     pub fn from_config_with_pool(config: &Config, pool: Arc<ThreadPool>) -> anyhow::Result<Self> {
         let cache = crate::cache_resolve::resolve(config)?;
+        log_notices(&config.notices);
         let reference_fasta = crate::runner::open_fasta(config, &cache)?;
         let checks = crate::runner::fasta_setup_checks(config, reference_fasta.is_some())?;
-        for notice in &checks.notices {
-            info!("{}", notice.trim_start_matches("INFO: "));
-        }
+        log_notices(&checks.notices);
 
         let mut effects = new_effects_config(
             config.distance,
@@ -434,6 +433,14 @@ impl Annotator {
                 }
             })
             .collect()
+    }
+}
+
+/// Logs the `INFO:` lines the binary prints to stderr; the tracing level
+/// stands in for the prefix.
+fn log_notices(notices: &[&str]) {
+    for notice in notices {
+        info!("{}", notice.trim_start_matches("INFO: "));
     }
 }
 

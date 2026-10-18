@@ -99,12 +99,12 @@ chr	Config.pm	implemented	open
 chromosome-absent-from-cache	Parser.pm	implemented	open			
 chromosome-name-normalisation	Parser.pm	implemented	open			
 chromosome-synonyms	CacheDir.pm	implemented	landed:implemented	crates/vep-core/src/synonyms.rs::nc_accession_resolves_to_cache_name;crates/vep-cli/src/pipeline.rs::name_source_chromosomes_resolves_synonyms_against_the_cache;crates/vep-fasta/src/lib.rs::synonyms_reach_a_record_under_the_cache_name	tests/golden/116/GRCh38-synonyms	
-clin-sig-somatic-pheno-columns	OutputFactory.pm	implemented	open			
+clin-sig-somatic-pheno-columns	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::somatic_and_pheno_are_per_variant_lists_dropped_when_all_zero;crates/vep-io/src/output/fields.rs::clin_sig_keeps_duplicates	tests/golden/116/GRCh38-colocated	
 clin_sig	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::clin_sig_column_read_as_comma_list	tests/golden/116/GRCh38-colocated	
-clin_sig_allele	Config.pm	implemented	open			
-clin_sig_allele_revcomp_116	OutputFactory.pm	implemented	open			
+clin_sig_allele	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::clin_sig_allele_default_reports_this_alleles_entries;crates/vep-io/src/output/fields.rs::clin_sig_allele_zero_reports_locus_terms	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh38-colocated-alt	
+clin_sig_allele_revcomp_116	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::clin_sig_entries_reverse_complemented_when_ref_allele_differs;crates/vep-io/src/output/fields.rs::empty_allele_entry_matches_nothing	tests/golden/116/GRCh38-colocated	
 ClinPred	ClinPred.pm	implemented	open			
-clinvar_somatic_classification	Config.pm	documented_subset	open			
+clinvar_somatic_classification	Config.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/fields.rs::clinvar_somatic_classification_prints_cache_string;crates/vep-io/src/output/fields.rs::documented_subset_is_stated	tests/golden/116/GRCh38-colocated	
 coding_only	OutputFactory.pm	implemented	open			
 compress-output-gzip-vs-bgzip	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/output_compress.rs::bgzip_output_is_bgzf_and_gzip_output_is_plain_gzip	tests/golden/116/GRCh38-writers	
 compress_output	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::compress_output_rejects_unknown_value_with_perls_message;crates/vep-cli/tests/integration_test.rs::compress_output_writes_gzip_and_bgzip_streams_of_the_plain_output;crates/vep-cli/src/config.rs::parquet_with_compress_output_is_refused	tests/golden/116/GRCh38-writers	
@@ -380,7 +380,7 @@ protein-id	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cach
 protein_version	Config.pm	implemented	landed:implemented	crates/vep-effects/src/consequences.rs::protein_version_appends_the_translation_version;crates/vep-effects/src/consequences.rs::protein_version_leaves_a_versioned_or_unversioned_identifier_alone;crates/vep-cli/src/runner.rs::protein_version_prints_only_with_protein;crates/vep-cli/src/args.rs::protein_version_and_mask_header_cache_path_parse	tests/golden/116/GRCh38-release116	
 ProteinSeqs	ProteinSeqs.pm	error	open			
 ProtVar	ProtVar.pm	error	open			
-pubmed	Config.pm	implemented	open			
+pubmed	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::pubmed_keeps_duplicates_across_variants	tests/golden/116/GRCh38-colocated	
 python-r-binding	-	excluded	open			
 quiet	BaseVEP.pm::status_msg	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::quiet_keeps_warnings_file;crates/vep-cli/tests/cli_run_control.rs::quiet_keeps_the_warning_in_the_warnings_file;crates/vep-cli/tests/cli_run_control.rs::quiet_and_verbose_is_an_error	tests/golden/116/GRCh38-run-control	
 quiet-and-q	BaseVEP.pm	documented_subset	open			
@@ -518,7 +518,7 @@ use_transcript_ref	AnnotationType/Transcript.pm	documented_subset	open
 user	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
 UTRAnnotator	UTRAnnotator.pm	implemented	open			
 validate-vf-checks	Parser.pm	documented_subset	open			
-var_synonyms	Config.pm	implemented	open			
+var_synonyms	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::var_synonyms_joined_with_double_dash;crates/vep-io/src/output/json.rs::var_synonyms_nested_by_source;crates/vep-cli/src/config.rs::var_synonyms_implies_check_existing_with_info_line	tests/golden/116/GRCh38-colocated	
 variant_class	Config.pm	implemented	open			
 variant_recoder	VariantRecoder.pm::is_vr	documented_subset	open			
 variation-cache-columns	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::columns_come_from_info_json_variation_cols;crates/vep-cli/src/variation_source.rs::every_116_column_is_read_on_both_assemblies	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	

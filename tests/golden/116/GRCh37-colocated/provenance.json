@@ -30,5 +30,25 @@
    "all_vars.gz.csi": "3ee5d1f09144ae05896710ca7a53a027d7608b24435f63b6f5dc7a461a7b8165"
   },
   "slice_check": "Ensembl VEP 116.2 run on this slice and on the full cache with --grch37 --check_existing --af --af_1kg --af_gnomade --af_gnomadg --max_af --pubmed --var_synonyms --clinvar_somatic_classification --failed 1 wrote identical default-format output for every record"
+ },
+ "flag_sets": {
+  "colocated": {
+   "flags": [
+    "--grch37",
+    "--check_existing",
+    "--pubmed",
+    "--var_synonyms",
+    "--clinvar_somatic_classification",
+    "--failed",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_colocated",
+   "sha256": {
+    "default.txt": "f553f1ef86e658688654f79d24bdde12cf2408d53d8b79bab4675e790063fee0",
+    "tab.txt": "024787a5ba615e2b4efdca0af457ba9999fe0af61ec98cdc8f1ebeec52e640e5",
+    "vcf.vcf": "3dde9a2c7efd295f54b59b3f31ec6bdf401db1d96590686c13a3655f0bf6314c"
+   }
+  }
  }
 }

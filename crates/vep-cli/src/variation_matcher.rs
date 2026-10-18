@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use vep_core::coordinate::Strand;
 use vep_core::sv_routing::perl_true;
 use vep_core::variant::{colocated_in_output_order, ColocatedVariant, InputVariant, MatchedAllele};
-use vep_core::variation::CachedVariation;
+use vep_core::variation::{reverse_comp, CachedVariation};
 
 use crate::variation_source::{ReadFailure, VariationSource};
 
@@ -336,43 +336,6 @@ fn perl_true_bytes(allele: &[u8]) -> bool {
     !allele.is_empty() && allele != b"0"
 }
 
-/// `reverse_comp` of ensembl's `Utils/Sequence.pm`: the sequence reversed and
-/// complemented over `ACGT`, the IUPAC codes `RYMKSWHBVDNX` and their lower-case
-/// forms, every other character kept.
-pub fn reverse_comp(sequence: &str) -> String {
-    sequence
-        .chars()
-        .rev()
-        .map(|base| match base {
-            'a' => 't',
-            'c' => 'g',
-            'g' => 'c',
-            't' => 'a',
-            'r' => 'y',
-            'y' => 'r',
-            'm' => 'k',
-            'k' => 'm',
-            'h' => 'd',
-            'b' => 'v',
-            'v' => 'b',
-            'd' => 'h',
-            'A' => 'T',
-            'C' => 'G',
-            'G' => 'C',
-            'T' => 'A',
-            'R' => 'Y',
-            'Y' => 'R',
-            'M' => 'K',
-            'K' => 'M',
-            'H' => 'D',
-            'B' => 'V',
-            'V' => 'B',
-            'D' => 'H',
-            other => other,
-        })
-        .collect()
-}
-
 /// [`reverse_comp`] of `sequence` when `flip`, else `sequence` as written.
 fn reverse_comp_if(flip: bool, sequence: &str) -> Cow<'_, str> {
     if flip {
@@ -397,6 +360,7 @@ fn cached_to_colocated(
             .unwrap_or_default()
     };
     let mut colocated = ColocatedVariant {
+        chr: cv.chr,
         id: cv.variation_name,
         start: cv.start,
         end: cv.end,
@@ -1019,19 +983,6 @@ mod tests {
         assert_eq!(trim_directions("AT", "A"), &[false, true]);
     }
 
-    /// `reverse_comp` of ensembl's `Utils/Sequence.pm`, pinned with `perl` in the
-    /// release-116.2 image: `ACGTN-` is `-NACGT`, `RYMKSWHBVDX` is `XHBVDWSMKRY`,
-    /// lower case likewise, and `COSMIC_MUTATION` is `NOIATAUK_GIKSOG`.
-    #[test]
-    fn reverse_comp_matches_ensembl() {
-        assert_eq!(reverse_comp("ACGTN-"), "-NACGT");
-        assert_eq!(reverse_comp("acgtn"), "nacgt");
-        assert_eq!(reverse_comp("RYMKSWHBVDX"), "XHBVDWSMKRY");
-        assert_eq!(reverse_comp("rymkswhbvdx"), "xhbvdwsmkry");
-        assert_eq!(reverse_comp("COSMIC_MUTATION"), "NOIATAUK_GIKSOG");
-        assert_eq!(reverse_comp("GAT-"), "-ATC");
-    }
-
     /// `get_matched_variant_alleles` on the shapes `Utils/Sequence.pm:1151-1173`
     /// refuses: a position of 0, an allele string opening with `/`, one without
     /// alternate alleles; and the hash's last-wins rule for a repeated allele.
@@ -1432,6 +1383,8 @@ mod tests {
         );
     }
 
+    /// The flag groups come out in `@FLAG_FIELDS` order (Constants.pm:60-138);
+    /// an all-zero `PHENO` list is dropped (OutputFactory.pm:1136-1138).
     #[test]
     fn optional_groups_follow_vep_order() {
         let mut variant = InputVariant::new("21".into(), 100, 101, b"AC".to_vec(), b"-".to_vec());
@@ -1463,7 +1416,7 @@ mod tests {
         };
         assert_eq!(
             extra(&variant, Some(&tc), &options),
-            "IMPACT=HIGH;STRAND=1;VARIANT_CLASS=deletion;SIFT=deleterious(0.01);HGVSc=ENST00000366667.4:c.428C>T;HGVSp=ENSP00000355627.3:p.Ala143%3D;AF=0.003;CLIN_SIG=pathogenic,likely_pathogenic;SOMATIC=1;PHENO=0"
+            "IMPACT=HIGH;STRAND=1;VARIANT_CLASS=deletion;SIFT=deleterious(0.01);HGVSc=ENST00000366667.4:c.428C>T;HGVSp=ENSP00000355627.3:p.Ala143%3D;AF=0.003;CLIN_SIG=pathogenic,likely_pathogenic;SOMATIC=1"
         );
     }
 

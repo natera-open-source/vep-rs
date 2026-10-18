@@ -30,5 +30,26 @@
    "all_vars.gz.csi": "776bdd7454a9d63c0572aec7e7facc4d6e73775867664580757f0e41ab686ac5"
   },
   "slice_check": "Ensembl VEP 116.2 run on this slice and on the full cache wrote identical default-format output for every record under --check_existing --no_check_alleles --exclude_null_alleles --clin_sig_allele 0 --af_gnomad --failed 1, under --check_existing --failed 1, under --check_existing alone, and under --check_existing --af --af_1kg --af_gnomade --af_gnomadg --max_af --pubmed --var_synonyms --clinvar_somatic_classification --failed 1"
+ },
+ "flag_sets": {
+  "colocated-alt": {
+   "flags": [
+    "--check_existing",
+    "--no_check_alleles",
+    "--exclude_null_alleles",
+    "--clin_sig_allele",
+    "0",
+    "--failed",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_colocated-alt",
+   "sha256": {
+    "default.txt": "8d84cacc85e3e1f7a0e54f19640612d425f4005c74ef95789575bef253391869",
+    "tab.txt": "04df453ce6f365c887ac99c59fd7f82d99409530c2ba95e06bb04a7571bdc7f8",
+    "vcf.vcf": "8e589cbe8dad0d1b43613b19b41ee5bf4f1f6be3c346e299bb0de9d9129de246",
+    "json.jsonl": "a3d34b9dcd9b7c7df95b4ac4e2745c49e3063f41f7ab3410d6cc1c69ae85440a"
+   }
+  }
  }
 }
