@@ -90,6 +90,11 @@ impl<R: BufRead> EnsemblParser<R> {
         let ref_allele = alleles[0];
         let alts = &alleles[1..];
         let multi_allelic = alts.len() > 1;
+        // Ensembl VEP keeps the whole column as the record's allele string
+        // (Parser/VEP_input.pm:156), upper-cased by `validate_vf` (Parser.pm:554),
+        // the string its record class is read from.
+        let record_allele_string: Option<Arc<str>> =
+            multi_allelic.then(|| allele_string.to_ascii_uppercase().into());
 
         let mut variants = Vec::with_capacity(alts.len());
         // OutputFactory.pm `VariationFeature_to_output_hash`, the ensembl `_line`
@@ -109,6 +114,7 @@ impl<R: BufRead> EnsemblParser<R> {
             variant.id = id.clone();
             variant.allele_index = i;
             variant.minimised = multi_allelic;
+            variant.record_allele_string_multi = record_allele_string.clone();
             variant.input_line_name = Some(line_name.clone());
 
             variants.push(variant);
@@ -171,6 +177,22 @@ mod tests {
         assert_eq!(v.id, Some("rs699".to_string()));
 
         assert!(parser.next_variant().is_none());
+    }
+
+    /// A multi-allelic line keeps the whole allele column as the record's allele
+    /// string on every allele (Parser/VEP_input.pm:156), upper-cased as `validate_vf`
+    /// leaves it (Parser.pm:554); a bi-allelic line keeps none.
+    #[test]
+    fn multi_allelic_line_carries_the_record_allele_string() {
+        let data = "21\t38218616\t38218617\ttt/-/t\t1\tmixed\n21\t100\t100\tA/G\t1\tsnv\n";
+        let mut parser = EnsemblParser::new(Cursor::new(data.as_bytes()));
+        let first = parser.next_variant().unwrap().unwrap();
+        let second = parser.next_variant().unwrap().unwrap();
+        assert_eq!(first.record_allele_string_multi.as_deref(), Some("TT/-/T"));
+        assert_eq!(second.record_allele_string_multi.as_deref(), Some("TT/-/T"));
+        assert_eq!(second.allele_index, 1);
+        let snv = parser.next_variant().unwrap().unwrap();
+        assert_eq!(snv.record_allele_string_multi, None);
     }
 
     #[test]

@@ -109,8 +109,8 @@ coding_only	OutputFactory.pm	implemented	open
 compress-output-gzip-vs-bgzip	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/output_compress.rs::bgzip_output_is_bgzf_and_gzip_output_is_plain_gzip	tests/golden/116/GRCh38-writers	
 compress_output	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::compress_output_rejects_unknown_value_with_perls_message;crates/vep-cli/tests/integration_test.rs::compress_output_writes_gzip_and_bgzip_streams_of_the_plain_output;crates/vep-cli/src/config.rs::parquet_with_compress_output_is_refused	tests/golden/116/GRCh38-writers	
 condel	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::condel_is_accepted_without_effect		
-config	Config.pm::read_config_from_file	implemented	open			
-config-file	Config.pm	implemented	open			
+config	Config.pm::read_config_from_file	implemented	landed:implemented	crates/vep-cli/src/argv.rs::config_file_options_precede_command_line;crates/vep-cli/src/argv.rs::config_unknown_key_is_dropped;crates/vep-cli/src/argv.rs::config_missing_file_is_fatal;crates/vep-cli/tests/cli_argv.rs::config_file_is_read_through_the_binary	tests/golden/116/GRCh38-run-control	
+config-file	Config.pm	implemented	landed:implemented	crates/vep-cli/src/argv.rs::vep_ini_under_dir_is_read;crates/vep-cli/src/argv.rs::priority_order_command_line_config_ini_env;crates/vep-cli/tests/cli_argv.rs::vep_ini_is_read_through_the_binary	tests/golden/116/GRCh38-run-control	
 Conservation	Conservation.pm	error	open			
 conservation-shortcuts	Config.pm	documented_subset	open			
 convert	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::convert_is_deprecated_error		
@@ -226,9 +226,9 @@ gzip-bgzip-input	Parser.pm	implemented	open
 haplo	haplo	documented_subset	open			
 help	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::empty_argv_prints_help_and_exits_0;crates/vep-cli/tests/cli_run_control.rs::help_and_version_win_over_a_flag_refused_before_parsing	tests/golden/116/GRCh38-run-control	
 hgnc	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::hgnc_is_accepted_without_effect		
-hgvs	OutputFactory.pm	documented_subset	open			
+hgvs	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/runner.rs::hgvs_without_fasta_offline_exits_with_vep_message;crates/vep-cli/src/runner.rs::everything_without_fasta_prints_info_and_clears_hgvs;crates/vep-effects/src/hgvs.rs::documented_subset_names_the_refseq_edited_transcript_paths;crates/vep-core/src/variant.rs::on_forward_strand_reverse_complements_the_alleles_of_a_reverse_strand_input	tests/golden/116/GRCh37-hgvs;tests/golden/116/GRCh38-identifiers	
 hgvs-genomic-input	Sequence.pm	implemented	open			
-hgvs-offset-field	OutputFactory.pm	implemented	open			
+hgvs-offset-field	OutputFactory.pm	implemented	landed:implemented	crates/vep-effects/src/concordance_tests.rs::concordance_hgvsc_perl_shifted_insertion_reports_the_offset;crates/vep-effects/src/concordance_tests.rs::concordance_hgvsc_perl_shifted_deletion_reports_the_offset;crates/vep-effects/src/concordance_tests.rs::concordance_hgvsc_perl_reverse_strand_shift_has_negative_offset	tests/golden/116/GRCh37-hgvs;tests/golden/116/GRCh38-identifiers	
 hgvs-protein-input	Config.pm	documented_subset	open			
 hgvs-rna-input	-	error	open			
 hgvs-transcript-input	HGVS.pm	implemented	open			
@@ -331,7 +331,7 @@ numbers	Config.pm	implemented	open
 offline	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::offline_changes_no_output		
 old_maf	Config.pm	implemented	open			
 OpenTargets	OpenTargets.pm	error	open			
-option-prefix-abbreviation	Config.pm	implemented	open			
+option-prefix-abbreviation	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_argv.rs::unique_prefix_resolves;crates/vep-cli/tests/cli_argv.rs::ambiguous_prefix_is_usage_error;crates/vep-cli/tests/cli_argv.rs::every_perl_unique_prefix_resolves_the_same	tests/golden/116/GRCh38-run-control	
 option_rule_tables	Config.pm	implemented	landed:implemented	crates/vep-cli/src/option_rules.rs::incompatible_pairs_match_config_pm;crates/vep-cli/src/option_rules.rs::requires_match_config_pm;crates/vep-cli/src/option_rules.rs::option_sets_match_config_pm;crates/vep-cli/src/option_rules.rs::repeated_plugin_and_custom_accumulate;crates/vep-cli/src/option_rules.rs::list_flags_split_on_comma;crates/vep-cli/src/option_rules.rs::output_format_validated	tests/golden/116/GRCh38-run-control	
 os_and_architecture_matrix	-	documented_subset	open			
 output_file	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::stdout_literal_is_case_insensitive;crates/vep-cli/tests/cli_run_control.rs::repeated_output_file_keeps_last_with_warning;crates/vep-cli/tests/cli_run_control.rs::existing_output_is_refused_with_ensembl_veps_text	tests/golden/116/GRCh38-run-control	
@@ -415,15 +415,15 @@ safe	Runner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_contr
 SameCodon	SameCodon.pm	error	open			
 satMutMPRA	satMutMPRA.pm	error	open			
 sereal	CacheDir.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::sereal_is_accepted_without_effect		
-shift_3prime	AnnotationType/Transcript.pm	documented_subset	open			
-shift_genomic	OutputFactory.pm	implemented	open			
-shift_hgvs	BaseRunner.pm	implemented	open			
-shift_length	OutputFactory.pm	implemented	open			
+shift_3prime	AnnotationType/Transcript.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/args.rs::shift_3prime_takes_0_or_1;crates/vep-effects/src/consequences.rs::shift_3prime_bound_matches_perform_shift;crates/vep-effects/src/consequences.rs::shift_3prime_moves_the_display_columns_and_counts_the_shift;crates/vep-effects/src/consequences.rs::shift_3prime_keeps_a_row_the_input_span_earned_past_the_window;crates/vep-effects/src/consequences.rs::shift_motif_follows_the_record_class_and_the_forward_strand;crates/vep-effects/src/consequences.rs::reverse_strand_input_analyses_as_its_forward_form;crates/vep-effects/src/display.rs::exon_and_intron_numbers_fetch_at_the_shifted_span_and_number_at_the_placed_one;crates/vep-effects/src/hgvs.rs::documented_subset_names_the_refseq_edited_transcript_paths	tests/golden/116/GRCh38-identifiers	
+shift_genomic	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::shift_genomic_moves_location_and_allele_for_shifted_rows;crates/vep-io/src/output/json.rs::shift_genomic_writes_a_location_on_the_entries_vep_moves;crates/vep-cli/src/runner.rs::shift_genomic_shifts_intergenic_rows_only_with_shift_3prime;crates/vep-core/src/variant.rs::display_allele_shifted_rotates_a_reverse_strand_allele_the_other_way	tests/golden/116/GRCh38-identifiers	
+shift_hgvs	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/args.rs::shift_hgvs_takes_0_or_1;crates/vep-effects/src/hgvs.rs::shift_hgvs_0_leaves_an_indel_in_a_repeat_unshifted;crates/vep-effects/src/hgvs.rs::shift_hgvs_0_on_the_reverse_strand_looks_a_duplication_up_5prime_first;crates/vep-effects/src/consequences.rs::shift_hgvs_0_reads_the_lookup_order_from_the_input_strand;crates/vep-cli/src/config.rs::shift_hgvs_0_forces_shift_3prime_0	tests/golden/116/GRCh38-identifiers	
+shift_length	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::shift_length_prints_zero_on_unshifted_transcript_rows;crates/vep-io/src/output/fields.rs::shift_length_is_absent_without_shift_3prime	tests/golden/116/GRCh38-identifiers	
 show_cache_info	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::show_cache_info_prints_info_json_and_exits_0	tests/golden/116/GRCh38-run-control	
 show_ref_allele	Config.pm	implemented	open			
 sift	Config.pm	documented_subset	open			
 sift-polyphen-value-grammar	Config.pm	documented_subset	open			
-single-dash-long-options	Config.pm	implemented	open			
+single-dash-long-options	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_argv.rs::single_dash_long_option_is_rewritten;crates/vep-cli/tests/cli_argv.rs::short_flags_unchanged;crates/vep-cli/tests/cli_argv.rs::single_dash_unknown_option_is_refused_by_name	tests/golden/116/GRCh38-run-control	
 SingleLetterAA	SingleLetterAA.pm	error	open			
 singularity-apptainer	-	implemented	open			
 skipped-variant-reporting	Parser.pm	implemented	open			
@@ -544,7 +544,7 @@ vefc-seq-edits	Database/Transcript.pm	documented_subset	open
 vefc-sorted-exons	Database/Transcript.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/src/builder.rs::sorted_exons_in_genomic_order	tests/golden/116/GRCh38-native-builder	
 vefc-three-prime-utr	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/builder.rs::utr_sequences_written_from_fasta	tests/golden/116/GRCh38-native-builder	
 vefc-translateable-seq	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/builder.rs::translateable_seq_n_padded_on_cds_start_nf	tests/golden/116/GRCh38-native-builder	
-vep-environment-variables	Config.pm	implemented	open			
+vep-environment-variables	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_argv.rs::vep_env_sets_unset_flag;crates/vep-cli/tests/cli_argv.rs::vep_env_never_overrides_command_line;crates/vep-cli/tests/cli_argv.rs::vep_env_unknown_key_is_ignored	tests/golden/116/GRCh38-run-control	
 verbose	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::verbose_prints_the_detected_format;crates/vep-cli/tests/cli_run_control.rs::quiet_and_verbose_is_an_error	tests/golden/116/GRCh38-run-control	
 verbose-and-v	Config.pm	implemented	open			
 version	-	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::version_prints_crate_version_and_exits_0	tests/golden/116/GRCh38-run-control	

@@ -16,12 +16,13 @@ Worked examples are in [examples.md](examples.md); the output formats and their 
 
 ## Flags
 
-Grouped by section as `--help` groups them. A repeated single-value flag keeps its last value, as Getopt::Long does; `-o` accumulates and the last wins with a warning, as the `vep` script does (vep:32-33). Long option names are matched exactly as written.
+Grouped by section as `--help` groups them. A repeated single-value flag keeps its last value, as Getopt::Long does; `-o` accumulates and the last wins with a warning, as the `vep` script does (vep:32-33). A long option is also read in any case, as a unique prefix and after one dash, and from the `--config` file, `vep.ini` and the `VEP_*` variables (the configuration sources below).
 
 ### Input
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
+| `--config` | String | -- | Configuration file, one flag per line as `<name> <value>` without the dashes (`format vcf`, `offline 1`); a flag the command line also gives keeps the command line's value |
 | `--input_file`, `-i` | String | `STDIN` | Input file path (use "STDIN" for standard input) |
 | `--input_data` | String | -- | Input data string (accepted for VEP compatibility; not implemented, input is read from --input_file) |
 | `--format` | `ensembl`, `vcf`, `hgvs`, `id`, `spdi`, `region`, `guess` | `guess` | Input file format ("guess" = auto-detect) |
@@ -68,7 +69,10 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--show_cache_info` | bool | false | Print the cache's source versions as sorted key<TAB>value lines and exit |
 | `--fasta`, `--fa` | String | -- | FASTA file for reference sequence lookup; without it, the first .fa by name in the cache directory that has its .fai beside it is used |
 | `--no_fasta` | bool | false | Do not use a FASTA file found in the cache directory |
-| `--shift_3prime` | bool | false | Enable 3' shifting of insertions/deletions (requires --fasta) |
+| `--shift_3prime` | `0`, `1` | -- | Move each insertion or deletion to its most 3' position on the transcript, over a 1,000-base window of the reference, before its consequence terms, positions, codons and amino acids are computed (1), or annotate it where the input placed it (0); needs a FASTA and stops the run without one. The HGVS notations shift under --shift_hgvs, not this flag. The shift runs along the genome only: a transcript whose cached sequence is edited away from the genome is not shifted again along its own sequence |
+| `--shift_hgvs` | `0`, `1` | -- | Move each insertion or deletion to its most 3' position on the transcript before its HGVSc and HGVSp are built (1, the default), or describe it where the input placed it (0), which also sets --shift_3prime to 0 and cannot be combined with --shift_3prime or --shift_genomic |
+| `--shift_genomic` | `0`, `1` | -- | Under --shift_3prime 1, print the shifted position in Location and the shifted sequence in Allele on every row (1), intergenic rows moving towards higher coordinates, or keep the input position (0); without --shift_3prime 1 nothing moves |
+| `--shift_length` | bool | false | Add the SHIFT_LENGTH column: under --shift_3prime 1, the bases each insertion or deletion moved along the transcript, 0 on every other transcript row |
 | `--sereal` | bool | false | Accepted without effect: the cache's serialiser is read from its own metadata |
 
 ### Species / Assembly
@@ -121,8 +125,8 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--protein_version` | bool | false | Add the translation version to the Ensembl protein ID (ENSP00000286808.3); needs --protein |
 | `--uniprot` | bool | false | Add UniProt cross-references |
 | `--xref_refseq` | bool | false | Add RefSeq transcript cross-references |
-| `--hgvs` | bool | false | Add HGVS coding and protein notations |
-| `--hgvsg` | bool | false | Add the HGVS genomic notation (HGVSg); needs --fasta |
+| `--hgvs` | bool | false | Add HGVS coding and protein notations; needs a FASTA named with --fasta or found in the cache directory and stops the run without one |
+| `--hgvsg` | bool | false | Add the HGVS genomic notation (HGVSg); needs a FASTA named with --fasta or found in the cache directory and stops the run without one |
 | `--sift` | `s`, `p`, `b` | -- | SIFT predictions (p = prediction, s = score, b = both) |
 | `--polyphen` | `s`, `p`, `b` | -- | PolyPhen predictions (p = prediction, s = score, b = both) |
 | `--condel` | String | -- | Accepted without effect: Ensembl VEP declares it and reads nothing from it |
@@ -200,7 +204,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--no_stats` | bool | false | Accepted for VEP compatibility; not implemented (no statistics file is written, with or without it) |
-| `--stats_file` | String | -- | Accepted for VEP compatibility; not implemented (no statistics file is written) |
+| `--stats_file`, `--sf` | String | -- | Accepted for VEP compatibility; not implemented (no statistics file is written) |
 | `--stats_text` | bool | false | Accepted for VEP compatibility; not implemented (no statistics file is written) |
 
 ### Verbosity
@@ -333,6 +337,12 @@ A declared flag carries its list as a value enumeration, so a value outside it i
 - A run naming none of `--database`, `--cache`, `--offline` and `--custom` is not refused (`Config.pm:993-1017`): vep-rs reads a local cache in every run, so those flags select nothing and the run proceeds on the cache it is given.
 - A `%name%` in an option-set value is replaced even when the flag's value is `0` or empty (`Config.pm:867` leaves the reference in place then); no declared flag carries such a value.
 - A VCF output selected with `--output_format vcf` fills `SYMBOL`, `BIOTYPE`, `EXON` and `INTRON` as `--vcf` does; Ensembl VEP's `vcf` option set applies to the `--vcf` flag alone and leaves the CSQ fields empty under `--output_format vcf`.
+- A value from the `--config` file, `vep.ini` or the environment never overwrites one a higher source gives, even a `0`, an empty value or a bare `--cache`: Ensembl VEP's `||=` (`Config.pm:1101, 1158`) lets a lower source overwrite a value Perl reads as false, so `--shift_hgvs 0` on its command line yields to a file's `shift_hgvs 1`.
+- A value from a file or the environment that the parser refuses (`fork many`, an empty `format`) is an argument syntax error (exit 2); Ensembl VEP's `is_valid_param` drops the line (`Config.pm:1046-1047`).
+- A `--config` path that is a directory, or cannot be read for any reason, is the `config` error; Ensembl VEP's `open` succeeds on a directory and reads nothing from it. A `vep.ini` that is a directory is read as nothing here too. A byte outside UTF-8 in a value becomes the replacement character, where Ensembl VEP passes the byte.
+- A flag read from a file or the environment acts exactly as if typed, refusals included; the status lines Ensembl VEP prints under `--verbose` while reading the sources (`Read configuration from <file>`, `Set '<flag>=<value>' from environment variable <VAR>`, `Config.pm:1107, 1145-1164`) are not printed.
+- A leading `~` in `--config`, `--dir` and a file's `dir` is expanded to the home directory, which Ensembl VEP leaves to the shell.
+- `-V` is the version, where Getopt::Long's `ignore_case` reads it as `-v`, and an upper-case short names no flag here; a short with its value attached (`-ofile.txt`) and a cluster of switches (`-qv`) are clap's readings, where Getopt::Long refuses the token; a `+` before an option name, which Getopt::Long accepts, is not an option here.
 
 ## Flags refused or accepted without effect
 
@@ -370,11 +380,35 @@ The error table: every flag vep-rs refuses, and the flags accepted without effec
 
 ## Configuration sources
 
-The command line is the one source of flags.
+A flag is read from four sources, the first that names it winning, as Ensembl VEP reads them (`Config.pm:693-708`): the command line; the `--config` file; `<dir>/vep.ini`, where `<dir>` is `--dir` (the command line's, else the `--config` file's) and `~/.vep` by default; and the environment variable `VEP_<FLAG>` (`VEP_DIR_PLUGINS` sets `--dir_plugins`). A repeatable flag (`--plugin`, `--custom`, `--phyloP`, `--phastCons`, `--transcript_filter`) collects every source's values, the command line's first. No source behind the command line can set `--config`, `--help`, `--version`.
 
-Environment variables vep-rs reads, which Ensembl VEP has no counterpart for:
+### The `--config` file and `vep.ini` (`Config.pm:1068-1110`)
+
+One flag per line: the flag's long name without its dashes (one leading dash is allowed), a blank, then its value. A switch is on with the value `1` and off with `0`; `cache` is on with `1`, a directory or an empty quoted value and off with `0`; a key alone on its line is dropped; a flag taking a value takes the first word after its name, or, for a repeatable flag, the rest of the line; blanks inside double quotes are part of a value and the quotes are removed. A line starting with `#`, or blank, is skipped. A key is the long name exactly: a prefix, another case or a name that is no option of Ensembl VEP's or of this version names nothing and the line is dropped, as Ensembl VEP drops it, and so does an alias, unless the alias is an option of Ensembl VEP's own (`full_cache_dir` names `--json_cache`); a key of an Ensembl VEP option this version lacks (`stats_html 1`, `clin_sig_allele 0`) is refused as the flag on the command line is (exit 2), unless it is a switch of Ensembl VEP's set to `0`, which is off there and adds nothing here. Of several lines naming one flag, the first whose value is not `0` or empty counts. A `--config` file that cannot be opened is `ERROR: [config] Could not open config file "<file>"`; `vep.ini` is read only when it is a file.
+
+```
+# flags of a run
+cache 1
+offline 1
+dir_cache /data/vep
+species homo_sapiens
+assembly GRCh38
+plugin LoFtool,/data/LoFtool_scores.txt
+```
+
+### Environment variables (`Config.pm:1127-1168`)
+
+`VEP_<FLAG>=<value>` sets `--<flag>`, the name lower-cased, when the value is not empty; the name is read as a configuration file's key is: a name that is no option of Ensembl VEP's or of this version is ignored, and one of an Ensembl VEP option this version lacks is refused as the flag is (exit 2). The variables are read in name order.
+
+Environment variables vep-rs reads outside this mechanism, which Ensembl VEP has no counterpart for:
 
 - `VEP_FASTA_STORAGE`: how the FASTA is held: `mmap` (default) maps the file, `memory` reads it into RAM; any other value is an error.
+
+### Option spellings (`Config.pm:62`)
+
+Getopt::Long's defaults apply to the command line: a long option is read in any case (`--FORMAT vcf`), abbreviated to any prefix that names one option (`--form vcf`), and after one dash as well as two (`-cache`, `-form vcf`); a value follows its option or is attached with `=`, and the token after an option that requires a value is that value whatever it looks like (`--input_file -cache` names the file `-cache`). A prefix is resolved against this version's flags first and then, where a flag vep-rs adds makes it ambiguous, as Getopt::Long resolves it against Ensembl VEP's `@VEP_PARAMS` (`Config.pm:73-276`): `--js` is `--json` though `--json_cache` also starts with it, `--pa` `--password`, `--ve` `--verbose`. An Ensembl VEP option this version lacks is refused by its full name in every spelling (`-stats_html` and `--stats_h` are refused as `--stats_html`, exit 2), never read as a cluster of shorts. A prefix that names one flag of this version resolves to it even where Ensembl VEP's larger set leaves it ambiguous (`--sy` is `--symbol`); a prefix of several flags that Getopt::Long resolves no better (`--fo`), or a name no option has, is an argument syntax error (exit 2). A single-letter short is clap's and is matched by case: `-v` is `--verbose`, `-V` the version, `-qv` the cluster `-q -v`, and `-ofile.txt` the value `file.txt` of `-o`, a spelling Getopt::Long refuses. Of the spellings Getopt::Long resolves to an option this version declares, these resolve differently here:
+
+- none: every such spelling names the same option.
 
 ## Exit status and errors
 
@@ -385,9 +419,10 @@ Environment variables vep-rs reads, which Ensembl VEP has no counterpart for:
   - `plugin`: under --safe, a plugin that cannot be loaded or a plugins directory that does not exist
   - `cache`: the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read
   - `filter`: a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect
-  - `config`: a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer
+  - `fasta`: the reference FASTA: a flag that reads it (`--hgvs`, `--hgvsg`, `--shift_3prime 1`) was given and none was named or found in the cache directory
+  - `config`: the `--config` file, or a `vep.ini` that is a file, cannot be read; or a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer
   - `run`: any other failure of the annotation run, with its cause chain
-- `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown flag, a missing value, a value outside an enumeration.
+- `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown flag, a prefix of several flags, a missing value, a value outside an enumeration.
 
 `--help` and `--version` win over a flag the error table refuses before parsing wherever they stand on the command line; over a flag the parser does not know they win only when they come first, since clap reads left to right (Ensembl VEP's Getopt::Long runs with `pass_through`, Config.pm:62, so any unknown flag reaches the usage there, vep:29).
 

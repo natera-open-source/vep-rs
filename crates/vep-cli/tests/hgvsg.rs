@@ -17,7 +17,7 @@ fn corpus(name: &str) -> PathBuf {
 }
 
 /// `--hgvsg` with no FASTA, named or auto-detected, exits 1 with Ensembl VEP's
-/// message (Runner.pm 759) under the `cli` component, before any input is read.
+/// message (Runner.pm 759) under the `fasta` component, before any input is read.
 #[test]
 fn hgvsg_without_fasta_exits_with_vep_message() {
     let cache = corpus("GRCh38-release116").join("json_cache");
@@ -29,7 +29,7 @@ fn hgvsg_without_fasta_exits_with_vep_message() {
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&output.stderr),
-        "ERROR: [cli] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)\n"
+        "ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)\n"
     );
 }
 

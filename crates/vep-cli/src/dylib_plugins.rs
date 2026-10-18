@@ -190,7 +190,7 @@ mod tests {
     /// when populated.
     #[test]
     fn consequence_json_carries_every_documented_key_and_nothing_else() {
-        const ALWAYS: [&str; 39] = [
+        const ALWAYS: [&str; 40] = [
             "transcript_id",
             "gene_id",
             "gene_symbol",
@@ -213,6 +213,7 @@ mod tests {
             "hgvsc",
             "hgvsp",
             "hgvs_offset",
+            "shift_length",
             "sift",
             "polyphen",
             "domains",

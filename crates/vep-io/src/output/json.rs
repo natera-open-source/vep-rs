@@ -179,10 +179,26 @@ impl JsonOutputFormatter {
             )]);
         }
         let mut obj: IndexMap<String, Value> = IndexMap::new();
+        // Under `--shift_genomic 1` VEP writes `Location` into every transcript
+        // row's hash (OutputFactory.pm:1702-1706) and into an intergenic row's
+        // when `--shift_3prime 1` gave its insertion or deletion a shift length,
+        // 0 included (:1991-1998), so those entries carry a `location`.
+        let include_location = match tc {
+            Some(_) => self.options.shift_genomic,
+            None => {
+                self.options.shift_3prime
+                    && self.options.shift_genomic
+                    && variant.intergenic_shift.is_some()
+            }
+        };
         let mut names: Vec<&str> = DEFAULT_OUTPUT_COLS
             .iter()
             .copied()
-            .filter(|c| !matches!(*c, "Uploaded_variation" | "Location" | "Existing_variation"))
+            .filter(|c| match *c {
+                "Uploaded_variation" | "Existing_variation" => false,
+                "Location" => include_location,
+                _ => true,
+            })
             .collect();
         for k in fields::extra_keys(variant, tc, &self.options) {
             if !names.contains(&k) {
@@ -586,6 +602,58 @@ mod tests {
         assert_eq!(ic["consequence_terms"][0], "intergenic_variant");
         assert_eq!(ic["impact"], "MODIFIER");
         assert_eq!(ic["variant_allele"], "G");
+    }
+
+    /// `--shift_genomic 1` puts a `location` on every transcript entry, moved by
+    /// the row's shift along the transcript's strand; an intergenic entry gets
+    /// one only when `--shift_3prime 1` analysed its allele as an insertion or
+    /// deletion, and nothing gets one without `--shift_genomic 1`.
+    #[test]
+    fn shift_genomic_writes_a_location_on_the_entries_vep_moves() {
+        let shifting = |shift_3prime: bool| FieldOptions {
+            shift_3prime,
+            shift_genomic: true,
+            ..Default::default()
+        };
+        let mut v = make_annotated_variant();
+        v.transcript_consequences[0].shift_length = 2;
+        let plain = fmt(FieldOptions::default()).format_variant_value(&v);
+        assert!(plain["transcript_consequences"][0]
+            .get("location")
+            .is_none());
+        let moved = fmt(shifting(true)).format_variant_value(&v);
+        assert_eq!(
+            moved["transcript_consequences"][0]["location"],
+            "21:25000098"
+        );
+        let unmoved = fmt(shifting(false)).format_variant_value(&v);
+        assert_eq!(
+            unmoved["transcript_consequences"][0]["location"],
+            "21:25000100"
+        );
+
+        let mut intergenic = InputVariant::new(
+            "21".into(),
+            25000100,
+            25000100,
+            b"A".to_vec(),
+            b"-".to_vec(),
+        );
+        intergenic.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let unshifted = fmt(shifting(true)).format_variant_value(&intergenic);
+        assert!(unshifted["intergenic_consequences"][0]
+            .get("location")
+            .is_none());
+        intergenic.intergenic_shift = Some(3);
+        let shifted = fmt(shifting(true)).format_variant_value(&intergenic);
+        assert_eq!(
+            shifted["intergenic_consequences"][0]["location"],
+            "21:25000103"
+        );
+        let still = fmt(shifting(false)).format_variant_value(&intergenic);
+        assert!(still["intergenic_consequences"][0]
+            .get("location")
+            .is_none());
     }
 
     /// A `--summary` or `--most_severe` record files one entry under

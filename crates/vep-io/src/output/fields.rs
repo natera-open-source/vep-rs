@@ -81,6 +81,17 @@ pub struct FieldOptions {
     pub pubmed: bool,
     pub dont_skip: bool,
     pub overlaps: bool,
+    /// `--shift_length`: the SHIFT_LENGTH field is listed; its value is written
+    /// only under `shift_3prime` (OutputFactory.pm:1695).
+    pub shift_length: bool,
+    /// `--shift_3prime 1`: insertions and deletions were annotated at their most
+    /// 3' position on each transcript, so SHIFT_LENGTH has a value and
+    /// `shift_genomic` has a shift to print.
+    pub shift_3prime: bool,
+    /// `--shift_genomic 1`: Location and Allele print the shifted position and
+    /// allele of each row under `shift_3prime` (OutputFactory.pm:1349-1352,
+    /// 1702-1706, 1992-1998).
+    pub shift_genomic: bool,
     pub regulatory: bool,
     /// VEP's `--no_escape` (implied by `--json`): HGVSp keeps its `=` instead of
     /// the `%3D` the text formats print.
@@ -161,6 +172,7 @@ const FLAG_FIELD_GROUPS: &[(&str, &[&str])] = &[
     ("pubmed", &["PUBMED"]),
     ("dont_skip", &["CHECK_REF"]),
     ("overlaps", &["OverlapBP", "OverlapPC"]),
+    ("shift_length", &["SHIFT_LENGTH"]),
     (
         "regulatory",
         &[
@@ -212,6 +224,7 @@ impl FieldOptions {
             "pubmed" => self.pubmed,
             "dont_skip" => self.dont_skip,
             "overlaps" => self.overlaps,
+            "shift_length" => self.shift_length,
             "regulatory" => self.regulatory,
             _ => false,
         }
@@ -545,7 +558,31 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
         "Reports variants where the input reference does not match the expected reference",
     ),
     ("GENCODE_PRIMARY", "Reports if transcript is GENCODE primary"),
+    (
+        "SHIFT_LENGTH",
+        "Reports the number of bases the insertion or deletion has been shifted relative to the underlying transcript due to right alignment before consequence calculation",
+    ),
 ];
+
+/// The shift `--shift_genomic 1` prints on a row and the strand it moved along:
+/// a transcript row's own shift along its transcript (OutputFactory.pm:1702-1706),
+/// an intergenic row's shift along the forward strand (:1992-1998). `None` when
+/// the flags are off or the row moved nothing, so Location and Allele print as
+/// the input placed them.
+fn genomic_shift(
+    variant: &InputVariant,
+    tc: Option<&TranscriptConsequence>,
+    options: &FieldOptions,
+) -> Option<(u64, i8)> {
+    if !(options.shift_3prime && options.shift_genomic) {
+        return None;
+    }
+    let (shift, strand) = match tc {
+        Some(tc) => (tc.shift_length, tc.strand),
+        None => (variant.intergenic_shift?, 1),
+    };
+    (shift > 0).then_some((shift, strand))
+}
 
 /// One output row: an allele of the record and the transcript consequence it is
 /// reported against, or `None` for the record's intergenic row or its `--summary`
@@ -688,8 +725,14 @@ fn row_field_value(
 ) -> String {
     match field {
         "Uploaded_variation" => variant.uploaded_variation(),
-        "Location" => variant.location(),
-        "Allele" => variant.display_allele(),
+        "Location" => match genomic_shift(variant, tc, options) {
+            Some((shift, strand)) => variant.location_shifted(shift, strand),
+            None => variant.location(),
+        },
+        "Allele" => match genomic_shift(variant, tc, options) {
+            Some((shift, strand)) => variant.display_allele_shifted(shift, strand),
+            None => variant.display_allele(),
+        },
         "Consequence" => tc
             .map(consequence_string)
             .or_else(|| {
@@ -860,6 +903,12 @@ fn row_field_value(
         "HGVS_OFFSET" => tc
             .and_then(|x| x.hgvs_offset.map(|o| o.to_string()))
             .unwrap_or_default(),
+        // Set on every transcript row, 0 included, when both flags are on
+        // (OutputFactory.pm:1690-1695); an intergenic row carries none.
+        "SHIFT_LENGTH" if options.shift_3prime => {
+            tc.map(|x| x.shift_length.to_string()).unwrap_or_default()
+        }
+        "SHIFT_LENGTH" => String::new(),
         "CLIN_SIG" => joined_unique(
             variant
                 .colocated_variants
@@ -1201,6 +1250,146 @@ mod tests {
         assert_eq!(&f[..4], &["IMPACT", "DISTANCE", "STRAND", "FLAGS"]);
         assert_eq!(&f[4..7], &["SYMBOL", "SYMBOL_SOURCE", "HGNC_ID"]);
         assert_eq!(f.iter().filter(|x| **x == "AF").count(), 1);
+    }
+
+    /// Under `--shift_3prime 1 --shift_genomic 1` a transcript row's Location moves
+    /// by its shift along the transcript strand and an inserted allele prints
+    /// rotated along the move (OutputFactory.pm:1349-1352, 1702-1706); an
+    /// intergenic row moves towards higher coordinates by the forward-strand
+    /// shift (:1992-1998); a row that moved nothing, and every row without both
+    /// flags, prints the input position and allele.
+    #[test]
+    fn shift_genomic_moves_location_and_allele_for_shifted_rows() {
+        let both = FieldOptions {
+            shift_3prime: true,
+            shift_genomic: true,
+            ..Default::default()
+        };
+        let insertion =
+            InputVariant::new("21".into(), 1_001, 1_000, b"-".to_vec(), b"CAG".to_vec());
+        let forward = TranscriptConsequence {
+            strand: 1,
+            shift_length: 4,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("Location", &insertion, Some(&forward), &both, ","),
+            "21:1004-1005"
+        );
+        assert_eq!(
+            field_value("Allele", &insertion, Some(&forward), &both, ","),
+            "AGC"
+        );
+        let reverse = TranscriptConsequence {
+            strand: -1,
+            shift_length: 1,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("Location", &insertion, Some(&reverse), &both, ","),
+            "21:999-1000"
+        );
+        assert_eq!(
+            field_value("Allele", &insertion, Some(&reverse), &both, ","),
+            "GCA"
+        );
+        let unmoved = TranscriptConsequence::default();
+        assert_eq!(
+            field_value("Location", &insertion, Some(&unmoved), &both, ","),
+            "21:1000-1001"
+        );
+        assert_eq!(
+            field_value("Allele", &insertion, Some(&unmoved), &both, ","),
+            "CAG"
+        );
+
+        let mut deletion =
+            InputVariant::new("21".into(), 2_000, 2_001, b"AT".to_vec(), b"-".to_vec());
+        deletion.intergenic_shift = Some(3);
+        assert_eq!(
+            field_value("Location", &deletion, None, &both, ","),
+            "21:2003-2004"
+        );
+        assert_eq!(field_value("Allele", &deletion, None, &both, ","), "-");
+
+        for options in [
+            FieldOptions {
+                shift_3prime: true,
+                ..Default::default()
+            },
+            FieldOptions {
+                shift_genomic: true,
+                ..Default::default()
+            },
+        ] {
+            assert_eq!(
+                field_value("Location", &insertion, Some(&forward), &options, ","),
+                "21:1000-1001"
+            );
+            assert_eq!(
+                field_value("Allele", &insertion, Some(&forward), &options, ","),
+                "CAG"
+            );
+            assert_eq!(
+                field_value("Location", &deletion, None, &options, ","),
+                "21:2000-2001"
+            );
+        }
+    }
+
+    /// `--shift_length` lists SHIFT_LENGTH among the flag fields, and under
+    /// `--shift_3prime 1` every transcript row carries its value, 0 included
+    /// (OutputFactory.pm:1690-1695); an intergenic row carries none.
+    #[test]
+    fn shift_length_prints_zero_on_unshifted_transcript_rows() {
+        let options = FieldOptions {
+            shift_length: true,
+            shift_3prime: true,
+            ..Default::default()
+        };
+        assert!(flag_fields(&options).contains(&"SHIFT_LENGTH"));
+        let snv = InputVariant::new("21".into(), 1_000, 1_000, b"A".to_vec(), b"G".to_vec());
+        let unmoved = TranscriptConsequence::default();
+        assert_eq!(
+            field_value("SHIFT_LENGTH", &snv, Some(&unmoved), &options, ","),
+            "0"
+        );
+        let moved = TranscriptConsequence {
+            shift_length: 7,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("SHIFT_LENGTH", &snv, Some(&moved), &options, ","),
+            "7"
+        );
+        assert_eq!(field_value("SHIFT_LENGTH", &snv, None, &options, ","), "");
+    }
+
+    /// Without `--shift_3prime 1` the SHIFT_LENGTH column is listed under
+    /// `--shift_length` but no row sets it (the flag field follows the parameter,
+    /// OutputFactory.pm:2516-2528; the value needs both, :1695), and without
+    /// `--shift_length` the field is not listed at all.
+    #[test]
+    fn shift_length_is_absent_without_shift_3prime() {
+        let listed = FieldOptions {
+            shift_length: true,
+            ..Default::default()
+        };
+        assert!(flag_fields(&listed).contains(&"SHIFT_LENGTH"));
+        let snv = InputVariant::new("21".into(), 1_000, 1_000, b"A".to_vec(), b"G".to_vec());
+        let moved = TranscriptConsequence {
+            shift_length: 7,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("SHIFT_LENGTH", &snv, Some(&moved), &listed, ","),
+            ""
+        );
+        let unlisted = FieldOptions {
+            shift_3prime: true,
+            ..Default::default()
+        };
+        assert!(!flag_fields(&unlisted).contains(&"SHIFT_LENGTH"));
     }
 
     /// VEP computes a structural row's overlap from the allele's own start and end:

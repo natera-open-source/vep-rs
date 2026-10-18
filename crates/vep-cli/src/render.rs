@@ -8,9 +8,11 @@ use smallvec::SmallVec;
 
 use crate::pipeline::WriteContext;
 use crate::variation_matcher;
+use std::borrow::Cow;
 use vep_core::consequence::Consequence;
 use vep_core::variant::InputVariant;
-use vep_io::output::fields::{record_rows_into, ExtraFieldsPlan, Row};
+
+use vep_io::output::fields::{field_value, record_rows_into, ExtraFieldsPlan, Row};
 use vep_io::OutputFormatter;
 
 /// Renders one input record: the alleles split from one line, written together
@@ -81,6 +83,9 @@ pub(crate) fn render_default_record<'a>(
     }
     let columns: SmallVec<[AlleleColumns; 4]> =
         record.iter().map(|v| AlleleColumns::new(v)).collect();
+    // Under --shift_3prime 1 --shift_genomic 1 the Location and Allele of a row
+    // follow its own shift, so they are rendered per row rather than per allele.
+    let shifted_rows = plan.options.shift_3prime && plan.options.shift_genomic;
     for &(variant, tc) in rows.iter() {
         let allele = record
             .iter()
@@ -88,10 +93,18 @@ pub(crate) fn render_default_record<'a>(
             .expect("row allele belongs to its record");
         let cols = &columns[allele];
         let existing_str = cols.existing.as_deref().unwrap_or("-");
+        let (location, allele_text): (Cow<str>, Cow<str>) = if shifted_rows {
+            (
+                field_value("Location", variant, tc, &plan.options, ",").into(),
+                field_value("Allele", variant, tc, &plan.options, ",").into(),
+            )
+        } else {
+            (cols.location.as_str().into(), cols.allele.as_str().into())
+        };
 
         out.extend_from_slice(cols.uploaded.as_bytes());
         out.push(b'\t');
-        out.extend_from_slice(cols.location.as_bytes());
+        out.extend_from_slice(location.as_bytes());
         out.push(b'\t');
         match (tc, &variant.summary_terms) {
             (None, Some(terms)) => {
@@ -106,7 +119,7 @@ pub(crate) fn render_default_record<'a>(
                 out.push(b'\n');
             }
             (None, None) => {
-                out.extend_from_slice(cols.allele.as_bytes());
+                out.extend_from_slice(allele_text.as_bytes());
                 // Intergenic: no feature columns, the most severe consequence, and
                 // an Extra column carrying IMPACT alone (no STRAND), as VEP does.
                 let consequence_str = variant
@@ -122,7 +135,7 @@ pub(crate) fn render_default_record<'a>(
                 out.push(b'\n');
             }
             (Some(tc), _) => {
-                out.extend_from_slice(cols.allele.as_bytes());
+                out.extend_from_slice(allele_text.as_bytes());
                 out.push(b'\t');
                 out.extend_from_slice(tc.gene_id.as_bytes());
                 out.push(b'\t');

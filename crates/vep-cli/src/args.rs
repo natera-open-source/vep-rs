@@ -257,9 +257,46 @@ pub struct Args {
     #[arg(help_heading = "Cache / Offline", long = "no_fasta")]
     pub no_fasta: bool,
 
-    /// Enable 3' shifting of insertions/deletions (requires --fasta)
-    #[arg(help_heading = "Cache / Offline", long = "shift_3prime")]
-    pub shift_3prime: bool,
+    /// Move each insertion or deletion to its most 3' position on the transcript, over
+    /// a 1,000-base window of the reference, before its consequence terms, positions,
+    /// codons and amino acids are computed (1), or annotate it where the input placed it
+    /// (0); needs a FASTA and stops the run without one. The HGVS notations shift under
+    /// --shift_hgvs, not this flag. The shift runs along the genome only: a transcript
+    /// whose cached sequence is edited away from the genome is not shifted again along
+    /// its own sequence
+    #[arg(
+        help_heading = "Cache / Offline",
+        long = "shift_3prime",
+        value_parser = ["0", "1"]
+    )]
+    pub shift_3prime: Option<String>,
+
+    /// Move each insertion or deletion to its most 3' position on the transcript before
+    /// its HGVSc and HGVSp are built (1, the default), or describe it where the input
+    /// placed it (0), which also sets --shift_3prime to 0 and cannot be combined with
+    /// --shift_3prime or --shift_genomic
+    #[arg(
+        help_heading = "Cache / Offline",
+        long = "shift_hgvs",
+        value_parser = ["0", "1"]
+    )]
+    pub shift_hgvs: Option<String>,
+
+    /// Under --shift_3prime 1, print the shifted position in Location and the shifted
+    /// sequence in Allele on every row (1), intergenic rows moving towards higher
+    /// coordinates, or keep the input position (0); without --shift_3prime 1 nothing
+    /// moves
+    #[arg(
+        help_heading = "Cache / Offline",
+        long = "shift_genomic",
+        value_parser = ["0", "1"]
+    )]
+    pub shift_genomic: Option<String>,
+
+    /// Add the SHIFT_LENGTH column: under --shift_3prime 1, the bases each insertion
+    /// or deletion moved along the transcript, 0 on every other transcript row
+    #[arg(help_heading = "Cache / Offline", long = "shift_length")]
+    pub shift_length: bool,
 
     #[arg(help_heading = "Cache / Offline", long)]
     pub sereal: bool,
@@ -439,11 +476,11 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long = "xref_refseq")]
     pub xref_refseq: bool,
 
-    /// Add HGVS coding and protein notations
+    /// Add HGVS coding and protein notations; needs a FASTA named with --fasta or found in the cache directory and stops the run without one
     #[arg(help_heading = "Output Control", long)]
     pub hgvs: bool,
 
-    /// Add the HGVS genomic notation (HGVSg); needs --fasta
+    /// Add the HGVS genomic notation (HGVSg); needs a FASTA named with --fasta or found in the cache directory and stops the run without one
     #[arg(help_heading = "Output Control", long)]
     pub hgvsg: bool,
 
@@ -1115,6 +1152,61 @@ mod tests {
         assert!(args.total_length);
         assert!(args.dont_skip);
         assert!(args.allow_non_variant);
+    }
+
+    /// `shift_hgvs=i` (Config.pm:201) takes a value, and only 0 or 1 is read as a
+    /// setting (BaseRunner.pm:498): the bare flag and any other value are syntax
+    /// errors, so neither can pass as a silent default.
+    #[test]
+    fn shift_hgvs_takes_0_or_1() {
+        assert_eq!(
+            Args::parse_from(["vep", "--shift_hgvs", "0"])
+                .shift_hgvs
+                .as_deref(),
+            Some("0")
+        );
+        assert_eq!(
+            Args::parse_from(["vep", "--shift_hgvs=1"])
+                .shift_hgvs
+                .as_deref(),
+            Some("1")
+        );
+        assert_eq!(Args::parse_from(["vep"]).shift_hgvs, None);
+        for argv in [
+            &["vep", "--shift_hgvs"][..],
+            &["vep", "--shift_hgvs", "2"][..],
+            &["vep", "--shift_hgvs", "yes"][..],
+        ] {
+            let err = Args::try_parse_from(argv).unwrap_err();
+            assert_eq!(err.exit_code(), 2, "{argv:?}: {err}");
+        }
+    }
+
+    /// `shift_3prime=i` and `shift_genomic=i` (Config.pm:231-232) take a value as
+    /// `--shift_hgvs` does; the bare `--shift_3prime` is a syntax error, and
+    /// `--shift_length` is a plain switch (Config.pm:233).
+    #[test]
+    fn shift_3prime_takes_0_or_1() {
+        let args = Args::parse_from(["vep", "--shift_3prime", "1", "--shift_genomic", "0"]);
+        assert_eq!(args.shift_3prime.as_deref(), Some("1"));
+        assert_eq!(args.shift_genomic.as_deref(), Some("0"));
+        assert!(!args.shift_length);
+        assert_eq!(
+            Args::parse_from(["vep", "--shift_3prime=0"])
+                .shift_3prime
+                .as_deref(),
+            Some("0")
+        );
+        assert!(Args::parse_from(["vep", "--shift_length"]).shift_length);
+        for argv in [
+            &["vep", "--shift_3prime"][..],
+            &["vep", "--shift_3prime", "2"][..],
+            &["vep", "--shift_genomic"][..],
+            &["vep", "--shift_genomic", "-1"][..],
+        ] {
+            let err = Args::try_parse_from(argv).unwrap_err();
+            assert_eq!(err.exit_code(), 2, "{argv:?}: {err}");
+        }
     }
 
     /// Every flag has help text: its own doc comment, or the error table's.

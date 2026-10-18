@@ -74,7 +74,7 @@ Crates that depend on this one, and what they read:
 
 | Crate | Use |
 | --- | --- |
-| [vep-cli](../vep-cli/README.md) | Opens the `--fasta` file, refuses `--shift_3prime` without it, and shares the handle with the crates below |
+| [vep-cli](../vep-cli/README.md) | Opens the `--fasta` file, refuses `--hgvs`, `--hgvsg` and `--shift_3prime 1` without it, and shares the handle with the crates below |
 | [vep-effects](../vep-effects/README.md) | Reads single bases to walk an indel to its 3'-most position, and sequence ranges for Human Genome Variation Society (HGVS) notation and the untranslated regions of a transcript |
 | [vep-builtins](../vep-builtins/README.md) | The LoFTEE plugin reads the splice-site dinucleotides of an intron, a nine-base window around a single-nucleotide variant, and the ancestral base from its own `human_ancestor_fa` file |
 | [vep-cache-builder](../vep-cache-builder/README.md) | Reads each coding-sequence region of a transcript from the `--genome-fasta` genome to build its translateable sequence |

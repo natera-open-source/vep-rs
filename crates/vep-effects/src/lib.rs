@@ -16,7 +16,7 @@ pub mod mapper;
 pub mod overlap;
 pub mod sv;
 
-pub use consequences::{calculate_consequences, EffectsConfig};
+pub use consequences::{calculate_consequences, shift_indel_3prime, shift_motif, EffectsConfig};
 pub use overlap::find_overlapping_transcripts;
 
 /// Test helpers for building mock transcripts. Available in tests only.

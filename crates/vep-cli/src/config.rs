@@ -344,6 +344,10 @@ pub const COMPONENTS: &[(&str, &str)] = &[
         "a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect",
     ),
     (
+        "fasta",
+        "the reference FASTA: a flag that reads it (`--hgvs`, `--hgvsg`, `--shift_3prime 1`) was given and none was named or found in the cache directory",
+    ),
+    (
         "config",
         "the `--config` file, or a `vep.ini` that is a file, cannot be read; or a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer",
     ),
@@ -477,7 +481,18 @@ pub struct Config {
     pub fasta: Option<String>,
     /// Do not pick up a FASTA file found in the cache directory.
     pub no_fasta: bool,
+    /// `--shift_3prime 1`: insertions and deletions are moved to their most 3'
+    /// position on each transcript before annotation; off under `--shift_hgvs 0`,
+    /// which sets it to 0 as `post_setup_checks` does (Runner.pm:792-795).
     pub shift_3prime: bool,
+    /// `--shift_hgvs`: the HGVS notations describe the 3'-shifted allele (the
+    /// default); `--shift_hgvs 0` describes the allele where the input placed it.
+    pub shift_hgvs: bool,
+    /// `--shift_genomic 1`: Location and Allele print the shifted position and
+    /// allele under `--shift_3prime 1`.
+    pub shift_genomic: bool,
+    /// `--shift_length`: the SHIFT_LENGTH column is added.
+    pub shift_length: bool,
 
     pub species: String,
     pub assembly: Option<String>,
@@ -497,6 +512,9 @@ pub struct Config {
     /// Default [`TranscriptIndexImpl::Bin`].
     pub transcript_index_impl: TranscriptIndexImpl,
 
+    /// `--everything` was given: the HGVS flags it switched on are dropped, not
+    /// refused, when no FASTA is found (Runner.pm:745-754).
+    pub everything: bool,
     pub symbol: bool,
     pub biotype: bool,
     pub canonical: bool,
@@ -758,6 +776,11 @@ impl Config {
             tracing::warn!("{}", notice);
         }
 
+        // `shift_hgvs` is a setting only as 0 or 1 (BaseRunner.pm:498), and 0 sets
+        // `shift_3prime` to 0 whatever the command line said (Runner.pm:792-795).
+        let shift_hgvs = args.shift_hgvs.as_deref() != Some("0");
+        let shift_3prime = shift_hgvs && args.shift_3prime.as_deref() == Some("1");
+
         Config {
             input_file: args.input_file,
             input_data: args.input_data,
@@ -783,7 +806,10 @@ impl Config {
             show_cache_info: args.show_cache_info,
             fasta: args.fasta,
             no_fasta: args.no_fasta,
-            shift_3prime: args.shift_3prime,
+            shift_3prime,
+            shift_hgvs,
+            shift_genomic: args.shift_genomic.as_deref() == Some("1"),
+            shift_length: args.shift_length,
             species: args.species,
             assembly: state.scalar("assembly").map(str::to_string),
             buffer_size: args.buffer_size,
@@ -798,6 +824,7 @@ impl Config {
                 .transcript_index_impl
                 .parse::<TranscriptIndexImpl>()
                 .unwrap_or_default(),
+            everything: on("everything"),
             symbol: on("symbol") || vcf_output,
             biotype: on("biotype") || vcf_output,
             canonical: on("canonical"),
@@ -1812,9 +1839,48 @@ mod tests {
         let names: std::collections::BTreeSet<&str> =
             COMPONENTS.iter().map(|(name, _)| *name).collect();
         assert_eq!(names.len(), COMPONENTS.len(), "{COMPONENTS:?}");
-        for component in ["cli", "output", "cache", "filter", "config", "run"] {
+        for component in ["cli", "output", "cache", "filter", "fasta", "config", "run"] {
             assert!(names.contains(component), "{component}");
         }
+    }
+
+    /// `--shift_hgvs 0` sets `shift_3prime` to 0 whatever the command line said
+    /// (Runner.pm:792-795); `--shift_hgvs 1` leaves it alone, and a bare run
+    /// shifts the HGVS notations and nothing else (BaseRunner.pm:498 reads no
+    /// setting from an absent flag).
+    #[test]
+    fn shift_hgvs_0_forces_shift_3prime_0() {
+        let c = config(&["vep", "--shift_hgvs", "0", "--shift_3prime", "0"]);
+        assert!(!c.shift_hgvs && !c.shift_3prime);
+        let c = config(&["vep", "--shift_hgvs", "0", "--shift_3prime", "1"]);
+        assert!(!c.shift_hgvs && !c.shift_3prime);
+        let c = config(&["vep", "--shift_hgvs", "0"]);
+        assert!(!c.shift_hgvs && !c.shift_3prime);
+        let c = config(&["vep", "--shift_hgvs", "1"]);
+        assert!(c.shift_hgvs && !c.shift_3prime);
+        let c = config(&[
+            "vep",
+            "--shift_3prime",
+            "1",
+            "--shift_genomic",
+            "1",
+            "--shift_length",
+        ]);
+        assert!(c.shift_hgvs && c.shift_3prime && c.shift_genomic && c.shift_length);
+        let plain = config(&["vep"]);
+        assert!(plain.shift_hgvs && !plain.shift_3prime && !plain.shift_genomic);
+        assert!(!plain.shift_length);
+        // The pair Ensembl VEP refuses (Config.pm:630): an active --shift_hgvs
+        // beside an active --shift_3prime or --shift_genomic; a 0 is not active.
+        assert_eq!(
+            refusal(&["vep", "--shift_hgvs", "1", "--shift_3prime", "1"]),
+            "ERROR: [cli] Can't use --shift_hgvs and --shift_3prime together"
+        );
+        assert_eq!(
+            refusal(&["vep", "--shift_hgvs", "1", "--shift_genomic", "1"]),
+            "ERROR: [cli] Can't use --shift_hgvs and --shift_genomic together"
+        );
+        assert!(Config::from_argv(["vep", "--shift_hgvs", "0", "--shift_genomic", "0"]).is_ok());
     }
 
     #[test]

@@ -27,6 +27,7 @@
   "hgvsc_clamp_116",
   "hgvsp_extter_116",
   "flag_matrix_concordance",
+  "hgvs-offset-field",
   "engine_identity_lines"
  ],
  "suites": {

@@ -82,6 +82,59 @@ pub struct Runner {
     cache: ResolvedCache,
     /// The invocation as VEP prints it in `## VEP command-line:`.
     command_line: String,
+    /// The `INFO:` lines `post_setup_checks` prints once the FASTA is known
+    /// (Runner.pm:752, 793), written to standard error before the run unless
+    /// `--quiet`.
+    notices: Vec<&'static str>,
+}
+
+/// What the FASTA checks of `post_setup_checks` decide for a run.
+pub(crate) struct FastaChecks {
+    /// Whether HGVSc and HGVSp are computed: the `--hgvs` that `--everything`
+    /// switched on is dropped when no FASTA is found.
+    pub(crate) hgvs: bool,
+    /// The `INFO:` lines the checks print.
+    pub(crate) notices: Vec<&'static str>,
+}
+
+/// The FASTA checks of `post_setup_checks` (Runner.pm:742-798) on the resolved
+/// configuration, every run being an offline run here. `--everything` without a
+/// FASTA drops the HGVS flags it switched on with an `INFO:` line (:745-754);
+/// an explicit `--hgvs` or `--hgvsg` without one is refused with Ensembl VEP's
+/// text (:759); `--shift_3prime 1` without one is refused too, since the shift
+/// reads the reference; `--shift_hgvs 0` reports that it set `shift_3prime` to
+/// 0 (:792-795).
+pub(crate) fn fasta_setup_checks(
+    config: &Config,
+    fasta_found: bool,
+) -> Result<FastaChecks, CliError> {
+    let mut checks = FastaChecks {
+        hgvs: config.hgvs,
+        notices: Vec::new(),
+    };
+    if !fasta_found {
+        if config.hgvs && config.everything {
+            checks
+                .notices
+                .push("INFO: Disabling --hgvs; using --offline and no FASTA file found");
+            checks.hgvs = false;
+        }
+        if checks.hgvs || config.hgvsg {
+            return Err(CliError::new("fasta", HGVS_NEEDS_FASTA));
+        }
+        if config.shift_3prime {
+            return Err(CliError::new(
+                "fasta",
+                "Cannot shift variants (--shift_3prime 1) without a FASTA file (see --fasta)",
+            ));
+        }
+    }
+    if !config.shift_hgvs {
+        checks
+            .notices
+            .push("INFO: --shift_hgvs has been set to zero, setting shift_3prime to 0");
+    }
+    Ok(checks)
 }
 
 /// Renders the invocation as VEP prints it in `## VEP command-line:`
@@ -226,13 +279,26 @@ impl Runner {
     /// Resolves the cache the configuration names (`AnnotationSourceAdaptor.pm:120-132`
     /// builds it before the parser), so a run with no cache fails here, before the
     /// input or the output is opened.
-    pub fn new(config: Config) -> anyhow::Result<Self> {
+    pub fn new(mut config: Config) -> anyhow::Result<Self> {
         let cache = crate::cache_resolve::resolve(&config)?;
+        let fasta_found = config.fasta.is_some() || cache.fasta.is_some();
+        // `vep` answers --show_cache_info and exits before `run()` (vep:39-46), so
+        // such a run never reaches `post_setup_checks`.
+        let checks = if config.show_cache_info {
+            FastaChecks {
+                hgvs: config.hgvs,
+                notices: Vec::new(),
+            }
+        } else {
+            fasta_setup_checks(&config, fasta_found)?
+        };
+        config.hgvs = checks.hgvs;
         let command_line = vep_command_line(std::env::args().skip(1));
         Ok(Self {
             config,
             cache,
             command_line,
+            notices: checks.notices,
         })
     }
 
@@ -294,6 +360,9 @@ impl Runner {
             pubmed: c.pubmed,
             dont_skip: c.dont_skip,
             overlaps: c.overlaps,
+            shift_length: c.shift_length,
+            shift_3prime: c.shift_3prime,
+            shift_genomic: c.shift_genomic,
             regulatory: c.regulatory,
             no_escape: c.output_format == "json",
         }
@@ -380,6 +449,14 @@ impl Runner {
             return self.write_cache_info(&mut io::stdout().lock());
         }
 
+        // `post_setup_checks` prints its lines in `init()` (Runner.pm:138), before
+        // the output file is opened (:202).
+        if !self.config.quiet {
+            for notice in &self.notices {
+                eprintln!("{notice}");
+            }
+        }
+
         // BaseRunner.pm:203-204, with Ensembl VEP's text.
         if self.config.output_file != "STDOUT" {
             let path = Path::new(&self.config.output_file);
@@ -411,15 +488,7 @@ impl Runner {
             info!("Using {} threads for annotation", num_threads);
         }
 
-        let fasta_path = self.fasta_path();
-        if self.config.shift_3prime && fasta_path.is_none() {
-            bail!("--shift_3prime requires --fasta <path> (indexed FASTA: .fa + .fai)");
-        }
-        if self.config.hgvsg && fasta_path.is_none() {
-            return Err(CliError::new("cli", HGVS_NEEDS_FASTA).into());
-        }
-
-        let reference_fasta = if let Some(fasta_path) = fasta_path {
+        let reference_fasta = if let Some(fasta_path) = self.fasta_path() {
             if self.config.fasta.is_none() {
                 debug!("Auto-detected FASTA file in cache directory");
             }
@@ -447,8 +516,7 @@ impl Runner {
             downstream_distance: self.config.distance.1,
             reference_fasta,
             enable_indel_3prime_shift: self.config.shift_3prime,
-            // This primarily needs to cover simple repeat-induced shifting around splice windows.
-            max_indel_3prime_shift: 2000,
+            shift_hgvs: self.config.shift_hgvs,
             populate_loftee_context: needs_loftee_context,
             compute_hgvs: needs_hgvs_computation(&self.config),
             compute_exon_intron_numbers: needs_exon_intron_numbers(&self.config),
@@ -1321,9 +1389,31 @@ pub(crate) fn annotate_one(
         && !is_bnd
     {
         variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        variant.intergenic_shift = intergenic_shift(variant, &resources.effects_config);
     }
 
     csq_count
+}
+
+/// The bases an intergenic insertion or deletion moves under `--shift_3prime 1`:
+/// `IntergenicVariationAllele::genomic_shift` runs `_genomic_shift(1)`, the
+/// forward-strand shift (IntergenicVariationAllele.pm:63-72), so the row moves
+/// towards higher coordinates, by zero when the flanking bases let it move
+/// nowhere; a structural or symbolic allele and every other class move nothing
+/// and carry no shift (TranscriptVariationAllele.pm:123, 129, 420). `None`
+/// without the flag or a FASTA.
+pub(crate) fn intergenic_shift(
+    variant: &InputVariant,
+    config: &vep_effects::EffectsConfig,
+) -> Option<u64> {
+    if !config.enable_indel_3prime_shift || variant.is_structural {
+        return None;
+    }
+    let fasta = config.reference_fasta.as_deref()?;
+    vep_effects::shift_motif(variant)?;
+    let shifted =
+        vep_effects::shift_indel_3prime(variant, vep_core::coordinate::Strand::Forward, fasta);
+    Some(shifted.map_or(0, |(start, _)| start - variant.start))
 }
 
 /// Annotate a batch of variants, optionally in parallel using rayon.
@@ -2032,6 +2122,158 @@ mod tests {
         assert!(!flag_fields(&alone.field_options()).contains(&"ENSP"));
         let both = runner_over(&cache, &["--protein", "--protein_version"]);
         assert!(flag_fields(&both.field_options()).contains(&"ENSP"));
+    }
+
+    /// `post_setup_checks` (Runner.pm:757-759): an explicit `--hgvs` or `--hgvsg`
+    /// with no FASTA named or found is refused with Ensembl VEP's text, before the
+    /// input is opened; `--shift_3prime 1` without one is refused in the same shape.
+    #[test]
+    fn hgvs_without_fasta_offline_exits_with_vep_message() {
+        let cache = write_json_cache("nofasta", &[("21", 1_000)]);
+        let dir = cache.path().to_str().unwrap();
+        for flags in [
+            &["--hgvs"][..],
+            &["--hgvsg"][..],
+            &["--hgvs", "--offline"][..],
+        ] {
+            let mut argv = vec!["--json_cache", dir];
+            argv.extend_from_slice(flags);
+            let Err(error) = Runner::new(config_from(&argv)) else {
+                panic!("{flags:?} without a FASTA made a runner");
+            };
+            assert_eq!(
+                crate::config::CliError::from_run(&error),
+                "ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)"
+            );
+        }
+        let Err(error) = Runner::new(config_from(&["--json_cache", dir, "--shift_3prime", "1"]))
+        else {
+            panic!("--shift_3prime 1 without a FASTA made a runner");
+        };
+        assert_eq!(
+            crate::config::CliError::from_run(&error),
+            "ERROR: [fasta] Cannot shift variants (--shift_3prime 1) without a FASTA file (see --fasta)"
+        );
+        // A FASTA named with --fasta satisfies the checks.
+        let (_fasta_dir, fasta) = fasta_of_a_runs(&[]);
+        assert!(runner_over(&cache, &["--hgvs", "--fasta", &fasta])
+            .notices
+            .is_empty());
+        // --show_cache_info answers before the checks would run.
+        runner_over(&cache, &["--show_cache_info", "--hgvs"]);
+    }
+
+    /// `post_setup_checks` (Runner.pm:745-754): the `--hgvs` that `--everything`
+    /// switched on is dropped with an `INFO:` line when no FASTA is found, and the
+    /// run goes on without HGVS; `--shift_hgvs 0` adds its own line (:792-795).
+    #[test]
+    fn everything_without_fasta_prints_info_and_clears_hgvs() {
+        let cache = write_json_cache("everything", &[("21", 1_000)]);
+        let runner = runner_over(&cache, &["--everything"]);
+        assert_eq!(
+            runner.notices,
+            ["INFO: Disabling --hgvs; using --offline and no FASTA file found"]
+        );
+        assert!(!runner.config.hgvs);
+        assert!(!runner.field_options().hgvs);
+        assert!(!needs_hgvs_computation(&runner.config));
+        // --everything --hgvsg still names a flag the checks refuse.
+        let Err(error) = Runner::new(config_from(&[
+            "--json_cache",
+            cache.path().to_str().unwrap(),
+            "--everything",
+            "--hgvsg",
+        ])) else {
+            panic!("--everything --hgvsg without a FASTA made a runner");
+        };
+        assert!(crate::config::CliError::from_run(&error)
+            .starts_with("ERROR: [fasta] Cannot generate HGVS"));
+        let runner = runner_over(&cache, &["--shift_hgvs", "0"]);
+        assert_eq!(
+            runner.notices,
+            ["INFO: --shift_hgvs has been set to zero, setting shift_3prime to 0"]
+        );
+        assert!(!runner.config.shift_3prime);
+    }
+
+    /// A reference FASTA of chromosome 21 whose bases are `C` except an `A` at
+    /// each listed position, with its index, in a temporary directory.
+    fn fasta_of_a_runs(a_positions: &[u64]) -> (tempfile::TempDir, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut sequence = vec![b'C'; 60_000];
+        for &pos in a_positions {
+            sequence[pos as usize - 1] = b'A';
+        }
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(
+            &fa,
+            format!(">21\n{}\n", String::from_utf8(sequence).unwrap()),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("ref.fa.fai"),
+            "21\t60000\t4\t60000\t60001\n",
+        )
+        .unwrap();
+        let path = fa.to_str().unwrap().to_string();
+        (dir, path)
+    }
+
+    /// An intergenic insertion or deletion carries the forward-strand genomic
+    /// shift only under `--shift_3prime 1` (`IntergenicVariationAllele_to_output_hash`
+    /// runs `genomic_shift` behind that flag, OutputFactory.pm:1992), and the
+    /// Location and Allele columns print it only when `--shift_genomic 1` is on
+    /// too (:1994-1997); a transcript row prints its own shift.
+    #[test]
+    fn shift_genomic_shifts_intergenic_rows_only_with_shift_3prime() {
+        use vep_io::output::fields::field_value;
+        let cache = write_json_cache("intergenic_shift", &[("21", 1_000)]);
+        let (_fasta_dir, fasta) = fasta_of_a_runs(&[50_001, 50_002, 50_003, 50_004]);
+        let dir = cache.path().to_str().unwrap();
+        // Deleting the first `A` of `AAAA` at 50,001-50,004, far from the transcript.
+        let line = "21\t50000\t.\tCA\tC\t.\t.\t.";
+        let annotate = |flags: &[&str]| {
+            let mut argv = vec!["--json_cache", dir, "--fasta", fasta.as_str()];
+            argv.extend_from_slice(flags);
+            let runner = Runner::new(config_from(&argv)).unwrap();
+            let fasta_file = Arc::new(vep_fasta::IndexedFasta::from_path(&fasta).unwrap());
+            let transcripts = Arc::new(
+                LazyTranscriptIndexes::new(dir, TranscriptIndexImpl::Bin, 5_000, 5_000).unwrap(),
+            );
+            let mut resources = resources_over(transcripts);
+            resources.effects_config = Arc::new(vep_effects::EffectsConfig {
+                reference_fasta: Some(fasta_file),
+                enable_indel_3prime_shift: runner.config.shift_3prime,
+                ..Default::default()
+            });
+            let mut batch = parse_vcf_line(line, false).unwrap();
+            let pool = build_thread_pool(1).unwrap();
+            prewarm_batch(&batch, &resources, &pool).unwrap();
+            annotate_one(&mut batch[0], &resources, &ReadFailure::default());
+            let variant = batch.remove(0);
+            assert_eq!(
+                variant.most_severe_consequence,
+                Some(Consequence::IntergenicVariant)
+            );
+            let options = runner.field_options();
+            (
+                variant.intergenic_shift,
+                field_value("Location", &variant, None, &options, ","),
+                field_value("Allele", &variant, None, &options, ","),
+            )
+        };
+        assert_eq!(
+            annotate(&["--shift_3prime", "1", "--shift_genomic", "1"]),
+            (Some(3), "21:50004".to_string(), "-".to_string())
+        );
+        assert_eq!(
+            annotate(&["--shift_3prime", "1"]),
+            (Some(3), "21:50001".to_string(), "-".to_string())
+        );
+        assert_eq!(
+            annotate(&["--shift_genomic", "1"]),
+            (None, "21:50001".to_string(), "-".to_string())
+        );
     }
 
     /// `@FLAG_FIELDS` adds the PICK column under `--flag_pick`,

@@ -340,14 +340,19 @@ fn overlap(a_start: i64, a_end: i64, b_start: i64, b_end: i64) -> bool {
     a_end >= b_start && a_start <= b_end
 }
 
-/// Whether the variant overlaps an exon, each exon stretched by 12 bases on
-/// a transcript with a frameshift intron.
-fn overlaps_an_exon(transcript: &Transcript, min_vf: i64, max_vf: i64) -> bool {
-    let stretch = if transcript.facts().has_frameshift_intron {
+/// The bases each exon stretches by when the transcript has a frameshift
+/// intron: a variant in such an intron, up to 12 bases long, counts as exonic.
+fn exon_stretch(transcript: &Transcript) -> i64 {
+    if transcript.facts().has_frameshift_intron {
         12
     } else {
         0
-    };
+    }
+}
+
+/// Whether the variant overlaps an exon, each stretched by [`exon_stretch`].
+fn overlaps_an_exon(transcript: &Transcript, min_vf: i64, max_vf: i64) -> bool {
+    let stretch = exon_stretch(transcript);
     transcript.exons.iter().any(|e| {
         overlap(
             min_vf,
@@ -358,13 +363,17 @@ fn overlaps_an_exon(transcript: &Transcript, min_vf: i64, max_vf: i64) -> bool {
     })
 }
 
-/// `a-b/total` for the 1-based ordinals of the features the variant strictly
-/// overlaps, or `None` when it overlaps none.
-fn number_string(features: &[(i64, i64)], vf_start: i64, vf_end: i64) -> Option<String> {
+/// `a-b/total` for the 1-based ordinals of the features that `fetched` admits
+/// and the placed span strictly overlaps, or `None` when there is none.
+fn number_string(
+    features: &[(i64, i64)],
+    fetched: impl Fn(i64, i64) -> bool,
+    placed: (i64, i64),
+) -> Option<String> {
     let mut numbers = features
         .iter()
         .enumerate()
-        .filter(|(_, (s, e))| overlap(vf_start, vf_end, *s, *e))
+        .filter(|(_, (s, e))| fetched(*s, *e) && overlap(placed.0, placed.1, *s, *e))
         .map(|(i, _)| i + 1);
     let first = numbers.next()?;
     let last = numbers.next_back().unwrap_or(first);
@@ -376,13 +385,21 @@ fn number_string(features: &[(i64, i64)], vf_start: i64, vf_end: i64) -> Option<
 }
 
 /// `EXON` and `INTRON` of a row as VEP prints them with `--numbers`
-/// (`BaseTranscriptVariation::exon_number`, `intron_number`): the ordinals of
-/// the exons, then introns, that the variant's span strictly overlaps, as a
-/// range over the total, once the variant lies within the transcript. An
-/// intron counts as touched when the span reaches within three bases of it,
-/// but only strictly overlapped introns are numbered.
+/// (`BaseTranscriptVariation::exon_number`, `intron_number`), as a range of
+/// ordinals over the total, once `variant` lies within the transcript.
+///
+/// `variant` is the span the consequences were called on and `placed` the span
+/// the input gave; they differ only under `--shift_3prime 1`. VEP fetches the
+/// overlapped exons and introns while it evaluates the predicates, at the
+/// shifted span (`_bvfo_preds`, BaseVariationFeatureOverlapAllele.pm:454-516),
+/// each exon stretched by 12 bases on a transcript with a frameshift intron
+/// and each intron reaching 3 bases past its ends, and keeps that list on the
+/// overlap; `exon_number` and `intron_number` then number the fetched features
+/// the placed span strictly overlaps (BaseTranscriptVariation.pm:679-760), so
+/// a shift across an exon boundary leaves both columns empty.
 pub fn exon_intron_numbers(
     variant: &InputVariant,
+    placed: &InputVariant,
     transcript: &Transcript,
 ) -> (Option<String>, Option<String>) {
     let (vf_start, vf_end) = (variant.start as i64, variant.end as i64);
@@ -398,21 +415,19 @@ pub fn exon_intron_numbers(
     if variant.is_structural && vf_start <= tx_start && vf_end >= tx_end {
         return (None, None);
     }
+    let stretch = exon_stretch(transcript);
+    let placed = (placed.start as i64, placed.end as i64);
     let ordinals = transcript.feature_ordinals();
-    let exon = if overlaps_an_exon(transcript, min_vf, max_vf) {
-        number_string(&ordinals.exons, vf_start, vf_end)
-    } else {
-        None
-    };
-    let intron = if ordinals
-        .introns
-        .iter()
-        .any(|(s, e)| overlap(min_vf, max_vf, s - 3, e + 3))
-    {
-        number_string(&ordinals.introns, vf_start, vf_end)
-    } else {
-        None
-    };
+    let exon = number_string(
+        &ordinals.exons,
+        |s, e| overlap(min_vf, max_vf, s - stretch, e + stretch),
+        placed,
+    );
+    let intron = number_string(
+        &ordinals.introns,
+        |s, e| overlap(min_vf, max_vf, s - 3, e + 3),
+        placed,
+    );
     (exon, intron)
 }
 
@@ -751,6 +766,17 @@ pub struct DisplayFields {
     pub codons: Option<String>,
 }
 
+impl DisplayFields {
+    /// Writes the five columns onto `tc`.
+    pub(crate) fn write_to(self, tc: &mut TranscriptConsequence) {
+        tc.cdna_position = self.cdna_position;
+        tc.cds_position = self.cds_position;
+        tc.protein_position = self.protein_position;
+        tc.amino_acids = self.amino_acids;
+        tc.codons = self.codons;
+    }
+}
+
 /// Computes the display columns for `variant` against `transcript`.
 pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> DisplayFields {
     let mut out = DisplayFields::default();
@@ -866,14 +892,9 @@ pub fn apply_display_fields(
     transcript: &Transcript,
     numbers: bool,
 ) {
-    let d = display_fields(variant, transcript);
-    tc.cdna_position = d.cdna_position;
-    tc.cds_position = d.cds_position;
-    tc.protein_position = d.protein_position;
-    tc.amino_acids = d.amino_acids;
-    tc.codons = d.codons;
+    display_fields(variant, transcript).write_to(tc);
     let (exon, intron) = if numbers {
-        exon_intron_numbers(variant, transcript)
+        exon_intron_numbers(variant, variant, transcript)
     } else {
         (None, None)
     };
@@ -1215,29 +1236,52 @@ mod tests {
         let tx = forward_transcript();
         // Exonic SNV: exon 1 of 3, no intron.
         assert_eq!(
-            exon_intron_numbers(&snv(1052, "G", "A"), &tx),
+            exon_intron_numbers(&snv(1052, "G", "A"), &snv(1052, "G", "A"), &tx),
             (Some("1/3".to_string()), None)
         );
         // Intronic SNV deep in intron 1.
         assert_eq!(
-            exon_intron_numbers(&snv(1300, "A", "G"), &tx),
+            exon_intron_numbers(&snv(1300, "A", "G"), &snv(1300, "A", "G"), &tx),
             (None, Some("1/2".to_string()))
         );
         // A deletion from exon 1 across intron 1 into exon 2 numbers both.
         let big = deletion(1190, 1510, "A");
         assert_eq!(
-            exon_intron_numbers(&big, &tx),
+            exon_intron_numbers(&big, &big, &tx),
             (Some("1-2/3".to_string()), Some("1/2".to_string()))
         );
         // Two bases into the intron: the intron predicate fires (3-base reach)
         // and the intron is strictly overlapped; the exon is not.
         assert_eq!(
-            exon_intron_numbers(&snv(1201, "A", "G"), &tx),
+            exon_intron_numbers(&snv(1201, "A", "G"), &snv(1201, "A", "G"), &tx),
             (None, Some("1/2".to_string()))
         );
         // An insertion exactly at the exon/intron boundary touches neither.
         assert_eq!(
-            exon_intron_numbers(&insertion(1199, "T"), &tx),
+            exon_intron_numbers(&insertion(1199, "T"), &insertion(1199, "T"), &tx),
+            (None, None)
+        );
+    }
+
+    /// Under `--shift_3prime 1` the fetch runs at the shifted span and the
+    /// numbering at the placed span: a deletion placed at the last base of exon
+    /// 1 and shifted two bases into intron 1 fetches the intron alone, which the
+    /// placed span never overlaps, so both columns stay empty; shifted within
+    /// the exon it keeps its number; shifted past the transcript it has none.
+    #[test]
+    fn exon_and_intron_numbers_fetch_at_the_shifted_span_and_number_at_the_placed_one() {
+        let tx = forward_transcript();
+        let placed = deletion(1199, 1199, "A");
+        assert_eq!(
+            exon_intron_numbers(&deletion(1201, 1201, "A"), &placed, &tx),
+            (None, None)
+        );
+        assert_eq!(
+            exon_intron_numbers(&deletion(1198, 1198, "A"), &deletion(1196, 1196, "A"), &tx),
+            (Some("1/3".to_string()), None)
+        );
+        assert_eq!(
+            exon_intron_numbers(&deletion(2001, 2001, "A"), &deletion(1999, 1999, "A"), &tx),
             (None, None)
         );
     }

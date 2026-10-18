@@ -25,8 +25,8 @@ use vep_core::consequence::Consequence;
 use vep_core::variant::{InputVariant, VariantClass};
 use vep_plugin::PluginRegistry;
 
-/// The refusal of `--hgvsg` with no reference FASTA, Ensembl VEP's text
-/// (Runner.pm 759) under the `cli` component.
+/// The refusal of `--hgvs` or `--hgvsg` with no reference FASTA, Ensembl VEP's
+/// text (Runner.pm 759), under the `fasta` component.
 pub(crate) const HGVS_NEEDS_FASTA: &str = "Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)";
 
 /// Shared annotation resources that can be reused across batches.
@@ -227,23 +227,23 @@ impl Annotator {
     pub fn from_config_with_pool(config: &Config, pool: Arc<ThreadPool>) -> anyhow::Result<Self> {
         let cache = crate::cache_resolve::resolve(config)?;
         let fasta_path = config.fasta.as_deref().or(cache.fasta.as_deref());
-        if config.shift_3prime && fasta_path.is_none() {
-            anyhow::bail!("--shift_3prime requires --fasta <path> (indexed FASTA: .fa + .fai)");
-        }
-        if config.hgvsg && fasta_path.is_none() {
-            return Err(CliError::new("cli", HGVS_NEEDS_FASTA).into());
+        let checks = crate::runner::fasta_setup_checks(config, fasta_path.is_some())?;
+        for notice in &checks.notices {
+            info!("{}", notice.trim_start_matches("INFO: "));
         }
 
         let reference_fasta = fasta_path.map(load_reference_fasta).transpose()?;
-        let effects_config = Arc::new(new_effects_config(
+        let mut effects = new_effects_config(
             config.distance,
             reference_fasta.clone(),
             config.shift_3prime,
-            crate::runner::needs_hgvs_computation(config),
+            checks.hgvs,
             crate::runner::needs_exon_intron_numbers(config),
             config.protein_version,
             hgvsg_options(config),
-        ));
+        );
+        effects.shift_hgvs = config.shift_hgvs;
+        let effects_config = Arc::new(effects);
         let LoadedPlugins { builtin, dylib } = load_plugins(
             &config.plugin,
             &config.dir_plugins,
@@ -520,11 +520,12 @@ pub fn build_effects_config(
     distance: (u64, u64),
     reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
     shift_3prime: bool,
+    shift_hgvs: bool,
     compute_hgvs: bool,
     compute_exon_intron_numbers: bool,
     protein_version: bool,
 ) -> Arc<vep_effects::EffectsConfig> {
-    Arc::new(new_effects_config(
+    let mut effects = new_effects_config(
         distance,
         reference_fasta,
         shift_3prime,
@@ -532,9 +533,13 @@ pub fn build_effects_config(
         compute_exon_intron_numbers,
         protein_version,
         None,
-    ))
+    );
+    effects.shift_hgvs = shift_hgvs;
+    Arc::new(effects)
 }
 
+/// The effects configuration with the HGVS shift on, `--shift_hgvs 1`; a caller
+/// that runs under `--shift_hgvs 0` clears `shift_hgvs` on the result.
 fn new_effects_config(
     distance: (u64, u64),
     reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
@@ -549,8 +554,7 @@ fn new_effects_config(
         downstream_distance: distance.1,
         reference_fasta,
         enable_indel_3prime_shift: shift_3prime,
-        // This primarily needs to cover simple repeat-induced shifting around splice windows.
-        max_indel_3prime_shift: 2000,
+        shift_hgvs: true,
         // LoFTEE context is attached by the main runner path when the plugin is
         // active; this shared helper is not on that path.
         populate_loftee_context: false,
@@ -670,6 +674,8 @@ pub fn annotate_batch(
             && !is_bnd
         {
             variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
+            variant.intergenic_shift =
+                crate::runner::intergenic_shift(variant, &resources.effects_config);
         }
     };
 
@@ -1380,7 +1386,7 @@ mod tests {
     }
 
     /// `from_config` refuses `--hgvsg` with no FASTA as the binary does, with
-    /// Ensembl VEP's message (Runner.pm 759) under the `cli` component.
+    /// Ensembl VEP's message (Runner.pm 759) under the `fasta` component.
     #[test]
     fn from_config_refuses_hgvsg_without_a_fasta() {
         let leaf = format!(
@@ -1394,7 +1400,7 @@ mod tests {
             .expect("--hgvsg without a FASTA is refused");
         assert_eq!(
             CliError::from_run(&err),
-            format!("ERROR: [cli] {HGVS_NEEDS_FASTA}")
+            format!("ERROR: [fasta] {HGVS_NEEDS_FASTA}")
         );
     }
 

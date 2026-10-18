@@ -203,7 +203,7 @@ fn main() -> Result<()> {
         downstream_distance: 5000,
         reference_fasta: None,
         enable_indel_3prime_shift: false,
-        max_indel_3prime_shift: 2000,
+        shift_hgvs: true,
         populate_loftee_context: false,
         compute_hgvs: false,
         compute_exon_intron_numbers: true,

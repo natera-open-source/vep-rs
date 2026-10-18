@@ -107,7 +107,9 @@ The source-version lines come from the cache's `info.json` (`source_versions`, w
 
 ### Extra Field
 
-Keys appear in VEP's order: `IMPACT`, `DISTANCE`, `STRAND`, `FLAGS` (preceded by `ALLELE_NUM` under `--allele_number` and `REF_ALLELE` under `--show_ref_allele`), then the fields of the active flags in VEP's flag order (`VARIANT_CLASS`, `SYMBOL`, `SYMBOL_SOURCE`, `HGNC_ID`, `BIOTYPE`, `CANONICAL`, `MANE`, `TSL`, `APPRIS`, `CCDS`, `ENSP`, `SIFT`, `PolyPhen`, `EXON`, `INTRON`, `DOMAINS`, `HGVSc`, `HGVSp`, `HGVS_OFFSET`, allele frequencies, `MAX_AF`, `CLIN_SIG`, `SOMATIC`, `PHENO`, `PUBMED`, ...), then any other key alphabetically (the structural-variant `OverlapBP`/`OverlapPC` and plugin keys). Inside a value `;` is escaped as `%3B` and, unless `--no_escape`, the `=` of an HGVSp value as `%3D`; lists join with `,`. An intergenic row carries `IMPACT=MODIFIER` and no `STRAND`, `DISTANCE` or `FLAGS`; record-level keys such as `VARIANT_CLASS`, `CLIN_SIG` and variant-level plugin keys join it under their flags.
+Keys appear in VEP's order: `IMPACT`, `DISTANCE`, `STRAND`, `FLAGS` (preceded by `ALLELE_NUM` under `--allele_number` and `REF_ALLELE` under `--show_ref_allele`), then the fields of the active flags in VEP's flag order (`VARIANT_CLASS`, `SYMBOL`, `SYMBOL_SOURCE`, `HGNC_ID`, `BIOTYPE`, `CANONICAL`, `MANE`, `TSL`, `APPRIS`, `CCDS`, `ENSP`, `SIFT`, `PolyPhen`, `EXON`, `INTRON`, `DOMAINS`, `HGVSc`, `HGVSp`, `HGVS_OFFSET`, allele frequencies, `MAX_AF`, `CLIN_SIG`, `SOMATIC`, `PHENO`, `PUBMED`, ..., `SHIFT_LENGTH`), then any other key alphabetically (the structural-variant `OverlapBP`/`OverlapPC` and plugin keys). Inside a value `;` is escaped as `%3B` and, unless `--no_escape`, the `=` of an HGVSp value as `%3D`; lists join with `,`. An intergenic row carries `IMPACT=MODIFIER` and no `STRAND`, `DISTANCE` or `FLAGS`; record-level keys such as `VARIANT_CLASS`, `CLIN_SIG` and variant-level plugin keys join it under their flags.
+
+`HGVS_OFFSET` is the number of bases the HGVS notations moved an insertion or deletion 3' along the transcript, negative on the reverse strand, present only when something moved; under `--shift_hgvs 0` nothing moves and the key never appears. `SHIFT_LENGTH` (`--shift_length`) is the number of bases `--shift_3prime 1` moved the allele before its terms and positions were computed, written on every transcript row, `0` included, and on no intergenic row; without `--shift_3prime 1` the column is listed and left empty. Under `--shift_3prime 1 --shift_genomic 1` the `Location` column prints the moved position (a transcript row along its transcript's strand, an intergenic row towards higher coordinates) and `Allele` the inserted bases rotated along the move; `Uploaded_variation` keeps the input's name.
 
 ### Example
 
@@ -165,7 +167,7 @@ CSQ=C|missense_variant|MODERATE|FLVCR1|ENSG00000162769|Transcript|ENST0000036697
     C|intron_variant&non_coding_transcript_variant|MODIFIER|FLVCR1|ENSG00000162769|Transcript|ENST00000483790|processed_transcript||2/5||||||||||1||HGNC|24682
 ```
 
-`EXON` and `INTRON` are `n/total` or `a-b/total` over the exons and introns the variant strictly overlaps. An absent value is empty (not `-`), except `Allele`. An intergenic entry carries `Allele`, `Consequence` and `IMPACT` alone (`G|intergenic_variant|MODIFIER||||...`).
+`EXON` and `INTRON` are `n/total` or `a-b/total` over the exons and introns the variant strictly overlaps; under `--shift_3prime 1` the candidates are the features the moved allele overlaps and the numbering follows the input's position, as in Ensembl VEP, so a move across an exon boundary leaves both empty. An absent value is empty (not `-`), except `Allele`. An intergenic entry carries `Allele`, `Consequence` and `IMPACT` alone (`G|intergenic_variant|MODIFIER||||...`).
 
 ### Encoding
 
@@ -274,7 +276,7 @@ An allele gets an `intergenic_consequences` entry only when it overlaps no trans
 - Column renames: `Consequence` to `consequence_terms` (array), `Gene` to `gene_id`, `Allele` to `variant_allele`, `Feature` to `transcript_id`, `SYMBOL` to `gene_symbol`, `OverlapBP` to `bp_overlap`, `OverlapPC` to `percentage_overlap`, `ENSP` to `protein_id` (`ENSP00000286808.3` under `--protein_version`), `RefSeq` to `refseq_transcript_ids`; `Feature_type` is dropped; `YES` flags become `1`.
 - Positions split into `*_start` and `*_end`, each written only when defined: `390-?` gives `cds_start` 390 alone and `?-335` gives `cdna_end` 335 alone, as Ensembl VEP 116 writes them. A single position fills both keys. SIFT and PolyPhen split into `*_prediction` and `*_score`.
 - Numeric-looking values are numbers except identifier keys; a zero fraction prints as an integer (`100`, not `100.0`).
-- `gene_symbol`, `gene_symbol_source`, `biotype`, `variant_class` and the other flag-gated keys appear only under their flags. Absent or `-` values are omitted. `--fields` does not apply: every key the flags produce is written, as in Ensembl VEP.
+- `gene_symbol`, `gene_symbol_source`, `biotype`, `variant_class` and the other flag-gated keys appear only under their flags. Absent or `-` values are omitted. `--fields` does not apply: every key the flags produce is written, as in Ensembl VEP. `--shift_genomic 1` adds a `location` to every transcript entry (the `Location` column, moved under `--shift_3prime 1`) and to the intergenic entry of an insertion or deletion `--shift_3prime 1` analysed.
 - Plugin fields, built-in or dylib, sit inside each consequence object; none is written at the record level.
 - `vep_rs_version` names the vep-rs release that wrote the object, on every object; Ensembl VEP writes no such key ([Engine identity](#engine-identity)).
 

@@ -299,8 +299,10 @@ pub struct InputVariant {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uploaded_allele_string: Option<Arc<str>>,
     /// The record's allele string as VEP works with it, when it is not the allele's
-    /// own: for a multi-allelic record every allele with the shared first base chopped
-    /// (`TT/T/-`), for a breakpoint record the reference base joined to its ALT side
+    /// own: for a multi-allelic VCF record every allele with the shared first base
+    /// chopped (`TT/T/-`), for a multi-allelic Ensembl-format line the whole allele
+    /// column upper-cased (`TT/-/T`; Parser/VEP_input.pm:156, Parser.pm:554), for a
+    /// breakpoint record the reference base joined to its ALT side
     /// (`N/N[21:100[/N]21:200]`) unless that side opens or closes with `.`, a native
     /// single breakend VEP keeps bare (Parser/VCF.pm:469 and 499). VEP's JSON
     /// `allele_string` prints this while Uploaded_variation prints the raw one. One
@@ -325,6 +327,13 @@ pub struct InputVariant {
     /// sequence variant and for a structural type the table lacks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub record_so_term: Option<String>,
+    /// Bases a 3' shift along the genome moves this insertion or deletion when it
+    /// overlaps no transcript, towards higher coordinates (`--shift_3prime 1`),
+    /// zero when the flanking bases let it move nowhere; `None` when the run does
+    /// not shift, the allele is not an indel, or it overlaps a transcript (its
+    /// rows then carry each transcript's own shift).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intergenic_shift: Option<u64>,
     /// The record's `--summary` or `--most_severe` row, carried by one allele of
     /// the record: the unique consequence terms of the rows left after the row
     /// filters and the pick family, in rank order (`--summary`), or the first of
@@ -394,6 +403,7 @@ impl Default for InputVariant {
             record_allele_string_multi: None,
             input_line_name: None,
             record_so_term: None,
+            intergenic_shift: None,
             summary_terms: None,
             intergenic_pick: false,
         }
@@ -469,6 +479,7 @@ impl InputVariant {
             uploaded_allele_string: None,
             input_line_name: None,
             record_so_term: None,
+            intergenic_shift: None,
             summary_terms: None,
             intergenic_pick: false,
         }
@@ -699,6 +710,84 @@ impl InputVariant {
         };
         out.extend_from_slice(allele.as_bytes());
     }
+
+    /// [`Self::location`] after a 3' shift of `shift` bases along `strand`
+    /// (`--shift_genomic 1`): a transcript row moves by `shift_length * strand`
+    /// (OutputFactory.pm:1705), an intergenic row towards higher coordinates
+    /// (:1997).
+    pub fn location_shifted(&self, shift: u64, strand: i8) -> String {
+        let moved = |pos: u64| {
+            if strand < 0 {
+                pos.saturating_sub(shift)
+            } else {
+                pos + shift
+            }
+        };
+        let s = moved(self.original_start.unwrap_or(self.start));
+        let e = moved(self.original_end.unwrap_or(self.end));
+        let (lo, hi) = (s.min(e), s.max(e));
+        if lo == hi {
+            format!("{}:{}", self.original_chr, lo)
+        } else {
+            format!("{}:{}-{}", self.original_chr, lo, hi)
+        }
+    }
+
+    /// The variant with its alleles on the forward strand: an Ensembl-format
+    /// record gives them on the strand its column names, and Ensembl VEP reads
+    /// each against a feature as `feature_seq`, reverse-complemented when the
+    /// two strands differ (VariationFeatureOverlapAllele.pm:253-256), so a copy
+    /// on the forward strand analyses the same way against every transcript. A
+    /// forward-strand variant is returned as it is; a `-` allele stays `-`.
+    pub fn on_forward_strand(&self) -> InputVariant {
+        if self.strand == Strand::Forward {
+            return self.clone();
+        }
+        let flip = |allele: &[u8]| -> Vec<u8> {
+            if allele == b"-" {
+                allele.to_vec()
+            } else {
+                crate::codon::reverse_complement(allele)
+            }
+        };
+        let mut forward = self.clone();
+        forward.strand = Strand::Forward;
+        forward.ref_allele = flip(&self.ref_allele);
+        forward.alt_alleles = self.alt_alleles.iter().map(|a| flip(a)).collect();
+        forward.allele_string = std::iter::once(&forward.ref_allele)
+            .chain(&forward.alt_alleles)
+            .map(|a| String::from_utf8_lossy(a).into_owned())
+            .collect::<Vec<_>>()
+            .join("/");
+        forward
+    }
+
+    /// [`Self::display_allele`] after a 3' shift of `shift` bases along `strand`
+    /// (`--shift_genomic 1`, OutputFactory.pm:1349-1352): the inserted bases as
+    /// given, rotated along the move, the `hgvs_allele_string` `perform_shift`
+    /// keeps (TranscriptVariationAllele.pm:300-301, 332-341: the rotation runs the
+    /// other way for an allele given on the reverse strand); every other allele is
+    /// unchanged.
+    pub fn display_allele_shifted(&self, shift: u64, strand: i8) -> String {
+        let inserted = self.alt_allele();
+        if self.variant_class != VariantClass::Insertion
+            || self.original_start.is_some()
+            || inserted.is_empty()
+            || inserted == b"-"
+        {
+            return self.display_allele();
+        }
+        let mut rotated = inserted.to_vec();
+        let steps = (shift % rotated.len() as u64) as usize;
+        let moves_towards_higher = strand >= 0;
+        let given_on_forward = self.strand == Strand::Forward;
+        if moves_towards_higher == given_on_forward {
+            rotated.rotate_left(steps);
+        } else {
+            rotated.rotate_right(steps);
+        }
+        String::from_utf8_lossy(&rotated).to_string()
+    }
 }
 
 /// Appends `n` in decimal; the buffer holds the 20 digits of `u64::MAX`.
@@ -719,6 +808,42 @@ fn push_decimal(out: &mut Vec<u8>, mut n: u64) {
 /// The text a byte writer appended: whole `str` values and ASCII, so UTF-8.
 fn written_text(bytes: Vec<u8>) -> String {
     String::from_utf8(bytes).expect("byte writers append str slices and ASCII")
+}
+
+#[cfg(test)]
+mod strand_tests {
+    use super::*;
+
+    /// An Ensembl-format allele on the reverse strand reads on the forward strand
+    /// as its reverse complement, a `-` staying `-`; a forward-strand variant is
+    /// its own copy.
+    #[test]
+    fn on_forward_strand_reverse_complements_the_alleles_of_a_reverse_strand_input() {
+        let mut given = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"TGA".to_vec());
+        given.strand = Strand::Reverse;
+        let forward = given.on_forward_strand();
+        assert_eq!(forward.strand, Strand::Forward);
+        assert_eq!(forward.ref_allele, b"-");
+        assert_eq!(forward.alt_allele(), b"TCA");
+        assert_eq!(forward.allele_string, "-/TCA");
+        assert_eq!(forward.variant_class, given.variant_class);
+        let snv = InputVariant::new("21".into(), 100, 100, b"G".to_vec(), b"T".to_vec());
+        assert_eq!(snv.on_forward_strand().allele_string, "G/T");
+    }
+
+    /// `perform_shift` rotates the allele as given the other way when it was
+    /// given on the reverse strand (TranscriptVariationAllele.pm:300-301,
+    /// 332-341): `-/TCA` moved 10 bases along a forward transcript prints `CAT`,
+    /// its reverse-strand spelling `-/TGA` prints `ATG`.
+    #[test]
+    fn display_allele_shifted_rotates_a_reverse_strand_allele_the_other_way() {
+        let forward = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"TCA".to_vec());
+        assert_eq!(forward.display_allele_shifted(10, 1), "CAT");
+        let mut reverse = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"TGA".to_vec());
+        reverse.strand = Strand::Reverse;
+        assert_eq!(reverse.display_allele_shifted(10, 1), "ATG");
+        assert_eq!(reverse.display_allele_shifted(10, -1), "GAT");
+    }
 }
 
 /// The name Ensembl VEP's VCF parser gives a record from its ID field: the first of the

@@ -6,6 +6,7 @@
 //! Perl citations name modules of ensembl-variation release/115
 //! (`Bio/EnsEMBL/Variation/...`); the `VEP::...` modules are in ensembl-vep release/115.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use smallvec::{smallvec, SmallVec};
@@ -28,12 +29,17 @@ pub struct EffectsConfig {
     pub downstream_distance: u64,
     /// Optional reference FASTA for sequence-aware behaviors (e.g. 3' shifting indels).
     pub reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
-    /// Enable 3' shifting of insertions/deletions when `reference_fasta` is available.
+    /// `--shift_3prime 1`: move each insertion or deletion to its most 3' position
+    /// on the transcript, within [`perform_shift_bound`], before its terms,
+    /// positions, codons and amino acids are computed; needs `reference_fasta`.
     ///
     /// Off by default because it changes consequence semantics.
     pub enable_indel_3prime_shift: bool,
-    /// Max number of bases to shift indels when `reference_fasta` is provided.
-    pub max_indel_3prime_shift: u64,
+    /// `--shift_hgvs`: describe an insertion or deletion in HGVSc and HGVSp at its
+    /// most 3' position on the transcript (on by default); off, the notations
+    /// describe the allele where the input placed it and a reverse-strand
+    /// duplication is looked up 5' first (TranscriptVariationAllele.pm:1465).
+    pub shift_hgvs: bool,
     /// Attach [`LofteeContext`](vep_core::consequence::LofteeContext) to each
     /// transcript consequence at construction time.
     ///
@@ -81,7 +87,7 @@ impl Default for EffectsConfig {
             downstream_distance: 5000,
             reference_fasta: None,
             enable_indel_3prime_shift: false,
-            max_indel_3prime_shift: 2000,
+            shift_hgvs: true,
             populate_loftee_context: false,
             compute_hgvs: false,
             compute_exon_intron_numbers: false,
@@ -172,19 +178,59 @@ pub fn calculate_consequences(
     transcript: &Transcript,
     config: &EffectsConfig,
 ) -> Option<TranscriptConsequence> {
-    let mut tc = calculate_terms(variant, transcript, config)?;
-    // The display columns follow VEP's rendering path, kept apart from the
-    // analysis that produced the terms.
-    crate::display::apply_display_fields(
-        &mut tc,
-        variant,
-        transcript,
-        config.compute_exon_intron_numbers,
-    );
+    // Under `--shift_3prime 1` the allele is analysed where the shift leaves it:
+    // every predicate reads the moved span (`get_all_OverlapConsequences` moves
+    // the feature's start and end for each one, BaseVariationFeatureOverlapAllele.pm:269-282,
+    // and `_bvfo_preds` adds the offset, :454-463) and the rotated allele
+    // (`shift_feature_seqs`, TranscriptVariationAllele.pm:1330), as do the cDNA,
+    // CDS and translation coordinates (`clear_shifting_variables`, :502-528) and
+    // the codons (:808-858). The input span keeps DISTANCE
+    // (BaseTranscriptVariation.pm:587-601) and the HGVS notations, which shift on
+    // their own; the exon and intron numbers read both spans. An allele given on
+    // the reverse strand is analysed on the forward strand, as `feature_seq`
+    // reads it against each transcript; the HGVS notations take it as given,
+    // because `hgvs_transcript` compares the input's strand with the
+    // transcript's (TranscriptVariationAllele.pm:1463-1466).
+    let placed: Cow<InputVariant> = match variant.strand {
+        vep_core::coordinate::Strand::Forward => Cow::Borrowed(variant),
+        vep_core::coordinate::Strand::Reverse => Cow::Owned(variant.on_forward_strand()),
+    };
+    let placed = placed.as_ref();
+    let shifted = consequence_shift(placed, transcript, config);
+    let shifted_allele = shifted.and_then(|span| {
+        crate::hgvs::shifted_variant(placed, transcript, span, config.reference_fasta.as_deref())
+    });
+    let analysed = shifted_allele.as_ref().unwrap_or(placed);
+    let mut tc = calculate_terms(analysed, variant, transcript, config)?;
+    crate::display::display_fields(analysed, transcript).write_to(&mut tc);
+    if config.compute_exon_intron_numbers {
+        (tc.exon, tc.intron) = crate::display::exon_intron_numbers(analysed, placed, transcript);
+    }
+    tc.shift_length = shifted.map_or(0, |(start, _)| start.abs_diff(placed.start));
     if config.protein_version {
         append_translation_version(&mut tc, transcript);
     }
     Some(tc)
+}
+
+/// The span an insertion or deletion is annotated at under `--shift_3prime 1`:
+/// `TranscriptVariation::new` shifts every allele unless `-no_shift`
+/// (TranscriptVariation.pm:132-135), and `_return_3prime` moves nothing for a
+/// structural or symbolic allele (TranscriptVariationAllele.pm:123, 129). `None`
+/// when the run does not shift, no FASTA is loaded, or the allele stays put.
+fn consequence_shift(
+    variant: &InputVariant,
+    transcript: &Transcript,
+    config: &EffectsConfig,
+) -> Option<(u64, u64)> {
+    if !config.enable_indel_3prime_shift
+        || variant.is_structural
+        || variant.variant_class.is_structural()
+    {
+        return None;
+    }
+    let fasta = config.reference_fasta.as_deref()?;
+    shift_indel_3prime_coords(variant, transcript, fasta)
 }
 
 /// `--protein_version` (OutputFactory.pm `BaseTranscriptVariationAllele_to_output_hash`):
@@ -206,8 +252,12 @@ fn append_translation_version(tc: &mut TranscriptConsequence, transcript: &Trans
 }
 
 /// Consequence terms and the fields the analysis derives alongside them.
+/// `variant` is the allele as analysed, `input` the allele as the input gave
+/// it, span and strand; the spans differ only under `--shift_3prime 1`. The
+/// transcript window, DISTANCE and the HGVS notations read `input`.
 fn calculate_terms(
     variant: &InputVariant,
+    input: &InputVariant,
     transcript: &Transcript,
     config: &EffectsConfig,
 ) -> Option<TranscriptConsequence> {
@@ -238,7 +288,7 @@ fn calculate_terms(
             vep_core::coordinate::Strand::Forward => config.upstream_distance,
             vep_core::coordinate::Strand::Reverse => config.downstream_distance,
         };
-        if variant.end < transcript.start.saturating_sub(left_dist) {
+        if input.end < transcript.start.saturating_sub(left_dist) {
             return None;
         }
     }
@@ -264,27 +314,37 @@ fn calculate_terms(
         });
     }
 
-    let shifted_variant_coords = if config.enable_indel_3prime_shift {
-        config.reference_fasta.as_ref().and_then(|f| {
-            shift_indel_3prime_coords(variant, transcript, f, config.max_indel_3prime_shift)
-        })
-    } else {
-        None
-    };
-
+    // The window test reads the input span, as the fetch does; a 3' shift moves
+    // the allele towards the transcript's downstream edge, so it can carry the
+    // analysed span up to `shift` bases past that edge, where its predicates
+    // still read `downstream`: the analysed span is mapped with the downstream
+    // window widened by that much.
+    let shift = variant.start.abs_diff(input.start);
+    if shift > 0 && !complete_overlap {
+        let within_window = |pos| {
+            map_genomic_to_transcript(
+                pos,
+                transcript,
+                config.upstream_distance,
+                config.downstream_distance,
+            )
+            .is_some()
+        };
+        let input_within_window = within_window(input.start) || within_window(input.end);
+        if !input_within_window {
+            return None;
+        }
+    }
+    let upstream_window = config.upstream_distance;
+    let downstream_window = config.downstream_distance.saturating_add(shift);
     let start_pos = map_genomic_to_transcript(
         variant.start,
         transcript,
-        config.upstream_distance,
-        config.downstream_distance,
+        upstream_window,
+        downstream_window,
     );
     let end_pos = if variant.end != variant.start {
-        map_genomic_to_transcript(
-            variant.end,
-            transcript,
-            config.upstream_distance,
-            config.downstream_distance,
-        )
+        map_genomic_to_transcript(variant.end, transcript, upstream_window, downstream_window)
     } else {
         None
     };
@@ -311,7 +371,6 @@ fn calculate_terms(
             transcript,
             consequences: &mut consequences,
             fields: &mut fields,
-            shifted_variant_coords,
             reference_fasta: config.reference_fasta.as_deref(),
         };
         match (start_pos.as_ref(), end_pos.as_ref()) {
@@ -381,19 +440,16 @@ fn calculate_terms(
     // an SNV inside the start codon (`coding::perl_coding_terms`): the
     // per-endpoint passes above keep their display fields, and the coding terms
     // they emitted are replaced by the set Perl assigns.
-    {
-        let (span_start, span_end) = shifted_variant_coords.unwrap_or((variant.start, variant.end));
-        if let Some(terms) = crate::coding::perl_coding_terms(
-            variant,
-            transcript,
-            span_start,
-            span_end,
-            config.reference_fasta.as_deref(),
-        ) {
-            consequences.retain(|c| !crate::coding::is_perl_coding_term(*c));
-            for term in terms {
-                push_unique(&mut consequences, term);
-            }
+    if let Some(terms) = crate::coding::perl_coding_terms(
+        variant,
+        transcript,
+        variant.start,
+        variant.end,
+        config.reference_fasta.as_deref(),
+    ) {
+        consequences.retain(|c| !crate::coding::is_perl_coding_term(*c));
+        for term in terms {
+            push_unique(&mut consequences, term);
         }
     }
 
@@ -406,7 +462,7 @@ fn calculate_terms(
             Consequence::UpstreamGeneVariant | Consequence::DownstreamGeneVariant
         )
     }) {
-        fields.distance = Some(distance_to_transcript(variant, transcript));
+        fields.distance = Some(distance_to_transcript(input, transcript));
     }
 
     // Perl checks splice sites against all overlapping introns
@@ -414,12 +470,7 @@ fn calculate_terms(
     // apply_position calls above cover only the introns containing the endpoints;
     // push_unique keeps the supplemental pass duplicate-free.
     if !insertion {
-        add_splice_for_overlapping_introns(
-            &mut consequences,
-            variant,
-            transcript,
-            shifted_variant_coords,
-        );
+        add_splice_for_overlapping_introns(&mut consequences, variant, transcript);
         // Perl uses full-span overlap for UTR terms (_before_coding /
         // _after_coding), so a deletion from coding into UTR gets the UTR term.
         add_utr_for_overlapping_span(&mut consequences, variant, transcript);
@@ -443,12 +494,7 @@ fn calculate_terms(
     } else {
         // Perl's _intron_effects iterates all overlapping introns for insertions
         // too; the per-endpoint apply_position calls cover only the endpoint introns.
-        add_splice_for_overlapping_introns_insertion(
-            &mut consequences,
-            variant,
-            transcript,
-            shifted_variant_coords,
-        );
+        add_splice_for_overlapping_introns_insertion(&mut consequences, variant, transcript);
     }
 
     // Perl's `VariationEffect::splice_donor_region_variant` and `splice_region`
@@ -522,8 +568,16 @@ fn calculate_terms(
 
     // HGVS strings are consumed solely by the output layer, so they are built
     // only when `compute_hgvs` is set.
-    let hgvs = if config.compute_hgvs {
-        crate::hgvs::generate_hgvs(variant, transcript, config.reference_fasta.as_deref())
+    // The HGVS notations are built only `within_feature` (OutputFactory.pm:1721),
+    // the predicate read at the shifted span, so an allele that shifts off the
+    // transcript has none even where its input span overlapped it.
+    let hgvs = if config.compute_hgvs && within_feature {
+        crate::hgvs::generate_hgvs(
+            input,
+            transcript,
+            config.reference_fasta.as_deref(),
+            config.shift_hgvs,
+        )
     } else {
         crate::hgvs::HgvsNotation::default()
     };
@@ -552,7 +606,6 @@ struct ApplyPositionContext<'a> {
     transcript: &'a Transcript,
     consequences: &'a mut ConsequenceList,
     fields: &'a mut PositionFields,
-    shifted_variant_coords: Option<(u64, u64)>,
     reference_fasta: Option<&'a vep_fasta::IndexedFasta>,
 }
 
@@ -592,7 +645,6 @@ fn apply_position(
     let transcript = ctx.transcript;
     let consequences = &mut *ctx.consequences;
     let fields = &mut *ctx.fields;
-    let shifted_variant_coords = ctx.shifted_variant_coords;
     let insertion = matches!(
         variant.variant_class,
         vep_core::variant::VariantClass::Insertion
@@ -660,15 +712,10 @@ fn apply_position(
                 if !paired_is_intron
                     && !paired_intron_has_essential_splice(variant, transcript, paired_position)
                 {
-                    add_exonic_splice_region(
-                        consequences,
-                        variant,
-                        shifted_variant_coords,
-                        transcript,
-                    );
+                    add_exonic_splice_region(consequences, variant, transcript);
                 }
             } else if !paired_intron_has_essential_splice(variant, transcript, paired_position) {
-                add_exonic_splice_region(consequences, variant, shifted_variant_coords, transcript);
+                add_exonic_splice_region(consequences, variant, transcript);
             }
         }
         TranscriptPosition::ThreePrimeUtr { .. } => {
@@ -695,15 +742,10 @@ fn apply_position(
                 if !paired_is_intron
                     && !paired_intron_has_essential_splice(variant, transcript, paired_position)
                 {
-                    add_exonic_splice_region(
-                        consequences,
-                        variant,
-                        shifted_variant_coords,
-                        transcript,
-                    );
+                    add_exonic_splice_region(consequences, variant, transcript);
                 }
             } else if !paired_intron_has_essential_splice(variant, transcript, paired_position) {
-                add_exonic_splice_region(consequences, variant, shifted_variant_coords, transcript);
+                add_exonic_splice_region(consequences, variant, transcript);
             }
         }
         TranscriptPosition::Coding { cds_pos, .. } => {
@@ -818,17 +860,11 @@ fn apply_position(
                 // `5_prime_UTR_variant,coding_sequence_variant`. The mapper here
                 // snaps the endpoint to `cdna_lo = 1`, so the shape is excluded from
                 // `is_start_lost` and takes the `else` branch below.
-                let extends_upstream_of_transcript = {
-                    let (us_span_start, us_span_end) =
-                        shifted_variant_coords.unwrap_or((variant.start, variant.end));
-                    !insertion
-                        && match transcript.strand {
-                            vep_core::coordinate::Strand::Forward => {
-                                us_span_start < transcript.start
-                            }
-                            vep_core::coordinate::Strand::Reverse => us_span_end > transcript.end,
-                        }
-                };
+                let extends_upstream_of_transcript = !insertion
+                    && match transcript.strand {
+                        vep_core::coordinate::Strand::Forward => variant.start < transcript.start,
+                        vep_core::coordinate::Strand::Reverse => variant.end > transcript.end,
+                    };
 
                 // For the upstream-extension shape Perl emits
                 // `5_prime_UTR_variant,coding_sequence_variant`. The 5'UTR term
@@ -876,38 +912,30 @@ fn apply_position(
                     // hiding that shift, so the past-CDS-end case takes
                     // `replicate_ins_del_stop_altered()`; without FASTA or cached UTR
                     // the clamped path remains.
-                    let extends_past_cds_end = {
-                        let bounds_opt = {
-                            let (span_start, span_end) =
-                                shifted_variant_coords.unwrap_or((variant.start, variant.end));
-                            crate::mapper::map_genomic_span_to_cds_bounds(
-                                span_start, span_end, transcript,
+                    let extends_past_cds_end = crate::mapper::map_genomic_span_to_cds_bounds(
+                        variant.start,
+                        variant.end,
+                        transcript,
+                    )
+                    .is_some_and(|bounds| {
+                        bounds.cds_start.max(bounds.cds_end) >= cds_len
+                            && matches!(
+                                paired_position,
+                                Some(
+                                    TranscriptPosition::ThreePrimeUtr { .. }
+                                        | TranscriptPosition::Downstream { .. }
+                                )
                             )
-                        };
-                        match bounds_opt.as_ref() {
-                            Some(b) => {
-                                let hi = b.cds_start.max(b.cds_end);
-                                hi >= cds_len
-                                    && matches!(
-                                        paired_position,
-                                        Some(
-                                            TranscriptPosition::ThreePrimeUtr { .. }
-                                                | TranscriptPosition::Downstream { .. }
-                                        )
-                                    )
-                            }
-                            None => false,
-                        }
-                    };
+                    });
 
                     let utr_aware = || -> Option<Consequence> {
                         // The helper prefers the cached `vefc.three_prime_utr` and uses
                         // FASTA only when the cache lacks the field.
                         let fasta_opt = ctx.reference_fasta;
-                        let (span_start, span_end) =
-                            shifted_variant_coords.unwrap_or((variant.start, variant.end));
                         let bounds = crate::mapper::map_genomic_span_to_cds_bounds(
-                            span_start, span_end, transcript,
+                            variant.start,
+                            variant.end,
+                            transcript,
                         )?;
                         let cds_lo = bounds.cds_start.min(bounds.cds_end);
                         if cds_lo == 0 || cds_lo > cds_len {
@@ -920,7 +948,9 @@ fn apply_position(
                         // 3'UTR still splices 4 bytes out of CDS+UTR, so the re-read
                         // codon pulls in a UTR base.
                         let (cdna_lo, cdna_hi) = crate::mapper::map_genomic_span_to_cdna_bounds(
-                            span_start, span_end, transcript,
+                            variant.start,
+                            variant.end,
+                            transcript,
                         )?;
                         let variant_cdna_len = (cdna_hi - cdna_lo + 1) as usize;
                         if variant_cdna_len == 0 {
@@ -984,10 +1014,10 @@ fn apply_position(
                     // `extends_upstream_of_transcript` above).
                     let utr_aware_start = || -> Option<bool> {
                         let fasta_opt = ctx.reference_fasta;
-                        let (span_start, span_end) =
-                            shifted_variant_coords.unwrap_or((variant.start, variant.end));
                         let (cdna_lo, cdna_hi) = crate::mapper::map_genomic_span_to_cdna_bounds(
-                            span_start, span_end, transcript,
+                            variant.start,
+                            variant.end,
+                            transcript,
                         )?;
                         let variant_cdna_len = (cdna_hi - cdna_lo + 1) as usize;
                         if variant_cdna_len == 0 {
@@ -1030,11 +1060,9 @@ fn apply_position(
                     // `map_genomic_span_to_cds_bounds`, which clamps intronic
                     // endpoints and cannot tell them from coding ones.
                     let mut emitted_specific_term = false;
-                    let (proj_span_start, proj_span_end) =
-                        shifted_variant_coords.unwrap_or((variant.start, variant.end));
                     if let Some(proj) = crate::mapper::map_genomic_span_to_cds_projection(
-                        proj_span_start,
-                        proj_span_end,
+                        variant.start,
+                        variant.end,
                         transcript,
                     ) {
                         // Perl gate 1: `defined cds_start && defined cds_end`, both
@@ -1107,10 +1135,11 @@ fn apply_position(
                     }
                 }
             } else {
-                let (span_start, span_end) =
-                    shifted_variant_coords.unwrap_or((variant.start, variant.end));
-                let coding_bounds =
-                    crate::mapper::map_genomic_span_to_cds_bounds(span_start, span_end, transcript);
+                let coding_bounds = crate::mapper::map_genomic_span_to_cds_bounds(
+                    variant.start,
+                    variant.end,
+                    transcript,
+                );
                 let use_insertion_anchor =
                     should_use_insertion_anchor(insertion, coding_bounds.as_ref());
                 let analysis_cds_pos = if use_insertion_anchor {
@@ -1397,10 +1426,10 @@ fn apply_position(
                 {
                     if cds_len >= 3 {
                         let stop_codon_start = cds_len - 2; // 1-based
-                        let (span_start, span_end) =
-                            shifted_variant_coords.unwrap_or((variant.start, variant.end));
                         let bounds = crate::mapper::map_genomic_span_to_cds_bounds(
-                            span_start, span_end, transcript,
+                            variant.start,
+                            variant.end,
+                            transcript,
                         );
                         let use_insertion_anchor =
                             should_use_insertion_anchor(insertion, bounds.as_ref());
@@ -1442,9 +1471,11 @@ fn apply_position(
             // span: on a reverse-strand deletion `*cds_pos` is the 3'-most index (4
             // for a CDS 2-4 span) and the `<= 3` gate would miss it.
             let start_bounds = if populate_fields {
-                let (span_start, span_end) =
-                    shifted_variant_coords.unwrap_or((variant.start, variant.end));
-                crate::mapper::map_genomic_span_to_cds_bounds(span_start, span_end, transcript)
+                crate::mapper::map_genomic_span_to_cds_bounds(
+                    variant.start,
+                    variant.end,
+                    transcript,
+                )
             } else {
                 None
             };
@@ -1563,15 +1594,10 @@ fn apply_position(
                 if !paired_is_intron
                     && !paired_intron_has_essential_splice(variant, transcript, paired_position)
                 {
-                    add_exonic_splice_region(
-                        consequences,
-                        variant,
-                        shifted_variant_coords,
-                        transcript,
-                    );
+                    add_exonic_splice_region(consequences, variant, transcript);
                 }
             } else if !paired_intron_has_essential_splice(variant, transcript, paired_position) {
-                add_exonic_splice_region(consequences, variant, shifted_variant_coords, transcript);
+                add_exonic_splice_region(consequences, variant, transcript);
             }
         }
         TranscriptPosition::Intron {
@@ -1667,7 +1693,6 @@ fn apply_position(
                         consequences,
                         transcript,
                         variant,
-                        shifted_variant_coords,
                         intron_start,
                         intron_end,
                         suppress_polypyr,
@@ -1676,9 +1701,8 @@ fn apply_position(
                 }
             }
 
-            // For intronic non-insertions Perl uses overlap-based intron effects,
-            // with 3' shifting for indels; that path applies whenever intron bounds
-            // exist.
+            // For intronic non-insertions Perl uses overlap-based intron effects;
+            // that path applies whenever intron bounds exist.
             if !insertion {
                 if let Some((intron_start, intron_end)) = intron_bounds {
                     let lo2 = variant.start.min(variant.end);
@@ -1690,7 +1714,6 @@ fn apply_position(
                         consequences,
                         transcript,
                         variant,
-                        shifted_variant_coords,
                         intron_start,
                         intron_end,
                         overlaps_exon || fs_stretch,
@@ -1713,7 +1736,6 @@ fn apply_position(
                         consequences,
                         transcript,
                         variant,
-                        shifted_variant_coords,
                         intron_start,
                         intron_end,
                     );
@@ -1785,15 +1807,10 @@ fn apply_position(
                 if !paired_is_intron
                     && !paired_intron_has_essential_splice(variant, transcript, paired_position)
                 {
-                    add_exonic_splice_region(
-                        consequences,
-                        variant,
-                        shifted_variant_coords,
-                        transcript,
-                    );
+                    add_exonic_splice_region(consequences, variant, transcript);
                 }
             } else if !paired_intron_has_essential_splice(variant, transcript, paired_position) {
-                add_exonic_splice_region(consequences, variant, shifted_variant_coords, transcript);
+                add_exonic_splice_region(consequences, variant, transcript);
             }
         }
     }
@@ -2479,11 +2496,10 @@ fn add_intronic_insertion_splice_consequences(
     consequences: &mut ConsequenceList,
     transcript: &Transcript,
     variant: &InputVariant,
-    shifted_variant_coords: Option<(u64, u64)>,
     intron_start: u64,
     intron_end: u64,
 ) {
-    let (v_start, v_end) = shifted_variant_coords.unwrap_or((variant.start, variant.end));
+    let (v_start, v_end) = (variant.start, variant.end);
     let (in_intron_list, in_boundary_list) = perl_intron_list_membership(
         v_start.min(v_end),
         v_start.max(v_end),
@@ -2580,14 +2596,14 @@ fn add_intronic_insertion_splice_consequences(
     }
 
     // Perl `within_intron` tests the core intron (intron_start+2..intron_end-2)
-    // plus the two anchor equalities, on both the shifted and the unshifted
-    // anchors; for an intron shorter than 4bp the equalities still hold.
+    // plus the two anchor equalities; for an intron shorter than 4bp the
+    // equalities still hold.
     let core_start = intron_start.saturating_add(2);
     let core_end = intron_end.saturating_sub(2);
-    let within_core = |s: u64, e: u64| -> bool {
-        overlap_unsorted(s, e, core_start, core_end) || s == core_start || e == core_end
-    };
-    if in_intron_list && (within_core(variant.start, variant.end) || within_core(v_start, v_end)) {
+    let within_core = overlap_unsorted(v_start, v_end, core_start, core_end)
+        || v_start == core_start
+        || v_end == core_end;
+    if in_intron_list && within_core {
         push_unique(consequences, Consequence::IntronVariant);
     }
 
@@ -2616,7 +2632,6 @@ fn add_splice_for_overlapping_introns(
     consequences: &mut ConsequenceList,
     variant: &InputVariant,
     transcript: &Transcript,
-    shifted_variant_coords: Option<(u64, u64)>,
 ) {
     let vefc = match transcript.vefc.as_ref() {
         Some(v) => v,
@@ -2628,19 +2643,17 @@ fn add_splice_for_overlapping_introns(
         &transcript.introns
     };
 
-    let (s_raw, e_raw) = shifted_variant_coords.unwrap_or((variant.start, variant.end));
-    let (vf_lo, vf_hi) = (s_raw.min(e_raw), s_raw.max(e_raw));
+    let vf_lo = variant.start.min(variant.end);
+    let vf_hi = variant.start.max(variant.end);
     if vf_hi < transcript.start || vf_lo > transcript.end {
         return;
     }
 
-    let lo = variant.start.min(variant.end);
-    let hi = variant.start.max(variant.end);
-    let overlaps_exon = allele_overlaps_any_exon(transcript, lo, hi);
+    let overlaps_exon = allele_overlaps_any_exon(transcript, vf_lo, vf_hi);
     // Perl extends exon overlap by 12bp when the transcript has any frameshift intron.
     let suppress_polypyr = overlaps_exon
         || (transcript.facts().vefc_has_frameshift_intron
-            && allele_overlaps_any_exon_stretched(transcript, lo, hi));
+            && allele_overlaps_any_exon_stretched(transcript, vf_lo, vf_hi));
 
     for intron in introns {
         let (in_intron_list, in_boundary_list) =
@@ -2652,7 +2665,6 @@ fn add_splice_for_overlapping_introns(
             consequences,
             transcript,
             variant,
-            shifted_variant_coords,
             intron.start,
             intron.end,
             suppress_polypyr,
@@ -2668,7 +2680,6 @@ fn add_splice_for_overlapping_introns_insertion(
     consequences: &mut ConsequenceList,
     variant: &InputVariant,
     transcript: &Transcript,
-    shifted_variant_coords: Option<(u64, u64)>,
 ) {
     let vefc = match transcript.vefc.as_ref() {
         Some(v) => v,
@@ -2680,7 +2691,7 @@ fn add_splice_for_overlapping_introns_insertion(
         &transcript.introns
     };
 
-    let (v_start, v_end) = shifted_variant_coords.unwrap_or((variant.start, variant.end));
+    let (v_start, v_end) = (variant.start, variant.end);
     if !overlap_unsorted(v_start, v_end, transcript.start, transcript.end) {
         return;
     }
@@ -2696,7 +2707,6 @@ fn add_splice_for_overlapping_introns_insertion(
             consequences,
             transcript,
             variant,
-            shifted_variant_coords,
             intron.start,
             intron.end,
         );
@@ -2862,13 +2872,12 @@ fn add_intronic_non_insertion_splice_consequences(
     consequences: &mut ConsequenceList,
     transcript: &Transcript,
     variant: &InputVariant,
-    shifted_variant_coords: Option<(u64, u64)>,
     intron_start: u64,
     intron_end: u64,
     suppress_polypyr: bool,
 ) {
-    let (s_raw, e_raw) = shifted_variant_coords.unwrap_or((variant.start, variant.end));
-    let (vf_lo, vf_hi) = (s_raw.min(e_raw), s_raw.max(e_raw));
+    let vf_lo = variant.start.min(variant.end);
+    let vf_hi = variant.start.max(variant.end);
     let (in_intron_list, in_boundary_list) =
         perl_intron_list_membership(vf_lo, vf_hi, intron_start, intron_end);
     if !in_intron_list && !in_boundary_list {
@@ -2881,27 +2890,17 @@ fn add_intronic_non_insertion_splice_consequences(
     // an exonic base adjacent to a 1bp intron can sit in its donor or acceptor
     // window.
     let frameshift_intron = is_frameshift_intron(intron_start, intron_end);
-    let perl_regions = |shifted: Option<(u64, u64)>| -> Vec<(u64, u64)> {
-        let mut regions = get_differing_regions_perl_unclamped(variant, shifted);
-        if frameshift_intron {
-            regions.retain(|&(rs, re)| !overlap_perl(rs, re, intron_start, intron_end));
-        }
-        regions
-    };
-    let regions = perl_regions(shifted_variant_coords);
+    let mut regions = get_differing_regions_perl_unclamped(variant);
+    if frameshift_intron {
+        regions.retain(|&(rs, re)| !overlap_perl(rs, re, intron_start, intron_end));
+    }
     let any_region_overlap =
         |fs: u64, fe: u64| -> bool { regions.iter().any(|&(rs, re)| overlap_perl(rs, re, fs, fe)) };
 
     let core_start = intron_start.saturating_add(2);
     let core_end = intron_end.saturating_sub(2);
-    // The intron loop of `_intron_effects` alone sets `intronic`, on both the
-    // shifted and the unshifted regions.
-    let mut within_core_intron = in_intron_list && any_region_overlap(core_start, core_end);
-    if in_intron_list && shifted_variant_coords.is_some() && !within_core_intron {
-        within_core_intron = perl_regions(None)
-            .iter()
-            .any(|&(rs, re)| overlap_perl(rs, re, core_start, core_end));
-    }
+    // The intron loop of `_intron_effects` alone sets `intronic`.
+    let within_core_intron = in_intron_list && any_region_overlap(core_start, core_end);
     // Both loops test the polypyrimidine windows.
     let polypyrimidine_splice_site =
         any_region_overlap(intron_end.saturating_sub(16), intron_end.saturating_sub(2));
@@ -2988,41 +2987,108 @@ fn add_intronic_non_insertion_splice_consequences(
     }
 }
 
+/// The bases of reference `perform_shift` (TranscriptVariationAllele.pm:291)
+/// reads on either side of the allele: `_genomic_shift` (:427) and the RefSeq
+/// edited-sequence shift in `_return_3prime` (:217) take 1,000 of flank.
+const SHIFT_SEARCH_AREA: usize = 1000;
+
+/// How far `perform_shift` can move an insertion or deletion of `len` bases: its
+/// loop runs to `length(post_seq) - len` inclusive going 3' and to
+/// `length(pre_seq) - len + 1` from 1 going 5' (:303-306), so a pattern that fits
+/// the flank moves at most `1001 - len` positions; a longer one gets a bound of
+/// `length(post_seq)` (:304), 1,000 moves, except that going 5' `len == 1001`
+/// leaves the loop bound at zero and nothing moves.
+pub fn perform_shift_bound(len: usize, reverse: bool) -> u64 {
+    match len {
+        0..=SHIFT_SEARCH_AREA => (SHIFT_SEARCH_AREA + 1 - len) as u64,
+        _ if reverse && len == SHIFT_SEARCH_AREA + 1 => 0,
+        _ => SHIFT_SEARCH_AREA as u64,
+    }
+}
+
+/// The span of `variant` after the 3' shift along `transcript`'s strand
+/// (`_genomic_shift`, TranscriptVariationAllele.pm:411), or `None` when the
+/// variant is not an insertion or deletion of plain bases or nothing moves.
 pub fn shift_indel_3prime_coords(
     variant: &InputVariant,
     transcript: &Transcript,
     fasta: &vep_fasta::IndexedFasta,
-    max_shift: u64,
+) -> Option<(u64, u64)> {
+    shift_indel_3prime(variant, transcript.strand, fasta)
+}
+
+/// Whether the record's alleles shift at all: `_return_3prime` and
+/// `_genomic_shift` read the class of the whole record
+/// (`$vf->var_class`, TranscriptVariationAllele.pm:119-123, 420), the
+/// `SO_variation_class` of its allele string (Utils/Sequence.pm:335-398), so a
+/// multi-allelic record is an `insertion` only when every allele inserts
+/// (`-/A/AA`) and a `deletion` only when every allele deletes, and one that
+/// mixes classes (`TT/-/T`) shifts none of its alleles. A record with one
+/// allele takes that allele's class.
+fn record_class_shifts(variant: &InputVariant) -> bool {
+    let Some(record) = variant.record_allele_string_multi.as_deref() else {
+        return true;
+    };
+    let mut alleles = record.split('/');
+    let Some(reference) = alleles.next() else {
+        return false;
+    };
+    let bases = |allele: &str| !allele.is_empty() && allele.bytes().all(|b| b.is_ascii_uppercase());
+    if reference == "-" {
+        alleles.all(bases)
+    } else if bases(reference) {
+        alleles.all(|allele| allele == "-")
+    } else {
+        false
+    }
+}
+
+/// The bases `perform_shift` walks along the reference, on the forward strand:
+/// the inserted allele of an insertion, the deleted allele of a deletion
+/// (`_genomic_shift`, TranscriptVariationAllele.pm:420, 445-459, which
+/// reverse-complements an allele given on the reverse strand); `None` for every
+/// other class and for an allele of a record whose class shifts nothing.
+pub fn shift_motif(variant: &InputVariant) -> Option<Vec<u8>> {
+    use vep_core::coordinate::Strand;
+    use vep_core::variant::VariantClass;
+
+    if !record_class_shifts(variant) {
+        return None;
+    }
+    let bases = match variant.variant_class {
+        VariantClass::Insertion => variant.alt_allele(),
+        VariantClass::Deletion => variant.ref_allele.as_slice(),
+        _ => return None,
+    };
+    if bases == b"-" || bases.is_empty() {
+        return None;
+    }
+    let motif = bases.to_ascii_uppercase();
+    Some(match variant.strand {
+        Strand::Forward => motif,
+        Strand::Reverse => vep_core::codon::reverse_complement(&motif),
+    })
+}
+
+/// [`shift_indel_3prime_coords`] towards the 3' end of `strand`: the span an
+/// insertion or deletion reaches when every base it passes matches the pattern
+/// cyclically, within [`perform_shift_bound`].
+pub fn shift_indel_3prime(
+    variant: &InputVariant,
+    strand: vep_core::coordinate::Strand,
+    fasta: &vep_fasta::IndexedFasta,
 ) -> Option<(u64, u64)> {
     use vep_core::coordinate::Strand;
     use vep_core::variant::VariantClass;
 
     let (mut start, mut end) = (variant.start, variant.end);
-
-    let mut motif: Vec<u8> = match variant.variant_class {
-        VariantClass::Insertion => {
-            let a = variant.alt_allele();
-            if a == b"-" || a.is_empty() {
-                return None;
-            }
-            a.iter().map(|b| b.to_ascii_uppercase()).collect()
-        }
-        VariantClass::Deletion => {
-            let r = variant.ref_allele.as_slice();
-            if r == b"-" || r.is_empty() {
-                return None;
-            }
-            r.iter().map(|b| b.to_ascii_uppercase()).collect()
-        }
-        _ => return None,
-    };
-    if motif.is_empty() {
-        return None;
-    }
+    let mut motif = shift_motif(variant)?;
+    let is_insertion = variant.variant_class == VariantClass::Insertion;
 
     // VEP shifts indels in the transcript 3' direction (genomic right for + strand,
     // genomic left for - strand transcripts).
-    let shift_right = transcript.strand == Strand::Forward;
+    let shift_right = strand == Strand::Forward;
+    let max_shift = perform_shift_bound(motif.len(), !shift_right);
     let mut shifted = 0u64;
 
     while shifted < max_shift {
@@ -3030,10 +3096,10 @@ pub fn shift_indel_3prime_coords(
             // Right shift by 1:
             // - insertion: compare reference base at `start` (base after insertion site)
             // - deletion: compare reference base at `end + 1` (base after deleted segment)
-            let check_pos = match variant.variant_class {
-                VariantClass::Insertion => start,
-                VariantClass::Deletion => end.saturating_add(1),
-                _ => break,
+            let check_pos = if is_insertion {
+                start
+            } else {
+                end.saturating_add(1)
             };
 
             let Some(ref_base) = fasta.base(&variant.chr, check_pos) else {
@@ -3051,10 +3117,10 @@ pub fn shift_indel_3prime_coords(
             // Left shift by 1:
             // - insertion: compare reference base at `end` (base before insertion site)
             // - deletion: compare reference base at `start - 1` (base before deleted segment)
-            let check_pos = match variant.variant_class {
-                VariantClass::Insertion => end,
-                VariantClass::Deletion => start.saturating_sub(1),
-                _ => break,
+            let check_pos = if is_insertion {
+                end
+            } else {
+                start.saturating_sub(1)
             };
             if check_pos == 0 {
                 break;
@@ -3111,7 +3177,6 @@ pub fn shift_indel_3prime_coords(
 fn add_exonic_splice_region(
     consequences: &mut ConsequenceList,
     variant: &InputVariant,
-    shifted_variant_coords: Option<(u64, u64)>,
     transcript: &Transcript,
 ) {
     let vefc = match transcript.vefc.as_ref() {
@@ -3128,13 +3193,13 @@ fn add_exonic_splice_region(
     // ref/alt character by character and groups consecutive differences; a complex indel
     // with matching bases inside the pair (ACCCCA to CTTCC shares CC at positions
     // 3-4) yields multiple non-contiguous regions.
-    let regions = get_differing_regions(variant, shifted_variant_coords);
+    let regions = get_differing_regions(variant);
     // The same regions as Perl maps them, `$vf_start + $region->{e}` with no
     // clamp to the reference span: the frameshift skip reads these, because a
     // net-insertion delins whose region runs past the reference span overlaps
     // an intron the clamped region stops short of, and Perl skips that intron.
     // The window tests keep the clamped regions.
-    let perl_regions = get_differing_regions_perl_unclamped(variant, shifted_variant_coords);
+    let perl_regions = get_differing_regions_perl_unclamped(variant);
 
     // Perl's overlap does not normalise, so start > end is no overlap.
     let overlap_perl = |vs: u64, ve: u64, fs: u64, fe: u64| -> bool { ve >= fs && vs <= fe };
@@ -3232,8 +3297,7 @@ fn add_exonic_splice_region(
 
     // Short-intron donor terms take the first hitting region; the first hit is
     // what selects the sub-term.
-    let (v_start_first, v_end_first) =
-        exonic_splice_differing_region(variant, shifted_variant_coords);
+    let (v_start_first, v_end_first) = exonic_splice_differing_region(variant);
 
     for intron in introns {
         // This span stands in for every region at once, so the intron is skipped
@@ -3348,13 +3412,9 @@ fn add_short_intron_far_boundary_donor_terms(
 ///
 /// Each region is returned as absolute genomic coordinates (start, end). For pure
 /// insertions, returns a single inverted-coordinate region.
-fn get_differing_regions(
-    variant: &InputVariant,
-    shifted_variant_coords: Option<(u64, u64)>,
-) -> Vec<(u64, u64)> {
-    let (start_raw, end_raw) = shifted_variant_coords.unwrap_or((variant.start, variant.end));
-    let lo = start_raw.min(end_raw);
-    let hi = start_raw.max(end_raw);
+fn get_differing_regions(variant: &InputVariant) -> Vec<(u64, u64)> {
+    let lo = variant.start.min(variant.end);
+    let hi = variant.start.max(variant.end);
 
     let ref_allele = variant.ref_allele.as_slice();
     let alt_allele = variant.alt_allele();
@@ -3435,13 +3495,9 @@ fn get_differing_regions(
 /// (`get_differing_regions`) is the one `add_exonic_splice_region` uses, which
 /// relies on inverted regions to signal "no overlap" against the exonic splice
 /// windows.
-fn get_differing_regions_perl_unclamped(
-    variant: &InputVariant,
-    shifted_variant_coords: Option<(u64, u64)>,
-) -> Vec<(u64, u64)> {
-    let (start_raw, end_raw) = shifted_variant_coords.unwrap_or((variant.start, variant.end));
-    let lo = start_raw.min(end_raw);
-    let hi = start_raw.max(end_raw);
+fn get_differing_regions_perl_unclamped(variant: &InputVariant) -> Vec<(u64, u64)> {
+    let lo = variant.start.min(variant.end);
+    let hi = variant.start.max(variant.end);
 
     let ref_allele = variant.ref_allele.as_slice();
     let alt_allele = variant.alt_allele();
@@ -3512,13 +3568,9 @@ fn get_differing_regions_perl_unclamped(
 ///
 /// note: This returns a single span (prefix/suffix trimmed). For complex indels,
 /// `get_differing_regions` should be used instead to get all non-contiguous segments.
-fn exonic_splice_differing_region(
-    variant: &InputVariant,
-    shifted_variant_coords: Option<(u64, u64)>,
-) -> (u64, u64) {
-    let (start_raw, end_raw) = shifted_variant_coords.unwrap_or((variant.start, variant.end));
-    let lo = start_raw.min(end_raw);
-    let hi = start_raw.max(end_raw);
+fn exonic_splice_differing_region(variant: &InputVariant) -> (u64, u64) {
+    let lo = variant.start.min(variant.end);
+    let hi = variant.start.max(variant.end);
 
     let ref_allele = variant.ref_allele.as_slice();
     let alt_allele = variant.alt_allele();
@@ -4208,7 +4260,7 @@ mod tests {
         );
 
         let mut csq: ConsequenceList = SmallVec::new();
-        add_exonic_splice_region(&mut csq, &variant, None, &tx);
+        add_exonic_splice_region(&mut csq, &variant, &tx);
 
         assert!(csq.contains(&Consequence::SpliceDonorRegionVariant));
         assert!(!csq.contains(&Consequence::SpliceRegionVariant));
@@ -4232,7 +4284,7 @@ mod tests {
         );
 
         let mut csq: ConsequenceList = SmallVec::new();
-        add_exonic_splice_region(&mut csq, &variant, None, &tx);
+        add_exonic_splice_region(&mut csq, &variant, &tx);
 
         assert!(csq.contains(&Consequence::SpliceDonorRegionVariant));
         assert!(!csq.contains(&Consequence::SpliceRegionVariant));
@@ -4249,7 +4301,7 @@ mod tests {
             b"ACCCCA".to_vec(),
             b"CTTCC".to_vec(),
         );
-        let regions = get_differing_regions(&variant, None);
+        let regions = get_differing_regions(&variant);
         assert_eq!(regions.len(), 2, "should produce 2 differing regions");
         assert_eq!(regions[0], (13112454, 13112456)); // positions 0-2
         assert_eq!(regions[1], (13112459, 13112459)); // position 5
@@ -4258,7 +4310,7 @@ mod tests {
     #[test]
     fn test_get_differing_regions_snp_single_region() {
         let variant = InputVariant::new("10".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-        let regions = get_differing_regions(&variant, None);
+        let regions = get_differing_regions(&variant);
         assert_eq!(regions.len(), 1);
         assert_eq!(regions[0], (100, 100));
     }
@@ -4266,7 +4318,7 @@ mod tests {
     #[test]
     fn test_get_differing_regions_pure_insertion() {
         let variant = InputVariant::new("10".into(), 101, 100, b"-".to_vec(), b"ACG".to_vec());
-        let regions = get_differing_regions(&variant, None);
+        let regions = get_differing_regions(&variant);
         assert_eq!(regions.len(), 1);
         // Pure insertion: inverted coordinates (hi, lo) = (101, 100)
         assert_eq!(regions[0], (101, 100));
@@ -4295,7 +4347,7 @@ mod tests {
         );
 
         let mut csq: ConsequenceList = SmallVec::new();
-        add_exonic_splice_region(&mut csq, &variant, None, &tx);
+        add_exonic_splice_region(&mut csq, &variant, &tx);
 
         assert!(
             csq.contains(&Consequence::SpliceRegionVariant),
@@ -4885,6 +4937,296 @@ mod tests {
             tc_off.consequences, tc_on.consequences,
             "compute_hgvs must not affect the consequence set"
         );
+    }
+
+    /// The shift reads the record's class (TranscriptVariationAllele.pm:119-123,
+    /// 420; Utils/Sequence.pm:335-398): every allele of `-/A/AA` or `TT/-/-`
+    /// walks, no allele of `TT/-/T` or `GT/G/AT` does, a lone allele walks by its
+    /// own class, and an allele given on the reverse strand walks as its
+    /// forward-strand bases (:459).
+    #[test]
+    fn shift_motif_follows_the_record_class_and_the_forward_strand() {
+        let allele = |record: Option<&str>, reference: &str, alt: &str| {
+            let (start, end) = if reference == "-" {
+                (101, 100)
+            } else {
+                (100, 99 + reference.len() as u64)
+            };
+            let mut v = InputVariant::new(
+                "1".into(),
+                start,
+                end,
+                reference.as_bytes().to_vec(),
+                alt.as_bytes().to_vec(),
+            );
+            v.record_allele_string_multi = record.map(Arc::from);
+            v
+        };
+        assert_eq!(shift_motif(&allele(None, "-", "A")), Some(b"A".to_vec()));
+        assert_eq!(shift_motif(&allele(None, "TT", "-")), Some(b"TT".to_vec()));
+        assert_eq!(shift_motif(&allele(None, "T", "A")), None);
+        assert_eq!(
+            shift_motif(&allele(Some("-/A/AA"), "-", "AA")),
+            Some(b"AA".to_vec())
+        );
+        assert_eq!(
+            shift_motif(&allele(Some("TT/-/-"), "TT", "-")),
+            Some(b"TT".to_vec())
+        );
+        assert_eq!(shift_motif(&allele(Some("TT/-/T"), "TT", "-")), None);
+        assert_eq!(shift_motif(&allele(Some("TT/-/T"), "T", "-")), None);
+        assert_eq!(shift_motif(&allele(Some("GT/G/AT"), "T", "-")), None);
+        let mut reverse = allele(None, "-", "TG");
+        reverse.strand = vep_core::coordinate::Strand::Reverse;
+        assert_eq!(shift_motif(&reverse), Some(b"CA".to_vec()));
+    }
+
+    /// An allele given on the reverse strand analyses as its forward-strand form
+    /// (`feature_seq`, VariationFeatureOverlapAllele.pm:253-256): the same terms,
+    /// codons, amino acids and HGVS notations, shifted or not.
+    #[test]
+    fn reverse_strand_input_analyses_as_its_forward_form() {
+        use crate::concordance_tests::{hgvsc_fasta_fixture, make_compact_test_transcript};
+        let tx = make_compact_test_transcript();
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[(163, b'A')]);
+        let config = EffectsConfig {
+            reference_fasta: Some(Arc::new(fasta)),
+            enable_indel_3prime_shift: true,
+            compute_hgvs: true,
+            ..Default::default()
+        };
+        let pairs = [
+            ((160, 160, "T", "A"), (160, 160, "A", "T")),
+            ((160, 160, "T", "-"), (160, 160, "A", "-")),
+            ((161, 160, "-", "TG"), (161, 160, "-", "CA")),
+        ];
+        for ((s, e, r, a), (rs, re, rr, ra)) in pairs {
+            let forward = InputVariant::new(
+                "1".into(),
+                s,
+                e,
+                r.as_bytes().to_vec(),
+                a.as_bytes().to_vec(),
+            );
+            let mut reverse = InputVariant::new(
+                "1".into(),
+                rs,
+                re,
+                rr.as_bytes().to_vec(),
+                ra.as_bytes().to_vec(),
+            );
+            reverse.strand = vep_core::coordinate::Strand::Reverse;
+            let f = calculate_consequences(&forward, &tx, &config).unwrap();
+            let g = calculate_consequences(&reverse, &tx, &config).unwrap();
+            assert_eq!(f.consequences, g.consequences, "{forward:?}");
+            assert_eq!(
+                (f.codons, f.amino_acids),
+                (g.codons, g.amino_acids),
+                "{forward:?}"
+            );
+            assert!(f.hgvsc.is_some());
+            assert_eq!(
+                (f.hgvsc, f.hgvsp, f.hgvs_offset),
+                (g.hgvsc, g.hgvsp, g.hgvs_offset)
+            );
+            assert_eq!(f.shift_length, g.shift_length);
+        }
+    }
+
+    /// `hgvs_transcript` compares the input's strand with the transcript's
+    /// (TranscriptVariationAllele.pm:1463-1466), so under `--shift_hgvs 0` an
+    /// inserted `C` given on the forward strand against a reverse-strand transcript
+    /// duplicates the base before it, `c.60dup`, while the same insertion given on
+    /// the reverse strand, `-/G -1`, keeps the default order, `c.61dup`; shifted,
+    /// both are `c.62dup` with the same protein notation.
+    #[test]
+    fn shift_hgvs_0_reads_the_lookup_order_from_the_input_strand() {
+        use crate::concordance_tests::{
+            compact_on_chr1, hgvsc_fasta_fixture, make_descending_reverse_strand_transcript,
+        };
+        let tx = compact_on_chr1(make_descending_reverse_strand_transcript());
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[(5989, b'C'), (5990, b'C'), (5991, b'C')]);
+        let fasta = Arc::new(fasta);
+        let config = |shift_hgvs| EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            compute_hgvs: true,
+            shift_hgvs,
+            ..Default::default()
+        };
+        let forward = InputVariant::new("1".into(), 5991, 5990, b"-".to_vec(), b"C".to_vec());
+        let mut reverse = InputVariant::new("1".into(), 5991, 5990, b"-".to_vec(), b"G".to_vec());
+        reverse.strand = vep_core::coordinate::Strand::Reverse;
+        let hgvs = |variant: &InputVariant, shift_hgvs: bool| {
+            let tc = calculate_consequences(variant, &tx, &config(shift_hgvs)).unwrap();
+            (tc.hgvsc, tc.hgvsp, tc.hgvs_offset)
+        };
+        let (f_shifted, r_shifted) = (hgvs(&forward, true), hgvs(&reverse, true));
+        assert_eq!(f_shifted.0.as_deref(), Some("ENST00000000001.1:c.62dup"));
+        assert_eq!(f_shifted, r_shifted);
+        assert!(f_shifted.1.is_some());
+        assert_eq!(
+            hgvs(&forward, false).0.as_deref(),
+            Some("ENST00000000001.1:c.60dup")
+        );
+        assert_eq!(
+            hgvs(&reverse, false).0.as_deref(),
+            Some("ENST00000000001.1:c.61dup")
+        );
+    }
+
+    /// `perform_shift` (TranscriptVariationAllele.pm:291) walks the 1,000-base
+    /// flank `_genomic_shift` reads (:427-437): on a reference that is one long run
+    /// a 1-base deletion moves 1,000 bases and a 2-base one 999 (:303, the loop
+    /// bound `length(post_seq) - indel_length` inclusive from 0), in either
+    /// direction; an allele longer than the flank moves 1,000 going 3' (:304) and a
+    /// 1,001-base allele going 5' does not move at all (:303, a loop from 1 to 0).
+    #[test]
+    fn shift_3prime_bound_matches_perform_shift() {
+        use crate::concordance_tests::{
+            compact_on_chr1, hgvsc_fasta_fixture, make_compact_test_transcript,
+            make_descending_reverse_strand_transcript,
+        };
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[]);
+        let forward = make_compact_test_transcript();
+        let reverse = compact_on_chr1(make_descending_reverse_strand_transcript());
+        let deletion = |start: u64, len: u64| {
+            InputVariant::new(
+                "1".into(),
+                start,
+                start + len - 1,
+                vec![b'T'; len as usize],
+                b"-".to_vec(),
+            )
+        };
+
+        assert_eq!(perform_shift_bound(1, false), 1000);
+        assert_eq!(perform_shift_bound(2, true), 999);
+        assert_eq!(perform_shift_bound(1000, false), 1);
+        assert_eq!(perform_shift_bound(1001, false), 1000);
+        assert_eq!(perform_shift_bound(1001, true), 0);
+        assert_eq!(perform_shift_bound(1500, true), 1000);
+
+        assert_eq!(
+            shift_indel_3prime_coords(&deletion(300, 1), &forward, &fasta),
+            Some((1300, 1300))
+        );
+        assert_eq!(
+            shift_indel_3prime_coords(&deletion(300, 2), &forward, &fasta),
+            Some((1299, 1300))
+        );
+        let insertion = InputVariant::new("1".into(), 300, 299, b"-".to_vec(), b"T".to_vec());
+        assert_eq!(
+            shift_indel_3prime_coords(&insertion, &forward, &fasta),
+            Some((1300, 1299))
+        );
+        assert_eq!(
+            shift_indel_3prime_coords(&deletion(5000, 1), &reverse, &fasta),
+            Some((4000, 4000))
+        );
+        assert_eq!(
+            shift_indel_3prime_coords(&deletion(5000, 2), &reverse, &fasta),
+            Some((4001, 4002))
+        );
+        assert_eq!(
+            shift_indel_3prime_coords(&deletion(2000, 1001), &forward, &fasta),
+            Some((3000, 4000))
+        );
+        assert_eq!(
+            shift_indel_3prime_coords(&deletion(3000, 1001), &reverse, &fasta),
+            None
+        );
+    }
+
+    /// Under `--shift_3prime 1` the display columns describe the shifted allele
+    /// and `shift_length` counts the move (OutputFactory.pm:1690-1695, 1725-1741);
+    /// a substitution moves nothing and reports 0, and without the flag an indel
+    /// keeps the input span and reports 0 too.
+    #[test]
+    fn shift_3prime_moves_the_display_columns_and_counts_the_shift() {
+        use crate::concordance_tests::{hgvsc_fasta_fixture, make_compact_test_transcript};
+        let tx = make_compact_test_transcript();
+        // CDS 1 is genomic 150: deleting the `T` at 160 (CDS 11) before `TT` and an
+        // `A` at 163 moves two bases to CDS 13.
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[(163, b'A')]);
+        let fasta = Arc::new(fasta);
+        let deletion = InputVariant::new("1".into(), 160, 160, b"T".to_vec(), b"-".to_vec());
+        let snv = InputVariant::new("1".into(), 160, 160, b"T".to_vec(), b"A".to_vec());
+
+        let unshifted = EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            ..Default::default()
+        };
+        let tc = calculate_consequences(&deletion, &tx, &unshifted).unwrap();
+        assert_eq!(tc.shift_length, 0);
+        assert_eq!(tc.cds_position.as_deref(), Some("11"));
+
+        let shifted = EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            enable_indel_3prime_shift: true,
+            ..Default::default()
+        };
+        let tc = calculate_consequences(&deletion, &tx, &shifted).unwrap();
+        assert_eq!(tc.shift_length, 2);
+        assert_eq!(tc.cds_position.as_deref(), Some("13"));
+        let tc = calculate_consequences(&snv, &tx, &shifted).unwrap();
+        assert_eq!(tc.shift_length, 0);
+        assert_eq!(tc.cds_position.as_deref(), Some("11"));
+    }
+
+    /// The transcript window is read on the input span: a deletion at the last
+    /// base of the downstream window whose shift carries it past the window keeps
+    /// its row, `downstream_gene_variant` at the input's distance, while one
+    /// placed a base beyond the window has none, shifted or not.
+    #[test]
+    fn shift_3prime_keeps_a_row_the_input_span_earned_past_the_window() {
+        use crate::concordance_tests::{hgvsc_fasta_fixture, make_compact_test_transcript};
+        let tx = make_compact_test_transcript();
+        assert_eq!(tx.end, 6100);
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[(6603, b'A'), (6604, b'A')]);
+        let fasta = Arc::new(fasta);
+        let config = |shift_3prime| EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            enable_indel_3prime_shift: shift_3prime,
+            downstream_distance: 500,
+            ..Default::default()
+        };
+        let at_edge = InputVariant::new("1".into(), 6600, 6600, b"T".to_vec(), b"-".to_vec());
+        for (shift_3prime, shift_length) in [(false, 0), (true, 2)] {
+            let tc = calculate_consequences(&at_edge, &tx, &config(shift_3prime)).unwrap();
+            assert_eq!(
+                tc.consequences.as_slice(),
+                [Consequence::DownstreamGeneVariant]
+            );
+            assert_eq!(tc.distance, Some(500));
+            assert_eq!(tc.shift_length, shift_length);
+        }
+        let past_edge = InputVariant::new("1".into(), 6601, 6601, b"T".to_vec(), b"-".to_vec());
+        assert!(calculate_consequences(&past_edge, &tx, &config(false)).is_none());
+        assert!(calculate_consequences(&past_edge, &tx, &config(true)).is_none());
+
+        // Upstream, the shift moves the allele towards the transcript, here the
+        // whole 1,000-base bound along the run of `T`: a deletion a base beyond
+        // the upstream window shifts into the transcript and still has no row,
+        // because the fetch never produced one; at the edge it keeps its row,
+        // described where the shift leaves it.
+        assert_eq!(tx.start, 100);
+        let upstream_config = |shift_3prime| EffectsConfig {
+            upstream_distance: 50,
+            ..config(shift_3prime)
+        };
+        let before_edge = InputVariant::new("1".into(), 49, 49, b"T".to_vec(), b"-".to_vec());
+        assert!(calculate_consequences(&before_edge, &tx, &upstream_config(false)).is_none());
+        assert!(calculate_consequences(&before_edge, &tx, &upstream_config(true)).is_none());
+        let at_upstream_edge = InputVariant::new("1".into(), 50, 50, b"T".to_vec(), b"-".to_vec());
+        let tc = calculate_consequences(&at_upstream_edge, &tx, &upstream_config(false)).unwrap();
+        assert_eq!(
+            tc.consequences.as_slice(),
+            [Consequence::UpstreamGeneVariant]
+        );
+        assert_eq!(tc.distance, Some(50));
+        let tc = calculate_consequences(&at_upstream_edge, &tx, &upstream_config(true)).unwrap();
+        assert_eq!(tc.shift_length, 1000);
+        assert!(!tc.consequences.contains(&Consequence::UpstreamGeneVariant));
     }
 
     #[test]

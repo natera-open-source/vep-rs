@@ -29,7 +29,7 @@ a single endpoint cannot see (a splice-region window in a neighbouring intron, a
 untranslated region (UTR) the span runs into) and the suppression rules remove the pairs
 Perl VEP never writes together. The list is sorted by severity rank, the impact is the
 most severe term's, and `hgvs::generate_hgvs` adds HGVSc and HGVSp when `compute_hgvs`
-is set. Back in `calculate_consequences`, `display::apply_display_fields` renders the
+is set. Back in `calculate_consequences`, `display::display_fields` renders the
 five display columns (`cDNA_position`, `CDS_position`, `Protein_position`,
 `Amino_acids`, `Codons`) and, under `compute_exon_intron_numbers`, the `EXON` and
 `INTRON` ordinals. The finished `TranscriptConsequence` returns to `vep-cli`, which
@@ -69,7 +69,8 @@ in [docs/cli-reference.md](../../docs/cli-reference.md).
 | ----------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `upstream_distance`, `downstream_distance`            | 5000, 5000    | How far beyond the transcript span a variant still earns `upstream_gene_variant` or `downstream_gene_variant` (`--distance`)              |
 | `reference_fasta`                                     | `None`        | An indexed FASTA from [vep-fasta](../vep-fasta/README.md) for the sequence-aware steps, HGVS and indel 3' shifting among them (`--fasta`) |
-| `enable_indel_3prime_shift`, `max_indel_3prime_shift` | `false`, 2000 | Shift an insertion or deletion 3' along the transcript before classifying it, up to the given number of bases (`--shift_3prime`)          |
+| `enable_indel_3prime_shift`                           | `false`       | Shift an insertion or deletion 3' along the transcript before classifying it, over Ensembl VEP's 1,000-base search area (`--shift_3prime 1`) |
+| `shift_hgvs`                                          | `true`        | Describe an insertion or deletion in HGVSc and HGVSp at its most 3' position (`--shift_hgvs 0` describes it where the input placed it)        |
 | `compute_hgvs`                                        | `false`       | Build HGVSc, HGVSp and `HGVS_OFFSET` (`--hgvs`; `vep-cli` also sets it for the Variant Call Format (VCF), JSON and Parquet outputs)       |
 | `compute_exon_intron_numbers`                         | `false`       | Fill the `EXON` and `INTRON` ordinals (`--numbers`, and whenever a plugin runs)                                                           |
 | `protein_version`                                     | `false`       | Append the translation version to the protein identifier (`--protein_version`)                                                            |
@@ -84,8 +85,8 @@ The other callables a caller reaches for, each one phrase:
 - `mapper::map_genomic_span_to_cds_bounds(start, end, transcript) -> Option<CdsSpanBounds>`: the CDS and peptide bounds of a span, intronic ends snapped to the nearest exon boundary.
 - `coding::get_codon_change(variant, transcript, cds_pos) -> Option<CodonChange>`: the reference and alternate codons and residues of one variant, the changed base in upper case.
 - `display::display_fields(variant, transcript) -> DisplayFields`: the five display columns on their own.
-- `hgvs::generate_hgvs(variant, transcript, fasta) -> HgvsNotation`: HGVSc, HGVSp and the shift offset in one call; `generate_hgvsc` and `generate_hgvsp` give each alone.
-- `consequences::shift_indel_3prime_coords(variant, transcript, fasta, max_shift) -> Option<(u64, u64)>`: the shifted span of an insertion or deletion.
+- `hgvs::generate_hgvs(variant, transcript, fasta, shift_hgvs) -> HgvsNotation`: HGVSc, HGVSp and the shift offset in one call, the notations left where the input placed the allele when `shift_hgvs` is false; `generate_hgvsc` and `generate_hgvsp` give each alone, shifted.
+- `consequences::shift_indel_3prime_coords(variant, transcript, fasta) -> Option<(u64, u64)>`: the span an insertion or deletion reaches after the 3' shift along the transcript's strand, `None` when nothing moves.
 
 `cargo doc` renders the full item list:
 

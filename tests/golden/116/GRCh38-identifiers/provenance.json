@@ -1,0 +1,74 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, with the .fai of the plain file",
+ "input": "variants.vcf: 47 hand-placed chromosome 21 records, named in the ID column by their design: insertions and deletions inside homopolymer, dinucleotide and trinucleotide runs in coding exons, introns near splice sites, untranslated regions and intergenic space on both strands (the 3' shift moves each by the run's remainder), runs spanning an exon boundary and a transcript start, a 55-base homopolymer insertion before a 52-base run and a 2-base deletion at the start of a 53-base run (the whole-flank shift), deletions of 24 and 25 bases, substitutions in coding, intronic, flanking and intergenic positions, a 2-base substitution, a 2-to-3 delins and four multi-allelic records, two of them in a 53-base run where a record whose alleles all insert shifts and one that mixes a deletion with a shorter deletion does not; the reference base is the GRCh38 primary assembly's",
+ "sha256": {
+  "default.txt": "5f02f68c3817d5e2a39b63695b519b406e05c1e2f985ce67fd7bc57301000d95",
+  "tab.txt": "1445509a65c5a8898efec444c948e92b86846a8895f6fc9da330658a3f1e1594",
+  "vcf.vcf": "47297783fe4612daa71c75dc3638dcfc4432a0408314a431de32c2913a65a119",
+  "json.jsonl": "0d34af6d668d1cc554af54fee1b793355327d20fc100bc620dbe7f8beaae4c40"
+ },
+ "variants_vcf_sha256": "65b43f8a25ae26940e349d4b812080197f90fac5f87005ba94e51517c4b32279",
+ "flag_sets": {
+  "shift3prime": {
+   "flags": [
+    "--hgvs",
+    "--shift_3prime",
+    "1",
+    "--shift_length",
+    "--shift_genomic",
+    "1"
+   ],
+   "expected_dir": "expected_shift3prime",
+   "sha256": {
+    "default.txt": "afdf0be609e5cdd9954d29eb0a0688fc6661d0848751f05e54068d7f1778ce34",
+    "tab.txt": "4dd613055188590d1254f21a778165147d1b720766eb5710f6f708609e051231",
+    "vcf.vcf": "2a1fcfb7940c5d2ebbfdbfadfa3d973d7df29827f8ea18dca150fffb43c43acd",
+    "json.jsonl": "2dbd7f52d904239f9c187318cd8709758afa077f0eb8440a63092776a5597e2d"
+   }
+  },
+  "noshift": {
+   "flags": [
+    "--hgvs",
+    "--shift_hgvs",
+    "0"
+   ],
+   "expected_dir": "expected_noshift",
+   "sha256": {
+    "default.txt": "03e72ab7a7f964f56633eb61216ef03e9fc077d9cb28e2eeb594a988a22115fb",
+    "tab.txt": "a94e7d59ee71dd11902e43ed7367f2f4b35c850a00156f454bfcb31f8bf480e3",
+    "vcf.vcf": "d1c45b0e57438b0fb7748ad652771a5daed5bba5370359ac7e8b4530045d490b",
+    "json.jsonl": "1fa4695815e687466ae9dcb2067350f8a4c347fa17e8197fc24dfddd4571acb5"
+   }
+  },
+  "shiftgenomic": {
+   "flags": [
+    "--hgvs",
+    "--shift_genomic",
+    "1"
+   ],
+   "expected_dir": "expected_shiftgenomic",
+   "sha256": {
+    "default.txt": "6f8cabe4d451f69cfc25d8c8dd36dcb0cdb047c420d273f582ea5f595a049ded",
+    "tab.txt": "79688ce2b8444d28c938b8adec28820f60204dd54cb9ea99827969cff5d522a2",
+    "vcf.vcf": "4f0e88f46b309d129ad9e61ef0ed441d4ebe44c045cffe8320b4f01670597a86",
+    "json.jsonl": "2f2cb45de7dcb96b8b23116913436837cf6f0c73d134917b6bab0a9ca3c90732"
+   }
+  }
+ },
+ "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite identifiers=<reference>=<candidates> --k 100 --seed 1 --covers hgvs --covers hgvs-offset-field --matrix tests/parity/matrix.tsv --flag=--hgvs --fasta-name reference.fa.gz --out tests/golden/116/GRCh38-identifiers; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 (the record spans plus one anchor at every record's nearest protein-coding transcription start on either side); scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and each flag set); scripts/golden/build_golden_corpus.py flag-set (one per flag set) and classify --field HGVSc --field HGVSp (the manifest's run and each flag set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 726
+  },
+  "shards": 14,
+  "spans_by_chromosome": {
+   "21": 74
+  }
+ }
+}

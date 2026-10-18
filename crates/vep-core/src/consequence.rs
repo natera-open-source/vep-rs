@@ -547,6 +547,11 @@ pub struct TranscriptConsequence {
     /// Bases the HGVS notations were shifted 3' along the transcript, signed by
     /// the transcript strand; `None` when nothing shifted.
     pub hgvs_offset: Option<i64>,
+    /// Bases the insertion or deletion was moved 3' along the transcript before
+    /// its terms and positions were computed (`--shift_3prime 1`); 0 when nothing
+    /// moved, every other row included.
+    #[serde(default)]
+    pub shift_length: u64,
     /// SIFT prediction and score.
     pub sift: Option<String>,
     /// PolyPhen prediction and score.
@@ -688,6 +693,7 @@ impl Default for TranscriptConsequence {
             hgvsc: None,
             hgvsp: None,
             hgvs_offset: None,
+            shift_length: 0,
             sift: None,
             polyphen: None,
             domains: Vec::new(),
@@ -746,6 +752,7 @@ impl TranscriptConsequence {
             hgvsc: None,
             hgvsp: None,
             hgvs_offset: None,
+            shift_length: 0,
             sift: None,
             polyphen: None,
             domains: Vec::new(),
