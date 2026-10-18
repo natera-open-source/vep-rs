@@ -7,15 +7,19 @@
 //! version or names no argument at all (the usage, as `vep` prints it, vep:29);
 //! 1 on a refusal or a failed run, after one line `ERROR: [<component>]
 //! <message>` on standard error; 2 on an argument syntax error, in clap's words.
+//!
+//! The command line is read through [`argv::prepass`] first, which adds the
+//! flags of the `--config` file, `<dir>/vep.ini` and the `VEP_*` variables
+//! behind the command line's own and spells every option as the parser
+//! declares it.
 
 use std::ffi::OsString;
 
 use tracing_subscriber::filter::filter_fn;
 use tracing_subscriber::prelude::*;
 
-use vep_cli::args;
 use vep_cli::config::{self, CliError, ParseFailure};
-use vep_cli::warnings;
+use vep_cli::{args, argv, warnings};
 
 /// The annotation path allocates and frees per (variant x transcript
 /// consequence), and glibc malloc dominates its profile; mimalloc's
@@ -37,6 +41,13 @@ fn run(argv: Vec<OsString>) -> i32 {
         return 0;
     }
 
+    let argv = match argv::prepass(argv, std::env::vars_os()) {
+        Ok(argv) => argv,
+        Err(error) => {
+            eprintln!("{error}");
+            return 1;
+        }
+    };
     let parsed = match config::parse_command_line(argv) {
         Ok(parsed) => parsed,
         Err(ParseFailure::Usage(error)) => error.exit(),

@@ -13,6 +13,12 @@
 //! applies the table's, so `--help` and the generated CLI reference read one
 //! source. Every flag lives under a help heading, the section of the reference
 //! it is documented in.
+//!
+//! The command line reaches this parser through [`crate::argv::prepass`], which
+//! adds the flags of the `--config` file, `vep.ini` and the `VEP_*` variables
+//! and spells single-dash and other-case long options as declared here; a
+//! unique prefix of a long name is accepted here as well (`infer_long_args`),
+//! as Getopt::Long's `auto_abbrev` accepts it.
 
 use clap::{ArgAction, CommandFactory, Parser};
 
@@ -33,9 +39,14 @@ const HELP_TEMPLATE: &str =
     long_about = "Predict functional effects of genomic variants.\n\n\
                   Usage: vep -i input.vcf -o output.txt --json_cache <dir>",
     help_template = HELP_TEMPLATE,
-    args_override_self = true
+    args_override_self = true,
+    infer_long_args = true
 )]
 pub struct Args {
+    /// Configuration file, one flag per line as `<name> <value>` without the dashes (`format vcf`, `offline 1`); a flag the command line also gives keeps the command line's value
+    #[arg(help_heading = "Input", long, value_name = "FILE")]
+    pub config: Option<String>,
+
     /// Input file path (use "STDIN" for standard input)
     #[arg(
         help_heading = "Input",
@@ -707,7 +718,7 @@ pub struct Args {
     pub no_stats: bool,
 
     /// Accepted for VEP compatibility; not implemented (no statistics file is written)
-    #[arg(help_heading = "Statistics", long = "stats_file")]
+    #[arg(help_heading = "Statistics", long = "stats_file", visible_alias = "sf")]
     pub stats_file: Option<String>,
 
     /// Accepted for VEP compatibility; not implemented (no statistics file is written)

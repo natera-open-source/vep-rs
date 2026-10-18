@@ -14,6 +14,9 @@ use std::path::PathBuf;
 
 use clap::{Arg, ArgAction, Command};
 use vep_cli::args::Args;
+use vep_cli::argv::{
+    unresolved_perl_spellings, COMMAND_LINE_ONLY, DEFAULT_DIR, ENV_PREFIX, INI_FILE,
+};
 use vep_cli::config::{Treatment, COMPONENTS, ENVIRONMENT, ERROR_TABLE};
 use vep_cli::option_rules::{
     ALLOW_MULTIPLE, DEPRECATED, INCOMPATIBLE, LIST_FLAGS, OPTION_SETS, OWN_RULES, REQUIRES,
@@ -105,17 +108,16 @@ fn flag_type(arg: &Arg) -> String {
         };
         name.to_string()
     };
-    let mut qualifiers = Vec::new();
-    if arg.get_value_delimiter().is_some() {
-        qualifiers.push("comma-separated");
-    }
-    if matches!(arg.get_action(), ArgAction::Append) && arg.get_value_delimiter().is_none() {
-        qualifiers.push("repeatable");
-    }
-    if qualifiers.is_empty() {
-        base
+    let qualifier = if arg.get_value_delimiter().is_some() {
+        Some("comma-separated")
+    } else if matches!(arg.get_action(), ArgAction::Append) {
+        Some("repeatable")
     } else {
-        format!("{base} ({})", qualifiers.join(", "))
+        None
+    };
+    match qualifier {
+        Some(qualifier) => format!("{base} ({qualifier})"),
+        None => base,
     }
 }
 
@@ -182,7 +184,9 @@ fn render(command: &Command) -> String {
     out.push_str(
         "Grouped by section as `--help` groups them. A repeated single-value flag keeps its last \
          value, as Getopt::Long does; `-o` accumulates and the last wins with a warning, as the \
-         `vep` script does (vep:32-33). Long option names are matched exactly as written.\n\n",
+         `vep` script does (vep:32-33). A long option is also read in any case, as a unique \
+         prefix and after one dash, and from the `--config` file, `vep.ini` and the `VEP_*` \
+         variables (the configuration sources below).\n\n",
     );
     let mut sections: Vec<(String, Vec<Vec<String>>)> = Vec::new();
     for arg in command.get_arguments() {
@@ -350,7 +354,28 @@ fn render(command: &Command) -> String {
          such a value.\n\
          - A VCF output selected with `--output_format vcf` fills `SYMBOL`, `BIOTYPE`, `EXON` and \
          `INTRON` as `--vcf` does; Ensembl VEP's `vcf` option set applies to the `--vcf` flag \
-         alone and leaves the CSQ fields empty under `--output_format vcf`.\n\n",
+         alone and leaves the CSQ fields empty under `--output_format vcf`.\n\
+         - A value from the `--config` file, `vep.ini` or the environment never overwrites one a \
+         higher source gives, even a `0`, an empty value or a bare `--cache`: Ensembl VEP's \
+         `||=` (`Config.pm:1101, 1158`) lets a lower source overwrite a value Perl reads as \
+         false, so `--shift_hgvs 0` on its command line yields to a file's `shift_hgvs 1`.\n\
+         - A value from a file or the environment that the parser refuses (`fork many`, an empty \
+         `format`) is an argument syntax error (exit 2); Ensembl VEP's `is_valid_param` drops the \
+         line (`Config.pm:1046-1047`).\n\
+         - A `--config` path that is a directory, or cannot be read for any reason, is the `config` \
+         error; Ensembl VEP's `open` succeeds on a directory and reads nothing from it. A \
+         `vep.ini` that is a directory is read as nothing here too. A byte outside UTF-8 in a \
+         value becomes the replacement character, where Ensembl VEP passes the byte.\n\
+         - A flag read from a file or the environment acts exactly as if typed, refusals included; \
+         the status lines Ensembl VEP prints under `--verbose` while reading the sources (`Read \
+         configuration from <file>`, `Set '<flag>=<value>' from environment variable <VAR>`, \
+         `Config.pm:1107, 1145-1164`) are not printed.\n\
+         - A leading `~` in `--config`, `--dir` and a file's `dir` is expanded to the home \
+         directory, which Ensembl VEP leaves to the shell.\n\
+         - `-V` is the version, where Getopt::Long's `ignore_case` reads it as `-v`, and an \
+         upper-case short names no flag here; a short with its value attached (`-ofile.txt`) and a \
+         cluster of switches (`-qv`) are clap's readings, where Getopt::Long refuses the token; a \
+         `+` before an option name, which Getopt::Long accepts, is not an option here.\n\n",
     );
 
     out.push_str("## Flags refused or accepted without effect\n\n");
@@ -389,14 +414,112 @@ fn render(command: &Command) -> String {
     );
 
     out.push_str("## Configuration sources\n\n");
-    out.push_str("The command line is the one source of flags.\n\n");
+    writeln!(
+        out,
+        "A flag is read from four sources, the first that names it winning, as Ensembl VEP reads \
+         them (`Config.pm:693-708`): the command line; the `--config` file; `<dir>/{INI_FILE}`, \
+         where `<dir>` is `--dir` (the command line's, else the `--config` file's) and \
+         `{DEFAULT_DIR}` by default; and the environment variable `{ENV_PREFIX}<FLAG>` \
+         (`{ENV_PREFIX}DIR_PLUGINS` sets `--dir_plugins`). A repeatable flag ({}) collects every \
+         source's values, the command line's first. No source behind the command line can set \
+         {}.\n",
+        flags_in_code(ALLOW_MULTIPLE),
+        flags_in_code(COMMAND_LINE_ONLY)
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "### The `--config` file and `{INI_FILE}` (`Config.pm:1068-1110`)\n"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "One flag per line: the flag's long name without its dashes (one leading dash is allowed), \
+         a blank, then its value. A switch is on with the value `1` and off with `0`; `cache` is \
+         on with `1`, a directory or an empty quoted value and off with `0`; a key alone on its \
+         line is dropped; a flag taking a value takes the first word after its name, or, for a \
+         repeatable flag, the rest of the line; blanks inside double quotes are part of a value \
+         and the quotes are removed. A line starting with `#`, or blank, is skipped. A key is the \
+         long name exactly: a prefix, another case or a name that is no option of Ensembl VEP's \
+         or of this version names nothing and the line is dropped, as Ensembl VEP drops it, and \
+         so does an alias, unless the alias is an option of Ensembl VEP's own (`full_cache_dir` \
+         names `--json_cache`); a key of an Ensembl VEP option this version lacks (`stats_html 1`, \
+         `clin_sig_allele 0`) is refused as the flag on the command line is (exit 2), unless it \
+         is a switch of Ensembl VEP's set to `0`, which is off there and adds nothing here. Of \
+         several lines naming one flag, the first whose value is not `0` or empty counts. A \
+         `--config` file that cannot be opened is `ERROR: [config] Could not open config \
+         file \"<file>\"`; `{INI_FILE}` is read only when it is a file.\n\n\
+         ```\n# flags of a run\ncache 1\noffline 1\ndir_cache /data/vep\nspecies homo_sapiens\n\
+         assembly GRCh38\nplugin LoFtool,/data/LoFtool_scores.txt\n```\n"
+    )
+    .unwrap();
+    out.push_str("### Environment variables (`Config.pm:1127-1168`)\n\n");
+    writeln!(
+        out,
+        "`{ENV_PREFIX}<FLAG>=<value>` sets `--<flag>`, the name lower-cased, when the value is \
+         not empty; the name is read as a configuration file's key is: a name that is no option \
+         of Ensembl VEP's or of this version is ignored, and one of an Ensembl VEP option this \
+         version lacks is refused as the flag is (exit 2). The variables are read in name \
+         order.\n"
+    )
+    .unwrap();
     out.push_str(
-        "Environment variables vep-rs reads, which Ensembl VEP has no counterpart for:\n\n",
+        "Environment variables vep-rs reads outside this mechanism, which Ensembl VEP has no \
+         counterpart for:\n\n",
     );
     for (name, help) in ENVIRONMENT {
         writeln!(out, "- `{name}`: {help}.").unwrap();
     }
     out.push('\n');
+    out.push_str("### Option spellings (`Config.pm:62`)\n\n");
+    out.push_str(
+        "Getopt::Long's defaults apply to the command line: a long option is read in any case \
+         (`--FORMAT vcf`), abbreviated to any prefix that names one option (`--form vcf`), and \
+         after one dash as well as two (`-cache`, `-form vcf`); a value follows its option or is \
+         attached with `=`, and the token after an option that requires a value is that value \
+         whatever it looks like (`--input_file -cache` names the file `-cache`). A prefix is \
+         resolved against this version's flags first and then, where a flag vep-rs adds makes it \
+         ambiguous, as Getopt::Long resolves it against Ensembl VEP's `@VEP_PARAMS` \
+         (`Config.pm:73-276`): `--js` is `--json` though `--json_cache` also starts with it, `--pa` \
+         `--password`, `--ve` `--verbose`. An Ensembl VEP option this version lacks is refused by \
+         its full name in every spelling (`-stats_html` and `--stats_h` are refused as `--stats_html`, exit \
+         2), never read as a cluster of shorts. A prefix that names one flag of this version \
+         resolves to it even where Ensembl VEP's larger set leaves it ambiguous (`--sy` is \
+         `--symbol`); a prefix of several flags that Getopt::Long resolves no better (`--fo`), or \
+         a name no option has, is an argument syntax error (exit 2). A single-letter short is \
+         clap's and is matched by case: `-v` is `--verbose`, `-V` the version, `-qv` the cluster \
+         `-q -v`, and `-ofile.txt` the value `file.txt` of `-o`, a spelling Getopt::Long refuses. \
+         Of the spellings Getopt::Long resolves to an option this version declares, these resolve \
+         differently here:\n\n",
+    );
+    let unresolved = unresolved_perl_spellings(command);
+    if unresolved.is_empty() {
+        out.push_str("- none: every such spelling names the same option.\n\n");
+    } else {
+        let rows: Vec<Vec<String>> = unresolved
+            .iter()
+            .map(|u| {
+                vec![
+                    flag_in_code(&u.spelling),
+                    flag_in_code(&u.perl),
+                    if u.candidates.is_empty() {
+                        "no flag".to_string()
+                    } else {
+                        flags_in_code(&u.candidates.iter().map(String::as_str).collect::<Vec<_>>())
+                    },
+                ]
+            })
+            .collect();
+        table(
+            &mut out,
+            &[
+                "Spelling",
+                "Ensembl VEP reads",
+                "vep-rs flags it could name",
+            ],
+            &rows,
+        );
+    }
 
     out.push_str("## Exit status and errors\n\n");
     out.push_str(
@@ -410,7 +533,7 @@ fn render(command: &Command) -> String {
     }
     out.push_str(
         "- `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown \
-         flag, a missing value, a value outside an enumeration.\n\n",
+         flag, a prefix of several flags, a missing value, a value outside an enumeration.\n\n",
     );
     out.push_str(
         "`--help` and `--version` win over a flag the error table refuses before parsing \

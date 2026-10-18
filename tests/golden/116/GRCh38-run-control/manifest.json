@@ -39,7 +39,12 @@
   "full_cache_dir",
   "show_cache_info",
   "no_fasta",
-  "engine_identity_lines"
+  "engine_identity_lines",
+  "config",
+  "config-file",
+  "vep-environment-variables",
+  "option-prefix-abbreviation",
+  "single-dash-long-options"
  ],
  "suites": {
   "GRCh38-run-control": {
@@ -1151,6 +1156,239 @@
    "expect": {
     "exit": 1,
     "stderr_contains": "/json_cache does not exist"
+   }
+  },
+  {
+   "name": "config-file",
+   "argv": [
+    "-i",
+    "{input}",
+    "--dir_cache",
+    "{cache_root}",
+    "--config",
+    "{corpus}/config/flags.ini",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "config-file-loses-to-command-line",
+   "argv": [
+    "-i",
+    "{input}",
+    "--dir_cache",
+    "{cache_root}",
+    "--config",
+    "{corpus}/config/flags.ini",
+    "--species",
+    "mus_musculus",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "/cache_root/mus_musculus not found"
+   }
+  },
+  {
+   "name": "config-file-missing",
+   "argv": [
+    "{golden}",
+    "--config",
+    "{corpus}/config/absent.ini",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [config] Could not open config file \""
+   }
+  },
+  {
+   "name": "vep-ini",
+   "argv": [
+    "-i",
+    "{input}",
+    "--dir",
+    "{corpus}/config",
+    "--dir_cache",
+    "{cache_root}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "tab.txt",
+    "format": "tab"
+   }
+  },
+  {
+   "name": "env-sets-flags",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "-o",
+    "{out}"
+   ],
+   "env": {
+    "VEP_PROTEIN": "1",
+    "VEP_PROTEIN_VERSION": "1",
+    "VEP_MASK_HEADER_CACHE_PATH": "1",
+    "VEP_MAX_SV_SIZE": "-1",
+    "VEP_TAB": "1"
+   },
+   "expect": {
+    "exit": 0,
+    "output": "tab.txt",
+    "format": "tab"
+   }
+  },
+  {
+   "name": "env-loses-to-command-line",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}"
+   ],
+   "env": {
+    "VEP_SPECIES": "mus_musculus",
+    "VEP_CACHE_VERSION": "115",
+    "VEP_ASSEMBLY": "GRCh37",
+    "VEP_BUFFER_SIZE": "1",
+    "VEP_NO_SUCH_FLAG": "1"
+   },
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "prefix-spellings",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offl",
+    "--cache",
+    "--dir_c",
+    "{cache_root}",
+    "--cache_v",
+    "116",
+    "--spec",
+    "homo_sapiens",
+    "--assem",
+    "{assembly}",
+    "--buffer",
+    "5000",
+    "--force_o",
+    "--no_st",
+    "--qui",
+    "--protein",
+    "--protein_v",
+    "--mask",
+    "--max_sv",
+    "-1",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "ambiguous-prefix",
+   "argv": [
+    "{golden}",
+    "--fo"
+   ],
+   "expect": {
+    "exit": 2,
+    "stderr_contains": "error: unexpected argument '--fo' found"
+   }
+  },
+  {
+   "name": "single-dash-spellings",
+   "argv": [
+    "-i",
+    "{input}",
+    "-offline",
+    "-cache",
+    "-dir_cache",
+    "{cache_root}",
+    "-cache_version",
+    "116",
+    "-species",
+    "homo_sapiens",
+    "-assembly",
+    "{assembly}",
+    "-buffer_size",
+    "5000",
+    "-force_overwrite",
+    "-no_stats",
+    "-quiet",
+    "-protein",
+    "-protein_version",
+    "-mask_header_cache_path",
+    "-max_sv_size",
+    "-1",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "case-folded-spellings",
+   "argv": [
+    "-i",
+    "{input}",
+    "--OFFLINE",
+    "--Cache",
+    "--DIR_CACHE",
+    "{cache_root}",
+    "--Cache_Version",
+    "116",
+    "--SPECIES",
+    "homo_sapiens",
+    "--Assembly",
+    "{assembly}",
+    "--BUFFER_SIZE",
+    "5000",
+    "--Force_Overwrite",
+    "--NO_STATS",
+    "--QUIET",
+    "--Protein",
+    "--PROTEIN_VERSION",
+    "--Mask_Header_Cache_Path",
+    "--MAX_SV_SIZE",
+    "-1",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
    }
   }
  ]

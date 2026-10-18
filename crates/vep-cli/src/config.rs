@@ -345,7 +345,7 @@ pub const COMPONENTS: &[(&str, &str)] = &[
     ),
     (
         "config",
-        "a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer",
+        "the `--config` file, or a `vep.ini` that is a file, cannot be read; or a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer",
     ),
     (
         "run",
