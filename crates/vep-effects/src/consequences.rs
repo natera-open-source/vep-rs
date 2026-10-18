@@ -35,11 +35,9 @@ pub struct EffectsConfig {
     ///
     /// Off by default because it changes consequence semantics.
     pub enable_indel_3prime_shift: bool,
-    /// `--shift_hgvs`: describe an insertion or deletion in HGVSc and HGVSp at its
-    /// most 3' position on the transcript (on by default); off, the notations
-    /// describe the allele where the input placed it and a reverse-strand
-    /// duplication is looked up 5' first (TranscriptVariationAllele.pm:1465).
-    pub shift_hgvs: bool,
+    /// The flags that shape the HGVSc and HGVSp notations: `--shift_hgvs`,
+    /// `--hgvsp_use_prediction` and `--remove_hgvsp_version`.
+    pub hgvs: crate::hgvs::HgvsOptions,
     /// Attach [`LofteeContext`](vep_core::consequence::LofteeContext) to each
     /// transcript consequence at construction time.
     ///
@@ -85,7 +83,7 @@ impl Default for EffectsConfig {
             downstream_distance: 5000,
             reference_fasta: None,
             enable_indel_3prime_shift: false,
-            shift_hgvs: true,
+            hgvs: crate::hgvs::HgvsOptions::default(),
             populate_loftee_context: false,
             compute_hgvs: false,
             compute_exon_intron_numbers: false,
@@ -574,7 +572,7 @@ fn calculate_terms(
             input,
             transcript,
             config.reference_fasta.as_deref(),
-            config.shift_hgvs,
+            config.hgvs,
         )
     } else {
         crate::hgvs::HgvsNotation::default()
@@ -5043,7 +5041,10 @@ mod tests {
         let config = |shift_hgvs| EffectsConfig {
             reference_fasta: Some(fasta.clone()),
             compute_hgvs: true,
-            shift_hgvs,
+            hgvs: crate::hgvs::HgvsOptions {
+                shift_hgvs,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let forward = InputVariant::new("1".into(), 5991, 5990, b"-".to_vec(), b"C".to_vec());

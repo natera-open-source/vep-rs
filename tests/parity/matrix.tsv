@@ -233,12 +233,12 @@ hgvs-protein-input	Config.pm	documented_subset	open
 hgvs-rna-input	-	error	open			
 hgvs-transcript-input	HGVS.pm	implemented	open			
 hgvsc_clamp_116	Variation/TranscriptVariationAllele.pm	implemented	landed:implemented	crates/vep-effects/src/hgvs.rs::test_hgvsc_deletion_starting_before_transcript_is_clamped_to_first_base;crates/vep-effects/src/hgvs.rs::test_hgvsc_deletion_running_past_transcript_end_is_clamped_to_last_base;crates/vep-effects/src/hgvs.rs::test_hgvsc_deletion_wholly_outside_transcript_has_no_notation;crates/vep-effects/src/hgvs.rs::test_hgvsc_deletion_covering_whole_transcript_is_described_end_to_end;crates/vep-effects/src/hgvs.rs::test_hgvsc_insertion_adjacent_to_transcript_edge_has_no_notation	tests/golden/116/GRCh37-hgvs	
-hgvsg	OutputFactory.pm	implemented	landed:implemented	crates/vep-effects/src/hgvsg.rs::hgvsg_snv_del_ins_dup_delins_match_vep;crates/vep-effects/src/hgvsg.rs::hgvsg_mt_uses_m_numbering;crates/vep-effects/src/hgvsg.rs::hgvsg_multi_allelic_trims_per_allele;crates/vep-effects/src/hgvsg.rs::reverse_strand_alleles_are_read_on_the_chromosome_strand;crates/vep-cli/tests/hgvsg.rs::hgvsg_matches_vep_on_grch37_corpus_records_in_every_format;crates/vep-cli/tests/hgvsg.rs::hgvsg_without_fasta_exits_with_vep_message	tests/golden/116/GRCh37-hgvs	
+hgvsg	OutputFactory.pm	implemented	landed:implemented	crates/vep-effects/src/hgvsg.rs::hgvsg_snv_del_ins_dup_delins_match_vep;crates/vep-effects/src/hgvsg.rs::hgvsg_mt_uses_m_numbering;crates/vep-effects/src/hgvsg.rs::hgvsg_multi_allelic_trims_per_allele;crates/vep-effects/src/hgvsg.rs::reverse_strand_alleles_are_read_on_the_chromosome_strand;crates/vep-cli/tests/hgvsg.rs::hgvsg_matches_vep_on_grch37_corpus_records_in_every_format;crates/vep-cli/tests/hgvsg.rs::hgvsg_without_fasta_exits_with_vep_message	tests/golden/116/GRCh37-hgvs;tests/golden/116/GRCh38-identifiers	
 hgvsg_shift_full_flank_116	Variation/Utils/Sequence.pm	implemented	landed:implemented	crates/vep-effects/src/hgvsg.rs::repeat_run_indel_shifts_over_the_whole_flank;crates/vep-cli/tests/hgvsg.rs::grch37_hgvs_corpus_carries_a_full_flank_shift_record	tests/golden/116/GRCh37-hgvs	
 hgvsg_use_accession	OutputFactory.pm	implemented	open			
 HGVSIntronOffset	HGVSIntronOffset.pm	error	open			
 hgvsp_extter_116	Variation/TranscriptVariationAllele.pm	implemented	landed:implemented	crates/vep-effects/src/hgvs.rs::test_hgvsp_frameshift_starting_at_stop_codon_is_extension;crates/vep-effects/src/hgvs.rs::test_hgvsp_frameshift_starting_at_stop_codon_without_new_stop_keeps_query;crates/vep-effects/src/hgvs.rs::test_hgvsp_frameshift_before_stop_codon_keeps_fs_ter_count;crates/vep-effects/src/hgvs.rs::test_hgvsp_deletion_inside_stop_codon_is_not_a_frameshift	tests/golden/116/GRCh37-hgvs	
-hgvsp_use_prediction	OutputFactory.pm	implemented	open			
+hgvsp_use_prediction	OutputFactory.pm	implemented	landed:implemented	crates/vep-effects/src/hgvs.rs::hgvsp_prediction_format_wraps_the_description;crates/vep-cli/src/annotator.rs::hgvs_and_hgvsg_options_follow_the_flags	tests/golden/116/GRCh38-identifiers	
 HGVSReferenceBase	HGVSReferenceBase.pm	error	open			
 high-inf-pos-motif-score-change	MotifFeatureVariationAllele.pm	implemented	open			
 homebrew-distribution	-	documented_subset	open			
@@ -405,7 +405,7 @@ regulatory-so-terms	Constants.pm	implemented	open
 regulatory-sv-rows	AnnotationType/RegFeat.pm	implemented	open			
 regulatory-sv-terms	Constants.pm	implemented	open			
 regulatory_gff	Config.pm	implemented	open			crates/vep-cli/src/args.rs::regulatory_gff_is_refused;crates/vep-cli/tests/integration_test.rs::refused_flags_exit_with_their_message
-remove_hgvsp_version	OutputFactory.pm	implemented	open			
+remove_hgvsp_version	OutputFactory.pm	implemented	landed:implemented	crates/vep-effects/src/hgvs.rs::remove_hgvsp_version_drops_the_translation_version_only;crates/vep-cli/src/annotator.rs::hgvs_and_hgvsg_options_follow_the_flags	tests/golden/116/GRCh38-identifiers	
 rest-option-set	Config.pm	implemented	open			
 rest_service_surface	-	excluded	open			
 REVEL	REVEL.pm	implemented	open			

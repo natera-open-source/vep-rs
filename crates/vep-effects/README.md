@@ -70,7 +70,7 @@ in [docs/cli-reference.md](../../docs/cli-reference.md).
 | `upstream_distance`, `downstream_distance`            | 5000, 5000    | How far beyond the transcript span a variant still earns `upstream_gene_variant` or `downstream_gene_variant` (`--distance`)              |
 | `reference_fasta`                                     | `None`        | An indexed FASTA from [vep-fasta](../vep-fasta/README.md) for the sequence-aware steps, HGVS and indel 3' shifting among them (`--fasta`) |
 | `enable_indel_3prime_shift`                           | `false`       | Shift an insertion or deletion 3' along the transcript before classifying it, over Ensembl VEP's 1,000-base search area (`--shift_3prime 1`) |
-| `shift_hgvs`                                          | `true`        | Describe an insertion or deletion in HGVSc and HGVSp at its most 3' position (`--shift_hgvs 0` describes it where the input placed it)        |
+| `hgvs`                                                | `HgvsOptions::default()` | The HGVSc and HGVSp flags: `shift_hgvs` (`true`; `--shift_hgvs 0` describes an insertion or deletion where the input placed it), `hgvsp_use_prediction` (`--hgvsp_use_prediction`, `p.(Arg97Ter)`) and `remove_hgvsp_version` (`--remove_hgvsp_version`, no translation version on the HGVSp name) |
 | `compute_hgvs`                                        | `false`       | Build HGVSc, HGVSp and `HGVS_OFFSET` (`--hgvs`; `vep-cli` also sets it for the Variant Call Format (VCF), JSON and Parquet outputs)       |
 | `compute_exon_intron_numbers`                         | `false`       | Fill the `EXON` and `INTRON` ordinals (`--numbers`, and whenever a plugin runs)                                                           |
 | `protein_version`                                     | `false`       | Append the translation version to the protein identifier (`--protein_version`)                                                            |
@@ -85,7 +85,7 @@ The other callables a caller reaches for, each one phrase:
 - `mapper::map_genomic_span_to_cds_bounds(start, end, transcript) -> Option<CdsSpanBounds>`: the CDS and peptide bounds of a span, intronic ends snapped to the nearest exon boundary.
 - `coding::get_codon_change(variant, transcript, cds_pos) -> Option<CodonChange>`: the reference and alternate codons and residues of one variant, the changed base in upper case.
 - `display::display_fields(variant, transcript) -> DisplayFields`: the five display columns on their own.
-- `hgvs::generate_hgvs(variant, transcript, fasta, shift_hgvs) -> HgvsNotation`: HGVSc, HGVSp and the shift offset in one call, the notations left where the input placed the allele when `shift_hgvs` is false; `generate_hgvsc` and `generate_hgvsp` give each alone, shifted.
+- `hgvs::generate_hgvs(variant, transcript, fasta, options) -> HgvsNotation`: HGVSc, HGVSp and the shift offset in one call under an `HgvsOptions` (the notations left where the input placed the allele when its `shift_hgvs` is false, HGVSp in the predicted form or without its version under the other two); `generate_hgvsc` and `generate_hgvsp` give each alone under the defaults.
 - `consequences::shift_indel_3prime_coords(variant, transcript, fasta) -> Option<(u64, u64)>`: the span an insertion or deletion reaches after the 3' shift along the transcript's strand, `None` when nothing moves.
 
 `cargo doc` renders the full item list:

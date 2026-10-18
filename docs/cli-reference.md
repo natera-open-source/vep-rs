@@ -129,6 +129,8 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--xref_refseq` | bool | false | Add RefSeq transcript cross-references |
 | `--hgvs` | bool | false | Add HGVS coding and protein notations; needs a FASTA named with --fasta or found in the cache directory and stops the run without one |
 | `--hgvsg` | bool | false | Add the HGVS genomic notation (HGVSg); needs a FASTA named with --fasta or found in the cache directory and stops the run without one |
+| `--hgvsp_use_prediction` | bool | false | Write HGVSp in the predicted form, the description after p. in parentheses (ENSP00000286808.3:p.(Arg97Ter)); the = of a synonymous description is still escaped as %3D in the text formats |
+| `--remove_hgvsp_version` | bool | false | Leave the translation version off the HGVSp reference name (ENSP00000286808:p.Arg97Ter); HGVSc keeps its version |
 | `--sift` | `s`, `p`, `b` | -- | SIFT predictions (p = prediction, s = score, b = both) |
 | `--polyphen` | `s`, `p`, `b` | -- | PolyPhen predictions (p = prediction, s = score, b = both) |
 | `--condel` | String | -- | Accepted without effect: Ensembl VEP declares it and reads nothing from it |

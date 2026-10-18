@@ -238,12 +238,12 @@ impl Annotator {
             config.distance,
             reference_fasta.clone(),
             config.shift_3prime,
+            hgvs_options(config),
             checks.hgvs,
             crate::runner::needs_exon_intron_numbers(config),
             config.protein_version,
-            hgvsg_options(config),
         );
-        effects.shift_hgvs = config.shift_hgvs;
+        effects.hgvsg = hgvsg_options(config);
         let effects_config = Arc::new(effects);
         let LoadedPlugins { builtin, dylib } = load_plugins(
             &config.plugin,
@@ -508,62 +508,73 @@ pub(crate) fn load_plugins(
     Ok(LoadedPlugins { builtin, dylib })
 }
 
-/// The effects configuration of an embedding caller, without HGVSg.
+/// The effects configuration of an embedding caller, without HGVSg; `hgvs`
+/// carries the shift and the two HGVSp forms.
 pub fn build_effects_config(
     distance: (u64, u64),
     reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
     shift_3prime: bool,
-    shift_hgvs: bool,
+    hgvs: vep_effects::hgvs::HgvsOptions,
     compute_hgvs: bool,
     compute_exon_intron_numbers: bool,
     protein_version: bool,
 ) -> Arc<vep_effects::EffectsConfig> {
-    let mut effects = new_effects_config(
+    Arc::new(new_effects_config(
         distance,
         reference_fasta,
         shift_3prime,
+        hgvs,
         compute_hgvs,
         compute_exon_intron_numbers,
         protein_version,
-        None,
-    );
-    effects.shift_hgvs = shift_hgvs;
-    Arc::new(effects)
+    ))
 }
 
-/// The effects configuration with the HGVS shift on, `--shift_hgvs 1`; a caller
-/// that runs under `--shift_hgvs 0` clears `shift_hgvs` on the result.
+/// The effects configuration without HGVSg; `Annotator::from_config_with_pool`
+/// sets `hgvsg` on the result.
 fn new_effects_config(
     distance: (u64, u64),
     reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
     shift_3prime: bool,
+    hgvs: vep_effects::hgvs::HgvsOptions,
     compute_hgvs: bool,
     compute_exon_intron_numbers: bool,
     protein_version: bool,
-    hgvsg: Option<vep_effects::hgvsg::HgvsgOptions>,
 ) -> vep_effects::EffectsConfig {
     vep_effects::EffectsConfig {
         upstream_distance: distance.0,
         downstream_distance: distance.1,
         reference_fasta,
         enable_indel_3prime_shift: shift_3prime,
-        shift_hgvs: true,
+        hgvs,
         // LoFTEE context is attached by the main runner path when the plugin is
         // active; this shared helper is not on that path.
         populate_loftee_context: false,
         compute_hgvs,
         compute_exon_intron_numbers,
         protein_version,
-        hgvsg,
+        hgvsg: None,
+    }
+}
+
+/// The HGVSc and HGVSp options of a configuration: the shift under `--shift_hgvs`
+/// and the two HGVSp forms.
+pub(crate) fn hgvs_options(config: &Config) -> vep_effects::hgvs::HgvsOptions {
+    vep_effects::hgvs::HgvsOptions {
+        shift_hgvs: config.shift_hgvs,
+        hgvsp_use_prediction: config.hgvsp_use_prediction,
+        remove_hgvsp_version: config.remove_hgvsp_version,
     }
 }
 
 /// The HGVSg options of a configuration: `None` without `--hgvsg`. Insertions
-/// and deletions are described at their most 3' position, as Ensembl VEP's
-/// default `shift_hgvs` does, and the chromosome is named as the input names it.
+/// and deletions are described at their most 3' position unless `--shift_hgvs 0`,
+/// the one setting that gates every HGVS shift (`shift_hgvs_variants_3prime`,
+/// VariationFeature.pm 1981-1988), and the chromosome is named as the input
+/// names it.
 pub(crate) fn hgvsg_options(config: &Config) -> Option<vep_effects::hgvsg::HgvsgOptions> {
     config.hgvsg.then_some(vep_effects::hgvsg::HgvsgOptions {
-        shift: true,
+        shift: config.shift_hgvs,
         accessions: None,
     })
 }
@@ -1395,6 +1406,150 @@ mod tests {
             CliError::from_run(&err),
             format!("ERROR: [fasta] {HGVS_NEEDS_FASTA}")
         );
+    }
+
+    /// `from_config` lands every HGVS-related field of the effects configuration
+    /// as the binary's run computes it from the same configuration, on the
+    /// GRCh38-identifiers corpus with its reference: `--hgvsg` gives the shifted
+    /// HGVSg options, `--shift_hgvs 0` the unshifted ones with the HGVSc and
+    /// HGVSp options beside them, and `--hgvs` alone computes HGVSc and HGVSp
+    /// with no HGVSg.
+    #[test]
+    fn from_config_carries_the_hgvs_and_hgvsg_options() {
+        let corpus = format!(
+            "{}/../../tests/golden/116/GRCh38-identifiers",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let cache = format!("{corpus}/json_cache");
+        // The reader opens a plain FASTA beside its `.fai`.
+        let fasta_dir = tempfile::tempdir().unwrap();
+        let fasta = fasta_dir.path().join("reference.fa");
+        let mut bases = Vec::new();
+        std::io::Read::read_to_end(
+            &mut flate2::read::GzDecoder::new(
+                std::fs::File::open(format!("{corpus}/reference.fa.gz")).unwrap(),
+            ),
+            &mut bases,
+        )
+        .unwrap();
+        std::fs::write(&fasta, bases).unwrap();
+        std::fs::copy(
+            format!("{corpus}/reference.fa.fai"),
+            fasta_dir.path().join("reference.fa.fai"),
+        )
+        .unwrap();
+        let fasta = fasta.to_str().unwrap();
+        let effects = |flags: &[&str]| {
+            let mut argv = vec![
+                "vep",
+                "--fork",
+                "1",
+                "--json_cache",
+                &cache,
+                "--fasta",
+                fasta,
+            ];
+            argv.extend_from_slice(flags);
+            let config = Config::from_argv(argv).unwrap();
+            let annotator = Annotator::from_config(&config).unwrap();
+            let effects = Arc::clone(&annotator.resources().effects_config);
+            assert_eq!(effects.hgvs, hgvs_options(&config), "{flags:?}");
+            assert_eq!(effects.hgvsg, hgvsg_options(&config), "{flags:?}");
+            assert_eq!(
+                effects.compute_hgvs,
+                crate::runner::fasta_setup_checks(&config, true)
+                    .unwrap()
+                    .hgvs,
+                "{flags:?}"
+            );
+            assert_eq!(
+                effects.compute_exon_intron_numbers,
+                crate::runner::needs_exon_intron_numbers(&config),
+                "{flags:?}"
+            );
+            assert_eq!(effects.enable_indel_3prime_shift, config.shift_3prime);
+            assert_eq!(effects.protein_version, config.protein_version);
+            assert_eq!(
+                (effects.upstream_distance, effects.downstream_distance),
+                config.distance
+            );
+            assert!(effects.reference_fasta.is_some(), "{flags:?}");
+            effects
+        };
+
+        let shifted = effects(&["--hgvsg"]);
+        assert_eq!(shifted.hgvsg.as_ref().map(|o| o.shift), Some(true));
+        assert!(shifted.hgvs.shift_hgvs && !shifted.compute_hgvs);
+
+        let unshifted = effects(&["--hgvsg", "--shift_hgvs", "0"]);
+        assert_eq!(unshifted.hgvsg.as_ref().map(|o| o.shift), Some(false));
+        assert!(!unshifted.hgvs.shift_hgvs && !unshifted.enable_indel_3prime_shift);
+
+        let hgvs = effects(&[
+            "--hgvs",
+            "--hgvsp_use_prediction",
+            "--remove_hgvsp_version",
+            "--protein_version",
+            "--numbers",
+            "--distance",
+            "2000,1000",
+        ]);
+        assert!(hgvs.compute_hgvs && hgvs.hgvsg.is_none());
+        assert!(hgvs.hgvs.hgvsp_use_prediction && hgvs.hgvs.remove_hgvsp_version);
+        assert!(hgvs.protein_version && hgvs.compute_exon_intron_numbers);
+        assert_eq!(
+            (hgvs.upstream_distance, hgvs.downstream_distance),
+            (2000, 1000)
+        );
+    }
+
+    /// `--shift_hgvs 0` is the one setting that turns every HGVS shift off
+    /// (`shift_hgvs_variants_3prime`, read by `hgvs_genomic` at VariationFeature.pm
+    /// 1981-1988 as by `hgvs_transcript` and `hgvs_protein`), so the HGVSg options
+    /// and the HGVSc and HGVSp options read the same flag; the two HGVSp forms
+    /// travel beside it.
+    #[test]
+    fn hgvs_and_hgvsg_options_follow_the_flags() {
+        let config = |flags: &[&str]| {
+            let mut argv = vec!["vep", "--fork", "1", "--hgvsg"];
+            argv.extend_from_slice(flags);
+            Config::from_argv(argv).unwrap()
+        };
+        let default = config(&[]);
+        assert_eq!(hgvsg_options(&default).map(|o| o.shift), Some(true));
+        assert_eq!(
+            hgvs_options(&default),
+            vep_effects::hgvs::HgvsOptions::default()
+        );
+
+        let unshifted = config(&["--shift_hgvs", "0"]);
+        assert_eq!(hgvsg_options(&unshifted).map(|o| o.shift), Some(false));
+        assert!(!hgvs_options(&unshifted).shift_hgvs);
+
+        let forms = config(&["--hgvsp_use_prediction", "--remove_hgvsp_version"]);
+        assert_eq!(
+            hgvs_options(&forms),
+            vep_effects::hgvs::HgvsOptions {
+                shift_hgvs: true,
+                hgvsp_use_prediction: true,
+                remove_hgvsp_version: true,
+            }
+        );
+    }
+
+    /// An embedding caller passes the whole `HgvsOptions`, so the two HGVSp
+    /// forms reach it as `--shift_hgvs` does; HGVSg stays off on this path.
+    #[test]
+    fn build_effects_config_carries_the_hgvs_options() {
+        let options = vep_effects::hgvs::HgvsOptions {
+            shift_hgvs: false,
+            hgvsp_use_prediction: true,
+            remove_hgvsp_version: true,
+        };
+        let effects =
+            build_effects_config((5_000, 5_000), None, false, options, true, false, false);
+        assert_eq!(effects.hgvs, options);
+        assert!(effects.compute_hgvs && effects.hgvsg.is_none());
     }
 
     /// The annotator path reaches the same record-level breakend verdict as the CLI:

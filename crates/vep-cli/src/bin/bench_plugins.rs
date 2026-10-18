@@ -203,7 +203,7 @@ fn main() -> Result<()> {
         downstream_distance: 5000,
         reference_fasta: None,
         enable_indel_3prime_shift: false,
-        shift_hgvs: true,
+        hgvs: vep_effects::hgvs::HgvsOptions::default(),
         populate_loftee_context: false,
         compute_hgvs: false,
         compute_exon_intron_numbers: true,

@@ -35,15 +35,16 @@
   "noshift": {
    "flags": [
     "--hgvs",
+    "--hgvsg",
     "--shift_hgvs",
     "0"
    ],
    "expected_dir": "expected_noshift",
    "sha256": {
-    "default.txt": "03e72ab7a7f964f56633eb61216ef03e9fc077d9cb28e2eeb594a988a22115fb",
-    "tab.txt": "a94e7d59ee71dd11902e43ed7367f2f4b35c850a00156f454bfcb31f8bf480e3",
-    "vcf.vcf": "d1c45b0e57438b0fb7748ad652771a5daed5bba5370359ac7e8b4530045d490b",
-    "json.jsonl": "1fa4695815e687466ae9dcb2067350f8a4c347fa17e8197fc24dfddd4571acb5"
+    "default.txt": "742d4e313ee5bf037681181cbdce5f0ad9ea65f27415a10c28a7087dc02b5329",
+    "tab.txt": "41ddb792c7845ca99892fd1c20813c37a2526626d4c3cd1db00a515216b17f58",
+    "vcf.vcf": "276beacbc6cbf684ae9476c01806f76276b91b4d3671951cb2b6abf63be460e8",
+    "json.jsonl": "81c8040c539e8099d620bd5ad7b6481933b9a03d30b22d09fdbdee2159a7a1e5"
    }
   },
   "shiftgenomic": {
@@ -58,6 +59,20 @@
     "tab.txt": "79688ce2b8444d28c938b8adec28820f60204dd54cb9ea99827969cff5d522a2",
     "vcf.vcf": "4f0e88f46b309d129ad9e61ef0ed441d4ebe44c045cffe8320b4f01670597a86",
     "json.jsonl": "2f2cb45de7dcb96b8b23116913436837cf6f0c73d134917b6bab0a9ca3c90732"
+   }
+  },
+  "hgvsp-forms": {
+   "flags": [
+    "--hgvs",
+    "--hgvsp_use_prediction",
+    "--remove_hgvsp_version"
+   ],
+   "expected_dir": "expected_hgvsp-forms",
+   "sha256": {
+    "default.txt": "3ec458a73c71b9233ba033a977554c17ffa4663cbf84a25dde12a91f35a225c0",
+    "tab.txt": "ab3c21afc35693298f37e229fed049a0aabf157f0fdef6d03573f20d5971b91c",
+    "vcf.vcf": "f103c9c1787da8901cab65fb912f9454eb4bf8eb0b9bd8b4cd7be7d606a86e1d",
+    "json.jsonl": "765aa195d57579577940d0f73407a1d713c6dfd2965ef94be2aa52a4f4a00fba"
    }
   }
  },

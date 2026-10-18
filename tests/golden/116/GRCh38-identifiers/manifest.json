@@ -55,11 +55,13 @@
    "name": "noshift",
    "flags": [
     "--hgvs",
+    "--hgvsg",
     "--shift_hgvs",
     "0"
    ],
    "input": "variants.vcf",
    "stdin": false,
+   "unordered": false,
    "formats": [
     "default",
     "tab",
@@ -69,7 +71,8 @@
    "expected_dir": "expected_noshift",
    "covers": [
     "shift_hgvs",
-    "hgvs"
+    "hgvs",
+    "hgvsg"
    ],
    "divergences": [],
    "vep_rs_only_tuples": [],
@@ -77,7 +80,8 @@
    "vep_rs_only_summary": {},
    "fields_compared": [
     "HGVSc",
-    "HGVSp"
+    "HGVSp",
+    "HGVSg"
    ],
    "field_divergences": [],
    "field_divergence_summary": {}
@@ -100,6 +104,39 @@
    "expected_dir": "expected_shiftgenomic",
    "covers": [
     "shift_genomic",
+    "hgvs"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "HGVSc",
+    "HGVSp"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  },
+  {
+   "name": "hgvsp-forms",
+   "flags": [
+    "--hgvs",
+    "--hgvsp_use_prediction",
+    "--remove_hgvsp_version"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_hgvsp-forms",
+   "covers": [
+    "hgvsp_use_prediction",
+    "remove_hgvsp_version",
     "hgvs"
    ],
    "divergences": [],

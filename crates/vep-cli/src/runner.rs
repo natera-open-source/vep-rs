@@ -27,7 +27,8 @@ use rayon::ThreadPool;
 use tracing::{debug, info, warn};
 
 use crate::annotator::{
-    build_thread_pool, hgvsg_options, LoadedPlugins, PredictionConfig, HGVS_NEEDS_FASTA,
+    build_thread_pool, hgvs_options, hgvsg_options, LoadedPlugins, PredictionConfig,
+    HGVS_NEEDS_FASTA,
 };
 use crate::cache_resolve::ResolvedCache;
 use crate::config::{CliError, Config};
@@ -540,7 +541,7 @@ impl Runner {
             downstream_distance: self.config.distance.1,
             reference_fasta: reference_fasta.clone(),
             enable_indel_3prime_shift: self.config.shift_3prime,
-            shift_hgvs: self.config.shift_hgvs,
+            hgvs: hgvs_options(&self.config),
             populate_loftee_context: needs_loftee_context,
             compute_hgvs: checks.hgvs,
             compute_exon_intron_numbers: needs_exon_intron_numbers(&self.config),

@@ -536,6 +536,10 @@ pub struct Config {
     pub xref_refseq: bool,
     pub hgvs: bool,
     pub hgvsg: bool,
+    /// `--hgvsp_use_prediction`: HGVSp's description after `p.` is parenthesised.
+    pub hgvsp_use_prediction: bool,
+    /// `--remove_hgvsp_version`: HGVSp's reference name carries no version.
+    pub remove_hgvsp_version: bool,
     pub sift: Option<String>,
     pub polyphen: Option<String>,
     pub numbers: bool,
@@ -847,6 +851,8 @@ impl Config {
             xref_refseq: args.xref_refseq,
             hgvs: on("hgvs"),
             hgvsg: args.hgvsg,
+            hgvsp_use_prediction: args.hgvsp_use_prediction,
+            remove_hgvsp_version: args.remove_hgvsp_version,
             sift: state.scalar("sift").map(str::to_string),
             polyphen: state.scalar("polyphen").map(str::to_string),
             numbers: on("numbers") || vcf_output,

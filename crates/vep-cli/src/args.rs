@@ -492,6 +492,17 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long)]
     pub hgvsg: bool,
 
+    /// Write HGVSp in the predicted form, the description after p. in parentheses
+    /// (ENSP00000286808.3:p.(Arg97Ter)); the = of a synonymous description is still
+    /// escaped as %3D in the text formats
+    #[arg(help_heading = "Output Control", long = "hgvsp_use_prediction")]
+    pub hgvsp_use_prediction: bool,
+
+    /// Leave the translation version off the HGVSp reference name
+    /// (ENSP00000286808:p.Arg97Ter); HGVSc keeps its version
+    #[arg(help_heading = "Output Control", long = "remove_hgvsp_version")]
+    pub remove_hgvsp_version: bool,
+
     /// SIFT predictions (p = prediction, s = score, b = both)
     #[arg(help_heading = "Output Control", long, value_parser = ["s", "p", "b"])]
     pub sift: Option<String>,
