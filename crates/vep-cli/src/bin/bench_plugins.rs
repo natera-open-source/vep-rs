@@ -40,7 +40,7 @@ use vep_builtins::{BuiltinRegistry, PluginTimings};
 use vep_cli::config::CliError;
 use vep_cli::json_cache;
 use vep_cli::transcript_index::TranscriptBinIndex;
-use vep_cli::variation_matcher;
+use vep_cli::variation_matcher::{self, ColocationRules};
 use vep_cli::variation_source::{ReadFailure, VariationSource};
 use vep_core::allele::trim_alleles;
 use vep_core::consequence::Consequence;
@@ -466,7 +466,12 @@ fn annotate_consequences(
         }
 
         if let Some(source) = variation_source {
-            variation_matcher::annotate_colocated(variant, source, &failure);
+            variation_matcher::annotate_colocated(
+                variant,
+                source,
+                &ColocationRules::default(),
+                &failure,
+            );
         }
 
         if variant.transcript_consequences.is_empty() && variant.most_severe_consequence.is_none() {

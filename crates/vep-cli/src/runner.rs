@@ -36,7 +36,7 @@ use crate::output_compress::{CompressedOutput, OutputCompression};
 use crate::pick::FilterConfig;
 use crate::pipeline;
 use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex, TranscriptSet};
-use crate::variation_matcher;
+use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_source::{ReadFailure, VariationSource};
 use vep_builtins::BuiltinRegistry;
 use vep_core::consequence::{Consequence, Impact};
@@ -673,6 +673,7 @@ impl Runner {
         let annotation_resources = AnnotationResources {
             transcripts,
             variation_source,
+            colocation: ColocationRules::from_config(&self.config),
             effects_config,
             builtin_plugins,
             dylib_plugins,
@@ -1131,6 +1132,8 @@ pub(crate) fn open_variation_source(
 pub(crate) struct AnnotationResources {
     transcripts: Arc<LazyTranscriptIndexes>,
     variation_source: Option<Arc<VariationSource>>,
+    /// Which known variants of a window co-locate with an input variant.
+    colocation: ColocationRules,
     effects_config: Arc<vep_effects::EffectsConfig>,
     builtin_plugins: Arc<BuiltinRegistry>,
     dylib_plugins: Arc<PluginRegistry>,
@@ -1304,7 +1307,7 @@ pub(crate) fn annotate_one(
     let csq_count = variant.transcript_consequences.len() as u64;
 
     if let Some(source) = &resources.variation_source {
-        variation_matcher::annotate_colocated(variant, source, failure);
+        variation_matcher::annotate_colocated(variant, source, &resources.colocation, failure);
     }
 
     // A record on a chromosome the cache lacks reaches annotation only under
@@ -1664,6 +1667,7 @@ pub(crate) fn annotate_batch_for_test(
     let resources = AnnotationResources {
         transcripts,
         variation_source: None,
+        colocation: ColocationRules::default(),
         effects_config: Arc::new(vep_effects::EffectsConfig {
             upstream_distance: 5_000,
             downstream_distance: 5_000,
@@ -1719,6 +1723,7 @@ pub(crate) fn default_rows_for_test(
     let resources = AnnotationResources {
         transcripts,
         variation_source,
+        colocation: ColocationRules::default(),
         effects_config: Arc::new(vep_effects::EffectsConfig {
             upstream_distance: 5_000,
             downstream_distance: 5_000,
@@ -2245,6 +2250,7 @@ mod tests {
         AnnotationResources {
             transcripts,
             variation_source: None,
+            colocation: ColocationRules::default(),
             effects_config: Arc::new(vep_effects::EffectsConfig {
                 upstream_distance: 5_000,
                 downstream_distance: 5_000,
@@ -2375,7 +2381,12 @@ mod tests {
         // batch's own slot instead.
         let source = resources.variation_source.as_ref().unwrap();
         let failure = ReadFailure::default();
-        variation_matcher::annotate_colocated(&mut batch[0], source, &failure);
+        variation_matcher::annotate_colocated(
+            &mut batch[0],
+            source,
+            &ColocationRules::default(),
+            &failure,
+        );
         assert!(batch[0].colocated_variants.is_empty());
         let err = check_variation_reads(&failure).expect_err("the recorded failure surfaces");
         let line = CliError::from_run(&err);
@@ -2752,6 +2763,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts,
             variation_source: None,
+            colocation: ColocationRules::default(),
             effects_config,
             builtin_plugins,
             dylib_plugins: Arc::new(PluginRegistry::new()),
@@ -2807,6 +2819,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts,
             variation_source: None,
+            colocation: ColocationRules::default(),
             effects_config,
             builtin_plugins,
             dylib_plugins: Arc::new(PluginRegistry::new()),
@@ -2867,6 +2880,7 @@ mod tests {
             let resources = AnnotationResources {
                 transcripts: Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)),
                 variation_source: None,
+                colocation: ColocationRules::default(),
                 effects_config: Arc::new(vep_effects::EffectsConfig::default()),
                 builtin_plugins: Arc::new(BuiltinRegistry::new()),
                 dylib_plugins: Arc::new(PluginRegistry::new()),

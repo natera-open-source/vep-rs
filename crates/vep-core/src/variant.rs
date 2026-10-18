@@ -170,7 +170,12 @@ pub struct InputVariant {
     pub transcript_consequences: Vec<TranscriptConsequence>,
     /// Most severe consequence across all transcripts.
     pub most_severe_consequence: Option<Consequence>,
-    /// Co-located known variants (from variation cache).
+    /// The known variants co-located with the whole input record, in the cache's
+    /// order with a name listed once: Ensembl VEP matches the record's variation
+    /// feature, every allele at once, and keys the matches on it
+    /// (`AnnotationType/Variation.pm` `compare_existing`), so an allele of a
+    /// multi-allelic record carries the matches of its siblings too, each telling
+    /// through [`ColocatedVariant::applies_to_allele`] which rows it prints on.
     pub colocated_variants: Vec<ColocatedVariant>,
     /// The HGVS genomic notation of this allele (`HGVSg`), computed under
     /// `--hgvsg` with a reference FASTA; printed on every row of the allele.
@@ -189,8 +194,16 @@ pub struct InputVariant {
     /// Raw input line (for passthrough in some output formats), one buffer shared by
     /// every allele of the record.
     pub raw_input: Option<Arc<str>>,
-    /// Existing variation IDs (from co-located variants).
+    /// The names of [`Self::colocated_variants`] that print on this allele's rows,
+    /// in Ensembl VEP's order: non-somatic variants first, then by name prefix
+    /// ([`colocated_in_output_order`]), keeping those matched on this allele or on
+    /// their span alone (`OutputFactory.pm:1069-1086` at release/116.2).
     pub existing_variation: Vec<String>,
+    /// The names of the known structural variants overlapping the variant under
+    /// `--check_svs`, sorted and unique as Ensembl VEP prints them in `SV`
+    /// (`OutputFactory.pm:962-964`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overlapping_svs: Vec<String>,
     /// Plugin annotation data (variant-level).
     /// Keyed by field name (e.g., "CADD_PHRED"), value is the annotation string.
     /// Variant-level plugin data is included in the Extra column for every
@@ -357,6 +370,7 @@ impl Default for InputVariant {
             original_end: None,
             raw_input: None,
             existing_variation: Vec::new(),
+            overlapping_svs: Vec::new(),
             plugin_data: indexmap::IndexMap::new(),
             sv_end: None,
             sv_type: None,
@@ -431,6 +445,7 @@ impl InputVariant {
             original_end: None,
             raw_input: None,
             existing_variation: Vec::new(),
+            overlapping_svs: Vec::new(),
             plugin_data: indexmap::IndexMap::new(),
             sv_end: None,
             sv_type: None,
@@ -759,10 +774,93 @@ pub struct ColocatedVariant {
     pub clin_sig: Vec<String>,
     /// Phenotype/disease association flag.
     pub phenotype: bool,
-    /// Population allele frequencies.
+    /// The frequencies of the record allele matched to this input allele, by
+    /// population column; empty when the record matched on its span alone.
     pub frequencies: std::collections::HashMap<String, f64>,
     /// PubMed IDs.
     pub pubmed: Vec<String>,
+    /// The input alleles the record's alleles were matched to, as
+    /// `Utils/Sequence.pm` `get_matched_variant_alleles` returns them (ensembl-variation
+    /// release/116). Empty for a record matched on its span alone, a null-allele record
+    /// or any record under `--no_check_alleles`, which prints on every allele's row.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub matched_alleles: Vec<MatchedAllele>,
+    /// The record's frequency columns as the cache stores them, by population
+    /// column name: `allele:frequency` pairs joined by `,`.
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub frequency_strings: std::collections::HashMap<String, String>,
+    /// The record's ClinVar allele and somatic fields, when it carries any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clinvar: Option<Box<crate::variation::ClinVarDetail>>,
+    /// The record's synonyms as the cache stores them: `source::id,id` groups
+    /// joined by `--`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub var_synonyms: Option<String>,
+}
+
+impl ColocatedVariant {
+    /// Whether the record prints on the rows of `allele` (the row's `Allele`
+    /// column): a record matched on its span alone prints on every row, a record
+    /// matched by allele only on the rows of an allele it matched
+    /// (`OutputFactory.pm:1081-1083` at release/116.2).
+    pub fn applies_to_allele(&self, allele: &str) -> bool {
+        self.matched_alleles.is_empty()
+            || self
+                .matched_alleles
+                .iter()
+                .any(|matched| matched.input_allele == allele)
+    }
+
+    /// The record allele matched to the input allele `allele`, the first match
+    /// when the record's alleles matched it more than once (`OutputFactory.pm:1200`).
+    pub fn record_allele_for(&self, allele: &str) -> Option<&str> {
+        self.matched_alleles
+            .iter()
+            .find(|matched| matched.input_allele == allele)
+            .map(|matched| matched.record_allele.as_str())
+    }
+
+    /// Ensembl VEP's rank of the record by the first two letters of its name,
+    /// case-insensitively: dbSNP `rs` 1, HGMD `cm`, `ci` and `cd` 2, COSMIC `co`
+    /// 3, anything else 100 (`OutputFactory.pm:1057-1065`).
+    pub fn prefix_rank(&self) -> u8 {
+        let prefix: String = self
+            .id
+            .chars()
+            .take(2)
+            .flat_map(char::to_lowercase)
+            .collect();
+        match prefix.as_str() {
+            "rs" => 1,
+            "cm" | "ci" | "cd" => 2,
+            "co" => 3,
+            _ => 100,
+        }
+    }
+}
+
+/// One matched allele pair of an input variant and a known variant: the
+/// `a_allele`, `a_index`, `b_allele` and `b_index` of `get_matched_variant_alleles`
+/// (`Utils/Sequence.pm:1232-1238`, ensembl-variation release/116).
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MatchedAllele {
+    /// The input allele as the input's allele string spells it.
+    pub input_allele: String,
+    /// The input allele's position among the input alternate alleles.
+    pub input_index: usize,
+    /// The known variant's allele as its allele string spells it.
+    pub record_allele: String,
+    /// The known variant's allele's position among its alternate alleles.
+    pub record_index: usize,
+}
+
+/// The co-located variants in the order Ensembl VEP reports them: non-somatic
+/// variants first, then by [`ColocatedVariant::prefix_rank`], ties in the given
+/// order (`OutputFactory.pm:1069-1078`; Perl's `sort` is a stable merge sort).
+pub fn colocated_in_output_order(variants: &[ColocatedVariant]) -> Vec<&ColocatedVariant> {
+    let mut ordered: Vec<&ColocatedVariant> = variants.iter().collect();
+    ordered.sort_by_key(|cv| (cv.somatic, cv.prefix_rank()));
+    ordered
 }
 
 #[cfg(test)]

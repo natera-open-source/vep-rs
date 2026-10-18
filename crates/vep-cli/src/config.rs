@@ -529,6 +529,13 @@ pub struct Config {
     pub gene_phenotype: bool,
     pub mirna: bool,
     pub check_existing: bool,
+    /// `--no_check_alleles`: a known variant co-locates on its span alone.
+    pub no_check_alleles: bool,
+    /// `--exclude_null_alleles`: a known variant without alleles never co-locates.
+    pub exclude_null_alleles: bool,
+    /// `--failed <int>`: the highest `failed` value a known variant may carry and
+    /// still co-locate; Ensembl VEP's default is 0.
+    pub failed: i64,
     pub coding_only: bool,
     pub no_intergenic: bool,
 
@@ -822,6 +829,9 @@ impl Config {
             gene_phenotype: on("gene_phenotype"),
             mirna: on("mirna"),
             check_existing: on("check_existing"),
+            no_check_alleles: args.no_check_alleles,
+            exclude_null_alleles: args.exclude_null_alleles,
+            failed: args.failed,
             coding_only: args.coding_only,
             no_intergenic: args.no_intergenic,
             pick: args.pick,

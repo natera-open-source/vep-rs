@@ -13,6 +13,8 @@
   "variation-cache-columns",
   "gnomade-columns",
   "gnomadg-columns",
+  "check_existing",
+  "existing-variation-matching",
   "engine_identity_lines"
  ],
  "excludes": {

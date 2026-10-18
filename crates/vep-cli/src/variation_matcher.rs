@@ -1,22 +1,59 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Co-located variant matching and frequency extraction.
+//! Co-located variant matching: the `--check_existing` stage.
 //!
-//! Matches input variants against cached known variants (e.g., dbSNP, gnomAD)
-//! by genomic position, extracts allele-specific population frequencies, and
-//! builds the Extra output fields (AF, CLIN_SIG, PUBMED, etc.) for VEP output.
-//! Implements the `--check_existing` pipeline stage.
+//! Ports Ensembl VEP release/116.2's matching of an input variant against the
+//! known variants of its window: `AnnotationSource/Cache/VariationTabix.pm`
+//! `_annotate_pm` (the walk, the failed filter, one entry per name),
+//! `AnnotationType/Variation.pm` `compare_existing` (span matches, the allele
+//! rules) and ensembl-variation release/116's `Utils/Sequence.pm`
+//! `get_matched_variant_alleles` and `trim_sequences` (strand-aware allele
+//! matching with trimming in both directions). The `Extra` column writer of the
+//! default format lives here too.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
-use vep_core::variant::{ColocatedVariant, InputVariant};
+use vep_core::coordinate::Strand;
+use vep_core::sv_routing::perl_true;
+use vep_core::variant::{colocated_in_output_order, ColocatedVariant, InputVariant, MatchedAllele};
 use vep_core::variation::CachedVariation;
 
 use crate::variation_source::{ReadFailure, VariationSource};
 
-/// Attaches the co-located known variants of `variant` read from `source`:
-/// its `existing_variation` names and `colocated_variants`.
+/// The flags that decide which known variants of a window co-locate with an
+/// input variant (`AnnotationType/Variation.pm:146-166, 224-227`); the default is
+/// Ensembl VEP's: alleles checked, null alleles kept, `failed` 0.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ColocationRules {
+    /// `--no_check_alleles`: a known variant matches on its start and end alone and
+    /// prints on every allele's row.
+    pub no_check_alleles: bool,
+    /// `--exclude_null_alleles`: a known variant without alleles (`COSMIC_MUTATION`,
+    /// `HGMD_MUTATION`, `dbSNP_novariation`) never matches; without the flag it
+    /// matches on its start and end.
+    pub exclude_null_alleles: bool,
+    /// `--failed <int>`: a known variant matches only when its `failed` value is at
+    /// most this; Ensembl VEP's default is 0.
+    pub failed: i64,
+}
+
+impl ColocationRules {
+    /// The rules a run's configuration asks for.
+    pub fn from_config(config: &crate::config::Config) -> Self {
+        Self {
+            no_check_alleles: config.no_check_alleles,
+            exclude_null_alleles: config.exclude_null_alleles,
+            failed: config.failed,
+        }
+    }
+}
+
+/// Attaches the known variants of `source` co-located with `variant`:
+/// `colocated_variants` holds every match of the input record, in the cache's
+/// order, and `existing_variation` the names that print on this allele's rows,
+/// in Ensembl VEP's order. A structural variant gets none (`VariationTabix.pm:118`).
 ///
 /// A failure to read a variation file is recorded in `failure` for the batch
 /// driver to end the run with (`runner::check_variation_reads`): the file is
@@ -25,8 +62,12 @@ use crate::variation_source::{ReadFailure, VariationSource};
 pub fn annotate_colocated(
     variant: &mut InputVariant,
     source: &VariationSource,
+    rules: &ColocationRules,
     failure: &ReadFailure,
 ) {
+    if variant.is_structural {
+        return;
+    }
     let candidates = match source.records_overlapping(&variant.chr, variant.start, variant.end) {
         Ok(candidates) => candidates,
         Err(error) => {
@@ -34,73 +75,353 @@ pub fn annotate_colocated(
             return;
         }
     };
-    let colocated = find_colocated_variants(variant, &candidates);
-    for cv in &colocated {
-        variant.existing_variation.push(cv.id.clone());
-    }
+    let allele = variant.display_allele();
+    let colocated = match_candidates(variant, &allele, candidates, rules);
+    variant.existing_variation = existing_variation_names(&colocated, &allele);
     variant.colocated_variants = colocated;
 }
 
-/// Find co-located known variants for an input variant among the candidates
-/// its window holds.
-///
-/// Uses simple position-based matching: any cached variant at the same
-/// start position is reported as co-located.
-pub fn find_colocated_variants(
-    variant: &InputVariant,
-    candidates: &[CachedVariation],
-) -> Vec<ColocatedVariant> {
-    candidates
-        .iter()
-        .filter(|cv| cv.start == variant.start && cv.failed == 0)
-        .map(|cv| cached_to_colocated(cv, variant))
+/// The names of `colocated` that print on the rows of `allele`, in Ensembl VEP's
+/// order: [`colocated_in_output_order`], keeping the records
+/// [`ColocatedVariant::applies_to_allele`] admits.
+fn existing_variation_names(colocated: &[ColocatedVariant], allele: &str) -> Vec<String> {
+    colocated_in_output_order(colocated)
+        .into_iter()
+        .filter(|cv| cv.applies_to_allele(allele))
+        .map(|cv| cv.id.clone())
         .collect()
 }
 
-/// Convert a CachedVariation to a ColocatedVariant, extracting allele-specific
-/// frequencies for the input variant's alt allele.
-///
-/// When doing position-based matching (no allele check), the input allele may
-/// not appear in the cached variant's frequency strings. In that case the first
-/// non-reference allele frequency available is used.
-fn cached_to_colocated(cv: &CachedVariation, variant: &InputVariant) -> ColocatedVariant {
-    let alt_allele = variant.display_allele();
+/// The known variants among `candidates`, the records of the variant's window in
+/// file order, that Ensembl VEP keeps on the input record
+/// (`VariationTabix.pm:232-241`): a record whose `failed` value exceeds the
+/// threshold is skipped, a name already kept is not matched again, and
+/// [`compare_existing`] decides the rest. The record's whole allele string is
+/// matched, as Ensembl VEP matches the variation feature of a multi-allelic
+/// record before splitting its rows by allele.
+pub fn find_colocated_variants(
+    variant: &InputVariant,
+    candidates: Vec<CachedVariation>,
+    rules: &ColocationRules,
+) -> Vec<ColocatedVariant> {
+    match_candidates(variant, &variant.display_allele(), candidates, rules)
+}
 
-    let mut frequencies = HashMap::new();
-    for (pop, freq_str) in &cv.frequencies {
-        let freq = extract_allele_frequency(freq_str, &alt_allele)
-            .or_else(|| extract_first_frequency(freq_str));
-        if let Some(f) = freq {
-            frequencies.insert(pop.clone(), f);
+/// [`find_colocated_variants`] with `variant`'s row allele `allele` built by the
+/// caller, which [`annotate_colocated`] needs again for the names; the matched
+/// records' fields move into the result.
+fn match_candidates(
+    variant: &InputVariant,
+    allele: &str,
+    candidates: Vec<CachedVariation>,
+    rules: &ColocationRules,
+) -> Vec<ColocatedVariant> {
+    let input = InputAlleles {
+        allele_string: variant
+            .record_allele_string_multi
+            .as_deref()
+            .unwrap_or(&variant.allele_string),
+        start: variant.start,
+        end: variant.end,
+        strand: variant.strand,
+    };
+    let mut colocated: Vec<ColocatedVariant> = Vec::new();
+    for record in candidates {
+        if i64::from(record.failed) > rules.failed {
+            continue;
+        }
+        if colocated.iter().any(|cv| cv.id == record.variation_name) {
+            continue;
+        }
+        if let Some(matched) = compare_existing(&input, &record, rules) {
+            colocated.push(cached_to_colocated(record, matched, allele));
+        }
+    }
+    colocated
+}
+
+/// The input record as `compare_existing` sees its variation feature.
+struct InputAlleles<'a> {
+    /// The record's allele string: every alternate allele after the shared
+    /// anchor, so a multi-allelic record is matched whole.
+    allele_string: &'a str,
+    start: u64,
+    end: u64,
+    strand: Strand,
+}
+
+/// Whether a known variant co-locates with the input record, and on which alleles
+/// (`AnnotationType/Variation.pm:146-207`). `Some(empty)` is a match on start and
+/// end alone, which Ensembl VEP returns without `matched_alleles`: a record
+/// without alleles (no `/` in its allele string) unless `--exclude_null_alleles`,
+/// or any record under `--no_check_alleles`. Otherwise the alleles decide.
+fn compare_existing(
+    input: &InputAlleles<'_>,
+    record: &CachedVariation,
+    rules: &ColocationRules,
+) -> Option<Vec<MatchedAllele>> {
+    let same_span = record.start == input.start && record.end == input.end;
+    if !record.allele_string.contains('/') {
+        if rules.exclude_null_alleles {
+            return None;
+        }
+        if same_span {
+            return Some(Vec::new());
+        }
+    }
+    if rules.no_check_alleles {
+        return if same_span { Some(Vec::new()) } else { None };
+    }
+    let matched = get_matched_variant_alleles(
+        &AlleleSet {
+            allele_string: input.allele_string,
+            pos: input.start,
+            strand: input.strand.as_i8(),
+        },
+        &AlleleSet {
+            allele_string: &record.allele_string,
+            pos: record.start,
+            strand: record.strand,
+        },
+    );
+    (!matched.is_empty()).then_some(matched)
+}
+
+/// A variant as `get_matched_variant_alleles` takes it: its allele string,
+/// reference first, its start and its strand.
+#[derive(Debug, Clone, Copy)]
+pub struct AlleleSet<'a> {
+    pub allele_string: &'a str,
+    pub pos: u64,
+    pub strand: i8,
+}
+
+/// The reference and alternate alleles of an allele string as `split('/')`
+/// yields them (trailing empty alleles dropped, as Perl's `split` drops them);
+/// `None` for an empty string, a string that is `0`, or one beginning with `/`
+/// followed by anything (`Utils/Sequence.pm:1151-1157, 1173`).
+fn split_allele_string(allele_string: &str) -> Option<(&str, std::str::Split<'_, char>)> {
+    if !perl_true(allele_string) || (allele_string.starts_with('/') && allele_string.len() > 1) {
+        return None;
+    }
+    let mut alleles = allele_string.trim_end_matches('/').split('/');
+    let reference = alleles.next()?;
+    Some((reference, alleles))
+}
+
+/// The alternate alleles `a` and `b` share, as `get_matched_variant_alleles`
+/// finds them (`Utils/Sequence.pm:1144-1247`, ensembl-variation release/116):
+/// `a`'s alleles are reverse-complemented when the strands differ, every
+/// reference-alternate pair of each side is trimmed of its shared ends in both
+/// orders (left first, then right first) when either allele is longer than one
+/// base, and a pair of `b` matches when one of its trimmed forms, tried in order,
+/// equals a trimmed form of `a` (the later of `a`'s alleles owning a shared form).
+/// Returns one match per matching allele of `b`, in `b`'s order; a position of 0
+/// or an unusable allele string matches nothing.
+pub fn get_matched_variant_alleles(a: &AlleleSet<'_>, b: &AlleleSet<'_>) -> Vec<MatchedAllele> {
+    let (Some((a_ref, a_alts)), Some((b_ref, b_alts))) = (
+        split_allele_string(a.allele_string),
+        split_allele_string(b.allele_string),
+    ) else {
+        return Vec::new();
+    };
+    if a.pos == 0 || b.pos == 0 {
+        return Vec::new();
+    }
+    let flip = a.strand != b.strand;
+    let a_ref = reverse_comp_if(flip, a_ref);
+    // Each alternate allele of `a` as written, with its reading on `b`'s strand.
+    let a_alts: Vec<(&str, Cow<'_, str>)> = a_alts
+        .map(|alt| (alt, reverse_comp_if(flip, alt)))
+        .collect();
+
+    // Every trimmed form of an input allele with the allele as written; a later
+    // allele with the same form replaces an earlier one, as the Perl hash does, so
+    // a lookup reads the list from its end.
+    let mut minimised: Vec<(TrimmedAlleles<'_>, &str)> = Vec::with_capacity(a_alts.len() * 2);
+    for (orig_alt, alt) in &a_alts {
+        for &end_first in trim_directions(&a_ref, orig_alt) {
+            minimised.push((trim_sequences(&a_ref, alt, a.pos, end_first), *orig_alt));
         }
     }
 
-    let clin_sig = cv
-        .clin_sig
-        .as_deref()
-        .filter(|s| !s.is_empty())
-        .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
-        .unwrap_or_default();
+    let mut matches = Vec::new();
+    for (index, orig_alt) in b_alts.enumerate() {
+        for &end_first in trim_directions(b_ref, orig_alt) {
+            let trimmed = trim_sequences(b_ref, orig_alt, b.pos, end_first);
+            let found = minimised
+                .iter()
+                .rev()
+                .find(|(form, _)| *form == trimmed)
+                .map(|(_, a_alt)| *a_alt)
+                .filter(|a_alt| perl_true(a_alt));
+            if let Some(a_alt) = found {
+                matches.push(MatchedAllele {
+                    input_allele: a_alt.to_string(),
+                    // The index is the allele string's last position among `a`'s
+                    // alternates, as `$a_indexes{$orig_a_alt} = $i++` leaves it.
+                    input_index: a_alts
+                        .iter()
+                        .rposition(|(alt, _)| *alt == a_alt)
+                        .expect("the allele came from this list"),
+                    record_allele: orig_alt.to_string(),
+                    record_index: index,
+                });
+                break;
+            }
+        }
+    }
+    matches
+}
 
-    let pubmed = cv
-        .pubmed
-        .as_deref()
-        .filter(|s| !s.is_empty())
-        .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
-        .unwrap_or_default();
+/// The trimming orders tried for an allele pair: left end first, and right end
+/// first too when either allele is longer than one base
+/// (`Utils/Sequence.pm:1250-1258`).
+fn trim_directions(reference: &str, alt: &str) -> &'static [bool] {
+    if reference.len() > 1 || alt.len() > 1 {
+        &[false, true]
+    } else {
+        &[false]
+    }
+}
 
-    ColocatedVariant {
-        id: cv.variation_name.clone(),
+/// A reference-alternate pair as `trim_sequences` leaves it: the trimmed
+/// reference, the trimmed alternate and the new start.
+type TrimmedAlleles<'s> = (&'s [u8], &'s [u8], u64);
+
+/// `trim_sequences` for a forward-strand pair (`Utils/Sequence.pm:965-1038`):
+/// bytes shared at one end are removed while both alleles are Perl-true
+/// (non-empty and not `0`), the left end first and then the right unless
+/// `end_first`, the start moving up by one per byte trimmed from the left, as
+/// Perl's `substr` moves it over an undecoded string; an emptied allele reads
+/// `-`. The returned alleles are slices of the inputs.
+fn trim_sequences<'s>(
+    reference: &'s str,
+    alt: &'s str,
+    mut start: u64,
+    end_first: bool,
+) -> TrimmedAlleles<'s> {
+    let mut trim_left = |mut reference: &'s [u8], mut alt: &'s [u8]| {
+        while perl_true_bytes(reference) && perl_true_bytes(alt) && reference[0] == alt[0] {
+            reference = &reference[1..];
+            alt = &alt[1..];
+            start += 1;
+        }
+        (reference, alt)
+    };
+    let trim_right = |mut reference: &'s [u8], mut alt: &'s [u8]| {
+        while perl_true_bytes(reference)
+            && perl_true_bytes(alt)
+            && reference[reference.len() - 1] == alt[alt.len() - 1]
+        {
+            reference = &reference[..reference.len() - 1];
+            alt = &alt[..alt.len() - 1];
+        }
+        (reference, alt)
+    };
+    let (reference, alt) = if end_first {
+        let (reference, alt) = trim_right(reference.as_bytes(), alt.as_bytes());
+        trim_left(reference, alt)
+    } else {
+        let (reference, alt) = trim_left(reference.as_bytes(), alt.as_bytes());
+        trim_right(reference, alt)
+    };
+    let dash = |allele: &'s [u8]| if allele.is_empty() { b"-" } else { allele };
+    (dash(reference), dash(alt), start)
+}
+
+/// Perl's truth of an allele while it is trimmed: the empty string and `0` are
+/// false, so trimming stops at either.
+fn perl_true_bytes(allele: &[u8]) -> bool {
+    !allele.is_empty() && allele != b"0"
+}
+
+/// `reverse_comp` of ensembl's `Utils/Sequence.pm`: the sequence reversed and
+/// complemented over `ACGT`, the IUPAC codes `RYMKSWHBVDNX` and their lower-case
+/// forms, every other character kept.
+pub fn reverse_comp(sequence: &str) -> String {
+    sequence
+        .chars()
+        .rev()
+        .map(|base| match base {
+            'a' => 't',
+            'c' => 'g',
+            'g' => 'c',
+            't' => 'a',
+            'r' => 'y',
+            'y' => 'r',
+            'm' => 'k',
+            'k' => 'm',
+            'h' => 'd',
+            'b' => 'v',
+            'v' => 'b',
+            'd' => 'h',
+            'A' => 'T',
+            'C' => 'G',
+            'G' => 'C',
+            'T' => 'A',
+            'R' => 'Y',
+            'Y' => 'R',
+            'M' => 'K',
+            'K' => 'M',
+            'H' => 'D',
+            'B' => 'V',
+            'V' => 'B',
+            'D' => 'H',
+            other => other,
+        })
+        .collect()
+}
+
+/// [`reverse_comp`] of `sequence` when `flip`, else `sequence` as written.
+fn reverse_comp_if(flip: bool, sequence: &str) -> Cow<'_, str> {
+    if flip {
+        Cow::Owned(reverse_comp(sequence))
+    } else {
+        Cow::Borrowed(sequence)
+    }
+}
+
+/// The `ColocatedVariant` of a matched record: the record's fields, the matched
+/// alleles, and the frequencies of the record allele matched to `allele`, this
+/// input allele, when the record was matched by allele.
+fn cached_to_colocated(
+    cv: CachedVariation,
+    matched_alleles: Vec<MatchedAllele>,
+    allele: &str,
+) -> ColocatedVariant {
+    let comma_list = |value: Option<String>| -> Vec<String> {
+        value
+            .filter(|s| !s.is_empty())
+            .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
+            .unwrap_or_default()
+    };
+    let mut colocated = ColocatedVariant {
+        id: cv.variation_name,
         start: cv.start,
         end: cv.end,
-        allele_string: Some(cv.allele_string.clone()).filter(|s| !s.is_empty()),
+        allele_string: Some(cv.allele_string).filter(|s| !s.is_empty()),
         strand: cv.strand,
         somatic: cv.somatic != 0,
-        clin_sig,
+        clin_sig: comma_list(cv.clin_sig),
         phenotype: cv.phenotype_or_disease != 0,
-        frequencies,
-        pubmed,
+        frequencies: HashMap::new(),
+        pubmed: comma_list(cv.pubmed),
+        matched_alleles,
+        frequency_strings: cv.frequencies,
+        clinvar: cv.clinvar,
+        var_synonyms: cv.var_synonyms,
+    };
+    if let Some(record_allele) = colocated.record_allele_for(allele) {
+        colocated.frequencies = colocated
+            .frequency_strings
+            .iter()
+            .filter_map(|(pop, freq_str)| {
+                extract_allele_frequency(freq_str, record_allele).map(|f| (pop.clone(), f))
+            })
+            .collect();
     }
+    colocated
 }
 
 /// Parse a frequency string like "T:0.003,C:0.997" or "T:0.003" and extract
@@ -113,21 +434,6 @@ pub fn extract_allele_frequency(freq_str: &str, allele: &str) -> Option<f64> {
         if let Some((allele_part, freq_part)) = entry.split_once(':') {
             if allele_part == allele {
                 return freq_part.parse::<f64>().ok();
-            }
-        }
-    }
-    None
-}
-
-/// Extract the first available frequency from a frequency string,
-/// regardless of allele. Used as a fallback when the specific input
-/// allele is not found (e.g., due to strand differences).
-fn extract_first_frequency(freq_str: &str) -> Option<f64> {
-    for entry in freq_str.split(',') {
-        let entry = entry.trim();
-        if let Some((_allele_part, freq_part)) = entry.split_once(':') {
-            if let Ok(f) = freq_part.parse::<f64>() {
-                return Some(f);
             }
         }
     }
@@ -265,58 +571,781 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_find_colocated_basic() {
-        let var = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
-
-        let mut freqs = HashMap::new();
-        freqs.insert("AFR".to_string(), "G:0.003".to_string());
-
-        let cached = vec![CachedVariation {
-            variation_name: "rs123".to_string(),
-            start: 100,
-            end: 100,
-            allele_string: "A/G".to_string(),
+    /// A cache record as `parse_record` builds it from the release-116 GRCh38
+    /// chromosome 21 cache (`chr variation_name failed somatic start end allele_string
+    /// strand`): the cited records are quoted from that file.
+    fn record(name: &str, start: u64, end: u64, allele_string: &str) -> CachedVariation {
+        CachedVariation {
+            variation_name: name.to_string(),
+            start,
+            end,
+            allele_string: allele_string.to_string(),
             strand: 1,
-            frequencies: freqs,
             ..Default::default()
-        }];
-
-        let colocated = find_colocated_variants(&var, &cached);
-        assert_eq!(colocated.len(), 1);
-        assert_eq!(colocated[0].id, "rs123");
-        assert_eq!(colocated[0].frequencies.get("AFR"), Some(&0.003));
+        }
     }
 
-    #[test]
-    fn test_find_colocated_skips_failed() {
-        let var = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+    fn somatic(mut record: CachedVariation) -> CachedVariation {
+        record.somatic = 1;
+        record
+    }
 
-        let cached = vec![CachedVariation {
-            variation_name: "rs_failed".to_string(),
-            start: 100,
-            end: 100,
+    /// The input variants of one VCF data line, as the run parses it.
+    fn parsed(line: &str) -> Vec<InputVariant> {
+        crate::vcf_parser::parse_vcf_line(line, false).expect("a valid VCF line")
+    }
+
+    /// The names that print on the first allele's row under `rules`.
+    fn existing(
+        line: &str,
+        candidates: &[CachedVariation],
+        rules: &ColocationRules,
+    ) -> Vec<String> {
+        let variant = &parsed(line)[0];
+        let colocated = find_colocated_variants(variant, candidates.to_vec(), rules);
+        existing_variation_names(&colocated, &variant.display_allele())
+    }
+
+    fn names(colocated: &[ColocatedVariant]) -> Vec<&str> {
+        colocated.iter().map(|cv| cv.id.as_str()).collect()
+    }
+
+    const DEFAULT: ColocationRules = ColocationRules {
+        no_check_alleles: false,
+        exclude_null_alleles: false,
+        failed: 0,
+    };
+
+    /// `21 14109044 G A` against the record set at 14109044 as the release-116
+    /// cache holds it: an HGMD null-allele record, a COSMIC somatic null-allele
+    /// record and `rs7278737` (`G/A/T`); Ensembl VEP 116.2 prints the three in the
+    /// order dbSNP, HGMD, COSMIC, and with ALT `C` the dbSNP record falls away and
+    /// the two null-allele records stay. The COSMIC and HGMD names here are
+    /// stand-ins of the real records' prefix classes.
+    #[test]
+    fn snv_with_different_alt_does_not_match() {
+        let candidates = [
+            record("CM990001", 14109044, 14109044, "HGMD_MUTATION"),
+            somatic(record("COSV9900001", 14109044, 14109044, "COSMIC_MUTATION")),
+            record("rs7278737", 14109044, 14109044, "G/A/T"),
+        ];
+        assert_eq!(
+            existing("21\t14109044\t.\tG\tA\t.\t.\t.", &candidates, &DEFAULT),
+            ["rs7278737", "CM990001", "COSV9900001"]
+        );
+        assert_eq!(
+            existing("21\t14109044\t.\tG\tC\t.\t.\t.", &candidates, &DEFAULT),
+            ["CM990001", "COSV9900001"]
+        );
+        let variant = &parsed("21\t14109044\t.\tG\tA\t.\t.\t.")[0];
+        let colocated = find_colocated_variants(variant, candidates.to_vec(), &DEFAULT);
+        assert_eq!(
+            colocated[2].matched_alleles,
+            [MatchedAllele {
+                input_allele: "A".to_string(),
+                input_index: 0,
+                record_allele: "A".to_string(),
+                record_index: 0,
+            }]
+        );
+        assert!(
+            colocated[0].matched_alleles.is_empty(),
+            "a span match carries no alleles"
+        );
+    }
+
+    /// The cache keeps `rs2123010281` untrimmed as `GG/G` at 5029945-5029946.
+    /// `21 5029945 GG G` minimises to `G/-` at 5029946 and matches it by trimming the
+    /// record from the left; `21 5029944 NG N` is `G/-` at 5029945 and matches it by
+    /// trimming from the right, the second order tried. Ensembl VEP 116.2 prints
+    /// `rs2123010281` for both. With `--no_check_alleles` neither matches: no record
+    /// spans exactly 5029945-5029945 or 5029946-5029946, and Ensembl VEP prints `-`.
+    #[test]
+    fn indel_matches_after_trimming_both_directions() {
+        let candidates = [record("rs2123010281", 5029945, 5029946, "GG/G")];
+        assert_eq!(
+            existing("21\t5029945\t.\tGG\tG\t.\t.\t.", &candidates, &DEFAULT),
+            ["rs2123010281"]
+        );
+        assert_eq!(
+            existing("21\t5029944\t.\tNG\tN\t.\t.\t.", &candidates, &DEFAULT),
+            ["rs2123010281"]
+        );
+        let no_check = ColocationRules {
+            no_check_alleles: true,
+            ..DEFAULT
+        };
+        assert!(existing("21\t5029945\t.\tGG\tG\t.\t.\t.", &candidates, &no_check).is_empty());
+        assert!(existing("21\t5029944\t.\tNG\tN\t.\t.\t.", &candidates, &no_check).is_empty());
+    }
+
+    /// `rs71668025` is `TT/T/TTT` at 28382673-28382674. `21 28382673 TT T,TTTT` is
+    /// the record `T/-/TTT` at 28382674: the deletion matches the record's `T`, the
+    /// three-base insertion matches nothing (the record's `TTT` is a one-base
+    /// insertion), so Ensembl VEP 116.2 prints `rs71668025` on the `-` row and `-`
+    /// on the `TTT` row.
+    #[test]
+    fn insertion_length_decides_the_match_of_a_multi_allelic_record() {
+        let candidates = [
+            record("rs1601149035", 28382673, 28382673, "T/A/G"),
+            record("rs71668025", 28382673, 28382674, "TT/T/TTT"),
+        ];
+        let alleles = parsed("21\t28382673\t.\tTT\tT,TTTT\t.\t.\t.");
+        let colocated = find_colocated_variants(&alleles[0], candidates.to_vec(), &DEFAULT);
+        assert_eq!(names(&colocated), ["rs71668025"]);
+        assert_eq!(
+            colocated[0].matched_alleles,
+            [MatchedAllele {
+                input_allele: "-".to_string(),
+                input_index: 0,
+                record_allele: "T".to_string(),
+                record_index: 0,
+            }]
+        );
+        assert!(colocated[0].applies_to_allele("-"));
+        assert!(!colocated[0].applies_to_allele("TTT"));
+    }
+
+    /// The records at 38383755 are two COSMIC somatic null alleles then
+    /// `rs2516998629` (`T/C`, somatic) in file order; Ensembl VEP 116.2 prints the
+    /// dbSNP name first, then the two COSMIC names in file order, for
+    /// `21 38383755 T C`. At 14109044 the non-somatic HGMD record and `rs7278737`
+    /// precede the somatic COSMIC record, and the dbSNP name precedes the HGMD
+    /// name. The COSMIC and HGMD names are stand-ins of the real records' prefix
+    /// classes (`OutputFactory.pm:1057-1065` ranks by the first two letters).
+    #[test]
+    fn existing_variation_sorted_non_somatic_then_prefix_rank() {
+        let candidates = [
+            somatic(record("COSV9900002", 38383755, 38383755, "COSMIC_MUTATION")),
+            somatic(record("COSV9900003", 38383755, 38383755, "COSMIC_MUTATION")),
+            somatic(record("rs2516998629", 38383755, 38383755, "T/C")),
+        ];
+        assert_eq!(
+            existing("21\t38383755\t.\tT\tC\t.\t.\t.", &candidates, &DEFAULT),
+            ["rs2516998629", "COSV9900002", "COSV9900003"]
+        );
+        let mixed = [
+            record("CM990001", 14109044, 14109044, "HGMD_MUTATION"),
+            somatic(record("COSV9900001", 14109044, 14109044, "COSMIC_MUTATION")),
+            record("rs7278737", 14109044, 14109044, "G/A/T"),
+            record("CD990002", 14109044, 14109044, "HGMD_MUTATION"),
+            record("TMP_1", 14109044, 14109044, "G/A"),
+        ];
+        assert_eq!(
+            existing("21\t14109044\t.\tG\tA\t.\t.\t.", &mixed, &DEFAULT),
+            ["rs7278737", "CM990001", "CD990002", "TMP_1", "COSV9900001"]
+        );
+        let variant = &parsed("21\t14109044\t.\tG\tA\t.\t.\t.")[0];
+        let colocated = find_colocated_variants(variant, mixed.to_vec(), &DEFAULT);
+        assert_eq!(
+            names(&colocated),
+            ["CM990001", "COSV9900001", "rs7278737", "CD990002", "TMP_1"],
+            "the record keeps the cache's order"
+        );
+    }
+
+    /// No record of the release-116 chromosome 21 cache is on the reverse strand, so
+    /// the record is hand-built: `T/C` on strand -1 at 100 is `A/G` on the forward
+    /// strand, which `get_matched_variant_alleles` finds by reverse-complementing
+    /// the input's alleles (`Utils/Sequence.pm:1182, 1196`); the match names the
+    /// alleles as each side spells them. `A/C` does not match it.
+    #[test]
+    fn reverse_strand_record_matches_complemented_alleles() {
+        let mut reverse = record("rsREV", 100, 100, "T/C");
+        reverse.strand = -1;
+        let candidates = [reverse];
+        let variant = &parsed("21\t100\t.\tA\tG\t.\t.\t.")[0];
+        let colocated = find_colocated_variants(variant, candidates.to_vec(), &DEFAULT);
+        assert_eq!(names(&colocated), ["rsREV"]);
+        assert_eq!(
+            colocated[0].matched_alleles,
+            [MatchedAllele {
+                input_allele: "G".to_string(),
+                input_index: 0,
+                record_allele: "C".to_string(),
+                record_index: 0,
+            }]
+        );
+        assert!(existing("21\t100\t.\tA\tC\t.\t.\t.", &candidates, &DEFAULT).is_empty());
+
+        let mut reverse_deletion = record("rsREVDEL", 200, 201, "CA/-");
+        reverse_deletion.strand = -1;
+        assert_eq!(
+            existing("21\t199\t.\tNTG\tN\t.\t.\t.", &[reverse_deletion], &DEFAULT),
+            ["rsREVDEL"]
+        );
+    }
+
+    /// An input on the reverse strand (the Ensembl input format's strand column)
+    /// is matched through its reverse complement: `A/G` on strand -1 at 100 is
+    /// `T/C` on the forward strand, so it matches a forward `T/C` record and not a
+    /// forward `A/G` one, and the match names the input allele as the input spells
+    /// it (`Utils/Sequence.pm:1182, 1196`: `a`'s alleles are complemented, `b`'s
+    /// are not). A reverse-strand `TT/T` at 200-201 is a forward `AA/A` and matches
+    /// the forward `A/-` at 201 by trimming.
+    #[test]
+    fn reverse_strand_input_matches_a_forward_record() {
+        let mut reverse = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        reverse.strand = Strand::Reverse;
+        let candidates = [
+            record("rsFWD_TC", 100, 100, "T/C"),
+            record("rsFWD_AG", 100, 100, "A/G"),
+        ];
+        let colocated = find_colocated_variants(&reverse, candidates.to_vec(), &DEFAULT);
+        assert_eq!(names(&colocated), ["rsFWD_TC"]);
+        assert_eq!(
+            colocated[0].matched_alleles,
+            [MatchedAllele {
+                input_allele: "G".to_string(),
+                input_index: 0,
+                record_allele: "C".to_string(),
+                record_index: 0,
+            }]
+        );
+        assert!(colocated[0].applies_to_allele(&reverse.display_allele()));
+
+        let mut deletion = InputVariant::new("21".into(), 200, 201, b"TT".to_vec(), b"T".to_vec());
+        deletion.strand = Strand::Reverse;
+        let candidates = [record("rsFWD_DEL", 201, 201, "A/-")];
+        let colocated = find_colocated_variants(&deletion, candidates.to_vec(), &DEFAULT);
+        assert_eq!(names(&colocated), ["rsFWD_DEL"]);
+    }
+
+    /// A structural variant is never co-located (`VariationTabix.pm:118` keeps the
+    /// sequence variants alone), whatever record starts where it does.
+    #[test]
+    fn structural_variants_are_not_colocated() {
+        let mut variant =
+            parsed("21\t5029945\t.\tG\t<DEL>\t.\t.\tSVTYPE=DEL;END=5029950").remove(0);
+        assert!(variant.is_structural);
+        let dir = tempfile::tempdir().unwrap();
+        let source = region_source(
+            dir.path(),
+            &["rs2123010281\t0\t0\t5029945\t5029946\tGG/G\t1\t\t0\t\t\t\t\t"],
+        );
+        let failure = ReadFailure::default();
+        annotate_colocated(&mut variant, &source, &DEFAULT, &failure);
+        assert!(variant.colocated_variants.is_empty());
+        assert!(variant.existing_variation.is_empty());
+        assert!(failure.take().is_none());
+
+        variant = parsed("21\t5029945\t.\tGG\tG\t.\t.\t.").remove(0);
+        annotate_colocated(&mut variant, &source, &DEFAULT, &failure);
+        assert_eq!(variant.existing_variation, ["rs2123010281"]);
+    }
+
+    /// `21 14109044 G A,C`: `rs7278737` (`G/A/T`) matches the record through `A`
+    /// alone, so Ensembl VEP 116.2 prints it on the `A` row and not on the `C` row,
+    /// while the two null-allele records (HGMD and COSMIC stand-ins) print on both.
+    /// Every allele carries the record's whole match list.
+    #[test]
+    fn rsid_not_matching_this_allele_is_omitted_from_its_row() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = region_source(
+            dir.path(),
+            &[
+                "CM990001\t0\t0\t14109044\t\tHGMD_MUTATION\t1\t\t1\t\t\t\t\t",
+                "COSV9900001\t0\t1\t14109044\t\tCOSMIC_MUTATION\t1\t\t1\t\t\t\t\t",
+                "rs7278737\t0\t0\t14109044\t\tG/A/T\t1\tbenign\t1\tT:benign\tG\t\t\t",
+            ],
+        );
+        let failure = ReadFailure::default();
+        let mut alleles = parsed("21\t14109044\t.\tG\tA,C\t.\t.\t.");
+        for variant in &mut alleles {
+            annotate_colocated(variant, &source, &DEFAULT, &failure);
+        }
+        assert_eq!(alleles[0].display_allele(), "A");
+        assert_eq!(
+            alleles[0].existing_variation,
+            ["rs7278737", "CM990001", "COSV9900001"]
+        );
+        assert_eq!(alleles[1].display_allele(), "C");
+        assert_eq!(alleles[1].existing_variation, ["CM990001", "COSV9900001"]);
+        for variant in &alleles {
+            assert_eq!(
+                names(&variant.colocated_variants),
+                ["CM990001", "COSV9900001", "rs7278737"]
+            );
+        }
+    }
+
+    /// Under `--no_check_alleles` a record matches on its start and end alone and
+    /// carries no matched alleles: `21 38383755 T G` gains `rs2516998629` (`T/C`),
+    /// `21 40000000 A G` gains `rs775128082` (`T/C`), as Ensembl VEP 116.2 prints;
+    /// a record spanning one base more does not match.
+    #[test]
+    fn no_check_alleles_matches_on_start_and_end_only() {
+        let rules = ColocationRules {
+            no_check_alleles: true,
+            ..DEFAULT
+        };
+        let candidates = [
+            record("rs775128082", 40000000, 40000000, "T/C"),
+            record("rsWIDER", 40000000, 40000001, "TA/C"),
+        ];
+        let variant = &parsed("21\t40000000\t.\tA\tG\t.\t.\t.")[0];
+        let colocated = find_colocated_variants(variant, candidates.to_vec(), &rules);
+        assert_eq!(names(&colocated), ["rs775128082"]);
+        assert!(colocated[0].matched_alleles.is_empty());
+        assert!(colocated[0].applies_to_allele("G"));
+        assert!(colocated[0].frequencies.is_empty());
+        assert!(existing("21\t40000000\t.\tA\tG\t.\t.\t.", &candidates, &DEFAULT).is_empty());
+    }
+
+    /// A COSMIC stand-in (`COSMIC_MUTATION`, no `/`) at 14109044 matches
+    /// `21 14109044 G C` on its span alone, prints on every allele's row, and never
+    /// matches under `--exclude_null_alleles`; a null-allele record at another span
+    /// never matches, `--no_check_alleles` notwithstanding
+    /// (`AnnotationType/Variation.pm:150-157`).
+    #[test]
+    fn null_allele_record_matches_on_span_unless_excluded() {
+        let candidates = [
+            somatic(record("COSV9900001", 14109044, 14109044, "COSMIC_MUTATION")),
+            somatic(record("COSVWIDE", 14109044, 14109045, "COSMIC_MUTATION")),
+        ];
+        let line = "21\t14109044\t.\tG\tC\t.\t.\t.";
+        assert_eq!(existing(line, &candidates, &DEFAULT), ["COSV9900001"]);
+        let exclude = ColocationRules {
+            exclude_null_alleles: true,
+            ..DEFAULT
+        };
+        assert!(existing(line, &candidates, &exclude).is_empty());
+        let no_check = ColocationRules {
+            no_check_alleles: true,
+            ..DEFAULT
+        };
+        assert_eq!(existing(line, &candidates, &no_check), ["COSV9900001"]);
+        let both = ColocationRules {
+            no_check_alleles: true,
+            exclude_null_alleles: true,
+            ..DEFAULT
+        };
+        assert!(existing(line, &candidates, &both).is_empty());
+    }
+
+    /// `rs1979841086` at 5230609 is `dbSNP_novariation` with `failed` 1 beside
+    /// `rs373402393` (`A/C`): Ensembl VEP 116.2 prints `rs373402393` for
+    /// `21 5230609 A C` and `rs1979841086,rs373402393` under `--failed 1`.
+    #[test]
+    fn failed_threshold_admits_failed_records() {
+        let mut failed = record("rs1979841086", 5230609, 5230609, "dbSNP_novariation");
+        failed.failed = 1;
+        let candidates = [failed, record("rs373402393", 5230609, 5230609, "A/C")];
+        let line = "21\t5230609\t.\tA\tC\t.\t.\t.";
+        assert_eq!(existing(line, &candidates, &DEFAULT), ["rs373402393"]);
+        let admit = ColocationRules {
             failed: 1,
-            ..Default::default()
-        }];
-
-        let colocated = find_colocated_variants(&var, &cached);
-        assert!(colocated.is_empty());
+            ..DEFAULT
+        };
+        assert_eq!(
+            existing(line, &candidates, &admit),
+            ["rs1979841086", "rs373402393"]
+        );
     }
 
+    /// A name already kept is not matched again (`VariationTabix.pm:237`): the first
+    /// record of the name stays.
     #[test]
-    fn test_find_colocated_no_match() {
-        let var = InputVariant::new("21".into(), 200, 200, b"A".to_vec(), b"G".to_vec());
+    fn a_name_is_kept_once() {
+        let candidates = [
+            record("rs1", 100, 100, "A/G"),
+            record("rs1", 100, 100, "A/G/T"),
+            record("rs2", 100, 100, "A/G"),
+        ];
+        let variant = &parsed("21\t100\t.\tA\tG\t.\t.\t.")[0];
+        let colocated = find_colocated_variants(variant, candidates.to_vec(), &DEFAULT);
+        assert_eq!(names(&colocated), ["rs1", "rs2"]);
+        assert_eq!(colocated[0].allele_string.as_deref(), Some("A/G"));
+    }
 
-        let cached = vec![CachedVariation {
-            variation_name: "rs123".to_string(),
-            start: 100,
-            end: 100,
+    /// The frequencies attached to a match are the matched record allele's: the
+    /// record `A/G/T` with `AF T:0.1,G:0.3` gives the `G` input 0.3 and the `T`
+    /// input 0.1; a record matched on its span alone gives none.
+    #[test]
+    fn frequencies_follow_the_matched_record_allele() {
+        let mut rec = record("rs1", 100, 100, "A/G/T");
+        rec.frequencies
+            .insert("AF".to_string(), "T:0.1,G:0.3".to_string());
+        let candidates = [rec];
+        let alleles = parsed("21\t100\t.\tA\tG,T\t.\t.\t.");
+        let for_g = find_colocated_variants(&alleles[0], candidates.to_vec(), &DEFAULT);
+        assert_eq!(for_g[0].frequencies.get("AF"), Some(&0.3));
+        assert_eq!(for_g[0].record_allele_for("G"), Some("G"));
+        assert_eq!(for_g[0].record_allele_for("T"), Some("T"));
+        let for_t = find_colocated_variants(&alleles[1], candidates.to_vec(), &DEFAULT);
+        assert_eq!(for_t[0].frequencies.get("AF"), Some(&0.1));
+        assert_eq!(
+            for_t[0].frequency_strings.get("AF").map(String::as_str),
+            Some("T:0.1,G:0.3")
+        );
+        let span_only = find_colocated_variants(
+            &parsed("21\t100\t.\tA\tC\t.\t.\t.")[0],
+            candidates.to_vec(),
+            &ColocationRules {
+                no_check_alleles: true,
+                ..DEFAULT
+            },
+        );
+        assert!(span_only[0].frequencies.is_empty());
+    }
+
+    /// `trim_sequences` as `Utils/Sequence.pm:965-1038` trims: `AT/ATT` from the
+    /// left is `-/T` at 102, from the right first `-/T` at 101; `GG/G` from the
+    /// left is `G/-` at 101, from the right first `G/-` at 100; a one-base pair is
+    /// untouched; identical alleles empty to `-/-`.
+    #[test]
+    fn trim_sequences_follows_perl_in_both_orders() {
+        let trimmed = |r: &str, a: &str, start: u64, end_first: bool| {
+            let (r, a, pos) = trim_sequences(r, a, start, end_first);
+            (
+                String::from_utf8_lossy(r).into_owned(),
+                String::from_utf8_lossy(a).into_owned(),
+                pos,
+            )
+        };
+        let t = |r: &str, a: &str, pos: u64| (r.to_string(), a.to_string(), pos);
+        assert_eq!(trimmed("AT", "ATT", 100, false), t("-", "T", 102));
+        assert_eq!(trimmed("AT", "ATT", 100, true), t("-", "T", 101));
+        assert_eq!(trimmed("GG", "G", 100, false), t("G", "-", 101));
+        assert_eq!(trimmed("GG", "G", 100, true), t("G", "-", 100));
+        assert_eq!(trimmed("A", "G", 100, false), t("A", "G", 100));
+        assert_eq!(trimmed("AC", "AC", 100, false), t("-", "-", 102));
+        assert_eq!(trimmed("0", "0", 100, false), t("0", "0", 100));
+        assert_eq!(trimmed("A0", "A0", 100, false), t("0", "0", 101));
+        // Perl trims the bytes of an undecoded string: a two-byte character shared
+        // at the left moves the start by two.
+        assert_eq!(trimmed("\u{e9}A", "\u{e9}C", 100, false), t("A", "C", 102));
+        assert_eq!(trim_directions("A", "G"), &[false]);
+        assert_eq!(trim_directions("AT", "A"), &[false, true]);
+    }
+
+    /// `reverse_comp` of ensembl's `Utils/Sequence.pm`, pinned with `perl` in the
+    /// release-116.2 image: `ACGTN-` is `-NACGT`, `RYMKSWHBVDX` is `XHBVDWSMKRY`,
+    /// lower case likewise, and `COSMIC_MUTATION` is `NOIATAUK_GIKSOG`.
+    #[test]
+    fn reverse_comp_matches_ensembl() {
+        assert_eq!(reverse_comp("ACGTN-"), "-NACGT");
+        assert_eq!(reverse_comp("acgtn"), "nacgt");
+        assert_eq!(reverse_comp("RYMKSWHBVDX"), "XHBVDWSMKRY");
+        assert_eq!(reverse_comp("rymkswhbvdx"), "xhbvdwsmkry");
+        assert_eq!(reverse_comp("COSMIC_MUTATION"), "NOIATAUK_GIKSOG");
+        assert_eq!(reverse_comp("GAT-"), "-ATC");
+    }
+
+    /// `get_matched_variant_alleles` on the shapes `Utils/Sequence.pm:1151-1173`
+    /// refuses: a position of 0, an allele string opening with `/`, one without
+    /// alternate alleles; and the hash's last-wins rule for a repeated allele.
+    #[test]
+    fn unusable_allele_sets_match_nothing() {
+        let a = AlleleSet {
+            allele_string: "A/G",
+            pos: 100,
+            strand: 1,
+        };
+        let b = AlleleSet {
+            allele_string: "A/G",
+            pos: 0,
+            strand: 1,
+        };
+        assert!(get_matched_variant_alleles(&a, &b).is_empty());
+        let slash = AlleleSet {
+            allele_string: "/G",
+            pos: 100,
+            strand: 1,
+        };
+        assert!(get_matched_variant_alleles(&a, &slash).is_empty());
+        let null = AlleleSet {
+            allele_string: "COSMIC_MUTATION",
+            pos: 100,
+            strand: 1,
+        };
+        assert!(get_matched_variant_alleles(&a, &null).is_empty());
+        let repeated = AlleleSet {
+            allele_string: "A/G/G",
+            pos: 100,
+            strand: 1,
+        };
+        let matched = get_matched_variant_alleles(&repeated, &a);
+        assert_eq!(matched.len(), 1);
+        assert_eq!(
+            matched[0].input_index, 1,
+            "the later allele owns the shared key"
+        );
+    }
+
+    /// Every allele of the three committed co-location corpora against the slice
+    /// committed beside it: `Existing_variation` as Ensembl VEP 116.2 wrote it for
+    /// each `Uploaded_variation` and `Allele` under the flags named here, `-` for
+    /// none. The two `colocated` corpora are matched under `--failed 1`; among their
+    /// rows the record the window misses (`21_5030482_GGGAGGGGTGG/GG` trims to
+    /// 5030484-5030492 and `rs1987113057` starts at 5030482), the failed null allele
+    /// `rs1979841086` admitted beside `rs373402393`, and the multi-allelic records
+    /// whose every allele matches one record.
+    #[test]
+    fn committed_corpus_slices_match_ensembl_vep_existing_variation() {
+        const GRCH38: &[(&str, &str, &str)] = &[
+            ("21_5029945_GG/G", "-", "rs2123010281"),
+            ("21_5030192_A/G", "G", "rs1172282560"),
+            ("21_5030287_A/T", "T", "rs1249916603"),
+            ("21_5030482_GGGAGGGGTGG/GG", "-", "-"),
+            ("21_5030602_A/AA", "A", "rs1370167485"),
+            ("21_5030602_A/C", "C", "rs1300916113"),
+            ("21_5030625_GCAT/G", "-", "rs1380012774"),
+            ("21_5030633_C/T", "T", "rs2123011366"),
+            ("21_5030664_A/T", "T", "rs1987116015"),
+            ("21_5031926_T/A", "A", "rs1435841083"),
+            ("21_5032970_T/TCAGTGAG", "CAGTGAG", "rs1568756826"),
+            ("21_5033370_C/CA/CT", "A", "rs1286929552"),
+            ("21_5033370_C/CA/CT", "T", "rs1286929552"),
+            ("21_5131441_T/C", "C", "rs1555830109"),
+            ("21_5131480_A/G", "G", "rs1555830111"),
+            ("21_5161864_G/A", "A", "-"),
+            ("21_5230609_A/C", "C", "rs1979841086,rs373402393"),
+            ("21_6138391_G/C", "C", "rs1555842629"),
+            ("21_7759128_T/A/G", "A", "rs1555870136"),
+            ("21_7759128_T/A/G", "G", "rs1555870136"),
+            ("21_9040338_T/A/C", "A", "rs75275574"),
+            ("21_9040338_T/A/C", "C", "rs75275574"),
+            ("21_10503115_A/C", "C", "-"),
+            ("21_10541121_G/A/T", "A", "rs374325784"),
+            ("21_10541121_G/A/T", "T", "rs374325784"),
+            ("21_10602054_ATA/A", "-", "rs149363218"),
+            ("21_13610458_C/A/G/T", "A", "rs201981080"),
+            ("21_13610458_C/A/G/T", "G", "rs201981080"),
+            ("21_13610458_C/A/G/T", "T", "rs201981080"),
+            ("21_14967531_T/C", "C", "rs139263261"),
+            ("21_14981488_A/C/G/T", "C", "rs17274750"),
+            ("21_14981488_A/C/G/T", "G", "rs17274750"),
+            ("21_14981488_A/C/G/T", "T", "rs17274750"),
+            ("21_38403526_T/TTCC", "TCC", "rs2517045861"),
+            ("21_44195140_G/A", "A", "rs2838519"),
+            ("21_44195140_G/A/C", "A", "rs2838519"),
+            ("21_44195140_G/A/C", "C", "rs2838519"),
+            ("21_44293150_TGTGTGTG/TGTGTG", "-", "-"),
+        ];
+        const GRCH37: &[(&str, &str, &str)] = &[
+            ("21_9411284_C/A", "A", "rs1980632183"),
+            ("21_9411349_T/A", "A", "rs1455295117"),
+            ("21_9411379_CT/C", "-", "rs1432311608"),
+            ("21_9411405_TCTATC/TC", "-", "-"),
+            ("21_9411410_C/A", "A", "-"),
+            ("21_9411555_C/T", "T", "rs1980640962"),
+            ("21_9412358_T/TG", "G", "rs555324129"),
+            ("21_9412370_A/AAC/AT", "AC", "rs1555879625"),
+            ("21_9412370_A/AAC/AT", "T", "rs1555879625"),
+            ("21_9412503_C/A/G/T", "A", "rs71220884"),
+            ("21_9412503_C/A/G/T", "G", "rs71220884"),
+            ("21_9412503_C/A/G/T", "T", "rs71220884"),
+            ("21_9413584_G/A", "A", "rs80143362"),
+            ("21_9492382_C/A/T", "A", "rs1326732194"),
+            ("21_9492382_C/A/T", "T", "rs1326732194"),
+            ("21_9569350_C/T", "T", "rs538160740"),
+            ("21_9569836_T/C", "C", "rs552769896"),
+            ("21_9879171_T/A/C", "A", "rs75275574"),
+            ("21_9879171_T/A/C", "C", "rs75275574"),
+            ("21_10090673_T/A", "A", "-"),
+            ("21_10910401_TAT/T", "-", "rs149363218"),
+            ("21_15588513_C/A/G/T", "A", "rs753372738"),
+            ("21_15588513_C/A/G/T", "G", "rs753372738"),
+            ("21_15588513_C/A/G/T", "T", "rs753372738"),
+            ("21_16340235_CC/C", "-", "rs1555879360"),
+            ("21_16438793_A/G/T", "G", "rs2223043"),
+            ("21_16438793_A/G/T", "T", "rs2223043"),
+            ("21_43005598_G/A", "A", "rs151008585,rs2146578403"),
+        ];
+        // GRCh38-colocated-alt under `--no_check_alleles --exclude_null_alleles
+        // --failed 1`: a record matches on its span alone, so `21_5030602_A/G` gains
+        // both records at 5030602 and `21_5030602_A/AA`, whose minimised span is
+        // 5030603-5030602, gains none; the failed null allele `rs1979841086` is
+        // excluded while the failed `rs1555857356` (`A/ANA`) is admitted on the span
+        // of `21_13492486_A/G`.
+        const ALT_SPAN_ONLY: &[(&str, &str, &str)] = &[
+            ("21_5030241_CCCCC/CCCC", "-", "-"),
+            ("21_5030602_A/AA", "A", "-"),
+            ("21_5030602_A/G", "G", "rs1300916113,rs1370167485"),
+            ("21_5031987_G/A/T", "A", "rs1190341920"),
+            ("21_5031987_G/A/T", "T", "rs1190341920"),
+            ("21_5031990_T/C", "C", "rs1601770516"),
+            ("21_5063607_A/AA", "A", "rs2123035150"),
+            ("21_5227650_CGC/C", "-", "rs1555831393"),
+            ("21_5230609_A/C", "C", "rs373402393"),
+            ("21_7819485_G/A/C", "A", "rs1983989595"),
+            ("21_7819485_G/A/C", "C", "rs1983989595"),
+            ("21_8680517_C/A", "A", "rs538160740"),
+            ("21_8681003_T/A", "A", "rs552769896"),
+            ("21_8701352_A/G", "G", "rs528851961"),
+            ("21_8701459_A/T", "T", "rs553814603"),
+            ("21_10541121_G/A", "A", "rs374325784"),
+            ("21_10541121_G/A/C/T", "A", "rs374325784"),
+            ("21_10541121_G/A/C/T", "C", "rs374325784"),
+            ("21_10541121_G/A/C/T", "T", "rs374325784"),
+            ("21_10541137_G/A", "A", "rs150733676"),
+            ("21_10541137_G/A/C/T", "A", "rs150733676"),
+            ("21_10541137_G/A/C/T", "C", "rs150733676"),
+            ("21_10541137_G/A/C/T", "T", "rs150733676"),
+            ("21_12002666_T/A", "A", "-"),
+            ("21_13492486_A/ANA", "NA", "-"),
+            ("21_13492486_A/G", "G", "rs1555857356"),
+            ("21_14109088_AGAGA/AGA", "-", "-"),
+            ("21_18281193_CT/C", "-", "rs2074694480"),
+            ("21_20257301_G/C", "C", "rs2123213965"),
+            ("21_30000028_CC/C", "-", "rs2072291126"),
+            ("21_33248813_TCT/TCTC", "C", "-"),
+            ("21_41585438_G/A", "A", "rs2146578403"),
+        ];
+        // The same corpus under `--check_existing --failed 1`: the alleles decide again.
+        const ALT_BY_ALLELE: &[(&str, &str, &str)] = &[
+            ("21_5030241_CCCCC/CCCC", "-", "-"),
+            ("21_5030602_A/AA", "A", "rs1370167485"),
+            ("21_5030602_A/G", "G", "-"),
+            ("21_5031987_G/A/T", "A", "rs1190341920"),
+            ("21_5031987_G/A/T", "T", "rs1190341920"),
+            ("21_5031990_T/C", "C", "rs1601770516"),
+            ("21_5063607_A/AA", "A", "-"),
+            ("21_5227650_CGC/C", "-", "rs1601785900,rs1568769193"),
+            ("21_5230609_A/C", "C", "rs1979841086,rs373402393"),
+            ("21_7819485_G/A/C", "A", "rs1983989595"),
+            ("21_7819485_G/A/C", "C", "-"),
+            ("21_8680517_C/A", "A", "-"),
+            ("21_8681003_T/A", "A", "-"),
+            ("21_8701352_A/G", "G", "rs528851961"),
+            ("21_8701459_A/T", "T", "rs553814603"),
+            ("21_10541121_G/A", "A", "rs374325784"),
+            ("21_10541121_G/A/C/T", "A", "rs374325784"),
+            ("21_10541121_G/A/C/T", "C", "rs374325784"),
+            ("21_10541121_G/A/C/T", "T", "rs374325784"),
+            ("21_10541137_G/A", "A", "rs150733676"),
+            ("21_10541137_G/A/C/T", "A", "rs150733676"),
+            ("21_10541137_G/A/C/T", "C", "rs150733676"),
+            ("21_10541137_G/A/C/T", "T", "rs150733676"),
+            ("21_12002666_T/A", "A", "-"),
+            ("21_13492486_A/ANA", "NA", "rs1555857356"),
+            ("21_13492486_A/G", "G", "-"),
+            ("21_14109088_AGAGA/AGA", "-", "-"),
+            ("21_18281193_CT/C", "-", "rs2074694480"),
+            ("21_20257301_G/C", "C", "-"),
+            ("21_30000028_CC/C", "-", "-"),
+            ("21_33248813_TCT/TCTC", "C", "-"),
+            ("21_41585438_G/A", "A", "rs151008585,rs2146578403"),
+        ];
+        let admit_failed = ColocationRules {
+            failed: 1,
+            ..DEFAULT
+        };
+        let span_only = ColocationRules {
+            no_check_alleles: true,
+            exclude_null_alleles: true,
+            failed: 1,
+        };
+        for (corpus, rules, expected) in [
+            ("GRCh38-colocated", &admit_failed, GRCH38),
+            ("GRCh37-colocated", &admit_failed, GRCH37),
+            ("GRCh38-colocated-alt", &span_only, ALT_SPAN_ONLY),
+            ("GRCh38-colocated-alt", &admit_failed, ALT_BY_ALLELE),
+        ] {
+            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../tests/golden/116")
+                .join(corpus);
+            let source =
+                VariationSource::open_json_cache(dir.join("json_cache").to_str().unwrap(), false)
+                    .unwrap()
+                    .expect("the corpus carries a variation slice");
+            let failure = ReadFailure::default();
+            let mut got = Vec::new();
+            let vcf = std::fs::read_to_string(dir.join("variants.vcf")).unwrap();
+            for line in vcf.lines().filter(|l| !l.starts_with('#')) {
+                for mut variant in parsed(line) {
+                    annotate_colocated(&mut variant, &source, rules, &failure);
+                    let names = if variant.existing_variation.is_empty() {
+                        "-".to_string()
+                    } else {
+                        variant.existing_variation.join(",")
+                    };
+                    got.push((
+                        variant.uploaded_variation(),
+                        variant.display_allele(),
+                        names,
+                    ));
+                }
+            }
+            assert!(failure.take().is_none());
+            let expected: Vec<(String, String, String)> = expected
+                .iter()
+                .map(|(name, allele, names)| {
+                    (name.to_string(), allele.to_string(), names.to_string())
+                })
+                .collect();
+            assert_eq!(got, expected, "{corpus} under {rules:?}");
+        }
+    }
+
+    /// An empty input allele (`A//G` splits to `A`, an empty string and `G`) is
+    /// stored under its trimmed form but never matched: Perl tests the allele it
+    /// finds for truth (`Utils/Sequence.pm:1232`), and the empty string is false, so
+    /// a record `A/-`, whose own form is the same `A`, `-`, matches nothing of it.
+    #[test]
+    fn an_empty_input_allele_matches_nothing() {
+        let a = AlleleSet {
+            allele_string: "A//G",
+            pos: 100,
+            strand: 1,
+        };
+        let b = AlleleSet {
+            allele_string: "A/-",
+            pos: 100,
+            strand: 1,
+        };
+        assert!(get_matched_variant_alleles(&a, &b).is_empty());
+        let g = AlleleSet {
+            allele_string: "A/G",
+            pos: 100,
+            strand: 1,
+        };
+        assert_eq!(get_matched_variant_alleles(&a, &g).len(), 1);
+    }
+
+    /// A region-layout variation source for chromosome 21 over `lines`, each a
+    /// record whose tab-separated cells follow the `variation_cols` order below.
+    fn region_source(dir: &std::path::Path, lines: &[&str]) -> VariationSource {
+        let region_dir = dir.join("variations").join("21");
+        std::fs::create_dir_all(&region_dir).unwrap();
+        let mut body = Vec::new();
+        {
+            let mut encoder =
+                flate2::write::GzEncoder::new(&mut body, flate2::Compression::default());
+            for line in lines {
+                std::io::Write::write_all(&mut encoder, line.replace('\t', " ").as_bytes())
+                    .unwrap();
+                std::io::Write::write_all(&mut encoder, b"\n").unwrap();
+            }
+            encoder.finish().unwrap();
+        }
+        std::fs::write(region_dir.join("1-50000000_var.gz"), body).unwrap();
+        let info = vep_core::cache_info::CacheInfo {
+            variation_cols: [
+                "variation_name",
+                "failed",
+                "somatic",
+                "start",
+                "end",
+                "allele_string",
+                "strand",
+                "clin_sig",
+                "phenotype_or_disease",
+                "clin_sig_allele",
+                "clin_sig_ref_allele",
+                "clinical_impact",
+                "pubmed",
+                "var_synonyms",
+            ]
+            .iter()
+            .map(|name| name.to_string())
+            .collect(),
             ..Default::default()
-        }];
-
-        let colocated = find_colocated_variants(&var, &cached);
-        assert!(colocated.is_empty());
+        };
+        VariationSource::open(dir, &info, false)
+            .unwrap()
+            .expect("a region file is a variation source")
     }
 
     // The `-o vep` path streams the Extra column straight into the writer, and

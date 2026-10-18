@@ -483,6 +483,24 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long = "check_existing")]
     pub check_existing: bool,
 
+    /// Report a known variant as co-located when its start and end equal the input variant's, whatever its alleles; such a variant prints on every allele's row
+    #[arg(help_heading = "Output Control", long = "no_check_alleles")]
+    pub no_check_alleles: bool,
+
+    /// Never report a known variant whose alleles the cache does not hold (COSMIC and HGMD records, dbSNP records without variation); without the flag such a variant is reported when its start and end equal the input variant's
+    #[arg(help_heading = "Output Control", long = "exclude_null_alleles")]
+    pub exclude_null_alleles: bool,
+
+    /// Report known variants whose failed value is at most this: 0 excludes variants that failed Ensembl's quality checks, 1 includes them
+    #[arg(
+        help_heading = "Output Control",
+        long,
+        value_name = "INT",
+        default_value_t = 0,
+        allow_negative_numbers = true
+    )]
+    pub failed: i64,
+
     /// Accepted for VEP compatibility; not implemented
     #[arg(help_heading = "Output Control", long = "coding_only")]
     pub coding_only: bool,
@@ -745,7 +763,7 @@ impl Args {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
+    use crate::config::{Config, ParseFailure};
 
     #[test]
     fn test_default_args() {
@@ -942,6 +960,42 @@ mod tests {
         assert!(args.check_existing);
         assert!(args.coding_only);
         assert!(args.no_intergenic);
+    }
+
+    /// `--failed` is Ensembl VEP's `failed=i` (Config.pm:119, default 0 at :308): an
+    /// integer, negative included, and a syntax error for anything else; the two
+    /// co-location switches parse beside it.
+    #[test]
+    fn failed_takes_an_integer() {
+        let config = Config::from_argv(["vep", "--check_existing"]).unwrap();
+        assert_eq!(config.failed, 0);
+        assert!(!config.no_check_alleles);
+        assert!(!config.exclude_null_alleles);
+        let config = Config::from_argv([
+            "vep",
+            "--check_existing",
+            "--failed",
+            "1",
+            "--no_check_alleles",
+            "--exclude_null_alleles",
+        ])
+        .unwrap();
+        assert_eq!(config.failed, 1);
+        assert!(config.no_check_alleles);
+        assert!(config.exclude_null_alleles);
+        assert_eq!(
+            Config::from_argv(["vep", "--failed=-1"]).unwrap().failed,
+            -1
+        );
+        assert_eq!(
+            Config::from_argv(["vep", "--failed", "-1"]).unwrap().failed,
+            -1
+        );
+        let err = Config::from_argv(["vep", "--failed", "yes"]).unwrap_err();
+        assert!(
+            matches!(err, ParseFailure::Usage(_)),
+            "a non-integer is clap's own error: {err}"
+        );
     }
 
     #[test]

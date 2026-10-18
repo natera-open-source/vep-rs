@@ -134,6 +134,9 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--variant_class` | bool | false | Add variant class from SO |
 | `--overlaps` | bool | false | Add the OverlapBP and OverlapPC columns to the tab, VCF and Parquet outputs: the bases of a structural variant inside the transcript and the percentage of the transcript they cover (transcript rows only; regulatory features are not annotated) |
 | `--check_existing` | bool | false | Check for co-located known variants |
+| `--no_check_alleles` | bool | false | Report a known variant as co-located when its start and end equal the input variant's, whatever its alleles; such a variant prints on every allele's row |
+| `--exclude_null_alleles` | bool | false | Never report a known variant whose alleles the cache does not hold (COSMIC and HGMD records, dbSNP records without variation); without the flag such a variant is reported when its start and end equal the input variant's |
+| `--failed` | i64 | `0` | Report known variants whose failed value is at most this: 0 excludes variants that failed Ensembl's quality checks, 1 includes them |
 | `--coding_only` | bool | false | Accepted for VEP compatibility; not implemented |
 | `--no_intergenic` | bool | false | Accepted for VEP compatibility; not implemented |
 | `--hgnc` | bool | false | Accepted without effect: Ensembl VEP declares it and reads nothing from it |

@@ -13,6 +13,11 @@
   "gnomadg-columns",
   "variation_name",
   "clin_sig",
+  "check_existing",
+  "existing-variation-matching",
+  "failed",
+  "variation-strand",
+  "exclude_null_alleles",
   "engine_identity_lines"
  ],
  "excludes": {

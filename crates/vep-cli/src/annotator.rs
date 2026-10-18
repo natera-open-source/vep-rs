@@ -17,7 +17,7 @@ use crate::json_cache;
 use crate::transcript_index::{
     LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl, TranscriptSet,
 };
-use crate::variation_matcher;
+use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_source::{ReadFailure, VariationSource};
 use crate::vcf_parser::parse_vcf_line;
 use vep_builtins::BuiltinRegistry;
@@ -33,6 +33,8 @@ pub(crate) const HGVS_NEEDS_FASTA: &str = "Cannot generate HGVS coordinates (--h
 pub struct AnnotationResources {
     pub transcripts: Arc<LazyTranscriptIndexes>,
     pub variation_source: Option<Arc<VariationSource>>,
+    /// Which known variants of a window co-locate with an input variant.
+    pub colocation: ColocationRules,
     pub effects_config: Arc<vep_effects::EffectsConfig>,
     pub builtin_plugins: Arc<BuiltinRegistry>,
     /// C-ABI plugins loaded from the `--plugin` arguments no built-in claimed.
@@ -263,6 +265,7 @@ impl Annotator {
             AnnotationResources {
                 transcripts,
                 variation_source,
+                colocation: ColocationRules::from_config(config),
                 effects_config,
                 builtin_plugins,
                 dylib_plugins,
@@ -656,7 +659,7 @@ pub fn annotate_batch(
         );
 
         if let Some(source) = &resources.variation_source {
-            variation_matcher::annotate_colocated(variant, source, failure);
+            variation_matcher::annotate_colocated(variant, source, &resources.colocation, failure);
         }
 
         // A breakend's intergenic verdict is its record's: `apply_record_rules`.
@@ -728,6 +731,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts,
             variation_source: None,
+            colocation: ColocationRules::default(),
             effects_config: Arc::new(vep_effects::EffectsConfig::default()),
             builtin_plugins: Arc::new(BuiltinRegistry::new()),
             dylib_plugins: Arc::new(PluginRegistry::new()),
@@ -1092,6 +1096,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts: Arc::new(LazyTranscriptIndexes::empty()),
             variation_source: Some(Arc::new(source)),
+            colocation: ColocationRules::default(),
             effects_config: Arc::new(vep_effects::EffectsConfig::default()),
             builtin_plugins: Arc::new(BuiltinRegistry::new()),
             dylib_plugins: Arc::new(PluginRegistry::new()),
@@ -1340,6 +1345,38 @@ mod tests {
             .err()
             .expect("an empty cache root is refused");
         assert!(err.to_string().starts_with("ERROR: [cache] "), "{err}");
+    }
+
+    /// `from_config` carries the co-location flags into the library path: on the
+    /// GRCh38-colocated corpus, `21 5230609 A C` gains the failed null allele
+    /// `rs1979841086` beside `rs373402393` under `--failed 1`, as Ensembl VEP 116.2
+    /// prints it, and `rs373402393` alone without the flag.
+    #[test]
+    fn from_config_carries_the_colocation_rules() {
+        let cache = format!(
+            "{}/../../tests/golden/116/GRCh38-colocated/json_cache",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let existing = |flags: &[&str]| -> Vec<String> {
+            let mut argv = vec![
+                "vep",
+                "--fork",
+                "1",
+                "--json_cache",
+                &cache,
+                "--check_existing",
+            ];
+            argv.extend_from_slice(flags);
+            let annotator = Annotator::from_config(&Config::from_argv(argv).unwrap()).unwrap();
+            let mut batch = parse_vcf_line("21\t5230609\t.\tA\tC\t.\t.\t.", false).unwrap();
+            let _ = annotator.annotate_batch(&mut batch);
+            batch[0].existing_variation.clone()
+        };
+        assert_eq!(existing(&[]), ["rs373402393"]);
+        assert_eq!(
+            existing(&["--failed", "1"]),
+            ["rs1979841086", "rs373402393"]
+        );
     }
 
     /// `from_config` refuses `--hgvsg` with no FASTA as the binary does, with

@@ -91,7 +91,7 @@ cell-type-header-and-field-group	Constants.pm	implemented	open
 cell_type	Config.pm	implemented	open			
 check-ref-column	Constants.pm	implemented	open			
 check-svs-offline-source	-	documented_subset	open			
-check_existing	Config.pm	implemented	open			
+check_existing	Config.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::snv_with_different_alt_does_not_match;crates/vep-cli/src/variation_matcher.rs::indel_matches_after_trimming_both_directions;crates/vep-cli/src/variation_matcher.rs::committed_corpus_slices_match_ensembl_vep_existing_variation	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 check_frequency	Config.pm	implemented	open			
 check_ref	Parser.pm::validate_vf	implemented	open			
 check_svs	Config.pm	implemented	open			
@@ -156,14 +156,14 @@ EVE	EVE.pm	error	open
 everything	Config.pm	implemented	open			
 exac-columns	OutputFactory.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::af_exac_is_refused_as_removed_upstream		
 examples_and_validator	Parser.pm::validate_vf	implemented	open			
-exclude_null_alleles	Config.pm	implemented	open			
+exclude_null_alleles	Config.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::null_allele_record_matches_on_span_unless_excluded	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh38-colocated-alt	
 exclude_predicted	Config.pm	implemented	open			
-existing-variation-matching	AnnotationType/Variation.pm	implemented	open			
+existing-variation-matching	AnnotationType/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::existing_variation_sorted_non_somatic_then_prefix_rank;crates/vep-cli/src/variation_matcher.rs::reverse_strand_record_matches_complemented_alleles;crates/vep-cli/src/variation_matcher.rs::structural_variants_are_not_colocated;crates/vep-cli/src/variation_matcher.rs::rsid_not_matching_this_allele_is_omitted_from_its_row	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 exit-codes	vep	implemented	open			
 exit-codes-and-error-text	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_exit_codes.rs::success_is_0;crates/vep-cli/tests/cli_exit_codes.rs::run_error_is_1;crates/vep-cli/tests/cli_exit_codes.rs::usage_error_is_2;crates/vep-cli/tests/cli_exit_codes.rs::refused_flag_is_1	tests/golden/116/GRCh38-run-control	
 extended_promoters	Config.pm	implemented	open			crates/vep-cli/src/args.rs::extended_promoters_is_refused;crates/vep-cli/tests/integration_test.rs::refused_flags_exit_with_their_message
 extra-key-order-and-percent-encoding	VEP_output.pm	implemented	open			
-failed	Config.pm	implemented	open			
+failed	Config.pm	implemented	landed:implemented	crates/vep-cli/src/args.rs::failed_takes_an_integer;crates/vep-cli/src/variation_matcher.rs::failed_threshold_admits_failed_records	tests/golden/116/GRCh38-colocated	
 fasta	BaseVEP.pm	documented_subset	open			
 fasta-download-and-indexing	INSTALL.pl	implemented	open			
 fasta_dir	BaseVEP.pm	implemented	open			
@@ -317,7 +317,7 @@ NearestGene	NearestGene.pm	error	open
 nextflow-nf-core-drop-in	-	documented_subset	open			
 neXtProt	neXtProt.pm	error	open			
 NMD	NMD.pm	implemented	open			
-no_check_alleles	Config.pm	implemented	open			
+no_check_alleles	Config.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::no_check_alleles_matches_on_start_and_end_only	tests/golden/116/GRCh38-colocated-alt	
 no_check_variants_order	InputBuffer.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::no_check_variants_order_is_accepted_without_effect		
 no_escape	Config.pm	implemented	open			
 no_fasta	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::no_fasta_suppresses_autodetect	tests/golden/116/GRCh38-run-control	
@@ -524,7 +524,7 @@ variant_recoder	VariantRecoder.pm::is_vr	documented_subset	open
 variation-cache-columns	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::columns_come_from_info_json_variation_cols;crates/vep-cli/src/variation_source.rs::every_116_column_is_read_on_both_assemblies	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 variation-coordinates	Database/Variation.pm	implemented	open			
 variation-files-as-input	Cache/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::reads_all_vars_gz_through_csi;crates/vep-cli/src/variation_source.rs::reads_per_region_var_gz	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
-variation-strand	Database/Variation.pm	implemented	open			
+variation-strand	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::reverse_strand_record_matches_complemented_alleles;crates/vep-cli/src/variation_matcher.rs::reverse_strand_input_matches_a_forward_record	tests/golden/116/GRCh38-colocated	
 variation_name	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::variation_name_is_the_second_column	tests/golden/116/GRCh38-colocated	
 VARITY	VARITY.pm	error	open			
 vcf	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::vcf_with_json_or_tab_is_perls_error;crates/vep-cli/src/config.rs::vcf_with_most_severe_is_perls_error	tests/golden/116/GRCh38-writers	
