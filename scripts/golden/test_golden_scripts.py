@@ -1077,15 +1077,23 @@ def _corpora() -> list[Path]:
 @pytest.mark.parametrize("corpus", _corpora(), ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_committed_expected_files_match_their_provenance_digests(corpus: Path):
     """The expected outputs are stored gzipped; their uncompressed bytes must hash to
-    what provenance.json recorded when VEP produced them."""
+    what provenance.json recorded when VEP produced them, for the manifest's own run
+    and for every flag set it names, each under its own record in provenance.json's
+    `flag_sets`."""
     prov = json.loads((corpus / "provenance.json").read_text(encoding="utf-8"))
-    expected_dir = corpus / "expected"
-    for name, digest in prov["sha256"].items():
-        gz = expected_dir / (name + ".gz")
-        plain = expected_dir / name
-        data = gzip.open(gz, "rb").read() if gz.is_file() else plain.read_bytes()
-        assert hashlib.sha256(data).hexdigest() == digest, f"{corpus.name}/{name} differs from its recorded digest"
     manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
+    runs = [("expected", prov["sha256"])]
+    for flag_set in manifest.get("flag_sets") or []:
+        set_name = flag_set["name"]
+        record = (prov.get("flag_sets") or {}).get(set_name)
+        assert record is not None, f"{corpus.name}: flag set {set_name} has no provenance record"
+        runs.append((flag_set.get("expected_dir", f"expected_{set_name}"), record["sha256"]))
+    for expected_dir, digests in runs:
+        for name, digest in digests.items():
+            gz = corpus / expected_dir / (name + ".gz")
+            plain = corpus / expected_dir / name
+            data = gzip.open(gz, "rb").read() if gz.is_file() else plain.read_bytes()
+            assert hashlib.sha256(data).hexdigest() == digest, f"{corpus.name}/{expected_dir}/{name} differs from its recorded digest"
     # The directory is the assembly, optionally suffixed (`GRCh37-hgvs`).
     assembly = corpus.name.split("-", 1)[0]
     assert manifest["release"] == corpus.parent.name and manifest["assembly"] == assembly

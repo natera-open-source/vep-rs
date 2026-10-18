@@ -47945,5 +47945,25 @@
  },
  "vep_rs_only_summary": {
   "reference_skipped_record": 2624
- }
+ },
+ "flag_sets": [
+  {
+   "name": "overlaps",
+   "flags": [
+    "--grch37",
+    "--overlaps"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "tab",
+    "vcf"
+   ],
+   "expected_dir": "expected_overlaps",
+   "covers": [
+    "overlaps",
+    "overlapbp-overlappc-sv"
+   ]
+  }
+ ]
 }

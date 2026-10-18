@@ -76,5 +76,21 @@
    "MT": 2,
    "X": 46
   }
+ },
+ "flag_sets": {
+  "overlaps": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --overlaps [--tab|--vcf]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "tab.txt": "6a74af00516fa478b10f4d11189048c503c392efb5106525054f04bcb2551883",
+    "vcf.vcf": "a4e81700e41154a7817098f0da6bb7de7ef5c241f9acdedc4bbe358af964c2e4"
+   }
+  }
  }
 }

@@ -305,7 +305,7 @@ impl Runner {
             check_existing: c.check_existing,
             pubmed: c.pubmed,
             dont_skip: c.dont_skip,
-            overlaps: false,
+            overlaps: c.overlaps,
             regulatory: c.regulatory,
             no_escape: c.output_format == "json",
         }

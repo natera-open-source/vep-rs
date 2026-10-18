@@ -549,5 +549,31 @@
  },
  "vep_rs_only_summary": {
   "reference_skipped_record": 5
- }
+ },
+ "flag_sets": [
+  {
+   "name": "distance",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--distance",
+    "2000,0"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_distance",
+   "covers": [
+    "distance"
+   ]
+  }
+ ]
 }

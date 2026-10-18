@@ -361,7 +361,8 @@ pub struct Args {
     )]
     pub transcript_index_impl: String,
 
-    /// Upstream/downstream distance in bp (or "up,down" for asymmetric)
+    /// Upstream and downstream distance in bp: one integer, or the pair "up,down"
+    /// (a downstream part written 0 reads as the upstream value)
     #[arg(help_heading = "Runtime", long, default_value = "5000")]
     pub distance: String,
 
@@ -466,6 +467,12 @@ pub struct Args {
     /// Add variant class from SO
     #[arg(help_heading = "Output Control", long = "variant_class")]
     pub variant_class: bool,
+
+    /// Add the OverlapBP and OverlapPC columns to the tab, VCF and Parquet outputs: the
+    /// bases of a structural variant inside the transcript and the percentage of the
+    /// transcript they cover (transcript rows only; regulatory features are not annotated)
+    #[arg(help_heading = "Output Control", long)]
+    pub overlaps: bool,
 
     /// Check for co-located known variants
     #[arg(help_heading = "Output Control", long = "check_existing")]

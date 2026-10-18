@@ -344,6 +344,10 @@ pub const COMPONENTS: &[(&str, &str)] = &[
         "a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect",
     ),
     (
+        "config",
+        "a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer",
+    ),
+    (
         "run",
         "any other failure of the annotation run, with its cause chain",
     ),
@@ -514,6 +518,7 @@ pub struct Config {
     pub domains: bool,
     pub regulatory: bool,
     pub variant_class: bool,
+    pub overlaps: bool,
     pub af: bool,
     pub af_1kg: bool,
     pub af_gnomade: bool,
@@ -630,13 +635,15 @@ impl Config {
                 return Err(CliError::new(rule.component, rule.message));
             }
         }
-        Ok(Config::resolve(args, &state))
+        let distance =
+            parse_distance(&args.distance).map_err(|message| CliError::new("config", message))?;
+        Ok(Config::resolve(args, &state, distance))
     }
 
     /// The configuration from the arguments and the flag state after the option
     /// sets: a value an option set assigns comes from the state, everything else
     /// from the arguments.
-    fn resolve(args: Args, state: &FlagState) -> Self {
+    fn resolve(args: Args, state: &FlagState, distance: (u64, u64)) -> Self {
         let on = |flag: &str| state.is_active(flag);
         let output_format = state.scalar("output_format").unwrap_or("vep").to_string();
         // The VCF CSQ layout names SYMBOL, BIOTYPE, EXON and INTRON whatever the
@@ -680,8 +687,6 @@ impl Config {
             .unwrap_or_else(|| format!("{dir}/Plugins"));
 
         let cache_version = args.cache_version.unwrap_or(vep_core::VEP_VERSION);
-
-        let distance = parse_distance(&args.distance);
 
         let fields = args.fields.map(|f| {
             f.split(',')
@@ -753,6 +758,7 @@ impl Config {
             domains: on("domains"),
             regulatory: on("regulatory"),
             variant_class: on("variant_class"),
+            overlaps: args.overlaps,
             af: on("af"),
             af_1kg: on("af_1kg"),
             af_gnomade: on("af_gnomade"),
@@ -841,27 +847,23 @@ fn resolve_decompression_threads(raw: usize) -> usize {
         .unwrap_or(4)
 }
 
-/// Parse the --distance flag value into (upstream, downstream) bp.
-///
-/// Accepts either a single number ("5000") or a pair ("5000,2000").
-fn parse_distance(s: &str) -> (u64, u64) {
-    if let Some((up, down)) = s.split_once(',') {
-        let up = up
-            .trim()
-            .parse::<u64>()
-            .unwrap_or(vep_core::DEFAULT_DISTANCE);
-        let down = down
-            .trim()
-            .parse::<u64>()
-            .unwrap_or(vep_core::DEFAULT_DISTANCE);
-        (up, down)
-    } else {
-        let d = s
-            .trim()
-            .parse::<u64>()
-            .unwrap_or(vep_core::DEFAULT_DISTANCE);
-        (d, d)
-    }
+/// The `--distance` value as (upstream, downstream) bp: one integer for both, or
+/// the pair `up,down`. Ensembl VEP reads the pair with `$d ||= $u` (`BaseRunner.pm`
+/// 506), which fires on the false string `0` alone, so the downstream part `0` is
+/// the upstream value while `00` or `+0` is a downstream distance of 0. Ensembl VEP
+/// numifies a non-numeric part to 0 under an `Argument "x" isn't numeric` warning
+/// and drops the up- or downstream rows that part governs (both for a single
+/// value); here it is a refusal naming the value, as is a part padded with
+/// whitespace, which Perl numifies but `||=` reads as set.
+fn parse_distance(s: &str) -> Result<(u64, u64), String> {
+    let refused = || format!("--distance expects one or two integers (up[,down]); got {s:?}");
+    let integer = |part: &str| part.parse::<u64>().map_err(|_| refused());
+    let (up, down) = match s.split_once(',') {
+        None => (s, s),
+        Some((up, "0")) => (up, up),
+        Some((up, down)) => (up, down),
+    };
+    Ok((integer(up)?, integer(down)?))
 }
 
 /// Expand a leading `~` to the user's home directory.
@@ -1221,14 +1223,56 @@ mod tests {
         }
     }
 
+    /// Ensembl VEP splits `--distance` on `,` (`Config.pm` 334) and reads the pair with
+    /// `($u, $d) = @$distances; $d ||= $u` (`BaseRunner.pm` 505-506): one value serves
+    /// both directions, `5000,2000` is asymmetric, the downstream part `0` is the
+    /// upstream value (`2000,0` is `2000,2000`), an upstream 0 stands (`0,2000`), and
+    /// `00` or `+0` is a true string in Perl, kept and numified to a downstream 0.
     #[test]
-    fn test_parse_distance_single() {
-        assert_eq!(parse_distance("5000"), (5000, 5000));
+    fn distance_pair_with_zero_downstream_uses_upstream() {
+        assert_eq!(parse_distance("5000"), Ok((5000, 5000)));
+        assert_eq!(parse_distance("5000,2000"), Ok((5000, 2000)));
+        assert_eq!(parse_distance("2000,0"), Ok((2000, 2000)));
+        assert_eq!(parse_distance("2000,00"), Ok((2000, 0)));
+        assert_eq!(parse_distance("2000,+0"), Ok((2000, 0)));
+        assert_eq!(parse_distance("0,2000"), Ok((0, 2000)));
+        assert_eq!(parse_distance("0"), Ok((0, 0)));
+        assert_eq!(parse_distance("00"), Ok((0, 0)));
+        assert_eq!(
+            config(&["vep", "--distance", "2000,0"]).distance,
+            (2000, 2000)
+        );
     }
 
+    /// A part that is not an integer, an empty part, or a third part is refused
+    /// with the contract line `ERROR: [config] <message>` naming the value as
+    /// written. Ensembl VEP numifies a non-numeric part to 0 under an `Argument "x"
+    /// isn't numeric` warning, dropping the up- or downstream rows that part governs,
+    /// reads `5000,` as `5000` (Perl's `split` drops a trailing empty field), ignores
+    /// a third part, and reads ` 0 ` as a set downstream value (numified to 0) where a
+    /// trimmed `0` would read as the upstream value, so a padded part is refused as
+    /// well. A negative value in its own token (`--distance -1`) never reaches here:
+    /// clap reads `-1` as an unknown flag and exits 2; `--distance=-1` is refused here.
     #[test]
-    fn test_parse_distance_pair() {
-        assert_eq!(parse_distance("5000,2000"), (5000, 2000));
+    fn distance_non_numeric_is_an_error() {
+        for value in [
+            "x", "5000,x", "x,5000", "", "5000,", ",5000", "1.5", "1,2,3", " 2000", "2000, 0",
+        ] {
+            assert_eq!(
+                refusal(&["vep", "--distance", value]),
+                format!(
+                    "ERROR: [config] --distance expects one or two integers (up[,down]); got {value:?}"
+                )
+            );
+        }
+        assert!(matches!(
+            Config::from_argv(["vep", "--distance", "-1"]),
+            Err(ParseFailure::Usage(_))
+        ));
+        assert_eq!(
+            refusal(&["vep", "--distance=-1"]),
+            "ERROR: [config] --distance expects one or two integers (up[,down]); got \"-1\""
+        );
     }
 
     #[test]
@@ -1309,7 +1353,7 @@ mod tests {
         let names: std::collections::BTreeSet<&str> =
             COMPONENTS.iter().map(|(name, _)| *name).collect();
         assert_eq!(names.len(), COMPONENTS.len(), "{COMPONENTS:?}");
-        for component in ["cli", "output", "cache", "filter", "run"] {
+        for component in ["cli", "output", "cache", "filter", "config", "run"] {
             assert!(names.contains(component), "{component}");
         }
     }

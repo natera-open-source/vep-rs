@@ -12462,5 +12462,24 @@
   "start_cooccurrence_swap": 213,
   "breakend_mate_local_read": 79
  },
- "vep_rs_only_summary": {}
+ "vep_rs_only_summary": {},
+ "flag_sets": [
+  {
+   "name": "overlaps",
+   "flags": [
+    "--overlaps"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "tab",
+    "vcf"
+   ],
+   "expected_dir": "expected_overlaps",
+   "covers": [
+    "overlaps",
+    "overlapbp-overlappc-sv"
+   ]
+  }
+ ]
 }

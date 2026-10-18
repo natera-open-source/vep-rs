@@ -15,7 +15,10 @@ mod common;
 use std::path::Path;
 use std::process::Command;
 
-use common::{compare_run, corpora, default_run, run_output, run_vep, runs, vep_command, Run};
+use common::{
+    compare_run, corpora, default_run, parse_tab, parse_vcf, run_output, run_vep, runs,
+    vep_command, Run,
+};
 
 fn check(run: &Run, label: &str, header: String, body: String, failures: &mut Vec<String>) {
     if !header.is_empty() || !body.is_empty() {
@@ -63,6 +66,128 @@ fn json_output_matches_vep_on_every_corpus() {
         }
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}
+
+/// Ensembl VEP lists `OverlapBP` and `OverlapPC` as the fields `--overlaps` adds
+/// (`Constants.pm` 131), last among the flag fields of the tab columns and of the
+/// VCF CSQ fields (after `FLAGS`, and after the `SYMBOL_SOURCE` and `HGNC_ID` that
+/// `--vcf` switches on), and fills them on every structural variant row except a
+/// breakpoint's, when the overlap is positive, with the overlap length and
+/// `sprintf("%.2f")` of the percentage of the feature it covers (`OutputFactory.pm`
+/// 2087-2094). On the GRCh38 corpus the 272-base deletion
+/// `gnomAD-SV_v3_DEL_chr21_9b2929e7` (21:13610236-13610507) against ENST00000299443
+/// carries 272 and 0.75 and against ENST00000620442 272 and 1.73, the values Ensembl
+/// VEP 116.2 writes for those rows; the breakend `synth_bnd_inter_0055_A` carries
+/// neither (`-` in tab, empty in VCF). Without the flag neither format names the
+/// two fields.
+#[test]
+fn overlaps_adds_overlapbp_overlappc_columns_to_tab_and_vcf() {
+    let tmp = tempfile::tempdir().unwrap();
+    let corpora = corpora();
+    let corpus = corpora
+        .iter()
+        .find(|c| c.release == "116" && c.name == "GRCh38")
+        .expect("the 116/GRCh38 corpus");
+    let run = default_run(corpus);
+    let deletion_id = "gnomAD-SV_v3_DEL_chr21_9b2929e7";
+    let breakend_id = "synth_bnd_inter_0055_A";
+    let column_line = |tab: &str| {
+        tab.lines()
+            .find(|l| l.starts_with("#Uploaded_variation"))
+            .unwrap()
+            .to_string()
+    };
+    let csq_format = |vcf: &str| {
+        vcf.lines()
+            .find(|l| l.starts_with("##INFO=<ID=CSQ"))
+            .unwrap()
+            .to_string()
+    };
+
+    let tab = run_vep(&run, "tab", tmp.path(), &[]);
+    assert!(column_line(&tab).ends_with("\tFLAGS"));
+    assert!(!tab.contains("OverlapBP"));
+    let vcf = run_vep(&run, "vcf", tmp.path(), &[]);
+    assert!(csq_format(&vcf).ends_with("|FLAGS|SYMBOL_SOURCE|HGNC_ID\">"));
+    assert!(!vcf.contains("OverlapBP"));
+
+    let tab = run_vep(&run, "tab", tmp.path(), &["--overlaps"]);
+    assert!(column_line(&tab).ends_with("\tFLAGS\tOverlapBP\tOverlapPC"));
+    let rows = parse_tab(&tab);
+    let tab_values = |id: &str, feature: &str| {
+        let row = rows
+            .iter()
+            .find(|e| e.fields["Uploaded_variation"] == id && e.feature == feature)
+            .unwrap_or_else(|| panic!("tab row {id} x {feature}"));
+        (
+            row.fields["OverlapBP"].as_str(),
+            row.fields["OverlapPC"].as_str(),
+        )
+    };
+    assert_eq!(tab_values(deletion_id, "ENST00000299443"), ("272", "0.75"));
+    assert_eq!(tab_values(deletion_id, "ENST00000620442"), ("272", "1.73"));
+    assert_eq!(tab_values(breakend_id, "ENST00000374832"), ("-", "-"));
+
+    let vcf = run_vep(&run, "vcf", tmp.path(), &["--overlaps"]);
+    assert!(csq_format(&vcf).ends_with("|FLAGS|SYMBOL_SOURCE|HGNC_ID|OverlapBP|OverlapPC\">"));
+    let inputs = run.input_records();
+    let entries = parse_vcf(&vcf, &inputs);
+    let csq_values = |id: &str, feature: &str| {
+        let id_column = format!("\t{id}\t");
+        let record = inputs
+            .iter()
+            .position(|l| l.contains(&id_column))
+            .unwrap_or_else(|| panic!("input record {id}"));
+        let entry = entries
+            .iter()
+            .find(|e| e.record == Some(record) && e.feature == feature)
+            .unwrap_or_else(|| panic!("CSQ entry of record {record} x {feature}"));
+        (
+            entry.fields["OverlapBP"].as_str(),
+            entry.fields["OverlapPC"].as_str(),
+        )
+    };
+    assert_eq!(csq_values(deletion_id, "ENST00000299443"), ("272", "0.75"));
+    assert_eq!(csq_values(deletion_id, "ENST00000620442"), ("272", "1.73"));
+    assert_eq!(csq_values(breakend_id, "ENST00000374832"), ("", ""));
+
+    // The flat Parquet output takes the tab columns, so it gains the two under the flag.
+    if !duckdb_available() {
+        eprintln!("skipping the Parquet half: duckdb CLI not installed");
+        return;
+    }
+    let write_parquet = |flags: &[&str], dir: &str| {
+        let parquet_dir = tmp.path().join(dir);
+        let mut cmd = vep_command(&run, tmp.path());
+        cmd.arg("-o")
+            .arg(&parquet_dir)
+            .args(["--output_format", "parquet", "--parquet_shape", "flat"])
+            .args(flags);
+        let out = run_output(&run, &mut cmd);
+        assert!(
+            out.status.success(),
+            "vep --output_format parquet {flags:?} failed:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        format!("{}/**/*.parquet", parquet_dir.display()).replace('\'', "''")
+    };
+    let overlap_columns = |glob: &str| {
+        duckdb_csv(&format!(
+            "SELECT count(*) FROM (DESCRIBE SELECT * FROM read_parquet('{glob}')) \
+             WHERE column_name IN ('OverlapBP', 'OverlapPC')"
+        ))
+        .trim()
+        .to_string()
+    };
+    let plain_glob = write_parquet(&[], "plain.parquet");
+    assert_eq!(overlap_columns(&plain_glob), "0");
+    let overlaps_glob = write_parquet(&["--overlaps"], "overlaps.parquet");
+    assert_eq!(overlap_columns(&overlaps_glob), "2");
+    let values = duckdb_csv(&format!(
+        "SELECT OverlapBP, OverlapPC FROM read_parquet('{overlaps_glob}') \
+         WHERE Uploaded_variation = '{deletion_id}' AND Feature = 'ENST00000299443'"
+    ));
+    assert_eq!(values.trim(), "272,0.75");
 }
 
 fn duckdb_available() -> bool {

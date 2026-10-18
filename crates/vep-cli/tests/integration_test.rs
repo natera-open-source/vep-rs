@@ -371,6 +371,24 @@ fn refused_flags_exit_with_their_message() {
     }
 }
 
+/// A `--distance` value with a part that is not an integer is refused before any
+/// input is read: one line `ERROR: [config] <message>` naming the value on
+/// standard error, exit status 1. Ensembl VEP numifies the part to 0 under an
+/// `Argument "x" isn't numeric` warning and drops the rows of that direction.
+#[test]
+fn distance_non_numeric_exits_with_the_error_line() {
+    let result = vep_binary()
+        .args(["--distance", "5000,x"])
+        .args(["-i", "/nonexistent/file.vcf", "--quiet"])
+        .output()
+        .unwrap();
+    assert_eq!(result.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&result.stderr),
+        "ERROR: [config] --distance expects one or two integers (up[,down]); got \"5000,x\"\n"
+    );
+}
+
 /// A `--transcript_filter` Ensembl VEP would refuse ends the run before any
 /// input is read, with one `ERROR: [filter] <message>` line on stderr and exit
 /// status 1: Ensembl VEP's message for a missing list file and an unknown
