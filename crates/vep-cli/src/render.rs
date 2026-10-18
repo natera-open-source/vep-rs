@@ -10,9 +10,9 @@ use crate::pipeline::WriteContext;
 use crate::variation_matcher;
 use std::borrow::Cow;
 use vep_core::consequence::Consequence;
+use vep_core::terms::Vocabulary;
 use vep_core::variant::InputVariant;
-
-use vep_io::output::fields::{field_value, record_rows_into, ExtraFieldsPlan, Row};
+use vep_io::output::fields::{field_value, record_rows_into, rendered_terms, ExtraFieldsPlan, Row};
 use vep_io::OutputFormatter;
 
 /// Renders one input record: the alleles split from one line, written together
@@ -70,7 +70,8 @@ impl AlleleColumns {
 /// `write!`: a `write!` with only `{}` placeholders still builds
 /// `core::fmt::Arguments` and routes each `Display::fmt` through
 /// `Formatter::pad`, per (variant x transcript consequence). The bytes are
-/// identical for `&str` with no width, precision or fill.
+/// identical for `&str` with no width, precision or fill. The one value
+/// formatted here is the `--total_length` suffix of a position.
 pub(crate) fn render_default_record<'a>(
     out: &mut Vec<u8>,
     record: &[&'a InputVariant],
@@ -113,7 +114,8 @@ pub(crate) fn render_default_record<'a>(
                 // column is `-`, Existing_variation included, and the Extra column
                 // holds the variant-level keys or `-` (VEP_output.pm:104).
                 out.extend_from_slice(b"-\t-\t-\t-\t");
-                write_so_terms(out, terms);
+                let rendered = rendered_terms(terms, plan.options.terms, true);
+                out.extend_from_slice(rendered.join(",").as_bytes());
                 out.extend_from_slice(b"\t-\t-\t-\t-\t-\t-\t");
                 variation_matcher::write_extra_fields(variant, None, plan, out)?;
                 out.push(b'\n');
@@ -122,10 +124,10 @@ pub(crate) fn render_default_record<'a>(
                 out.extend_from_slice(allele_text.as_bytes());
                 // Intergenic: no feature columns, the most severe consequence, and
                 // an Extra column carrying IMPACT alone (no STRAND), as VEP does.
-                let consequence_str = variant
+                let consequence = variant
                     .most_severe_consequence
-                    .map(|c| c.so_term())
-                    .unwrap_or(Consequence::IntergenicVariant.so_term());
+                    .unwrap_or(Consequence::IntergenicVariant);
+                let consequence_str = plan.options.terms.term(consequence);
                 out.extend_from_slice(b"\t-\t-\t-\t");
                 out.extend_from_slice(consequence_str.as_bytes());
                 out.extend_from_slice(b"\t-\t-\t-\t-\t-\t");
@@ -143,11 +145,21 @@ pub(crate) fn render_default_record<'a>(
                 out.push(b'\t');
                 out.extend_from_slice(tc.feature_type.as_str().as_bytes());
                 out.push(b'\t');
-                write_so_terms(out, &tc.consequences);
+                write_terms(out, &tc.consequences, plan.options.terms);
+                for (position, total) in [
+                    (tc.cdna_position.as_deref(), tc.cdna_total),
+                    (tc.cds_position.as_deref(), tc.cds_total),
+                    (tc.protein_position.as_deref(), tc.protein_total),
+                ] {
+                    out.push(b'\t');
+                    out.extend_from_slice(position.unwrap_or("-").as_bytes());
+                    if plan.options.total_length {
+                        if let Some(total) = total {
+                            out.extend_from_slice(format!("/{total}").as_bytes());
+                        }
+                    }
+                }
                 for field in [
-                    tc.cdna_position.as_deref().unwrap_or("-"),
-                    tc.cds_position.as_deref().unwrap_or("-"),
-                    tc.protein_position.as_deref().unwrap_or("-"),
                     tc.amino_acids.as_deref().unwrap_or("-"),
                     tc.codons.as_deref().unwrap_or("-"),
                     existing_str,
@@ -164,13 +176,15 @@ pub(crate) fn render_default_record<'a>(
     Ok(())
 }
 
-/// Writes the SO terms of a Consequence column, `,`-joined.
-fn write_so_terms(out: &mut Vec<u8>, terms: &[Consequence]) {
-    for (i, term) in terms.iter().enumerate() {
+/// Writes a feature row's Consequence column, `,`-joined, in the `--terms`
+/// vocabulary, a term at a time with nothing allocated; a summary row lists
+/// each rendered label once and so goes through [`rendered_terms`] instead.
+fn write_terms(out: &mut Vec<u8>, terms: &[Consequence], vocabulary: Vocabulary) {
+    for (i, &term) in terms.iter().enumerate() {
         if i > 0 {
             out.push(b',');
         }
-        out.extend_from_slice(term.so_term().as_bytes());
+        out.extend_from_slice(vocabulary.term(term).as_bytes());
     }
 }
 

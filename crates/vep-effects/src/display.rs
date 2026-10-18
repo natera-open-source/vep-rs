@@ -756,22 +756,35 @@ impl AlleleWindows {
 // ---------------------------------------------------------------------------
 // Row assembly.
 
-/// The five display columns of one row; `None` prints as `-`.
+/// The five display columns of one row; `None` prints as `-`. The three
+/// totals are the lengths `--total_length` appends to the positions
+/// (`OutputFactory.pm` `TranscriptVariationAllele_to_output_hash`): the
+/// transcript's exon length sum whenever the variant overlaps an exon, the
+/// cached coding sequence's length and the cached peptide's length whenever the
+/// variant lies in the coding region and the sequence is present; each is set
+/// whether or not its position is, so the writers print `-/<total>` where
+/// Ensembl VEP appends to its placeholder.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct DisplayFields {
     pub cdna_position: Option<String>,
     pub cds_position: Option<String>,
     pub protein_position: Option<String>,
+    pub cdna_total: Option<u32>,
+    pub cds_total: Option<u32>,
+    pub protein_total: Option<u32>,
     pub amino_acids: Option<String>,
     pub codons: Option<String>,
 }
 
 impl DisplayFields {
-    /// Writes the five columns onto `tc`.
+    /// Writes the five columns and the three totals onto `tc`.
     pub(crate) fn write_to(self, tc: &mut TranscriptConsequence) {
         tc.cdna_position = self.cdna_position;
         tc.cds_position = self.cds_position;
         tc.protein_position = self.protein_position;
+        tc.cdna_total = self.cdna_total;
+        tc.cds_total = self.cds_total;
+        tc.protein_total = self.protein_total;
         tc.amino_acids = self.amino_acids;
         tc.codons = self.codons;
     }
@@ -805,6 +818,7 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
     let strand = transcript.strand.as_i8();
     let cdna = genomic2cdna(mapper, vf_start, vf_end, strand);
     out.cdna_position = coords_column(first_start(&cdna), last_end(&cdna));
+    out.cdna_total = Some(transcript.spliced_length());
 
     // coding
     let (Some(coding_start), Some(coding_end)) =
@@ -830,25 +844,28 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
     let phase_offset = transcript.facts().start_phase_offset as i64;
     let cds_start = first_start(&cds).map(|s| s + phase_offset);
     let cds_end = last_end(&cds).map(|e| e + phase_offset);
-    out.cds_position = coords_column(cds_start, cds_end);
-    let pep = pep_from_cds(mapper, &cds);
-    let (pep_start, pep_end) = (first_start(&pep), last_end(&pep));
-    out.protein_position = coords_column(pep_start, pep_end);
-
-    if variant.is_structural {
-        return out;
-    }
     let vefc = transcript.vefc.as_ref();
     let cds_seq = vefc
         .and_then(|v| v.translateable_seq.as_deref())
         .unwrap_or("")
         .as_bytes();
-    let utr3 = vefc
-        .and_then(|v| v.three_prime_utr.as_deref())
-        .unwrap_or("")
-        .as_bytes();
     let pep_seq = vefc
         .and_then(|v| v.peptide.as_deref())
+        .unwrap_or("")
+        .as_bytes();
+    let cached_length = |seq: &[u8]| (!seq.is_empty()).then_some(seq.len() as u32);
+    out.cds_position = coords_column(cds_start, cds_end);
+    out.cds_total = cached_length(cds_seq);
+    let pep = pep_from_cds(mapper, &cds);
+    let (pep_start, pep_end) = (first_start(&pep), last_end(&pep));
+    out.protein_position = coords_column(pep_start, pep_end);
+    out.protein_total = cached_length(pep_seq);
+
+    if variant.is_structural {
+        return out;
+    }
+    let utr3 = vefc
+        .and_then(|v| v.three_prime_utr.as_deref())
         .unwrap_or("")
         .as_bytes();
     let seq_edits: &[SeqEdit] = vefc.map_or(&[], |v| v.seq_edits.as_slice());
@@ -1155,6 +1172,50 @@ mod tests {
         assert_eq!(d.cdna_position.as_deref(), Some("11"));
         assert_eq!(d.cds_position, None);
         assert_eq!(d.amino_acids, None);
+    }
+
+    /// The totals `--total_length` appends (`OutputFactory.pm`
+    /// `TranscriptVariationAllele_to_output_hash`): the transcript's length (the
+    /// exon sum, `Transcript::length`) beside the cDNA position of a variant
+    /// overlapping an exon, the length of the cached `translateable_seq` beside
+    /// the CDS position and the length of the cached `peptide` beside the protein
+    /// position of a coding variant, the sequence totals only when the cache
+    /// carries the sequence; the positions themselves stay numeric. On the
+    /// fixture the exons sum to 500, the CDS is 300 bases and the peptide 99
+    /// residues.
+    #[test]
+    fn total_length_appends_cdna_cds_and_peptide_lengths() {
+        let mut tx = forward_transcript();
+        let mut vefc = tx.vefc.take().unwrap();
+        vefc.peptide = Some("M".to_string() + &"A".repeat(98));
+        tx.vefc = Some(vefc);
+        let d = display_fields(&snv(1052, "G", "A"), &tx);
+        assert_eq!(d.cdna_position.as_deref(), Some("53"));
+        assert_eq!(d.cds_position.as_deref(), Some("3"));
+        assert_eq!(d.protein_position.as_deref(), Some("1"));
+        assert_eq!(
+            (d.cdna_total, d.cds_total, d.protein_total),
+            (Some(500), Some(300), Some(99))
+        );
+        assert_eq!(d.amino_acids.as_deref(), Some("M/I"));
+        let d = display_fields(&deletion(1053, 1055, "GCT"), &tx);
+        assert_eq!(d.cdna_position.as_deref(), Some("54-56"));
+        assert_eq!(
+            (d.cdna_total, d.cds_total, d.protein_total),
+            (Some(500), Some(300), Some(99))
+        );
+        let d = display_fields(&snv(1010, "A", "G"), &tx);
+        assert_eq!(d.cdna_position.as_deref(), Some("11"));
+        assert_eq!(d.cdna_total, Some(500));
+        assert_eq!((d.cds_position, d.cds_total), (None, None));
+        assert_eq!((d.protein_position, d.protein_total), (None, None));
+        assert_eq!(
+            display_fields(&snv(1300, "A", "G"), &tx),
+            DisplayFields::default()
+        );
+        // Without a cached peptide the protein position gets no total.
+        let d = display_fields(&snv(1052, "G", "A"), &forward_transcript());
+        assert_eq!((d.cds_total, d.protein_total), (Some(300), None));
     }
 
     #[test]

@@ -431,8 +431,9 @@ fn format_u64(mut value: u64, buf: &mut [u8; 20]) -> &[u8] {
 /// summary row, which carries the variant-level keys alone.
 ///
 /// This is the hot path for the default `-o vep` format: it runs once per
-/// (variant x transcript consequence). With no optional field group active and no
-/// plugin data it writes the four fixed keys directly without allocating.
+/// (variant x transcript consequence). For a sequence variant with no optional
+/// field group active, no plugin data and a vocabulary that prints DISTANCE as the
+/// SO terms do, it writes the four fixed keys directly without allocating.
 pub fn write_extra_fields(
     variant: &InputVariant,
     tc: Option<&vep_core::consequence::TranscriptConsequence>,
@@ -442,7 +443,12 @@ pub fn write_extra_fields(
     let has_plugin_data =
         !variant.plugin_data.is_empty() || tc.is_some_and(|t| !t.plugin_data.is_empty());
     let summary_row = tc.is_none() && variant.summary_terms.is_some();
-    if !plan.any_optional_group && !has_plugin_data && !variant.is_structural && !summary_row {
+    if !plan.any_optional_group
+        && !has_plugin_data
+        && !variant.is_structural
+        && !summary_row
+        && plan.options.user_group_is_plain()
+    {
         return write_user_group(tc, writer);
     }
 

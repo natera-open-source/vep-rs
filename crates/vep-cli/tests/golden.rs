@@ -415,7 +415,9 @@ fn skipped_record_markers_match_the_reference_output() {
 /// Each corpus stays inside its in-repository size budget. A corpus that ships a
 /// reference contig (`manifest["fasta"]`) has that file measured on its own
 /// against a budget of its own, since a whole chromosome compresses to about
-/// ten mebibytes and would otherwise consume the corpus budget by itself.
+/// ten mebibytes and would otherwise consume the corpus budget by itself; a
+/// corpus naming a sibling's reference (`../GRCh37-hgvs/reference.fa.gz`) ships
+/// no bytes of it, so nothing is subtracted.
 #[test]
 fn each_corpus_fits_its_size_budget() {
     const BUDGET_BYTES: u64 = 15 * 1024 * 1024;
@@ -423,14 +425,21 @@ fn each_corpus_fits_its_size_budget() {
     for corpus in corpora() {
         let mut size = common::dir_size(&corpus.dir);
         if let Some(fasta) = corpus.manifest["fasta"].as_str() {
-            let fasta_size = std::fs::metadata(corpus.dir.join(fasta)).unwrap().len();
+            let path = corpus.dir.join(fasta);
+            let fasta_size = fs::metadata(&path).unwrap().len();
             assert!(
                 fasta_size <= FASTA_BUDGET_BYTES,
                 "{}/{}: {fasta} is {fasta_size} bytes, over the {FASTA_BUDGET_BYTES} byte reference budget",
                 corpus.release,
                 corpus.name
             );
-            size -= fasta_size;
+            let inside_corpus = path
+                .canonicalize()
+                .unwrap()
+                .starts_with(corpus.dir.canonicalize().unwrap());
+            if inside_corpus {
+                size -= fasta_size;
+            }
         }
         assert!(
             size <= BUDGET_BYTES,

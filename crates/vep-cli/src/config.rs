@@ -13,6 +13,8 @@ use std::fmt;
 
 use clap::FromArgMatches;
 
+use vep_core::terms::Vocabulary;
+
 use crate::args::Args;
 use crate::option_rules::{FlagState, OWN_RULES};
 use crate::transcript_index::TranscriptIndexImpl;
@@ -455,6 +457,12 @@ pub struct Config {
     pub compress_output: Option<String>,
     pub force_overwrite: bool,
     pub no_headers: bool,
+    /// The vocabulary consequence terms print in (`--terms`).
+    pub terms: Vocabulary,
+    /// Leave HGVSp's `=` and a VCF gene symbol's whitespace unescaped: `--no_escape`,
+    /// which `--json` implies through Ensembl VEP's `rest` option set; `--output_format
+    /// json` implies it here as well (`docs/intended-divergences.md`).
+    pub no_escape: bool,
     /// Print the cache directory in the output headers as `[PATH]/<leaf>`.
     pub mask_header_cache_path: bool,
     /// Where the run's warnings go: the `--warning_file` value, else
@@ -587,6 +595,8 @@ pub struct Config {
     pub transcript_filter: Vec<String>,
     pub allele_number: bool,
     pub show_ref_allele: bool,
+    pub uploaded_allele: bool,
+    pub ambiguity: bool,
     pub minimal: bool,
     pub total_length: bool,
 
@@ -771,6 +781,7 @@ impl Config {
         // flags, so a VCF output fills them by either route; Ensembl VEP's `vcf`
         // option set does so for `--vcf` alone.
         let vcf_output = output_format == "vcf";
+        let json_output = output_format == "json";
 
         // Getopt::Long accumulates `-o` (`output_file|o=s@`) and the vep script keeps
         // the last (vep:33); `STDOUT` is matched in any case (BaseRunner.pm:213).
@@ -832,6 +843,11 @@ impl Config {
             compress_output: args.compress_output,
             force_overwrite: args.force_overwrite,
             no_headers: args.no_headers,
+            // clap's enumeration admits the `%VALID` spellings alone; a `None` here
+            // means it drifted from `Vocabulary::from_flag`, and the default is safer
+            // than a crash.
+            terms: Vocabulary::from_flag(&args.terms).unwrap_or_default(),
+            no_escape: on("no_escape") || json_output,
             mask_header_cache_path: args.mask_header_cache_path,
             warning_file,
             skipped_variants_file: args.skipped_variants_file,
@@ -920,6 +936,8 @@ impl Config {
             transcript_filter: args.transcript_filter,
             allele_number: on("allele_number"),
             show_ref_allele: args.show_ref_allele,
+            uploaded_allele: args.uploaded_allele,
+            ambiguity: args.ambiguity,
             minimal: args.minimal,
             total_length: args.total_length,
             no_stats: on("no_stats"),
@@ -1419,6 +1437,52 @@ mod tests {
     fn minimal_implies_allele_number() {
         assert!(config(&["vep", "--minimal"]).allele_number);
         assert!(!config(&["vep"]).allele_number);
+    }
+
+    /// `--terms` takes Ensembl VEP's `%VALID` values (Config.pm:598: `SO`,
+    /// `display`, `NCBI`), `SO` by default (:307), with `-t` as its short form
+    /// (:176 `terms|t=s`); a value outside the list, `ensembl` included, is a
+    /// value outside the enumeration and so clap's own error (exit 2), as for
+    /// every declared `%VALID` flag.
+    #[test]
+    fn terms_rejects_ensembl_as_a_value_outside_the_enumeration() {
+        assert_eq!(config(&["vep"]).terms, Vocabulary::So);
+        assert_eq!(
+            config(&["vep", "--terms", "display"]).terms,
+            Vocabulary::Display
+        );
+        assert_eq!(config(&["vep", "-t", "NCBI"]).terms, Vocabulary::Ncbi);
+        for bad in ["ensembl", "so", "ncbi"] {
+            match Config::from_argv(["vep", "--terms", bad]).unwrap_err() {
+                ParseFailure::Usage(e) => {
+                    assert_eq!(e.kind(), clap::error::ErrorKind::InvalidValue, "{bad}")
+                }
+                ParseFailure::Refused(e) => panic!("{bad} refused instead: {e}"),
+            }
+        }
+    }
+
+    /// `--no_escape` is a flag of its own (Config.pm:228); `--json` implies it
+    /// through the `rest` option set (:484-498), and `--output_format json` is
+    /// read the same way here, where Ensembl VEP escapes that output.
+    #[test]
+    fn json_flag_implies_no_escape() {
+        assert!(config(&["vep", "--no_escape"]).no_escape);
+        assert!(config(&["vep", "--json"]).no_escape);
+        assert!(config(&["vep", "--output_format", "json"]).no_escape);
+        assert!(!config(&["vep"]).no_escape);
+        assert!(!config(&["vep", "--vcf"]).no_escape);
+        assert!(!config(&["vep", "--tab"]).no_escape);
+    }
+
+    /// `--uploaded_allele` (Config.pm:234) and `--ambiguity` (:229) are plain
+    /// switches that no option set implies.
+    #[test]
+    fn uploaded_allele_and_ambiguity_are_plain_switches() {
+        let c = config(&["vep", "--uploaded_allele", "--ambiguity"]);
+        assert!(c.uploaded_allele && c.ambiguity);
+        let plain = config(&["vep", "--everything", "--minimal", "--vcf"]);
+        assert!(!plain.uploaded_allele && !plain.ambiguity);
     }
 
     /// `--var_synonyms` without `--check_existing` switches the latter on and owes

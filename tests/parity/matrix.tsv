@@ -15,12 +15,12 @@ af_gnomad	Config.pm	implemented	open
 af_gnomade	Config.pm	implemented	open			
 af_gnomadg	Config.pm	implemented	open			
 all_refseq	AnnotationType/Transcript.pm	implemented	open			
-allele_number	Config.pm	implemented	open			
+allele_number	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::minimal_implies_allele_number	tests/golden/116/GRCh37-output-flags	
 allele_string	Database/Variation.pm	implemented	open			
 allow_non_variant	Parser/VCF.pm	documented_subset	open			
 AlphaMissense	AlphaMissense.pm	implemented	open			
 alt_equals_ref_and_duplicate_alts	Variation/VariationFeatureOverlap.pm	implemented	open			
-ambiguity	Config.pm	implemented	open			
+ambiguity	Config.pm	implemented	landed:implemented	crates/vep-core/src/variant.rs::ambiguity_code_follows_perl_table;crates/vep-io/src/output/fields.rs::ambiguity_key_absent_for_indels;crates/vep-io/src/output/json.rs::variant_level_keys_sit_on_the_record_object	tests/golden/116/GRCh37-output-flags	
 ambiguous_hgvs	Parser/HGVS.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::ambiguous_hgvs_is_refused		
 AncestralAllele	AncestralAllele.pm	error	open			
 anchor-base-trimming	VCF.pm	implemented	open			
@@ -162,7 +162,7 @@ existing-variation-matching	AnnotationType/Variation.pm	implemented	landed:imple
 exit-codes	vep	implemented	open			
 exit-codes-and-error-text	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_exit_codes.rs::success_is_0;crates/vep-cli/tests/cli_exit_codes.rs::run_error_is_1;crates/vep-cli/tests/cli_exit_codes.rs::usage_error_is_2;crates/vep-cli/tests/cli_exit_codes.rs::refused_flag_is_1	tests/golden/116/GRCh38-run-control	
 extended_promoters	Config.pm	implemented	open			crates/vep-cli/src/args.rs::extended_promoters_is_refused;crates/vep-cli/tests/integration_test.rs::refused_flags_exit_with_their_message
-extra-key-order-and-percent-encoding	VEP_output.pm	implemented	open			
+extra-key-order-and-percent-encoding	VEP_output.pm	implemented	landed:implemented	crates/vep-io/src/output/vcf_output.rs::symbol_whitespace_is_percent20_in_vcf_unless_no_escape	tests/golden/116/GRCh37-output-flags	
 failed	Config.pm	implemented	landed:implemented	crates/vep-cli/src/args.rs::failed_takes_an_integer;crates/vep-cli/src/variation_matcher.rs::failed_threshold_admits_failed_records	tests/golden/116/GRCh38-colocated	
 fasta	BaseVEP.pm	documented_subset	landed:documented_subset	crates/vep-fasta/src/lib.rs::bgzf_fasta_with_gzi_matches_plain;crates/vep-fasta/src/lib.rs::plain_gzip_fasta_is_refused;crates/vep-fasta/src/lib.rs::directory_opens_every_indexed_fasta;crates/vep-fasta/src/lib.rs::gzi_of_another_file_is_refused;crates/vep-cli/tests/cli_run_control.rs::hgvs_without_fasta_is_fatal;crates/vep-cli/tests/cli_run_control.rs::misdescribed_block_fails_the_run	tests/golden/116/GRCh37-hgvs	
 fasta-download-and-indexing	INSTALL.pl	implemented	open			
@@ -319,7 +319,7 @@ neXtProt	neXtProt.pm	error	open
 NMD	NMD.pm	implemented	open			
 no_check_alleles	Config.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::no_check_alleles_matches_on_start_and_end_only	tests/golden/116/GRCh38-colocated-alt	
 no_check_variants_order	InputBuffer.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::no_check_variants_order_is_accepted_without_effect		
-no_escape	Config.pm	implemented	open			
+no_escape	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::no_escape_leaves_hgvsp_equals_raw;crates/vep-cli/src/config.rs::json_flag_implies_no_escape	tests/golden/116/GRCh37-output-flags	
 no_fasta	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::no_fasta_suppresses_autodetect	tests/golden/116/GRCh38-run-control	
 no_headers	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/integration_test.rs::no_headers_writes_no_hash_line_in_default_tab_and_vcf	tests/golden/116/GRCh38-writers	
 no_intergenic	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/row_filter.rs::no_intergenic_suppresses_the_intergenic_row_in_every_format	tests/golden/116/GRCh38-pick-summary	
@@ -327,7 +327,7 @@ no_progress	Config.pm	implemented	open
 no_stats	BaseRunner.pm	implemented	open			
 non-variant-records	VCF.pm	implemented	open			
 NonSynonymousFilter	NonSynonymousFilter.pm	error	open			
-numbers	Config.pm	implemented	open			
+numbers	Config.pm	implemented	landed:implemented	crates/vep-effects/src/display.rs::exon_and_intron_numbers_follow_vep	tests/golden/116/GRCh37-output-flags	
 offline	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::offline_changes_no_output		
 old_maf	Config.pm	implemented	open			
 OpenTargets	OpenTargets.pm	error	open			
@@ -420,7 +420,7 @@ shift_genomic	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/
 shift_hgvs	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/args.rs::shift_hgvs_takes_0_or_1;crates/vep-effects/src/hgvs.rs::shift_hgvs_0_leaves_an_indel_in_a_repeat_unshifted;crates/vep-effects/src/hgvs.rs::shift_hgvs_0_on_the_reverse_strand_looks_a_duplication_up_5prime_first;crates/vep-effects/src/consequences.rs::shift_hgvs_0_reads_the_lookup_order_from_the_input_strand;crates/vep-cli/src/config.rs::shift_hgvs_0_forces_shift_3prime_0	tests/golden/116/GRCh38-identifiers	
 shift_length	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::shift_length_prints_zero_on_unshifted_transcript_rows;crates/vep-io/src/output/fields.rs::shift_length_is_absent_without_shift_3prime	tests/golden/116/GRCh38-identifiers	
 show_cache_info	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::show_cache_info_prints_info_json_and_exits_0	tests/golden/116/GRCh38-run-control	
-show_ref_allele	Config.pm	implemented	open			
+show_ref_allele	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::ref_allele_absent_on_summary_rows	tests/golden/116/GRCh37-output-flags	
 sift	Config.pm	documented_subset	open			
 sift-polyphen-value-grammar	Config.pm	documented_subset	open			
 single-dash-long-options	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_argv.rs::single_dash_long_option_is_rewritten;crates/vep-cli/tests/cli_argv.rs::short_flags_unchanged;crates/vep-cli/tests/cli_argv.rs::single_dash_unknown_option_is_refused_by_name	tests/golden/116/GRCh38-run-control	
@@ -487,11 +487,11 @@ tab	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::tab_w
 tab-column-order-and-placeholder	Tab.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::tab_header_describes_plugin_columns_with_their_own_text	tests/golden/116/GRCh38-writers	
 tabix-and-bigwig-readers	File.pm	documented_subset	open			
 tandem-repeats-cnv-tr	VCF.pm	documented_subset	open			
-terms	Config.pm	implemented	open			
-terms-vocabularies	Variation/Utils/Constants.pm	implemented	open			
+terms	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::terms_rejects_ensembl_as_a_value_outside_the_enumeration;crates/vep-io/src/output/fields.rs::consequence_column_renders_in_the_terms_vocabulary;crates/vep-io/src/output/json.rs::terms_vocabulary_renders_json_consequences;crates/vep-io/src/output/fields.rs::distance_follows_the_rendered_terms;crates/vep-io/src/output/fields.rs::summary_rows_list_each_rendered_label_once	tests/golden/116/GRCh37-output-flags	
+terms-vocabularies	Variation/Utils/Constants.pm	implemented	landed:implemented	crates/vep-core/src/terms.rs::display_and_ncbi_vocabularies_match_ensembl_variation;crates/vep-core/src/terms.rs::flag_values_name_their_vocabulary	tests/golden/116/GRCh37-output-flags	
 threads	-	implemented	landed:implemented	crates/vep-cli/src/args.rs::test_threads_alias	tests/golden/116/GRCh38-run-control	
 tmpdir	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::tmpdir_is_accepted_without_effect		
-total_length	Config.pm	implemented	open			
+total_length	Config.pm	implemented	landed:implemented	crates/vep-effects/src/display.rs::total_length_appends_cdna_cds_and_peptide_lengths;crates/vep-io/src/output/fields.rs::total_length_renders_the_totals_beside_the_positions;crates/vep-io/src/output/json.rs::total_length_json_keeps_perls_split_strings	tests/golden/116/GRCh37-output-flags	
 trans-exon-array	Core.pm	implemented	landed:implemented	crates/vep-cache-builder/src/builder.rs::exon_phases_from_ensembl_phase_attributes	tests/golden/116/GRCh38-native-builder	
 transcript-biotype	OutputFactory.pm	implemented	open			
 transcript-coordinates	Database/Transcript.pm	implemented	open			
@@ -511,7 +511,7 @@ ucsc_data_root	Config.pm	implemented	open
 uniparc-uniprot-isoform-columns	OutputFactory.pm	implemented	open			
 uniprot	OutputFactory.pm	documented_subset	open			
 unsorted-input	InputBuffer.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::unsorted_input_is_annotated_in_input_order		
-uploaded_allele	Config.pm	implemented	open			
+uploaded_allele	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::uploaded_allele_prints_the_record_allele_string;crates/vep-core/src/variant.rs::uploaded_allele_follows_perls_two_sources;crates/vep-cli/src/config.rs::uploaded_allele_and_ambiguity_are_plain_switches	tests/golden/116/GRCh37-output-flags	
 uploaded_variation_naming_116	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/vcf_parser.rs::uploaded_variation_is_the_id_when_the_record_carries_one;crates/vep-cli/src/vcf_parser.rs::dot_id_names_an_snv_by_its_line;crates/vep-cli/src/vcf_parser.rs::dot_id_names_an_indel_by_its_line;crates/vep-cli/src/vcf_parser.rs::minimised_copy_is_named_by_its_line;crates/vep-cli/src/vcf_parser.rs::dot_id_names_a_multi_allelic_record_by_its_line;crates/vep-cli/src/vcf_parser.rs::dot_id_names_a_symbolic_record_by_its_line;crates/vep-cli/src/vcf_parser.rs::an_id_equal_to_the_generated_name_yields_the_line_name;crates/vep-io/src/input/ensembl.rs::id_less_line_is_named_by_its_lower_coordinate_and_allele_column;crates/vep-cli/src/vcf_parser.rs::a_dot_empty_or_zero_first_id_names_the_record_by_its_line;crates/vep-core/src/variant.rs::a_perl_false_or_dot_name_yields_the_line_name_and_the_generated_json_id;crates/vep-core/src/variant.rs::first_vcf_id_takes_the_first_element_as_written;crates/vep-io/src/input/ensembl.rs::an_ensembl_format_id_column_is_kept_whole	tests/golden/116/GRCh37-hgvs	
 use_given_ref	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::use_given_ref_is_accepted_without_effect		
 use_transcript_ref	AnnotationType/Transcript.pm	documented_subset	open			
@@ -519,7 +519,7 @@ user	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_f
 UTRAnnotator	UTRAnnotator.pm	implemented	open			
 validate-vf-checks	Parser.pm	documented_subset	open			
 var_synonyms	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::var_synonyms_joined_with_double_dash;crates/vep-io/src/output/json.rs::var_synonyms_nested_by_source;crates/vep-cli/src/config.rs::var_synonyms_implies_check_existing_with_info_line	tests/golden/116/GRCh38-colocated	
-variant_class	Config.pm	implemented	open			
+variant_class	Config.pm	implemented	landed:implemented	crates/vep-core/src/variant.rs::so_variation_class_follows_perl;crates/vep-io/src/output/fields.rs::variant_class_survives_on_summary_rows	tests/golden/116/GRCh37-output-flags	
 variant_recoder	VariantRecoder.pm::is_vr	documented_subset	open			
 variation-cache-columns	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::columns_come_from_info_json_variation_cols;crates/vep-cli/src/variation_source.rs::every_116_column_is_read_on_both_assemblies	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 variation-coordinates	Database/Variation.pm	implemented	open			

@@ -1866,6 +1866,21 @@ Illegal division by zero at /opt/vep/src/ensembl-vep/modules/Bio/EnsEMBL/VEP/Par
 
 Without a FASTA the record is not expanded and the run completes. vep-rs reads the record symbolically with or without a FASTA, the empty unit contributing no bases (`21:30425588-30425596 tandem_repeat` with `feature_truncation,inframe_deletion` on ENST00000390690), and completes the run.
 
+## Unescaped JSON under `--output_format json`
+
+A difference in the text of one field, not in any tuple: the comparators score consequence sets and never see it, and nothing is set aside.
+
+Ensembl VEP percent-encodes the `=` of a synonymous HGVSp notation as `%3D` in every output unless `--no_escape` is set (`OutputFactory.pm`, `TranscriptVariationAllele_to_output_hash`: `$hgvs_p =~ s/\=/\%3D/g if $hgvs_p && !$self->{no_escape}`), and sets `--no_escape` through the `rest` option set that `--json` switches on (`Config.pm` lines 484-498). `--output_format json` is not in that set, so Ensembl VEP's JSON written through it carries `%3D` while its JSON written through `--json` carries `=`. vep-rs reads the resolved output format: `--json` and `--output_format json` both imply `--no_escape`, so its JSON is unescaped either way, and a text output stays escaped unless `--no_escape` is given.
+
+The record is `rs148468217`, `21 34655545 C T` on GRCh37, synonymous on ENST00000290200 (`tests/golden/116/GRCh37-output-flags/variants.vcf`, with that corpus's cache and the GRCh37 chromosome 21 FASTA beside it). Both engines run with `--hgvs --fasta <reference.fa> --output_format json`, and the `hgvsp` of the ENST00000290200 entry is:
+
+```
+Ensembl VEP 116.2   "hgvsp":"ENSP00000290200.2:p.Asp215%3D"
+vep-rs              "hgvsp":"ENSP00000290200.2:p.Asp215="
+```
+
+With `--json` in place of `--output_format json` both engines write `p.Asp215=`, and in the default, tab and VCF outputs both write `p.Asp215%3D` unless `--no_escape` is given, under which both write `p.Asp215=`; the `no-escape` flag set of the same corpus compares those. The golden corpora pass `--json` to both engines, so no JSON comparison reads the difference.
+
 ## Scoring against Ensembl VEP 116.2
 
 The comparators score against one Ensembl VEP release at a time, chosen by `--reference-release`, and `116.2` is the default: against it they apply the classes of this page, and every class the 116.2 registry sets aside or counts is listed with its treatment in [docs/concordance-provenance/116.2-divergence-classes.md](concordance-provenance/116.2-divergence-classes.md). Under `--reference-release 115.2`, the release the paper was measured against, they apply the paper's twelve classes instead, classes 1 to 12 as the paper's supplement and this page's previous version document them, and write exactly the reports they wrote for the paper; the five masks of the paper's classes 5 to 10 are listed as not applied in every 116.2 report, each with its reason.

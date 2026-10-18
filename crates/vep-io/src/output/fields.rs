@@ -18,6 +18,7 @@ use std::collections::BTreeSet;
 
 use vep_core::consequence::{Consequence, TranscriptConsequence};
 use vep_core::sv_routing::perl_true;
+use vep_core::terms::Vocabulary;
 use vep_core::variant::{colocated_in_output_order, ColocatedVariant, InputVariant, VariantClass};
 use vep_core::variation::reverse_comp;
 
@@ -99,9 +100,15 @@ pub struct FieldOptions {
     pub shift_genomic: bool,
     pub var_synonyms: bool,
     pub regulatory: bool,
+    pub ambiguity: bool,
     /// VEP's `--no_escape` (implied by `--json`): HGVSp keeps its `=` instead of
-    /// the `%3D` the text formats print.
+    /// the `%3D` the text formats print, and a gene symbol's whitespace stays in
+    /// VCF output instead of becoming `%20`.
     pub no_escape: bool,
+    /// The vocabulary consequence terms print in (`--terms`).
+    pub terms: Vocabulary,
+    /// Append `/<total>` to the three position columns (`--total_length`).
+    pub total_length: bool,
     /// `--clin_sig_allele`: which ClinVar entries CLIN_SIG reports.
     pub clin_sig_allele: ClinSigAllele,
 }
@@ -119,49 +126,76 @@ pub enum ClinSigAllele {
     WholeVariant,
 }
 
+/// One flag-driven field group: the flag, its fields, and whether VEP fills
+/// the fields from the variant alone (`VariationFeature_to_output_hash`), so
+/// that they survive on a `--most_severe` or `--summary` row, which carries
+/// no feature.
+struct FieldGroup {
+    flag: &'static str,
+    fields: &'static [&'static str],
+    vf_level: bool,
+}
+
+const fn group(flag: &'static str, fields: &'static [&'static str]) -> FieldGroup {
+    FieldGroup {
+        flag,
+        fields,
+        vf_level: false,
+    }
+}
+
+const fn vf_group(flag: &'static str, fields: &'static [&'static str]) -> FieldGroup {
+    FieldGroup {
+        flag,
+        fields,
+        vf_level: true,
+    }
+}
+
 /// The flag-driven field groups in VEP's order (`@FLAG_FIELDS`). The `user`
 /// group is unconditional and comes first among the groups that can fire here.
-const FLAG_FIELD_GROUPS: &[(&str, &[&str])] = &[
-    ("allele_number", &["ALLELE_NUM"]),
-    ("show_ref_allele", &["REF_ALLELE"]),
-    ("uploaded_allele", &["UPLOADED_ALLELE"]),
-    ("user", &["IMPACT", "DISTANCE", "STRAND", "FLAGS"]),
-    ("include_pick", &["PICK"]),
-    ("variant_class", &["VARIANT_CLASS"]),
-    ("minimal", &["MINIMISED"]),
-    (
+const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
+    group("allele_number", &["ALLELE_NUM"]),
+    group("show_ref_allele", &["REF_ALLELE"]),
+    group("uploaded_allele", &["UPLOADED_ALLELE"]),
+    group("user", &["IMPACT", "DISTANCE", "STRAND", "FLAGS"]),
+    group("include_pick", &["PICK"]),
+    vf_group("variant_class", &["VARIANT_CLASS"]),
+    vf_group("minimal", &["MINIMISED"]),
+    group(
         "clinvar_somatic_classification",
         &["CLINVAR_SOMATIC_CLASSIFICATION"],
     ),
-    ("symbol", &["SYMBOL", "SYMBOL_SOURCE", "HGNC_ID"]),
-    ("biotype", &["BIOTYPE"]),
-    ("canonical", &["CANONICAL"]),
-    ("mane_select", &["MANE", "MANE_SELECT"]),
-    ("mane", &["MANE", "MANE_SELECT", "MANE_PLUS_CLINICAL"]),
-    ("tsl", &["TSL"]),
-    ("gencode_primary", &["GENCODE_PRIMARY"]),
-    ("appris", &["APPRIS"]),
-    ("ccds", &["CCDS"]),
-    ("protein", &["ENSP"]),
-    (
+    group("symbol", &["SYMBOL", "SYMBOL_SOURCE", "HGNC_ID"]),
+    group("biotype", &["BIOTYPE"]),
+    group("canonical", &["CANONICAL"]),
+    group("mane_select", &["MANE", "MANE_SELECT"]),
+    group("mane", &["MANE", "MANE_SELECT", "MANE_PLUS_CLINICAL"]),
+    group("tsl", &["TSL"]),
+    group("gencode_primary", &["GENCODE_PRIMARY"]),
+    group("appris", &["APPRIS"]),
+    group("ccds", &["CCDS"]),
+    group("protein", &["ENSP"]),
+    group(
         "uniprot",
         &["SWISSPROT", "TREMBL", "UNIPARC", "UNIPROT_ISOFORM"],
     ),
-    ("xref_refseq", &["RefSeq"]),
-    ("gene_phenotype", &["GENE_PHENO"]),
-    ("sift", &["SIFT"]),
-    ("polyphen", &["PolyPhen"]),
-    ("numbers", &["EXON", "INTRON"]),
-    ("domains", &["DOMAINS"]),
-    ("mirna", &["miRNA"]),
-    ("hgvs", &["HGVSc", "HGVSp", "HGVS_OFFSET"]),
-    ("hgvsg", &["HGVSg"]),
-    ("af", &["AF"]),
-    (
+    group("xref_refseq", &["RefSeq"]),
+    group("gene_phenotype", &["GENE_PHENO"]),
+    vf_group("ambiguity", &["AMBIGUITY"]),
+    group("sift", &["SIFT"]),
+    group("polyphen", &["PolyPhen"]),
+    group("numbers", &["EXON", "INTRON"]),
+    group("domains", &["DOMAINS"]),
+    group("mirna", &["miRNA"]),
+    group("hgvs", &["HGVSc", "HGVSp", "HGVS_OFFSET"]),
+    group("hgvsg", &["HGVSg"]),
+    group("af", &["AF"]),
+    group(
         "af_1kg",
         &["AF", "AFR_AF", "AMR_AF", "EAS_AF", "EUR_AF", "SAS_AF"],
     ),
-    (
+    group(
         "af_gnomade",
         &[
             "gnomADe_AF",
@@ -176,7 +210,7 @@ const FLAG_FIELD_GROUPS: &[(&str, &[&str])] = &[
             "gnomADe_SAS_AF",
         ],
     ),
-    (
+    group(
         "af_gnomadg",
         &[
             "gnomADg_AF",
@@ -192,16 +226,16 @@ const FLAG_FIELD_GROUPS: &[(&str, &[&str])] = &[
             "gnomADg_SAS_AF",
         ],
     ),
-    ("max_af", &["MAX_AF", "MAX_AF_POPS"]),
-    ("check_frequency", &["FREQS"]),
-    ("check_existing", &["CLIN_SIG", "SOMATIC", "PHENO"]),
-    ("pubmed", &["PUBMED"]),
-    ("check_svs", &["SV"]),
-    ("dont_skip", &["CHECK_REF"]),
-    ("overlaps", &["OverlapBP", "OverlapPC"]),
-    ("shift_length", &["SHIFT_LENGTH"]),
-    ("var_synonyms", &["VAR_SYNONYMS"]),
-    (
+    group("max_af", &["MAX_AF", "MAX_AF_POPS"]),
+    group("check_frequency", &["FREQS"]),
+    group("check_existing", &["CLIN_SIG", "SOMATIC", "PHENO"]),
+    group("pubmed", &["PUBMED"]),
+    group("check_svs", &["SV"]),
+    vf_group("dont_skip", &["CHECK_REF"]),
+    group("overlaps", &["OverlapBP", "OverlapPC"]),
+    group("shift_length", &["SHIFT_LENGTH"]),
+    group("var_synonyms", &["VAR_SYNONYMS"]),
+    group(
         "regulatory",
         &[
             "MOTIF_NAME",
@@ -237,6 +271,7 @@ impl FieldOptions {
             "uniprot" => self.uniprot,
             "xref_refseq" => self.xref_refseq,
             "gene_phenotype" => self.gene_phenotype,
+            "ambiguity" => self.ambiguity,
             "sift" => self.sift,
             "polyphen" => self.polyphen,
             "numbers" => self.numbers,
@@ -262,12 +297,32 @@ impl FieldOptions {
         }
     }
 
+    /// Whether a row's `DISTANCE` is printed: VEP sets it only when the rendered
+    /// consequence list names `upstream_gene_variant` or `downstream_gene_variant`
+    /// (`OutputFactory.pm`, `%DISTANCE_CONS` tested against `Consequence`), so the
+    /// display vocabulary, which renders them `UPSTREAM` and `DOWNSTREAM`, never
+    /// prints it; the SO and NCBI vocabularies render both terms as themselves.
+    pub fn distance_shown(&self, tc: &TranscriptConsequence) -> bool {
+        tc.consequences.iter().any(|c| {
+            matches!(
+                self.terms.term(*c),
+                "upstream_gene_variant" | "downstream_gene_variant"
+            )
+        })
+    }
+
+    /// Whether the unconditional `user` group prints as it does under the SO
+    /// vocabulary: `DISTANCE` on every row that carries one.
+    pub fn user_group_is_plain(&self) -> bool {
+        self.terms != Vocabulary::Display
+    }
+
     /// True when any group beyond the unconditional `user` group is on, i.e.
     /// when a row can carry a field that is not IMPACT, DISTANCE, STRAND or FLAGS.
     pub fn any_optional_group(&self) -> bool {
         FLAG_FIELD_GROUPS
             .iter()
-            .any(|(g, _)| *g != "user" && self.group_active(g))
+            .any(|g| g.flag != "user" && self.group_active(g.flag))
     }
 }
 
@@ -309,9 +364,9 @@ const UNGUARDED_GROUPS: [&str; 2] = ["overlaps", "dont_skip"];
 /// for it.
 pub fn field_is_produced(field: &str, options: &FieldOptions) -> bool {
     let mut listed = false;
-    for (group, fields) in FLAG_FIELD_GROUPS {
-        if fields.contains(&field) {
-            if UNGUARDED_GROUPS.contains(group) || options.group_active(group) {
+    for group in FLAG_FIELD_GROUPS {
+        if group.fields.contains(&field) {
+            if UNGUARDED_GROUPS.contains(&group.flag) || options.group_active(group.flag) {
                 return true;
             }
             listed = true;
@@ -322,19 +377,43 @@ pub fn field_is_produced(field: &str, options: &FieldOptions) -> bool {
 
 /// The optional fields a configuration emits, in VEP's order, each name once.
 pub fn flag_fields(options: &FieldOptions) -> Vec<&'static str> {
+    fields_of_groups(options, |_| true)
+}
+
+/// The active fields VEP fills from the variant alone, in VEP's order: the
+/// keys a row without a feature (a `--most_severe` or `--summary` row) carries.
+pub fn vf_level_flag_fields(options: &FieldOptions) -> Vec<&'static str> {
+    fields_of_groups(options, |g| g.vf_level)
+}
+
+fn fields_of_groups(
+    options: &FieldOptions,
+    keep: impl Fn(&FieldGroup) -> bool,
+) -> Vec<&'static str> {
     let mut seen: BTreeSet<&str> = BTreeSet::new();
     let mut out = Vec::new();
-    for (group, fields) in FLAG_FIELD_GROUPS {
-        if !options.group_active(group) {
+    for group in FLAG_FIELD_GROUPS {
+        if !options.group_active(group.flag) || !keep(group) {
             continue;
         }
-        for f in *fields {
+        for f in group.fields {
             if seen.insert(f) {
                 out.push(*f);
             }
         }
     }
     out
+}
+
+/// Whether `VariationFeature_to_output_hash` sets `field` from the record alone
+/// (OutputFactory.pm:883-1025 at release/116.2), so that a `--most_severe` or
+/// `--summary` row prints it: the identity and location columns, and the field
+/// of every `vf_group` whether or not its flag is on.
+fn is_vf_level_field(field: &str) -> bool {
+    matches!(field, "Uploaded_variation" | "Location")
+        || FLAG_FIELD_GROUPS
+            .iter()
+            .any(|group| group.vf_level && group.fields.contains(&field))
 }
 
 /// VEP's description of a field, for the `## Column descriptions:` and
@@ -563,7 +642,8 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
         "Allele number from input; 0 is reference, 1 is first alternate etc",
     ),
     ("REF_ALLELE", "Reference allele"),
-    ("UPLOADED_ALLELE", "The variant allele as it was uploaded"),
+    ("UPLOADED_ALLELE", "The variant allele uploaded"),
+    ("AMBIGUITY", "Allele ambiguity code"),
     ("STRAND", "Strand of the feature (1/-1)"),
     (
         "PICK",
@@ -668,14 +748,29 @@ pub fn record_rows_into<'a>(record: &[&'a InputVariant], rows: &mut Vec<Row<'a>>
     }
 }
 
-/// Consequence terms of a row joined by `,`.
-pub fn consequence_string(tc: &TranscriptConsequence) -> String {
-    let mut out = String::new();
-    for (i, c) in tc.consequences.iter().enumerate() {
-        if i > 0 {
-            out.push(',');
+/// Consequence terms of a feature row in the configured vocabulary, joined by
+/// `,`, a label every time an SO term renders to it.
+pub fn consequence_string(tc: &TranscriptConsequence, options: &FieldOptions) -> String {
+    rendered_terms(&tc.consequences, options.terms, false).join(",")
+}
+
+/// `terms` in the vocabulary `--terms` names, one label per SO term, or with
+/// `once` each rendered label the first time it appears: Ensembl VEP's
+/// `summary_only` collects a `--summary` row's terms through a seen-set after
+/// rendering them (`OutputFactory.pm:426-458`), so two SO terms sharing a display
+/// label print it one time there.
+pub fn rendered_terms(
+    terms: &[Consequence],
+    vocabulary: Vocabulary,
+    once: bool,
+) -> Vec<&'static str> {
+    let mut out = Vec::with_capacity(terms.len());
+    for &c in terms {
+        let term = vocabulary.term(c);
+        if once && out.contains(&term) {
+            continue;
         }
-        out.push_str(c.so_term());
+        out.push(term);
     }
     out
 }
@@ -731,14 +826,12 @@ pub fn field_value(
 ) -> String {
     if let (None, Some(terms)) = (tc, &variant.summary_terms) {
         return match field {
-            "Consequence" => terms
-                .iter()
-                .map(|c| c.so_term())
-                .collect::<Vec<_>>()
-                .join(list_sep),
-            // The keys `VariationFeature_to_output_hash` sets (OutputFactory.pm:883-1025
-            // at release/116.2) that the field table carries.
-            "Uploaded_variation" | "Location" | "VARIANT_CLASS" | "MINIMISED" | "CHECK_REF" => {
+            "Consequence" => rendered_terms(terms, options.terms, true).join(list_sep),
+            // The record hash places the row at the input span; the
+            // `--shift_genomic 1` move is written by the feature and intergenic
+            // row builders alone (OutputFactory.pm:1702-1706, 1992-1998).
+            "Location" => variant.location(),
+            _ if is_vf_level_field(field) => {
                 row_field_value(field, variant, None, options, list_sep)
             }
             _ => String::new(),
@@ -765,14 +858,15 @@ fn row_field_value(
             Some((shift, strand)) => variant.display_allele_shifted(shift, strand),
             None => variant.display_allele(),
         },
-        "Consequence" => tc
-            .map(consequence_string)
-            .or_else(|| {
-                variant
+        "Consequence" => match tc {
+            Some(x) => consequence_string(x, options),
+            None => {
+                let consequence = variant
                     .most_severe_consequence
-                    .map(|c| c.so_term().to_string())
-            })
-            .unwrap_or_else(|| Consequence::IntergenicVariant.so_term().to_string()),
+                    .unwrap_or(Consequence::IntergenicVariant);
+                options.terms.term(consequence).to_string()
+            }
+        },
         "IMPACT" => tc
             .map(|x| x.impact.to_string())
             .or_else(|| {
@@ -808,11 +902,21 @@ fn row_field_value(
                 v.replace('=', "%3D")
             }
         }
-        "cDNA_position" => tc.and_then(|x| x.cdna_position.clone()).unwrap_or_default(),
-        "CDS_position" => tc.and_then(|x| x.cds_position.clone()).unwrap_or_default(),
-        "Protein_position" => tc
-            .and_then(|x| x.protein_position.clone())
-            .unwrap_or_default(),
+        "cDNA_position" => position_column(
+            tc.and_then(|x| x.cdna_position.as_deref()),
+            tc.and_then(|x| x.cdna_total)
+                .filter(|_| options.total_length),
+        ),
+        "CDS_position" => position_column(
+            tc.and_then(|x| x.cds_position.as_deref()),
+            tc.and_then(|x| x.cds_total)
+                .filter(|_| options.total_length),
+        ),
+        "Protein_position" => position_column(
+            tc.and_then(|x| x.protein_position.as_deref()),
+            tc.and_then(|x| x.protein_total)
+                .filter(|_| options.total_length),
+        ),
         "Amino_acids" => tc.and_then(|x| x.amino_acids.clone()).unwrap_or_default(),
         "Codons" => tc.and_then(|x| x.codons.clone()).unwrap_or_default(),
         "Existing_variation" => variant.existing_variation.join(list_sep),
@@ -820,13 +924,13 @@ fn row_field_value(
             .allele_num
             .unwrap_or(variant.allele_index as u32 + 1)
             .to_string(),
+        // A structural row carries neither `REF_ALLELE` nor `UPLOADED_ALLELE`
+        // (OutputFactory.pm `BaseStructuralVariationOverlapAllele_to_output_hash`).
+        "REF_ALLELE" if variant.is_structural => String::new(),
         "REF_ALLELE" => String::from_utf8_lossy(&variant.ref_allele).to_string(),
-        "UPLOADED_ALLELE" => variant
-            .uploaded_allele_string
-            .as_deref()
-            .unwrap_or(&variant.allele_string)
-            .to_string(),
+        "UPLOADED_ALLELE" => variant.uploaded_allele(options.minimal).unwrap_or_default(),
         "DISTANCE" => tc
+            .filter(|x| options.distance_shown(x))
             .and_then(|x| x.distance.map(|d| d.to_string()))
             .unwrap_or_default(),
         "OverlapBP" => sv_overlap(variant, tc)
@@ -858,7 +962,11 @@ fn row_field_value(
                 String::new()
             }
         }
-        "VARIANT_CLASS" => variant.variant_class.so_term().to_string(),
+        "VARIANT_CLASS" => variant.class_so_term(),
+        "AMBIGUITY" => variant
+            .ambiguity_code()
+            .map(|code| char::from(code).to_string())
+            .unwrap_or_default(),
         "MINIMISED" => {
             if variant.minimised {
                 "1".to_string()
@@ -997,6 +1105,18 @@ fn row_field_value(
     }
 }
 
+/// A position column with the total `--total_length` appends: `428/1200`, or
+/// `-/1200` where the position is undefined but the total applies, since
+/// Ensembl VEP appends to its `-` placeholder (`OutputFactory.pm`
+/// `TranscriptVariationAllele_to_output_hash`); without a total the position
+/// alone, empty when undefined.
+pub fn position_column(position: Option<&str>, total: Option<u32>) -> String {
+    match total {
+        Some(total) => format!("{}/{total}", position.unwrap_or("-")),
+        None => position.unwrap_or_default().to_string(),
+    }
+}
+
 /// The fields `add_colocated_variant_info` (OutputFactory.pm:1041-1167 at
 /// release/116.2) and `add_colocated_frequency_data` (:1185-1278) set on a row:
 /// the co-located variant columns and the fields of the frequency groups
@@ -1017,7 +1137,7 @@ pub fn colocated_field(field: &str) -> bool {
             | "FREQS"
     ) || FLAG_FIELD_GROUPS
         .iter()
-        .any(|(group, fields)| FREQUENCY_GROUPS.contains(group) && fields.contains(&field))
+        .any(|group| FREQUENCY_GROUPS.contains(&group.flag) && group.fields.contains(&field))
 }
 
 /// One co-located variant column of a row, as `add_colocated_variant_info`
@@ -1494,6 +1614,34 @@ mod tests {
         }
     }
 
+    /// A `--summary` or `--most_severe` row is the record's hash
+    /// (`VariationFeature_to_output_hash`, OutputFactory.pm:883-932), whose
+    /// Location is the input span: the `--shift_genomic 1` move belongs to the
+    /// feature and intergenic row builders (:1702-1706, :1992-1998), so the row
+    /// of a record whose intergenic allele shifted keeps the input position.
+    #[test]
+    fn summary_row_location_is_the_input_span_under_shift_genomic() {
+        let both = FieldOptions {
+            shift_3prime: true,
+            shift_genomic: true,
+            ..Default::default()
+        };
+        let mut deletion =
+            InputVariant::new("21".into(), 2_000, 2_001, b"AT".to_vec(), b"-".to_vec());
+        deletion.intergenic_shift = Some(3);
+        deletion.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        deletion.summary_terms = Some(smallvec::smallvec![Consequence::IntergenicVariant]);
+        assert_eq!(
+            field_value("Location", &deletion, None, &both, ","),
+            "21:2000-2001"
+        );
+        assert_eq!(
+            field_value("Consequence", &deletion, None, &both, ","),
+            "intergenic_variant"
+        );
+        assert_eq!(field_value("Allele", &deletion, None, &both, ","), "");
+    }
+
     /// `--shift_length` lists SHIFT_LENGTH among the flag fields, and under
     /// `--shift_3prime 1` every transcript row carries its value, 0 included
     /// (OutputFactory.pm:1690-1695); an intergenic row carries none.
@@ -1862,6 +2010,356 @@ mod tests {
         assert_eq!(
             lines.last().unwrap(),
             "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra"
+        );
+    }
+
+    fn missense_tc() -> TranscriptConsequence {
+        TranscriptConsequence {
+            transcript_id: std::sync::Arc::from("ENST1"),
+            consequences: smallvec::smallvec![Consequence::MissenseVariant],
+            hgvsp: Some("ENSP1:p.Arg97=".to_string()),
+            ..Default::default()
+        }
+    }
+
+    /// `OutputFactory.pm` `TranscriptVariationAllele_to_output_hash` turns the `=`
+    /// of an HGVSp notation into `%3D` unless `no_escape` is set.
+    #[test]
+    fn no_escape_leaves_hgvsp_equals_raw() {
+        let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let tc = missense_tc();
+        let escaped = FieldOptions {
+            hgvs: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("HGVSp", &v, Some(&tc), &escaped, ","),
+            "ENSP1:p.Arg97%3D"
+        );
+        let raw = FieldOptions {
+            hgvs: true,
+            no_escape: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("HGVSp", &v, Some(&tc), &raw, ","),
+            "ENSP1:p.Arg97="
+        );
+    }
+
+    /// The `AMBIGUITY` group follows `--ambiguity` and sits after `GENE_PHENO`
+    /// in `@FLAG_FIELDS`; its value is the record's IUPAC code, so an indel, whose
+    /// allele set has none, carries no key (`OutputFactory.pm`
+    /// `VariationFeature_to_output_hash`: the key is set only for a defined code).
+    #[test]
+    fn ambiguity_key_absent_for_indels() {
+        let opts = FieldOptions {
+            ambiguity: true,
+            gene_phenotype: true,
+            sift: true,
+            ..Default::default()
+        };
+        let fields = flag_fields(&opts);
+        let at = |name: &str| fields.iter().position(|f| *f == name).unwrap();
+        assert!(at("GENE_PHENO") < at("AMBIGUITY") && at("AMBIGUITY") < at("SIFT"));
+        assert!(!flag_fields(&FieldOptions::default()).contains(&"AMBIGUITY"));
+
+        let snv = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(field_value("AMBIGUITY", &snv, None, &opts, ","), "R");
+        let mut multi = InputVariant::new("21".into(), 100, 100, b"C".to_vec(), b"G".to_vec());
+        multi.record_allele_string_multi = Some("C/G/T".into());
+        assert_eq!(field_value("AMBIGUITY", &multi, None, &opts, ","), "B");
+        let deletion = InputVariant::new("21".into(), 101, 102, b"AT".to_vec(), b"-".to_vec());
+        assert_eq!(field_value("AMBIGUITY", &deletion, None, &opts, ","), "");
+        assert!(!extra_keys(&deletion, None, &opts).is_empty());
+        let tc = missense_tc();
+        assert_eq!(
+            field_value("AMBIGUITY", &deletion, Some(&tc), &opts, ","),
+            ""
+        );
+    }
+
+    /// `UPLOADED_ALLELE` is the record's allele string as uploaded, `REF/ALT1/ALT2`,
+    /// the same on every row of the record (`OutputFactory.pm`
+    /// `VariationFeatureOverlapAllele_to_output_hash`: `original_allele_string ||
+    /// allele_string`), the group follows `--uploaded_allele`, and a structural row
+    /// carries neither it nor `REF_ALLELE`
+    /// (`BaseStructuralVariationOverlapAllele_to_output_hash`).
+    #[test]
+    fn uploaded_allele_prints_the_record_allele_string() {
+        let opts = FieldOptions {
+            uploaded_allele: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            flag_fields(&opts),
+            ["UPLOADED_ALLELE", "IMPACT", "DISTANCE", "STRAND", "FLAGS"]
+        );
+        assert!(!flag_fields(&FieldOptions::default()).contains(&"UPLOADED_ALLELE"));
+        let mut a = InputVariant::new("21".into(), 101, 102, b"AG".to_vec(), b"A".to_vec());
+        a.uploaded_allele_string = Some("TAG/TA/T".into());
+        let mut b = InputVariant::new("21".into(), 101, 102, b"AG".to_vec(), b"-".to_vec());
+        b.uploaded_allele_string = Some("TAG/TA/T".into());
+        for v in [&a, &b] {
+            assert_eq!(
+                field_value("UPLOADED_ALLELE", v, None, &opts, ","),
+                "TAG/TA/T"
+            );
+            assert_eq!(
+                field_value("UPLOADED_ALLELE", v, Some(&missense_tc()), &opts, ","),
+                "TAG/TA/T"
+            );
+        }
+        let plain = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(
+            field_value("UPLOADED_ALLELE", &plain, None, &opts, ","),
+            "A/G"
+        );
+        let mut sv = InputVariant::new("21".into(), 100, 200, b"N".to_vec(), b"<DEL>".to_vec());
+        sv.is_structural = true;
+        sv.uploaded_allele_string = Some("<DEL>".into());
+        let both = FieldOptions {
+            uploaded_allele: true,
+            show_ref_allele: true,
+            ..Default::default()
+        };
+        assert_eq!(field_value("UPLOADED_ALLELE", &sv, None, &both, ","), "");
+        assert_eq!(field_value("REF_ALLELE", &sv, None, &both, ","), "");
+        assert_eq!(field_value("REF_ALLELE", &plain, None, &both, ","), "A");
+    }
+
+    /// `REF_ALLELE`, like `ALLELE_NUM` and `UPLOADED_ALLELE`, is set per overlap
+    /// allele (`OutputFactory.pm` `VariationFeatureOverlapAllele_to_output_hash`),
+    /// so a row built from the variant alone, a `--most_severe` or `--summary`
+    /// row, never carries it.
+    #[test]
+    fn ref_allele_absent_on_summary_rows() {
+        let opts = FieldOptions {
+            allele_number: true,
+            show_ref_allele: true,
+            uploaded_allele: true,
+            symbol: true,
+            ..Default::default()
+        };
+        assert_eq!(vf_level_flag_fields(&opts), Vec::<&str>::new());
+        assert!(flag_fields(&opts).contains(&"REF_ALLELE"));
+    }
+
+    /// `VARIANT_CLASS`, `MINIMISED`, `AMBIGUITY` and `CHECK_REF` are set from the
+    /// variant alone (`OutputFactory.pm` `VariationFeature_to_output_hash`), so a
+    /// summary row carries them and nothing else of the field table.
+    #[test]
+    fn variant_class_survives_on_summary_rows() {
+        let opts = FieldOptions {
+            variant_class: true,
+            minimal: true,
+            ambiguity: true,
+            dont_skip: true,
+            symbol: true,
+            hgvs: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            vf_level_flag_fields(&opts),
+            ["VARIANT_CLASS", "MINIMISED", "AMBIGUITY", "CHECK_REF"]
+        );
+        assert_eq!(
+            vf_level_flag_fields(&FieldOptions {
+                variant_class: true,
+                ..Default::default()
+            }),
+            ["VARIANT_CLASS"]
+        );
+        let mut summary = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        summary.most_severe_consequence = Some(Consequence::MissenseVariant);
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(field_value("AMBIGUITY", &summary, None, &opts, ","), "R");
+        assert_eq!(
+            field_value("VARIANT_CLASS", &summary, None, &opts, ","),
+            "SNV"
+        );
+        assert_eq!(field_value("SYMBOL", &summary, None, &opts, ","), "");
+    }
+
+    /// `OutputFactory.pm` sets `DISTANCE` only when the rendered consequence list
+    /// names `upstream_gene_variant` or `downstream_gene_variant`
+    /// (`%DISTANCE_CONS`): under `--terms display` the row reads `UPSTREAM` and
+    /// carries no distance, under `--terms NCBI` the two terms have no label and
+    /// render as themselves, so the distance stays.
+    #[test]
+    fn distance_follows_the_rendered_terms() {
+        let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let tc = TranscriptConsequence {
+            consequences: smallvec::smallvec![Consequence::UpstreamGeneVariant],
+            distance: Some(141),
+            ..Default::default()
+        };
+        let with = |terms: Vocabulary| FieldOptions {
+            terms,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("DISTANCE", &v, Some(&tc), &with(Vocabulary::So), ","),
+            "141"
+        );
+        assert_eq!(
+            field_value("DISTANCE", &v, Some(&tc), &with(Vocabulary::Ncbi), ","),
+            "141"
+        );
+        assert_eq!(
+            field_value("DISTANCE", &v, Some(&tc), &with(Vocabulary::Display), ","),
+            ""
+        );
+        assert!(with(Vocabulary::So).user_group_is_plain());
+        assert!(!with(Vocabulary::Display).user_group_is_plain());
+    }
+
+    /// `--total_length` appends `/<total>` to each position column that carries a
+    /// total, the `-` placeholder included (`OutputFactory.pm`
+    /// `TranscriptVariationAllele_to_output_hash` appends to `format_coords`'s
+    /// result); without the flag the stored positions print as they are, so the
+    /// numeric readers of the positions never see a total.
+    #[test]
+    fn total_length_renders_the_totals_beside_the_positions() {
+        let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let tc = TranscriptConsequence {
+            cdna_position: Some("428".into()),
+            cds_position: None,
+            protein_position: Some("97-98".into()),
+            cdna_total: Some(1200),
+            cds_total: Some(306),
+            protein_total: Some(101),
+            ..Default::default()
+        };
+        let with = FieldOptions {
+            total_length: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("cDNA_position", &v, Some(&tc), &with, ","),
+            "428/1200"
+        );
+        assert_eq!(
+            field_value("CDS_position", &v, Some(&tc), &with, ","),
+            "-/306"
+        );
+        assert_eq!(
+            field_value("Protein_position", &v, Some(&tc), &with, ","),
+            "97-98/101"
+        );
+        let without = FieldOptions::default();
+        assert_eq!(
+            field_value("cDNA_position", &v, Some(&tc), &without, ","),
+            "428"
+        );
+        assert_eq!(
+            field_value("CDS_position", &v, Some(&tc), &without, ","),
+            ""
+        );
+        assert_eq!(position_column(Some("11"), None), "11");
+        assert_eq!(position_column(None, None), "");
+    }
+
+    /// A `--summary` row lists each rendered label once (`OutputFactory.pm`
+    /// `summary_only` pushes a rendered term unless already seen), so splice
+    /// terms that share `SPLICE_SITE` collapse to one under `--terms display`;
+    /// a feature row keeps every repeat, and the SO vocabulary, whose labels
+    /// are distinct, is unchanged either way.
+    #[test]
+    fn summary_rows_list_each_rendered_label_once() {
+        let terms = [
+            Consequence::SpliceDonor5thBaseVariant,
+            Consequence::SpliceRegionVariant,
+            Consequence::IntronVariant,
+        ];
+        let tc = TranscriptConsequence {
+            consequences: smallvec::SmallVec::from_slice(&terms),
+            ..Default::default()
+        };
+        let display = FieldOptions {
+            terms: Vocabulary::Display,
+            ..Default::default()
+        };
+        assert_eq!(
+            consequence_string(&tc, &display),
+            "SPLICE_SITE,SPLICE_SITE,INTRONIC"
+        );
+        assert_eq!(
+            rendered_terms(&terms, Vocabulary::Display, true),
+            ["SPLICE_SITE", "INTRONIC"]
+        );
+        assert_eq!(
+            rendered_terms(&terms, Vocabulary::So, true),
+            [
+                "splice_donor_5th_base_variant",
+                "splice_region_variant",
+                "intron_variant"
+            ]
+        );
+        let mut summary = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        summary.most_severe_consequence = Some(terms[0]);
+        summary.summary_terms = Some(smallvec::SmallVec::from_slice(&terms));
+        assert_eq!(
+            field_value("Consequence", &summary, None, &display, "&"),
+            "SPLICE_SITE&INTRONIC"
+        );
+    }
+
+    /// The `Consequence` column renders in the `--terms` vocabulary on feature
+    /// rows and intergenic rows alike; the default is the SO term.
+    #[test]
+    fn consequence_column_renders_in_the_terms_vocabulary() {
+        let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let tc = TranscriptConsequence {
+            consequences: smallvec::smallvec![
+                Consequence::SpliceRegionVariant,
+                Consequence::SynonymousVariant
+            ],
+            ..Default::default()
+        };
+        let with = |terms: Vocabulary| FieldOptions {
+            terms,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("Consequence", &v, Some(&tc), &FieldOptions::default(), ","),
+            "splice_region_variant,synonymous_variant"
+        );
+        assert_eq!(
+            field_value(
+                "Consequence",
+                &v,
+                Some(&tc),
+                &with(Vocabulary::Display),
+                ","
+            ),
+            "SPLICE_SITE,SYNONYMOUS_CODING"
+        );
+        assert_eq!(
+            field_value("Consequence", &v, Some(&tc), &with(Vocabulary::Ncbi), ","),
+            "splice_region_variant,cds-synon"
+        );
+        let mut intergenic = v.clone();
+        intergenic.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        assert_eq!(
+            field_value(
+                "Consequence",
+                &intergenic,
+                None,
+                &with(Vocabulary::Display),
+                ","
+            ),
+            "INTERGENIC"
+        );
+        assert_eq!(
+            field_value(
+                "Consequence",
+                &intergenic,
+                None,
+                &with(Vocabulary::Ncbi),
+                ","
+            ),
+            "intergenic_variant"
         );
     }
 

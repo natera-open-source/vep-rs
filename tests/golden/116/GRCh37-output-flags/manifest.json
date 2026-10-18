@@ -1,0 +1,633 @@
+{
+ "release": "116",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "max_span": 1000000,
+ "fasta": "../GRCh37-hgvs/reference.fa.gz",
+ "covers": [
+  "numbers",
+  "variant_class",
+  "show_ref_allele",
+  "allele_number"
+ ],
+ "suites": {
+  "flags": {
+   "reference": "expected.default.out",
+   "input": "design-variants.vcf",
+   "rows": 243,
+   "combinations": 44
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 2
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 3
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant,stop_gained": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_deletion": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_region_variant,synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,incomplete_terminal_codon_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,splice_donor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 30,
+   "exemplar_records": 9
+  },
+  "frameshift_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 2
+  },
+  "frameshift_variant,splice_region_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 4
+  },
+  "frameshift_variant,start_retained_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "frameshift_variant,stop_gained": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "inframe_deletion": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "inframe_deletion,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "inframe_insertion": {
+   "observed_rows": 11,
+   "exemplar_records": 1
+  },
+  "intergenic_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 16,
+   "exemplar_records": 9
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 8
+  },
+  "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 20,
+   "exemplar_records": 4
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 17,
+   "exemplar_records": 8
+  },
+  "non_coding_transcript_exon_variant,splice_donor_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 4
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 2
+  },
+  "protein_altering_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "splice_donor_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "splice_region_variant,synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "start_lost": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "stop_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "stop_retained_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 2
+  },
+  "synonymous_variant": {
+   "observed_rows": 16,
+   "exemplar_records": 2
+  },
+  "transcript_ablation": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 13,
+   "exemplar_records": 9
+  }
+ },
+ "variant_classes": {
+  "deletion": 56,
+  "insertion": 40,
+  "mnv_or_complex": 18,
+  "snv": 129
+ },
+ "records": [
+  {
+   "suite": "flags",
+   "vcf": "21\t9937918\trs867932594\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t9937921\ttwo_alts\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t10906906\trs748371308\tT\tC\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant",
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t10906909\tthree_alts\tT\tA,C,G\t.\t.\t.",
+   "combinations": [
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t10910400\trs149363218\tCTA\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
+    "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t10910406\ttwo_deletions\tATG\tAT,A\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
+    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ],
+   "strata": [
+    "multi_allelic_indel_trimmable"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t10970008\trs11184139\tC\tT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,splice_region_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "non_coding_transcript_variant,splice_donor_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t10970008\trs11184139\tCCTTT\tC\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,splice_region_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "non_coding_transcript_variant,splice_donor_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t10970011\tmixed_lengths\tT\tA,TT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,splice_region_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "strata": [
+    "multi_allelic_indel_trimmable"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t15966333\trs1369241870\tCCAGTT\tC\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "frameshift_variant,splice_region_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t15974344\trs1385910518\tCTGATAGGAAGTTCCT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_deletion,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t17202918\trs1262376465\tCAAGT\tC\t.\t.\t.",
+   "combinations": [
+    "coding_sequence_variant,splice_donor_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t19638355\trs770292805\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t19638358\tstar_allele\tA\tC,*\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t19744457\t3722895\tCTACAGTGAGGGAGGATAAAACAGAAGGGGAGAGAGTAGGGGGGAGAACTTACCACACATTTTATTGT\tC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+    "coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t23006810\trs117720560\tA\tT\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant,splice_donor_region_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t24245453\trs1037870053\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t26979786\t3904802\tA\tG\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t27062183\t829531\tAT\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t27369678\t662051\tTAACAGGATC\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "protein_altering_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t27394181\t1346978\tT\tTGTGGTG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "inframe_insertion",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t27850391\trs1039049841\tT\tTAC\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t33867405\trs779730010\tATCG\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,inframe_deletion",
+    "NMD_transcript_variant,intron_variant",
+    "inframe_deletion",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t34655545\trs148468217\tC\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "NMD_transcript_variant,splice_region_variant,synonymous_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "splice_region_variant,synonymous_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t34924574\t996796\tT\tTA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant,stop_gained",
+    "frameshift_variant,stop_gained",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t34950628\trs1374797816\tA\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t46326846\t3632111\tC\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t46957692\trs773493715\tC\tT\t.\t.\t.",
+   "combinations": [
+    "coding_sequence_variant,incomplete_terminal_codon_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t47531391\t2439448\tA\tATGCTCCAGGGCACC\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,start_retained_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "flags",
+   "vcf": "21\t47532318\t842566\tCGCGAGGAGGGCATCCGGCTCTTCGCCGTGGCCCCCAACCAGAACCTGAAGGAGCAGGGCCTGCGGGACATCGCCAGCACGCCGCACGAGCTCTACCGCAACGACTACGCCACCATGCTGCCCGACTCCACCGAGATCGACCAGGACACCATCAACCGCATCATCAAGGTCATGGTGAGCCGCGGGCGGGAGCACCGTCCACGCGCCAGGGGTGGCCACGGTGGGCCGTCCACCCACTCCGGGCCTCACTTTACCCCTCTGTGAGTGCGGAGGCCGAAGGAGGAAGCTCCGGGCAGGGCCTGGGCCACTCAGGTGTCCCTCCATCCCCACCCAGACTCGAGGTGCAGCCGCCCCAGGTCTCGAGGCACACGGCTAACCAGCATGTCTGTCTTTTCTGCAGAAACACGAAGCCTACGGAGAGGTGAGTGGCGCTTCCCTTCCTGCCAGTGCTGGCCGGCAGCTGACCCAGCAGAGATGACCGCGCCAGGCTGCCGACTCCTGGCGCCTCCAGGCTGGAACAGATGAGAGGAGAGGGAGTCACCTGCTCCATGTTGGACCTGAGGCCTTGGAGTCTGGAGAAAGGGCTCCCAGCCAAAGCTAGGCTGTTTAGATCCCGTGAGGGTCAGCGTTAGGGTCACCCACAGAGCACGTGTTACAAGGAGAGGTCGAGGGTCTGGCCTCCGGGCAGGTGGGATCCATCCACCCTGGACTCGAGGCCCGAGCCCAGCCCAGCAGGTCAGGGGAGAAGGAACTGACATCATCGGGGTCCATGACATCCCCACCTCCCTGTGTGTCCCAGCTCCAGCTCTCAGGAAG\tC\t.\t.\t.",
+   "combinations": [
+    "coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
+    "downstream_gene_variant",
+    "transcript_ablation",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "terms-display",
+   "flags": [
+    "--terms",
+    "display"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf"
+   ],
+   "expected_dir": "expected_terms-display",
+   "covers": [
+    "terms",
+    "terms-vocabularies"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "terms-ncbi",
+   "flags": [
+    "--terms",
+    "NCBI"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf"
+   ],
+   "expected_dir": "expected_terms-ncbi",
+   "covers": [
+    "terms",
+    "terms-vocabularies"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "total-length",
+   "flags": [
+    "--total_length"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_total-length",
+   "covers": [
+    "total_length"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "no-escape",
+   "flags": [
+    "--hgvs",
+    "--no_escape"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_no-escape",
+   "covers": [
+    "no_escape",
+    "extra-key-order-and-percent-encoding"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "allele-flags",
+   "flags": [
+    "--allele_number",
+    "--show_ref_allele",
+    "--uploaded_allele",
+    "--ambiguity",
+    "--variant_class",
+    "--numbers"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_allele-flags",
+   "covers": [
+    "allele_number",
+    "show_ref_allele",
+    "uploaded_allele",
+    "ambiguity",
+    "variant_class",
+    "numbers"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

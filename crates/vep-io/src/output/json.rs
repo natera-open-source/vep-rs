@@ -22,12 +22,15 @@ use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
 
-use super::fields::{self, FieldOptions, DEFAULT_OUTPUT_COLS};
+use super::fields::{self, rendered_terms, FieldOptions, DEFAULT_OUTPUT_COLS};
 use super::OutputFormatter;
 
 /// JSON output formatter.
 pub struct JsonOutputFormatter {
     options: FieldOptions,
+    /// [`fields::vf_level_flag_fields`] of `options`: the keys written on the
+    /// record object and left off every consequence entry.
+    vf_level_fields: Vec<&'static str>,
     plugin_fields: Vec<String>,
     assembly: Option<String>,
 }
@@ -40,8 +43,10 @@ impl JsonOutputFormatter {
         plugin_fields: Vec<String>,
         assembly: Option<String>,
     ) -> Self {
+        let vf_level_fields = fields::vf_level_flag_fields(&options);
         Self {
             options,
+            vf_level_fields,
             plugin_fields,
             assembly,
         }
@@ -93,11 +98,17 @@ impl JsonOutputFormatter {
         if let Some(raw) = &first.raw_input {
             root.insert("input".to_string(), Value::String(raw.to_string()));
         }
-        if self.options.variant_class {
-            root.insert(
-                "variant_class".to_string(),
-                Value::String(first.variant_class.so_term().to_string()),
-            );
+        // The keys VEP fills from the variant alone sit on the record object,
+        // lower-cased, and on no consequence entry (`OutputFactory/JSON.pm`
+        // copies `VariationFeature_to_output_hash` onto the record and builds
+        // the entries from an empty hash).
+        for name in &self.vf_level_fields {
+            let value = fields::field_value(name, first, None, &self.options, ",");
+            if !value.is_empty() {
+                let key = json_key(name);
+                let v = numberify(&key, value);
+                root.insert(key, v);
+            }
         }
         let mut buckets: IndexMap<String, Vec<Value>> = IndexMap::new();
         let mut all_terms: Vec<Consequence> = Vec::new();
@@ -123,7 +134,7 @@ impl JsonOutputFormatter {
             root.insert(bucket, Value::Array(entries));
         }
         let most_severe = Consequence::most_severe(&all_terms)
-            .map(|c| c.so_term().to_string())
+            .map(|c| self.options.terms.term(c).to_string())
             .unwrap_or_else(|| "?".to_string());
         root.insert(
             "most_severe_consequence".to_string(),
@@ -157,9 +168,9 @@ impl JsonOutputFormatter {
             // (`add_VariationFeatureOverlapAllele_info`, JSON.pm:320), so the
             // record's one entry carries its consequence terms alone; the
             // variant-level keys sit at the top level.
-            let consequence_terms = terms
-                .iter()
-                .map(|c| Value::String(c.so_term().to_string()))
+            let consequence_terms = rendered_terms(terms, self.options.terms, true)
+                .into_iter()
+                .map(|term| Value::String(term.to_string()))
                 .collect();
             return serde_json::Map::from_iter([(
                 "consequence_terms".to_string(),
@@ -192,7 +203,10 @@ impl JsonOutputFormatter {
         // consequence hash by the JSON factory (OutputFactory/JSON.pm:493-515) and
         // written under `colocated_variants` instead.
         for k in fields::extra_keys(variant, tc, &self.options) {
-            if !names.contains(&k) && !fields::colocated_field(k) {
+            if !names.contains(&k)
+                && !self.vf_level_fields.contains(&k)
+                && !fields::colocated_field(k)
+            {
                 names.push(k);
             }
         }
@@ -589,6 +603,7 @@ mod tests {
     use serde_json::json;
     use smallvec::smallvec;
     use vep_core::consequence::{Consequence, FeatureType, Impact, TranscriptConsequence};
+    use vep_core::terms::Vocabulary;
 
     fn make_annotated_variant() -> InputVariant {
         let mut variant = InputVariant::new(
@@ -936,20 +951,99 @@ mod tests {
         assert_eq!(position_bounds("?-430/1234"), (None, None));
     }
 
-    /// `OutputFactory/JSON.pm:333-343` (release 116.2) on `--total_length` values:
-    /// a point `428/1200` is split on `-` into one part, so `cdna_start` and
-    /// `cdna_end` are both the string `"428/1200"` (`numberify` leaves a value with
-    /// a `/` alone); a range `900-901/1200` has an end that fails `^\d+$`, so
-    /// `cds_end` falls back to the start `900` while `cds_start` is the number.
+    /// The `--total_length` columns as the JSON writer files them, Ensembl VEP's
+    /// shape (`OutputFactory/JSON.pm` `add_VariationFeatureOverlapAllele_info`): a
+    /// single position with its total is the string `"53/500"` at both ends, a
+    /// range with its total keeps its start as a number at both ends because the
+    /// `/total` tail is not a plain number, and `consequence_terms` is untouched.
     #[test]
     fn total_length_json_keeps_perls_split_strings() {
-        let tc = positions("428/1200", "900-901/1200", "122/400");
-        assert_eq!(tc["cdna_start"], json!("428/1200"));
-        assert_eq!(tc["cdna_end"], json!("428/1200"));
-        assert_eq!(tc["cds_start"], json!(900));
-        assert_eq!(tc["cds_end"], json!(900));
-        assert_eq!(tc["protein_start"], json!("122/400"));
-        assert_eq!(tc["protein_end"], json!("122/400"));
+        let mut v = make_annotated_variant();
+        let consequence = &mut v.transcript_consequences[0];
+        consequence.cdna_position = Some("53".into());
+        consequence.cds_position = Some("4-6".into());
+        consequence.protein_position = Some("2".into());
+        consequence.cdna_total = Some(500);
+        consequence.cds_total = Some(300);
+        consequence.protein_total = Some(99);
+        let tc = fmt(FieldOptions {
+            total_length: true,
+            ..Default::default()
+        })
+        .format_variant_value(&v)["transcript_consequences"][0]
+            .clone();
+        assert_eq!(
+            (&tc["cdna_start"], &tc["cdna_end"]),
+            (&json!("53/500"), &json!("53/500"))
+        );
+        assert_eq!((&tc["cds_start"], &tc["cds_end"]), (&json!(4), &json!(4)));
+        assert_eq!(
+            (&tc["protein_start"], &tc["protein_end"]),
+            (&json!("2/99"), &json!("2/99"))
+        );
+        assert_eq!(tc["consequence_terms"], json!(["synonymous_variant"]));
+    }
+
+    /// `--terms display` renders `consequence_terms`, `most_severe_consequence`
+    /// and the intergenic entry in the vocabulary; `variant_class` stays the SO
+    /// class term, as `class_SO_term` is what Ensembl VEP writes there.
+    #[test]
+    fn terms_vocabulary_renders_json_consequences() {
+        let mut v = make_annotated_variant();
+        v.transcript_consequences[0].consequences = smallvec![
+            Consequence::SpliceRegionVariant,
+            Consequence::SynonymousVariant
+        ];
+        v.most_severe_consequence = Some(Consequence::SpliceRegionVariant);
+        let parsed = fmt(FieldOptions {
+            variant_class: true,
+            terms: Vocabulary::Display,
+            ..Default::default()
+        })
+        .format_variant_value(&v);
+        assert_eq!(
+            parsed["transcript_consequences"][0]["consequence_terms"],
+            json!(["SPLICE_SITE", "SYNONYMOUS_CODING"])
+        );
+        assert_eq!(parsed["most_severe_consequence"], "SPLICE_SITE");
+        assert_eq!(parsed["variant_class"], "SNV");
+        let mut intergenic = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        intergenic.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let parsed = fmt(FieldOptions {
+            terms: Vocabulary::Ncbi,
+            ..Default::default()
+        })
+        .format_variant_value(&intergenic);
+        assert_eq!(
+            parsed["intergenic_consequences"][0]["consequence_terms"],
+            json!(["intergenic_variant"])
+        );
+        assert_eq!(parsed["most_severe_consequence"], "intergenic_variant");
+    }
+
+    /// `MINIMISED` and `AMBIGUITY`, like `VARIANT_CLASS`, are the variant's own
+    /// keys (`OutputFactory.pm` `VariationFeature_to_output_hash`), so the JSON
+    /// writer puts them on the record object, lower-cased and numberified, and on
+    /// no consequence entry (`OutputFactory/JSON.pm` copies the variant hash onto
+    /// the record and builds the entries from an empty hash).
+    #[test]
+    fn variant_level_keys_sit_on_the_record_object() {
+        let mut v = make_annotated_variant();
+        v.minimised = true;
+        let parsed = fmt(FieldOptions {
+            minimal: true,
+            ambiguity: true,
+            dont_skip: true,
+            ..Default::default()
+        })
+        .format_variant_value(&v);
+        assert_eq!(parsed["minimised"], json!(1));
+        assert_eq!(parsed["ambiguity"], json!("R"));
+        assert!(parsed.get("check_ref").is_none());
+        let entry = &parsed["transcript_consequences"][0];
+        for key in ["minimised", "ambiguity", "check_ref", "variant_class"] {
+            assert!(entry.get(key).is_none(), "{key} on a consequence entry");
+        }
     }
 
     /// A `colocated_variants` entry as `add_colocated_variant_info_JSON` writes

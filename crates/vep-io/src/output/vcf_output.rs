@@ -235,6 +235,10 @@ pub(crate) fn value_for_field(
     fields::field_value(field, variant, tc, options, "&")
 }
 
+/// One CSQ entry. A gene symbol's whitespace is percent-encoded before the
+/// subfield escaping turns whitespace into `_`, so it reaches the output as
+/// `%20`; `--no_escape` leaves it to the `_` rule (`OutputFactory.pm`,
+/// `BaseTranscriptVariationAllele_to_output_hash`, the `symbol` block).
 fn format_csq_entry(
     fields: &[String],
     produced: &[bool],
@@ -252,6 +256,8 @@ fn format_csq_entry(
             let v = value_for_field(field, variant, tc, options);
             if v == "-" && field != "Allele" {
                 String::new()
+            } else if field == "SYMBOL" && !options.no_escape {
+                vcf_encode(&v.replace(char::is_whitespace, "%20"))
             } else {
                 vcf_encode(&v)
             }
@@ -747,6 +753,45 @@ mod tests {
         assert_eq!(vcf_encode("a b"), "a_b");
         assert_eq!(vcf_encode("a\tb"), "a_b");
         assert_eq!(vcf_encode("normal"), "normal");
+    }
+
+    /// `OutputFactory.pm` encodes whitespace in a gene symbol as `%20` for VCF
+    /// output unless `--no_escape` (`BaseTranscriptVariationAllele_to_output_hash`,
+    /// the `symbol` block), before `output_hash_to_vcf_info_chunk` turns the
+    /// whitespace of every other value into `_` (`VCF.pm`); under `--no_escape`
+    /// the symbol takes that `_` rule like any other value.
+    #[test]
+    fn symbol_whitespace_is_percent20_in_vcf_unless_no_escape() {
+        let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let tc = TranscriptConsequence {
+            transcript_id: "ENST1".into(),
+            gene_id: "ENSG1".into(),
+            gene_symbol: Some("MY GENE".into()),
+            gene_symbol_source: Some("HGNC Symbol".into()),
+            consequences: smallvec![Consequence::MissenseVariant],
+            impact: Impact::MODERATE,
+            feature_type: FeatureType::Transcript,
+            strand: 1,
+            ..Default::default()
+        };
+        let fields = ["SYMBOL".to_string(), "SYMBOL_SOURCE".to_string()];
+        let escaped = FieldOptions {
+            symbol: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            format_csq_entry(&fields, &[true, true], &variant, Some(&tc), &escaped),
+            "MY%20GENE|HGNC_Symbol"
+        );
+        let plain = FieldOptions {
+            symbol: true,
+            no_escape: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            format_csq_entry(&fields, &[true, true], &variant, Some(&tc), &plain),
+            "MY_GENE|HGNC_Symbol"
+        );
     }
 
     #[test]

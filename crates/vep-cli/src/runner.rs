@@ -371,7 +371,7 @@ impl Runner {
         FieldOptions {
             allele_number: c.allele_number,
             show_ref_allele: c.show_ref_allele,
-            uploaded_allele: false,
+            uploaded_allele: c.uploaded_allele,
             // `@FLAG_FIELDS` lists PICK under the three flagging variants alone
             // (Constants.pm:75-77); the removing variants add no column.
             include_pick: c.flag_pick || c.flag_pick_allele || c.flag_pick_allele_gene,
@@ -414,7 +414,10 @@ impl Runner {
             shift_genomic: c.shift_genomic,
             var_synonyms: c.var_synonyms,
             regulatory: c.regulatory,
-            no_escape: c.output_format == "json",
+            ambiguity: c.ambiguity,
+            no_escape: c.no_escape,
+            terms: c.terms,
+            total_length: c.total_length,
             clin_sig_allele: if c.clin_sig_allele {
                 ClinSigAllele::PerAllele
             } else {

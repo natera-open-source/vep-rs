@@ -199,6 +199,28 @@ pub struct Args {
     )]
     pub vcf_info_field: String,
 
+    /// The vocabulary consequence terms are printed in: SO (Sequence Ontology terms), display
+    /// (Ensembl display labels such as NON_SYNONYMOUS_CODING) or NCBI (labels such as missense),
+    /// the SO term standing in for a consequence without a label in the chosen vocabulary.
+    /// Severity ranks stay on the SO term, so the most severe term (--most_severe, JSON's
+    /// most_severe_consequence) is chosen by SO rank and printed in the vocabulary; a display or
+    /// NCBI JSON output is one Ensembl VEP does not produce, since it exits when it ranks a label
+    /// against another term there
+    #[arg(
+        help_heading = "Output",
+        short = 't',
+        long,
+        default_value = "SO",
+        value_parser = ["SO", "display", "NCBI"]
+    )]
+    pub terms: String,
+
+    /// Do not percent-encode the two characters Ensembl VEP escapes: HGVSp keeps its = (else %3D)
+    /// and whitespace in a gene symbol is left to the VCF subfield rule, which writes it as _
+    /// (else %20); implied by --json and by --output_format json
+    #[arg(help_heading = "Output", long = "no_escape")]
+    pub no_escape: bool,
+
     /// Keep an input VCF's existing annotation: its `##INFO` and `##VEP` header lines and the INFO entry under --vcf_info_field's name stay, and the new entry is appended under the same name, so the line carries both
     #[arg(help_heading = "Output", long = "keep_csq")]
     pub keep_csq: bool,
@@ -735,11 +757,24 @@ pub struct Args {
     #[arg(help_heading = "Filtering / Picking", long = "show_ref_allele")]
     pub show_ref_allele: bool,
 
+    /// Add the UPLOADED_ALLELE column: the record's allele string as uploaded, REF and every ALT
+    /// joined by /
+    #[arg(help_heading = "Filtering / Picking", long = "uploaded_allele")]
+    pub uploaded_allele: bool,
+
+    /// Add the AMBIGUITY column: the IUPAC ambiguity code of the record's alleles (R for A/G);
+    /// absent on an indel or any other allele set without a code
+    #[arg(help_heading = "Filtering / Picking", long)]
+    pub ambiguity: bool,
+
     /// Convert alleles to minimal representation; switches on --allele_number as in Ensembl VEP
     #[arg(help_heading = "Filtering / Picking", long)]
     pub minimal: bool,
 
-    /// Accepted for VEP compatibility; not implemented
+    /// Append /<total length> to the cDNA, CDS and protein positions: the transcript's cDNA
+    /// length, its coding sequence length and its peptide length. JSON keeps Ensembl VEP's
+    /// shape: a single base prints the string "428/1200" as both cdna_start and cdna_end, and a
+    /// range prints its start as both
     #[arg(help_heading = "Filtering / Picking", long = "total_length")]
     pub total_length: bool,
 

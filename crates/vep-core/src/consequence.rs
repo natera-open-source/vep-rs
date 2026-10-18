@@ -526,6 +526,17 @@ pub struct TranscriptConsequence {
     pub cds_position: Option<String>,
     /// Protein position (e.g., "101").
     pub protein_position: Option<String>,
+    /// The totals `--total_length` appends to the three positions: the
+    /// transcript's cDNA length where the variant overlaps an exon, the coding
+    /// sequence length and the peptide length where it lies in the coding
+    /// region and the cache carries the sequence. Set whenever the column's
+    /// rule holds, position or not, so a `-` column prints `-/<total>`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cdna_total: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cds_total: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub protein_total: Option<u32>,
     /// Amino acid change (e.g., "A/V").
     pub amino_acids: Option<String>,
     /// Codon change (e.g., "gCc/gTc").
@@ -683,6 +694,9 @@ impl Default for TranscriptConsequence {
             cdna_position: None,
             cds_position: None,
             protein_position: None,
+            cdna_total: None,
+            cds_total: None,
+            protein_total: None,
             amino_acids: None,
             codons: None,
             protein_id: None,
@@ -742,6 +756,9 @@ impl TranscriptConsequence {
             cdna_position: None,
             cds_position: None,
             protein_position: None,
+            cdna_total: None,
+            cds_total: None,
+            protein_total: None,
             amino_acids: None,
             codons: None,
             protein_id: transcript.protein_id.clone(),

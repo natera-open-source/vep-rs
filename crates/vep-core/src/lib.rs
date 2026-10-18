@@ -19,6 +19,7 @@ pub mod sv_record;
 pub mod sv_routing;
 pub mod sv_span;
 pub mod synonyms;
+pub mod terms;
 pub mod transcript;
 pub mod variant;
 pub mod variation;

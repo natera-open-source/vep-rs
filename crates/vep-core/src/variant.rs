@@ -711,6 +711,60 @@ impl InputVariant {
         out.extend_from_slice(allele.as_bytes());
     }
 
+    /// The `VARIANT_CLASS` value of the record, Ensembl VEP's `class_SO_term`: a
+    /// structural record's own term ([`Self::record_so_term`], `Alu_insertion` for
+    /// `<INS:ME:ALU>`) or, for a type the term table lacks, the string its `Allele`
+    /// column prints ([`Self::display_allele`], `CPX` for `<CPX>`), since Ensembl
+    /// VEP prints the one `class_SO_term` in both columns of a structural row; a
+    /// breakend row, whose `Allele` is its breakend string, prints the class term
+    /// `chromosome_breakpoint`. A sequence record prints [`so_variation_class`] of
+    /// [`Self::record_allele_string`] upper-cased, the allele string the whole
+    /// record works with after `validate_vf` (`Parser.pm:554`), so every allele of
+    /// a multi-allelic record prints the one class (`sequence_alteration` for
+    /// `TG/T/-`, `indel` for `T/A/TT`, `SNV` for `A/C/G`) and a record written in
+    /// lower case prints the class of its upper-cased alleles.
+    pub fn class_so_term(&self) -> String {
+        if self.is_structural || self.variant_class.is_structural() {
+            return match &self.record_so_term {
+                Some(term) => term.clone(),
+                None if self.variant_class == VariantClass::Translocation => {
+                    self.variant_class.so_term().to_string()
+                }
+                None => self.display_allele(),
+            };
+        }
+        so_variation_class(&self.record_allele_string().to_ascii_uppercase()).to_string()
+    }
+
+    /// The `AMBIGUITY` value of the record: [`ambiguity_code`] of
+    /// [`Self::record_allele_string`], the allele string Ensembl VEP's
+    /// `VariationFeature::ambig_code` reads, and `None` for a structural variant,
+    /// whose feature class carries no code (OutputFactory.pm
+    /// `VariationFeature_to_output_hash`).
+    pub fn ambiguity_code(&self) -> Option<u8> {
+        if self.is_structural {
+            return None;
+        }
+        ambiguity_code(&self.record_allele_string())
+    }
+
+    /// The `UPLOADED_ALLELE` value of the record: [`uploaded_allele`] of the
+    /// allele string as uploaded ([`Self::uploaded_allele_string`], else the
+    /// allele's own) under the run's `--minimal` setting, and `None` for a
+    /// structural variant, whose rows carry neither it nor `REF_ALLELE`
+    /// (`OutputFactory.pm` `BaseStructuralVariationOverlapAllele_to_output_hash`
+    /// sets `Allele`, `ALLELE_NUM`, `Consequence`, `IMPACT` and `PICK` alone).
+    pub fn uploaded_allele(&self, minimal: bool) -> Option<String> {
+        if self.is_structural {
+            return None;
+        }
+        let raw = self
+            .uploaded_allele_string
+            .as_deref()
+            .unwrap_or(&self.allele_string);
+        Some(uploaded_allele(raw, minimal))
+    }
+
     /// [`Self::location`] after a 3' shift of `shift` bases along `strand`
     /// (`--shift_genomic 1`): a transcript row moves by `shift_length * strand`
     /// (OutputFactory.pm:1705), an intergenic row towards higher coordinates
@@ -808,6 +862,126 @@ fn push_decimal(out: &mut Vec<u8>, mut n: u64) {
 /// The text a byte writer appended: whole `str` values and ASCII, so UTF-8.
 fn written_text(bytes: Vec<u8>) -> String {
     String::from_utf8(bytes).expect("byte writers append str slices and ASCII")
+}
+
+/// The Sequence Ontology class of an allele string, as ensembl-variation
+/// `Utils/Sequence.pm` `SO_variation_class` derives it with a trusted reference
+/// allele: single upper-case letters throughout are an `SNV`; `)` followed by a
+/// digit is a `tandem_repeat`; a `-` reference with sequence or `INS` alleles an
+/// `insertion` and with one `DEL` allele a `deletion`; a sequence reference with
+/// `-` or `DEL` alleles alone a `deletion`, and with sequence alleles a
+/// `substitution` when every allele has its length, else an `indel`; a `DEL`
+/// reference with `-` alleles a `deletion`; a lone `INS` or `DEL` allele an
+/// `insertion` or `deletion`; anything else, a `*` allele or deletions of two
+/// lengths included, a `sequence_alteration`.
+pub fn so_variation_class(allele_string: &str) -> &'static str {
+    let is_sequence = |a: &str| !a.is_empty() && a.bytes().all(|b| b.is_ascii_uppercase());
+    let parts: Vec<&str> = allele_string.split('/').collect();
+    if parts.len() > 1 && parts.iter().all(|a| a.len() == 1 && is_sequence(a)) {
+        return "SNV";
+    }
+    let tandem_repeat = allele_string
+        .as_bytes()
+        .windows(2)
+        .any(|w| w[0] == b')' && w[1].is_ascii_digit());
+    if tandem_repeat {
+        return "tandem_repeat";
+    }
+    let mut class = "sequence_alteration";
+    match parts.as_slice() {
+        [reference, alts @ ..] if !alts.is_empty() => {
+            if *reference == "-" {
+                if alts.iter().all(|a| is_sequence(a) || a.contains("INS")) {
+                    class = "insertion";
+                } else if alts.len() == 1 && alts[0].contains("DEL") {
+                    class = "deletion";
+                }
+            } else if is_sequence(reference) {
+                if alts.iter().all(|a| a.contains('-') || a.contains("DEL")) {
+                    class = "deletion";
+                } else if alts.iter().all(|a| is_sequence(a)) {
+                    class = if alts.iter().all(|a| a.len() == reference.len()) {
+                        "substitution"
+                    } else {
+                        "indel"
+                    };
+                }
+            } else if reference.contains("DEL") && alts.iter().all(|a| a.contains('-')) {
+                class = "deletion";
+            }
+        }
+        [single] => {
+            if single.contains("INS") {
+                class = "insertion";
+            } else if single.contains("DEL") {
+                class = "deletion";
+            }
+        }
+        _ => {}
+    }
+    class
+}
+
+/// The IUPAC ambiguity code of an allele string, as ensembl-variation
+/// `Utils/Sequence.pm` `ambiguity_code` derives it: the alleles are split on `/`,
+/// `|` or `\`, an `N` stands for the four bases, and the distinct alleles,
+/// sorted as strings, are joined and upper-cased into the key of a sixteen-entry
+/// table (`AC` is `M`, `ACGT` is `N`, `-` alone keeps `-`). The key is built
+/// from whole alleles, so `G/AC` reads as `ACG` and prints `V` while `A/AT`
+/// reads as `AAT` and prints nothing; every anchor-trimmed indel (`-/T`, `TA/-`)
+/// and every record carrying a `*` has no code.
+pub fn ambiguity_code(allele_string: &str) -> Option<u8> {
+    let mut alleles: Vec<&str> = Vec::new();
+    for allele in allele_string.split(['/', '|', '\\']) {
+        if allele == "N" {
+            alleles.extend(["A", "C", "G", "T"]);
+        } else {
+            alleles.push(allele);
+        }
+    }
+    alleles.sort_unstable();
+    alleles.dedup();
+    match alleles.concat().to_ascii_uppercase().as_str() {
+        "AC" => Some(b'M'),
+        "ACG" => Some(b'V'),
+        "ACGT" => Some(b'N'),
+        "ACT" => Some(b'H'),
+        "AG" => Some(b'R'),
+        "AGT" => Some(b'D'),
+        "AT" => Some(b'W'),
+        "CG" => Some(b'S'),
+        "CGT" => Some(b'B'),
+        "CT" => Some(b'Y'),
+        "GT" => Some(b'K'),
+        "C" => Some(b'C'),
+        "A" => Some(b'A'),
+        "T" => Some(b'T'),
+        "G" => Some(b'G'),
+        "-" => Some(b'-'),
+        _ => None,
+    }
+}
+
+/// The `UPLOADED_ALLELE` value: the record's allele string as uploaded when its
+/// alleles differ in length with no `-` among them, or the run is `--minimal`,
+/// else that string upper-cased. Ensembl VEP prints
+/// `original_allele_string || allele_string` (`OutputFactory.pm`
+/// `VariationFeatureOverlapAllele_to_output_hash`); the parser keeps the raw
+/// string as `original_allele_string` for a record whose alleles differ in
+/// length, a string carrying a `-` excepted (`Parser.pm` `post_process_vfs`
+/// ends its length test at the first `-`), and, under `--minimal`, for every
+/// record (`minimise_alleles`), and `validate_vf` upper-cases the working
+/// `allele_string` every other record prints.
+pub fn uploaded_allele(allele_string: &str, minimal: bool) -> String {
+    let mut parts = allele_string.split('/');
+    let reference_length = parts.next().map_or(0, str::len);
+    let minimised =
+        !allele_string.contains('-') && parts.any(|allele| allele.len() != reference_length);
+    if minimal || minimised {
+        allele_string.to_string()
+    } else {
+        allele_string.to_ascii_uppercase()
+    }
 }
 
 #[cfg(test)]
@@ -1033,6 +1207,189 @@ mod tests {
             b"TT".to_vec(),
         );
         assert_eq!(ins.location(), "21:25000100-25000101");
+    }
+
+    /// `Utils/Sequence.pm` `ambiguity_code` (ensembl-variation release/116,
+    /// lines 115-130): the fifteen single-base sets and `-` of its `%ambig` table,
+    /// keyed by the distinct alleles joined, with `N` standing for the four bases;
+    /// every other key, so every anchor-trimmed indel (`-/T`, `TA/-`) and any
+    /// record carrying a `*` allele, has no code. `VariationFeature::ambig_code`
+    /// reads the record's whole allele string, so a multi-allelic record takes
+    /// the code of all its alleles, a bi-allelic indel its minimised string, and
+    /// a structural variant never has one (`OutputFactory.pm`
+    /// `VariationFeature_to_output_hash` asks a `VariationFeature` alone).
+    #[test]
+    fn ambiguity_code_follows_perl_table() {
+        let table = [
+            ("A/C", b'M'),
+            ("A/C/G", b'V'),
+            ("A/C/G/T", b'N'),
+            ("A/C/T", b'H'),
+            ("A/G", b'R'),
+            ("A/G/T", b'D'),
+            ("A/T", b'W'),
+            ("C/G", b'S'),
+            ("C/G/T", b'B'),
+            ("C/T", b'Y'),
+            ("G/T", b'K'),
+            ("C", b'C'),
+            ("A", b'A'),
+            ("T", b'T'),
+            ("G", b'G'),
+            ("-", b'-'),
+        ];
+        for (alleles, code) in table {
+            assert_eq!(ambiguity_code(alleles), Some(code), "{alleles}");
+        }
+        // Order, repeats and the separator do not matter; `N` expands.
+        assert_eq!(ambiguity_code("T/A"), Some(b'W'));
+        assert_eq!(ambiguity_code("A/G/A"), Some(b'R'));
+        assert_eq!(ambiguity_code("A|G"), Some(b'R'));
+        assert_eq!(ambiguity_code("N/A"), Some(b'N'));
+        assert_eq!(ambiguity_code("a/c"), Some(b'M'));
+        // The key is the joined allele strings, so a multi-base allele whose
+        // letters complete a set has a code (Ensembl VEP 116.2 prints these).
+        assert_eq!(ambiguity_code("G/AC"), Some(b'V'));
+        assert_eq!(ambiguity_code("T/AC"), Some(b'H'));
+        assert_eq!(ambiguity_code("T/AG"), Some(b'D'));
+        assert_eq!(ambiguity_code("C/GT"), Some(b'B'));
+        assert_eq!(ambiguity_code("A/CGT"), Some(b'N'));
+        assert_eq!(ambiguity_code("A/GT"), Some(b'D'));
+        assert_eq!(ambiguity_code("C/A/GT"), Some(b'N'));
+        for none in [
+            "A/AT", "G/AT", "-/T", "T/-", "AG/A/-", "A/*", "A/G/*", "AT/GC", "<DEL>", "",
+        ] {
+            assert_eq!(ambiguity_code(none), None, "{none}");
+        }
+
+        let snv = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(snv.ambiguity_code(), Some(b'R'));
+        let mut multi = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        multi.record_allele_string_multi = Some("A/G/T".into());
+        assert_eq!(multi.ambiguity_code(), Some(b'D'));
+        let ins = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"T".to_vec());
+        assert_eq!(ins.ambiguity_code(), None);
+        let mut sv = InputVariant::new("21".into(), 100, 200, b"N".to_vec(), b"<DEL>".to_vec());
+        sv.is_structural = true;
+        sv.uploaded_allele_string = Some("<DEL>".into());
+        assert_eq!(sv.ambiguity_code(), None);
+        let mut sv_like_snv =
+            InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        sv_like_snv.is_structural = true;
+        assert_eq!(sv_like_snv.ambiguity_code(), None);
+    }
+
+    /// `Utils/Sequence.pm` `SO_variation_class` (ensembl-variation release/116,
+    /// lines 335-412) on the allele strings its own comments name and on the
+    /// record strings a multi-allelic VCF line becomes: the class is the whole
+    /// record's, so two deletions of different length are a
+    /// `sequence_alteration`, a mixed SNV and insertion an `indel`, and a `*`
+    /// allele defeats every pattern (`OutputFactory.pm`
+    /// `VariationFeature_to_output_hash` writes `class_SO_term`).
+    #[test]
+    fn so_variation_class_follows_perl() {
+        for (alleles, class) in [
+            ("A/T", "SNV"),
+            ("A/T/G", "SNV"),
+            ("N/A", "SNV"),
+            ("(CAG)8/(CAG)9", "tandem_repeat"),
+            ("-/ATT", "insertion"),
+            ("-/(LARGEINSERTION)", "insertion"),
+            ("-/(LARGEDELETION)", "deletion"),
+            ("A/-", "deletion"),
+            ("TA/-", "deletion"),
+            ("A/(LARGEDELETION)", "deletion"),
+            ("AA/TT", "substitution"),
+            ("AA/TTTT", "indel"),
+            ("(LARGEDELETION)/-", "deletion"),
+            ("(LARGEINSERTION)", "insertion"),
+            ("(308 BP DELETION)", "deletion"),
+            ("A/C/*", "sequence_alteration"),
+            ("TG/T/-", "sequence_alteration"),
+            ("T/A/TT", "indel"),
+            ("-/T/-", "sequence_alteration"),
+            ("a/t", "sequence_alteration"),
+        ] {
+            assert_eq!(so_variation_class(alleles), class, "{alleles}");
+        }
+        let snv = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(snv.class_so_term(), "SNV");
+        let lower = InputVariant::new("21".into(), 100, 100, b"a".to_vec(), b"g".to_vec());
+        assert_eq!(lower.class_so_term(), "SNV");
+        let lower_del = InputVariant::new("21".into(), 100, 100, b"t".to_vec(), b"-".to_vec());
+        assert_eq!(lower_del.class_so_term(), "deletion");
+        let mut multi = InputVariant::new("21".into(), 101, 102, b"TG".to_vec(), b"T".to_vec());
+        multi.record_allele_string_multi = Some("TG/T/-".into());
+        assert_eq!(multi.class_so_term(), "sequence_alteration");
+        let mut sv = InputVariant::new("21".into(), 100, 200, b"N".to_vec(), b"<DEL>".to_vec());
+        sv.is_structural = true;
+        sv.variant_class = VariantClass::StructuralDeletion;
+        sv.uploaded_allele_string = Some("<DEL>".into());
+        assert_eq!(sv.class_so_term(), "deletion");
+        // A structural record prints the term its own ALT names, as the Allele
+        // column does: Ensembl VEP writes `Alu_insertion`, not the class term.
+        let mut alu = InputVariant::new(
+            "21".into(),
+            101,
+            100,
+            b"N".to_vec(),
+            b"<INS:ME:ALU>".to_vec(),
+        );
+        alu.is_structural = true;
+        alu.variant_class = VariantClass::MobileElementInsertion;
+        alu.record_so_term = Some("Alu_insertion".into());
+        assert_eq!(alu.class_so_term(), "Alu_insertion");
+        // A type the term table lacks has no record term; its row prints the one
+        // string in the Allele and VARIANT_CLASS columns, as Ensembl VEP does.
+        let mut cpx = InputVariant::new("21".into(), 101, 300, b"N".to_vec(), b"<CPX>".to_vec());
+        cpx.is_structural = true;
+        cpx.variant_class = VariantClass::ComplexStructural;
+        cpx.vep_skip = true;
+        assert_eq!(cpx.class_so_term(), "CPX");
+        assert_eq!(cpx.class_so_term(), cpx.display_allele());
+        // A breakend row's Allele is its breakend string; its class is the term.
+        let mut bnd =
+            InputVariant::new("21".into(), 100, 100, b"N".to_vec(), b"N[21:200[".to_vec());
+        bnd.is_structural = true;
+        bnd.variant_class = VariantClass::Translocation;
+        bnd.mate_id = Some("bnd_1".into());
+        assert_eq!(bnd.class_so_term(), "chromosome_breakpoint");
+        assert_eq!(bnd.display_allele(), "N[21:200[");
+    }
+
+    /// `UPLOADED_ALLELE` is the raw string of a record whose alleles differ in
+    /// length with no `-` among them, or of every record under `--minimal`, and
+    /// the upper-cased working string otherwise (`OutputFactory.pm`
+    /// `VariationFeatureOverlapAllele_to_output_hash` reads
+    /// `original_allele_string || allele_string`; `Parser.pm` `post_process_vfs`
+    /// sets the former when a length differs, ending its test at the first `-`,
+    /// `minimise_alleles` sets it for every record, and `validate_vf` upper-cases
+    /// the latter), and a structural row has none. An Ensembl-format column
+    /// written `at/-` or `tt/-/t` therefore prints upper-cased, as `t/-` does.
+    #[test]
+    fn uploaded_allele_follows_perls_two_sources() {
+        assert_eq!(uploaded_allele("a/g", false), "A/G");
+        assert_eq!(uploaded_allele("A/C/*", false), "A/C/*");
+        assert_eq!(uploaded_allele("at/a", false), "at/a");
+        assert_eq!(uploaded_allele("TAG/TA/T", false), "TAG/TA/T");
+        assert_eq!(uploaded_allele("AT/A/*", false), "AT/A/*");
+        assert_eq!(uploaded_allele("t/-", false), "T/-");
+        assert_eq!(uploaded_allele("at/-", false), "AT/-");
+        assert_eq!(uploaded_allele("-/at", false), "-/AT");
+        assert_eq!(uploaded_allele("tt/-/t", false), "TT/-/T");
+        assert_eq!(uploaded_allele("a/g", true), "a/g");
+        assert_eq!(uploaded_allele("a/c/g", true), "a/c/g");
+        assert_eq!(uploaded_allele("at/-", true), "at/-");
+        let mut snv = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        snv.uploaded_allele_string = Some("a/g".into());
+        assert_eq!(snv.uploaded_allele(false).as_deref(), Some("A/G"));
+        assert_eq!(snv.uploaded_allele(true).as_deref(), Some("a/g"));
+        let plain = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(plain.uploaded_allele(false).as_deref(), Some("A/G"));
+        let mut sv = InputVariant::new("21".into(), 100, 200, b"N".to_vec(), b"<DEL>".to_vec());
+        sv.is_structural = true;
+        sv.uploaded_allele_string = Some("<DEL>".into());
+        assert_eq!(sv.uploaded_allele(false), None);
     }
 
     /// The three byte writers append exactly the bytes of the `String` columns,
