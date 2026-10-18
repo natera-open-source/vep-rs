@@ -19,6 +19,13 @@
 #   WARMUP-OUTPUT  a timed run that starts with the discarded warmup's output
 #                  still on disk, whose pages the timed run then reclaims while
 #                  writing its own.
+#   EXTRA-ARGS     --vep-extra-args that reach the SNP/indel call but not the SV
+#                  loop's subshell, or a provenance record that names other
+#                  arguments than the ones the binary ran with, hashes a file the
+#                  run did not execute, or sits beside an earlier run's wrapper;
+#                  both loops run the wrapper, an empty value appends nothing, and
+#                  a host without python3 or a binary that is not a readable file
+#                  is refused before any cell.
 #
 # Run: bash scripts/concordance/test_run_clone_measurement.sh
 
@@ -1063,6 +1070,225 @@ if [[ -f "$HARNESS" ]]; then
             bad "$fn derives the release $_n_derive time(s) (relative line ${_derive_rel:-none}) against its first time_run at relative line ${_time_rel:-none}"
         fi
     done
+fi
+
+echo
+echo "EXTRA-ARGS: --vep-extra-args reaches every vep-rs invocation through the wrapper and is recorded in provenance.json; an empty value appends nothing"
+
+# The extra arguments travel through <output-dir>/vep-wrapper.sh, which VEP_BINARY is pointed
+# at, so the SNP/indel call and the SV loop's `bash -c` subshell carry them without a change to
+# either command line. A stub binary records the argument vector it was run with and writes one
+# data line, enough for the SV output gate; the run is --walltime-only on one SNP/indel cell and
+# one SV cell with two inputs, six invocations in all.
+if [[ -f "$HARNESS" ]]; then
+    grep -q '^VEP_EXTRA_ARGS=""$' "$HARNESS" &&
+        ok "--vep-extra-args defaults to nothing (VEP_EXTRA_ARGS empty)" ||
+        bad "VEP_EXTRA_ARGS does not default to empty"
+    grep -A 2 -e '^[[:space:]]*--vep-extra-args)$' "$HARNESS" | grep -q 'VEP_EXTRA_ARGS="$2"' &&
+        ok "--vep-extra-args is parsed into VEP_EXTRA_ARGS" ||
+        bad "--vep-extra-args is not parsed"
+    grep -q -- '--vep-extra-args applies to --engine vep-rs only' "$HARNESS" &&
+        ok "a non-vep-rs engine with extra arguments is refused" ||
+        bad "the vep-rs-only guard on --vep-extra-args is missing"
+    # The two engine command lines are not edited for the pass-through: the extra arguments
+    # appear in the wrapper the harness writes, never in the SNP/indel call or the SV subshell.
+    _extra_in_cmds=$(sed -n '/^measure_p1() {/,/^}/p; /^measure_sv() {/,/^}/p' "$HARNESS" |
+        grep -cE 'VEP_EXTRA_ARG[SV]') || _extra_in_cmds=0
+    [[ "$_extra_in_cmds" -eq 0 ]] &&
+        ok "neither measure_p1 nor measure_sv names the extra arguments (they travel through VEP_BINARY)" ||
+        bad "measure_p1 or measure_sv names VEP_EXTRA_ARGS on $_extra_in_cmds line(s); the pass-through must not touch the command lines"
+    _ea="$TMP/extra_args"
+    _ea_sv_inputs="$_ea/data/ground_truth/perl/sv_per_vcf/canonical_inputs/grch37"
+    mkdir -p "$_ea/bin" "$_ea/data/vcf/grch37/all_variants_canonical" "$_ea_sv_inputs"
+    : >"$_ea/data/vcf/grch37/all_variants_canonical/clinvar_grch37.canonical.vcf.gz"
+    printf '##fileformat=VCFv4.2\n#CHROM\tPOS\n21\t1\n' >"$_ea_sv_inputs/01_a.vcf"
+    printf '##fileformat=VCFv4.2\n#CHROM\tPOS\n21\t2\n' >"$_ea_sv_inputs/02_b.vcf"
+    cat >"$_ea/bin/vep" <<'STUB'
+#!/usr/bin/env bash
+# stub engine: one line per invocation, the argument vector joined by spaces; one data line at -o
+out=""; prev=""
+for a in "$@"; do [[ "$prev" == -o ]] && out="$a"; prev="$a"; done
+printf '%s\n' "$*" >>"$STUB_ARGV"
+printf '#Uploaded_variation\tLocation\nv\t21:1\n' >"$out"
+STUB
+    chmod +x "$_ea/bin/vep"
+    run_extra_args_harness() { # run_extra_args_harness <run name> [harness args...]
+        local run_name="$1"; shift
+        : >"$_ea/$run_name.argv"
+        STUB_ARGV="$_ea/$run_name.argv" bash "$HARNESS" --engine vep-rs --vep-binary "$_ea/bin/vep" --data-dir "$_ea/data" \
+            --output-dir "$_ea/$run_name" --suites "s01 s07" --walltime-only "$@" >"$_ea/$run_name.log" 2>&1
+    }
+    if /usr/bin/time -v true >/dev/null 2>&1; then
+        run_extra_args_harness with --vep-extra-args "--transcript_index_impl coitrees --fork 4"; rc=$?
+        _n_inv=$(grep -c . "$_ea/with.argv") || _n_inv=0
+        _n_tail=$(grep -c -- ' --quiet --transcript_index_impl coitrees --fork 4$' "$_ea/with.argv") || _n_tail=0
+        _n_sv=$(grep -c -- '--species homo_sapiens --assembly GRCh37 --quiet --transcript_index_impl coitrees --fork 4$' "$_ea/with.argv") || _n_sv=0
+        _n_p1=$(grep -c -- '/s01/rust/output.txt --offline .* --force --no_stats --quiet --transcript_index_impl coitrees --fork 4$' "$_ea/with.argv") || _n_p1=0
+        if [[ "$rc" -eq 0 && "$_n_inv" -eq 6 && "$_n_tail" -eq 6 ]]; then
+            ok "all six vep-rs invocations (SNP/indel warmup and timed, SV loop twice over two inputs) end with the extra arguments after the harness's own"
+        else
+            bad "rc=$rc; $_n_inv invocation(s), $_n_tail of them ending with the extra arguments (expected 6 and 6): $(head -2 "$_ea/with.argv" | cut -c1-160 | tr '\n' '|') $(tail -3 "$_ea/with.log" | tr '\n' '|')"
+        fi
+        [[ "$_n_p1" -eq 2 && "$_n_sv" -eq 4 ]] &&
+            ok "the SNP/indel call (2) and the SV subshell's per-VCF calls (4) both ran through the wrapper" ||
+            bad "$_n_p1 SNP/indel and $_n_sv SV invocations carried the extra arguments (expected 2 and 4)"
+        _bad_rows=$(awk -F, 'NR>1 && ($10!="0" || ($8!="warmup" && $8!="timed"))' "$_ea/with/wall_times.csv" 2>/dev/null | wc -l | tr -d ' ')
+        _rows=$(awk -F, 'NR>1' "$_ea/with/wall_times.csv" 2>/dev/null | wc -l | tr -d ' ')
+        [[ "$_rows" -eq 4 && "$_bad_rows" -eq 0 ]] &&
+            ok "both cells record their warmup and timed rows with exit 0 through the wrapper" ||
+            bad "wall_times.csv has $_rows rows, $_bad_rows of them failed (expected 4 and 0)"
+        [[ -x "$_ea/with/vep-wrapper.sh" ]] && grep -q "^exec $_ea/bin/vep \"\$@\" --transcript_index_impl coitrees --fork 4\$" "$_ea/with/vep-wrapper.sh" &&
+            ok "the wrapper execs the real binary with the harness's arguments first and the extra ones after" ||
+            bad "vep-wrapper.sh is missing or does not exec the real binary with the extra arguments appended: $(cat "$_ea/with/vep-wrapper.sh" 2>/dev/null | tail -1)"
+        _sha=$( (sha256sum "$_ea/bin/vep" 2>/dev/null || shasum -a 256 "$_ea/bin/vep") | awk '{print $1}')
+        if python3 - "$_ea/with/provenance.json" "$_ea/bin/vep" "$_sha" "$_ea/with/vep-wrapper.sh" <<'PY'
+import json, sys
+p, binary, sha, wrapper = sys.argv[1:]
+d = json.load(open(p))
+assert d["engine"] == "vep-rs", d
+assert d["vep_binary"] == binary and d["vep_binary_sha256"] == sha, (d["vep_binary"], d["vep_binary_sha256"])
+assert d["vep_extra_args"] == "--transcript_index_impl coitrees --fork 4", d["vep_extra_args"]
+assert d["vep_extra_argv"] == ["--transcript_index_impl", "coitrees", "--fork", "4"], d["vep_extra_argv"]
+assert d["wrapper"] == wrapper, d["wrapper"]
+assert len(d["executed_argv"]) == 6, len(d["executed_argv"])
+for argv in d["executed_argv"]:
+    assert argv[0] == binary and argv[-4:] == ["--transcript_index_impl", "coitrees", "--fork", "4"], argv
+    assert "--fork" in argv[:-4] and "--offline" in argv, argv
+assert sum(1 for a in d["executed_argv"] if "--species" in a) == 4, "SV invocations"
+PY
+        then
+            ok "provenance.json names the real binary, its sha256, the extra arguments as given and split, the wrapper, and the six executed argument vectors"
+        else
+            bad "provenance.json does not carry the expected record: $(cat "$_ea/with/provenance.json" 2>/dev/null | tr -d '\n' | cut -c1-300)"
+        fi
+        run_extra_args_harness empty --vep-extra-args ""; rc=$?
+        _n_inv=$(grep -c . "$_ea/empty.argv") || _n_inv=0
+        _n_plain=$(grep -cE -- ' --quiet$' "$_ea/empty.argv") || _n_plain=0
+        if [[ "$rc" -eq 0 && "$_n_inv" -eq 6 && "$_n_plain" -eq 6 && ! -e "$_ea/empty/vep-wrapper.sh" ]]; then
+            ok "an empty value appends nothing: six invocations end with the harness's own --quiet and no wrapper is written"
+        else
+            bad "empty value: rc=$rc, $_n_inv invocations, $_n_plain ending with --quiet, wrapper present=$([[ -e "$_ea/empty/vep-wrapper.sh" ]] && echo yes || echo no)"
+        fi
+        if python3 - "$_ea/empty/provenance.json" "$_ea/bin/vep" 2>/dev/null <<'PY'
+import json, sys
+p, binary = sys.argv[1:]
+d = json.load(open(p))
+assert d["vep_binary"] == binary, d
+assert d["wrapper"] is None, d
+assert d["vep_extra_args"] == "" and d["vep_extra_argv"] == [], d
+assert d["executed_argv"] == [], d
+PY
+        then
+            ok "provenance.json is still written for a run without extra arguments, naming the binary and no wrapper"
+        else
+            bad "provenance.json for the empty value is missing or names a wrapper: $(cat "$_ea/empty/provenance.json" 2>/dev/null | tr -d '\n' | cut -c1-200)"
+        fi
+        # "Split on whitespace" includes a newline: a value read line by line would keep only
+        # its first line and drop the rest without a word.
+        run_extra_args_harness lines --vep-extra-args $'--transcript_index_impl coitrees\n--fork 4'; rc=$?
+        _n_tail=$(grep -c -- ' --quiet --transcript_index_impl coitrees --fork 4$' "$_ea/lines.argv") || _n_tail=0
+        if [[ "$rc" -eq 0 && "$_n_tail" -eq 6 ]] && python3 - "$_ea/lines/provenance.json" 2>/dev/null <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["vep_extra_argv"] == ["--transcript_index_impl", "coitrees", "--fork", "4"], d
+PY
+        then
+            ok "a newline inside the value separates arguments like a space: all six invocations carry both flags"
+        else
+            bad "newline-separated value: rc=$rc, $_n_tail of 6 invocations carry both flags: $(head -1 "$_ea/lines.argv" 2>/dev/null | cut -c1-160)"
+        fi
+        # A binary named without a slash: the executable test reads the working directory
+        # while a bare command word resolves through PATH, so a decoy first on PATH would run
+        # and the record would hash the file that did not. The harness makes the operand
+        # absolute, so the working directory's file runs and is the one recorded.
+        mkdir -p "$_ea/decoy"
+        printf '#!/usr/bin/env bash\n: >"$DECOY_MARK"\n' >"$_ea/decoy/vep"
+        chmod +x "$_ea/decoy/vep"
+        : >"$_ea/rel.argv"
+        (cd "$_ea/bin" && DECOY_MARK="$_ea/decoy.ran" STUB_ARGV="$_ea/rel.argv" PATH="$_ea/decoy:$PATH" bash "$HARNESS" --engine vep-rs --vep-binary vep \
+            --data-dir "$_ea/data" --output-dir "$_ea/rel" --suites s01 --walltime-only >"$_ea/rel.log" 2>&1); rc=$?
+        _n_inv=$(grep -c . "$_ea/rel.argv") || _n_inv=0
+        if [[ "$rc" -eq 0 && "$_n_inv" -eq 2 && ! -e "$_ea/decoy.ran" ]] && python3 - "$_ea/rel/provenance.json" "$_ea/bin/vep" 2>/dev/null <<'PY'
+import json, sys
+p, binary = sys.argv[1:]
+d = json.load(open(p))
+assert d["vep_binary"] == binary, d["vep_binary"]
+PY
+        then
+            ok "a slash-less --vep-binary runs the working directory's file, never a PATH decoy, and is recorded by its absolute path"
+        else
+            bad "slash-less --vep-binary: rc=$rc, $_n_inv stub invocation(s), decoy ran=$([[ -e "$_ea/decoy.ran" ]] && echo yes || echo no), recorded as $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["vep_binary"])' "$_ea/rel/provenance.json" 2>/dev/null)"
+        fi
+        # A run without extra arguments into the directory of a run with them leaves no
+        # wrapper or log behind to contradict its own record.
+        run_extra_args_harness rerun --vep-extra-args "--fork 4"; rc1=$?
+        run_extra_args_harness rerun; rc2=$?
+        if [[ "$rc1" -eq 0 && "$rc2" -eq 0 && ! -e "$_ea/rerun/vep-wrapper.sh" && ! -e "$_ea/rerun/vep-wrapper.argv" ]] && python3 - "$_ea/rerun/provenance.json" 2>/dev/null <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["wrapper"] is None and d["executed_argv"] == [], d
+PY
+        then
+            ok "a re-run without extra arguments removes the earlier run's wrapper and log from the output directory"
+        else
+            bad "re-run into the same output directory: rc=$rc1/$rc2, left behind: $(ls "$_ea/rerun" 2>/dev/null | grep vep-wrapper | tr '\n' ' ')"
+        fi
+        # Only a vep-rs run writes the record, so a run under another engine into the same
+        # directory must not leave a vep-rs record beside its own wall_times.csv. The record's
+        # presence before the run is part of the check: its absence alone also holds when the
+        # vep-rs run above wrote none.
+        _record_before=$([[ -e "$_ea/rerun/provenance.json" ]] && echo yes || echo no)
+        STUB_ARGV="$_ea/rerun-fastvep.argv" bash "$HARNESS" --engine fastvep --fastvep-binary "$_ea/bin/vep" --data-dir "$_ea/data" --output-dir "$_ea/rerun" --suites s01 --walltime-only >"$_ea/rerun-fastvep.log" 2>&1; rc=$?
+        if [[ "$_record_before" == yes && "$rc" -eq 0 && ! -e "$_ea/rerun/provenance.json" ]] && grep -q '^fastvep,' "$_ea/rerun/wall_times.csv"; then
+            ok "a run under another engine into the same output directory removes the earlier vep-rs record"
+        else
+            bad "fastvep re-run into a vep-rs output directory: rc=$rc, provenance.json before=$_record_before, after=$([[ -e "$_ea/rerun/provenance.json" ]] && echo yes || echo no): $(tail -2 "$_ea/rerun-fastvep.log" | tr '\n' '|' | cut -c1-200)"
+        fi
+    else
+        echo "  skip functional extra-args run: /usr/bin/time -v is not GNU time here"
+    fi
+    # A directory passes `-x`; the harness refuses it with its own line before anything is
+    # written, instead of failing inside the record writer.
+    bash "$HARNESS" --engine vep-rs --vep-binary "$_ea/bin" --data-dir "$_ea/data" --output-dir "$_ea/dirbin" --suites s01 --walltime-only >"$_ea/dirbin.log" 2>&1; rc=$?
+    if [[ "$rc" -eq 1 && ! -e "$_ea/dirbin" ]] && grep -q '^ERROR: vep-rs binary not a readable executable file: ' "$_ea/dirbin.log" && ! grep -q 'Traceback' "$_ea/dirbin.log"; then
+        ok "a directory given as --vep-binary is refused before any cell with the harness's own line"
+    else
+        bad "directory as --vep-binary: rc=$rc, output dir exists=$([[ -e "$_ea/dirbin" ]] && echo yes || echo no): $(head -2 "$_ea/dirbin.log" | tr '\n' '|' | cut -c1-200)"
+    fi
+    # An execute-only file passes `-x` and `-f` and cannot be hashed; it is refused like the
+    # directory. Root reads every file, so the check is meaningful only for another user.
+    if [[ "$EUID" -ne 0 ]]; then
+        cp "$_ea/bin/vep" "$_ea/bin/vep-xonly"
+        chmod 0111 "$_ea/bin/vep-xonly"
+        bash "$HARNESS" --engine vep-rs --vep-binary "$_ea/bin/vep-xonly" --data-dir "$_ea/data" --output-dir "$_ea/xonly" --suites s01 --walltime-only >"$_ea/xonly.log" 2>&1; rc=$?
+        if [[ "$rc" -eq 1 && ! -e "$_ea/xonly" ]] && grep -q '^ERROR: vep-rs binary not a readable executable file: ' "$_ea/xonly.log" && ! grep -q 'Traceback' "$_ea/xonly.log"; then
+            ok "an execute-only --vep-binary is refused before any cell with the harness's own line"
+        else
+            bad "execute-only --vep-binary: rc=$rc, output dir exists=$([[ -e "$_ea/xonly" ]] && echo yes || echo no): $(head -2 "$_ea/xonly.log" | tr '\n' '|' | cut -c1-200)"
+        fi
+        chmod 0755 "$_ea/bin/vep-xonly"
+    else
+        echo "  skip execute-only check: root reads every file"
+    fi
+    # Every vep-rs run writes provenance.json through python3, so a host without it is refused
+    # at startup by the harness's own line. The PATH holds the tools the harness runs before
+    # the provenance write and no interpreter.
+    _np="$_ea/nopython/bin"
+    mkdir -p "$_np"
+    for _t in bash dirname date mkdir; do ln -sf "$(type -P "$_t")" "$_np/$_t"; done
+    PATH="$_np" "$_np/bash" "$HARNESS" --engine vep-rs --vep-binary "$_ea/bin/vep" --data-dir "$_ea/data" --output-dir "$_ea/nopython/out" --suites s01 --walltime-only >"$_ea/nopython.log" 2>&1; rc=$?
+    _n_err=$(grep -c '^ERROR: \[run_clone_measurement\] python3 is not on PATH' "$_ea/nopython.log") || _n_err=0
+    if [[ "$rc" -eq 1 && "$_n_err" -eq 1 ]] && ! grep -q -e 'command not found' -e ' starting$' "$_ea/nopython.log"; then
+        ok "without python3 a vep-rs run stops before any cell with one line naming the interpreter"
+    else
+        bad "without python3: rc=$rc, $_n_err interpreter line(s): $(head -3 "$_ea/nopython.log" | tr '\n' '|')"
+    fi
+    bash "$HARNESS" --engine perl --data-dir "$_ea/data" --output-dir "$_ea/perl" --suites s01 --vep-extra-args "--transcript_index_impl coitrees" >"$_ea/perl.log" 2>&1; rc=$?
+    if [[ "$rc" -ne 0 ]] && grep -q "^ERROR: --vep-extra-args applies to --engine vep-rs only (got engine 'perl')" "$_ea/perl.log" && ! grep -q "run_clone_measurement engine=perl" "$_ea/perl.log"; then
+        ok "extra arguments under another engine stop the run before any cell"
+    else
+        bad "extra arguments under --engine perl were not refused before the run (rc=$rc): $(head -2 "$_ea/perl.log" | tr '\n' ' ')"
+    fi
 fi
 
 echo

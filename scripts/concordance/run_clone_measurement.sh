@@ -62,7 +62,8 @@
 #     --engine vep-rs --vep-binary /path/to/vep \
 #     --data-dir <data> --output-dir <data>/work \
 #     [--suites all|snp-indel|sv|"s01 s04"] [--walltime-only] [--skip-fields] [--fork 16] \
-#     [--reference-release 115.2|116.2] [--run-id <id>] [--host-id <id>]
+#     [--reference-release 115.2|116.2] [--run-id <id>] [--host-id <id>] \
+#     [--vep-extra-args "<flags>"]
 #
 #   scripts/concordance/run_clone_measurement.sh --engine fastvep \
 #     --fastvep-binary /path/to/fastvep --data-dir <data> --output-dir <data>/work
@@ -97,6 +98,7 @@ RUN_ID="manual"
 HOST_ID="local"
 REPLICATE=""
 CONTAINER_PROBE=0
+VEP_EXTRA_ARGS=""
 # The Ensembl VEP release of the ground truth, handed to both comparators as
 # --reference-release. Empty means derived per cell from the ground-truth directory's
 # provenance (provenance.json or <output>.provenance.json, reference_release.py); a
@@ -153,6 +155,20 @@ Optional:
                          <output-dir>/container_start.csv (default 0: none). Every
                          Perl cell pays one container start per invocation; the
                          probe measures that cost on its own.
+  --vep-extra-args "<flags>"
+                         vep-rs engine only: arguments appended, after the harness's
+                         own, to every vep-rs invocation of the run (the SNP/indel
+                         cells and the SV per-VCF loop alike), split on whitespace.
+                         They reach the binary through <output-dir>/vep-wrapper.sh,
+                         so the invocations documented in this file's header stay
+                         as written; the wrapper costs one bash start per invocation
+                         inside the timed window, which a run without this flag does
+                         not pay. The wrapper logs every argument vector it runs to
+                         <output-dir>/vep-wrapper.argv; after the last cell the log is
+                         folded into <output-dir>/provenance.json beside the binary,
+                         its sha256 and the extra arguments (that record is written
+                         for every vep-rs run, extra arguments or not). An empty value
+                         appends nothing and writes no wrapper.
 EOF
 	exit 1
 }
@@ -223,6 +239,10 @@ while [[ $# -gt 0 ]]; do
 		CONTAINER_PROBE="$2"
 		shift 2
 		;;
+	--vep-extra-args)
+		VEP_EXTRA_ARGS="$2"
+		shift 2
+		;;
 	-h | --help) usage ;;
 	*)
 		echo "ERROR: unknown argument: $1" >&2
@@ -245,6 +265,10 @@ esac
 }
 [[ "$CONTAINER_PROBE" -eq 0 || "$ENGINE" == "perl" ]] || {
 	echo "ERROR: --container-probe applies to --engine perl only (got engine '$ENGINE')" >&2
+	usage
+}
+[[ -z "${VEP_EXTRA_ARGS//[[:space:]]/}" || "$ENGINE" == "vep-rs" ]] || {
+	echo "ERROR: --vep-extra-args applies to --engine vep-rs only (got engine '$ENGINE')" >&2
 	usage
 }
 case "$ENGINE" in
@@ -276,8 +300,18 @@ vep-rs)
 		echo "ERROR: --vep-binary required for engine vep-rs" >&2
 		exit 1
 	}
-	[[ -x "$VEP_BINARY" ]] || {
-		echo "ERROR: vep-rs binary not executable: $VEP_BINARY" >&2
+	# A readable regular file, not only `-x`: a directory and an execute-only file both pass
+	# `-x`, and provenance.json reads the file to hash it.
+	[[ -f "$VEP_BINARY" && -r "$VEP_BINARY" && -x "$VEP_BINARY" ]] || {
+		echo "ERROR: vep-rs binary not a readable executable file: $VEP_BINARY" >&2
+		exit 1
+	}
+	# The command lines run the operand as given, so a name without a slash would resolve
+	# through PATH while the test above and the hash read the file in the working directory;
+	# the absolute path makes the three agree.
+	[[ "$VEP_BINARY" == /* ]] || VEP_BINARY="$PWD/$VEP_BINARY"
+	command -v python3 >/dev/null 2>&1 || {
+		echo "ERROR: [run_clone_measurement] python3 is not on PATH: every vep-rs run writes <output-dir>/provenance.json through it; install it" >&2
 		exit 1
 	}
 	;;
@@ -357,12 +391,61 @@ gff3_for() { [[ "$1" == "GRCh37" ]] && echo "$GFF3_GRCH37" || echo "$GFF3_GRCH38
 # Output dir + wall_times.csv. The schema is identical across all three engines,
 # so runs can be concatenated into one uniform CSV.
 mkdir -p "$OUTPUT_DIR"
+# A re-run into the same output directory starts without the previous run's vep-rs record,
+# wrapper and log, which only a vep-rs run writes (the wrapper and log only with extra
+# arguments), so none of the three sits beside a wall_times.csv they do not describe.
+rm -f "$OUTPUT_DIR/provenance.json" "$OUTPUT_DIR/vep-wrapper.sh" "$OUTPUT_DIR/vep-wrapper.argv"
 WALL_CSV="$OUTPUT_DIR/wall_times.csv"
 echo "engine,run_id,host_id,replicate,suite_id,suite_name,assembly,run_kind,wall_seconds,exit_code" >"$WALL_CSV"
 # replicate is a provenance column: this run's 1..N index across a set of repeated
 # runs, passed in by the caller. When unset (a single run) it defaults to the host
 # id so the column is never empty.
 [[ -n "$REPLICATE" ]] || REPLICATE="$HOST_ID"
+
+# --vep-extra-args reaches the binary through a wrapper that VEP_BINARY is pointed at, so
+# the command lines below stay as the header documents them. Without extra arguments no
+# wrapper is written, so a timed command line never carries one it was not asked for.
+# provenance.json's executed_argv is filled after the suite loop from the wrapper's log.
+VEP_REAL_BINARY="$VEP_BINARY"
+VEP_WRAPPER=""
+VEP_ARGV_LOG=""
+VEP_EXTRA_ARGV=()
+if [[ "$ENGINE" == "vep-rs" ]]; then
+	# `-d ''` reads to the end of the value, so a newline inside it is one more separator;
+	# a plain `read` stops at the first newline and drops what follows. `read` exits 1 at
+	# the end of input without a NUL, which is the normal case here.
+	read -r -d '' -a VEP_EXTRA_ARGV <<<"$VEP_EXTRA_ARGS" || true
+	if [[ ${#VEP_EXTRA_ARGV[@]} -gt 0 ]]; then
+		VEP_WRAPPER="$OUTPUT_DIR/vep-wrapper.sh"
+		VEP_ARGV_LOG="$OUTPUT_DIR/vep-wrapper.argv"
+		: >"$VEP_ARGV_LOG"
+		real_binary_q=$(printf '%q' "$VEP_REAL_BINARY")
+		extra_args_q=$(printf ' %q' "${VEP_EXTRA_ARGV[@]}")
+		argv_log_q=$(printf '%q' "$VEP_ARGV_LOG")
+		cat >"$VEP_WRAPPER" <<EOF
+#!/usr/bin/env bash
+# Written by run_clone_measurement.sh for --vep-extra-args: runs the measured binary
+# with the extra arguments after the harness's own, and appends every argument vector
+# it runs to the log beside it, one line per invocation, fields separated by \\037.
+{ printf '%s\\037' $real_binary_q "\$@"$extra_args_q; echo; } >>$argv_log_q
+exec $real_binary_q "\$@"$extra_args_q
+EOF
+		chmod +x "$VEP_WRAPPER"
+		VEP_BINARY="$VEP_WRAPPER"
+		echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] vep-rs extra arguments: ${VEP_EXTRA_ARGV[*]} (through $VEP_WRAPPER)"
+	fi
+	# `${VEP_EXTRA_ARGV[@]+...}`, not a bare `"${VEP_EXTRA_ARGV[@]}"`: on macOS bash 3.2 an
+	# empty array is an unbound variable under `set -u`.
+	python3 - "$OUTPUT_DIR/provenance.json" "$VEP_REAL_BINARY" "$VEP_EXTRA_ARGS" "$VEP_WRAPPER" ${VEP_EXTRA_ARGV[@]+"${VEP_EXTRA_ARGV[@]}"} <<'PY'
+import hashlib, json, sys
+out, binary, extra, wrapper, *argv = sys.argv[1:]
+record = {"engine": "vep-rs", "vep_binary": binary,
+          "vep_binary_sha256": hashlib.sha256(open(binary, "rb").read()).hexdigest(),
+          "vep_extra_args": extra, "vep_extra_argv": argv,
+          "wrapper": wrapper or None, "executed_argv": []}
+json.dump(record, open(out, "w"), indent=1, sort_keys=True)
+PY
+fi
 
 # discard_warmup_output <suite_dir>
 # The discarded warmup's output must be gone before the timed run starts: its pages,
@@ -1292,6 +1375,19 @@ for entry in "${SUITES[@]}"; do
 			failed_suites+=("$suite_id")
 	fi
 done
+
+# The wrapper's argument-vector log, one record per vep-rs invocation, folded into
+# provenance.json now that every cell has run.
+if [[ -n "$VEP_ARGV_LOG" ]]; then
+	python3 - "$OUTPUT_DIR/provenance.json" "$VEP_ARGV_LOG" <<'PY'
+import json, sys
+out, log = sys.argv[1:]
+record = json.load(open(out))
+record["executed_argv"] = [line.split("\037")[:-1] for line in open(log).read().split("\n") if line]
+json.dump(record, open(out, "w"), indent=1, sort_keys=True)
+PY
+	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(grep -c . "$VEP_ARGV_LOG" || true) vep-rs invocation(s) recorded in $OUTPUT_DIR/provenance.json"
+fi
 
 # container_probe <n>: n bare starts of the Perl image, the same --user flag as the
 # timed cells and no mounts, so the wall time is the container start-up alone. Every
