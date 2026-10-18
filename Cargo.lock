@@ -2539,6 +2539,7 @@ dependencies = [
  "tempfile",
  "tracing",
  "tracing-subscriber",
+ "vep-cli",
  "vep-core",
  "vep-fasta",
 ]

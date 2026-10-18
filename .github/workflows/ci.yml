@@ -89,6 +89,7 @@ jobs:
           check scripts/golden/test_golden_scripts.py 67
           check scripts/release/test_render_release_notes.py 95
           check scripts/parity/test_check_parity_matrix.py 60
+          check scripts/validation/test_diff_caches.py 4
           [ "$fail" -eq 0 ]
           python3 -m pytest -q \
             scripts/validation/test_compare_sv_concordance.py \
@@ -100,7 +101,8 @@ jobs:
             scripts/concordance/test_compare_plugin_outputs.py \
             scripts/golden/test_golden_scripts.py \
             scripts/release/test_render_release_notes.py \
-            scripts/parity/test_check_parity_matrix.py
+            scripts/parity/test_check_parity_matrix.py \
+            scripts/validation/test_diff_caches.py
       # The Rust field comparator's goldens are what compare_vep_fields.py writes over its
       # fixture pairs; the Test job holds the binary to them, this step holds the Python,
       # so a change to either side that moves the contract fails here or there. From the

@@ -18,7 +18,10 @@
   "failed",
   "variation-strand",
   "exclude_null_alleles",
-  "engine_identity_lines"
+  "engine_identity_lines",
+  "af-1kg-columns",
+  "variation-coordinates",
+  "somatic"
  ],
  "excludes": {
   "variation_records_named": [

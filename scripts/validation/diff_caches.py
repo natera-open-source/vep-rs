@@ -4,12 +4,17 @@
 Compares transcripts, variations, and info.json field-by-field, producing
 a JSON report with match rates and detailed mismatch breakdowns.
 
-A region shard is ``<cache>/<transcripts|variations>/<chr>/<start>-<end>.json``
-or the same name with a ``.gz`` suffix; the two sides are matched on the name
-with any ``.gz`` removed, so a gzipped cache (``tests/golden/*/*/json_cache``)
-compares against a plain one. A shard is a JSON array of records. A JSON object
-is accepted too: its values are either records keyed by id or arrays of records
+A transcript shard is ``<cache>/transcripts/<chr>/<start>-<end>.json`` or the
+same name with a ``.gz`` suffix; the two sides are matched on the name with any
+``.gz`` removed, so a gzipped cache (``tests/golden/*/*/json_cache``) compares
+against a plain one. A shard is a JSON array of records. A JSON object is
+accepted too: its values are either records keyed by id or arrays of records
 keyed by chromosome.
+
+The variation files are ``<cache>/variations/<chr>/all_vars.gz``, one
+tab-delimited bgzip file per chromosome whose columns each cache's
+``info.json`` names under ``variation_cols``; records are matched by chromosome
+and variation name and compared on the columns both caches declare.
 
 Usage:
     python3 scripts/validation/diff_caches.py \
@@ -170,18 +175,48 @@ def load_region_transcripts(path: Path) -> dict[str, dict]:
 # Variation comparison
 
 VARIATION_COMPARE_FIELDS = [
+    "failed",
+    "somatic",
     "start",
     "end",
     "allele_string",
     "strand",
     "clin_sig",
-    "minor_allele",
-    "minor_allele_freq",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms",
 ]
 
 
-def compare_variations(baseline: dict, builder: dict) -> dict:
-    """Compare two variation dicts. Returns dict of mismatched fields."""
+def variation_columns(cache_dir: Path) -> list[str]:
+    """Return the ``variation_cols`` of ``<cache_dir>/info.json`` ([] when absent)."""
+    info_path = cache_dir / "info.json"
+    if not info_path.exists():
+        return []
+    with open(info_path) as fh:
+        return list(json.load(fh).get("variation_cols") or [])
+
+
+def parse_all_vars_line(line: str, columns: list[str]) -> dict[str, str]:
+    """Return a record's non-empty cells keyed by column; ``.`` is an empty cell."""
+    record = {}
+    for column, cell in zip(columns, line.rstrip("\n").split("\t")):
+        if cell != "." and cell != "":
+            record[column] = cell
+    return record
+
+
+def compare_variations(
+    baseline: dict[str, str], builder: dict[str, str], frequency_columns: list[str]
+) -> dict:
+    """Compare two variation records. Returns dict of mismatched fields.
+
+    The fixed columns are compared one by one; the frequency columns both caches
+    declare are compared together under ``frequencies``.
+    """
     mismatches = {}
     for field in VARIATION_COMPARE_FIELDS:
         bval = baseline.get(field)
@@ -189,25 +224,37 @@ def compare_variations(baseline: dict, builder: dict) -> dict:
         if bval != cval:
             mismatches[field] = {"baseline": bval, "builder": cval}
 
-    # Compare frequencies (nested dict)
-    b_freqs = baseline.get("frequencies", {})
-    c_freqs = builder.get("frequencies", {})
+    b_freqs = {c: baseline[c] for c in frequency_columns if c in baseline}
+    c_freqs = {c: builder[c] for c in frequency_columns if c in builder}
     if b_freqs != c_freqs:
         mismatches["frequencies"] = "content_differs"
 
     return mismatches
 
 
-def load_region_variations(path: Path) -> dict[str, dict]:
-    """Load a region variation JSON file and return {variation_name: variation_dict}."""
+def load_all_vars(path: Path, columns: list[str]) -> dict[str, dict[str, str]]:
+    """Load a chromosome's ``all_vars.gz`` and return {variation_name: record}."""
     if not path.exists():
         return {}
     result = {}
-    for var in _shard_records(_read_json(path), "variations"):
-        name = var.get("variation_name") or var.get("name", "")
-        if name:
-            result[name] = var
+    with gzip.open(path, "rt") as fh:
+        for line in fh:
+            record = parse_all_vars_line(line, columns)
+            name = record.get("variation_name")
+            if name:
+                result[name] = record
     return result
+
+
+def find_all_vars_files(cache_dir: Path) -> dict[str, Path]:
+    """Return {chromosome: path} of every ``variations/<chr>/all_vars.gz``."""
+    base = cache_dir / "variations"
+    if not base.is_dir():
+        return {}
+    return {
+        path.parent.name: path
+        for path in sorted(base.glob("*/all_vars.gz"))
+    }
 
 
 # Directory walking
@@ -316,14 +363,17 @@ def diff_transcripts(baseline_dir: Path, builder_dir: Path) -> dict:
 
 
 def diff_variations(baseline_dir: Path, builder_dir: Path) -> dict:
-    """Compare all variation region files between two cache dirs."""
-    baseline_files = find_region_files(baseline_dir, "variations")
-    builder_files = find_region_files(builder_dir, "variations")
+    """Compare the variation files of two cache dirs chromosome by chromosome."""
+    baseline_columns = variation_columns(baseline_dir)
+    builder_columns = variation_columns(builder_dir)
+    fixed = set(VARIATION_COMPARE_FIELDS) | {"chr", "variation_name"}
+    frequency_columns = [
+        c for c in baseline_columns if c not in fixed and c in builder_columns
+    ]
 
-    baseline_keys = {relative_key(f, baseline_dir, "variations"): f for f in baseline_files}
-    builder_keys = {relative_key(f, builder_dir, "variations"): f for f in builder_files}
-
-    all_keys = sorted(set(baseline_keys) | set(builder_keys))
+    baseline_files = find_all_vars_files(baseline_dir)
+    builder_files = find_all_vars_files(builder_dir)
+    all_chromosomes = sorted(set(baseline_files) | set(builder_files))
 
     total_baseline = 0
     total_builder = 0
@@ -334,12 +384,12 @@ def diff_variations(baseline_dir: Path, builder_dir: Path) -> dict:
     total_differed = 0
     field_mismatch_counts: Counter[str] = Counter()
 
-    for key in all_keys:
-        b_path = baseline_keys.get(key)
-        c_path = builder_keys.get(key)
+    for chromosome in all_chromosomes:
+        b_path = baseline_files.get(chromosome)
+        c_path = builder_files.get(chromosome)
 
-        b_vars = load_region_variations(b_path) if b_path else {}
-        c_vars = load_region_variations(c_path) if c_path else {}
+        b_vars = load_all_vars(b_path, baseline_columns) if b_path else {}
+        c_vars = load_all_vars(c_path, builder_columns) if c_path else {}
 
         b_names = set(b_vars)
         c_names = set(c_vars)
@@ -354,7 +404,7 @@ def diff_variations(baseline_dir: Path, builder_dir: Path) -> dict:
         total_only_builder += len(only_c)
 
         for name in shared:
-            diffs = compare_variations(b_vars[name], c_vars[name])
+            diffs = compare_variations(b_vars[name], c_vars[name], frequency_columns)
             if diffs:
                 total_differed += 1
                 for field in diffs:
@@ -374,6 +424,7 @@ def diff_variations(baseline_dir: Path, builder_dir: Path) -> dict:
         "matched": total_matched,
         "differed": total_differed,
         "field_mismatches": dict(field_mismatch_counts.most_common()),
+        "frequency_columns_compared": frequency_columns,
         "match_rate": round(match_rate, 6),
     }
 

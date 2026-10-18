@@ -1,280 +1,110 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Parse Ensembl variation VCF files and build variation JSON cache.
+//! Build the variation files of a native cache from Ensembl's variation VCFs.
 //!
-//! Reads bgzipped VCF files from Ensembl (germline or somatic), extracts
-//! variation records in the form Ensembl VEP's own VCF parser gives a record
-//! (`Parser/VCF.pm`: the shared anchor base chopped, `-` for an emptied allele,
-//! an insertion's `start` one past its `end`), joins the ClinVar allele and
-//! somatic columns from the variation database dumps when they are given, and
-//! writes the records as JSON files in the directory structure expected by
-//! `vep-cli`'s `json_cache.rs::load_all_variations()`:
-//!
-//! ```text
-//! {output_dir}/variations/{chr}/{region_start}-{region_end}.json
-//! ```
+//! Each chromosome's records are read from Ensembl's per-chromosome germline
+//! VCF, joined with the records of the genome-wide somatic, phenotype- and
+//! clinically-associated VCFs that the per-chromosome file lacks, given their
+//! 1000 Genomes frequencies from the frequency VCF and, with the variation
+//! database dumps, their ClinVar allele and somatic columns; then written as
+//! the file Ensembl VEP's dumper writes (`Pipeline/DumpVEP/Dumper/Variation.pm:
+//! 98-135, 211-270`): `variations/<chr>/all_vars.gz`, tab-delimited bgzip with
+//! the chromosome first and `.` for an empty cell, sorted by start and indexed
+//! by a `.csi` on the start column alone, its columns the `variation_cols` of
+//! `info.json`.
 
-use std::collections::HashMap;
-use std::io::BufRead;
-use std::path::Path;
+use std::collections::{BTreeMap, HashMap};
+use std::io::{BufRead, Write};
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use serde::Serialize;
-use tracing::{debug, info};
+use noodles::bgzf;
+use noodles::core::{Position, Region};
+use noodles::csi::binning_index::index::header::format::CoordinateSystem;
+use noodles::csi::binning_index::index::header::Format;
+use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+use noodles::csi::binning_index::index::reference_sequence::index::BinnedIndex;
+use noodles::csi::binning_index::index::Header;
+use noodles::csi::binning_index::Indexer;
+use noodles::vcf;
+use tracing::{debug, info, warn};
+use vep_core::cache_info::FIXED_VARIATION_COLUMNS;
 
 use crate::core_dumps::read_table;
 
-/// Region size for binning variations (1 Mb), matching the transcript builder.
-const REGION_SIZE: u64 = 1_000_000;
+/// The allele string of a COSMIC variant, whose alleles the variation database
+/// does not hold (`VariationFeature.pm:2355`).
+const COSMIC_MUTATION: &str = "COSMIC_MUTATION";
 
-/// First 1-based position of the 1 Mb region containing `pos`.
-///
-/// Extracted so the binning tests exercise this function rather than re-inlining the
-/// same arithmetic on literals: a test that recomputes the formula it is checking
-/// cannot fail when the formula changes.
-fn region_start(pos: u64) -> u64 {
-    ((pos - 1) / REGION_SIZE) * REGION_SIZE + 1
-}
+/// The allele string of an HGMD-PUBLIC variant, likewise without alleles.
+const HGMD_MUTATION: &str = "HGMD_MUTATION";
 
-/// VCF INFO field name to JSON frequency key mapping.
-///
-/// The Ensembl VCF stores population frequencies as INFO fields (e.g., `AFR_AF`),
-/// while the JSON cache stores them as top-level keys (e.g., `AFR`).
-const FREQ_FIELD_MAPPING: &[(&str, &str)] = &[
-    ("AF", "AF"),
-    ("AFR_AF", "AFR"),
-    ("AMR_AF", "AMR"),
-    ("EAS_AF", "EAS"),
-    ("EUR_AF", "EUR"),
-    ("SAS_AF", "SAS"),
-    ("AA_AF", "AA"),
-    ("EA_AF", "EA"),
-    ("gnomADe_AF", "gnomADe"),
-    ("gnomADe_AFR_AF", "gnomADe_AFR"),
-    ("gnomADe_AMR_AF", "gnomADe_AMR"),
-    ("gnomADe_ASJ_AF", "gnomADe_ASJ"),
-    ("gnomADe_EAS_AF", "gnomADe_EAS"),
-    ("gnomADe_FIN_AF", "gnomADe_FIN"),
-    ("gnomADe_MID_AF", "gnomADe_MID"),
-    ("gnomADe_NFE_AF", "gnomADe_NFE"),
-    ("gnomADe_REMAINING_AF", "gnomADe_REMAINING"),
-    ("gnomADe_SAS_AF", "gnomADe_SAS"),
-    ("gnomADg_AF", "gnomADg"),
-    ("gnomADg_AFR_AF", "gnomADg_AFR"),
-    ("gnomADg_AMI_AF", "gnomADg_AMI"),
-    ("gnomADg_AMR_AF", "gnomADg_AMR"),
-    ("gnomADg_ASJ_AF", "gnomADg_ASJ"),
-    ("gnomADg_EAS_AF", "gnomADg_EAS"),
-    ("gnomADg_FIN_AF", "gnomADg_FIN"),
-    ("gnomADg_MID_AF", "gnomADg_MID"),
-    ("gnomADg_NFE_AF", "gnomADg_NFE"),
-    ("gnomADg_REMAINING_AF", "gnomADg_REMAINING"),
-    ("gnomADg_SAS_AF", "gnomADg_SAS"),
+/// The 1000 Genomes phase 3 populations of the frequency VCF, in the order the
+/// dumper lists their columns (`DumpVEP_conf.pm:150`), each with the number of
+/// samples of the phase 3 panel: 2,504 in all.
+const THOUSAND_GENOMES_POPULATIONS: [(&str, u64); 5] = [
+    ("AFR", 661),
+    ("AMR", 347),
+    ("EAS", 504),
+    ("EUR", 503),
+    ("SAS", 489),
 ];
 
-/// A variation record parsed from an Ensembl VCF, ready for JSON serialization.
-///
-/// Field names and types match `json_cache.rs::JsonVariation` so that
-/// `load_all_variations()` can deserialize these without changes.
-///
-/// `start`, `end` and `allele_string` are in the form `Parser/VCF.pm` gives a VCF
-/// record: `end` is `POS + len(REF) - 1` and, when the record is an indel whose REF
-/// and ALTs share their first base, that base is chopped, `start` moves one past
-/// `POS` and an emptied allele reads `-`, so an insertion has `start == end + 1`.
-///
-/// Frequency fields are serialized as top-level keys (e.g., `"AF"`, `"gnomADe"`)
-/// matching the Perl cache JSON format that `JsonVariation` expects.
-#[derive(Debug, Clone, Serialize)]
-#[allow(non_snake_case)] // Field names match Perl JSON cache format (e.g., "gnomADe_AFR")
+/// The frequency columns the 1000 Genomes file yields: the whole panel's
+/// frequency under the name the dumper gives its unnamed population
+/// (`Dumper/Variation.pm:191`), then the five continental populations.
+pub const THOUSAND_GENOMES_COLUMNS: [&str; 6] = ["AF", "AFR", "AMR", "EAS", "EUR", "SAS"];
+
+/// The chromosome and start columns of an `all_vars.gz` record, 0-based.
+const CHR_COLUMN: usize = 0;
+const START_COLUMN: usize = 4;
+
+/// A variation record in the form the variation database holds it, the form
+/// Ensembl VEP's dumper writes.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct VariationRecord {
     pub variation_name: String,
-    pub start: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end: Option<u64>,
-    pub allele_string: String,
-    pub strand: i8,
     pub failed: u8,
     pub somatic: u8,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub minor_allele: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub minor_allele_freq: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: u64,
+    /// `start - 1` for an insertion.
+    pub end: u64,
+    pub strand: i8,
+    /// `/`-separated alleles, or a bare class name for a variant without
+    /// alleles.
+    pub allele_string: String,
+    /// Clinical significance terms joined by `,`.
     pub clin_sig: Option<String>,
     pub phenotype_or_disease: u8,
     /// ClinVar significance per risk allele, `allele:term` pairs joined by `;`.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub clin_sig_allele: Option<String>,
     /// The ClinVar reference allele behind `clin_sig_allele`.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub clin_sig_ref_allele: Option<String>,
     /// ClinVar somatic classification, `phenotype(classification)` entries joined by `;`.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub clinical_impact: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pubmed: Option<String>,
-
-    #[serde(rename = "AF", skip_serializing_if = "Option::is_none")]
-    pub af: Option<String>,
-    #[serde(rename = "AFR", skip_serializing_if = "Option::is_none")]
-    pub afr: Option<String>,
-    #[serde(rename = "AMR", skip_serializing_if = "Option::is_none")]
-    pub amr: Option<String>,
-    #[serde(rename = "EAS", skip_serializing_if = "Option::is_none")]
-    pub eas: Option<String>,
-    #[serde(rename = "EUR", skip_serializing_if = "Option::is_none")]
-    pub eur: Option<String>,
-    #[serde(rename = "SAS", skip_serializing_if = "Option::is_none")]
-    pub sas: Option<String>,
-    #[serde(rename = "AA", skip_serializing_if = "Option::is_none")]
-    pub aa: Option<String>,
-    #[serde(rename = "EA", skip_serializing_if = "Option::is_none")]
-    pub ea: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADe: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADe_AFR: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADe_AMR: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADe_ASJ: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADe_EAS: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADe_FIN: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADe_MID: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADe_NFE: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADe_REMAINING: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADe_SAS: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg_AFR: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg_AMI: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg_AMR: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg_ASJ: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg_EAS: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg_FIN: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg_MID: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg_NFE: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg_REMAINING: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gnomADg_SAS: Option<String>,
+    /// Population frequencies by column name, `allele:frequency` entries joined
+    /// by `,`.
+    pub frequencies: HashMap<String, String>,
 }
 
-impl Default for VariationRecord {
-    fn default() -> Self {
-        Self {
-            variation_name: String::new(),
-            start: 0,
-            end: None,
-            allele_string: String::new(),
-            strand: 1,
-            failed: 0,
-            somatic: 0,
-            minor_allele: None,
-            minor_allele_freq: None,
-            clin_sig: None,
-            phenotype_or_disease: 0,
-            clin_sig_allele: None,
-            clin_sig_ref_allele: None,
-            clinical_impact: None,
-            pubmed: None,
-            af: None,
-            afr: None,
-            amr: None,
-            eas: None,
-            eur: None,
-            sas: None,
-            aa: None,
-            ea: None,
-            gnomADe: None,
-            gnomADe_AFR: None,
-            gnomADe_AMR: None,
-            gnomADe_ASJ: None,
-            gnomADe_EAS: None,
-            gnomADe_FIN: None,
-            gnomADe_MID: None,
-            gnomADe_NFE: None,
-            gnomADe_REMAINING: None,
-            gnomADe_SAS: None,
-            gnomADg: None,
-            gnomADg_AFR: None,
-            gnomADg_AMI: None,
-            gnomADg_AMR: None,
-            gnomADg_ASJ: None,
-            gnomADg_EAS: None,
-            gnomADg_FIN: None,
-            gnomADg_MID: None,
-            gnomADg_NFE: None,
-            gnomADg_REMAINING: None,
-            gnomADg_SAS: None,
-        }
+/// The columns of the variation files: `chr`, the fixed columns and, when the
+/// frequency VCF was read, the 1000 Genomes columns.
+pub fn variation_columns(with_frequencies: bool) -> Vec<String> {
+    let mut columns: Vec<String> = FIXED_VARIATION_COLUMNS
+        .iter()
+        .map(|c| c.to_string())
+        .collect();
+    if with_frequencies {
+        columns.extend(THOUSAND_GENOMES_COLUMNS.iter().map(|c| c.to_string()));
     }
-}
-
-impl VariationRecord {
-    /// Set a frequency field by its JSON key name (e.g., "AF", "gnomADe_AFR").
-    fn set_freq(&mut self, key: &str, value: String) {
-        match key {
-            "AF" => self.af = Some(value),
-            "AFR" => self.afr = Some(value),
-            "AMR" => self.amr = Some(value),
-            "EAS" => self.eas = Some(value),
-            "EUR" => self.eur = Some(value),
-            "SAS" => self.sas = Some(value),
-            "AA" => self.aa = Some(value),
-            "EA" => self.ea = Some(value),
-            "gnomADe" => self.gnomADe = Some(value),
-            "gnomADe_AFR" => self.gnomADe_AFR = Some(value),
-            "gnomADe_AMR" => self.gnomADe_AMR = Some(value),
-            "gnomADe_ASJ" => self.gnomADe_ASJ = Some(value),
-            "gnomADe_EAS" => self.gnomADe_EAS = Some(value),
-            "gnomADe_FIN" => self.gnomADe_FIN = Some(value),
-            "gnomADe_MID" => self.gnomADe_MID = Some(value),
-            "gnomADe_NFE" => self.gnomADe_NFE = Some(value),
-            "gnomADe_REMAINING" => self.gnomADe_REMAINING = Some(value),
-            "gnomADe_SAS" => self.gnomADe_SAS = Some(value),
-            "gnomADg" => self.gnomADg = Some(value),
-            "gnomADg_AFR" => self.gnomADg_AFR = Some(value),
-            "gnomADg_AMI" => self.gnomADg_AMI = Some(value),
-            "gnomADg_AMR" => self.gnomADg_AMR = Some(value),
-            "gnomADg_ASJ" => self.gnomADg_ASJ = Some(value),
-            "gnomADg_EAS" => self.gnomADg_EAS = Some(value),
-            "gnomADg_FIN" => self.gnomADg_FIN = Some(value),
-            "gnomADg_MID" => self.gnomADg_MID = Some(value),
-            "gnomADg_NFE" => self.gnomADg_NFE = Some(value),
-            "gnomADg_REMAINING" => self.gnomADg_REMAINING = Some(value),
-            "gnomADg_SAS" => self.gnomADg_SAS = Some(value),
-            _ => {}
-        }
-    }
-}
-
-/// Statistics from a variation cache build.
-pub struct VariationBuildStats {
-    pub variation_count: usize,
-    pub region_file_count: usize,
+    columns
 }
 
 /// One germline ClinVar phenotype feature: the attributes
 /// `PhenotypeFeatureAdaptor::get_clinsig_alleles_by_location` returns per feature.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct GermlineClinVar {
-    variation_name: String,
     risk_allele: Option<String>,
     clinvar_clin_sig: Option<String>,
     clinvar_ref_allele: Option<String>,
@@ -289,18 +119,26 @@ struct SomaticClinVar {
     oncogenic_clin_sig: Option<String>,
 }
 
-/// The ClinVar phenotype features of a variation database, keyed by the
-/// `chromosome:start-end` span `Database/Variation.pm` looks them up by.
+/// The ClinVar phenotype features of a variation database.
 ///
 /// Ensembl VEP's dumper joins `clin_sig_allele`, `clin_sig_ref_allele` and
 /// `clinical_impact` onto each variation feature from the `phenotype_feature`
 /// and `phenotype_feature_attrib` tables (`Database/Variation.pm:161-162,
-/// 196-221`); the Ensembl variation VCFs carry none of the three, so this type
-/// reads the same tables from the database's text dumps.
+/// 196-221`), looking them up by the feature's `chromosome:start-end` span; the
+/// Ensembl variation VCFs carry none of the three, so this type reads the same
+/// tables from the database's text dumps. The tables hold the database's span,
+/// while a record read from the VCF export may hold the trimmed one, so the
+/// germline features, which the dumper keeps only under the variant's own name,
+/// are keyed by `chromosome:variation_name`, and the somatic features, which it
+/// keeps whatever their name, by span, a record's database span being read from
+/// its own somatic features when it has any.
 #[derive(Debug, Default)]
 pub struct ClinVarAttribs {
     germline: HashMap<String, Vec<GermlineClinVar>>,
     somatic: HashMap<String, Vec<SomaticClinVar>>,
+    /// By `chromosome:variation_name`, the spans of the variant's own somatic
+    /// features.
+    somatic_spans: HashMap<String, Vec<String>>,
 }
 
 impl ClinVarAttribs {
@@ -352,8 +190,8 @@ impl ClinVarAttribs {
         }
 
         struct Feature {
-            key: String,
-            object_id: String,
+            span_key: String,
+            name_key: String,
             phenotype_id: String,
             somatic: bool,
             risk_allele: Option<String>,
@@ -374,8 +212,8 @@ impl ClinVarAttribs {
             features.insert(
                 row.field(0).to_string(),
                 Feature {
-                    key: format!("{chr}:{}-{}", row.field(8), row.field(9)),
-                    object_id: row.field(5).to_string(),
+                    span_key: format!("{chr}:{}-{}", row.field(8), row.field(9)),
+                    name_key: format!("{chr}:{}", row.field(5)),
                     phenotype_id: row.field(1).to_string(),
                     somatic: row.optional(11) == Some("Somatic"),
                     risk_allele: None,
@@ -418,17 +256,21 @@ impl ClinVarAttribs {
         let mut out = Self::default();
         for (_, f) in ordered {
             if f.somatic {
-                out.somatic.entry(f.key).or_default().push(SomaticClinVar {
+                let feature = SomaticClinVar {
                     phenotype: phenotypes.get(&f.phenotype_id).cloned().unwrap_or_default(),
                     somatic_clin_sig: f.somatic_clin_sig,
                     oncogenic_clin_sig: f.oncogenic_clin_sig,
-                });
+                };
+                let spans = out.somatic_spans.entry(f.name_key).or_default();
+                if !spans.contains(&f.span_key) {
+                    spans.push(f.span_key.clone());
+                }
+                out.somatic.entry(f.span_key).or_default().push(feature);
             } else if f.risk_allele.is_some() || f.clinvar_ref_allele.is_some() {
                 out.germline
-                    .entry(f.key)
+                    .entry(f.name_key)
                     .or_default()
                     .push(GermlineClinVar {
-                        variation_name: f.object_id,
                         risk_allele: f.risk_allele,
                         clinvar_clin_sig: f.clinvar_clin_sig,
                         clinvar_ref_allele: f.clinvar_ref_allele,
@@ -436,7 +278,7 @@ impl ClinVarAttribs {
             }
         }
         info!(
-            "Read {} germline and {} somatic ClinVar spans from {}",
+            "Read ClinVar features of {} germline variants and {} somatic spans from {}",
             out.germline.len(),
             out.somatic.len(),
             dir.display()
@@ -455,22 +297,21 @@ impl ClinVarAttribs {
     /// A germline feature counts when its variation name is the record's: each
     /// `risk_allele:clinvar_clin_sig` pair (spaces in the term read `_`) once, joined
     /// by `;`, and its `clinvar_ref_allele` as the reference allele. Every somatic
-    /// feature on the span counts, whatever its name, formatted by
-    /// `_format_clinical_impact` (`:252-275`). The germline pairs keep their first-seen
-    /// order where Perl's hash keys have none.
+    /// feature on the record's database span counts, whatever its name, formatted by
+    /// `_format_clinical_impact` (`:252-275`): the one span the record's own somatic
+    /// features lie on when they lie on one, the tables holding the database's span
+    /// where the record's may be the trimmed one, else the record's own. The
+    /// germline pairs keep their first-seen order where Perl's hash keys have none.
     fn apply(&self, var: &mut VariationRecord, chr: &str) {
-        let key = format!("{chr}:{}-{}", var.start, var.end.unwrap_or(var.start));
+        let name_key = format!("{chr}:{}", var.variation_name);
 
-        if let Some(features) = self.germline.get(&key) {
+        if let Some(features) = self.germline.get(&name_key) {
             let mut pairs: Vec<String> = Vec::new();
             let mut ref_allele = None;
             for f in features {
                 let Some(clin_sig) = &f.clinvar_clin_sig else {
                     continue;
                 };
-                if f.variation_name != var.variation_name {
-                    continue;
-                }
                 let pair = format!(
                     "{}:{}",
                     f.risk_allele.as_deref().unwrap_or(""),
@@ -489,7 +330,12 @@ impl ClinVarAttribs {
             var.clin_sig_ref_allele = ref_allele;
         }
 
-        if let Some(features) = self.somatic.get(&key) {
+        let span_key = format!("{chr}:{}-{}", var.start, var.end);
+        let database_span = match self.somatic_spans.get(&name_key).map(Vec::as_slice) {
+            Some([span]) => span,
+            _ => &span_key,
+        };
+        if let Some(features) = self.somatic.get(database_span) {
             let impact = format_clinical_impact(features);
             if !impact.is_empty() {
                 var.clinical_impact = Some(impact);
@@ -514,170 +360,724 @@ fn format_clinical_impact(features: &[SomaticClinVar]) -> String {
     entries.join(";")
 }
 
-/// Parse an Ensembl variation VCF file into variation records.
-///
-/// Supports both plain-text and bgzipped (.vcf.gz) VCF files. Records where
-/// FILTER is not PASS, ".", or empty are skipped. The `somatic` flag is applied
-/// to all records from the file (Ensembl distributes germline and somatic VCFs
-/// separately). With `clinvar`, each record gains the ClinVar allele and somatic
-/// columns of the phenotype features on its span.
-pub fn parse_variation_vcf(
-    path: &Path,
-    somatic: bool,
-    clinvar: Option<&ClinVarAttribs>,
-) -> Result<Vec<VariationRecord>> {
-    use noodles::vcf;
+/// The genome-wide variation VCFs read beside a chromosome's own file.
+#[derive(Debug, Default)]
+pub struct GenomeWideInputs {
+    /// The 1000 Genomes frequency VCF.
+    pub frequencies: Option<PathBuf>,
+    /// The somatic VCF: every record of it is a somatic variant.
+    pub somatic: Option<PathBuf>,
+    /// VCFs whose records are germline variants the per-chromosome file may
+    /// lack (the phenotype- and clinically-associated files).
+    pub germline: Vec<PathBuf>,
+}
 
+/// Streams the variation records of chromosome `chr` to `emit` in start order:
+/// the per-chromosome VCF's, plus the records of the genome-wide files absent
+/// from it (a record is the same one when its name, position and alleles are),
+/// the somatic file's flagged `somatic`, every non-somatic record given its 1000
+/// Genomes frequencies and, with `clinvar`, its ClinVar columns. The
+/// per-chromosome file is read in its position order and reordered through a
+/// buffer, since a record's start lies within two bases of its position;
+/// records sharing a start come out in name order ([`StartOrder`]). Returns the
+/// number of records emitted.
+pub fn chromosome_records(
+    chr: &str,
+    vcf: &Path,
+    inputs: &GenomeWideInputs,
+    clinvar: Option<&ClinVarAttribs>,
+    mut emit: impl FnMut(VariationRecord) -> Result<()>,
+) -> Result<usize> {
+    let frequencies = match &inputs.frequencies {
+        Some(path) => Some(ThousandGenomes::load(path, chr)?),
+        None => None,
+    };
+
+    let mut held: HashMap<RecordIdentity, VariationRecord> = HashMap::new();
+    // The somatic file first, so a variant it shares with a germline file
+    // keeps its flag.
+    let genome_wide = inputs
+        .somatic
+        .iter()
+        .map(|path| (path, true))
+        .chain(inputs.germline.iter().map(|path| (path, false)));
+    for (path, somatic) in genome_wide {
+        parse_chromosome(
+            path,
+            Some(chr),
+            somatic,
+            frequencies.as_ref(),
+            |fields, record| {
+                held.entry(fields.identity()).or_insert(record);
+                Ok(())
+            },
+        )?;
+    }
+
+    let mut emitted = 0usize;
+    let mut merge = StartOrder::new(held, |mut record: VariationRecord| {
+        if let Some(clinvar) = clinvar {
+            clinvar.apply(&mut record, chr);
+        }
+        emitted += 1;
+        emit(record)
+    });
+    parse_chromosome(vcf, None, false, frequencies.as_ref(), |fields, record| {
+        merge.push(fields, record)
+    })?;
+    merge.finish()?;
+    info!("chr {}: {} variation records", chr, emitted);
+    Ok(emitted)
+}
+
+/// The start-ordered merge of a chromosome's records: the per-chromosome
+/// file's, each held back until the file's position passes its start, and the
+/// genome-wide files' records the per-chromosome file lacks. A record's start
+/// never precedes its position, so once the file's position passes a start
+/// nothing before that start is still to come. Records sharing a start come out
+/// in name order, the order the dumper's sort on the start column leaves them in
+/// (`Dumper/Variation.pm:120`: `sort -k5,5n`, whose equal keys fall back to the
+/// whole line, which the name follows the chromosome on).
+struct StartOrder<F: FnMut(VariationRecord) -> Result<()>> {
+    /// The per-chromosome file's records held back until the file's position
+    /// passes their start, keyed by start, name and the order they were read in.
+    buffered: BTreeMap<(u64, String, usize), VariationRecord>,
+    sequence: usize,
+    /// The genome-wide records by start and name, descending, so the next one is
+    /// last.
+    added: Vec<(u64, String, RecordIdentity)>,
+    /// The genome-wide records; one leaves, written in the copy's place, when
+    /// the per-chromosome file yields its copy.
+    held: HashMap<RecordIdentity, VariationRecord>,
+    emit: F,
+}
+
+impl<F: FnMut(VariationRecord) -> Result<()>> StartOrder<F> {
+    fn new(held: HashMap<RecordIdentity, VariationRecord>, emit: F) -> Self {
+        let mut added: Vec<(u64, String, RecordIdentity)> = held
+            .iter()
+            .map(|(identity, record)| {
+                (
+                    record.start,
+                    record.variation_name.clone(),
+                    identity.clone(),
+                )
+            })
+            .collect();
+        added.sort_by(|a, b| b.cmp(a));
+        Self {
+            buffered: BTreeMap::new(),
+            sequence: 0,
+            added,
+            held,
+            emit,
+        }
+    }
+
+    /// Takes the next per-chromosome record, read at `fields.pos`: emits every
+    /// record starting before that position, then holds this one back. A
+    /// genome-wide copy of the record takes its place, so a variant the somatic
+    /// file holds keeps that file's flag and goes without frequencies.
+    fn push(&mut self, fields: &VcfFields, record: VariationRecord) -> Result<()> {
+        let record = if self.held.is_empty() {
+            record
+        } else {
+            self.held.remove(&fields.identity()).unwrap_or(record)
+        };
+        self.flush(Some(fields.pos))?;
+        self.sequence += 1;
+        let key = (record.start, record.variation_name.clone(), self.sequence);
+        self.buffered.insert(key, record);
+        Ok(())
+    }
+
+    /// Emits everything still held.
+    fn finish(mut self) -> Result<()> {
+        self.flush(None)
+    }
+
+    /// Emits, by start then name, the held records whose start precedes `before`
+    /// (every held record when `None`).
+    fn flush(&mut self, before: Option<u64>) -> Result<()> {
+        loop {
+            let next_buffered = self
+                .buffered
+                .keys()
+                .next()
+                .map(|(start, name, _)| (*start, name.as_str()));
+            let next_added = self
+                .added
+                .last()
+                .map(|(start, name, _)| (*start, name.as_str()));
+            let (take_buffered, start) = match (next_buffered, next_added) {
+                (None, None) => return Ok(()),
+                (Some(buffered), None) => (true, buffered.0),
+                (None, Some(added)) => (false, added.0),
+                (Some(buffered), Some(added)) if buffered <= added => (true, buffered.0),
+                (Some(_), Some(added)) => (false, added.0),
+            };
+            if before.is_some_and(|position| start >= position) {
+                return Ok(());
+            }
+            if take_buffered {
+                let (_, record) = self.buffered.pop_first().expect("peeked");
+                (self.emit)(record)?;
+            } else {
+                let (_, _, identity) = self.added.pop().expect("peeked");
+                // A genome-wide record the per-chromosome file also holds
+                // left the table when its copy was read.
+                if let Some(record) = self.held.remove(&identity) {
+                    (self.emit)(record)?;
+                }
+            }
+        }
+    }
+}
+
+/// The `variations/<chr>/all_vars.gz` of one chromosome and its `.csi`, written
+/// record by record in start order.
+pub struct AllVarsWriter {
+    path: PathBuf,
+    index_path: PathBuf,
+    chr: String,
+    columns: Vec<String>,
+    writer: bgzf::io::Writer<std::fs::File>,
+    indexer: Indexer<BinnedIndex>,
+    line: String,
+    last_start: u64,
+    count: usize,
+}
+
+impl AllVarsWriter {
+    /// Creates `<output_dir>/variations/<chr>/all_vars.gz` for the records of
+    /// `chr`, with a cell per column of `columns`.
+    pub fn create(output_dir: &Path, chr: &str, columns: &[String]) -> Result<Self> {
+        let dir = output_dir.join("variations").join(chr);
+        std::fs::create_dir_all(&dir)
+            .with_context(|| format!("Failed to create {}", dir.display()))?;
+        let path = dir.join("all_vars.gz");
+        let file = std::fs::File::create(&path)
+            .with_context(|| format!("Failed to create {}", path.display()))?;
+        Ok(Self {
+            index_path: dir.join("all_vars.gz.csi"),
+            path,
+            chr: chr.to_string(),
+            columns: columns.to_vec(),
+            writer: bgzf::io::Writer::new(file),
+            // The index parameters of the Ensembl VEP cache's own `.csi` files.
+            indexer: Indexer::<BinnedIndex>::new(14, 8),
+            line: String::new(),
+            last_start: 0,
+            count: 0,
+        })
+    }
+
+    /// Writes one record as `Dumper/Variation.pm:262-264` prints it: the
+    /// chromosome, then a tab-separated cell per column with `.` for an empty
+    /// one; and indexes it by its start. A record starting before the previous
+    /// one is an error: the index is built on the start column in file order.
+    pub fn write(&mut self, record: &VariationRecord) -> Result<()> {
+        if record.start < self.last_start {
+            anyhow::bail!(
+                "{} starts at {}, before the record written before it ({}): the variation \
+                 records of chr {} are not in position order",
+                record.variation_name,
+                record.start,
+                self.last_start,
+                self.chr
+            );
+        }
+        self.last_start = record.start;
+        self.line.clear();
+        self.line.push_str(&self.chr);
+        for column in self.columns.iter().skip(1) {
+            self.line.push('\t');
+            let cell = record.cell(column);
+            self.line
+                .push_str(if cell.is_empty() { "." } else { &cell });
+        }
+        self.line.push('\n');
+        let begin = self.writer.virtual_position();
+        self.writer
+            .write_all(self.line.as_bytes())
+            .with_context(|| format!("Failed to write {}", self.path.display()))?;
+        let end = self.writer.virtual_position();
+        let start = Position::try_from(record.start as usize)
+            .with_context(|| format!("{} has start {}", record.variation_name, record.start))?;
+        self.indexer
+            .add_record(Some((0, start, start, true)), Chunk::new(begin, end))
+            .with_context(|| format!("Failed to index {}", self.path.display()))?;
+        self.count += 1;
+        Ok(())
+    }
+
+    /// Finishes the bgzip file and writes its `.csi` (`:131`: `tabix -C -s 1 -b 5
+    /// -e 5`, the start column alone, so a record is found by its start and never
+    /// by its span); returns the number of records written.
+    pub fn finish(mut self) -> Result<usize> {
+        self.writer
+            .try_finish()
+            .with_context(|| format!("Failed to finish {}", self.path.display()))?;
+        let header = Header::builder()
+            .set_format(Format::Generic(CoordinateSystem::Gff))
+            .set_reference_sequence_name_index(CHR_COLUMN)
+            .set_start_position_index(START_COLUMN)
+            .set_end_position_index(Some(START_COLUMN))
+            .set_reference_sequence_names([self.chr.as_bytes().into()].into_iter().collect())
+            .build();
+        let index = self.indexer.set_header(header).build(1);
+        noodles::csi::fs::write(&self.index_path, &index)
+            .with_context(|| format!("Failed to write {}", self.index_path.display()))?;
+        info!(
+            "chr {}: wrote {} ({} records)",
+            self.chr,
+            self.path.display(),
+            self.count
+        );
+        Ok(self.count)
+    }
+
+    /// Removes the file and any index beside it, leaving the chromosome without
+    /// a variation file rather than with a partial one.
+    pub fn discard(self) {
+        let _ = std::fs::remove_file(&self.path);
+        let _ = std::fs::remove_file(&self.index_path);
+    }
+}
+
+/// Writes chromosome `chr`'s variation file from its inputs: the records of
+/// [`chromosome_records`] through an [`AllVarsWriter`] with `columns`. Returns
+/// the number of records written; on an error the partial file and any index
+/// beside it are removed.
+pub fn write_chromosome(
+    chr: &str,
+    vcf: &Path,
+    inputs: &GenomeWideInputs,
+    clinvar: Option<&ClinVarAttribs>,
+    columns: &[String],
+    output_dir: &Path,
+) -> Result<usize> {
+    let mut writer = AllVarsWriter::create(output_dir, chr, columns)?;
+    match chromosome_records(chr, vcf, inputs, clinvar, |record| writer.write(&record)) {
+        Ok(_) => writer.finish(),
+        Err(error) => {
+            writer.discard();
+            Err(error)
+        }
+    }
+}
+
+impl VariationRecord {
+    /// The text of one cell, empty when the dumper leaves it empty
+    /// (`Dumper/Variation.pm:233-250`: `failed`, `somatic` and
+    /// `phenotype_or_disease` when 0, `end` when it equals `start`, `strand`
+    /// when 1).
+    fn cell(&self, column: &str) -> String {
+        let flag = |value: u8| {
+            if value == 0 {
+                String::new()
+            } else {
+                value.to_string()
+            }
+        };
+        match column {
+            "variation_name" => self.variation_name.clone(),
+            "failed" => flag(self.failed),
+            "somatic" => flag(self.somatic),
+            "start" => self.start.to_string(),
+            "end" => {
+                if self.end == self.start {
+                    String::new()
+                } else {
+                    self.end.to_string()
+                }
+            }
+            "allele_string" => self.allele_string.clone(),
+            "strand" => {
+                if self.strand == 1 {
+                    String::new()
+                } else {
+                    self.strand.to_string()
+                }
+            }
+            "clin_sig" => self.clin_sig.clone().unwrap_or_default(),
+            "phenotype_or_disease" => flag(self.phenotype_or_disease),
+            "clin_sig_allele" => self.clin_sig_allele.clone().unwrap_or_default(),
+            "clin_sig_ref_allele" => self.clin_sig_ref_allele.clone().unwrap_or_default(),
+            "clinical_impact" => self.clinical_impact.clone().unwrap_or_default(),
+            "pubmed" | "var_synonyms" => String::new(),
+            population => self
+                .frequencies
+                .get(population)
+                .cloned()
+                .unwrap_or_default(),
+        }
+    }
+}
+
+/// What makes two VCF records the same variant across Ensembl's files, which
+/// export every variant identically wherever it appears.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct RecordIdentity {
+    name: String,
+    pos: u64,
+    reference: String,
+    alternates: String,
+}
+
+/// The fields of a VCF record this module reads.
+struct VcfFields {
+    chr: String,
+    pos: u64,
+    name: String,
+    reference: String,
+    alternates: String,
+    filter: String,
+    info: String,
+}
+
+impl VcfFields {
+    fn read(record: &vcf::Record) -> Result<Self> {
+        Ok(Self {
+            chr: record.reference_sequence_name().to_string(),
+            pos: record
+                .variant_start()
+                .context("Missing POS")?
+                .context("Invalid POS")?
+                .get() as u64,
+            name: record.ids().as_ref().to_string(),
+            reference: record.reference_bases().to_string(),
+            alternates: record.alternate_bases().as_ref().to_string(),
+            filter: record.filters().as_ref().to_string(),
+            info: record.info().as_ref().to_string(),
+        })
+    }
+
+    fn identity(&self) -> RecordIdentity {
+        RecordIdentity {
+            name: self.name.clone(),
+            pos: self.pos,
+            reference: self.reference.clone(),
+            alternates: self.alternates.clone(),
+        }
+    }
+
+    /// The INFO fields, each `key` or `key=value`.
+    fn info_fields(&self) -> impl Iterator<Item = &str> {
+        self.info
+            .split(';')
+            .filter(|field| !field.is_empty() && *field != ".")
+    }
+
+    fn has_flag(&self, key: &str) -> bool {
+        self.info_fields().any(|field| field == key)
+    }
+
+    fn info_value(&self, key: &str) -> Option<&str> {
+        self.info_fields()
+            .find_map(|field| field.split_once('=').filter(|(k, _)| *k == key))
+            .map(|(_, value)| value)
+    }
+}
+
+/// Reads the records of `path` on chromosome `chr` (every record when `None`)
+/// and hands each, with its VCF fields, to `f` as a variation record: through
+/// the file's `.csi` or `.tbi` when one lies beside it, else by reading the file
+/// through and keeping the chromosome's records. Records whose FILTER is not
+/// `PASS`, `.` or empty are skipped, as are those the database form has no
+/// shape for.
+fn parse_chromosome(
+    path: &Path,
+    chr: Option<&str>,
+    somatic: bool,
+    frequencies: Option<&ThousandGenomes>,
+    mut f: impl FnMut(&VcfFields, VariationRecord) -> Result<()>,
+) -> Result<()> {
+    let mut skipped = 0u64;
+    let mut parsed = 0u64;
+    let malformed = for_each_record(path, chr, |fields| {
+        match parse_vcf_fields(&fields, somatic, frequencies) {
+            Some(record) => {
+                parsed += 1;
+                f(&fields, record)
+            }
+            None => {
+                skipped += 1;
+                Ok(())
+            }
+        }
+    })?;
+    info!(
+        "Parsed {} variations from {} ({} skipped)",
+        parsed,
+        path.display(),
+        skipped + malformed
+    );
+    Ok(())
+}
+
+/// Calls `f` with each record of `path` on `chr`, or with every record when
+/// `chr` is `None`; returns the number of records skipped as malformed.
+fn for_each_record(
+    path: &Path,
+    chr: Option<&str>,
+    mut f: impl FnMut(VcfFields) -> Result<()>,
+) -> Result<u64> {
+    if let Some(chr) = chr {
+        if !has_index(path) {
+            warn!(
+                "No index beside {}: reading the file through for chromosome {}",
+                path.display(),
+                chr
+            );
+        } else if let Some(malformed) = query_chromosome(path, chr, &mut f)? {
+            return Ok(malformed);
+        } else {
+            warn!(
+                "The index beside {} names no sequence: reading the file through for \
+                 chromosome {}",
+                path.display(),
+                chr
+            );
+        }
+    }
     let file = std::fs::File::open(path)
         .with_context(|| format!("Failed to open VCF: {}", path.display()))?;
-
-    let reader: Box<dyn BufRead + Send> = if path
-        .extension()
-        .is_some_and(|ext| ext == "gz" || ext == "bgz")
-    {
-        Box::new(std::io::BufReader::new(noodles::bgzf::io::Reader::new(
-            file,
-        )))
+    let reader: Box<dyn BufRead> = if is_compressed(path) {
+        Box::new(std::io::BufReader::new(bgzf::io::Reader::new(file)))
     } else {
         Box::new(std::io::BufReader::new(file))
     };
-
     let mut vcf_reader = vcf::io::Reader::new(reader);
-    let header = vcf_reader
+    vcf_reader
         .read_header()
         .with_context(|| format!("Failed to read VCF header: {}", path.display()))?;
-
-    let mut records = Vec::new();
-    let mut record = vcf::Record::default();
-    let mut skipped = 0u64;
-
-    loop {
-        match vcf_reader.read_record(&mut record) {
-            Ok(0) => break,
-            Ok(_) => match parse_vcf_record(&record, &header, somatic) {
-                Ok(Some(mut var)) => {
-                    if let Some(clinvar) = clinvar {
-                        clinvar.apply(&mut var, record.reference_sequence_name());
-                    }
-                    records.push(var);
-                }
-                Ok(None) => skipped += 1,
-                Err(e) => {
-                    debug!("Skipping malformed VCF record: {}", e);
-                    skipped += 1;
-                }
-            },
-            Err(e) => {
-                debug!("Error reading VCF record, skipping: {}", e);
-                skipped += 1;
+    read_records(
+        path,
+        |record| vcf_reader.read_record(record),
+        |fields| {
+            if chr.is_some_and(|chr| fields.chr != chr) {
+                return Ok(());
             }
-        }
-    }
-
-    info!(
-        "Parsed {} variations from {} ({} skipped)",
-        records.len(),
-        path.display(),
-        skipped
-    );
-
-    Ok(records)
+            f(fields)
+        },
+    )
 }
 
-/// Parse a single VCF record into a `VariationRecord`, or `None` if it should be skipped.
-fn parse_vcf_record(
-    record: &noodles::vcf::Record,
-    header: &noodles::vcf::Header,
-    somatic: bool,
-) -> Result<Option<VariationRecord>> {
-    let filters = record.filters();
-    let filter_str: &str = filters.as_ref();
-    if !filter_str.is_empty() && filter_str != "." && filter_str != "PASS" {
+/// Calls `f` with each record of chromosome `chr` of the indexed VCF `path` and
+/// returns the number skipped as malformed, or `None` without a call when the
+/// index names no sequence at all (an index without the tabix header, which the
+/// caller then reads around); a chromosome the index names no records for yields
+/// none.
+fn query_chromosome(
+    path: &Path,
+    chr: &str,
+    f: &mut impl FnMut(VcfFields) -> Result<()>,
+) -> Result<Option<u64>> {
+    let mut reader = vcf::io::indexed_reader::Builder::default()
+        .build_from_path(path)
+        .with_context(|| format!("Failed to open indexed VCF: {}", path.display()))?;
+    let header = reader
+        .read_header()
+        .with_context(|| format!("Failed to read VCF header: {}", path.display()))?;
+    let Some(index_header) = reader.index().header() else {
         return Ok(None);
-    }
-
-    let pos: u64 = record
-        .variant_start()
-        .context("Missing POS")?
-        .context("Invalid POS")?
-        .get() as u64;
-
-    let ids = record.ids();
-    let ids_str: &str = ids.as_ref();
-    let variation_name = if ids_str.is_empty() || ids_str == "." {
-        String::new()
-    } else {
-        ids_str.split(';').next().unwrap_or("").to_string()
     };
-
-    let ref_allele = record.reference_bases().to_string();
-
-    use noodles::vcf::variant::record::AlternateBases;
-    let alts: Vec<String> = record
-        .alternate_bases()
-        .iter()
-        .filter_map(|r| r.ok())
-        .filter(|alt| *alt != ".")
-        .map(|s| s.to_string())
-        .collect();
-
-    if alts.is_empty() {
-        return Ok(None);
+    if !index_header
+        .reference_sequence_names()
+        .contains(chr.as_bytes())
+    {
+        return Ok(Some(0));
     }
+    let region = Region::new(chr, ..);
+    let mut query = reader
+        .query(&header, &region)
+        .with_context(|| format!("Failed to query {} in {}", chr, path.display()))?;
+    read_records(path, |record| query.read_record(record), f).map(Some)
+}
 
-    let (start, end, allele_string) = ensembl_alleles(pos, &ref_allele, &alts);
-
-    let info = record.info();
-    let info_raw: &str = info.as_ref();
-
-    let minor_allele = get_info_string_value(record, header, "MA", info_raw);
-    let minor_allele_freq =
-        get_info_string_value(record, header, "MAF", info_raw).and_then(|s| s.parse::<f64>().ok());
-
-    let clin_sig = get_info_string_value(record, header, "CLIN_SIG", info_raw);
-    let phenotype_or_disease = u8::from(info_has_flag(
-        record,
-        header,
-        "E_Phenotype_or_Disease",
-        info_raw,
-    ));
-
-    let pubmed = get_info_string_value(record, header, "PUBMED", info_raw);
-
-    let mut var = VariationRecord {
-        variation_name,
-        start,
-        end: Some(end),
-        allele_string,
-        strand: 1, // Ensembl VCFs are always forward-strand
-        failed: 0,
-        somatic: if somatic { 1 } else { 0 },
-        minor_allele,
-        minor_allele_freq,
-        clin_sig,
-        phenotype_or_disease,
-        pubmed,
-        ..Default::default()
-    };
-
-    // A frequency entry names the allele as the allele string spells it
-    // (`Dumper/Variation.pm:350, 378`), so the chopped ALTs key the entries.
-    let cache_alts: Vec<String> = var
-        .allele_string
-        .split('/')
-        .skip(1)
-        .map(String::from)
-        .collect();
-    for &(vcf_field, json_key) in FREQ_FIELD_MAPPING {
-        if let Some(raw_value) = get_info_string_value(record, header, vcf_field, info_raw) {
-            let freq_str = format_freq_value(&raw_value, &cache_alts);
-            if !freq_str.is_empty() {
-                var.set_freq(json_key, freq_str);
+/// Calls `f` with the fields of each record `read_next` yields until it yields
+/// none; returns the number of records skipped because their fields do not read.
+fn read_records(
+    path: &Path,
+    mut read_next: impl FnMut(&mut vcf::Record) -> std::io::Result<usize>,
+    mut f: impl FnMut(VcfFields) -> Result<()>,
+) -> Result<u64> {
+    let mut record = vcf::Record::default();
+    let mut malformed = 0u64;
+    loop {
+        let read = read_next(&mut record)
+            .with_context(|| format!("Failed to read a record of {}", path.display()))?;
+        if read == 0 {
+            return Ok(malformed);
+        }
+        match VcfFields::read(&record) {
+            Ok(fields) => f(fields)?,
+            Err(e) => {
+                malformed += 1;
+                debug!("Skipping malformed VCF record: {}", e);
             }
         }
     }
+}
 
-    Ok(Some(var))
+fn is_compressed(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|ext| ext == "gz" || ext == "bgz")
+}
+
+/// Whether a `.csi` or `.tbi` index lies beside the compressed file `path`.
+fn has_index(path: &Path) -> bool {
+    is_compressed(path)
+        && ["csi", "tbi"].iter().any(|ext| {
+            let mut name = path.as_os_str().to_owned();
+            name.push(".");
+            name.push(ext);
+            Path::new(&name).is_file()
+        })
+}
+
+/// Parse one VCF record into its database form, or `None` when it is skipped:
+/// a filtered record, or one without alleles whose source names no class.
+fn parse_vcf_fields(
+    fields: &VcfFields,
+    somatic: bool,
+    frequencies: Option<&ThousandGenomes>,
+) -> Option<VariationRecord> {
+    if !fields.filter.is_empty() && fields.filter != "." && fields.filter != "PASS" {
+        return None;
+    }
+    let variation_name = if fields.name == "." {
+        String::new()
+    } else {
+        fields.name.split(';').next().unwrap_or("").to_string()
+    };
+    let alts: Vec<&str> = fields.alternates.split(',').collect();
+    let source = Source::of(fields);
+    let (start, end, allele_string) = database_form(
+        fields.pos,
+        &fields.reference,
+        &alts,
+        fields.info_value("TSA"),
+        source,
+    )?;
+
+    let clin_sig_terms: Vec<&str> = fields
+        .info_fields()
+        .filter_map(|field| field.strip_prefix("CLIN_"))
+        .collect();
+    let mut record = VariationRecord {
+        variation_name,
+        failed: 0,
+        somatic: u8::from(somatic),
+        start,
+        end,
+        strand: 1,
+        allele_string,
+        clin_sig: (!clin_sig_terms.is_empty()).then(|| clin_sig_terms.join(",")),
+        phenotype_or_disease: u8::from(fields.has_flag("E_Phenotype_or_Disease")),
+        ..Default::default()
+    };
+    // The dumper joins frequencies onto non-somatic variants only
+    // (`Dumper/Variation.pm:280`).
+    if let Some(frequencies) = frequencies.filter(|_| !somatic) {
+        frequencies.apply(&mut record, fields.pos, &fields.reference, &alts);
+    }
+    Some(record)
+}
+
+/// The source of a variant without alleles, read from the source flag the
+/// Ensembl VCFs set on every record (`COSMIC_102`, `HGMD-PUBLIC_20204`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Source {
+    Cosmic,
+    Hgmd,
+    Other,
+}
+
+impl Source {
+    fn of(fields: &VcfFields) -> Self {
+        let mut source = Self::Other;
+        for field in fields.info_fields() {
+            if field.contains('=') {
+                continue;
+            }
+            if field.starts_with("COSMIC") {
+                source = Self::Cosmic;
+            } else if field.starts_with("HGMD") {
+                source = Self::Hgmd;
+            }
+        }
+        source
+    }
+}
+
+/// The `start`, `end` and allele string the variation database holds for a VCF
+/// record, or `None` for a record without alleles whose source names no class.
+///
+/// A record with alleles takes the form Ensembl VEP's VCF parser gives it
+/// ([`ensembl_alleles`]), except that a record the export marks `TSA=insertion`
+/// lies one base further right: the database holds such a variant with its start
+/// one past its end, the GVF export collapses the start onto the end, and the VCF
+/// export then anchors the record on the base before that, so the base the VCF
+/// names is two before the database start. A variant the database holds with an
+/// anchor base of its own (`A/AA`, marked `indel`) is exported at its database
+/// start and keeps the parser's coordinates. An HGMD-PUBLIC variant keeps its
+/// coordinates but its allele string reads `HGMD_MUTATION`, the string the
+/// database holds for every variant of that source.
+///
+/// A record whose ALT is `.` or `<.>` is a COSMIC or HGMD-PUBLIC variant whose
+/// alleles the database does not hold: its allele string is the source's class
+/// name and its span is read back from the shape the export gives it. `.` on a
+/// reference base is a substitution or one-base deletion of that base, or, under
+/// `TSA=insertion`, an insertion after it; `<.>` after an anchor base spans the
+/// bases that follow the anchor, or, under `TSA=insertion`, an insertion two
+/// bases on, as for a record with alleles.
+fn database_form(
+    pos: u64,
+    reference: &str,
+    alts: &[&str],
+    tsa: Option<&str>,
+    source: Source,
+) -> Option<(u64, u64, String)> {
+    let class_name = match source {
+        Source::Cosmic => Some(COSMIC_MUTATION),
+        Source::Hgmd => Some(HGMD_MUTATION),
+        Source::Other => None,
+    };
+    let marked_insertion = tsa == Some("insertion");
+    let reference_end = pos + reference.len() as u64 - 1;
+    match alts {
+        ["."] | [""] => {
+            let name = class_name?;
+            if marked_insertion {
+                Some((pos + 1, pos, name.to_string()))
+            } else {
+                Some((pos, reference_end, name.to_string()))
+            }
+        }
+        ["<.>"] => {
+            let name = class_name?;
+            if marked_insertion {
+                Some((pos + 2, pos + 1, name.to_string()))
+            } else {
+                Some((pos + 1, reference_end, name.to_string()))
+            }
+        }
+        _ => {
+            let alts: Vec<String> = alts.iter().map(|alt| alt.to_string()).collect();
+            let (mut start, mut end, allele_string) = ensembl_alleles(pos, reference, &alts);
+            if marked_insertion && allele_string.starts_with("-/") {
+                start += 1;
+                end += 1;
+            }
+            let allele_string = match source {
+                Source::Hgmd => HGMD_MUTATION.to_string(),
+                _ => allele_string,
+            };
+            Some((start, end, allele_string))
+        }
+    }
 }
 
 /// The `start`, `end` and allele string Ensembl VEP's VCF parser gives a record
@@ -726,292 +1126,330 @@ fn ensembl_alleles(pos: u64, ref_allele: &str, alts: &[String]) -> (u64, u64, St
     (start, end, allele_string)
 }
 
-/// Whether the INFO column carries the flag `key`, through the typed API first and
-/// the raw `;`-separated text when the header does not declare it.
-fn info_has_flag(
-    record: &noodles::vcf::Record,
-    header: &noodles::vcf::Header,
-    key: &str,
-    info_raw: &str,
-) -> bool {
-    if let Some(Ok(Some(_))) = record.info().get(header, key) {
-        return true;
-    }
-    info_raw
-        .split(';')
-        .any(|field| field == key || field.split_once('=').is_some_and(|(k, _)| k == key))
+/// The 1000 Genomes frequencies of one chromosome, keyed by minimised allele.
+///
+/// The frequency VCF gives each ALT its frequency in the five continental
+/// populations and no frequency in the whole panel. The dumper's join
+/// (`Dumper/Variation.pm:272-420`) matches a VCF allele to a variant's allele
+/// through `get_matched_variant_alleles` (`Utils/Sequence.pm:1144-1245`): each
+/// REF/ALT pair is trimmed to its minimal form (`trim_sequences`, `:965-1031`),
+/// from the left and, when an allele exceeds one base, from the right as well,
+/// and two alleles match when a minimal form and its position agree.
+struct ThousandGenomes {
+    /// Minimised `ref_alt_pos` key to the frequency record (its index in `alleles`)
+    /// and the ALT the key came from.
+    by_allele: HashMap<String, (u32, u8)>,
+    /// Per frequency record in file order, per ALT, the five populations'
+    /// frequencies in [`THOUSAND_GENOMES_POPULATIONS`] order, NaN for a `.`.
+    alleles: Vec<Vec<[f64; 5]>>,
 }
 
-/// Format a VCF frequency INFO value into the Perl cache "ALT:freq" format.
-///
-/// For single-allelic sites, this produces "ALT:0.123".
-/// For multi-allelic sites with comma-separated frequencies, it produces
-/// "ALT1:freq1,ALT2:freq2".
-fn format_freq_value(raw_value: &str, alts: &[String]) -> String {
-    let freqs: Vec<&str> = raw_value.split(',').collect();
+impl ThousandGenomes {
+    /// Reads the frequency VCF's records on chromosome `chr`.
+    fn load(path: &Path, chr: &str) -> Result<Self> {
+        let mut by_allele = HashMap::new();
+        let mut alleles: Vec<Vec<[f64; 5]>> = Vec::new();
+        let malformed = for_each_record(path, Some(chr), |fields| {
+            let values: Vec<Vec<&str>> = THOUSAND_GENOMES_POPULATIONS
+                .iter()
+                .map(|(population, _)| {
+                    fields
+                        .info_value(population)
+                        .map(|value| value.split(',').collect())
+                        .unwrap_or_default()
+                })
+                .collect();
+            let record_index = u32::try_from(alleles.len()).context("frequency record count")?;
+            let mut record_alleles = Vec::new();
+            for (index, alt) in fields.alternates.split(',').enumerate() {
+                let mut entry = [f64::NAN; 5];
+                for (slot, population_values) in entry.iter_mut().zip(&values) {
+                    if let Some(value) = population_values.get(index) {
+                        *slot = value.parse().unwrap_or(f64::NAN);
+                    }
+                }
+                record_alleles.push(entry);
+                let alt_index = u8::try_from(index).context("ALT count")?;
+                for key in minimised_keys(fields.pos, &fields.reference, alt) {
+                    by_allele.entry(key).or_insert((record_index, alt_index));
+                }
+            }
+            alleles.push(record_alleles);
+            Ok(())
+        })?;
+        info!(
+            "chr {}: {} frequency records read from {} ({} skipped)",
+            chr,
+            alleles.len(),
+            path.display(),
+            malformed
+        );
+        Ok(Self { by_allele, alleles })
+    }
 
-    let mut parts = Vec::new();
-    for (i, freq_str) in freqs.iter().enumerate() {
-        let freq_str = freq_str.trim();
-        if freq_str.is_empty() || freq_str == "." {
-            continue;
+    /// Fills the record's 1000 Genomes columns from the frequencies of its
+    /// alleles: each population's text is `allele:frequency` per matched allele,
+    /// in the order of the frequency records matched and of their ALTs, as the
+    /// dumper joins them (`:349-399`), with the frequency printed as it prints it
+    /// (`:378`: `0`, else `%.4g`). An allele whose frequency is 0 in every
+    /// population gets no entry: the frequency VCF lists a frequency for every
+    /// allele of a variant, the 1000 Genomes release only for the alleles its call
+    /// set holds, and 0 everywhere is the one sign of an allele it does not list.
+    /// `AF`, the whole panel's frequency, is the allele's count over the panel's
+    /// 5,008 chromosomes: a population's count is its frequency times its
+    /// chromosomes, rounded to a whole number.
+    fn apply(&self, record: &mut VariationRecord, pos: u64, reference: &str, alts: &[&str]) {
+        let cache_alleles: Vec<&str> = record.allele_string.split('/').skip(1).collect();
+        let mut matched: Vec<((u32, u8), &str)> = alts
+            .iter()
+            .zip(cache_alleles)
+            .filter_map(|(alt, cache_allele)| {
+                minimised_keys(pos, reference, alt)
+                    .into_iter()
+                    .find_map(|key| self.by_allele.get(&key))
+                    .map(|&entry| (entry, cache_allele))
+            })
+            .collect();
+        matched.sort_by_key(|(entry, _)| *entry);
+        matched.dedup_by_key(|(entry, _)| *entry);
+
+        let mut columns: Vec<Vec<String>> = vec![Vec::new(); THOUSAND_GENOMES_COLUMNS.len()];
+        for ((record_index, alt_index), cache_allele) in matched {
+            let frequencies = &self.alleles[record_index as usize][alt_index as usize];
+            if frequencies.iter().all(|f| f.is_nan() || *f == 0.0) {
+                continue;
+            }
+            let mut count = 0.0f64;
+            let mut chromosomes = 0u64;
+            for ((_, samples), frequency) in THOUSAND_GENOMES_POPULATIONS.iter().zip(frequencies) {
+                if frequency.is_nan() {
+                    continue;
+                }
+                let population_chromosomes = 2 * samples;
+                count += (frequency * population_chromosomes as f64).round();
+                chromosomes += population_chromosomes;
+            }
+            for (column, frequency) in columns.iter_mut().skip(1).zip(frequencies) {
+                if !frequency.is_nan() {
+                    column.push(format!("{cache_allele}:{}", perl_g4(*frequency)));
+                }
+            }
+            if chromosomes > 0 {
+                columns[0].push(format!(
+                    "{cache_allele}:{}",
+                    perl_g4(count / chromosomes as f64)
+                ));
+            }
         }
-        let allele = if i < alts.len() {
-            &alts[i]
-        } else if alts.len() == 1 {
-            &alts[0]
+        for (column, entries) in THOUSAND_GENOMES_COLUMNS.iter().zip(columns) {
+            if !entries.is_empty() {
+                record
+                    .frequencies
+                    .insert(column.to_string(), entries.join(","));
+            }
+        }
+    }
+}
+
+/// The `ref_alt_pos` keys `get_matched_variant_alleles` builds for one REF/ALT
+/// pair (`Utils/Sequence.pm:1198-1210`): the pair trimmed from the left then the
+/// right and, when either allele exceeds one base, from the right then the left,
+/// an emptied allele reading `-`.
+fn minimised_keys(pos: u64, reference: &str, alt: &str) -> Vec<String> {
+    let mut keys = vec![trim_key(pos, reference, alt, false)];
+    if reference.len() > 1 || alt.len() > 1 {
+        let right_first = trim_key(pos, reference, alt, true);
+        if right_first != keys[0] {
+            keys.push(right_first);
+        }
+    }
+    keys
+}
+
+/// `trim_sequences` (`Utils/Sequence.pm:965-1031`) on the forward strand, as the
+/// key `ref_alt_pos`: shared bases are removed from the left, moving the position
+/// right by one per base, and from the right, in the order `end_first` says, while
+/// both alleles still have a base.
+fn trim_key(pos: u64, reference: &str, alt: &str, end_first: bool) -> String {
+    let (mut r, mut a, mut pos) = (reference.as_bytes(), alt.as_bytes(), pos);
+    let trim_left = |r: &mut &[u8], a: &mut &[u8], pos: &mut u64| {
+        while let (Some((r_first, r_rest)), Some((a_first, a_rest))) =
+            (r.split_first(), a.split_first())
+        {
+            if r_first != a_first {
+                break;
+            }
+            *r = r_rest;
+            *a = a_rest;
+            *pos += 1;
+        }
+    };
+    let trim_right = |r: &mut &[u8], a: &mut &[u8]| {
+        while let (Some((r_last, r_rest)), Some((a_last, a_rest))) =
+            (r.split_last(), a.split_last())
+        {
+            if r_last != a_last {
+                break;
+            }
+            *r = r_rest;
+            *a = a_rest;
+        }
+    };
+    if end_first {
+        trim_right(&mut r, &mut a);
+        trim_left(&mut r, &mut a, &mut pos);
+    } else {
+        trim_left(&mut r, &mut a, &mut pos);
+        trim_right(&mut r, &mut a);
+    }
+    let dash_if_empty = |s: &[u8]| {
+        if s.is_empty() {
+            "-".to_string()
         } else {
-            continue;
-        };
-        parts.push(format!("{}:{}", allele, freq_str));
-    }
-
-    parts.join(",")
-}
-
-/// Try to extract a string INFO field value. Uses the noodles typed API first,
-/// then falls back to raw string parsing.
-fn get_info_string_value(
-    record: &noodles::vcf::Record,
-    header: &noodles::vcf::Header,
-    key: &str,
-    info_raw: &str,
-) -> Option<String> {
-    use noodles::vcf::variant::record::info::field::Value;
-
-    if let Some(Ok(Some(value))) = record.info().get(header, key) {
-        return match value {
-            Value::String(s) => {
-                let s = s.to_string();
-                if s.is_empty() || s == "." {
-                    None
-                } else {
-                    Some(s)
-                }
-            }
-            Value::Integer(n) => Some(n.to_string()),
-            Value::Float(f) => Some(f.to_string()),
-            Value::Array(arr) => {
-                use noodles::vcf::variant::record::info::field::value::Array;
-                match arr {
-                    Array::Integer(iter) => {
-                        let vals: Vec<String> = iter
-                            .iter()
-                            .filter_map(|r| r.ok())
-                            .filter_map(|v| v.map(|n| n.to_string()))
-                            .collect();
-                        if vals.is_empty() {
-                            None
-                        } else {
-                            Some(vals.join(","))
-                        }
-                    }
-                    Array::Float(iter) => {
-                        let vals: Vec<String> = iter
-                            .iter()
-                            .filter_map(|r| r.ok())
-                            .filter_map(|v| v.map(|f| f.to_string()))
-                            .collect();
-                        if vals.is_empty() {
-                            None
-                        } else {
-                            Some(vals.join(","))
-                        }
-                    }
-                    Array::String(iter) => {
-                        let vals: Vec<String> = iter
-                            .iter()
-                            .filter_map(|r| r.ok())
-                            .filter_map(|v| v.map(|s| s.to_string()))
-                            .collect();
-                        if vals.is_empty() {
-                            None
-                        } else {
-                            Some(vals.join(","))
-                        }
-                    }
-                    Array::Character(iter) => {
-                        let vals: Vec<String> = iter
-                            .iter()
-                            .filter_map(|r| r.ok())
-                            .filter_map(|v| v.map(|c| c.to_string()))
-                            .collect();
-                        if vals.is_empty() {
-                            None
-                        } else {
-                            Some(vals.join(","))
-                        }
-                    }
-                }
-            }
-            Value::Flag => Some("1".to_string()),
-            Value::Character(c) => Some(c.to_string()),
-        };
-    }
-
-    get_raw_info_value(info_raw, key).map(|s| s.to_string())
-}
-
-/// Parse a single INFO field value from the raw semicolon-delimited INFO string.
-fn get_raw_info_value<'a>(info_raw: &'a str, key: &str) -> Option<&'a str> {
-    if info_raw == "." || info_raw.is_empty() {
-        return None;
-    }
-    for field in info_raw.split(';') {
-        if let Some((k, v)) = field.split_once('=') {
-            if k == key && !v.is_empty() && v != "." {
-                return Some(v);
-            }
+            String::from_utf8_lossy(s).into_owned()
         }
-    }
-    None
+    };
+    format!("{}_{}_{}", dash_if_empty(r), dash_if_empty(a), pos)
 }
 
-/// Build variation JSON cache files from parsed variation records.
-///
-/// Groups variations into 1Mb regions and writes one JSON file per region,
-/// matching the directory structure expected by `json_cache.rs::load_all_variations()`:
-/// `{output_dir}/variations/{chr}/{region_start}-{region_end}.json`
-pub fn build_variation_cache(
-    records: &[VariationRecord],
-    output_dir: &Path,
-    chr: &str,
-) -> Result<VariationBuildStats> {
-    let mut by_region: HashMap<u64, Vec<&VariationRecord>> = HashMap::new();
-    for rec in records {
-        by_region
-            .entry(region_start(rec.start))
-            .or_default()
-            .push(rec);
+/// A number as Perl's `sprintf('%.4g')` prints it: four significant digits,
+/// trailing zeros dropped, exponent form below 0.0001 and from 10,000 up.
+fn perl_g4(value: f64) -> String {
+    if value == 0.0 {
+        return "0".to_string();
     }
-
-    let variations_dir = output_dir.join("variations").join(chr);
-    std::fs::create_dir_all(&variations_dir)
-        .with_context(|| format!("Failed to create {}", variations_dir.display()))?;
-
-    let mut region_file_count = 0usize;
-
-    for (region_start, region_records) in &by_region {
-        let region_end = region_start + REGION_SIZE - 1;
-        let filename = format!("{}-{}.json", region_start, region_end);
-        let filepath = variations_dir.join(&filename);
-
-        let json =
-            serde_json::to_string(region_records).context("Failed to serialize variations")?;
-
-        std::fs::write(&filepath, json)
-            .with_context(|| format!("Failed to write {}", filepath.display()))?;
-
-        region_file_count += 1;
+    let scientific = format!("{value:.3e}");
+    let (mantissa, exponent) = scientific.split_once('e').expect("exponent form");
+    let exponent: i32 = exponent.parse().expect("exponent digits");
+    if !(-4..4).contains(&exponent) {
+        let sign = if exponent < 0 { '-' } else { '+' };
+        format!(
+            "{}e{sign}{:02}",
+            trim_fraction_zeros(mantissa),
+            exponent.abs()
+        )
+    } else {
+        let decimals = (3 - exponent).max(0) as usize;
+        trim_fraction_zeros(&format!("{value:.decimals$}"))
     }
+}
 
-    info!(
-        "chr {}: {} variations in {} regions",
-        chr,
-        records.len(),
-        region_file_count
-    );
-
-    Ok(VariationBuildStats {
-        variation_count: records.len(),
-        region_file_count,
-    })
+fn trim_fraction_zeros(text: &str) -> String {
+    if text.contains('.') {
+        text.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        text.to_string()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::io::Read;
 
-    /// Build a minimal VCF as bytes (plain text, not bgzipped) for testing.
-    fn make_vcf_bytes(info_headers: &str, records: &str) -> Vec<u8> {
-        format!(
-            "##fileformat=VCFv4.1\n\
-             ##INFO=<ID=MA,Number=1,Type=String,Description=\"Minor allele\">\n\
-             ##INFO=<ID=MAF,Number=1,Type=Float,Description=\"Minor allele frequency\">\n\
-             ##INFO=<ID=CLIN_SIG,Number=.,Type=String,Description=\"Clinical significance\">\n\
-             ##INFO=<ID=PUBMED,Number=.,Type=String,Description=\"PubMed IDs\">\n\
-             ##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency\">\n\
-             ##INFO=<ID=AFR_AF,Number=A,Type=Float,Description=\"AFR allele frequency\">\n\
-             ##INFO=<ID=EUR_AF,Number=A,Type=Float,Description=\"EUR allele frequency\">\n\
-             ##INFO=<ID=gnomADe_AF,Number=A,Type=Float,Description=\"gnomAD exome AF\">\n\
-             {info_headers}\
-             #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
-             {records}"
-        )
-        .into_bytes()
+    /// INFO lines of an Ensembl variation VCF header: the source flags, the
+    /// `E_*` evidence flags, the `CLIN_*` flags, `TSA` and the 1000 Genomes
+    /// populations.
+    const ENSEMBL_HEADER: &str = "##fileformat=VCFv4.1\n\
+        ##INFO=<ID=dbSNP_156,Number=0,Type=Flag,Description=\"dbSNP\">\n\
+        ##INFO=<ID=ClinVar_202509,Number=0,Type=Flag,Description=\"ClinVar\">\n\
+        ##INFO=<ID=COSMIC_102,Number=0,Type=Flag,Description=\"COSMIC\">\n\
+        ##INFO=<ID=HGMD-PUBLIC_20204,Number=0,Type=Flag,Description=\"HGMD-PUBLIC\">\n\
+        ##INFO=<ID=TSA,Number=1,Type=String,Description=\"Type of sequence alteration\">\n\
+        ##INFO=<ID=E_Freq,Number=0,Type=Flag,Description=\"Frequency\">\n\
+        ##INFO=<ID=E_Phenotype_or_Disease,Number=0,Type=Flag,Description=\"Phenotype_or_Disease\">\n\
+        ##INFO=<ID=CLIN_pathogenic,Number=0,Type=Flag,Description=\"pathogenic\">\n\
+        ##INFO=<ID=CLIN_likely_pathogenic,Number=0,Type=Flag,Description=\"likely pathogenic\">\n\
+        ##INFO=<ID=CLIN_uncertain_significance,Number=0,Type=Flag,Description=\"uncertain significance\">\n\
+        ##INFO=<ID=AA,Number=1,Type=String,Description=\"Ancestral Allele\">\n\
+        ##INFO=<ID=AFR,Number=A,Type=Float,Description=\"AFR\">\n\
+        ##INFO=<ID=AMR,Number=A,Type=Float,Description=\"AMR\">\n\
+        ##INFO=<ID=EAS,Number=A,Type=Float,Description=\"EAS\">\n\
+        ##INFO=<ID=EUR,Number=A,Type=Float,Description=\"EUR\">\n\
+        ##INFO=<ID=SAS,Number=A,Type=Float,Description=\"SAS\">\n\
+        #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+
+    /// Writes a plain-text VCF of `records` under `name` in `dir`.
+    fn write_vcf(dir: &Path, name: &str, records: &str) -> PathBuf {
+        let path = dir.join(name);
+        fs::write(&path, format!("{ENSEMBL_HEADER}{records}")).unwrap();
+        path
     }
 
-    /// Write a VCF to a temp file and parse it.
-    fn parse_vcf_str(info_headers: &str, records: &str, somatic: bool) -> Vec<VariationRecord> {
-        parse_vcf_str_with(info_headers, records, somatic, None)
-    }
-
-    fn parse_vcf_str_with(
-        info_headers: &str,
-        records: &str,
-        somatic: bool,
+    /// The records [`chromosome_records`] emits, in order.
+    fn collect(
+        vcf: &Path,
+        inputs: &GenomeWideInputs,
         clinvar: Option<&ClinVarAttribs>,
     ) -> Vec<VariationRecord> {
-        let dir = tempfile::tempdir().unwrap();
-        let vcf_path = dir.path().join("test.vcf");
-        let data = make_vcf_bytes(info_headers, records);
-        std::fs::write(&vcf_path, &data).unwrap();
-        parse_variation_vcf(&vcf_path, somatic, clinvar).unwrap()
+        let mut records = Vec::new();
+        let emitted = chromosome_records("21", vcf, inputs, clinvar, |record| {
+            records.push(record);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(emitted, records.len());
+        records
     }
 
-    /// INFO lines of an Ensembl variation VCF header: the `E_*` evidence flags, a
-    /// `CLIN_*` flag and `TSA`.
-    const ENSEMBL_INFO_HEADERS: &str = "##INFO=<ID=E_Phenotype_or_Disease,Number=0,Type=Flag,Description=\"Phenotype_or_Disease\">\n\
-         ##INFO=<ID=E_Freq,Number=0,Type=Flag,Description=\"Frequency\">\n\
-         ##INFO=<ID=CLIN_pathogenic,Number=0,Type=Flag,Description=\"pathogenic\">\n\
-         ##INFO=<ID=TSA,Number=1,Type=String,Description=\"Type of sequence alteration\">\n";
+    fn records_of(records: &str) -> Vec<VariationRecord> {
+        let dir = tempfile::tempdir().unwrap();
+        let vcf = write_vcf(dir.path(), "homo_sapiens-chr21.vcf", records);
+        collect(&vcf, &GenomeWideInputs::default(), None)
+    }
+
+    fn span(record: &VariationRecord) -> (u64, u64, &str) {
+        (record.start, record.end, record.allele_string.as_str())
+    }
 
     /// Ensembl VEP's VCF parser chops the shared anchor base of an indel, moves
     /// `start` one past `POS`, leaves `end` at `POS + len(REF) - 1` and spells an
     /// emptied allele `-` (`Parser/VCF.pm:254, 309-316, 331-334`): a `TA/T` deletion at
     /// 5030218 is `A/-` at 5030219-5030219, the mapping Ensembl itself reports for
-    /// rs1416749598; a `C/CGT` insertion at 100 is `-/GT` with `start` 101 and `end`
-    /// 100; the shared base of `AAA/A,AA,AAAA` goes too (`:306-308`); a `G/GT,A`
-    /// record whose ALTs disagree on the first base keeps every allele (`:306-308`);
-    /// an `A/AT,*` record chops around the `*` allele, which stays as written
-    /// (`:306, 315`).
+    /// rs1416749598; the shared base of `AAA/A,AA,AAAA` goes too (`:306-308`), giving
+    /// rs1232130144 `AA/-/A/AAA` at 5030914-5030915; a `G/GT,A` record whose ALTs
+    /// disagree on the first base keeps every allele; a same-length `AC/GT` is never
+    /// chopped. A record marked `TSA=insertion` lies one base further right than the
+    /// chop puts it, Ensembl's export anchoring it two bases before the database
+    /// start: `G/GG` at 5031747 is `-/G` at 5031749-5031748, where the release-116
+    /// cache holds rs1987130899, and a two-allele insertion `A/AT,AG` at 100 is
+    /// `-/T/G` at 102-101. A record marked `indel`, which the database holds with
+    /// its own anchor base, keeps the chop's coordinates: `A/AA` at 5030602 is `-/A`
+    /// at 5030603-5030602, the left-trimmed form of the cache's `A/AA` at 5030602
+    /// for rs1370167485, so an input in either spelling co-locates with it.
     #[test]
-    fn indel_allele_string_is_ensembl_style() {
-        let records = parse_vcf_str(
-            "",
-            "21\t5030218\trs1416749598\tTA\tT\t.\t.\t.\n\
-             21\t100\tins1\tC\tCGT\t.\t.\t.\n\
-             21\t5030913\trs1232130144\tAAA\tA,AA,AAAA\t.\t.\t.\n\
-             21\t300\tmixed1\tG\tGT,A\t.\t.\t.\n\
-             21\t400\tmnv1\tAC\tGT\t.\t.\t.\n\
-             21\t500\tspan1\tA\tAT,*\t.\t.\t.\n",
-            false,
+    fn indel_records_minimised_to_ensembl_coordinates() {
+        let records = records_of(
+            "21\t100\tins2\tA\tAT,AG\t.\t.\tdbSNP_156;TSA=insertion\n\
+             21\t300\tmixed1\tG\tGT,A\t.\t.\tdbSNP_156;TSA=indel\n\
+             21\t400\tmnv1\tAC\tGT\t.\t.\tdbSNP_156;TSA=substitution\n\
+             21\t500\tsnv1\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t5030218\trs1416749598\tTA\tT\t.\t.\tdbSNP_156;TSA=deletion\n\
+             21\t5030602\trs1370167485\tA\tAA\t.\t.\tdbSNP_156;TSA=indel\n\
+             21\t5030913\trs1232130144\tAAA\tA,AA,AAAA\t.\t.\tdbSNP_156;TSA=indel\n\
+             21\t5031747\trs1987130899\tG\tGG\t.\t.\tdbSNP_156;TSA=insertion\n",
         );
-        assert_eq!(records.len(), 6);
-
-        let del = &records[0];
-        assert_eq!(del.allele_string, "A/-");
-        assert_eq!((del.start, del.end), (5030219, Some(5030219)));
-
-        let ins = &records[1];
-        assert_eq!(ins.allele_string, "-/GT");
-        assert_eq!((ins.start, ins.end), (101, Some(100)));
-
-        let multi = &records[2];
-        assert_eq!(multi.allele_string, "AA/-/A/AAA");
-        assert_eq!((multi.start, multi.end), (5030914, Some(5030915)));
-
-        let mixed = &records[3];
-        assert_eq!(mixed.allele_string, "G/GT/A");
-        assert_eq!((mixed.start, mixed.end), (300, Some(300)));
-
-        let mnv = &records[4];
-        assert_eq!(mnv.allele_string, "AC/GT");
-        assert_eq!((mnv.start, mnv.end), (400, Some(401)));
-
-        let spanning = &records[5];
-        assert_eq!(spanning.allele_string, "-/T/*");
-        assert_eq!((spanning.start, spanning.end), (501, Some(500)));
+        let by_name: HashMap<&str, &VariationRecord> = records
+            .iter()
+            .map(|r| (r.variation_name.as_str(), r))
+            .collect();
+        assert_eq!(span(by_name["rs1416749598"]), (5030219, 5030219, "A/-"));
+        assert_eq!(span(by_name["rs1370167485"]), (5030603, 5030602, "-/A"));
+        assert_eq!(
+            span(by_name["rs1232130144"]),
+            (5030914, 5030915, "AA/-/A/AAA")
+        );
+        assert_eq!(span(by_name["mixed1"]), (300, 300, "G/GT/A"));
+        assert_eq!(span(by_name["mnv1"]), (400, 401, "AC/GT"));
+        assert_eq!(span(by_name["rs1987130899"]), (5031749, 5031748, "-/G"));
+        assert_eq!(span(by_name["ins2"]), (102, 101, "-/T/G"));
+        assert_eq!(span(by_name["snv1"]), (500, 500, "A/G"));
+        let starts: Vec<u64> = records.iter().map(|r| r.start).collect();
+        assert_eq!(
+            starts,
+            [102, 300, 400, 500, 5030219, 5030603, 5030914, 5031749]
+        );
     }
 
     /// An allele whose first character is not ASCII never anchors the chop: the
@@ -1019,58 +1457,309 @@ mod tests {
     /// panicking on a byte slice through the character.
     #[test]
     fn non_ascii_allele_is_left_unchopped() {
-        let records = parse_vcf_str("", "21\t100\trs1\tÄT\tÄ\t.\t.\t.\n", false);
-        assert_eq!(records.len(), 1);
+        let records = records_of("21\t100\trs1\tÄT\tÄ\t.\t.\tdbSNP_156\n");
         assert_eq!(records[0].allele_string, "ÄT/Ä");
         assert_eq!(records[0].start, 100);
     }
 
-    /// A frequency entry is keyed by the chopped allele (`Dumper/Variation.pm:350,
-    /// 378`): the `C/CGT` insertion's `AF=0.25` reads `GT:0.25`, not `CGT:0.25`.
+    /// The somatic file's records are flagged `somatic` and kept with the span and
+    /// allele string the variation database holds for a variant without alleles,
+    /// `COSMIC_MUTATION`: on the reference base for a `.` substitution (`C/.` at
+    /// 1000 is 1000-1000), after it for a `.` insertion (`T/.` with `TSA=insertion`
+    /// at 2000 is 2001-2000), over the bases after the anchor for a `<.>` deletion
+    /// (`TTCT/<.>` at 3000 is 3001-3003); a somatic record with alleles keeps them,
+    /// an insertion two bases on (`A/ATCC` at 5000 is `-/TCC` at 5002-5001). An
+    /// HGMD-PUBLIC record reads `HGMD_MUTATION` with `somatic` 0, two bases on for a
+    /// `<.>` insertion (`A/<.>` at 4000 is 4002-4001) and on the deleted base for a
+    /// deletion with alleles (`AT/A` at 1500 is 1501-1501); a `.` record of no such
+    /// source is skipped. `phenotype_or_disease` and `clin_sig` read the record's
+    /// own flags. The identifiers are made up: the shapes are what Ensembl's export
+    /// writes for the two sources, whose identifiers the tests do not reproduce.
     #[test]
-    fn frequency_entries_name_the_chopped_allele() {
-        let records = parse_vcf_str("", "21\t100\tins1\tC\tCGT\t.\t.\tAF=0.25\n", false);
-        assert_eq!(records[0].af, Some("GT:0.25".to_string()));
+    fn somatic_vcf_records_are_flagged_and_null_alleles_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let germline = write_vcf(
+            dir.path(),
+            "homo_sapiens-chr21.vcf",
+            "21\t100\trs1\tA\t.\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t1500\tCD990002\tAT\tA\t.\t.\tHGMD-PUBLIC_20204;TSA=deletion;E_Phenotype_or_Disease;AA=TA\n\
+             21\t4000\tCI990003\tA\t<.>\t.\t.\tHGMD-PUBLIC_20204;TSA=insertion;E_Phenotype_or_Disease\n",
+        );
+        let somatic = write_vcf(
+            dir.path(),
+            "homo_sapiens_somatic.vcf",
+            "1\t100\tCOSV9900001\tT\t.\t.\t.\tCOSMIC_102;TSA=SNV;E_Phenotype_or_Disease;AA=T\n\
+             21\t1000\tCOSV9900002\tC\t.\t.\t.\tCOSMIC_102;TSA=SNV;E_Phenotype_or_Disease\n\
+             21\t2000\tCOSV9900003\tT\t.\t.\t.\tCOSMIC_102;TSA=insertion;E_Phenotype_or_Disease\n\
+             21\t3000\tCOSV9900004\tTTCT\t<.>\t.\t.\tCOSMIC_102;TSA=deletion;E_Phenotype_or_Disease\n\
+             21\t5000\trs2517045861\tA\tATCC\t.\t.\tClinVar_202509;TSA=insertion;E_Phenotype_or_Disease;CLIN_uncertain_significance\n",
+        );
+        let inputs = GenomeWideInputs {
+            somatic: Some(somatic),
+            ..Default::default()
+        };
+        let records = collect(&germline, &inputs, None);
+        let summary: Vec<String> = records
+            .iter()
+            .map(|r| {
+                format!(
+                    "{} {}-{} {} somatic={} pheno={} clin_sig={}",
+                    r.variation_name,
+                    r.start,
+                    r.end,
+                    r.allele_string,
+                    r.somatic,
+                    r.phenotype_or_disease,
+                    r.clin_sig.as_deref().unwrap_or("-")
+                )
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                "COSV9900002 1000-1000 COSMIC_MUTATION somatic=1 pheno=1 clin_sig=-",
+                "CD990002 1501-1501 HGMD_MUTATION somatic=0 pheno=1 clin_sig=-",
+                "COSV9900003 2001-2000 COSMIC_MUTATION somatic=1 pheno=1 clin_sig=-",
+                "COSV9900004 3001-3003 COSMIC_MUTATION somatic=1 pheno=1 clin_sig=-",
+                "CI990003 4002-4001 HGMD_MUTATION somatic=0 pheno=1 clin_sig=-",
+                "rs2517045861 5002-5001 -/TCC somatic=1 pheno=1 clin_sig=uncertain_significance",
+            ]
+        );
     }
 
-    /// `phenotype_or_disease` is 1 when the variation's evidence set names
-    /// Phenotype_or_Disease (`Database/Variation.pm:173`), which the Ensembl VCFs
-    /// write as the `E_Phenotype_or_Disease` flag; a record flagged `CLIN_pathogenic`
-    /// without that evidence stays 0, and a record with the evidence but no clinical
-    /// significance reads 1.
+    /// `clin_sig` is the record's `CLIN_<term>` flags in their order, joined by `,`,
+    /// the string `Database/Variation.pm:177` reads from the database (its spaces
+    /// already `_`); `phenotype_or_disease` is 1 when the record carries
+    /// `E_Phenotype_or_Disease` (`:178`); a record with neither leaves both unset.
     #[test]
-    fn phenotype_or_disease_from_evidence_flag() {
-        let records = parse_vcf_str(
-            ENSEMBL_INFO_HEADERS,
-            "21\t100\trs1\tA\tG\t.\t.\tTSA=SNV;E_Freq;E_Phenotype_or_Disease\n\
-             21\t200\trs2\tA\tG\t.\t.\tTSA=SNV;E_Freq;CLIN_pathogenic\n\
-             21\t300\trs3\tA\tG\t.\t.\tTSA=SNV;E_Freq\n",
-            false,
+    fn clin_sig_and_phenotype_read_the_records_flags() {
+        let records = records_of(
+            "21\t100\trs1\tC\tA,T\t.\t.\tdbSNP_156;TSA=SNV;E_Freq;E_Phenotype_or_Disease;CLIN_uncertain_significance;CLIN_likely_pathogenic;AA=C\n\
+             21\t200\trs2\tA\tG\t.\t.\tdbSNP_156;TSA=SNV;E_Freq;CLIN_pathogenic\n\
+             21\t300\trs3\tA\tG\t.\t.\tdbSNP_156;TSA=SNV;E_Freq\n",
         );
-        assert_eq!(records.len(), 3);
+        assert_eq!(
+            records[0].clin_sig.as_deref(),
+            Some("uncertain_significance,likely_pathogenic")
+        );
         assert_eq!(records[0].phenotype_or_disease, 1);
+        assert_eq!(records[1].clin_sig.as_deref(), Some("pathogenic"));
         assert_eq!(records[1].phenotype_or_disease, 0);
+        assert_eq!(records[2].clin_sig, None);
         assert_eq!(records[2].phenotype_or_disease, 0);
     }
 
-    /// The evidence flag is read from a VCF whose header does not declare it.
+    /// Records whose FILTER is neither `PASS`, `.` nor empty are skipped; the first
+    /// of several IDs names the record and a `.` ID leaves the name empty.
     #[test]
-    fn phenotype_or_disease_flag_read_without_header_line() {
-        let records = parse_vcf_str(
-            "",
-            "21\t100\trs1\tA\tG\t.\t.\tE_Phenotype_or_Disease\n",
-            false,
+    fn filtered_records_are_skipped_and_the_first_id_names_a_record() {
+        let records = records_of(
+            "21\t100\trs1;rs2\tA\tG\t.\tPASS\tdbSNP_156\n\
+             21\t200\trs3\tA\tG\t.\tLowQual\tdbSNP_156\n\
+             21\t300\t.\tA\tG\t.\t.\tdbSNP_156\n",
         );
-        assert_eq!(records[0].phenotype_or_disease, 1);
+        let names: Vec<&str> = records.iter().map(|r| r.variation_name.as_str()).collect();
+        assert_eq!(names, ["rs1", ""]);
+    }
+
+    /// The 1000 Genomes file gives rs2838519's A allele `AFR=0.7148 AMR=0.379
+    /// EAS=0.4534 EUR=0.6024 SAS=0.5583`; the release-116 cache holds the record
+    /// as `A:0.5625 A:0.7148 A:0.379 A:0.4534 A:0.6024 A:0.5583` under `AF, AFR,
+    /// AMR, EAS, EUR, SAS`. The whole-panel frequency is the recovered counts
+    /// (945 + 263 + 457 + 606 + 546 = 2,817 of 5,008 chromosomes) printed `%.4g`;
+    /// the C allele, absent from the frequency file, gets no entry. rs142566111's
+    /// A allele, a singleton (`AFR=0.0008`, one of 1,322 chromosomes), reads
+    /// `0.0001997`, the cache's figure for one allele in 5,008, with `A:0` in the
+    /// populations that lack it; its G allele, 0 in every population, gets no
+    /// entry, as the cache has none. A variant the file does not carry has no
+    /// frequency column, and a somatic variant is given none
+    /// (`Dumper/Variation.pm:280`).
+    #[test]
+    fn thousand_genomes_file_populates_af_and_continental_columns() {
+        let dir = tempfile::tempdir().unwrap();
+        let germline = write_vcf(
+            dir.path(),
+            "homo_sapiens-chr21.vcf",
+            "21\t44195140\trs2838519\tG\tA,C\t.\t.\tdbSNP_156;TSA=SNV;E_Freq\n\
+             21\t44229058\trs142566111\tT\tA,G\t.\t.\tdbSNP_156;TSA=SNV;E_Freq\n\
+             21\t44300000\trs9\tC\tT\t.\t.\tdbSNP_156;TSA=SNV\n",
+        );
+        let frequencies = write_vcf(
+            dir.path(),
+            "1000GENOMES-phase_3.vcf",
+            "21\t44195140\trs2838519\tG\tA\t.\t.\tdbSNP_156;TSA=SNV;E_Freq;E_1000G;AFR=0.7148;AMR=0.379;EAS=0.4534;EUR=0.6024;SAS=0.5583\n\
+             21\t44229058\trs142566111\tT\tA,G\t.\t.\tdbSNP_156;TSA=SNV;E_Freq;E_1000G;AFR=0.0008,0;AMR=0,0;EAS=0,0;EUR=0,0;SAS=0,0\n\
+             21\t44400000\tCOSV1\tA\tT\t.\t.\tCOSMIC_102;TSA=SNV;AFR=0.5;AMR=0.5;EAS=0.5;EUR=0.5;SAS=0.5\n",
+        );
+        let somatic = write_vcf(
+            dir.path(),
+            "homo_sapiens_somatic.vcf",
+            "21\t44400000\tCOSV1\tA\tT\t.\t.\tCOSMIC_102;TSA=SNV\n",
+        );
+        let inputs = GenomeWideInputs {
+            frequencies: Some(frequencies),
+            somatic: Some(somatic),
+            ..Default::default()
+        };
+        let records = collect(&germline, &inputs, None);
+        let frequencies = |name: &str| -> BTreeMap<&str, &str> {
+            let record = records.iter().find(|r| r.variation_name == name).unwrap();
+            record
+                .frequencies
+                .iter()
+                .map(|(column, text)| (column.as_str(), text.as_str()))
+                .collect()
+        };
+        assert_eq!(
+            frequencies("rs2838519"),
+            BTreeMap::from([
+                ("AF", "A:0.5625"),
+                ("AFR", "A:0.7148"),
+                ("AMR", "A:0.379"),
+                ("EAS", "A:0.4534"),
+                ("EUR", "A:0.6024"),
+                ("SAS", "A:0.5583"),
+            ])
+        );
+        assert_eq!(
+            frequencies("rs142566111"),
+            BTreeMap::from([
+                ("AF", "A:0.0001997"),
+                ("AFR", "A:0.0008"),
+                ("AMR", "A:0"),
+                ("EAS", "A:0"),
+                ("EUR", "A:0"),
+                ("SAS", "A:0"),
+            ])
+        );
+        assert!(frequencies("rs9").is_empty());
+        assert!(frequencies("COSV1").is_empty());
+    }
+
+    /// A frequency VCF allele matches a variant's allele through the minimised
+    /// REF/ALT pair, so a record the frequency file spells with another anchor or
+    /// a subset of the alleles still joins: `G/GT` at 300 (the frequency file) and
+    /// `G/GT,A` at 300 (the variant, unchopped because `A` shares no first base)
+    /// both minimise to `-_T_301`. A pair an allele of more than one base belongs
+    /// to is keyed both ways: `AAA/A` at 5030913 trimmed from the left is `AA/-`
+    /// at 5030914, from the right `AA/-` at 5030913; `GT/G` at 200 has one key,
+    /// nothing being shared on the right; `ACA/ACACA` at 100 is `-/CA` at 103 from
+    /// the left and `-/AC` at 100 from the right.
+    #[test]
+    fn frequency_alleles_match_through_minimised_pairs() {
+        assert_eq!(minimised_keys(300, "G", "GT"), ["-_T_301"]);
+        assert_eq!(minimised_keys(300, "G", "A"), ["G_A_300"]);
+        assert_eq!(minimised_keys(200, "GT", "G"), ["T_-_201"]);
+        assert_eq!(minimised_keys(10178, "C", "CC"), ["-_C_10179", "-_C_10178"]);
+        assert_eq!(
+            minimised_keys(5030913, "AAA", "A"),
+            ["AA_-_5030914", "AA_-_5030913"]
+        );
+        assert_eq!(
+            minimised_keys(100, "ACA", "ACACA"),
+            ["-_CA_103", "-_AC_100"]
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let germline = write_vcf(
+            dir.path(),
+            "homo_sapiens-chr21.vcf",
+            "21\t300\tmixed1\tG\tGT,A\t.\t.\tdbSNP_156;TSA=indel\n",
+        );
+        let frequencies = write_vcf(
+            dir.path(),
+            "1000GENOMES-phase_3.vcf",
+            "21\t300\tmixed1\tG\tGT\t.\t.\tdbSNP_156;TSA=insertion;AFR=0.1;AMR=0.2;EAS=0.3;EUR=0.4;SAS=0.5\n",
+        );
+        let inputs = GenomeWideInputs {
+            frequencies: Some(frequencies),
+            ..Default::default()
+        };
+        let records = collect(&germline, &inputs, None);
+        assert_eq!(records[0].allele_string, "G/GT/A");
+        assert_eq!(records[0].frequencies["AFR"], "GT:0.1");
+        assert_eq!(records[0].frequencies["SAS"], "GT:0.5");
+        // 132 + 139 + 302 + 402 + 489 of 5,008.
+        assert_eq!(records[0].frequencies["AF"], "GT:0.2923");
+    }
+
+    /// `%.4g` as Perl prints it: four significant digits, trailing zeros gone,
+    /// exponent form below 0.0001 and from 10,000.
+    #[test]
+    fn perl_g4_prints_four_significant_digits() {
+        assert_eq!(perl_g4(0.0), "0");
+        assert_eq!(perl_g4(0.5625), "0.5625");
+        assert_eq!(perl_g4(0.379), "0.379");
+        assert_eq!(perl_g4(1.0 / 5008.0), "0.0001997");
+        assert_eq!(perl_g4(0.0000121), "1.21e-05");
+        assert_eq!(perl_g4(1.0), "1");
+        assert_eq!(perl_g4(12345.0), "1.234e+04");
+    }
+
+    /// A record of the phenotype- or clinically-associated file that the
+    /// per-chromosome file already holds (same name, position and alleles) is
+    /// written once; one it lacks is added, sorted into place by start; one the
+    /// somatic file also holds is written once, flagged `somatic`, whether or
+    /// not the per-chromosome file holds a copy too.
+    #[test]
+    fn genome_wide_germline_records_are_added_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let germline = write_vcf(
+            dir.path(),
+            "homo_sapiens-chr21.vcf",
+            "21\t100\trs1\tA\tG\t.\t.\tdbSNP_156;TSA=SNV;E_Phenotype_or_Disease;CLIN_pathogenic\n\
+             21\t250\tCOSV9\tC\t.\t.\t.\tCOSMIC_102;TSA=SNV;E_Phenotype_or_Disease\n\
+             21\t300\trs3\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n",
+        );
+        let phenotype = write_vcf(
+            dir.path(),
+            "homo_sapiens_phenotype_associated.vcf",
+            "21\t100\trs1\tA\tG\t.\t.\tdbSNP_156;TSA=SNV;E_Phenotype_or_Disease;CLIN_pathogenic\n\
+             21\t200\trs2516155147\tG\tA\t.\t.\tClinVar_202509;TSA=SNV;E_Phenotype_or_Disease;CLIN_uncertain_significance\n\
+             21\t250\tCOSV9\tC\t.\t.\t.\tCOSMIC_102;TSA=SNV;E_Phenotype_or_Disease\n\
+             22\t200\trs22\tG\tA\t.\t.\tClinVar_202509;TSA=SNV;E_Phenotype_or_Disease\n",
+        );
+        let clinical = write_vcf(
+            dir.path(),
+            "homo_sapiens_clinically_associated.vcf",
+            "21\t200\trs2516155147\tG\tA\t.\t.\tClinVar_202509;TSA=SNV;E_Phenotype_or_Disease;CLIN_uncertain_significance\n",
+        );
+        let somatic = write_vcf(
+            dir.path(),
+            "homo_sapiens_somatic.vcf",
+            "21\t250\tCOSV9\tC\t.\t.\t.\tCOSMIC_102;TSA=SNV;E_Phenotype_or_Disease\n",
+        );
+        let inputs = GenomeWideInputs {
+            germline: vec![phenotype, clinical],
+            somatic: Some(somatic),
+            ..Default::default()
+        };
+        let records = collect(&germline, &inputs, None);
+        let names: Vec<(&str, u64, u8)> = records
+            .iter()
+            .map(|r| (r.variation_name.as_str(), r.start, r.somatic))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                ("rs1", 100, 0),
+                ("rs2516155147", 200, 0),
+                ("COSV9", 250, 1),
+                ("rs3", 300, 0)
+            ]
+        );
+        assert_eq!(
+            records[1].clin_sig.as_deref(),
+            Some("uncertain_significance")
+        );
     }
 
     /// Write each table's tab-separated rows to `<table>.txt.gz` under `dir`,
     /// gzipped as the Ensembl FTP publishes the dumps, with `\N` for NULL.
     fn write_dump_dir(dir: &Path, tables: &[(&str, &str)]) {
-        use std::io::Write;
         for (table, rows) in tables {
             let path = dir.join(format!("{table}.txt.gz"));
-            let file = std::fs::File::create(&path).unwrap();
+            let file = fs::File::create(&path).unwrap();
             let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::fast());
             gz.write_all(rows.as_bytes()).unwrap();
             gz.finish().unwrap();
@@ -1084,7 +1773,11 @@ mod tests {
     /// (A, then C), and four somatic features (a somatic classification with a comma,
     /// an oncogenicity, a classification on a phenotype whose description carries
     /// MySQL-escaped backslashes, and an oncogenicity on a `Gene`-type feature of the
-    /// span, which the adaptor's location query joins like any other).
+    /// span, which the adaptor's location query joins like any other); on the
+    /// database span 21:200-204 of rs5 (held untrimmed as `AGAGA/AGA`), one germline
+    /// feature (risk allele `GA`, `benign`, reference allele `AGAGA`) and one somatic
+    /// feature; and on 21:201-202, the span rs5's export trims to, one somatic
+    /// feature of rs7.
     const DUMP_TABLES: &[(&str, &str)] = &[
         ("source", "1\tdbSNP\t156\t\\N\t\\N\t\\N\tgermline\tvariation\n32\tClinVar\t202509\t\\N\t\\N\t\\N\tmixed\tphenotype_feature\n"),
         ("seq_region", "131537\t21\t4\n131538\t22\t4\n"),
@@ -1100,7 +1793,10 @@ mod tests {
 1007\t7\t1\t\\N\tVariation\trs1\t1\t131537\t100\t100\t1\tGermline\n\
 1008\t7\t32\t\\N\tGene\tENSG1\t1\t131537\t100\t100\t1\tGermline\n\
 1009\t10\t32\t\\N\tVariation\trs1\t1\t131537\t100\t100\t1\tSomatic\n\
-1010\t9\t32\t\\N\tGene\tENSG1\t1\t131537\t100\t100\t1\tSomatic\n"),
+1010\t9\t32\t\\N\tGene\tENSG1\t1\t131537\t100\t100\t1\tSomatic\n\
+1011\t7\t32\t\\N\tVariation\trs5\t1\t131537\t200\t204\t1\tGermline\n\
+1012\t8\t32\t\\N\tVariation\trs5\t1\t131537\t200\t204\t1\tSomatic\n\
+1013\t9\t32\t\\N\tVariation\trs7\t1\t131537\t201\t202\t1\tSomatic\n"),
         ("phenotype_feature_attrib", "\
 1001\t480\tpathogenic\n1001\t483\tT\n1001\t583\tA\n\
 1002\t480\tuncertain significance\n1002\t483\tC\n\
@@ -1110,7 +1806,10 @@ mod tests {
 1006\t578\tOncogenic\n\
 1007\t480\tbenign\n1007\t483\tG\n\
 1009\t577\tTier II - Potential\n1004\t483\tA\n1004\t483\tC\n\
-1010\t578\tLikely oncogenic\n"),
+1010\t578\tLikely oncogenic\n\
+1011\t480\tbenign\n1011\t483\tGA\n1011\t583\tAGAGA\n\
+1012\t577\tTier I - Strong\n\
+1013\t577\tTier III - Unknown\n"),
     ];
 
     /// `clin_sig_allele` joins each `risk_allele:clinvar_clin_sig` pair of the germline
@@ -1124,22 +1823,28 @@ mod tests {
     /// `clinical_impact` is `_format_clinical_impact` (`:252-275`) over the somatic
     /// features: `phenotype(classification)` with `,` read `;`, then
     /// `phenotype(oncogenicity:term)`, joined by `;`, the dump's `\\` read as one
-    /// backslash. A record on another span gets none.
+    /// backslash. A record on another span gets none. rs5, exported trimmed (`AGA/A`
+    /// at 200, `GA/-` at 201-202) where the tables hold the database's 200-204,
+    /// still takes the features of that span, found through its own somatic feature,
+    /// not those of rs7, whose database span is the 201-202 the export gives rs5 and
+    /// whose own record, the same `AGA/A` at 200, takes them.
     #[test]
-    fn clinical_impact_from_clinvar_vcf() {
+    fn clinical_impact_from_clinvar_dumps() {
         let dir = tempfile::tempdir().unwrap();
         write_dump_dir(dir.path(), DUMP_TABLES);
         let clinvar = ClinVarAttribs::load(dir.path(), &[]).unwrap();
         assert!(!clinvar.is_empty());
 
-        let records = parse_vcf_str_with(
-            ENSEMBL_INFO_HEADERS,
-            "21\t100\trs1\tA\tC,T\t.\t.\tTSA=SNV;E_Phenotype_or_Disease;CLIN_pathogenic\n\
-             21\t200\trs2\tA\tG\t.\t.\tTSA=SNV\n",
-            false,
-            Some(&clinvar),
+        let vcf = write_vcf(
+            dir.path(),
+            "homo_sapiens-chr21.vcf",
+            "21\t100\trs1\tA\tC,T\t.\t.\tdbSNP_156;TSA=SNV;E_Phenotype_or_Disease;CLIN_pathogenic\n\
+             21\t150\trs2\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t200\trs5\tAGA\tA\t.\t.\tdbSNP_156;TSA=deletion;E_Phenotype_or_Disease;CLIN_benign\n\
+             21\t200\trs7\tAGA\tA\t.\t.\tdbSNP_156;TSA=deletion;E_Phenotype_or_Disease\n",
         );
-        assert_eq!(records.len(), 2);
+        let records = collect(&vcf, &GenomeWideInputs::default(), Some(&clinvar));
+        assert_eq!(records.len(), 4);
 
         let r = &records[0];
         assert_eq!(
@@ -1157,19 +1862,24 @@ mod tests {
         assert_eq!(other.clin_sig_ref_allele, None);
         assert_eq!(other.clinical_impact, None);
 
-        let json: serde_json::Value = serde_json::to_value(r).unwrap();
+        let trimmed = &records[2];
+        assert_eq!(trimmed.variation_name, "rs5");
+        assert_eq!(span(trimmed), (201, 202, "GA/-"));
+        assert_eq!(trimmed.clin_sig_allele.as_deref(), Some("GA:benign"));
+        assert_eq!(trimmed.clin_sig_ref_allele.as_deref(), Some("AGAGA"));
         assert_eq!(
-            json["clin_sig_allele"],
-            "T:pathogenic;C:uncertain_significance;C:not_provided"
+            trimmed.clinical_impact.as_deref(),
+            Some("Lung carcinoma(Tier I - Strong)")
         );
-        assert_eq!(json["clin_sig_ref_allele"], "A");
+
+        let same_export = &records[3];
+        assert_eq!(same_export.variation_name, "rs7");
+        assert_eq!(span(same_export), (201, 202, "GA/-"));
+        assert_eq!(same_export.clin_sig_allele, None);
         assert_eq!(
-            json["clinical_impact"],
-            "Lung carcinoma(Tier I - Strong;Tier II - Potential);Breast cancer(oncogenicity:Oncogenic);Carcinoma\\of\\lung(Tier II - Potential);Not provided(oncogenicity:Likely oncogenic)"
+            same_export.clinical_impact.as_deref(),
+            Some("Not provided(Tier III - Unknown)")
         );
-        let json_other: serde_json::Value = serde_json::to_value(other).unwrap();
-        assert!(json_other.get("clin_sig_allele").is_none());
-        assert!(json_other.get("clinical_impact").is_none());
     }
 
     /// The dump reader accepts the uncompressed `.txt` spelling, keeps nothing from a
@@ -1179,7 +1889,7 @@ mod tests {
     fn clinvar_dump_reader_accepts_plain_text_and_absent_clinvar() {
         let dir = tempfile::tempdir().unwrap();
         for (table, rows) in DUMP_TABLES {
-            std::fs::write(dir.path().join(format!("{table}.txt")), rows).unwrap();
+            fs::write(dir.path().join(format!("{table}.txt")), rows).unwrap();
         }
         let clinvar = ClinVarAttribs::load(dir.path(), &[]).unwrap();
         assert!(!clinvar.is_empty());
@@ -1187,7 +1897,7 @@ mod tests {
         assert!(other_chromosome.is_empty());
 
         let no_clinvar = tempfile::tempdir().unwrap();
-        std::fs::write(
+        fs::write(
             no_clinvar.path().join("source.txt"),
             "1\tdbSNP\t156\t\\N\t\\N\t\\N\tgermline\tvariation\n",
         )
@@ -1205,267 +1915,174 @@ mod tests {
         assert!(err.to_string().contains("source.txt"), "{err}");
     }
 
+    /// The file is written as the dumper prints a record (`Dumper/Variation.pm:
+    /// 233-264`): the chromosome first, one cell per column, `.` for an empty one,
+    /// `failed`, `somatic` and `phenotype_or_disease` only when 1, `end` only when
+    /// it differs from `start`, `strand` only when -1, and a frequency column's
+    /// text as joined. A record starting before the one written before it is
+    /// refused, the index being built in file order.
     #[test]
-    fn test_parse_snv() {
-        let records = parse_vcf_str(
-            "",
-            "21\t25000100\trs699\tA\tG\t.\tPASS\tMA=G;MAF=0.2345\n",
-            false,
-        );
-        assert_eq!(records.len(), 1);
-        let r = &records[0];
-        assert_eq!(r.variation_name, "rs699");
-        assert_eq!(r.start, 25000100);
-        assert_eq!(r.end, Some(25000100));
-        assert_eq!(r.allele_string, "A/G");
-        assert_eq!(r.strand, 1);
-        assert_eq!(r.failed, 0);
-        assert_eq!(r.somatic, 0);
-        assert_eq!(r.minor_allele, Some("G".to_string()));
-        assert_eq!(r.minor_allele_freq, Some(0.2345));
-    }
-
-    #[test]
-    fn test_parse_deletion() {
-        let records = parse_vcf_str("", "21\t100\trs1\tATG\tA\t.\t.\t.\n", false);
-        assert_eq!(records.len(), 1);
-        let r = &records[0];
-        assert_eq!(r.start, 101);
-        assert_eq!(r.end, Some(102));
-        assert_eq!(r.allele_string, "TG/-");
-    }
-
-    #[test]
-    fn test_parse_multi_allelic() {
-        let records = parse_vcf_str("", "21\t200\trs2\tA\tG,T\t.\tPASS\tAF=0.3,0.1\n", false);
-        assert_eq!(records.len(), 1);
-        let r = &records[0];
-        assert_eq!(r.allele_string, "A/G/T");
-        assert_eq!(r.af, Some("G:0.3,T:0.1".to_string()));
-    }
-
-    #[test]
-    fn test_somatic_flag() {
-        let records = parse_vcf_str("", "21\t100\tCOSV1\tA\tG\t.\t.\t.\n", true);
-        assert_eq!(records.len(), 1);
-        assert_eq!(records[0].somatic, 1);
-    }
-
-    #[test]
-    fn test_filter_skips_non_pass() {
-        let records = parse_vcf_str(
-            "",
-            "21\t100\trs1\tA\tG\t.\tPASS\t.\n\
-             21\t200\trs2\tA\tG\t.\tLowQual\t.\n\
-             21\t300\trs3\tA\tG\t.\t.\t.\n",
-            false,
-        );
-        assert_eq!(records.len(), 2);
-        assert_eq!(records[0].variation_name, "rs1");
-        assert_eq!(records[1].variation_name, "rs3");
-    }
-
-    #[test]
-    fn test_clin_sig_and_pubmed() {
-        let records = parse_vcf_str(
-            "",
-            "21\t100\trs1\tA\tG\t.\tPASS\tCLIN_SIG=benign,likely_benign;PUBMED=12345,67890\n",
-            false,
-        );
-        assert_eq!(records.len(), 1);
-        let r = &records[0];
-        assert_eq!(r.clin_sig, Some("benign,likely_benign".to_string()));
-        assert_eq!(r.pubmed, Some("12345,67890".to_string()));
-        assert_eq!(r.phenotype_or_disease, 0);
-    }
-
-    #[test]
-    fn test_no_clin_sig_phenotype_zero() {
-        let records = parse_vcf_str("", "21\t100\trs1\tA\tG\t.\tPASS\t.\n", false);
-        assert_eq!(records[0].phenotype_or_disease, 0);
-    }
-
-    #[test]
-    fn test_frequency_formatting_single_allele() {
-        let result = format_freq_value("0.123", &["G".to_string()]);
-        assert_eq!(result, "G:0.123");
-    }
-
-    #[test]
-    fn test_frequency_formatting_multi_allele() {
-        let result = format_freq_value("0.3,0.1", &["G".to_string(), "T".to_string()]);
-        assert_eq!(result, "G:0.3,T:0.1");
-    }
-
-    #[test]
-    fn test_frequency_formatting_missing_dot() {
-        let result = format_freq_value(".", &["G".to_string()]);
-        assert_eq!(result, "");
-    }
-
-    #[test]
-    fn test_population_frequencies() {
-        let records = parse_vcf_str(
-            "",
-            "21\t100\trs1\tA\tG\t.\tPASS\tAF=0.5;AFR_AF=0.3;EUR_AF=0.6;gnomADe_AF=0.45\n",
-            false,
-        );
-        assert_eq!(records.len(), 1);
-        let r = &records[0];
-        assert_eq!(r.af, Some("G:0.5".to_string()));
-        assert_eq!(r.afr, Some("G:0.3".to_string()));
-        assert_eq!(r.eur, Some("G:0.6".to_string()));
-        assert_eq!(r.gnomADe, Some("G:0.45".to_string()));
-    }
-
-    #[test]
-    fn test_build_variation_cache() {
+    fn all_vars_lines_follow_the_dumpers_cells() {
         let dir = tempfile::tempdir().unwrap();
-        let records = vec![
-            VariationRecord {
-                variation_name: "rs1".to_string(),
-                start: 500_000,
-                end: Some(500_000),
-                allele_string: "A/G".to_string(),
-                strand: 1,
-                ..Default::default()
-            },
-            VariationRecord {
-                variation_name: "rs2".to_string(),
-                start: 1_500_000,
-                end: Some(1_500_000),
-                allele_string: "C/T".to_string(),
-                strand: 1,
-                ..Default::default()
-            },
-            VariationRecord {
-                variation_name: "rs3".to_string(),
-                start: 999_999,
-                end: Some(999_999),
-                allele_string: "G/A".to_string(),
-                strand: 1,
-                ..Default::default()
-            },
-        ];
-
-        let stats = build_variation_cache(&records, dir.path(), "21").unwrap();
-        assert_eq!(stats.variation_count, 3);
-        assert_eq!(stats.region_file_count, 2); // 1-1000000 and 1000001-2000000
-
-        let region1 = dir.path().join("variations/21/1-1000000.json");
-        let region2 = dir.path().join("variations/21/1000001-2000000.json");
-        assert!(region1.exists());
-        assert!(region2.exists());
-
-        let data1: Vec<serde_json::Value> =
-            serde_json::from_str(&std::fs::read_to_string(&region1).unwrap()).unwrap();
-        assert_eq!(data1.len(), 2);
-
-        let data2: Vec<serde_json::Value> =
-            serde_json::from_str(&std::fs::read_to_string(&region2).unwrap()).unwrap();
-        assert_eq!(data2.len(), 1);
-        assert_eq!(data2[0]["variation_name"], "rs2");
-    }
-
-    #[test]
-    fn test_region_binning_boundary() {
-        // Position 1 -> region 1-1000000
-        assert_eq!(region_start(1), 1);
-        // Position 1000000 -> region 1-1000000
-        assert_eq!(region_start(1_000_000), 1);
-        // Position 1000001 -> region 1000001-2000000
-        assert_eq!(region_start(1_000_001), 1_000_001);
-    }
-
-    #[test]
-    fn test_json_roundtrip_compatible_with_loader() {
-        // The serialized JSON must deserialize through the serde structure that
-        // json_cache.rs uses.
-        let rec = VariationRecord {
-            variation_name: "rs699".to_string(),
-            start: 230710048,
-            end: Some(230710048),
-            allele_string: "A/G".to_string(),
+        let somatic = VariationRecord {
+            variation_name: "COSV1".to_string(),
+            somatic: 1,
+            start: 100,
+            end: 100,
             strand: 1,
-            failed: 0,
-            somatic: 0,
-            minor_allele: Some("G".to_string()),
-            minor_allele_freq: Some(0.2345),
-            clin_sig: Some("benign".to_string()),
+            allele_string: COSMIC_MUTATION.to_string(),
             phenotype_or_disease: 1,
-            pubmed: Some("12345".to_string()),
-            af: Some("G:0.5".to_string()),
-            afr: Some("G:0.3".to_string()),
-            gnomADe: Some("G:0.45".to_string()),
             ..Default::default()
         };
-
-        let json = serde_json::to_string(&rec).unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(parsed["variation_name"], "rs699");
-        assert_eq!(parsed["start"], 230710048);
-        assert_eq!(parsed["end"], 230710048);
-        assert_eq!(parsed["allele_string"], "A/G");
-        assert_eq!(parsed["strand"], 1);
-        assert_eq!(parsed["failed"], 0);
-        assert_eq!(parsed["somatic"], 0);
-        assert_eq!(parsed["minor_allele"], "G");
-        assert_eq!(parsed["minor_allele_freq"], 0.2345);
-        assert_eq!(parsed["clin_sig"], "benign");
-        assert_eq!(parsed["phenotype_or_disease"], 1);
-        assert_eq!(parsed["pubmed"], "12345");
-        assert_eq!(parsed["AF"], "G:0.5");
-        assert_eq!(parsed["AFR"], "G:0.3");
-        assert_eq!(parsed["gnomADe"], "G:0.45");
-
-        assert!(parsed.get("gnomADe_AFR").is_none());
-        assert!(parsed.get("gnomADg").is_none());
-        assert!(parsed.get("var_synonyms").is_none());
-    }
-
-    #[test]
-    fn test_empty_variation_name() {
-        let records = parse_vcf_str("", "21\t100\t.\tA\tG\t.\tPASS\t.\n", false);
-        assert_eq!(records.len(), 1);
-        assert_eq!(records[0].variation_name, "");
-    }
-
-    #[test]
-    fn test_multiple_ids_takes_first() {
-        let records = parse_vcf_str("", "21\t100\trs1;rs2;rs3\tA\tG\t.\tPASS\t.\n", false);
-        assert_eq!(records[0].variation_name, "rs1");
-    }
-
-    #[test]
-    fn test_monomorphic_site_skipped() {
-        let records = parse_vcf_str("", "21\t100\trs1\tA\t.\t.\tPASS\t.\n", false);
-        assert!(records.is_empty());
-    }
-
-    #[test]
-    fn test_raw_info_value() {
-        assert_eq!(
-            get_raw_info_value("MA=G;MAF=0.5;CLIN_SIG=benign", "MA"),
-            Some("G")
+        let snv = VariationRecord {
+            variation_name: "rs1".to_string(),
+            start: 150,
+            end: 150,
+            strand: 1,
+            allele_string: "A/G".to_string(),
+            clin_sig: Some("pathogenic".to_string()),
+            clin_sig_allele: Some("G:pathogenic".to_string()),
+            clin_sig_ref_allele: Some("A".to_string()),
+            clinical_impact: Some("Breast cancer(Tier I - Strong)".to_string()),
+            ..Default::default()
+        };
+        let mut insertion = VariationRecord {
+            variation_name: "rs2".to_string(),
+            start: 201,
+            end: 200,
+            strand: 1,
+            allele_string: "-/G".to_string(),
+            ..Default::default()
+        };
+        insertion
+            .frequencies
+            .insert("AF".to_string(), "G:0.1".to_string());
+        let columns = variation_columns(true);
+        assert_eq!(columns.len(), 15 + 6);
+        let mut writer = AllVarsWriter::create(dir.path(), "21", &columns).unwrap();
+        for record in [&somatic, &snv, &insertion] {
+            writer.write(record).unwrap();
+        }
+        let error = writer.write(&snv).unwrap_err();
+        assert!(
+            error.to_string().contains("not in position order"),
+            "{error}"
         );
+        assert_eq!(writer.finish().unwrap(), 3);
+
+        let path = dir.path().join("variations/21/all_vars.gz");
+        let mut text = String::new();
+        bgzf::io::Reader::new(fs::File::open(&path).unwrap())
+            .read_to_string(&mut text)
+            .unwrap();
         assert_eq!(
-            get_raw_info_value("MA=G;MAF=0.5;CLIN_SIG=benign", "MAF"),
-            Some("0.5")
+            text,
+            "21\tCOSV1\t.\t1\t100\t.\tCOSMIC_MUTATION\t.\t.\t1\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\n\
+             21\trs1\t.\t.\t150\t.\tA/G\t.\tpathogenic\t.\tG:pathogenic\tA\tBreast cancer(Tier I - Strong)\t.\t.\t.\t.\t.\t.\t.\t.\n\
+             21\trs2\t.\t.\t201\t200\t-/G\t.\t.\t.\t.\t.\t.\t.\t.\tG:0.1\t.\t.\t.\t.\t.\n"
         );
-        assert_eq!(
-            get_raw_info_value("MA=G;MAF=0.5;CLIN_SIG=benign", "PUBMED"),
-            None
-        );
-        assert_eq!(get_raw_info_value(".", "MA"), None);
-        assert_eq!(get_raw_info_value("", "MA"), None);
+        assert!(dir.path().join("variations/21/all_vars.gz.csi").is_file());
     }
 
+    /// A per-chromosome file out of position order fails the write with the
+    /// out-of-order error and leaves no variation file or index behind.
     #[test]
-    fn test_build_empty_records() {
+    fn failed_write_leaves_no_variation_file() {
         let dir = tempfile::tempdir().unwrap();
-        let stats = build_variation_cache(&[], dir.path(), "21").unwrap();
-        assert_eq!(stats.variation_count, 0);
-        assert_eq!(stats.region_file_count, 0);
+        let vcf = write_vcf(
+            dir.path(),
+            "homo_sapiens-chr21.vcf",
+            "21\t500\trs5\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t600\trs6\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t100\trs1\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n",
+        );
+        let out = dir.path().join("cache");
+        let error = write_chromosome(
+            "21",
+            &vcf,
+            &GenomeWideInputs::default(),
+            None,
+            &variation_columns(false),
+            &out,
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("not in position order"),
+            "{error}"
+        );
+        let written: Vec<_> = fs::read_dir(out.join("variations/21"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert!(written.is_empty(), "{written:?}");
+    }
+
+    /// The per-chromosome file's records come out in start order although the
+    /// file is in position order: an insertion at 100 (start 102) follows the
+    /// substitutions at 100 and 101, and a deletion at 102 (start 103) the
+    /// insertion. Records sharing a start come out in name order, the dumper's
+    /// (`sort -k5,5n` falls back to the whole line): at 102, `ins` before
+    /// `rs10` before `rs9`, whatever the file's order.
+    #[test]
+    fn records_are_emitted_in_start_order() {
+        let records = records_of(
+            "21\t100\tins\tA\tAT\t.\t.\tdbSNP_156;TSA=insertion\n\
+             21\t100\tsnv1\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t101\tsnv2\tC\tG\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t102\tdel\tCA\tC\t.\t.\tdbSNP_156;TSA=deletion\n\
+             21\t102\trs9\tC\tT\t.\t.\tdbSNP_156;TSA=SNV\n\
+             21\t102\trs10\tC\tA\t.\t.\tdbSNP_156;TSA=SNV\n",
+        );
+        let order: Vec<(&str, u64)> = records
+            .iter()
+            .map(|r| (r.variation_name.as_str(), r.start))
+            .collect();
+        assert_eq!(
+            order,
+            [
+                ("snv1", 100),
+                ("snv2", 101),
+                ("ins", 102),
+                ("rs10", 102),
+                ("rs9", 102),
+                ("del", 103)
+            ]
+        );
+    }
+
+    /// A `.csi` without the tabix header names no sequence, so a chromosome
+    /// cannot be queried through it: the file is read through instead and only
+    /// the chromosome's records are kept.
+    #[test]
+    fn index_without_a_header_falls_back_to_reading_through() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("homo_sapiens_somatic.vcf.gz");
+        let mut writer = bgzf::io::Writer::new(fs::File::create(&path).unwrap());
+        writer.write_all(ENSEMBL_HEADER.as_bytes()).unwrap();
+        let mut indexer = Indexer::<BinnedIndex>::new(14, 5);
+        let records = [
+            (0, 100, "1\t100\tCOSV1\tA\t.\t.\t.\tCOSMIC_102;TSA=SNV"),
+            (1, 200, "21\t200\tCOSV2\tC\t.\t.\t.\tCOSMIC_102;TSA=SNV"),
+        ];
+        for (sequence, pos, line) in records {
+            let begin = writer.virtual_position();
+            writeln!(writer, "{line}").unwrap();
+            let end = writer.virtual_position();
+            let pos = Position::try_from(pos).unwrap();
+            indexer
+                .add_record(Some((sequence, pos, pos, true)), Chunk::new(begin, end))
+                .unwrap();
+        }
+        writer.try_finish().unwrap();
+        noodles::csi::fs::write(format!("{}.csi", path.display()), &indexer.build(2)).unwrap();
+        assert!(has_index(&path));
+
+        let mut names = Vec::new();
+        for_each_record(&path, Some("21"), |fields| {
+            names.push(fields.name);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(names, ["COSV2"]);
     }
 }

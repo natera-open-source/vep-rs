@@ -8,10 +8,12 @@
 //! `info.json` carries what Ensembl VEP's `info.txt` carries for the cache
 //! (`Pipeline/DumpVEP/Dumper/Core.pm` `dump_info`: species, assembly, the
 //! `sift` and `polyphen` markers, the source versions) in the form the
-//! converter writes, plus `contig_order`, and `variation_cols` only when the
-//! cache holds variation records. `chr_synonyms.txt` is the file the Ensembl
-//! VEP dump pipeline derives from the core `seq_region_synonym` table
-//! (`Pipeline/DumpVEP/CreateDumpJobs.pm:187-212`, `BaseVEP.pm:596-621`).
+//! converter writes, plus `contig_order`, and `variation_cols` with `var_type
+//! tabix` only when the cache holds variation records
+//! (`Pipeline/DumpVEP/Dumper/Variation.pm:140, 177-197`). `chr_synonyms.txt`
+//! is the file the Ensembl VEP dump pipeline derives from the core
+//! `seq_region_synonym` table (`Pipeline/DumpVEP/CreateDumpJobs.pm:187-212`,
+//! `BaseVEP.pm:596-621`).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
@@ -36,10 +38,14 @@ pub struct CacheInfoJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub polyphen: Option<String>,
     pub regulatory: bool,
-    /// The columns of the variation records, present only when records were
-    /// written ([`VARIATION_COLS`]).
+    /// The columns of the variation files, present only when the files were
+    /// written.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variation_cols: Option<Vec<String>>,
+    /// `tabix` when the variation files are written: one indexed `all_vars.gz`
+    /// per chromosome, the layout `CacheDir.pm:184` selects by this key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub var_type: Option<String>,
     pub source_versions: BTreeMap<String, String>,
     /// The chromosome directories written, in [`contig_order`].
     pub contig_order: Vec<String>,
@@ -47,15 +53,15 @@ pub struct CacheInfoJson {
 
 impl CacheInfoJson {
     /// The metadata of a build: `sift` and `polyphen` read `b` only when a
-    /// matrix of that tool was written, `variation_cols` is present only when
-    /// variation records were, and `contig_order` lists the chromosomes the
-    /// build wrote.
+    /// matrix of that tool was written, `variation_cols` and `var_type` are
+    /// present only when variation files were (`variation_cols` names their
+    /// columns), and `contig_order` lists the chromosomes the build wrote.
     pub fn new(
         species: &str,
         assembly: &str,
         cache_version: u32,
         stats: &BuildStats,
-        with_variations: bool,
+        variation_cols: Option<Vec<String>>,
         source_versions: BTreeMap<String, String>,
     ) -> Self {
         let marker = |written: usize| (written > 0).then(|| "b".to_string());
@@ -66,8 +72,8 @@ impl CacheInfoJson {
             sift: marker(stats.sift_matrices),
             polyphen: marker(stats.polyphen_matrices),
             regulatory: false,
-            variation_cols: with_variations
-                .then(|| VARIATION_COLS.iter().map(|c| c.to_string()).collect()),
+            var_type: variation_cols.is_some().then(|| "tabix".to_string()),
+            variation_cols,
             source_versions,
             contig_order: stats.chromosomes.clone(),
         }
@@ -103,58 +109,6 @@ pub fn contig_order(names: impl IntoIterator<Item = String>) -> Vec<String> {
     names.sort_by_cached_key(|name| rank(name));
     names
 }
-
-/// The keys the variation records carry (`variation::VariationRecord`), in the
-/// order Ensembl VEP's dumper lists its own columns: the fixed columns first
-/// (`Database/Variation.pm` `@VAR_CACHE_COLS`), then the population
-/// frequencies. A key the dumper never writes (`minor_allele`,
-/// `minor_allele_freq`) follows the field it qualifies.
-pub const VARIATION_COLS: [&str; 44] = [
-    "variation_name",
-    "failed",
-    "somatic",
-    "start",
-    "end",
-    "allele_string",
-    "strand",
-    "minor_allele",
-    "minor_allele_freq",
-    "clin_sig",
-    "phenotype_or_disease",
-    "clin_sig_allele",
-    "clin_sig_ref_allele",
-    "clinical_impact",
-    "pubmed",
-    "AF",
-    "AFR",
-    "AMR",
-    "EAS",
-    "EUR",
-    "SAS",
-    "AA",
-    "EA",
-    "gnomADe",
-    "gnomADe_AFR",
-    "gnomADe_AMR",
-    "gnomADe_ASJ",
-    "gnomADe_EAS",
-    "gnomADe_FIN",
-    "gnomADe_MID",
-    "gnomADe_NFE",
-    "gnomADe_REMAINING",
-    "gnomADe_SAS",
-    "gnomADg",
-    "gnomADg_AFR",
-    "gnomADg_AMI",
-    "gnomADg_AMR",
-    "gnomADg_ASJ",
-    "gnomADg_EAS",
-    "gnomADg_FIN",
-    "gnomADg_MID",
-    "gnomADg_NFE",
-    "gnomADg_REMAINING",
-    "gnomADg_SAS",
-];
 
 /// The synonym pairs the Ensembl VEP dump pipeline writes to
 /// `chr_synonyms.txt` from the `seq_region_synonym` table
@@ -235,7 +189,6 @@ pub fn write_chr_synonyms(output_dir: &Path, dumps_dir: &Path) -> Result<usize> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::variation::VariationRecord;
 
     fn fixture_dir() -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/grch38_chr21")
@@ -295,74 +248,6 @@ mod tests {
         assert_eq!(lines, ["A\tB", "A\tC", "B\tC", "B\tD", "C\tD"]);
     }
 
-    /// `variation_cols` names exactly the keys a fully populated variation
-    /// record serializes, so the metadata never advertises a column the shards
-    /// lack or omits one they carry.
-    #[test]
-    fn variation_cols_match_written_shards() {
-        let text = Some("x".to_string());
-        let record = VariationRecord {
-            variation_name: "rs1".to_string(),
-            start: 1,
-            end: Some(1),
-            allele_string: "A/G".to_string(),
-            strand: 1,
-            failed: 0,
-            somatic: 0,
-            minor_allele: text.clone(),
-            minor_allele_freq: Some(0.1),
-            clin_sig: text.clone(),
-            phenotype_or_disease: 1,
-            clin_sig_allele: text.clone(),
-            clin_sig_ref_allele: text.clone(),
-            clinical_impact: text.clone(),
-            pubmed: text.clone(),
-            af: text.clone(),
-            afr: text.clone(),
-            amr: text.clone(),
-            eas: text.clone(),
-            eur: text.clone(),
-            sas: text.clone(),
-            aa: text.clone(),
-            ea: text.clone(),
-            gnomADe: text.clone(),
-            gnomADe_AFR: text.clone(),
-            gnomADe_AMR: text.clone(),
-            gnomADe_ASJ: text.clone(),
-            gnomADe_EAS: text.clone(),
-            gnomADe_FIN: text.clone(),
-            gnomADe_MID: text.clone(),
-            gnomADe_NFE: text.clone(),
-            gnomADe_REMAINING: text.clone(),
-            gnomADe_SAS: text.clone(),
-            gnomADg: text.clone(),
-            gnomADg_AFR: text.clone(),
-            gnomADg_AMI: text.clone(),
-            gnomADg_AMR: text.clone(),
-            gnomADg_ASJ: text.clone(),
-            gnomADg_EAS: text.clone(),
-            gnomADg_FIN: text.clone(),
-            gnomADg_MID: text.clone(),
-            gnomADg_NFE: text.clone(),
-            gnomADg_REMAINING: text.clone(),
-            gnomADg_SAS: text,
-        };
-        let json = serde_json::to_value(&record).unwrap();
-        let written: BTreeSet<&str> = json
-            .as_object()
-            .unwrap()
-            .keys()
-            .map(String::as_str)
-            .collect();
-        let declared: BTreeSet<&str> = VARIATION_COLS.iter().copied().collect();
-        assert_eq!(declared, written);
-        assert_eq!(
-            declared.len(),
-            VARIATION_COLS.len(),
-            "no column is listed twice"
-        );
-    }
-
     /// Autosomes by number, X, Y, MT, then the rest by name.
     #[test]
     fn contig_order_follows_the_converter() {
@@ -395,9 +280,9 @@ mod tests {
     }
 
     /// `sift` and `polyphen` read `b` only for a tool whose matrices were
-    /// written, `variation_cols` is present only with variation records, and
-    /// the species, assembly, version, source versions and contig order are
-    /// written as given.
+    /// written, `variation_cols` and `var_type tabix` are present only with
+    /// variation files, and the species, assembly, version, source versions
+    /// and contig order are written as given.
     #[test]
     fn info_json_markers_follow_the_build() {
         let dir = tempfile::tempdir().unwrap();
@@ -413,7 +298,7 @@ mod tests {
             sift_matrices: 3,
             polyphen_matrices: 0,
         };
-        CacheInfoJson::new("homo_sapiens", "GRCh38", 116, &stats, false, versions)
+        CacheInfoJson::new("homo_sapiens", "GRCh38", 116, &stats, None, versions)
             .write(dir.path())
             .unwrap();
         let parsed: serde_json::Value =
@@ -425,6 +310,7 @@ mod tests {
         assert_eq!(parsed["sift"], "b");
         assert!(parsed.get("polyphen").is_none());
         assert!(parsed.get("variation_cols").is_none());
+        assert!(parsed.get("var_type").is_none());
         assert_eq!(parsed["regulatory"], false);
         assert_eq!(parsed["source_versions"]["assembly"], "GRCh38.p14");
         assert_eq!(parsed["source_versions"]["gencode"], "GENCODE 50");
@@ -436,15 +322,19 @@ mod tests {
             chromosomes: vec![],
             ..stats
         };
-        let with_variations =
-            CacheInfoJson::new("homo_sapiens", "GRCh37", 116, &stats, true, BTreeMap::new());
+        let columns = crate::variation::variation_columns(false);
+        let with_variations = CacheInfoJson::new(
+            "homo_sapiens",
+            "GRCh37",
+            116,
+            &stats,
+            Some(columns.clone()),
+            BTreeMap::new(),
+        );
         let parsed = serde_json::to_value(&with_variations).unwrap();
         assert!(parsed.get("sift").is_none());
         assert_eq!(parsed["polyphen"], "b");
-        assert_eq!(parsed["variation_cols"][0], "variation_name");
-        assert_eq!(
-            parsed["variation_cols"].as_array().unwrap().len(),
-            VARIATION_COLS.len()
-        );
+        assert_eq!(parsed["var_type"], "tabix");
+        assert_eq!(parsed["variation_cols"], serde_json::json!(columns));
     }
 }

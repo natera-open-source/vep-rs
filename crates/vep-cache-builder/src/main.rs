@@ -21,6 +21,14 @@
 //! With `--include-predictions`, connects to Ensembl's public MySQL server
 //! to fetch pre-computed SIFT/PolyPhen prediction matrices. These are embedded
 //! in the JSON cache alongside each protein-coding transcript.
+//!
+//! ## Variation files
+//!
+//! With `--include-variations`, Ensembl's variation VCFs (the per-chromosome
+//! germline files, the genome-wide somatic, phenotype- and clinically-associated
+//! files and the 1000 Genomes frequency file) are read into the variation files
+//! Ensembl VEP's own cache carries: `variations/<chr>/all_vars.gz` with its
+//! `.csi`, the columns listed by `info.json`'s `variation_cols`.
 
 use std::path::{Path, PathBuf};
 
@@ -80,11 +88,18 @@ struct Args {
     #[arg(long)]
     core_dumps: Option<String>,
 
-    /// Include variation data in the cache
+    /// Include variation data in the cache: Ensembl's per-chromosome variation
+    /// VCFs with the genome-wide somatic, phenotype-associated,
+    /// clinically-associated and 1000 Genomes frequency VCFs, downloaded or
+    /// read from `--variation-vcf-dir`
     #[arg(long)]
     include_variations: bool,
 
-    /// Skip download, use local variation VCF directory
+    /// Skip download, use local variation VCF directory: `<species>-chr<N>.vcf.gz`
+    /// per chromosome and, under their Ensembl names, the genome-wide files
+    /// (`1000GENOMES-phase_3.vcf.gz`, `<species>_somatic.vcf.gz`,
+    /// `<species>_phenotype_associated.vcf.gz`,
+    /// `<species>_clinically_associated.vcf.gz`), each with its `.csi` index
     #[arg(long)]
     variation_vcf_dir: Option<String>,
 
@@ -233,8 +248,7 @@ fn main() -> Result<()> {
         stats.transcript_count, stats.chromosome_count, stats.region_file_count
     );
 
-    let mut variation_region_files = 0usize;
-    if args.include_variations {
+    let variation_cols = if args.include_variations {
         let variation_inputs = download::resolve_variation_inputs(
             &args.variation_vcf_dir,
             args.release,
@@ -243,11 +257,15 @@ fn main() -> Result<()> {
             args.chromosomes.as_deref(),
         )
         .context("Failed to resolve variation inputs")?;
-        info!("Resolved {} variation VCF files", variation_inputs.len());
+        info!(
+            "Resolved {} per-chromosome variation VCF files",
+            variation_inputs.per_chromosome.len()
+        );
 
         let clinvar = if let Some(ref dir) = args.variation_dumps {
             info!("Reading the ClinVar phenotype features: {}", dir);
             let chromosomes: Vec<String> = variation_inputs
+                .per_chromosome
                 .iter()
                 .map(|(chrom, _)| chrom.clone())
                 .collect();
@@ -258,25 +276,34 @@ fn main() -> Result<()> {
             None
         };
 
+        let columns =
+            variation::variation_columns(variation_inputs.genome_wide.frequencies.is_some());
         let mut total_variations = 0usize;
-
-        for (chrom, path) in &variation_inputs {
-            info!("Parsing variation VCF for chr{}: {}", chrom, path.display());
-            let records = variation::parse_variation_vcf(path, false, clinvar.as_ref())
-                .with_context(|| format!("Failed to parse variation VCF for chr{}", chrom))?;
-
-            let stats = variation::build_variation_cache(&records, &output_dir, chrom)
-                .with_context(|| format!("Failed to build variation cache for chr{}", chrom))?;
-
-            total_variations += stats.variation_count;
-            variation_region_files += stats.region_file_count;
+        for (chrom, path) in &variation_inputs.per_chromosome {
+            info!(
+                "Reading the variation records of chr{}: {}",
+                chrom,
+                path.display()
+            );
+            total_variations += variation::write_chromosome(
+                chrom,
+                path,
+                &variation_inputs.genome_wide,
+                clinvar.as_ref(),
+                &columns,
+                &output_dir,
+            )
+            .with_context(|| format!("Failed to write the variation file of chr{}", chrom))?;
         }
-
         info!(
-            "Variation cache built: {} variations across {} region files",
-            total_variations, variation_region_files
+            "Variation files written: {} records across {} chromosomes",
+            total_variations,
+            variation_inputs.per_chromosome.len()
         );
-    }
+        Some(columns)
+    } else {
+        None
+    };
 
     // Source versions the output headers print: the core `meta` table's, as
     // Ensembl VEP's own cache info carries them, else the GTF header's.
@@ -305,7 +332,7 @@ fn main() -> Result<()> {
         &args.assembly,
         args.release,
         &stats,
-        variation_region_files > 0,
+        variation_cols,
         source_versions,
     )
     .write(&output_dir)

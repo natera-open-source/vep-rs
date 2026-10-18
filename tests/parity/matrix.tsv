@@ -9,7 +9,7 @@ _uniparc	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-
 _uniprot_isoform	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/core_dumps.rs::ccds_and_refseq_from_transcript_xrefs;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::native_cache_matches_the_ensembl_cache_with_core_dumps;crates/vep-cli/src/json_cache.rs::uniprot_isoform_loaded	tests/golden/116/GRCh38-native-builder	
 aa-ea-esp-columns	-	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::legacy_esp_columns_change_no_output		
 af	Config.pm	implemented	open			
-af-1kg-columns	OutputFactory.pm	implemented	open			
+af-1kg-columns	OutputFactory.pm	implemented	landed:implemented	crates/vep-cache-builder/src/variation.rs::thousand_genomes_file_populates_af_and_continental_columns;crates/vep-cache-builder/tests/variation_cache_from_dumps.rs::variation_files_carry_ensembl_form_and_read_back_through_the_runtime_source	tests/golden/116/GRCh38-colocated	
 af_1kg	Config.pm	implemented	open			
 af_gnomad	Config.pm	implemented	open			
 af_gnomade	Config.pm	implemented	open			
@@ -431,7 +431,7 @@ skipped-variant-semantics	Parser.pm	implemented	open
 skipped-variant-warning-lines	BaseVEP.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::skipped_line_writes_the_vep_warning_line_to_stderr_and_the_warnings_file;crates/vep-cli/tests/cli_run_control.rs::chromosome_absent_is_warned_not_intergenic;crates/vep-cli/src/warnings.rs::skipped_variant_lines_follow_skipped_variant_msg;crates/vep-cli/src/pipeline.rs::read_vcf_drops_a_non_variant_record_silently_without_the_flag;crates/vep-cli/src/pipeline.rs::refused_record_descriptions_follow_perl_order;crates/vep-core/src/sv_routing.rs::sv_type_string_replaces_the_alts_with_svtype_outside_the_vcf44_forms;crates/vep-cli/tests/cli_run_control.rs::deletion_looks_incomplete_follows_the_type_and_precedes_the_span	tests/golden/116/GRCh38-run-control	
 skipped_variants_file	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::skipped_variants_file_lists_every_skip_in_perl_layout;crates/vep-cli/tests/cli_run_control.rs::existing_skipped_file_is_refused_without_force;crates/vep-cli/src/warnings.rs::skipped_variants_file_follows_dump_skipped_variants	tests/golden/116/GRCh38-run-control	
 solr	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::solr_is_accepted_without_effect		
-somatic	Database/Variation.pm	implemented	open			
+somatic	Database/Variation.pm	implemented	landed:implemented	crates/vep-cache-builder/src/variation.rs::somatic_vcf_records_are_flagged_and_null_alleles_kept;crates/vep-cache-builder/tests/variation_cache_from_dumps.rs::variation_files_carry_ensembl_form_and_read_back_through_the_runtime_source	tests/golden/116/GRCh38-colocated	
 source-cache	MergeVEP.pm	documented_subset	open			
 source_regbuild	Database/RegFeat.pm	implemented	open			
 spanning-deletion-allele	VCF.pm	implemented	open			
@@ -522,7 +522,7 @@ var_synonyms	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/f
 variant_class	Config.pm	implemented	landed:implemented	crates/vep-core/src/variant.rs::so_variation_class_follows_perl;crates/vep-io/src/output/fields.rs::variant_class_survives_on_summary_rows	tests/golden/116/GRCh37-output-flags	
 variant_recoder	VariantRecoder.pm::is_vr	documented_subset	open			
 variation-cache-columns	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::columns_come_from_info_json_variation_cols;crates/vep-cli/src/variation_source.rs::every_116_column_is_read_on_both_assemblies	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
-variation-coordinates	Database/Variation.pm	implemented	open			
+variation-coordinates	Database/Variation.pm	implemented	landed:implemented	crates/vep-cache-builder/src/variation.rs::indel_records_minimised_to_ensembl_coordinates;crates/vep-cache-builder/tests/variation_cache_from_dumps.rs::variation_files_carry_ensembl_form_and_read_back_through_the_runtime_source	tests/golden/116/GRCh38-colocated	
 variation-files-as-input	Cache/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::reads_all_vars_gz_through_csi;crates/vep-cli/src/variation_source.rs::reads_per_region_var_gz	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 variation-strand	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::reverse_strand_record_matches_complemented_alleles;crates/vep-cli/src/variation_matcher.rs::reverse_strand_input_matches_a_forward_record	tests/golden/116/GRCh38-colocated	
 variation_name	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::variation_name_is_the_second_column	tests/golden/116/GRCh38-colocated	

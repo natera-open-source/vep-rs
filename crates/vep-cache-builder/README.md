@@ -6,8 +6,8 @@ release's GFF3 (General Feature Format version 3) and protein FASTA, without Per
 (Variant Effect Predictor). No workspace crate depends on it; it uses
 `vep-fasta` for genome reads and `vep-core` for the reverse complement, and `vep-cli`
 loads what it writes. The output is `info.json`, one transcript shard per chromosome and
-1 Mb region under `transcripts/` and, with `--include-variations`, matching shards under
-`variations/`.
+1 Mb region under `transcripts/` and, with `--include-variations`, one `all_vars.gz` with its
+`.csi` per chromosome under `variations/`, the variation file Ensembl VEP's own cache carries.
 
 ## How it works
 
@@ -88,7 +88,8 @@ matrix of that tool was written, whose `source_versions` come from the core `met
 (`assembly`, `gencode`, `genebuild`, as Ensembl VEP's cache info carries them) or, without
 the dumps, from the GTF header, whose `contig_order` lists the chromosome directories
 written (autosomes by number, X, Y, MT, then the rest by name) and whose `variation_cols`
-names the variation records' keys only when records were written. With `--core-dumps`,
+and `var_type tabix` name the variation files' columns and layout only when the files were
+written. With `--core-dumps`,
 `info::write_chr_synonyms` writes `chr_synonyms.txt` beside it from the `seq_region` and
 `seq_region_synonym` tables, the pairs Ensembl VEP's dump pipeline writes (each
 sequence region's name against its synonyms, linked one step further through the
@@ -105,22 +106,38 @@ no dump carries; a native cache lists them by feature identifier, so `DOMAINS` m
 the same features in another order.
 
 With `--include-variations`, `download::resolve_variation_inputs` scans
-`--variation-vcf-dir` for `*-chr*.vcf.gz` files or downloads Ensembl's per-chromosome
-VCFs (Variant Call Format) and their optional `.csi` indexes in parallel;
-`variation::parse_variation_vcf` keeps each record whose `FILTER` is `PASS`, `.` or
-empty and that has an alternate allele, and writes it in the form Ensembl VEP's VCF
-parser gives a record: `end` is `POS` plus the reference length minus one, and when an
-indel's alleles share their first base that base is chopped, `start` moves one past
-`POS` and an emptied allele reads `-`, so an insertion starts one past its end. It reads
-the first `ID`, `MA`, `MAF`, `CLIN_SIG`, `PUBMED` and every population frequency `INFO`
-field as an `ALT:freq` string keyed by the chopped allele, and sets
-`phenotype_or_disease` from the `E_Phenotype_or_Disease` evidence flag.
+`--variation-vcf-dir` for the per-chromosome `*-chr*.vcf.gz` files and, under their Ensembl
+names, the genome-wide `1000GENOMES-phase_3.vcf.gz`, `<species>_somatic.vcf.gz`,
+`<species>_phenotype_associated.vcf.gz` and `<species>_clinically_associated.vcf.gz`, or
+downloads them (Variant Call Format, each with its `.csi` index; a genome-wide file the
+site does not publish, the 1000 Genomes file on GRCh37, is left out with a warning).
+`variation::chromosome_records` reads one chromosome at a time: the per-chromosome file
+whole and each genome-wide file through its index (or read through when it has none),
+keeping each record whose `FILTER` is `PASS`, `.` or empty, adding the genome-wide
+records the per-chromosome file lacks (a record is the same one when its name, position
+and alleles are) with the somatic file's flagged `somatic`. Each record takes the form
+the variation database holds: `end` is `POS` plus the reference length minus one; when an
+indel's alleles share their first base that base is chopped, `start` moves one past `POS`
+and an emptied allele reads `-`; an insertion the export marks `TSA=insertion` lies one base
+further right still (the export anchors it two bases before the database start); a COSMIC or
+HGMD-PUBLIC variant
+whose ALT is `.` or `<.>` reads `COSMIC_MUTATION` or `HGMD_MUTATION` on the span the
+export's shape encodes, and every HGMD-PUBLIC variant reads `HGMD_MUTATION`. `clin_sig`
+is the record's `CLIN_<term>` flags joined by `,` and `phenotype_or_disease` the
+`E_Phenotype_or_Disease` evidence flag. The 1000 Genomes file's per-allele `AFR`, `AMR`,
+`EAS`, `EUR` and `SAS` frequencies join each non-somatic record through the minimised
+REF/ALT pair Ensembl VEP's own join matches on, printed as the dumper prints them
+(`%.4g`), an allele at 0 in every population getting no entry; `AF`, which the file lacks,
+is the allele's count over the panel's 5,008 chromosomes, each population's count recovered
+from its frequency and sample size.
 `clin_sig_allele`, `clin_sig_ref_allele` and `clinical_impact`, which Ensembl VEP joins
 from the variation database's ClinVar phenotype features, are filled from the
 `phenotype_feature` and `phenotype_feature_attrib` dumps of the `--variation-dumps`
 directory (`variation::ClinVarAttribs`); no Ensembl VCF carries them.
-`variation::build_variation_cache` writes the same 1 Mb bins as compact JSON under
-`variations/<chr>/`.
+`variation::write_chromosome` writes the chromosome's records sorted by start as
+`variations/<chr>/all_vars.gz`, tab-delimited bgzip with the chromosome first and `.` for
+an empty cell, and its `.csi` on the start column, the file and index the Ensembl VEP
+dumper writes.
 
 ```text
 <output-dir>/
@@ -132,7 +149,8 @@ directory (`variation::ClinVarAttribs`); no Ensembl VCF carries them.
       1000001-2000000.json
   variations/
     1/
-      1-1000000.json
+      all_vars.gz
+      all_vars.gz.csi
 ```
 
 The `variations/` tree exists only with `--include-variations`. A transcript shard
@@ -142,17 +160,17 @@ carries no `chr` field: the loader takes the chromosome from the directory name.
 
 | Module               | Role                                                                                                                                                                                         |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main.rs`        | The `clap` argument struct and the run order: resolve inputs, resolve and read the core dumps, parse FASTA and GFF3, fetch predictions, load the genome FASTA and GTF, build the transcript cache, then the variation cache, then `chr_synonyms.txt` and `info.json` |
-| `src/download.rs`    | Ensembl FTP URL construction (GRCh37 gene set capped at release 87; the core and variation MySQL dump directories), downloads into the temporary directory with reuse, the `--core-dumps` directory fill, the local variation directory scan and the parallel per-chromosome VCF download |
+| `src/main.rs`        | The `clap` argument struct and the run order: resolve inputs, resolve and read the core dumps, parse FASTA and GFF3, fetch predictions, load the genome FASTA and GTF, build the transcript cache, then the variation files, then `chr_synonyms.txt` and `info.json` |
+| `src/download.rs`    | Ensembl FTP URL construction (GRCh37 gene set capped at release 87; the core and variation MySQL dump directories), downloads into the temporary directory with reuse, the `--core-dumps` directory fill, the local variation directory scan, the parallel per-chromosome VCF download and the genome-wide variation VCFs with their indexes |
 | `src/fasta.rs`       | Protein FASTA reader: unversioned transcript identifier to peptide, plain or gzipped                                                                                                         |
 | `src/gff3.rs`        | GFF3 reader into `GeneRecord`, `TranscriptRecord`, `ExonRecord` and `CdsRecord`; chromosome normalisation, attribute URL-decoding, the `tag` codes, `ccdsid`, `transcript_support_level`, the exon phases, the CDS `protein_id` and `version`, and the dumper's `artifact` and readthrough filters |
 | `src/core_dumps.rs`  | The core and variation table dumps: MySQL escape decoding, the joins of `transcript_attrib`, `translation`, `protein_feature`, `xref`, `object_xref`, `gene`, `seq_region_attrib`, `meta`, `phenotype_feature` and `phenotype` into per-transcript and per-gene facts; the table reader `info.rs` uses for `seq_region_synonym` |
-| `src/info.rs`        | `info.json` (species, assembly, version, the `sift` and `polyphen` markers, source versions, `variation_cols`, `contig_order`) and `chr_synonyms.txt` from the `seq_region_synonym` table |
+| `src/info.rs`        | `info.json` (species, assembly, version, the `sift` and `polyphen` markers, source versions, `variation_cols` and `var_type`, `contig_order`) and `chr_synonyms.txt` from the `seq_region_synonym` table |
 | `src/gtf.rs`         | GTF `transcript` lines: the `#!` header keys and the five tags kept as transcript attributes (`basic` and `gencode_basic` both become `gencode_basic`)                                        |
 | `src/mapper.rs`      | cDNA-to-genome mapper pairs, `cdna_coding_start` and `cdna_coding_end` for one transcript, with exon 1's phase as the start phase                                                              |
 | `src/builder.rs`     | The serialised cache types, exon ordering and phases, introns, the spliced cDNA cut into UTRs and `translateable_seq`, the codon table, seq edits, attributes and xref lists from the GFF3 or the dumps, the per-region HGNC identifier copy, 1 Mb binning and the transcript shards |
 | `src/predictions.rs` | SIFT and PolyPhen matrix fetch from Ensembl's MySQL server, keyed by the MD5 of the peptide and stored base64-encoded under the Ensembl matrix object's keys (`analysis`, `sub_analysis`, `translation_md5`) |
-| `src/variation.rs`   | Variation VCF reader (bgzipped or plain) in Ensembl VEP's record form, the ClinVar columns from the variation dumps, the frequency field mapping to `ALT:freq` strings and the variation shards |
+| `src/variation.rs`   | The variation VCF readers (per-chromosome whole, genome-wide through the index), each record in the variation database's form, the 1000 Genomes frequency join, the ClinVar columns from the variation dumps, and the `all_vars.gz` writer with its `.csi` |
 
 ## Command line
 
@@ -174,8 +192,8 @@ the `vep` binary, not this one, so the flags are listed here.
 | `--include-predictions`       | Fetch the SIFT and PolyPhen matrices; `homo_sapiens` on GRCh37 or GRCh38 only                                                                             |
 | `--mysql-host <HOST>`         | Prediction server, default `ensembldb.ensembl.org`                                                                                                        |
 | `--mysql-port <PORT>`         | Prediction server port, default `3306`                                                                                                                    |
-| `--include-variations`        | Also build `variations/` from Ensembl's variation VCFs                                                                                                    |
-| `--variation-vcf-dir <DIR>`   | Local directory of `*-chr*.vcf.gz` files instead of the download                                                                                          |
+| `--include-variations`        | Also write `variations/<chr>/all_vars.gz` and its `.csi` from Ensembl's variation VCFs: the per-chromosome files with the genome-wide somatic, phenotype-associated, clinically-associated and 1000 Genomes frequency files |
+| `--variation-vcf-dir <DIR>`   | Local directory of the `*-chr*.vcf.gz` files and, under their Ensembl names, the genome-wide files with their `.csi` indexes, instead of the download        |
 | `--variation-dumps <DIR>`     | Directory of the release's variation MySQL table dumps (`source`, `seq_region`, `attrib_type`, `phenotype`, `phenotype_feature`, `phenotype_feature_attrib`; nothing is downloaded): the ClinVar allele and somatic classification columns of the variation records, read with `--include-variations` for the chromosomes being built |
 | `--chromosomes <A,B,...>`     | Chromosomes whose variation VCFs to download; default 1 to 22, X, Y and MT. The transcript build always covers every chromosome the GFF3 carries          |
 
@@ -198,7 +216,11 @@ tag selection, VCF parsing on temporary files and region binning. The integratio
 `tests/fixtures/grch38_chr21/`, a release 116 slice of 27 chromosome 21 genes (the GFF3
 lines, three GTF transcript lines, peptides and dump rows), and compares the identifier,
 symbol, xref, attribute, protein feature and exon coordinate fields of the 63 transcripts
-it writes with the same transcripts of the Ensembl VEP 116 GRCh38 cache. On Linux the binary links OpenSSL (`reqwest` and `mysql` both use
+it writes with the same transcripts of the Ensembl VEP 116 GRCh38 cache. The integration test
+`tests/variation_cache_from_dumps.rs` runs the binary with `--include-variations` and
+`--variation-dumps` on indexed VCFs and dump rows written to a temporary directory, checks
+the `all_vars.gz` lines and `info.json` it writes, and reads the records back through `vep`'s
+variation source. On Linux the binary links OpenSSL (`reqwest` and `mysql` both use
 `native-tls`), so the build needs the OpenSSL development package; macOS links
 Security.framework. The workspace `rust-version` in `Cargo.toml` is set by this crate's
 `mysql` dependency chain. `scripts/validation/validate_builder_cache.sh` builds the

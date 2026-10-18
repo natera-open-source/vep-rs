@@ -12,6 +12,7 @@ use rayon::prelude::*;
 use tracing::{info, warn};
 
 use crate::core_dumps::{table_path, CORE_TABLES, VARIATION_TABLES};
+use crate::variation::GenomeWideInputs;
 
 /// Resolve input file paths: download from Ensembl FTP if not provided locally.
 ///
@@ -217,16 +218,36 @@ const HUMAN_CHROMOSOMES: &[&str] = &[
     "18", "19", "20", "21", "22", "X", "Y", "MT",
 ];
 
-/// Resolve variation VCF inputs: scan a local directory or download from Ensembl FTP.
-///
-/// Returns `Vec<(chromosome, local_path)>`.
+/// The variation VCF inputs of a build: one per-chromosome germline VCF per
+/// chromosome, and the genome-wide files read beside them.
+pub struct VariationInputs {
+    /// `(chromosome, path)` of each per-chromosome VCF, by chromosome name.
+    pub per_chromosome: Vec<(String, PathBuf)>,
+    pub genome_wide: GenomeWideInputs,
+}
+
+/// The genome-wide variation VCFs Ensembl publishes beside the per-chromosome
+/// files, by the name each has in the FTP directory and in a local directory.
+/// The 1000 Genomes file is human-only and exists for GRCh38 alone.
+const THOUSAND_GENOMES_FILE: &str = "1000GENOMES-phase_3.vcf.gz";
+const SOMATIC_SUFFIX: &str = "_somatic.vcf.gz";
+const GERMLINE_SUFFIXES: [&str; 2] = [
+    "_phenotype_associated.vcf.gz",
+    "_clinically_associated.vcf.gz",
+];
+
+/// Resolve the variation VCF inputs: scan a local directory or download from
+/// the Ensembl FTP site. A genome-wide file the directory or the site lacks is
+/// left out with a warning naming what the cache will lack; a downloaded file's
+/// index (`.csi`) is fetched with it, so each chromosome's records are read
+/// through the index.
 pub fn resolve_variation_inputs(
     local_vcf_dir: &Option<String>,
     release: u32,
     assembly: &str,
     species: &str,
     chromosomes: Option<&[String]>,
-) -> Result<Vec<(String, PathBuf)>> {
+) -> Result<VariationInputs> {
     match local_vcf_dir {
         Some(dir) => {
             let dir_path = PathBuf::from(dir);
@@ -236,14 +257,20 @@ pub fn resolve_variation_inputs(
                     dir_path.display()
                 );
             }
-            scan_local_vcfs(&dir_path)
+            Ok(VariationInputs {
+                per_chromosome: scan_local_vcfs(&dir_path)?,
+                genome_wide: scan_local_genome_wide(&dir_path, species)?,
+            })
         }
         None => {
             let chroms: Vec<&str> = match chromosomes {
                 Some(c) => c.iter().map(|s| s.as_str()).collect(),
                 None => HUMAN_CHROMOSOMES.to_vec(),
             };
-            download_variation_vcfs(release, assembly, species, &chroms)
+            Ok(VariationInputs {
+                per_chromosome: download_variation_vcfs(release, assembly, species, &chroms)?,
+                genome_wide: download_genome_wide(release, assembly, species)?,
+            })
         }
     }
 }
@@ -281,6 +308,49 @@ fn scan_local_vcfs(dir: &PathBuf) -> Result<Vec<(String, PathBuf)>> {
     Ok(results)
 }
 
+/// The genome-wide files present in a local directory under their Ensembl names.
+fn scan_local_genome_wide(dir: &Path, species: &str) -> Result<GenomeWideInputs> {
+    genome_wide_inputs(species, |name| {
+        let path = dir.join(name);
+        if !path.is_file() {
+            return Ok(None);
+        }
+        info!("Found local variation VCF: {}", path.display());
+        Ok(Some(path))
+    })
+}
+
+/// The genome-wide inputs of `species`, each file looked up by its Ensembl name
+/// through `locate`: the 1000 Genomes file, the somatic file, then the germline
+/// files. A file `locate` does not find is left out with a warning naming what
+/// the cache lacks without it.
+fn genome_wide_inputs(
+    species: &str,
+    mut locate: impl FnMut(&str) -> Result<Option<PathBuf>>,
+) -> Result<GenomeWideInputs> {
+    let frequencies = locate(THOUSAND_GENOMES_FILE)?;
+    let somatic = locate(&format!("{species}{SOMATIC_SUFFIX}"))?;
+    let mut germline = Vec::new();
+    for suffix in GERMLINE_SUFFIXES {
+        let name = format!("{species}{suffix}");
+        match locate(&name)? {
+            Some(path) => germline.push(path),
+            None => warn!("No {name}: a variant only it carries is absent from the cache"),
+        }
+    }
+    if frequencies.is_none() {
+        warn!("No {THOUSAND_GENOMES_FILE}: the cache carries no 1000 Genomes frequency column");
+    }
+    if somatic.is_none() {
+        warn!("No somatic variation VCF: no record of the cache is flagged somatic");
+    }
+    Ok(GenomeWideInputs {
+        frequencies,
+        somatic,
+        germline,
+    })
+}
+
 /// Extract chromosome name from a filename like "homo_sapiens-chr21.vcf.gz".
 fn extract_chromosome_from_filename(filename: &str) -> Option<String> {
     let stem = filename.strip_suffix(".vcf.gz")?;
@@ -292,22 +362,24 @@ fn extract_chromosome_from_filename(filename: &str) -> Option<String> {
     Some(chr_part.to_string())
 }
 
-/// Build the Ensembl FTP URL for a single chromosome's variation VCF.
+/// The Ensembl FTP directory of a species' variation VCFs.
 ///
 /// Ensembl names the variation VCFs with the lowercase species directory name
 /// (`homo_sapiens-chr21.vcf.gz`), unlike the capitalised GFF3 and FASTA files.
-pub fn variation_vcf_url(release: u32, assembly: &str, species: &str, chromosome: &str) -> String {
+fn variation_vcf_dir_url(release: u32, assembly: &str, species: &str) -> String {
     if assembly == "GRCh37" {
-        format!(
-            "https://ftp.ensembl.org/pub/grch37/release-{}/variation/vcf/{}/{}-chr{}.vcf.gz",
-            release, species, species, chromosome
-        )
+        format!("https://ftp.ensembl.org/pub/grch37/release-{release}/variation/vcf/{species}/")
     } else {
-        format!(
-            "https://ftp.ensembl.org/pub/release-{}/variation/vcf/{}/{}-chr{}.vcf.gz",
-            release, species, species, chromosome
-        )
+        format!("https://ftp.ensembl.org/pub/release-{release}/variation/vcf/{species}/")
     }
+}
+
+/// Build the Ensembl FTP URL for a single chromosome's variation VCF.
+pub fn variation_vcf_url(release: u32, assembly: &str, species: &str, chromosome: &str) -> String {
+    format!(
+        "{}{species}-chr{chromosome}.vcf.gz",
+        variation_vcf_dir_url(release, assembly, species)
+    )
 }
 
 /// Download per-chromosome variation VCFs from Ensembl FTP.
@@ -332,42 +404,16 @@ pub fn download_variation_vcfs(
         .par_iter()
         .map(|chrom| {
             let vcf_url = variation_vcf_url(release, assembly, species, chrom);
-            let csi_url = format!("{}.csi", vcf_url);
-
             let vcf_dest = std::env::temp_dir().join(format!(
                 "vep_cache_builder_{}_{}_{}_chr{}.vcf.gz",
                 species, assembly, release, chrom
             ));
-            let csi_dest = std::env::temp_dir().join(format!(
-                "vep_cache_builder_{}_{}_{}_chr{}.vcf.gz.csi",
-                species, assembly, release, chrom
-            ));
-
-            if vcf_dest.exists() {
-                info!(
-                    "Using cached variation VCF for chr{}: {}",
-                    chrom,
-                    vcf_dest.display()
-                );
-            } else {
-                download_file(&vcf_url, &vcf_dest).with_context(|| {
-                    format!("Failed to download variation VCF for chr{}", chrom)
-                })?;
+            download_cached(&vcf_url, &vcf_dest)
+                .with_context(|| format!("Failed to download variation VCF for chr{}", chrom))?;
+            // The CSI index is optional: some chromosomes have none.
+            if let Err(e) = download_index(&vcf_url, &vcf_dest) {
+                info!("CSI index not available for chr{}: {}", chrom, e);
             }
-
-            if csi_dest.exists() {
-                info!(
-                    "Using cached CSI index for chr{}: {}",
-                    chrom,
-                    csi_dest.display()
-                );
-            } else {
-                // The CSI index is optional: some chromosomes have none.
-                if let Err(e) = download_file(&csi_url, &csi_dest) {
-                    info!("CSI index not available for chr{}: {}", chrom, e);
-                }
-            }
-
             Ok((chrom.to_string(), vcf_dest))
         })
         .collect();
@@ -375,6 +421,43 @@ pub fn download_variation_vcfs(
     let mut results = results?;
     results.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(results)
+}
+
+/// Downloads the genome-wide variation VCFs and their indexes; a file the site
+/// does not publish for this release and assembly (the 1000 Genomes file on
+/// GRCh37) is left out.
+fn download_genome_wide(release: u32, assembly: &str, species: &str) -> Result<GenomeWideInputs> {
+    let dir_url = variation_vcf_dir_url(release, assembly, species);
+    genome_wide_inputs(species, |name| {
+        let url = format!("{dir_url}{name}");
+        let dest = std::env::temp_dir().join(format!(
+            "vep_cache_builder_{species}_{assembly}_{release}_{name}"
+        ));
+        match download_cached(&url, &dest) {
+            Ok(()) => {}
+            Err(e) if is_not_found(&e) => return Ok(None),
+            Err(e) => return Err(e.context(format!("Failed to download {name}"))),
+        }
+        download_index(&url, &dest)
+            .with_context(|| format!("Failed to download the index of {name}"))?;
+        Ok(Some(dest))
+    })
+}
+
+/// Downloads `url` to `dest` unless `dest` already exists.
+fn download_cached(url: &str, dest: &Path) -> Result<()> {
+    if dest.exists() {
+        info!("Using cached download: {}", dest.display());
+        return Ok(());
+    }
+    download_file(url, dest)
+}
+
+/// Downloads the `.csi` index of the file at `url` beside `dest`.
+fn download_index(url: &str, dest: &Path) -> Result<()> {
+    let mut index_dest = dest.as_os_str().to_owned();
+    index_dest.push(".csi");
+    download_cached(&format!("{url}.csi"), Path::new(&index_dest))
 }
 
 /// An HTTP response status other than success, kept as a typed error so a

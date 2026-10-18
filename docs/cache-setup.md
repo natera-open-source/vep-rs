@@ -101,9 +101,10 @@ name a RefSeq or GenBank assembly file beside an Ensembl cache.
 whose matrices the cache holds, `source_versions` (on a native cache the core `meta` table's
 `assembly`, `gencode` and `genebuild`, or the GTF header's; the dbSNP, ClinVar, COSMIC and gnomAD
 versions an Ensembl cache's `info.txt` lists come from the variation database, which the builder
-does not read, so a native cache's headers print none), `variation_cols` only when the cache
-holds variation records, and `contig_order`, the cache's chromosome directories as autosomes by
-number, then X, Y and MT, then every other contig by name.
+does not read, so a native cache's headers print none), `variation_cols` and `var_type tabix`
+only when the cache holds variation files (`variation_cols` names their columns), and
+`contig_order`, the cache's chromosome directories as autosomes by number, then X, Y and MT, then
+every other contig by name.
 
 ## Getting a cache
 
@@ -164,13 +165,53 @@ uncompressed (1.5 GB). The tables are read once per build, in about half a minut
 3 GB of memory for GRCh38.
 
 Variation data, which `--check_existing` and the `--af*` flags read, is optional
-(`--include-variations`). The builder downloads Ensembl's per-chromosome variation VCFs
-itself (`https://ftp.ensembl.org/pub/release-116/variation/vcf/homo_sapiens/homo_sapiens-chr<N>.vcf.gz`,
-under `pub/grch37/release-116/` for GRCh37; chromosomes 1-22, X, Y and MT unless
-`--chromosomes` narrows the list), or reads local copies from the directory passed with
-`--variation-vcf-dir`. `scripts/validation/compare_gtf_tags_to_cache.py`
+(`--include-variations`). The builder downloads Ensembl's variation VCFs itself from
+`https://ftp.ensembl.org/pub/release-116/variation/vcf/homo_sapiens/` (under
+`pub/grch37/release-116/` for GRCh37), or reads local copies under the same names from the
+directory passed with `--variation-vcf-dir`: the per-chromosome germline files
+`homo_sapiens-chr<N>.vcf.gz` (the download covers chromosomes 1-22, X, Y and MT unless
+`--chromosomes` narrows the list; from a local directory every `*-chr*.vcf.gz` file is read) and,
+each with its `.csi` index, the genome-wide `homo_sapiens_somatic.vcf.gz` (every
+record of it is flagged `somatic`), `homo_sapiens_phenotype_associated.vcf.gz` and
+`homo_sapiens_clinically_associated.vcf.gz` (whose records the per-chromosome files already carry
+at release 116; a record found only there is added) and `1000GENOMES-phase_3.vcf.gz`, the 1000
+Genomes frequencies. A genome-wide file the directory or the site lacks is left out with a
+warning naming what the cache then lacks. The records are written per chromosome as
+`variations/<chr>/all_vars.gz` with a `.csi` on the start column, the file Ensembl VEP's own
+cache carries, so `--check_existing` and the frequency flags read a native cache exactly as they
+read a converted one. Each record takes the form the variation database holds: an indel's
+alleles with the shared anchor base removed and `-` for an emptied allele; an insertion the
+export marks `TSA=insertion` two bases after the base its VCF line names (`start` one past
+`end`), where the Ensembl cache places it; a COSMIC variant without alleles as `COSMIC_MUTATION`
+on its span and every HGMD-PUBLIC variant, alleles or not, as `HGMD_MUTATION`, the string the
+variation database holds for that source; `clin_sig` from the record's `CLIN_<term>`
+flags (a term the export declares no flag for, `likely_risk_allele`, is absent) and
+`phenotype_or_disease` from `E_Phenotype_or_Disease`. The Ensembl cache keeps dbSNP's untrimmed
+alleles for about seven indels in ten (`CCCCC/CCCC` at 5030241 where the export gives `C/-` at
+5030242; 1,058,020 of chromosome 21's 1,500,839 indel records, 7 of every 100 records), and the
+export's trimmed form is what a native cache holds: an input co-locates with such a record when
+its own spelling trims to the same alleles and position, where the Ensembl cache answers the
+untrimmed spelling instead. A native cache carries no `failed` flag (the export leaves the failed
+variants out, the `dbSNP_novariation` records among them, and the few it keeps are written
+unflagged), no `pubmed` or `var_synonyms` (the export carries none) and no gnomAD
+frequency: Ensembl publishes no gnomAD VCF for release 116, so gnomAD frequencies come from the
+Ensembl variation cache, by conversion. A native cache built by an earlier release holds JSON
+variation files that nothing reads; build it again. The 1000 Genomes file exists for GRCh38
+only, so a GRCh37 native cache has no frequency column; where it is read, the `AFR`, `AMR`,
+`EAS`, `EUR` and `SAS` columns hold each allele's continental frequency as the file gives it and
+`AF` the whole panel's: the file states no panel-wide frequency, so `AF` is the allele's count
+over the panel's 5,008 chromosomes, each population's count recovered from its frequency and
+sample count with two chromosomes per sample (an approximation on X and Y; a population the file
+gives no value for drops out of both the count and the total). An allele whose frequency is 0 in
+every population gets no entry: the release file lists no frequency for an allele absent from
+its call set, and the export does not tell such an allele from one the release lists with a
+count of 0, for which the Ensembl cache prints `0` (3,408 of the 1,106,899 chromosome 21 records
+the Ensembl cache holds frequencies for). The release's own panel-wide frequency, which the
+Ensembl cache prints, differs from the recovered count's for 443 of those records, 315 of them
+by one unit in the last significant digit. `scripts/validation/compare_gtf_tags_to_cache.py`
 compares the four attributes a GTF yields with those a cache carries and lists every
-disagreement.
+disagreement; `scripts/validation/diff_caches.py` compares two caches' transcripts, variation
+files and `info.json`.
 
 **Convert an existing Perl VEP cache.** `scripts/data/storable_to_json.pl` reads a Perl VEP
 Storable cache directory (for example `~/.vep/homo_sapiens/116_GRCh38`) and writes the same
