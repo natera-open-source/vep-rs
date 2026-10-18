@@ -20,7 +20,7 @@ pub use annotator::{
     AnnotationResources, AnnotationStats, Annotator, PredictionConfig, RawRow,
 };
 pub use config::Config;
-pub use pick::{apply_filters, FilterConfig};
+pub use pick::{apply_to_batch, apply_to_record, FilterConfig, PickCriterion};
 pub use transcript_index::{
     LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl, TranscriptSet,
 };

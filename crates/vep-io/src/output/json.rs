@@ -164,6 +164,20 @@ impl JsonOutputFormatter {
         variant: &InputVariant,
         tc: Option<&TranscriptConsequence>,
     ) -> serde_json::Map<String, Value> {
+        if let (None, Some(terms)) = (tc, &variant.summary_terms) {
+            // `summary_only` is given an empty hash in the JSON factory
+            // (`add_VariationFeatureOverlapAllele_info`, JSON.pm:320), so the
+            // record's one entry carries its consequence terms alone; the
+            // variant-level keys sit at the top level.
+            let consequence_terms = terms
+                .iter()
+                .map(|c| Value::String(c.so_term().to_string()))
+                .collect();
+            return serde_json::Map::from_iter([(
+                "consequence_terms".to_string(),
+                Value::Array(consequence_terms),
+            )]);
+        }
         let mut obj: IndexMap<String, Value> = IndexMap::new();
         let mut names: Vec<&str> = DEFAULT_OUTPUT_COLS
             .iter()
@@ -572,6 +586,41 @@ mod tests {
         assert_eq!(ic["consequence_terms"][0], "intergenic_variant");
         assert_eq!(ic["impact"], "MODIFIER");
         assert_eq!(ic["variant_allele"], "G");
+    }
+
+    /// A `--summary` or `--most_severe` record files one entry under
+    /// `intergenic_consequences` holding `consequence_terms` alone
+    /// (`add_VariationFeatureOverlapAllele_info` hands `summary_only` an empty
+    /// hash, JSON.pm:320 and 348), its most severe consequence is the first term,
+    /// and the record keeps its variant-level keys and co-located variants.
+    #[test]
+    fn summary_entry_is_intergenic_consequences_with_consequence_terms_only() {
+        let mut v = make_annotated_variant();
+        v.transcript_consequences.clear();
+        v.most_severe_consequence = Some(Consequence::SynonymousVariant);
+        v.summary_terms = Some(smallvec![
+            Consequence::SynonymousVariant,
+            Consequence::IntronVariant
+        ]);
+        v.colocated_variants = vec![vep_core::variant::ColocatedVariant {
+            id: "rs123".into(),
+            ..Default::default()
+        }];
+        let options = FieldOptions {
+            variant_class: true,
+            ..Default::default()
+        };
+        let parsed = fmt(options).format_variant_value(&v);
+        assert!(parsed.get("transcript_consequences").is_none());
+        let entries = parsed["intergenic_consequences"].as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            entries[0],
+            json!({"consequence_terms": ["synonymous_variant", "intron_variant"]})
+        );
+        assert_eq!(parsed["most_severe_consequence"], "synonymous_variant");
+        assert_eq!(parsed["variant_class"], "SNV");
+        assert_eq!(parsed["colocated_variants"][0]["id"], "rs123");
     }
 
     #[test]

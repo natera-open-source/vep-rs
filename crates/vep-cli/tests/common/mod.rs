@@ -35,9 +35,11 @@
 //! `variants.vcf`, every format, `expected/`) and once per `flag_sets` entry,
 //! which names its own `flags` (the whole list for that run), `input` (a file in
 //! the corpus, `variants.vcf` by default), `stdin` (the input piped on standard
-//! input with `-i STDIN`), `formats` (the formats compared, all four by default)
-//! and `expected_dir` (`expected_<name>` by default). An entry carrying its own
-//! `divergences` documents its run; one without inherits the manifest's lists.
+//! input with `-i STDIN`), `formats` (the formats compared, all four by default),
+//! `expected_dir` (`expected_<name>` by default) and `unordered` (the entries
+//! compared without their order, for a set whose rows the reference emits in
+//! hash order). An entry carrying its own `divergences` documents its run; one
+//! without inherits the manifest's lists.
 //!
 //! A manifest may also carry `runs`, command lines executed after the default
 //! run whose expectations are about the process rather than the annotation: each
@@ -216,6 +218,11 @@ pub struct Run<'a> {
     pub formats: Vec<String>,
     /// The directory of the expected outputs, relative to the corpus directory.
     pub expected_dir: String,
+    /// The reference's rows within a record come out in Ensembl VEP's hash
+    /// order (`--per_gene` emits its gene buckets and `--pick_allele` its allele
+    /// buckets from a Perl hash), so the run compares the entries and their
+    /// fields, not the order of the entries.
+    pub unordered: bool,
     /// The manifest object whose divergence lists apply to this run.
     documented: &'a serde_json::Value,
 }
@@ -298,6 +305,7 @@ pub fn default_run(corpus: &Corpus) -> Run<'_> {
         stdin: false,
         formats: ALL_FORMATS.iter().map(|f| f.to_string()).collect(),
         expected_dir: "expected".to_string(),
+        unordered: false,
         documented: &corpus.manifest,
     }
 }
@@ -360,6 +368,7 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
         typed("input", set["input"].is_string());
         typed("expected_dir", set["expected_dir"].is_string());
         typed("stdin", set["stdin"].is_boolean());
+        typed("unordered", set["unordered"].is_boolean());
         let formats = if set["formats"].is_array() {
             strings(&set["formats"])
         } else {
@@ -403,6 +412,7 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
             stdin,
             formats,
             expected_dir,
+            unordered: set["unordered"].as_bool().unwrap_or(false),
             documented: if set.get("divergences").is_some() {
                 set
             } else {
@@ -1119,8 +1129,14 @@ pub fn consequence_set(s: &str) -> String {
 const EXAMPLES_PER_GROUP: usize = 4;
 
 /// Compares expected against actual entries and returns a report of every
-/// difference, or an empty string when the two agree.
-pub fn compare_entries(expected: &[Entry], actual: &[Entry], documented: &Documented) -> String {
+/// difference, or an empty string when the two agree. Under `ordered` the keys
+/// both sides share must also come in the same order.
+pub fn compare_entries(
+    expected: &[Entry],
+    actual: &[Entry],
+    documented: &Documented,
+    ordered: bool,
+) -> String {
     let actual_by_key: HashMap<&str, &Entry> = actual.iter().map(|e| (e.key.as_str(), e)).collect();
     let expected_by_key: HashMap<&str, &Entry> =
         expected.iter().map(|e| (e.key.as_str(), e)).collect();
@@ -1231,7 +1247,7 @@ pub fn compare_entries(expected: &[Entry], actual: &[Entry], documented: &Docume
         .map(|a| a.key.as_str())
         .collect();
     let mut order_note = String::new();
-    if shared_expected != shared_actual {
+    if ordered && shared_expected != shared_actual {
         let first = shared_expected
             .iter()
             .zip(shared_actual.iter())
@@ -1544,6 +1560,7 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
                 &parse_default(&expected),
                 &parse_default(&actual),
                 &documented,
+                !run.unordered,
             ),
         ),
         "vcf" => {
@@ -1555,6 +1572,7 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
                     &parse_vcf_info(&expected, &inputs, info_field),
                     &parse_vcf_info(&actual, &inputs, info_field),
                     &documented,
+                    !run.unordered,
                 ),
             )
         }
@@ -1566,6 +1584,7 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
                     &parse_json(&expected, &inputs),
                     &parse_json(&actual, &inputs),
                     &documented,
+                    !run.unordered,
                 ),
             )
         }
@@ -2079,6 +2098,7 @@ pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) 
                     &parse_default(&expected),
                     &parse_default(&actual),
                     &documented,
+                    true,
                 ),
             ),
             "vcf" => (
@@ -2087,6 +2107,7 @@ pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) 
                     &parse_vcf(&expected, &inputs),
                     &parse_vcf(&actual, &inputs),
                     &documented,
+                    true,
                 ),
             ),
             _ => (
@@ -2095,6 +2116,7 @@ pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) 
                     &parse_json(&expected, &inputs),
                     &parse_json(&actual, &inputs),
                     &documented,
+                    true,
                 ),
             ),
         };

@@ -696,11 +696,25 @@ fn read_parsed(
     // multi-allelic line (Parser/VEP_input.pm:150-162) and warns once, so the
     // alleles after the first take the first's verdict.
     let mut keep = true;
+    // A kept record is open from its first allele until the next line's first
+    // allele or the end of the input, and lays out as one unit, as
+    // `parse_lines` lays out a VCF line.
+    let mut open_record: Option<usize> = None;
     loop {
         match parser.next_variant() {
             Some(Ok(mut variant)) => {
                 mark_oversize_sv(&mut variant, cfg.max_sv_size);
                 if variant.allele_index == 0 {
+                    if let Some(start) = open_record.take() {
+                        batch.units.push(Unit::Record(start..batch.variants.len()));
+                    }
+                    if batch.variants.len() >= cfg.batch_size {
+                        if tx.send(InputBatch::Parsed(batch)).is_err() {
+                            return Ok(());
+                        }
+                        seq += 1;
+                        batch = ParsedBatch::new(seq);
+                    }
                     record_count += 1;
                     // These parsers expose no line text, so the warning quotes none.
                     let line = RecordLine {
@@ -709,22 +723,16 @@ fn read_parsed(
                         quoted: None,
                     };
                     keep = rules.keep_record(std::slice::from_ref(&variant), &line);
+                    if keep {
+                        open_record = Some(batch.variants.len());
+                    }
                 }
                 variant.input_record = record_count;
                 if !keep {
                     continue;
                 }
                 cfg.transcripts.prewarm(&variant.chr)?;
-                let start = batch.variants.len();
                 batch.variants.push(variant);
-                batch.units.push(Unit::Record(start..start + 1));
-                if batch.variants.len() >= cfg.batch_size {
-                    if tx.send(InputBatch::Parsed(batch)).is_err() {
-                        return Ok(());
-                    }
-                    seq += 1;
-                    batch = ParsedBatch::new(seq);
-                }
             }
             Some(Err(e)) => {
                 record_count += 1;
@@ -735,6 +743,9 @@ fn read_parsed(
             }
             None => break,
         }
+    }
+    if let Some(start) = open_record {
+        batch.units.push(Unit::Record(start..batch.variants.len()));
     }
     if !batch.units.is_empty() {
         let _ = tx.send(InputBatch::Parsed(batch));
@@ -980,13 +991,15 @@ fn coordinate(
                     c.stats,
                     c.stats_enabled,
                 )?;
+                // The record step runs once the record rules have given every
+                // record its verdict, the intergenic rows included.
                 if c.write_ctx.filters_active {
                     let filter_config = c.write_ctx.filter_config;
                     c.pool.install(|| {
                         batch
                             .variants
-                            .par_iter_mut()
-                            .for_each(|v| pick::apply_filters(v, filter_config));
+                            .par_chunk_by_mut(InputVariant::same_record)
+                            .for_each(|record| pick::apply_to_record(record, filter_config));
                     });
                 }
             }
@@ -1209,12 +1222,13 @@ fn annotate_render_batch(
                 let mut csqs = 0u64;
                 for variant in slice.iter_mut() {
                     csqs += annotate_one(variant, resources, &failure);
-                    if let Some(filter_config) = filter {
-                        pick::apply_filters(variant, filter_config);
-                    }
                 }
-                // A task's slice is whole records (the chunk ends at a unit end).
+                // A task's slice is whole records (the chunk ends at a unit end),
+                // so the record rules and the record step run over it in place.
                 apply_record_rules(slice, None);
+                if let Some(filter_config) = filter {
+                    pick::apply_to_batch(slice, filter_config);
+                }
                 let mut out: Vec<u8> = Vec::with_capacity(reserve);
                 {
                     let slice: &[InputVariant] = slice;
@@ -1333,6 +1347,11 @@ mod tests {
     use super::*;
     use crate::vcf_parser::parse_vcf_line;
     use std::io::{BufReader, Cursor};
+
+    /// `read_parsed` reports a skipped record through the process-wide warnings
+    /// sink, whose skip list one test reads, so the tests that skip a record run
+    /// in turn.
+    static SKIP_SINK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn scan_all(input: &[u8], fill: usize) -> Vec<Vec<u8>> {
         let mut scanner = LineScanner::new(BufReader::with_capacity(fill, Cursor::new(input)));
@@ -1746,6 +1765,9 @@ mod tests {
             transcripts: &transcripts,
             prewarm_order: &[],
         };
+        let _in_turn = SKIP_SINK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let skipped_file = dir.path().join("skipped.txt");
         let sink = crate::warnings::global();
@@ -2075,5 +2097,78 @@ mod tests {
             "second batch reused the returned text buffer"
         );
         assert_eq!(&batches[1].text, "21\t200\t.\tC\tT\t.\tPASS\t.");
+    }
+
+    /// A multi-allelic Ensembl-format line is one record: its alleles share one
+    /// record ordinal and one unit, and a batch closes between records, so the
+    /// record step and the writers see every allele of the line together, as they
+    /// see a VCF line's.
+    #[test]
+    fn read_parsed_keeps_a_multi_allelic_line_in_one_record() {
+        let input = "21\t100\t100\tA/G/T\t1\trs1\n\
+                     Z\t150\t150\tA/G/T\t1\trsZ\n\
+                     21\t200\t200\tC/T\t1\trs2\n\
+                     21\t300\t300\tG/A\t1\trs3\n";
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("21".to_string(), Vec::new())]),
+            crate::transcript_index::TranscriptIndexImpl::default(),
+            0,
+            0,
+        );
+        let cfg = ReaderConfig {
+            batch_size: 2,
+            capture_raw_input: false,
+            allow_non_variant: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            output_format: "vep",
+            no_headers: false,
+            vcf_formatter: None,
+            transcripts: &transcripts,
+            prewarm_order: &[],
+        };
+        let _in_turn = SKIP_SINK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let (tx, rx) = mpsc::sync_channel(64);
+        let parser: Box<dyn vep_io::InputParser> = Box::new(
+            vep_io::input::ensembl::EnsemblParser::new(Cursor::new(input.to_string())),
+        );
+        read_parsed(parser, &cfg, tx).unwrap();
+        let batches: Vec<ParsedBatch> = rx
+            .iter()
+            .map(|b| match b {
+                InputBatch::Parsed(p) => p,
+                InputBatch::Lines(_) => unreachable!(),
+            })
+            .collect();
+        // `layout` has one string per batch: its units, each as
+        // `start..end[record/allele ...]`.
+        let describe_unit = |batch: &ParsedBatch, unit: &Unit| -> String {
+            let Unit::Record(range) = unit else {
+                unreachable!("a parser yields no text");
+            };
+            let alleles: Vec<String> = batch.variants[range.clone()]
+                .iter()
+                .map(|v| format!("{}/{}", v.input_record, v.allele_index))
+                .collect();
+            format!("{}..{}[{}]", range.start, range.end, alleles.join(" "))
+        };
+        let layout: Vec<String> = batches
+            .iter()
+            .map(|batch| {
+                batch
+                    .units
+                    .iter()
+                    .map(|unit| describe_unit(batch, unit))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .collect();
+        // The skipped record (chromosome Z) counts and lays out nothing.
+        assert_eq!(layout, ["0..2[1/0 1/1]", "0..1[3/0] 1..2[4/0]"]);
+        assert_eq!(batches[0].variants[0].alt_allele(), b"G");
+        assert_eq!(batches[0].variants[1].alt_allele(), b"T");
+        assert!(batches[0].variants[0].same_record(&batches[0].variants[1]));
     }
 }

@@ -305,6 +305,10 @@ fn runs_refuses_the_flag_set_entries_the_corpus_tool_refuses() {
             format!("{label} flag set x: stdin is not of its type"),
         ),
         (
+            serde_json::json!([{"name": "x", "unordered": 1}]),
+            format!("{label} flag set x: unordered is not of its type"),
+        ),
+        (
             serde_json::json!([{"name": "x", "input": 5}]),
             format!("{label} flag set x: input is not of its type"),
         ),

@@ -35,20 +35,20 @@ Intolerant From Tolerant) and PolyPhen (Polymorphism Phenotyping) predictions, a
 gains its mate's consequences, `variation_matcher` attaches the co-located known variants, and
 a variant on a cached chromosome that overlaps nothing becomes `intergenic_variant`. Built-in
 plugins see the whole batch in one `run_batch` call and dynamic-library plugins run per
-consequence; `pick::apply_filters` applies the pick flags; `render_record` hands each record's
-alleles to the chosen `vep-io` formatter, or to `render_default_record` for VEP's default text
-format. Without plugins the coordinator fuses annotation, filtering, rendering and freeing
-into one pass over the pool per batch. The writer thread receives the rendered batches in
-sequence order and streams their bytes to the output; a Parquet run writes a TSV
-(tab-separated values) intermediate and converts it with a DuckDB subprocess once the pipeline
-has drained.
+consequence; `pick::apply_to_batch` applies the pick flags and summaries to each record's
+alleles together; `render_record` hands each record's alleles to the chosen `vep-io` formatter,
+or to `render_default_record` for VEP's default text format. Without plugins the coordinator
+fuses annotation, filtering, rendering and freeing into one pass over the pool per batch. The
+writer thread receives the rendered batches in sequence order and streams their bytes to the
+output; a Parquet run writes a TSV (tab-separated values) intermediate and converts it with a
+DuckDB subprocess once the pipeline has drained.
 
 ## Modules
 
 | Module                      | Role                                                                                                                                                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/main.rs`               | The `vep` binary: parses `Args`, sets the log level from `--verbose` and `--quiet`, prints the version banner, builds `Config` and runs `Runner`; mimalloc is the global allocator under the default `mimalloc` feature     |
-| `src/lib.rs`                | The library root: re-exports the embedding surface (`Annotator`, `Config`, `apply_filters`, the transcript index types, `InputVariant`, `JsonOutputFormatter`) and declares the modules                                      |
+| `src/lib.rs`                | The library root: re-exports the embedding surface (`Annotator`, `Config`, `apply_to_record`, the transcript index types, `InputVariant`, `JsonOutputFormatter`) and declares the modules                                      |
 | `src/args.rs`               | The clap definition of every flag, named as Perl VEP names them (underscores included); a flag the error table of `config.rs` governs takes its help text from that table                                                                     |
 | `src/config.rs`             | `Config::from_parsed`: the error table of refused and no-effect flags, the fields the option sets imply, the `--fork` and `--decompression_threads` automatic caps, `--distance`, tilde expansion and the cache path the output header prints                       |
 | `src/option_rules.rs`       | Ensembl VEP's option rules as data (`Config.pm:327-645`): the lists, option sets, valid values, requirements, incompatibilities and deprecations, and the flag state they are applied to and checked on |
@@ -61,7 +61,7 @@ has drained.
 | `src/transcript_index.rs`   | Transcript interval indexes (UCSC binning, coitrees, sorted array) behind one `TranscriptIndex` surface; `LazyTranscriptIndexes` loads each chromosome once; `MaterializedTranscriptIndexes` proves every chromosome loaded |
 | `src/vcf_parser.rs`         | Parses one VCF data line into `InputVariant`s: the fixed fields, allele trimming and minimisation per alternate allele, structural records through `vep-core`'s routing, the `--max_sv_size` limit                          |
 | `src/variation_matcher.rs`  | Matches input variants to cached known variants by position, extracts allele frequencies, and writes the Extra column fields (IMPACT, STRAND, the frequency and clinical fields, plugin keys)                                 |
-| `src/pick.rs`               | `FilterConfig` and `apply_filters`: VEP's pick algorithm for `--pick`, `--per_gene`, `--most_severe`, `--summary` and the `--flag_pick` variants                                                                            |
+| `src/pick.rs`               | `FilterConfig`, `apply_to_record` and `apply_to_batch`: VEP's pick algorithm and summaries over an input record for `--pick`, `--per_gene`, `--pick_order`, `--most_severe`, `--summary` and the `--flag_pick` variants                                                                            |
 | `src/dylib_plugins.rs`      | Loads the `--plugin` names no built-in claimed as C-ABI dynamic libraries and runs them over a batch, merging their JSON results into each consequence's `plugin_data`                                                        |
 | `src/bin/bench_plugins.rs`  | The `bench_plugins` binary: times the phases of an annotation run with and without plugins and writes a JSON report                                                                                                          |
 
@@ -111,7 +111,7 @@ binaries and tests, and their contents may move between releases.
 | `Annotator`                                                                                 | One loaded cache plus a scoped thread pool, reused across batches: `from_config` loads every chromosome up front, `annotate_batch` annotates `InputVariant`s in place, `try_annotate_rows` takes `RawRow`s         |
 | `AnnotationResources`, `build_thread_pool`                                                  | The shared transcripts, variation data, effects configuration and plugins behind an `Annotator`, and the pool it runs on                                                                                           |
 | `AnnotationStats`, `AnnotationError`, `RawRow`, `validate_raw_row`, `row_to_input_variant`  | The per-batch counts, the row-level error taxonomy, and the simple-allele input (chromosome, 1-based position, reference allele, alternate allele) with its validation and conversion                               |
-| `apply_filters`, `FilterConfig`                                                             | VEP's pick algorithm over one annotated `InputVariant`                                                                                                                                                              |
+| `apply_to_record`, `apply_to_batch`, `FilterConfig`, `PickCriterion`                        | VEP's pick algorithm and summaries over the annotated alleles of one input record                                                                                                                                                              |
 | `LazyTranscriptIndexes`, `MaterializedTranscriptIndexes`, `TranscriptIndexImpl`, `TranscriptSet` | The per-chromosome transcript index, the guard that an `Annotator` requires before fanning out to the pool, the index implementation choice, and the transcript set (every transcript, or a GENCODE set) the indexes keep |
 | `InputVariant`, `Consequence`, `Impact`, `TranscriptConsequence`                            | Re-exported from `vep-core`, so a caller constructs and inspects annotations without a direct dependency                                                                                                             |
 | `JsonOutputFormatter`                                                                       | Re-exported from `vep-io` for an embedder that renders JSON                                                                                                                                                         |

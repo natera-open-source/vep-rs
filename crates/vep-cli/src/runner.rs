@@ -190,9 +190,7 @@ pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: Option<u
 
 /// The rules decided over a whole input record once its alleles are annotated.
 /// `batch` is laid out in record order, every allele of a record adjacent to the
-/// others: the pipeline stamps each with the record's ordinal, and alleles that
-/// carry none (a batch built from `parse_vcf_line` alone) are one record when
-/// they share the line's identity.
+/// others ([`InputVariant::same_record`]).
 ///
 /// A breakend record is intergenic when no allele of it, the record's own
 /// breakend or a bracket mate, lies within the transcript distance of any
@@ -209,17 +207,7 @@ pub(crate) fn apply_record_rules(
     batch: &mut [InputVariant],
     loaded: Option<&LazyTranscriptIndexes>,
 ) {
-    fn same_record(a: &InputVariant, b: &InputVariant) -> bool {
-        if a.input_record != 0 || b.input_record != 0 {
-            return a.input_record == b.input_record;
-        }
-        a.original_chr == b.original_chr
-            && a.start == b.start
-            && a.id == b.id
-            && a.ref_allele == b.ref_allele
-            && a.uploaded_allele_string == b.uploaded_allele_string
-    }
-    for alleles in batch.chunk_by_mut(same_record) {
+    for alleles in batch.chunk_by_mut(InputVariant::same_record) {
         let intergenic_breakend_record = alleles.iter().all(|v| {
             v.variant_class == VariantClass::Translocation
                 && v.transcript_consequences.is_empty()
@@ -272,12 +260,9 @@ impl Runner {
             allele_number: c.allele_number,
             show_ref_allele: c.show_ref_allele,
             uploaded_allele: false,
-            include_pick: c.flag_pick
-                || c.flag_pick_allele
-                || c.flag_pick_allele_gene
-                || c.pick
-                || c.pick_allele
-                || c.pick_allele_gene,
+            // `@FLAG_FIELDS` lists PICK under the three flagging variants alone
+            // (Constants.pm:75-77); the removing variants add no column.
+            include_pick: c.flag_pick || c.flag_pick_allele || c.flag_pick_allele_gene,
             variant_class: c.variant_class,
             minimal: c.minimal,
             symbol: c.symbol,
@@ -584,6 +569,8 @@ impl Runner {
             flag_pick: self.config.flag_pick,
             flag_pick_allele: self.config.flag_pick_allele,
             flag_pick_allele_gene: self.config.flag_pick_allele_gene,
+            pick_order: crate::pick::pick_order(self.config.pick_order.as_deref())
+                .map_err(CliError::cli)?,
         };
         let filters_active = filter_config.any_active();
 
@@ -2040,6 +2027,31 @@ mod tests {
         assert!(!flag_fields(&alone.field_options()).contains(&"ENSP"));
         let both = runner_over(&cache, &["--protein", "--protein_version"]);
         assert!(flag_fields(&both.field_options()).contains(&"ENSP"));
+    }
+
+    /// `@FLAG_FIELDS` adds the PICK column under `--flag_pick`,
+    /// `--flag_pick_allele` and `--flag_pick_allele_gene` alone
+    /// (Constants.pm:75-77): a removing variant prints no PICK key.
+    #[test]
+    fn pick_adds_no_pick_column() {
+        use vep_io::output::fields::flag_fields;
+        let cache = write_json_cache("pick-column", &[("21", 1_000)]);
+        for (flag, prints_pick) in [
+            ("--pick", false),
+            ("--pick_allele", false),
+            ("--per_gene", false),
+            ("--pick_allele_gene", false),
+            ("--flag_pick", true),
+            ("--flag_pick_allele", true),
+            ("--flag_pick_allele_gene", true),
+        ] {
+            let runner = runner_over(&cache, &[flag]);
+            assert_eq!(
+                flag_fields(&runner.field_options()).contains(&"PICK"),
+                prints_pick,
+                "{flag}"
+            );
+        }
     }
 
     /// `--json` switches on `rest`, and `rest` switches on `no_escape`

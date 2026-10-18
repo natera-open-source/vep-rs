@@ -179,9 +179,9 @@ filterset-in-run-filter	Config.pm	implemented	open
 final-summary-line	-	implemented	open			
 flag_gencode_primary	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::flag_gencode_primary_sets_column;crates/vep-io/src/output/fields.rs::gencode_primary_column_is_1_on_presence	tests/golden/116/GRCh38-flag-gencode-primary	
 flag_matrix_concordance	-	implemented	open			
-flag_pick	OutputFactory.pm	implemented	open			
-flag_pick_allele	OutputFactory.pm	implemented	open			
-flag_pick_allele_gene	OutputFactory.pm	implemented	open			
+flag_pick	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::flag_pick_marks_one_row_per_record;crates/vep-io/src/output/fields.rs::intergenic_row_prints_pick_when_flagged;crates/vep-cli/src/runner.rs::pick_adds_no_pick_column	tests/golden/116/GRCh38-pick-summary	
+flag_pick_allele	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::flag_pick_allele_marks_one_row_per_alt	tests/golden/116/GRCh38-pick-summary	
+flag_pick_allele_gene	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::flag_pick_allele_gene_marks_one_row_per_alt_and_gene	tests/golden/116/GRCh38-pick-summary	
 FlagLRG	FlagLRG.pm	error	open			
 force-overwrite-scope	BaseRunner.pm	documented_subset	open			
 force_overwrite	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::existing_output_is_refused_with_ensembl_veps_text;crates/vep-cli/tests/cli_run_control.rs::existing_skipped_file_is_refused_without_force	tests/golden/116/GRCh38-run-control	
@@ -299,10 +299,10 @@ merged	CacheDir.pm	documented_subset	open
 minimal	Config.pm	implemented	open			
 minor-allele-columns	BaseCacheVariation.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::minor_allele_columns_change_no_output		
 mirna	OutputFactory.pm	implemented	open			
-most-severe-summary-output-shape	OutputFactory.pm	implemented	open			
+most-severe-summary-output-shape	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/render.rs::most_severe_row_prints_dash_allele_feature_columns_and_extra;crates/vep-io/src/output/fields.rs::summary_row_tab_cells_are_dashes;crates/vep-io/src/output/json.rs::summary_entry_is_intergenic_consequences_with_consequence_terms_only	tests/golden/116/GRCh38-pick-summary	
 most-severe-summary-regulatory-terms	OutputFactory.pm	implemented	open			
-most-severe-with-regulatory	OutputFactory.pm	documented_subset	open			
-most_severe	Config.pm	implemented	open			
+most-severe-with-regulatory	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/pick.rs::most_severe_documents_the_regulatory_exclusion	tests/golden/116/GRCh38-pick-summary	
+most_severe	Config.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::most_severe_collapses_the_record;crates/vep-cli/src/config.rs::most_severe_refuses_its_incompatible_flags	tests/golden/116/GRCh38-pick-summary	
 motif-feature-fields	Dumper/Regulation.pm	documented_subset	open			
 motif-feature-rows	AnnotationType/RegFeat.pm	implemented	open			
 MPC	MPC.pm	error	open			
@@ -343,20 +343,20 @@ parquet_row_group_size	-	removed	open
 parquet_shape	-	removed	open			
 password	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
 per-gene-regulatory-rows	OutputFactory.pm	implemented	open			
-per-gene-tie-break	OutputFactory.pm	implemented	open			
-per_gene	OutputFactory.pm	implemented	open			
+per-gene-tie-break	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::full_tie_falls_to_the_lexicographically_first_stable_id;crates/vep-cli/src/pick.rs::per_gene_keeps_one_row_per_gene_per_record	tests/golden/116/GRCh38-pick-summary	
+per_gene	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::per_gene_keeps_one_row_per_gene_per_record;crates/vep-cli/src/pick.rs::most_severe_follows_the_per_gene_picks	tests/golden/116/GRCh38-pick-summary	
 phased	Parser/VCF.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::phased_is_accepted_without_effect		
 phastCons	Config.pm	implemented	open			
 phenotype_or_disease	Database/Variation.pm	implemented	open			
 PhenotypeOrthologous	PhenotypeOrthologous.pm	error	open			
 Phenotypes	Phenotypes.pm	error	open			
 phyloP	Config.pm	implemented	open			
-pick	OutputFactory.pm	implemented	open			
-pick-order-criteria	OutputFactory.pm	implemented	open			
+pick	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::pick_keeps_one_row_per_record_across_alts;crates/vep-cli/src/pick.rs::intergenic_rows_are_picked_and_flagged_like_transcript_rows;crates/vep-cli/src/runner.rs::pick_adds_no_pick_column	tests/golden/116/GRCh38-pick-summary	
+pick-order-criteria	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::length_prefers_the_longer_cds_then_cdna;crates/vep-cli/src/pick.rs::ensembl_and_refseq_tie_on_a_single_source_cache;crates/vep-cli/src/pick.rs::pick_info_reads_every_criterion;crates/vep-cli/src/pick.rs::appris_rank_follows_the_perl_pattern	tests/golden/116/GRCh38-pick-summary	
 pick-ranking-of-regulatory-rows	OutputFactory.pm	implemented	open			
-pick_allele	OutputFactory.pm	implemented	open			
-pick_allele_gene	OutputFactory.pm	implemented	open			
-pick_order	Config.pm	implemented	open			
+pick_allele	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::pick_allele_keeps_one_row_per_alt;crates/vep-cli/src/pick.rs::structural_record_collapses_the_per_allele_flags	tests/golden/116/GRCh38-pick-summary	
+pick_allele_gene	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::pick_allele_gene_keeps_one_row_per_alt_and_gene	tests/golden/116/GRCh38-pick-summary	
+pick_order	Config.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::pick_order_rank_first_changes_the_pick;crates/vep-cli/src/pick.rs::pick_order_tokens_resolve_to_the_criteria;crates/vep-cli/src/config.rs::pick_order_rejects_a_bad_token_listing_perls_valid_values	tests/golden/116/GRCh38-pick-summary	
 pLI	pLI.pm	implemented	open			
 plugin	Runner.pm	implemented	landed:implemented	crates/vep-cli/src/annotator.rs::plugin_name_and_params_split_as_perl_does;crates/vep-cli/src/args.rs::repeated_plugin_flags_load_in_order	tests/golden/116/GRCh38-run-control	
 plugin-argument-parsing	Runner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::safe_makes_unknown_plugin_fatal;crates/vep-cli/tests/cli_run_control.rs::quiet_keeps_the_warning_in_the_warnings_file;crates/vep-cli/src/dylib_plugins.rs::load_unresolved_skips_an_unknown_name_and_dies_under_safe	tests/golden/116/GRCh38-run-control	
@@ -475,7 +475,7 @@ stdout-output	BaseRunner.pm	documented_subset	landed:documented_subset	crates/ve
 stop_codon_predicates_116	Variation/Utils/VariationEffect.pm	implemented	landed:implemented	crates/vep-effects/src/concordance_tests.rs::release116_insertion_keeping_a_lone_stop_is_stop_retained_without_inframe_insertion;crates/vep-effects/src/concordance_tests.rs::release116_deleting_the_stop_codon_is_stop_lost_without_inframe_deletion;crates/vep-effects/src/coding.rs::test_stop_gained_yields_to_stop_lost;crates/vep-effects/src/concordance_tests.rs::release116_partial_codon_deletion_is_never_stop_lost;crates/vep-effects/src/concordance_tests.rs::release116_stop_lost_with_an_x_peptide_reads_the_edited_stop_codon_as_lost;crates/vep-effects/src/concordance_tests.rs::release116_stop_lost_with_an_x_peptide_reads_the_edited_stop_codon_as_kept;crates/vep-effects/src/concordance_tests.rs::release116_stop_retained_cil_forward_strand_drops_a_four_base_insertion;crates/vep-effects/src/concordance_tests.rs::release116_stop_retained_cil_reverse_strand_keeps_a_four_base_insertion;crates/vep-effects/src/concordance_tests.rs::release116_frameshift_starting_at_the_stop_codon_is_not_a_frameshift;crates/vep-effects/src/concordance_tests.rs::release116_ref_eq_alt_sequence_reads_the_first_residue_past_the_protein;crates/vep-effects/src/sv/deletion.rs::stop_lost_withheld_in_the_partial_terminal_codon_forward_strand;crates/vep-effects/src/sv/deletion.rs::stop_lost_withheld_in_the_partial_terminal_codon_reverse_strand;crates/vep-effects/src/sv/deletion.rs::stop_lost_withheld_in_the_partial_terminal_codon_of_a_spliced_transcript;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_clipped_terminal_codon_is_complete;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_on_a_complete_last_codon_of_an_open_ended_segment;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_deletion_enters_the_partial_codon_from_the_utr;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_deletion_starts_on_the_last_complete_codon_forward_strand;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_deletion_starts_on_the_last_complete_codon_reverse_strand;crates/vep-effects/src/sv/cnv.rs::cn0_keeps_stop_lost_on_the_complete_last_codon_of_an_open_ended_segment;crates/vep-effects/src/sv/cnv.rs::cn0_withholds_stop_lost_in_the_partial_terminal_codon;crates/vep-effects/src/sv/cnv.rs::cn0_keeps_stop_lost_on_a_cds_start_nf_transcript_with_a_complete_stop_codon	tests/golden/116/GRCh38-release116	
 StructuralVariantOverlap	StructuralVariantOverlap.pm	error	open			
 SubsetVCF	SubsetVCF.pm	error	open			
-summary	Config.pm	implemented	open			
+summary	Config.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::summary_lists_unique_terms_of_the_record_in_rank_order;crates/vep-cli/src/config.rs::summary_refuses_its_incompatible_flags	tests/golden/116/GRCh38-pick-summary	
 sv-coordinates	BaseVCF4.pm	implemented	open			
 sv_json_coordinates_116	OutputFactory/JSON.pm	implemented	landed:implemented	crates/vep-io/src/output/json.rs::undefined_end_writes_the_start_alone;crates/vep-io/src/output/json.rs::undefined_start_writes_the_end_alone;crates/vep-io/src/output/json.rs::defined_range_writes_both_ends;crates/vep-io/src/output/json.rs::single_position_writes_both_ends;crates/vep-io/src/output/json.rs::total_length_forms_follow_the_perl_split	tests/golden/116/GRCh38-release116	
 swissprot-trembl	Database/Transcript.pm	implemented	open			

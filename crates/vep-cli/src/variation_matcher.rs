@@ -157,7 +157,8 @@ fn format_u64(mut value: u64, buf: &mut [u8; 20]) -> &[u8] {
 /// by `;`, keys in VEP's order (IMPACT, DISTANCE, STRAND, FLAGS, then the active
 /// flag fields, then plugin keys alphabetically), values escaping only `;` as
 /// `%3B`, lists joined by `,`, and a lone `-` when no field applies. `tc` is
-/// `None` for an intergenic row, which carries IMPACT and no STRAND.
+/// `None` for an intergenic row, which carries IMPACT and no STRAND, and for a
+/// summary row, which carries the variant-level keys alone.
 ///
 /// This is the hot path for the default `-o vep` format: it runs once per
 /// (variant x transcript consequence). With no optional field group active and no
@@ -170,7 +171,8 @@ pub fn write_extra_fields(
 ) -> std::io::Result<()> {
     let has_plugin_data =
         !variant.plugin_data.is_empty() || tc.is_some_and(|t| !t.plugin_data.is_empty());
-    if !plan.any_optional_group && !has_plugin_data && !variant.is_structural {
+    let summary_row = tc.is_none() && variant.summary_terms.is_some();
+    if !plan.any_optional_group && !has_plugin_data && !variant.is_structural && !summary_row {
         return write_user_group(tc, writer);
     }
 

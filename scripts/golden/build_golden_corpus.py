@@ -57,7 +57,9 @@ Subcommands:
             `name`, `flags` (the whole flag list of that run), `input` (a file in the corpus,
             `variants.vcf` by default), `stdin` (the input piped on standard input, with
             `-i STDIN`; its `flags` must name `--format`, which Ensembl VEP needs on
-            STDIN), `formats` (the output formats compared, all four by default),
+            STDIN), `unordered` (the reference's rows within a record come out in
+            Ensembl VEP's hash order, so the golden tests compare the rows and not
+            their order), `formats` (the output formats compared, all four by default),
             `expected_dir` (`expected_<name>` by default) and `covers`; `input` and
             `expected_dir` are paths inside the corpus directory. A set that exists is
             rewritten from the options, so `classify --flag-set` runs after it.
@@ -803,8 +805,9 @@ def flag_set_shape_error(fs: object) -> str | None:
     for key in ("input", "expected_dir"):
         if key in fs and not is_corpus_path(fs[key]):
             return f"flag set {name} {key} is not a path inside the corpus directory"
-    if "stdin" in fs and not isinstance(fs["stdin"], bool):
-        return f"flag set {name} stdin is not true or false"
+    for key in ("stdin", "unordered"):
+        if key in fs and not isinstance(fs[key], bool):
+            return f"flag set {name} {key} is not true or false"
     if "formats" in fs and not (isinstance(fs["formats"], list) and fs["formats"]
                                 and all(f in OUTPUT_FORMATS for f in fs["formats"])):
         return f"flag set {name} formats is not a non-empty subset of {','.join(OUTPUT_FORMATS)}"
@@ -1441,6 +1444,7 @@ def cmd_flag_set(args: argparse.Namespace) -> int:
                 " ".join(fs.get("flags") or []),
                 fs.get("input", DEFAULT_INPUT),
                 str(bool(fs.get("stdin"))).lower(),
+                str(bool(fs.get("unordered"))).lower(),
                 ",".join(fs.get("formats") or OUTPUT_FORMATS),
                 fs.get("expected_dir", f"expected_{fs['name']}"),
                 ",".join(fs.get("covers") or []),
@@ -1485,6 +1489,7 @@ def cmd_flag_set(args: argparse.Namespace) -> int:
         "flags": flags,
         "input": args.input,
         "stdin": bool(args.stdin),
+        "unordered": bool(args.unordered),
         "formats": formats,
         "expected_dir": expected_dir,
         "covers": covers,
@@ -1497,7 +1502,8 @@ def cmd_flag_set(args: argparse.Namespace) -> int:
         sets.append(entry)
     write_manifest(corpus, manifest)
     print(f"flag set {args.name}: {len(entry['flags'])} flags, input {entry['input']}"
-          f"{' on stdin' if entry['stdin'] else ''}, formats {','.join(formats)}, expected {entry['expected_dir']}, "
+          f"{' on stdin' if entry['stdin'] else ''}{', unordered' if entry['unordered'] else ''}, "
+          f"formats {','.join(formats)}, expected {entry['expected_dir']}, "
           f"covers {len(covers)}")
     return 0
 
@@ -1584,6 +1590,9 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--flag", action="append", help="a command-line flag of the run, written --flag=--pick (repeatable)")
     f.add_argument("--input", default=DEFAULT_INPUT, help=f"the input file inside the corpus (default: {DEFAULT_INPUT})")
     f.add_argument("--stdin", action="store_true", help="pipe the input on standard input and pass -i STDIN")
+    f.add_argument("--unordered", action="store_true",
+                   help="the reference's row order within a record is Ensembl VEP's hash order (--per_gene gene "
+                        "buckets, --pick_allele allele buckets), so the runner compares the entry set and not the order")
     f.add_argument("--format", default=None, help=f"the output formats compared, comma-separated (default: all of {','.join(OUTPUT_FORMATS)})")
     f.add_argument("--expected-dir", default=None, help="the directory of the set's expected outputs")
     f.add_argument("--covers", action="append", help="a parity-matrix row the set exercises (repeatable)")

@@ -548,12 +548,14 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
 ];
 
 /// One output row: an allele of the record and the transcript consequence it is
-/// reported against, or `None` for the record's intergenic row.
+/// reported against, or `None` for the record's intergenic row or its `--summary`
+/// or `--most_severe` row (the allele carrying [`InputVariant::summary_terms`]).
 pub type Row<'a> = (&'a InputVariant, Option<&'a TranscriptConsequence>);
 
 /// The rows one input record produces, in VEP's order: transcript-major (by
 /// transcript id) and allele-minor (ALT order) across every allele split from
-/// the record, then one intergenic row per allele that overlapped nothing.
+/// the record, then one intergenic row per allele that overlapped nothing, or
+/// the one `--summary` or `--most_severe` row the record's first allele carries.
 ///
 /// An allele whose chromosome had no transcripts at all (no `most_severe_consequence`)
 /// produces no row, as VEP writes nothing for it.
@@ -645,7 +647,39 @@ fn joined_unique(values: impl IntoIterator<Item = String>, sep: &str) -> String 
 /// is absent on this row. `list_sep` joins list-valued fields (`,` in the default
 /// and tab formats, `&` inside a VCF CSQ entry). Field names not in the table are
 /// looked up in the row's plugin data.
+///
+/// A row carrying the record's [`InputVariant::summary_terms`] is Ensembl VEP's
+/// `summary_only` row (OutputFactory.pm:426-458): the record's hash with the
+/// summary's `Consequence`, so it has the variant's identity, location and
+/// variant-level fields and nothing else, no Allele, IMPACT, Existing_variation
+/// or plugin key included.
 pub fn field_value(
+    field: &str,
+    variant: &InputVariant,
+    tc: Option<&TranscriptConsequence>,
+    options: &FieldOptions,
+    list_sep: &str,
+) -> String {
+    if let (None, Some(terms)) = (tc, &variant.summary_terms) {
+        return match field {
+            "Consequence" => terms
+                .iter()
+                .map(|c| c.so_term())
+                .collect::<Vec<_>>()
+                .join(list_sep),
+            // The keys `VariationFeature_to_output_hash` sets (OutputFactory.pm:883-1025
+            // at release/116.2) that the field table carries.
+            "Uploaded_variation" | "Location" | "VARIANT_CLASS" | "MINIMISED" | "CHECK_REF" => {
+                row_field_value(field, variant, None, options, list_sep)
+            }
+            _ => String::new(),
+        };
+    }
+    row_field_value(field, variant, tc, options, list_sep)
+}
+
+/// [`field_value`] of a row against a feature or an allele's intergenic row.
+fn row_field_value(
     field: &str,
     variant: &InputVariant,
     tc: Option<&TranscriptConsequence>,
@@ -738,11 +772,12 @@ pub fn field_value(
             })
             .unwrap_or_default(),
         "PICK" => {
-            if options.include_pick
-                && tc
-                    .map(|x| x.flags.iter().any(|f| f == "PICK"))
-                    .unwrap_or(false)
-            {
+            // An intergenic allele is flagged like a transcript allele
+            // (`VariationFeatureOverlapAllele_to_output_hash`, OutputFactory.pm:1363).
+            let picked = tc.map_or(variant.intergenic_pick, |x| {
+                x.flags.iter().any(|f| f == "PICK")
+            });
+            if options.include_pick && picked {
                 "1".to_string()
             } else {
                 String::new()
@@ -1197,6 +1232,123 @@ mod tests {
         assert_eq!(sv_overlap(&pair, Some(&tc)), None);
         assert!(!extra_keys(&pair, Some(&tc), &FieldOptions::default()).contains(&"OverlapBP"));
         assert_eq!(pair.location(), "21:1500-1501");
+    }
+
+    /// A `--summary` row is the record's hash alone (OutputFactory.pm:426-458
+    /// over `VariationFeature_to_output_hash`): the tab format prints its identity,
+    /// location and consequence list, `-` in every allele and feature column, no
+    /// IMPACT, STRAND, ALLELE_NUM or Existing_variation, and the variant-level
+    /// VARIANT_CLASS and MINIMISED beside them.
+    #[test]
+    fn summary_row_tab_cells_are_dashes() {
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.id = Some("rs1".into());
+        v.existing_variation = vec!["rs1".into()];
+        v.minimised = true;
+        v.most_severe_consequence = Some(Consequence::MissenseVariant);
+        v.summary_terms = Some(smallvec::smallvec![
+            Consequence::MissenseVariant,
+            Consequence::IntronVariant
+        ]);
+        let options = FieldOptions {
+            allele_number: true,
+            variant_class: true,
+            minimal: true,
+            check_existing: true,
+            symbol: true,
+            ..Default::default()
+        };
+        let rows = record_rows(&[&v]);
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].1.is_none());
+        let columns = tab_columns(&options, &[], None);
+        let cells: Vec<String> = columns
+            .iter()
+            .map(|col| {
+                let value = field_value(col, &v, None, &options, ",");
+                if value.is_empty() {
+                    "-".to_string()
+                } else {
+                    value
+                }
+            })
+            .collect();
+        assert_eq!(
+            cells,
+            [
+                "rs1",
+                "21:100",
+                "-",
+                "-",
+                "-",
+                "-",
+                "missense_variant,intron_variant",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "SNV",
+                "1",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+            ]
+        );
+        assert_eq!(
+            columns[13..],
+            [
+                "ALLELE_NUM",
+                "IMPACT",
+                "DISTANCE",
+                "STRAND",
+                "FLAGS",
+                "VARIANT_CLASS",
+                "MINIMISED",
+                "SYMBOL",
+                "SYMBOL_SOURCE",
+                "HGNC_ID",
+                "CLIN_SIG",
+                "SOMATIC",
+                "PHENO"
+            ]
+        );
+        assert_eq!(
+            field_value("Consequence", &v, None, &options, "&"),
+            "missense_variant&intron_variant"
+        );
+        v.plugin_data
+            .insert("CADD_PHRED".to_string(), "9".to_string());
+        assert_eq!(field_value("CADD_PHRED", &v, None, &options, ","), "");
+    }
+
+    /// An intergenic row flagged by `--flag_pick` prints `PICK=1` as a transcript
+    /// row does (OutputFactory.pm:1363 sets PICK on every overlap allele).
+    #[test]
+    fn intergenic_row_prints_pick_when_flagged() {
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let options = FieldOptions {
+            include_pick: true,
+            ..Default::default()
+        };
+        assert_eq!(field_value("PICK", &v, None, &options, ","), "");
+        v.intergenic_pick = true;
+        assert_eq!(field_value("PICK", &v, None, &options, ","), "1");
+        assert_eq!(
+            field_value("PICK", &v, None, &FieldOptions::default(), ","),
+            "",
+            "PICK is printed only under a `--flag_pick*` option"
+        );
     }
 
     #[test]

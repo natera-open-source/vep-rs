@@ -579,6 +579,27 @@ impl Transcript {
         Some(seq)
     }
 
+    /// Length of the cached translateable sequence of a transcript with a
+    /// translation, padding included
+    /// (`length($tr->{_variation_effect_feature_cache}->{translateable_seq})`,
+    /// OutputFactory.pm:743-748 at release/116.2); `None` without a translation.
+    pub fn cds_length(&self) -> Option<u32> {
+        self.translation.is_some().then(|| {
+            self.vefc
+                .as_ref()
+                .and_then(|v| v.translateable_seq.as_deref())
+                .map_or(0, |s| s.len() as u32)
+        })
+    }
+
+    /// The sum of the exon lengths (`Bio::EnsEMBL::Transcript::length`).
+    pub fn spliced_length(&self) -> u32 {
+        self.exons
+            .iter()
+            .map(|e| (e.end.saturating_sub(e.start) + 1) as u32)
+            .sum()
+    }
+
     /// Length of the transcript on the genome.
     pub fn genomic_length(&self) -> u64 {
         if self.end >= self.start {
@@ -967,6 +988,20 @@ mod tests {
             ..Default::default()
         });
         tx
+    }
+
+    /// The lengths the pick family compares (OutputFactory.pm:743-748): the
+    /// cached translateable sequence's, padding included, for a translated
+    /// transcript, and the exon sum for every transcript.
+    #[test]
+    fn cds_length_counts_the_padded_cached_sequence_and_spliced_length_the_exons() {
+        let padded = coding_transcript("", "TGCCCTAA", "TTT", 2);
+        assert_eq!(padded.cds_length(), Some(10));
+        assert_eq!(padded.spliced_length(), 11);
+        let mut non_coding = coding_transcript("GGAAC", "ATGCCCTAA", "TTTAAACC", 0);
+        non_coding.translation = None;
+        assert_eq!(non_coding.cds_length(), None);
+        assert_eq!(non_coding.spliced_length(), 22);
     }
 
     /// The cDNA is the 5' UTR, the translateable sequence without its

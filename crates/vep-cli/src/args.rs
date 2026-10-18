@@ -562,7 +562,9 @@ pub struct Args {
     #[arg(help_heading = "Filtering / Picking", long = "flag_pick_allele_gene")]
     pub flag_pick_allele_gene: bool,
 
-    /// Accepted for VEP compatibility; not implemented (the pick order is fixed to VEP's default)
+    /// The criteria the pick family compares, in order, as a comma-separated list; a
+    /// shorter list compares its criteria and then keeps the first transcript in
+    /// stable-id order. Default: mane_select,mane_plus_clinical,canonical,appris,tsl,biotype,ccds,rank,length,ensembl,refseq
     #[arg(
         help_heading = "Filtering / Picking",
         long = "pick_order",

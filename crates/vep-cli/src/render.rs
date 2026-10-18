@@ -93,9 +93,20 @@ pub(crate) fn render_default_record<'a>(
         out.push(b'\t');
         out.extend_from_slice(cols.location.as_bytes());
         out.push(b'\t');
-        out.extend_from_slice(cols.allele.as_bytes());
-        match tc {
-            None => {
+        match (tc, &variant.summary_terms) {
+            (None, Some(terms)) => {
+                // The `--summary` or `--most_severe` row: the record's hash alone
+                // (`VariationFeature_to_output_hash`), so every allele and feature
+                // column is `-`, Existing_variation included, and the Extra column
+                // holds the variant-level keys or `-` (VEP_output.pm:104).
+                out.extend_from_slice(b"-\t-\t-\t-\t");
+                write_so_terms(out, terms);
+                out.extend_from_slice(b"\t-\t-\t-\t-\t-\t-\t");
+                variation_matcher::write_extra_fields(variant, None, plan, out)?;
+                out.push(b'\n');
+            }
+            (None, None) => {
+                out.extend_from_slice(cols.allele.as_bytes());
                 // Intergenic: no feature columns, the most severe consequence, and
                 // an Extra column carrying IMPACT alone (no STRAND), as VEP does.
                 let consequence_str = variant
@@ -110,7 +121,8 @@ pub(crate) fn render_default_record<'a>(
                 variation_matcher::write_extra_fields(variant, None, plan, out)?;
                 out.push(b'\n');
             }
-            Some(tc) => {
+            (Some(tc), _) => {
+                out.extend_from_slice(cols.allele.as_bytes());
                 out.push(b'\t');
                 out.extend_from_slice(tc.gene_id.as_bytes());
                 out.push(b'\t');
@@ -118,12 +130,7 @@ pub(crate) fn render_default_record<'a>(
                 out.push(b'\t');
                 out.extend_from_slice(tc.feature_type.as_str().as_bytes());
                 out.push(b'\t');
-                for (i, c) in tc.consequences.iter().enumerate() {
-                    if i > 0 {
-                        out.push(b',');
-                    }
-                    out.extend_from_slice(c.so_term().as_bytes());
-                }
+                write_so_terms(out, &tc.consequences);
                 for field in [
                     tc.cdna_position.as_deref().unwrap_or("-"),
                     tc.cds_position.as_deref().unwrap_or("-"),
@@ -142,4 +149,60 @@ pub(crate) fn render_default_record<'a>(
         }
     }
     Ok(())
+}
+
+/// Writes the SO terms of a Consequence column, `,`-joined.
+fn write_so_terms(out: &mut Vec<u8>, terms: &[Consequence]) {
+    for (i, term) in terms.iter().enumerate() {
+        if i > 0 {
+            out.push(b',');
+        }
+        out.extend_from_slice(term.so_term().as_bytes());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vep_io::output::fields::FieldOptions;
+
+    /// The `--most_severe` row of the default format is the record's hash
+    /// (`VariationFeature_to_output_hash`, OutputFactory.pm:883-1025): `-` in the
+    /// Allele, feature, position and Existing_variation columns, the one term in
+    /// Consequence, and an Extra of the variant-level keys or `-` alone
+    /// (VEP_output.pm:104).
+    #[test]
+    fn most_severe_row_prints_dash_allele_feature_columns_and_extra() {
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.id = Some("rs1".into());
+        v.existing_variation = vec!["rs1".into()];
+        v.most_severe_consequence = Some(Consequence::MissenseVariant);
+        v.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        let mut rows = Vec::new();
+        let mut out = Vec::new();
+        let plan = ExtraFieldsPlan::new(FieldOptions::default());
+        render_default_record(&mut out, &[&v], &plan, &mut rows).unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "rs1\t21:100\t-\t-\t-\t-\tmissense_variant\t-\t-\t-\t-\t-\t-\t-\n"
+        );
+        let mut out = Vec::new();
+        let plan = ExtraFieldsPlan::new(FieldOptions {
+            variant_class: true,
+            symbol: true,
+            check_existing: true,
+            ..Default::default()
+        });
+        render_default_record(&mut out, &[&v], &plan, &mut rows).unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "rs1\t21:100\t-\t-\t-\t-\tmissense_variant\t-\t-\t-\t-\t-\t-\tVARIANT_CLASS=SNV\n"
+        );
+        // The other allele of the record carries no row.
+        let mut other = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"T".to_vec());
+        other.allele_index = 1;
+        let mut out = Vec::new();
+        render_default_record(&mut out, &[&v, &other], &plan, &mut rows).unwrap();
+        assert_eq!(String::from_utf8(out).unwrap().lines().count(), 1);
+    }
 }

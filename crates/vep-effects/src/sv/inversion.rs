@@ -345,6 +345,17 @@ mod tests {
         );
     }
 
+    /// The row carries the transcript lengths the pick family ranks by
+    /// (OutputFactory.pm:743-748 at release/116.2), as every other row does.
+    #[test]
+    fn inversion_rows_carry_the_transcript_lengths() {
+        let tx = make_test_transcript();
+        let csq = calculate(&make_inversion(25_000_200, 25_000_301), &tx, 5000, 5000).unwrap();
+        assert_eq!(csq.cds_length, tx.cds_length());
+        assert_eq!(csq.cdna_length, tx.spliced_length());
+        assert!(csq.cds_length.is_some_and(|n| n > 0) && csq.cdna_length > 0);
+    }
+
     /// Non-coding counterpart of the donor-dinucleotide test above.
     ///
     /// `overlaps_any_intron_trimmed` is called at two sites: once in

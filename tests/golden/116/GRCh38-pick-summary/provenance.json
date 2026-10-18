@@ -1,0 +1,180 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "bea179c7e5a9309eedb07fdf55246f42",
+  "arch": "arm64",
+  "flags_passed": []
+ },
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [<flag set flags>] [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "one SNV record per locus at 35 chromosome 21 loci chosen from the cache's transcript set for the pick family: loci inside an exon of a MANE Select transcript of a gene with three or more isoforms; loci whose 5 kb window holds two or more isoforms of one gene and none canonical, so the pick falls to APPRIS, TSL, biotype, length or the stable-id tie; loci whose window holds three or more genes; loci inside an exon of one isoform and an intron of another; and loci with no transcript within 5 kb. Eleven records carry two alternate alleles and five carry three; the reference base is the GRCh38 primary assembly's",
+ "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite ps=<reference>=<input> --k 2000 --seed 1 --multi-allelic-per-suite 40 --covers pick --covers most_severe --covers summary --matrix tests/parity/matrix.tsv --cache <chr21 json cache> --out tests/golden/116/GRCh38-pick-summary; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/golden/build_golden_corpus.py flag-set (one per flag set, --unordered for pick-allele, per-gene and pick-allele-gene) and classify (the manifest's run and each flag set)",
+ "sha256": {
+  "default.txt": "a7391592770a0a4b9b28dce35f3814aa5c3bf28df1237b1d8e0fc725baf23cc4",
+  "tab.txt": "ed277bb13c6e06d9037e51a095f29c9caeee66ab62b2b2ce9fefb030585fbb3b",
+  "vcf.vcf": "76097e8b9c3cd23b22fdc776c2adfda8b46e98cef6af852616d0bc3a7a2a9c25",
+  "json.jsonl": "e623c39d53295a548c2577c3165a53b174b26f829759afc2acd6b68047f4079c"
+ },
+ "variants_vcf_sha256": "95f8739f8c0fff56698d25025f23d86e16623fc77dbc8cd43934f35ead74e9f3",
+ "flag_sets": {
+  "pick": {
+   "flags": [
+    "--pick"
+   ],
+   "expected_dir": "expected_pick",
+   "sha256": {
+    "default.txt": "e801983497abe37b05af6006be2a1159c7063d78efb090bc0d2260dbdbb88a3c",
+    "tab.txt": "9d37527c540cf8cb27f431e92c96e640110d3239088c33d6819a3f6e4d529be1",
+    "vcf.vcf": "10edcef85b5a5a351df6c8402878a7d592241af6b599ec33873772eca7442d98",
+    "json.jsonl": "bf09aa98f527000b157937ce89f271f4684edb278bf6a652c67043046c2f2478"
+   }
+  },
+  "pick-allele": {
+   "flags": [
+    "--pick_allele"
+   ],
+   "expected_dir": "expected_pick-allele",
+   "sha256": {
+    "default.txt": "bd22c7fba1c2219857948597869205acdeea7d93ec686fe091e4d92099c2e83a",
+    "tab.txt": "c32018f51a447e9024d9bba38621adbaec9ae0b1c019c65bf9e6d87aadd4872b",
+    "vcf.vcf": "3ef0da47982bad0285754ff85da5bcf7a0794a56eb0de6fd9f643a74c9bd9e55",
+    "json.jsonl": "273902c33687413497811b22b459c5995f4c123d0439fa348dfb7afa5275b195"
+   }
+  },
+  "per-gene": {
+   "flags": [
+    "--per_gene"
+   ],
+   "expected_dir": "expected_per-gene",
+   "sha256": {
+    "default.txt": "d98883fb45d3ef5ed22da5e976e2887819867522e8fc0b9c78080c2c1b6d1863",
+    "tab.txt": "d5aa6e66f4bdbb926c7cf0691ce36471e407213cb6053b5335ef4b63fcdf3976",
+    "vcf.vcf": "6777fe92e3cf33600763868499993dbd388598aba88fa12dd4b28e92905ad77b",
+    "json.jsonl": "e048155a76ae7807c98855745833eb80e648d473cef8098cb5311f6ac2b9d443"
+   }
+  },
+  "pick-allele-gene": {
+   "flags": [
+    "--pick_allele_gene"
+   ],
+   "expected_dir": "expected_pick-allele-gene",
+   "sha256": {
+    "default.txt": "7a57ca1489b276c105bc14be91e05c37d2a01860020762e19dd5fc74cf929538",
+    "tab.txt": "393b25e7af75fff3d90e5d4ee4df347d809133049161c7d2dc6c6b73302126f4",
+    "vcf.vcf": "b2b9ed0fb33206fa68b4c6064c9f16bd7bc803afb71a27433c3d0bd458193251",
+    "json.jsonl": "2ba7e609b76dc6a810d0eac5ac0ad9b0a11d26f061c52f5ab8da9b3c0f0e53b4"
+   }
+  },
+  "flag-pick": {
+   "flags": [
+    "--flag_pick"
+   ],
+   "expected_dir": "expected_flag-pick",
+   "sha256": {
+    "default.txt": "7780c8a43cbd279ad220275a3694199681c316b519553de4e3defa26ebf4c531",
+    "tab.txt": "e91a98af79a5b03918e70734af4b54f2db5d99afa279571b93db0b9e090c45f9",
+    "vcf.vcf": "2a4b2062e368b6ac8adf7c8d52d22f7843b8943976ee75a640036ed8697f8b18",
+    "json.jsonl": "c8a4283f9fa4b44419c9f434c79cf349c916d007555ee824440e0086dc8f9898"
+   }
+  },
+  "flag-pick-allele": {
+   "flags": [
+    "--flag_pick_allele"
+   ],
+   "expected_dir": "expected_flag-pick-allele",
+   "sha256": {
+    "default.txt": "58f5b1855eceb0bcc8a48106c81a3e2a08eae597d8b320868a82a0e0f613d3bf",
+    "tab.txt": "eedc99fb78d470ab82f73a994a41c57749af7c0f05b1a6b99f64e84eb0701397",
+    "vcf.vcf": "459cf8b4078c04f62b537701a0170b34c847cbd2a07a6a8a034f464e0db94655",
+    "json.jsonl": "859c25366ec7e6280d6e054fe32190916d6b68fd34b18aca7663063bde4f0867"
+   }
+  },
+  "flag-pick-allele-gene": {
+   "flags": [
+    "--flag_pick_allele_gene"
+   ],
+   "expected_dir": "expected_flag-pick-allele-gene",
+   "sha256": {
+    "default.txt": "a44333fa7a91c7cbd2c0d2e4a7dadaecceff8ea59920f34b43237ed59064bed6",
+    "tab.txt": "840105c7498eb8b00c1f6237c6eb8c2633b4db49808cf6c5db10ff821ec4e89a",
+    "vcf.vcf": "32b5253c030eeb652de27456625b32077389d8f5f36b8110367a7516abc323bd",
+    "json.jsonl": "221bbc98c997ffc6796acfbca38c437e98f071326bb316fa467e37b39916398a"
+   }
+  },
+  "pick-order": {
+   "flags": [
+    "--pick",
+    "--pick_order",
+    "rank,canonical,length"
+   ],
+   "expected_dir": "expected_pick-order",
+   "sha256": {
+    "default.txt": "436b67762f1dd2c37d6ace9f78db21ec1476b7602c6a38d6a263870ed12a7828",
+    "tab.txt": "02623d88b9edce3d475382071ace872367d6d24077621651be37586e498eee3f",
+    "vcf.vcf": "bd3428eb2dc04d4c45ced9097196b482e323699ab431344c35badf66fc83e3d9",
+    "json.jsonl": "dfce76515ae90d1bdfe3a6559a9fbf779274f1cd54af35a9416ff789c9e37240"
+   }
+  },
+  "most-severe": {
+   "flags": [
+    "--most_severe"
+   ],
+   "expected_dir": "expected_most-severe",
+   "sha256": {
+    "default.txt": "3cc80a00a4fdeda0a6737271d9f0d50cdb680dbcd0240a7634471bbd0b42631e",
+    "tab.txt": "c7960d5378bf372342eceee7f5b11630b125bedc4f56b5b531335673ab50b738",
+    "json.jsonl": "f128c1b974c1bbd9b43baedb0faaadd9f8ce7b65af244aff784d0ae7fd7b7529"
+   }
+  },
+  "summary": {
+   "flags": [
+    "--summary"
+   ],
+   "expected_dir": "expected_summary",
+   "sha256": {
+    "default.txt": "e0f57c5b8baa1b49ae97925b944b1ec6b9abdf4f1cebc36818e0e502d679cf68",
+    "tab.txt": "1752a09352747449b793a1d7ca5ffbd6f09d77d9d84d1f53e2561c756e92eb75",
+    "json.jsonl": "576687aa21b9eed33e4d1d95e27914a63f9707786f5656410d28fb2640632b1d"
+   }
+  },
+  "per-gene-most-severe": {
+   "flags": [
+    "--per_gene",
+    "--most_severe"
+   ],
+   "expected_dir": "expected_per-gene-most-severe",
+   "sha256": {
+    "default.txt": "d7094359a70de6309f7667a3ee9a87f01d7da877a1c6350d9996a256b723bd6d",
+    "tab.txt": "e621983dfc9717397e27ce350689e1e6d2c05afcc321998683bc2d8de3e5221a",
+    "json.jsonl": "6b01795f798e5753b3c4084f58cdfd36f5afe6fc47429523298d98afe8f15aa0"
+   }
+  },
+  "most-severe-vf-keys": {
+   "flags": [
+    "--most_severe",
+    "--variant_class"
+   ],
+   "expected_dir": "expected_most-severe-vf-keys",
+   "sha256": {
+    "default.txt": "2cb27e23320ea25d6be903334703097c1f4fa3a99e1256f320b8baf928f834e9",
+    "tab.txt": "9c7e7edc0fc1e822af1476ab6b194c6fffcaecffede2b81189d27d2410becb14",
+    "json.jsonl": "5153e5b4a8dac9629bb2a216d8aba82ea4eebc5558d13f5afef32796bfa810e2"
+   }
+  }
+ },
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 985
+  },
+  "shards": 23,
+  "spans_by_chromosome": {
+   "21": 35
+  }
+ }
+}

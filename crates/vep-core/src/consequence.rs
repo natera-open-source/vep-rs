@@ -581,6 +581,21 @@ pub struct TranscriptConsequence {
     pub trembl: Option<String>,
     /// RefSeq transcript ID.
     pub refseq: Option<String>,
+    /// Length of the transcript's translateable sequence as the cache stores it,
+    /// `None` for a transcript without a translation. The `length` pick
+    /// criterion reads it (OutputFactory.pm:743-748 at release/116.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cds_length: Option<u32>,
+    /// The transcript's spliced length, the sum of its exon lengths
+    /// (`Bio::EnsEMBL::Transcript::length`), which the `length` pick criterion
+    /// reads for a transcript without a translation.
+    #[serde(default)]
+    pub cdna_length: u32,
+    /// The cache the transcript came from in a merged cache (`_source_cache`),
+    /// which the `ensembl` and `refseq` pick criteria read; `None` on every
+    /// single-source cache, where both criteria score alike.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_cache: Option<SourceCache>,
     /// Plugin annotation data (transcript-consequence-level).
     /// Keyed by field name (e.g., "REVEL_score"), value is the annotation string.
     #[serde(default, skip_serializing_if = "indexmap::IndexMap::is_empty")]
@@ -639,6 +654,15 @@ impl fmt::Display for FeatureType {
     }
 }
 
+/// The cache a transcript of a merged cache came from: Ensembl VEP's
+/// `_source_cache` key, `Ensembl` or `RefSeq` (`Pipeline/DumpVEP/MergeVEP.pm`
+/// at release/116.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum SourceCache {
+    Ensembl,
+    RefSeq,
+}
+
 impl Default for TranscriptConsequence {
     fn default() -> Self {
         Self {
@@ -678,6 +702,9 @@ impl Default for TranscriptConsequence {
             swissprot: None,
             trembl: None,
             refseq: None,
+            cds_length: None,
+            cdna_length: 0,
+            source_cache: None,
             plugin_data: indexmap::IndexMap::new(),
             feature_start: 0,
             feature_end: 0,
@@ -733,6 +760,9 @@ impl TranscriptConsequence {
             swissprot: transcript.swissprot.clone(),
             trembl: transcript.trembl.clone(),
             refseq: transcript.refseq.clone(),
+            cds_length: transcript.cds_length(),
+            cdna_length: transcript.spliced_length(),
+            source_cache: None,
             plugin_data: indexmap::IndexMap::new(),
             feature_start: transcript.start,
             feature_end: transcript.end,

@@ -186,10 +186,11 @@ mod tests {
 
     /// The consequence document a plugin receives carries these keys and no
     /// other: every field of `TranscriptConsequence` except `id_rank`, with
-    /// `plugin_data` and `loftee_ctx` present only when populated.
+    /// `plugin_data`, `loftee_ctx`, `cds_length` and `source_cache` present only
+    /// when populated.
     #[test]
     fn consequence_json_carries_every_documented_key_and_nothing_else() {
-        const ALWAYS: [&str; 38] = [
+        const ALWAYS: [&str; 39] = [
             "transcript_id",
             "gene_id",
             "gene_symbol",
@@ -226,6 +227,7 @@ mod tests {
             "swissprot",
             "trembl",
             "refseq",
+            "cdna_length",
             "feature_start",
             "feature_end",
         ];
@@ -251,8 +253,12 @@ mod tests {
                 &crate::runner::make_runner_test_transcript("ENST1", "ENSG1", "1", 100),
             ),
         ));
+        tc.cds_length = Some(300);
+        tc.source_cache = Some(vep_core::consequence::SourceCache::Ensembl);
         expected.push("plugin_data".to_string());
         expected.push("loftee_ctx".to_string());
+        expected.push("cds_length".to_string());
+        expected.push("source_cache".to_string());
         expected.sort();
         assert_eq!(sorted_keys(&tc), expected);
     }

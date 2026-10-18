@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use crate::consequence::{Consequence, TranscriptConsequence};
+use crate::consequence::{Consequence, ConsequenceList, TranscriptConsequence};
 use crate::coordinate::{normalize_chromosome, Strand};
 use crate::sv_routing::{perl_true, sv_so_term_and_class, sv_type_abbreviation};
 
@@ -312,6 +312,21 @@ pub struct InputVariant {
     /// sequence variant and for a structural type the table lacks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub record_so_term: Option<String>,
+    /// The record's `--summary` or `--most_severe` row, carried by one allele of
+    /// the record: the unique consequence terms of the rows left after the row
+    /// filters and the pick family, in rank order (`--summary`), or the first of
+    /// them alone (`--most_severe`); `OutputFactory.pm:426-458` at release/116.2.
+    /// The allele then has no transcript consequences, its
+    /// `most_severe_consequence` is the first term, and the other alleles of the
+    /// record carry no row.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary_terms: Option<ConsequenceList>,
+    /// The allele's intergenic row is the one a `--flag_pick`, `--flag_pick_allele`
+    /// or `--flag_pick_allele_gene` run picked, so it prints `PICK=1`: Ensembl VEP
+    /// flags the intergenic allele of a record that overlaps no transcript as it
+    /// flags a transcript allele (`OutputFactory.pm:1363` at release/116.2).
+    #[serde(default)]
+    pub intergenic_pick: bool,
 }
 
 /// An empty placeholder: no allocation, every field at its zero value. Lets a
@@ -365,6 +380,8 @@ impl Default for InputVariant {
             record_allele_string_multi: None,
             input_line_name: None,
             record_so_term: None,
+            summary_terms: None,
+            intergenic_pick: false,
         }
     }
 }
@@ -437,6 +454,8 @@ impl InputVariant {
             uploaded_allele_string: None,
             input_line_name: None,
             record_so_term: None,
+            summary_terms: None,
+            intergenic_pick: false,
         }
     }
 
@@ -458,6 +477,22 @@ impl InputVariant {
             .join("/");
         variant.no_allele = true;
         variant
+    }
+
+    /// Whether two alleles were split from one input record: both carry the same
+    /// record ordinal, or, when neither carries one (alleles built from a line
+    /// alone), they share the line's identity. The pipeline lays a batch out in
+    /// record order, so the alleles of one record are adjacent and
+    /// `chunk_by_mut(InputVariant::same_record)` yields one chunk per record.
+    pub fn same_record(&self, other: &InputVariant) -> bool {
+        if self.input_record != 0 || other.input_record != 0 {
+            return self.input_record == other.input_record;
+        }
+        self.original_chr == other.original_chr
+            && self.start == other.start
+            && self.id == other.id
+            && self.ref_allele == other.ref_allele
+            && self.uploaded_allele_string == other.uploaded_allele_string
     }
 
     /// Location string in VEP format ("chr:start" or "chr:start-end").

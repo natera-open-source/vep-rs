@@ -705,6 +705,21 @@ mod tests {
         assert!(tc.consequences.contains(&Consequence::FeatureElongation));
     }
 
+    /// The row carries the transcript lengths the pick family ranks by
+    /// (OutputFactory.pm:743-748 at release/116.2), as every other row does.
+    #[test]
+    fn insertion_rows_carry_the_transcript_lengths() {
+        let tx = make_test_transcript();
+        let point = make_point_ins(25_002_100);
+        let pair = make_pair_ins(25_002_100, VariantClass::StructuralInsertion);
+        for insertion in [point, pair] {
+            let tc = calculate(&insertion, &tx, 5000, 5000).unwrap();
+            assert_eq!(tc.cds_length, tx.cds_length());
+            assert_eq!(tc.cdna_length, tx.spliced_length());
+            assert!(tc.cds_length.is_some_and(|n| n > 0) && tc.cdna_length > 0);
+        }
+    }
+
     #[test]
     fn test_insertion_in_3prime_utr() {
         let tx = make_test_transcript();

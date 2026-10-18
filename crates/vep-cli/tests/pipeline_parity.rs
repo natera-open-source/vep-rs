@@ -156,6 +156,130 @@ fn assert_same(expected: &[u8], actual: &[u8], what: &str) {
     panic!("{what}\n{first_diff}");
 }
 
+/// The default-format output with everything `LoFTEE` adds removed: its
+/// `## LoF... :` header lines and every `LoF` key of the Extra column; a column
+/// left with no key reads `-`.
+fn without_plugin_keys(output: &[u8]) -> Vec<u8> {
+    let text = String::from_utf8_lossy(output);
+    let mut kept = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        if line.starts_with('#') {
+            if !line.starts_with("## LoF") {
+                kept.push_str(line);
+            }
+            continue;
+        }
+        let (body, newline) = match line.strip_suffix('\n') {
+            Some(body) => (body, "\n"),
+            None => (line, ""),
+        };
+        let (columns, extra_column) = body.rsplit_once('\t').unwrap_or((body, ""));
+        let extra: Vec<&str> = extra_column
+            .split(';')
+            .filter(|kv| !kv.starts_with("LoF"))
+            .collect();
+        kept.push_str(columns);
+        kept.push('\t');
+        if extra.is_empty() {
+            kept.push('-');
+        } else {
+            kept.push_str(&extra.join(";"));
+        }
+        kept.push_str(newline);
+    }
+    kept.into_bytes()
+}
+
+/// The corpus VCF with a breakend record appended whose two ends lie in the
+/// chromosome 21 centromere, megabases from any transcript of the corpus
+/// cache: no allele of it reaches a transcript, so its intergenic rows exist
+/// only once the record rules have run.
+fn with_intergenic_breakend(corpus: &Corpus, dir: &Path) -> std::path::PathBuf {
+    let mut text = fs::read_to_string(corpus.dir.join("variants.vcf")).unwrap();
+    text.push_str("21\t12000000\tintergenic_bnd\tN\tN[21:12500000[\t.\t.\tSVTYPE=BND\n");
+    let path = dir.join("intergenic_breakend.vcf");
+    fs::write(&path, text).unwrap();
+    path
+}
+
+/// The record step runs at the same point in both coordinator paths: the fused
+/// path a run without plugins takes and the batched path a plugin forces
+/// (`LoFTEE` loads with no data file and adds only its own `LoF` keys). With
+/// `--flag_pick` the two paths mark the same row of every record, and with
+/// `--most_severe` they squash every record to the same row, once the plugin's
+/// keys are removed from the Extra column. The corpus's sequence variants read
+/// the same whether the step runs before or after the record rules; the
+/// intergenic breakend record has no row before them, so its flagged row (one
+/// row under `--most_severe`) shows the step ran after.
+#[test]
+fn pick_family_runs_at_the_same_point_in_both_coordinator_paths() {
+    let tmp = tempfile::tempdir().unwrap();
+    let corpus = corpora()
+        .into_iter()
+        .find(|c| c.name == "GRCh38-pick-summary")
+        .expect("the pick-summary corpus is committed");
+    let input = with_intergenic_breakend(&corpus, tmp.path());
+    for flag in ["--flag_pick", "--most_severe"] {
+        let fused_out = tmp.path().join(format!("fused{flag}.out"));
+        let fused = vep(
+            &input,
+            &corpus.cache_dir(),
+            &corpus.assembly,
+            &fused_out,
+            &[flag, "--buffer_size", "7", "--fork", "4"],
+        );
+        assert!(fused.success, "{flag} without plugin: {}", fused.stderr);
+        let fused_text = String::from_utf8_lossy(&fused.output);
+        let breakend_rows: Vec<&str> = fused_text
+            .lines()
+            .filter(|l| l.starts_with("intergenic_bnd\t"))
+            .collect();
+        let picked = breakend_rows
+            .iter()
+            .filter(|l| {
+                l.rsplit('\t')
+                    .next()
+                    .unwrap()
+                    .split(';')
+                    .any(|kv| kv == "PICK=1")
+            })
+            .count();
+        match flag {
+            "--flag_pick" => assert!(
+                !breakend_rows.is_empty() && picked == 1,
+                "{flag}: the breakend record's rows {breakend_rows:?} carry {picked} PICK flags, not one"
+            ),
+            _ => assert_eq!(
+                breakend_rows.len(),
+                1,
+                "{flag}: the breakend record keeps {breakend_rows:?}, not one row"
+            ),
+        }
+        let batched_out = tmp.path().join(format!("batched{flag}.out"));
+        let batched = vep(
+            &input,
+            &corpus.cache_dir(),
+            &corpus.assembly,
+            &batched_out,
+            &[
+                flag,
+                "--plugin",
+                "LoFTEE",
+                "--buffer_size",
+                "7",
+                "--fork",
+                "4",
+            ],
+        );
+        assert!(batched.success, "{flag} with plugin: {}", batched.stderr);
+        assert_same(
+            &without_run_headers(&fused.output),
+            &without_plugin_keys(&without_run_headers(&batched.output)),
+            &format!("{flag}: the batched path differs from the fused path"),
+        );
+    }
+}
+
 #[test]
 fn fork_1_matches_fork_4_on_every_format() {
     let tmp = tempfile::tempdir().unwrap();

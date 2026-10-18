@@ -488,6 +488,7 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "input": "../x.vcf"}]', "flag set a input is not a path inside the corpus directory"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "expected_dir": ""}]', "flag set a expected_dir is not a path inside the corpus directory"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "stdin": "true"}]', "flag set a stdin is not true or false"),
+        ('"covers": ["symbol"], "flag_sets": [{"name": "a", "unordered": 1}]', "flag set a unordered is not true or false"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "formats": []}]', "flag set a formats is not a non-empty subset of default,tab,vcf,json"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "formats": "vcf"}]', "flag set a formats is not a non-empty subset of default,tab,vcf,json"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "stdin": true, "flags": ["--pick"]}]', "flag set a runs on stdin without --format among its flags"),
@@ -1047,9 +1048,9 @@ def test_select_requires_named_genotype_classes_and_one_sample_set(tmp_path: Pat
 
 
 def test_flag_set_subcommand_writes_an_entry(tmp_path: Path, capsys):
-    """An entry carries the whole flag list of its run, its input and stdin mode, the formats
-    compared, its expected directory and its covers; a set is rewritten by name; the inputs
-    the harness cannot run are refused before anything is written."""
+    """An entry carries the whole flag list of its run, its input, stdin and unordered modes,
+    the formats compared, its expected directory and its covers; a set is rewritten by name; the
+    inputs the harness cannot run are refused before anything is written."""
     ref, vcf = _two_record_suite(tmp_path)
     out = tmp_path / "corpus"
     matrix = _matrix(tmp_path, "symbol", "pick", "per_gene")
@@ -1059,28 +1060,33 @@ def test_flag_set_subcommand_writes_an_entry(tmp_path: Path, capsys):
     assert capsys.readouterr().out == "flag set pick: 2 flags, input variants.vcf, formats default,tab,vcf,json, expected expected_pick, covers 1\n"
     m = json.loads((out / "manifest.json").read_text())
     assert m["flag_sets"] == [{
-        "name": "pick", "flags": ["--pick", "--symbol"], "input": "variants.vcf", "stdin": False,
+        "name": "pick", "flags": ["--pick", "--symbol"], "input": "variants.vcf", "stdin": False, "unordered": False,
         "formats": ["default", "tab", "vcf", "json"], "expected_dir": "expected_pick", "covers": ["pick"],
     }]
     (out / "variants.ensembl").write_text("21\t100\t100\tA/G\t+\n", encoding="utf-8")
     assert bgc.main(["flag-set", str(out), "--name", "ensembl-stdin", "--flag=--format", "--flag=ensembl", "--input", "variants.ensembl",
                      "--stdin", "--format", "default,json", "--expected-dir", "expected_ens", "--matrix", str(matrix)]) == 0
-    assert bgc.main(["flag-set", str(out), "--name", "pick", "--flag=--per_gene", "--covers", "per_gene", "--matrix", str(matrix)]) == 0
+    # A run whose reference orders a record's rows by Ensembl VEP's hash order is marked unordered.
+    assert bgc.main(["flag-set", str(out), "--name", "pick", "--flag=--per_gene", "--unordered", "--covers", "per_gene",
+                     "--matrix", str(matrix)]) == 0
+    assert capsys.readouterr().out.endswith(
+        "flag set pick: 1 flags, input variants.vcf, unordered, formats default,tab,vcf,json, expected expected_pick, covers 1\n")
     m = json.loads((out / "manifest.json").read_text())
     assert [fs["name"] for fs in m["flag_sets"]] == ["pick", "ensembl-stdin"]
     assert m["flag_sets"][0]["flags"] == ["--per_gene"] and m["flag_sets"][0]["covers"] == ["per_gene"]
+    assert m["flag_sets"][0]["unordered"] is True
     assert m["flag_sets"][1] == {
         "name": "ensembl-stdin", "flags": ["--format", "ensembl"], "input": "variants.ensembl", "stdin": True,
-        "formats": ["default", "json"], "expected_dir": "expected_ens", "covers": [],
+        "unordered": False, "formats": ["default", "json"], "expected_dir": "expected_ens", "covers": [],
     }
     # `--format=<format>` is the other spelling of the format a stdin run must name.
     assert bgc.main(["flag-set", str(out), "--name", "eq", "--flag=--format=vcf", "--stdin", "--matrix", str(matrix)]) == 0
     capsys.readouterr()
     assert bgc.main(["flag-set", str(out), "--list"]) == 0
     assert capsys.readouterr().out == (
-        "pick\t--per_gene\tvariants.vcf\tfalse\tdefault,tab,vcf,json\texpected_pick\tper_gene\n"
-        "ensembl-stdin\t--format ensembl\tvariants.ensembl\ttrue\tdefault,json\texpected_ens\t\n"
-        "eq\t--format=vcf\tvariants.vcf\ttrue\tdefault,tab,vcf,json\texpected_eq\t\n"
+        "pick\t--per_gene\tvariants.vcf\tfalse\ttrue\tdefault,tab,vcf,json\texpected_pick\tper_gene\n"
+        "ensembl-stdin\t--format ensembl\tvariants.ensembl\ttrue\tfalse\tdefault,json\texpected_ens\t\n"
+        "eq\t--format=vcf\tvariants.vcf\ttrue\tfalse\tdefault,tab,vcf,json\texpected_eq\t\n"
     )
     before = (out / "manifest.json").read_text()
     refused = [

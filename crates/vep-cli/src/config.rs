@@ -1356,6 +1356,117 @@ mod tests {
         );
     }
 
+    /// `--most_severe` refuses every flag of its `%INCOMPATIBLE` list
+    /// (Config.pm:616) with Ensembl VEP's message; `--per_gene`, which the list
+    /// omits, is accepted beside it.
+    #[test]
+    fn most_severe_refuses_its_incompatible_flags() {
+        let incompatible = [
+            "biotype",
+            "no_intergenic",
+            "protein",
+            "symbol",
+            "coding_only",
+            "ccds",
+            "mane",
+            "mane_select",
+            "canonical",
+            "xref_refseq",
+            "numbers",
+            "domains",
+            "tsl",
+            "appris",
+            "uniprot",
+            "pick",
+            "flag_pick",
+            "pick_allele",
+            "flag_pick_allele",
+            "summary",
+        ];
+        for other in incompatible {
+            let flag = format!("--{other}");
+            assert_eq!(
+                refusal(&["vep", "--most_severe", &flag]),
+                format!("ERROR: [cli] Can't use --most_severe and --{other} together"),
+                "{flag}"
+            );
+        }
+        // The `vcf` option set switches on `biotype` (Config.pm:500-508), the
+        // first flag of the list, so that pair is named.
+        assert_eq!(
+            refusal(&["vep", "--most_severe", "--vcf"]),
+            "ERROR: [cli] Can't use --most_severe and --biotype together"
+        );
+        for (tool, value) in [("sift", "b"), ("polyphen", "p")] {
+            let flag = format!("--{tool}");
+            assert_eq!(
+                refusal(&["vep", "--most_severe", &flag, value]),
+                format!("ERROR: [cli] Can't use --most_severe and --{tool} together")
+            );
+        }
+        let accepted = config(&["vep", "--most_severe", "--per_gene"]);
+        assert!(accepted.most_severe && accepted.per_gene);
+    }
+
+    /// `--summary` refuses the same list with `--most_severe` in place of
+    /// `--summary` (Config.pm:617); the pair of the two is named by the
+    /// `most_severe` row, which the table lists first.
+    #[test]
+    fn summary_refuses_its_incompatible_flags() {
+        for other in ["biotype", "coding_only", "pick", "flag_pick_allele"] {
+            let flag = format!("--{other}");
+            assert_eq!(
+                refusal(&["vep", "--summary", &flag]),
+                format!("ERROR: [cli] Can't use --summary and --{other} together"),
+                "{flag}"
+            );
+        }
+        assert_eq!(
+            refusal(&["vep", "--summary", "--vcf"]),
+            "ERROR: [cli] Can't use --summary and --biotype together"
+        );
+        assert_eq!(
+            refusal(&["vep", "--summary", "--most_severe"]),
+            "ERROR: [cli] Can't use --most_severe and --summary together"
+        );
+        let accepted = config(&["vep", "--summary", "--pick_allele_gene"]);
+        assert!(accepted.summary && accepted.pick_allele_gene);
+    }
+
+    /// `--pick_order` takes Ensembl VEP's `%VALID` tokens (Config.pm:601) in any
+    /// order and count; a token outside the list is refused when the line is
+    /// parsed, with the valid values listed, as every `%VALID` flag is.
+    #[test]
+    fn pick_order_rejects_a_bad_token_listing_perls_valid_values() {
+        assert_eq!(
+            config(&["vep", "--pick_order", "rank,canonical,length"])
+                .pick_order
+                .as_deref(),
+            Some(
+                &[
+                    "rank".to_string(),
+                    "canonical".to_string(),
+                    "length".to_string()
+                ][..]
+            )
+        );
+        assert_eq!(config(&["vep"]).pick_order, None);
+        let ParseFailure::Usage(error) =
+            Config::from_argv(["vep", "--pick_order", "canonical,x"]).unwrap_err()
+        else {
+            panic!("a bad token is refused by the parser");
+        };
+        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidValue);
+        let text = error.to_string();
+        assert!(text.contains("'x'"), "{text}");
+        assert!(
+            text.contains(
+                "mane_select, mane_plus_clinical, canonical, appris, tsl, biotype, ccds, rank, length, ensembl, refseq"
+            ),
+            "{text}"
+        );
+    }
+
     /// `%INCOMPATIBLE` pairs `gencode_primary` with `gencode_basic` and `refseq`
     /// (Config.pm:621-622), so the two GENCODE sets cannot be combined; either
     /// alone, and `--flag_gencode_primary` beside `--gencode_basic`, resolve.
