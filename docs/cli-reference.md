@@ -46,6 +46,8 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--force_overwrite`, `--force` | bool | false | Overwrite output file if it already exists |
 | `--no_headers` | bool | false | Suppress header lines in output |
 | `--mask_header_cache_path` | bool | false | Print the cache directory in the output headers as [PATH]/<leaf> |
+| `--warning_file` | String | -- | File the warnings of the run are written to, created at the first warning; default <output_file>_warnings.txt beside the output (STDOUT_warnings.txt in the working directory for -o STDOUT). STDERR, in any case, keeps them on standard error alone. A warning is also echoed on standard error unless --quiet |
+| `--skipped_variants_file` | String | -- | File listing every input record the run skipped: a header line naming the input, then one line per record with its line number, the record's first 40 characters and the reason. An existing file is refused before the run without --force_overwrite; the file is written when the run ends |
 | `--fields` | String | -- | Accepted for VEP compatibility; not implemented (the columns follow the field flags) |
 | `--vcf_info_field` | String | `CSQ` | VCF INFO field name for VEP annotation |
 | `--keep_ann` | bool | false | Accepted without effect: Ensembl VEP declares it as a synonym of --keep_csq and reads nothing from it |
@@ -174,7 +176,8 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--plugin` | String (repeatable) | -- | Load plugin(s) - can be specified multiple times |
 | `--custom` | String (repeatable) | -- | Custom annotation source(s) (accepted for VEP compatibility; not implemented, sources are not loaded) |
 | `--custom_suppress_filter` | bool | false | Refused with an error: --custom_suppress_filter is not supported: it would keep a --custom VCF source's FILTER column out of the output unless the --custom source's fields argument names it, and custom annotation is not supported |
-| `--dir_plugins` | String | -- | Plugin directory |
+| `--dir_plugins` | String | -- | Directory the plugin libraries are looked up in; default <--dir>/Plugins. A directory that does not exist is warned about when --plugin names a plugin (an error under --safe) |
+| `--safe` | bool | false | Make a plugin that cannot be loaded, or a missing plugins directory, an error instead of a warning, and skip the check of incompatible flag pairs |
 
 ### Transcript Sets
 
@@ -198,7 +201,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--verbose`, `-v` | bool | false | Verbose output (debug-level logging) |
-| `--quiet`, `-q` | bool | false | Suppress status/progress messages |
+| `--quiet`, `-q` | bool | false | Suppress the status and progress lines and the standard-error copy of each warning; the warnings file is still written |
 
 ### Miscellaneous
 
@@ -369,7 +372,8 @@ Environment variables vep-rs reads, which Ensembl VEP has no counterpart for:
 - `0`: the run completed; also `--help`, `--version` and an empty command line.
 - `1`: a refusal or a failed run. One line `ERROR: [<component>] <message>` is written to standard error, where `<message>` is Ensembl VEP's text where it has one, without its own `ERROR: ` prefix. The components:
   - `cli`: an unsupported flag, or a combination the option rules refuse
-  - `output`: the output file or format
+  - `output`: the output file or format, the warnings file or the skipped-variants file
+  - `plugin`: under --safe, a plugin that cannot be loaded or a plugins directory that does not exist
   - `cache`: the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read
   - `filter`: a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect
   - `run`: any other failure of the annotation run, with its cause chain

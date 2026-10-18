@@ -137,7 +137,7 @@ delimiter	Config.pm	implemented	open
 DeNovo	DeNovo.pm	error	open			
 dir	Config.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::dir_is_the_default_cache_root	tests/golden/116/GRCh38-run-control	
 dir_cache	AnnotationSourceAdaptor.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::dir_cache_overrides_dir;crates/vep-cli/src/cache_resolve.rs::missing_species_dir_is_fatal	tests/golden/116/GRCh38-run-control	
-dir_plugins	Runner.pm	implemented	open			
+dir_plugins	Runner.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::dir_plugins_defaults_to_dir_slash_plugins;crates/vep-cli/tests/cli_run_control.rs::missing_plugins_dir_warns_only_when_a_plugin_is_named;crates/vep-cli/src/annotator.rs::missing_plugins_dir_dies_under_safe	tests/golden/116/GRCh38-run-control	
 distance	BaseRunner.pm	implemented	open			
 docker-image	INSTALL.pl	implemented	open			
 domains	OutputFactory.pm	implemented	open			
@@ -184,7 +184,7 @@ flag_pick_allele	OutputFactory.pm	implemented	open
 flag_pick_allele_gene	OutputFactory.pm	implemented	open			
 FlagLRG	FlagLRG.pm	error	open			
 force-overwrite-scope	BaseRunner.pm	documented_subset	open			
-force_overwrite	BaseRunner.pm	implemented	open			
+force_overwrite	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::existing_output_is_refused_with_ensembl_veps_text;crates/vep-cli/tests/cli_run_control.rs::existing_skipped_file_is_refused_without_force	tests/golden/116/GRCh38-run-control	
 fork	Runner.pm::_forked_buffer_to_output	implemented	landed:implemented	crates/vep-cli/src/runner.rs::test_annotate_batch_fork_1_matches_fork_4	tests/golden/116/GRCh38-run-control	
 format	Config.pm	implemented	open			
 freq_filter	Config.pm	implemented	open			
@@ -358,8 +358,8 @@ pick_allele	OutputFactory.pm	implemented	open
 pick_allele_gene	OutputFactory.pm	implemented	open			
 pick_order	Config.pm	implemented	open			
 pLI	pLI.pm	implemented	open			
-plugin	Runner.pm	implemented	open			
-plugin-argument-parsing	Runner.pm	implemented	open			
+plugin	Runner.pm	implemented	landed:implemented	crates/vep-cli/src/annotator.rs::plugin_name_and_params_split_as_perl_does;crates/vep-cli/src/args.rs::repeated_plugin_flags_load_in_order	tests/golden/116/GRCh38-run-control	
+plugin-argument-parsing	Runner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::safe_makes_unknown_plugin_fatal;crates/vep-cli/tests/cli_run_control.rs::quiet_keeps_the_warning_in_the_warnings_file;crates/vep-cli/src/dylib_plugins.rs::load_unresolved_skips_an_unknown_name_and_dies_under_safe	tests/golden/116/GRCh38-run-control	
 plugin-install-and-data	INSTALL.pl	documented_subset	open			
 plugin_exception_isolation	OutputFactory.pm::run_plugins	implemented	open			
 plugins-regulatory-feature-types	Runner.pm	implemented	open			
@@ -382,7 +382,7 @@ ProteinSeqs	ProteinSeqs.pm	error	open
 ProtVar	ProtVar.pm	error	open			
 pubmed	Config.pm	implemented	open			
 python-r-binding	-	excluded	open			
-quiet	BaseVEP.pm::status_msg	implemented	open			
+quiet	BaseVEP.pm::status_msg	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::quiet_keeps_warnings_file;crates/vep-cli/tests/cli_run_control.rs::quiet_keeps_the_warning_in_the_warnings_file;crates/vep-cli/tests/cli_run_control.rs::quiet_and_verbose_is_an_error	tests/golden/116/GRCh38-run-control	
 quiet-and-q	BaseVEP.pm	documented_subset	open			
 RankFilter	RankFilter.pm	error	open			
 ReferenceQuality	ReferenceQuality.pm	error	open			
@@ -411,7 +411,7 @@ rest_service_surface	-	excluded	open
 REVEL	REVEL.pm	implemented	open			
 reverse-strand-input	VEP_input.pm	implemented	open			
 RiboseqORFs	RiboseqORFs.pm	error	open			
-safe	Runner.pm	implemented	open			
+safe	Runner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::safe_makes_unknown_plugin_fatal;crates/vep-cli/tests/cli_run_control.rs::safe_skips_incompatible_check;crates/vep-cli/tests/cli_run_control.rs::missing_plugins_dir_warns_only_when_a_plugin_is_named;crates/vep-cli/src/annotator.rs::missing_plugins_dir_dies_under_safe	tests/golden/116/GRCh38-run-control	
 SameCodon	SameCodon.pm	error	open			
 satMutMPRA	satMutMPRA.pm	error	open			
 sereal	CacheDir.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::sereal_is_accepted_without_effect		
@@ -428,8 +428,8 @@ SingleLetterAA	SingleLetterAA.pm	error	open
 singularity-apptainer	-	implemented	open			
 skipped-variant-reporting	Parser.pm	implemented	open			
 skipped-variant-semantics	Parser.pm	implemented	open			
-skipped-variant-warning-lines	BaseVEP.pm	implemented	open			
-skipped_variants_file	BaseRunner.pm	implemented	open			
+skipped-variant-warning-lines	BaseVEP.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::skipped_line_writes_the_vep_warning_line_to_stderr_and_the_warnings_file;crates/vep-cli/tests/cli_run_control.rs::chromosome_absent_is_warned_not_intergenic;crates/vep-cli/src/warnings.rs::skipped_variant_lines_follow_skipped_variant_msg;crates/vep-cli/src/pipeline.rs::read_vcf_drops_a_non_variant_record_silently_without_the_flag;crates/vep-cli/src/pipeline.rs::refused_record_descriptions_follow_perl_order;crates/vep-core/src/sv_routing.rs::sv_type_string_replaces_the_alts_with_svtype_outside_the_vcf44_forms;crates/vep-cli/tests/cli_run_control.rs::deletion_looks_incomplete_follows_the_type_and_precedes_the_span	tests/golden/116/GRCh38-run-control	
+skipped_variants_file	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::skipped_variants_file_lists_every_skip_in_perl_layout;crates/vep-cli/tests/cli_run_control.rs::existing_skipped_file_is_refused_without_force;crates/vep-cli/src/warnings.rs::skipped_variants_file_follows_dump_skipped_variants	tests/golden/116/GRCh38-run-control	
 solr	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::solr_is_accepted_without_effect		
 somatic	Database/Variation.pm	implemented	open			
 source-cache	MergeVEP.pm	documented_subset	open			
@@ -492,7 +492,7 @@ terms-vocabularies	Variation/Utils/Constants.pm	implemented	open
 threads	-	implemented	landed:implemented	crates/vep-cli/src/args.rs::test_threads_alias	tests/golden/116/GRCh38-run-control	
 tmpdir	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::tmpdir_is_accepted_without_effect		
 total_length	Config.pm	implemented	open			
-trans-exon-array	Core.pm	implemented	open			
+trans-exon-array	Core.pm	implemented	landed:implemented	crates/vep-cache-builder/src/builder.rs::exon_phases_from_ensembl_phase_attributes	tests/golden/116/GRCh38-native-builder	
 transcript-biotype	OutputFactory.pm	implemented	open			
 transcript-coordinates	Database/Transcript.pm	implemented	open			
 transcript-dbid	AnnotationType/Transcript.pm	implemented	open			
@@ -532,21 +532,21 @@ vcf-csq-info-header	VCF.pm	documented_subset	open
 vcf-short-records	VCF.pm	implemented	open			
 vcf_info_field	Config.pm	implemented	open			
 vcf_output_from_non_vcf_input	Variation/VariationFeature.pm::to_VCF_record	implemented	open			
-vefc-codon-table	Database/Transcript.pm	implemented	open			
-vefc-five-prime-utr	Database/Transcript.pm	implemented	open			
+vefc-codon-table	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/builder.rs::codon_table_2_on_mt	tests/golden/116/GRCh38-native-builder	
+vefc-five-prime-utr	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/builder.rs::utr_sequences_written_from_fasta	tests/golden/116/GRCh38-native-builder	
 vefc-introns	Database/Transcript.pm	implemented	open			
-vefc-mapper	Database/Transcript.pm	implemented	open			
+vefc-mapper	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/mapper.rs::start_phase_is_ensembl_phase	tests/golden/116/GRCh38-native-builder	
 vefc-peptide	Database/Transcript.pm	implemented	open			
 vefc-protein-features	Database/Transcript.pm	implemented	open			
 vefc-protein-function-predictions	Database/Transcript.pm	implemented	open			
 vefc-runtime-only-keys	BaseTranscriptVariation.pm	implemented	open			
 vefc-seq-edits	Database/Transcript.pm	documented_subset	open			
-vefc-sorted-exons	Database/Transcript.pm	documented_subset	open			
-vefc-three-prime-utr	Database/Transcript.pm	implemented	open			
-vefc-translateable-seq	Database/Transcript.pm	implemented	open			
+vefc-sorted-exons	Database/Transcript.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/src/builder.rs::sorted_exons_in_genomic_order	tests/golden/116/GRCh38-native-builder	
+vefc-three-prime-utr	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/builder.rs::utr_sequences_written_from_fasta	tests/golden/116/GRCh38-native-builder	
+vefc-translateable-seq	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/builder.rs::translateable_seq_n_padded_on_cds_start_nf	tests/golden/116/GRCh38-native-builder	
 vep-environment-variables	Config.pm	implemented	open			
-verbose	Config.pm	implemented	open			
+verbose	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::verbose_prints_the_detected_format;crates/vep-cli/tests/cli_run_control.rs::quiet_and_verbose_is_an_error	tests/golden/116/GRCh38-run-control	
 verbose-and-v	Config.pm	implemented	open			
 version	-	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::version_prints_crate_version_and_exits_0	tests/golden/116/GRCh38-run-control	
-warning_file	BaseVEP.pm::warning_msg	implemented	open			
+warning_file	BaseVEP.pm::warning_msg	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::warnings_file_is_written_by_default;crates/vep-cli/tests/cli_run_control.rs::warning_file_stderr_literal;crates/vep-cli/tests/cli_run_control.rs::warnings_deduplicate_ignoring_line_number;crates/vep-cli/tests/cli_run_control.rs::unwritable_warnings_file_fails_the_run;crates/vep-cli/src/warnings.rs::warning_prefix_follows_warning_msg;crates/vep-cli/src/warnings.rs::warnings_deduplicate_ignoring_a_trailing_line_number;crates/vep-cli/src/warnings.rs::warnings_file_is_opened_at_the_first_warning;crates/vep-cli/src/config.rs::warning_file_defaults_beside_the_output_as_spelled	tests/golden/116/GRCh38-run-control	
 xref_refseq	OutputFactory.pm	documented_subset	open			

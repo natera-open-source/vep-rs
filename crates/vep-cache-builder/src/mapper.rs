@@ -25,6 +25,7 @@ pub struct MapperResult {
     pub pairs: Vec<MapperPair>,
     pub cdna_coding_start: Option<u64>,
     pub cdna_coding_end: Option<u64>,
+    /// Exon 1's Ensembl phase, the value `TranscriptMapper.pm:110` records.
     pub start_phase: i8,
 }
 
@@ -35,7 +36,15 @@ pub struct MapperResult {
 /// 2. Accumulate cDNA positions while traversing exons
 /// 3. Each exon becomes a mapper pair: from (cDNA) -> to (genomic)
 /// 4. Compute cdna_coding_start/end by mapping the first/last CDS positions
-pub fn build_mapper(exons: &[ExonRecord], cds_regions: &[CdsRecord], strand: i8) -> MapperResult {
+///
+/// `first_exon_phase` is the Ensembl phase of exon 1, recorded as the mapper's
+/// `start_phase` (`TranscriptMapper.pm:110`); a transcript without exons records -1.
+pub fn build_mapper(
+    exons: &[ExonRecord],
+    cds_regions: &[CdsRecord],
+    strand: i8,
+    first_exon_phase: i8,
+) -> MapperResult {
     if exons.is_empty() {
         return MapperResult {
             pairs: Vec::new(),
@@ -73,35 +82,31 @@ pub fn build_mapper(exons: &[ExonRecord], cds_regions: &[CdsRecord], strand: i8)
         cdna_pos = from_end + 1;
     }
 
-    let (cdna_coding_start, cdna_coding_end, start_phase) = if cds_regions.is_empty() {
-        (None, None, -1i8)
-    } else {
-        compute_cdna_coding(&pairs, cds_regions, strand)
-    };
+    let (cdna_coding_start, cdna_coding_end) = compute_cdna_coding(&pairs, cds_regions, strand);
 
     MapperResult {
         pairs,
         cdna_coding_start,
         cdna_coding_end,
-        start_phase,
+        start_phase: first_exon_phase,
     }
 }
 
 /// Compute cdna_coding_start and cdna_coding_end from CDS regions.
 ///
 /// The CDS defines the coding portion of the transcript; the first and last CDS
-/// bases are located in cDNA coordinates.
+/// bases are located in cDNA coordinates. Both are `None` without a CDS.
 fn compute_cdna_coding(
     pairs: &[MapperPair],
     cds_regions: &[CdsRecord],
     strand: i8,
-) -> (Option<u64>, Option<u64>, i8) {
-    if cds_regions.is_empty() {
-        return (None, None, -1);
-    }
-
-    let cds_genomic_start = cds_regions.iter().map(|c| c.start).min().unwrap();
-    let cds_genomic_end = cds_regions.iter().map(|c| c.end).max().unwrap();
+) -> (Option<u64>, Option<u64>) {
+    let (Some(cds_genomic_start), Some(cds_genomic_end)) = (
+        cds_regions.iter().map(|c| c.start).min(),
+        cds_regions.iter().map(|c| c.end).max(),
+    ) else {
+        return (None, None);
+    };
 
     let (first_cds_pos, last_cds_pos) = if strand >= 0 {
         (cds_genomic_start, cds_genomic_end)
@@ -109,25 +114,10 @@ fn compute_cdna_coding(
         (cds_genomic_end, cds_genomic_start)
     };
 
-    let cdna_coding_start = genomic_to_cdna(pairs, first_cds_pos, strand);
-    let cdna_coding_end = genomic_to_cdna(pairs, last_cds_pos, strand);
-
-    // Start phase comes from the first CDS feature in 5'->3' order.
-    let start_phase = if strand >= 0 {
-        cds_regions
-            .iter()
-            .min_by_key(|c| c.start)
-            .map(|c| c.phase)
-            .unwrap_or(-1)
-    } else {
-        cds_regions
-            .iter()
-            .max_by_key(|c| c.end)
-            .map(|c| c.phase)
-            .unwrap_or(-1)
-    };
-
-    (cdna_coding_start, cdna_coding_end, start_phase)
+    (
+        genomic_to_cdna(pairs, first_cds_pos, strand),
+        genomic_to_cdna(pairs, last_cds_pos, strand),
+    )
 }
 
 /// Map a genomic position to its cDNA coordinate using the mapper pairs.
@@ -177,7 +167,7 @@ mod tests {
     fn test_forward_strand_two_exons() {
         let exons = vec![make_exon(100, 200, 1), make_exon(300, 500, 1)];
         let cds = vec![];
-        let result = build_mapper(&exons, &cds, 1);
+        let result = build_mapper(&exons, &cds, 1, -1);
 
         assert_eq!(result.pairs.len(), 2);
 
@@ -200,7 +190,7 @@ mod tests {
     fn test_reverse_strand_two_exons() {
         let exons = vec![make_exon(100, 200, -1), make_exon(300, 500, -1)];
         let cds = vec![];
-        let result = build_mapper(&exons, &cds, -1);
+        let result = build_mapper(&exons, &cds, -1, -1);
 
         assert_eq!(result.pairs.len(), 2);
 
@@ -224,7 +214,7 @@ mod tests {
     fn test_forward_strand_with_cds() {
         let exons = vec![make_exon(100, 200, 1), make_exon(300, 500, 1)];
         let cds = vec![make_cds(150, 200, 1, 0), make_cds(300, 480, 1, 2)];
-        let result = build_mapper(&exons, &cds, 1);
+        let result = build_mapper(&exons, &cds, 1, -1);
 
         // CDS starts at genomic 150, which is in exon 1 (100-200).
         // Offset = 150 - 100 = 50, so cDNA coding start = 1 + 50 = 51.
@@ -233,8 +223,6 @@ mod tests {
         // CDS ends at genomic 480, which is in exon 2 (300-500).
         // Offset = 480 - 300 = 180, so cDNA coding end = 102 + 180 = 282.
         assert_eq!(result.cdna_coding_end, Some(282));
-
-        assert_eq!(result.start_phase, 0);
     }
 
     #[test]
@@ -243,7 +231,7 @@ mod tests {
         // CDS from 120-200 and 300-450.
         let exons = vec![make_exon(100, 200, -1), make_exon(300, 500, -1)];
         let cds = vec![make_cds(120, 200, -1, 1), make_cds(300, 450, -1, 0)];
-        let result = build_mapper(&exons, &cds, -1);
+        let result = build_mapper(&exons, &cds, -1, -1);
 
         // Reverse strand: first CDS in 5'->3' is the one with highest genomic end.
         // CDS at 300-450: genomic end 450 is the 5' start.
@@ -255,17 +243,31 @@ mod tests {
         // In mapper pairs: pair[1] = 100-200 -> cDNA 202-302
         // Offset of genomic 120 from end: 200 - 120 = 80, cDNA = 202 + 80 = 282
         assert_eq!(result.cdna_coding_end, Some(282));
-
-        // Start phase from CDS with highest end (300-450, phase=0).
-        assert_eq!(result.start_phase, 0);
     }
 
     #[test]
     fn test_empty_exons() {
-        let result = build_mapper(&[], &[], 1);
+        let result = build_mapper(&[], &[], 1, 2);
         assert!(result.pairs.is_empty());
         assert!(result.cdna_coding_start.is_none());
         assert!(result.cdna_coding_end.is_none());
         assert_eq!(result.start_phase, -1);
+    }
+
+    /// The mapper's `start_phase` is exon 1's Ensembl phase (`TranscriptMapper.pm:110`),
+    /// here -1 for a transcript whose first exon is untranslated, not the GFF3 phase
+    /// column of the 5'-most CDS segment (2 here) and not the translation start exon's
+    /// phase; a `cds_start_NF` transcript whose exon 1 begins mid-codon records that
+    /// exon's phase, 1.
+    #[test]
+    fn start_phase_is_ensembl_phase() {
+        let exons = vec![make_exon(100, 200, 1), make_exon(300, 500, 1)];
+        let cds = vec![make_cds(300, 480, 1, 2)];
+        let result = build_mapper(&exons, &cds, 1, -1);
+        assert_eq!(result.start_phase, -1);
+        assert_eq!(result.cdna_coding_start, Some(102));
+
+        let partial = build_mapper(&exons, &[make_cds(100, 200, 1, 2)], 1, 1);
+        assert_eq!(partial.start_phase, 1);
     }
 }

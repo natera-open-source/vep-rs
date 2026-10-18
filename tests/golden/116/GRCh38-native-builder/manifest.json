@@ -22,1186 +22,15 @@
   "symbol-source-hgnc-id-columns",
   "attribute-tsl",
   "attributes-cds-start-end-nf",
-  "dump_time_transcript_filters"
+  "dump_time_transcript_filters",
+  "vefc-codon-table",
+  "vefc-five-prime-utr",
+  "vefc-three-prime-utr",
+  "vefc-translateable-seq",
+  "vefc-mapper",
+  "vefc-sorted-exons",
+  "trans-exon-array"
  ],
- "suites": {
-  "nb": {
-   "reference": "perl_designed.txt",
-   "input": "designed_identical_lean.vcf",
-   "rows": 140,
-   "combinations": 9
-  },
-  "g21": {
-   "reference": "perl_golden_small.txt",
-   "input": "golden_small_lean.vcf",
-   "rows": 938,
-   "combinations": 77
-  }
- },
- "combinations": {
-  "3_prime_UTR_variant": {
-   "observed_rows": 12,
-   "exemplar_records": 2
-  },
-  "3_prime_UTR_variant,NMD_transcript_variant": {
-   "observed_rows": 14,
-   "exemplar_records": 3
-  },
-  "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant": {
-   "observed_rows": 6,
-   "exemplar_records": 1
-  },
-  "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant,stop_retained_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
-   "observed_rows": 3,
-   "exemplar_records": 2
-  },
-  "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "3_prime_UTR_variant,splice_region_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "3_prime_UTR_variant,stop_lost": {
-   "observed_rows": 2,
-   "exemplar_records": 1
-  },
-  "5_prime_UTR_variant": {
-   "observed_rows": 5,
-   "exemplar_records": 2
-  },
-  "5_prime_UTR_variant,NMD_transcript_variant": {
-   "observed_rows": 3,
-   "exemplar_records": 1
-  },
-  "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant": {
-   "observed_rows": 10,
-   "exemplar_records": 1
-  },
-  "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant": {
-   "observed_rows": 3,
-   "exemplar_records": 1
-  },
-  "5_prime_UTR_variant,coding_sequence_variant,splice_acceptor_variant": {
-   "observed_rows": 55,
-   "exemplar_records": 1
-  },
-  "5_prime_UTR_variant,intron_variant,splice_acceptor_variant": {
-   "observed_rows": 4,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant": {
-   "observed_rows": 6,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,frameshift_variant,splice_region_variant,stop_gained": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,frameshift_variant,stop_lost": {
-   "observed_rows": 3,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,inframe_deletion,start_lost": {
-   "observed_rows": 4,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,inframe_insertion": {
-   "observed_rows": 2,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,inframe_insertion,stop_gained": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,intron_variant": {
-   "observed_rows": 79,
-   "exemplar_records": 7
-  },
-  "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
-   "observed_rows": 2,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,intron_variant,splice_donor_variant": {
-   "observed_rows": 3,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,intron_variant,splice_region_variant": {
-   "observed_rows": 12,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,missense_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,protein_altering_variant,splice_region_variant,stop_gained": {
-   "observed_rows": 2,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,protein_altering_variant,stop_gained": {
-   "observed_rows": 7,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,synonymous_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "coding_sequence_variant,inframe_insertion,splice_region_variant": {
-   "observed_rows": 12,
-   "exemplar_records": 1
-  },
-  "coding_sequence_variant,intron_variant,splice_acceptor_variant": {
-   "observed_rows": 5,
-   "exemplar_records": 2
-  },
-  "coding_sequence_variant,intron_variant,splice_donor_region_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant": {
-   "observed_rows": 2,
-   "exemplar_records": 1
-  },
-  "coding_sequence_variant,splice_acceptor_variant": {
-   "observed_rows": 5,
-   "exemplar_records": 1
-  },
-  "coding_sequence_variant,splice_donor_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "downstream_gene_variant": {
-   "observed_rows": 92,
-   "exemplar_records": 17
-  },
-  "frameshift_variant,splice_region_variant": {
-   "observed_rows": 2,
-   "exemplar_records": 1
-  },
-  "frameshift_variant,splice_region_variant,stop_gained": {
-   "observed_rows": 5,
-   "exemplar_records": 1
-  },
-  "frameshift_variant,start_lost": {
-   "observed_rows": 9,
-   "exemplar_records": 1
-  },
-  "inframe_deletion": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "inframe_deletion,start_lost": {
-   "observed_rows": 12,
-   "exemplar_records": 2
-  },
-  "inframe_insertion": {
-   "observed_rows": 4,
-   "exemplar_records": 1
-  },
-  "inframe_insertion,splice_region_variant,stop_gained": {
-   "observed_rows": 5,
-   "exemplar_records": 1
-  },
-  "inframe_insertion,stop_lost": {
-   "observed_rows": 4,
-   "exemplar_records": 1
-  },
-  "inframe_insertion,stop_retained_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "intergenic_variant": {
-   "observed_rows": 2,
-   "exemplar_records": 2
-  },
-  "intron_variant": {
-   "observed_rows": 132,
-   "exemplar_records": 12
-  },
-  "intron_variant,non_coding_transcript_exon_variant,splice_donor_region_variant,splice_donor_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "intron_variant,non_coding_transcript_variant": {
-   "observed_rows": 80,
-   "exemplar_records": 18
-  },
-  "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
-   "observed_rows": 18,
-   "exemplar_records": 1
-  },
-  "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "intron_variant,non_coding_transcript_variant,splice_donor_region_variant": {
-   "observed_rows": 3,
-   "exemplar_records": 1
-  },
-  "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant": {
-   "observed_rows": 49,
-   "exemplar_records": 2
-  },
-  "intron_variant,non_coding_transcript_variant,splice_donor_variant": {
-   "observed_rows": 5,
-   "exemplar_records": 1
-  },
-  "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant": {
-   "observed_rows": 25,
-   "exemplar_records": 1
-  },
-  "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "intron_variant,non_coding_transcript_variant,splice_region_variant": {
-   "observed_rows": 3,
-   "exemplar_records": 1
-  },
-  "intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
-   "observed_rows": 10,
-   "exemplar_records": 2
-  },
-  "intron_variant,splice_donor_variant": {
-   "observed_rows": 13,
-   "exemplar_records": 1
-  },
-  "intron_variant,splice_polypyrimidine_tract_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "intron_variant,splice_region_variant": {
-   "observed_rows": 63,
-   "exemplar_records": 3
-  },
-  "mature_miRNA_variant": {
-   "observed_rows": 2,
-   "exemplar_records": 2
-  },
-  "missense_variant": {
-   "observed_rows": 6,
-   "exemplar_records": 2
-  },
-  "non_coding_transcript_exon_variant": {
-   "observed_rows": 31,
-   "exemplar_records": 13
-  },
-  "non_coding_transcript_exon_variant,splice_acceptor_variant": {
-   "observed_rows": 16,
-   "exemplar_records": 4
-  },
-  "non_coding_transcript_exon_variant,splice_region_variant": {
-   "observed_rows": 26,
-   "exemplar_records": 6
-  },
-  "non_coding_transcript_variant,splice_acceptor_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "non_coding_transcript_variant,splice_donor_variant": {
-   "observed_rows": 12,
-   "exemplar_records": 2
-  },
-  "non_coding_transcript_variant,splice_region_variant": {
-   "observed_rows": 24,
-   "exemplar_records": 1
-  },
-  "protein_altering_variant,splice_region_variant,stop_gained": {
-   "observed_rows": 30,
-   "exemplar_records": 1
-  },
-  "protein_altering_variant,stop_gained": {
-   "observed_rows": 2,
-   "exemplar_records": 1
-  },
-  "splice_acceptor_variant": {
-   "observed_rows": 7,
-   "exemplar_records": 1
-  },
-  "stop_gained": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "stop_lost": {
-   "observed_rows": 2,
-   "exemplar_records": 1
-  },
-  "synonymous_variant": {
-   "observed_rows": 13,
-   "exemplar_records": 3
-  },
-  "upstream_gene_variant": {
-   "observed_rows": 90,
-   "exemplar_records": 14
-  }
- },
- "variant_classes": {
-  "deletion": 86,
-  "insertion": 56,
-  "mnv_or_complex": 14,
-  "snv": 111
- },
- "family_columns": [
-  "SYMBOL=",
-  "SYMBOL_SOURCE=",
-  "HGNC_ID",
-  "TSL",
-  "MANE_SELECT",
-  "CANONICAL",
-  "FLAGS=",
-  "ENSP",
-  "BIOTYPE="
- ],
- "family_strata": {
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;insertion": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 2,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;insertion": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=TEC;snv": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;insertion": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;mnv_or_complex": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=miRNA;deletion": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=miRNA;snv": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=snoRNA;mnv_or_complex": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=-;insertion": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=-;snv": 1,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 2,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;insertion": 2,
-  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=AATBC;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=AATBC;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=AATBC;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=ATP5PF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=ATP5PF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=ATP5PF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;deletion": 1,
-  "SYMBOL=ATP5PF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=ATP5PF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 2,
-  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;insertion": 1,
-  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=nonsense_mediated_decay;insertion": 1,
-  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;insertion": 1,
-  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=BAGE2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=transcribed_unprocessed_pseudogene;snv": 1,
-  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 3,
-  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 2,
-  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;insertion": 1,
-  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;snv": 1,
-  "SYMBOL=CYP4F29P;SYMBOL_SOURCE=EntrezGene;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=CYP4F29P;SYMBOL_SOURCE=EntrezGene;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=CYP4F29P;SYMBOL_SOURCE=EntrezGene;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=CYP4F29P;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=transcribed_unprocessed_pseudogene;snv": 1,
-  "SYMBOL=CYYR1-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=CYYR1-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=CYYR1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=CYYR1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=CYYR1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=CYYR1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=DNAJC28;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=DNAJC28;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=DNAJC28;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=DSTNP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=processed_pseudogene;insertion": 1,
-  "SYMBOL=EPCIP-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=EPCIP-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=EPCIP-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=FAM3B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=FAM3B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=FAM3B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;insertion": 1,
-  "SYMBOL=FAM3B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;insertion": 1,
-  "SYMBOL=FAM3B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=GABPA;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=GABPA;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=HEMK2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=HEMK2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;snv": 1,
-  "SYMBOL=HEMK2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=HEMK2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;snv": 1,
-  "SYMBOL=HEMK2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=HSPD1P7;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=processed_pseudogene;snv": 1,
-  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;insertion": 1,
-  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;insertion": 1,
-  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=nonsense_mediated_decay;insertion": 1,
-  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;insertion": 1,
-  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;insertion": 1,
-  "SYMBOL=KRTAP10-8;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=LINC00334;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=LINC00334;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=LINC00334;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=LINC00945;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=LINC00945;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=LINC01426;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=LINC01426;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=LINC01426;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=LINC01684;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=LINC01684;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=LINC01684;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=LINC01694;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=LINC01694;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=LINC01694;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=LINC02573;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=LINC02575;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=LINC02575;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=LINC03104;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=LINC03104;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=LINC03104;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=LIPI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=LIPI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;snv": 1,
-  "SYMBOL=LIPI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=LIPI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;snv": 1,
-  "SYMBOL=LIPI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=MIR3648-2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=miRNA;deletion": 1,
-  "SYMBOL=MIR3648-2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=miRNA;snv": 1,
-  "SYMBOL=MIR548X;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=miRNA;snv": 1,
-  "SYMBOL=MIR548XHG;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=MIR548XHG;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=MIR548XHG;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;deletion": 1,
-  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;insertion": 1,
-  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;insertion": 1,
-  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;insertion": 1,
-  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;insertion": 2,
-  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 2,
-  "SYMBOL=MT-ATP8;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=MT-CO1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=MT-CO2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=MT-ND1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=MT-ND2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=MT-RNR1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_rRNA;snv": 1,
-  "SYMBOL=MT-RNR2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_rRNA;snv": 1,
-  "SYMBOL=MT-TA;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TC;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TD;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TK;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TL1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TM;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TN;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TQ;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TV;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TW;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MT-TY;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;snv": 1,
-  "SYMBOL=MTCO1P3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=processed_pseudogene;snv": 1,
-  "SYMBOL=OLIG1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;snv": 1,
-  "SYMBOL=OLIG1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=OLIG1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=OLIG1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=PCP4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=PCP4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;snv": 1,
-  "SYMBOL=PCP4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;snv": 1,
-  "SYMBOL=PCP4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;snv": 1,
-  "SYMBOL=PCP4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 2,
-  "SYMBOL=PCSEAT;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=PCSEAT;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;snv": 1,
-  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;snv": 1,
-  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;snv": 1,
-  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF,cds_end_NF;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;snv": 1,
-  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=PRMT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=PRMT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=PRMT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;insertion": 1,
-  "SYMBOL=PRMT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;insertion": 1,
-  "SYMBOL=PRMT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=RBM11;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=RBM11;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;deletion": 1,
-  "SYMBOL=RBM11;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;deletion": 1,
-  "SYMBOL=RBM11;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=RBM11;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=RNA5SP490;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=rRNA_pseudogene;snv": 1,
-  "SYMBOL=RPS5P3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=processed_pseudogene;snv": 1,
-  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;deletion": 1,
-  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;deletion": 1,
-  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 2,
-  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 2,
-  "SYMBOL=RRP1B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=RRP1B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;snv": 1,
-  "SYMBOL=RRP1B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;snv": 1,
-  "SYMBOL=RRP1B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=RSPH1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=RSPH1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=RSPH1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;deletion": 1,
-  "SYMBOL=RSPH1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=RSPH1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=RWDD2B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=RWDD2B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;deletion": 1,
-  "SYMBOL=RWDD2B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;deletion": 1,
-  "SYMBOL=RWDD2B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=RWDD2B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=SAMSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;snv": 1,
-  "SYMBOL=SAMSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;snv": 1,
-  "SYMBOL=SAMSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;insertion": 1,
-  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_end_NF;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;insertion": 2,
-  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=SOD1-DT;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;mnv_or_complex": 1,
-  "SYMBOL=SOD1-DT;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;mnv_or_complex": 1,
-  "SYMBOL=SOD1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;mnv_or_complex": 1,
-  "SYMBOL=SOD1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;mnv_or_complex": 1,
-  "SYMBOL=SOD1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;mnv_or_complex": 1,
-  "SYMBOL=SOD1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;mnv_or_complex": 1,
-  "SYMBOL=SOD1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;mnv_or_complex": 1,
-  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;deletion": 1,
-  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;deletion": 1,
-  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=TCP10L;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;snv": 1,
-  "SYMBOL=TCP10L;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=TCP10L;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;snv": 1,
-  "SYMBOL=TCP10L;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=nonsense_mediated_decay;snv": 1,
-  "SYMBOL=TMPRSS15;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=TMPRSS15;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_end_NF;ENSP+;BIOTYPE=protein_coding;snv": 1,
-  "SYMBOL=TPTE;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=TPTE;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=TPTE;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=TPTE;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=TSPEAR-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;deletion": 1,
-  "SYMBOL=TSPEAR;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=TSPEAR;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;deletion": 1,
-  "SYMBOL=TSPEAR;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;deletion": 1,
-  "SYMBOL=TSPEAR;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;deletion": 1,
-  "SYMBOL=UBASH3A;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=UBASH3A;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;insertion": 1,
-  "SYMBOL=UBASH3A;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=UBASH3A;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;insertion": 1,
-  "SYMBOL=WDR4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;mnv_or_complex": 1,
-  "SYMBOL=WDR4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;mnv_or_complex": 1,
-  "SYMBOL=WDR4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;mnv_or_complex": 1,
-  "SYMBOL=WDR4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;mnv_or_complex": 1,
-  "SYMBOL=WDR4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;mnv_or_complex": 1,
-  "SYMBOL=Y_RNA;SYMBOL_SOURCE=RFAM;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=misc_RNA;deletion": 1,
-  "SYMBOL=Y_RNA;SYMBOL_SOURCE=RFAM;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=misc_RNA;snv": 1,
-  "SYMBOL=ZNF114P1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=processed_pseudogene;snv": 1
- },
- "records": [
-  {
-   "suite": "nb",
-   "vcf": "21\t5597440\tnb_y_rna_rfam\tA\tG\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t8987026\trs1988325939\tAGCCGCGGGGATC\tA\t.\t.\t.",
-   "combinations": [
-    "mature_miRNA_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t8987044\t.\tG\tT\t.\t.\t.",
-   "combinations": [
-    "mature_miRNA_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t10414912\trs1600775702\tG\tGTGCTTCATCTTC\t.\t.\t.",
-   "combinations": [
-    "non_coding_transcript_variant,splice_donor_variant"
-   ]
-  },
-  {
-   "suite": "nb",
-   "vcf": "21\t10482800\tnb_readthrough_exon\tG\tA\t.\t.\t.",
-   "combinations": [
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t10603633\trs1281258100\tGTATGAATATAATAGA\tG\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
-    "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
-   ]
-  },
-  {
-   "suite": "nb",
-   "vcf": "21\t13843300\tnb_cyp4f29p_entrez\tG\tA\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t14165216\trs551950541\tC\tG\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,intron_variant,splice_region_variant",
-    "intron_variant,non_coding_transcript_variant,splice_region_variant",
-    "intron_variant,splice_region_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t14216335\trs1391685509\tCAT\tC\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,frameshift_variant,stop_lost",
-    "intron_variant",
-    "intron_variant,non_coding_transcript_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t14622621\trs2123345541\tG\tC\t.\t.\t.",
-   "combinations": [
-    "intron_variant",
-    "intron_variant,non_coding_transcript_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t15105118\trs752575819\tC\tT\t.\t.\t.",
-   "combinations": [
-    "non_coding_transcript_variant,splice_donor_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t15283784\t21:15283784:T:TA\tT\tTA\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t15477784\trs1601121900\tTCA\tT\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t15575269\trs1361934799\tC\tCAG\t.\t.\t.",
-   "combinations": [
-    "non_coding_transcript_variant,splice_region_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t17756666\t.\tTGGAG\tT\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t18171655\trs1568921854\tC\tA\t.\t.\t.",
-   "combinations": [
-    "intron_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t18256505\t.\tTCAGGCCA\tT\t.\t.\t.",
-   "combinations": [
-    "5_prime_UTR_variant",
-    "5_prime_UTR_variant,intron_variant,splice_acceptor_variant",
-    "coding_sequence_variant,intron_variant,splice_acceptor_variant"
-   ]
-  },
-  {
-   "suite": "nb",
-   "vcf": "21\t18256600\tnb_chodl_cds\tA\tG\t.\t.\t.",
-   "combinations": [
-    "synonymous_variant"
-   ]
-  },
-  {
-   "suite": "nb",
-   "vcf": "21\t18398250\tnb_tmprss15_cds\tT\tC\t.\t.\t.",
-   "combinations": [
-    "synonymous_variant"
-   ]
-  },
-  {
-   "suite": "nb",
-   "vcf": "21\t18398251\tnb_tmprss15_cds2\tT\tC\t.\t.\t.",
-   "combinations": [
-    "missense_variant"
-   ]
-  },
-  {
-   "suite": "nb",
-   "vcf": "21\t18686120\tnb_mir548x\tC\tT\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "nb",
-   "vcf": "21\t18918000\tnb_lncrna_no_symbol\tC\tT\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t19268555\trs937007124\tC\tT\t.\t.\t.",
-   "combinations": [
-    "intergenic_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t20204701\t21:20204701:T:C\tT\tC\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t23254313\t21:23254313:G:GA\tG\tGA\t.\t.\t.",
-   "combinations": [
-    "intergenic_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t23432233\trs1983579045\tTA\tT\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant",
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t24526341\t.\tAGAC\tA\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant,splice_acceptor_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t25729793\trs1237301162\tATGCTGATTC\tA\t.\t.\t.",
-   "combinations": [
-    "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant",
-    "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant",
-    "5_prime_UTR_variant,coding_sequence_variant,splice_acceptor_variant",
-    "non_coding_transcript_exon_variant,splice_acceptor_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t26483402\t.\tTCTCTCCTATC\tT\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant",
-    "coding_sequence_variant,intron_variant,splice_acceptor_variant",
-    "intron_variant",
-    "intron_variant,non_coding_transcript_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t28885369\trs575418327\tC\tT\t.\t.\t.",
-   "combinations": [
-    "5_prime_UTR_variant",
-    "5_prime_UTR_variant,NMD_transcript_variant",
-    "downstream_gene_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t29006645\t21:29006645:TCTGAGTC:T\tTCTGAGTC\tT\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant",
-    "coding_sequence_variant,splice_acceptor_variant",
-    "non_coding_transcript_exon_variant,splice_acceptor_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t31659979\tsynth_mnp_0574\tGGTCG\tAGTTG\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,synonymous_variant",
-    "coding_sequence_variant,intron_variant,splice_donor_region_variant",
-    "downstream_gene_variant",
-    "intron_variant",
-    "non_coding_transcript_exon_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t32567827\trs776557022\tT\tC\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,intron_variant",
-    "downstream_gene_variant",
-    "intron_variant,non_coding_transcript_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t32893769\trs2045243839\tG\tA\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "non_coding_transcript_exon_variant,splice_region_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t33065835\t21:33065835:GGTTTCAGAG:G\tGGTTTCAGAGTGAGATTCT\tG\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant",
-    "non_coding_transcript_exon_variant,splice_acceptor_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t33072052\trs1327468266\tG\tA\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant",
-    "3_prime_UTR_variant,splice_region_variant",
-    "non_coding_transcript_exon_variant,splice_region_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t33485728\t.\tA\tT\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant",
-    "downstream_gene_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t33836987\trs1200767520\tG\tGAATC\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
-    "coding_sequence_variant,inframe_insertion,splice_region_variant",
-    "downstream_gene_variant",
-    "non_coding_transcript_exon_variant,splice_region_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t33903747\trs1987132913\tT\tTTACCTC\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "NMD_transcript_variant,intron_variant",
-    "downstream_gene_variant",
-    "inframe_insertion,stop_retained_variant",
-    "intron_variant",
-    "intron_variant,non_coding_transcript_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t34142409\trs1184816984\tT\tTG\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
-    "NMD_transcript_variant,frameshift_variant,splice_region_variant,stop_gained",
-    "NMD_transcript_variant,intron_variant",
-    "frameshift_variant,splice_region_variant",
-    "frameshift_variant,splice_region_variant,stop_gained",
-    "non_coding_transcript_exon_variant,splice_region_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t34748182\trs193193818\tC\tA\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t36374328\trs1433696562\tCG\tC\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,intron_variant",
-    "intron_variant",
-    "intron_variant,non_coding_transcript_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t39916525\trs1470200400\tA\tG\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,intron_variant",
-    "intron_variant",
-    "intron_variant,non_coding_transcript_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t39929109\trs2087638767\tT\tC\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "stop_lost",
-    "synonymous_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t41345735\t.\tT\tTAGACCTTAATTC\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,inframe_insertion,stop_gained",
-    "inframe_insertion,splice_region_variant,stop_gained",
-    "intron_variant,splice_region_variant",
-    "non_coding_transcript_exon_variant,splice_region_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t41584973\trs1249262350\tC\tA\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t42426705\trs771158307\tC\tCCTT\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,inframe_insertion",
-    "inframe_insertion"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t42482619\t408130\tACATGCTCCGCAACTTAC\tA\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,intron_variant",
-    "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant",
-    "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t42863432\t3336333\tCCACCTA\tACACCTG\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,intron_variant,splice_donor_variant",
-    "intron_variant,non_coding_transcript_variant,splice_donor_variant",
-    "intron_variant,splice_donor_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t43161261\trs1985621170\tG\tA\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t43683285\trs755653178\tG\tA\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,missense_variant",
-    "missense_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t43774760\t4725737\tC\tT\t.\t.\t.",
-   "combinations": [
-    "intron_variant",
-    "intron_variant,splice_polypyrimidine_tract_variant",
-    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
-    "non_coding_transcript_variant,splice_acceptor_variant",
-    "splice_acceptor_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t43776268\t423466\tA\tAAT\t.\t.\t.",
-   "combinations": [
-    "frameshift_variant,start_lost",
-    "non_coding_transcript_exon_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t43801711\trs2085093698\tCGCGTCAGTGAGGT\tC\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant",
-    "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant,stop_retained_variant",
-    "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant",
-    "coding_sequence_variant,splice_donor_variant",
-    "downstream_gene_variant",
-    "intron_variant",
-    "intron_variant,non_coding_transcript_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t44499780\t.\tGCCTCAGCGTGT\tG\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,stop_lost",
-    "downstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t44529793\trs781794878\tCTAACCATAGG\tC\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
-    "coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
-    "downstream_gene_variant",
-    "intron_variant,non_coding_transcript_exon_variant,splice_donor_region_variant,splice_donor_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t44612102\t.\tTGGCTGACGCCTG\tT\t.\t.\t.",
-   "combinations": [
-    "inframe_deletion,start_lost"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t44817965\t.\tACAT\tA\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,inframe_deletion,start_lost",
-    "inframe_deletion",
-    "inframe_deletion,start_lost",
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "nb",
-   "vcf": "21\t45268500\tnb_cds_start_nf_intron\tG\tA\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,intron_variant",
-    "downstream_gene_variant",
-    "intron_variant",
-    "intron_variant,non_coding_transcript_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t45379117\trs1374160967\tC\tT\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t45537772\t.\tT\tTATTCCAGAA\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,protein_altering_variant,splice_region_variant,stop_gained",
-    "NMD_transcript_variant,protein_altering_variant,stop_gained",
-    "non_coding_transcript_exon_variant,splice_region_variant",
-    "protein_altering_variant,splice_region_variant,stop_gained",
-    "protein_altering_variant,stop_gained"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t45595661\trs1282250887\tTGTAA\tT\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant",
-    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
-   ]
-  },
-  {
-   "suite": "g21",
-   "vcf": "21\t46658922\t.\tT\tTTAAGGAGTTTTTTTCAAAGCCCAAGTATAACCACATTTTGAAACCAG\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "inframe_insertion,stop_lost",
-    "intron_variant",
-    "intron_variant,splice_region_variant",
-    "non_coding_transcript_exon_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "nb",
-   "vcf": "MT\t600\tnb_mt_trna\tA\tG\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "non_coding_transcript_exon_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "nb",
-   "vcf": "MT\t3400\tnb_mt_nd1\tC\tT\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "stop_gained",
-    "upstream_gene_variant"
-   ]
-  }
- ],
- "multi_allelic_per_suite": 4,
- "uncovered_combinations": [],
- "unresolved_exemplars": [],
- "divergences": [],
- "vep_rs_only_tuples": [],
- "divergence_summary": {},
- "vep_rs_only_summary": {},
  "flag_sets": [
   {
    "name": "ccds",
@@ -1226,10 +55,2384 @@
    "covers": [
     "_ccds"
    ],
-   "divergences": [],
+   "divergences": [
+    {
+     "location": "21:34613795-34613797",
+     "allele": "-",
+     "feature": "ENST00000399272",
+     "feature_type": "Transcript",
+     "record_indices": [
+      43
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000866134",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001002268",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001111227",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001131501",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "MT:14747-14748",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      157
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
    "vep_rs_only_tuples": [],
-   "divergence_summary": {},
+   "divergence_summary": {
+    "start_cooccurrence_swap": 7
+   },
    "vep_rs_only_summary": {}
   }
- ]
+ ],
+ "suites": {
+  "attributes": {
+   "reference": "attributes.ref.txt",
+   "input": "attributes.vcf",
+   "rows": 1004,
+   "combinations": 78
+  },
+  "frame": {
+   "reference": "frame.ref.txt",
+   "input": "frame.vcf",
+   "rows": 1055,
+   "combinations": 125
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 24,
+   "exemplar_records": 2
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 27,
+   "exemplar_records": 4
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 2
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant,stop_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 18,
+   "exemplar_records": 2
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,stop_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,coding_sequence_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,coding_sequence_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,stop_lost": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,stop_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 2
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 2
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant,start_lost": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant,splice_acceptor_variant": {
+   "observed_rows": 55,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,intron_variant,splice_acceptor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,start_lost": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,start_lost,start_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,coding_sequence_variant,splice_donor_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant,splice_region_variant,stop_gained": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant,start_lost": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant,stop_gained": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant,stop_lost": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_deletion": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_deletion,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_deletion,start_lost": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_deletion,stop_gained": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_deletion,stop_lost": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_insertion": {
+   "observed_rows": 10,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,inframe_insertion,splice_region_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_insertion,splice_region_variant,stop_gained": {
+   "observed_rows": 1,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,inframe_insertion,stop_gained": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_insertion,stop_retained_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 90,
+   "exemplar_records": 7
+  },
+  "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_donor_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_donor_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_region_variant": {
+   "observed_rows": 20,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant,splice_region_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,protein_altering_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,protein_altering_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,protein_altering_variant,splice_region_variant,stop_gained": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,protein_altering_variant,stop_gained": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_donor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_region_variant,stop_gained": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_region_variant,synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,start_lost": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,stop_gained": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,stop_lost": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 2
+  },
+  "coding_sequence_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,incomplete_terminal_codon_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,inframe_insertion,splice_region_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,intron_variant,splice_acceptor_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 2
+  },
+  "coding_sequence_variant,intron_variant,splice_donor_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,missense_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,splice_acceptor_variant": {
+   "observed_rows": 18,
+   "exemplar_records": 2
+  },
+  "coding_sequence_variant,splice_donor_variant": {
+   "observed_rows": 16,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 210,
+   "exemplar_records": 19
+  },
+  "frameshift_variant": {
+   "observed_rows": 23,
+   "exemplar_records": 1
+  },
+  "frameshift_variant,splice_region_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 1
+  },
+  "frameshift_variant,splice_region_variant,stop_gained": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "frameshift_variant,start_lost": {
+   "observed_rows": 16,
+   "exemplar_records": 2
+  },
+  "frameshift_variant,start_lost,start_retained_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "frameshift_variant,stop_gained": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "incomplete_terminal_codon_variant,inframe_insertion": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "incomplete_terminal_codon_variant,protein_altering_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "inframe_deletion": {
+   "observed_rows": 26,
+   "exemplar_records": 2
+  },
+  "inframe_deletion,splice_region_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "inframe_deletion,splice_region_variant,stop_gained": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "inframe_deletion,start_lost": {
+   "observed_rows": 16,
+   "exemplar_records": 2
+  },
+  "inframe_deletion,stop_gained": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "inframe_deletion,stop_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "inframe_insertion": {
+   "observed_rows": 25,
+   "exemplar_records": 2
+  },
+  "inframe_insertion,splice_region_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "inframe_insertion,splice_region_variant,stop_gained": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "inframe_insertion,splice_region_variant,stop_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "inframe_insertion,stop_lost": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "inframe_insertion,stop_retained_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "intergenic_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "intron_variant": {
+   "observed_rows": 197,
+   "exemplar_records": 11
+  },
+  "intron_variant,non_coding_transcript_exon_variant,splice_donor_region_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 86,
+   "exemplar_records": 22
+  },
+  "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_donor_region_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 2
+  },
+  "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant": {
+   "observed_rows": 52,
+   "exemplar_records": 3
+  },
+  "intron_variant,non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_region_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 2
+  },
+  "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_5th_base_variant": {
+   "observed_rows": 9,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 2
+  },
+  "intron_variant,splice_donor_region_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_region_variant,splice_donor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_variant": {
+   "observed_rows": 13,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 16,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_region_variant": {
+   "observed_rows": 74,
+   "exemplar_records": 3
+  },
+  "mature_miRNA_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "missense_variant": {
+   "observed_rows": 48,
+   "exemplar_records": 2
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 21,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 73,
+   "exemplar_records": 13
+  },
+  "non_coding_transcript_exon_variant,splice_acceptor_variant": {
+   "observed_rows": 21,
+   "exemplar_records": 4
+  },
+  "non_coding_transcript_exon_variant,splice_donor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 35,
+   "exemplar_records": 7
+  },
+  "non_coding_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 2
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 15,
+   "exemplar_records": 3
+  },
+  "non_coding_transcript_variant,splice_region_variant": {
+   "observed_rows": 26,
+   "exemplar_records": 2
+  },
+  "protein_altering_variant": {
+   "observed_rows": 9,
+   "exemplar_records": 1
+  },
+  "protein_altering_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "protein_altering_variant,splice_region_variant,stop_gained": {
+   "observed_rows": 32,
+   "exemplar_records": 2
+  },
+  "protein_altering_variant,stop_gained": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "splice_acceptor_variant": {
+   "observed_rows": 22,
+   "exemplar_records": 2
+  },
+  "splice_donor_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,stop_gained": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,stop_lost": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,stop_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "start_lost": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "start_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "stop_gained": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "stop_lost": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "stop_retained_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 24,
+   "exemplar_records": 3
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 230,
+   "exemplar_records": 15
+  }
+ },
+ "variant_classes": {
+  "deletion": 118,
+  "insertion": 117,
+  "mnv_or_complex": 14,
+  "snv": 126
+ },
+ "family_columns": [
+  "SYMBOL=",
+  "SYMBOL_SOURCE=",
+  "HGNC_ID",
+  "TSL",
+  "MANE_SELECT",
+  "CANONICAL",
+  "FLAGS=",
+  "ENSP",
+  "BIOTYPE=",
+  "STRAND="
+ ],
+ "family_strata": {
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;deletion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;insertion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;deletion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;insertion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;insertion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=TEC;STRAND=1;snv": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;deletion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;insertion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;insertion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;mnv_or_complex": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=miRNA;STRAND=1;deletion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=miRNA;STRAND=1;snv": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=snoRNA;STRAND=1;mnv_or_complex": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=-;STRAND=-1;deletion": 19,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=-;STRAND=-1;insertion": 37,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=-;STRAND=-1;snv": 7,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=-;STRAND=-;insertion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=-;STRAND=-;snv": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=-;STRAND=1;deletion": 11,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=-;STRAND=1;insertion": 15,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=-;STRAND=1;snv": 3,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;deletion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;insertion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;insertion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP-;BIOTYPE=-;STRAND=-1;deletion": 4,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP-;BIOTYPE=-;STRAND=-1;insertion": 9,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP-;BIOTYPE=-;STRAND=-1;snv": 4,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP-;BIOTYPE=-;STRAND=1;deletion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP-;BIOTYPE=-;STRAND=1;insertion": 1,
+  "SYMBOL=-;SYMBOL_SOURCE=-;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP-;BIOTYPE=-;STRAND=1;snv": 1,
+  "SYMBOL=AATBC;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;deletion": 1,
+  "SYMBOL=AATBC;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;deletion": 1,
+  "SYMBOL=AATBC;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;deletion": 1,
+  "SYMBOL=ATP5PF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=ATP5PF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=ATP5PF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=-1;deletion": 1,
+  "SYMBOL=ATP5PF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;deletion": 1,
+  "SYMBOL=ATP5PF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 2,
+  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=-1;insertion": 1,
+  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;insertion": 1,
+  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;insertion": 1,
+  "SYMBOL=ATP5PO;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=BAGE2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=transcribed_unprocessed_pseudogene;STRAND=1;snv": 1,
+  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=CHODL;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;insertion": 1,
+  "SYMBOL=CSTB;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;snv": 1,
+  "SYMBOL=CYP4F29P;SYMBOL_SOURCE=EntrezGene;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=CYP4F29P;SYMBOL_SOURCE=EntrezGene;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=CYP4F29P;SYMBOL_SOURCE=EntrezGene;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=CYP4F29P;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=transcribed_unprocessed_pseudogene;STRAND=-1;snv": 1,
+  "SYMBOL=CYYR1-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=CYYR1-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=CYYR1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=CYYR1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=CYYR1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;deletion": 1,
+  "SYMBOL=CYYR1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=DNAJC28;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=DNAJC28;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=DNAJC28;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=DSTNP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=processed_pseudogene;STRAND=-1;insertion": 1,
+  "SYMBOL=EPCIP-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=EPCIP-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=EPCIP-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=FAM3B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=FAM3B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=FAM3B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=1;insertion": 1,
+  "SYMBOL=FAM3B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;insertion": 1,
+  "SYMBOL=FAM3B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=GABPA;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=GABPA;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=HEMK2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=HEMK2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;snv": 1,
+  "SYMBOL=HEMK2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=HEMK2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;snv": 1,
+  "SYMBOL=HEMK2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=HSPD1P7;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=processed_pseudogene;STRAND=-1;snv": 1,
+  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=1;insertion": 1,
+  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=1;insertion": 1,
+  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;insertion": 1,
+  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;insertion": 1,
+  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=ITSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=1;insertion": 1,
+  "SYMBOL=KRTAP10-8;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=LINC00334;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=LINC00334;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=LINC00334;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=LINC00945;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=LINC00945;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=LINC01426;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=LINC01426;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=LINC01426;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=LINC01684;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=LINC01684;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=LINC01684;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=LINC01694;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=LINC01694;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=LINC01694;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=LINC02573;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=LINC02575;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=LINC02575;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=LINC03104;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=LINC03104;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=LINC03104;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=LIPI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=LIPI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;snv": 1,
+  "SYMBOL=LIPI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=LIPI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;snv": 1,
+  "SYMBOL=LIPI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=MIR3648-2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=miRNA;STRAND=1;deletion": 1,
+  "SYMBOL=MIR3648-2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=miRNA;STRAND=1;snv": 1,
+  "SYMBOL=MIR548X;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=miRNA;STRAND=-1;snv": 1,
+  "SYMBOL=MIR548XHG;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=MIR548XHG;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=MIR548XHG;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;snv": 1,
+  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;deletion": 1,
+  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=1;deletion": 1,
+  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;deletion": 1,
+  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;deletion": 1,
+  "SYMBOL=MORC3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;insertion": 1,
+  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=1;insertion": 1,
+  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=1;insertion": 1,
+  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;insertion": 1,
+  "SYMBOL=MRPS6;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=MT-ATP8;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=MT-CO1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=MT-CO2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=MT-ND1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=MT-ND2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=MT-RNR1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_rRNA;STRAND=1;snv": 1,
+  "SYMBOL=MT-RNR2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_rRNA;STRAND=1;snv": 1,
+  "SYMBOL=MT-TA;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=-1;snv": 1,
+  "SYMBOL=MT-TC;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=-1;snv": 1,
+  "SYMBOL=MT-TD;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=1;snv": 1,
+  "SYMBOL=MT-TF;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=1;snv": 1,
+  "SYMBOL=MT-TI;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=1;snv": 1,
+  "SYMBOL=MT-TK;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=1;snv": 1,
+  "SYMBOL=MT-TL1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=1;snv": 1,
+  "SYMBOL=MT-TM;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=1;snv": 1,
+  "SYMBOL=MT-TN;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=-1;snv": 1,
+  "SYMBOL=MT-TQ;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=-1;snv": 1,
+  "SYMBOL=MT-TS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=-1;snv": 1,
+  "SYMBOL=MT-TV;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=1;snv": 1,
+  "SYMBOL=MT-TW;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=1;snv": 1,
+  "SYMBOL=MT-TY;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=Mt_tRNA;STRAND=-1;snv": 1,
+  "SYMBOL=MTCO1P3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=processed_pseudogene;STRAND=-1;snv": 1,
+  "SYMBOL=OLIG1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=1;snv": 1,
+  "SYMBOL=OLIG1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=OLIG1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=OLIG1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=PCP4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=PCP4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;snv": 1,
+  "SYMBOL=PCP4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=1;snv": 1,
+  "SYMBOL=PCP4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;snv": 1,
+  "SYMBOL=PCP4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=PCSEAT;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=PCSEAT;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;snv": 1,
+  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;snv": 1,
+  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;snv": 1,
+  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF,cds_end_NF;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;snv": 1,
+  "SYMBOL=POFUT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=PRMT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=PRMT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=PRMT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=1;insertion": 1,
+  "SYMBOL=PRMT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;insertion": 1,
+  "SYMBOL=PRMT2;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=RBM11;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=RBM11;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=1;deletion": 1,
+  "SYMBOL=RBM11;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=1;deletion": 1,
+  "SYMBOL=RBM11;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;deletion": 1,
+  "SYMBOL=RBM11;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=RNA5SP490;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=rRNA_pseudogene;STRAND=1;snv": 1,
+  "SYMBOL=RPS5P3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=processed_pseudogene;STRAND=-1;snv": 1,
+  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;deletion": 1,
+  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=1;deletion": 1,
+  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=1;deletion": 1,
+  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;deletion": 1,
+  "SYMBOL=RRP1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=RRP1B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=RRP1B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=1;snv": 1,
+  "SYMBOL=RRP1B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;snv": 1,
+  "SYMBOL=RRP1B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;snv": 1,
+  "SYMBOL=RSPH1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=RSPH1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=RSPH1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=-1;deletion": 1,
+  "SYMBOL=RSPH1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;deletion": 1,
+  "SYMBOL=RSPH1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=RWDD2B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=RWDD2B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;deletion": 1,
+  "SYMBOL=RWDD2B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=-1;deletion": 1,
+  "SYMBOL=RWDD2B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;deletion": 1,
+  "SYMBOL=RWDD2B;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=SAMSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;snv": 1,
+  "SYMBOL=SAMSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=-1;snv": 1,
+  "SYMBOL=SAMSN1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;insertion": 1,
+  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_end_NF;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;insertion": 1,
+  "SYMBOL=SLC19A1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;insertion": 1,
+  "SYMBOL=SOD1-DT;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;mnv_or_complex": 1,
+  "SYMBOL=SOD1-DT;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=-1;mnv_or_complex": 1,
+  "SYMBOL=SOD1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;mnv_or_complex": 1,
+  "SYMBOL=SOD1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;mnv_or_complex": 1,
+  "SYMBOL=SOD1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=1;mnv_or_complex": 1,
+  "SYMBOL=SOD1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;mnv_or_complex": 1,
+  "SYMBOL=SOD1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;mnv_or_complex": 1,
+  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;deletion": 1,
+  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=retained_intron;STRAND=-1;deletion": 1,
+  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;deletion": 1,
+  "SYMBOL=SUMO3;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=TCP10L;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;snv": 1,
+  "SYMBOL=TCP10L;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=TCP10L;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;snv": 1,
+  "SYMBOL=TCP10L;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=cds_start_NF;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;snv": 1,
+  "SYMBOL=TMPRSS15;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=TMPRSS15;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=cds_end_NF;ENSP+;BIOTYPE=protein_coding;STRAND=-1;snv": 1,
+  "SYMBOL=TPTE;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=TPTE;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=TPTE;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;deletion": 1,
+  "SYMBOL=TPTE;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;deletion": 1,
+  "SYMBOL=TSPEAR-AS1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=lncRNA;STRAND=1;deletion": 1,
+  "SYMBOL=TSPEAR;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=TSPEAR;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;deletion": 1,
+  "SYMBOL=TSPEAR;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;deletion": 1,
+  "SYMBOL=TSPEAR;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;deletion": 1,
+  "SYMBOL=UBASH3A;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=UBASH3A;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=1;insertion": 1,
+  "SYMBOL=UBASH3A;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=UBASH3A;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=1;insertion": 1,
+  "SYMBOL=WDR4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT+;CANONICAL+;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;mnv_or_complex": 1,
+  "SYMBOL=WDR4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;mnv_or_complex": 1,
+  "SYMBOL=WDR4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL+;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP-;BIOTYPE=protein_coding_CDS_not_defined;STRAND=-1;mnv_or_complex": 1,
+  "SYMBOL=WDR4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=nonsense_mediated_decay;STRAND=-1;mnv_or_complex": 1,
+  "SYMBOL=WDR4;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL-;FLAGS=-;ENSP+;BIOTYPE=protein_coding;STRAND=-1;mnv_or_complex": 1,
+  "SYMBOL=Y_RNA;SYMBOL_SOURCE=RFAM;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=misc_RNA;STRAND=-1;deletion": 1,
+  "SYMBOL=Y_RNA;SYMBOL_SOURCE=RFAM;HGNC_ID-;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=misc_RNA;STRAND=1;snv": 1,
+  "SYMBOL=ZNF114P1;SYMBOL_SOURCE=HGNC;HGNC_ID+;TSL-;MANE_SELECT-;CANONICAL+;FLAGS=-;ENSP-;BIOTYPE=processed_pseudogene;STRAND=1;snv": 1
+ },
+ "records": [
+  {
+   "suite": "attributes",
+   "vcf": "21\t5597440\tnb_y_rna_rfam\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t8987026\trs1988325939\tAGCCGCGGGGATC\tA\t.\t.\t.",
+   "combinations": [
+    "mature_miRNA_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t8987044\t.\tG\tT\t.\t.\t.",
+   "combinations": [
+    "mature_miRNA_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t10414912\trs1600775702\tG\tGTGCTTCATCTTC\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t10482800\tnb_readthrough_exon\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t10603633\trs1281258100\tGTATGAATATAATAGA\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+    "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t13843300\tnb_cyp4f29p_entrez\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t14165216\trs551950541\tC\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_region_variant",
+    "intron_variant,non_coding_transcript_variant,splice_region_variant",
+    "intron_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t14216335\trs1391685509\tCAT\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant,stop_lost",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t14622621\trs2123345541\tG\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t15105118\trs752575819\tC\tT\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t15283784\t21:15283784:T:TA\tT\tTA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t15477784\trs1601121900\tTCA\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t15575269\trs1361934799\tC\tCAG\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t18171655\trs1568921854\tC\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t18256505\t.\tTCAGGCCA\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,intron_variant,splice_acceptor_variant",
+    "coding_sequence_variant,intron_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t18256600\tnb_chodl_cds\tA\tG\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t18398250\tnb_tmprss15_cds\tT\tC\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t18398251\tnb_tmprss15_cds2\tT\tC\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t18686120\tnb_mir548x\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t18918000\tnb_lncrna_no_symbol\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t19268555\trs937007124\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t20204701\t21:20204701:T:C\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t23254313\t21:23254313:G:GA\tG\tGA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t23432233\trs1983579045\tTA\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t24526341\t.\tAGAC\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t25729793\trs1237301162\tATGCTGATTC\tA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant",
+    "5_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant",
+    "5_prime_UTR_variant,coding_sequence_variant,splice_acceptor_variant",
+    "non_coding_transcript_exon_variant,splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t26483402\t.\tTCTCTCCTATC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant",
+    "coding_sequence_variant,intron_variant,splice_acceptor_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t28885369\trs575418327\tC\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "5_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t29006645\t21:29006645:TCTGAGTC:T\tTCTGAGTC\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant",
+    "coding_sequence_variant,splice_acceptor_variant",
+    "non_coding_transcript_exon_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t31659979\tsynth_mnp_0574\tGGTCG\tAGTTG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant",
+    "coding_sequence_variant,intron_variant,splice_donor_region_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t32567827\trs776557022\tT\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t32893769\trs2045243839\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t33065835\t21:33065835:GGTTTCAGAG:G\tGGTTTCAGAGTGAGATTCT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t33072052\trs1327468266\tG\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t33485728\t.\tA\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t33836987\trs1200767520\tG\tGAATC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "coding_sequence_variant,inframe_insertion,splice_region_variant",
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t33903747\trs1987132913\tT\tTTACCTC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t34142409\trs1184816984\tT\tTG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant,splice_region_variant,stop_gained",
+    "NMD_transcript_variant,intron_variant",
+    "frameshift_variant,splice_region_variant,stop_gained",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34518083\t.\tTT\tAA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34526662\t.\tCC\tGG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34613786\t.\tC\tCA\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34613787\t.\tA\tC\t.\t.\t.",
+   "combinations": [
+    "splice_region_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34613794\t.\tATTC\tA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,start_lost,start_retained_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34613795\t.\tTT\tAA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,start_lost"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34614278\t.\tCC\tGG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34614758\t.\tAC\tA\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34614758\t.\tACCC\tA\t.\t.\t.",
+   "combinations": [
+    "coding_sequence_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34614760\t.\tC\tCGCT\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34615010\t.\tA\tAA\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,start_lost"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34615010\t.\tA\tAGCT\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34615011\t.\tTCCC\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34645251\t.\tG\tGGCT\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34648343\t.\tCT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34648349\t.\tAGGA\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34657344\t.\tCA\tGC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34657462\t.\tCCTG\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34658323\t.\tTC\tT\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34658331\t.\tAG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34663853\t.\tTTAC\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34663861\t.\tCTGC\tC\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34669602\t.\tG\tGGCT\t.\t.\t.",
+   "combinations": [
+    "protein_altering_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34707389\t.\tGGTA\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant,splice_donor_region_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34707943\t.\tGGAA\tG\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion,splice_region_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34709543\t.\tATCT\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,splice_donor_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34724044\t.\tAC\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34746017\t.\tGTAA\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34746021\t.\tG\tGGCT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t34748182\trs193193818\tC\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t34762246\t.\tGG\tTT\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t36374328\trs1433696562\tCG\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t39916525\trs1470200400\tA\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t39929109\trs2087638767\tT\tC\t.\t.\t.",
+   "combinations": [
+    "stop_lost",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t41345735\t.\tT\tTAGACCTTAATTC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_insertion,stop_gained",
+    "inframe_insertion,splice_region_variant,stop_gained",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t41584973\trs1249262350\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42312256\t.\tT\tTGCT\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion,stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42312257\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42312267\t.\tAT\tCA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "3_prime_UTR_variant,coding_sequence_variant,splice_region_variant",
+    "missense_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42312269\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "splice_region_variant,stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42312269\t.\tTC\tAG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant",
+    "coding_sequence_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42312270\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42312270\t.\tCTGC\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42312271\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42312271\t.\tTG\tAT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42312274\t.\tAA\tCC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
+    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313477\t.\tG\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_region_variant",
+    "intron_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313484\t.\tC\tCGCT\t.\t.\t.",
+   "combinations": [
+    "protein_altering_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313484\t.\tCC\tGG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313485\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "splice_region_variant,synonymous_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313485\t.\tCTGC\tC\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313534\t.\tGT\tTA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313535\t.\tT\tTA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,stop_lost",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313535\t.\tTCAA\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_deletion,stop_lost"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313536\t.\tC\tCGCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_insertion,stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313575\t.\tC\tCGCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313580\t.\tG\tGGCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_insertion",
+    "inframe_insertion"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313600\t.\tGT\tTA\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313602\t.\tC\tCGCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,protein_altering_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313609\t.\tTGGC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_deletion",
+    "inframe_deletion,stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313628\t.\tGCAG\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_deletion,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313631\t.\tG\tGGCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_insertion,splice_region_variant",
+    "NMD_transcript_variant,protein_altering_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313631\t.\tG\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,splice_region_variant,synonymous_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313632\t.\tCT\tGA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42313688\t.\tTG\tAT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315285\t.\tGTAC\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant",
+    "intron_variant,splice_donor_5th_base_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315291\t.\tA\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_donor_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315291\t.\tACAC\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315292\t.\tC\tCGCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,splice_region_variant,stop_gained",
+    "inframe_insertion,splice_region_variant,stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315292\t.\tCA\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315293\t.\tA\tAA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315293\t.\tAC\tCG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant,splice_region_variant",
+    "splice_region_variant,stop_lost"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315305\t.\tACTC\tA\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315306\t.\tCT\tGA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,coding_sequence_variant,splice_donor_variant",
+    "NMD_transcript_variant,missense_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315319\t.\tCT\tGA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315320\t.\tT\tTA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315336\t.\tC\tG\t.\t.\t.",
+   "combinations": [
+    "coding_sequence_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315336\t.\tCA\tGC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,coding_sequence_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315372\t.\tC\tCA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant,start_lost"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315373\t.\tA\tAGCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,start_lost"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315373\t.\tATGA\tA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant,start_lost"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t42315409\t.\tC\tCGCT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t42426705\trs771158307\tC\tCCTT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_insertion",
+    "inframe_insertion"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t42482619\t408130\tACATGCTCCGCAACTTAC\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant",
+    "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t42863432\t3336333\tCCACCTA\tACACCTG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_donor_variant",
+    "intron_variant,non_coding_transcript_variant,splice_donor_variant",
+    "intron_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t43161261\trs1985621170\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t43683285\trs755653178\tG\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t43774760\t4725737\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,splice_polypyrimidine_tract_variant",
+    "non_coding_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t43776268\t423466\tA\tAAT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,start_lost",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t43801711\trs2085093698\tCGCGTCAGTGAGGT\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant,stop_retained_variant",
+    "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t44499780\t.\tGCCTCAGCGTGT\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,stop_lost",
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t44529793\trs781794878\tCTAACCATAGG\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+    "coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_exon_variant,splice_donor_region_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t44612102\t.\tTGGCTGACGCCTG\tT\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion,start_lost"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t44817965\t.\tACAT\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_deletion,start_lost",
+    "inframe_deletion",
+    "inframe_deletion,start_lost",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t45268500\tnb_cds_start_nf_intron\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t45379117\trs1374160967\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t45537772\t.\tT\tTATTCCAGAA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,protein_altering_variant,stop_gained",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "protein_altering_variant,splice_region_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t45595661\trs1282250887\tTGTAA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t45981851\t.\tA\tAA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t45986944\t.\tG\tGGCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,protein_altering_variant,splice_region_variant,stop_gained",
+    "protein_altering_variant,splice_region_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t45990377\t.\tG\tGGCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_insertion,splice_region_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t45990378\t.\tG\tGGCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_insertion,splice_region_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t45992746\t.\tAGGG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t45997452\t.\tA\tAA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t45997452\t.\tACCG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_deletion,stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t46001305\t.\tCA\tGC\t.\t.\t.",
+   "combinations": [
+    "coding_sequence_variant,missense_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t46002335\t.\tTGAC\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,stop_lost"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "21\t46005048\t.\tC\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "21\t46658922\t.\tT\tTTAAGGAGTTTTTTTCAAAGCCCAAGTATAACCACATTTTGAAACCAG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "inframe_insertion,stop_lost",
+    "intron_variant",
+    "intron_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "MT\t600\tnb_mt_trna\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "attributes",
+   "vcf": "MT\t3400\tnb_mt_nd1\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t4260\t.\tC\tCGCT\t.\t.\t.",
+   "combinations": [
+    "incomplete_terminal_codon_variant,inframe_insertion"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t4261\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "coding_sequence_variant,incomplete_terminal_codon_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t5091\t.\tT\tTA\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t9988\t.\tCTTA\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t9989\t.\tTT\tT\t.\t.\t.",
+   "combinations": [
+    "incomplete_terminal_codon_variant,protein_altering_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t12339\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "start_retained_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t14149\t.\tCCTA\tC\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion,stop_lost"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t14747\t.\tA\tAA\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,start_lost,start_retained_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t15806\t.\tG\tGGCT\t.\t.\t.",
+   "combinations": [
+    "protein_altering_variant"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t15886\t.\tC\tCA\t.\t.\t.",
+   "combinations": [
+    "coding_sequence_variant,incomplete_terminal_codon_variant,inframe_insertion"
+   ]
+  },
+  {
+   "suite": "frame",
+   "vcf": "MT\t15887\t.\tTG\tAT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,coding_sequence_variant,incomplete_terminal_codon_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [
+  {
+   "location": "21:34613795-34613797",
+   "allele": "-",
+   "feature": "ENST00000399272",
+   "feature_type": "Transcript",
+   "record_indices": [
+    43
+   ],
+   "vep_consequence_set": "5_prime_UTR_variant,start_lost,start_retained_variant",
+   "vep_rs_consequence_sets": [
+    "5_prime_UTR_variant,start_retained_variant"
+   ],
+   "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "21:45981851-45981852",
+   "allele": "A",
+   "feature": "ENST00000361866",
+   "feature_type": "Transcript",
+   "record_indices": [
+    137
+   ],
+   "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,start_retained_variant"
+   ],
+   "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "21:45981851-45981852",
+   "allele": "A",
+   "feature": "ENST00000866134",
+   "feature_type": "Transcript",
+   "record_indices": [
+    137
+   ],
+   "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,start_retained_variant"
+   ],
+   "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "21:45981851-45981852",
+   "allele": "A",
+   "feature": "ENST00001002268",
+   "feature_type": "Transcript",
+   "record_indices": [
+    137
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,frameshift_variant,start_retained_variant"
+   ],
+   "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "21:45981851-45981852",
+   "allele": "A",
+   "feature": "ENST00001111227",
+   "feature_type": "Transcript",
+   "record_indices": [
+    137
+   ],
+   "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,start_retained_variant"
+   ],
+   "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "21:45981851-45981852",
+   "allele": "A",
+   "feature": "ENST00001131501",
+   "feature_type": "Transcript",
+   "record_indices": [
+    137
+   ],
+   "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,start_retained_variant"
+   ],
+   "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "MT:14747-14748",
+   "allele": "A",
+   "feature": "ENST00000361789",
+   "feature_type": "Transcript",
+   "record_indices": [
+    157
+   ],
+   "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,start_retained_variant"
+   ],
+   "expected_divergence": "start_cooccurrence_swap"
+  }
+ ],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {
+  "start_cooccurrence_swap": 7
+ },
+ "vep_rs_only_summary": {}
 }

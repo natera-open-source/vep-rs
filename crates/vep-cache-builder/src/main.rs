@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use tracing::info;
+use tracing::{info, warn};
 
 mod builder;
 mod core_dumps;
@@ -87,6 +87,14 @@ struct Args {
     #[arg(long)]
     variation_vcf_dir: Option<String>,
 
+    /// Directory of the release's Ensembl variation MySQL table dumps
+    /// (`source`, `seq_region`, `attrib_type`, `phenotype`, `phenotype_feature`
+    /// and `phenotype_feature_attrib`, each `.txt.gz` or `.txt`): the ClinVar
+    /// allele and somatic classification columns of the variation records,
+    /// which no variation VCF carries. Read with `--include-variations`
+    #[arg(long)]
+    variation_dumps: Option<String>,
+
     /// Specific chromosomes to include (default: all)
     #[arg(long, value_delimiter = ',')]
     chromosomes: Option<Vec<String>>,
@@ -119,6 +127,23 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let output_dir = PathBuf::from(&args.output_dir);
 
+    if !args.include_variations {
+        let ignored: Vec<&str> = [
+            ("--variation-vcf-dir", args.variation_vcf_dir.is_some()),
+            ("--variation-dumps", args.variation_dumps.is_some()),
+            ("--chromosomes", args.chromosomes.is_some()),
+        ]
+        .into_iter()
+        .filter_map(|(flag, given)| given.then_some(flag))
+        .collect();
+        if !ignored.is_empty() {
+            warn!(
+                "{} read only with --include-variations; no variation record is built",
+                ignored.join(", ")
+            );
+        }
+    }
+
     let (gff3_path, fasta_path) = download::resolve_inputs(
         &args.gff3,
         &args.fasta,
@@ -133,7 +158,9 @@ fn main() -> Result<()> {
         download::resolve_core_dumps(dir, args.release, &args.assembly, &args.species)
             .context("Failed to resolve the core table dumps")?;
         info!("Reading core table dumps: {}", dir.display());
-        Some(core_dumps::CoreDumps::load(dir).context("Failed to read the core table dumps")?)
+        let dumps =
+            core_dumps::CoreDumps::load(dir).context("Failed to read the core table dumps")?;
+        Some(dumps)
     } else {
         None
     };
@@ -244,12 +271,25 @@ fn main() -> Result<()> {
         .context("Failed to resolve variation inputs")?;
         info!("Resolved {} variation VCF files", variation_inputs.len());
 
+        let clinvar = if let Some(ref dir) = args.variation_dumps {
+            info!("Reading the ClinVar phenotype features: {}", dir);
+            let chromosomes: Vec<String> = variation_inputs
+                .iter()
+                .map(|(chrom, _)| chrom.clone())
+                .collect();
+            let attribs = variation::ClinVarAttribs::load(Path::new(dir), &chromosomes)
+                .context("Failed to read the variation table dumps")?;
+            Some(attribs)
+        } else {
+            None
+        };
+
         let mut total_variations = 0usize;
         let mut total_region_files = 0usize;
 
         for (chrom, path) in &variation_inputs {
             info!("Parsing variation VCF for chr{}: {}", chrom, path.display());
-            let records = variation::parse_variation_vcf(path, false)
+            let records = variation::parse_variation_vcf(path, false, clinvar.as_ref())
                 .with_context(|| format!("Failed to parse variation VCF for chr{}", chrom))?;
 
             let stats = variation::build_variation_cache(&records, &output_dir, chrom)

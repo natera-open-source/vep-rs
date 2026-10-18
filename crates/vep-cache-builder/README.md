@@ -51,22 +51,36 @@ hashes every peptide with MD5 (Message-Digest algorithm 5) and fetches the match
 and PolyPhen matrices from Ensembl's public MySQL server in batches of 500 hashes,
 `gtf::parse_gtf_tags` reads the `#!` header keys and the per-transcript `tag` values of the
 GTF (Gene Transfer Format), and `vep_fasta::IndexedFasta` opens `--genome-fasta`.
-`builder::build_cache` then turns the transcript into a `CacheTranscript`:
-`mapper::build_mapper` lays the exons out 5' to 3' into cDNA-to-genome pairs and locates
-`cdna_coding_start`, `cdna_coding_end` and the start phase from the CDS; the exon phases
-come from CDS overlap, the introns from the gaps between exons, the peptide from the FASTA
-map, the protein identifier and translation version from the CDS line, `ccds` from
-`ccdsid` (or the dumper's `-`), the attributes from the core dumps when read and
-otherwise from the GFF3 `tag` list and `transcript_support_level` (a MANE membership
-whose accession the GFF3 does not carry is written with an empty value) plus the GTF's
-kept tags, and `translateable_seq` from the CDS segments read out of the genome FASTA in
-transcript order, reverse-complemented on the minus strand. With the core dumps the
+`builder::build_cache` then turns the transcript into a `CacheTranscript` the way Ensembl
+VEP's own cache dumper reads the transcript off the core API. The exons are ordered 5' to
+3' by `rank` and each carries the GFF3 line's `ensembl_phase` and `ensembl_end_phase`,
+the exon's own Ensembl phases (an exon line without the pair gets them derived from the
+CDS: -1 at an end in untranslated sequence, the CDS phase column with 1 and 2 swapped at
+a coding 5' end, and `(phase + coding length) % 3` at a coding 3' end).
+`mapper::build_mapper` lays the exons out into cDNA-to-genome pairs, locates
+`cdna_coding_start` and `cdna_coding_end` from the CDS and records exon 1's phase as the
+mapper's `start_phase`. With `--genome-fasta` the spliced cDNA is read exon by exon,
+reverse-complemented on the minus strand, and cut into `five_prime_utr`,
+`translateable_seq` (led by one `N` per base of the translation start exon's phase, so a
+transcript whose coding sequence opens mid-codon keeps its frame) and `three_prime_utr`;
+a transcript without a translation has the empty `translateable_seq`. `sorted_exons`
+lists the exons by genomic start, the introns follow the exons in transcript order, the
+translation's `start` and `end` are positions within its start and end exons, and
+`codon_table` is the sequence region's attribute when the core dumps carry one, else 2
+on `MT` and 1 elsewhere. The peptide comes from the FASTA map, the protein identifier and
+translation version from the CDS line, `ccds` from `ccdsid` (or the dumper's `-`), and
+the attributes from the core dumps when read and otherwise from the GFF3 `tag` list and
+`transcript_support_level` (a MANE membership whose accession the GFF3 does not carry is
+written with an empty value) plus the GTF's kept tags. With the core dumps the
 transcript also carries the gene symbol's source and HGNC identifier, the gene phenotype
 count, the RefSeq, SWISSPROT, TrEMBL, UniParc and UniProt isoform lists (`-` where there
-are none), the protein features and the sequence region's codon table (2 on MT); and,
-within each 1 Mb region, a transcript whose gene symbol matches that of a transcript
-carrying an HGNC identifier takes that identifier, as Ensembl VEP's `merge_features`
-copies it at dump time. The builder bins the transcripts by chromosome and by the 1 Mb
+are none), the protein features, the translation's sequence edits (`seq_edits`, the
+`initial_met`, `_selenocysteine`, `amino_acid_sub` and `_stop_codon_rt` attributes as
+`start`, `end` and `alt_seq`) and the sequence region's codon table; and, within each
+1 Mb region, a transcript whose gene symbol matches that of a transcript carrying an HGNC
+identifier takes that identifier, as Ensembl VEP's `merge_features` copies it at dump
+time. The record carries the keys the dumper keeps and none of its own: no exon or
+intron strand, no mapper pair count or map names. The builder bins the transcripts by chromosome and by the 1 Mb
 region of their start and writes each bin as a pretty-printed JSON array to
 `transcripts/<chr>/<start>-<end>.json`; `builder::generate_info_json` closes with
 `info.json`, whose `cache_version` is `--release`, whose `sift` and `polyphen` read `b`
@@ -76,7 +90,7 @@ without the dumps, from the GTF header.
 
 Without `--core-dumps` the cache states what the GFF3 states and no more: no symbol
 source or HGNC identifier, no gene phenotype count, no MANE accession, no APPRIS, no
-mature miRNA arms, no RefSeq or UniProt lists and no protein features, so the `SYMBOL_SOURCE`,
+mature miRNA arms, no RefSeq or UniProt lists, no protein features and no sequence edits, so the `SYMBOL_SOURCE`,
 `HGNC_ID`, `GENE_PHENO`, `MANE_SELECT`, `APPRIS`, `miRNA`, `RefSeq`, `SWISSPROT`, `TREMBL`,
 `UNIPARC`, `UNIPROT_ISOFORM` and `DOMAINS` columns stay empty on such a cache. The
 Ensembl cache lists a translation's protein features in the database's row order, which
@@ -87,10 +101,19 @@ With `--include-variations`, `download::resolve_variation_inputs` scans
 `--variation-vcf-dir` for `*-chr*.vcf.gz` files or downloads Ensembl's per-chromosome
 VCFs (Variant Call Format) and their optional `.csi` indexes in parallel;
 `variation::parse_variation_vcf` keeps each record whose `FILTER` is `PASS`, `.` or
-empty and that has an alternate allele, reading the first `ID`, the `REF/ALT` allele
-string, `MA`, `MAF`, `CLIN_SIG`, `PUBMED` and every population frequency `INFO` field as
-an `ALT:freq` string; `variation::build_variation_cache` writes the same 1 Mb bins as
-compact JSON under `variations/<chr>/`.
+empty and that has an alternate allele, and writes it in the form Ensembl VEP's VCF
+parser gives a record: `end` is `POS` plus the reference length minus one, and when an
+indel's alleles share their first base that base is chopped, `start` moves one past
+`POS` and an emptied allele reads `-`, so an insertion starts one past its end. It reads
+the first `ID`, `MA`, `MAF`, `CLIN_SIG`, `PUBMED` and every population frequency `INFO`
+field as an `ALT:freq` string keyed by the chopped allele, and sets
+`phenotype_or_disease` from the `E_Phenotype_or_Disease` evidence flag.
+`clin_sig_allele`, `clin_sig_ref_allele` and `clinical_impact`, which Ensembl VEP joins
+from the variation database's ClinVar phenotype features, are filled from the
+`phenotype_feature` and `phenotype_feature_attrib` dumps of the `--variation-dumps`
+directory (`variation::ClinVarAttribs`); no Ensembl VCF carries them.
+`variation::build_variation_cache` writes the same 1 Mb bins as compact JSON under
+`variations/<chr>/`.
 
 ```text
 <output-dir>/
@@ -117,10 +140,10 @@ carries no `chr` field: the loader takes the chromosome from the directory name.
 | `src/gff3.rs`        | GFF3 reader into `GeneRecord`, `TranscriptRecord`, `ExonRecord` and `CdsRecord`; chromosome normalisation, attribute URL-decoding, the `tag` codes, `ccdsid`, `transcript_support_level`, the exon phases, the CDS `protein_id` and `version`, and the dumper's `artifact` and readthrough filters |
 | `src/core_dumps.rs`  | The core and variation table dumps: MySQL escape decoding, the joins of `transcript_attrib`, `translation`, `protein_feature`, `xref`, `object_xref`, `gene`, `seq_region_attrib`, `meta`, `phenotype_feature` and `phenotype` into per-transcript and per-gene facts |
 | `src/gtf.rs`         | GTF `transcript` lines: the `#!` header keys and the five tags kept as transcript attributes (`basic` and `gencode_basic` both become `gencode_basic`)                                        |
-| `src/mapper.rs`      | cDNA-to-genome mapper pairs, `cdna_coding_start`, `cdna_coding_end` and the start phase for one transcript                                                                                    |
-| `src/builder.rs`     | The serialised cache types, exon phases, introns, `translateable_seq`, attributes and xref lists from the GFF3 or the dumps, the per-region HGNC identifier copy, 1 Mb binning, the transcript shards and `info.json` |
+| `src/mapper.rs`      | cDNA-to-genome mapper pairs, `cdna_coding_start` and `cdna_coding_end` for one transcript, with exon 1's phase as the start phase                                                              |
+| `src/builder.rs`     | The serialised cache types, exon ordering and phases, introns, the spliced cDNA cut into UTRs and `translateable_seq`, the codon table, seq edits, attributes and xref lists from the GFF3 or the dumps, the per-region HGNC identifier copy, 1 Mb binning, the transcript shards and `info.json` |
 | `src/predictions.rs` | SIFT and PolyPhen matrix fetch from Ensembl's MySQL server, keyed by the MD5 of the peptide and stored base64-encoded under the Ensembl matrix object's keys (`analysis`, `sub_analysis`, `translation_md5`) |
-| `src/variation.rs`   | Variation VCF reader (bgzipped or plain), the frequency field mapping to `ALT:freq` strings and the variation shards                                                                          |
+| `src/variation.rs`   | Variation VCF reader (bgzipped or plain) in Ensembl VEP's record form, the ClinVar columns from the variation dumps, the frequency field mapping to `ALT:freq` strings and the variation shards |
 
 ## Command line
 
@@ -144,6 +167,7 @@ the `vep` binary, not this one, so the flags are listed here.
 | `--mysql-port <PORT>`         | Prediction server port, default `3306`                                                                                                                    |
 | `--include-variations`        | Also build `variations/` from Ensembl's variation VCFs                                                                                                    |
 | `--variation-vcf-dir <DIR>`   | Local directory of `*-chr*.vcf.gz` files instead of the download                                                                                          |
+| `--variation-dumps <DIR>`     | Directory of the release's variation MySQL table dumps (`source`, `seq_region`, `attrib_type`, `phenotype`, `phenotype_feature`, `phenotype_feature_attrib`; nothing is downloaded): the ClinVar allele and somatic classification columns of the variation records, read with `--include-variations` for the chromosomes being built |
 | `--chromosomes <A,B,...>`     | Chromosomes whose variation VCFs to download; default 1 to 22, X, Y and MT. The transcript build always covers every chromosome the GFF3 carries          |
 
 The GRCh38 build command is in the [root README's quick start](../../README.md#quick-start);
