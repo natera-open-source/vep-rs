@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Tests for stage_release.sh: a stub `gh` serves a fabricated release, and each
-# fail-closed gate (tag shape, existing destination, download, checksum line,
+# Tests for stage_release.sh: a stub `gh` serves a fabricated release with two
+# Linux archives, the target argument picks the archive, and each fail-closed
+# gate (tag shape, target shape, existing destination, download, checksum line,
 # checksum value, attestation) is shown to stop the run with nothing staged.
 #
 # Pure bash. No network, no GitHub.
@@ -24,14 +25,17 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 ARCHIVE=vep-9.9.9-x86_64-unknown-linux-gnu.tar.gz
+GENERIC=vep-9.9.9-aarch64-unknown-linux-gnu-generic.tar.gz
 RELEASE="$TMP/release"
 STUBS="$TMP/bin"
-mkdir -p "$RELEASE" "$STUBS" "$TMP/src/vep-9.9.9-x86_64-unknown-linux-gnu"
+mkdir -p "$RELEASE" "$STUBS" "$TMP/src/vep-9.9.9-x86_64-unknown-linux-gnu" "$TMP/src/vep-9.9.9-aarch64-unknown-linux-gnu-generic"
 for bin in vep vep-cache-builder vep-cache-converter; do
     echo "$bin" >"$TMP/src/vep-9.9.9-x86_64-unknown-linux-gnu/$bin"
+    echo "$bin generic" >"$TMP/src/vep-9.9.9-aarch64-unknown-linux-gnu-generic/$bin"
 done
 tar -czf "$RELEASE/$ARCHIVE" -C "$TMP/src" vep-9.9.9-x86_64-unknown-linux-gnu
-sum() { (cd "$RELEASE" && sha256sum "$ARCHIVE"); }
+tar -czf "$RELEASE/$GENERIC" -C "$TMP/src" vep-9.9.9-aarch64-unknown-linux-gnu-generic
+sum() { (cd "$RELEASE" && sha256sum "$ARCHIVE" "$GENERIC"); }
 good_sums() { { echo "$(printf '0%.0s' {1..64})  vep-rs-9.9.9.tar.gz"; sum; } >"$RELEASE/SHA256SUMS"; }
 good_sums
 
@@ -57,10 +61,11 @@ esac
 STUB
 chmod +x "$STUBS/gh"
 
-run() { # run <dest> [VAR=value ...]; TAG in the caller's env overrides v9.9.9
+run() { # run <dest> [VAR=value ...]; TAG and TARGET in the caller's env override v9.9.9 and the x86_64 archive
     local dest="$1"
     shift
-    env PATH="$STUBS:$PATH" STUB_RELEASE="$RELEASE" STUB_LOG="$TMP/gh.log" "$@" bash "$STAGE" "${TAG:-v9.9.9}" "$dest"
+    env PATH="$STUBS:$PATH" STUB_RELEASE="$RELEASE" STUB_LOG="$TMP/gh.log" "$@" \
+        bash "$STAGE" "${TAG:-v9.9.9}" "${TARGET:-x86_64-unknown-linux-gnu}" "$dest"
 }
 
 expect_fail() { # expect_fail <name> <stderr substring> [VAR=value ...]
@@ -93,8 +98,22 @@ grep -q -- "--source-ref refs/tags/v9.9.9" "$TMP/gh.log" &&
     ok "the attestation must come from this release's tag" ||
     bad "gh attestation verify was not pinned to refs/tags/v9.9.9: $(cat "$TMP/gh.log")"
 
+dest="$TMP/ctx-generic"
+if TARGET=aarch64-unknown-linux-gnu-generic run "$dest" >/dev/null 2>&1 &&
+    [[ "$(cat "$dest/vep")" == "vep generic" && "$(cat "$dest/vep-cache-converter")" == "vep-cache-converter generic" ]]; then
+    ok "the target argument picks that archive of the release"
+else
+    bad "the generic target did not stage the generic archive: $(cat "$dest/vep" 2>&1)"
+fi
+grep -q -- "--pattern $GENERIC" "$TMP/gh.log" &&
+    ok "only the named archive and SHA256SUMS are downloaded" ||
+    bad "the generic archive was not the download pattern: $(cat "$TMP/gh.log")"
+
 TAG=0.2.0 expect_fail "a tag without the v prefix fails" "is not vX.Y.Z"
 TAG=v1.0 expect_fail "a two-part tag fails" "is not vX.Y.Z"
+TARGET=aarch64-apple-darwin expect_fail "a non-Linux target fails" "is not a Linux archive name"
+TARGET=x86_64-unknown-linux-gnu/../x expect_fail "a target with a path in it fails" "is not a Linux archive name"
+TARGET=aarch64-unknown-linux-gnu-sve2 expect_fail "a target whose archive the release lacks fails" "SHA256SUMS has no line for vep-9.9.9-aarch64-unknown-linux-gnu-sve2.tar.gz"
 mkdir -p "$TMP/exists"
 err=$(run "$TMP/exists" 2>&1 >/dev/null) && bad "an existing destination was overwritten" ||
     { [[ "$err" == *"already exists"* ]] && ok "an existing destination is never overwritten" || bad "existing destination: $err"; }

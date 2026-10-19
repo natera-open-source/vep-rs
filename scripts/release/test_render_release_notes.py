@@ -81,14 +81,21 @@ def fixture_repo(tmp_path: Path) -> Path:
         shutil.copy(record, repo / "docs" / "concordance-provenance" / record.name)
     write_notes(repo, OPENER, f"Upgrade notes\n\n{repository_upgrade_notes()}")
     (repo / "SHA256SUMS").write_text("".join(f"{d}  {n}\n" for n, d in DIGESTS.items()))
+    write_floors(repo, {n: "2.39" for n in DIGESTS if "linux-gnu" in n})
     return repo
+
+
+def write_floors(repo: Path, floors: dict[str, str]) -> None:
+    """The measured glibc floor per Linux archive, the file check_glibc_floor.py --json writes."""
+    (repo / "glibc-floors.json").write_text(json.dumps(floors))
 
 
 def render(repo: Path, *extra: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--repo", str(repo), "--version", VERSION, "--previous", PREVIOUS,
-         "--commit", COMMIT, "--toolchain", TOOLCHAIN, "--sha256sums", str(repo / "SHA256SUMS"), *extra],
-        capture_output=True, text=True,
+         "--commit", COMMIT, "--toolchain", TOOLCHAIN, "--sha256sums", str(repo / "SHA256SUMS"),
+         "--glibc-floors", str(repo / "glibc-floors.json"), *extra],
+        check=False, capture_output=True, text=True,
     )
 
 
@@ -461,6 +468,7 @@ def test_install_lists_every_archive_in_target_order_with_its_digest(tmp_path: P
     assert [l.split("`")[1] for l in install[:3]] == list(PLATFORMS)
     assert [l.rsplit("`", 2)[1] for l in install[:3]] == [DIGESTS[n] for n in PLATFORMS]
     assert install[3].startswith("- Each archive unpacks to `vep-0.3.2-<target>/`") and "Rust 1.88 or later" in install[3]
+    assert [l.split(": ", 1)[1].rsplit("; sha256", 1)[0] for l in install[:3]] == [PLATFORMS[n] for n in PLATFORMS]
     assert install[4] == (
         "- Container image: `docker pull ghcr.io/natera-open-source/vep-rs:0.3.2` (linux/amd64: the x86_64 binaries "
         "with the `duckdb` CLI that Parquet output needs)"
@@ -483,6 +491,131 @@ def test_install_refuses_an_incomplete_or_unknown_sha256sums(tmp_path: Path) -> 
     assert "SHA256SUMS lists ['vep-0.3.2-riscv64gc-unknown-linux-gnu.tar.gz'], archives of no known target" in error(repo)
     sums.unlink()
     assert "no SHA256SUMS at" in error(repo)
+
+
+GENERIC_DIGESTS = {
+    "vep-0.3.2-x86_64-unknown-linux-gnu-v2.tar.gz": "1" * 64,
+    "vep-0.3.2-aarch64-unknown-linux-gnu-generic.tar.gz": "2" * 64,
+}
+GENERIC_PLATFORMS = {
+    "vep-0.3.2-x86_64-unknown-linux-gnu-v2.tar.gz": (
+        "Linux x86_64, glibc 2.17 or later, x86-64-v2 (SSE4.2, POPCNT: Intel Nehalem 2008 or later, AMD Bulldozer 2011 "
+        "or later, and VMs that hide AVX2)"
+    ),
+    "vep-0.3.2-aarch64-unknown-linux-gnu-generic.tar.gz": (
+        "Linux aarch64, glibc 2.17 or later, Armv8.0-A with NEON (any 64-bit Arm: AWS Graviton2, Ampere Altra, "
+        "Raspberry Pi, Apple silicon under Linux)"
+    ),
+}
+
+
+def with_generic_archives(repo: Path, floors: dict[str, str]) -> None:
+    """SHA256SUMS listing the two generic archives beside the three measured ones, with the given floors."""
+    (repo / "SHA256SUMS").write_text("".join(f"{d}  {n}\n" for n, d in {**DIGESTS, **GENERIC_DIGESTS}.items()))
+    write_floors(repo, floors)
+
+
+def install_lines(body: str) -> list[str]:
+    return body.split("## Install\n\n")[1].split("\n\n## Cite")[0].splitlines()
+
+
+def test_install_states_the_glibc_floor_measured_on_each_linux_archive(tmp_path: Path) -> None:
+    repo = fixture_repo(tmp_path)
+    write_floors(repo, {"vep-0.3.2-x86_64-unknown-linux-gnu.tar.gz": "2.17", "vep-0.3.2-aarch64-unknown-linux-gnu.tar.gz": "2.28"})
+    install = install_lines(page(repo))
+    assert "Linux x86_64, glibc 2.17 or later, x86-64-v3" in install[0]
+    assert "Linux aarch64, glibc 2.28 or later, Armv8.4-A with SVE" in install[1]
+    assert "glibc" not in install[2] and install[2].split("`")[1] == "vep-0.3.2-aarch64-apple-darwin.tar.gz"
+
+
+def test_install_refuses_floors_that_are_absent_incomplete_stale_or_not_versions(tmp_path: Path) -> None:
+    repo = fixture_repo(tmp_path)
+    floors = repo / "glibc-floors.json"
+    out = render(repo, "--glibc-floors", str(tmp_path / "absent.json"))
+    assert out.returncode == 1 and "no glibc floors at" in out.stderr
+    write_floors(repo, {"vep-0.3.2-x86_64-unknown-linux-gnu.tar.gz": "2.17"})
+    assert "has no glibc floor for ['vep-0.3.2-aarch64-unknown-linux-gnu.tar.gz']" in error(repo)
+    write_floors(repo, {n: "2.17" for n in DIGESTS if "linux-gnu" in n} | {"vep-0.3.2-riscv64gc-unknown-linux-gnu.tar.gz": "2.17"})
+    assert "names ['vep-0.3.2-riscv64gc-unknown-linux-gnu.tar.gz'], archives SHA256SUMS lacks" in error(repo)
+    write_floors(repo, {n: "2.17" for n in DIGESTS if "linux-gnu" in n} | {"vep-0.3.2-x86_64-unknown-linux-gnu.tar.gz": "glibc 2.17"})
+    assert "carries a glibc floor for vep-0.3.2-x86_64-unknown-linux-gnu.tar.gz that is not a version: 'glibc 2.17'" in error(repo)
+    floors.write_text("[]")
+    assert f"{floors} is not an object" in error(repo)
+    out = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo", str(repo), "--version", VERSION, "--previous", PREVIOUS, "--commit", COMMIT,
+         "--toolchain", TOOLCHAIN, "--sha256sums", str(repo / "SHA256SUMS")],
+        check=False, capture_output=True, text=True,
+    )
+    assert out.returncode == 1 and "Linux archives need --glibc-floors" in out.stderr
+
+
+def test_generic_archives_follow_their_measured_archive_with_their_own_cpu_floor(tmp_path: Path) -> None:
+    """A release with the two generic builds lists five archives, x86_64 then aarch64 then macOS, each generic
+    archive right after the measured archive of its architecture; a record without the generic builds' cells
+    says their wall time was not measured, and the container bullet names both platforms and the fast tags."""
+    repo = fixture_repo(tmp_path)
+    with_generic_archives(repo, {n: "2.17" for n in {**DIGESTS, **GENERIC_DIGESTS} if "linux-gnu" in n})
+    install = install_lines(page(repo))
+    assert len(install) == 9
+    names = [l.split("`")[1] for l in install[:5]]
+    assert names == [
+        "vep-0.3.2-x86_64-unknown-linux-gnu.tar.gz", "vep-0.3.2-x86_64-unknown-linux-gnu-v2.tar.gz",
+        "vep-0.3.2-aarch64-unknown-linux-gnu.tar.gz", "vep-0.3.2-aarch64-unknown-linux-gnu-generic.tar.gz",
+        "vep-0.3.2-aarch64-apple-darwin.tar.gz",
+    ]
+    for line in install[:5]:
+        name = line.split("`")[1]
+        digest = {**DIGESTS, **GENERIC_DIGESTS}[name]
+        assert line.endswith(f"; sha256 `{digest}`")
+    assert install[1] == (
+        f"- [`vep-0.3.2-x86_64-unknown-linux-gnu-v2.tar.gz`]({DOWNLOAD}/vep-0.3.2-x86_64-unknown-linux-gnu-v2.tar.gz): "
+        f"{GENERIC_PLATFORMS['vep-0.3.2-x86_64-unknown-linux-gnu-v2.tar.gz']}, wall time against the x86-64-v3 build "
+        f"not measured; sha256 `{'1' * 64}`"
+    )
+    assert install[3] == (
+        f"- [`vep-0.3.2-aarch64-unknown-linux-gnu-generic.tar.gz`]({DOWNLOAD}/vep-0.3.2-aarch64-unknown-linux-gnu-generic.tar.gz): "
+        f"{GENERIC_PLATFORMS['vep-0.3.2-aarch64-unknown-linux-gnu-generic.tar.gz']}, wall time against the neoverse-v1 build "
+        f"not measured; sha256 `{'2' * 64}`"
+    )
+    assert install[6] == (
+        "- Container image: `docker pull ghcr.io/natera-open-source/vep-rs:0.3.2` (linux/amd64 and linux/arm64: the "
+        "`x86-64-v2` and the generic aarch64 binaries, which run on almost every 64-bit host; the single-platform tags "
+        "`0.3.2-x86-64-v3` and `0.3.2-neoverse-v1` carry the measured binaries; every image adds the `duckdb` CLI that "
+        "Parquet output needs)"
+    )
+    assert all(l.startswith("- ") for l in install)
+
+
+def generic_cells(record: dict) -> None:
+    """The campaign's generic-build cells: ClinVar GRCh38 on each architecture, named by `target_cpu`, beside the
+    measured build's cells; the measured build's own cells may name their CPU too."""
+    s02 = {a["arch"]: a for a in record["per_cell_aggregates"] if a["suite_id"] == "s02"}
+    record["per_cell_aggregates"] += [
+        {**s02["arm64"], "target_cpu": "generic", "median_sec": 14.0},  # 14.0 / 12.5
+        {**s02["x86_64"], "target_cpu": "x86-64-v2", "median_sec": 24.05},  # 24.05 / 21.2
+    ]
+    s02["arm64"]["target_cpu"] = "neoverse-v1"
+
+
+def test_generic_archives_state_their_wall_time_against_the_measured_build_from_the_record(tmp_path: Path) -> None:
+    repo = six_dataset_repo(tmp_path)
+    with_generic_archives(repo, {n: "2.17" for n in {**DIGESTS, **GENERIC_DIGESTS} if "linux-gnu" in n})
+    before = page(repo)
+    edit_record(repo, "release", generic_cells)
+    body = page(repo)
+    install = install_lines(body)
+    assert "x86-64-v2 (SSE4.2, POPCNT: Intel Nehalem 2008 or later, AMD Bulldozer 2011 or later, and VMs that hide AVX2), 1.13 times the x86-64-v3 build's wall time on ClinVar GRCh38; sha256" in install[1]
+    assert "Apple silicon under Linux), 1.12 times the neoverse-v1 build's wall time on ClinVar GRCh38; sha256" in install[3]
+    # The generic cells change nothing else: the measured build's ClinVar rows and caption read as before.
+    assert concordance_section(body) == concordance_section(before)
+    edit_record(repo, "release", lambda r: r["per_cell_aggregates"].append({**aggregate(r, "s02", "arm64"), "target_cpu": "generic"}))
+    assert "the release record has 2 per_cell_aggregates entries for s02 on arm64 of the generic build; one is read" in error(repo)
+    edit_record(repo, "release", lambda r: r["per_cell_aggregates"].pop())
+    edit_record(repo, "release", lambda r: aggregate(r, "s02", "arm64").update(median_sec=0))
+    assert "the measured build's s02 median on arm64 is zero" in error(repo)
+    edit_record(repo, "release", lambda r: aggregate(r, "s02", "arm64").update(median_sec=12.5))
+    edit_record(repo, "release", lambda r: next(a for a in r["per_cell_aggregates"] if a.get("target_cpu") == "generic").update(median_sec="slow"))
+    assert "the per_cell_aggregates entry for s02 on arm64 of the generic build carries a median_sec that is not a number: 'slow'" in error(repo)
 
 
 def test_cite_and_source_archive_carry_the_version_doi_when_minted(tmp_path: Path) -> None:
@@ -1425,6 +1558,7 @@ def release_040_repo(tmp_path: Path) -> Path:
     for record in (ROOT / "docs" / "concordance-provenance").glob("*-v0.4.0.json"):
         shutil.copy(record, repo / "docs" / "concordance-provenance" / record.name)
     (repo / "SHA256SUMS").write_text("".join(f"{d}  {n}\n" for n, d in DIGESTS_040.items()))
+    write_floors(repo, {n: "2.39" for n in DIGESTS_040 if "linux-gnu" in n})
     return repo
 
 
@@ -1435,7 +1569,7 @@ def test_the_0_4_0_records_render_the_published_concordance_section(tmp_path: Pa
     repo = release_040_repo(tmp_path)
     out = subprocess.run(
         [sys.executable, str(SCRIPT), "--repo", str(repo), "--version", "0.4.0", "--previous", "v0.3.2", "--commit", COMMIT_040,
-         "--toolchain", TOOLCHAIN, "--sha256sums", str(repo / "SHA256SUMS")],
+         "--toolchain", TOOLCHAIN, "--sha256sums", str(repo / "SHA256SUMS"), "--glibc-floors", str(repo / "glibc-floors.json")],
         capture_output=True, text=True, check=False,
     )
     assert out.returncode == 0, out.stderr

@@ -20,7 +20,9 @@
   "vefc-seq-edits",
   "engine_identity_lines",
   "symbol",
-  "biotype"
+  "biotype",
+  "prebuilt-binaries-glibc-floor",
+  "portable-cpu-baseline-builds"
  ],
  "flags": [
   "--grch37"

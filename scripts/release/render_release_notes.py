@@ -4,12 +4,13 @@
 The page, every header `##`, in this order: the hand-written opener, then `## Highlights` and
 `## Upgrade notes` when `.github/release-notes/vX.Y.Z.md` carries them (its lines are the only
 hand-written ones); the version's CHANGELOG.md section with each `###` kind header raised to `##`;
-`## Concordance and wall time` from the release and population provenance records; `## Install`
-from SHA256SUMS, the build and the workspace rust-version; `## Cite` from CITATION.cff; and the
-full-changelog footer. A page runs about 60 lines; one over 80 is refused.
+`## Concordance and wall time` from the release and population provenance records; `## Install` from
+SHA256SUMS, the glibc floors `check_glibc_floor.py --json` measured on the Linux archives, the build and the
+workspace rust-version; `## Cite` from CITATION.cff; and the full-changelog footer. A page runs about 60
+lines; one over 80 is refused.
 
 usage: render_release_notes.py --repo DIR --version X.Y.Z --previous vX.Y.Z --commit SHA
-                               --toolchain 1.97.1 --sha256sums FILE [--notes FILE]
+                               --toolchain 1.97.1 --sha256sums FILE --glibc-floors FILE [--notes FILE]
                                [--changelog-section NAME] [--date YYYY-MM-DD] [--out FILE]
 
 A dry run before the CHANGELOG has the version's dated section passes
@@ -24,6 +25,7 @@ import re
 import sys
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
+from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "concordance"))
 from reference_release import release_from_provenance  # noqa: E402  (one reading of a reference's release for every script)
@@ -32,17 +34,48 @@ REPO_URL = "https://github.com/natera-open-source/vep-rs"
 CONCEPT_DOI = "10.5281/zenodo.22837896"
 LINE_CAP = 80
 SCORED = ("s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08")
+MEASURED_CPU = {"arm64": "neoverse-v1", "x86_64": "x86-64-v3"}
+
+
+class Target(NamedTuple):
+    """One binary archive: the platform it runs on, its CPU floor with the processors that meet it, the
+    architecture its wall time is recorded under when the record times it, and for a generic build the
+    `target_cpu` its campaign cells carry and the measured archive it is compared with."""
+
+    platform: str
+    cpu: str
+    arch: str | None = None
+    target_cpu: str | None = None
+    generic_of: str | None = None
+
+
 TARGETS = {
-    "x86_64-unknown-linux-gnu": (
-        "Linux x86_64, glibc 2.39 or later",
-        "x86-64-v3 (AVX2, BMI2, FMA: Intel Haswell 2013 or later, AMD Zen or later)",
+    "x86_64-unknown-linux-gnu": Target(
+        "Linux x86_64", "x86-64-v3 (AVX2, BMI2, FMA: Intel Haswell 2013 or later, AMD Zen or later)", "x86_64"
     ),
-    "aarch64-unknown-linux-gnu": (
-        "Linux aarch64, glibc 2.39 or later",
+    "x86_64-unknown-linux-gnu-v2": Target(
+        "Linux x86_64",
+        "x86-64-v2 (SSE4.2, POPCNT: Intel Nehalem 2008 or later, AMD Bulldozer 2011 or later, and VMs that hide AVX2)",
+        "x86_64",
+        "x86-64-v2",
+        "x86_64-unknown-linux-gnu",
+    ),
+    "aarch64-unknown-linux-gnu": Target(
+        "Linux aarch64",
         "Armv8.4-A with SVE (Arm Neoverse V1 or later: AWS Graviton3 and later, not Graviton2, Ampere Altra or Raspberry Pi)",
+        "arm64",
     ),
-    "aarch64-apple-darwin": ("macOS 11 or later on Apple silicon", "any Apple M-series"),
+    "aarch64-unknown-linux-gnu-generic": Target(
+        "Linux aarch64",
+        "Armv8.0-A with NEON (any 64-bit Arm: AWS Graviton2, Ampere Altra, Raspberry Pi, Apple silicon under Linux)",
+        "arm64",
+        "generic",
+        "aarch64-unknown-linux-gnu",
+    ),
+    "aarch64-apple-darwin": Target("macOS 11 or later on Apple silicon", "any Apple M-series"),
 }
+LINUX = tuple(t for t, target in TARGETS.items() if target.arch)
+GENERIC_SUITE = "s02"
 SUITE_LABELS = {
     "s01": ("ClinVar full", "GRCh37"),
     "s02": ("ClinVar full", "GRCh38"),
@@ -521,21 +554,43 @@ def int_triple(block, keys: tuple[str, str, str], where: str) -> tuple[int, int,
     return integer(i, keys[0], where), integer(a, keys[1], where), integer(b, keys[2], where)
 
 
-def whole_file_aggregate(release: dict, suite: str, arch: str) -> dict:
-    """The release record's `per_cell_aggregates` entry of one ClinVar cell and architecture, the released
-    binary's whole-file wall time; refused when absent or repeated, as is a `per_cell_aggregates` that is
-    not a list of objects."""
+def whole_file_aggregate(release: dict, suite: str, arch: str, target_cpu: str | None = None) -> dict:
+    """The release record's `per_cell_aggregates` entry of one ClinVar cell and architecture: the measured
+    binary's whole-file wall time, or a generic build's when `target_cpu` names one; refused when absent or
+    repeated, as is a `per_cell_aggregates` that is not a list of objects."""
     entries = release.get("per_cell_aggregates")
     if not isinstance(entries, list) or not all(isinstance(a, dict) for a in entries):
         fail("the release record's per_cell_aggregates is not a list of objects")
-    hits = [
+    hits = cell_aggregates(release, suite, arch, target_cpu)
+    if len(hits) != 1:
+        build = f" of the {target_cpu} build" if target_cpu else ""
+        fail(f"the release record has {len(hits)} per_cell_aggregates entries for {suite} on {arch}{build}; one is read")
+    return hits[0]
+
+
+def cell_aggregates(release: dict, suite: str, arch: str, target_cpu: str | None) -> list[dict]:
+    """The `per_cell_aggregates` entries timing vep-rs built for `target_cpu` on one suite and architecture. A
+    block that is not a list, and an entry that is not an object, contribute nothing: `whole_file_aggregate`
+    refuses those by name first, and `generic_wall_time` reads an empty result as a build not measured."""
+    entries = release.get("per_cell_aggregates")
+    if not isinstance(entries, list):
+        return []
+    return [
         a
         for a in entries
-        if a.get("suite_id") == suite and a.get("arch") == arch and a.get("engine", "vep_rs") == "vep_rs"
+        if isinstance(a, dict) and a.get("suite_id") == suite and a.get("arch") == arch and is_vep_rs(a, target_cpu)
     ]
-    if len(hits) != 1:
-        fail(f"the release record has {len(hits)} per_cell_aggregates entries for {suite} on {arch}; one is read")
-    return hits[0]
+
+
+def is_vep_rs(aggregate: dict, target_cpu: str | None) -> bool:
+    """Whether an aggregate times vep-rs built for `target_cpu`: an entry without `target_cpu` is the measured
+    build, the one the archives without a CPU suffix carry; a generic build's cells name their `target_cpu`."""
+    if aggregate.get("engine", "vep_rs") != "vep_rs":
+        return False
+    cpu = aggregate.get("target_cpu")
+    if target_cpu is None:
+        return cpu is None or cpu == MEASURED_CPU.get(aggregate.get("arch"))
+    return cpu == target_cpu
 
 
 def whole_file_wall_time(release: dict, suite: str, arch: str) -> tuple[Decimal, str, int]:
@@ -735,16 +790,64 @@ def read_sums(path: Path) -> dict[str, str]:
     return out
 
 
+def read_floors(path: Path | None, archives: list[str]) -> dict[str, str]:
+    """The glibc floor `check_glibc_floor.py --json` measured for each Linux archive, {archive: version};
+    refused when the file is absent, when a Linux archive in SHA256SUMS has no entry, when an entry names an
+    archive SHA256SUMS lacks, or when a floor is not a version."""
+    if path is None:
+        fail("Linux archives need --glibc-floors, the file check_glibc_floor.py --json writes")
+    if not path.exists():
+        fail(f"no glibc floors at {path}")
+    floors = json.loads(path.read_text())
+    if not isinstance(floors, dict):
+        fail(f"{path} is not an object")
+    missing = [n for n in archives if n not in floors]
+    if missing:
+        fail(f"{path} has no glibc floor for {missing}")
+    extra = [n for n in floors if n not in archives]
+    if extra:
+        fail(f"{path} names {extra}, archives SHA256SUMS lacks")
+    for name, floor in floors.items():
+        if not isinstance(floor, str) or not re.fullmatch(r"\d+(\.\d+)+", floor):
+            fail(f"{path} carries a glibc floor for {name} that is not a version: {floor!r}")
+    return floors
+
+
+def generic_wall_time(release: dict, target: Target) -> str:
+    """How a generic build's wall time compares with the measured archive's on the campaign's generic cell, the
+    genome-wide ClinVar GRCh38 file: the ratio of the two medians when the record carries the generic build's
+    aggregate, else that it was not measured."""
+    if not cell_aggregates(release, GENERIC_SUITE, target.arch, target.target_cpu):
+        return f"wall time against the {MEASURED_CPU[target.arch]} build not measured"
+    where = f"the per_cell_aggregates entry for {GENERIC_SUITE} on {target.arch} of the {target.target_cpu} build"
+    (generic,) = required(whole_file_aggregate(release, GENERIC_SUITE, target.arch, target.target_cpu), ("median_sec",), where)
+    reference, _, _ = whole_file_wall_time(release, GENERIC_SUITE, target.arch)
+    if reference == 0:
+        fail(f"the measured build's {GENERIC_SUITE} median on {target.arch} is zero")
+    ratio = (median_seconds(generic, where) / reference).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return f"{ratio} times the {MEASURED_CPU[target.arch]} build's wall time on {CLINVAR[GENERIC_SUITE]}"
+
+
 def install_bullets(
-    version: str, sums: dict[str, str], commit: str, toolchain: str, rust_version: str, version_doi: str | None
+    version: str,
+    sums: dict[str, str],
+    floors_path: Path | None,
+    release: dict,
+    commit: str,
+    toolchain: str,
+    rust_version: str,
+    version_doi: str | None,
 ) -> str:
-    """One bullet per binary archive in the order of TARGETS, then the archive contents and the source build,
-    the container image, the build and its attestation, and the source archive. Every target's archive and
-    the source archive must be in SHA256SUMS, and every binary archive there must be a known target."""
+    """One bullet per binary archive in the order of TARGETS, each with its platform, the glibc floor measured on
+    its binaries (Linux) and its CPU floor, a generic build's with its wall time against the measured archive;
+    then the archive contents and the source build, the container image, the build and its attestation, and
+    the source archive. Every measured target's archive and the source archive must be in SHA256SUMS, a generic
+    build's archive is listed when present, and every binary archive there must be a known target."""
     tag = f"v{version}"
     dl = f"{REPO_URL}/releases/download/{tag}"
     prefix, suffix = f"vep-{version}-", ".tar.gz"
-    missing = [t for t in TARGETS if f"{prefix}{t}{suffix}" not in sums]
+    archive = {t: f"{prefix}{t}{suffix}" for t in TARGETS}
+    missing = [t for t, target in TARGETS.items() if target.generic_of is None and archive[t] not in sums]
     if missing:
         fail(f"SHA256SUMS lacks the archive for {missing}")
     unknown = [
@@ -755,19 +858,33 @@ def install_bullets(
     src = f"vep-rs-{version}.tar.gz"
     if src not in sums:
         fail(f"SHA256SUMS lacks {src}")
-    bullets = [
-        f"- [`{prefix}{triple}{suffix}`]({dl}/{prefix}{triple}{suffix}): {platform}, {floor}; "
-        f"sha256 `{sums[f'{prefix}{triple}{suffix}']}`"
-        for triple, (platform, floor) in TARGETS.items()
-    ]
+    present = [t for t in TARGETS if archive[t] in sums]
+    floors = read_floors(floors_path, [archive[t] for t in present if t in LINUX])
+    bullets = []
+    for t in present:
+        target = TARGETS[t]
+        clauses = [target.platform]
+        if t in LINUX:
+            clauses.append(f"glibc {floors[archive[t]]} or later")
+        clauses.append(target.cpu)
+        if target.generic_of:
+            clauses.append(generic_wall_time(release, target))
+        bullets.append(f"- [`{archive[t]}`]({dl}/{archive[t]}): {', '.join(clauses)}; sha256 `{sums[archive[t]]}`")
+    if any(TARGETS[t].generic_of for t in present):
+        image = (
+            "linux/amd64 and linux/arm64: the `x86-64-v2` and the generic aarch64 binaries, which run on almost every "
+            f"64-bit host; the single-platform tags `{version}-x86-64-v3` and `{version}-neoverse-v1` carry the measured "
+            "binaries; every image adds the `duckdb` CLI that Parquet output needs"
+        )
+    else:
+        image = "linux/amd64: the x86_64 binaries with the `duckdb` CLI that Parquet output needs"
     doi = f"; version DOI [{version_doi}](https://doi.org/{version_doi})" if version_doi else ""
     bullets += [
         f"- Each archive unpacks to `vep-{version}-<target>/` holding `vep`, `vep-cache-builder` and "
         "`vep-cache-converter`; a binary below its CPU floor aborts with an illegal-instruction fault, so on "
         f"such a host build from source (Rust {rust_version} or later), which compiles for the machine it runs "
         'on: `RUSTFLAGS="-C target-cpu=native" cargo build --release --locked`',
-        f"- Container image: `docker pull ghcr.io/natera-open-source/vep-rs:{version}` (linux/amd64: the x86_64 "
-        "binaries with the `duckdb` CLI that Parquet output needs)",
+        f"- Container image: `docker pull ghcr.io/natera-open-source/vep-rs:{version}` ({image})",
         f"- Built by the [release workflow]({REPO_URL}/actions/workflows/release.yml) from tag `{tag}` "
         f"(commit `{commit}`) with Rust {toolchain}; every file in [`SHA256SUMS`]({dl}/SHA256SUMS) carries a "
         "GitHub build-provenance attestation: `gh attestation verify <file> --repo natera-open-source/vep-rs`",
@@ -785,6 +902,7 @@ def main() -> None:
     ap.add_argument("--commit", required=True)
     ap.add_argument("--toolchain", required=True)
     ap.add_argument("--sha256sums", required=True, type=Path)
+    ap.add_argument("--glibc-floors", type=Path, help="check_glibc_floor.py --json output: the floor per Linux archive")
     ap.add_argument("--notes", type=Path, help=".github/release-notes/vX.Y.Z.md")
     ap.add_argument("--changelog-section", help="defaults to the version")
     ap.add_argument("--date", help="release date; defaults to the CHANGELOG heading's")
@@ -814,9 +932,10 @@ def main() -> None:
         blocks += ["## Upgrade notes", hand["upgrade"]]
     blocks += kind_blocks(section)
     blocks += measurements_blocks(repo, v)
+    release = load_release_record(repo, v)[0]
     blocks += [
         "## Install",
-        install_bullets(v, sums, a.commit, a.toolchain, rust_version.group(1), version_doi),
+        install_bullets(v, sums, a.glibc_floors, release, a.commit, a.toolchain, rust_version.group(1), version_doi),
         "## Cite",
         f"Porter M, Borkowski R. vep-rs, version {v}. {date[:4]}. doi:[{cite_doi}](https://doi.org/{cite_doi})",
         f"**Full changelog**: [CHANGELOG]({REPO_URL}/blob/{tag}/CHANGELOG.md) · "

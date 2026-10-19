@@ -88,6 +88,7 @@ jobs:
           check scripts/concordance/test_compare_plugin_outputs.py 3
           check scripts/golden/test_golden_scripts.py 109
           check scripts/release/test_render_release_notes.py 95
+          check scripts/release/test_check_glibc_floor.py 8
           check scripts/parity/test_check_parity_matrix.py 60
           check scripts/validation/test_diff_caches.py 4
           [ "$fail" -eq 0 ]
@@ -101,6 +102,7 @@ jobs:
             scripts/concordance/test_compare_plugin_outputs.py \
             scripts/golden/test_golden_scripts.py \
             scripts/release/test_render_release_notes.py \
+            scripts/release/test_check_glibc_floor.py \
             scripts/parity/test_check_parity_matrix.py \
             scripts/validation/test_diff_caches.py
       # The Rust field comparator's goldens are what compare_vep_fields.py writes over its

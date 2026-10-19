@@ -370,9 +370,9 @@ polyphen	Config.pm	documented_subset	landed:documented_subset	crates/vep-cli/src
 PolyPhen_SIFT	PolyPhen_SIFT.pm	error	open			
 PON_P2	PON_P2.pm	error	open			
 port	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
-portable-cpu-baseline-builds	-	implemented	open			
+portable-cpu-baseline-builds	-	implemented	landed:implemented	scripts/release/test_render_release_notes.py::test_generic_archives_follow_their_measured_archive_with_their_own_cpu_floor	tests/golden/116/GRCh37	
 PostGAP	PostGAP.pm	error	open			
-prebuilt-binaries-glibc-floor	-	implemented	open			
+prebuilt-binaries-glibc-floor	-	implemented	landed:implemented	scripts/release/test_check_glibc_floor.py::test_the_floor_fails_a_binary_above_it_and_names_the_symbols_at_each_version	tests/golden/116/GRCh37	
 prebuilt-cache-distribution	INSTALL.pl	implemented	open			
 PrimateAI	PrimateAI.pm	implemented	open			
 process_ref_homs	Parser/VCF.pm	implemented	open			
