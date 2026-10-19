@@ -62,7 +62,7 @@ pub struct Args {
     pub input_data: Option<String>,
 
     /// Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record.
-    /// ID, SPDI and CAid input resolve through Ensembl's database and are refused; a region input needs --fasta
+    /// ID and CAid input resolve through Ensembl's database and are refused; a region or SPDI input needs --fasta, which fills or checks its reference allele
     #[arg(
         help_heading = "Input",
         long,
@@ -401,7 +401,9 @@ pub struct Args {
     /// oversize record before annotation and writes nothing for it in any format;
     /// vep-rs annotates it: rows in the default, tab and parquet outputs, its VCF
     /// line without consequences, no JSON object (docs/output-formats.md and
-    /// docs/intended-divergences.md describe the divergence)
+    /// docs/intended-divergences.md describe the divergence). An SPDI record whose
+    /// span exceeds the limit is skipped with Ensembl VEP's warning, as every
+    /// oversize record is in Ensembl VEP 116
     #[arg(
         help_heading = "Runtime",
         long = "max_sv_size",

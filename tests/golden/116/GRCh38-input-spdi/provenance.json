@@ -1,0 +1,71 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --format vcf --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --fasta reference.fa --variant_class --uploaded_allele --mask_header_cache_path [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "GRCh38 chromosome 21, the GRCh38-identifiers corpus's reference.fa.gz (its records' spans with N elsewhere) decompressed, passed to both engines on every run; in the database-mode runs it stands in for the database's sequence, as the Slice::seq redirection under --fasta reads the reference allele from it",
+ "input": "variants.spdi.txt: 19 hand-built SPDI notations at the sites of the GRCh38-identifiers corpus's records on chromosome 21 of the GRCh38-release116 cache, in position order: substitutions written by letters on the NC_000021.9 accession, on chr21, on CM000683.2 and in lower case, and by length on 21; a two-base substitution by letters and one by length that shares its last base; a delins; deletions by letters with an empty and a 0 insertion and by length; two deletions written with their anchor base as a VCF writes them; insertions with an empty and a 0 deletion, one a 55-base run; and a notation with spaces around its colons; variants.vcf: the same 19 changes as VCF records in the same order, named by their design",
+ "sha256": {
+  "default.txt": "ed4b4297b37e110125e2a2a6c78168e2a79942dc9ea7360b60b207c67a7a3b5c",
+  "tab.txt": "d7333e14c563cebe094432b59b4d6a1882bd34d530b0bfaaf5f10bd36acfafcb",
+  "vcf.vcf": "6a1dfae7996f55b77be626e05b97f5f11c70d5aac9ac4444f4d0cf07889d78ae",
+  "json.jsonl": "474d67f5f3ce9f2e68056e1541fc9bef1788421ee6addb2e90a8ae0eb98fcb81"
+ },
+ "variants_vcf_sha256": "f3dc7f0419efa8edb5978f549fb79f4494af331900e05960d800659f79c98df8",
+ "flag_sets": {
+  "spdi": {
+   "flags": [
+    "--variant_class",
+    "--uploaded_allele",
+    "--mask_header_cache_path",
+    "--format",
+    "spdi"
+   ],
+   "input": "variants.spdi.txt",
+   "expected_dir": "expected_spdi",
+   "perl_mode": "database",
+   "vep_command": "vep -i variants.spdi.txt -o <out> --database --host ensembldb.ensembl.org --port 3306 --db_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --fasta reference.fa --variant_class --uploaded_allele --mask_header_cache_path --format spdi [--tab|--vcf|--json]",
+   "database": {
+    "host": "ensembldb.ensembl.org",
+    "port": 3306,
+    "db_version": 116,
+    "date": "October 2026"
+   },
+   "sha256": {
+    "default.txt": "a1259768d0e8e073a8401d817d33a411fb2187f1c98939267362c763c4b139c3",
+    "tab.txt": "db53a9b529c1d3724df09d48e8b3e3dc2be865a40214aeae17a4bc9349e369b2",
+    "vcf.vcf": "4903100d078225d112818ec550be23bfc8e7646ac6b8c27215560d53a59e7978",
+    "json.jsonl": "63854362b7830f7bd9974d1e21452a66e3e75b2c6a82cc4083f7ff8709ed4219"
+   }
+  },
+  "spdi-guess": {
+   "flags": [
+    "--variant_class",
+    "--uploaded_allele",
+    "--mask_header_cache_path"
+   ],
+   "input": "variants.spdi.txt",
+   "expected_dir": "expected_spdi",
+   "perl_mode": "database",
+   "reference": "the spdi set's expected_spdi, compared under format detection in place of --format spdi",
+   "sha256": {
+    "default.txt": "a1259768d0e8e073a8401d817d33a411fb2187f1c98939267362c763c4b139c3",
+    "tab.txt": "db53a9b529c1d3724df09d48e8b3e3dc2be865a40214aeae17a4bc9349e369b2",
+    "vcf.vcf": "4903100d078225d112818ec550be23bfc8e7646ac6b8c27215560d53a59e7978",
+    "json.jsonl": "63854362b7830f7bd9974d1e21452a66e3e75b2c6a82cc4083f7ff8709ed4219"
+   }
+  }
+ },
+ "generator": "cache copied from tests/golden/116/GRCh38-identifiers (its json_cache and chr_synonyms.txt whole, the reference named from that corpus); variants.vcf and manifest.json by scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite GRCh38-input-spdi=<reference>=<input> --k 100 --seed 1 --covers spdi-input-format --matrix tests/parity/matrix.tsv --flag=--variant_class --flag=--uploaded_allele --flag=--mask_header_cache_path --fasta-name ../GRCh38-identifiers/reference.fa.gz; expected/ by one container run per format of the base invocation on the full Ensembl cache; build_golden_corpus.py flag-set (two sets) and classify (the base run and the spdi set); expected_spdi/ by one container run per format of the same image in database mode against Ensembl's public MySQL at release 116, the four outputs gzipped and their sha256 recorded under flag_sets",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 726
+  },
+  "shards": 14,
+  "spans_by_chromosome": {
+   "21": 74
+  }
+ }
+}

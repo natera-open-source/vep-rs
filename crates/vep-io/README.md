@@ -2,8 +2,9 @@
 
 Input parsers and output formatters for vep-rs, the Rust reimplementation of the
 Ensembl Variant Effect Predictor (VEP). The crate turns one line of Ensembl
-default, region or genomic Human Genome Variation Society (HGVS) input into
-`vep_core::variant::InputVariant` values, detects an input's format from its
+default, region, SPDI (Sequence Position Deletion Insertion) or genomic Human
+Genome Variation Society (HGVS) input into `vep_core::variant::InputVariant`
+values, detects an input's format from its
 first data line, and renders annotated variants as VEP's `--tab`, Variant Call
 Format (VCF), JSON (JavaScript Object Notation) and Parquet outputs through one
 shared field table. `vep-cli` is its only dependent in the workspace, and
@@ -37,8 +38,8 @@ with `chrom`, `pos`, `end`, `ref` and `alt` ahead of the `--tab` columns, for th
 
 The `vep` binary reads VCF through its own line parser in `vep-cli`, which keeps
 the input's header lines for VCF output passthrough; this crate has no VCF
-parser of its own. The Ensembl, region and HGVS parsers are the ones the binary
-runs. VEP's default text format has no
+parser of its own. The Ensembl, region, SPDI and HGVS parsers are the ones the
+binary runs. VEP's default text format has no
 formatter struct here: `vep-cli` renders its rows from this crate's field table
 (`record_rows_into`, `extra_keys_with`, `field_value`) and takes its header from
 `default_format_header`.
@@ -47,11 +48,12 @@ formatter struct here: `vep-cli` renders its rows from this crate's field table
 
 | Module               | Role                                                                                                                                                                                                                                   |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `error`              | `IoError`: `Io`, `VcfParse` (every parse failure, whichever input format raised it) and `NotImplemented` (transcript-level HGVS).                                                                                                      |
-| `input`              | The `InputParser` trait (`next_variant` yields one `InputVariant` per ALT allele and `None` at end of input; `take_empty_lines` the empty lines read past), `Delimiter` (the column delimiter as `--delimiter` names it or detection chooses it), `ParserContext` (delimiter, reference sequence, synonyms) and `minimise_alleles`. |
+| `error`              | `IoError`: `Io`, `VcfParse` (a parse failure of the Ensembl, region or HGVS parser), `SkippedLine` (a line Ensembl VEP's parser warns about and reads past, the warning's text as the message), `NotImplemented` (transcript-level HGVS) and `Unsupported` (input refused by design). |
+| `input`              | The `InputParser` trait (`next_variant` yields one `InputVariant` per ALT allele and `None` at end of input; `take_empty_lines` the empty lines read past), `Delimiter` (the column delimiter as `--delimiter` names it or detection chooses it), `ParserContext` (delimiter, reference sequence, synonyms, the annotation source's chromosomes) and `minimise_alleles`. |
 | `input::detect`      | `detect_format`: Ensembl VEP's format detection from the first data line, returning the verdict, the delimiter it split the line on and the bytes read to reach it.                                                                 |
 | `input::ensembl`     | `EnsemblParser`: VEP's four- to six-column default format split on the context's delimiter; strand tokens, class words, upper-casing and the minimisation of a bi-allelic indel as Ensembl VEP reads them; one variant per ALT of the allele string. |
 | `input::region`      | `RegionParser`: `chr:start-end:strand/allele` or `chr:start-end/allele`; the reference allele is `-` and the strand defaults to forward.                                                                                              |
+| `input::spdi`        | `SpdiParser`: `sequence:position:deletion:insertion`, the position 0-based, a deletion or insertion written as bases or as a length; the reference allele is checked against or read from the context's reference, the sequence name resolves to the source's chromosome through its synonyms, and a refused notation is a `SkippedLine` carrying Ensembl VEP's text. |
 | `input::hgvs`        | `HgvsParser`: genomic `:g.` substitutions, deletions, insertions, delins and duplications (a duplication is read as an insertion of the duplicated bases); `:c.`, `:p.`, `:n.` and `:r.` expressions fail with `NotImplemented`.       |
 | `output`             | The `OutputFormatter` trait: `write_header`, `format_variant`, `format_record` (every allele split from one input record together) and `finish`.                                                                                       |
 | `output::fields`     | The field table every text format shares: the thirteen default columns, the flag-to-field order, header descriptions, `record_rows` ordering, `field_value`, the `Extra` column keys, the default and tab headers and the VCF `##VEP=` meta line. |
@@ -74,7 +76,7 @@ Input:
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `InputParser::next_variant`                    | The one method every parser implements.                                                                                                      |
 | `detect::detect_format(reader)`                | The format of the first data line and the bytes read to find it, for the caller to replay.                                                   |
-| `EnsemblParser::new(reader, &context)`, `RegionParser::new`, `HgvsParser::new` | Line parsers over any `BufRead`; blank and `#` lines are skipped.                                                              |
+| `EnsemblParser::new(reader, &context)`, `SpdiParser::new(reader, &context)`, `RegionParser::new`, `HgvsParser::new` | Line parsers over any `BufRead`; blank lines are skipped, and so are `#` lines except by the SPDI parser, which reads them as Ensembl VEP's does. |
 | `Delimiter::from_flag`, `ParserContext`         | The `--delimiter` value as a pattern (a tab, a space, a run of spaces, `\s+` or literal text; a regular expression is refused); what the parsers share.         |
 
 Output:

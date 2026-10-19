@@ -440,7 +440,7 @@ source-cache	MergeVEP.pm	documented_subset	open
 source_regbuild	Database/RegFeat.pm	implemented	open			
 spanning-deletion-allele	VCF.pm	implemented	open			
 spdi	OutputFactory.pm	implemented	landed:implemented	crates/vep-core/src/spdi.rs::spdi_snv_ins_del_long_del_and_reverse_strand_match_vep;crates/vep-effects/src/spdi.rs::chromosome_is_named_by_the_cache_on_transcript_rows_and_by_the_fasta_elsewhere;crates/vep-effects/src/spdi.rs::alleles_follow_the_record_as_parsed;crates/vep-io/src/output/fields.rs::spdi_and_ga4gh_vrs_print_the_allele_notation_and_the_encoded_object;crates/vep-io/src/output/fields.rs::spdi_is_absent_on_a_row_whose_allele_a_genomic_shift_rotated	tests/golden/116/GRCh38-identifiers	
-spdi-input-format	SPDI.pm	implemented	open			
+spdi-input-format	SPDI.pm	implemented	landed:implemented	crates/vep-io/src/input/spdi.rs::del_sequence_checked;crates/vep-io/src/input/spdi.rs::del_length_read_from_fasta;crates/vep-io/src/input/spdi.rs::ins_empty_is_deletion;crates/vep-io/src/input/spdi.rs::pos0_to_start;crates/vep-io/src/input/spdi.rs::nc_accession_via_synonyms;crates/vep-io/src/input/spdi.rs::bad_shape_error_text;crates/vep-cli/tests/input_spdi.rs::spdi_records_annotate_as_their_vcf_twins;crates/vep-cli/tests/input_spdi.rs::unparsable_notation_is_warned_and_skipped;crates/vep-cli/tests/input_spdi.rs::spdi_without_fasta_is_refused	tests/golden/116/GRCh38-input-spdi	
 species	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::species_names_the_directory;crates/vep-cli/src/cache_resolve.rs::species_refseq_suffix_is_refused	tests/golden/116/GRCh38-run-control	
 species_statement	-	documented_subset	open			
 SpliceAI	SpliceAI.pm	implemented	open			

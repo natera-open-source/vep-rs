@@ -334,7 +334,7 @@ pub const COMPONENTS: &[(&str, &str)] = &[
     ),
     (
         "input",
-        "the input: a file that does not exist, standard input without --format, a first data line of no known format, BCF input, or a format (ID, SPDI, CAid) Ensembl VEP resolves through its database and a region input without --fasta",
+        "the input: a file that does not exist, standard input without --format, a first data line of no known format, BCF input, or a format (ID, CAid) Ensembl VEP resolves through its database and a region or SPDI input without --fasta",
     ),
     (
         "output",

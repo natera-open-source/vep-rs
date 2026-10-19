@@ -21,4 +21,9 @@ pub enum IoError {
     /// Input refused by design, with the reason as the whole message.
     #[error("{0}")]
     Unsupported(String),
+
+    /// A line Ensembl VEP's parser warns about and reads past, the warning's
+    /// text as the whole message.
+    #[error("{0}")]
+    SkippedLine(String),
 }

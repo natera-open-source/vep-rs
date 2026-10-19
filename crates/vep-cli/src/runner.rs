@@ -1310,14 +1310,17 @@ impl Runner {
     /// streaming gunzip (`get_compressed_filehandle`, Utils.pm:429-453); BCF is
     /// refused before any line is read. The format is `--format`'s, or detected
     /// from the first data line, which standard input cannot give (Parser.pm:377).
-    /// A format Ensembl VEP resolves through its database (ID, SPDI, CAid) is
-    /// refused as it refuses them offline, and a region input needs the run's
-    /// FASTA (Parser/Region.pm:115). Opened where Ensembl VEP's init() builds
-    /// the parser (Runner.pm:136), before `post_setup_checks`. The parsers
-    /// share the delimiter, the FASTA and the cache's synonyms through a
-    /// [`ParserContext`]; the delimiter is `--delimiter`'s under an explicit
-    /// `--format` and, under `guess`, the one detection chose from the first
-    /// data line, as Ensembl VEP's detection overrides the flag (Parser.pm:414).
+    /// A format Ensembl VEP resolves through its database (ID, CAid) is
+    /// refused as it refuses them offline; a region input needs the run's
+    /// FASTA (Parser/Region.pm:115), and so does an SPDI input, whose
+    /// reference allele Ensembl VEP checks against or reads from its database
+    /// (VariationFeatureAdaptor.pm:2557-2590). Opened where Ensembl VEP's
+    /// init() builds the parser (Runner.pm:136), before `post_setup_checks`.
+    /// The parsers share the delimiter, the FASTA, the cache's synonyms and
+    /// its chromosomes through a [`ParserContext`]; the delimiter is
+    /// `--delimiter`'s under an explicit `--format` and, under `guess`, the one
+    /// detection chose from the first data line, as Ensembl VEP's detection
+    /// overrides the flag (Parser.pm:414).
     fn open_input(
         &self,
         reference_fasta: Option<&Arc<vep_fasta::IndexedFasta>>,
@@ -1377,6 +1380,12 @@ impl Runner {
                 Arc::new(FastaReference(Arc::clone(fasta))) as Arc<dyn ReferenceSequence>
             }),
             synonyms: Arc::clone(&self.cache.synonyms),
+            chromosomes: Arc::new(
+                crate::json_cache::enumerate_transcript_shards(&self.cache.dir)?
+                    .into_keys()
+                    .collect(),
+            ),
+            max_sv_size: config.max_sv_size,
         };
 
         // VCF is read line by line because header passthrough needs the lines;
@@ -1401,7 +1410,14 @@ impl Runner {
             }
             InputFormat::Id => return Err(input_error("Cannot use ID format in offline mode")),
             InputFormat::Spdi => {
-                return Err(input_error("Cannot use SPDI format in offline mode"))
+                if !fasta_found {
+                    return Err(input_error(
+                        "Cannot use SPDI format in offline mode without a FASTA file",
+                    ));
+                }
+                pipeline::InputSource::Parser(Box::new(
+                    vep_io::input::spdi::SpdiParser::new(reader, &context),
+                ))
             }
             InputFormat::Caid => {
                 return Err(input_error(

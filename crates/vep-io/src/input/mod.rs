@@ -4,15 +4,17 @@
 //! Input parsers for variant formats, the detection of a format from the
 //! first data line ([`detect`]), and what the parsers share: the field
 //! delimiter of a column-based input ([`Delimiter`]), the run's reference
-//! sequence and chromosome synonyms ([`ParserContext`]), and the
-//! minimisation Ensembl VEP applies to every parsed record
+//! sequence, chromosome synonyms and chromosome names ([`ParserContext`]), and
+//! the minimisation Ensembl VEP applies to every parsed record
 //! ([`minimise_alleles`]).
 
 pub mod detect;
 pub mod ensembl;
 pub mod hgvs;
 pub mod region;
+pub mod spdi;
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use vep_core::synonyms::ChromosomeSynonyms;
@@ -44,7 +46,8 @@ pub trait ReferenceSequence: Send + Sync {
 
 /// What the text-format parsers are built against beyond their reader
 /// (Parser.pm:128-135 and :159 hand the format's parser the delimiter; the
-/// reference and the synonyms reach it through the run's configuration).
+/// reference, the synonyms and the valid chromosomes, `Runner.pm:827`, reach it
+/// through the run's configuration).
 #[derive(Clone, Default)]
 pub struct ParserContext {
     /// The pattern a column-based input is split on.
@@ -53,10 +56,17 @@ pub struct ParserContext {
     pub fasta: Option<Arc<dyn ReferenceSequence>>,
     /// The chromosome synonyms an input name is resolved through.
     pub synonyms: Arc<ChromosomeSynonyms>,
+    /// The chromosome names the run's annotation source holds, for a parser
+    /// that names a record's chromosome as the source names it (an accession
+    /// resolves through the synonyms to one of these).
+    pub chromosomes: Arc<HashSet<String>>,
+    /// `--max_sv_size`, the span `validate_vf` refuses a record beyond
+    /// (Parser.pm:491-499); `None` for the flag's `-1`, no limit.
+    pub max_sv_size: Option<u64>,
 }
 
 impl ParserContext {
-    /// A context with `delimiter`, no reference and no synonyms.
+    /// A context with `delimiter` alone.
     pub fn with_delimiter(delimiter: Delimiter) -> Self {
         Self {
             delimiter,

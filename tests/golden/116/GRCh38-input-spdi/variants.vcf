@@ -1,0 +1,21 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	10451779	exon_ins_empty_deletion	A	ATA	.	.	.
+21	10521699	intron_del_empty_insertion	GC	G	.	.	.
+21	10538885	intron_snv_accession	A	C	.	.	.
+21	10542415	cds_mnv_letters	AA	GG	.	.	.
+21	10552677	cds_delins	AG	GTA	.	.	.
+21	10561150	cds_del_zero_insertion	AT	A	.	.	.
+21	13615721	intron_snv_by_length	A	C	.	.	.
+21	13620283	cds_ins_zero_deletion	G	GTCA	.	.	.
+21	13630971	cds_del24_anchored	AATCCTGTGGGATTACCAGAAAACC	A	.	.	.
+21	14144642	cds_mnv_by_length	AT	CT	.	.	.
+21	14163451	cds_del_by_length	AA	A	.	.	.
+21	14210832	cds_ins_rev	A	AA	.	.	.
+21	14221107	cds_snv_fwd_chr	C	A	.	.	.
+21	14375782	cds_tri_del_anchored	TGCT	T	.	.	.
+21	14512455	cds_snv_rev_lower	T	A	.	.	.
+21	15826987	cds_snv_genbank	C	G	.	.	.
+21	16218276	intron_ins55	A	ATTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT	.	.	.
+21	20006769	intergenic_snv_spaced	T	A	.	.	.
+21	30000000	intergenic_del25_anchored	GCCCACTTTTACTTACTCACGTCTTT	G	.	.	.
