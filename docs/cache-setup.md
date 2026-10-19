@@ -182,19 +182,28 @@ Genomes frequencies. A genome-wide file the directory or the site lacks is left 
 warning naming what the cache then lacks. The records are written per chromosome as
 `variations/<chr>/all_vars.gz` with a `.csi` on the start column, the file Ensembl VEP's own
 cache carries, so `--check_existing` and the frequency flags read a native cache exactly as they
-read a converted one. Each record takes the form the variation database holds: an indel's
-alleles with the shared anchor base removed and `-` for an emptied allele; an insertion the
-export marks `TSA=insertion` two bases after the base its VCF line names (`start` one past
-`end`), where the Ensembl cache places it; a COSMIC variant without alleles as `COSMIC_MUTATION`
+read a converted one. Each record takes the form the variation database holds, as far as the
+export preserves it: a deletion's alleles with the anchor base the export prepended removed and
+`-` for the emptied allele; an insertion the export marks `TSA=insertion` two bases after the
+base its VCF line names (`start` one past `end`), where the Ensembl cache places it; an indel
+(`TSA=indel`, every allele non-empty) with the alleles the export wrote at its `POS`, since the
+export prepends an anchor only to alleles that do not share a first base (an `A/AA` record stays
+`A/AA`; a `CC/CTTCT` line, whose alleles differ once the shared base goes, is the database's
+`C/TTCT` one base on); a COSMIC variant without alleles as `COSMIC_MUTATION`
 on its span and every HGMD-PUBLIC variant, alleles or not, as `HGMD_MUTATION`, the string the
 variation database holds for that source; `clin_sig` from the record's `CLIN_<term>`
 flags (a term the export declares no flag for, `likely_risk_allele`, is absent) and
-`phenotype_or_disease` from `E_Phenotype_or_Disease`. The Ensembl cache keeps dbSNP's untrimmed
-alleles for about seven indels in ten (`CCCCC/CCCC` at 5030241 where the export gives `C/-` at
-5030242; 1,058,020 of chromosome 21's 1,500,839 indel records, 7 of every 100 records), and the
-export's trimmed form is what a native cache holds: an input co-locates with such a record when
-its own spelling trims to the same alleles and position, where the Ensembl cache answers the
-untrimmed spelling instead. A native cache carries no `failed` flag (the export leaves the failed
+`phenotype_or_disease` from `E_Phenotype_or_Disease`. The Ensembl cache keeps dbSNP's alleles
+over the whole run an indel can shift along (`CCCCC/CCCC` at 5030241-5030245), which the export
+trims to `CC/C` at 5030241: 751,114 of chromosome 21's `indel` records, 5 of every 100 records.
+A native cache holds the trimmed form, which minimises from the right end to the same alleles
+and position as the Ensembl cache's record, so an input spelled at the left end of the run (the
+VCF convention, `AC/A` at 5030240) co-locates with it exactly as Ensembl VEP co-locates it. An
+input anchored on the run's first base (`CC/C` at 5030241) minimises to the record's second
+base, which the trimmed form also reaches and the Ensembl cache's record does not, so it
+co-locates with the native record alone; an input spelled at the run's right end co-locates
+with neither, its start lying outside the one-base window the start-indexed files answer. A
+native cache carries no `failed` flag (the export leaves the failed
 variants out, the `dbSNP_novariation` records among them, and the few it keeps are written
 unflagged), no `pubmed` or `var_synonyms` (the export carries none) and no gnomAD
 frequency: Ensembl publishes no gnomAD VCF for release 116, so gnomAD frequencies come from the

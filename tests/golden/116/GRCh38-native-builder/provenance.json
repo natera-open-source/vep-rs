@@ -15,10 +15,10 @@
  },
  "variants_vcf_sha256": "d310ec194676585bb2ba52de41f86f1e4641bed455858077780e2aa04f3c61c2",
  "json_cache": {
-  "source": "built by vep-cache-builder from the release 116 GRCh38 GFF3 (the chromosome 21 and MT lines), the peptide FASTA, the chromosome 21 and MT genome FASTA and the core and variation MySQL table dumps (--core-dumps), then pruned to the records' transcripts with scripts/golden/prune_json_cache.py --gzip (no key dropped)",
-  "info_json": "derived from the Ensembl VEP cache's info.txt as every corpus's is, so the version header the format tests compare matches; the native build's own info.json carries the assembly, gencode and genebuild versions alone"
+  "source": "built by vep-cache-builder from the release 116 GRCh38 GFF3 (the chromosome 21 and MT lines), the peptide FASTA, the chromosome 21 and MT genome FASTA and the core and variation MySQL table dumps (--core-dumps), then pruned to the records' transcripts with scripts/golden/prune_json_cache.py --gzip (no key dropped); the variation files under variations/ are vep-cache-builder's --include-variations output for chromosomes 21 and MT, built from the release 116 Ensembl variation VCFs (homo_sapiens-chr21.vcf.gz, homo_sapiens-chrMT.vcf.gz, homo_sapiens_somatic.vcf.gz, homo_sapiens_phenotype_associated.vcf.gz, homo_sapiens_clinically_associated.vcf.gz, 1000GENOMES-phase_3.vcf.gz) with the variation database's phenotype_feature and phenotype_feature_attrib dumps (--variation-dumps), then pruned to the records' windows with prune_json_cache.py --variations --variation-info --exclude-variation",
+  "info_json": "derived from the Ensembl VEP cache's info.txt as every corpus's is, so the version header the format tests compare matches; variation_cols and var_type are the native build's own (prune_json_cache.py --variation-info), the 21 columns its all_vars.gz files carry; the native build's own info.json carries the assembly, gencode and genebuild versions alone"
  },
- "generator": "vep-cache-builder --release 116 --assembly GRCh38 --gff3 <chr21+MT lines of Homo_sapiens.GRCh38.116.gff3.gz> --fasta Homo_sapiens.GRCh38.pep.all.fa.gz --core-dumps <dir> --genome-fasta <chr21+MT .fa> --output-dir <cache>; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<designed and chr21 records> --suite <id>=<reference>=<frame records> --k 1 --seed 1 --cache <cache> --family-columns SYMBOL=,SYMBOL_SOURCE=,HGNC_ID,TSL,MANE_SELECT,CANONICAL,FLAGS=,ENSP,BIOTYPE= --covers ... --matrix tests/parity/matrix.tsv --flag=--symbol ... --out tests/golden/116/GRCh38-native-builder; scripts/golden/prune_json_cache.py --cache <cache> --out <corpus>/json_cache --vcf <corpus>/variants.vcf --gzip; scripts/golden/prune_json_cache.py --info-only --perl-info <perl cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus <corpus> --perl-cache-dir <dir>; scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and the ccds, gencode_basic, gencode_primary and flag_gencode_primary sets; each set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags)",
+ "generator": "vep-cache-builder --release 116 --assembly GRCh38 --gff3 <chr21+MT lines of Homo_sapiens.GRCh38.116.gff3.gz> --fasta Homo_sapiens.GRCh38.pep.all.fa.gz --core-dumps <dir> --genome-fasta <chr21+MT .fa> --output-dir <cache>; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<designed and chr21 records> --suite <id>=<reference>=<frame records> --k 1 --seed 1 --cache <cache> --family-columns SYMBOL=,SYMBOL_SOURCE=,HGNC_ID,TSL,MANE_SELECT,CANONICAL,FLAGS=,ENSP,BIOTYPE= --covers ... --matrix tests/parity/matrix.tsv --flag=--symbol ... --out tests/golden/116/GRCh38-native-builder; scripts/golden/prune_json_cache.py --cache <cache> --out <corpus>/json_cache --vcf <corpus>/variants.vcf --gzip; scripts/golden/prune_json_cache.py --info-only --perl-info <perl cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus <corpus> --perl-cache-dir <dir>; scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and the ccds, gencode_basic, gencode_primary and flag_gencode_primary sets; each set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags); vep-cache-builder --release 116 --assembly GRCh38 --include-variations --variation-vcf-dir <release 116 variation VCFs> --variation-dumps <homo_sapiens_variation_116_38 dumps> --output-dir <native>; scripts/golden/prune_json_cache.py --cache <corpus>/json_cache --out <pruned> --vcf <corpus>/variants.vcf --gzip --perl-info <perl cache>/info.txt --cache-version 116 --variations <native>/variations --variation-info <native>/info.json --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}' (the transcript shards come out byte-identical; variations/ and info.json are taken); scripts/golden/build_golden_corpus.py flag-set and classify --flag-set variation (the variation set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags)",
  "pruned_cache": {
   "transcripts_per_chromosome": {
    "21": 936,
@@ -201,6 +201,76 @@
     "vcf.vcf": "87835c80911cfceeb85be0891b9f97b46172c27ad8c3aaa4e0a3216a0297f72c",
     "json.jsonl": "8c4835d3a17241011ba4a07f6c90ba75b94a6ff2ae821636bdf6617e9a08fe1c"
    }
+  },
+  "variation": {
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--check_existing",
+    "--exclude_null_alleles",
+    "--af",
+    "--af_1kg",
+    "--clinvar_somatic_classification"
+   ],
+   "expected_dir": "expected_variation",
+   "sha256": {
+    "default.txt": "da5dd8874ea2128157236e19aed27a8ff561d04faeecc287a852592b23eeff94",
+    "tab.txt": "438bdb978fe9234bd241cd7f63cd85a0bb2b760500a781f6735afb275ab497b6",
+    "vcf.vcf": "dcbd906cdab52a5df19637b94c37f065cb8a7aba4d61d80c6cfc08359ec741cb",
+    "json.jsonl": "9bc4f8fcb2144e9ec3de4403bbbea94398cfdd2706e1e5a9a58a494a0cd6b656"
+   },
+   "flags_left_out": {
+    "--af_gnomade --af_gnomadg --max_af": "no gnomAD frequency enters a native cache (Ensembl publishes no release 116 gnomAD VCF), where the Ensembl cache's MAX_AF ranges over the gnomAD populations",
+    "--pubmed --var_synonyms": "the Ensembl variation VCFs carry no PubMed identifier and no synonym, so a native cache's pubmed and var_synonyms columns are empty",
+    "--failed 1": "the Ensembl variation VCFs leave failed variants out, so a native cache carries none"
+   },
+   "flag_added": {
+    "--exclude_null_alleles": "COSMIC and HGMD-PUBLIC records carry no alleles; the flag leaves them out of Ensembl VEP's reference as the exclusion leaves their identifiers out of the committed slice"
+   },
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf"
+   ],
+   "format_left_out": {
+    "json": "colocated_variants prints every non-empty column of a co-located record whatever the flags (OutputFactory/JSON.pm:407-476), so the JSON output shows what the native files cannot carry: 43 of the 45 co-located records' objects (43 of the 2,034 JSON entries) differ, in the gnomAD frequencies the Ensembl cache holds (42 objects), in the allele string and end of a dbSNP indel the database spells over its whole run where the native record holds the export's right-trimmed one (14), in var_synonyms (2) and in pubmed (1), and in nothing else; the set compares the three formats whose columns the flags select"
+   },
+   "columns_compared_empty": {
+    "CLINVAR_SOMATIC_CLASSIFICATION, SOMATIC": "no corpus record co-locates with a record carrying clinical_impact or somatic, so both columns are compared absent on every row; chromosome 21 holds three allele-bearing records with clinical_impact (34859477, 34859534 and 34880580, in RUNX1), none inside a corpus window, and the slice's 377 records carry neither value; the set therefore does not cover cache-clinical-impact"
+   }
   }
+ },
+ "variation_slice": {
+  "source": "variations/21/all_vars.gz and variations/MT/all_vars.gz of a vep-cache-builder --include-variations build from the release 116 Ensembl variation VCFs and variation database dumps",
+  "window": "records whose start lies within one base of an input record's span",
+  "windows": {
+   "21": 109,
+   "MT": 10
+  },
+  "records_kept": {
+   "21": 357,
+   "MT": 20
+  },
+  "records_excluded": {
+   "21": 43,
+   "MT": 4
+  },
+  "excludes": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "columns": 21,
+  "sha256": {
+   "21/all_vars.gz": "d70ea066fe28901552f4aa5aea2becef46323f2a2e31792417874c8be2e1d2e8",
+   "21/all_vars.gz.csi": "a1aacbde474665c0e7ebe9ef5ddb9cfed21d91e05a9258ce107d7546feea084d",
+   "MT/all_vars.gz": "74698957161d65e58641288832ad6e0c3d048f20a29491e9717f0644567160fa",
+   "MT/all_vars.gz.csi": "a6ea484f2e80a42fbbccc4b2c148216a474fdb5537d09b694fdf1a4d4bea3dbc"
+  },
+  "slice_check": "vep-rs run on this slice and on the whole native chromosome 21 and MT variation files under the variation set's flags wrote identical output for every record; Ensembl VEP 116.2 run on its own cache with this slice in place of its chromosome 21 and MT variation files (variation_cols set to the slice's 21 columns) wrote the same default-format output as on its own files for every record"
  }
 }

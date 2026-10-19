@@ -1015,16 +1015,27 @@ impl Source {
 /// The `start`, `end` and allele string the variation database holds for a VCF
 /// record, or `None` for a record without alleles whose source names no class.
 ///
-/// A record with alleles takes the form Ensembl VEP's VCF parser gives it
-/// ([`ensembl_alleles`]), except that a record the export marks `TSA=insertion`
-/// lies one base further right: the database holds such a variant with its start
-/// one past its end, the GVF export collapses the start onto the end, and the VCF
-/// export then anchors the record on the base before that, so the base the VCF
-/// names is two before the database start. A variant the database holds with an
-/// anchor base of its own (`A/AA`, marked `indel`) is exported at its database
-/// start and keeps the parser's coordinates. An HGMD-PUBLIC variant keeps its
-/// coordinates but its allele string reads `HGMD_MUTATION`, the string the
-/// database holds for every variant of that source.
+/// The export writes a variant's database alleles into a VCF line
+/// (`VariationFeature.pm:2340-2420`, `to_VCF_record`): an indel's alleles are
+/// trimmed of their shared trailing bases down to one base, and the base before
+/// the variant is prepended to every allele, with `POS` moved onto it, only when
+/// the alleles do not all share a first base, which an empty allele never does.
+/// A record with alleles therefore takes the form Ensembl VEP's VCF parser gives
+/// it ([`ensembl_alleles`]: the shared first base chopped) when the database
+/// holds an empty allele (`TSA=deletion`, `TSA=insertion`, the mixed
+/// `sequence_alteration`), except that a record marked `TSA=insertion` lies one
+/// base further right: the database holds such a variant with its start one past
+/// its end, the GVF export collapses the start onto the end, and the VCF export
+/// then anchors the record on the base before that, so the base the VCF names is
+/// two before the database start. A record marked `TSA=indel` has no empty allele
+/// in the database, so it keeps the export's alleles at `POS` ([`indel_form`])
+/// unless the chop leaves alleles that neither include an empty one nor share a
+/// first base, the shape the export's anchor leaves behind (a database record
+/// spelling one shared base before alleles that then differ, `AC/AGT`, would be
+/// read as anchored; the sources' minimal spellings carry no such base).
+/// An HGMD-PUBLIC variant keeps its coordinates but its allele string reads
+/// `HGMD_MUTATION`, the string the database holds for every variant of that
+/// source.
 ///
 /// A record whose ALT is `.` or `<.>` is a COSMIC or HGMD-PUBLIC variant whose
 /// alleles the database does not hold: its allele string is the source's class
@@ -1066,7 +1077,11 @@ fn database_form(
         }
         _ => {
             let alts: Vec<String> = alts.iter().map(|alt| alt.to_string()).collect();
-            let (mut start, mut end, allele_string) = ensembl_alleles(pos, reference, &alts);
+            let (mut start, mut end, allele_string) = if tsa == Some("indel") {
+                indel_form(pos, reference, &alts)
+            } else {
+                ensembl_alleles(pos, reference, &alts)
+            };
             if marked_insertion && allele_string.starts_with("-/") {
                 start += 1;
                 end += 1;
@@ -1124,6 +1139,43 @@ fn ensembl_alleles(pos: u64, ref_allele: &str, alts: &[String]) -> (u64, u64, St
         allele_string.push_str(&chop(alt));
     }
     (start, end, allele_string)
+}
+
+/// The `start`, `end` and allele string of a record marked `TSA=indel`: the
+/// export's alleles at `POS`, with `end` at `POS + len(REF) - 1`, unless the
+/// chopped form ([`ensembl_alleles`]) leaves alleles that neither include an empty
+/// one nor all share a first base, which is then the database's form.
+///
+/// The database holds an indel with every allele non-empty, and the export
+/// prepends an anchor base only when the alleles do not all share a first base
+/// (`VariationFeature.pm:2400-2408`). A chop that empties an allele or leaves a
+/// shared first base therefore removed a base the database holds (`A/AA` stays
+/// `A/AA`; `AGA/AGAGA` stays), while a chop leaving alleles that differ at once
+/// (`CC/CTTCT` to `C/TTCT`) removed the anchor the export added. The record's
+/// start and alleles are then the database's, trailing bases the export trimmed
+/// aside, so a left-aligned input co-locates with it exactly where Ensembl VEP
+/// co-locates it, which the chopped form, one base to the right, never does.
+fn indel_form(pos: u64, ref_allele: &str, alts: &[String]) -> (u64, u64, String) {
+    let (start, end, chopped) = ensembl_alleles(pos, ref_allele, alts);
+    let anchor_chopped = start > pos;
+    let alleles: Vec<&str> = chopped
+        .split('/')
+        .filter(|allele| !allele.contains('*'))
+        .collect();
+    let none_empty = alleles.iter().all(|allele| *allele != "-");
+    let share_first_base = alleles
+        .windows(2)
+        .all(|pair| pair[0].as_bytes().first() == pair[1].as_bytes().first());
+    if anchor_chopped && none_empty && !share_first_base {
+        (start, end, chopped)
+    } else {
+        let mut allele_string = ref_allele.to_string();
+        for alt in alts {
+            allele_string.push('/');
+            allele_string.push_str(alt);
+        }
+        (pos, end, allele_string)
+    }
 }
 
 /// The 1000 Genomes frequencies of one chromosome, keyed by minimised allele.
@@ -1403,21 +1455,25 @@ mod tests {
         (record.start, record.end, record.allele_string.as_str())
     }
 
-    /// Ensembl VEP's VCF parser chops the shared anchor base of an indel, moves
-    /// `start` one past `POS`, leaves `end` at `POS + len(REF) - 1` and spells an
-    /// emptied allele `-` (`Parser/VCF.pm:254, 309-316, 331-334`): a `TA/T` deletion at
-    /// 5030218 is `A/-` at 5030219-5030219, the mapping Ensembl itself reports for
-    /// rs1416749598; the shared base of `AAA/A,AA,AAAA` goes too (`:306-308`), giving
-    /// rs1232130144 `AA/-/A/AAA` at 5030914-5030915; a `G/GT,A` record whose ALTs
-    /// disagree on the first base keeps every allele; a same-length `AC/GT` is never
-    /// chopped. A record marked `TSA=insertion` lies one base further right than the
-    /// chop puts it, Ensembl's export anchoring it two bases before the database
-    /// start: `G/GG` at 5031747 is `-/G` at 5031749-5031748, where the release-116
-    /// cache holds rs1987130899, and a two-allele insertion `A/AT,AG` at 100 is
-    /// `-/T/G` at 102-101. A record marked `indel`, which the database holds with
-    /// its own anchor base, keeps the chop's coordinates: `A/AA` at 5030602 is `-/A`
-    /// at 5030603-5030602, the left-trimmed form of the cache's `A/AA` at 5030602
-    /// for rs1370167485, so an input in either spelling co-locates with it.
+    /// A deletion the database holds with an empty allele is exported behind an
+    /// anchor base, which Ensembl VEP's VCF parser chops, moving `start` one past
+    /// `POS`, leaving `end` at `POS + len(REF) - 1` and spelling the emptied allele
+    /// `-` (`Parser/VCF.pm:254, 309-316, 331-334`): the export's `TA/T` at 5030218 is
+    /// `A/-` at 5030219-5030219, where the release-116 cache holds rs1416749598. A
+    /// record marked `TSA=insertion` lies one base further right than the chop puts
+    /// it, Ensembl's export anchoring it two bases before the database start: `G/GG`
+    /// at 5031747 is `-/G` at 5031749-5031748, the cache's rs1987130899, and a
+    /// two-allele insertion `A/AT,AG` at 100 is `-/T/G` at 102-101. A record marked
+    /// `indel` has no empty allele in the database, and the export adds no anchor to
+    /// alleles that share a first base (`VariationFeature.pm:2400-2408`), so its
+    /// alleles stay as exported at `POS`: `A/AA` at 5030602 is the cache's `A/AA` at
+    /// 5030602-5030602 (rs1370167485), and `AAA/A,AA,AAAA` at 5030913 is
+    /// `AAA/A/AA/AAAA` at 5030913-5030915, the cache's ten-base run `AAAAAAAAAA/
+    /// AAAAAAAA/AAAAAAAAA/AAAAAAAAAAA` at 5030913-5030922 (rs1232130144) trimmed of
+    /// the trailing bases the export drops; both minimise, right end first, to the
+    /// cache record's key for a left-aligned input (`-/A` at 5030602; `AA/-` at
+    /// 5030913). A `G/GT,A` record whose ALTs disagree on the first base keeps every
+    /// allele at `POS`, and a same-length `AC/GT` is never chopped.
     #[test]
     fn indel_records_minimised_to_ensembl_coordinates() {
         let records = records_of(
@@ -1435,10 +1491,10 @@ mod tests {
             .map(|r| (r.variation_name.as_str(), r))
             .collect();
         assert_eq!(span(by_name["rs1416749598"]), (5030219, 5030219, "A/-"));
-        assert_eq!(span(by_name["rs1370167485"]), (5030603, 5030602, "-/A"));
+        assert_eq!(span(by_name["rs1370167485"]), (5030602, 5030602, "A/AA"));
         assert_eq!(
             span(by_name["rs1232130144"]),
-            (5030914, 5030915, "AA/-/A/AAA")
+            (5030913, 5030915, "AAA/A/AA/AAAA")
         );
         assert_eq!(span(by_name["mixed1"]), (300, 300, "G/GT/A"));
         assert_eq!(span(by_name["mnv1"]), (400, 401, "AC/GT"));
@@ -1448,8 +1504,38 @@ mod tests {
         let starts: Vec<u64> = records.iter().map(|r| r.start).collect();
         assert_eq!(
             starts,
-            [102, 300, 400, 500, 5030219, 5030603, 5030914, 5031749]
+            [102, 300, 400, 500, 5030219, 5030602, 5030913, 5031749]
         );
+    }
+
+    /// The export prepends an anchor base to an indel's alleles only when they do
+    /// not all share a first base (`VariationFeature.pm:2400-2408`), so a `TSA=indel`
+    /// record is chopped only when the chop leaves alleles that neither include an
+    /// empty one nor share a first base: the export's `CC/CTTCT` at 5227450 is the
+    /// cache's `C/TTCT` at 5227451 (rs1554602202) and `ATG/AC` at 5230561 its `TG/C`
+    /// at 5230562-5230563 (rs1555831546), while `A/AGA`, whose chop empties an
+    /// allele, and `ACT/ACCG`, whose chop leaves `CT/CCG` sharing `C`, keep the
+    /// export's alleles at `POS` (the cache's `AGA/AGAGA` at 15575270-15575272,
+    /// rs1361934799, which the export right-trims to `A/AGA`). A `*` allele takes no
+    /// part in the comparison, as it takes none in the export's.
+    #[test]
+    fn indel_records_keep_the_exported_alleles_unless_the_export_anchored_them() {
+        let records = records_of(
+            "21\t5227450\trs1554602202\tCC\tCTTCT\t.\t.\tdbSNP_156;TSA=indel\n\
+             21\t5230561\trs1555831546\tATG\tAC\t.\t.\tdbSNP_156;TSA=indel\n\
+             21\t6000000\tstar1\tATG\tAC,*\t.\t.\tdbSNP_156;TSA=indel\n\
+             21\t7000000\tshared1\tACT\tACCG\t.\t.\tdbSNP_156;TSA=indel\n\
+             21\t15575270\trs1361934799\tA\tAGA\t.\t.\tdbSNP_156;TSA=indel\n",
+        );
+        let by_name: HashMap<&str, &VariationRecord> = records
+            .iter()
+            .map(|r| (r.variation_name.as_str(), r))
+            .collect();
+        assert_eq!(span(by_name["rs1554602202"]), (5227451, 5227451, "C/TTCT"));
+        assert_eq!(span(by_name["rs1555831546"]), (5230562, 5230563, "TG/C"));
+        assert_eq!(span(by_name["star1"]), (6000001, 6000002, "TG/C/*"));
+        assert_eq!(span(by_name["shared1"]), (7000000, 7000002, "ACT/ACCG"));
+        assert_eq!(span(by_name["rs1361934799"]), (15575270, 15575270, "A/AGA"));
     }
 
     /// An allele whose first character is not ASCII never anchors the chop: the

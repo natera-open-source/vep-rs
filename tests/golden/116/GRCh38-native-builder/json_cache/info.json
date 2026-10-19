@@ -1,6 +1,10 @@
 {
   "assembly": "GRCh38",
   "cache_version": 116,
+  "contig_order": [
+    "21",
+    "MT"
+  ],
   "polyphen": "b",
   "regulatory": true,
   "sift": "b",
@@ -19,5 +23,29 @@
     "regbuild": "1.0",
     "sift": "6.2.1"
   },
-  "species": "homo_sapiens"
+  "species": "homo_sapiens",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clin_sig_ref_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms",
+    "AF",
+    "AFR",
+    "AMR",
+    "EAS",
+    "EUR",
+    "SAS"
+  ]
 }

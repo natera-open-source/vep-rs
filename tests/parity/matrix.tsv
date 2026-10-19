@@ -16,7 +16,7 @@ af_gnomade	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fre
 af_gnomadg	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/frequency.rs::gnomadg_columns_include_ami	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 all_refseq	AnnotationType/Transcript.pm	implemented	open			
 allele_number	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::minimal_implies_allele_number	tests/golden/116/GRCh37-output-flags	
-allele_string	Database/Variation.pm	implemented	open			
+allele_string	Database/Variation.pm	implemented	landed:implemented	crates/vep-cache-builder/src/variation.rs::indel_records_minimised_to_ensembl_coordinates;crates/vep-cache-builder/src/variation.rs::indel_records_keep_the_exported_alleles_unless_the_export_anchored_them;crates/vep-cache-builder/tests/variation_cache_from_dumps.rs::variation_files_carry_ensembl_form_and_read_back_through_the_runtime_source	tests/golden/116/GRCh38-native-builder	
 allow_non_variant	Parser/VCF.pm	documented_subset	open			
 AlphaMissense	AlphaMissense.pm	implemented	open			
 alt_equals_ref_and_duplicate_alts	Variation/VariationFeatureOverlap.pm	implemented	open			
@@ -257,7 +257,7 @@ info-sift-polyphen	Cache/Transcript.pm	implemented	landed:implemented	crates/vep
 info-source-versions	CacheDir.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/src/info.rs::info_json_markers_follow_the_build;crates/vep-cache-builder/src/core_dumps.rs::source_versions_from_core_meta	tests/golden/116/GRCh38	
 info-species-assembly	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::assembly_mismatch_with_info_json_is_fatal;crates/vep-cache-converter/src/main.rs::info_json_is_validated_and_synonyms_travel_with_it;crates/vep-cache-builder/src/info.rs::info_json_markers_follow_the_build;crates/vep-cache-builder/src/core_dumps.rs::source_versions_from_core_meta	tests/golden/116/GRCh38	
 info-var-type-serialiser	CacheDir.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/json_cache.rs::sereal_cache_without_shards_is_refused;crates/vep-cache-converter/src/main.rs::info_json_is_validated_and_synonyms_travel_with_it	tests/golden/116/GRCh38	
-info-variation-cols	CacheDir.pm	implemented	open			
+info-variation-cols	CacheDir.pm	implemented	landed:implemented	crates/vep-cache-builder/src/info.rs::info_json_markers_follow_the_build;crates/vep-cache-builder/tests/variation_cache_from_dumps.rs::variation_files_carry_ensembl_form_and_read_back_through_the_runtime_source	tests/golden/116/GRCh38-native-builder	
 input-data-and-id	Config.pm	implemented	open			
 input_data	Runner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_input.rs::input_data_string_is_annotated	tests/golden/116/GRCh38-run-control	
 input_file	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_input.rs::stdin_literal_is_case_insensitive;crates/vep-cli/tests/cli_input.rs::missing_input_file_is_fatal	tests/golden/116/GRCh38-run-control	
@@ -348,7 +348,7 @@ per-gene-tie-break	OutputFactory.pm	implemented	landed:implemented	crates/vep-cl
 per_gene	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/pick.rs::per_gene_keeps_one_row_per_gene_per_record;crates/vep-cli/src/pick.rs::most_severe_follows_the_per_gene_picks	tests/golden/116/GRCh38-pick-summary	
 phased	Parser/VCF.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::phased_is_accepted_without_effect		
 phastCons	Config.pm	implemented	open			
-phenotype_or_disease	Database/Variation.pm	implemented	open			
+phenotype_or_disease	Database/Variation.pm	implemented	landed:implemented	crates/vep-cache-builder/src/variation.rs::clin_sig_and_phenotype_read_the_records_flags	tests/golden/116/GRCh38-native-builder	
 PhenotypeOrthologous	PhenotypeOrthologous.pm	error	open			
 Phenotypes	Phenotypes.pm	error	open			
 phyloP	Config.pm	implemented	open			

@@ -116,10 +116,18 @@ whole and each genome-wide file through its index (or read through when it has n
 keeping each record whose `FILTER` is `PASS`, `.` or empty, adding the genome-wide
 records the per-chromosome file lacks (a record is the same one when its name, position
 and alleles are) with the somatic file's flagged `somatic`. Each record takes the form
-the variation database holds: `end` is `POS` plus the reference length minus one; when an
-indel's alleles share their first base that base is chopped, `start` moves one past `POS`
-and an emptied allele reads `-`; an insertion the export marks `TSA=insertion` lies one base
-further right still (the export anchors it two bases before the database start); a COSMIC or
+the variation database holds, undoing what the export did to it: `end` is `POS` plus the
+reference length minus one; a record whose class says the database holds an empty allele
+(`TSA=deletion`, `TSA=insertion`) was exported behind an anchor base, so that base is
+chopped from every allele, `start` moves one past `POS` and the emptied allele reads `-`,
+and an insertion lies one base further right still (the export anchors it two bases before
+the database start); a record marked `TSA=indel` has no empty allele in the database and
+was anchored only if its alleles do not all share a first base, so it keeps the export's
+alleles at `POS` (`A/AA`, and the dbSNP forms the export trimmed of their trailing bases,
+`A/AGA` for the database's `AGA/AGAGA`) unless chopping leaves alleles that neither include
+an empty one nor share a first base (`CC/CTTCT` to `C/TTCT`), the shape the export's anchor
+leaves behind (a database record spelling one shared base before alleles that then differ
+would be read as anchored; the sources' minimal spellings carry no such base); a COSMIC or
 HGMD-PUBLIC variant
 whose ALT is `.` or `<.>` reads `COSMIC_MUTATION` or `HGMD_MUTATION` on the span the
 export's shape encodes, and every HGMD-PUBLIC variant reads `HGMD_MUTATION`. `clin_sig`

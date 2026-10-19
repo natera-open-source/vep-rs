@@ -30,6 +30,10 @@ column, the layout and index the Ensembl VEP dumper writes. The start column is 
 `variation_cols` of the `info.json` being written. `--exclude-variation <regex>` (repeatable)
 drops every record whose name matches, so a slice can leave out identifiers that are not
 redistributable; the summary counts the records kept and excluded per chromosome.
+`--variation-info <info.json>` names the metadata of the cache the variation files belong to
+when it is not the cache the rest of `info.json` describes (a native cache's `variations/`
+beside an Ensembl cache's `info.txt`): its `variation_cols` and `var_type` are written in
+place of the others', so the columns `info.json` declares are the columns the slice has.
 
 `info.json` is the cache metadata vep-rs prints in its output headers. It is built from the
 Ensembl VEP cache's `info.txt` when `--perl-info` names one (every `source_<key>` line
@@ -45,7 +49,8 @@ Usage:
     prune_json_cache.py --cache <src-dir> --out <dst-dir> --vcf <a.vcf> [--vcf <b.vcf.gz>]
         [--flank 5000] [--gzip] [--drop sorted_exons ...] [--drop-except <ids.txt>]
         [--perl-info <cache>/info.txt]
-        [--variations <dir> [--variation-flank 1] [--exclude-variation <regex> ...]]
+        [--variations <dir> [--variation-flank 1] [--exclude-variation <regex> ...]
+         [--variation-info <cache>/info.json]]
         [--species homo_sapiens --assembly GRCh37 --cache-version 116]
     prune_json_cache.py --info-only --out <dst-dir> --perl-info <cache>/info.txt --cache-version 116
 
@@ -539,6 +544,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="how far from a record span a variation record's start may lie and still be kept (default 1)")
     ap.add_argument("--exclude-variation", action="append", default=[], metavar="REGEX",
                     help="drop every variation record whose name matches (repeatable)")
+    ap.add_argument("--variation-info", type=Path, default=None, metavar="INFO_JSON",
+                    help="the info.json of the cache the --variations files belong to, whose variation_cols and "
+                         "var_type replace those of the info being written")
     ap.add_argument("--info-only", action="store_true", help="write info.json and nothing else")
     ap.add_argument("--species", default="homo_sapiens")
     ap.add_argument("--assembly", default=None)
@@ -551,7 +559,13 @@ def main(argv: list[str] | None = None) -> int:
     info = cache_info(args)
     if isinstance(info, int):
         return info
+    if args.variation_info is not None and args.variations is None:
+        print("ERROR: [prune_json_cache] --variation-info describes the files of --variations; pass both", file=sys.stderr)
+        return 2
     if args.info_only:
+        if args.variations is not None:
+            print("ERROR: [prune_json_cache] --info-only writes info.json alone; --variations and --variation-info describe a slice this run does not cut", file=sys.stderr)
+            return 2
         write_info(args.out, info)
         return 0
     if args.cache is None or not (args.cache / "transcripts").is_dir():
@@ -566,6 +580,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.variation_flank < 0:
             print(f"ERROR: [prune_json_cache] --variation-flank {args.variation_flank}: a distance is not negative", file=sys.stderr)
             return 2
+        if args.variation_info is not None:
+            try:
+                variation_info = json.loads(args.variation_info.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                print(f"ERROR: [prune_json_cache] --variation-info {args.variation_info}: {getattr(error, 'strerror', None) or error}", file=sys.stderr)
+                return 2
+            if not isinstance(variation_info, dict) or not isinstance(variation_info.get("variation_cols"), list):
+                print(f"ERROR: [prune_json_cache] --variation-info {args.variation_info} declares no variation_cols list", file=sys.stderr)
+                return 2
+            for key in VARIATION_INFO_KEYS:
+                info.pop(key, None)
+                if key in variation_info:
+                    info[key] = variation_info[key]
         columns = info.get("variation_cols") or []
         if not isinstance(columns, list):
             print(f"ERROR: [prune_json_cache] --variations needs variation_cols as a list of column names in the info being written, not {columns!r}", file=sys.stderr)
@@ -619,6 +646,25 @@ def main(argv: list[str] | None = None) -> int:
     if args.variations is not None and not any((args.variations / chrom / "all_vars.gz").is_file() for chrom in spans):
         print(f"ERROR: [prune_json_cache] --variations {args.variations}: no <chr>/all_vars.gz for any chromosome of the records ({', '.join(sorted(spans))})", file=sys.stderr)
         return 2
+    if args.variations is not None:
+        # The runtime zips variation_cols and a record's fields by position and reads a shorter
+        # record silently, so a wrong declaration mislabels every value.
+        for chrom in sorted(spans):
+            source = args.variations / chrom / "all_vars.gz"
+            if not source.is_file():
+                continue
+            try:
+                with gzip.open(source, "rb") as reader:
+                    first_record = reader.readline()
+            except (OSError, EOFError, zlib.error) as error:
+                print(f"ERROR: [prune_json_cache] --variations {source}: {getattr(error, 'strerror', None) or error}", file=sys.stderr)
+                return 2
+            if not first_record:
+                continue
+            field_count = first_record.count(b"\t") + 1
+            if field_count != len(columns):
+                print(f"ERROR: [prune_json_cache] --variations {source} carries {field_count} fields where variation_cols names {len(columns)} columns", file=sys.stderr)
+                return 2
     drop_except: frozenset[str] = frozenset()
     if args.drop_except is not None:
         if not args.drop:

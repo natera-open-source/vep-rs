@@ -1141,6 +1141,157 @@
     "start_cooccurrence_swap": 7
    },
    "vep_rs_only_summary": {}
+  },
+  {
+   "name": "variation",
+   "flags": [
+    "--symbol",
+    "--biotype",
+    "--canonical",
+    "--mane",
+    "--tsl",
+    "--protein",
+    "--protein_version",
+    "--check_existing",
+    "--exclude_null_alleles",
+    "--af",
+    "--af_1kg",
+    "--clinvar_somatic_classification"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf"
+   ],
+   "expected_dir": "expected_variation",
+   "covers": [
+    "allele_string",
+    "phenotype_or_disease",
+    "info-variation-cols"
+   ],
+   "divergences": [
+    {
+     "location": "21:34613795-34613797",
+     "allele": "-",
+     "feature": "ENST00000399272",
+     "feature_type": "Transcript",
+     "record_indices": [
+      43
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000361866",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00000866134",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001002268",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001111227",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "21:45981851-45981852",
+     "allele": "A",
+     "feature": "ENST00001131501",
+     "feature_type": "Transcript",
+     "record_indices": [
+      137
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    },
+    {
+     "location": "MT:14747-14748",
+     "allele": "A",
+     "feature": "ENST00000361789",
+     "feature_type": "Transcript",
+     "record_indices": [
+      157
+     ],
+     "vep_consequence_set": "frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "frameshift_variant,start_retained_variant"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 7
+   },
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "Existing_variation",
+    "CLIN_SIG",
+    "PHENO",
+    "SOMATIC",
+    "CLINVAR_SOMATIC_CLASSIFICATION",
+    "AF",
+    "AFR_AF",
+    "AMR_AF",
+    "EAS_AF",
+    "EUR_AF",
+    "SAS_AF"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
   }
  ],
  "suites": {
@@ -3415,5 +3566,12 @@
  "divergence_summary": {
   "start_cooccurrence_swap": 7
  },
- "vep_rs_only_summary": {}
+ "vep_rs_only_summary": {},
+ "excludes": {
+  "variation_records_named": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "reason": "COSMIC and HGMD-PUBLIC identifiers are not redistributed; those records carry no alleles in the variation database, so the variation flag set runs with --exclude_null_alleles and Ensembl VEP's reference names none of them either"
+ }
 }

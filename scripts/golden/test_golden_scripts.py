@@ -1545,6 +1545,70 @@ def test_prune_variation_slice_reindexes(tmp_path: Path):
                      "--variations", str(src), "--variation-flank", "-1"]) == 2
 
 
+def test_prune_variation_slice_takes_the_columns_of_the_variation_cache(tmp_path: Path):
+    """A slice cut from a native cache beside an Ensembl cache's metadata declares the native
+    cache's columns: `--variation-info` replaces `variation_cols` and `var_type` of the info being
+    written, and the index is built on the start column of those columns. The option without
+    `--variations`, either option under `--info-only`, an info.json without a `variation_cols`
+    list, or one whose top level is not an object, is refused; so is a slice whose records carry
+    a field count other than the declared columns, or whose file is not gzip or does not inflate,
+    before anything is written, while a chromosome file with no record is left out, not refused."""
+    native = tmp_path / "native"
+    native_cols = VAR_COLS[:15] + ["AF"]
+    line = ("\t".join(["21", "rs1", ".", ".", "200", ".", "A/G"] + ["."] * (len(native_cols) - 7)) + "\n").encode()
+    _write_all_vars(native / "variations" / "21" / "all_vars.gz", [line])
+    (native / "info.json").write_text(json.dumps({"species": "homo_sapiens", "assembly": "GRCh38", "cache_version": 116,
+                                                   "variation_cols": native_cols, "var_type": "tabix", "source_versions": {}}))
+    cache = tmp_path / "cache"
+    (cache / "transcripts" / "21").mkdir(parents=True)
+    (cache / "transcripts" / "21" / "1-1000000.json").write_text(json.dumps([{"stable_id": "ENST_A", "start": "150", "end": "250"}]))
+    info_txt = tmp_path / "info.txt"
+    info_txt.write_text("species\thomo_sapiens\nassembly\tGRCh38\nsource_dbSNP\t156\nvariation_cols\t" + ",".join(VAR_COLS) + "\nvar_type\ttabix\n")
+    vcf = tmp_path / "v.vcf"
+    vcf.write_text("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t200\t.\tA\tG\t.\t.\t.\n")
+    common = ["--cache", str(cache), "--vcf", str(vcf), "--perl-info", str(info_txt), "--cache-version", "116"]
+    native_info = ["--variation-info", str(native / "info.json")]
+    out = tmp_path / "out"
+    assert pjc.main([*common, "--out", str(out), "--variations", str(native / "variations"), *native_info]) == 0
+    info = json.loads((out / "info.json").read_text())
+    assert info["variation_cols"] == native_cols and info["var_type"] == "tabix"
+    assert info["source_versions"] == {"dbSNP": "156"}, "the rest of the metadata is still the Ensembl cache's"
+    gz = out / "variations" / "21" / "all_vars.gz"
+    assert _csi_query(gz, 200) == ["rs1"]
+    assert pjc.main([*common, "--out", str(tmp_path / "out2"), *native_info]) == 2
+    (tmp_path / "bare.json").write_text(json.dumps({"species": "homo_sapiens"}))
+    assert pjc.main([*common, "--out", str(tmp_path / "out3"), "--variations", str(native / "variations"), "--variation-info", str(tmp_path / "bare.json")]) == 2
+    assert not (tmp_path / "out3" / "info.json").exists()
+    (tmp_path / "list.json").write_text(json.dumps([]))
+    assert pjc.main([*common, "--out", str(tmp_path / "out4"), "--variations", str(native / "variations"), "--variation-info", str(tmp_path / "list.json")]) == 2
+    assert not (tmp_path / "out4" / "info.json").exists()
+    # The Ensembl cache's columns over the native files: the record width disagrees, so the
+    # declaration is refused rather than written over records it does not describe.
+    assert pjc.main([*common, "--out", str(tmp_path / "out5"), "--variations", str(native / "variations")]) == 2
+    assert not (tmp_path / "out5").exists() or not any((tmp_path / "out5").iterdir())
+    assert pjc.main(["--info-only", "--out", str(tmp_path / "out6"), "--perl-info", str(info_txt), "--cache-version", "116", *native_info]) == 2
+    assert not (tmp_path / "out6" / "info.json").exists()
+    assert pjc.main(["--info-only", "--out", str(tmp_path / "out7"), "--perl-info", str(info_txt), "--cache-version", "116",
+                     "--variations", str(native / "variations"), *native_info]) == 2
+    assert not (tmp_path / "out7" / "info.json").exists()
+    # A chromosome file with no record is skipped, not refused; a file that is not gzip is refused.
+    empty = tmp_path / "empty"
+    _write_all_vars(empty / "variations" / "21" / "all_vars.gz", [])
+    assert pjc.main([*common, "--out", str(tmp_path / "out8"), "--variations", str(empty / "variations"), *native_info]) == 0
+    assert not (tmp_path / "out8" / "variations").exists()
+    plain = tmp_path / "plain"
+    (plain / "variations" / "21").mkdir(parents=True)
+    (plain / "variations" / "21" / "all_vars.gz").write_bytes(b"21\trs1\t.\t.\t200\n")
+    assert pjc.main([*common, "--out", str(tmp_path / "out9"), "--variations", str(plain / "variations"), *native_info]) == 2
+    assert not (tmp_path / "out9" / "transcripts").exists()
+    # A gzip header over a corrupt deflate stream raises zlib.error, not OSError or EOFError.
+    corrupt = tmp_path / "corrupt"
+    (corrupt / "variations" / "21").mkdir(parents=True)
+    (corrupt / "variations" / "21" / "all_vars.gz").write_bytes(b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03" + b"\xff\xff\xff\xff\x00garbage" * 4)
+    assert pjc.main([*common, "--out", str(tmp_path / "out10"), "--variations", str(corrupt / "variations"), *native_info]) == 2
+    assert not (tmp_path / "out10" / "transcripts").exists()
+
+
 def test_bgzf_writer_blocks_and_virtual_offsets(tmp_path: Path):
     path = tmp_path / "x.gz"
     with path.open("wb") as raw:
