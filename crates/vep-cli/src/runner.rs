@@ -46,6 +46,7 @@ use crate::variation_source::{ReadFailure, VariationSource};
 use vep_builtins::BuiltinRegistry;
 use vep_core::cache_info::CacheInfo;
 use vep_core::consequence::{Consequence, Impact};
+use vep_core::sv_routing::perl_true;
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
 use vep_io::input::detect::{self, InputFormat};
@@ -382,6 +383,66 @@ pub(crate) fn fasta_setup_checks(
     Ok(checks)
 }
 
+/// What the SIFT and PolyPhen availability check settles for a run: each tool's
+/// flag value after the check, and the `INFO:` lines it prints.
+#[derive(Debug)]
+pub(crate) struct PredictionChecks {
+    pub(crate) sift: Option<String>,
+    pub(crate) polyphen: Option<String>,
+    pub(crate) notices: Vec<&'static str>,
+}
+
+/// Ensembl VEP's `check_sift_polyphen` (`AnnotationSource/Cache/Transcript.pm:148-176`
+/// at release/116.2), run as the cache is opened: a tool asked for on a cache whose
+/// metadata names no version of it (the `source_sift` and `source_polyphen` lines
+/// of `info.txt`, `CacheDir.pm:468-470`) stops the run with
+/// `ERROR: <tool> not available`, or, under `--everything` or `--safe`, is
+/// switched off with `INFO: disabling <tool>` so its column is not written. A
+/// native cache names no tool version and marks a tool whose matrices it holds
+/// with `sift b` or `polyphen b` instead, so that marker counts as availability
+/// too. `--humdiv` has no check in Ensembl VEP and none here: a cache without
+/// the HumDiv matrix prints an empty column.
+pub(crate) fn prediction_checks(
+    config: &Config,
+    info: &vep_core::cache_info::CacheInfo,
+) -> Result<PredictionChecks, CliError> {
+    let in_cache = |source: &str, marker: &Option<String>| {
+        info.source_versions
+            .get(source)
+            .is_some_and(|version| perl_true(version))
+            || marker.as_deref().is_some_and(perl_true)
+    };
+    let mut notices = Vec::new();
+    let mut check =
+        |tool: &str, disabling: &'static str, mode: &Option<String>, available: bool| {
+            if mode.is_none() || available {
+                return Ok(mode.clone());
+            }
+            if config.everything || config.safe {
+                notices.push(disabling);
+                return Ok(None);
+            }
+            Err(CliError::new("cache", format!("{tool} not available")))
+        };
+    let sift = check(
+        "SIFT",
+        "INFO: disabling SIFT",
+        &config.sift,
+        in_cache("sift", &info.sift),
+    )?;
+    let polyphen = check(
+        "PolyPhen",
+        "INFO: disabling PolyPhen",
+        &config.polyphen,
+        in_cache("polyphen", &info.polyphen),
+    )?;
+    Ok(PredictionChecks {
+        sift,
+        polyphen,
+        notices,
+    })
+}
+
 /// Renders the invocation as VEP prints it in `## VEP command-line:`
 /// (Config.pm `full_command`): `vep` then every option sorted by name, a value
 /// after its flag, and each path collapsed to `[PATH]/<basename>`. Each option
@@ -586,7 +647,8 @@ impl Runner {
 
     /// Which optional output fields the configuration switches on, shared by
     /// every output format; `run` replaces `hgvs` with the value
-    /// [`fasta_setup_checks`] settled once the FASTA is known.
+    /// [`fasta_setup_checks`] settled once the FASTA is known, and `sift` and
+    /// `polyphen` with the values [`prediction_checks`] settled against the cache.
     fn field_options(&self) -> FieldOptions {
         let c = &self.config;
         FieldOptions {
@@ -723,22 +785,29 @@ impl Runner {
 
         if self.config.show_cache_info {
             // The input parser opens before the info prints (BaseRunner.pm:406),
-            // and its constructor's arguments build the annotation sources first
-            // (Runner.pm:827 evaluates valid_chromosomes before Parser->new), so
-            // the gnomAD check of the cache's columns (CacheDir.pm:188-197) fires
-            // before a named file that is not there is refused with Ensembl VEP's
+            // and evaluating its valid_chromosomes argument (Runner.pm:827, before
+            // Parser->new runs) builds the annotation sources: the transcript
+            // source checks the tools against the cache's metadata
+            // (CacheDir.pm:141-150, Cache/Transcript.pm:148-176), the variation
+            // source checks the gnomAD columns (CacheDir.pm:188-197), and only
+            // then is a named file that is not there refused with Ensembl VEP's
             // text (Parser.pm:239); the input is otherwise not read.
+            let predictions = prediction_checks(&self.config, &self.cache.info)?;
+            self.print_notices(&predictions.notices);
             check_gnomad_columns(&self.config, &self.cache.info)?;
             check_input_file_exists(&self.config)?;
             return self.write_cache_info(&mut io::stdout().lock());
         }
 
         // Runner.pm:117-120, :128, :133-138 and :200-202: init() prints the
-        // configuration's notice, builds the annotation sources (where the
-        // cache's columns are checked, CacheDir.pm:188-197), opens the FASTA,
-        // then the input through the parser, then runs post_setup_checks, whose
-        // lines print there; the output opens after.
+        // configuration's notice, builds the annotation sources (the tool check's
+        // lines print there, CacheDir.pm:141-150, then the cache's columns are
+        // checked, :188-197), opens the FASTA, then the input through the
+        // parser, then runs post_setup_checks, whose lines print there; the
+        // output opens after.
         self.print_notices(&self.config.notices);
+        let predictions = prediction_checks(&self.config, &self.cache.info)?;
+        self.print_notices(&predictions.notices);
         check_gnomad_columns(&self.config, &self.cache.info)?;
         let reference_fasta = open_fasta(&self.config, &self.cache)?;
         let fasta_found = reference_fasta.is_some();
@@ -806,6 +875,7 @@ impl Runner {
             protein_version: self.config.protein_version,
             hgvsg: hgvsg_options(&self.config, &self.cache.synonyms),
             spdi: spdi_options(&self.config, &self.cache.synonyms),
+            domains: self.config.domains,
         });
 
         let LoadedPlugins { builtin, dylib } = self.load_plugins(plugin_fasta)?;
@@ -909,6 +979,8 @@ impl Runner {
         let plugin_fields = vep_io::output::fields::plugin_field_names(&plugin_headers);
         let mut options = self.field_options();
         options.hgvs = checks.hgvs;
+        options.sift = predictions.sift.is_some();
+        options.polyphen = predictions.polyphen.is_some();
         let extra_plan = ExtraFieldsPlan::new(options.clone());
 
         match output_format {
@@ -1006,8 +1078,9 @@ impl Runner {
             builtin_plugins,
             dylib_plugins,
             prediction_config: PredictionConfig {
-                sift: self.config.sift.clone(),
-                polyphen: self.config.polyphen.clone(),
+                sift: predictions.sift,
+                polyphen: predictions.polyphen,
+                humdiv: self.config.humdiv,
             },
             transcript_filter,
             synonyms: Arc::clone(&self.cache.synonyms),
@@ -1926,7 +1999,7 @@ pub(crate) fn annotate_variant(
             return;
         }
         if let Some(mut tc) = vep_effects::calculate_consequences(variant, transcript, config) {
-            if has_predictions && tc.consequences.contains(&Consequence::MissenseVariant) {
+            if has_predictions {
                 lookup_predictions(&mut tc, transcript, prediction_config);
             }
             // LoFTEE's structural context is captured here because `transcript` is
@@ -1980,10 +2053,31 @@ pub(crate) fn annotate_variant(
     vep_effects::spdi::annotate(variant, config);
 }
 
-/// Look up SIFT/PolyPhen predictions for a missense consequence.
-///
-/// Parses the protein position and amino acids from the transcript consequence,
-/// then queries the prediction matrix stored in the transcript's VEFC.
+/// The alternate residue of a single-residue substitution, the one shape
+/// Ensembl VEP predicts on (`TranscriptVariationAllele.pm` `_protein_function_prediction`,
+/// release/116): a peptide allele string of exactly `X/Y` with two upper-case
+/// letters whose alternate is one of the twenty standard amino acids. A start
+/// codon change (`M/T`) qualifies; a stop gain or loss (`R/*`, `*/R`), an
+/// unknown alternate residue (`M/X`), a synonymous change (whose string is the
+/// one residue, `C`), a change of several residues and every insertion or
+/// deletion do not.
+fn substituted_residue(amino_acids: Option<&str>) -> Option<u8> {
+    let bytes = amino_acids?.as_bytes();
+    let [reference, b'/', alternate] = bytes else {
+        return None;
+    };
+    if !reference.is_ascii_uppercase() || !b"ACDEFGHIKLMNPQRSTVWY".contains(alternate) {
+        return None;
+    }
+    Some(*alternate)
+}
+
+/// Fills the `SIFT` and `PolyPhen` columns of a transcript consequence from the
+/// matrices cached on its transcript (`OutputFactory.pm` `add_sift_polyphen`,
+/// release/116.2): a prediction is looked up for a single-residue substitution
+/// ([`substituted_residue`]) at its residue, each tool rendered under its flag's
+/// value, PolyPhen from the HumVar matrix or under `--humdiv` the HumDiv one; a
+/// cache without a tool's matrix leaves its column empty.
 fn lookup_predictions(
     tc: &mut vep_core::consequence::TranscriptConsequence,
     transcript: &vep_core::transcript::Transcript,
@@ -1991,50 +2085,43 @@ fn lookup_predictions(
 ) {
     use vep_core::prediction::{format_prediction, AnalysisType};
 
-    let position: usize = tc
+    let Some(alt_aa) = substituted_residue(tc.amino_acids.as_deref()) else {
+        return;
+    };
+    let Some(position) = tc
         .protein_position
         .as_deref()
         .and_then(|s| s.split('-').next())
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
-    if position == 0 {
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|p| *p > 0)
+    else {
         return;
-    }
-
-    let alt_aa: u8 = tc
-        .amino_acids
-        .as_deref()
-        .and_then(|s| s.split('/').nth(1))
-        .and_then(|s| s.as_bytes().first().copied())
-        .unwrap_or(0);
-    if alt_aa == 0 || alt_aa == b'-' {
-        return;
-    }
-
-    let predictions = match transcript
+    };
+    let Some(predictions) = transcript
         .vefc
         .as_ref()
         .and_then(|v| v.protein_function_predictions.as_ref())
-    {
-        Some(p) => p,
-        None => return,
+    else {
+        return;
     };
 
-    if let Some(ref mode) = prediction_config.sift {
-        if let Some(ref matrix) = predictions.sift {
-            if let Some(pred) = matrix.lookup(position, alt_aa, AnalysisType::Sift) {
-                tc.sift = Some(format_prediction(&pred, mode));
-            }
-        }
+    if let Some(mode) = &prediction_config.sift {
+        tc.sift = predictions
+            .sift
+            .as_ref()
+            .and_then(|matrix| matrix.lookup(position, alt_aa, AnalysisType::Sift))
+            .map(|prediction| format_prediction(&prediction, mode));
     }
-
-    // PolyPhen (default: humvar, matching Perl VEP)
-    if let Some(ref mode) = prediction_config.polyphen {
-        if let Some(ref matrix) = predictions.polyphen_humvar {
-            if let Some(pred) = matrix.lookup(position, alt_aa, AnalysisType::PolyPhenHumVar) {
-                tc.polyphen = Some(format_prediction(&pred, mode));
-            }
-        }
+    if let Some(mode) = &prediction_config.polyphen {
+        let (matrix, analysis) = if prediction_config.humdiv {
+            (&predictions.polyphen_humdiv, AnalysisType::PolyPhenHumDiv)
+        } else {
+            (&predictions.polyphen_humvar, AnalysisType::PolyPhenHumVar)
+        };
+        tc.polyphen = matrix
+            .as_ref()
+            .and_then(|matrix| matrix.lookup(position, alt_aa, analysis))
+            .map(|prediction| format_prediction(&prediction, mode));
     }
 }
 
@@ -2695,6 +2782,316 @@ mod tests {
             &["--var_synonyms", "--check_existing", "--shift_hgvs", "0"],
         );
         assert!(runner.config.notices.is_empty());
+    }
+
+    /// The cache metadata of a converted Ensembl VEP 116 cache dumped with the
+    /// given tools: a `source_versions` entry and the dumper's `b` marker per tool.
+    fn cache_info_with(tools: &[&str]) -> vep_core::cache_info::CacheInfo {
+        let mut info = vep_core::cache_info::CacheInfo::default();
+        for tool in tools {
+            let (version, marker) = match *tool {
+                "sift" => ("6.2.1", &mut info.sift),
+                _ => ("2.2.3", &mut info.polyphen),
+            };
+            *marker = Some("b".to_string());
+            info.source_versions
+                .insert(tool.to_string(), version.to_string());
+        }
+        info
+    }
+
+    /// `check_sift_polyphen` (Cache/Transcript.pm:148-176): `--sift` or
+    /// `--polyphen` on a cache whose metadata names no version of the tool is
+    /// refused with Ensembl VEP's text; a cache naming the version passes the
+    /// flag through, as does a native cache, which names no version and marks
+    /// the tool it holds matrices for with `sift b` or `polyphen b` instead.
+    /// `--humdiv` has no check (Config.pm:517-522 rewrites `polyphen_analysis` and
+    /// nothing reads the cache for it).
+    #[test]
+    fn sift_refused_when_cache_lacks_it() {
+        let both = cache_info_with(&["sift", "polyphen"]);
+        let none = cache_info_with(&[]);
+        let error = prediction_checks(&config_from(&["--sift", "b"]), &none)
+            .expect_err("--sift on a cache without SIFT passed the check");
+        assert_eq!(error.to_string(), "ERROR: [cache] SIFT not available");
+        let error = prediction_checks(&config_from(&["--polyphen", "p"]), &none)
+            .expect_err("--polyphen on a cache without PolyPhen passed the check");
+        assert_eq!(error.to_string(), "ERROR: [cache] PolyPhen not available");
+        let error = prediction_checks(
+            &config_from(&["--sift", "s", "--polyphen", "s"]),
+            &cache_info_with(&["sift"]),
+        )
+        .expect_err("--polyphen on a SIFT-only cache passed the check");
+        assert_eq!(error.to_string(), "ERROR: [cache] PolyPhen not available");
+
+        let checks =
+            prediction_checks(&config_from(&["--sift", "s", "--polyphen", "p"]), &both).unwrap();
+        assert_eq!(checks.sift.as_deref(), Some("s"));
+        assert_eq!(checks.polyphen.as_deref(), Some("p"));
+        assert!(checks.notices.is_empty());
+        let native = vep_core::cache_info::CacheInfo {
+            sift: Some("b".to_string()),
+            ..Default::default()
+        };
+        let checks = prediction_checks(&config_from(&["--sift", "b"]), &native).unwrap();
+        assert_eq!(checks.sift.as_deref(), Some("b"));
+        let checks =
+            prediction_checks(&config_from(&["--polyphen", "b", "--humdiv"]), &both).unwrap();
+        assert_eq!(checks.polyphen.as_deref(), Some("b"));
+        let checks = prediction_checks(&config_from(&["--humdiv"]), &none).unwrap();
+        assert!(checks.sift.is_none() && checks.polyphen.is_none());
+        assert!(prediction_checks(&config_from(&[]), &none)
+            .unwrap()
+            .notices
+            .is_empty());
+    }
+
+    /// Under `--everything` or `--safe` an unavailable tool is dropped with
+    /// `INFO: disabling <tool>` (Cache/Transcript.pm:160-164) and its column is
+    /// not written, so the field options and the lookup both read the settled
+    /// value rather than the flag's.
+    #[test]
+    fn everything_disables_sift_with_info_line() {
+        let none = cache_info_with(&[]);
+        let checks = prediction_checks(&config_from(&["--everything"]), &none).unwrap();
+        assert_eq!(
+            checks.notices,
+            ["INFO: disabling SIFT", "INFO: disabling PolyPhen"]
+        );
+        assert!(checks.sift.is_none() && checks.polyphen.is_none());
+        let checks = prediction_checks(
+            &config_from(&["--everything"]),
+            &cache_info_with(&["polyphen"]),
+        )
+        .unwrap();
+        assert_eq!(checks.notices, ["INFO: disabling SIFT"]);
+        assert!(checks.sift.is_none());
+        assert_eq!(checks.polyphen.as_deref(), Some("b"));
+        let checks = prediction_checks(&config_from(&["--safe", "--sift", "p"]), &none).unwrap();
+        assert_eq!(checks.notices, ["INFO: disabling SIFT"]);
+        assert!(checks.sift.is_none());
+        let cache = write_json_cache("everything_sift", &[("21", 1_000)]);
+        let runner = runner_over(&cache, &["--everything"]);
+        let mut options = runner.field_options();
+        assert!(options.sift && options.polyphen);
+        let checks = prediction_checks(&runner.config, &runner.cache.info).unwrap();
+        options.sift = checks.sift.is_some();
+        options.polyphen = checks.polyphen.is_some();
+        let fields = vep_io::output::fields::flag_fields(&options);
+        assert!(!fields.contains(&"SIFT") && !fields.contains(&"PolyPhen"));
+    }
+
+    /// A decompressed prediction matrix of `residues` positions whose listed
+    /// cells carry a category and a score times 1000, every other cell no
+    /// prediction (`ProteinFunctionPredictionMatrix.pm` `pack 'v'`).
+    fn prediction_matrix(
+        analysis: &str,
+        residues: usize,
+        cells: &[(usize, u8, u16, u16)],
+    ) -> vep_core::transcript::PredictionMatrix {
+        const HEADER: &[u8] = b"VEP";
+        const AMINO_ACIDS: &[u8; 20] = b"ACDEFGHIKLMNPQRSTVWY";
+        const CELL_BYTES: usize = 2;
+        let mut data = HEADER.to_vec();
+        data.extend(std::iter::repeat_n(
+            0xFFu8,
+            residues * AMINO_ACIDS.len() * CELL_BYTES,
+        ));
+        for &(position, residue, category, score) in cells {
+            let column = AMINO_ACIDS.iter().position(|aa| *aa == residue).unwrap();
+            let offset = HEADER.len() + ((position - 1) * AMINO_ACIDS.len() + column) * CELL_BYTES;
+            data[offset..offset + CELL_BYTES]
+                .copy_from_slice(&((category << 14) | score).to_le_bytes());
+        }
+        vep_core::transcript::PredictionMatrix {
+            analysis: analysis.to_string(),
+            sub_analysis: None,
+            peptide_length: residues,
+            predictions_data: data,
+        }
+    }
+
+    /// A coding transcript carrying the given matrices, and a consequence on it
+    /// with the given peptide allele string at residue `position`.
+    fn predicted(
+        matrices: vep_core::transcript::ProteinFunctionPredictions,
+        amino_acids: &str,
+        position: &str,
+        config: &PredictionConfig,
+    ) -> vep_core::consequence::TranscriptConsequence {
+        let mut transcript = make_runner_test_transcript("ENST_CODING", "ENSG_CODING", "21", 1_000);
+        transcript.biotype = "protein_coding".into();
+        transcript.vefc = Some(vep_core::transcript::TranscriptVEFC {
+            protein_function_predictions: Some(matrices),
+            ..Default::default()
+        });
+        let mut tc = vep_core::consequence::TranscriptConsequence::for_transcript(&transcript);
+        tc.amino_acids = Some(amino_acids.to_string());
+        tc.protein_position = Some(position.to_string());
+        lookup_predictions(&mut tc, &transcript, config);
+        tc
+    }
+
+    fn sift_matrix() -> vep_core::transcript::ProteinFunctionPredictions {
+        vep_core::transcript::ProteinFunctionPredictions {
+            // Residue 1 T deleterious 0.01 (a start codon change), residue 5 K
+            // tolerated 0.35, residue 5 Y tolerated 1.
+            sift: Some(prediction_matrix(
+                "sift",
+                6,
+                &[(1, b'T', 1, 10), (5, b'K', 0, 350), (5, b'Y', 0, 1000)],
+            )),
+            polyphen_humvar: None,
+            polyphen_humdiv: None,
+        }
+    }
+
+    fn both_modes() -> PredictionConfig {
+        PredictionConfig {
+            sift: Some("b".to_string()),
+            polyphen: Some("b".to_string()),
+            humdiv: false,
+        }
+    }
+
+    /// `_protein_function_prediction` (TranscriptVariationAllele.pm:1296-1319)
+    /// predicts when the peptide allele string is `^[A-Z]/[A-Z]$` and the
+    /// alternate residue is a standard amino acid: `M/T` at residue 1 (a
+    /// `start_lost` row) prints `deleterious(0.01)`, `R/K` at residue 5
+    /// `tolerated(0.35)` and `tolerated(1)` for a whole score; a two-residue
+    /// change, an insertion, a deletion, an unknown alternate residue and a
+    /// residue the matrix has no cell for print nothing. Each flag value renders
+    /// its own shape (`p`, `s`, `b`; OutputFactory.pm:1798-1851).
+    #[test]
+    fn sift_eligibility_single_residue_substitution() {
+        assert_eq!(substituted_residue(Some("A/D")), Some(b'D'));
+        assert_eq!(substituted_residue(Some("M/T")), Some(b'T'));
+        assert_eq!(substituted_residue(Some("X/A")), Some(b'A'));
+        assert_eq!(substituted_residue(Some("L/L")), Some(b'L'));
+        for ineligible in ["AL/DV", "A/-", "-/A", "M/X", "M/U", "a/d", "A", "A/DD", ""] {
+            assert_eq!(substituted_residue(Some(ineligible)), None, "{ineligible}");
+        }
+        assert_eq!(substituted_residue(None), None);
+
+        let both = both_modes();
+        assert_eq!(
+            predicted(sift_matrix(), "M/T", "1", &both).sift.as_deref(),
+            Some("deleterious(0.01)")
+        );
+        assert_eq!(
+            predicted(sift_matrix(), "R/K", "5", &both).sift.as_deref(),
+            Some("tolerated(0.35)")
+        );
+        assert_eq!(
+            predicted(sift_matrix(), "R/Y", "5", &both).sift.as_deref(),
+            Some("tolerated(1)")
+        );
+        assert!(predicted(sift_matrix(), "R/A", "5", &both).sift.is_none());
+        assert!(predicted(sift_matrix(), "RK/KK", "5-6", &both)
+            .sift
+            .is_none());
+        assert!(predicted(sift_matrix(), "-/K", "5-6", &both).sift.is_none());
+        assert!(predicted(sift_matrix(), "K/-", "5", &both).sift.is_none());
+        assert!(predicted(sift_matrix(), "R/X", "5", &both).sift.is_none());
+        let score = PredictionConfig {
+            sift: Some("s".to_string()),
+            ..PredictionConfig::default()
+        };
+        assert_eq!(
+            predicted(sift_matrix(), "R/K", "5", &score).sift.as_deref(),
+            Some("0.35")
+        );
+        let term = PredictionConfig {
+            sift: Some("p".to_string()),
+            ..PredictionConfig::default()
+        };
+        assert_eq!(
+            predicted(sift_matrix(), "R/K", "5", &term).sift.as_deref(),
+            Some("tolerated")
+        );
+        assert!(
+            predicted(sift_matrix(), "R/K", "5", &PredictionConfig::default())
+                .sift
+                .is_none()
+        );
+    }
+
+    /// A stop codon is no amino acid letter, so `R/*` (stop_gained) and `*/R`
+    /// (stop_lost) fail `^[A-Z]/[A-Z]$` and are never predicted, whatever the
+    /// matrix holds at that residue.
+    #[test]
+    fn sift_not_predicted_for_stop_changes() {
+        assert_eq!(substituted_residue(Some("R/*")), None);
+        assert_eq!(substituted_residue(Some("*/R")), None);
+        assert_eq!(substituted_residue(Some("*/*")), None);
+        let both = both_modes();
+        assert!(predicted(sift_matrix(), "R/*", "5", &both).sift.is_none());
+        assert!(predicted(sift_matrix(), "*/K", "5", &both).sift.is_none());
+        assert_eq!(
+            predicted(sift_matrix(), "R/K", "5", &both).sift.as_deref(),
+            Some("tolerated(0.35)")
+        );
+    }
+
+    /// PolyPhen follows the same eligibility: a `start_lost` `M/T` at residue 1
+    /// reads the HumVar matrix (`polyphen_prediction` with the default
+    /// `humvar` classifier, TranscriptVariationAllele.pm:947-963) and prints
+    /// `probably_damaging(0.967)`; a cache without the matrix prints nothing.
+    #[test]
+    fn polyphen_predicts_start_lost_single_residue() {
+        let matrices = vep_core::transcript::ProteinFunctionPredictions {
+            sift: None,
+            polyphen_humvar: Some(prediction_matrix("polyphen", 2, &[(1, b'T', 0, 967)])),
+            polyphen_humdiv: None,
+        };
+        let tc = predicted(matrices.clone(), "M/T", "1", &both_modes());
+        assert_eq!(tc.polyphen.as_deref(), Some("probably_damaging(0.967)"));
+        assert!(tc.sift.is_none());
+        assert!(predicted(matrices, "M/*", "1", &both_modes())
+            .polyphen
+            .is_none());
+        let without = vep_core::transcript::ProteinFunctionPredictions::default();
+        assert!(predicted(without, "M/T", "1", &both_modes())
+            .polyphen
+            .is_none());
+    }
+
+    /// `--humdiv` rewrites `polyphen_analysis` to `humdiv` (Config.pm:517-522), so
+    /// the PolyPhen column reads the `polyphen_humdiv` matrix
+    /// (TranscriptVariation.pm:326-345); a cache holding only the HumVar matrix
+    /// prints nothing under the flag, with no error, and HumVar stays the default.
+    #[test]
+    fn humdiv_selects_humdiv_matrix() {
+        let matrices = vep_core::transcript::ProteinFunctionPredictions {
+            sift: None,
+            polyphen_humvar: Some(prediction_matrix("polyphen", 2, &[(2, b'C', 2, 90)])),
+            polyphen_humdiv: Some(prediction_matrix("polyphen", 2, &[(2, b'C', 1, 512)])),
+        };
+        let humdiv = PredictionConfig {
+            humdiv: true,
+            ..both_modes()
+        };
+        assert_eq!(
+            predicted(matrices.clone(), "A/C", "2", &humdiv)
+                .polyphen
+                .as_deref(),
+            Some("possibly_damaging(0.512)")
+        );
+        assert_eq!(
+            predicted(matrices.clone(), "A/C", "2", &both_modes())
+                .polyphen
+                .as_deref(),
+            Some("benign(0.09)")
+        );
+        let humvar_only = vep_core::transcript::ProteinFunctionPredictions {
+            polyphen_humdiv: None,
+            ..matrices
+        };
+        assert!(predicted(humvar_only, "A/C", "2", &humdiv)
+            .polyphen
+            .is_none());
+        assert!(config_from(&["--humdiv"]).humdiv);
+        assert!(!config_from(&["--polyphen", "b"]).humdiv);
     }
 
     /// A reference FASTA of chromosome 21 whose bases are `C` except an `A` at

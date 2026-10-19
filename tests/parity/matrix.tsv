@@ -140,8 +140,8 @@ dir_cache	AnnotationSourceAdaptor.pm	implemented	landed:implemented	crates/vep-c
 dir_plugins	Runner.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::dir_plugins_defaults_to_dir_slash_plugins;crates/vep-cli/tests/cli_run_control.rs::missing_plugins_dir_warns_only_when_a_plugin_is_named;crates/vep-cli/src/annotator.rs::missing_plugins_dir_dies_under_safe	tests/golden/116/GRCh38-run-control	
 distance	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::distance_pair_with_zero_downstream_uses_upstream;crates/vep-cli/src/config.rs::distance_non_numeric_is_an_error;crates/vep-cli/tests/integration_test.rs::distance_non_numeric_exits_with_the_error_line	tests/golden/116/GRCh38-release116	
 docker-image	INSTALL.pl	implemented	open			
-domains	OutputFactory.pm	implemented	open			
-domains-value-format	OutputFactory.pm	implemented	open			
+domains	OutputFactory.pm	implemented	landed:implemented	crates/vep-effects/src/consequences.rs::domains_overlapping_protein_position	tests/golden/116/GRCh38-protein-features	
+domains-value-format	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/json.rs::domains_json_resplit_truncates_at_non_word	tests/golden/116/GRCh38-protein-features	
 dont_skip	Parser.pm	implemented	open			
 DosageSensitivity	DosageSensitivity.pm	implemented	open			
 Downstream	Downstream.pm	error	open			
@@ -243,7 +243,7 @@ HGVSReferenceBase	HGVSReferenceBase.pm	error	open
 high-inf-pos-motif-score-change	MotifFeatureVariationAllele.pm	implemented	open			
 homebrew-distribution	-	documented_subset	open			
 host	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
-humdiv	Config.pm	implemented	open			
+humdiv	Config.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::humdiv_selects_humdiv_matrix	tests/golden/116/GRCh38-humdiv	
 id-input-format	ID.pm	documented_subset	open			
 incomplete-del	VCF.pm	implemented	open			
 ind-zyg-columns	OutputFactory.pm	implemented	open			
@@ -253,7 +253,7 @@ individual_zyg	Parser/VCF.pm	implemented	open
 info-bam	CacheDir.pm	documented_subset	open			
 info-region-size-build	CacheDir.pm	accepted_noop	open			
 info-regulatory-cell-types	CacheDir.pm	documented_subset	open			
-info-sift-polyphen	Cache/Transcript.pm	implemented	open			
+info-sift-polyphen	Cache/Transcript.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::sift_refused_when_cache_lacks_it;crates/vep-cli/src/runner.rs::everything_disables_sift_with_info_line	tests/golden/116/GRCh38-protein-features	
 info-source-versions	CacheDir.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/src/info.rs::info_json_markers_follow_the_build;crates/vep-cache-builder/src/core_dumps.rs::source_versions_from_core_meta	tests/golden/116/GRCh38	
 info-species-assembly	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::assembly_mismatch_with_info_json_is_fatal;crates/vep-cache-converter/src/main.rs::info_json_is_validated_and_synonyms_travel_with_it;crates/vep-cache-builder/src/info.rs::info_json_markers_follow_the_build;crates/vep-cache-builder/src/core_dumps.rs::source_versions_from_core_meta	tests/golden/116/GRCh38	
 info-var-type-serialiser	CacheDir.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/json_cache.rs::sereal_cache_without_shards_is_refused;crates/vep-cache-converter/src/main.rs::info_json_is_validated_and_synonyms_travel_with_it	tests/golden/116/GRCh38	
@@ -363,7 +363,7 @@ plugin-argument-parsing	Runner.pm	implemented	landed:implemented	crates/vep-cli/
 plugin-install-and-data	INSTALL.pl	documented_subset	open			
 plugin_exception_isolation	OutputFactory.pm::run_plugins	implemented	open			
 plugins-regulatory-feature-types	Runner.pm	implemented	open			
-polyphen	Config.pm	documented_subset	open			
+polyphen	Config.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/runner.rs::polyphen_predicts_start_lost_single_residue;crates/vep-cli/src/args.rs::polyphen_value_outside_spb_is_an_error	tests/golden/116/GRCh38-protein-features	
 PolyPhen_SIFT	PolyPhen_SIFT.pm	error	open			
 PON_P2	PON_P2.pm	error	open			
 port	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
@@ -421,8 +421,8 @@ shift_hgvs	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/args.
 shift_length	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::shift_length_prints_zero_on_unshifted_transcript_rows;crates/vep-io/src/output/fields.rs::shift_length_is_absent_without_shift_3prime	tests/golden/116/GRCh38-identifiers	
 show_cache_info	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::show_cache_info_prints_info_json_and_exits_0	tests/golden/116/GRCh38-run-control	
 show_ref_allele	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::ref_allele_absent_on_summary_rows	tests/golden/116/GRCh37-output-flags	
-sift	Config.pm	documented_subset	open			
-sift-polyphen-value-grammar	Config.pm	documented_subset	open			
+sift	Config.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/runner.rs::sift_eligibility_single_residue_substitution;crates/vep-cli/src/runner.rs::sift_not_predicted_for_stop_changes	tests/golden/116/GRCh38-protein-features	
+sift-polyphen-value-grammar	Config.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/json.rs::score_only_mode_sets_score_key_only;crates/vep-cli/src/args.rs::sift_value_outside_spb_is_an_error	tests/golden/116/GRCh38-sift-score	
 single-dash-long-options	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_argv.rs::single_dash_long_option_is_rewritten;crates/vep-cli/tests/cli_argv.rs::short_flags_unchanged;crates/vep-cli/tests/cli_argv.rs::single_dash_unknown_option_is_refused_by_name	tests/golden/116/GRCh38-run-control	
 SingleLetterAA	SingleLetterAA.pm	error	open			
 singularity-apptainer	-	implemented	open			
@@ -538,7 +538,7 @@ vefc-introns	Database/Transcript.pm	implemented	open
 vefc-mapper	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/mapper.rs::start_phase_is_ensembl_phase	tests/golden/116/GRCh38-native-builder	
 vefc-peptide	Database/Transcript.pm	implemented	open			
 vefc-protein-features	Database/Transcript.pm	implemented	open			
-vefc-protein-function-predictions	Database/Transcript.pm	implemented	open			
+vefc-protein-function-predictions	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::storable_matrix_decodes	tests/golden/116/GRCh38-protein-features	
 vefc-runtime-only-keys	BaseTranscriptVariation.pm	implemented	open			
 vefc-seq-edits	Database/Transcript.pm	documented_subset	open			
 vefc-sorted-exons	Database/Transcript.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/src/builder.rs::sorted_exons_in_genomic_order	tests/golden/116/GRCh38-native-builder	

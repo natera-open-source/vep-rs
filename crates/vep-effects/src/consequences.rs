@@ -80,6 +80,10 @@ pub struct EffectsConfig {
     /// `reference_fasta` names the chromosome of a variant overlapping no
     /// transcript when it is set. `None` leaves both fields `None`.
     pub spdi: Option<crate::spdi::SpdiOptions>,
+    /// List the protein features the variant's residues overlap on each coding
+    /// consequence, as `--domains` does; off, `TranscriptConsequence.domains`
+    /// stays empty.
+    pub domains: bool,
 }
 
 impl Default for EffectsConfig {
@@ -96,6 +100,7 @@ impl Default for EffectsConfig {
             protein_version: false,
             hgvsg: None,
             spdi: None,
+            domains: false,
         }
     }
 }
@@ -205,7 +210,11 @@ pub fn calculate_consequences(
     });
     let analysed = shifted_allele.as_ref().unwrap_or(placed);
     let mut tc = calculate_terms(analysed, variant, transcript, config)?;
-    crate::display::display_fields(analysed, transcript).write_to(&mut tc);
+    let fields = crate::display::display_fields(analysed, transcript);
+    if config.domains {
+        tc.domains = domains_overlapping_protein_position(transcript, fields.translation_span);
+    }
+    fields.write_to(&mut tc);
     if config.compute_exon_intron_numbers {
         (tc.exon, tc.intron) = crate::display::exon_intron_numbers(analysed, placed, transcript);
     }
@@ -391,6 +400,47 @@ fn append_translation_version(tc: &mut TranscriptConsequence, transcript: &Trans
     if !versioned {
         tc.protein_id = Some(Arc::from(format!("{id}.{version}")));
     }
+}
+
+/// The `DOMAINS` pairs of a coding consequence (`OutputFactory.pm:1494-1512`
+/// at release/116.2; `BaseTranscriptVariation.pm` `get_overlapping_ProteinFeatures`,
+/// release/116): every protein feature of the transcript whose residue span
+/// overlaps `translation_span`, in the cache's order, each as its analysis
+/// label and its identifier with every whitespace character, `;` and `=`
+/// replaced by `_`. Nothing when either residue end is undefined, as for a
+/// variant that leaves the coding sequence. The overlap is Ensembl's
+/// `feature.end >= start && feature.start <= end` on the raw span, so an
+/// insertion between two residues (start one past end) lists only the features
+/// covering both.
+fn domains_overlapping_protein_position(
+    transcript: &Transcript,
+    translation_span: Option<(i64, i64)>,
+) -> Vec<(String, String)> {
+    let Some((start, end)) = translation_span else {
+        return Vec::new();
+    };
+    let Some(vefc) = transcript.vefc.as_ref() else {
+        return Vec::new();
+    };
+    let printable = |text: &str| -> String {
+        // Perl's `\s` matches the vertical tab, which `is_ascii_whitespace` does not.
+        text.chars()
+            .map(|c| match c {
+                ' ' | '\t' | '\n' | '\r' | '\u{0b}' | '\u{0c}' | ';' | '=' => '_',
+                other => other,
+            })
+            .collect()
+    };
+    vefc.protein_features
+        .iter()
+        .filter(|feature| feature.end as i64 >= start && feature.start as i64 <= end)
+        .map(|feature| {
+            (
+                printable(feature.analysis.as_deref().unwrap_or_default()),
+                printable(&feature.hseqname),
+            )
+        })
+        .collect()
 }
 
 /// Consequence terms and the fields the analysis derives alongside them.
@@ -3973,6 +4023,116 @@ mod tests {
         let offset = mirna_transcript(Strand::Forward, "10:85 .7(16.(4.(3.2(4.10)4.2)3.).)14.6)5");
         assert!(terms(&snv(1003), &offset).is_empty());
         assert_eq!(terms(&snv(1012), &offset), ["miRNA_loop"]);
+    }
+
+    /// Under `--domains` a coding row lists the protein features whose residue
+    /// span overlaps the variant's, in the cache's order, as `label:identifier`
+    /// with whitespace, `;` and `=` written `_` (OutputFactory.pm:1494-1512 at
+    /// release/116.2 over `get_overlapping_ProteinFeatures`, whose test is
+    /// Ensembl's `overlap` on the raw residue span). On the test transcript
+    /// residue n is genomic 25_000_050 + 3(n - 1) to + 2: the residue-3 SNV
+    /// overlaps the Pfam and the AFDB features and not the residue-5 Gene3D one;
+    /// the deletion of residues 4 and 5 overlaps all three; the insertion
+    /// between residues 4 and 5 maps to the span 5-4, which Ensembl VEP
+    /// overlaps only with a feature covering both residues, so the Gene3D and
+    /// AFDB features drop out; a 5' UTR variant is not coding and lists none;
+    /// without the flag the list stays empty.
+    #[test]
+    fn domains_overlapping_protein_position() {
+        use vep_core::transcript::ProteinFeature;
+        let mut tx = make_test_transcript();
+        tx.vefc.as_mut().unwrap().protein_features = vec![
+            ProteinFeature {
+                start: 1,
+                end: 10,
+                hseqname: "PF00080".to_string(),
+                analysis: Some("Pfam".to_string()),
+            },
+            ProteinFeature {
+                start: 5,
+                end: 5,
+                hseqname: "3.30.160.20".to_string(),
+                analysis: Some("Gene3D".to_string()),
+            },
+            ProteinFeature {
+                start: 2,
+                end: 4,
+                hseqname: "AF-P60331-F1".to_string(),
+                analysis: Some("AFDB-ENSP mappings".to_string()),
+            },
+            ProteinFeature {
+                start: 20,
+                end: 30,
+                hseqname: "seg;a=b".to_string(),
+                analysis: Some("Low complexity (Seg)".to_string()),
+            },
+        ];
+        let config = EffectsConfig {
+            domains: true,
+            ..EffectsConfig::default()
+        };
+        let pairs = |variant: &InputVariant, config: &EffectsConfig| {
+            calculate_consequences(variant, &tx, config)
+                .unwrap()
+                .domains
+                .iter()
+                .map(|(label, id)| format!("{label}:{id}"))
+                .collect::<Vec<_>>()
+        };
+        let snv_residue_3 = InputVariant::new(
+            "21".into(),
+            25_000_057,
+            25_000_057,
+            b"G".to_vec(),
+            b"T".to_vec(),
+        );
+        assert_eq!(
+            pairs(&snv_residue_3, &config),
+            ["Pfam:PF00080", "AFDB-ENSP_mappings:AF-P60331-F1"]
+        );
+        let deletion_residues_4_5 = InputVariant::new(
+            "21".into(),
+            25_000_059,
+            25_000_064,
+            b"AAATTC".to_vec(),
+            b"-".to_vec(),
+        );
+        assert_eq!(
+            pairs(&deletion_residues_4_5, &config),
+            [
+                "Pfam:PF00080",
+                "Gene3D:3.30.160.20",
+                "AFDB-ENSP_mappings:AF-P60331-F1"
+            ]
+        );
+        let insertion_between_4_and_5 = InputVariant::new(
+            "21".into(),
+            25_000_062,
+            25_000_061,
+            b"-".to_vec(),
+            b"GGG".to_vec(),
+        );
+        assert_eq!(pairs(&insertion_between_4_and_5, &config), ["Pfam:PF00080"]);
+        let snv_residue_25 = InputVariant::new(
+            "21".into(),
+            25_000_123,
+            25_000_123,
+            b"C".to_vec(),
+            b"A".to_vec(),
+        );
+        assert_eq!(
+            pairs(&snv_residue_25, &config),
+            ["Low_complexity_(Seg):seg_a_b"]
+        );
+        let utr = InputVariant::new(
+            "21".into(),
+            25_000_010,
+            25_000_010,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        );
+        assert!(pairs(&utr, &config).is_empty());
+        assert!(pairs(&snv_residue_3, &EffectsConfig::default()).is_empty());
     }
 
     /// `split /\s+|\:/`: a colon or a whitespace run ends a field, a colon

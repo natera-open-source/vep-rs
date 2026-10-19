@@ -581,6 +581,10 @@ pub struct Config {
     pub remove_hgvsp_version: bool,
     pub sift: Option<String>,
     pub polyphen: Option<String>,
+    /// `--humdiv`: the PolyPhen column reads the HumDiv matrix. Ensembl VEP keeps
+    /// the choice as `polyphen_analysis`, `humvar` by default (Config.pm:310) and
+    /// `humdiv` through the flag's option set (:517-522).
+    pub humdiv: bool,
     pub numbers: bool,
     pub domains: bool,
     pub regulatory: bool,
@@ -954,6 +958,7 @@ impl Config {
             remove_hgvsp_version: args.remove_hgvsp_version,
             sift: state.scalar("sift").map(str::to_string),
             polyphen: state.scalar("polyphen").map(str::to_string),
+            humdiv: state.scalar("polyphen_analysis") == Some("humdiv"),
             numbers: on("numbers") || vcf_output,
             domains: on("domains"),
             regulatory: on("regulatory"),

@@ -210,6 +210,7 @@ fn main() -> Result<()> {
         protein_version: false,
         hgvsg: None,
         spdi: None,
+        domains: false,
     });
 
     let raw_transcripts = json_cache::load_all_transcripts(&args.json_cache)?;

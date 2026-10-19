@@ -571,13 +571,26 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long = "remove_hgvsp_version")]
     pub remove_hgvsp_version: bool,
 
-    /// SIFT predictions (p = prediction, s = score, b = both)
+    /// Add the SIFT column on every single-residue substitution inside the coding sequence
+    /// (start_lost included, a stop change never): p the prediction, s the score, b both as
+    /// prediction(score). Needs a cache whose metadata names a SIFT version; a cache without
+    /// one stops the run, or under --everything or --safe drops the flag with an INFO line (a
+    /// native cache carries the matrices only when built with --include-predictions)
     #[arg(help_heading = "Output Control", long, value_parser = ["s", "p", "b"])]
     pub sift: Option<String>,
 
-    /// PolyPhen predictions (p = prediction, s = score, b = both)
+    /// Add the PolyPhen column on every single-residue substitution inside the coding sequence
+    /// (start_lost included, a stop change never): p the prediction, s the score, b both as
+    /// prediction(score). Needs a cache whose metadata names a PolyPhen version; a cache
+    /// without one stops the run, or under --everything or --safe drops the flag with an INFO
+    /// line (a native cache carries the matrices only when built with --include-predictions)
     #[arg(help_heading = "Output Control", long, value_parser = ["s", "p", "b"])]
     pub polyphen: Option<String>,
+
+    /// Read the PolyPhen column from the HumDiv-trained matrix instead of the default HumVar one;
+    /// a cache without the HumDiv matrix prints an empty column with no error, as in Ensembl VEP
+    #[arg(help_heading = "Output Control", long)]
+    pub humdiv: bool,
 
     #[arg(help_heading = "Output Control", long, value_name = "CONDEL")]
     pub condel: Option<String>,
@@ -599,7 +612,9 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long)]
     pub numbers: bool,
 
-    /// Add overlapping protein domain information
+    /// Add the DOMAINS column: on a coding row, the protein features whose residues the variant
+    /// overlaps, each as label:identifier (Pfam:PF00080, Gene3D:1.10.510.10; a native cache
+    /// carries the features only when built with --core-dumps)
     #[arg(help_heading = "Output Control", long)]
     pub domains: bool,
 
@@ -1324,6 +1339,79 @@ mod tests {
             );
         }
         assert!(help("ccds").contains("no RefSeq or merged cache is built natively"));
+    }
+
+    /// `--sift` takes Ensembl VEP's `%VALID` values `s`, `p` and `b`
+    /// (Config.pm:599) and nothing else: a value outside them is refused when the
+    /// command line is read, the valid values listed, as every `%VALID` flag is;
+    /// the option-rule check behind the parser carries Ensembl VEP's own text for
+    /// the same value (Config.pm:945-957).
+    #[test]
+    fn sift_value_outside_spb_is_an_error() {
+        for value in ["s", "p", "b"] {
+            assert_eq!(
+                Config::from_argv(["vep", "--sift", value])
+                    .unwrap()
+                    .sift
+                    .as_deref(),
+                Some(value)
+            );
+        }
+        let ParseFailure::Usage(error) = Config::from_argv(["vep", "--sift", "x"]).unwrap_err()
+        else {
+            panic!("--sift x is refused by the parser");
+        };
+        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidValue);
+        let text = error.to_string();
+        assert!(text.contains("'x'") && text.contains("s, p, b"), "{text}");
+        assert!(matches!(
+            Config::from_argv(["vep", "--sift", "both"]).unwrap_err(),
+            ParseFailure::Usage(_)
+        ));
+        let mut state = crate::option_rules::FlagState::default();
+        state.set("sift", "x");
+        assert_eq!(
+            state.check(false),
+            Err("\"x\" is not a valid value for --sift\nValid values: s, p, b".to_string())
+        );
+    }
+
+    /// `--polyphen` takes the same three values (Config.pm:600); `--humdiv`
+    /// parses as a flag and rewrites `polyphen_analysis` to `humdiv` through its
+    /// option set (Config.pm:517-522), nothing more.
+    #[test]
+    fn polyphen_value_outside_spb_is_an_error() {
+        for value in ["s", "p", "b"] {
+            assert_eq!(
+                Config::from_argv(["vep", "--polyphen", value])
+                    .unwrap()
+                    .polyphen
+                    .as_deref(),
+                Some(value)
+            );
+        }
+        let ParseFailure::Usage(error) =
+            Config::from_argv(["vep", "--polyphen", "humdiv"]).unwrap_err()
+        else {
+            panic!("--polyphen humdiv is refused by the parser");
+        };
+        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidValue);
+        let mut state = crate::option_rules::FlagState::default();
+        state.set("polyphen", "P");
+        assert_eq!(
+            state.check(false),
+            Err("\"P\" is not a valid value for --polyphen\nValid values: s, p, b".to_string())
+        );
+        let humdiv = Config::from_argv(["vep", "--polyphen", "b", "--humdiv"]).unwrap();
+        assert!(humdiv.humdiv);
+        assert_eq!(humdiv.polyphen.as_deref(), Some("b"));
+        let alone = Config::from_argv(["vep", "--humdiv"]).unwrap();
+        assert!(alone.humdiv && alone.polyphen.is_none());
+        assert!(
+            !Config::from_argv(["vep", "--polyphen", "b"])
+                .unwrap()
+                .humdiv
+        );
     }
 
     /// `--regulatory_gff` is refused: regulatory annotation is not supported.

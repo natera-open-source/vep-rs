@@ -1567,6 +1567,49 @@ def test_peptide_is_kept_and_cannot_be_dropped(tmp_path: Path):
     assert pjc.main(["--cache", str(cache), "--out", str(tmp_path / "out2"), "--vcf", str(vcf), "--drop", "peptide", "--assembly", "GRCh37", "--cache-version", "115"]) == 2
 
 
+def test_drop_except_keeps_the_dropped_keys_on_the_named_transcripts(tmp_path: Path, capsys):
+    """`--drop-except <file>` names the transcripts that keep every `--drop` key, so a corpus
+    carries protein features and prediction matrices for the transcripts its records test and
+    for no other; the option needs a `--drop` key to apply to, and a file that cannot be read
+    or decoded is refused with the path and the reason, not a traceback."""
+    cache = tmp_path / "cache"
+    (cache / "transcripts" / "21").mkdir(parents=True)
+    features = [{"start": 1, "end": 9, "hseqname": "PF00080", "analysis": "Pfam"}]
+    matrices = {"sift": {"analysis": "sift", "predictions_data": "H4sI"}}
+    vefc = {"peptide": "MLW", "sorted_exons": [], "protein_features": features, "protein_function_predictions": matrices}
+    transcripts = [
+        {"stable_id": "ENST_KEPT", "start": "10000", "end": "20000", "variation_effect_feature_cache": vefc},
+        {"stable_id": "ENST_DROPPED", "start": "12000", "end": "22000", "variation_effect_feature_cache": vefc},
+    ]
+    (cache / "transcripts" / "21" / "1-1000000.json").write_text(json.dumps(transcripts))
+    vcf = tmp_path / "v.vcf"
+    vcf.write_text("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t15000\t.\tA\tG\t.\t.\t.\n")
+    keep = tmp_path / "keep.txt"
+    keep.write_text("ENST_KEPT\n\n")
+    out = tmp_path / "out"
+    assert pjc.main(["--cache", str(cache), "--out", str(out), "--vcf", str(vcf), "--drop", "sorted_exons",
+                     "--drop", "protein_features", "--drop", "protein_function_predictions",
+                     "--drop-except", str(keep), "--assembly", "GRCh38", "--cache-version", "116"]) == 0
+    assert json.loads(capsys.readouterr().out)["drop_except"] == 1
+    by_id = {t["stable_id"]: t["variation_effect_feature_cache"]
+             for t in json.loads((out / "transcripts" / "21" / "1-1000000.json").read_text())}
+    assert by_id["ENST_KEPT"]["protein_features"] == features
+    assert by_id["ENST_KEPT"]["protein_function_predictions"] == matrices
+    assert by_id["ENST_KEPT"]["sorted_exons"] == []
+    assert set(by_id["ENST_DROPPED"]) == {"peptide"}
+    assert pjc.main(["--cache", str(cache), "--out", str(tmp_path / "out2"), "--vcf", str(vcf),
+                     "--drop-except", str(keep), "--assembly", "GRCh38", "--cache-version", "116"]) == 2
+    assert "--drop-except needs at least one --drop key" in capsys.readouterr().err
+    assert pjc.main(["--cache", str(cache), "--out", str(tmp_path / "out3"), "--vcf", str(vcf), "--drop", "sorted_exons",
+                     "--drop-except", str(tmp_path / "missing.txt"), "--assembly", "GRCh38", "--cache-version", "116"]) == 2
+    assert f"--drop-except {tmp_path / 'missing.txt'}: " in capsys.readouterr().err
+    not_utf8 = tmp_path / "latin1.txt"
+    not_utf8.write_bytes(b"\xffENST_KEPT\n")
+    assert pjc.main(["--cache", str(cache), "--out", str(tmp_path / "out4"), "--vcf", str(vcf), "--drop", "sorted_exons",
+                     "--drop-except", str(not_utf8), "--assembly", "GRCh38", "--cache-version", "116"]) == 2
+    assert f"--drop-except {not_utf8}: 'utf-8' codec can't decode" in capsys.readouterr().err
+
+
 def _corpora() -> list[Path]:
     root = Path(__file__).resolve().parents[2] / "tests" / "golden"
     return sorted(p for p in root.glob("*/*") if (p / "manifest.json").is_file())

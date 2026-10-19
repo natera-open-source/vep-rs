@@ -7,9 +7,10 @@
 //! binary matrices per transcript. Each matrix encodes predictions for every
 //! possible amino acid substitution at every protein position.
 //!
-//! ## Binary Format (from `ProteinFunctionPredictionMatrix.pm` in ensembl-variation release/115)
+//! ## Binary Format (from `ProteinFunctionPredictionMatrix.pm` in ensembl-variation release/116)
 //!
-//! The matrix is gzip-compressed. After decompression:
+//! The matrix is gzip-compressed: the `matrix` blob a Storable cache holds and
+//! a native cache's `predictions_data` are the same bytes. After decompression:
 //!
 //! - **Header**: 3 bytes `"VEP"`
 //! - **Per position**: 20 amino acids × 2 bytes = 40 bytes
@@ -65,29 +66,78 @@ pub enum AnalysisType {
     PolyPhenHumVar,
 }
 
-/// SIFT prediction categories (indexed by the top 2 bits of the cell).
-const SIFT_CATEGORIES: &[&str] = &[
-    "tolerated",
-    "deleterious",
-    "tolerated_low_confidence",
-    "deleterious_low_confidence",
-];
+/// The qualitative prediction a matrix cell encodes: the four SIFT and the four
+/// PolyPhen-2 categories, in the order of their 2-bit indexes
+/// (`ProteinFunctionPredictionMatrix.pm` `$PREDICTION_TO_VAL`, release/116).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PredictionTerm {
+    Tolerated,
+    Deleterious,
+    ToleratedLowConfidence,
+    DeleteriousLowConfidence,
+    ProbablyDamaging,
+    PossiblyDamaging,
+    Benign,
+    Unknown,
+}
 
-/// PolyPhen prediction categories (indexed by the top 2 bits of the cell).
-const POLYPHEN_CATEGORIES: &[&str] = &[
-    "probably_damaging",
-    "possibly_damaging",
-    "benign",
-    "unknown",
-];
+impl PredictionTerm {
+    /// The SIFT term for a category index, `None` past the four.
+    fn sift(index: usize) -> Option<Self> {
+        [
+            Self::Tolerated,
+            Self::Deleterious,
+            Self::ToleratedLowConfidence,
+            Self::DeleteriousLowConfidence,
+        ]
+        .get(index)
+        .copied()
+    }
 
-/// A decoded prediction: category label and numeric score.
-#[derive(Debug, Clone, PartialEq)]
+    /// The PolyPhen term for a category index, `None` past the four.
+    fn polyphen(index: usize) -> Option<Self> {
+        [
+            Self::ProbablyDamaging,
+            Self::PossiblyDamaging,
+            Self::Benign,
+            Self::Unknown,
+        ]
+        .get(index)
+        .copied()
+    }
+
+    /// The term as the output prints it: the database's wording with each
+    /// whitespace run replaced by `_` and ` - ` collapsed to one `_`
+    /// (`OutputFactory.pm` `add_sift_polyphen`, release/116.2), so
+    /// `tolerated - low confidence` prints `tolerated_low_confidence`.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Tolerated => "tolerated",
+            Self::Deleterious => "deleterious",
+            Self::ToleratedLowConfidence => "tolerated_low_confidence",
+            Self::DeleteriousLowConfidence => "deleterious_low_confidence",
+            Self::ProbablyDamaging => "probably_damaging",
+            Self::PossiblyDamaging => "possibly_damaging",
+            Self::Benign => "benign",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+/// A decoded prediction: the qualitative term and the numeric score.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Prediction {
-    /// Categorical prediction (e.g., "tolerated", "probably_damaging").
-    pub label: String,
+    /// Categorical prediction.
+    pub term: PredictionTerm,
     /// Numeric score (0.0 to 1.0, 3 decimal places).
     pub score: f64,
+}
+
+impl Prediction {
+    /// The term as the output prints it; see [`PredictionTerm::label`].
+    pub fn label(&self) -> &'static str {
+        self.term.label()
+    }
 }
 
 /// Decompress a gzip-compressed prediction matrix.
@@ -123,7 +173,7 @@ pub fn decode_prediction(
 
     let aa_idx = AMINO_ACIDS.iter().position(|&b| b == amino_acid)?;
 
-    let offset = HEADER.len() + ((position - 1) * AA_COUNT + aa_idx) * BYTES_PER_CELL;
+    let offset = HEADER.len() + (position.checked_sub(1)? * AA_COUNT + aa_idx) * BYTES_PER_CELL;
     if offset + 1 >= data.len() {
         return None;
     }
@@ -136,29 +186,28 @@ pub fn decode_prediction(
     let cat_idx = (raw >> CATEGORY_SHIFT) as usize;
     let score = f64::from(raw & SCORE_MASK) / SCORE_DIVISOR;
 
-    let categories = match analysis {
-        AnalysisType::Sift => SIFT_CATEGORIES,
-        AnalysisType::PolyPhenHumDiv | AnalysisType::PolyPhenHumVar => POLYPHEN_CATEGORIES,
-    };
-
-    let label = categories.get(cat_idx)?.to_string();
-    Some(Prediction { label, score })
+    let term = match analysis {
+        AnalysisType::Sift => PredictionTerm::sift(cat_idx),
+        AnalysisType::PolyPhenHumDiv | AnalysisType::PolyPhenHumVar => {
+            PredictionTerm::polyphen(cat_idx)
+        }
+    }?;
+    Some(Prediction { term, score })
 }
 
-/// Format a prediction for VEP output.
+/// Format a prediction as the `SIFT` and `PolyPhen` columns print it under the
+/// flag's value (`OutputFactory.pm` `add_sift_polyphen`, release/116.2): `p`
+/// the term alone, `s` the score alone, `b` the term with the score in
+/// parentheses. A value outside the three is refused when the command line is
+/// read, so anything else here is rendered as `b`.
 ///
 /// The score is printed the way Perl stringifies `$prob / 1000`: no fixed number of
 /// decimals, so 10 prints as `0.01`, 1000 as `1` and 796 as `0.796`.
-///
-/// # Mode values
-/// - `"p"`: prediction label only (e.g., `"tolerated"`)
-/// - `"s"`: score only (e.g., `"0.456"`)
-/// - `"b"` or anything else: both (e.g., `"tolerated(0.456)"`)
 pub fn format_prediction(prediction: &Prediction, mode: &str) -> String {
     match mode {
-        "p" => prediction.label.clone(),
+        "p" => prediction.label().to_string(),
         "s" => format_score(prediction.score),
-        _ => format!("{}({})", prediction.label, format_score(prediction.score)),
+        _ => format!("{}({})", prediction.label(), format_score(prediction.score)),
     }
 }
 
@@ -223,7 +272,7 @@ mod tests {
         );
         let data = gunzip_matrix(&compressed).unwrap();
         let pred = decode_prediction(&data, 3, b'V', AnalysisType::Sift).unwrap();
-        assert_eq!(pred.label, "tolerated");
+        assert_eq!(pred.term, PredictionTerm::Tolerated);
         assert!((pred.score - 0.456).abs() < 1e-9);
     }
 
@@ -238,7 +287,7 @@ mod tests {
         );
         let data = gunzip_matrix(&compressed).unwrap();
         let pred = decode_prediction(&data, 1, b'A', AnalysisType::Sift).unwrap();
-        assert_eq!(pred.label, "deleterious");
+        assert_eq!(pred.term, PredictionTerm::Deleterious);
         assert!((pred.score - 0.010).abs() < 1e-9);
     }
 
@@ -253,7 +302,7 @@ mod tests {
         );
         let data = gunzip_matrix(&compressed).unwrap();
         let pred = decode_prediction(&data, 7, b'R', AnalysisType::PolyPhenHumVar).unwrap();
-        assert_eq!(pred.label, "probably_damaging");
+        assert_eq!(pred.term, PredictionTerm::ProbablyDamaging);
         assert!((pred.score - 0.950).abs() < 1e-9);
     }
 
@@ -267,7 +316,7 @@ mod tests {
         );
         let data = gunzip_matrix(&compressed).unwrap();
         let pred = decode_prediction(&data, 2, b'D', AnalysisType::PolyPhenHumDiv).unwrap();
-        assert_eq!(pred.label, "benign");
+        assert_eq!(pred.term, PredictionTerm::Benign);
         assert!((pred.score - 0.050).abs() < 1e-9);
     }
 
@@ -286,6 +335,8 @@ mod tests {
         // Position 10 is beyond a 3-residue protein
         let result = decode_prediction(&data, 10, b'A', AnalysisType::Sift);
         assert!(result.is_none());
+        // Positions are 1-based: 0 is before the first residue, not a cell.
+        assert!(decode_prediction(&data, 0, b'A', AnalysisType::Sift).is_none());
     }
 
     #[test]
@@ -312,7 +363,7 @@ mod tests {
     #[test]
     fn test_format_prediction_both() {
         let pred = Prediction {
-            label: "tolerated".to_string(),
+            term: PredictionTerm::Tolerated,
             score: 0.456,
         };
         assert_eq!(format_prediction(&pred, "b"), "tolerated(0.456)");
@@ -321,7 +372,7 @@ mod tests {
     #[test]
     fn test_format_prediction_label_only() {
         let pred = Prediction {
-            label: "deleterious".to_string(),
+            term: PredictionTerm::Deleterious,
             score: 0.01,
         };
         assert_eq!(format_prediction(&pred, "p"), "deleterious");
@@ -330,7 +381,7 @@ mod tests {
     #[test]
     fn test_format_prediction_score_only() {
         let pred = Prediction {
-            label: "probably_damaging".to_string(),
+            term: PredictionTerm::ProbablyDamaging,
             score: 0.95,
         };
         assert_eq!(format_prediction(&pred, "s"), "0.95");
@@ -341,17 +392,17 @@ mod tests {
     #[test]
     fn test_format_prediction_matches_perl_number_stringification() {
         let one = Prediction {
-            label: "tolerated".to_string(),
+            term: PredictionTerm::Tolerated,
             score: 1.0,
         };
         assert_eq!(format_prediction(&one, "b"), "tolerated(1)");
         let hundredth = Prediction {
-            label: "deleterious".to_string(),
+            term: PredictionTerm::Deleterious,
             score: 0.01,
         };
         assert_eq!(format_prediction(&hundredth, "b"), "deleterious(0.01)");
         let zero = Prediction {
-            label: "deleterious".to_string(),
+            term: PredictionTerm::Deleterious,
             score: 0.0,
         };
         assert_eq!(format_prediction(&zero, "s"), "0");
@@ -371,10 +422,10 @@ mod tests {
         let off_c = HEADER.len() + (AA_COUNT + 1) * BYTES_PER_CELL;
         raw[off_c..off_c + 2].copy_from_slice(&cell_c.to_le_bytes());
         let a = decode_prediction(&raw, 1, b'A', AnalysisType::PolyPhenHumVar).unwrap();
-        assert_eq!(a.label, "probably_damaging");
+        assert_eq!(a.term, PredictionTerm::ProbablyDamaging);
         assert!((a.score - 0.967).abs() < 1e-9);
         let c = decode_prediction(&raw, 2, b'C', AnalysisType::PolyPhenHumVar).unwrap();
-        assert_eq!(c.label, "benign");
+        assert_eq!(c.term, PredictionTerm::Benign);
         assert!((c.score - 0.09).abs() < 1e-9);
         assert_eq!(format_prediction(&c, "b"), "benign(0.09)");
     }
@@ -434,19 +485,19 @@ mod tests {
         let data = gunzip_matrix(&compressed).unwrap();
 
         let p1 = decode_prediction(&data, 1, b'A', AnalysisType::Sift).unwrap();
-        assert_eq!(p1.label, "tolerated");
+        assert_eq!(p1.term, PredictionTerm::Tolerated);
         assert!((p1.score - 0.100).abs() < 1e-9);
 
         let p2 = decode_prediction(&data, 1, b'V', AnalysisType::Sift).unwrap();
-        assert_eq!(p2.label, "deleterious");
+        assert_eq!(p2.term, PredictionTerm::Deleterious);
         assert!((p2.score - 0.005).abs() < 1e-9);
 
         let p3 = decode_prediction(&data, 3, b'G', AnalysisType::Sift).unwrap();
-        assert_eq!(p3.label, "tolerated");
+        assert_eq!(p3.term, PredictionTerm::Tolerated);
         assert!((p3.score - 0.999).abs() < 1e-9);
 
         let p4 = decode_prediction(&data, 5, b'Y', AnalysisType::Sift).unwrap();
-        assert_eq!(p4.label, "deleterious_low_confidence");
+        assert_eq!(p4.term, PredictionTerm::DeleteriousLowConfidence);
         assert!((p4.score - 0.0).abs() < 1e-9);
 
         // Unpopulated cell should return None

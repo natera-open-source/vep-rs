@@ -2245,7 +2245,7 @@ mod tests {
         assert_eq!(sift.analysis, "sift");
         assert_eq!(sift.peptide_length, 0);
         let hit = sift.lookup(2, b'C', AnalysisType::Sift).unwrap();
-        assert_eq!((hit.label.as_str(), hit.score), ("deleterious", 0.01));
+        assert_eq!((hit.label(), hit.score), ("deleterious", 0.01));
         assert!(sift.lookup(1, b'A', AnalysisType::Sift).is_none());
         assert!(predictions.polyphen_humvar.is_none());
         assert!(predictions.polyphen_humdiv.is_none());

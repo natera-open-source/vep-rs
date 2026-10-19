@@ -498,20 +498,19 @@ def test_self_parity_accepts_a_name_carrying_a_bar(texts):
     assert report["pairs"]["json"]["shared_entries"] == ROWS
 
 
-def test_self_parity_undoes_the_json_sift_polyphen_and_domains_splits():
-    """A synthetic record, since no committed corpus runs --sift, --polyphen or --domains:
-    the JSON prediction/score pair and the db/name objects must match the default
-    format's ``deleterious(0.01)`` and ``Pfam:PF1,PANTHER:PTHR1`` spellings."""
+def synthetic_self_parity(extra: dict[str, str], consequence: dict) -> dict:
+    """The self-parity report of one synthetic missense record: the default format's Extra
+    carries IMPACT, STRAND and then ``extra``, the tab and VCF formats spell the same values, and
+    the JSON transcript consequence carries ``consequence`` beside the fixed columns' members."""
     fixed = ("Uploaded_variation", "Location", "Allele", "Gene", "Feature", "Feature_type", "Consequence",
              "cDNA_position", "CDS_position", "Protein_position", "Amino_acids", "Codons", "Existing_variation")
     values = ("rs1", "1:100", "G", "ENSG1", "ENST1", "Transcript", "missense_variant", "10", "5", "2", "A/G", "gCa/gGa", "rs1")
-    extra = {"IMPACT": "MODERATE", "STRAND": "1", "SIFT": "deleterious(0.01)",
-             "PolyPhen": "probably_damaging(0.95)", "DOMAINS": "Pfam:PF1,PANTHER:PTHR1"}
-    default = "#" + "\t".join(fixed + ("Extra",)) + "\n" + "\t".join(values + (";".join(f"{k}={v}" for k, v in extra.items()),)) + "\n"
-    tab = "#" + "\t".join(fixed + tuple(extra)) + "\n" + "\t".join(values + tuple(extra.values())) + "\n"
+    extra_column = {"IMPACT": "MODERATE", "STRAND": "1", **extra}
+    default = "#" + "\t".join(fixed + ("Extra",)) + "\n" + "\t".join(values + (";".join(f"{k}={v}" for k, v in extra_column.items()),)) + "\n"
+    tab = "#" + "\t".join(fixed + tuple(extra_column)) + "\n" + "\t".join(values + tuple(extra_column.values())) + "\n"
     csq = ("Allele", "Consequence", "IMPACT", "Gene", "Feature_type", "Feature", "cDNA_position", "CDS_position",
-           "Protein_position", "Amino_acids", "Codons", "Existing_variation", "STRAND", "SIFT", "PolyPhen", "DOMAINS")
-    row = dict(zip(fixed, values)) | extra
+           "Protein_position", "Amino_acids", "Codons", "Existing_variation", "STRAND", *extra)
+    row = dict(zip(fixed, values)) | extra_column
     vcf = (
         '##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from Ensembl VEP. Format: '
         + "|".join(csq) + '">\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
@@ -525,18 +524,61 @@ def test_self_parity_undoes_the_json_sift_polyphen_and_domains_splits():
             "variant_allele": "G", "gene_id": "ENSG1", "transcript_id": "ENST1", "consequence_terms": ["missense_variant"],
             "impact": "MODERATE", "strand": 1, "cdna_start": 10, "cdna_end": 10, "cds_start": 5, "cds_end": 5,
             "protein_start": 2, "protein_end": 2, "amino_acids": "A/G", "codons": "gCa/gGa",
-            "sift_prediction": "deleterious", "sift_score": 0.01,
-            "polyphen_prediction": "probably_damaging", "polyphen_score": 0.95,
-            "domains": [{"db": "Pfam", "name": "PF1"}, {"db": "PANTHER", "name": "PTHR1"}],
+            **consequence,
         }],
     }
-    report = cvf.SelfParity(default, tab, vcf, json.dumps(obj) + "\n").run()
+    return cvf.SelfParity(default, tab, vcf, json.dumps(obj) + "\n").run()
+
+
+def test_self_parity_undoes_the_json_sift_polyphen_and_domains_splits():
+    """A synthetic record beside the committed --sift, --polyphen and --domains corpora: the
+    JSON prediction/score pair and the db/name objects must match the default format's
+    ``deleterious(0.01)`` and ``Pfam:PF1,PANTHER:PTHR1`` spellings."""
+    extra = {"SIFT": "deleterious(0.01)", "PolyPhen": "probably_damaging(0.95)", "DOMAINS": "Pfam:PF1,PANTHER:PTHR1"}
+    consequence = {
+        "sift_prediction": "deleterious", "sift_score": 0.01,
+        "polyphen_prediction": "probably_damaging", "polyphen_score": 0.95,
+        "domains": [{"db": "Pfam", "name": "PF1"}, {"db": "PANTHER", "name": "PTHR1"}],
+    }
+    report = synthetic_self_parity(extra, consequence)
     assert report["verdict"] == "green", report["reasons"]
     assert {"SIFT", "PolyPhen", "DOMAINS"} <= set(report["pairs"]["json"]["columns_compared"])
-    obj["transcript_consequences"][0]["domains"].pop()
-    obj["transcript_consequences"][0]["sift_score"] = 0.02
-    report = cvf.SelfParity(default, tab, vcf, json.dumps(obj) + "\n").run()
+    report = synthetic_self_parity(extra, {**consequence, "sift_score": 0.02, "domains": [{"db": "Pfam", "name": "PF1"}]})
     assert sorted(report["pairs"]["json"]["differing"]) == ["DOMAINS", "SIFT"]
+
+
+def test_self_parity_domains_model_repeats_the_last_match_and_numbers_a_digit_name():
+    """Ensembl VEP's JSON re-split (`(\\w+):(\\w+)`, OutputFactory/JSON.pm:363-371) keeps `$1` and
+    `$2` from the list's last successful match, so an entry the pattern does not match repeats the
+    previous object and an opening one is dropped; `numberify` then makes a digit-only name a
+    number. `Gene3D:1.10.510.10,Low_complexity_(Seg):seg,Pfam:PF1` is therefore
+    `{Gene3D 1}, {Gene3D 1}, {Pfam PF1}` and `Low_complexity_(Seg):seg,Pfam:PF1` is `{Pfam PF1}`.
+    A capture of `0` fails `push ... if $1 && $2`, so `Gene3D:0.10.510.10,Low_complexity_(Seg):seg`
+    is empty and `Pfam:PF1,Gene3D:0.10.510.10,Low_complexity_(Seg):seg` is `{Pfam PF1}` alone."""
+    repeated = [{"db": "Gene3D", "name": 1}, {"db": "Gene3D", "name": 1}, {"db": "Pfam", "name": "PF1"}]
+    report = synthetic_self_parity({"DOMAINS": "Gene3D:1.10.510.10,Low_complexity_(Seg):seg,Pfam:PF1"}, {"domains": repeated})
+    assert report["verdict"] == "green", report["reasons"]
+    report = synthetic_self_parity({"DOMAINS": "Low_complexity_(Seg):seg,Pfam:PF1"}, {"domains": [{"db": "Pfam", "name": "PF1"}]})
+    assert report["verdict"] == "green", report["reasons"]
+    report = synthetic_self_parity(
+        {"DOMAINS": "Gene3D:1.10.510.10,Low_complexity_(Seg):seg,Pfam:PF1"},
+        {"domains": [{"db": "Gene3D", "name": "1"}, {"db": "Pfam", "name": "PF1"}]},
+    )
+    assert sorted(report["pairs"]["json"]["differing"]) == ["DOMAINS"]
+    report = synthetic_self_parity({"DOMAINS": "Gene3D:0.10.510.10,Low_complexity_(Seg):seg"}, {"domains": []})
+    assert report["verdict"] == "green", report["reasons"]
+    report = synthetic_self_parity(
+        {"DOMAINS": "Pfam:PF1,Gene3D:0.10.510.10,Low_complexity_(Seg):seg"}, {"domains": [{"db": "Pfam", "name": "PF1"}]}
+    )
+    assert report["verdict"] == "green", report["reasons"]
+    report = synthetic_self_parity(
+        {"DOMAINS": "Gene3D:0.10.510.10,Low_complexity_(Seg):seg"},
+        {"domains": [{"db": "Gene3D", "name": 0}, {"db": "Gene3D", "name": 0}]},
+    )
+    assert sorted(report["pairs"]["json"]["differing"]) == ["DOMAINS"]
+    assert cvf.perl_numeric_or_text("007") == 7 and cvf.perl_numeric_or_text("PF1") == "PF1"
+    # Python's str.isdigit accepts a superscript digit that Perl's looks_like_number refuses.
+    assert cvf.perl_numeric_or_text("\u00b2") == "\u00b2"
 
 
 def test_perl_numify_follows_perl_numification():

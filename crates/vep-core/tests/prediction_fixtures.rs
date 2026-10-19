@@ -48,7 +48,7 @@ fn count_by_label(data: &[u8], residues: usize, analysis: AnalysisType) -> BTree
     for pos in 1..=residues {
         for aa in AMINO_ACIDS {
             if let Some(p) = decode_prediction(data, pos, *aa, analysis) {
-                *counts.entry(p.label).or_insert(0) += 1;
+                *counts.entry(p.label().to_string()).or_insert(0) += 1;
             }
         }
     }

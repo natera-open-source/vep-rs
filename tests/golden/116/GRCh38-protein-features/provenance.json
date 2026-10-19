@@ -1,0 +1,41 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --domains --sift b --polyphen b --protein [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "91 small-variant records on chromosome 21 chosen from the converted Ensembl VEP 116 cache's own matrices and protein features: single-base substitutions whose alternate residue each SIFT category (tolerated, deleterious and both low-confidence forms) and each PolyPhen HumVar category (probably damaging, possibly damaging, benign, unknown) predicts, inside and outside a protein feature, on forward and reverse transcripts; substitutions on transcripts with a SIFT matrix and no PolyPhen one; start codon changes with and without a matrix, synonymous changes, stop gains and losses; an inframe deletion, a frameshift insertion, two- and three-base substitutions within one codon and across two, an inframe insertion between the last residue of one feature and the first of the next, and one at a feature's first residue; a 5' UTR position, an intron and an intergenic position. Chosen over transcripts whose coding neighbours add the fewest matrix bytes to the cache; the reference base is the GRCh38 primary assembly's",
+ "sha256": {
+  "default.txt": "a1aea595febb6256c20e78d8d72f5035fd480960b07352d646966edeabdae5f2",
+  "tab.txt": "a9f753e2bd2e63acd211247456ce20e143b2991e2190fdf5e411b22efbaaad90",
+  "vcf.vcf": "fbf071af5a9dc2aab5a841c84c847323414b910bd8e0d248eec7c5e72f18efe5",
+  "json.jsonl": "5e402dcc6db915a944172c888c65f1cfa0625f70d73590c98cd7d7028445c610"
+ },
+ "variants_vcf_sha256": "b16f4f41f20a82e0c7cd4b44bf535033f2fd8a7e200cbf286a1248ef3fca35bc",
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "da6d4f10e9df87f4f19aff51eb0b2f7e",
+  "arch": "aarch64",
+  "flags_passed": [
+   "--domains",
+   "--sift",
+   "b",
+   "--polyphen",
+   "b",
+   "--protein"
+  ]
+ },
+ "generator": "candidate records annotated with Ensembl VEP under the corpus flags, then scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite pool38=<reference>=<candidates> --k 200 --seed 1 --cache <converted slice> --family-columns SIFT,PolyPhen,DOMAINS --covers ... --matrix tests/parity/matrix.tsv --flag=--domains --flag=--sift --flag=b --flag=--polyphen --flag=b --flag=--protein; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --drop-except naming the coding transcripts the records reach, so those keep protein_features and protein_function_predictions and every other transcript drops them --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 270
+  },
+  "shards": 10,
+  "spans_by_chromosome": {
+   "21": 91
+  }
+ }
+}

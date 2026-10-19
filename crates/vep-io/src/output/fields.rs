@@ -1175,11 +1175,19 @@ fn row_field_value(
             }
         }
         "miRNA" => tc.map(|x| x.mirna.join(list_sep)).unwrap_or_default(),
+        // `join(':', grep {$_} (label, identifier))` (OutputFactory.pm:1500): a
+        // part that is empty or `0` is false to Perl and left out, so a feature
+        // with no label prints its identifier alone.
         "DOMAINS" => tc
             .map(|x| {
                 x.domains
                     .iter()
-                    .map(|(src, id)| format!("{src}:{id}"))
+                    .map(|(label, id)| match (perl_true(label), perl_true(id)) {
+                        (true, true) => format!("{label}:{id}"),
+                        (false, true) => id.clone(),
+                        (true, false) => label.clone(),
+                        (false, false) => String::new(),
+                    })
                     .collect::<Vec<_>>()
                     .join(list_sep)
             })
@@ -2645,6 +2653,31 @@ mod tests {
             });
         tc.gene_phenotype = false;
         assert_eq!(field_value("GENE_PHENO", &v, Some(&tc), &options, ","), "");
+    }
+
+    /// `DOMAINS` joins each feature's label and identifier with `:` and, as
+    /// `join(':', grep {$_} ...)` does (OutputFactory.pm:1500), prints the
+    /// identifier alone for a feature whose cache entry carries no label or
+    /// the label `0`, which Perl reads as false.
+    #[test]
+    fn domains_without_a_label_print_the_identifier_alone() {
+        let options = FieldOptions {
+            domains: true,
+            ..Default::default()
+        };
+        let mut tc = ndufv3_consequence();
+        tc.domains = vec![
+            ("Pfam".to_string(), "PF00080".to_string()),
+            (String::new(), "CYTOPLASMIC_DOMAIN".to_string()),
+            ("Gene3D".to_string(), "3.30.160.20".to_string()),
+            ("0".to_string(), "PF00080".to_string()),
+        ];
+        assert_eq!(
+            value("DOMAINS", &tc, &options),
+            "Pfam:PF00080,CYTOPLASMIC_DOMAIN,Gene3D:3.30.160.20,PF00080"
+        );
+        tc.domains.clear();
+        assert_eq!(value("DOMAINS", &tc, &options), "");
     }
 
     /// `--gene_version` appends `.<version>` to the Gene column

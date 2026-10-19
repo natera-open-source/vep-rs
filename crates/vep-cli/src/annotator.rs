@@ -84,6 +84,8 @@ pub struct PredictionConfig {
     pub sift: Option<String>,
     /// PolyPhen output mode: "p" (prediction), "s" (score), "b" (both), or None.
     pub polyphen: Option<String>,
+    /// Read PolyPhen from the HumDiv matrix rather than HumVar (`--humdiv`).
+    pub humdiv: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -253,6 +255,8 @@ impl Annotator {
         let transcript_filter =
             crate::runner::compile_transcript_filter(&config.transcript_filter)?;
         log_notices(&config.notices);
+        let predictions = crate::runner::prediction_checks(config, &cache.info)?;
+        log_notices(&predictions.notices);
         let reference_fasta = crate::runner::open_fasta(config, &cache)?;
         let checks = crate::runner::fasta_setup_checks(config, reference_fasta.is_some())?;
         log_notices(&checks.notices);
@@ -268,6 +272,7 @@ impl Annotator {
         );
         effects.hgvsg = hgvsg_options(config, &cache.synonyms);
         effects.spdi = spdi_options(config, &cache.synonyms);
+        effects.domains = config.domains;
         let effects_config = Arc::new(effects);
         let LoadedPlugins { builtin, dylib } = load_plugins(
             &config.plugin,
@@ -297,8 +302,9 @@ impl Annotator {
                 builtin_plugins,
                 dylib_plugins,
                 prediction_config: PredictionConfig {
-                    sift: config.sift.clone(),
-                    polyphen: config.polyphen.clone(),
+                    sift: predictions.sift,
+                    polyphen: predictions.polyphen,
+                    humdiv: config.humdiv,
                 },
                 nearest: config.nearest,
                 transcript_filter,
@@ -594,6 +600,7 @@ fn new_effects_config(
         protein_version,
         hgvsg: None,
         spdi: None,
+        domains: false,
     }
 }
 

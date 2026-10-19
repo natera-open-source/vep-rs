@@ -1092,6 +1092,12 @@ def perl_numify(s: str) -> str:
     return _json_float(value)
 
 
+def perl_numeric_or_text(word: str) -> int | str:
+    """A ``\\w+`` capture as ``numberify`` leaves it: ASCII digits alone become an integer (Perl's
+    ``+ 0`` on a string ``looks_like_number`` accepts); anything else stays text."""
+    return int(word) if word.isascii() and word.isdigit() else word
+
+
 def format_coords(start, end) -> str:
     """``Utils.pm:141-166``: ``start``, ``start-end``, or the pair low to high."""
     if start is not None and end is not None:
@@ -1425,11 +1431,23 @@ class SelfParity:
                     remaining.discard("domains")
                     want = None
                     if raw not in ("-", ""):
+                        # OutputFactory/JSON.pm:363-371 re-splits each entry with ``(\w+):(\w+)`` and
+                        # pushes ``{db => $1, name => $2}`` if ``$1 && $2``. A failed match leaves ``$1``
+                        # and ``$2`` at the list's last successful one, so such an entry repeats the
+                        # previous object and is dropped only before the first match. A capture of ``0``
+                        # is false to Perl, so its entry and every unmatched one after it push nothing.
+                        # ``numberify`` then runs over the record (JSON.pm:288), so a name of digits
+                        # alone is a number.
                         want = []
+                        db = name = None
+                        perl_false = (None, "", "0")
                         for item in decode_extra(raw).split(","):
                             dm = DOMAIN_RE.search(item)
-                            if dm and dm.group(1) and dm.group(2):
-                                want.append(json_compact({"db": dm.group(1), "name": dm.group(2)}))
+                            if dm:
+                                db, name = dm.group(1), dm.group(2)
+                            if db not in perl_false and name not in perl_false:
+                                domain = {"db": perl_numeric_or_text(db), "name": perl_numeric_or_text(name)}
+                                want.append(json_compact(domain))
                     # json_scalar joins the list's compact objects with ",", which each object
                     # also contains, so the comparison is on the joined text.
                     got = o.fields.get("domains")

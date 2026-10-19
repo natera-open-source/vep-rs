@@ -280,26 +280,23 @@ impl JsonOutputFormatter {
                 }
                 "SIFT" | "PolyPhen" => {
                     let tool = name.to_lowercase();
-                    let (pred, score) = parse_prediction_score(&value);
-                    if let Some(p) = pred.filter(|p| !p.is_empty()) {
-                        obj.insert(format!("{tool}_prediction"), Value::String(p));
+                    let (prediction, score) = parse_prediction_score(&value);
+                    if let Some(prediction) = prediction {
+                        obj.insert(
+                            format!("{tool}_prediction"),
+                            Value::String(prediction.to_string()),
+                        );
                     }
-                    if let Some(s) = score.and_then(serde_json::Number::from_f64) {
-                        obj.insert(format!("{tool}_score"), Value::Number(s));
+                    if let Some(score) = score {
+                        let key = format!("{tool}_score");
+                        let number = numberify(&key, score.to_string());
+                        obj.insert(key, number);
                     }
                 }
                 "DOMAINS" => {
-                    let doms: Vec<Value> = value
-                        .split(',')
-                        .filter_map(|d| d.split_once(':'))
-                        .map(|(db, id)| {
-                            Value::Object(serde_json::Map::from_iter([
-                                ("db".to_string(), Value::String(db.to_string())),
-                                ("name".to_string(), Value::String(id.to_string())),
-                            ]))
-                        })
-                        .collect();
-                    obj.insert("domains".to_string(), Value::Array(doms));
+                    let domains =
+                        domains_json(tc.map(|x| x.domains.as_slice()).unwrap_or_default());
+                    obj.insert("domains".to_string(), Value::Array(domains));
                 }
                 // The fields VEP's output hash holds as lists (OutputFactory.pm:1478,
                 // 1540, 1572, 1592-1600, 1662 at release/116.2), encoded as arrays;
@@ -441,16 +438,92 @@ fn numberify(key: &str, value: String) -> Value {
     Value::String(value)
 }
 
-/// Parse a SIFT/PolyPhen string like "deleterious(0.01)" into (prediction, score).
-fn parse_prediction_score(value: &str) -> (Option<String>, Option<f64>) {
-    if let Some(open_paren) = value.find('(') {
-        if let Some(close_paren) = value.find(')') {
-            let prediction = value[..open_paren].to_string();
-            let score = value[open_paren + 1..close_paren].parse::<f64>().ok();
-            return (Some(prediction), score);
+/// Splits a `SIFT` or `PolyPhen` value into its prediction and score as
+/// `OutputFactory/JSON.pm:353-360` (release/116.2) does with
+/// `([a-z_]+)?\(?([\d.]+)?\)?`, matched case-insensitively: every part is
+/// optional, so the match sits at the start of the value, the prediction is its
+/// leading run of letters and underscores, and the score the run of digits and
+/// dots after that run and an optional `(`. A bare score (`--sift s`) sets no
+/// prediction and a bare prediction (`--sift p`) no score.
+fn parse_prediction_score(value: &str) -> (Option<&str>, Option<&str>) {
+    let letters = value
+        .bytes()
+        .take_while(|b| b.is_ascii_alphabetic() || *b == b'_')
+        .count();
+    let (prediction, rest) = value.split_at(letters);
+    let rest = rest.strip_prefix('(').unwrap_or(rest);
+    let digits = rest
+        .bytes()
+        .take_while(|b| b.is_ascii_digit() || *b == b'.')
+        .count();
+    (
+        (!prediction.is_empty()).then_some(prediction),
+        (digits > 0).then(|| &rest[..digits]),
+    )
+}
+
+/// The `domains` array of a consequence as `OutputFactory/JSON.pm:363-371`
+/// (release/116.2) builds it: each entry the `DOMAINS` column prints (the label
+/// and identifier parts `grep {$_}` keeps, joined by `:`, OutputFactory.pm:1500)
+/// re-split by [`word_colon_word`] into `{db, name}`. The split is Perl's
+/// `m/(\w+)\:(\w+)/` followed by `push ... if $1 && $2`, and a failed match
+/// leaves `$1` and `$2` at the values of the list's last successful one, so an
+/// entry the pattern does not match repeats the previous entry's `db` and
+/// `name`, and is dropped only when no earlier entry of the list matched. A
+/// capture of `0` (`Gene3D:0.10.510.10` names `0`) is false to Perl, so that
+/// entry pushes nothing, and neither does an unmatched entry after it until a
+/// later match replaces the captures. `numberify` then runs over the whole
+/// record (JSON.pm:288) and neither key is exempt, so a name of digits alone,
+/// Gene3D's truncated `1`, is a number.
+fn domains_json(domains: &[(String, String)]) -> Vec<Value> {
+    let mut captured: Option<(String, String)> = None;
+    let mut out = Vec::with_capacity(domains.len());
+    for (label, id) in domains {
+        let entry = match (perl_true(label), perl_true(id)) {
+            (true, true) => format!("{label}:{id}"),
+            (false, true) => id.clone(),
+            (true, false) => label.clone(),
+            (false, false) => String::new(),
+        };
+        if let Some(split) = word_colon_word(&entry) {
+            captured = Some(split);
+        }
+        if let Some((db, name)) = captured
+            .as_ref()
+            .filter(|(db, name)| perl_true(db) && perl_true(name))
+        {
+            out.push(Value::Object(serde_json::Map::from_iter([
+                ("db".to_string(), numberify("db", db.clone())),
+                ("name".to_string(), numberify("name", name.clone())),
+            ])));
         }
     }
-    (Some(value.to_string()), value.parse::<f64>().ok())
+    out
+}
+
+/// The `db` and `name` of a `DOMAINS` entry as `(\w+):(\w+)` reads them: the
+/// first `:` with a word character on both sides splits the entry, the run of
+/// word characters before it is the database and the run after it the name, so
+/// `Gene3D:1.10.510.10` names `1` and `PANTHER:PTHR24416:SF8` names
+/// `PTHR24416`; `None` for an entry with no such `:`. Word characters are ASCII
+/// letters, digits and `_`.
+fn word_colon_word(text: &str) -> Option<(String, String)> {
+    let bytes = text.as_bytes();
+    let is_word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let colon = (1..bytes.len().saturating_sub(1))
+        .find(|&i| bytes[i] == b':' && is_word(bytes[i - 1]) && is_word(bytes[i + 1]))?;
+    let db_start = bytes[..colon]
+        .iter()
+        .rposition(|b| !is_word(*b))
+        .map_or(0, |i| i + 1);
+    let name_end = bytes[colon + 1..]
+        .iter()
+        .position(|b| !is_word(*b))
+        .map_or(bytes.len(), |i| colon + 1 + i);
+    Some((
+        text[db_start..colon].to_string(),
+        text[colon + 1..name_end].to_string(),
+    ))
 }
 
 /// The populations whose matched-allele frequencies a `colocated_variants`
@@ -1464,15 +1537,160 @@ mod tests {
         assert!(buf.is_empty());
     }
 
+    /// The consequence object of the annotated variant under `--sift`,
+    /// `--polyphen` and `--domains`, with the given values on its consequence.
+    fn prediction_object(edit: impl Fn(&mut TranscriptConsequence)) -> Value {
+        let mut v = make_annotated_variant();
+        edit(&mut v.transcript_consequences[0]);
+        let options = FieldOptions {
+            sift: true,
+            polyphen: true,
+            domains: true,
+            ..Default::default()
+        };
+        fmt(options).format_variant_value(&v)["transcript_consequences"][0].clone()
+    }
+
+    /// `JSON.pm:353-360` splits each tool's value with
+    /// `([a-z_]+)?\(?([\d\.]+)?\)?` and sets `<tool>_prediction` only for a
+    /// prediction and `<tool>_score` only for a score: `--sift s` prints the bare
+    /// score, so its object carries `sift_score` alone; `--sift p` carries
+    /// `sift_prediction` alone; `b` carries both. The score is a number as
+    /// `numberify` makes it, a whole score (`tolerated(1)`) an integer.
     #[test]
-    fn prediction_score_parsing() {
+    fn score_only_mode_sets_score_key_only() {
+        let score_only = prediction_object(|tc| {
+            tc.sift = Some("0.01".to_string());
+            tc.polyphen = Some("0.998".to_string());
+        });
+        assert_eq!(score_only["sift_score"], json!(0.01));
+        assert_eq!(score_only["polyphen_score"], json!(0.998));
+        assert!(score_only.get("sift_prediction").is_none(), "{score_only}");
+        assert!(
+            score_only.get("polyphen_prediction").is_none(),
+            "{score_only}"
+        );
+        let prediction_only = prediction_object(|tc| {
+            tc.sift = Some("deleterious_low_confidence".to_string());
+            tc.polyphen = Some("probably_damaging".to_string());
+        });
+        assert_eq!(
+            prediction_only["sift_prediction"],
+            json!("deleterious_low_confidence")
+        );
+        assert_eq!(
+            prediction_only["polyphen_prediction"],
+            json!("probably_damaging")
+        );
+        assert!(
+            prediction_only.get("sift_score").is_none(),
+            "{prediction_only}"
+        );
+        assert!(
+            prediction_only.get("polyphen_score").is_none(),
+            "{prediction_only}"
+        );
+        let both = prediction_object(|tc| {
+            tc.sift = Some("tolerated(1)".to_string());
+            tc.polyphen = Some("benign(0.09)".to_string());
+        });
+        assert_eq!(both["sift_prediction"], json!("tolerated"));
+        assert_eq!(both["sift_score"], json!(1));
+        assert_eq!(both["polyphen_prediction"], json!("benign"));
+        assert_eq!(both["polyphen_score"], json!(0.09));
         assert_eq!(
             parse_prediction_score("deleterious(0.01)"),
-            (Some("deleterious".into()), Some(0.01))
+            (Some("deleterious"), Some("0.01"))
+        );
+        assert_eq!(parse_prediction_score("0"), (None, Some("0")));
+    }
+
+    /// `JSON.pm:363-371` re-splits each `DOMAINS` entry with `(\w+):(\w+)`, so
+    /// the name stops at the first non-word character, and an entry whose `:`
+    /// has no word character on both sides repeats the previous entry's split,
+    /// `$1` and `$2` keeping the last successful match: the Ensembl VEP 116.2
+    /// JSON for
+    /// `DOMAINS=Gene3D:1.10.510.10,PANTHER:PTHR24416:SF8,AFDB-ENSP_mappings:AF-P60331-F1,Low_complexity_(Seg):seg,Pfam:PF00080`
+    /// is `{Gene3D 1}` with the name a number, `numberify` (JSON.pm:288) having
+    /// run over the record, `{PANTHER PTHR24416}`, `{ENSP_mappings AF}`,
+    /// `{ENSP_mappings AF}` again and `{Pfam PF00080}`; a list opening with such
+    /// an entry drops it (the GRCh38 chromosome 21 rows of ENST00000391624,
+    /// `Low_complexity_(Seg):seg,AFDB-ENSP_mappings:AF-Q3LI67-F1`, carry one
+    /// object). A capture of `0` fails `push ... if $1 && $2`, so
+    /// `Gene3D:0.10.510.10,Low_complexity_(Seg):seg` is empty, and
+    /// `Pfam:PF00080,Gene3D:0.10.510.10,Low_complexity_(Seg):seg` is
+    /// `{Pfam PF00080}` alone, the `0` match having replaced the captures.
+    #[test]
+    fn domains_json_resplit_truncates_at_non_word() {
+        let tc = prediction_object(|tc| {
+            tc.domains = vec![
+                ("Gene3D".to_string(), "1.10.510.10".to_string()),
+                ("PANTHER".to_string(), "PTHR24416:SF8".to_string()),
+                ("AFDB-ENSP_mappings".to_string(), "AF-P60331-F1".to_string()),
+                ("Low_complexity_(Seg)".to_string(), "seg".to_string()),
+                ("Pfam".to_string(), "PF00080".to_string()),
+            ];
+        });
+        assert_eq!(
+            tc["domains"],
+            json!([
+                {"db": "Gene3D", "name": 1},
+                {"db": "PANTHER", "name": "PTHR24416"},
+                {"db": "ENSP_mappings", "name": "AF"},
+                {"db": "ENSP_mappings", "name": "AF"},
+                {"db": "Pfam", "name": "PF00080"}
+            ])
+        );
+        let opening = prediction_object(|tc| {
+            tc.domains = vec![
+                ("Low_complexity_(Seg)".to_string(), "seg".to_string()),
+                ("AFDB-ENSP_mappings".to_string(), "AF-Q3LI67-F1".to_string()),
+            ];
+        });
+        assert_eq!(
+            opening["domains"],
+            json!([{"db": "ENSP_mappings", "name": "AF"}])
+        );
+        // A part the text column drops (`grep {$_}`: empty or `0`) leaves an
+        // entry with no `:`, which the pattern does not match.
+        let dropped_part = prediction_object(|tc| {
+            tc.domains = vec![
+                ("Pfam".to_string(), "PF00080".to_string()),
+                ("0".to_string(), "SSF46934".to_string()),
+                (String::new(), "seg".to_string()),
+            ];
+        });
+        assert_eq!(
+            dropped_part["domains"],
+            json!([
+                {"db": "Pfam", "name": "PF00080"},
+                {"db": "Pfam", "name": "PF00080"},
+                {"db": "Pfam", "name": "PF00080"}
+            ])
+        );
+        let zero_name = prediction_object(|tc| {
+            tc.domains = vec![
+                ("Gene3D".to_string(), "0.10.510.10".to_string()),
+                ("Low_complexity_(Seg)".to_string(), "seg".to_string()),
+            ];
+        });
+        assert_eq!(zero_name["domains"], json!([]));
+        let zero_after_match = prediction_object(|tc| {
+            tc.domains = vec![
+                ("Pfam".to_string(), "PF00080".to_string()),
+                ("Gene3D".to_string(), "0.10.510.10".to_string()),
+                ("Low_complexity_(Seg)".to_string(), "seg".to_string()),
+            ];
+        });
+        assert_eq!(
+            zero_after_match["domains"],
+            json!([{"db": "Pfam", "name": "PF00080"}])
         );
         assert_eq!(
-            parse_prediction_score("tolerated"),
-            (Some("tolerated".into()), None)
+            word_colon_word("a:b:c"),
+            Some(("a".to_string(), "b".to_string()))
         );
+        assert_eq!(word_colon_word(":x"), None);
+        assert_eq!(word_colon_word("x:"), None);
     }
 }

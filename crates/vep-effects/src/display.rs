@@ -774,6 +774,11 @@ pub struct DisplayFields {
     pub protein_total: Option<u32>,
     pub amino_acids: Option<String>,
     pub codons: Option<String>,
+    /// The residues the variant maps to, as `BaseTranscriptVariation`'s
+    /// `translation_start` and `translation_end` give them before the column
+    /// orders them: an insertion's start is one past its end. `None` when
+    /// either end is unmapped.
+    pub translation_span: Option<(i64, i64)>,
 }
 
 impl DisplayFields {
@@ -860,6 +865,7 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
     let (pep_start, pep_end) = (first_start(&pep), last_end(&pep));
     out.protein_position = coords_column(pep_start, pep_end);
     out.protein_total = cached_length(pep_seq);
+    out.translation_span = pep_start.zip(pep_end);
 
     if variant.is_structural {
         return out;

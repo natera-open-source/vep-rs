@@ -17,7 +17,9 @@ its records whenever it carries breakends. `--gzip` writes each shard as
 `<start>-<end>.json.gz`, and `--drop <key>` removes a `variation_effect_feature_cache` entry
 vep-rs can do without; `peptide` is not one of them (the reference peptide's sequence edits
 are read from it, so a cache without it prints a non-ATG start codon's residue as the codon
-translates rather than as VEP's edited `M`) and is refused.
+translates rather than as VEP's edited `M`) and is refused. `--drop-except <file>` names the
+transcripts (one stable id per line) that keep every `--drop` key, so a corpus can carry the
+protein features and prediction matrices of the transcripts its records test and no others.
 
 `--variations <dir>` prunes the variation files beside the transcripts: `<dir>/<chr>/all_vars.gz`
 (an Ensembl VEP cache directory, or a converted cache's `variations/`) is read for every
@@ -41,7 +43,8 @@ chromosome the output holds. `--info-only` writes just that file.
 
 Usage:
     prune_json_cache.py --cache <src-dir> --out <dst-dir> --vcf <a.vcf> [--vcf <b.vcf.gz>]
-        [--flank 5000] [--gzip] [--drop sorted_exons ...] [--perl-info <cache>/info.txt]
+        [--flank 5000] [--gzip] [--drop sorted_exons ...] [--drop-except <ids.txt>]
+        [--perl-info <cache>/info.txt]
         [--variations <dir> [--variation-flank 1] [--exclude-variation <regex> ...]]
         [--species homo_sapiens --assembly GRCh37 --cache-version 116]
     prune_json_cache.py --info-only --out <dst-dir> --perl-info <cache>/info.txt --cache-version 116
@@ -122,7 +125,8 @@ def read_shard(shard: Path) -> list:
         return json.load(fh)
 
 
-def prune(cache: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank: int, compress: bool = False, drop: tuple[str, ...] = ()) -> dict:
+def prune(cache: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank: int, compress: bool = False, drop: tuple[str, ...] = (),
+          drop_except: frozenset[str] = frozenset()) -> dict:
     kept: dict[str, int] = {}
     shards_written = 0
     for chrom, chrom_spans in sorted(spans.items()):
@@ -138,7 +142,7 @@ def prune(cache: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank
                 continue
             for t in survivors:
                 vefc = t.get("variation_effect_feature_cache")
-                if isinstance(vefc, dict):
+                if isinstance(vefc, dict) and t.get("stable_id") not in drop_except:
                     for key in drop:
                         vefc.pop(key, None)
             name = shard.name[: -len(".gz")] if shard.name.endswith(".gz") else shard.name
@@ -525,6 +529,8 @@ def main(argv: list[str] | None = None) -> int:
                          "vep-rs rebuilds sorted_exons from exons, and protein_features and "
                          "protein_function_predictions serve only --domains, --sift and --polyphen; "
                          "peptide is refused")
+    ap.add_argument("--drop-except", type=Path, default=None, metavar="FILE",
+                    help="a file of transcript stable ids, one per line, that keep every --drop key")
     ap.add_argument("--perl-info", type=Path, default=None, help="Ensembl VEP cache info.txt to derive info.json from")
     ap.add_argument("--variations", type=Path, default=None,
                     help="a directory holding <chr>/all_vars.gz: its records within --variation-flank of a record span are "
@@ -613,7 +619,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.variations is not None and not any((args.variations / chrom / "all_vars.gz").is_file() for chrom in spans):
         print(f"ERROR: [prune_json_cache] --variations {args.variations}: no <chr>/all_vars.gz for any chromosome of the records ({', '.join(sorted(spans))})", file=sys.stderr)
         return 2
-    summary = prune(args.cache, args.out, spans, args.flank, args.gzip, tuple(args.drop))
+    drop_except: frozenset[str] = frozenset()
+    if args.drop_except is not None:
+        if not args.drop:
+            print("ERROR: [prune_json_cache] --drop-except needs at least one --drop key to keep", file=sys.stderr)
+            return 2
+        try:
+            id_lines = args.drop_except.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as error:
+            print(f"ERROR: [prune_json_cache] --drop-except {args.drop_except}: {getattr(error, 'strerror', None) or error}", file=sys.stderr)
+            return 2
+        drop_except = frozenset(line.strip() for line in id_lines if line.strip())
+    summary = prune(args.cache, args.out, spans, args.flank, args.gzip, tuple(args.drop), drop_except)
+    if drop_except:
+        summary["drop_except"] = len(drop_except)
     if args.variations is not None:
         summary["variations_per_chromosome"] = prune_variations(
             args.variations, args.out, spans, args.variation_flank, columns, exclude)

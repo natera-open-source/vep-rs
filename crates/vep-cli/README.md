@@ -30,7 +30,7 @@ lines on the pool: `parse_vcf_line_with_max_sv_size` routes the record through `
 structural-variant rules and splits a sequence record into one `InputVariant` per alternate
 allele, alleles trimmed. Each variant then passes through `annotate_one`: `annotate_variant`
 visits every transcript overlapping the variant's span and calls
-`vep_effects::calculate_consequences` on each, a missense consequence gains its SIFT (Sorting
+`vep_effects::calculate_consequences` on each, a single-residue substitution gains its SIFT (Sorting
 Intolerant From Tolerant) and PolyPhen (Polymorphism Phenotyping) predictions, a breakend
 gains its mate's consequences, `variation_matcher` attaches the co-located known variants,
 `sv_source` the known structural variants of `--check_svs`, and a variant on a cached
