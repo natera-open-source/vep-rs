@@ -337,6 +337,11 @@
    "name": "colocated",
    "flags": [
     "--check_existing",
+    "--af",
+    "--af_1kg",
+    "--af_gnomade",
+    "--af_gnomadg",
+    "--max_af",
     "--pubmed",
     "--var_synonyms",
     "--clinvar_somatic_classification",
@@ -349,7 +354,8 @@
    "formats": [
     "default",
     "tab",
-    "vcf"
+    "vcf",
+    "json"
    ],
    "expected_dir": "expected_colocated",
    "covers": [
@@ -358,7 +364,14 @@
     "clin_sig_allele_revcomp_116",
     "clinvar_somatic_classification",
     "pubmed",
-    "var_synonyms"
+    "var_synonyms",
+    "af",
+    "af_1kg",
+    "af_gnomade",
+    "af_gnomadg",
+    "max_af",
+    "max-af-computation",
+    "max-af-over-frequency-columns"
    ]
   }
  ]

@@ -698,6 +698,10 @@ pub struct Args {
     #[arg(help_heading = "Allele Frequencies", long = "af_gnomade")]
     pub af_gnomade: bool,
 
+    /// Add gnomAD exome allele frequencies under the older spelling of --af_gnomade; the two spellings cannot be combined, and this one alone fails on a cache without gnomAD exome data
+    #[arg(help_heading = "Allele Frequencies", long = "af_gnomad")]
+    pub af_gnomad: bool,
+
     /// Add gnomAD genome allele frequencies
     #[arg(help_heading = "Allele Frequencies", long = "af_gnomadg")]
     pub af_gnomadg: bool,
@@ -1196,6 +1200,49 @@ mod tests {
         assert!(
             matches!(err, ParseFailure::Usage(_)),
             "a non-integer is clap's own error: {err}"
+        );
+    }
+
+    /// `--af_gnomad` is Ensembl VEP's older spelling of `--af_gnomade`
+    /// (Config.pm:132), its own flag with the same output fields
+    /// (Constants.pm:120-121) and the same option set, which switches
+    /// `--check_existing` on (:449-452).
+    #[test]
+    fn af_gnomad_parses_as_its_own_flag() {
+        let config = Config::from_argv(["vep", "--af_gnomad"]).unwrap();
+        assert!(config.af_gnomad);
+        assert!(!config.af_gnomade);
+        assert!(config.check_existing);
+        let config = Config::from_argv(["vep", "--af_gnomade"]).unwrap();
+        assert!(config.af_gnomade);
+        assert!(!config.af_gnomad);
+        let plain = Config::from_argv(["vep"]).unwrap();
+        assert!(!plain.af_gnomad && !plain.af_gnomade && !plain.check_existing);
+    }
+
+    /// The two spellings together are refused as `%INCOMPATIBLE` pairs them
+    /// (Config.pm:619), with Ensembl VEP's message.
+    #[test]
+    fn af_gnomad_and_af_gnomade_together_is_an_error() {
+        let err = Config::from_argv(["vep", "--af_gnomade", "--af_gnomad"]).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "ERROR: [cli] Can't use --af_gnomade and --af_gnomad together"
+        );
+    }
+
+    /// `--max_af` parses as a bare flag and switches `--check_existing` on
+    /// (Config.pm:449-452).
+    #[test]
+    fn max_af_flag_parses() {
+        let config = Config::from_argv(["vep", "--max_af"]).unwrap();
+        assert!(config.max_af);
+        assert!(config.check_existing);
+        assert!(!Config::from_argv(["vep"]).unwrap().max_af);
+        let err = Config::from_argv(["vep", "--max_af", "1"]).unwrap_err();
+        assert!(
+            matches!(err, ParseFailure::Usage(_)),
+            "a value is clap's own error: {err}"
         );
     }
 

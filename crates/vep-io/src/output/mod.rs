@@ -4,6 +4,7 @@
 //! Output formatters for VEP results.
 
 pub mod fields;
+pub mod frequency;
 pub mod json;
 pub mod parquet;
 pub mod tab;

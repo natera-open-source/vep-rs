@@ -588,6 +588,9 @@ pub struct Config {
     pub af: bool,
     pub af_1kg: bool,
     pub af_gnomade: bool,
+    /// `--af_gnomad`: the older spelling of `--af_gnomade`, its own flag with
+    /// the same fields (Config.pm:132); refused beside `--af_gnomade` (:619).
+    pub af_gnomad: bool,
     pub af_gnomadg: bool,
     pub max_af: bool,
     pub pubmed: bool,
@@ -954,6 +957,7 @@ impl Config {
             af: on("af"),
             af_1kg: on("af_1kg"),
             af_gnomade: on("af_gnomade"),
+            af_gnomad: on("af_gnomad"),
             af_gnomadg: on("af_gnomadg"),
             max_af: on("max_af"),
             pubmed: on("pubmed"),
@@ -1188,6 +1192,7 @@ mod tests {
             ("af", c.af),
             ("af_1kg", c.af_1kg),
             ("af_gnomade", c.af_gnomade),
+            ("af_gnomad", c.af_gnomad),
             ("af_gnomadg", c.af_gnomadg),
             ("max_af", c.max_af),
             ("pubmed", c.pubmed),

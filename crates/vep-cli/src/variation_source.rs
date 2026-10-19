@@ -31,7 +31,7 @@ use rustc_hash::FxHashMap;
 use vep_builtins::tabix::{BatchQueryResult, TabixAnnotator, TabixConfig, TabixRecord};
 use vep_builtins::PluginError;
 use vep_core::cache_info::{CacheInfo, VariationColumns};
-use vep_core::variation::{CachedVariation, ClinVarDetail};
+use vep_core::variation::{perl_number_string, perl_numeric, CachedVariation, ClinVarDetail};
 
 /// The populations whose values `--old_maf` rewrites
 /// (`BaseCacheVariation.pm:132` at release/116.2).
@@ -625,46 +625,6 @@ fn old_maf_rewrite(value: &str) -> String {
         }
     }
     value.to_string()
-}
-
-/// A string's value as a Perl numeric context reads it: its longest numeric
-/// prefix, 0 when it has none.
-fn perl_numeric(text: &str) -> f64 {
-    let text = text.trim_start();
-    (1..=text.len())
-        .rev()
-        .filter(|&len| text.is_char_boundary(len))
-        .find_map(|len| text[..len].parse::<f64>().ok())
-        .unwrap_or(0.0)
-}
-
-/// A number as Perl stringifies it: `%.15g`.
-pub fn perl_number_string(value: f64) -> String {
-    if value == 0.0 {
-        return "0".to_string();
-    }
-    let scientific = format!("{value:.14e}");
-    let (mantissa, exponent) = scientific.split_once('e').expect("exponent form");
-    let exponent: i32 = exponent.parse().expect("exponent digits");
-    if !(-4..15).contains(&exponent) {
-        let sign = if exponent < 0 { '-' } else { '+' };
-        format!(
-            "{}e{sign}{:02}",
-            trim_fraction_zeros(mantissa),
-            exponent.abs()
-        )
-    } else {
-        let decimals = (14 - exponent).max(0) as usize;
-        trim_fraction_zeros(&format!("{value:.decimals$}"))
-    }
-}
-
-fn trim_fraction_zeros(text: &str) -> String {
-    if text.contains('.') {
-        text.trim_end_matches('0').trim_end_matches('.').to_string()
-    } else {
-        text.to_string()
-    }
 }
 
 #[cfg(test)]
@@ -1472,20 +1432,5 @@ mod tests {
             .records_overlapping("21", 44195140, 44195140)
             .unwrap();
         assert_eq!(records[0].frequencies["AFR"], "0.2852");
-    }
-
-    #[test]
-    fn perl_number_string_prints_fifteen_significant_digits() {
-        assert_eq!(perl_number_string(1.0 - 0.7), "0.3");
-        assert_eq!(perl_number_string(1.0 - 0.9999), "9.9999999999989e-05");
-        assert_eq!(perl_number_string(0.0), "0");
-        assert_eq!(perl_number_string(1.0), "1");
-        assert_eq!(perl_number_string(0.25), "0.25");
-        assert_eq!(perl_number_string(1e-05), "1e-05");
-        assert_eq!(perl_number_string(1e15), "1e+15");
-        assert_eq!(perl_number_string(123456789012345.0), "123456789012345");
-        assert_eq!(perl_numeric("0.7abc"), 0.7);
-        assert_eq!(perl_numeric("abc"), 0.0);
-        assert_eq!(perl_numeric("1e-05"), 1e-05);
     }
 }

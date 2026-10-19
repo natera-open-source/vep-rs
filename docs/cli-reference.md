@@ -167,6 +167,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--af` | bool | false | Add global allele frequency from 1000 Genomes Phase 3 |
 | `--af_1kg` | bool | false | Add continental allele frequencies from 1000 Genomes |
 | `--af_gnomade` | bool | false | Add gnomAD exome allele frequencies |
+| `--af_gnomad` | bool | false | Add gnomAD exome allele frequencies under the older spelling of --af_gnomade; the two spellings cannot be combined, and this one alone fails on a cache without gnomAD exome data |
 | `--af_gnomadg` | bool | false | Add gnomAD genome allele frequencies |
 | `--max_af` | bool | false | Add highest allele frequency across populations |
 | `--pubmed` | bool | false | Add PubMed IDs for co-located variants |

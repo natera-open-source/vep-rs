@@ -23,6 +23,7 @@ use vep_core::variant::InputVariant;
 use crate::error::IoError;
 
 use super::fields::{self, rendered_terms, FieldOptions, DEFAULT_OUTPUT_COLS};
+use super::frequency::{self, FrequencyGroups};
 use super::OutputFormatter;
 
 /// JSON output formatter.
@@ -155,10 +156,11 @@ impl JsonOutputFormatter {
         );
 
         if !first.colocated_variants.is_empty() {
+            let groups = self.options.frequency_groups().for_json();
             let cvs: Vec<Value> = first
                 .colocated_variants
                 .iter()
-                .map(|cv| Value::Object(colocated_variant_object(cv, record)))
+                .map(|cv| Value::Object(colocated_variant_object(cv, record, &groups)))
                 .collect();
             root.insert("colocated_variants".to_string(), Value::Array(cvs));
         }
@@ -492,15 +494,17 @@ const FREQ_FIELDS: &[&str] = &[
 /// `{source: [ids]}` split on `--`, `::` and `,` (:449-471), `clinical_impact` as
 /// the raw string under `clinvar_somatic_classification`, and the frequency
 /// columns replaced by `frequencies`: for each alternate allele of the record
-/// the values of the record allele matched to it, keyed by the lower-cased
-/// population (:419-431). Every value is numberified except the identifiers
-/// (:288, `%NUMBERIFY_EXEMPT`).
+/// the frequencies the text formats would print on that allele's rows under
+/// `groups` (JSON.pm:276-284 builds one frequency hash per allele through
+/// `add_colocated_frequency_data`), `AF` under `af` and each other column
+/// under its lower-cased name (:419-431). Every value is numberified except
+/// the identifiers (:288, `%NUMBERIFY_EXEMPT`).
 ///
-/// `record` is every allele split from the input line; the record's copy of the
-/// variant on allele `a` carries the frequencies matched to `a`.
+/// `record` is every allele split from the input line.
 fn colocated_variant_object(
     cv: &vep_core::variant::ColocatedVariant,
     record: &[&InputVariant],
+    groups: &FrequencyGroups,
 ) -> serde_json::Map<String, Value> {
     let mut obj: IndexMap<String, Value> = IndexMap::new();
     if let Some(chr) = &cv.chr {
@@ -547,25 +551,20 @@ fn colocated_variant_object(
     }
     let mut frequencies: IndexMap<String, Value> = IndexMap::new();
     for allele in record {
-        let copy = allele
-            .colocated_variants
-            .iter()
-            .find(|c| c.id == cv.id && c.start == cv.start && c.end == cv.end);
-        let Some(copy) = copy.filter(|c| !c.frequencies.is_empty()) else {
-            continue;
-        };
+        let row_allele = allele.display_allele();
         let mut by_population: IndexMap<String, Value> = IndexMap::new();
         for population in FREQ_FIELDS {
-            if let Some(&value) = copy.frequencies.get(*population) {
+            if let Some(value) = frequency::reported_frequency(cv, population, &row_allele, groups)
+            {
                 by_population.insert(
                     population.to_lowercase(),
-                    numberify("frequency", value.to_string()),
+                    numberify("frequency", value.text()),
                 );
             }
         }
         if !by_population.is_empty() {
             frequencies.insert(
-                allele.display_allele(),
+                row_allele,
                 Value::Object(serde_json::Map::from_iter(by_population)),
             );
         }
@@ -1261,47 +1260,74 @@ mod tests {
     }
 
     /// `frequencies` nests, under each alternate allele of the record, the
-    /// matched record allele's values keyed by the lower-cased population
-    /// (OutputFactory/JSON.pm:419-431): an allele the variant was not matched to
-    /// has no entry, and a record without matched frequencies carries no
-    /// `frequencies` key.
+    /// values of the record allele matched to it keyed by the lower-cased
+    /// population (OutputFactory/JSON.pm:419-431), whatever the flags
+    /// (:160-163): Ensembl VEP 116.2 writes
+    /// `{"A": {"gnomadg": 0.0002047, "gnomadg_afr": 0, ...}, "G": {"af": 1,
+    /// "afr": 1, ...}}` for `rs1555870136` on `21 7759128 T A,G` of the
+    /// `GRCh38-colocated` corpus with no frequency flag. `AF` prints with four
+    /// decimals and numberified (`0.006789` is `0.0068`,
+    /// OutputFactory.pm:1219; `rs1555830109` on `21 5131441 T C`); an allele
+    /// the variant was not matched to has no entry, and a record without a
+    /// frequency carries no `frequencies` key.
     #[test]
     fn colocated_frequencies_nest_per_allele() {
         let mut a = make_annotated_variant();
         a.allele_index = 0;
         a.record_allele_string_multi = Some("A/G/T".into());
-        let mut g_copy = vep_core::variant::ColocatedVariant {
+        let matched = |input: &str, index: usize| vep_core::variant::MatchedAllele {
+            input_allele: input.to_string(),
+            input_index: index,
+            record_allele: input.to_string(),
+            record_index: index,
+        };
+        let rs1 = vep_core::variant::ColocatedVariant {
             chr: Some("21".into()),
             id: "rs1".into(),
             start: 25000100,
             end: 25000100,
             allele_string: Some("A/G/T".into()),
             strand: 1,
+            matched_alleles: vec![matched("G", 0), matched("T", 1)],
+            frequency_strings: [
+                ("AF", "G:1"),
+                ("gnomADg_AFR", "T:0,G:1"),
+                ("gnomADg", "T:0.0002047,G:0.9994"),
+            ]
+            .into_iter()
+            .map(|(column, value)| (column.to_string(), value.to_string()))
+            .collect(),
             ..Default::default()
         };
-        g_copy
-            .frequencies
-            .insert("gnomADg_AFR".to_string(), 6.875e-5);
-        g_copy.frequencies.insert("AF".to_string(), 1.0);
-        a.colocated_variants = vec![g_copy.clone()];
+        a.colocated_variants = vec![rs1.clone()];
         let mut b = a.clone();
         b.alt_alleles = vec![b"T".to_vec()];
         b.allele_string = "A/T".into();
         b.allele_index = 1;
-        let mut t_copy = g_copy.clone();
-        t_copy.frequencies.clear();
-        t_copy.frequencies.insert("gnomADg_AFR".to_string(), 0.0);
-        b.colocated_variants = vec![t_copy];
         let parsed = fmt(FieldOptions::default()).format_record_value(&[&a, &b]);
         assert_eq!(
             parsed["colocated_variants"][0]["frequencies"],
             json!({
-                "G": {"af": 1, "gnomadg_afr": 6.875e-5},
-                "T": {"gnomadg_afr": 0}
+                "G": {"af": 1, "gnomadg": 0.9994, "gnomadg_afr": 1},
+                "T": {"gnomadg": 0.0002047, "gnomadg_afr": 0}
             })
         );
-        b.colocated_variants[0].frequencies.clear();
-        a.colocated_variants[0].frequencies.clear();
+
+        let mut rounded = rs1.clone();
+        rounded.matched_alleles = vec![matched("G", 0)];
+        rounded.frequency_strings = [("AF".to_string(), "G:0.006789".to_string())].into();
+        a.colocated_variants = vec![rounded.clone()];
+        b.colocated_variants = vec![rounded];
+        let parsed = fmt(FieldOptions::default()).format_record_value(&[&a, &b]);
+        assert_eq!(
+            parsed["colocated_variants"][0]["frequencies"],
+            json!({"G": {"af": 0.0068}})
+        );
+
+        let mut none = rs1;
+        none.frequency_strings.clear();
+        a.colocated_variants = vec![none.clone()];
+        b.colocated_variants = vec![none];
         let parsed = fmt(FieldOptions::default()).format_record_value(&[&a, &b]);
         assert!(parsed["colocated_variants"][0].get("frequencies").is_none());
     }

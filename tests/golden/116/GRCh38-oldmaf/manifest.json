@@ -146,5 +146,28 @@
  "divergences": [],
  "vep_rs_only_tuples": [],
  "divergence_summary": {},
- "vep_rs_only_summary": {}
+ "vep_rs_only_summary": {},
+ "flag_sets": [
+  {
+   "name": "oldmaf",
+   "flags": [
+    "--check_existing",
+    "--af_1kg",
+    "--old_maf"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_oldmaf",
+   "covers": [
+    "old_maf"
+   ]
+  }
+ ]
 }

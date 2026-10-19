@@ -235,6 +235,11 @@
    "flags": [
     "--grch37",
     "--check_existing",
+    "--af",
+    "--af_1kg",
+    "--af_gnomade",
+    "--af_gnomadg",
+    "--max_af",
     "--pubmed",
     "--var_synonyms",
     "--clinvar_somatic_classification",
@@ -247,13 +252,16 @@
    "formats": [
     "default",
     "tab",
-    "vcf"
+    "vcf",
+    "json"
    ],
    "expected_dir": "expected_colocated",
    "covers": [
     "clin-sig-somatic-pheno-columns",
     "pubmed",
-    "var_synonyms"
+    "var_synonyms",
+    "af_gnomade",
+    "af_gnomadg"
    ]
   }
  ]

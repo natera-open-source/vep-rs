@@ -42,6 +42,7 @@ use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex, Transcript
 use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_source::{ReadFailure, VariationSource};
 use vep_builtins::BuiltinRegistry;
+use vep_core::cache_info::CacheInfo;
 use vep_core::consequence::{Consequence, Impact};
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
@@ -601,6 +602,7 @@ impl Runner {
             ga4gh_vrs: c.ga4gh_vrs,
             af: c.af,
             af_1kg: c.af_1kg,
+            af_gnomad: c.af_gnomad,
             af_gnomade: c.af_gnomade,
             af_gnomadg: c.af_gnomadg,
             max_af: c.max_af,
@@ -699,17 +701,23 @@ impl Runner {
 
         if self.config.show_cache_info {
             // The input parser opens before the info prints (BaseRunner.pm:406),
-            // and a named file that is not there is refused with Ensembl VEP's
+            // and its constructor's arguments build the annotation sources first
+            // (Runner.pm:827 evaluates valid_chromosomes before Parser->new), so
+            // the gnomAD check of the cache's columns (CacheDir.pm:188-197) fires
+            // before a named file that is not there is refused with Ensembl VEP's
             // text (Parser.pm:239); the input is otherwise not read.
+            check_gnomad_columns(&self.config, &self.cache.info)?;
             check_input_file_exists(&self.config)?;
             return self.write_cache_info(&mut io::stdout().lock());
         }
 
-        // Runner.pm:117-120, :133-138 and :200-202: init() prints the
-        // configuration's notice, opens the FASTA, then the input through the
-        // parser, then runs post_setup_checks, whose lines print there; the
-        // output opens after.
+        // Runner.pm:117-120, :128, :133-138 and :200-202: init() prints the
+        // configuration's notice, builds the annotation sources (where the
+        // cache's columns are checked, CacheDir.pm:188-197), opens the FASTA,
+        // then the input through the parser, then runs post_setup_checks, whose
+        // lines print there; the output opens after.
         self.print_notices(&self.config.notices);
+        check_gnomad_columns(&self.config, &self.cache.info)?;
         let reference_fasta = open_fasta(&self.config, &self.cache)?;
         let fasta_found = reference_fasta.is_some();
         let OpenedInput {
@@ -806,7 +814,7 @@ impl Runner {
             effects_config.downstream_distance,
         )?);
 
-        let variation_source = open_variation_source(&self.config, cache_dir)?;
+        let variation_source = open_variation_source(&self.config, &self.cache)?;
 
         // Parquet: a TSV intermediate at `<output_file>.tsv.tmp`, converted by a
         // DuckDB subprocess after the write loop.
@@ -1477,19 +1485,22 @@ fn sql_ident(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
-/// The variation source a run reads its co-located variants from: the
-/// resolved cache's variation files under `--check_existing` (which the
-/// frequency and PubMed flags imply, `Config.pm:449-452`), `None` otherwise.
-/// A cache without variation data warns once, as Ensembl VEP would annotate
+/// The variation source a run reads its co-located variants from: `None`
+/// without `--check_existing` (which the frequency and PubMed flags imply,
+/// `Config.pm:449-452`); otherwise the resolved cache's variation files, opened
+/// once [`check_gnomad_columns`] passes on the cache's declared columns. A
+/// cache without variation data warns once, as Ensembl VEP would annotate
 /// silently (`CacheDir.pm:179`), unless `--quiet`.
 pub(crate) fn open_variation_source(
     config: &Config,
-    cache_dir: &str,
+    cache: &ResolvedCache,
 ) -> anyhow::Result<Option<Arc<VariationSource>>> {
     if !config.check_existing {
         return Ok(None);
     }
-    let source = VariationSource::open_json_cache(cache_dir, config.old_maf)
+    check_gnomad_columns(config, &cache.info)?;
+    let cache_dir = cache.dir.as_str();
+    let source = VariationSource::open(Path::new(cache_dir), &cache.info, config.old_maf)
         .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
     match source {
         Some(source) => {
@@ -1503,6 +1514,27 @@ pub(crate) fn open_variation_source(
             Ok(None)
         }
     }
+}
+
+/// Ensembl VEP's refusal of `--af_gnomad` on a cache whose declared variation
+/// columns lack `gnomADe` (CacheDir.pm:179-197): checked for that spelling
+/// alone, under `--check_existing`, on a cache that declares columns, and not
+/// under `--everything`; the files behind the columns are not consulted.
+fn check_gnomad_columns(config: &Config, info: &CacheInfo) -> Result<(), CliError> {
+    let check_applies = config.af_gnomad && config.check_existing && !config.everything;
+    if !check_applies {
+        return Ok(());
+    }
+    let Some(columns) = info.variation_columns() else {
+        return Ok(());
+    };
+    if columns.position("gnomADe").is_none() {
+        return Err(CliError::new(
+            "cache",
+            "gnomAD data is not available in this cache",
+        ));
+    }
+    Ok(())
 }
 
 /// Shared annotation resources passed to each batch.

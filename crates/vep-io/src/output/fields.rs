@@ -23,6 +23,8 @@ use vep_core::terms::Vocabulary;
 use vep_core::variant::{colocated_in_output_order, ColocatedVariant, InputVariant, VariantClass};
 use vep_core::variation::reverse_comp;
 
+use super::frequency::{self, FrequencyGroups};
+
 /// The vep-rs release every output names beside the Ensembl VEP header lines:
 /// `## vep-rs <version>` in the default and tab headers, `##vep-rs=<version>`
 /// in the VCF header and `vep_rs_version` in every JSON object. Every crate of
@@ -91,6 +93,9 @@ pub struct FieldOptions {
     pub ga4gh_vrs: bool,
     pub af: bool,
     pub af_1kg: bool,
+    /// `--af_gnomad`, the older spelling of `--af_gnomade`, its own flag in
+    /// Ensembl VEP with the same fields (Config.pm:132, Constants.pm:120).
+    pub af_gnomad: bool,
     pub af_gnomade: bool,
     pub af_gnomadg: bool,
     pub max_af: bool,
@@ -145,6 +150,20 @@ pub enum ClinSigAllele {
     /// `--clin_sig_allele 0`: the variant's terms whatever the allele (:1125).
     WholeVariant,
 }
+
+/// The gnomAD exome fields of `--af_gnomad` and `--af_gnomade` (Constants.pm:120-121).
+const GNOMADE_FIELDS: &[&str] = &[
+    "gnomADe_AF",
+    "gnomADe_AFR_AF",
+    "gnomADe_AMR_AF",
+    "gnomADe_ASJ_AF",
+    "gnomADe_EAS_AF",
+    "gnomADe_FIN_AF",
+    "gnomADe_MID_AF",
+    "gnomADe_NFE_AF",
+    "gnomADe_REMAINING_AF",
+    "gnomADe_SAS_AF",
+];
 
 /// One flag-driven field group: the flag, its fields, and whether VEP fills
 /// the fields from the variant alone (`VariationFeature_to_output_hash`), so
@@ -218,21 +237,8 @@ const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
         "af_1kg",
         &["AF", "AFR_AF", "AMR_AF", "EAS_AF", "EUR_AF", "SAS_AF"],
     ),
-    group(
-        "af_gnomade",
-        &[
-            "gnomADe_AF",
-            "gnomADe_AFR_AF",
-            "gnomADe_AMR_AF",
-            "gnomADe_ASJ_AF",
-            "gnomADe_EAS_AF",
-            "gnomADe_FIN_AF",
-            "gnomADe_MID_AF",
-            "gnomADe_NFE_AF",
-            "gnomADe_REMAINING_AF",
-            "gnomADe_SAS_AF",
-        ],
-    ),
+    group("af_gnomad", GNOMADE_FIELDS),
+    group("af_gnomade", GNOMADE_FIELDS),
     group(
         "af_gnomadg",
         &[
@@ -306,6 +312,7 @@ impl FieldOptions {
             "ga4gh_vrs" => self.ga4gh_vrs,
             "af" => self.af,
             "af_1kg" => self.af_1kg,
+            "af_gnomad" => self.af_gnomad,
             "af_gnomade" => self.af_gnomade,
             "af_gnomadg" => self.af_gnomadg,
             "max_af" => self.max_af,
@@ -349,6 +356,18 @@ impl FieldOptions {
         FLAG_FIELD_GROUPS
             .iter()
             .any(|g| g.flag != "user" && self.group_active(g.flag))
+    }
+
+    /// The frequency groups the configuration reports.
+    pub fn frequency_groups(&self) -> FrequencyGroups {
+        FrequencyGroups {
+            af: self.af,
+            af_1kg: self.af_1kg,
+            af_gnomad: self.af_gnomad,
+            af_gnomade: self.af_gnomade,
+            af_gnomadg: self.af_gnomadg,
+            max_af: self.max_af,
+        }
     }
 }
 
@@ -859,38 +878,6 @@ pub fn rendered_terms(
     out
 }
 
-fn first_frequency(variant: &InputVariant, pop: &str) -> Option<f64> {
-    for cv in &variant.colocated_variants {
-        if let Some(&f) = cv.frequencies.get(pop) {
-            return Some(f);
-        }
-    }
-    None
-}
-
-/// Frequencies print as VEP prints them (`%.4g`): four significant digits,
-/// trailing zeros trimmed, scientific notation outside [1e-4, 1e4).
-pub fn format_freq(f: f64) -> String {
-    if f == 0.0 || !f.is_finite() {
-        return "0".to_string();
-    }
-    let abs = f.abs();
-    let mut out = if !(0.0001..10_000.0).contains(&abs) {
-        format!("{f:.3e}")
-    } else {
-        let digits_before_decimal = abs.log10().floor() as i32 + 1;
-        let decimals = (4 - digits_before_decimal).max(0) as usize;
-        format!("{f:.decimals$}")
-    };
-    if let Some((mantissa, exponent)) = out.split_once('e') {
-        let trimmed = mantissa.trim_end_matches('0').trim_end_matches('.');
-        out = format!("{trimmed}e{exponent}");
-    } else if out.contains('.') {
-        out = out.trim_end_matches('0').trim_end_matches('.').to_string();
-    }
-    out
-}
-
 /// The version `--transcript_version` and `--gene_version` append to a stable
 /// id as `.<version>` (OutputFactory.pm:1465 and :1469 at release/116.2):
 /// `Some` only for a non-empty id with a known, non-zero version that does not
@@ -1220,45 +1207,23 @@ fn row_field_value(
         | "HIGH_INF_POS"
         | "MOTIF_SCORE_CHANGE"
         | "TRANSCRIPTION_FACTORS" => String::new(),
-        "AF" => first_frequency(variant, "AF")
-            .map(format_freq)
+        "MAX_AF" => frequency::max_af(variant, &options.frequency_groups())
+            .map(|(max, _)| max)
             .unwrap_or_default(),
-        f if f.ends_with("_AF") => {
-            // `AFR_AF` -> population `AFR`; `gnomADe_NFE_AF` -> `gnomADe_NFE`; `gnomADe_AF` -> `gnomADe`.
-            let pop = &f[..f.len() - 3];
-            first_frequency(variant, pop)
-                .map(format_freq)
-                .unwrap_or_default()
-        }
-        "MAX_AF" => {
-            let mut max_af: Option<f64> = None;
-            for cv in &variant.colocated_variants {
-                for value in cv.frequencies.values() {
-                    if max_af.is_none_or(|m| *value > m) {
-                        max_af = Some(*value);
-                    }
-                }
-            }
-            max_af.map(format_freq).unwrap_or_default()
-        }
-        "MAX_AF_POPS" => {
-            let mut max_af: Option<f64> = None;
-            let mut max_pop = String::new();
-            for cv in &variant.colocated_variants {
-                for (pop, value) in &cv.frequencies {
-                    if max_af.is_none_or(|m| *value > m) {
-                        max_af = Some(*value);
-                        max_pop = pop.clone();
-                    }
-                }
-            }
-            max_pop
-        }
-        _ => tc
-            .and_then(|x| x.plugin_data.get(field))
-            .or_else(|| variant.plugin_data.get(field))
-            .cloned()
+        "MAX_AF_POPS" => frequency::max_af(variant, &options.frequency_groups())
+            .map(|(_, populations)| populations.join(list_sep))
             .unwrap_or_default(),
+        _ => match frequency::frequency_column(field) {
+            Some(column) => {
+                frequency::frequency_field(column, variant, &options.frequency_groups())
+                    .join(list_sep)
+            }
+            None => tc
+                .and_then(|x| x.plugin_data.get(field))
+                .or_else(|| variant.plugin_data.get(field))
+                .cloned()
+                .unwrap_or_default(),
+        },
     }
 }
 
@@ -1281,7 +1246,14 @@ pub fn position_column(position: Option<&str>, total: Option<u32>) -> String {
 /// out (OutputFactory/JSON.pm:493-515) and writes the data under
 /// `colocated_variants` instead; a plugin's field is never one of them.
 pub fn colocated_field(field: &str) -> bool {
-    const FREQUENCY_GROUPS: [&str; 5] = ["af", "af_1kg", "af_gnomade", "af_gnomadg", "max_af"];
+    const FREQUENCY_GROUPS: [&str; 6] = [
+        "af",
+        "af_1kg",
+        "af_gnomad",
+        "af_gnomade",
+        "af_gnomadg",
+        "max_af",
+    ];
     matches!(
         field,
         "Existing_variation"
@@ -1694,6 +1666,88 @@ mod tests {
         assert_eq!(&f[..4], &["IMPACT", "DISTANCE", "STRAND", "FLAGS"]);
         assert_eq!(&f[4..7], &["SYMBOL", "SYMBOL_SOURCE", "HGNC_ID"]);
         assert_eq!(f.iter().filter(|x| **x == "AF").count(), 1);
+    }
+
+    /// `--af_gnomad` and `--af_gnomade` name the same ten gnomAD exome fields
+    /// (Constants.pm:120-121); `flag_fields` lists them once when both groups
+    /// are on (OutputFactory.pm:2516-2538 uniquifies; the CLI refuses the pair
+    /// as Config.pm:619 does), no frequency group is filled from the variant
+    /// alone, and the JSON factory stubs every one of them out.
+    #[test]
+    fn gnomad_exome_fields_print_under_either_flag_and_once_under_both() {
+        let gnomad = FieldOptions {
+            af_gnomad: true,
+            ..Default::default()
+        };
+        let gnomade = FieldOptions {
+            af_gnomade: true,
+            ..Default::default()
+        };
+        let both = FieldOptions {
+            af_gnomad: true,
+            af_gnomade: true,
+            ..Default::default()
+        };
+        assert_eq!(&flag_fields(&gnomad)[4..], GNOMADE_FIELDS);
+        assert_eq!(flag_fields(&gnomade), flag_fields(&gnomad));
+        assert_eq!(flag_fields(&both), flag_fields(&gnomad));
+        assert!(!flag_fields(&FieldOptions::default())
+            .iter()
+            .any(|f| f.starts_with("gnomADe_")));
+        for field in GNOMADE_FIELDS {
+            assert!(field_is_produced(field, &gnomad), "{field}");
+            assert!(field_is_produced(field, &gnomade), "{field}");
+            assert!(
+                !field_is_produced(field, &FieldOptions::default()),
+                "{field}"
+            );
+            assert!(colocated_field(field), "{field}");
+        }
+        let every_frequency_group = FieldOptions {
+            af: true,
+            af_1kg: true,
+            af_gnomad: true,
+            af_gnomade: true,
+            af_gnomadg: true,
+            max_af: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            vf_level_flag_fields(&every_frequency_group),
+            Vec::<&str>::new()
+        );
+
+        let mut cv = known("rs1", "A/G", &[("G", "G")], &[], None);
+        cv.frequency_strings = [
+            ("gnomADe".to_string(), "G:0.1234".to_string()),
+            ("gnomADe_NFE".to_string(), "G:0.2".to_string()),
+        ]
+        .into();
+        let alleles = record("A", &["G"], vec![cv]);
+        for options in [&gnomad, &gnomade, &both] {
+            assert_eq!(
+                field_value("gnomADe_AF", &alleles[0], None, options, ","),
+                "0.1234"
+            );
+            assert_eq!(
+                field_value("gnomADe_NFE_AF", &alleles[0], None, options, ","),
+                "0.2"
+            );
+            assert_eq!(
+                field_value("gnomADe_AFR_AF", &alleles[0], None, options, ","),
+                ""
+            );
+        }
+        assert_eq!(
+            field_value(
+                "gnomADe_AF",
+                &alleles[0],
+                None,
+                &FieldOptions::default(),
+                ","
+            ),
+            ""
+        );
     }
 
     /// Under `--shift_3prime 1 --shift_genomic 1` a transcript row's Location moves

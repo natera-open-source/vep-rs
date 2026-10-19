@@ -36,6 +36,11 @@
    "flags": [
     "--grch37",
     "--check_existing",
+    "--af",
+    "--af_1kg",
+    "--af_gnomade",
+    "--af_gnomadg",
+    "--max_af",
     "--pubmed",
     "--var_synonyms",
     "--clinvar_somatic_classification",
@@ -45,9 +50,10 @@
    "input": "variants.vcf",
    "expected_dir": "expected_colocated",
    "sha256": {
-    "default.txt": "f553f1ef86e658688654f79d24bdde12cf2408d53d8b79bab4675e790063fee0",
-    "tab.txt": "024787a5ba615e2b4efdca0af457ba9999fe0af61ec98cdc8f1ebeec52e640e5",
-    "vcf.vcf": "3dde9a2c7efd295f54b59b3f31ec6bdf401db1d96590686c13a3655f0bf6314c"
+    "default.txt": "3a1f534ff1fa9263e62a64a91d3d4447cc192d554b8054eb7e3716bc2a54ee53",
+    "tab.txt": "eab74191baad6ed8d521a829138028ba162a9a06e896fb5705149c6541b365ee",
+    "vcf.vcf": "544716bbca1941b83ce9dd25720042a17f6f97abde79a189ff83463e132055be",
+    "json.jsonl": "c950f17396910b94692e508575dcd711eba4891be5871b32f184e7d2d7405136"
    }
   }
  }

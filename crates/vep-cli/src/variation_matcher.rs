@@ -13,7 +13,6 @@
 //! default format lives here too.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
 
 use vep_core::coordinate::Strand;
 use vep_core::sv_routing::perl_true;
@@ -75,9 +74,8 @@ pub fn annotate_colocated(
             return;
         }
     };
-    let allele = variant.display_allele();
-    let colocated = match_candidates(variant, &allele, candidates, rules);
-    variant.existing_variation = existing_variation_names(&colocated, &allele);
+    let colocated = find_colocated_variants(variant, candidates, rules);
+    variant.existing_variation = existing_variation_names(&colocated, &variant.display_allele());
     variant.colocated_variants = colocated;
 }
 
@@ -104,18 +102,6 @@ pub fn find_colocated_variants(
     candidates: Vec<CachedVariation>,
     rules: &ColocationRules,
 ) -> Vec<ColocatedVariant> {
-    match_candidates(variant, &variant.display_allele(), candidates, rules)
-}
-
-/// [`find_colocated_variants`] with `variant`'s row allele `allele` built by the
-/// caller, which [`annotate_colocated`] needs again for the names; the matched
-/// records' fields move into the result.
-fn match_candidates(
-    variant: &InputVariant,
-    allele: &str,
-    candidates: Vec<CachedVariation>,
-    rules: &ColocationRules,
-) -> Vec<ColocatedVariant> {
     let input = InputAlleles {
         allele_string: variant
             .record_allele_string_multi
@@ -134,7 +120,7 @@ fn match_candidates(
             continue;
         }
         if let Some(matched) = compare_existing(&input, &record, rules) {
-            colocated.push(cached_to_colocated(record, matched, allele));
+            colocated.push(cached_to_colocated(record, matched));
         }
     }
     colocated
@@ -345,13 +331,11 @@ fn reverse_comp_if(flip: bool, sequence: &str) -> Cow<'_, str> {
     }
 }
 
-/// The `ColocatedVariant` of a matched record: the record's fields, the matched
-/// alleles, and the frequencies of the record allele matched to `allele`, this
-/// input allele, when the record was matched by allele.
+/// The `ColocatedVariant` of a matched record: the record's fields, its
+/// frequency columns as the cache wrote them, and the matched alleles.
 fn cached_to_colocated(
     cv: CachedVariation,
     matched_alleles: Vec<MatchedAllele>,
-    allele: &str,
 ) -> ColocatedVariant {
     let comma_list = |value: Option<String>| -> Vec<String> {
         value
@@ -359,7 +343,7 @@ fn cached_to_colocated(
             .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
             .unwrap_or_default()
     };
-    let mut colocated = ColocatedVariant {
+    ColocatedVariant {
         chr: cv.chr,
         id: cv.variation_name,
         start: cv.start,
@@ -369,39 +353,12 @@ fn cached_to_colocated(
         somatic: cv.somatic != 0,
         clin_sig: comma_list(cv.clin_sig),
         phenotype: cv.phenotype_or_disease != 0,
-        frequencies: HashMap::new(),
         pubmed: comma_list(cv.pubmed),
         matched_alleles,
         frequency_strings: cv.frequencies,
         clinvar: cv.clinvar,
         var_synonyms: cv.var_synonyms,
-    };
-    if let Some(record_allele) = colocated.record_allele_for(allele) {
-        colocated.frequencies = colocated
-            .frequency_strings
-            .iter()
-            .filter_map(|(pop, freq_str)| {
-                extract_allele_frequency(freq_str, record_allele).map(|f| (pop.clone(), f))
-            })
-            .collect();
     }
-    colocated
-}
-
-/// Parse a frequency string like "T:0.003,C:0.997" or "T:0.003" and extract
-/// the frequency for the given allele.
-///
-/// Returns `None` if the allele is not found in the frequency string.
-pub fn extract_allele_frequency(freq_str: &str, allele: &str) -> Option<f64> {
-    for entry in freq_str.split(',') {
-        let entry = entry.trim();
-        if let Some((allele_part, freq_part)) = entry.split_once(':') {
-            if allele_part == allele {
-                return freq_part.parse::<f64>().ok();
-            }
-        }
-    }
-    None
 }
 
 /// Render `value` as decimal ASCII into `buf`, returning the populated slice.
@@ -508,38 +465,6 @@ fn write_user_group(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_extract_allele_frequency_single() {
-        assert_eq!(extract_allele_frequency("T:0.003", "T"), Some(0.003));
-        assert_eq!(extract_allele_frequency("T:0.003", "A"), None);
-    }
-
-    #[test]
-    fn test_extract_allele_frequency_multiple() {
-        assert_eq!(
-            extract_allele_frequency("T:0.003,C:0.997", "T"),
-            Some(0.003)
-        );
-        assert_eq!(
-            extract_allele_frequency("T:0.003,C:0.997", "C"),
-            Some(0.997)
-        );
-        assert_eq!(extract_allele_frequency("T:0.003,C:0.997", "G"), None);
-    }
-
-    #[test]
-    fn test_extract_allele_frequency_zero() {
-        assert_eq!(extract_allele_frequency("T:0", "T"), Some(0.0));
-    }
-
-    #[test]
-    fn test_extract_allele_frequency_scientific() {
-        assert_eq!(
-            extract_allele_frequency("T:1.886e-05", "T"),
-            Some(1.886e-05)
-        );
-    }
 
     /// A cache record as `parse_record` builds it from the release-116 GRCh38
     /// chromosome 21 cache (`chr variation_name failed somatic start end allele_string
@@ -858,7 +783,6 @@ mod tests {
         assert_eq!(names(&colocated), ["rs775128082"]);
         assert!(colocated[0].matched_alleles.is_empty());
         assert!(colocated[0].applies_to_allele("G"));
-        assert!(colocated[0].frequencies.is_empty());
         assert!(existing("21\t40000000\t.\tA\tG\t.\t.\t.", &candidates, &DEFAULT).is_empty());
     }
 
@@ -928,22 +852,23 @@ mod tests {
         assert_eq!(colocated[0].allele_string.as_deref(), Some("A/G"));
     }
 
-    /// The frequencies attached to a match are the matched record allele's: the
-    /// record `A/G/T` with `AF T:0.1,G:0.3` gives the `G` input 0.3 and the `T`
-    /// input 0.1; a record matched on its span alone gives none.
+    /// A match carries the record's frequency columns as the cache wrote them
+    /// and the alleles matched, from which the renderer reads each row's
+    /// allele: the record `A/G/T` with `AF T:0.1,G:0.3` matches the `G` and `T`
+    /// inputs to their own record alleles; a record matched on its span alone
+    /// carries the columns and no matched allele.
     #[test]
-    fn frequencies_follow_the_matched_record_allele() {
+    fn matches_carry_the_frequency_columns_and_the_matched_alleles() {
         let mut rec = record("rs1", 100, 100, "A/G/T");
         rec.frequencies
             .insert("AF".to_string(), "T:0.1,G:0.3".to_string());
         let candidates = [rec];
         let alleles = parsed("21\t100\t.\tA\tG,T\t.\t.\t.");
         let for_g = find_colocated_variants(&alleles[0], candidates.to_vec(), &DEFAULT);
-        assert_eq!(for_g[0].frequencies.get("AF"), Some(&0.3));
         assert_eq!(for_g[0].record_allele_for("G"), Some("G"));
         assert_eq!(for_g[0].record_allele_for("T"), Some("T"));
         let for_t = find_colocated_variants(&alleles[1], candidates.to_vec(), &DEFAULT);
-        assert_eq!(for_t[0].frequencies.get("AF"), Some(&0.1));
+        assert_eq!(for_t[0].matched_alleles, for_g[0].matched_alleles);
         assert_eq!(
             for_t[0].frequency_strings.get("AF").map(String::as_str),
             Some("T:0.1,G:0.3")
@@ -956,7 +881,11 @@ mod tests {
                 ..DEFAULT
             },
         );
-        assert!(span_only[0].frequencies.is_empty());
+        assert!(span_only[0].matched_alleles.is_empty());
+        assert_eq!(
+            span_only[0].frequency_strings.get("AF").map(String::as_str),
+            Some("T:0.1,G:0.3")
+        );
     }
 
     /// `trim_sequences` as `Utils/Sequence.pm:965-1038` trims: `AT/ATT` from the
@@ -1394,14 +1323,19 @@ mod tests {
     #[test]
     fn optional_groups_follow_vep_order() {
         let mut variant = InputVariant::new("21".into(), 100, 101, b"AC".to_vec(), b"-".to_vec());
-        let mut frequencies = std::collections::HashMap::new();
-        frequencies.insert("AF".to_string(), 0.003);
         variant.colocated_variants.push(ColocatedVariant {
             id: "rs123".to_string(),
+            allele_string: Some("AC/-".to_string()),
             clin_sig: vec!["pathogenic".to_string(), "likely_pathogenic".to_string()],
             somatic: true,
             phenotype: false,
-            frequencies,
+            matched_alleles: vec![MatchedAllele {
+                input_allele: "-".to_string(),
+                input_index: 0,
+                record_allele: "-".to_string(),
+                record_index: 0,
+            }],
+            frequency_strings: [("AF".to_string(), "-:0.003".to_string())].into(),
             ..Default::default()
         });
         let tc = TranscriptConsequence {
@@ -1422,7 +1356,7 @@ mod tests {
         };
         assert_eq!(
             extra(&variant, Some(&tc), &options),
-            "IMPACT=HIGH;STRAND=1;VARIANT_CLASS=deletion;SIFT=deleterious(0.01);HGVSc=ENST00000366667.4:c.428C>T;HGVSp=ENSP00000355627.3:p.Ala143%3D;AF=0.003;CLIN_SIG=pathogenic,likely_pathogenic;SOMATIC=1"
+            "IMPACT=HIGH;STRAND=1;VARIANT_CLASS=deletion;SIFT=deleterious(0.01);HGVSc=ENST00000366667.4:c.428C>T;HGVSp=ENSP00000355627.3:p.Ala143%3D;AF=0.0030;CLIN_SIG=pathogenic,likely_pathogenic;SOMATIC=1"
         );
     }
 

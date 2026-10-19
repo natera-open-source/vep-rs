@@ -880,14 +880,6 @@ mod tests {
     }
 
     #[test]
-    fn test_frequency_formatting() {
-        assert_eq!(fields::format_freq(0.0), "0");
-        assert_eq!(fields::format_freq(0.1254321), "0.1254");
-        assert_eq!(fields::format_freq(12.34567), "12.35");
-        assert_eq!(fields::format_freq(0.00001886), "1.886e-5");
-    }
-
-    #[test]
     fn multi_allelic_record_is_one_line_with_every_allele_in_csq() {
         let formatter = VcfOutputFormatter::default();
         let mut a = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());

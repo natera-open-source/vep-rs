@@ -1108,9 +1108,6 @@ pub struct ColocatedVariant {
     pub clin_sig: Vec<String>,
     /// Phenotype/disease association flag.
     pub phenotype: bool,
-    /// The frequencies of the record allele matched to this input allele, by
-    /// population column; empty when the record matched on its span alone.
-    pub frequencies: std::collections::HashMap<String, f64>,
     /// PubMed IDs.
     pub pubmed: Vec<String>,
     /// The input alleles the record's alleles were matched to, as

@@ -315,6 +315,7 @@
     "--exclude_null_alleles",
     "--clin_sig_allele",
     "0",
+    "--af_gnomad",
     "--failed",
     "1"
    ],
@@ -330,7 +331,8 @@
    "expected_dir": "expected_colocated-alt",
    "covers": [
     "clin_sig_allele",
-    "clin-sig-somatic-pheno-columns"
+    "clin-sig-somatic-pheno-columns",
+    "af_gnomad"
    ]
   }
  ]

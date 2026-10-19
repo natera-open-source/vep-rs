@@ -279,7 +279,7 @@ impl Annotator {
             config.transcript_index_impl,
             TranscriptSet::from_config(config),
         )?;
-        let variation_source = crate::runner::open_variation_source(config, &cache.dir)?;
+        let variation_source = crate::runner::open_variation_source(config, &cache)?;
 
         Self::new(
             AnnotationResources {

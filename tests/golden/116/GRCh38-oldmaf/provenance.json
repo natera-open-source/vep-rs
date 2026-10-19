@@ -30,5 +30,22 @@
    "all_vars.gz.csi": "a184bf4686e17c71a597d37a6ce9b5e78a3ab6cc51bb98d4003c64899ae0c01f"
   },
   "slice_check": "Ensembl VEP 116.2 run on this slice and on the full cache with --check_existing --af_1kg --old_maf wrote identical default-format output for every record"
+ },
+ "flag_sets": {
+  "oldmaf": {
+   "flags": [
+    "--check_existing",
+    "--af_1kg",
+    "--old_maf"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_oldmaf",
+   "sha256": {
+    "default.txt": "2870046aefcd2fc84d34ddd6f5c11cd0e6ea23f14b786f6094dd8a6981d71b29",
+    "tab.txt": "3b592e577892849ecc4daf30a40a87da2e4f101e67b3643d55414ec88f4499f5",
+    "vcf.vcf": "087d2b79a042338fce06f1678e1b681ca3a531061a517b7062952db8fa4299bf",
+    "json.jsonl": "eca1a39ede48fab0407c438e83d5140987f67980ccbe514f208fbce533e1ab44"
+   }
+  }
  }
 }

@@ -35,6 +35,11 @@
   "colocated": {
    "flags": [
     "--check_existing",
+    "--af",
+    "--af_1kg",
+    "--af_gnomade",
+    "--af_gnomadg",
+    "--max_af",
     "--pubmed",
     "--var_synonyms",
     "--clinvar_somatic_classification",
@@ -44,9 +49,10 @@
    "input": "variants.vcf",
    "expected_dir": "expected_colocated",
    "sha256": {
-    "default.txt": "6c1ed6c88f1defc068aa1a97251f688abe67e855aa91920110bcb3e68932b726",
-    "tab.txt": "79fdc3d2897eb4b35d5cc3a3d279b33513c61f7017195cee3720507475021664",
-    "vcf.vcf": "9fbae1546db8c9b59b42bde647e05478c29742fcabdc2158aef128b09a64c7b2"
+    "default.txt": "42ff731331cd7e764116b476781b0aa195d723891a61e682f25f86e339cb9d0c",
+    "tab.txt": "157aefc391c5c30a19ec87e016474e7cc257fe98e12f51d68f4df2928841f3c6",
+    "vcf.vcf": "2feb077e6cfde992b1f2154ef96e516db94ae37917ca3da7fcb3820fc07b78dc",
+    "json.jsonl": "24046b572cd782ff554fe584981e274e0439ddc33b4554d155a4203fe382812e"
    }
   }
  }

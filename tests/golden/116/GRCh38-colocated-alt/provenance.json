@@ -39,16 +39,17 @@
     "--exclude_null_alleles",
     "--clin_sig_allele",
     "0",
+    "--af_gnomad",
     "--failed",
     "1"
    ],
    "input": "variants.vcf",
    "expected_dir": "expected_colocated-alt",
    "sha256": {
-    "default.txt": "8d84cacc85e3e1f7a0e54f19640612d425f4005c74ef95789575bef253391869",
-    "tab.txt": "04df453ce6f365c887ac99c59fd7f82d99409530c2ba95e06bb04a7571bdc7f8",
-    "vcf.vcf": "8e589cbe8dad0d1b43613b19b41ee5bf4f1f6be3c346e299bb0de9d9129de246",
-    "json.jsonl": "a3d34b9dcd9b7c7df95b4ac4e2745c49e3063f41f7ab3410d6cc1c69ae85440a"
+    "default.txt": "fbf2874a3671f1391b22e920db131e9ad0cbd9c7808076e827f7474ff734ce2a",
+    "tab.txt": "aaff92c40864ca56280a010f6ff5abe4a59db8c4da38a10984d94212e62a93aa",
+    "vcf.vcf": "2a5183ade579c6b9859f5925908440eecec478fc0866f00ecd6ca54168c04468",
+    "json.jsonl": "3ba0858b855587004562b916080100f477c8f113760f1e14b37d15a11445bbe5"
    }
   }
  }
