@@ -18,7 +18,9 @@
 #                      <assembly, lower-cased> under --json-cache-dir; an optional
 #                      =<dir> suffix names the candidate's JSON cache instead
 #   fasta              - or an indexed FASTA given to both engines (its .fai beside it; a
-#                      .gz is decompressed once per run, as the golden tests do)
+#                      .gz is decompressed once per run, as the golden tests do, into a
+#                      directory of its own under the work tree, so two sources that
+#                      decompress to one file name never share a copy)
 #   flags              whitespace-separated flags appended verbatim to both engines, or -;
 #                      a --nearest case mounts the Ensembl cache writable, since Ensembl
 #                      VEP writes transcript_gene_tss.txt there on its first run (a scan
@@ -36,8 +38,13 @@
 #   perl_mode          offline | database
 #   reference_release  the Ensembl VEP release the image carries, recorded per report
 #   masks              compare_vep_formats.py --masks, applied from the manifest.json
-#                      beside the input, or -
-#   floors             compare_vep_formats.py --floors (COL=MIN,...), or -
+#                      beside the input, or -; the comparator's built-in classes
+#                      (regulatory_feature_rows, order_only) need no manifest
+#   floors             compare_vep_formats.py --floors (COL=MIN,...), or -; a floor on a
+#                      column the json format has no row count for (a record-level column,
+#                      Feature_type, Extra) is not applicable there: the report.json entry
+#                      of that format lists it under floors_not_applicable, and a case whose
+#                      formats give such a floor no text format to be checked in is red
 #   field_pairs        compare_vep_formats.py --field-pairs (COL=EXPECTED=>ACTUAL;...), or -
 #
 # THE ENGINES. Ensembl VEP runs in Docker, once per case and output format, since a run
@@ -355,6 +362,8 @@ done
 # The case table
 COLUMNS="case tier input cache fasta flags formats perl_image perl_mode reference_release masks floors field_pairs"
 OUTPUT_FORMATS="default tab vcf json parquet"
+# The comparator's own divergence classes, applied without a manifest.
+BUILTIN_MASKS="regulatory_feature_rows order_only"
 # Flags the runner sets from the table's own columns and its options, with the aliases
 # Ensembl VEP's Config.pm and the candidate accept for them; a flags cell naming one would
 # give an engine the flag twice, or move the input, the server or the assembly behind the
@@ -593,12 +602,11 @@ pf_error() {
 	echo "ERROR: [feature_oracle] $C_ID: $*" >&2
 	PREFLIGHT_FAILED=1
 }
-# FASTA_SOURCES: every FASTA path, one per line; FASTA_NAMES: the decompressed name of
-# every .gz source, which share one directory under the work tree. TSS_SLICES: the cache
+# FASTA_SOURCES: every FASTA path, one per line, in first-use order; a .gz source is
+# decompressed into fasta/<its line number>/ under the work tree. TSS_SLICES: the cache
 # slice of every offline --nearest case whose first Ensembl VEP run writes
 # transcript_gene_tss.txt, one line per case.
 FASTA_SOURCES=""
-FASTA_NAMES=""
 TSS_SLICES=""
 IMAGES=""
 CACHE_RE='^[0-9]+_[A-Za-z0-9]+$'
@@ -612,16 +620,8 @@ while IFS= read -r line; do
 		[[ -f "$C_FASTA_PATH" ]] || pf_error "FASTA not found: $C_FASTA_PATH"
 		fai="${C_FASTA_PATH%.gz}.fai"
 		[[ -f "$fai" ]] || pf_error "FASTA index not found: $fai"
-		if ! in_lines "$FASTA_SOURCES" "$C_FASTA_PATH"; then
-			FASTA_SOURCES="${FASTA_SOURCES}${C_FASTA_PATH}
+		in_lines "$FASTA_SOURCES" "$C_FASTA_PATH" || FASTA_SOURCES="${FASTA_SOURCES}${C_FASTA_PATH}
 "
-			if [[ "$C_FASTA_PATH" == *.gz ]]; then
-				name=$(basename "${C_FASTA_PATH%.gz}")
-				in_lines "$FASTA_NAMES" "$name" && pf_error "FASTA $C_FASTA_PATH decompresses to $name, the name another case's FASTA decompresses to; the cases would read one copy"
-				FASTA_NAMES="${FASTA_NAMES}${name}
-"
-			fi
-		fi
 	fi
 	[[ "$C_CACHE" =~ $CACHE_RE ]] || pf_error "cache '$C_CACHE' is not <version>_<assembly>"
 	[[ -d "$C_JSON_CACHE/transcripts" ]] || pf_error "candidate JSON cache has no transcripts/: $C_JSON_CACHE"
@@ -666,8 +666,21 @@ while IFS= read -r line; do
 			stored_warnings_file "$C_ID" >/dev/null || pf_error "stored reference lacks default.txt_warnings.txt[.gz] under $REFERENCE_DIR/$C_ID/expected/ (an empty file states no warnings)"
 		fi
 	fi
-	for f in $C_MASKS; do
-		[[ "$f" == "-" || -n "$C_MANIFEST" ]] || pf_error "masks '$C_MASKS' apply from a manifest.json beside the input, and none is there"
+	# In a comparator cell `-` is the whole cell or nothing: no mask class, floor or field pair
+	# begins with a dash, and a cell that does is read by the comparator's option parser as
+	# another option.
+	for column_cell in "masks:$C_MASKS" "floors:$C_FLOORS" "field_pairs:$C_FIELD_PAIRS"; do
+		column="${column_cell%%:*}"
+		value="${column_cell#*:}"
+		items=$(printf '%s' "$value" | tr ',;' '\n\n')
+		if [[ "$value" != "-" && "$items" =~ (^|$'\n')- ]]; then
+			pf_error "$column '$value' has an item beginning with -; write - alone for no value"
+		fi
+	done
+	for f in $(printf '%s' "$C_MASKS" | tr ',' ' '); do
+		if [[ "$f" != "-" && -z "$C_MANIFEST" ]] && ! has_word "$BUILTIN_MASKS" "$f"; then
+			pf_error "masks names '$f', which applies from a manifest.json beside the input, and none is there (the built-in classes are $BUILTIN_MASKS)"
+		fi
 	done
 done <<<"$SELECTED"
 [[ "$PREFLIGHT_FAILED" -eq 0 ]] || die "preflight failed; nothing ran"
@@ -769,13 +782,21 @@ fi
 log "feature_oracle tier=$TIER cases=$N_SELECTED candidates=$N_CANDIDATES table=$CASES dry_run=$DRY_RUN"
 log "out=$OUT_DIR work=$WORK_DIR reference_dir=${REFERENCE_DIR:-none} perl_cache=$PERL_CACHE_DIR json_cache=$JSON_CACHE_DIR"
 
+# decompressed_fasta <.gz source>: where the run decompresses the source: a directory of
+# its own, numbered by the source's line in FASTA_SOURCES, so two sources of one file name
+# never share a copy.
+decompressed_fasta() {
+	local n
+	n=$(printf '%s' "$FASTA_SOURCES" | grep -nFx -- "$1" | cut -d: -f1)
+	printf '%s/fasta/%s/%s' "$WORK_DIR" "$n" "$(basename "${1%.gz}")"
+}
 # The FASTA an engine reads: a .gz source decompressed into the work tree at the start of
 # every run (never a copy an earlier run left) with its index beside it, otherwise the
 # source itself.
 case_fasta() {
 	case "$C_FASTA_PATH" in
 	"") ;;
-	*.gz) printf '%s/fasta/%s' "$WORK_DIR" "$(basename "${C_FASTA_PATH%.gz}")" ;;
+	*.gz) decompressed_fasta "$C_FASTA_PATH" ;;
 	*) printf '%s' "$C_FASTA_PATH" ;;
 	esac
 }
@@ -845,8 +866,8 @@ trap on_signal INT TERM
 while IFS= read -r src; do
 	case "$src" in
 	*.gz)
-		mkdir -p "$WORK_DIR/fasta"
-		target="$WORK_DIR/fasta/$(basename "${src%.gz}")"
+		target=$(decompressed_fasta "$src")
+		mkdir -p "$(dirname "$target")"
 		gzip -dc "$src" >"$target.tmp" || die "cannot decompress $src"
 		mv -f "$target.tmp" "$target"
 		cp -f "${src%.gz}.fai" "$target.fai"
@@ -965,6 +986,8 @@ while i < len(args):
         entry = {"verdict": "red" if sub_reasons else "green", "report": path, "reasons": sub_reasons}
         if "one_sided" in sub:
             entry["one_sided"] = sub["one_sided"]
+        if sub.get("floors_not_applicable"):
+            entry["floors_not_applicable"] = sub["floors_not_applicable"]
         record["formats"][fmt] = entry
         reasons.extend(f"{fmt}: {r}" for r in sub_reasons)
     elif key == "format_error":
@@ -995,6 +1018,15 @@ while i < len(args):
 # docker reports.
 if not record.get("perl_image_digest") and record.get("reference_provenance_image"):
     record["perl_image_digest"] = record["reference_provenance_image"]
+# A floor a format could not count is met only where a text format of the same case
+# counted it; a case that compared no text format leaves it unchecked.
+text_compared = any(
+    fmt in ("default", "tab", "vcf", "parquet") and "report" in entry for fmt, entry in record["formats"].items()
+)
+if not text_compared:
+    for fmt, entry in sorted(record["formats"].items()):
+        for name in entry.get("floors_not_applicable", []):
+            reasons.append(f"{fmt}: floor {name} is not applicable to {fmt} and no text format of the case checked it")
 record["verdict"] = "red" if reasons else "green"
 record["reasons"] = reasons
 with open(report_path, "w", encoding="utf-8") as fh:

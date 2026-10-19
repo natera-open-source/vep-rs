@@ -5,6 +5,7 @@ are the records the reference annotated, its consequence rows and the records it
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -452,8 +453,9 @@ def test_floor_failure(texts):
     assert met["verdict"] == "green"
     assert met["columns"]["IMPACT"] == {
         "expected_populated": ROWS, "actual_populated": ROWS, "differing": 0, "pairs_accepted": 0,
-        "nearest_accepted": 0, "floor": ROWS, "floor_met": True,
+        "nearest_accepted": 0, "order_only": 0, "floor": ROWS, "floor_met": True,
     }
+    assert met["floors_not_applicable"] == []
     empty = cvf.compare_entries(expected, actual, no_documented(), floors={"HGVSc": 1})
     assert empty["verdict"] == "red"
     assert empty["reasons"] == ["floor HGVSc=1: expected populated 0, actual populated 0"]
@@ -1028,3 +1030,290 @@ def test_floors_masks_and_field_pairs_parse():
     assert cvf.parse_field_pairs(["HGVSp=p.Arg97%3D=>p.Arg97="]) == {"HGVSp": {("p.Arg97%3D", "p.Arg97=")}}
     with pytest.raises(cvf.ComparatorError):
         cvf.parse_field_pairs(["HGVSp=a:b"])
+
+
+PROTEIN_FEATURES = HERE.parent.parent / "tests" / "golden" / "116" / "GRCh38-protein-features"
+FREQFILTER = HERE.parent.parent / "tests" / "golden" / "116" / "GRCh38-freqfilter"
+# Rows of the protein-features reference whose DOMAINS carries two or more items that differ,
+# so reversing the items changes the text: 118 of the 119 multi-item rows in the default
+# format, and 116 JSON consequence objects once the JSON re-split has mapped the items.
+REORDERABLE_DOMAINS_ROWS = 118
+REORDERABLE_DOMAINS_OBJECTS = 116
+
+
+def reversed_lists(text: str, column: str) -> str:
+    """``text`` with the items of every ``column=`` list of the Extra text reversed."""
+
+    def flip(m):
+        return column + "=" + ",".join(reversed(m.group(1).split(",")))
+
+    return re.sub(rf"{column}=([^;\t\n]+)", flip, text)
+
+
+def test_order_only_class_accepts_domains_in_any_order_in_every_format():
+    """golden-GRCh38-protein-features under ``--masks order_only``: a candidate printing the
+    protein features of a row in another order (a native cache orders them by feature id, the
+    Ensembl cache by its array) agrees as a multiset, counted per column as ``order_only``;
+    without the class the same rows are differing fields, and a reorder of any other column,
+    or a repeated item, stays red under it."""
+    inputs = cvf.input_records(PROTEIN_FEATURES / "variants.vcf")
+    default = cvf.read_text(PROTEIN_FEATURES / "expected" / "default.txt.gz")
+    expected = cvf.parse_default(default)
+    actual = cvf.parse_default(reversed_lists(default, "DOMAINS"))
+    plain = cvf.compare_entries(expected, actual, no_documented())
+    assert plain["verdict"] == "red"
+    assert plain["columns"]["DOMAINS"]["differing"] == REORDERABLE_DOMAINS_ROWS
+    assert plain["columns"]["Extra"]["differing"] == REORDERABLE_DOMAINS_ROWS
+    documented = no_documented()
+    accepted = cvf.compare_entries(expected, actual, documented, order_only=cvf.order_only_fields("default"))
+    assert accepted["verdict"] == "green"
+    assert accepted["columns"]["DOMAINS"]["differing"] == 0
+    assert accepted["columns"]["DOMAINS"]["order_only"] == REORDERABLE_DOMAINS_ROWS
+    assert accepted["columns"]["Extra"]["order_only"] == REORDERABLE_DOMAINS_ROWS
+    assert documented.applied == {cvf.ORDER_ONLY: 2 * REORDERABLE_DOMAINS_ROWS}
+    example = accepted["columns"]["DOMAINS"]["order_only_examples"][0]
+    assert example.startswith("21:14216193|G|ENST00000400577|Transcript: expected 'PDB-ENSP_mappings:2ywk.A,")
+    assert "got 'AFDB-ENSP_mappings:AF-P57052-F1,PDB-ENSP_mappings:2ywk.A'" in example
+
+    # The tab format's DOMAINS column, the same rule.
+    tab = cvf.read_text(PROTEIN_FEATURES / "expected" / "tab.txt.gz")
+    domains_column = cvf.header_columns(tab).index("DOMAINS")
+    tab_rows = []
+    for row in data_lines(tab):
+        cells = row.split("\t")
+        cells[domains_column] = ",".join(reversed(cells[domains_column].split(",")))
+        tab_rows.append("\t".join(cells))
+    tab_report = cvf.compare_entries(
+        cvf.parse_tab(tab), cvf.parse_tab(rebuild(tab, tab_rows)), no_documented(),
+        order_only=cvf.order_only_fields("tab"),
+    )
+    assert tab_report["verdict"] == "green"
+    assert tab_report["columns"]["DOMAINS"]["order_only"] == REORDERABLE_DOMAINS_ROWS
+
+    # The VCF format joins the items with & (VCF.pm:391).
+    vcf = cvf.read_text(PROTEIN_FEATURES / "expected" / "vcf.vcf.gz")
+    vcf_rows = data_lines(vcf)
+    flipped = []
+    for row in vcf_rows:
+        prefix, marker, csq = row.partition(";CSQ=")
+        if not csq:
+            prefix, marker, csq = row.partition("CSQ=")
+        chunks = []
+        for chunk in csq.split(","):
+            vals = chunk.split("|")
+            vals[-1] = "&".join(reversed(vals[-1].split("&")))
+            chunks.append("|".join(vals))
+        flipped.append(prefix + marker + ",".join(chunks))
+    vcf_expected = cvf.parse_vcf(vcf, inputs)
+    vcf_actual = cvf.parse_vcf(rebuild(vcf, flipped), inputs)
+    assert cvf.compare_entries(vcf_expected, vcf_actual, no_documented())["columns"]["DOMAINS"]["differing"] == REORDERABLE_DOMAINS_ROWS
+    vcf_report = cvf.compare_entries(vcf_expected, vcf_actual, no_documented(), order_only=cvf.order_only_fields("vcf"))
+    assert vcf_report["verdict"] == "green"
+    assert vcf_report["columns"]["DOMAINS"]["order_only"] == REORDERABLE_DOMAINS_ROWS
+
+    # The JSON format's domains array (JSON.pm:363-371), the objects compared as a multiset.
+    json_text = cvf.read_text(PROTEIN_FEATURES / "expected" / "json.jsonl.gz")
+    objects = []
+    for line in cvf.text_lines(json_text):
+        if not line:
+            continue
+        obj = json.loads(line)
+        for tc in obj.get("transcript_consequences", []):
+            if "domains" in tc:
+                tc["domains"] = list(reversed(tc["domains"]))
+        objects.append(json.dumps(obj))
+    json_expected = cvf.parse_json(json_text, inputs)
+    json_actual = cvf.parse_json("\n".join(objects) + "\n", inputs)
+    assert cvf.compare_entries(json_expected, json_actual, no_documented())["columns"]["domains"]["differing"] == REORDERABLE_DOMAINS_OBJECTS
+    json_report = cvf.compare_entries(json_expected, json_actual, no_documented(), order_only=cvf.order_only_fields("json"))
+    assert json_report["verdict"] == "green"
+    assert json_report["columns"]["domains"]["order_only"] == REORDERABLE_DOMAINS_OBJECTS
+    assert cvf.order_only_fields("json") == {"domains": cvf.JSON_ARRAY}
+
+    # Another column's order, or a repeated item, is not an order-only agreement.
+    rows = data_lines(default)
+    target = next(i for i, r in enumerate(rows) if "DOMAINS=PDB-ENSP_mappings:2ywk.A,AFDB-ENSP_mappings:AF-P57052-F1" in r)
+    rows[target] = rows[target].replace(
+        "DOMAINS=PDB-ENSP_mappings:2ywk.A,AFDB-ENSP_mappings:AF-P57052-F1",
+        "DOMAINS=PDB-ENSP_mappings:2ywk.A,PDB-ENSP_mappings:2ywk.A,AFDB-ENSP_mappings:AF-P57052-F1",
+    )
+    repeated = cvf.compare_entries(expected, cvf.parse_default(rebuild(default, rows)), no_documented(), order_only=cvf.order_only_fields("default"))
+    assert repeated["verdict"] == "red"
+    assert repeated["columns"]["DOMAINS"]["differing"] == 1
+    rows = data_lines(default)
+    rows[target] = rows[target].replace("\tmissense_variant\t", "\tsplice_region_variant,missense_variant\t", 1)
+    other = cvf.compare_entries(expected, cvf.parse_default(rebuild(default, rows)), no_documented(), order_only=cvf.order_only_fields("default"))
+    assert other["verdict"] == "red"
+    assert other["columns"]["Consequence"]["differing"] == 1
+    assert other["columns"]["Consequence"]["order_only"] == 0
+
+
+def test_order_only_class_covers_freqs_and_is_reported_through_compare_files(tmp_path):
+    """FREQS is printed in hash order (OutputFactory.pm:1152-1153), so a two-allele record's
+    entries agree as a multiset under the class; ``compare_files`` applies the class from
+    ``--masks`` and reports it applied or unused, with the other formats untouched."""
+    default = cvf.read_text(FREQFILTER / "expected_freqfilter" / "default.txt.gz")
+    assert "FREQS=AF:C:0.0007987" in default
+    reference = default.replace("FREQS=AF:C:0.0007987", "FREQS=AF:C:0.0007987,AF:T:0.5")
+    candidate = default.replace("FREQS=AF:C:0.0007987", "FREQS=AF:T:0.5,AF:C:0.0007987")
+    reference_path = tmp_path / "reference.txt"
+    reference_path.write_text(reference, encoding="utf-8")
+    candidate_path = tmp_path / "candidate.txt"
+    candidate_path.write_text(candidate, encoding="utf-8")
+    rows = default.count("FREQS=AF:C:0.0007987")
+
+    plain = cvf.compare_files("default", reference_path, candidate_path, None, no_documented(), set(), {}, {}, 4)
+    assert plain["verdict"] == "red"
+    assert plain["columns"]["FREQS"]["differing"] == rows
+    documented = no_documented()
+    report = cvf.compare_files("default", reference_path, candidate_path, None, documented, {cvf.ORDER_ONLY}, {}, {}, 4)
+    assert report["verdict"] == "green"
+    assert report["columns"]["FREQS"]["order_only"] == rows
+    assert report["columns"]["Extra"]["order_only"] == rows
+    assert report["masks"] == {
+        "requested": [cvf.ORDER_ONLY], "applied": {cvf.ORDER_ONLY: 2 * rows}, "unused": [], "available": {},
+    }
+    # The class is unused on a candidate that prints every list in the reference's order.
+    same = cvf.compare_files("default", reference_path, reference_path, None, no_documented(), {cvf.ORDER_ONLY}, {}, {}, 4)
+    assert same["verdict"] == "green"
+    assert same["masks"]["applied"] == {} and same["masks"]["unused"] == [cvf.ORDER_ONLY]
+    assert same["columns"]["FREQS"]["order_only"] == 0
+    # The record-level FREQS has no JSON key, so the JSON format compares no such field.
+    assert "FREQS" in cvf.RECORD_LEVEL_COLUMNS
+    assert cvf.same_items("a,b", "b,a", ",") and not cvf.same_items("a,b", "a,a,b", ",")
+    assert cvf.same_items("-", "-", ",") and not cvf.same_items("-", "a", ",")
+    assert cvf.same_items('{"db":"x","name":"1"},{"db":"y","name":"2"}', '{"db":"y","name":"2"},{"db":"x","name":"1"}', cvf.JSON_ARRAY)
+    assert not cvf.same_items("a,b", "b,a", cvf.JSON_ARRAY)
+
+
+def test_json_floors_count_under_the_json_keys(tmp_path):
+    """A floor names the default-format column in every format: in JSON it is counted under
+    the column's JSON key (DOMAINS under domains, ENSP under protein_id, SIFT and PolyPhen
+    under either of their two keys, so ``--sift s`` counts the bare score), and a
+    record-level column, ``Feature_type`` (the consequence list's name, no key of an entry)
+    or ``Extra`` (the text formats' container) has no row count there and is reported as not
+    applicable instead of red; the text formats count the column itself."""
+    assert cvf.json_floor_fields("DOMAINS") == ("domains",)
+    assert cvf.json_floor_fields("ENSP") == ("protein_id",)
+    assert cvf.json_floor_fields("SYMBOL") == ("gene_symbol",)
+    assert cvf.json_floor_fields("SIFT") == ("sift_prediction", "sift_score")
+    assert cvf.json_floor_fields("PolyPhen") == ("polyphen_prediction", "polyphen_score")
+    assert cvf.json_floor_fields("Protein_position") == ("protein_start", "protein_end")
+    assert cvf.json_floor_fields("Feature") == ("transcript_id", "regulatory_feature_id", "motif_feature_id")
+    for column in ("Existing_variation", "AF", "gnomADe_NFE_AF", "MAX_AF", "FREQS", "CLIN_SIG", "Feature_type", "Extra"):
+        assert cvf.json_floor_fields(column) is None
+
+    inputs = cvf.input_records(PROTEIN_FEATURES / "variants.vcf")
+    floors = {"DOMAINS": 157, "SIFT": 219, "PolyPhen": 163, "ENSP": 451, "Existing_variation": 1, "Feature_type": 1}
+    json_path = PROTEIN_FEATURES / "expected" / "json.jsonl.gz"
+    report = cvf.compare_files("json", json_path, json_path, inputs, no_documented(), set(), floors, {}, 4)
+    assert report["verdict"] == "green"
+    assert report["reasons"] == []
+    assert report["floors_not_applicable"] == ["Existing_variation", "Feature_type"]
+    assert report["columns"]["Existing_variation"] == {
+        "expected_populated": 0, "actual_populated": 0, "differing": 0, "pairs_accepted": 0,
+        "nearest_accepted": 0, "order_only": 0, "floor": 1, "floor_met": None, "floor_note": cvf.FLOOR_NOT_APPLICABLE,
+    }
+    assert report["columns"]["Feature_type"]["floor_met"] is None
+    assert report["columns"]["Feature_type"]["floor_note"] == cvf.FLOOR_NOT_APPLICABLE
+    for column, fields in (("DOMAINS", ["domains"]), ("SIFT", ["sift_prediction", "sift_score"]),
+                           ("PolyPhen", ["polyphen_prediction", "polyphen_score"]), ("ENSP", ["protein_id"])):
+        col = report["columns"][column]
+        assert col["floor_met"] is True
+        assert col["floor_fields"] == fields
+        assert col["expected_populated"] == col["actual_populated"] == floors[column]
+    # The same counts the default format reaches under the column names themselves.
+    default_path = PROTEIN_FEATURES / "expected" / "default.txt.gz"
+    text_report = cvf.compare_files("default", default_path, default_path, None, no_documented(), set(), floors, {}, 4)
+    assert text_report["floors_not_applicable"] == []
+    assert text_report["reasons"] == ["floor Existing_variation=1: expected populated 0, actual populated 0"]
+    assert text_report["columns"]["Feature_type"]["floor_met"] is True
+    assert "floor_fields" not in text_report["columns"]["DOMAINS"]
+    assert text_report["columns"]["DOMAINS"]["expected_populated"] == 157
+
+    # A floor the JSON counts fall short of is red, as in the text formats.
+    short = cvf.compare_files("json", json_path, json_path, inputs, no_documented(), set(), {"DOMAINS": 158}, {}, 4)
+    assert short["verdict"] == "red"
+    assert short["reasons"] == ["floor DOMAINS=158: expected populated 157, actual populated 157"]
+
+    # --sift s prints the bare score, which the JSON format carries as sift_score alone.
+    score_corpus = HERE.parent.parent / "tests" / "golden" / "116" / "GRCh38-sift-score"
+    score_inputs = cvf.input_records(score_corpus / "variants.vcf")
+    score_json = score_corpus / "expected" / "json.jsonl.gz"
+    score_report = cvf.compare_files("json", score_json, score_json, score_inputs, no_documented(), set(), {"SIFT": 84, "PolyPhen": 58}, {}, 4)
+    assert score_report["verdict"] == "green"
+    assert score_report["columns"]["SIFT"]["expected_populated"] == 84
+    assert score_report["columns"]["sift_score"]["expected_populated"] == 84
+    assert "sift_prediction" not in score_report["columns"]
+
+    # Through the command line, the floors of a fixture row on its JSON format.
+    out = tmp_path / "json.json"
+    code = cvf.main([
+        "--format", "json", "--expected", str(json_path), "--actual", str(json_path), "--input",
+        str(PROTEIN_FEATURES / "variants.vcf"), "--floors", "DOMAINS=157,SIFT=219,PolyPhen=163,ENSP=451,Existing_variation=1",
+        "--masks", cvf.ORDER_ONLY, "--report", str(out),
+    ])
+    assert code == 0
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert written["floors_not_applicable"] == ["Existing_variation"]
+    assert written["masks"]["unused"] == [cvf.ORDER_ONLY]
+
+
+def json_floor_counts_match_the_default(corpus: Path) -> dict[str, tuple[int, int]]:
+    """Per default-format column of a corpus reference with a JSON floor mapping, the
+    default format's populated count beside the JSON format's floor count."""
+    inputs = cvf.input_records(corpus / "variants.vcf")
+    default = cvf.parse_default(cvf.read_text(corpus / "expected" / "default.txt.gz"))
+    objects = cvf.parse_json(cvf.read_text(corpus / "expected" / "json.jsonl.gz"), inputs)
+    default_counts = cvf.populated_counts(default)
+    out = {}
+    for column in sorted({name for e in default for name in e.fields}):
+        fields = cvf.json_floor_fields(column)
+        if fields is not None:
+            out[column] = (default_counts.get(column, 0), cvf.populated_under(objects, fields))
+    return out
+
+
+def test_json_floor_counts_equal_the_default_counts_on_every_mapped_column():
+    """On the GRCh38 and GRCh38-everything references of Ensembl VEP 116.2, every default
+    column with a JSON floor mapping counts the same under its JSON fields as in the default
+    format: the position keys survive a ``?`` start (JSON.pm:340-341 keep the end), the
+    record objects' own ``strand`` is not counted, a ``domains`` array left empty by the
+    re-split still marks a populated row, and a present key is a populated column."""
+    corpus = HERE.parent.parent / "tests" / "golden" / "116" / "GRCh38"
+    grch38 = json_floor_counts_match_the_default(corpus)
+    assert grch38["cDNA_position"] == (8879, 8879)
+    assert grch38["CDS_position"] == (5907, 5907)
+    assert grch38["STRAND"] == (20621, 20621)
+    mismatched = {column: counts for column, counts in grch38.items() if counts[0] != counts[1]}
+    assert mismatched == {}
+    # A floor spelled with the JSON key itself is counted the same way, over the
+    # consequence entries alone: the record objects carry their own strand.
+    inputs = cvf.input_records(corpus / "variants.vcf")
+    json_path = corpus / "expected" / "json.jsonl.gz"
+    report = cvf.compare_files("json", json_path, json_path, inputs, no_documented(), set(), {"strand": 20621}, {}, 4)
+    assert report["columns"]["strand"]["floor_fields"] == ["strand"]
+    assert report["columns"]["strand"]["expected_populated"] == 20621 and report["verdict"] == "green"
+    everything = json_floor_counts_match_the_default(HERE.parent.parent / "tests" / "golden" / "116" / "GRCh38-everything")
+    assert len(everything) == 40
+    assert everything["DOMAINS"] == (2055, 2055)
+    assert everything["Protein_position"] == (2734, 2734)
+    mismatched = {column: counts for column, counts in everything.items() if counts[0] != counts[1]}
+    assert mismatched == {}
+
+
+def test_self_parity_sets_freqs_aside_as_a_record_level_column():
+    """FREQS is a record-level column the JSON format never carries (JSON.pm:493-495), so
+    the self-parity comparison of one engine's formats lists it under the columns not
+    compared against JSON instead of reporting the missing key as a difference."""
+    expected = FREQFILTER / "expected_freqfilter"
+    report = cvf.SelfParity(
+        cvf.read_text(expected / "default.txt.gz"),
+        cvf.read_text(expected / "tab.txt.gz"),
+        cvf.read_text(expected / "vcf.vcf.gz"),
+        cvf.read_text(expected / "json.jsonl.gz"),
+        inputs=cvf.input_records(FREQFILTER / "variants.vcf"),
+    ).run()
+    assert report["verdict"] == "green", report["reasons"]
+    assert "FREQS" in report["not_compared"]["default_record_level"]
+    assert "FREQS" in report["pairs"]["vcf"]["columns_compared"]

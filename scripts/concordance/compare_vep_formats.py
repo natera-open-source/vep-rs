@@ -37,9 +37,21 @@ Masks, floors and field pairs (comparison mode):
   ``--regulatory``, which ``--everything`` switches on), recomputes the
   ``most_severe_consequence`` of each JSON record that lost a row from the rows that remain,
   and in ``--warnings`` mode requires the candidate's notice about the exclusion and leaves
-  it out of the comparison.
+  it out of the comparison. The class ``order_only`` is built in too: the set-valued columns
+  ``DOMAINS`` and ``FREQS`` (and the ``Extra`` text carrying them) agree when their items
+  agree as a multiset in any order, since Ensembl VEP prints the protein features in the
+  order of the cache's array and the frequencies in hash order; every such agreement is
+  counted per column as ``order_only`` in the report, never passed as equal.
 * ``--floors COL=MIN,...``: the populated (present and not ``-``) count of column ``COL``
-  must reach ``MIN`` on both sides.
+  must reach ``MIN`` on both sides. ``COL`` is the default-format name in every format; in
+  the JSON format the count is taken under the column's JSON key (lower-cased and renamed
+  as the JSON factory renames it, SIFT and PolyPhen under either of their two keys, a
+  position under either of its start and end keys), and a column with no row count there
+  has no floor there: a record-level column, which the JSON format carries once per record
+  or not at all, ``Feature_type``, which names the consequence list and is no key of its
+  entries, and ``Extra``, the text formats' container of the keyed fields; the report lists
+  such a column under ``floors_not_applicable`` and the text formats of the same case check
+  its floor.
 * ``--field-pairs 'COL=EXPECTED=>ACTUAL;...'`` (repeatable): a value pair accepted as
   agreeing wherever it occurs in ``COL``.
 * ``--nearest-sites <json_cache>``: ``NEAREST`` values (and the JSON ``nearest``) agree
@@ -130,7 +142,10 @@ JSON_CONSEQUENCE_LISTS = (
 # ``##vep-rs=<version>``) fall with the other ``##`` lines the text parsers skip.
 JSON_IDENTITY_KEY = "vep_rs_version"
 # Columns the default format prints on every row of a record while the JSON format
-# carries them once per record, in colocated_variants or at the top level.
+# carries them once per record, in colocated_variants or at the top level, or not at all:
+# the JSON factory's add_colocated_variant_info returns its hash unchanged (JSON.pm:493-495),
+# so FREQS (OutputFactory.pm:1149-1163) has no JSON key, and JSON.pm:419-426 copies the AF
+# keys alone out of the per-allele hash that carries MAX_AF and MAX_AF_POPS.
 RECORD_LEVEL_COLUMNS = {
     "Uploaded_variation",
     "Location",
@@ -143,11 +158,27 @@ RECORD_LEVEL_COLUMNS = {
     "PHENO",
     "PUBMED",
     "VAR_SYNONYMS",
+    "FREQS",
     "MAX_AF",
     "MAX_AF_POPS",
     "CLINVAR_SOMATIC_CLASSIFICATION",
 }
 RECORD_LEVEL_COLUMN_RE = re.compile(r"(^|_)AF$")
+# The built-in class under which a set-valued column agrees when its items agree as a
+# multiset: Ensembl VEP prints DOMAINS in the order of the cache's protein_features array
+# (ensembl-variation BaseTranscriptVariation.pm:634-643 at release/116, the database's row
+# order when the cache was built) and FREQS in hash order (OutputFactory.pm:1152-1153), so
+# neither order carries meaning.
+ORDER_ONLY = "order_only"
+ORDER_ONLY_COLUMNS = ("DOMAINS", "FREQS")
+# The marker ``order_only_fields`` gives a JSON array field in place of a list separator.
+JSON_ARRAY = "json"
+# The note of a floor the JSON format cannot count.
+FLOOR_NOT_APPLICABLE = (
+    "a column the JSON format has no row count for (a record-level column is carried once "
+    "per record or not at all, Feature_type names the consequence list, Extra is the text "
+    "formats' container), so the floor is checked in the text formats of the same case"
+)
 # Config.pm:501-508 at release/116.2: --vcf implies --symbol, --biotype and --numbers, so a
 # VCF run carries these columns where a default run without those flags does not.
 VCF_IMPLIED_COLUMNS = {"SYMBOL", "SYMBOL_SOURCE", "HGNC_ID", "BIOTYPE", "EXON", "INTRON"}
@@ -826,33 +857,113 @@ class NearestSites:
         return all(self.sites.get(a, set()) & expected_sites for a in actual_values)
 
 
-def extra_nearest_accepted(expected: str, actual: str, sites: NearestSites) -> bool:
-    """Whether ``actual`` is ``expected`` with an agreeing ``NEAREST`` value substituted on its
-    ``key=value`` pairs, the keys and their order kept."""
+def extra_accepted(expected: str, actual: str, accept: Callable[[str, str, str], bool]) -> bool:
+    """Whether ``actual`` is ``expected`` with at least one differing ``key=value`` pair that
+    ``accept(key, expected value, actual value)`` allows substituted, the keys and their
+    order kept; a difference in the order of the pairs is not accepted."""
     ap = extra_pairs(actual)
-    if "NEAREST" not in ap:
-        return False
     rewritten = []
+    substituted = False
     for kv in expected.split(";"):
         k, sep, v = kv.partition("=")
-        if sep and k == "NEAREST" and sites.agree(v, ap[k]):
+        if sep and k in ap and v != ap[k] and accept(k, v, ap[k]):
             kv = f"{k}={ap[k]}"
+            substituted = True
         rewritten.append(kv)
-    return ";".join(rewritten) == actual
+    return substituted and ";".join(rewritten) == actual
+
+
+def extra_nearest_accepted(expected: str, actual: str, sites: NearestSites) -> bool:
+    """``extra_accepted`` for an agreeing ``NEAREST`` value."""
+    return extra_accepted(expected, actual, lambda k, v, a: k == "NEAREST" and sites.agree(v, a))
 
 
 def extra_pairs_accepted(expected: str, actual: str, field_pairs: dict[str, set[tuple[str, str]]]) -> bool:
-    """Whether ``actual`` is ``expected`` with an accepted field pair substituted on its
-    ``key=value`` pairs, the keys and their order kept; a difference in order alone is
-    not accepted."""
-    ap = extra_pairs(actual)
-    rewritten = []
-    for kv in expected.split(";"):
-        k, sep, v = kv.partition("=")
-        if sep and k in ap and (v, ap[k]) in field_pairs.get(k, ()):
-            kv = f"{k}={ap[k]}"
-        rewritten.append(kv)
-    return ";".join(rewritten) == actual
+    """``extra_accepted`` for the accepted field pairs."""
+    return extra_accepted(expected, actual, lambda k, v, a: (v, a) in field_pairs.get(k, ()))
+
+
+def extra_order_only_accepted(expected: str, actual: str, order_only: dict[str, str]) -> bool:
+    """``extra_accepted`` for the set-valued columns, their items agreeing as a multiset."""
+    return extra_accepted(expected, actual, lambda k, v, a: k in order_only and same_items(v, a, order_only[k]))
+
+
+def list_items(value: str, separator: str) -> list[str] | None:
+    """The items of a list-valued field: the ``separator``-joined parts of a text format's
+    value, or the elements of the JSON array ``json_scalar`` joined (``JSON_ARRAY``), each
+    as its compact text; ``None`` when the value is not such a list."""
+    if separator != JSON_ARRAY:
+        return value.split(separator)
+    try:
+        items = json.loads(f"[{value}]")
+    except ValueError:
+        return None
+    return [json_compact(item) for item in items]
+
+
+def same_items(expected: str, actual: str, separator: str) -> bool:
+    """Whether two list-valued field texts carry the same items the same number of times,
+    in any order; an empty or absent value agrees with itself alone."""
+    if expected in ("", "-", ABSENT) or actual in ("", "-", ABSENT):
+        return expected == actual
+    expected_items = list_items(expected, separator)
+    actual_items = list_items(actual, separator)
+    if expected_items is None or actual_items is None:
+        return False
+    return Counter(expected_items) == Counter(actual_items)
+
+
+def order_only_fields(fmt: str) -> dict[str, str]:
+    """The fields the ``order_only`` class compares as multisets in ``fmt``, each with its
+    list separator: ``,`` in the default and tab formats (``convert_arrayref``,
+    Utils.pm:185-198), ``&`` in VCF (VCF.pm:391), and in JSON the array under the column's
+    JSON key (FREQS has none)."""
+    if fmt == "vcf":
+        return dict.fromkeys(ORDER_ONLY_COLUMNS, "&")
+    if fmt == "json":
+        return {
+            JSON_RENAME.get(c.lower(), c.lower()): JSON_ARRAY
+            for c in ORDER_ONLY_COLUMNS
+            if c not in RECORD_LEVEL_COLUMNS
+        }
+    return dict.fromkeys(ORDER_ONLY_COLUMNS, ",")
+
+
+def json_floor_fields(column: str) -> tuple[str, ...] | None:
+    """The JSON fields a floor on the default-format ``column`` is counted under
+    (JSON.pm:311-385): the name lower-cased and renamed as ``%RENAME_KEYS`` renames it,
+    ``Feature`` under the per-kind id, SIFT and PolyPhen under either of their two keys, a
+    position under either of its start and end keys (JSON.pm:340-341 delete the start when
+    it is ``?`` and keep the end, which the default format prints as ``?-N``); ``None`` for
+    a column with no row count in the JSON format: a record-level column, ``Feature_type``,
+    which chooses the consequence list an entry joins and is deleted from the entry
+    (JSON.pm:348-350), and ``Extra``, the text formats' container of the keyed fields
+    (VEP_output.pm:114-133)."""
+    key = column.lower()
+    if column in RECORD_LEVEL_COLUMNS or RECORD_LEVEL_COLUMN_RE.search(column) or key in ("feature_type", "extra"):
+        return None
+    if key == "feature":
+        return tuple(f"{kind}_id" for _, kind in JSON_CONSEQUENCE_LISTS if kind != "intergenic")
+    pm = POSITION_RE.match(column)
+    if pm:
+        coord = pm.group(1).lower()
+        return (f"{coord}_start", f"{coord}_end")
+    if key in ("sift", "polyphen"):
+        return (f"{key}_prediction", f"{key}_score")
+    return (JSON_RENAME.get(key, key),)
+
+
+def populated_under(entries: list[Entry], fields: Collection[str]) -> int:
+    """The consequence entries (never a record's own entry, which repeats ``strand`` and
+    the coordinates) carrying any of ``fields`` with a value other than ``-``: the JSON
+    factory drops a key whose default-format value is ``-`` and keeps the allele keys
+    (JSON.pm:327), so a present key is a populated column, an empty ``domains`` array
+    included (JSON.pm:363-371 keep the key when no item re-splits)."""
+    return sum(
+        1
+        for e in entries
+        if not e.key.endswith("|record") and any(f in e.fields and e.fields[f] != "-" for f in fields)
+    )
 
 
 def compare_entries(
@@ -864,13 +975,22 @@ def compare_entries(
     check_order: bool = True,
     examples: int = EXAMPLES_PER_GROUP,
     nearest_sites: NearestSites | None = None,
+    order_only: dict[str, str] | None = None,
+    floor_fields: dict[str, tuple[str, ...] | None] | None = None,
 ) -> dict:
     """Compares expected against actual entries and returns the format's report: the
     one-sided key counts, every field with its differing count and examples grouped by the
     expected consequence set, the stale documented divergences, the order of the shared
-    keys, the floors, and the ``verdict``."""
+    keys, the floors, and the ``verdict``. ``order_only`` names the fields compared as
+    multisets with their list separators (``order_only_fields``), each agreement counted in
+    ``documented.applied`` under the class; ``floor_fields`` maps every floor's column to the
+    fields ``populated_under`` counts it by in a format whose keys differ from the column
+    names, ``None`` for a column the format has no row count for; a format without the map
+    counts the column itself over every entry."""
     floors = floors or {}
     field_pairs = field_pairs or {}
+    order_only = order_only or {}
+    floor_fields = floor_fields or {}
     actual_by_key = {e.key: e for e in actual}
     expected_by_key = {e.key: e for e in expected}
 
@@ -880,6 +1000,8 @@ def compare_entries(
     mismatch_totals: Counter[str] = Counter()
     pairs_accepted: Counter[str] = Counter()
     nearest_accepted: Counter[str] = Counter()
+    order_only_accepted: Counter[str] = Counter()
+    order_only_examples: dict[str, list[str]] = defaultdict(list)
     stale: list[str] = []
     compared = skipped_documented = annotated_without_reference = 0
 
@@ -937,6 +1059,14 @@ def compare_entries(
             ):
                 nearest_accepted[name] += 1
                 continue
+            if (name in order_only and same_items(ev, av, order_only[name])) or (
+                name == "Extra" and order_only and extra_order_only_accepted(ev, av, order_only)
+            ):
+                order_only_accepted[name] += 1
+                documented.applied[ORDER_ONLY] += 1
+                if len(order_only_examples[name]) < examples:
+                    order_only_examples[name].append(f"{e.key}: expected {ev!r}, got {av!r}")
+                continue
             mismatch_totals[name] += 1
             group = mismatches[name][e.consequence]
             if len(group) < examples:
@@ -965,25 +1095,40 @@ def compare_entries(
     expected_populated = populated_counts(expected)
     actual_populated = populated_counts(actual)
     columns: dict[str, dict] = {}
+    floors_not_applicable: list[str] = []
     for name in sorted(set(expected_populated) | set(actual_populated) | set(mismatch_totals) | set(floors)):
         expected_count = expected_populated.get(name, 0)
         actual_count = actual_populated.get(name, 0)
         floor = floors.get(name)
-        if floor is None:
-            floor_met = None
-        else:
-            floor_met = expected_count >= floor and actual_count >= floor
+        floor_met = None
+        floor_detail: dict[str, str | list[str]] = {}
+        if floor is not None:
+            counted = floor_fields.get(name)
+            if name not in floor_fields:
+                floor_met = expected_count >= floor and actual_count >= floor
+            elif counted is None:
+                floors_not_applicable.append(name)
+                floor_detail["floor_note"] = FLOOR_NOT_APPLICABLE
+            else:
+                expected_count = populated_under(expected, counted)
+                actual_count = populated_under(actual, counted)
+                floor_detail["floor_fields"] = list(counted)
+                floor_met = expected_count >= floor and actual_count >= floor
         col = {
             "expected_populated": expected_count,
             "actual_populated": actual_count,
             "differing": mismatch_totals.get(name, 0),
             "pairs_accepted": pairs_accepted.get(name, 0),
             "nearest_accepted": nearest_accepted.get(name, 0),
+            "order_only": order_only_accepted.get(name, 0),
             "floor": floor,
             "floor_met": floor_met,
+            **floor_detail,
         }
         if name in mismatches:
             col["examples"] = dict(mismatches[name])
+        if name in order_only_examples:
+            col["order_only_examples"] = order_only_examples[name]
         columns[name] = col
 
     reasons: list[str] = []
@@ -999,7 +1144,7 @@ def compare_entries(
         reasons.append(f"order differs at shared position {order['first_divergence']}")
     for name in sorted(floors):
         col = columns[name]
-        if not col["floor_met"]:
+        if col["floor_met"] is False:
             reasons.append(
                 f"floor {name}={floors[name]}: expected populated {col['expected_populated']}, "
                 f"actual populated {col['actual_populated']}"
@@ -1028,6 +1173,7 @@ def compare_entries(
         "missing": grouped(missing),
         "unexpected": grouped(unexpected),
         "columns": columns,
+        "floors_not_applicable": floors_not_applicable,
         "stale_divergences": stale[:20],
         "order": order,
     }
@@ -1096,6 +1242,8 @@ def compare_files(
         check_order=fmt != "parquet",
         examples=examples,
         nearest_sites=nearest_sites,
+        order_only=order_only_fields(fmt) if ORDER_ONLY in masks else None,
+        floor_fields={name: json_floor_fields(name) for name in floors} if fmt == "json" else None,
     )
     report.update(
         {
@@ -1788,9 +1936,15 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--masks",
         help="comma-separated intended-divergence classes applied: the manifest's, and the built-in "
-        "regulatory_feature_rows, the one class --warnings mode takes",
+        "regulatory_feature_rows (the one class --warnings mode takes) and order_only (DOMAINS and "
+        "FREQS compared as multisets)",
     )
-    ap.add_argument("--floors", help="COL=MIN,... minimum populated counts per column, both sides")
+    ap.add_argument(
+        "--floors",
+        help="COL=MIN,... minimum populated counts per default-format column, both sides; in JSON "
+        "counted under the column's JSON key, a column with no row count there (record-level, "
+        "Feature_type, Extra) reported as not applicable",
+    )
     ap.add_argument("--field-pairs", action="append", help="COL=EXPECTED=>ACTUAL[;...] value pairs accepted as equal")
     ap.add_argument(
         "--nearest-sites", type=Path, help="the candidate JSON cache whose start sites settle NEAREST values"

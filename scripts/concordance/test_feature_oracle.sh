@@ -258,9 +258,9 @@ T2="$TMP/t2.tsv"
 dry "$T2" "$TMP/d3.out"
 pc=$(cmd_after 'DRY-RUN c-fa perl default' "$TMP/d3.out")
 cc=$(cmd_after 'DRY-RUN c-fa stub default' "$TMP/d3.out")
-[[ "$pc" == *"-v $TMP/never/work/fasta/reference.fa:/work/ref.fa:ro -v $TMP/never/work/fasta/reference.fa.fai:/work/ref.fa.fai:ro"* && "$pc" == *"--hgvs --fasta /work/ref.fa"* ]] &&
+[[ "$pc" == *"-v $TMP/never/work/fasta/1/reference.fa:/work/ref.fa:ro -v $TMP/never/work/fasta/1/reference.fa.fai:/work/ref.fa.fai:ro"* && "$pc" == *"--hgvs --fasta /work/ref.fa"* ]] &&
     ok "Ensembl VEP mounts the decompressed FASTA and its index and gets --fasta" || bad "Ensembl VEP FASTA: $pc"
-[[ "$cc" == *"--hgvs --fasta $TMP/never/work/fasta/reference.fa" ]] && ok "the candidate gets --fasta with the decompressed FASTA" || bad "candidate FASTA: $cc"
+[[ "$cc" == *"--hgvs --fasta $TMP/never/work/fasta/1/reference.fa" ]] && ok "the candidate gets --fasta with the decompressed FASTA" || bad "candidate FASTA: $cc"
 
 echo
 echo "SELECTION: --tier and --only"
@@ -369,7 +369,35 @@ expect_error "a header without the tier column is an error" "header lacks the co
     echo "$HEADER"
     row c-masks fixture "$DATA/caches/vep-rs/grch38/transcripts" "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 some_class - -
 } >"$T3"
-expect_error "masks without a manifest.json beside the input is an error" "masks 'some_class' apply from a manifest.json" "$T3"
+expect_error "masks without a manifest.json beside the input is an error" "masks names 'some_class', which applies from a manifest.json beside the input, and none is there (the built-in classes are regulatory_feature_rows order_only)" "$T3"
+mkdir -p "$DATA/nomanifest"
+cp "$CORPUS/variants.vcf" "$DATA/nomanifest/variants.vcf"
+{
+    echo "$HEADER"
+    row c-builtin fixture nomanifest/variants.vcf "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 order_only,regulatory_feature_rows - -
+    row c-mixed fixture nomanifest/variants.vcf "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 order_only,some_class - -
+} >"$T3"
+dry "$T3" "$TMP/d-builtin.out" --only c-builtin
+rc=$?
+bc=$(cmd_second 'DRY-RUN c-builtin stub default' "$TMP/d-builtin.out")
+[[ "$rc" -eq 0 && "$bc" == *'--masks order_only\,regulatory_feature_rows' && "$bc" != *"--manifest"* ]] && ok "the comparator's built-in classes need no manifest beside the input" || bad "built-in masks: rc=$rc $bc"
+expect_error "a manifest class beside a built-in one still needs the manifest" "masks names 'some_class', which applies from a manifest.json" "$T3" --only c-mixed
+{
+    echo "$HEADER"
+    row c-dash fixture nomanifest/variants.vcf "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 -,order_only - -
+} >"$T3"
+expect_error "a - beside a class in the masks cell is an error (the comparator would read it as an option)" "masks '-,order_only' has an item beginning with -" "$T3"
+{
+    echo "$HEADER"
+    row c-dashfloor fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 - -,IMPACT=1 -
+    row c-dashpair fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 - - "-;IMPACT=LOW=>HIGH"
+    row c-dashclass fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 -foo - -
+    row c-dashafter fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 order_only,-foo - -
+} >"$T3"
+expect_error "a - item in the floors cell is an error" "floors '-,IMPACT=1' has an item beginning with -" "$T3" --only c-dashfloor
+expect_error "a - item in the field_pairs cell is an error" "field_pairs '-;IMPACT=LOW=>HIGH' has an item beginning with -" "$T3" --only c-dashpair
+expect_error "a masks class beginning with - is an error even beside a manifest" "masks '-foo' has an item beginning with -" "$T3" --only c-dashclass
+expect_error "a masks class beginning with - after a separator is an error" "masks 'order_only,-foo' has an item beginning with -" "$T3" --only c-dashafter
 {
     echo "$HEADER"
     row c-ok fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 - - -
@@ -447,6 +475,31 @@ n=$(count_lines ' -o ' "$STUB_CAND_LOG")
 [[ -d "$OUT/work/cases/c-four" && ! -d "$OUT/work/cases/c-four/perl" && ! -d "$OUT/work/cases/c-four/candidates/abc1234" ]] && ok "the engines' outputs are deleted after the comparison" || bad "engine outputs were kept without --keep-outputs"
 [[ -f "$OUT/run.json" ]] && grep -q '"abc1234"' "$OUT/run.json" && grep -q 'stubdigest' "$OUT/run.json" && ok "run.json records the pins and the image digest" || bad "run.json missing or incomplete"
 grep -q '"verdict": "green"' "$OUT/abc1234/c-four/warnings.json" && ok "no warnings file on either side compares green (an absent file is no warnings)" || bad "warnings verdict without files"
+T4F="$TMP/t4f.tsv"
+{
+    echo "$HEADER"
+    row c-floors fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - "$CORPUS_FLAGS" default,json "$IMAGE" offline 116.2 - Uploaded_variation=1,IMPACT=1 -
+} >"$T4F"
+run_oracle "$T4F" --out "$TMP/out-floors" --candidates "$STUBDIR/vep" --candidate-pins abc1234 >/dev/null 2>&1
+rc=$?
+python3 - "$TMP/out-floors/abc1234/c-floors/report.json" "$rc" <<'PY2' && ok "a floor on a record-level column is met in the default format and listed as not applicable on the json entry of report.json" || bad "json floors: rc=$rc $(reasons_of "$TMP/out-floors/abc1234/c-floors/report.json" 2>/dev/null)"
+import json, sys
+r = json.load(open(sys.argv[1]))
+assert sys.argv[2] == "0", sys.argv[2]
+assert r["verdict"] == "green", r["reasons"]
+assert r["formats"]["json"]["floors_not_applicable"] == ["Uploaded_variation"], r["formats"]["json"]
+assert "floors_not_applicable" not in r["formats"]["default"], r["formats"]["default"]
+sub = json.load(open(r["formats"]["json"]["report"]))
+assert sub["columns"]["IMPACT"]["floor_fields"] == ["impact"] and sub["columns"]["IMPACT"]["floor_met"] is True, sub["columns"]["IMPACT"]
+PY2
+{
+    echo "$HEADER"
+    row c-jsonfloor fixture "$CORPUS_INPUT" "$CORPUS_CACHE" - "$CORPUS_FLAGS" json "$IMAGE" offline 116.2 - Uploaded_variation=1,IMPACT=1 -
+} >"$T4F"
+run_oracle "$T4F" --out "$TMP/out-jsonfloor" --candidates "$STUBDIR/vep" --candidate-pins abc1234 >/dev/null 2>&1
+rc=$?
+[[ "$rc" -eq 1 && "$(reasons_of "$TMP/out-jsonfloor/abc1234/c-jsonfloor/report.json")" == "json: floor Uploaded_variation is not applicable to json and no text format of the case checked it" ]] &&
+    ok "a json-only case with a floor the json format cannot count is red: no format checked the floor" || bad "json-only floor: rc=$rc $(reasons_of "$TMP/out-jsonfloor/abc1234/c-jsonfloor/report.json" 2>/dev/null)"
 
 echo
 echo "REAL PATH: every difference the comparator sees makes the case red"
@@ -622,8 +675,8 @@ else
 fi
 run_oracle "$T2" --out "$TMP/out-fa" --candidates "$STUBDIR/vep" --candidate-pins p1 --keep-outputs >/dev/null 2>"$TMP/fa.err"
 rc=$?
-[[ -f "$TMP/out-fa/work/fasta/reference.fa" && -f "$TMP/out-fa/work/fasta/reference.fa.fai" && "$(head -c 1 "$TMP/out-fa/work/fasta/reference.fa")" == ">" ]] &&
-    ok "a .gz FASTA is decompressed into <work>/fasta with its .fai beside it" || bad "FASTA decompression (rc=$rc)"
+[[ -f "$TMP/out-fa/work/fasta/1/reference.fa" && -f "$TMP/out-fa/work/fasta/1/reference.fa.fai" && "$(head -c 1 "$TMP/out-fa/work/fasta/1/reference.fa")" == ">" ]] &&
+    ok "a .gz FASTA is decompressed into <work>/fasta/<n>/ with its .fai beside it" || bad "FASTA decompression (rc=$rc)"
 
 echo
 echo "MORE FAIL-CLOSED PATHS: cells, names and option values the first sections did not reach"
@@ -650,7 +703,22 @@ cp "$REPO/tests/golden/116/GRCh37-hgvs/reference.fa.fai" "$DATA/other/reference.
     row c-fa1 fixture "$REPO/tests/golden/116/GRCh37-hgvs/variants.vcf" 116_GRCh37=tests/golden/116/GRCh37-hgvs/json_cache tests/golden/116/GRCh37-hgvs/reference.fa.gz --hgvs default "$IMAGE" offline 116.2 - - -
     row c-fa2 fixture "$REPO/tests/golden/116/GRCh37-hgvs/variants.vcf" 116_GRCh37=tests/golden/116/GRCh37-hgvs/json_cache other/reference.fa.gz --hgvs default "$IMAGE" offline 116.2 - - -
 } >"$T3"
-expect_error "two .gz FASTAs that decompress to one name are an error" "decompresses to reference.fa, the name another case's FASTA decompresses to" "$T3"
+dry "$T3" "$TMP/d-fa2.out"
+rc=$?
+fa1=$(cmd_after 'DRY-RUN c-fa1 stub default' "$TMP/d-fa2.out")
+fa2=$(cmd_after 'DRY-RUN c-fa2 stub default' "$TMP/d-fa2.out")
+[[ "$rc" -eq 0 && "$fa1" == *"--fasta $TMP/never/work/fasta/1/reference.fa" && "$fa2" == *"--fasta $TMP/never/work/fasta/2/reference.fa" ]] &&
+    ok "two .gz FASTAs that decompress to one file name each get a directory of their own" || bad "two FASTAs of one name: rc=$rc fa1=$fa1 fa2=$fa2"
+{
+    echo "$HEADER"
+    row c-fa1 fixture "$REPO/tests/golden/116/GRCh37-hgvs/variants.vcf" 116_GRCh37=tests/golden/116/GRCh37-hgvs/json_cache tests/golden/116/GRCh37-hgvs/reference.fa.gz --hgvs default "$IMAGE" offline 116.2 - - -
+    row c-fa1b fixture "$REPO/tests/golden/116/GRCh37-hgvs/variants.vcf" 116_GRCh37=tests/golden/116/GRCh37-hgvs/json_cache tests/golden/116/GRCh37-hgvs/reference.fa.gz --hgvs default "$IMAGE" offline 116.2 - - -
+} >"$T3"
+dry "$T3" "$TMP/d-fa3.out"
+fa1=$(cmd_after 'DRY-RUN c-fa1 stub default' "$TMP/d-fa3.out")
+fa1b=$(cmd_after 'DRY-RUN c-fa1b stub default' "$TMP/d-fa3.out")
+[[ "$fa1" == *"--fasta $TMP/never/work/fasta/1/reference.fa" && "$fa1b" == *"--fasta $TMP/never/work/fasta/1/reference.fa" ]] &&
+    ok "two cases on one .gz FASTA share its one decompressed copy" || bad "shared FASTA: fa1=$fa1 fa1b=$fa1b"
 {
     echo "$HEADER"
     row c-refseq fixture "$CORPUS_INPUT" 116_GRCh38 - --refseq default "$IMAGE" offline 116.2 - - -
@@ -697,12 +765,12 @@ rc=$?
 } >"$T3"
 run_oracle "$T3" --out "$TMP/out-fastacase" --candidates "$STUBDIR/vep" --candidate-pins p1 >/dev/null 2>&1
 rc=$?
-[[ "$rc" -eq 0 && -f "$TMP/out-fastacase/work/fasta/reference.fa" ]] && ok "a case named fasta leaves the run's decompressed FASTA in place" || bad "case fasta: rc=$rc"
+[[ "$rc" -eq 0 && -f "$TMP/out-fastacase/work/fasta/1/reference.fa" ]] && ok "a case named fasta leaves the run's decompressed FASTA in place" || bad "case fasta: rc=$rc"
 run_oracle "$T2" --out "$TMP/out-refasta" --candidates "$STUBDIR/vep" --candidate-pins p1 --keep-outputs >/dev/null 2>&1
-echo "stale" >"$TMP/out-refasta/work/fasta/reference.fa"
+echo "stale" >"$TMP/out-refasta/work/fasta/1/reference.fa"
 run_oracle "$T2" --out "$TMP/out-refasta" --candidates "$STUBDIR/vep" --candidate-pins p1 --keep-outputs >/dev/null 2>&1
 rc=$?
-[[ "$rc" -eq 0 && "$(head -c 1 "$TMP/out-refasta/work/fasta/reference.fa")" == ">" ]] && ok "a .gz FASTA is decompressed again on every run, never reused from an earlier one" || bad "FASTA reuse: rc=$rc"
+[[ "$rc" -eq 0 && "$(head -c 1 "$TMP/out-refasta/work/fasta/1/reference.fa")" == ">" ]] && ok "a .gz FASTA is decompressed again on every run, never reused from an earlier one" || bad "FASTA reuse: rc=$rc"
 
 echo
 echo "EMPTY AND BROKEN OUTPUTS"
