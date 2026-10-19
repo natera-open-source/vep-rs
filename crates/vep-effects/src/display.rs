@@ -437,13 +437,6 @@ pub fn exon_intron_numbers(
 /// A codon window or peptide: a handful of bases, inline.
 type Bases = SmallVec<[u8; 16]>;
 
-fn is_dna(seq: &[u8]) -> bool {
-    !seq.is_empty()
-        && seq
-            .iter()
-            .all(|b| b"ACGTUMRWSYKVHDBXN-".contains(&b.to_ascii_uppercase()))
-}
-
 fn is_unambiguous_dna(seq: &[u8]) -> bool {
     !seq.is_empty()
         && seq
@@ -531,7 +524,7 @@ fn codon(ctx: &CodingContext, allele: &Allele) -> Option<Bases> {
     let (Some(tr_start), Some(tr_end)) = (ctx.pep_start, ctx.pep_end) else {
         return None;
     };
-    if tr_start == 0 || tr_end == 0 || !is_dna(allele.vf_seq) {
+    if tr_start == 0 || tr_end == 0 || !vep_core::codon::seq_is_dna(allele.vf_seq) {
         return None;
     }
     let codon_cds_start = tr_start * 3 - 2;
@@ -565,6 +558,9 @@ fn codon(ctx: &CodingContext, allele: &Allele) -> Option<Bases> {
     if let Some(i) = alt.iter().position(|b| *b == b'-') {
         alt.remove(i);
     }
+    // An allele given on the strand opposite the transcript's is read
+    // reverse-complemented, IUPAC letters included (`_get_alternate_cds`,
+    // TranscriptVariationAllele.pm:2413-2417, through Ensembl's `reverse_comp`).
     if !alt.is_empty() && ctx.reverse {
         alt.reverse();
         for b in &mut alt {
@@ -1105,6 +1101,22 @@ mod tests {
         let d = display_fields(&snv(1055, "T", "C"), &tx);
         assert_eq!(d.amino_acids.as_deref(), Some("A"));
         assert_eq!(d.codons.as_deref(), Some("gcT/gcC"));
+    }
+
+    /// An allele given on the strand opposite the transcript's enters the
+    /// alternate coding sequence through Ensembl's `reverse_comp`
+    /// (`_get_alternate_cds`, TranscriptVariationAllele.pm:2413-2417), so an
+    /// IUPAC letter is complemented too: `A/R` written on the reverse strand at
+    /// the T of the first GCT reads `T/Y`. The peptide stays undefined for an
+    /// ambiguous allele (`peptide`, :701).
+    #[test]
+    fn opposite_strand_allele_is_read_through_the_iupac_complement() {
+        let tx = forward_transcript();
+        let mut given = snv(1055, "A", "R");
+        given.strand = vep_core::coordinate::Strand::Reverse;
+        let d = display_fields(&given, &tx);
+        assert_eq!(d.codons.as_deref(), Some("gcT/gcY"));
+        assert_eq!(d.amino_acids, None);
     }
 
     #[test]

@@ -1705,15 +1705,12 @@ fn apply_position(
                             let ref_allele = &variant.ref_allele;
                             let alt_allele = variant.alt_allele();
                             let ref_is_dash = ref_allele == b"-" || ref_allele.is_empty();
-                            let alt_is_dash = alt_allele == b"-" || alt_allele.is_empty();
                             let ref_len = if ref_is_dash { 0 } else { ref_allele.len() };
-                            let alt_seq = if alt_is_dash {
-                                Vec::new()
-                            } else if transcript.strand == vep_core::coordinate::Strand::Reverse {
-                                crate::coding::reverse_complement_pub(alt_allele)
-                            } else {
-                                alt_allele.to_vec()
-                            };
+                            let alt_seq = crate::coding::feature_seq(
+                                alt_allele,
+                                variant.strand,
+                                transcript.strand,
+                            );
                             // `idx` derives from the 5'-most CDS index, as the gate above
                             // does: the per-endpoint `*cds_pos` is the 3'-most index on
                             // reverse strand and would excise the wrong bases, preserving

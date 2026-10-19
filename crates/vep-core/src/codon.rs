@@ -157,12 +157,28 @@ pub fn aa_three_letter(aa: u8) -> &'static str {
     AA_THREE_LETTER.get(&aa).unwrap_or(&"Xaa")
 }
 
-/// Reverse complement a DNA sequence.
+/// Reverse complement a DNA sequence, as Ensembl's `reverse_comp` does
+/// (`Bio::EnsEMBL::Utils::Sequence`): every byte through [`complement_base`],
+/// in reverse order.
 pub fn reverse_complement(seq: &[u8]) -> Vec<u8> {
     seq.iter().rev().map(|&b| complement_base(b)).collect()
 }
 
-/// Complement a single DNA base.
+/// Whether an allele is DNA by Ensembl's `seq_is_dna`
+/// (VariationFeatureOverlapAllele.pm:315-321): one or more nucleotide or IUPAC
+/// letters or `-`, in either case. `feature_seq` reverse-complements only such an
+/// allele; a symbolic allele (`<DEL>`, a breakend, `*`) is read as written.
+pub fn seq_is_dna(allele: &[u8]) -> bool {
+    !allele.is_empty()
+        && allele
+            .iter()
+            .all(|b| b"ACGTUMRWSYKVHDBXN-".contains(&b.to_ascii_uppercase()))
+}
+
+/// Complement a single DNA base, in either case: the four nucleotides and the
+/// IUPAC letters with a complement (`R` and `Y`, `M` and `K`, `B` and `V`, `D`
+/// and `H`), as Ensembl's `reverse_comp` complements them; `S`, `W`, `N`, `X`,
+/// `-` and every other byte are their own complement.
 pub fn complement_base(base: u8) -> u8 {
     match base {
         b'A' => b'T',
@@ -173,8 +189,22 @@ pub fn complement_base(base: u8) -> u8 {
         b'g' => b'c',
         b'C' => b'G',
         b'c' => b'g',
-        b'N' => b'N',
-        b'n' => b'n',
+        b'R' => b'Y',
+        b'r' => b'y',
+        b'Y' => b'R',
+        b'y' => b'r',
+        b'M' => b'K',
+        b'm' => b'k',
+        b'K' => b'M',
+        b'k' => b'm',
+        b'B' => b'V',
+        b'b' => b'v',
+        b'V' => b'B',
+        b'v' => b'b',
+        b'D' => b'H',
+        b'd' => b'h',
+        b'H' => b'D',
+        b'h' => b'd',
         other => other,
     }
 }
@@ -277,6 +307,51 @@ mod tests {
         assert_eq!(reverse_complement(b"ATGC"), b"GCAT");
         assert_eq!(reverse_complement(b"AAAA"), b"TTTT");
         assert_eq!(reverse_complement(b""), b"");
+    }
+
+    /// Ensembl's `reverse_comp` table (`Bio::EnsEMBL::Utils::Sequence`):
+    /// `tr/acgtrymkswhbvdnxACGTRYMKSWHBVDNX/tgcayrkmswdvbhnxTGCAYRKMSWDVBHNX/`,
+    /// every other character kept.
+    #[test]
+    fn complement_follows_ensembl_reverse_comp_for_iupac_letters() {
+        assert_eq!(reverse_complement(b"RYMKBVDH"), b"DHBVMKRY");
+        assert_eq!(reverse_complement(b"rymkbvdh"), b"dhbvmkry");
+        assert_eq!(reverse_complement(b"SWNX-*<>"), b"><*-XNWS");
+    }
+
+    /// Ensembl's `$ALL_NUCLEOTIDES` (VariationFeatureOverlapAllele.pm:76,
+    /// `qr/^[ACGTUMRWSYKVHDBXN-]+$/i`): one or more of those letters in either
+    /// case or `-`; the other letters, the empty allele and every symbolic
+    /// allele are refused.
+    #[test]
+    fn seq_is_dna_matches_perls_all_nucleotides_class() {
+        assert!(seq_is_dna(b"ACGTUMRWSYKVHDBXN-"));
+        assert!(seq_is_dna(b"acgtumrwsykvhdbxn-"));
+        for letter in b"EFIJLOPQZ" {
+            assert!(!seq_is_dna(&[*letter]), "{}", *letter as char);
+            assert!(
+                !seq_is_dna(&[letter.to_ascii_lowercase()]),
+                "{}",
+                letter.to_ascii_lowercase() as char
+            );
+        }
+        for refused in [
+            &b""[..],
+            b"*",
+            b"AC*",
+            b"<DEL>",
+            b"N[21:200[",
+            b"A.",
+            b"(3 BP INSERTION)",
+            b"A/G",
+            b" A",
+        ] {
+            assert!(
+                !seq_is_dna(refused),
+                "{:?}",
+                String::from_utf8_lossy(refused)
+            );
+        }
     }
 
     #[test]

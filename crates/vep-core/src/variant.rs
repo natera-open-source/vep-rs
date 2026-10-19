@@ -853,16 +853,24 @@ impl InputVariant {
     /// each against a feature as `feature_seq`, reverse-complemented when the
     /// two strands differ (VariationFeatureOverlapAllele.pm:253-256), so a copy
     /// on the forward strand analyses the same way against every transcript. A
-    /// forward-strand variant is returned as it is; a `-` allele stays `-`.
+    /// forward-strand variant is returned as it is, as is a structural variant,
+    /// whose alleles are class words that no `feature_seq` reads. Only an allele
+    /// `seq_is_dna` admits (`:315-321`: the nucleotide and IUPAC letters and `-`)
+    /// is reverse-complemented, with Ensembl's `reverse_comp`
+    /// ([`crate::codon::reverse_complement`]); any other allele is kept as given,
+    /// and a `-` allele stays `-`.
     pub fn on_forward_strand(&self) -> InputVariant {
-        if self.strand == Strand::Forward {
+        if self.strand == Strand::Forward
+            || self.is_structural
+            || self.variant_class.is_structural()
+        {
             return self.clone();
         }
         let flip = |allele: &[u8]| -> Vec<u8> {
-            if allele == b"-" {
-                allele.to_vec()
-            } else {
+            if crate::codon::seq_is_dna(allele) {
                 crate::codon::reverse_complement(allele)
+            } else {
+                allele.to_vec()
             }
         };
         let mut forward = self.clone();
@@ -1064,6 +1072,36 @@ mod strand_tests {
         assert_eq!(forward.variant_class, given.variant_class);
         let snv = InputVariant::new("21".into(), 100, 100, b"G".to_vec(), b"T".to_vec());
         assert_eq!(snv.on_forward_strand().allele_string, "G/T");
+    }
+
+    /// `feature_seq` flips only an allele `seq_is_dna` admits
+    /// (VariationFeatureOverlapAllele.pm:253, 315-321), with Ensembl's
+    /// `reverse_comp`: an IUPAC letter takes its complement (`R` to `Y`), a
+    /// structural-variant word or a lower-case run of bases is kept or
+    /// complemented as written, and a `*` or symbolic allele is left as given.
+    /// A structural variant is not read through `feature_seq` at all, so its
+    /// copy is itself, a word the letter set would admit (`CNV`) included.
+    #[test]
+    fn on_forward_strand_flips_dna_alleles_only_with_the_iupac_complement() {
+        let flip = |reference: &[u8], alt: &[u8]| {
+            let mut given =
+                InputVariant::new("21".into(), 100, 100, reference.to_vec(), alt.to_vec());
+            given.strand = Strand::Reverse;
+            given.on_forward_strand().allele_string
+        };
+        assert_eq!(flip(b"G", b"R"), "C/Y");
+        assert_eq!(flip(b"ag", b"tn"), "ct/na");
+        assert_eq!(flip(b"DEL", b"DUP"), "DEL/DUP");
+        assert_eq!(flip(b"G", b"<DEL>"), "C/<DEL>");
+        assert_eq!(flip(b"G", b"*"), "C/*");
+        let mut sv = InputVariant::new("21".into(), 100, 900, b"CNV".to_vec(), b"CNV".to_vec());
+        sv.strand = Strand::Reverse;
+        sv.is_structural = true;
+        let copy = sv.on_forward_strand();
+        assert_eq!(
+            (copy.strand, copy.allele_string.as_str()),
+            (Strand::Reverse, "CNV/CNV")
+        );
     }
 
     /// `perform_shift` rotates the allele as given the other way when it was

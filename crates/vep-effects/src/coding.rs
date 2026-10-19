@@ -17,7 +17,7 @@
 //! - [`compute_peptide_alleles`]: full CDS translation with trimmed peptide comparison
 //! - [`compute_codon_window_peptide_alleles`]: Perl-style local codon-window translation
 
-use vep_core::codon::{translate_codon, translate_codon_with_table};
+use vep_core::codon::{seq_is_dna, translate_codon, translate_codon_with_table};
 use vep_core::transcript::Transcript;
 use vep_core::variant::InputVariant;
 
@@ -371,20 +371,8 @@ fn normalize_indel_edit_in_transcript_sense(
         return None;
     }
 
-    let mut ref_seq = if ref_is_dash {
-        Vec::new()
-    } else if transcript.strand == vep_core::coordinate::Strand::Reverse {
-        reverse_complement(ref_allele)
-    } else {
-        ref_allele.to_vec()
-    };
-    let mut alt_seq = if alt_is_dash {
-        Vec::new()
-    } else if transcript.strand == vep_core::coordinate::Strand::Reverse {
-        reverse_complement(alt_allele)
-    } else {
-        alt_allele.to_vec()
-    };
+    let ref_seq = feature_seq(ref_allele, variant.strand, transcript.strand);
+    let alt_seq = feature_seq(alt_allele, variant.strand, transcript.strand);
 
     let raw_ref_len = ref_seq.len();
     let mut cds_idx = (cds_pos - 1) as usize;
@@ -406,8 +394,8 @@ fn normalize_indel_edit_in_transcript_sense(
     }
 
     cds_idx = cds_idx.checked_add(prefix)?;
-    ref_seq = ref_seq[prefix..ref_seq.len().saturating_sub(suffix)].to_vec();
-    alt_seq = alt_seq[prefix..alt_seq.len().saturating_sub(suffix)].to_vec();
+    let ref_seq = ref_seq[prefix..ref_seq.len().saturating_sub(suffix)].to_vec();
+    let alt_seq = alt_seq[prefix..alt_seq.len().saturating_sub(suffix)].to_vec();
 
     Some(NormalizedTranscriptEdit {
         cds_idx,
@@ -469,9 +457,26 @@ pub(crate) fn reverse_complement(seq: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-/// `reverse_complement` for callers outside this module (start_retained and HGVS checks).
-pub fn reverse_complement_pub(seq: &[u8]) -> Vec<u8> {
-    reverse_complement(seq)
+/// The bases of an allele read against the transcript, as `feature_seq` reads
+/// them (VariationFeatureOverlapAllele.pm:246-264): the allele as given when
+/// the variant's strand is the transcript's, its reverse complement when the two
+/// differ and `seq_is_dna` admits it (`:253`, `:315-321`), and no bases for `-`
+/// or an empty allele. The variant's strand is the one its alleles are written
+/// on (an Ensembl-format or region record names it); its coordinates are
+/// genomic whatever the strand, so the CDS index of an edit follows the
+/// transcript's strand alone.
+pub(crate) fn feature_seq<'a>(
+    allele: &'a [u8],
+    variant_strand: Strand,
+    transcript_strand: Strand,
+) -> Cow<'a, [u8]> {
+    if allele == b"-" {
+        Cow::Borrowed(&[])
+    } else if variant_strand != transcript_strand && seq_is_dna(allele) {
+        Cow::Owned(reverse_complement(allele))
+    } else {
+        Cow::Borrowed(allele)
+    }
 }
 
 /// Compute the 5' UTR sequence, preferring cached UTR (`vefc.five_prime_utr`)
@@ -711,13 +716,7 @@ pub fn replicate_ins_del_stop_altered(
         return None;
     }
 
-    let alt_seq: Vec<u8> = if alt_is_dash {
-        Vec::new()
-    } else if transcript.strand == vep_core::coordinate::Strand::Reverse {
-        reverse_complement(alt_allele)
-    } else {
-        alt_allele.to_vec()
-    };
+    let alt_seq = feature_seq(alt_allele, variant.strand, transcript.strand);
 
     // `compute_three_prime_utr_sequence` already reverse-complements for a
     // reverse-strand transcript, so the concatenation below is in reading frame.
@@ -833,13 +832,7 @@ pub fn replicate_ins_del_start_altered(
         return None;
     }
 
-    let alt_seq: Vec<u8> = if alt_is_dash {
-        Vec::new()
-    } else if transcript.strand == vep_core::coordinate::Strand::Reverse {
-        reverse_complement(alt_allele)
-    } else {
-        alt_allele.to_vec()
-    };
+    let alt_seq = feature_seq(alt_allele, variant.strand, transcript.strand);
 
     // The helper reverse-complements for a reverse-strand transcript, so the
     // concatenation reads 5' to CDS in reading frame.
@@ -942,13 +935,7 @@ fn compute_full_peptide_alleles_impl(
         return None;
     }
 
-    let alt_seq = if alt_is_dash {
-        Vec::new()
-    } else if transcript.strand == vep_core::coordinate::Strand::Reverse {
-        reverse_complement(alt_allele)
-    } else {
-        alt_allele.to_vec()
-    };
+    let alt_seq = feature_seq(alt_allele, variant.strand, transcript.strand);
 
     let nominal_ref_len = if ref_is_dash { 0 } else { ref_allele.len() };
     let ref_len = if clamp_ref_len {
@@ -1025,13 +1012,7 @@ pub fn compute_codon_window_peptide_alleles(
         return None;
     }
 
-    let alt_seq = if alt_is_dash {
-        Vec::new()
-    } else if transcript.strand == vep_core::coordinate::Strand::Reverse {
-        reverse_complement(alt_allele)
-    } else {
-        alt_allele.to_vec()
-    };
+    let alt_seq = feature_seq(alt_allele, variant.strand, transcript.strand);
     // Perl: $allele_len = length of alt variation_feature_seq (in mRNA sense)
     let allele_len = alt_seq.len();
 
@@ -1152,13 +1133,7 @@ pub fn narrow_alt_codon_is_stop(
     {
         return false;
     }
-    let alt_seq = if alt_is_dash {
-        Vec::new()
-    } else if transcript.strand == vep_core::coordinate::Strand::Reverse {
-        reverse_complement(alt_allele)
-    } else {
-        alt_allele.to_vec()
-    };
+    let alt_seq = feature_seq(alt_allele, variant.strand, transcript.strand);
 
     let vf_nt_len_isize = (bounds.cds_end as isize) - (bounds.cds_start as isize) + 1;
     let vf_nt_len: usize = vf_nt_len_isize.max(0) as usize;
@@ -1369,10 +1344,10 @@ fn get_snv_codon_change(
     let ref_codon_bytes = &seq_bytes[codon_start..codon_start + 3];
     let mut alt_codon_bytes = ref_codon_bytes.to_vec();
 
-    // The VCF allele is on the forward genomic strand while translateable_seq is
-    // in mRNA sense, so a reverse-strand transcript takes the complement.
+    // The one base as `feature_seq` reads it, complemented in place rather than
+    // through a one-byte allocation on this hottest coding path.
     let alt_base = variant.alt_allele()[0];
-    let effective_alt = if transcript_strand == vep_core::coordinate::Strand::Reverse {
+    let effective_alt = if variant.strand != transcript_strand {
         vep_core::codon::complement_base(alt_base)
     } else {
         alt_base
@@ -1435,13 +1410,7 @@ fn get_mnv_codon_change(
 
     let ref_window = &seq_bytes[codon_start..codon_end];
 
-    // A reverse-strand transcript takes the reverse complement of the genomic
-    // allele to apply it to the mRNA-sense CDS.
-    let alt_seq = if transcript_strand == vep_core::coordinate::Strand::Reverse {
-        reverse_complement(alt_allele)
-    } else {
-        alt_allele.to_vec()
-    };
+    let alt_seq = feature_seq(alt_allele, variant.strand, transcript_strand);
 
     let rel = cds_idx - codon_start;
     let mut alt_window = ref_window.to_vec();
@@ -1608,19 +1577,7 @@ fn compute_first_alt_aa_for_indel(
 
     // A codon needs at least 3 bases after the edit.
     let ref_is_dash = variant.ref_allele == b"-" || variant.ref_allele.is_empty();
-    let alt_is_dash = variant.alt_allele() == b"-" || variant.alt_allele().is_empty();
-
-    let alt_bases_owned: Vec<u8>;
-    let alt_bases: &[u8] = if alt_is_dash {
-        &[]
-    } else if transcript_strand == vep_core::coordinate::Strand::Reverse {
-        // translateable_seq is in mRNA sense; for reverse-strand transcripts the allele
-        // from the genome must be reverse-complemented to apply it to the CDS.
-        alt_bases_owned = reverse_complement(variant.alt_allele());
-        &alt_bases_owned
-    } else {
-        variant.alt_allele()
-    };
+    let alt_bases = feature_seq(variant.alt_allele(), variant.strand, transcript_strand);
     let del_len = if ref_is_dash { 0 } else { ref_len };
 
     if codon_end > cds.len() || cds_idx + del_len > cds.len() {
@@ -1638,7 +1595,7 @@ fn compute_first_alt_aa_for_indel(
     let mut local_alt =
         Vec::with_capacity(prefix.len() + alt_bases.len() + suffix_within_codon.len());
     local_alt.extend_from_slice(prefix);
-    local_alt.extend_from_slice(alt_bases);
+    local_alt.extend_from_slice(&alt_bases);
     local_alt.extend_from_slice(suffix_within_codon);
 
     if local_alt.len() >= 3 {
@@ -1941,32 +1898,6 @@ fn perl_substr_assign(s: &mut Vec<u8>, off: i64, len: i64, repl: &[u8]) {
     s.splice(off..stop, repl.iter().copied());
 }
 
-fn is_perl_dna(seq: &[u8]) -> bool {
-    !seq.is_empty()
-        && seq.iter().all(|b| {
-            matches!(
-                b.to_ascii_uppercase(),
-                b'A' | b'C'
-                    | b'G'
-                    | b'T'
-                    | b'U'
-                    | b'M'
-                    | b'R'
-                    | b'W'
-                    | b'S'
-                    | b'Y'
-                    | b'K'
-                    | b'V'
-                    | b'H'
-                    | b'D'
-                    | b'B'
-                    | b'X'
-                    | b'N'
-                    | b'-'
-            )
-        })
-}
-
 fn is_perl_unambiguous_dna(seq: &[u8]) -> bool {
     !seq.is_empty()
         && seq
@@ -2221,7 +2152,12 @@ struct PerlCodingEval<'a> {
     utr3: Option<Vec<u8>>,
     table: u8,
     span: PerlSpan,
+    /// The transcript's strand, which places the stop codon in genomic
+    /// coordinates.
     strand: i8,
+    /// Whether the alleles were given on the strand opposite the transcript's
+    /// and so read reverse-complemented (`feature_seq`).
+    opposite_strand: bool,
     cds_start_nf: bool,
     cds_end_nf: bool,
     cdna_coding_start: i64,
@@ -2282,7 +2218,7 @@ impl<'a> PerlCodingEval<'a> {
                 a.push(b);
             }
         }
-        if !a.is_empty() && self.strand == -1 {
+        if !a.is_empty() && self.opposite_strand {
             a = reverse_complement(&a);
         }
         let mut alt = Vec::with_capacity(self.cds.len() + a.len() + 8);
@@ -2309,7 +2245,7 @@ impl<'a> PerlCodingEval<'a> {
         else {
             return None;
         };
-        if !is_perl_dna(self.allele(is_ref)) {
+        if !seq_is_dna(self.allele(is_ref)) {
             return None;
         }
         let codon_cds_start = tl_start * 3 - 2;
@@ -3695,6 +3631,7 @@ impl<'a> PerlCodingEval<'a> {
         let mapper = vefc.mapper.as_ref()?;
         let span = perl_span(transcript, span_start, span_end)?;
         let strand = transcript.strand.as_i8();
+        let opposite_strand = variant.strand != transcript.strand;
         let ref_allele: &[u8] = if variant.ref_allele.is_empty() {
             b"-"
         } else {
@@ -3708,12 +3645,14 @@ impl<'a> PerlCodingEval<'a> {
                 a
             }
         };
-        let feature_seq = if transcript.strand == Strand::Reverse && is_perl_dna(alt_allele) {
+        // `feature_seq` flips only an allele `seq_is_dna` admits
+        // (VariationFeatureOverlapAllele.pm:253, 315-321).
+        let feature_seq = if opposite_strand && seq_is_dna(alt_allele) {
             reverse_complement(alt_allele)
         } else {
             alt_allele.to_vec()
         };
-        let seq_length = if is_perl_dna(alt_allele) {
+        let seq_length = if seq_is_dna(alt_allele) {
             Some(if alt_allele == b"-" {
                 0
             } else {
@@ -3771,6 +3710,7 @@ impl<'a> PerlCodingEval<'a> {
             table,
             span,
             strand,
+            opposite_strand,
             cds_start_nf: transcript.flags.iter().any(|f| f == "cds_start_NF"),
             cds_end_nf: transcript.flags.iter().any(|f| f == "cds_end_NF"),
             cdna_coding_start: mapper.cdna_coding_start as i64,
@@ -4763,6 +4703,196 @@ mod tests {
             ev.terms(),
             vec![Consequence::FrameshiftVariant, Consequence::StopLost]
         );
+    }
+
+    /// A record given on the reverse strand (an Ensembl-format or region line
+    /// whose strand column reads `-1`, Parser/VEP_input.pm:131 and
+    /// Parser/Region.pm:183) writes its alleles on that strand, and against a
+    /// forward-strand transcript Ensembl VEP reads each of them
+    /// reverse-complemented, for every predicate (`feature_seq`,
+    /// VariationFeatureOverlapAllele.pm:253-255). Every case below is the
+    /// reverse-strand spelling of a forward record whose terms follow from the
+    /// coding sequence of `make_test_transcript`, `ATG GCT GGA AAA TTC GAT` then
+    /// `GCT` repeated, with CDS position p at genomic 25_000_049 + p and the
+    /// exon ending at 25_000_299, under the standard codon table; read as
+    /// written, the alleles would give another amino acid or another term.
+    #[test]
+    fn reverse_strand_input_alleles_revcomp_for_every_predicate() {
+        use crate::consequences::{calculate_consequences, EffectsConfig};
+        use vep_core::consequence::Consequence::*;
+
+        let tx = make_test_transcript();
+        let config = EffectsConfig::default();
+        struct Case {
+            span: (u64, u64),
+            /// The alleles as the reverse-strand record writes them.
+            reverse: &'static str,
+            /// The same alleles on the forward strand.
+            forward: &'static str,
+            terms: &'static [Consequence],
+            amino_acids: &'static str,
+        }
+        let cases = [
+            // codon 2 GCT: GAT is Asp; as written, GTT is Val
+            Case {
+                span: (25_000_054, 25_000_054),
+                reverse: "G/T",
+                forward: "C/A",
+                terms: &[MissenseVariant],
+                amino_acids: "A/D",
+            },
+            // codon 4 AAA: AAG is Lys; as written, AAC is Asn
+            Case {
+                span: (25_000_061, 25_000_061),
+                reverse: "T/C",
+                forward: "A/G",
+                terms: &[SynonymousVariant],
+                amino_acids: "K",
+            },
+            // codon 3 GGA: TGA is a stop; as written, AGA is Arg
+            Case {
+                span: (25_000_056, 25_000_056),
+                reverse: "C/A",
+                forward: "G/T",
+                terms: &[StopGained],
+                amino_acids: "G/*",
+            },
+            // one base inserted between codons 1 and 2
+            Case {
+                span: (25_000_053, 25_000_052),
+                reverse: "-/T",
+                forward: "-/A",
+                terms: &[FrameshiftVariant],
+                amino_acids: "-/X",
+            },
+            // a Lys codon inserted between codons 2 and 3; as written, Phe
+            Case {
+                span: (25_000_056, 25_000_055),
+                reverse: "-/TTT",
+                forward: "-/AAA",
+                terms: &[InframeInsertion],
+                amino_acids: "-/K",
+            },
+            // codon 3 deleted
+            Case {
+                span: (25_000_056, 25_000_058),
+                reverse: "TCC/-",
+                forward: "GGA/-",
+                terms: &[InframeDeletion],
+                amino_acids: "G/-",
+            },
+            // the exon's last base, codon 84 GCT: TCT is Ser; as written, ACT is Thr
+            Case {
+                span: (25_000_299, 25_000_299),
+                reverse: "C/A",
+                forward: "G/T",
+                terms: &[MissenseVariant, SpliceRegionVariant],
+                amino_acids: "A/S",
+            },
+            // the start codon ATG: TTG is Leu; as written, the codon is unchanged
+            Case {
+                span: (25_000_050, 25_000_050),
+                reverse: "T/A",
+                forward: "A/T",
+                terms: &[StartLost],
+                amino_acids: "M/L",
+            },
+        ];
+        let record = |(start, end): (u64, u64), alleles: &str, strand: Strand| {
+            let (reference, alt) = alleles.split_once('/').unwrap();
+            let mut v = InputVariant::new(
+                "21".into(),
+                start,
+                end,
+                reference.as_bytes().to_vec(),
+                alt.as_bytes().to_vec(),
+            );
+            v.strand = strand;
+            v
+        };
+        for case in &cases {
+            let forward = record(case.span, case.forward, Strand::Forward);
+            let reverse = record(case.span, case.reverse, Strand::Reverse);
+            let f = calculate_consequences(&forward, &tx, &config).unwrap();
+            let r = calculate_consequences(&reverse, &tx, &config).unwrap();
+            let label = format!("{} -1 at {}", case.reverse, case.span.0);
+            assert_eq!(r.consequences.as_slice(), case.terms, "{label}");
+            assert_eq!(r.amino_acids.as_deref(), Some(case.amino_acids), "{label}");
+            assert_eq!(f.consequences, r.consequences, "{label}");
+            assert_eq!(
+                (f.codons, f.amino_acids),
+                (r.codons, r.amino_acids),
+                "{label}"
+            );
+        }
+
+        // The coding predicates read the record's own strand, not only the copy
+        // `calculate_consequences` places on the forward strand: against a
+        // reverse-strand transcript the same reverse-strand record is read as
+        // written (`feature_seq` flips nothing when the strands agree).
+        let missense = record((25_000_054, 25_000_054), "G/T", Strand::Reverse);
+        let cc = get_codon_change(&missense, &tx, 5).unwrap();
+        assert_eq!((cc.alt_codon.as_str(), cc.alt_amino_acid), ("gAt", b'D'));
+        let mut reverse_tx = make_test_transcript();
+        reverse_tx.strand = Strand::Reverse;
+        let cc = get_codon_change(&missense, &reverse_tx, 5).unwrap();
+        assert_eq!((cc.alt_codon.as_str(), cc.alt_amino_acid), ("gTt", b'V'));
+        let start_lost = record((25_000_050, 25_000_050), "T/A", Strand::Reverse);
+        assert_eq!(
+            perl_coding_terms(&start_lost, &tx, 25_000_050, 25_000_050, None),
+            Some(vec![StartLost])
+        );
+        // Both edits start at CDS position 7, the first base of codon 3.
+        let deletion = record((25_000_056, 25_000_058), "TCC/-", Strand::Reverse);
+        assert_eq!(
+            classify_inframe_indel_by_peptide(&deletion, &tx, 7, None),
+            Some(InframeIndelKind::Deletion)
+        );
+        let insertion = record((25_000_056, 25_000_055), "-/TTT", Strand::Reverse);
+        assert_eq!(
+            compute_peptide_alleles(&insertion, &tx, 7),
+            Some((b"".to_vec(), b"K".to_vec()))
+        );
+    }
+
+    /// `feature_seq` (VariationFeatureOverlapAllele.pm:246-264): no bases for
+    /// `-`, the allele as given on the transcript's strand, its reverse
+    /// complement on the other strand when `seq_is_dna` admits it (`:253`,
+    /// `:315-321`), and an allele the letter set rejects as given.
+    #[test]
+    fn feature_seq_follows_the_strands_and_the_dna_gate() {
+        use Strand::{Forward, Reverse};
+        assert_eq!(&*feature_seq(b"-", Reverse, Forward), b"");
+        assert_eq!(&*feature_seq(b"ACG", Forward, Forward), b"ACG");
+        assert_eq!(&*feature_seq(b"ACG", Reverse, Reverse), b"ACG");
+        assert_eq!(&*feature_seq(b"ACG", Reverse, Forward), b"CGT");
+        assert_eq!(&*feature_seq(b"ar", Forward, Reverse), b"yt");
+        assert_eq!(&*feature_seq(b"<DEL>", Reverse, Forward), b"<DEL>");
+    }
+
+    /// The per-transcript evaluation reads an opposite-strand allele through
+    /// Ensembl's `reverse_comp`, IUPAC letters included (`_get_alternate_cds`,
+    /// TranscriptVariationAllele.pm:2413-2417): `A/R` written on the reverse
+    /// strand at the T of codon 2, GCT, gives the codon `GCY`, and no peptide for
+    /// an ambiguous allele (`peptide`, :701).
+    #[test]
+    fn perl_coding_eval_reads_an_opposite_strand_allele_through_the_iupac_complement() {
+        let tx = make_test_transcript();
+        let mut given = InputVariant::new(
+            "21".into(),
+            25_000_055,
+            25_000_055,
+            b"A".to_vec(),
+            b"R".to_vec(),
+        );
+        given.strand = Strand::Reverse;
+        let (ref_codon, alt_codon, _, alt_pep) =
+            perl_codon_peptides(&given, &tx, 25_000_055, 25_000_055, None).unwrap();
+        assert_eq!(
+            (ref_codon.as_deref(), alt_codon.as_deref()),
+            (Some(&b"GCT"[..]), Some(&b"GCY"[..]))
+        );
+        assert_eq!(alt_pep, None);
     }
 
     /// A span the `coding` pre-predicate refuses yields `None` although the
