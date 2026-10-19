@@ -1,0 +1,25 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	10521699	intron_hp_del	GC	G	.	.	.
+21	10538885	intron_snv_colon	A	C	.	.	.
+21	10542415	cds_mnv	AA	GG	.	.	.
+21	10542415	cds_mnv_rev_strand	AA	TG	.	.	.
+21	10552677	cds_delins	AG	GTA	.	.	.
+21	10559999	sv_del	C	<DEL>	.	.	SVTYPE=DEL;END=10570000
+21	10592341	cds_hp_ins	G	GA	.	.	.
+21	13608999	sv_del_lower_case	G	<DEL>	.	.	SVTYPE=DEL;END=13610500
+21	13615721	intron_snv_strand_colon	A	C	.	.	.
+21	13620283	cds_tri_ins	G	GTCA	.	.	.
+21	13630971	cds_del24	AATCCTGTGGGATTACCAGAAAACC	A	.	.	.
+21	14144642	cds_mnv_chr_prefix	AT	CT	.	.	.
+21	14181865	intron_hp_del_rev_strand	AA	A	.	.	.
+21	14210832	cds_hp_ins_rev_strand	A	AA	.	.	.
+21	14220999	sv_dup	A	<DUP>	.	.	SVTYPE=DUP;END=14222000
+21	14221106	sv_alu_insertion	G	<INS:ME:ALU>	.	.	SVTYPE=INS;END=14221107
+21	14221107	cds_snv	C	A	.	.	.
+21	14512455	cds_snv_strand_one	T	A	.	.	.
+21	14964727	cds_snv_rev_strand	C	G	.	.	.
+21	15826987	cds_snv_plus_one_lower_case	C	G	.	.	.
+21	16218276	long_ins55	A	ATTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT	.	.	.
+21	20006769	intergenic_snv	T	A	.	.	.
+21	30000000	intergenic_del25	GCCCACTTTTACTTACTCACGTCTTT	G	.	.	.

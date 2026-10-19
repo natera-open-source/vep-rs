@@ -1,0 +1,65 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --format vcf --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --fasta reference.fa --variant_class --uploaded_allele --mask_header_cache_path [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "GRCh38 chromosome 21, the GRCh38-identifiers corpus's reference.fa.gz (its records' spans and its transcripts' spans with N elsewhere) decompressed, passed to both engines on every run; the region runs read every sequence record's reference allele from it, as the format's lookup_ref does",
+ "input": "variants.region.txt: 23 hand-built regions at the sites of the GRCh38-identifiers corpus's records on chromosome 21 of the GRCh38-release116 cache, in position order: substitutions of one and two bases with the allele after a slash and after a colon, with the strand written 1, +1 and -1 and left out, in lower case and on the chr21 spelling; a two-for-three delins; deletions of one, 24 and 25 bases, one from the reverse strand; insertions of one, three and 55 bases, one from the reverse strand; and the structural words DUP, DEL, del and INS:ME:ALU over transcript spans; variants.vcf: the same 23 changes as VCF records sorted by position (the two at 14221107 fall the other way round), a reverse-strand region's twin written on the forward strand, named by their design",
+ "sha256": {
+  "default.txt": "56fd2159fd8f52bf0cdbb3d1c584744779c246faa1ed803feabc3c953756d6fc",
+  "tab.txt": "7a4ff829160fb70c9d59e1a673b0776138557d2fc851d36767a637670b75c5f3",
+  "vcf.vcf": "4d3037ea620a353bf4ee2962d6cabb333baba77058bf13a089a90a19d0cd38b4",
+  "json.jsonl": "c3c1510040ffabd9e6cf68fe061549528cd2062b01de485f9ed095eb608292da"
+ },
+ "variants_vcf_sha256": "dce9c0a8977d34bc557dc4faca2a746c7d6b267a13c1858c68b2b0b3d12cc1d9",
+ "flag_sets": {
+  "region": {
+   "flags": [
+    "--variant_class",
+    "--uploaded_allele",
+    "--mask_header_cache_path",
+    "--format",
+    "region"
+   ],
+   "input": "variants.region.txt",
+   "expected_dir": "expected_region",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.region.txt -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --format region --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --fasta reference.fa --variant_class --uploaded_allele --mask_header_cache_path [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "59335ae218745dd2f5b29b637d69ac53084f7716ebd7cedb097ab65d74bcbac3",
+    "tab.txt": "6571795b527bb5689e679fb4e90eea98c1c497e369f454b74d2883d12647dbec",
+    "vcf.vcf": "dbbdaef85e5f5416f8fc85850e9c369d7b77f31baf4c9b7cdb2690154ee71802",
+    "json.jsonl": "535150d2dc00418649cf949c45f61f096ca4710cb46cf09483018453439309c1"
+   }
+  },
+  "region-guess": {
+   "flags": [
+    "--variant_class",
+    "--uploaded_allele",
+    "--mask_header_cache_path"
+   ],
+   "input": "variants.region.txt",
+   "expected_dir": "expected_region",
+   "perl_mode": "offline",
+   "reference": "the region set's expected_region, compared under format detection in place of --format region",
+   "sha256": {
+    "default.txt": "59335ae218745dd2f5b29b637d69ac53084f7716ebd7cedb097ab65d74bcbac3",
+    "tab.txt": "6571795b527bb5689e679fb4e90eea98c1c497e369f454b74d2883d12647dbec",
+    "vcf.vcf": "dbbdaef85e5f5416f8fc85850e9c369d7b77f31baf4c9b7cdb2690154ee71802",
+    "json.jsonl": "535150d2dc00418649cf949c45f61f096ca4710cb46cf09483018453439309c1"
+   }
+  }
+ },
+ "generator": "cache copied from tests/golden/116/GRCh38-identifiers (its json_cache and chr_synonyms.txt whole, the reference named from that corpus); variants.vcf and manifest.json by scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite GRCh38-input-region=<reference>=<input> --k 100 --seed 1 --covers region-input-format --matrix tests/parity/matrix.tsv --flag=--variant_class --flag=--uploaded_allele --flag=--mask_header_cache_path --fasta-name ../GRCh38-identifiers/reference.fa.gz; expected/ by one container run per format of the base invocation on the full Ensembl cache; build_golden_corpus.py flag-set (two sets) and classify (the base run); expected_region/ by one container run per format of the same image on the same cache under --format region with the FASTA, the four outputs gzipped and their sha256 recorded under flag_sets",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 726
+  },
+  "shards": 14,
+  "spans_by_chromosome": {
+   "21": 74
+  }
+ }
+}

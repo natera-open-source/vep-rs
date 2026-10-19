@@ -225,7 +225,7 @@ pub(super) fn upper_case_alleles(variant: &mut InputVariant) {
 /// term for the record, warned as `<word> is not a supported structural variant
 /// type` (Parser.pm:725) and annotated under it in every format: the record
 /// carries no `record_so_term`, which is the caller's cue to write the warning.
-fn structural_variant(chr: String, start: u64, end: u64, word: &str) -> InputVariant {
+pub(super) fn structural_variant(chr: String, start: u64, end: u64, word: &str) -> InputVariant {
     let term = sv_so_term_and_class(&sv_type_abbreviation(word, None));
     let mut variant = InputVariant::new(chr, start, end, b"N".to_vec(), word.as_bytes().to_vec());
     variant.is_structural = true;

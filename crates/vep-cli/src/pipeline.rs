@@ -1004,9 +1004,12 @@ fn push_vcf_header(batch: &mut LineBatch, cfg: &ReaderConfig<'_>, input_headers:
 /// call. Its VCF parser yields no variant for an empty line (Parser/VCF.pm:226),
 /// which ends the buffer fill (InputBuffer.pm:212), and a fill that opens on one
 /// ends the run with the output written so far (Runner.pm:424); here the run of
-/// lines is skipped instead. `from_line` is the number of the data record that
-/// follows the run: an empty line takes no record number, as Parser/VCF.pm:228
-/// counts none.
+/// lines is skipped instead. `from_line` is the next line number when the run
+/// is met: the VCF reader numbers data records alone (Parser/VCF.pm:228 counts
+/// no empty line), so the record after the run takes it; a list-format parser's
+/// reader counts the empty lines too, as `skip_empty_lines` advances
+/// `line_number` per empty line (Parser.pm:273-276), so the first empty line
+/// takes it and the record after the run is `from_line + skipped`.
 fn warn_empty_lines(skipped: u64, from_line: u64) {
     crate::warnings::global().warn(&empty_lines_warning(skipped, from_line));
 }
@@ -1165,13 +1168,18 @@ fn invalid_ensembl_coordinate(line: &str, delimiter: &Delimiter) -> Option<Strin
 /// the resolver refuses is warned at Parser/HGVS.pm:214 and Parser/SPDI.pm:183
 /// as `Unable to parse ...`): every refusal of an Ensembl-format line, whose
 /// feature Parser/VEP_input.pm builds from any columns, and a skipped line
-/// carrying `validate_vf`'s own text, which the SPDI parser and
-/// `RegionReferencePlaceholder` write for the size check they run on the record
-/// they built (Parser.pm:491-500), where a resolver's refusal opens with
-/// `Unable to parse`.
+/// carrying `validate_vf`'s own text, which the SPDI and region parsers write
+/// for the size check they run on the record they built (Parser.pm:491-500),
+/// where a resolver's refusal opens with `Unable to parse`. The region parser's
+/// other refusals are its own: a line outside its expression, and a structural
+/// class `%SO_TERMS` lacks, which `get_SO_term` warns about before `validate_vf`
+/// runs (Parser/Region.pm:171, 205-206).
 fn refused_by_validate_vf(format: InputFormat, error: &vep_io::IoError) -> bool {
     match (format, error) {
         (InputFormat::Ensembl, _) => true,
+        (InputFormat::Region, vep_io::IoError::SkippedLine(message)) => {
+            message.starts_with("variant size (")
+        }
         (_, vep_io::IoError::SkippedLine(message)) => !message.starts_with("Unable to parse "),
         _ => false,
     }
@@ -1228,10 +1236,11 @@ fn read_parsed(
     let mut seq = 0u64;
     let mut batch = ParsedBatch::new(seq);
     let mut report = report_skip;
-    // Ensembl VEP's line number for these formats counts the records read
-    // (Parser/VEP_input.pm:119), unless the parser counts otherwise and says so
-    // (`record_line_number`); a parser yields a record's alleles in turn, the
-    // first at allele index 0, and an unparsable line is a record of its own.
+    // Ensembl VEP's line number for these formats counts the records read and
+    // the empty lines read past (Parser/VEP_input.pm:115-119, Parser.pm:273-276),
+    // unless the parser counts otherwise and says so (`record_line_number`); a
+    // parser yields a record's alleles in turn, the first at allele index 0, and
+    // an unparsable line is a record of its own.
     let mut record_count = 0u64;
     // The verdict is the record's: Ensembl VEP builds one feature from a
     // multi-allelic line (Parser/VEP_input.pm:150-162) and warns once, so the
@@ -1245,10 +1254,12 @@ fn read_parsed(
     loop {
         let next = parser.next_variant();
         // The empty lines the parser read past before this record, warned as the
-        // VCF reader warns a run of them, numbered by the record that follows.
+        // VCF reader warns a run of them and counted into the line numbers that
+        // follow, as `skip_empty_lines` counts them (Parser.pm:273-276).
         let empty_lines = parser.take_empty_lines();
         if empty_lines > 0 {
             warn_empty_lines(empty_lines, record_count + 1);
+            record_count += empty_lines;
         }
         for warning in parser.take_warnings() {
             crate::warnings::global().warn(&warning);
@@ -2533,6 +2544,35 @@ mod tests {
     use super::*;
     use crate::vcf_parser::parse_vcf_line;
     use std::io::{BufReader, Cursor};
+
+    /// Which parser refusals the `--chr` list silences: every refusal of an
+    /// Ensembl-format line; a skipped SPDI or HGVS line unless its text opens
+    /// with `Unable to parse`; a skipped region line only for the size check,
+    /// since a line outside the region expression or a class word the table
+    /// lacks is refused before `validate_vf` runs (Parser/Region.pm:171,
+    /// 205-206); never a reader or format error.
+    #[test]
+    fn refused_by_validate_vf_names_the_checks_behind_the_chr_list() {
+        let skipped = |text: &str| vep_io::IoError::SkippedLine(text.to_string());
+        let size = skipped("variant size (1001) is bigger than --max_sv_size (1000)");
+        let unparsable =
+            skipped("Unable to parse region '21:100/A': expected chr:start-end[:strand]/allele");
+        let unknown_class = skipped("FOO is not a supported structural variant type");
+        let parse_error = vep_io::IoError::VcfParse("Invalid start position: 'x'".to_string());
+        assert!(refused_by_validate_vf(InputFormat::Ensembl, &parse_error));
+        assert!(refused_by_validate_vf(InputFormat::Ensembl, &unparsable));
+        assert!(refused_by_validate_vf(InputFormat::Region, &size));
+        assert!(!refused_by_validate_vf(InputFormat::Region, &unparsable));
+        assert!(!refused_by_validate_vf(InputFormat::Region, &unknown_class));
+        assert!(!refused_by_validate_vf(InputFormat::Region, &parse_error));
+        assert!(refused_by_validate_vf(InputFormat::Spdi, &size));
+        assert!(refused_by_validate_vf(InputFormat::Spdi, &unknown_class));
+        assert!(!refused_by_validate_vf(
+            InputFormat::Spdi,
+            &skipped("Unable to parse SPDI notation '21:3:A'")
+        ));
+        assert!(!refused_by_validate_vf(InputFormat::Hgvs, &parse_error));
+    }
 
     fn scan_all(input: &[u8], fill: usize) -> Vec<Vec<u8>> {
         let mut scanner = LineScanner::new(BufReader::with_capacity(fill, Cursor::new(input)));
@@ -3832,8 +3872,8 @@ mod tests {
     }
 
     /// The warning for a run of empty lines takes Ensembl VEP's words
-    /// (`Parser.pm:283-290`), singular for one line, and names the data record
-    /// the run precedes.
+    /// (`Parser.pm:283-290`), singular for one line, and names the line the run
+    /// starts on.
     #[test]
     fn blank_lines_counted() {
         assert_eq!(

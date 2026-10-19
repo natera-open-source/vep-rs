@@ -164,49 +164,6 @@ impl ReferenceSequence for FastaReference {
     }
 }
 
-/// The region parser's records with the reference allele Ensembl VEP's region
-/// parser gives them: `N` per base of the span, `-` for an insertion
-/// (Parser/Region.pm:189), where the parser writes `-` for every record. The
-/// bases are read from the FASTA by the `lookup_ref` the format switches on.
-/// A span over `--max_sv_size` is refused before the run of `N` is built, with
-/// the text `validate_vf` refuses it with (Parser.pm:491-500), so the run is
-/// never longer than the cap; the refusal holds under `--dont_skip` too, where
-/// Ensembl VEP carries the feature unannotated.
-struct RegionReferencePlaceholder<P> {
-    parser: P,
-    max_sv_size: Option<u64>,
-}
-
-impl<P: vep_io::InputParser> vep_io::InputParser for RegionReferencePlaceholder<P> {
-    fn next_variant(&mut self) -> Option<Result<InputVariant, vep_io::IoError>> {
-        let mut variant = match self.parser.next_variant()? {
-            Ok(variant) => variant,
-            Err(error) => return Some(Err(error)),
-        };
-        let span = variant.end.saturating_sub(variant.start);
-        if let Some(max) = self.max_sv_size.filter(|&max| span > max) {
-            return Some(Err(vep_io::IoError::SkippedLine(format!(
-                "variant size ({span}) is bigger than --max_sv_size ({max})"
-            ))));
-        }
-        if !variant.is_structural && variant.ref_allele == b"-" && variant.start <= variant.end {
-            let reference = "N".repeat((variant.end - variant.start + 1) as usize);
-            variant.allele_string = format!(
-                "{reference}/{}",
-                String::from_utf8_lossy(variant.alt_allele())
-            );
-            variant.ref_allele = reference.into_bytes();
-            variant.variant_class =
-                vep_core::variant::classify_variant(&variant.ref_allele, variant.alt_allele());
-        }
-        Some(Ok(variant))
-    }
-
-    fn take_empty_lines(&mut self) -> u64 {
-        self.parser.take_empty_lines()
-    }
-}
-
 /// Refuses a named input file that is not there with Ensembl VEP's text
 /// (Parser.pm:239); `--input_data` and `STDIN` name no file to check.
 fn check_input_file_exists(config: &Config) -> Result<(), CliError> {
@@ -1683,10 +1640,7 @@ impl Runner {
                 }
                 let (reader, last_line) = pipeline::LineCapture::new(reader);
                 parser_source(
-                    Box::new(RegionReferencePlaceholder {
-                        parser: vep_io::input::region::RegionParser::new(reader),
-                        max_sv_size: config.max_sv_size,
-                    }),
+                    Box::new(vep_io::input::region::RegionParser::new(reader, &context)),
                     last_line,
                 )
             }
@@ -2928,43 +2882,6 @@ mod tests {
         assert_eq!(parquet_row_group_rows(5_000), 6_144);
         assert_eq!(parquet_row_group_rows(1), 2_048);
         assert_eq!(parquet_row_group_rows(0), 2_048);
-    }
-
-    /// A region record's reference is `N` per base of its span and `-` for an
-    /// insertion (Parser/Region.pm:189); a span over `--max_sv_size` is refused
-    /// with `validate_vf`'s text (Parser.pm:491-500) before any run of `N` is
-    /// built, so a span no memory could hold is a skipped line, and the records
-    /// after it are still read.
-    #[test]
-    fn region_placeholder_refuses_an_oversize_span_before_building_its_reference() {
-        use vep_io::InputParser;
-        let input = "21:1-4611686018427387903/A\n21:5-7/C\n21:6-5/T\n21:1-1001/G\n";
-        let mut parser = RegionReferencePlaceholder {
-            parser: vep_io::input::region::RegionParser::new(Cursor::new(input)),
-            max_sv_size: Some(1000),
-        };
-        let refused = parser.next_variant().unwrap().unwrap_err();
-        assert_eq!(
-            refused.to_string(),
-            "variant size (4611686018427387902) is bigger than --max_sv_size (1000)"
-        );
-        let deletion = parser.next_variant().unwrap().unwrap();
-        assert_eq!(deletion.ref_allele, b"NNN");
-        assert_eq!(deletion.allele_string, "NNN/C");
-        let insertion = parser.next_variant().unwrap().unwrap();
-        assert_eq!(insertion.ref_allele, b"-");
-        assert_eq!(insertion.allele_string, "-/T");
-        let at_the_cap = parser.next_variant().unwrap().unwrap();
-        assert_eq!(at_the_cap.ref_allele.len(), 1001);
-        assert!(parser.next_variant().is_none());
-        let mut uncapped = RegionReferencePlaceholder {
-            parser: vep_io::input::region::RegionParser::new(Cursor::new("21:1-2000/G\n")),
-            max_sv_size: None,
-        };
-        assert_eq!(
-            uncapped.next_variant().unwrap().unwrap().ref_allele.len(),
-            2000
-        );
     }
 
     /// A BGZF block header is the gzip magic with FEXTRA set and a `BC` subfield

@@ -227,43 +227,10 @@ fn has_allele_pair(s: &str) -> bool {
         .any(|w| is_allele_byte(w[0]) && w[1] == b'/' && is_allele_byte(w[2]))
 }
 
-/// `_valid_region_regex` (Utils/VEP.pm:391):
-/// `^([^:]+):(\d+)-(\d+)(:[-\+]?1)?[\/:]([a-z0-9:]{3,}|[ACGTN-]+)$` under `/i`.
+/// `_valid_region_regex` (Utils/VEP.pm:391), the expression the region parser
+/// reads a line by.
 fn is_region(s: &str) -> bool {
-    let Some((chr, rest)) = s.split_once(':') else {
-        return false;
-    };
-    if chr.is_empty() {
-        return false;
-    }
-    let Some((start, rest)) = rest.split_once('-') else {
-        return false;
-    };
-    if !all_digits(start) {
-        return false;
-    }
-    let end_len = rest.bytes().take_while(|b| b.is_ascii_digit()).count();
-    if end_len == 0 {
-        return false;
-    }
-    let tail = &rest[end_len..];
-    // With the optional strand group, then without it.
-    let after_strand = tail.strip_prefix(':').and_then(|after_colon| {
-        let unsigned = after_colon.strip_prefix(['-', '+']).unwrap_or(after_colon);
-        unsigned.strip_prefix('1')
-    });
-    after_strand.is_some_and(is_region_tail) || is_region_tail(tail)
-}
-
-/// `[\/:]([a-z0-9:]{3,}|[ACGTN-]+)$` under `/i`: a separator, then to the end
-/// either three or more alphanumerics and colons or an allele.
-fn is_region_tail(tail: &str) -> bool {
-    tail.strip_prefix(['/', ':']).is_some_and(|rest| {
-        let three_or_more_alphanumerics =
-            rest.len() >= 3 && rest.bytes().all(|b| b.is_ascii_alphanumeric() || b == b':');
-        let allele = !rest.is_empty() && rest.bytes().all(is_allele_byte);
-        three_or_more_alphanumerics || allele
-    })
+    super::region::match_region(s).is_some()
 }
 
 /// `^CA\d{1,}$` under `/i`.
