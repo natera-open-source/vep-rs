@@ -299,7 +299,20 @@ fn delimiter_regular_expression_is_refused() {
         assert!(!out.exists(), "{value:?}: nothing is written");
     }
     let hgvs = write(dir.path(), "records.hgvs", "21:g.30282169C>A\n");
-    let rows = annotate(dir.path(), &hgvs, &["--format", "hgvs", "--delimiter", "|"]);
+    let fasta = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-input-hgvs/reference.fa.gz");
+    let rows = annotate(
+        dir.path(),
+        &hgvs,
+        &[
+            "--format",
+            "hgvs",
+            "--delimiter",
+            "|",
+            "--fasta",
+            fasta.to_str().unwrap(),
+        ],
+    );
     assert!(!rows.is_empty());
 }
 

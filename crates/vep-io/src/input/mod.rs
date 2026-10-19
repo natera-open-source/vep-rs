@@ -42,6 +42,13 @@ pub trait ReferenceSequence: Send + Sync {
     /// The bases of `chr` from `start` to `end`, 1-based and inclusive; `None`
     /// when the reference has no such chromosome or span.
     fn sequence(&self, chr: &str, start: u64, end: u64) -> Option<Vec<u8>>;
+
+    /// The name the reference gives the sequence `chr` reaches: `chr` itself
+    /// when a sequence carries it, else the one its `chr` spelling or a synonym
+    /// names; `None` when no sequence is reached. A notation that names a
+    /// chromosome by an accession is printed under this name, as Ensembl VEP
+    /// prints a slice's `seq_region_name`.
+    fn record_name(&self, chr: &str) -> Option<String>;
 }
 
 /// What the text-format parsers are built against beyond their reader

@@ -79,7 +79,7 @@ fn decompressed_fasta(dir: &Path) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh37-hgvs");
     let compressed = std::fs::File::open(corpus.join("reference.fa.gz")).unwrap();
     let mut data = Vec::new();
-    flate2::read::GzDecoder::new(compressed)
+    flate2::read::MultiGzDecoder::new(compressed)
         .read_to_end(&mut data)
         .unwrap();
     let target = dir.join("reference.fa");
@@ -723,20 +723,33 @@ fn dont_skip_keeps_an_absent_chromosome_record_as_intergenic() {
 /// Parser/Region.pm:167, Parser/HGVS.pm:151), so two records skipped for one
 /// reason are two warnings. The line Ensembl VEP quotes from its parser's
 /// `current_block` (BaseVEP.pm:846-851) is quoted for an Ensembl-format record
-/// and absent for the region and HGVS formats, whose parsers expose no line
-/// text. The region run names a FASTA, which the format needs (Parser/Region.pm:115).
+/// and absent for the region format, whose parser exposes no line text. The
+/// region and HGVS runs name a FASTA, which both formats need
+/// (Parser/Region.pm:115; the HGVS notation is resolved against it), so a
+/// chromosome the FASTA lacks fails an HGVS notation before the cache is
+/// consulted, with the parser's own warning, as the slice fetch fails it in
+/// Ensembl VEP.
 #[test]
 fn non_vcf_skips_carry_the_record_number() {
     let dir = tempfile::tempdir().unwrap();
     let fasta = decompressed_fasta(dir.path());
-    for (format, records, quoted) in [
+    let not_in_cache = |quoted: &str| {
+        format!("{quoted}Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features")
+    };
+    let not_in_fasta = |notation: &str| {
+        format!("Unable to parse HGVS notation '{notation}': The reference FASTA has no sequence named Z")
+    };
+    for (format, records, warnings) in [
         (
             "ensembl",
             "21\t30165801\t30165801\tA/G\t1\n\
              Z\t1000\t1000\tA/G\t1\n\
              Z\t2000\t2000\tA/G\t1\n\
              21\t30165811\t30165811\tA/G\t1\n",
-            ["(Z 1000 1000 A/G 1): ", "(Z 2000 2000 A/G 1): "],
+            [
+                not_in_cache("(Z 1000 1000 A/G 1): "),
+                not_in_cache("(Z 2000 2000 A/G 1): "),
+            ],
         ),
         (
             "region",
@@ -744,29 +757,32 @@ fn non_vcf_skips_carry_the_record_number() {
              Z:1000-1000:1/G\n\
              Z:2000-2000:1/G\n\
              21:30165811-30165811:1/G\n",
-            ["", ""],
+            [not_in_cache(""), not_in_cache("")],
         ),
         (
             "hgvs",
             "21:g.30165801A>G\n\
              Z:g.1000A>G\n\
              Z:g.2000A>G\n\
-             21:g.30165811A>G\n",
-            ["", ""],
+             21:g.30165811T>G\n",
+            [not_in_fasta("Z:g.1000A>G"), not_in_fasta("Z:g.2000A>G")],
         ),
     ] {
         let input = dir.path().join(format!("in.{format}"));
         std::fs::write(&input, records).unwrap();
         let out = dir.path().join(format!("out.{format}"));
+        // The corpus lifts the structural-variant limit; a genomic HGVS notation
+        // under the lifted limit is skipped, as Ensembl VEP skips it.
+        let mut args = corpus_args_with_input(&input);
+        if format == "hgvs" {
+            let limit = args.iter().position(|a| a == "--max_sv_size").unwrap();
+            args.drain(limit..limit + 2);
+        }
         let mut command = vep();
-        command.args(corpus_args_with_input(&input)).args([
-            "--format",
-            format,
-            "-o",
-            out.to_str().unwrap(),
-            "--quiet",
-        ]);
-        if format == "region" {
+        command
+            .args(args)
+            .args(["--format", format, "-o", out.to_str().unwrap(), "--quiet"]);
+        if format != "ensembl" {
             command.arg("--fasta").arg(&fasta);
         }
         let output = command.stdin(Stdio::null()).output().unwrap();
@@ -782,8 +798,8 @@ fn non_vcf_skips_carry_the_record_number() {
                 .lines()
                 .collect::<Vec<_>>(),
             [
-                format!("WARNING: line 2 skipped {}Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features", quoted[0]),
-                format!("WARNING: line 3 skipped {}Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features", quoted[1]),
+                format!("WARNING: line 2 skipped {}", warnings[0]),
+                format!("WARNING: line 3 skipped {}", warnings[1]),
             ],
             "{format}"
         );

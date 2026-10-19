@@ -370,6 +370,10 @@ mod tests {
             }
             Some(bases.as_bytes()[start as usize - 1..end as usize].to_vec())
         }
+
+        fn record_name(&self, chr: &str) -> Option<String> {
+            self.0.contains_key(chr).then(|| chr.to_string())
+        }
     }
 
     /// Chromosome 21 as `TGCATACGTTAGGCATGACC...`, the cache holding `21` and

@@ -207,7 +207,7 @@ fn sequence_variants(
 /// `validate_vf`'s `tr/[a-z]/[A-Z]/` on the allele string (Parser.pm:554),
 /// applied to the alleles the string is built from; the class is read again,
 /// since `classify_variant` reads the bases.
-fn upper_case_alleles(variant: &mut InputVariant) {
+pub(super) fn upper_case_alleles(variant: &mut InputVariant) {
     variant.ref_allele.make_ascii_uppercase();
     for alt in &mut variant.alt_alleles {
         alt.make_ascii_uppercase();

@@ -1,302 +1,562 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Simplified genomic HGVS notation parser.
+//! HGVS notation input, one notation per line, read as Ensembl VEP's
+//! `Parser/HGVS.pm` `create_VariationFeatures` (release/116.2, lines 141-252)
+//! reads it over ensembl-io's list parser and resolves it through
+//! `VariationFeatureAdaptor::fetch_by_hgvs_notation` (ensembl-variation
+//! release/116, lines 1767-1991):
 //!
-//! Supports basic genomic HGVS expressions:
 //! ```text
-//! 21:g.25585733A>G          (substitution)
-//! 21:g.25585656_25585660del (deletion)
-//! 21:g.25585733delAinsGT    (delins)
-//! 21:g.25585734_25585735insACG (insertion)
+//! 21:g.25585733A>G
+//! NC_000021.9:g.25585656_25585660del
+//! MT:m.8993T>G
 //! ```
 //!
-//! Transcript-level HGVS (e.g., `ENST00000366667:c.803C>T`) is unsupported
-//! and returns an error.
+//! Whitespace is removed from the line (`:156`), a notation with a `[` or `]`
+//! (a repeat) is skipped with the parser's warning (`:158-161`), and the
+//! notation is split into its reference, type and description after a
+//! `(gene)` qualifier and a `(p.…)` suffix are removed (`Notation`). The
+//! genomic types `g.` and `m.` are read by [`genomic`] against the run's
+//! reference FASTA, which stands in for the slice Ensembl VEP fetches from its
+//! database (its own parser accepts no HGVS input offline, `:104`); a `c.`,
+//! `n.` or `p.` notation fails its line as unimplemented. An `r.` notation is
+//! one Ensembl VEP's resolver throws on (`HGVS type r not recognised`, `:1989`)
+//! and its parser then skips with that message; here it fails the line with
+//! [`IoError::Unsupported`], which stops the run.
+//!
+//! A notation Ensembl VEP cannot resolve is warned about as `Unable to parse
+//! HGVS notation '<notation>'` followed by the exception its resolver threw
+//! (`:204-216`) and the line is skipped; here such a line fails with
+//! [`IoError::SkippedLine`] carrying that text and the exception's message on one
+//! line, for the caller to warn about and skip. The record is named by
+//! the notation as written without its whitespace (`:237, 242`), which is what
+//! `Uploaded_variation`, the JSON `id` and the JSON `input` print. Ensembl
+//! VEP's list parser has no comment lines, so a `#` line is a notation it
+//! cannot parse and warns about; here a `#` line is a comment, and an empty or
+//! whitespace-only line is counted for the caller's `skip_empty_lines`
+//! warning.
+
+pub mod genomic;
 
 use std::io::BufRead;
+use std::sync::Arc;
 
-use vep_core::coordinate::parse_coordinate;
 use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
 
-use super::InputParser;
+use super::{is_perl_space, InputParser, ParserContext, ReferenceSequence};
 
-/// Parser for genomic HGVS notation.
+/// Parser for HGVS notation input.
 pub struct HgvsParser<R: BufRead> {
     reader: R,
-    line_buf: String,
+    reference: Option<Arc<dyn ReferenceSequence>>,
+    /// `--lookup_ref`: the reference allele a notation writes is replaced by
+    /// the genome's instead of being checked against it (`-replace_ref`,
+    /// Parser/HGVS.pm:192).
+    lookup_ref: bool,
+    /// `--max_sv_size` as given, the span a genomic notation must stay under
+    /// (`max_size`, `:169`): `None` is the flag's `-1`, kept and compared as
+    /// written (`$end - $start < -1`), so only a span written end first by two
+    /// or more bases passes under it; `0` reads as 5000.
+    max_sv_size: Option<u64>,
+    line_buf: Vec<u8>,
+    /// Empty lines read since the last [`InputParser::take_empty_lines`].
+    empty_lines: u64,
 }
 
 impl<R: BufRead> HgvsParser<R> {
-    pub fn new(reader: R) -> Self {
+    /// A parser over `reader` resolving its notations against the context's
+    /// reference under its `--max_sv_size`, replacing each written reference
+    /// allele by the genome's when `lookup_ref` is set.
+    pub fn new(reader: R, context: &ParserContext, lookup_ref: bool) -> Self {
         Self {
             reader,
-            line_buf: String::new(),
+            reference: context.fasta.clone(),
+            lookup_ref,
+            max_sv_size: context.max_sv_size,
+            line_buf: Vec::new(),
+            empty_lines: 0,
         }
     }
 
-    /// Parse a single HGVS expression into an `InputVariant`.
-    fn parse_line(&self, line: &str) -> Result<Option<InputVariant>, IoError> {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            return Ok(None);
+    /// The variant of one notation, its whitespace already removed.
+    fn read_notation(&self, hgvs: &str) -> Result<InputVariant, IoError> {
+        if hgvs.contains(['[', ']']) {
+            return Err(unable(hgvs, None));
         }
-
-        // Ensembl VEP's HGVS parser knows the types c, g, m, n and p; an r.
-        // notation dies with `HGVS type r not recognised` (ensembl-variation
-        // DBSQL/VariationFeatureAdaptor.pm:1989).
-        if line.contains(":r.") {
-            return Err(IoError::Unsupported(
+        let notation = Notation::split(hgvs).map_err(|message| unable(hgvs, Some(&message)))?;
+        match notation.kind.map(|kind| kind.to_ascii_lowercase()) {
+            Some('g' | 'm') => {
+                let Some(reference) = &self.reference else {
+                    return Err(IoError::Unsupported(
+                        "Cannot use HGVS format in offline mode without a FASTA file".into(),
+                    ));
+                };
+                genomic::variant(
+                    hgvs,
+                    &notation,
+                    reference.as_ref(),
+                    self.lookup_ref,
+                    self.max_sv_size,
+                )
+            }
+            Some('c' | 'n' | 'p') => Err(IoError::NotImplemented(
+                "transcript HGVS is not supported".into(),
+            )),
+            Some('r') => Err(IoError::Unsupported(
                 "HGVS r. notation is not supported (Ensembl VEP refuses it too: HGVS type r not recognised)"
                     .into(),
+            )),
+            other => Err(unable(
+                hgvs,
+                Some(&format!(
+                    "HGVS type {} not recognised for {}",
+                    other.map(String::from).unwrap_or_default(),
+                    notation.cleaned
+                )),
+            )),
+        }
+    }
+}
+
+/// The skip Ensembl VEP's parser writes for a notation its resolver refused
+/// (Parser/HGVS.pm:159, 214): the notation as written, then the resolver's
+/// message where there is one.
+pub(super) fn unable(hgvs: &str, message: Option<&str>) -> IoError {
+    IoError::SkippedLine(match message {
+        Some(message) => format!("Unable to parse HGVS notation '{hgvs}': {message}"),
+        None => format!("Unable to parse HGVS notation '{hgvs}'"),
+    })
+}
+
+/// A notation split as `fetch_by_hgvs_notation` splits it
+/// (VariationFeatureAdaptor.pm:1784-1820): a `(gene)` qualifier before the
+/// colon and a `(p.…)` suffix are removed, the reference is the text before
+/// the first colon, the type is the letter that follows the colon when it is
+/// one of `c`, `g`, `m`, `n`, `r` or `p`, and the description is the rest
+/// after that letter's dot. A notation with no colon, an empty reference or no
+/// digit, `*` or `-` after the colon cannot be parsed; a ClinVar range with an
+/// unknown bound (`-?_`, `(?_`) and an insertion of unspecified bases
+/// (`ins56`, `(100_200)insTC`) are refused with Ensembl VEP's messages; any
+/// other parenthesised text in the description cannot be interpreted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Notation {
+    /// The sequence the notation names before the colon, with the version
+    /// removed from an Ensembl or LRG identifier (`:1816-1818`).
+    pub reference: String,
+    /// The type letter as written, `None` when the description follows the
+    /// colon directly.
+    pub kind: Option<char>,
+    /// The variant description after the type and its dot.
+    pub description: String,
+    /// The notation with its qualifier and suffix removed, the form Ensembl
+    /// VEP's messages quote.
+    pub cleaned: String,
+}
+
+impl Notation {
+    pub(super) fn split(hgvs: &str) -> Result<Self, String> {
+        let cleaned = without_qualifiers(hgvs);
+        let could_not_parse = || format!("Could not parse the HGVS notation {cleaned}");
+        let (reference, rest) = cleaned
+            .split_once(':')
+            .filter(|(reference, _)| !reference.is_empty())
+            .ok_or_else(could_not_parse)?;
+        if !rest.contains(|c: char| c.is_ascii_digit() || c == '*' || c == '-') {
+            return Err(could_not_parse());
+        }
+        let kind = rest
+            .chars()
+            .next()
+            .filter(|c| matches!(c.to_ascii_lowercase(), 'c' | 'g' | 'm' | 'n' | 'r' | 'p'));
+        let after_kind = if kind.is_some() { &rest[1..] } else { rest };
+        let description = after_kind.strip_prefix('.').unwrap_or(after_kind);
+        if has_unknown_location(description) {
+            return Err(
+                "HGVS notation for variation with unknown location is not supported".to_string(),
+            );
+        }
+        if is_imprecise_insertion(description) {
+            return Err(format!(
+                "HGVS notation for insertion '{description}' is not supported"
             ));
         }
-        if line.contains(":c.") || line.contains(":p.") || line.contains(":n.") {
-            return Err(IoError::NotImplemented(
-                "transcript HGVS is not supported".into(),
-            ));
-        }
-
-        let (chr, rest) = line
-            .split_once(":g.")
-            .ok_or_else(|| IoError::VcfParse(format!("Invalid HGVS notation: '{}'", line)))?;
-
-        let chr = chr.to_string();
-
-        if rest.contains('>') {
-            self.parse_substitution(&chr, rest)
-        } else if rest.contains("delins") || (rest.contains("del") && rest.contains("ins")) {
-            self.parse_delins(&chr, rest)
-        } else if rest.contains("ins") {
-            self.parse_insertion(&chr, rest)
-        } else if rest.contains("del") {
-            self.parse_deletion(&chr, rest)
-        } else if rest.contains("dup") {
-            self.parse_duplication(&chr, rest)
-        } else {
-            Err(IoError::VcfParse(format!(
-                "Unrecognized HGVS type in: '{}'",
-                line
-            )))
-        }
-    }
-
-    /// Parse a substitution like "25585733A>G".
-    fn parse_substitution(&self, chr: &str, rest: &str) -> Result<Option<InputVariant>, IoError> {
-        let gt_pos = rest
-            .find('>')
-            .ok_or_else(|| IoError::VcfParse(format!("No '>' in substitution: '{}'", rest)))?;
-
-        let before_gt = &rest[..gt_pos];
-        let alt = &rest[gt_pos + 1..];
-
-        let pos_end = before_gt
-            .find(|c: char| c.is_ascii_alphabetic())
-            .unwrap_or(before_gt.len());
-
-        let pos_str = &before_gt[..pos_end];
-        let ref_allele = &before_gt[pos_end..];
-
-        let pos = parse_coordinate(pos_str)
-            .ok_or_else(|| IoError::VcfParse(format!("Invalid position: '{}'", pos_str)))?;
-
-        if ref_allele.is_empty() || alt.is_empty() {
-            return Err(IoError::VcfParse(format!(
-                "Missing ref or alt allele in substitution: '{}'",
-                rest
-            )));
-        }
-
-        let variant = InputVariant::new(
-            chr.to_string(),
-            pos,
-            pos,
-            ref_allele.as_bytes().to_vec(),
-            alt.as_bytes().to_vec(),
-        );
-
-        Ok(Some(variant))
-    }
-
-    /// Parse a deletion like "25585656_25585660del" or "25585656_25585660delACGTG".
-    fn parse_deletion(&self, chr: &str, rest: &str) -> Result<Option<InputVariant>, IoError> {
-        let del_pos = rest
-            .find("del")
-            .ok_or_else(|| IoError::VcfParse(format!("No 'del' in deletion: '{}'", rest)))?;
-
-        let pos_part = &rest[..del_pos];
-        let deleted_seq = &rest[del_pos + 3..]; // After "del"
-
-        let (start, end) = self.parse_position_range(pos_part)?;
-
-        let ref_allele = if deleted_seq.is_empty() {
-            b"-".to_vec()
-        } else {
-            deleted_seq.as_bytes().to_vec()
+        let description = match parenthesised(description) {
+            Some("(p.=)") => &description[..description.find('(').unwrap_or(0)],
+            Some(extra) => {
+                return Err(format!(
+                    "Could not parse the HGVS notation {cleaned} - can't interpret '{extra}'"
+                ))
+            }
+            None => description,
         };
-
-        let variant = InputVariant::new(chr.to_string(), start, end, ref_allele, b"-".to_vec());
-
-        Ok(Some(variant))
-    }
-
-    /// Parse an insertion like "25585734_25585735insACG".
-    fn parse_insertion(&self, chr: &str, rest: &str) -> Result<Option<InputVariant>, IoError> {
-        let ins_pos = rest
-            .find("ins")
-            .ok_or_else(|| IoError::VcfParse(format!("No 'ins' in insertion: '{}'", rest)))?;
-
-        let pos_part = &rest[..ins_pos];
-        let inserted_seq = &rest[ins_pos + 3..]; // After "ins"
-
-        if inserted_seq.is_empty() {
-            return Err(IoError::VcfParse(format!(
-                "Missing inserted sequence in: '{}'",
-                rest
-            )));
-        }
-
-        let (start, end) = self.parse_position_range(pos_part)?;
-
-        let variant = InputVariant::new(
-            chr.to_string(),
-            start,
-            end,
-            b"-".to_vec(),
-            inserted_seq.as_bytes().to_vec(),
-        );
-
-        Ok(Some(variant))
-    }
-
-    /// Parse a delins like "25585733delAinsGT".
-    fn parse_delins(&self, chr: &str, rest: &str) -> Result<Option<InputVariant>, IoError> {
-        let del_pos = rest
-            .find("del")
-            .ok_or_else(|| IoError::VcfParse(format!("No 'del' in delins: '{}'", rest)))?;
-        let ins_pos = rest
-            .find("ins")
-            .ok_or_else(|| IoError::VcfParse(format!("No 'ins' in delins: '{}'", rest)))?;
-
-        let pos_part = &rest[..del_pos];
-        let deleted_seq = &rest[del_pos + 3..ins_pos];
-        let inserted_seq = &rest[ins_pos + 3..];
-
-        if inserted_seq.is_empty() {
-            return Err(IoError::VcfParse(format!(
-                "Missing inserted sequence in delins: '{}'",
-                rest
-            )));
-        }
-
-        let (start, end) = self.parse_position_range(pos_part)?;
-
-        let ref_allele = if deleted_seq.is_empty() {
-            b"-".to_vec()
+        let reference = if reference.starts_with("ENS") || is_lrg(reference) {
+            without_versions(reference)
         } else {
-            deleted_seq.as_bytes().to_vec()
+            reference.to_string()
         };
-
-        let variant = InputVariant::new(
-            chr.to_string(),
-            start,
-            end,
-            ref_allele,
-            inserted_seq.as_bytes().to_vec(),
-        );
-
-        Ok(Some(variant))
+        Ok(Self {
+            reference,
+            kind,
+            description: description.to_string(),
+            cleaned,
+        })
     }
+}
 
-    /// Parse a duplication like "25585733dupA".
-    fn parse_duplication(&self, chr: &str, rest: &str) -> Result<Option<InputVariant>, IoError> {
-        let dup_pos = rest
-            .find("dup")
-            .ok_or_else(|| IoError::VcfParse(format!("No 'dup' in duplication: '{}'", rest)))?;
-
-        let pos_part = &rest[..dup_pos];
-        let dup_seq = &rest[dup_pos + 3..]; // After "dup"
-
-        let (start, end) = self.parse_position_range(pos_part)?;
-
-        // A duplication is effectively an insertion of the duplicated sequence
-        let alt = if dup_seq.is_empty() {
-            b"-".to_vec()
-        } else {
-            dup_seq.as_bytes().to_vec()
-        };
-
-        let variant = InputVariant::new(chr.to_string(), start, end, b"-".to_vec(), alt);
-
-        Ok(Some(variant))
-    }
-
-    /// Parse a position or position range from a string.
-    /// Handles both "123" and "123_456".
-    fn parse_position_range(&self, s: &str) -> Result<(u64, u64), IoError> {
-        if let Some((start_str, end_str)) = s.split_once('_') {
-            let start = parse_coordinate(start_str).ok_or_else(|| {
-                IoError::VcfParse(format!("Invalid start position: '{}'", start_str))
-            })?;
-            let end = parse_coordinate(end_str)
-                .ok_or_else(|| IoError::VcfParse(format!("Invalid end position: '{}'", end_str)))?;
-            Ok((start, end))
-        } else {
-            let pos = parse_coordinate(s)
-                .ok_or_else(|| IoError::VcfParse(format!("Invalid position: '{}'", s)))?;
-            Ok((pos, pos))
+/// `s/\(.+\):/:/` then `s/\(p\..+\)//` (VariationFeatureAdaptor.pm:1785-1786):
+/// the text from the first `(` to the last `):` goes, the colon staying, then
+/// the text from the first `(p.` to the last `)`.
+fn without_qualifiers(hgvs: &str) -> String {
+    let mut text = hgvs.to_string();
+    if let (Some(open), Some(close)) = (text.find('('), text.rfind("):")) {
+        if close > open + 1 {
+            text.replace_range(open..=close, "");
         }
     }
+    if let (Some(open), Some(close)) = (text.find("(p."), text.rfind(')')) {
+        if close > open + 3 {
+            text.replace_range(open..=close, "");
+        }
+    }
+    text
+}
+
+/// `(\-\?\_.+\?)|(\(\?\_.+\))` (`:1798`): a ClinVar range whose bound is
+/// unknown, `88957372-?_89042944+?dup` or `(?_145413072)(145592772_145596903)del`.
+fn has_unknown_location(description: &str) -> bool {
+    let follows = |marker: &str, closer: char| {
+        description.find(marker).is_some_and(|at| {
+            description[at + marker.len()..]
+                .rfind(closer)
+                .is_some_and(|close| close > 0)
+        })
+    };
+    follows("-?_", '?') || follows("(?_", ')')
+}
+
+/// `\(.+\_.+\)ins|ins\(?\d+\)?` (`:1805`, lower case only): an insertion
+/// between two positions given as a range, or of a number of unspecified bases.
+fn is_imprecise_insertion(description: &str) -> bool {
+    let ranged = description.match_indices(")ins").any(|(close, _)| {
+        description[..close].find('(').is_some_and(|open| {
+            let between = &description[open + 1..close];
+            between
+                .match_indices('_')
+                .any(|(underscore, _)| underscore > 0 && underscore + 1 < between.len())
+        })
+    });
+    let counted = description.match_indices("ins").any(|(at, _)| {
+        let after = &description[at + 3..];
+        let after = after.strip_prefix('(').unwrap_or(after);
+        after.starts_with(|c: char| c.is_ascii_digit())
+    });
+    ranged || counted
+}
+
+/// The parenthesised text `(.+?)(\(.+\))` captures when `\(.+\)` matches the
+/// description (`:1810-1813`): from the first `(` that has at least one
+/// character before it and a `)` two or more characters after it, to the last
+/// `)`; the empty string when the description opens with its only such `(`,
+/// which leaves the capture undefined; `None` when no `(` encloses a character.
+fn parenthesised(description: &str) -> Option<&str> {
+    let close = description.rfind(')')?;
+    let encloses = |open: usize| close >= open + 2;
+    if !description.find('(').is_some_and(encloses) {
+        return None;
+    }
+    let extra = description
+        .match_indices('(')
+        .map(|(open, _)| open)
+        .find(|open| *open > 0)
+        .filter(|open| encloses(*open))
+        .map_or("", |open| &description[open..=close]);
+    Some(extra)
+}
+
+/// `^LRG_\d+`: an LRG identifier, whose version is removed as an Ensembl one's is.
+fn is_lrg(reference: &str) -> bool {
+    reference
+        .strip_prefix("LRG_")
+        .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+}
+
+/// `s/\.\d+//g`: every dot followed by digits removed.
+fn without_versions(reference: &str) -> String {
+    let mut out = String::with_capacity(reference.len());
+    let mut chars = reference.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '.' && chars.peek().is_some_and(char::is_ascii_digit) {
+            while chars.peek().is_some_and(char::is_ascii_digit) {
+                chars.next();
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 impl<R: BufRead + Send> InputParser for HgvsParser<R> {
     fn next_variant(&mut self) -> Option<Result<InputVariant, IoError>> {
         loop {
             self.line_buf.clear();
-            match self.reader.read_line(&mut self.line_buf) {
+            match self.reader.read_until(b'\n', &mut self.line_buf) {
                 Ok(0) => return None,
-                Ok(_) => match self.parse_line(&self.line_buf) {
-                    Ok(Some(variant)) => return Some(Ok(variant)),
-                    Ok(None) => continue,
-                    Err(e) => return Some(Err(e)),
-                },
+                Ok(_) => {}
                 Err(e) => return Some(Err(IoError::Io(e))),
             }
+            let text = String::from_utf8_lossy(&self.line_buf);
+            if text.starts_with('#') {
+                continue;
+            }
+            // `s/\s+//g` (Parser/HGVS.pm:156): the line end goes with every
+            // other blank.
+            let hgvs: String = text.chars().filter(|c| !is_perl_space(*c)).collect();
+            if hgvs.is_empty() {
+                self.empty_lines += 1;
+                continue;
+            }
+            return Some(self.read_notation(&hgvs));
         }
+    }
+
+    fn take_empty_lines(&mut self) -> u64 {
+        std::mem::take(&mut self.empty_lines)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use std::io::Cursor;
-    use vep_core::coordinate::MAX_COORD;
 
-    /// A coordinate is read up to `MAX_COORD`; a position past it fails the line.
-    #[test]
-    fn coordinates_past_the_ceiling_fail_the_line() {
-        let data = "21:g.4611686018427387903A>G\n\
-                    21:g.4611686018427387904A>G\n\
-                    21:g.100_18446744073709551615del\n";
-        let mut parser = HgvsParser::new(Cursor::new(data.as_bytes()));
-        let kept = parser.next_variant().unwrap().unwrap();
-        assert_eq!(kept.start, MAX_COORD);
-        for expected in ["Invalid position", "Invalid end position"] {
-            let err = parser.next_variant().unwrap().unwrap_err().to_string();
-            assert!(err.contains(expected), "{err}");
+    /// A reference of named sequences, each known from an offset, reached by
+    /// its own name or an alias.
+    struct Genome {
+        sequences: HashMap<&'static str, (u64, &'static str)>,
+        aliases: HashMap<&'static str, &'static str>,
+    }
+
+    impl Genome {
+        /// GRCh38 chromosome 21 from 30,282,140 and MT from 8,990, with the
+        /// accession and `chr` spellings of chromosome 21 as aliases.
+        fn grch38() -> Arc<dyn ReferenceSequence> {
+            Arc::new(Self {
+                sequences: HashMap::from([
+                    ("21", (30_282_140, "TCCAGCTGCTATAAATTCTGGAAGTTGGTCAATAGC")),
+                    ("MT", (8_990, "CCCTGGC")),
+                ]),
+                aliases: HashMap::from([("NC_000021.9", "21"), ("chr21", "21")]),
+            })
         }
     }
 
+    impl ReferenceSequence for Genome {
+        fn sequence(&self, chr: &str, start: u64, end: u64) -> Option<Vec<u8>> {
+            let (offset, bases) = self.sequences.get(self.record_name(chr)?.as_str())?;
+            let first = usize::try_from(start.checked_sub(*offset)?).ok()?;
+            let last = usize::try_from(end.checked_sub(*offset)?).ok()?;
+            bases.get(first..=last).map(|s| s.as_bytes().to_vec())
+        }
+
+        fn record_name(&self, chr: &str) -> Option<String> {
+            if self.sequences.contains_key(chr) {
+                return Some(chr.to_string());
+            }
+            self.aliases.get(chr).map(|name| name.to_string())
+        }
+    }
+
+    /// The fake reference under Ensembl VEP's default `--max_sv_size`
+    /// (Config.pm:315).
+    pub(super) fn context() -> ParserContext {
+        context_with(Some(10_000_000))
+    }
+
+    pub(super) fn context_with(max_sv_size: Option<u64>) -> ParserContext {
+        ParserContext {
+            fasta: Some(Genome::grch38()),
+            max_sv_size,
+            ..ParserContext::default()
+        }
+    }
+
+    pub(super) fn parser(data: &str) -> HgvsParser<Cursor<Vec<u8>>> {
+        HgvsParser::new(Cursor::new(data.as_bytes().to_vec()), &context(), false)
+    }
+
+    /// The reference, type letter and description of each notation shape,
+    /// split as `fetch_by_hgvs_notation` splits them: a `(gene)` qualifier and
+    /// a `(p.=)` suffix go, the version comes off an Ensembl or LRG identifier
+    /// and stays on an accession, the type letter keeps its case, and a
+    /// notation whose description follows the colon directly has no type.
+    #[test]
+    fn notation_splits_as_fetch_by_hgvs_notation_does() {
+        let split = |hgvs: &str| Notation::split(hgvs).unwrap();
+        let n = split("21:g.25585733A>G");
+        assert_eq!(
+            (n.reference.as_str(), n.kind, n.description.as_str()),
+            ("21", Some('g'), "25585733A>G")
+        );
+        let n = split("NM_000088.3(COL1A1):c.589G>T(p.=)");
+        assert_eq!(
+            (
+                n.reference.as_str(),
+                n.kind,
+                n.description.as_str(),
+                n.cleaned.as_str()
+            ),
+            ("NM_000088.3", Some('c'), "589G>T", "NM_000088.3:c.589G>T")
+        );
+        let n = split("ENST00000366667.4:c.803C>T");
+        assert_eq!(n.reference, "ENST00000366667");
+        let n = split("LRG_8t1.2:c.3891A>T");
+        assert_eq!(n.reference, "LRG_8t1");
+        let n = split("NC_000021.9:G.25585733A>G");
+        assert_eq!((n.reference.as_str(), n.kind), ("NC_000021.9", Some('G')));
+        let n = split("21:25585733A>G");
+        assert_eq!((n.kind, n.description.as_str()), (None, "25585733A>G"));
+        let n = split("MT:m.8993T>G");
+        assert_eq!((n.reference.as_str(), n.kind), ("MT", Some('m')));
+    }
+
+    /// The notations `fetch_by_hgvs_notation` refuses before resolving them:
+    /// no colon or no digit, a ClinVar range with an unknown bound, an
+    /// insertion of unspecified bases (lower-case `ins` only, as the regular
+    /// expression at `:1805` is), and a parenthesised text other than the
+    /// protein suffix: the capture runs from the first `(` with text before it
+    /// to the last `)`, is empty for a description opening with its only `(`,
+    /// and an empty pair of parentheses is no text to interpret. The capture is
+    /// found by character, so a description opening with a character of more
+    /// than one byte is refused like any other.
+    #[test]
+    fn notation_refusals_carry_ensembl_vep_messages() {
+        let error = |hgvs: &str| Notation::split(hgvs).unwrap_err();
+        assert_eq!(
+            error("21.g.123A>G"),
+            "Could not parse the HGVS notation 21.g.123A>G"
+        );
+        assert_eq!(
+            error(":g.123A>G"),
+            "Could not parse the HGVS notation :g.123A>G"
+        );
+        assert_eq!(
+            error("21:g.A>G"),
+            "Could not parse the HGVS notation 21:g.A>G"
+        );
+        assert_eq!(
+            error("13:g.88957372-?_89042944+?dup"),
+            "HGVS notation for variation with unknown location is not supported"
+        );
+        assert_eq!(
+            error("13:g.(?_145413072)(145592772_145596903)del"),
+            "HGVS notation for variation with unknown location is not supported"
+        );
+        for description in [
+            "(99982241_99982249)insTC",
+            "99982241_99982242ins56",
+            "99982241_99982242ins(56)",
+        ] {
+            assert_eq!(
+                error(&format!("NC_000013.11:g.{description}")),
+                format!("HGVS notation for insertion '{description}' is not supported")
+            );
+        }
+        assert_eq!(
+            error("21:g.123A>G(foo)"),
+            "Could not parse the HGVS notation 21:g.123A>G(foo) - can't interpret '(foo)'"
+        );
+        assert_eq!(
+            error("21:g.(123)A>G"),
+            "Could not parse the HGVS notation 21:g.(123)A>G - can't interpret ''"
+        );
+        assert_eq!(
+            error("21:g.(1)_(2)del"),
+            "Could not parse the HGVS notation 21:g.(1)_(2)del - can't interpret '(2)'"
+        );
+        assert_eq!(
+            error("21:g.\u{2013}5(x)A>G"),
+            "Could not parse the HGVS notation 21:g.\u{2013}5(x)A>G - can't interpret '(x)'"
+        );
+        let n = Notation::split("21:g.123()A>G").unwrap();
+        assert_eq!(n.description, "123()A>G");
+        let n = Notation::split("21:g.123_124INS56").unwrap();
+        assert_eq!(n.description, "123_124INS56");
+    }
+
+    /// Whitespace inside a notation is removed before anything else and the
+    /// record is named by the notation without it, so `21:g.30282169 C>A`
+    /// annotates as `21:g.30282169C>A` does and prints that name (Ensembl VEP
+    /// 116.2 prints `21:g.30282169C>A` in `Uploaded_variation` for the spaced
+    /// line); a `#` line is passed over and an empty line counted.
+    #[test]
+    fn whitespace_is_removed_and_the_record_named_by_the_notation() {
+        let mut parser = parser("# a comment\n\n  \n21:g.30282169 C>A\r\n");
+        let v = parser.next_variant().unwrap().unwrap();
+        assert_eq!(parser.take_empty_lines(), 2);
+        assert_eq!(v.id.as_deref(), Some("21:g.30282169C>A"));
+        assert_eq!(v.raw_input.as_deref(), Some("21:g.30282169C>A"));
+        assert_eq!(v.uploaded_variation(), "21:g.30282169C>A");
+        assert_eq!(v.variation_name(), "21:g.30282169C>A");
+        assert!(v.input_line_name.is_none());
+        assert!(parser.next_variant().is_none());
+    }
+
+    /// A notation with a `[` or `]` is skipped with the parser's own warning,
+    /// which carries no resolver message (Parser/HGVS.pm:158-161); Ensembl VEP
+    /// 116.2 warns `Unable to parse HGVS notation '21:g.30282169C[3]'` and
+    /// writes no row for it.
+    #[test]
+    fn repeats_are_skipped_with_the_parser_warning() {
+        let mut parser = parser("21:g.30282169C[3]\n21:g.30282169C>A\n");
+        let err = parser.next_variant().unwrap().unwrap_err();
+        assert!(matches!(err, IoError::SkippedLine(_)), "{err:?}");
+        assert_eq!(
+            err.to_string(),
+            "Unable to parse HGVS notation '21:g.30282169C[3]'"
+        );
+        assert!(parser.next_variant().unwrap().is_ok());
+    }
+
+    /// The types Ensembl VEP's resolver knows (VariationFeatureAdaptor.pm:1829,
+    /// 1882, 1900): `c.`, `n.` and `p.` notations fail their line as
+    /// unimplemented; a notation with no type letter is skipped with Ensembl
+    /// VEP's `HGVS type  not recognised` (two spaces, the empty type).
+    #[test]
+    fn type_letters_dispatch_as_ensembl_vep_dispatches_them() {
+        let mut parser = parser(
+            "ENST00000366667:c.803C>T\nENST00000366667:n.803C>T\nENSP00000366667:p.Arg97Ter\n\
+             21:30282169C>A\n21:g.30282169C>A\n",
+        );
+        for _ in 0..3 {
+            let err = parser.next_variant().unwrap().unwrap_err();
+            assert!(matches!(err, IoError::NotImplemented(_)), "{err:?}");
+            assert_eq!(
+                err.to_string(),
+                "format not implemented: transcript HGVS is not supported"
+            );
+        }
+        let err = parser.next_variant().unwrap().unwrap_err();
+        assert!(matches!(err, IoError::SkippedLine(_)), "{err:?}");
+        assert_eq!(
+            err.to_string(),
+            "Unable to parse HGVS notation '21:30282169C>A': HGVS type  not recognised for 21:30282169C>A"
+        );
+        assert!(parser.next_variant().unwrap().is_ok());
+    }
+
     /// An r. notation fails its line with the refusal variant and a message
-    /// naming the type, as Ensembl VEP's `HGVS type r not recognised` does
-    /// (DBSQL/VariationFeatureAdaptor.pm:1989); the parser itself reads on, so
-    /// the caller decides the run's fate.
+    /// naming the type, as Ensembl VEP's resolver throws `HGVS type r not
+    /// recognised` (DBSQL/VariationFeatureAdaptor.pm:1989), where its parser
+    /// warns and skips the line; the parser here reads on, and the caller stops
+    /// the run on the variant.
     #[test]
     fn rna_hgvs_is_refused_naming_r() {
-        let data = "ENST00000366667:r.803C>T\n21:g.25585733A>G\n";
-        let mut parser = HgvsParser::new(Cursor::new(data.as_bytes()));
+        let mut parser = parser("ENST00000366667:r.803C>T\n21:g.30282169C>A\n");
         let err = parser.next_variant().unwrap().unwrap_err();
         assert!(matches!(err, IoError::Unsupported(_)), "{err:?}");
         assert_eq!(
@@ -306,125 +566,20 @@ mod tests {
         assert!(parser.next_variant().unwrap().is_ok());
     }
 
+    /// Without a reference the genomic types cannot be resolved: Ensembl VEP
+    /// refuses the format offline (Parser/HGVS.pm:104), and the run stops.
     #[test]
-    fn test_parse_substitution() {
-        let data = "21:g.25585733A>G\n";
-        let reader = Cursor::new(data.as_bytes());
-        let mut parser = HgvsParser::new(reader);
-
-        let v = parser.next_variant().unwrap().unwrap();
-        assert_eq!(v.chr, "21");
-        assert_eq!(v.start, 25585733);
-        assert_eq!(v.end, 25585733);
-        assert_eq!(v.ref_allele, b"A");
-        assert_eq!(v.alt_allele(), b"G");
-    }
-
-    #[test]
-    fn test_parse_deletion() {
-        let data = "21:g.25585656_25585660del\n";
-        let reader = Cursor::new(data.as_bytes());
-        let mut parser = HgvsParser::new(reader);
-
-        let v = parser.next_variant().unwrap().unwrap();
-        assert_eq!(v.chr, "21");
-        assert_eq!(v.start, 25585656);
-        assert_eq!(v.end, 25585660);
-        assert_eq!(v.alt_allele(), b"-");
-    }
-
-    #[test]
-    fn test_parse_deletion_with_seq() {
-        let data = "21:g.25585656_25585660delACGTG\n";
-        let reader = Cursor::new(data.as_bytes());
-        let mut parser = HgvsParser::new(reader);
-
-        let v = parser.next_variant().unwrap().unwrap();
-        assert_eq!(v.ref_allele, b"ACGTG");
-        assert_eq!(v.alt_allele(), b"-");
-    }
-
-    #[test]
-    fn test_parse_delins() {
-        let data = "21:g.25585733delAinsGT\n";
-        let reader = Cursor::new(data.as_bytes());
-        let mut parser = HgvsParser::new(reader);
-
-        let v = parser.next_variant().unwrap().unwrap();
-        assert_eq!(v.chr, "21");
-        assert_eq!(v.start, 25585733);
-        assert_eq!(v.ref_allele, b"A");
-        assert_eq!(v.alt_allele(), b"GT");
-    }
-
-    #[test]
-    fn test_parse_insertion() {
-        let data = "21:g.25585734_25585735insACG\n";
-        let reader = Cursor::new(data.as_bytes());
-        let mut parser = HgvsParser::new(reader);
-
-        let v = parser.next_variant().unwrap().unwrap();
-        assert_eq!(v.chr, "21");
-        assert_eq!(v.start, 25585734);
-        assert_eq!(v.end, 25585735);
-        assert_eq!(v.ref_allele, b"-");
-        assert_eq!(v.alt_allele(), b"ACG");
-    }
-
-    #[test]
-    fn test_transcript_hgvs_error() {
-        let data = "ENST00000366667:c.803C>T\n";
-        let reader = Cursor::new(data.as_bytes());
-        let mut parser = HgvsParser::new(reader);
-
-        let result = parser.next_variant().unwrap();
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.to_string().contains("transcript HGVS is not supported"));
-    }
-
-    #[test]
-    fn test_skip_comments_and_empty() {
-        let data = "# comment\n\n21:g.25585733A>G\n";
-        let reader = Cursor::new(data.as_bytes());
-        let mut parser = HgvsParser::new(reader);
-
-        let v = parser.next_variant().unwrap().unwrap();
-        assert_eq!(v.chr, "21");
-
-        assert!(parser.next_variant().is_none());
-    }
-
-    #[test]
-    fn test_parse_duplication() {
-        let data = "21:g.25585733dupA\n";
-        let reader = Cursor::new(data.as_bytes());
-        let mut parser = HgvsParser::new(reader);
-
-        let v = parser.next_variant().unwrap().unwrap();
-        assert_eq!(v.chr, "21");
-        assert_eq!(v.start, 25585733);
-        assert_eq!(v.alt_allele(), b"A");
-    }
-
-    #[test]
-    fn test_invalid_notation() {
-        let data = "21:25585733\n";
-        let reader = Cursor::new(data.as_bytes());
-        let mut parser = HgvsParser::new(reader);
-
-        let result = parser.next_variant().unwrap();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_x_chromosome() {
-        let data = "X:g.100000A>T\n";
-        let reader = Cursor::new(data.as_bytes());
-        let mut parser = HgvsParser::new(reader);
-
-        let v = parser.next_variant().unwrap().unwrap();
-        assert_eq!(v.chr, "X");
-        assert_eq!(v.start, 100000);
+    fn genomic_notation_without_a_reference_is_refused() {
+        let mut parser = HgvsParser::new(
+            Cursor::new(b"21:g.30282169C>A\n".to_vec()),
+            &ParserContext::default(),
+            false,
+        );
+        let err = parser.next_variant().unwrap().unwrap_err();
+        assert!(matches!(err, IoError::Unsupported(_)), "{err:?}");
+        assert_eq!(
+            err.to_string(),
+            "Cannot use HGVS format in offline mode without a FASTA file"
+        );
     }
 }

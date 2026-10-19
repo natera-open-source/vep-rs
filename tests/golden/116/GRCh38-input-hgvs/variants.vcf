@@ -1,0 +1,27 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	11000000	intergenic	A	G	.	.	.
+21	30282169	sub_protein_suffix	C	A	.	.	.
+21	30282169	sub_accession	C	A	.	.	.
+21	30282169	sub_lower_case_alt	C	A	.	.	.
+21	30282169	sub_stop_lost	C	A	.	.	.
+21	30282169	delins_trimmed_to_snv	C	A	.	.	.
+21	30282169	sub_chr_prefix	C	A	.	.	.
+21	30282169	delins_one_for_two	C	AT	.	.	.
+21	30282170	del_inframe_codon	AATA	A	.	.	.
+21	30282171	sub_synonymous	A	G	.	.	.
+21	30282171	del_frameshift_one_base	AT	A	.	.	.
+21	30282171	delins_codon	ATA	GGG	.	.	.
+21	30282171	inv_codon	ATA	TAT	.	.	.
+21	30282172	sub_missense	T	C	.	.	.
+21	30282172	ins_frameshift_one_base	T	TG	.	.	.
+21	30282179	del_twenty_bases	TCAGAGGTCTGCTACCACTGC	T	.	.	.
+21	30289183	ins_positions_reversed	C	CA	.	.	.
+21	30289183	dup_one_base	C	CA	.	.	.
+21	30319403	del_stop_retained	TC	T	.	.	.
+21	30348409	del_two_listed	CTA	C	.	.	.
+21	30348409	del_two_listed_wrong	CTA	C	.	.	.
+21	30430756	dup_five_bases	T	TAAATT	.	.	.
+21	30430756	ins_five_bases	T	TCCTAA	.	.	.
+MT	3243	mt_trna	A	G	.	.	.
+MT	8993	mt_missense	T	G	.	.	.

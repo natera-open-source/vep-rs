@@ -102,6 +102,10 @@ impl ReferenceSequence for FastaReference {
     fn sequence(&self, chr: &str, start: u64, end: u64) -> Option<Vec<u8>> {
         self.0.sequence(chr, start, end)
     }
+
+    fn record_name(&self, chr: &str) -> Option<String> {
+        self.0.record_name(chr).map(str::to_string)
+    }
 }
 
 /// Refuses a named input file that is not there with Ensembl VEP's text
@@ -1409,12 +1413,14 @@ impl Runner {
     /// from the first data line, which standard input cannot give (Parser.pm:377).
     /// A format Ensembl VEP resolves through its database (ID, CAid) is
     /// refused as it refuses them offline; a region input needs the run's
-    /// FASTA (Parser/Region.pm:115), and so does an SPDI input, whose
+    /// FASTA (Parser/Region.pm:115), and so do an SPDI input, whose
     /// reference allele Ensembl VEP checks against or reads from its database
-    /// (VariationFeatureAdaptor.pm:2557-2590). Opened where Ensembl VEP's
-    /// init() builds the parser (Runner.pm:136), before `post_setup_checks`.
-    /// The parsers share the delimiter, the FASTA, the cache's synonyms and
-    /// its chromosomes through a [`ParserContext`]; the delimiter is
+    /// (VariationFeatureAdaptor.pm:2557-2590), and an HGVS input, which is
+    /// resolved against it where Ensembl VEP's own parser refuses the format
+    /// offline (Parser/HGVS.pm:104). Opened where Ensembl VEP's init() builds
+    /// the parser (Runner.pm:136), before `post_setup_checks`. The parsers
+    /// share the delimiter, the FASTA, the cache's synonyms and its
+    /// chromosomes through a [`ParserContext`]; the delimiter is
     /// `--delimiter`'s under an explicit `--format` and, under `guess`, the one
     /// detection chose from the first data line, as Ensembl VEP's detection
     /// overrides the flag (Parser.pm:414).
@@ -1492,9 +1498,16 @@ impl Runner {
             InputFormat::Ensembl => pipeline::InputSource::Parser(Box::new(
                 vep_io::input::ensembl::EnsemblParser::new(reader, &context),
             )),
-            InputFormat::Hgvs => pipeline::InputSource::Parser(Box::new(
-                vep_io::input::hgvs::HgvsParser::new(reader),
-            )),
+            InputFormat::Hgvs => {
+                if !fasta_found {
+                    return Err(input_error(
+                        "Cannot use HGVS format in offline mode without a FASTA file",
+                    ));
+                }
+                pipeline::InputSource::Parser(Box::new(
+                    vep_io::input::hgvs::HgvsParser::new(reader, &context, false),
+                ))
+            }
             InputFormat::Region => {
                 if !fasta_found {
                     return Err(input_error(

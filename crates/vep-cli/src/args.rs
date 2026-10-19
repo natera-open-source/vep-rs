@@ -62,7 +62,8 @@ pub struct Args {
     pub input_data: Option<String>,
 
     /// Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record.
-    /// ID and CAid input resolve through Ensembl's database and are refused; a region or SPDI input needs --fasta, which fills or checks its reference allele
+    /// ID and CAid input resolve through Ensembl's database and are refused; a region, SPDI or HGVS input needs --fasta, which fills or checks the reference allele of an SPDI record.
+    /// HGVS input is genomic (g., m.) and resolved against the FASTA as Ensembl VEP resolves it through its database: the reference allele is checked, a deletion, duplication or inversion takes its bases from the genome, and a genomic notation Ensembl VEP cannot resolve is skipped with its warning; a c., n. or p. notation is skipped as unimplemented and an r. notation is refused
     #[arg(
         help_heading = "Input",
         long,
@@ -403,7 +404,10 @@ pub struct Args {
     /// line without consequences, no JSON object (docs/output-formats.md and
     /// docs/intended-divergences.md describe the divergence). An SPDI record whose
     /// span exceeds the limit is skipped with Ensembl VEP's warning, as every
-    /// oversize record is in Ensembl VEP 116
+    /// oversize record is in Ensembl VEP 116. An HGVS genomic notation's end minus
+    /// its start must be smaller than this value, 0 reading as 5000 and -1 as -1
+    /// itself, so under -1 a notation written in genome order is skipped, as
+    /// Ensembl VEP 116 skips it
     #[arg(
         help_heading = "Runtime",
         long = "max_sv_size",

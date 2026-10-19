@@ -190,9 +190,10 @@ fn lrg_is_refused() {
     );
 }
 
-/// Runs the binary on `input` against the release-116 cache, so a refusal of the
-/// input's content comes after the cache resolves and before any row is written.
-fn input_refusal(input: &Path, out: &Path) -> (Option<i32>, String) {
+/// Runs the binary on `input` against the release-116 cache, so a refusal of
+/// the input's content comes after the cache resolves and before any row is
+/// written; `extra` flags follow the fixed ones.
+fn input_refusal(input: &Path, out: &Path, extra: &[&str]) -> (Option<i32>, String) {
     let cache = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/golden/116/GRCh38-release116/json_cache");
     let output = common::isolated_vep_anywhere()
@@ -203,6 +204,7 @@ fn input_refusal(input: &Path, out: &Path) -> (Option<i32>, String) {
         .arg("--json_cache")
         .arg(cache)
         .args(["--assembly", "GRCh38", "--quiet"])
+        .args(extra)
         .stdin(Stdio::null())
         .output()
         .unwrap();
@@ -213,7 +215,7 @@ fn input_refusal(input: &Path, out: &Path) -> (Option<i32>, String) {
 }
 
 fn assert_input_refused(input: &Path, out: &Path, message: &str) {
-    let (code, stderr) = input_refusal(input, out);
+    let (code, stderr) = input_refusal(input, out, &[]);
     assert_eq!(code, Some(1), "{}: {stderr}", input.display());
     assert_eq!(
         stderr,
@@ -266,31 +268,45 @@ fn format_caid_is_refused() {
 }
 
 /// An HGVS input with an r. notation is refused by name when the line is read,
-/// however many lines follow it, and no record is annotated: Ensembl VEP's own
-/// parser dies on the type (ensembl-variation DBSQL/VariationFeatureAdaptor.pm:1989,
-/// `HGVS type r not recognised`), and HGVS input itself is refused offline
-/// (Parser/HGVS.pm:104).
+/// however many lines follow it, and no record is annotated: Ensembl VEP's
+/// resolver throws on the type (ensembl-variation
+/// DBSQL/VariationFeatureAdaptor.pm:1989, `HGVS type r not recognised`), which
+/// its parser warns about and skips (Parser/HGVS.pm:204-216), and HGVS input
+/// itself is refused offline (Parser/HGVS.pm:104); here the run stops. The run
+/// carries the reference FASTA the format needs, so the refusal is the type's,
+/// not the format's.
 #[test]
 fn hgvs_rna_input_is_refused() {
     let expected_stderr =
         "ERROR: [input] HGVS r. notation is not supported (Ensembl VEP refuses it too: HGVS type r not recognised)\n";
+    let fasta = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-input-hgvs/reference.fa.gz");
+    let with_fasta = ["--fasta", fasta.to_str().unwrap()];
     let dir = tempfile::tempdir().unwrap();
     let input = dir.path().join("rna.hgvs");
-    std::fs::write(&input, "ENST00000366667:r.803C>T\n21:g.30165851A>G\n").unwrap();
+    std::fs::write(&input, "ENST00000366667:r.803C>T\n21:g.30282169C>A\n").unwrap();
     let out = dir.path().join("out.txt");
-    let (code, stderr) = input_refusal(&input, &out);
+    let (code, stderr) = input_refusal(&input, &out, &with_fasta);
     assert_eq!(code, Some(1), "{stderr}");
     assert_eq!(stderr, expected_stderr);
-    let written = std::fs::read_to_string(&out).unwrap_or_default();
-    let rows = written.lines().filter(|l| !l.starts_with('#')).count();
-    assert_eq!(rows, 0, "no record is annotated: {written:?}");
+    assert_no_rows(&out);
 
     // The refusal ends a run whose earlier records were read.
     let later = dir.path().join("rna_later.hgvs");
-    std::fs::write(&later, "21:g.30165851A>G\nENST00000366667:r.803C>T\n").unwrap();
-    let (code, stderr) = input_refusal(&later, &dir.path().join("later.txt"));
+    std::fs::write(&later, "21:g.30282169C>A\nENST00000366667:r.803C>T\n").unwrap();
+    let later_out = dir.path().join("later.txt");
+    let (code, stderr) = input_refusal(&later, &later_out, &with_fasta);
     assert_eq!(code, Some(1), "{stderr}");
     assert_eq!(stderr, expected_stderr);
+    assert_no_rows(&later_out);
+}
+
+/// Asserts that `out` holds no data row: the run wrote no file, or its header
+/// alone.
+fn assert_no_rows(out: &Path) {
+    let written = std::fs::read_to_string(out).unwrap_or_default();
+    let rows = written.lines().filter(|l| !l.starts_with('#')).count();
+    assert_eq!(rows, 0, "no record is annotated: {written:?}");
 }
 
 /// A BCF stream (the magic `BCF` and version 2, raw or inside its BGZF blocks)
