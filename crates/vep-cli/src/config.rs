@@ -15,6 +15,7 @@ use std::str::FromStr;
 use clap::FromArgMatches;
 
 use vep_core::terms::Vocabulary;
+use vep_io::input::Delimiter;
 
 use crate::args::Args;
 use crate::nearest::NearestType;
@@ -463,6 +464,10 @@ pub struct Config {
     pub input_file: String,
     pub input_data: Option<String>,
     pub format: String,
+    /// The column delimiter of an Ensembl-format or VCF input under `--format
+    /// ensembl` or `--format vcf`; under `guess` the detected one is used instead
+    /// (Parser.pm:387-415), and for every other format this holds the tab default.
+    pub delimiter: Delimiter,
 
     pub output_file: String,
     pub output_format: String,
@@ -830,13 +835,24 @@ impl Config {
         }
         let distance =
             parse_distance(&args.distance).map_err(|message| CliError::new("config", message))?;
+        // Only the Ensembl and VCF parsers split on the delimiter (Parser/VEP_input.pm:90,
+        // Parser/VCF.pm:129), and under `guess` the one detection chooses replaces the
+        // flag's (Parser.pm:414), so the flag is read, and a bad value refused, only
+        // when one of those two formats is named.
+        let delimiter_is_read = matches!(state.scalar("format"), Some("ensembl" | "vcf"));
+        let delimiter = match args.delimiter.as_deref() {
+            Some(value) if delimiter_is_read => {
+                Delimiter::from_flag(value).map_err(|message| CliError::new("config", message))?
+            }
+            _ => Delimiter::Tab,
+        };
         // After every refusal: Ensembl VEP's `Runner.pm:117-120` runs once
         // `Config.pm:769` has checked the command line, so a refused one prints
         // its error alone.
         let notices = var_synonyms_implies_check_existing(&mut state)
             .into_iter()
             .collect();
-        let mut config = Config::resolve(args, &state, distance);
+        let mut config = Config::resolve(args, &state, distance, delimiter);
         config.notices = notices;
         Ok(config)
     }
@@ -844,7 +860,7 @@ impl Config {
     /// The configuration from the arguments and the flag state after the option
     /// sets: a value an option set assigns comes from the state, everything else
     /// from the arguments.
-    fn resolve(args: Args, state: &FlagState, distance: (u64, u64)) -> Self {
+    fn resolve(args: Args, state: &FlagState, distance: (u64, u64), delimiter: Delimiter) -> Self {
         let on = |flag: &str| state.is_active(flag);
         let input_data = input_data_for(&args).map(str::to_string);
         let output_format = state.scalar("output_format").unwrap_or("vep").to_string();
@@ -913,6 +929,7 @@ impl Config {
             input_file,
             input_data,
             format: state.scalar("format").unwrap_or("guess").to_string(),
+            delimiter,
             output_file,
             output_format,
             parquet_shape: args.parquet_shape,

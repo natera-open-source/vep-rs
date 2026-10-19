@@ -12,12 +12,16 @@ shared field table. `vep-cli` is its only dependent in the workspace, and
 ## How it works
 
 Take the Ensembl-format line `21 25000100 25000100 A/G/T 1 rs123` (one record,
-two ALT alleles). `EnsemblParser::next_variant` splits the columns, reads the
-allele string and the strand, and yields two `InputVariant` values in ALT order,
-`allele_index` 0 and 1, both marked `minimised` because the site is
-multi-allelic, both carrying `rs123` as the record's name. A VCF record follows
-the same path through the `vep-cli` crate's line parser. Annotation happens
-outside this crate, and the two variants return as one record slice.
+two ALT alleles). `EnsemblParser::next_variant` splits the columns on the
+context's delimiter, upper-cases the allele string, reads the strand (`-` or
+`-1` is reverse, any other token or none forward) and yields two `InputVariant`
+values in ALT order, `allele_index` 0 and 1, both marked `minimised` because the
+site is multi-allelic, both carrying `rs123` as the record's name. A bi-allelic
+indel written un-minimised (`21 100 101 AC/A`) is trimmed to `C/-` at 101 as
+Ensembl VEP trims it, and an allele column without a `/` (`DUP`) is a
+structural variant over the line's span. A VCF record follows the same path
+through the `vep-cli` crate's line parser. Annotation happens outside this
+crate, and the two variants return as one record slice.
 `OutputFormatter::format_record` receives that slice: `fields::record_rows`
 orders the rows transcript-major (by transcript id) and allele-minor (ALT order),
 then adds one intergenic row per allele that overlapped nothing, and
@@ -44,9 +48,9 @@ formatter struct here: `vep-cli` renders its rows from this crate's field table
 | Module               | Role                                                                                                                                                                                                                                   |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `error`              | `IoError`: `Io`, `VcfParse` (every parse failure, whichever input format raised it) and `NotImplemented` (transcript-level HGVS).                                                                                                      |
-| `input`              | The `InputParser` trait: `next_variant` yields one `InputVariant` per ALT allele and `None` at end of input.                                                                                                                           |
-| `input::detect`      | `detect_format`: Ensembl VEP's format detection from the first data line, returning the verdict and the bytes read to reach it.                                                                                                      |
-| `input::ensembl`     | `EnsemblParser`: VEP's five- or six-column default format, tab or whitespace delimited, one variant per ALT of the allele string.                                                                                                      |
+| `input`              | The `InputParser` trait (`next_variant` yields one `InputVariant` per ALT allele and `None` at end of input; `take_empty_lines` the empty lines read past), `Delimiter` (the column delimiter as `--delimiter` names it or detection chooses it), `ParserContext` (delimiter, reference sequence, synonyms) and `minimise_alleles`. |
+| `input::detect`      | `detect_format`: Ensembl VEP's format detection from the first data line, returning the verdict, the delimiter it split the line on and the bytes read to reach it.                                                                 |
+| `input::ensembl`     | `EnsemblParser`: VEP's four- to six-column default format split on the context's delimiter; strand tokens, class words, upper-casing and the minimisation of a bi-allelic indel as Ensembl VEP reads them; one variant per ALT of the allele string. |
 | `input::region`      | `RegionParser`: `chr:start-end:strand/allele` or `chr:start-end/allele`; the reference allele is `-` and the strand defaults to forward.                                                                                              |
 | `input::hgvs`        | `HgvsParser`: genomic `:g.` substitutions, deletions, insertions, delins and duplications (a duplication is read as an insertion of the duplicated bases); `:c.`, `:p.`, `:n.` and `:r.` expressions fail with `NotImplemented`.       |
 | `output`             | The `OutputFormatter` trait: `write_header`, `format_variant`, `format_record` (every allele split from one input record together) and `finish`.                                                                                       |
@@ -70,7 +74,8 @@ Input:
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `InputParser::next_variant`                    | The one method every parser implements.                                                                                                      |
 | `detect::detect_format(reader)`                | The format of the first data line and the bytes read to find it, for the caller to replay.                                                   |
-| `EnsemblParser::new`, `RegionParser::new`, `HgvsParser::new` | Line parsers over any `BufRead`; blank and `#` lines are skipped.                                                               |
+| `EnsemblParser::new(reader, &context)`, `RegionParser::new`, `HgvsParser::new` | Line parsers over any `BufRead`; blank and `#` lines are skipped.                                                              |
+| `Delimiter::from_flag`, `ParserContext`         | The `--delimiter` value as a pattern (a tab, a space, a run of spaces, `\s+` or literal text; a regular expression is refused); what the parsers share.         |
 
 Output:
 

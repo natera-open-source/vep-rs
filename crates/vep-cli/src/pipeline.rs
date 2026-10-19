@@ -80,6 +80,7 @@ use vep_core::sv_span::{structural_end, SpanClass, SpanError};
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::InputVariant;
 use vep_core::vcf_info::{info_value, info_value_written};
+use vep_io::input::Delimiter;
 use vep_io::output::fields::{ExtraFieldsPlan, Row};
 use vep_io::output::json::JsonOutputFormatter;
 use vep_io::output::parquet::ParquetOutputFormatter;
@@ -290,6 +291,12 @@ pub(crate) struct ReaderConfig<'a> {
     /// Whether each variant keeps its source line (`RAW_INPUT_OUTPUT_FORMATS`).
     /// When it does not, the reader keeps only the columns the parser reads.
     pub capture_raw_input: bool,
+    /// The column delimiter of the VCF input (`--delimiter`, or the one format
+    /// detection chose). Ensembl VEP's VCF parser splits its records on it
+    /// (Parser/VCF.pm:129); a line read under any pattern but a tab is split on
+    /// that pattern and its fields re-joined with tabs before the tab-anchored
+    /// column scan ([`rejoin_with_tabs`]).
+    pub delimiter: &'a Delimiter,
     pub allow_non_variant: bool,
     pub dont_skip: bool,
     pub max_sv_size: Option<u64>,
@@ -514,6 +521,8 @@ pub(crate) struct Coordinator<'a> {
     pub stats_enabled: bool,
     pub write_ctx: &'a WriteContext<'a>,
     pub capture_raw_input: bool,
+    /// The column delimiter of a VCF input, for the line a JSON object re-emits.
+    pub delimiter: &'a Delimiter,
     pub dont_skip: bool,
     pub max_sv_size: Option<u64>,
     /// `--quiet` off: progress goes to stderr every 10,000 variants.
@@ -549,6 +558,23 @@ impl Coordinator<'_> {
             synonyms: self.resources.synonyms(),
             max_sv_size: self.max_sv_size,
             dont_skip: self.dont_skip,
+        }
+    }
+
+    /// How a parse on this coordinator reads each data line, in either mode.
+    fn line_parse(&self) -> LineParse<'_> {
+        LineParse {
+            capture_raw_input: self.capture_raw_input,
+            max_sv_size: self.max_sv_size,
+            // Ensembl VEP's JSON `input` joins the record's fields with the run's
+            // delimiter (OutputFactory/JSON.pm:172, 247) where its VCF output
+            // joins them with tabs (OutputFactory/VCF.pm:355), so under another
+            // delimiter the JSON object's line is the reader's tab-joined fields
+            // joined again.
+            json_input_join: (self.capture_raw_input
+                && self.write_ctx.output_format == "json"
+                && *self.delimiter != Delimiter::Tab)
+                .then(|| self.delimiter.join_text()),
         }
     }
 
@@ -782,6 +808,23 @@ fn trim_line(line: &[u8]) -> &[u8] {
     }
 }
 
+/// Writes `line` into `out` with its fields, split on `delimiter` as Perl's
+/// `split` splits them, joined by tabs: the record Ensembl VEP's VCF parser
+/// holds for a line read under another delimiter (Parser/VCF.pm:129, ensembl-io
+/// ColumnBasedParser.pm:250), which its VCF output joins with tabs
+/// (OutputFactory/VCF.pm:355). The line is read as text, its invalid UTF-8
+/// replaced, since the patterns are character classes.
+fn rejoin_with_tabs(line: &[u8], delimiter: &Delimiter, out: &mut Vec<u8>) {
+    let text = String::from_utf8_lossy(line);
+    out.clear();
+    for (i, field) in delimiter.split(&text).into_iter().enumerate() {
+        if i > 0 {
+            out.push(b'\t');
+        }
+        out.extend_from_slice(field.as_bytes());
+    }
+}
+
 /// The part of a data line the parser reads when no output format re-emits
 /// the line: the eight fixed columns, with INFO replaced by `.` for a record
 /// whose REF and ALTs are a run of `ACGT` together, since only the structural
@@ -898,6 +941,8 @@ fn read_vcf_lines(
     let mut last_chr: Vec<u8> = Vec::new();
     // The empty lines met since the last record, warned about as one run.
     let mut empty_lines = 0u64;
+    // The line re-joined with tabs when the delimiter is another pattern.
+    let mut rejoined: Vec<u8> = Vec::new();
 
     loop {
         let mut send_batch = false;
@@ -922,6 +967,12 @@ fn read_vcf_lines(
                 warn_empty_lines(empty_lines, record_count + 1);
                 empty_lines = 0;
             }
+            let line = if *cfg.delimiter == Delimiter::Tab {
+                line
+            } else {
+                rejoin_with_tabs(line, cfg.delimiter, &mut rejoined);
+                rejoined.as_slice()
+            };
 
             if vcf_out && !vcf_header_written && !cfg.no_headers {
                 push_vcf_header(&mut batch, cfg, &input_headers);
@@ -1017,7 +1068,14 @@ fn read_parsed(
     // `parse_lines` lays out a VCF line.
     let mut open_record: Option<usize> = None;
     loop {
-        match parser.next_variant() {
+        let next = parser.next_variant();
+        // The empty lines the parser read past before this record, warned as the
+        // VCF reader warns a run of them, numbered by the record that follows.
+        let empty_lines = parser.take_empty_lines();
+        if empty_lines > 0 {
+            warn_empty_lines(empty_lines, record_count + 1);
+        }
+        match next {
             Some(Ok(mut variant)) => {
                 mark_oversize_sv(&mut variant, cfg.max_sv_size);
                 name_source_chromosomes(&mut variant, cfg.synonyms, cfg.transcripts);
@@ -1033,11 +1091,13 @@ fn read_parsed(
                         batch = ParsedBatch::new(seq);
                     }
                     record_count += 1;
-                    // These parsers expose no line text, so the warning quotes none.
+                    // The warning quotes the line as `skipped_variant_msg` quotes
+                    // the parser's current block (BaseVEP.pm:846-851) where the
+                    // parser carries it; the HGVS and region parsers carry none.
                     let line = RecordLine {
                         number: record_count,
                         columns: None,
-                        quoted: None,
+                        quoted: variant.raw_input.as_deref().map(str::as_bytes),
                     };
                     keep = rules.keep_record(std::slice::from_ref(&variant), &line, &mut report);
                     if keep {
@@ -1084,8 +1144,8 @@ struct SkipRules<'a> {
 
 /// The input record as the skip rules read it: `number` Ensembl VEP's count of
 /// the records read, `columns` the parser's columns (INFO complete for a
-/// structural record) and `quoted` the bytes a skip warning quotes, both `None`
-/// for a parser that exposes no line text.
+/// structural record) and `quoted` the bytes a skip warning quotes, each `None`
+/// when the parser exposes none.
 struct RecordLine<'a> {
     number: u64,
     columns: Option<&'a [u8]>,
@@ -1115,16 +1175,19 @@ impl SkipRules<'_> {
         };
         let quoted = line.quoted.map(String::from_utf8_lossy);
         let mut skip = |description: &str| report(description, line.number, quoted.as_deref());
-        let joined_alts = first.uploaded_allele_string.as_deref().unwrap_or("");
-        let svtype = first.sv_type.as_deref();
-        if first.vep_skip {
-            // `get_SO_term` names the type by its abbreviation (Parser.pm:668-725).
-            let abbrev = sv_type_abbreviation(joined_alts, svtype);
-            skip(&format!(
-                "{abbrev} is not a supported structural variant type"
-            ));
-        }
         if first.is_structural {
+            let joined_alts = first.uploaded_allele_string.as_deref().unwrap_or("");
+            let svtype = first.sv_type.as_deref();
+            // `get_SO_term` warns about a type `%SO_TERMS` lacks by its abbreviation
+            // (Parser.pm:668-725) whether the record is then carried without
+            // consequences (a VCF record, `vep_skip`) or annotated under its word
+            // (an Ensembl-format record).
+            if first.record_so_term.is_none() {
+                let abbrev = sv_type_abbreviation(joined_alts, svtype);
+                skip(&format!(
+                    "{abbrev} is not a supported structural variant type"
+                ));
+            }
             // Parser/VCF.pm:477-481: the deletion test runs on the SO term, or on
             // the raw type string when `%SO_TERMS` has no entry for it.
             let so_term = match &first.record_so_term {
@@ -1536,6 +1599,32 @@ fn retain_alleles(units: &mut Vec<Unit>, variants: &mut Vec<InputVariant>, keep:
 /// The alleles parsed from one data line; `None` for a passthrough item.
 type ParsedLine = Option<anyhow::Result<Vec<InputVariant>>>;
 
+/// What every data line of a run is parsed with.
+#[derive(Clone, Copy)]
+struct LineParse<'a> {
+    capture_raw_input: bool,
+    max_sv_size: Option<u64>,
+    /// The text the JSON `input` joins the line's fields with, when it is not the
+    /// tab the fields were read with.
+    json_input_join: Option<&'a str>,
+}
+
+impl LineParse<'_> {
+    /// The alleles of one data line, each carrying the line as the JSON `input`
+    /// prints it when the run captures lines.
+    fn parse(&self, line: &str) -> anyhow::Result<Vec<InputVariant>> {
+        let mut parsed =
+            parse_vcf_line_with_max_sv_size(line, self.capture_raw_input, self.max_sv_size);
+        if let (Some(join), Ok(alleles)) = (self.json_input_join, &mut parsed) {
+            let input: Arc<str> = line.replace('\t', join).into();
+            for allele in alleles.iter_mut() {
+                allele.raw_input = Some(Arc::clone(&input));
+            }
+        }
+        parsed
+    }
+}
+
 /// Parses a batch's data lines on the pool and lays the variants out in line
 /// order. Under `--dont_skip` the first malformed line, in input order, is the
 /// error.
@@ -1549,8 +1638,7 @@ fn parse_lines(
         text,
         mut items,
     } = lines;
-    let capture = c.capture_raw_input;
-    let max_sv_size = c.max_sv_size;
+    let line_parse = c.line_parse();
     // The parser reads text: a line that is not UTF-8 is read with each invalid
     // sequence replaced, so its identifiers and INFO values may print the
     // replacement character where Ensembl VEP prints the bytes.
@@ -1558,11 +1646,9 @@ fn parse_lines(
         items
             .par_iter()
             .map(|item| match item {
-                Item::Data { span, .. } => Some(parse_vcf_line_with_max_sv_size(
-                    &String::from_utf8_lossy(&text[span.clone()]),
-                    capture,
-                    max_sv_size,
-                )),
+                Item::Data { span, .. } => {
+                    Some(line_parse.parse(&String::from_utf8_lossy(&text[span.clone()])))
+                }
                 Item::Text(_) => None,
             })
             .collect()
@@ -2059,6 +2145,7 @@ fn parse_task_lines(
     skips: &mut Vec<SkipReport>,
 ) -> anyhow::Result<(Vec<Unit>, Vec<InputVariant>)> {
     let rules = c.skip_rules();
+    let line_parse = c.line_parse();
     let mut units = Vec::with_capacity(items.len());
     let mut variants = Vec::with_capacity(items.len());
     let mut report = |description: &str, line_number: u64, quoted: Option<&str>| {
@@ -2072,11 +2159,7 @@ fn parse_task_lines(
         match item {
             Item::Text(span) => units.push(Unit::Text(span.clone())),
             Item::Data { span, .. } => {
-                let result = parse_vcf_line_with_max_sv_size(
-                    &String::from_utf8_lossy(&lines.text[span.clone()]),
-                    c.capture_raw_input,
-                    c.max_sv_size,
-                );
+                let result = line_parse.parse(&String::from_utf8_lossy(&lines.text[span.clone()]));
                 place_parsed_line(
                     item,
                     result,
@@ -2933,6 +3016,7 @@ mod tests {
             stats_enabled: false,
             write_ctx: &write_ctx,
             capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             progress: false,
@@ -3127,6 +3211,7 @@ mod tests {
         let cfg = ReaderConfig {
             batch_size: 2,
             capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3188,6 +3273,7 @@ mod tests {
         let cfg = ReaderConfig {
             batch_size: 5000,
             capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3255,8 +3341,9 @@ mod tests {
     /// A parser-fed format numbers its records as Ensembl VEP counts them
     /// (Parser/VEP_input.pm:119: one per record read, an unparsable line
     /// included) and decides a skip once per record: a multi-allelic ensembl line
-    /// on a chromosome the cache lacks is one skip with no quoted line, and every
-    /// allele of a kept multi-allelic line carries the record's number.
+    /// on a chromosome the cache lacks is one skip quoting the line (an
+    /// unparsable line has none to quote), and every allele of a kept
+    /// multi-allelic line carries the record's number.
     #[test]
     fn read_parsed_numbers_records_and_skips_a_record_once() {
         let input = "21 100 100 A/G 1\n\
@@ -3273,6 +3360,7 @@ mod tests {
         let cfg = ReaderConfig {
             batch_size: 5000,
             capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3291,9 +3379,13 @@ mod tests {
         let sink = crate::warnings::global();
         sink.reserve_skipped_variants_file(skipped_file.to_str().unwrap(), true)
             .unwrap();
-        let parser: Box<dyn vep_io::InputParser> = Box::new(
-            vep_io::input::ensembl::EnsemblParser::new(BufReader::new(Cursor::new(input))),
-        );
+        // Space-delimited lines, read under the pattern detection would choose for them.
+        let context = vep_io::input::ParserContext::with_delimiter(Delimiter::Whitespace);
+        let parser: Box<dyn vep_io::InputParser> =
+            Box::new(vep_io::input::ensembl::EnsemblParser::new(
+                BufReader::new(Cursor::new(input)),
+                &context,
+            ));
         let (tx, rx) = mpsc::sync_channel(64);
         read_parsed(parser, &cfg, tx).unwrap();
         let skipped = sink.skipped();
@@ -3320,7 +3412,7 @@ mod tests {
             .filter_map(|skip| {
                 let reason = if skip.description.contains("Chromosome Z") {
                     "chromosome"
-                } else if skip.description.contains("at least 5 columns") {
+                } else if skip.description.contains("at least 4 columns") {
                     "columns"
                 } else {
                     return None;
@@ -3330,7 +3422,14 @@ mod tests {
             .collect();
         assert_eq!(
             skips,
-            [(Some(2), None, "chromosome"), (Some(4), None, "columns")]
+            [
+                (
+                    Some(2),
+                    Some("Z 1000 1000 A/G/T 1".to_string()),
+                    "chromosome"
+                ),
+                (Some(4), None, "columns")
+            ]
         );
     }
 
@@ -3355,6 +3454,7 @@ mod tests {
         let cfg = ReaderConfig {
             batch_size: 5000,
             capture_raw_input: true,
+            delimiter: &Delimiter::Tab,
             allow_non_variant: true,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3407,6 +3507,7 @@ mod tests {
         let cfg = ReaderConfig {
             batch_size: 5000,
             capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3693,6 +3794,7 @@ mod tests {
         let cfg = ReaderConfig {
             batch_size: 5000,
             capture_raw_input: true,
+            delimiter: &Delimiter::Tab,
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3773,6 +3875,7 @@ mod tests {
         let cfg = ReaderConfig {
             batch_size: 1,
             capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3829,6 +3932,7 @@ mod tests {
         let cfg = ReaderConfig {
             batch_size: 2,
             capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3843,9 +3947,11 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let (tx, rx) = mpsc::sync_channel(64);
-        let parser: Box<dyn vep_io::InputParser> = Box::new(
-            vep_io::input::ensembl::EnsemblParser::new(Cursor::new(input.to_string())),
-        );
+        let parser: Box<dyn vep_io::InputParser> =
+            Box::new(vep_io::input::ensembl::EnsemblParser::new(
+                Cursor::new(input.to_string()),
+                &vep_io::input::ParserContext::default(),
+            ));
         read_parsed(parser, &cfg, tx).unwrap();
         let batches: Vec<ParsedBatch> = rx
             .iter()

@@ -721,20 +721,22 @@ fn dont_skip_keeps_an_absent_chromosome_record_as_intergenic() {
 /// A skip in the ensembl, region and HGVS formats names the record's number as
 /// Ensembl VEP counts it, one per record read (Parser/VEP_input.pm:119,
 /// Parser/Region.pm:167, Parser/HGVS.pm:151), so two records skipped for one
-/// reason are two warnings. The quoted line Ensembl VEP adds from its parser's
-/// `current_block` (BaseVEP.pm:846-851) is absent: these parsers expose no line
+/// reason are two warnings. The line Ensembl VEP quotes from its parser's
+/// `current_block` (BaseVEP.pm:846-851) is quoted for an Ensembl-format record
+/// and absent for the region and HGVS formats, whose parsers expose no line
 /// text. The region run names a FASTA, which the format needs (Parser/Region.pm:115).
 #[test]
 fn non_vcf_skips_carry_the_record_number() {
     let dir = tempfile::tempdir().unwrap();
     let fasta = decompressed_fasta(dir.path());
-    for (format, records) in [
+    for (format, records, quoted) in [
         (
             "ensembl",
-            "21 30165801 30165801 A/G 1\n\
-             Z 1000 1000 A/G 1\n\
-             Z 2000 2000 A/G 1\n\
-             21 30165811 30165811 A/G 1\n",
+            "21\t30165801\t30165801\tA/G\t1\n\
+             Z\t1000\t1000\tA/G\t1\n\
+             Z\t2000\t2000\tA/G\t1\n\
+             21\t30165811\t30165811\tA/G\t1\n",
+            ["(Z 1000 1000 A/G 1): ", "(Z 2000 2000 A/G 1): "],
         ),
         (
             "region",
@@ -742,6 +744,7 @@ fn non_vcf_skips_carry_the_record_number() {
              Z:1000-1000:1/G\n\
              Z:2000-2000:1/G\n\
              21:30165811-30165811:1/G\n",
+            ["", ""],
         ),
         (
             "hgvs",
@@ -749,6 +752,7 @@ fn non_vcf_skips_carry_the_record_number() {
              Z:g.1000A>G\n\
              Z:g.2000A>G\n\
              21:g.30165811A>G\n",
+            ["", ""],
         ),
     ] {
         let input = dir.path().join(format!("in.{format}"));
@@ -778,8 +782,8 @@ fn non_vcf_skips_carry_the_record_number() {
                 .lines()
                 .collect::<Vec<_>>(),
             [
-                "WARNING: line 2 skipped Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features",
-                "WARNING: line 3 skipped Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features",
+                format!("WARNING: line 2 skipped {}Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features", quoted[0]),
+                format!("WARNING: line 3 skipped {}Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features", quoted[1]),
             ],
             "{format}"
         );

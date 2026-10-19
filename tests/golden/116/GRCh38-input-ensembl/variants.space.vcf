@@ -1,0 +1,23 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21 11000000 intergenic_snv A G . . .
+21 11000000 intergenic_rev A G . . .
+21 30213500 del_from_before_transcript N <DEL> . . END=30214300
+21 30214000 utr_rev_dash A G . . .
+21 30214000 utr_snv A G . . .
+21 30215900 dup_past_transcript_end N <DUP> . . END=30216600
+21 30282169 four_columns C A . . .
+21 30282169 seven_columns C A . . .
+21 30282169 dot_id C A . . .
+21 30282169 lower_snv C A . . .
+21 30282169 snv_fwd C A . . .
+21 30282169 multi C A,T . . .
+21 30289183 stop_ins1_lost_rev C CG . . .
+21 30289183 zero_id C CG . . .
+21 30319403 stop_del1_kept_rev TC T . . .
+21 30319403 lower_del TC T . . .
+21 30348409 stop_del2_lost_rev CTA C . . .
+21 30348409 lower_unminimised CTA C . . .
+21 30430756 stop_ins5_newstop_fwd T TCCTAA . . .
+21 30601265 stop_del1_kept_fwd TG T . . .
+21 34716478 penult_ins3_stop_fwd A AATA . . .

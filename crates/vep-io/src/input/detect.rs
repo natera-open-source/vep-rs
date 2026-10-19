@@ -21,6 +21,8 @@ use std::borrow::Cow;
 use std::fmt;
 use std::io::{self, BufRead};
 
+use super::Delimiter;
+
 /// The input formats Ensembl VEP's `%FORMAT_MAP` names (Parser.pm:88-96), in
 /// the lower-case spelling `--format` takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,11 +73,14 @@ impl fmt::Display for InputFormat {
 }
 
 /// What `detect_format` read from the input: the format of the first data line,
-/// if one was classified, and every byte consumed up to and including that line,
-/// to be replayed ahead of the rest of the input.
+/// if one was classified, every byte consumed up to and including that line, to
+/// be replayed ahead of the rest of the input, and the delimiter the line was
+/// split on, which Ensembl VEP keeps for the parser it then builds
+/// (Parser.pm:414-415 store it; :159 hands it on).
 pub struct Detection {
     pub format: Option<InputFormat>,
     pub consumed: Vec<u8>,
+    pub delimiter: Delimiter,
 }
 
 /// Reads past `#` lines and lines with no field, then classifies the first data
@@ -94,6 +99,7 @@ pub fn detect_format<R: BufRead>(reader: &mut R) -> io::Result<Detection> {
             return Ok(Detection {
                 format: None,
                 consumed,
+                delimiter,
             });
         }
         consumed.extend_from_slice(&line);
@@ -110,6 +116,7 @@ pub fn detect_format<R: BufRead>(reader: &mut R) -> io::Result<Detection> {
         return Ok(Detection {
             format: check_format(&fields),
             consumed,
+            delimiter,
         });
     }
 }
@@ -124,54 +131,6 @@ pub fn detect_line(line: &str) -> Option<InputFormat> {
         return None;
     }
     check_format(&fields)
-}
-
-/// The three delimiters `detect_format` splits on (Parser.pm:387-418): a tab,
-/// a run of spaces (`/ +/`), or whitespace in Perl's `split ' '` manner (leading
-/// whitespace ignored).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Delimiter {
-    Tab,
-    SpaceRun,
-    Whitespace,
-}
-
-impl Delimiter {
-    /// The delimiter for `line`: this one when the line contains it, else a run
-    /// of spaces when the line has two in a row, else whitespace when it has a
-    /// space, else this one still (Parser.pm:401-412).
-    fn chosen_for(self, line: &str) -> Self {
-        let present = match self {
-            Delimiter::Tab => line.contains('\t'),
-            Delimiter::SpaceRun | Delimiter::Whitespace => line.contains(' '),
-        };
-        if present {
-            self
-        } else if line.contains("  ") {
-            Delimiter::SpaceRun
-        } else if line.contains(' ') {
-            Delimiter::Whitespace
-        } else {
-            self
-        }
-    }
-
-    /// The fields of `line`, trailing empty fields dropped as Perl's `split`
-    /// drops them.
-    fn split(self, line: &str) -> Vec<&str> {
-        let mut fields: Vec<&str> = match self {
-            Delimiter::Tab => line.split('\t').collect(),
-            Delimiter::SpaceRun => split_on_space_runs(line),
-            Delimiter::Whitespace => line
-                .split(is_perl_space)
-                .filter(|field| !field.is_empty())
-                .collect(),
-        };
-        while fields.last().is_some_and(|field| field.is_empty()) {
-            fields.pop();
-        }
-        fields
-    }
 }
 
 /// `s/\r|(?>\v|\x0D\x0A).+//` (Parser.pm:398) on the line's bytes, as Perl runs
@@ -190,24 +149,6 @@ fn without_vertical_whitespace(line: &[u8]) -> Cow<'_, [u8]> {
         None if from_vertical.len() > 1 => Cow::Borrowed(before),
         None => Cow::Borrowed(line),
     }
-}
-
-/// Perl's `split / +/`: each run of spaces is one separator, so a leading run
-/// yields a leading empty field; a trailing run yields none, as `split` drops
-/// trailing empty fields.
-fn split_on_space_runs(line: &str) -> Vec<&str> {
-    let mut fields = Vec::new();
-    if line.starts_with(' ') {
-        fields.push("");
-    }
-    fields.extend(line.split(' ').filter(|field| !field.is_empty()));
-    fields
-}
-
-/// Perl's `\s` on a byte string, the separator class of `split ' '`: ASCII
-/// whitespace plus the vertical tab, which `char::is_ascii_whitespace` leaves out.
-fn is_perl_space(c: char) -> bool {
-    c.is_ascii_whitespace() || c == '\u{0B}'
 }
 
 /// `check_format` (Utils/VEP.pm:395-450): the format a line's fields name, or
@@ -508,10 +449,14 @@ mod tests {
         let two_spaces = format!("  \n{record}");
         let detection = detect_format(&mut Cursor::new(two_spaces.as_bytes())).unwrap();
         assert_eq!(detection.format, Some(InputFormat::Id));
+        assert_eq!(detection.delimiter, Delimiter::SpaceRun);
         let one_space = format!(" \n{record}");
         let detection = detect_format(&mut Cursor::new(one_space.as_bytes())).unwrap();
         assert_eq!(detection.format, Some(InputFormat::Vcf));
+        assert_eq!(detection.delimiter, Delimiter::Whitespace);
         assert_eq!(detect_line(record.trim_end()), Some(InputFormat::Vcf));
+        let detection = detect_format(&mut Cursor::new(record.as_bytes())).unwrap();
+        assert_eq!(detection.delimiter, Delimiter::Tab);
     }
 
     /// Parser.pm:398 strips one `\r` wherever it stands, and a vertical-tab or

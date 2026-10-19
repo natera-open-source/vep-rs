@@ -1,0 +1,112 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "21 hand-built records on chromosome 21 of the GRCh38-release116 cache as a VCF (variants.vcf: an intergenic SNV, two SNVs near a transcript end, a coding SNV written five ways, a multi-allelic SNV, three insertions, four deletions, a <DEL> and a <DUP> with END) and, record for record, the same sites in Ensembl's default input format (variants.ensembl.txt): the twins with Ensembl VEP's coordinates, the two-base deletion written un-minimised as CTA/C over its three bases, the class words DEL and DUP, the strand tokens 1, +, +1, ., -, -1 and an absent strand column, alleles in lower case with and without an ID, the ID column ., 0 and absent, and a seven-column line; variants.ensembl.space.txt is that file with every tab a single space and variants.space.vcf the VCF with every tab of its data lines a single space, record for record in its order",
+ "sha256": {
+  "default.txt": "9be51e83935fe74b3822e7bf61ea485275a54921fcd759c1c82042cbb52a4143",
+  "tab.txt": "3aa3620a950c816ff9fb5a5cde1600b6fa5dbba2dd78ecf5e151d92a18a18961",
+  "vcf.vcf": "09cb8f3c9d35e6c215114c2cc83f13830ca24306800b3813c56e2f6bb48ba5e3",
+  "json.jsonl": "bca7cd3f954bc08fb93a40d877ca9782199fc914362cb7ce63a72edc9e34587e"
+ },
+ "variants_vcf_sha256": "eb9dac8c33a71df80864b06393efbba89956c780d87c230fa3dee1137eacf3ff",
+ "flag_sets": {
+  "ensembl": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.ensembl.txt -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path --format ensembl [--tab|--vcf|--json]",
+   "input": "variants.ensembl.txt",
+   "expected_dir": "expected_ensembl",
+   "sha256": {
+    "default.txt": "29dcd061ecea9a96f5a09c157e2474244b737c1c778cf1a8026bea0ec178e8be",
+    "tab.txt": "052cb8c07b3755023710b9643daba4f3421938324502bb628dba7d474a308d82",
+    "vcf.vcf": "05967824807fd55c11da4e1239d74f5c87f250e98de7c3439df5b8effa8edfc3",
+    "json.jsonl": "3d1c8c2048a2cde03da99891ed3b191f9351e7717822656292298fc600805370"
+   }
+  },
+  "ensembl-guess": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.ensembl.txt -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+   "input": "variants.ensembl.txt",
+   "expected_dir": "expected_ensembl",
+   "sha256": {
+    "default.txt": "29dcd061ecea9a96f5a09c157e2474244b737c1c778cf1a8026bea0ec178e8be",
+    "tab.txt": "052cb8c07b3755023710b9643daba4f3421938324502bb628dba7d474a308d82",
+    "vcf.vcf": "05967824807fd55c11da4e1239d74f5c87f250e98de7c3439df5b8effa8edfc3",
+    "json.jsonl": "3d1c8c2048a2cde03da99891ed3b191f9351e7717822656292298fc600805370"
+   },
+   "expected_outputs": "the ensembl set's files (expected_ensembl): Ensembl VEP detects the format and the delimiter from the first data line, so its output for the input without --format is the output of the ensembl set"
+  },
+  "ensembl-space": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.ensembl.space.txt -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path --format ensembl --delimiter ' ' [--tab|--vcf|--json]",
+   "input": "variants.ensembl.space.txt",
+   "expected_dir": "expected_ensembl-space",
+   "sha256": {
+    "default.txt": "e242307559890b4e3c01df9851e7032619675256738be237958ff8444daaac4c",
+    "tab.txt": "6b04dacd24ffc9935f18bed2670d730215a958c0aea9ea30fe5cac09208d66f4",
+    "vcf.vcf": "e4f4eec8c8f0c4c7b243075b7d8a1af03c256c79438420d928c2f737b212bc7e",
+    "json.jsonl": "5b7463ac4d01d934a0b2318d319489aaacde7606a7c57f6864748a218b39f68d"
+   }
+  },
+  "ensembl-space-guess": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.ensembl.space.txt -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+   "input": "variants.ensembl.space.txt",
+   "expected_dir": "expected_ensembl-space",
+   "sha256": {
+    "default.txt": "e242307559890b4e3c01df9851e7032619675256738be237958ff8444daaac4c",
+    "tab.txt": "6b04dacd24ffc9935f18bed2670d730215a958c0aea9ea30fe5cac09208d66f4",
+    "vcf.vcf": "e4f4eec8c8f0c4c7b243075b7d8a1af03c256c79438420d928c2f737b212bc7e",
+    "json.jsonl": "5b7463ac4d01d934a0b2318d319489aaacde7606a7c57f6864748a218b39f68d"
+   },
+   "expected_outputs": "the ensembl-space set's files (expected_ensembl-space): Ensembl VEP detects the format and the delimiter from the first data line, so its output for the input without --format is the output of the ensembl-space set"
+  },
+  "vcf-space": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.space.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path --format vcf --delimiter ' ' [--tab|--vcf|--json]",
+   "input": "variants.space.vcf",
+   "expected_dir": "expected_vcf-space",
+   "sha256": {
+    "default.txt": "3dae6032913f9606a01f96ba64cef6b8d21f94bf68c630a6db7646b173d35992",
+    "tab.txt": "5ebf7b3486042841c6680f5851aea41e14c0b05bf7e54908a5d4ced56d153ee9",
+    "vcf.vcf": "46cdd3a106720b1d581f5ee9fde9437bb2b0810f887b72666f06da0ebe26013c",
+    "json.jsonl": "d20b9522f10e4ead0c7d151d9e2650b6c67c6abbb7217cffeef39c7e303783b5"
+   }
+  }
+ },
+ "generator": "cache copied from tests/golden/116/GRCh38-release116; variants.vcf and manifest.json by scripts/golden/build_golden_corpus.py select over Ensembl VEP's default output for the VCF; expected/ by scripts/concordance/generate_reference_output.sh --corpus; each flag set's expected_<set>/ by one container run per format of the same image, cache and base invocation with the set's own input and flags, the four outputs gzipped and their sha256 recorded under flag_sets",
+ "twins_sha256": {
+  "variants.ensembl.txt": "1b6eb18773ead54ceae0c8ddb5bd61c1076351fe6c825ff0d6ca3deec06a38a1",
+  "variants.ensembl.space.txt": "527be2e6b88e652b7b9b84a00ccf1358014d41448a55f8bf9a23d7965271a2df",
+  "variants.space.vcf": "4f3854bbf077d64ab6a0eeef1c4ad9f15449b47625c18c3621bc54e79aeb1690"
+ }
+}

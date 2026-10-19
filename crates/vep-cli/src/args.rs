@@ -71,6 +71,10 @@ pub struct Args {
     )]
     pub format: String,
 
+    /// Delimiter between the columns of an Ensembl-format or VCF input, a tab unless given: \t for a tab (a JSON `input` then joins its fields with a tab, where Ensembl VEP writes the two characters), a space to split on whitespace, a space and a plus (` +`) to split on runs of spaces, `\s+`, or literal text; a VCF record read under another delimiter is re-joined with tabs. With --format guess the delimiter is detected from the first data line instead, as Ensembl VEP detects it, and this flag is not read
+    #[arg(help_heading = "Input", long, value_name = "TEXT")]
+    pub delimiter: Option<String>,
+
     #[arg(help_heading = "Input", long)]
     pub gp: bool,
 

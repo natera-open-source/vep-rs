@@ -49,6 +49,10 @@ pub struct VcfOutputFormatter {
     vep_meta_line: String,
     /// The invocation for the `##VEP-command-line=` meta line.
     command_line: String,
+    /// Whether the records come from a VCF, whose own line each output line
+    /// extends (OutputFactory/VCF.pm:314-317); a record of another input format
+    /// carries its input line too, and its VCF line is built from the record.
+    vcf_input: bool,
 }
 
 impl VcfOutputFormatter {
@@ -77,6 +81,7 @@ impl VcfOutputFormatter {
             keep_csq: false,
             vep_meta_line: fields::vcf_vep_meta_line("", None),
             command_line: String::new(),
+            vcf_input: true,
         }
     }
 
@@ -85,6 +90,13 @@ impl VcfOutputFormatter {
     /// name stay, and the new entry is appended under the same name.
     pub fn with_keep_csq(mut self, keep_csq: bool) -> Self {
         self.keep_csq = keep_csq;
+        self
+    }
+
+    /// Sets whether the input is a VCF, whose records' own lines the output
+    /// extends; `true` unless set.
+    pub fn with_vcf_input(mut self, vcf_input: bool) -> Self {
+        self.vcf_input = vcf_input;
         self
     }
 
@@ -283,12 +295,14 @@ fn format_csq_entry(
         .join("|")
 }
 
-/// The record's VCF line: the raw input line when captured, else a minimal
-/// record rebuilt from the first allele's coordinates and every ALT.
-fn record_line(record: &[&InputVariant]) -> String {
+/// The record's VCF line: the raw input line when captured from a VCF, else a
+/// minimal record rebuilt from the first allele's coordinates and every ALT.
+fn record_line(record: &[&InputVariant], vcf_input: bool) -> String {
     let first = record[0];
-    if let Some(line) = &first.raw_input {
-        return line.to_string();
+    if vcf_input {
+        if let Some(line) = &first.raw_input {
+            return line.to_string();
+        }
     }
     let ref_str = String::from_utf8_lossy(&first.ref_allele);
     let alts = record
@@ -317,7 +331,7 @@ impl OutputFormatter for VcfOutputFormatter {
         if record.is_empty() {
             return Ok(Vec::new());
         }
-        let mut cols: Vec<String> = record_line(record)
+        let mut cols: Vec<String> = record_line(record, self.vcf_input)
             .split('\t')
             .map(str::to_string)
             .collect();

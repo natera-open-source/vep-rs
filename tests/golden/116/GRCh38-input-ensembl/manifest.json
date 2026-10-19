@@ -1,0 +1,359 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 30,
+ "max_span": 1000000,
+ "flags": [
+  "--uploaded_allele",
+  "--variant_class",
+  "--mask_header_cache_path"
+ ],
+ "covers": [
+  "ensembl-input-format",
+  "delimiter"
+ ],
+ "flag_sets": [
+  {
+   "name": "ensembl",
+   "flags": [
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path",
+    "--format",
+    "ensembl"
+   ],
+   "input": "variants.ensembl.txt",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "json"
+   ],
+   "expected_dir": "expected_ensembl",
+   "covers": [
+    "ensembl-input-format"
+   ]
+  },
+  {
+   "name": "ensembl-guess",
+   "flags": [
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path"
+   ],
+   "input": "variants.ensembl.txt",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "json"
+   ],
+   "expected_dir": "expected_ensembl",
+   "covers": [
+    "ensembl-input-format"
+   ]
+  },
+  {
+   "name": "ensembl-space",
+   "flags": [
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path",
+    "--format",
+    "ensembl",
+    "--delimiter",
+    " "
+   ],
+   "input": "variants.ensembl.space.txt",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "json"
+   ],
+   "expected_dir": "expected_ensembl-space",
+   "covers": [
+    "delimiter",
+    "ensembl-input-format"
+   ]
+  },
+  {
+   "name": "ensembl-space-guess",
+   "flags": [
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path"
+   ],
+   "input": "variants.ensembl.space.txt",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "json"
+   ],
+   "expected_dir": "expected_ensembl-space",
+   "covers": [
+    "delimiter"
+   ]
+  },
+  {
+   "name": "vcf-space",
+   "flags": [
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path",
+    "--format",
+    "vcf",
+    "--delimiter",
+    " "
+   ],
+   "input": "variants.space.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_vcf-space",
+   "covers": [
+    "delimiter"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "suites": {
+  "GRCh38-input-ensembl": {
+   "reference": "ref_default.txt",
+   "input": "input.vcf",
+   "rows": 32,
+   "combinations": 10
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant,feature_truncation": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "inframe_insertion,stop_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "inframe_insertion,stop_retained_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intergenic_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "stop_lost": {
+   "observed_rows": 10,
+   "exemplar_records": 10
+  },
+  "stop_retained_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 4
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 6
+  }
+ },
+ "variant_classes": {
+  "deletion": 7,
+  "insertion": 8,
+  "snv": 13,
+  "symbolic_deletion": 2,
+  "symbolic_duplication": 2
+ },
+ "records": [
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t11000000\tintergenic_snv\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t11000000\tintergenic_rev\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30213500\tdel_from_before_transcript\tN\t<DEL>\t.\t.\tEND=30214300",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30214000\tutr_rev_dash\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30214000\tutr_snv\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30215900\tdup_past_transcript_end\tN\t<DUP>\t.\t.\tEND=30216600",
+   "combinations": [
+    "5_prime_UTR_variant,coding_sequence_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282169\tfour_columns\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282169\tseven_columns\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282169\tdot_id\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282169\tlower_snv\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282169\tsnv_fwd\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282169\tmulti\tC\tA,T\t.\t.\t.",
+   "combinations": [
+    "stop_lost",
+    "stop_retained_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30289183\tstop_ins1_lost_rev\tC\tCG\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30289183\tzero_id\tC\tCG\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30319403\tstop_del1_kept_rev\tTC\tT\t.\t.\t.",
+   "combinations": [
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30319403\tlower_del\tTC\tT\t.\t.\t.",
+   "combinations": [
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30348409\tstop_del2_lost_rev\tCTA\tC\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30348409\tlower_unminimised\tCTA\tC\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30430756\tstop_ins5_newstop_fwd\tT\tTCCTAA\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion,stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30601265\tstop_del1_kept_fwd\tTG\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "stop_retained_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t34716478\tpenult_ins3_stop_fwd\tA\tAATA\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion,stop_retained_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

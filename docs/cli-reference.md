@@ -26,6 +26,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--input_file`, `-i` | String | `STDIN` | Input file path, or "STDIN" (in any case) for standard input, which needs --format. A gzip or BGZF file is decompressed whatever its name; BCF is refused |
 | `--input_data`, `--id` | String | -- | Input records as a string, read in place of --input_file; one record per line, the format detected as for a file |
 | `--format` | `ensembl`, `vcf`, `hgvs`, `id`, `spdi`, `region`, `guess` | `guess` | Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record. ID, SPDI and CAid input resolve through Ensembl's database and are refused; a region input needs --fasta |
+| `--delimiter` | String | -- | Delimiter between the columns of an Ensembl-format or VCF input, a tab unless given: \t for a tab (a JSON `input` then joins its fields with a tab, where Ensembl VEP writes the two characters), a space to split on whitespace, a space and a plus (` +`) to split on runs of spaces, `\s+`, or literal text; a VCF record read under another delimiter is re-joined with tabs. With --format guess the delimiter is detected from the first data line instead, as Ensembl VEP detects it, and this flag is not read |
 | `--gp` | bool | false | Refused with an error: --gp is not supported: it reads 1000 Genomes pilot coordinates from INFO/GP, which no current VCF carries |
 | `--ambiguous_hgvs` | bool | false | Refused with an error: --ambiguous_hgvs is not supported: it resolves an HGVSp input to every matching variant through the Ensembl database; HGVS input is genomic (g.) only |
 | `--phased` | bool | false | Accepted without effect: Ensembl VEP marks the genotypes as phased and nothing reads the mark |
@@ -179,6 +180,12 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--max_af` | bool | false | Add highest allele frequency across populations |
 | `--pubmed` | bool | false | Add PubMed IDs for co-located variants |
 | `--old_maf` | bool | false | Rewrite the AFR, AMR, ASN and EUR frequency values of each co-located variant as a bare minor-allele frequency: the allele is stripped, the first value kept and a value above 0.5 inverted; the allele-keyed frequency columns then find no allele in them and print empty |
+| `--check_frequency` | bool | false | Filter the input by the frequency of co-located known variants in the population --freq_pop names, against the threshold --freq_freq on the side --freq_gt_lt gives, dropping the alleles that pass or keeping the records whose alleles all pass as --freq_filter says; switches on --check_existing and adds the FREQS field (the frequencies the filter read, NA where an allele has none) |
+| `--freq_pop` | String | `1KG_ALL` | The population --check_frequency reads: 1KG_ALL (the 1000 Genomes AF column of the cache), a frequency column of the cache in any case (AF, AFR, gnomADe_NFE; the gnomAD genome columns are refused, as Ensembl VEP refuses them), or 1KG_ followed by such a column |
+| `--freq_freq` | f64 | `0.01` | The frequency --check_frequency compares against |
+| `--freq_gt_lt` | `gt`, `lt` | `gt` | Whether an allele passes --check_frequency with a frequency at or above (gt) or at or below (lt) --freq_freq |
+| `--freq_filter` | `exclude`, `include` | `exclude` | Whether --check_frequency drops the alleles that pass (exclude) or keeps a record only when every allele passes (include) |
+| `--filter_common` | bool | false | Drop the alleles with a 1000 Genomes frequency of 0.01 or more: --check_frequency with --freq_pop 1KG_ALL --freq_freq 0.01 --freq_gt_lt gt --freq_filter exclude |
 | `--gene_phenotype` | bool | false | Add the GENE_PHENO column: 1 on a transcript whose gene the cache associates with a phenotype, disease or trait, empty otherwise |
 
 ### Filtering / Picking

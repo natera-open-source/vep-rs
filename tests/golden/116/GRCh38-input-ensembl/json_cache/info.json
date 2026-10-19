@@ -1,0 +1,23 @@
+{
+  "assembly": "GRCh38",
+  "cache_version": 116,
+  "polyphen": "b",
+  "regulatory": true,
+  "sift": "b",
+  "source_versions": {
+    "1000genomes": "phase3",
+    "COSMIC": "102",
+    "ClinVar": "202509",
+    "HGMD-PUBLIC": "20204",
+    "assembly": "GRCh38.p14",
+    "dbSNP": "156",
+    "gencode": "GENCODE 50",
+    "genebuild": "GENCODE50",
+    "gnomADe": "v4.1",
+    "gnomADg": "v4.1",
+    "polyphen": "2.2.3",
+    "regbuild": "1.0",
+    "sift": "6.2.1"
+  },
+  "species": "homo_sapiens"
+}

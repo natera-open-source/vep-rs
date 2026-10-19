@@ -51,6 +51,7 @@ use vep_core::sv_routing::perl_true;
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
 use vep_io::input::detect::{self, InputFormat};
+use vep_io::input::{Delimiter, ParserContext, ReferenceSequence};
 use vep_io::output::fields::{ClinSigAllele, ExtraFieldsPlan, FieldOptions, PluginHeader};
 use vep_io::output::json::JsonOutputFormatter;
 use vep_io::output::parquet::ParquetOutputFormatter;
@@ -86,6 +87,18 @@ const GZIP_HEADER_BYTES: usize = 12;
 struct OpenedInput {
     source: pipeline::InputSource,
     bgzf_file: bool,
+    /// The column delimiter the input is read with: the detected one under
+    /// `--format guess`, else `--delimiter` (Parser.pm:135, 387-415).
+    delimiter: Delimiter,
+}
+
+/// The run's FASTA as a parser reads it ([`ReferenceSequence`]).
+struct FastaReference(Arc<vep_fasta::IndexedFasta>);
+
+impl ReferenceSequence for FastaReference {
+    fn sequence(&self, chr: &str, start: u64, end: u64) -> Option<Vec<u8>> {
+        self.0.sequence(chr, start, end)
+    }
 }
 
 /// Refuses a named input file that is not there with Ensembl VEP's text
@@ -833,7 +846,8 @@ impl Runner {
         let OpenedInput {
             source: input,
             bgzf_file,
-        } = self.open_input(fasta_found)?;
+            delimiter,
+        } = self.open_input(reference_fasta.as_ref())?;
         let checks = fasta_setup_checks(&self.config, fasta_found)?;
         self.print_notices(&checks.notices);
 
@@ -1021,6 +1035,7 @@ impl Runner {
                         self.config.fields.clone(),
                     )
                     .with_keep_csq(self.config.keep_csq)
+                    .with_vcf_input(matches!(input, pipeline::InputSource::Vcf(_)))
                     .with_run_info(
                         &self.header_cache_dir(),
                         Some(&self.cache.info),
@@ -1146,6 +1161,7 @@ impl Runner {
         let reader_cfg = pipeline::ReaderConfig {
             batch_size,
             capture_raw_input,
+            delimiter: &delimiter,
             allow_non_variant: self.config.allow_non_variant,
             dont_skip: self.config.dont_skip,
             max_sv_size: self.config.max_sv_size,
@@ -1174,6 +1190,7 @@ impl Runner {
             stats_enabled,
             write_ctx: &write_ctx,
             capture_raw_input,
+            delimiter: &delimiter,
             dont_skip: self.config.dont_skip,
             max_sv_size: self.config.max_sv_size,
             progress: !self.config.quiet,
@@ -1296,9 +1313,17 @@ impl Runner {
     /// A format Ensembl VEP resolves through its database (ID, SPDI, CAid) is
     /// refused as it refuses them offline, and a region input needs the run's
     /// FASTA (Parser/Region.pm:115). Opened where Ensembl VEP's init() builds
-    /// the parser (Runner.pm:136), before `post_setup_checks`.
-    fn open_input(&self, fasta_found: bool) -> anyhow::Result<OpenedInput> {
+    /// the parser (Runner.pm:136), before `post_setup_checks`. The parsers
+    /// share the delimiter, the FASTA and the cache's synonyms through a
+    /// [`ParserContext`]; the delimiter is `--delimiter`'s under an explicit
+    /// `--format` and, under `guess`, the one detection chose from the first
+    /// data line, as Ensembl VEP's detection overrides the flag (Parser.pm:414).
+    fn open_input(
+        &self,
+        reference_fasta: Option<&Arc<vep_fasta::IndexedFasta>>,
+    ) -> anyhow::Result<OpenedInput> {
         let config = &self.config;
+        let fasta_found = reference_fasta.is_some();
         let input_error = |message: &str| anyhow::Error::from(CliError::new("input", message));
         let read_failed = || format!("Failed to read input '{}'", config.input_file);
         let named_format = InputFormat::from_flag(&config.format);
@@ -1334,8 +1359,8 @@ impl Runner {
             ));
         }
 
-        let format = match named_format {
-            Some(format) => format,
+        let (format, delimiter) = match named_format {
+            Some(format) => (format, config.delimiter.clone()),
             None => {
                 let detection = detect::detect_format(&mut reader).with_context(read_failed)?;
                 reader = Box::new(Cursor::new(detection.consumed).chain(reader));
@@ -1343,8 +1368,15 @@ impl Runner {
                     return Err(input_error("Can't detect input format"));
                 };
                 debug!("No input file format specified - detected {format} format");
-                format
+                (format, detection.delimiter)
             }
+        };
+        let context = ParserContext {
+            delimiter: delimiter.clone(),
+            fasta: reference_fasta.map(|fasta| {
+                Arc::new(FastaReference(Arc::clone(fasta))) as Arc<dyn ReferenceSequence>
+            }),
+            synonyms: Arc::clone(&self.cache.synonyms),
         };
 
         // VCF is read line by line because header passthrough needs the lines;
@@ -1352,7 +1384,7 @@ impl Runner {
         let source = match format {
             InputFormat::Vcf => pipeline::InputSource::Vcf(reader),
             InputFormat::Ensembl => pipeline::InputSource::Parser(Box::new(
-                vep_io::input::ensembl::EnsemblParser::new(reader),
+                vep_io::input::ensembl::EnsemblParser::new(reader, &context),
             )),
             InputFormat::Hgvs => pipeline::InputSource::Parser(Box::new(
                 vep_io::input::hgvs::HgvsParser::new(reader),
@@ -1377,7 +1409,11 @@ impl Runner {
                 ))
             }
         };
-        Ok(OpenedInput { source, bgzf_file })
+        Ok(OpenedInput {
+            source,
+            bgzf_file,
+            delimiter,
+        })
     }
 
     /// Write the default-format header lines VEP writes, then the column line.
@@ -1782,9 +1818,10 @@ pub(crate) fn needs_exon_intron_numbers(config: &Config) -> bool {
 /// and the JSON writer carries the line as VEP's `input` key. Every other format
 /// builds its rows from the variant's own fields. The VCF writer also has a
 /// fallback that reconstructs a minimal record from `original_chr`/`start`/`id`/
-/// `ref_allele`/`alt_alleles` when `raw_input` is `None`, so a missing capture
-/// degrades silently to a rebuilt line rather than erroring, which is why the
-/// capture must be gated on the format list here rather than on a heuristic.
+/// `ref_allele`/`alt_alleles` when `raw_input` is `None` or the input is not a
+/// VCF, so a missing capture degrades silently to a rebuilt line rather than
+/// erroring, which is why the capture must be gated on the format list here
+/// rather than on a heuristic.
 const RAW_INPUT_OUTPUT_FORMATS: [&str; 2] = ["vcf", "json"];
 
 /// Whether the parser must retain the source VCF line on each variant.
