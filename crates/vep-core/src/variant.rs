@@ -397,6 +397,12 @@ pub struct InputVariant {
     /// the variation feature's own string. `None` when every allele was kept.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filtered_allele_string: Option<Arc<str>>,
+    /// The record's reference allele did not match the reference sequence under
+    /// `--check_ref`, and `--dont_skip` kept the record (Parser.pm:625 sets
+    /// `check_ref_failed`); every row of the record prints `CHECK_REF` as `failed`
+    /// (OutputFactory.pm:1020).
+    #[serde(default)]
+    pub check_ref_failed: bool,
 }
 
 /// An empty placeholder: no allocation, every field at its zero value. Lets a
@@ -461,6 +467,7 @@ impl Default for InputVariant {
             intergenic_pick: false,
             freqs: Vec::new(),
             filtered_allele_string: None,
+            check_ref_failed: false,
         }
     }
 }
@@ -544,6 +551,7 @@ impl InputVariant {
             intergenic_pick: false,
             freqs: Vec::new(),
             filtered_allele_string: None,
+            check_ref_failed: false,
         }
     }
 

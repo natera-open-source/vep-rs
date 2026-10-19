@@ -1165,7 +1165,13 @@ fn row_field_value(
         "GA4GH_VRS" => row_ga4gh_vrs(variant, tc, options)
             .map(VrsAllele::encoded)
             .unwrap_or_default(),
-        "CHECK_REF" => String::new(),
+        "CHECK_REF" => {
+            if variant.check_ref_failed {
+                "failed".to_string()
+            } else {
+                String::new()
+            }
+        }
         "RefSeq" => identifier_list(tc.and_then(|x| x.refseq.as_deref()), list_sep),
         "GENE_PHENO" => {
             if tc.is_some_and(|x| x.gene_phenotype) {
@@ -3440,6 +3446,43 @@ mod tests {
         assert_eq!(
             crate::OutputFormatter::format_record(&tab, &[&v]).unwrap(),
             vec!["ENST1\tprotein_coding"]
+        );
+    }
+
+    /// `CHECK_REF` prints `failed` on every row of a record whose reference allele
+    /// failed `--check_ref` and that `--dont_skip` kept (OutputFactory.pm:1020 sets
+    /// the key from `check_ref_failed`), in the `Extra` column as `CHECK_REF=failed`
+    /// and in the tab column the `dont_skip` group adds (Constants.pm:130); a record
+    /// that passed prints nothing.
+    #[test]
+    fn check_ref_failed_renders_failed() {
+        let options = FieldOptions {
+            dont_skip: true,
+            ..Default::default()
+        };
+        let mut failed = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        failed.check_ref_failed = true;
+        failed.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let passed = InputVariant::new("21".into(), 200, 200, b"C".to_vec(), b"T".to_vec());
+        assert_eq!(
+            field_value("CHECK_REF", &failed, None, &options, ","),
+            "failed"
+        );
+        assert_eq!(field_value("CHECK_REF", &passed, None, &options, ","), "");
+        assert!(
+            extra_keys(&failed, None, &options).contains(&"CHECK_REF"),
+            "the dont_skip group lists the key for the Extra column"
+        );
+        let tab = crate::output::tab::TabOutputFormatter::new(
+            options,
+            Vec::new(),
+            Some(["Location", "CHECK_REF"].map(str::to_string).to_vec()),
+            Vec::new(),
+            true,
+        );
+        assert_eq!(
+            crate::OutputFormatter::format_record(&tab, &[&failed]).unwrap(),
+            vec!["21:100\tfailed"]
         );
     }
 

@@ -93,6 +93,12 @@ struct OpenedInput {
     /// The column delimiter the input is read with: the detected one under
     /// `--format guess`, else `--delimiter` (Parser.pm:135, 387-415).
     delimiter: Delimiter,
+    /// The input names no reference allele and the run reads it from the FASTA:
+    /// Ensembl VEP's region parser switches `lookup_ref` on (Parser/Region.pm:121-122).
+    reads_reference: bool,
+    /// The format's parser names each record from its line (Parser/Region.pm:198,
+    /// Parser/HGVS.pm:237, Parser/SPDI.pm:193), so no name is built from the alleles.
+    parser_names_records: bool,
 }
 
 /// The run's FASTA as a parser reads it ([`ReferenceSequence`]).
@@ -105,6 +111,49 @@ impl ReferenceSequence for FastaReference {
 
     fn record_name(&self, chr: &str) -> Option<String> {
         self.0.record_name(chr).map(str::to_string)
+    }
+}
+
+/// The region parser's records with the reference allele Ensembl VEP's region
+/// parser gives them: `N` per base of the span, `-` for an insertion
+/// (Parser/Region.pm:189), where the parser writes `-` for every record. The
+/// bases are read from the FASTA by the `lookup_ref` the format switches on.
+/// A span over `--max_sv_size` is refused before the run of `N` is built, with
+/// the text `validate_vf` refuses it with (Parser.pm:491-500), so the run is
+/// never longer than the cap; the refusal holds under `--dont_skip` too, where
+/// Ensembl VEP carries the feature unannotated.
+struct RegionReferencePlaceholder<P> {
+    parser: P,
+    max_sv_size: Option<u64>,
+}
+
+impl<P: vep_io::InputParser> vep_io::InputParser for RegionReferencePlaceholder<P> {
+    fn next_variant(&mut self) -> Option<Result<InputVariant, vep_io::IoError>> {
+        let mut variant = match self.parser.next_variant()? {
+            Ok(variant) => variant,
+            Err(error) => return Some(Err(error)),
+        };
+        let span = variant.end.saturating_sub(variant.start);
+        if let Some(max) = self.max_sv_size.filter(|&max| span > max) {
+            return Some(Err(vep_io::IoError::SkippedLine(format!(
+                "variant size ({span}) is bigger than --max_sv_size ({max})"
+            ))));
+        }
+        if !variant.is_structural && variant.ref_allele == b"-" && variant.start <= variant.end {
+            let reference = "N".repeat((variant.end - variant.start + 1) as usize);
+            variant.allele_string = format!(
+                "{reference}/{}",
+                String::from_utf8_lossy(variant.alt_allele())
+            );
+            variant.ref_allele = reference.into_bytes();
+            variant.variant_class =
+                vep_core::variant::classify_variant(&variant.ref_allele, variant.alt_allele());
+        }
+        Some(Ok(variant))
+    }
+
+    fn take_empty_lines(&mut self) -> u64 {
+        self.parser.take_empty_lines()
     }
 }
 
@@ -459,10 +508,11 @@ pub(crate) struct FastaChecks {
 /// FASTA is opened or found absent, every run being an offline run here.
 /// `--everything` without a FASTA drops the HGVS flags it switched on with an
 /// `INFO:` line (:745-754); an explicit `--hgvs` or `--hgvsg` without one is
-/// refused with Ensembl VEP's text (:759); `--shift_3prime 1` without one is
-/// refused as well, since the shift reads the reference; `--shift_hgvs 0`
-/// reports that it set `shift_3prime` to 0 (:792-795). The caller prints the
-/// notices unless `--quiet`, as `status_msg` does (BaseVEP.pm:782).
+/// refused with Ensembl VEP's text (:759), then `--check_ref` (:760) and
+/// `--lookup_ref` (:761); `--shift_3prime 1` without one is refused as well,
+/// since the shift reads the reference; `--shift_hgvs 0` reports that it set
+/// `shift_3prime` to 0 (:792-795). The caller prints the notices unless
+/// `--quiet`, as `status_msg` does (BaseVEP.pm:782).
 pub(crate) fn fasta_setup_checks(
     config: &Config,
     fasta_found: bool,
@@ -480,6 +530,18 @@ pub(crate) fn fasta_setup_checks(
         }
         if checks.hgvs || config.hgvsg {
             return Err(CliError::new("fasta", HGVS_NEEDS_FASTA));
+        }
+        if config.check_ref {
+            return Err(CliError::new(
+                "fasta",
+                "Cannot check reference sequences (--check_ref) without a FASTA file (see --fasta)",
+            ));
+        }
+        if config.lookup_ref {
+            return Err(CliError::new(
+                "fasta",
+                "Cannot look up reference sequences (--lookup_ref) without a FASTA file (see --fasta)",
+            ));
         }
         if config.shift_3prime {
             return Err(CliError::new(
@@ -926,6 +988,8 @@ impl Runner {
             source: input,
             bgzf_file,
             delimiter,
+            reads_reference,
+            parser_names_records,
         } = self.open_input(reference_fasta.as_ref())?;
         let checks = fasta_setup_checks(&self.config, fasta_found)?;
         self.print_notices(&checks.notices);
@@ -1211,7 +1275,7 @@ impl Runner {
 
         // A non-VCF input has no header lines of its own, so the VCF output's
         // header block is written here rather than at the input's #CHROM line.
-        if matches!(input, pipeline::InputSource::Parser(_))
+        if matches!(input, pipeline::InputSource::Parser { .. })
             && output_format == "vcf"
             && !self.config.no_headers
         {
@@ -1231,6 +1295,18 @@ impl Runner {
         } else {
             Vec::new()
         };
+        let admitted_chromosomes = self
+            .config
+            .chr
+            .as_deref()
+            .map(crate::validate::ChromosomeList::new);
+        let checks = crate::validate::ReferenceChecks {
+            chr: admitted_chromosomes.as_ref(),
+            check_ref: self.config.check_ref,
+            lookup_ref: self.config.lookup_ref || reads_reference,
+            fasta: reference_fasta.as_deref(),
+            parser_names_records,
+        };
         let reader_cfg = pipeline::ReaderConfig {
             batch_size,
             capture_raw_input,
@@ -1244,6 +1320,7 @@ impl Runner {
             transcripts: &annotation_resources.transcripts,
             synonyms: &self.cache.synonyms,
             prewarm_order: &prewarm_order,
+            checks: &checks,
         };
         let write_ctx = pipeline::WriteContext {
             filter_config: &filter_config,
@@ -1267,6 +1344,7 @@ impl Runner {
             dont_skip: self.config.dont_skip,
             max_sv_size: self.config.max_sv_size,
             progress: !self.config.quiet,
+            checks: &checks,
             mode: self.config.pipeline_mode,
             depth: self.config.pipeline_depth,
             task_records: self.config.render_task_records,
@@ -1402,18 +1480,19 @@ impl Runner {
     /// refused before any line is read. The format is `--format`'s, or detected
     /// from the first data line, which standard input cannot give (Parser.pm:377).
     /// A format Ensembl VEP resolves through its database (ID, CAid) is
-    /// refused as it refuses them offline; a region input needs the run's
-    /// FASTA (Parser/Region.pm:115), and so do an SPDI input, whose
-    /// reference allele Ensembl VEP checks against or reads from its database
-    /// (VariationFeatureAdaptor.pm:2557-2590), and an HGVS input, which is
-    /// resolved against it where Ensembl VEP's own parser refuses the format
-    /// offline (Parser/HGVS.pm:104). Opened where Ensembl VEP's init() builds
-    /// the parser (Runner.pm:136), before `post_setup_checks`. The parsers
-    /// share the delimiter, the FASTA, the cache's synonyms and its
-    /// chromosomes through a [`ParserContext`]; the delimiter is
-    /// `--delimiter`'s under an explicit `--format` and, under `guess`, the one
-    /// detection chose from the first data line, as Ensembl VEP's detection
-    /// overrides the flag (Parser.pm:414).
+    /// refused as it refuses them offline. A region input needs the run's
+    /// FASTA (Parser/Region.pm:115) and refuses `--check_ref` (:118), as its
+    /// records name no reference allele; an SPDI input needs the FASTA too,
+    /// as Ensembl VEP checks its reference allele against its database or
+    /// reads it from there (VariationFeatureAdaptor.pm:2557-2590), and so does
+    /// an HGVS input, which is resolved against it where Ensembl VEP's own
+    /// parser refuses the format offline (Parser/HGVS.pm:104). Opened where
+    /// Ensembl VEP's init() builds the parser (Runner.pm:136), before
+    /// `post_setup_checks`. The parsers share the delimiter, the FASTA, the
+    /// cache's synonyms and its chromosomes through a [`ParserContext`]; the
+    /// delimiter is `--delimiter`'s under an explicit `--format` and, under
+    /// `guess`, the one detection chose from the first data line, as Ensembl
+    /// VEP's detection overrides the flag (Parser.pm:414).
     fn open_input(
         &self,
         reference_fasta: Option<&Arc<vep_fasta::IndexedFasta>>,
@@ -1482,21 +1561,42 @@ impl Runner {
         };
 
         // VCF is read line by line because header passthrough needs the lines;
-        // every other format goes through its parser.
+        // every other format goes through its parser, which reads through a
+        // capture of the last line for the skip warnings.
+        let parser_source = |parser: Box<dyn vep_io::InputParser>,
+                             last_line: pipeline::LastLine| {
+            pipeline::InputSource::Parser {
+                parser,
+                last_line,
+                format,
+            }
+        };
         let source = match format {
             InputFormat::Vcf => pipeline::InputSource::Vcf(reader),
-            InputFormat::Ensembl => pipeline::InputSource::Parser(Box::new(
-                vep_io::input::ensembl::EnsemblParser::new(reader, &context),
-            )),
+            InputFormat::Ensembl => {
+                let (reader, last_line) = pipeline::LineCapture::new(reader);
+                parser_source(
+                    Box::new(vep_io::input::ensembl::EnsemblParser::new(reader, &context)),
+                    last_line,
+                )
+            }
             InputFormat::Hgvs => {
                 if !fasta_found {
                     return Err(input_error(
                         "Cannot use HGVS format in offline mode without a FASTA file",
                     ));
                 }
-                pipeline::InputSource::Parser(Box::new(
-                    vep_io::input::hgvs::HgvsParser::new(reader, &context, false),
-                ))
+                // `--lookup_ref` reaches the HGVS parser as Parser/HGVS.pm:192 hands
+                // `-replace_ref` to its adaptor.
+                let (reader, last_line) = pipeline::LineCapture::new(reader);
+                parser_source(
+                    Box::new(vep_io::input::hgvs::HgvsParser::new(
+                        reader,
+                        &context,
+                        config.lookup_ref,
+                    )),
+                    last_line,
+                )
             }
             InputFormat::Region => {
                 if !fasta_found {
@@ -1504,9 +1604,19 @@ impl Runner {
                         "Cannot use Region format in offline mode without a FASTA file",
                     ));
                 }
-                pipeline::InputSource::Parser(Box::new(
-                    vep_io::input::region::RegionParser::new(reader),
-                ))
+                if config.check_ref {
+                    return Err(input_error(
+                        "Region format is not compatible with --check_ref",
+                    ));
+                }
+                let (reader, last_line) = pipeline::LineCapture::new(reader);
+                parser_source(
+                    Box::new(RegionReferencePlaceholder {
+                        parser: vep_io::input::region::RegionParser::new(reader),
+                        max_sv_size: config.max_sv_size,
+                    }),
+                    last_line,
+                )
             }
             InputFormat::Id => return Err(input_error("Cannot use ID format in offline mode")),
             InputFormat::Spdi => {
@@ -1515,9 +1625,11 @@ impl Runner {
                         "Cannot use SPDI format in offline mode without a FASTA file",
                     ));
                 }
-                pipeline::InputSource::Parser(Box::new(
-                    vep_io::input::spdi::SpdiParser::new(reader, &context),
-                ))
+                let (reader, last_line) = pipeline::LineCapture::new(reader);
+                parser_source(
+                    Box::new(vep_io::input::spdi::SpdiParser::new(reader, &context)),
+                    last_line,
+                )
             }
             InputFormat::Caid => {
                 return Err(input_error(
@@ -1529,6 +1641,11 @@ impl Runner {
             source,
             bgzf_file,
             delimiter,
+            reads_reference: format == InputFormat::Region,
+            parser_names_records: matches!(
+                format,
+                InputFormat::Region | InputFormat::Hgvs | InputFormat::Spdi
+            ),
         })
     }
 
@@ -2672,6 +2789,43 @@ mod tests {
         assert_eq!(parquet_row_group_rows(5_000), 6_144);
         assert_eq!(parquet_row_group_rows(1), 2_048);
         assert_eq!(parquet_row_group_rows(0), 2_048);
+    }
+
+    /// A region record's reference is `N` per base of its span and `-` for an
+    /// insertion (Parser/Region.pm:189); a span over `--max_sv_size` is refused
+    /// with `validate_vf`'s text (Parser.pm:491-500) before any run of `N` is
+    /// built, so a span no memory could hold is a skipped line, and the records
+    /// after it are still read.
+    #[test]
+    fn region_placeholder_refuses_an_oversize_span_before_building_its_reference() {
+        use vep_io::InputParser;
+        let input = "21:1-4611686018427387903/A\n21:5-7/C\n21:6-5/T\n21:1-1001/G\n";
+        let mut parser = RegionReferencePlaceholder {
+            parser: vep_io::input::region::RegionParser::new(Cursor::new(input)),
+            max_sv_size: Some(1000),
+        };
+        let refused = parser.next_variant().unwrap().unwrap_err();
+        assert_eq!(
+            refused.to_string(),
+            "variant size (4611686018427387902) is bigger than --max_sv_size (1000)"
+        );
+        let deletion = parser.next_variant().unwrap().unwrap();
+        assert_eq!(deletion.ref_allele, b"NNN");
+        assert_eq!(deletion.allele_string, "NNN/C");
+        let insertion = parser.next_variant().unwrap().unwrap();
+        assert_eq!(insertion.ref_allele, b"-");
+        assert_eq!(insertion.allele_string, "-/T");
+        let at_the_cap = parser.next_variant().unwrap().unwrap();
+        assert_eq!(at_the_cap.ref_allele.len(), 1001);
+        assert!(parser.next_variant().is_none());
+        let mut uncapped = RegionReferencePlaceholder {
+            parser: vep_io::input::region::RegionParser::new(Cursor::new("21:1-2000/G\n")),
+            max_sv_size: None,
+        };
+        assert_eq!(
+            uncapped.next_variant().unwrap().unwrap().ref_allele.len(),
+            2000
+        );
     }
 
     /// A BGZF block header is the gzip magic with FEXTRA set and a `BC` subfield

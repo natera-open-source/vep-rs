@@ -157,12 +157,12 @@ fn hgvs_records_annotate_as_their_vcf_twins_and_are_named_by_the_notation() {
 }
 
 /// A notation Ensembl VEP cannot resolve is skipped and warned about with the
-/// resolver's message (Parser/HGVS.pm:204-216): a reference allele the genome
-/// contradicts, a repeat, a notation with no type letter. A variant the
-/// resolver builds but `validate_vf` refuses (Parser.pm:564-592) is skipped
-/// with the line quoted: an insertion at one position, and an upper-case
-/// `DEL`, whose listed bases (none) stay its reference allele. The notations
-/// around them annotate.
+/// resolver's message (Parser/HGVS.pm:204-216), the line quoted as every skip
+/// of a parser-fed record quotes it: a reference allele the genome contradicts,
+/// a repeat, a notation with no type letter. A variant the resolver builds but
+/// `validate_vf` refuses (Parser.pm:564-592) is skipped likewise: an insertion
+/// at one position, and an upper-case `DEL`, whose listed bases (none) stay its
+/// reference allele. The notations around them annotate.
 #[test]
 fn unresolvable_notations_are_skipped_with_the_warning() {
     let dir = tempfile::tempdir().unwrap();
@@ -179,11 +179,11 @@ fn unresolvable_notations_are_skipped_with_the_warning() {
     let warnings = std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
     assert_eq!(
         warnings,
-        "WARNING: line 1 skipped Unable to parse HGVS notation '21:g.30282169G>A': \
+        "WARNING: line 1 skipped (21:g.30282169G>A): Unable to parse HGVS notation '21:g.30282169G>A': \
          Reference allele extracted from 21:30282169-30282169 (C) does not match reference \
          allele given by HGVS notation 21:g.30282169G>A (G)\n\
-         WARNING: line 3 skipped Unable to parse HGVS notation '21:g.30282169C[3]'\n\
-         WARNING: line 4 skipped Unable to parse HGVS notation '21:30282169C>A': \
+         WARNING: line 3 skipped (21:g.30282169C[3]): Unable to parse HGVS notation '21:g.30282169C[3]'\n\
+         WARNING: line 4 skipped (21:30282169C>A): Unable to parse HGVS notation '21:30282169C>A': \
          HGVS type  not recognised for 21:30282169C>A\n\
          WARNING: line 5 skipped (21:g.30282172insG): Alleles look like an insertion (-/G) \
          but coordinates are not start = end + 1 (START=30282172, END=30282172) \
@@ -220,7 +220,7 @@ fn max_sv_size_bounds_the_span_of_a_notation() {
     let warnings = std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
     assert_eq!(
         warnings,
-        "WARNING: line 1 skipped Unable to parse HGVS notation '21:g.30282180_30282199del': \
+        "WARNING: line 1 skipped (21:g.30282180_30282199del): Unable to parse HGVS notation '21:g.30282180_30282199del': \
          Region requested must be smaller than 10. This value can be adjusted with --max_sv_size.\n"
     );
 }

@@ -1,0 +1,20 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	30282169	snv_ok	C	T	.	.	.
+21	30289183	snv_bad	A	T	.	.	.
+21	30337048	lower_ok	c	t	.	.	.
+21	30813030	.	c	t	.	.	.
+21	30430756	n_ref	N	C	.	.	.
+21	30319403	del_ok	TCA	T	.	.	.
+21	34716478	del_bad	AGG	A	.	.	.
+21	37018203	ins_anchor_bad	G	GTT	.	.	.
+21	25585733	mnp_ok	CTT	GAA	.	.	.
+21	30348409	mnp_bad	CTG	GAA	.	.	.
+21	30440739	multi_ok	T	C,G	.	.	.
+21	30592776	multi_bad	A	C,G	.	.	.
+Z	1000	unknown_chr	A	G	.	.	.
+chr21	30635459	prefixed	T	C	.	.	.
+21	30165901	invalid_alleles	X	Y	.	.	.
+21	30601265	.	TG	.	.	.	.
+21	30643020	nonvar_csq	TTG	.	.	.	CSQ=old|stuff;DP=4
+21	30755140	nonvar_bad	G	.	.	.	.

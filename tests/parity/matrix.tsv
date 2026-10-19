@@ -17,7 +17,7 @@ af_gnomadg	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fre
 all_refseq	AnnotationType/Transcript.pm	implemented	open			
 allele_number	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::minimal_implies_allele_number	tests/golden/116/GRCh37-output-flags	
 allele_string	Database/Variation.pm	implemented	landed:implemented	crates/vep-cache-builder/src/variation.rs::indel_records_minimised_to_ensembl_coordinates;crates/vep-cache-builder/src/variation.rs::indel_records_keep_the_exported_alleles_unless_the_export_anchored_them;crates/vep-cache-builder/tests/variation_cache_from_dumps.rs::variation_files_carry_ensembl_form_and_read_back_through_the_runtime_source	tests/golden/116/GRCh38-native-builder	
-allow_non_variant	Parser/VCF.pm	documented_subset	open			
+allow_non_variant	Parser/VCF.pm	documented_subset	landed:documented_subset	crates/vep-cli/tests/input_validation.rs::allow_non_variant_every_format;crates/vep-cli/tests/input_validation.rs::allow_non_variant_strips_stale_csq;crates/vep-cli/tests/integration_test.rs::test_allow_non_variant_passthrough_vcf;crates/vep-cli/tests/pipeline_parity.rs::allow_non_variant_lines_stay_in_input_order_at_every_buffer_size_in_both_modes;crates/vep-cli/tests/input_validation.rs::non_variant_record_is_judged_by_the_frequency_filter	tests/golden/116/GRCh38-vcf-check-ref	
 AlphaMissense	AlphaMissense.pm	implemented	open			
 alt_equals_ref_and_duplicate_alts	Variation/VariationFeatureOverlap.pm	implemented	open			
 ambiguity	Config.pm	implemented	landed:implemented	crates/vep-core/src/variant.rs::ambiguity_code_follows_perl_table;crates/vep-io/src/output/fields.rs::ambiguity_key_absent_for_indels;crates/vep-io/src/output/json.rs::variant_level_keys_sit_on_the_record_object	tests/golden/116/GRCh37-output-flags	
@@ -89,14 +89,14 @@ CCDSFilter	CCDSFilter.pm	error	open
 cdna-and-coding-region-bounds	-	implemented	open			
 cell-type-header-and-field-group	Constants.pm	implemented	open			
 cell_type	Config.pm	implemented	open			
-check-ref-column	Constants.pm	implemented	open			
+check-ref-column	Constants.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::check_ref_failed_renders_failed;crates/vep-cli/tests/input_validation.rs::dont_skip_keeps_failing_variant	tests/golden/116/GRCh38-vcf-check-ref	
 check-svs-offline-source	-	documented_subset	landed:documented_subset	crates/vep-cli/src/sv_source.rs::parent_records_and_probe_class_are_excluded;crates/vep-cli/src/sv_source.rs::documented_exclusion_is_stated	tests/golden/116/GRCh38-checksvs	
 check_existing	Config.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::snv_with_different_alt_does_not_match;crates/vep-cli/src/variation_matcher.rs::indel_matches_after_trimming_both_directions;crates/vep-cli/src/variation_matcher.rs::committed_corpus_slices_match_ensembl_vep_existing_variation	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 check_frequency	Config.pm	implemented	landed:implemented	crates/vep-cli/src/frequency_filter.rs::exclude_keeps_variants_without_data;crates/vep-cli/src/frequency_filter.rs::partial_pass_rewrites_allele_string	tests/golden/116/GRCh38-freqfilter;tests/golden/116/GRCh38-freqfilter-include	
-check_ref	Parser.pm::validate_vf	implemented	open			
+check_ref	Parser.pm::validate_vf	implemented	landed:implemented	crates/vep-cli/src/validate.rs::check_ref_mismatch_skips;crates/vep-cli/src/validate.rs::check_ref_insertion_passes;crates/vep-cli/src/validate.rs::check_ref_case_insensitive;crates/vep-cli/src/validate.rs::check_ref_takes_precedence_over_lookup_ref;crates/vep-cli/tests/input_validation.rs::reference_checks_need_a_fasta_and_exclude_each_other;crates/vep-cli/tests/input_validation.rs::skip_reasons_match_ensembl_vep	tests/golden/116/GRCh38-vcf-check-ref	
 check_svs	Config.pm	implemented	landed:implemented	crates/vep-cli/src/sv_source.rs::overlapping_svs_sorted_into_sv_column;crates/vep-cli/src/args.rs::check_svs_takes_the_sv_file	tests/golden/116/GRCh38-checksvs	
-chr	Config.pm	implemented	open			
-chromosome-absent-from-cache	Parser.pm	implemented	open			
+chr	Config.pm	implemented	landed:implemented	crates/vep-cli/src/validate.rs::chr_list_filters_and_chr_prefix_not_normalised;crates/vep-cli/src/validate.rs::chr_range_expands;crates/vep-cli/tests/input_validation.rs::chr_filters_on_the_input_spelling	tests/golden/116/GRCh38-vcf-check-ref	
+chromosome-absent-from-cache	Parser.pm	implemented	landed:implemented	crates/vep-cli/tests/input_validation.rs::unknown_chromosome_is_warned_and_skipped_in_every_format;crates/vep-cli/src/validate.rs::database_toplevel_transform_not_ported	tests/golden/116/GRCh38-vcf-check-ref	
 chromosome-name-normalisation	Parser.pm	implemented	open			
 chromosome-synonyms	CacheDir.pm	implemented	landed:implemented	crates/vep-core/src/synonyms.rs::nc_accession_resolves_to_cache_name;crates/vep-cli/src/pipeline.rs::name_source_chromosomes_resolves_synonyms_against_the_cache;crates/vep-fasta/src/lib.rs::synonyms_reach_a_record_under_the_cache_name	tests/golden/116/GRCh38-synonyms	
 clin-sig-somatic-pheno-columns	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::somatic_and_pheno_are_per_variant_lists_dropped_when_all_zero;crates/vep-io/src/output/fields.rs::clin_sig_keeps_duplicates	tests/golden/116/GRCh38-colocated	
@@ -142,7 +142,7 @@ distance	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/config.
 docker-image	INSTALL.pl	implemented	open			
 domains	OutputFactory.pm	implemented	landed:implemented	crates/vep-effects/src/consequences.rs::domains_overlapping_protein_position	tests/golden/116/GRCh38-protein-features	
 domains-value-format	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/json.rs::domains_json_resplit_truncates_at_non_word	tests/golden/116/GRCh38-protein-features	
-dont_skip	Parser.pm	implemented	open			
+dont_skip	Parser.pm	implemented	landed:implemented	crates/vep-cli/tests/input_validation.rs::dont_skip_keeps_failing_variant;crates/vep-cli/tests/input_validation.rs::dont_skip_never_aborts;crates/vep-cli/tests/integration_test.rs::test_dont_skip_skips_an_invalid_vcf_line;crates/vep-cli/tests/pipeline_parity.rs::dont_skip_reports_the_malformed_line_in_a_later_batch_and_exits	tests/golden/116/GRCh38-vcf-check-ref	
 DosageSensitivity	DosageSensitivity.pm	implemented	open			
 Downstream	Downstream.pm	error	open			
 Draw	Draw.pm	error	open			
@@ -278,9 +278,9 @@ library-embedding	Runner.pm	implemented	open
 LocalID	LocalID.pm	error	open			
 LOEUF	LOEUF.pm	implemented	open			
 LoFtool	LoFtool.pm	implemented	open			
-lookup_ref	Parser.pm	implemented	open			
+lookup_ref	Parser.pm	implemented	landed:implemented	crates/vep-cli/src/validate.rs::lookup_ref_replaces_ref;crates/vep-cli/src/validate.rs::lookup_ref_restores_dash;crates/vep-cli/tests/input_validation.rs::reference_checks_need_a_fasta_and_exclude_each_other;crates/vep-cli/tests/input_validation.rs::skip_reasons_match_ensembl_vep;crates/vep-cli/tests/input_validation.rs::region_input_reads_its_reference_from_the_fasta	tests/golden/116/GRCh38-vcf-check-ref	
 LOVD	LOVD.pm	error	open			
-lowercase-alleles	Parser.pm	implemented	open			
+lowercase-alleles	Parser.pm	implemented	landed:implemented	crates/vep-cli/tests/input_validation.rs::lowercase_alleles_print_uppercase	tests/golden/116/GRCh38-vcf-check-ref	
 lrg	Parser.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::lrg_is_refused		
 mane	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::mane_lists_select_then_plus_clinical	tests/golden/116/GRCh38-attributes	
 mane-alternative-id-values	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::mane_select_value_is_attribute_verbatim	tests/golden/116/GRCh38-attributes	
@@ -325,7 +325,7 @@ no_headers	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/integra
 no_intergenic	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/row_filter.rs::no_intergenic_suppresses_the_intergenic_row_in_every_format	tests/golden/116/GRCh38-pick-summary	
 no_progress	Config.pm	implemented	open			
 no_stats	BaseRunner.pm	implemented	open			
-non-variant-records	VCF.pm	implemented	open			
+non-variant-records	VCF.pm	implemented	landed:implemented	crates/vep-cli/tests/input_validation.rs::non_variant_json_object_per_record	tests/golden/116/GRCh38-vcf-check-ref	
 NonSynonymousFilter	NonSynonymousFilter.pm	error	open			
 numbers	Config.pm	implemented	landed:implemented	crates/vep-effects/src/display.rs::exon_and_intron_numbers_follow_vep	tests/golden/116/GRCh37-output-flags	
 offline	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::offline_changes_no_output		
@@ -431,8 +431,8 @@ sift-polyphen-value-grammar	Config.pm	documented_subset	landed:documented_subset
 single-dash-long-options	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_argv.rs::single_dash_long_option_is_rewritten;crates/vep-cli/tests/cli_argv.rs::short_flags_unchanged;crates/vep-cli/tests/cli_argv.rs::single_dash_unknown_option_is_refused_by_name	tests/golden/116/GRCh38-run-control	
 SingleLetterAA	SingleLetterAA.pm	error	open			
 singularity-apptainer	-	implemented	open			
-skipped-variant-reporting	Parser.pm	implemented	open			
-skipped-variant-semantics	Parser.pm	implemented	open			
+skipped-variant-reporting	Parser.pm	implemented	landed:implemented	crates/vep-cli/tests/input_validation.rs::skipped_lines_reach_stderr_and_warning_file;crates/vep-cli/src/pipeline.rs::read_parsed_numbers_records_and_skips_a_record_once;crates/vep-cli/src/pipeline.rs::read_parsed_writes_perls_coordinate_text_for_an_ensembl_line;crates/vep-cli/src/pipeline.rs::line_capture_keeps_the_last_line_read;crates/vep-cli/tests/cli_run_control.rs::non_vcf_skips_carry_the_record_number	tests/golden/116/GRCh38-vcf-check-ref	
+skipped-variant-semantics	Parser.pm	implemented	landed:implemented	crates/vep-cli/tests/input_validation.rs::skip_reasons_match_ensembl_vep	tests/golden/116/GRCh38-vcf-check-ref	
 skipped-variant-warning-lines	BaseVEP.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::skipped_line_writes_the_vep_warning_line_to_stderr_and_the_warnings_file;crates/vep-cli/tests/cli_run_control.rs::chromosome_absent_is_warned_not_intergenic;crates/vep-cli/src/warnings.rs::skipped_variant_lines_follow_skipped_variant_msg;crates/vep-cli/src/pipeline.rs::read_vcf_drops_a_non_variant_record_silently_without_the_flag;crates/vep-cli/src/pipeline.rs::refused_record_descriptions_follow_perl_order;crates/vep-core/src/sv_routing.rs::sv_type_string_replaces_the_alts_with_svtype_outside_the_vcf44_forms;crates/vep-cli/tests/cli_run_control.rs::deletion_looks_incomplete_follows_the_type_and_precedes_the_span	tests/golden/116/GRCh38-run-control	
 skipped_variants_file	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::skipped_variants_file_lists_every_skip_in_perl_layout;crates/vep-cli/tests/cli_run_control.rs::existing_skipped_file_is_refused_without_force;crates/vep-cli/src/warnings.rs::skipped_variants_file_follows_dump_skipped_variants	tests/golden/116/GRCh38-run-control	
 solr	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::solr_is_accepted_without_effect		
@@ -522,7 +522,7 @@ use_given_ref	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/
 use_transcript_ref	AnnotationType/Transcript.pm	documented_subset	open			
 user	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
 UTRAnnotator	UTRAnnotator.pm	implemented	open			
-validate-vf-checks	Parser.pm	documented_subset	open			
+validate-vf-checks	Parser.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/validate.rs::start_gt_end_plus_one;crates/vep-cli/src/validate.rs::insertion_needs_start_eq_end_plus_one;crates/vep-cli/src/validate.rs::ref_length_must_equal_span;crates/vep-cli/src/validate.rs::allele_regex;crates/vep-cli/src/validate.rs::uppercase;crates/vep-cli/src/validate.rs::non_numeric_coords;crates/vep-cli/src/validate.rs::database_toplevel_transform_not_ported;crates/vep-cli/tests/input_validation.rs::skip_reasons_match_ensembl_vep;crates/vep-cli/src/validate.rs::parser_named_records_take_no_allele_name	tests/golden/116/GRCh38-vcf-check-ref	
 var_synonyms	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::var_synonyms_joined_with_double_dash;crates/vep-io/src/output/json.rs::var_synonyms_nested_by_source;crates/vep-cli/src/config.rs::var_synonyms_implies_check_existing_with_info_line	tests/golden/116/GRCh38-colocated	
 variant_class	Config.pm	implemented	landed:implemented	crates/vep-core/src/variant.rs::so_variation_class_follows_perl;crates/vep-io/src/output/fields.rs::variant_class_survives_on_summary_rows	tests/golden/116/GRCh37-output-flags	
 variant_recoder	VariantRecoder.pm::is_vr	documented_subset	open			

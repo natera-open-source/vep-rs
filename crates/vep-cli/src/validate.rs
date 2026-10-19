@@ -1,0 +1,1100 @@
+// Copyright (c) 2026-present Natera, Inc.
+// Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+//! Ensembl VEP's record validation, `validate_vf` (Parser.pm:457-649 at
+//! release/116.2), over the alleles vep-rs parsed from one input record.
+//!
+//! Ensembl VEP builds one feature per input line and runs the checks on it in a
+//! fixed order, stopping at the first that fails: the `--chr` list, the
+//! coordinates, the `--max_sv_size` bound, the chromosome against the cache, the
+//! allele string (upper-cased first), an insertion's coordinates, the reference
+//! allele's length against the span, then `--check_ref` or `--lookup_ref`
+//! against the reference sequence. A failing record is reported through the
+//! warning sink and dropped, or kept as it stands under `--dont_skip`
+//! (Parser.pm:189, Parser/VCF.pm:199), the checks after the failing one never
+//! run on it. vep-rs holds a record as one [`InputVariant`] per alternate
+//! allele, so the verdict is taken on the first allele and what the checks
+//! change (the upper-casing, a looked-up reference, the failed check mark) is
+//! carried to the record's other alleles.
+
+use std::borrow::Cow;
+use std::collections::HashSet;
+
+use vep_core::codon::reverse_complement;
+use vep_core::coordinate::Strand;
+use vep_core::sv_routing::{perl_true, sv_type_abbreviation, sv_type_string};
+use vep_core::synonyms::ChromosomeSynonyms;
+use vep_core::variant::{classify_variant, InputVariant};
+use vep_core::variation::{perl_number_string, perl_numeric};
+use vep_core::vcf_info::info_value_written;
+use vep_fasta::IndexedFasta;
+
+use crate::pipeline::SkipSink;
+use crate::transcript_index::LazyTranscriptIndexes;
+
+/// The reference-sequence checks of a run and the `--chr` list.
+pub(crate) struct ReferenceChecks<'a> {
+    /// The chromosome names `--chr` admits; `None` without the flag.
+    pub chr: Option<&'a ChromosomeList>,
+    /// `--check_ref`: a reference allele that differs from the reference
+    /// sequence fails the record.
+    pub check_ref: bool,
+    /// `--lookup_ref`: the reference allele is replaced by the reference
+    /// sequence over the record's span; read only when `check_ref` is off, as
+    /// `validate_vf`'s `elsif` reads it (Parser.pm:635).
+    pub lookup_ref: bool,
+    /// The run's reference FASTA, which both checks read.
+    pub fasta: Option<&'a IndexedFasta>,
+    /// The input format's parser names every record itself (Parser/Region.pm:198,
+    /// Parser/HGVS.pm:237, Parser/SPDI.pm:193), so Parser.pm:462 builds no name
+    /// from the alleles.
+    pub parser_names_records: bool,
+}
+
+impl ReferenceChecks<'_> {
+    /// Whether the `--chr` list admits a chromosome as the input spells it; every
+    /// name without the flag.
+    pub(crate) fn admits(&self, name: &str) -> bool {
+        self.chr.is_none_or(|admitted| admitted.admits(name))
+    }
+}
+
+/// No list and neither check: every record passes these three.
+#[cfg(test)]
+pub(crate) const NO_CHECKS: ReferenceChecks<'static> = ReferenceChecks {
+    chr: None,
+    check_ref: false,
+    lookup_ref: false,
+    fasta: None,
+    parser_names_records: false,
+};
+
+/// The chromosome names a `--chr` value admits: each comma-separated token as
+/// written (Ensembl VEP matches the raw input name against the token,
+/// Parser.pm:470-472), and a token of two non-negative integers joined by `-`
+/// as every integer between them, so `1-5,10,MT` admits `1` to `5`. Ensembl
+/// VEP admits the token `1-5` alone.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct ChromosomeList {
+    names: HashSet<String>,
+    ranges: Vec<(u64, u64)>,
+}
+
+impl ChromosomeList {
+    pub(crate) fn new(tokens: &[String]) -> Self {
+        // `str::parse::<u64>` takes a leading `+`, so a bound is tested as a run
+        // of decimal digits first and `+1-3` stays a name.
+        let bound = |text: &str| -> Option<u64> {
+            if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            text.parse().ok()
+        };
+        let mut list = ChromosomeList::default();
+        for token in tokens.iter().filter(|t| !t.is_empty()) {
+            let bounds = token
+                .split_once('-')
+                .and_then(|(from, to)| Some((bound(from)?, bound(to)?)));
+            match bounds {
+                Some((from, to)) if from <= to => list.ranges.push((from, to)),
+                _ => {
+                    list.names.insert(token.clone());
+                }
+            }
+        }
+        list
+    }
+
+    /// Whether a record whose chromosome the input spells `name` is annotated: a
+    /// name as written, or the plain decimal spelling of an integer in a range.
+    pub(crate) fn admits(&self, name: &str) -> bool {
+        self.names.contains(name)
+            || name.parse::<u64>().is_ok_and(|n| {
+                n.to_string() == name
+                    && self
+                        .ranges
+                        .iter()
+                        .any(|&(from, to)| (from..=to).contains(&n))
+            })
+    }
+}
+
+/// Perl's `looks_like_number`, the test of `validate_vf`'s coordinate check
+/// (Parser.pm:475): a decimal number with an optional sign, fraction and
+/// exponent, or `Inf`, `Infinity` or `NaN` in any case, blanks around it allowed.
+pub(crate) fn looks_like_number(text: &str) -> bool {
+    let text = text.trim();
+    let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
+    if ["inf", "infinity", "nan"].contains(&unsigned.to_ascii_lowercase().as_str()) {
+        return true;
+    }
+    let (mantissa, exponent) = match unsigned.split_once(['e', 'E']) {
+        Some((m, e)) => (m, Some(e)),
+        None => (unsigned, None),
+    };
+    let (whole, fraction) = match mantissa.split_once('.') {
+        Some((w, f)) => (w, Some(f)),
+        None => (mantissa, None),
+    };
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    let mantissa_ok = match fraction {
+        Some(f) => {
+            (digits(whole) && (f.is_empty() || digits(f))) || (whole.is_empty() && digits(f))
+        }
+        None => digits(whole),
+    };
+    let exponent_ok = exponent.is_none_or(|e| digits(e.strip_prefix(['+', '-']).unwrap_or(e)));
+    mantissa_ok && exponent_ok
+}
+
+/// The skip description of `validate_vf`'s coordinate test (Parser.pm:476-480)
+/// for a VCF record whose POS is not a number: Ensembl VEP's end is the
+/// numified POS plus the reference allele's length less one (Parser/VCF.pm:254),
+/// `abc` numifying to 0.
+pub(crate) fn invalid_vcf_coordinate(pos: &str, ref_allele: &str) -> String {
+    let end = perl_numeric(pos) + ref_allele.len() as f64 - 1.0;
+    format!(
+        "Invalid start '{pos}' or end '{}' coordinate",
+        perl_number_string(end)
+    )
+}
+
+/// The reference sequence over `start..=end` of `chr`, on `strand`, as
+/// `_get_ref_allele` reads it from the FASTA-backed slice (Parser.pm:745-753:
+/// `sub_Slice($start, $end, $strand)->seq`, reverse-complemented for strand
+/// -1); `None` when the FASTA has no such span.
+pub(crate) fn reference_sequence(
+    fasta: &IndexedFasta,
+    chr: &str,
+    start: u64,
+    end: u64,
+    strand: Strand,
+) -> Option<Vec<u8>> {
+    let sequence = fasta.sequence(chr, start, end)?;
+    Some(match strand {
+        Strand::Forward => sequence,
+        Strand::Reverse => reverse_complement(&sequence),
+    })
+}
+
+/// The checks Ensembl VEP's parser makes on a record before annotation, applied
+/// to the alleles vep-rs parsed from it.
+pub(crate) struct SkipRules<'a> {
+    pub transcripts: &'a LazyTranscriptIndexes,
+    /// The chromosome synonyms an input name is resolved through before the
+    /// checks run (`pipeline::name_source_chromosomes`).
+    pub synonyms: &'a ChromosomeSynonyms,
+    pub max_sv_size: Option<u64>,
+    pub dont_skip: bool,
+    pub checks: &'a ReferenceChecks<'a>,
+}
+
+/// The input record as the skip rules read it: `number` Ensembl VEP's count of
+/// the records read, `columns` the VCF columns (INFO complete for a structural
+/// record; `None` for a format the reader does not split) and `quoted` the
+/// bytes a skip warning quotes.
+pub(crate) struct RecordLine<'a> {
+    pub number: u64,
+    pub columns: Option<&'a [u8]>,
+    pub quoted: &'a [u8],
+}
+
+/// What the checks changed on a record's first allele, to carry to the alleles
+/// vep-rs split from the same line.
+pub(crate) struct AllelePatch {
+    /// The name given to a record whose ID column names it not, when the checks
+    /// change the alleles it is built from.
+    name: Option<String>,
+    upper_cased: bool,
+    /// The reference allele after `--lookup_ref`, when it replaced the record's.
+    reference: Option<Vec<u8>>,
+    check_ref_failed: bool,
+}
+
+impl AllelePatch {
+    /// Applies the record's changes to one of its other alleles.
+    pub(crate) fn apply(&self, variant: &mut InputVariant) {
+        if let Some(name) = &self.name {
+            variant.id = Some(name.clone());
+        }
+        if self.upper_cased {
+            upper_case_alleles(variant);
+        }
+        if let Some(reference) = &self.reference {
+            replace_reference(variant, reference);
+        }
+        variant.check_ref_failed = self.check_ref_failed;
+    }
+}
+
+impl SkipRules<'_> {
+    /// Reports every skip Ensembl VEP reports for the record, applies what the
+    /// checks change to `first`, the record's first allele, and returns whether
+    /// vep-rs annotates the record and the changes its other alleles take. The
+    /// parse-time marks come first: a type outside `%SO_TERMS` (Parser/VCF.pm:477-481)
+    /// and a deletion without an extent (`:555-558`), each warned and then, in
+    /// vep-rs, still annotated. Then `validate_vf` (Parser.pm:457-649) in its order,
+    /// each failing check dropping the record unless `--dont_skip` keeps it as it
+    /// stands (Parser/VCF.pm:199-201): the `--chr` list, read against the input's
+    /// own name and silent (`:470-472`); a start past the end plus one (`:483-488`);
+    /// a span over `--max_sv_size` (`:493-500`, warned and in vep-rs still
+    /// annotated); a chromosome the cache does not carry (`:542-546`); then, for a
+    /// sequence variant, the allele string upper-cased (`:554`), an allele string
+    /// with no `ACGTN-` run (`:556-560`), an insertion whose start is not the end
+    /// plus one (`:564-572`), a reference allele whose length is not the span's
+    /// (`:585-592`), and the reference allele against the reference sequence
+    /// (`--check_ref`, `:596-633`) or replaced by it (`--lookup_ref`, `:635-646`).
+    pub(crate) fn validate(
+        &self,
+        first: &mut InputVariant,
+        line: &RecordLine<'_>,
+        report: &mut SkipSink<'_>,
+    ) -> (bool, AllelePatch) {
+        let mut patch = AllelePatch {
+            name: None,
+            upper_cased: false,
+            reference: None,
+            check_ref_failed: false,
+        };
+        let quoted = String::from_utf8_lossy(line.quoted);
+        let mut skip = |description: &str| report(description, line.number, Some(&quoted));
+        if first.is_structural {
+            let joined_alts = first.uploaded_allele_string.as_deref().unwrap_or("");
+            let svtype = first.sv_type.as_deref();
+            // `get_SO_term` warns about a type `%SO_TERMS` lacks by its abbreviation
+            // (Parser.pm:668-725) whether the record is then carried without
+            // consequences (a VCF record, `vep_skip`) or annotated under its word
+            // (an Ensembl-format record).
+            if first.record_so_term.is_none() {
+                let abbrev = sv_type_abbreviation(joined_alts, svtype);
+                skip(&format!(
+                    "{abbrev} is not a supported structural variant type"
+                ));
+            }
+            // Parser/VCF.pm:477-481: the deletion test runs on the SO term, or on
+            // the raw type string when `%SO_TERMS` has no entry for it.
+            let so_term = match &first.record_so_term {
+                Some(term) => term.clone(),
+                None => sv_type_string(joined_alts, svtype),
+            };
+            if incomplete_deletion(first, &so_term, line.columns) {
+                skip("deletion looks incomplete");
+            }
+        }
+        // The name as the input spelled it, before any rename (Parser.pm:470 runs
+        // before `_have_chr`).
+        let input_name = first
+            .input_chr
+            .as_deref()
+            .unwrap_or(first.original_chr.as_str());
+        if !self.checks.admits(input_name) {
+            return (self.dont_skip, patch);
+        }
+        // A start past the end plus one names a span no annotation can read, so
+        // the record is dropped under `--dont_skip` too, where Ensembl VEP's run
+        // ends on the first transcript the record reaches.
+        if first.start > first.end + 1 {
+            skip(&format!(
+                "start > end+1 : (START={}, END={})",
+                first.start, first.end
+            ));
+            return (false, patch);
+        }
+        if let (true, Some(max)) = (first.oversize_sv, self.max_sv_size) {
+            skip(&format!(
+                "variant size ({}) is bigger than --max_sv_size ({max})",
+                first.end.saturating_sub(first.start)
+            ));
+            return (true, patch);
+        }
+        if !self.transcripts.contains_key(&first.chr) {
+            let chr = &first.original_chr;
+            skip(&format!(
+                "Chromosome {chr} not found in annotation sources or synonyms; chromosome {chr} does not overlap any features"
+            ));
+            return (self.dont_skip, patch);
+        }
+        if first.is_structural {
+            return (true, patch);
+        }
+        // Parser.pm:462 names a record whose ID column names it not from its
+        // alleles as written, before the upper-casing (:554) and the looked-up
+        // reference (:645) change them; the name is kept where those steps would
+        // change what the record builds at output.
+        let named_by_alleles =
+            !self.checks.parser_names_records && !first.id.as_deref().is_some_and(perl_true);
+        // The string as written covers every allele of the record, a parser's
+        // working copy of a multi-allelic string being upper-cased already.
+        let as_written = first.uploaded_allele_string.as_deref().unwrap_or("");
+        let lower_case = working_allele_string(first)
+            .bytes()
+            .chain(first.allele_string.bytes())
+            .chain(as_written.bytes())
+            .any(|b| b.is_ascii_lowercase());
+        let checks_change_alleles =
+            (self.checks.lookup_ref && !self.checks.check_ref) || lower_case;
+        if named_by_alleles && checks_change_alleles {
+            if let Some(multi) = &first.record_allele_string_multi {
+                if multi.as_ref() != as_written && multi.eq_ignore_ascii_case(as_written) {
+                    first.record_allele_string_multi = Some(as_written.into());
+                }
+            }
+            let name = first.variation_name();
+            first.id = Some(name.clone());
+            patch.name = Some(name);
+        }
+        if lower_case {
+            upper_case_alleles(first);
+            patch.upper_cased = true;
+        }
+        let allele_string = working_allele_string(first);
+        if !allele_string
+            .bytes()
+            .any(|b| matches!(b, b'A' | b'C' | b'G' | b'T' | b'N' | b'-'))
+        {
+            skip(&format!(
+                "Invalid allele string {allele_string} or possible parsing error"
+            ));
+            return (self.dont_skip, patch);
+        }
+        if allele_string.starts_with("-/") && first.start != first.end + 1 {
+            skip(&format!(
+                "Alleles look like an insertion ({allele_string}) but coordinates are not start = end + 1 (START={}, END={}) for variant ({}) ",
+                first.start,
+                first.end,
+                first.variation_name()
+            ));
+            return (self.dont_skip, patch);
+        }
+        // The reference allele with its `-` removed (Parser.pm:579-581), so an
+        // insertion's is empty.
+        let reference: Cow<[u8]> = if first.ref_allele.contains(&b'-') {
+            Cow::Owned(
+                first
+                    .ref_allele
+                    .iter()
+                    .copied()
+                    .filter(|&b| b != b'-')
+                    .collect(),
+            )
+        } else {
+            Cow::Borrowed(&first.ref_allele)
+        };
+        let span = first.end + 1 - first.start;
+        if reference
+            .iter()
+            .all(|b| matches!(b, b'A' | b'C' | b'G' | b'T'))
+            && span != reference.len() as u64
+        {
+            skip(&format!(
+                "Length of reference allele ({} length {}) does not match coordinates {}-{}",
+                String::from_utf8_lossy(&reference),
+                reference.len(),
+                first.start,
+                first.end
+            ));
+            return (self.dont_skip, patch);
+        }
+        let fetch = || {
+            self.checks.fasta.and_then(|fasta| {
+                reference_sequence(fasta, &first.chr, first.start, first.end, first.strand)
+            })
+        };
+        let span_text = || {
+            format!(
+                "{}:{}-{}({})",
+                first.original_chr,
+                first.start,
+                first.end,
+                first.strand.as_i8()
+            )
+        };
+        if self.checks.check_ref {
+            // An insertion has no reference allele to check (Parser.pm:601-603).
+            let matched = if reference.is_empty() {
+                true
+            } else {
+                match fetch() {
+                    Some(sequence) => sequence.eq_ignore_ascii_case(&reference),
+                    None => {
+                        skip(&format!("Could not fetch sub-slice from {}", span_text()));
+                        false
+                    }
+                }
+            };
+            if !matched {
+                first.check_ref_failed = true;
+                patch.check_ref_failed = true;
+                // The expected base never prints: the `my` of Parser.pm:605 shadows
+                // the variable `:627-629` reads.
+                skip(&format!(
+                    "Specified reference allele {} does not match Ensembl reference allele",
+                    String::from_utf8_lossy(&reference)
+                ));
+                return (self.dont_skip, patch);
+            }
+        } else if self.checks.lookup_ref {
+            let looked_up = if reference.is_empty() {
+                Some(Vec::new())
+            } else {
+                fetch()
+            };
+            let Some(looked_up) = looked_up else {
+                skip(&format!(
+                    "Could not fetch reference allele for {}",
+                    span_text()
+                ));
+                return (self.dont_skip, patch);
+            };
+            replace_reference(first, &looked_up);
+            patch.reference = Some(looked_up);
+        }
+        (true, patch)
+    }
+}
+
+/// The allele string Ensembl VEP tests after the anchor chop and the minimisation
+/// (Parser.pm:554 runs on the post-processed feature): the record's chopped
+/// multi-allelic string, else the allele's own.
+fn working_allele_string(variant: &InputVariant) -> &str {
+    variant
+        .record_allele_string_multi
+        .as_deref()
+        .unwrap_or(&variant.allele_string)
+}
+
+/// `tr/[a-z]/[A-Z]/` on the allele string (Parser.pm:554), which every allele of
+/// the record shares, so the alleles themselves follow.
+fn upper_case_alleles(variant: &mut InputVariant) {
+    variant.ref_allele.make_ascii_uppercase();
+    for alt in &mut variant.alt_alleles {
+        alt.make_ascii_uppercase();
+    }
+    variant.allele_string.make_ascii_uppercase();
+    if let Some(multi) = &variant.record_allele_string_multi {
+        if multi.bytes().any(|b| b.is_ascii_lowercase()) {
+            variant.record_allele_string_multi = Some(multi.to_ascii_uppercase().into());
+        }
+    }
+    variant.variant_class = classify_variant(&variant.ref_allele, variant.alt_allele());
+}
+
+/// `--lookup_ref`'s replacement (Parser.pm:645): the reference allele of the
+/// record is the reference sequence, `-` for an empty one, and every allele
+/// string the record prints follows; a record with no allele (a non-variant
+/// line's) is the reference alone.
+fn replace_reference(variant: &mut InputVariant, reference: &[u8]) {
+    let reference: Vec<u8> = if reference.is_empty() {
+        b"-".to_vec()
+    } else {
+        reference.to_vec()
+    };
+    let reference_text = String::from_utf8_lossy(&reference).into_owned();
+    variant.allele_string = if variant.no_allele {
+        reference_text.clone()
+    } else {
+        format!(
+            "{reference_text}/{}",
+            String::from_utf8_lossy(variant.alt_allele())
+        )
+    };
+    if let Some(multi) = &variant.record_allele_string_multi {
+        let alts = multi.split_once('/').map_or("", |(_, alts)| alts);
+        variant.record_allele_string_multi = Some(format!("{reference_text}/{alts}").into());
+    }
+    variant.ref_allele = reference;
+    variant.variant_class = classify_variant(&variant.ref_allele, variant.alt_allele());
+}
+
+/// Parser/VCF.pm:555: a record whose type reads as a deletion (`/del/i` on the
+/// term `so_term`) is incomplete when its start lies past its end or its INFO
+/// carries neither SVLEN nor END; the INFO is read from the line when the reader
+/// kept it.
+fn incomplete_deletion(variant: &InputVariant, so_term: &str, line: Option<&[u8]>) -> bool {
+    if !so_term.to_ascii_lowercase().contains("del") {
+        return false;
+    }
+    if variant.start > variant.end {
+        return true;
+    }
+    line.and_then(|line| line.split(|&b| b == b'\t').nth(7))
+        .is_some_and(|info| {
+            let info = String::from_utf8_lossy(info);
+            info_value_written(&info, "SVLEN").is_none()
+                && info_value_written(&info, "END").is_none()
+        })
+}
+
+/// The guard every test that writes to or configures the process-wide warning
+/// sink holds for its run, in this module and in the pipeline's, so such tests
+/// run in turn.
+#[cfg(test)]
+pub(crate) fn sink_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    static SINK_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    SINK_TESTS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::warnings::Target;
+    use std::path::Path;
+
+    /// A FASTA of one record `21` whose bases 1 to 20 are `ACGTACGTACGTACGTACGT`,
+    /// with its index, in `dir`.
+    fn fasta_in(dir: &Path) -> IndexedFasta {
+        let path = dir.join("ref.fa");
+        std::fs::write(&path, ">21\nACGTACGTACGTACGTACGT\n").unwrap();
+        std::fs::write(dir.join("ref.fa.fai"), "21\t20\t4\t20\t21\n").unwrap();
+        IndexedFasta::from_path(&path).unwrap()
+    }
+
+    /// A transcript set holding chromosome 21 alone.
+    fn transcripts(dir: &Path) -> LazyTranscriptIndexes {
+        let cache = dir.join("cache");
+        std::fs::create_dir_all(cache.join("transcripts").join("21")).unwrap();
+        std::fs::write(
+            cache.join("transcripts").join("21").join("1-100.json"),
+            "[]",
+        )
+        .unwrap();
+        LazyTranscriptIndexes::new(cache.to_str().unwrap(), 5000, 5000).unwrap()
+    }
+
+    fn variant(chr: &str, start: u64, end: u64, reference: &str, alt: &str) -> InputVariant {
+        let mut v = InputVariant::new(
+            chr.to_string(),
+            start,
+            end,
+            reference.as_bytes().to_vec(),
+            alt.as_bytes().to_vec(),
+        );
+        v.id = Some("r1".to_string());
+        v
+    }
+
+    /// Runs the rules over one record and returns the verdict with the warning
+    /// lines written for it.
+    fn judge(
+        rules: &SkipRules<'_>,
+        first: &mut InputVariant,
+        dir: &Path,
+    ) -> (bool, Vec<String>, AllelePatch) {
+        let path = dir.join("w.txt");
+        let _ = std::fs::remove_file(&path);
+        let sink = crate::warnings::global();
+        sink.configure(Target::File(path.clone()), true, false);
+        let line = RecordLine {
+            number: 7,
+            columns: None,
+            quoted: b"21\t100\tr1\tA\tG\t.\t.\t.",
+        };
+        let mut report = |description: &str, number: u64, quoted: Option<&str>| {
+            sink.skipped_variant(description, Some(number), quoted);
+        };
+        let (kept, patch) = rules.validate(first, &line, &mut report);
+        let lines = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_string)
+            .collect();
+        sink.configure(Target::Stderr, false, false);
+        (kept, lines, patch)
+    }
+
+    /// The reference checks of a run with the FASTA `fasta` and no `--chr` list.
+    fn checks(fasta: &IndexedFasta, check_ref: bool, lookup_ref: bool) -> ReferenceChecks<'_> {
+        ReferenceChecks {
+            chr: None,
+            check_ref,
+            lookup_ref,
+            fasta: Some(fasta),
+            parser_names_records: false,
+        }
+    }
+
+    static NO_SYNONYMS: std::sync::LazyLock<ChromosomeSynonyms> =
+        std::sync::LazyLock::new(ChromosomeSynonyms::new);
+
+    fn rules<'a>(
+        transcripts: &'a LazyTranscriptIndexes,
+        checks: &'a ReferenceChecks<'a>,
+        dont_skip: bool,
+    ) -> SkipRules<'a> {
+        SkipRules {
+            transcripts,
+            synonyms: &NO_SYNONYMS,
+            max_sv_size: None,
+            dont_skip,
+            checks,
+        }
+    }
+
+    /// `--chr` admits the names its tokens spell and reads an integer range as
+    /// the integers between its bounds, as Ensembl VEP's own help names the shape
+    /// (`1-5,10,MT`), without naming each one; a token Ensembl VEP would match
+    /// literally stays a name of its own.
+    #[test]
+    fn chr_range_expands() {
+        let list = ChromosomeList::new(&["1-3".to_string(), "21".to_string(), "MT".to_string()]);
+        for admitted in ["1", "2", "3", "21", "MT"] {
+            assert!(list.admits(admitted), "{admitted}");
+        }
+        for refused in ["4", "chr21", "X", "01", ""] {
+            assert!(!list.admits(refused), "{refused}");
+        }
+        let wide = ChromosomeList::new(&["1-18446744073709551615".to_string()]);
+        assert!(wide.admits("18446744073709551615") && !wide.admits("X"));
+        let literal = ChromosomeList::new(&[
+            "X-Y".to_string(),
+            "5-3".to_string(),
+            "+1-3".to_string(),
+            String::new(),
+        ]);
+        assert!(literal.admits("X-Y") && literal.admits("5-3") && literal.admits("+1-3"));
+        assert!(!literal.admits("X") && !literal.admits("4") && !literal.admits(""));
+        assert!(!literal.admits("2"), "a signed bound is no range");
+    }
+
+    /// The list filters on the input's own spelling (Parser.pm:470-472 compares
+    /// `$vf->{chr}` before `_have_chr` renames or resolves it): `21` admits `21`,
+    /// drops `chr21` and `22` without a warning, and `--dont_skip` keeps every
+    /// record, as it keeps any record `validate_vf` refuses.
+    #[test]
+    fn chr_list_filters_and_chr_prefix_not_normalised() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let admitted = ChromosomeList::new(&["21".to_string()]);
+        let checks = ReferenceChecks {
+            chr: Some(&admitted),
+            check_ref: false,
+            lookup_ref: false,
+            fasta: None,
+            parser_names_records: false,
+        };
+        let rules = rules(&transcripts, &checks, false);
+        for (chr, kept) in [("21", true), ("chr21", false), ("22", false)] {
+            let mut v = variant(chr, 5, 5, "A", "G");
+            let (verdict, warnings, _) = judge(&rules, &mut v, dir.path());
+            assert_eq!(verdict, kept, "{chr}");
+            assert!(warnings.is_empty(), "{chr}: {warnings:?}");
+        }
+        let mut renamed = variant("MT", 5, 5, "A", "G");
+        renamed.input_chr = Some("M".into());
+        assert!(
+            !judge(&rules, &mut renamed, dir.path()).0,
+            "M is matched, not MT"
+        );
+        let keep_all = SkipRules {
+            dont_skip: true,
+            ..rules
+        };
+        let mut v = variant("22", 5, 5, "A", "G");
+        assert!(judge(&keep_all, &mut v, dir.path()).0);
+    }
+
+    /// Parser.pm:483-488: a start past the end plus one is refused with Ensembl
+    /// VEP's text, under `--dont_skip` too.
+    #[test]
+    fn start_gt_end_plus_one() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let rules = rules(&transcripts, &NO_CHECKS, true);
+        let mut v = variant("21", 12, 5, "A", "G");
+        let (kept, warnings, _) = judge(&rules, &mut v, dir.path());
+        assert!(!kept);
+        assert_eq!(
+            warnings,
+            ["WARNING: line 7 skipped (21 100 r1 A G . . .): start > end+1 : (START=12, END=5)"]
+        );
+    }
+
+    /// Parser.pm:564-572: an insertion whose coordinates are not start = end + 1
+    /// is refused with Ensembl VEP's text, the record's name quoted and the
+    /// trailing blank of the Perl concatenation kept; `--dont_skip` keeps it.
+    #[test]
+    fn insertion_needs_start_eq_end_plus_one() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let rules = rules(&transcripts, &NO_CHECKS, false);
+        let mut v = variant("21", 5, 5, "-", "A");
+        let (kept, warnings, _) = judge(&rules, &mut v, dir.path());
+        assert!(!kept);
+        assert_eq!(
+            warnings,
+            ["WARNING: line 7 skipped (21 100 r1 A G . . .): Alleles look like an insertion (-/A) but coordinates are not start = end + 1 (START=5, END=5) for variant (r1) "]
+        );
+        let mut proper = variant("21", 6, 5, "-", "A");
+        assert!(judge(&rules, &mut proper, dir.path()).0);
+        let keep = SkipRules {
+            dont_skip: true,
+            ..rules
+        };
+        let mut v = variant("21", 5, 5, "-", "A");
+        assert!(judge(&keep, &mut v, dir.path()).0);
+    }
+
+    /// Parser.pm:585-592: a reference allele of `ACGT` bases whose length is not
+    /// the span's is refused with Ensembl VEP's text; one carrying `N` is not
+    /// measured.
+    #[test]
+    fn ref_length_must_equal_span() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let rules = rules(&transcripts, &NO_CHECKS, false);
+        let mut v = variant("21", 5, 10, "A", "G");
+        let (kept, warnings, _) = judge(&rules, &mut v, dir.path());
+        assert!(!kept);
+        assert_eq!(
+            warnings,
+            ["WARNING: line 7 skipped (21 100 r1 A G . . .): Length of reference allele (A length 1) does not match coordinates 5-10"]
+        );
+        let mut n = variant("21", 5, 10, "NN", "G");
+        assert!(judge(&rules, &mut n, dir.path()).0);
+        let mut deletion = variant("21", 5, 7, "ACG", "-");
+        assert!(judge(&rules, &mut deletion, dir.path()).0);
+    }
+
+    /// Parser.pm:556-560: an allele string with no run of `ACGTN-` is refused with
+    /// the upper-cased string in Ensembl VEP's text; `--dont_skip` keeps it.
+    #[test]
+    fn allele_regex() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let rules = rules(&transcripts, &NO_CHECKS, false);
+        let mut v = variant("21", 5, 5, "x", "y");
+        let (kept, warnings, _) = judge(&rules, &mut v, dir.path());
+        assert!(!kept);
+        assert_eq!(
+            warnings,
+            ["WARNING: line 7 skipped (21 100 r1 A G . . .): Invalid allele string X/Y or possible parsing error"]
+        );
+        let keep = SkipRules {
+            dont_skip: true,
+            ..rules
+        };
+        let mut v = variant("21", 5, 5, "X", "Y");
+        assert!(judge(&keep, &mut v, dir.path()).0);
+    }
+
+    /// Parser.pm:554: the alleles are upper-cased before the allele tests, on the
+    /// first allele and, through the patch, on the record's others, the shared
+    /// multi-allelic string included; the class follows the upper-cased bases.
+    #[test]
+    fn uppercase() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let rules = rules(&transcripts, &NO_CHECKS, false);
+        let mut first = variant("21", 5, 5, "a", "g");
+        first.record_allele_string_multi = Some("a/g/t".into());
+        first.id = None;
+        let (kept, warnings, patch) = judge(&rules, &mut first, dir.path());
+        assert!(kept && warnings.is_empty(), "{warnings:?}");
+        assert_eq!(first.allele_string, "A/G");
+        // Parser.pm:462 names the record before :554 upper-cases it.
+        assert_eq!(first.variation_name(), "21_5_a/g/t");
+        assert_eq!(first.ref_allele, b"A");
+        assert_eq!(first.alt_alleles, [b"G".to_vec()]);
+        assert_eq!(first.record_allele_string_multi.as_deref(), Some("A/G/T"));
+        let mut sibling = variant("21", 5, 5, "a", "t");
+        sibling.record_allele_string_multi = Some("a/g/t".into());
+        sibling.id = None;
+        patch.apply(&mut sibling);
+        assert_eq!(sibling.allele_string, "A/T");
+        assert_eq!(sibling.record_allele_string_multi.as_deref(), Some("A/G/T"));
+        assert_eq!(sibling.variation_name(), "21_5_a/g/t");
+        assert!(!sibling.check_ref_failed);
+        let mut upper = variant("21", 5, 5, "A", "G");
+        upper.id = None;
+        assert!(judge(&rules, &mut upper, dir.path()).0);
+        assert_eq!(
+            upper.id, None,
+            "an upper-case record keeps building its name at output"
+        );
+        // A parser's working copy of the multi-allelic string arrives upper-cased
+        // with the string as written beside it: the lower-case base reaches the
+        // sibling it belongs to, and the name reads the alleles as written.
+        let mut first = variant("21", 5, 5, "A", "G");
+        first.record_allele_string_multi = Some("A/G/T".into());
+        first.uploaded_allele_string = Some("A/G/t".into());
+        first.id = None;
+        let (kept, warnings, patch) = judge(&rules, &mut first, dir.path());
+        assert!(kept && warnings.is_empty(), "{warnings:?}");
+        assert_eq!(first.variation_name(), "21_5_A/G/t");
+        assert_eq!(first.record_allele_string_multi.as_deref(), Some("A/G/T"));
+        let mut sibling = variant("21", 5, 5, "A", "t");
+        sibling.record_allele_string_multi = Some("A/G/T".into());
+        sibling.uploaded_allele_string = Some("A/G/t".into());
+        sibling.id = None;
+        patch.apply(&mut sibling);
+        assert_eq!(sibling.allele_string, "A/T");
+        assert_eq!(sibling.alt_alleles, [b"T".to_vec()]);
+        assert_eq!(sibling.variation_name(), "21_5_A/G/t");
+    }
+
+    /// A parser that names its records itself (Parser/Region.pm:198,
+    /// Parser/HGVS.pm:237) gets no name from Parser.pm:462, so a record it left
+    /// unnamed keeps no alleles-built name through the upper-casing and the
+    /// looked-up reference, on the first allele and through the patch.
+    #[test]
+    fn parser_named_records_take_no_allele_name() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let fasta = fasta_in(dir.path());
+        let checks = ReferenceChecks {
+            parser_names_records: true,
+            ..checks(&fasta, false, true)
+        };
+        let rules = rules(&transcripts, &checks, false);
+        let mut first = variant("21", 5, 6, "nn", "g");
+        first.id = None;
+        let (kept, warnings, patch) = judge(&rules, &mut first, dir.path());
+        assert!(kept && warnings.is_empty(), "{warnings:?}");
+        assert_eq!(first.id, None);
+        assert_eq!(first.allele_string, "AC/G");
+        let mut sibling = variant("21", 5, 6, "nn", "t");
+        sibling.id = None;
+        patch.apply(&mut sibling);
+        assert_eq!(sibling.id, None);
+        assert_eq!(sibling.allele_string, "AC/T");
+    }
+
+    /// `check_ref` (Parser.pm:596-633): a reference allele that differs from the
+    /// FASTA's bases over the span fails the record with Ensembl VEP's text, which
+    /// never prints the expected base; the record is dropped, or kept under
+    /// `--dont_skip` with `check_ref_failed` on every allele; a span the FASTA
+    /// does not hold writes the sub-slice line first.
+    #[test]
+    fn check_ref_mismatch_skips() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let fasta = fasta_in(dir.path());
+        let checks = checks(&fasta, true, false);
+        let rules = rules(&transcripts, &checks, false);
+        // Bases 1 to 4 are `ACGT`: `AC` at 1-2 matches, `GG` at 5-6 (`AC`) does not.
+        let mut good = variant("21", 1, 2, "AC", "A");
+        assert!(judge(&rules, &mut good, dir.path()).0);
+        assert!(!good.check_ref_failed);
+        let mut bad = variant("21", 5, 6, "GG", "G");
+        let (kept, warnings, _) = judge(&rules, &mut bad, dir.path());
+        assert!(!kept);
+        assert_eq!(
+            warnings,
+            ["WARNING: line 7 skipped (21 100 r1 A G . . .): Specified reference allele GG does not match Ensembl reference allele"]
+        );
+        let keep = SkipRules {
+            dont_skip: true,
+            ..rules
+        };
+        let mut kept = variant("21", 5, 6, "GG", "G");
+        let (verdict, _, patch) = judge(&keep, &mut kept, dir.path());
+        assert!(verdict && kept.check_ref_failed);
+        let mut sibling = variant("21", 5, 6, "GG", "T");
+        patch.apply(&mut sibling);
+        assert!(sibling.check_ref_failed);
+        let mut past_end = variant("21", 25, 25, "A", "G");
+        let (_, warnings, _) = judge(&rules, &mut past_end, dir.path());
+        assert_eq!(
+            warnings,
+            [
+                "WARNING: line 7 skipped (21 100 r1 A G . . .): Could not fetch sub-slice from 21:25-25(1)",
+                "WARNING: line 7 skipped (21 100 r1 A G . . .): Specified reference allele A does not match Ensembl reference allele",
+            ]
+        );
+    }
+
+    /// An insertion has no reference allele to check (Parser.pm:601-603), so it
+    /// passes `check_ref` whatever the flanking bases.
+    #[test]
+    fn check_ref_insertion_passes() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let fasta = fasta_in(dir.path());
+        let checks = checks(&fasta, true, false);
+        let rules = rules(&transcripts, &checks, false);
+        let mut insertion = variant("21", 6, 5, "-", "TTT");
+        let (kept, warnings, _) = judge(&rules, &mut insertion, dir.path());
+        assert!(kept && warnings.is_empty(), "{warnings:?}");
+        assert!(!insertion.check_ref_failed);
+    }
+
+    /// `uc($slice_ref_allele) ne uc($ref_allele)` (Parser.pm:614): the comparison
+    /// is case-insensitive, and the record's alleles are upper-cased before it; a
+    /// reverse-strand record is checked against the reverse complement
+    /// (`sub_Slice` on the record's strand, Parser.pm:751).
+    #[test]
+    fn check_ref_case_insensitive() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let fasta = fasta_in(dir.path());
+        let checks = checks(&fasta, true, false);
+        let rules = rules(&transcripts, &checks, false);
+        let mut lower = variant("21", 1, 2, "ac", "a");
+        let (kept, warnings, _) = judge(&rules, &mut lower, dir.path());
+        assert!(kept && warnings.is_empty(), "{warnings:?}");
+        assert_eq!(lower.allele_string, "AC/A");
+        // Bases 2 to 3 are `CG`, whose reverse complement is `CG`; 1 to 2 are `AC`,
+        // reverse complement `GT`.
+        let mut reverse = variant("21", 1, 2, "GT", "G");
+        reverse.strand = Strand::Reverse;
+        assert!(judge(&rules, &mut reverse, dir.path()).0);
+        let mut reverse_bad = variant("21", 1, 2, "AC", "A");
+        reverse_bad.strand = Strand::Reverse;
+        let (kept, warnings, _) = judge(&rules, &mut reverse_bad, dir.path());
+        assert!(!kept);
+        assert_eq!(
+            warnings,
+            ["WARNING: line 7 skipped (21 100 r1 A G . . .): Specified reference allele AC does not match Ensembl reference allele"]
+        );
+    }
+
+    /// `lookup_ref` (Parser.pm:635-646): the reference allele is replaced by the
+    /// FASTA's bases over the span, on the record's strand, every allele string
+    /// the record prints following, and the record is kept; the class follows the
+    /// new alleles.
+    #[test]
+    fn lookup_ref_replaces_ref() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let fasta = fasta_in(dir.path());
+        let checks = checks(&fasta, false, true);
+        let rules = rules(&transcripts, &checks, false);
+        let mut first = variant("21", 5, 6, "GG", "G");
+        first.record_allele_string_multi = Some("GG/G/T".into());
+        let (kept, warnings, patch) = judge(&rules, &mut first, dir.path());
+        assert!(kept && warnings.is_empty(), "{warnings:?}");
+        assert_eq!(first.ref_allele, b"AC");
+        assert_eq!(first.allele_string, "AC/G");
+        assert_eq!(first.record_allele_string_multi.as_deref(), Some("AC/G/T"));
+        let mut sibling = variant("21", 5, 6, "GG", "T");
+        sibling.record_allele_string_multi = Some("GG/G/T".into());
+        patch.apply(&mut sibling);
+        assert_eq!(sibling.allele_string, "AC/T");
+        assert_eq!(
+            sibling.record_allele_string_multi.as_deref(),
+            Some("AC/G/T")
+        );
+        let mut reverse = variant("21", 1, 2, "NN", "A");
+        reverse.strand = Strand::Reverse;
+        assert!(judge(&rules, &mut reverse, dir.path()).0);
+        assert_eq!(reverse.allele_string, "GT/A");
+        // The record keeps the name built from the reference as written (:462
+        // runs before :645).
+        let mut unnamed = variant("21", 5, 6, "GG", "G");
+        unnamed.id = None;
+        assert!(judge(&rules, &mut unnamed, dir.path()).0);
+        assert_eq!(unnamed.allele_string, "AC/G");
+        assert_eq!(unnamed.variation_name(), "21_5_GG/G");
+        let mut past_end = variant("21", 25, 25, "A", "G");
+        let (kept, warnings, _) = judge(&rules, &mut past_end, dir.path());
+        assert!(!kept);
+        assert_eq!(
+            warnings,
+            ["WARNING: line 7 skipped (21 100 r1 A G . . .): Could not fetch reference allele for 21:25-25(1)"]
+        );
+        // A non-variant record's allele string is its reference alone (Parser/VCF.pm:342),
+        // and stays so once looked up.
+        let mut non_variant =
+            InputVariant::without_allele("21".into(), 5, "GG", std::iter::empty());
+        assert!(judge(&rules, &mut non_variant, dir.path()).0);
+        assert_eq!(non_variant.allele_string, "AC");
+        assert_eq!(non_variant.ref_allele, b"AC");
+    }
+
+    /// An insertion's empty reference reads back as `-` (`map {$_ || '-'}`,
+    /// Parser.pm:645), so `-/A` stays `-/A`.
+    #[test]
+    fn lookup_ref_restores_dash() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let fasta = fasta_in(dir.path());
+        let checks = checks(&fasta, false, true);
+        let rules = rules(&transcripts, &checks, false);
+        let mut insertion = variant("21", 6, 5, "-", "A");
+        assert!(judge(&rules, &mut insertion, dir.path()).0);
+        assert_eq!(insertion.allele_string, "-/A");
+        assert_eq!(insertion.ref_allele, b"-");
+    }
+
+    /// `check_ref` wins over `lookup_ref` when both are set (`if ... elsif`,
+    /// Parser.pm:596 and 635), as under `--safe`, which skips the pair check.
+    #[test]
+    fn check_ref_takes_precedence_over_lookup_ref() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let fasta = fasta_in(dir.path());
+        let checks = checks(&fasta, true, true);
+        let rules = rules(&transcripts, &checks, false);
+        let mut bad = variant("21", 5, 6, "GG", "G");
+        assert!(!judge(&rules, &mut bad, dir.path()).0);
+        assert_eq!(bad.allele_string, "GG/G");
+    }
+
+    /// Parser.pm:476-480's text for a VCF POS that is not a number: the end is
+    /// the numified POS plus the reference length less one (Parser/VCF.pm:254).
+    /// `looks_like_number` reads what Perl's reads as a number, so a negative or
+    /// fractional POS, which Ensembl VEP annotates as written, is not this message.
+    #[test]
+    fn non_numeric_coords() {
+        for number in [
+            "1", "-1", "+5", "3.5", ".5", "3.", "1e3", "1E-3", " 12 ", "Inf", "-inf", "NaN",
+        ] {
+            assert!(looks_like_number(number), "{number:?}");
+        }
+        for text in [
+            "abc", "12abc", "1_000", "0x1A", "", ".", "-", "1e", "e3", "1.2.3", "30 425",
+        ] {
+            assert!(!looks_like_number(text), "{text:?}");
+        }
+        assert_eq!(
+            invalid_vcf_coordinate("abc", "A"),
+            "Invalid start 'abc' or end '0' coordinate"
+        );
+        assert_eq!(
+            invalid_vcf_coordinate("12abc", "ACG"),
+            "Invalid start '12abc' or end '14' coordinate"
+        );
+        assert_eq!(
+            invalid_vcf_coordinate("1_000", "A"),
+            "Invalid start '1_000' or end '1' coordinate"
+        );
+    }
+
+    /// `validate_vf` transforms a chromosome the cache lacks to the toplevel
+    /// coordinate system through the core database (Parser.pm:505-536); offline it
+    /// writes the one message (`:542-546`), the branch this port has, so the
+    /// database fallback is the documented exclusion.
+    #[test]
+    fn database_toplevel_transform_not_ported() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let rules = rules(&transcripts, &NO_CHECKS, false);
+        let mut v = variant("Z", 5, 5, "A", "G");
+        let (kept, warnings, _) = judge(&rules, &mut v, dir.path());
+        assert!(!kept);
+        assert_eq!(
+            warnings,
+            ["WARNING: line 7 skipped (21 100 r1 A G . . .): Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features"]
+        );
+        assert!(
+            !warnings[0].contains("toplevel"),
+            "no transform is attempted offline"
+        );
+    }
+}

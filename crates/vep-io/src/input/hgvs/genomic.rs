@@ -38,12 +38,11 @@
 //! A reference allele equal to the alternate is refused (`:2104-2106`), as is
 //! a start more than one past the end (`Bio::EnsEMBL::Feature::new`). The
 //! record then goes through the minimisation and upper-casing every parsed
-//! record goes through ([`minimise_alleles`], Parser.pm:554) and the checks
-//! `validate_vf` makes on it afterwards (Parser.pm:483, 556-592): a start more
-//! than one past the end, an allele string with no `ACGTN-` run, an insertion
-//! whose start is not the end plus one, and a reference allele whose length is
-//! not the span's. Each refusal carries Ensembl VEP's message. Three refusals
-//! are this port's own: an insertion that names no bases, where Ensembl VEP
+//! record goes through ([`minimise_alleles`], Parser.pm:554) and is returned
+//! as built: the checks `validate_vf` makes on it afterwards (Parser.pm:483,
+//! 556-592) are the reader's, as they are for every parsed record, and
+//! `--dont_skip` keeps what the reader keeps (Parser.pm:189-191). Three
+//! refusals are this port's own: an insertion that names no bases, where Ensembl VEP
 //! builds a variant with an empty allele; a span reaching below the
 //! sequence's first base (an end written `_-5` or `_*5`), which Ensembl VEP
 //! reads from its slice padded with `N` before its feature refuses the span;
@@ -76,17 +75,6 @@ pub(super) fn variant(
     max_sv_size: Option<u64>,
 ) -> Result<InputVariant, IoError> {
     let refuse = |message: String| unable(hgvs, Some(&message));
-    // `validate_vf`'s skips quote the parser's line as `skipped_variant_msg`
-    // quotes it (BaseVEP.pm:846-851): cut to 46 characters and `...` past 50.
-    let skip = |message: String| {
-        let line = if hgvs.chars().count() > 50 {
-            let cut: String = hgvs.chars().take(46).collect();
-            format!("{cut}...")
-        } else {
-            hgvs.to_string()
-        };
-        IoError::SkippedLine(format!("({line}): {message}"))
-    };
     let description = notation.description.as_str();
     let (mut start, mut end) = positions(description, &notation.cleaned).map_err(refuse)?;
     // `max_sv_size || 5000`, then `$end - $start < $max_size`: a `0` reads as
@@ -210,54 +198,7 @@ pub(super) fn variant(
     variant.raw_input = Some(hgvs.into());
     minimise_alleles(&mut variant);
     upper_case_alleles(&mut variant);
-    validate(&variant, hgvs).map_err(skip)?;
     Ok(variant)
-}
-
-/// The checks of `validate_vf` (Parser.pm:457-592) a genomic notation can
-/// still fail after minimisation: a start more than one past the end (`:483`),
-/// an allele string with no run of `ACGTN-` (`:556`), an insertion whose start
-/// is not the end plus one (`:564-572`, naming the record), and a reference
-/// allele of `ACGT` whose length is not the span's (`:585-592`), in that order,
-/// each with Ensembl VEP's text.
-fn validate(variant: &InputVariant, name: &str) -> Result<(), String> {
-    let (start, end) = (variant.start, variant.end);
-    if start > end + 1 {
-        return Err(format!("start > end+1 : (START={start}, END={end})"));
-    }
-    let allele_string = variant.allele_string.as_str();
-    if !allele_string
-        .bytes()
-        .any(|b| matches!(b, b'A' | b'C' | b'G' | b'T' | b'N' | b'-'))
-    {
-        return Err(format!(
-            "Invalid allele string {allele_string} or possible parsing error"
-        ));
-    }
-    if allele_string.starts_with("-/") && start != end + 1 {
-        return Err(format!(
-            "Alleles look like an insertion ({allele_string}) but coordinates are not start = end + 1 (START={start}, END={end}) for variant ({name}) "
-        ));
-    }
-    let reference: Vec<u8> = variant
-        .ref_allele
-        .iter()
-        .copied()
-        .filter(|b| *b != b'-')
-        .collect();
-    let span = (i128::from(end) - i128::from(start)) + 1;
-    if reference
-        .iter()
-        .all(|b| matches!(b, b'A' | b'C' | b'G' | b'T'))
-        && span != reference.len() as i128
-    {
-        return Err(format!(
-            "Length of reference allele ({} length {}) does not match coordinates {start}-{end}",
-            String::from_utf8_lossy(&reference),
-            reference.len()
-        ));
-    }
-    Ok(())
 }
 
 /// `_parse_hgvs_genomic_position` (`:1595-1605`): the description's leading
@@ -620,9 +561,10 @@ mod tests {
     /// A `=` notation names one allele as reference and alternate, so it is
     /// refused as a reference allele matching its alternate when the base is
     /// the genome's (Ensembl VEP 116.2 on `21:g.30282169C=`) and as a mismatch
-    /// when it is not; one with no base reaches `validate_vf` as the allele
-    /// string `/`, skipped with the line quoted (Parser.pm:556). A repeat
-    /// (`[3]`) is skipped before the notation is split (Parser/HGVS.pm:158-161).
+    /// when it is not; one with no base is returned with the allele string
+    /// `/`, which the reader's `validate_vf` stage skips (Parser.pm:556). A
+    /// repeat (`[3]`) is skipped before the notation is split
+    /// (Parser/HGVS.pm:158-161).
     #[test]
     fn equals_and_repeats() {
         assert_eq!(
@@ -638,8 +580,8 @@ mod tests {
              reference allele given by HGVS notation 21:g.30282169G= (G)"
         );
         assert_eq!(
-            refused("21:g.30282169="),
-            "(21:g.30282169=): Invalid allele string / or possible parsing error"
+            placed("21:g.30282169="),
+            ("21".into(), 30282169, 30282169, "/".into())
         );
         assert_eq!(
             refused("21:g.30282169C[3]"),
@@ -768,7 +710,8 @@ mod tests {
     /// (`:2065`, `:2071`), where `get_hgvs_alleles` reads them in either
     /// (Utils/Sequence.pm:712-760), so a notation written `DEL` keeps the bases
     /// it lists as its reference allele instead of the genome's: none, and the
-    /// line is skipped by `validate_vf`'s length check; the right ones, and it
+    /// record carries an empty reference allele over a one-base span, which the
+    /// reader's `validate_vf` stage skips on its length; the right ones, and it
     /// annotates as the lower-case deletion does; wrong ones, and it is a
     /// mismatch. `DUP` keeps `get_hgvs_alleles`'s `-` and is a mismatch. The
     /// type letter is read the same way (`g`, `c`, `n` or `m`), so `G.` with
@@ -779,11 +722,8 @@ mod tests {
     fn shape_words_match_in_lower_case_only_where_ensembl_vep_reads_them_so() {
         for written in ["DEL", "Del"] {
             assert_eq!(
-                refused(&format!("21:g.30282172{written}")),
-                format!(
-                    "(21:g.30282172{written}): Length of reference allele ( length 0) \
-                     does not match coordinates 30282172-30282172"
-                )
+                placed(&format!("21:g.30282172{written}")),
+                ("21".into(), 30282172, 30282172, "/-".into())
             );
         }
         assert_eq!(
@@ -822,27 +762,25 @@ mod tests {
         );
     }
 
-    /// The checks `validate_vf` makes after the alleles are minimised
-    /// (Parser.pm:483, 564-592), each skipping the line with its text and the
-    /// line quoted: a deletion whose start is one past its end keeps a
-    /// two-base reference allele over an empty span; an insertion at one
-    /// position has no `start = end + 1`; a substitution written end first
+    /// A record the reader's `validate_vf` stage then skips, or keeps under
+    /// `--dont_skip`, is returned as the minimised alleles leave it
+    /// (Parser.pm:483, 564-592): a deletion whose start is one past its end
+    /// keeps a two-base reference allele over an empty span; an insertion at
+    /// one position has no `start = end + 1`; a substitution written end first
     /// whose shared base is trimmed moves its start two past its end.
     #[test]
-    fn coordinates_are_checked_after_minimisation() {
+    fn minimised_records_are_returned_for_the_readers_checks() {
         assert_eq!(
-            refused("21:g.30282173_30282172del"),
-            "(21:g.30282173_30282172del): Length of reference allele (TA length 2) \
-             does not match coordinates 30282173-30282172"
+            placed("21:g.30282173_30282172del"),
+            ("21".into(), 30282173, 30282172, "TA/-".into())
         );
         assert_eq!(
-            refused("21:g.30282172insG"),
-            "(21:g.30282172insG): Alleles look like an insertion (-/G) but coordinates are \
-             not start = end + 1 (START=30282172, END=30282172) for variant (21:g.30282172insG) "
+            placed("21:g.30282172insG"),
+            ("21".into(), 30282172, 30282172, "-/G".into())
         );
         assert_eq!(
-            refused("21:g.30282173_30282172TA>T"),
-            "(21:g.30282173_30282172TA>T): start > end+1 : (START=30282174, END=30282172)"
+            placed("21:g.30282173_30282172TA>T"),
+            ("21".into(), 30282174, 30282172, "A/-".into())
         );
     }
 
@@ -874,8 +812,8 @@ mod tests {
     /// it, is skipped; a position past the coordinate ceiling is invalid; a
     /// description opening with no position, and a shape outside the seven
     /// known ones, cannot be parsed; a `>` with no base on one side leaves both
-    /// alleles undefined and reaches `validate_vf` as `/`, which quotes the
-    /// line cut to 46 characters when it runs past 50 (BaseVEP.pm:848-850).
+    /// alleles undefined, the allele string `/` the reader's `validate_vf`
+    /// stage skips.
     #[test]
     fn unreachable_sequence_and_unknown_shapes_are_refused() {
         assert_eq!(
@@ -905,18 +843,10 @@ mod tests {
         );
         for notation in ["21:g.30282169A>", "21:g.30282169>G"] {
             assert_eq!(
-                refused(notation),
-                format!("({notation}): Invalid allele string / or possible parsing error")
+                placed(notation),
+                ("21".into(), 30282169, 30282169, "/".into())
             );
         }
-        let long = format!("21:g.30282169+{}A>", "0".repeat(40));
-        assert_eq!(
-            refused(&long),
-            format!(
-                "({}...): Invalid allele string / or possible parsing error",
-                &long[..46]
-            )
-        );
     }
 
     /// An intronic offset on a genomic position is read past, as Ensembl VEP's

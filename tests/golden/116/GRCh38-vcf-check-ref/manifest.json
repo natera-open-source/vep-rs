@@ -1,0 +1,407 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "flags": [
+  "--check_ref",
+  "--allow_non_variant"
+ ],
+ "fasta": "reference.fa.gz",
+ "covers": [
+  "check_ref",
+  "lookup_ref",
+  "check-ref-column",
+  "chr",
+  "chromosome-absent-from-cache",
+  "dont_skip",
+  "skipped-variant-semantics",
+  "skipped-variant-reporting",
+  "allow_non_variant",
+  "non-variant-records",
+  "lowercase-alleles",
+  "validate-vf-checks"
+ ],
+ "records": [
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30282169\tsnv_ok\tC\tT\t.\t.\t.",
+   "combinations": [
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30289183\tsnv_bad\tA\tT\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Specified reference allele A does not match Ensembl reference allele"
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30337048\tlower_ok\tc\tt\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30813030\t.\tc\tt\t.\t.\t.",
+   "combinations": [
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30430756\tn_ref\tN\tC\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Specified reference allele N does not match Ensembl reference allele"
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30319403\tdel_ok\tTCA\tT\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t34716478\tdel_bad\tAGG\tA\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Specified reference allele GG does not match Ensembl reference allele"
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t37018203\tins_anchor_bad\tG\tGTT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t25585733\tmnp_ok\tCTT\tGAA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30348409\tmnp_bad\tCTG\tGAA\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Specified reference allele CTG does not match Ensembl reference allele"
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30440739\tmulti_ok\tT\tC,G\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30592776\tmulti_bad\tA\tC,G\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Specified reference allele A does not match Ensembl reference allele"
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "Z\t1000\tunknown_chr\tA\tG\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features"
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "chr21\t30635459\tprefixed\tT\tC\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30165901\tinvalid_alleles\tX\tY\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Invalid allele string X/Y or possible parsing error"
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30601265\t.\tTG\t.\t.\t.\t.",
+   "combinations": []
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30643020\tnonvar_csq\tTTG\t.\t.\t.\tCSQ=old|stuff;DP=4",
+   "combinations": []
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30755140\tnonvar_bad\tG\t.\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Specified reference allele G does not match Ensembl reference allele"
+  }
+ ],
+ "flag_sets": [
+  {
+   "name": "dont-skip",
+   "flags": [
+    "--check_ref",
+    "--allow_non_variant",
+    "--dont_skip"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dont-skip",
+   "covers": [
+    "dont_skip",
+    "check-ref-column",
+    "check_ref"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "chr-list",
+   "flags": [
+    "--check_ref",
+    "--allow_non_variant",
+    "--chr",
+    "21,Z"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_chr-list",
+   "covers": [
+    "chr",
+    "check_ref"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "lookup-ref",
+   "flags": [
+    "--lookup_ref",
+    "--allow_non_variant"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_lookup-ref",
+   "covers": [
+    "lookup_ref"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "suites": {
+  "GRCh38-vcf-check-ref": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 51,
+   "combinations": 11
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 9,
+   "exemplar_records": 2
+  },
+  "frameshift_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 13,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "stop_lost": {
+   "observed_rows": 4,
+   "exemplar_records": 3
+  },
+  "stop_retained_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  }
+ },
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "runs": [
+  {
+   "name": "lookup-ref-default",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--json_cache",
+    "{cache}",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "--lookup_ref",
+    "--allow_non_variant",
+    "--fasta",
+    "{corpus}/reference.fa.gz",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "lookup_ref_default.txt",
+    "warnings_file": "lookup_ref_warnings.txt"
+   }
+  },
+  {
+   "name": "check-ref-without-fasta",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--json_cache",
+    "{cache}",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "--check_ref",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [fasta] Cannot check reference sequences (--check_ref) without a FASTA file (see --fasta)"
+   }
+  },
+  {
+   "name": "lookup-ref-without-fasta",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--json_cache",
+    "{cache}",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "--lookup_ref",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [fasta] Cannot look up reference sequences (--lookup_ref) without a FASTA file (see --fasta)"
+   }
+  },
+  {
+   "name": "check-ref-and-lookup-ref",
+   "argv": [
+    "{golden}",
+    "--lookup_ref",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [cli] Can't use --check_ref and --lookup_ref together"
+   }
+  },
+  {
+   "name": "skipped-variants-file",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--skipped_variants_file",
+    "{out}.skipped.txt"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "skipped_file": "skipped.txt"
+   }
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

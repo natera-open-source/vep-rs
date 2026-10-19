@@ -1,0 +1,84 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --check_ref --allow_non_variant [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside 2,000 bases of each record masked to N; reference.fa.gz beside this file, compressed as BGZF blocks of 65,280 bytes, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form",
+ "input": "variants.vcf: 18 hand-placed chromosome 21 records named by their design: a substitution, a deletion, a multi-nucleotide substitution and a multi-allelic record whose reference allele matches the reference sequence, and one of each whose reference allele does not; an insertion whose anchor base does not match (an insertion has no reference allele to check); a record with the reference allele N; lower-case alleles with and without an ID; a chromosome the cache lacks (Z); a chr-prefixed chromosome name; an invalid allele string; two non-variant records (ALT .), one carrying an earlier CSQ value, and one whose reference allele does not match",
+ "sha256": {
+  "default.txt": "085e75ea2007697e8e1f22407caf44d0c48367d7e6dbf08017b7ccac664bc38b",
+  "tab.txt": "256d548cfe69668942f0b402a53ae9401ca232c7de492331de5d0700f418ffa8",
+  "vcf.vcf": "eceedda798561715e650beac90a976e9a385249dabb845c85dbcbde268b1b91c",
+  "json.jsonl": "d5f67e2722ab4840b1b546af12489357480576c249d59a796decff3155d2f33e"
+ },
+ "variants_vcf_sha256": "ed4252bafc3cc44b2e74d52a2cd744a53ffe7f53bc81cd8e3f93d15900d65d1c",
+ "flag_sets": {
+  "dont-skip": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --check_ref --allow_non_variant --dont_skip [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dont-skip",
+   "sha256": {
+    "default.txt": "171607bc6afa403bb95b9003886db2beccfabb9617a0bf8906dfd43265d61983",
+    "tab.txt": "336acd609ef570c2845ce5d994c6d8377f2c58efb10b863b19859c4dcaa5c6fd",
+    "vcf.vcf": "57931bbf09ade6f06d2a86e9b5db2ef96aad67611655acc7360cd6c6d5d93795",
+    "json.jsonl": "5846615088128123056c720ee5538f18f55702314b25bf8e5b79ecf70cab232a"
+   }
+  },
+  "chr-list": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --check_ref --allow_non_variant --chr 21,Z [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_chr-list",
+   "sha256": {
+    "default.txt": "935f9b26311cbac10c74dbcbae86d5061912503cef700cbd9c7b7386b296c2e8",
+    "tab.txt": "f5b7ff1b3a3276a7afc72d44bb75a2fb4ab277f1e84e2b4513b7640e5f789da4",
+    "vcf.vcf": "9fc390a729ddb02d793cd09114779e1ddb6f16e05bc9dbec43313e0734bc28c8",
+    "json.jsonl": "1bc973772bee08df3f27597020c7206505d788e4d1f67116c826fb2d6f7a8368"
+   }
+  },
+  "lookup-ref": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --lookup_ref --allow_non_variant [--tab|--vcf|--json]",
+   "formats_compared": [
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_lookup-ref",
+   "sha256": {
+    "tab.txt": "63869082b693ddbce889b3a49084b77bee251879c1c1ce727012e9d6ce8c6cd8",
+    "vcf.vcf": "bb33fd0ea32e676d18d4468b8a6ae6fdf6eddb9d5c11a22365a666769bf50148",
+    "json.jsonl": "660544f18f11eac436a11981bc32bb054090726cfe2ee4ba5ecf216d2d1372cc"
+   }
+  }
+ },
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 63
+  },
+  "shards": 4,
+  "spans_by_chromosome": {
+   "21": 18
+  }
+ },
+ "runs": {
+  "lookup-ref-default": {
+   "description": "expected/lookup_ref_default.txt.gz and expected/lookup_ref_warnings.txt: the lookup-ref flag set's default-format output and warnings file, compared by the manifest run of that name",
+   "sha256": {
+    "lookup_ref_default.txt": "41a991e7c974965eb0380ee330d611ac2da44be8296c1f0db697ac521dd1388a"
+   }
+  },
+  "skipped-variants-file": "expected/skipped.txt: the default run's --skipped_variants_file"
+ },
+ "expected_warnings": "expected/default.txt_warnings.txt and expected_<set>/default.txt_warnings.txt: the warnings file of each run"
+}

@@ -1401,15 +1401,21 @@ fn max_sv_size_exclusion_is_documented() {
     }
 }
 
+/// `--dont_skip` keeps a record that fails a check (Parser.pm:189: the feature
+/// is returned whatever `validate_vf` returned), and a line the parser cannot read
+/// at all is skipped with its warning rather than ending the run: there is no
+/// record to keep. The run exits 0 and the records around the line are written.
 #[test]
-fn test_dont_skip_fails_on_invalid_vcf_line() {
+fn test_dont_skip_skips_an_invalid_vcf_line() {
     let output_dir = tempfile::tempdir().unwrap();
     let input_path = output_dir.path().join("invalid.vcf");
     let output_path = output_dir.path().join("output.txt");
 
     let vcf = "##fileformat=VCFv4.3\n\
                #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
-               21\t100\t.\tA\n";
+               21\t30165801\tfirst\tA\tG\t.\t.\t.\n\
+               21\t100\t.\tA\n\
+               21\t30165811\tlast\tA\tG\t.\t.\t.\n";
     std::fs::write(&input_path, vcf).unwrap();
 
     // The format is named: a four-column line is of no shape `check_format`
@@ -1422,16 +1428,26 @@ fn test_dont_skip_fails_on_invalid_vcf_line() {
         .output()
         .unwrap();
 
-    assert!(
-        !result.status.success(),
-        "Expected VEP to fail with --dont_skip on invalid VCF line"
-    );
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert_eq!(result.status.code(), Some(0), "{stderr}");
+    assert!(!stderr.contains("ERROR"), "{stderr}");
     // The number is the data record's ordinal, as Ensembl VEP counts its records
     // (Parser/VCF.pm:228), not the file line.
-    let stderr = String::from_utf8_lossy(&result.stderr);
+    let warnings =
+        std::fs::read_to_string(format!("{}_warnings.txt", output_path.display())).unwrap();
+    assert_eq!(
+        warnings.lines().collect::<Vec<_>>(),
+        ["WARNING: line 2 skipped (21 100 . A): VCF line has fewer than 8 fields"]
+    );
+    let ids: Vec<String> = std::fs::read_to_string(&output_path)
+        .unwrap()
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .map(|l| l.split('\t').next().unwrap().to_string())
+        .collect();
     assert!(
-        stderr.contains("ERROR: [run] line 1: parse error"),
-        "{stderr}"
+        ids.contains(&"first".to_string()) && ids.contains(&"last".to_string()),
+        "{ids:?}"
     );
 }
 

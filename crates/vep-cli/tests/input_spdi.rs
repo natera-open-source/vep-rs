@@ -203,9 +203,10 @@ fn spdi_without_fasta_is_refused() {
 
 /// A notation the adaptor refuses is warned about with Ensembl VEP's own text
 /// (Parser/SPDI.pm:183 and the `throw` it quotes) and skipped, the run going
-/// on to the next line: too few elements, a reference allele the FASTA does
-/// not carry, and a sequence name nothing resolves. A `#` line is such a
-/// record, as ensembl-io's list parser has no comment lines.
+/// on to the next line; the warning quotes the record's line, as every skip of
+/// a parser-fed record does. The refusals: too few elements, a reference
+/// allele the FASTA does not carry, and a sequence name nothing resolves. A
+/// `#` line is such a record, as ensembl-io's list parser has no comment lines.
 #[test]
 fn unparsable_notation_is_warned_and_skipped() {
     let dir = tempfile::tempdir().unwrap();
@@ -227,10 +228,10 @@ fn unparsable_notation_is_warned_and_skipped() {
     );
     let warnings = warnings(&out);
     for expected in [
-        "WARNING: line 1 skipped Unable to parse SPDI notation '#header': Could not parse the SPDI notation #header. Too few elements present",
-        "WARNING: line 2 skipped Unable to parse SPDI notation 'NC_000021.9:10538884:A': Could not parse the SPDI notation NC_000021.9:10538884:A. Too few elements present",
-        "WARNING: line 3 skipped Unable to parse SPDI notation 'NC_000021.9:10538884:G:C': Reference allele extracted from NC_000021.9:10538885-10538885 (A) does not match reference allele given by SPDI notation NC_000021.9:10538884:G:C (G)",
-        "WARNING: line 4 skipped Unable to parse SPDI notation 'NC_000099.1:100:A:C': Sequence name NC_000099.1 not valid",
+        "WARNING: line 1 skipped (# header): Unable to parse SPDI notation '#header': Could not parse the SPDI notation #header. Too few elements present",
+        "WARNING: line 2 skipped (NC_000021.9:10538884:A): Unable to parse SPDI notation 'NC_000021.9:10538884:A': Could not parse the SPDI notation NC_000021.9:10538884:A. Too few elements present",
+        "WARNING: line 3 skipped (NC_000021.9:10538884:G:C): Unable to parse SPDI notation 'NC_000021.9:10538884:G:C': Reference allele extracted from NC_000021.9:10538885-10538885 (A) does not match reference allele given by SPDI notation NC_000021.9:10538884:G:C (G)",
+        "WARNING: line 4 skipped (NC_000099.1:100:A:C): Unable to parse SPDI notation 'NC_000099.1:100:A:C': Sequence name NC_000099.1 not valid",
     ] {
         assert!(warnings.contains(expected), "{expected}\n--\n{warnings}");
     }
@@ -307,7 +308,7 @@ fn oversize_deletion_is_skipped_with_the_max_sv_size_warning() {
     let warnings = warnings(&out);
     assert!(
         warnings.contains(
-            "WARNING: line 1 skipped variant size (1001) is bigger than --max_sv_size (1000)"
+            "WARNING: line 1 skipped (NC_000021.9:10538884:1002:): variant size (1001) is bigger than --max_sv_size (1000)"
         ),
         "{warnings}"
     );

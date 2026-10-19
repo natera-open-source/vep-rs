@@ -240,6 +240,29 @@ def test_classify_refuses_a_zero_row_record_without_a_warning(tmp_path: Path, ca
     assert (corpus / "manifest.json").read_text() == before, "a refused run writes nothing"
 
 
+def test_classify_keeps_an_unwarned_non_variant_record(tmp_path: Path, capsys):
+    """A record whose ALT is `.` carries no row by its nature (under `--allow_non_variant` VEP
+    writes its VCF line and JSON object and no default row), so one without a warning is
+    neither refused nor marked skipped; one VEP warned about is skipped as any other."""
+    corpus = tmp_path / "c"
+    _manifest(corpus, [
+        _record("21\t100\trs1\tA\tG\t.\tPASS\t."),
+        _record("21\t200\tnonvar\tTG\t.\t.\tPASS\t."),
+        _record("21\t300\tnonvar_bad\tG\t.\t.\tPASS\t.",
+                reference_warning="Specified reference allele G does not match Ensembl reference allele"),
+    ])
+    vep = tmp_path / "vep.txt"
+    rs = tmp_path / "rs.txt"
+    vep.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rs.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rc = bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)])
+    assert rc == 0
+    assert "reference-skipped records [2]" in capsys.readouterr().out
+    records = json.loads((corpus / "manifest.json").read_text())["records"]
+    assert "reference_rows" not in records[1]
+    assert records[2]["reference_rows"] == 0
+
+
 def test_classify_refuses_a_warned_record_that_has_rows(tmp_path: Path, capsys):
     corpus = tmp_path / "c"
     _manifest(corpus, [_record("21\t100\trs1\tA\tG\t.\tPASS\t.", reference_warning="deletion looks incomplete")])

@@ -1179,15 +1179,23 @@ def reference_skipped_records(
 ) -> tuple[set[int], list[str]]:
     """Ordinals of the records no VEP row names (VEP dropped them before annotation), and the
     records that contradict their `reference_warning`: a zero-row record without one (its name
-    unresolved, or the reason unrecorded) and a warned record with rows."""
+    unresolved, or the reason unrecorded) and a warned record with rows. A non-variant record (ALT
+    `.`) carries no row by its nature: under `--allow_non_variant` VEP writes its VCF line and
+    JSON object and no default row (Parser/VCF.pm:259-267), so one without a warning is kept,
+    not skipped."""
     with_rows = {i for names in perl_names.values() for n in names for i in by_name.get(n, [])}
     skipped = set(range(len(records))) - with_rows
     problems: list[str] = []
     for i, rec in enumerate(records):
         warned = isinstance(rec.get("reference_warning"), str)
-        label = " ".join(rec["vcf"].split("\t")[:5])
+        columns = rec["vcf"].split("\t")
+        label = " ".join(columns[:5])
+        non_variant = len(columns) > 4 and columns[4] == "."
         if i in skipped and not warned:
-            problems.append(f"record {i} ({label}) has no VEP row and no reference_warning")
+            if non_variant:
+                skipped.discard(i)
+            else:
+                problems.append(f"record {i} ({label}) has no VEP row and no reference_warning")
         elif warned and i not in skipped:
             problems.append(f"record {i} ({label}) has VEP rows and reference_warning {rec['reference_warning']!r}")
     return skipped, problems

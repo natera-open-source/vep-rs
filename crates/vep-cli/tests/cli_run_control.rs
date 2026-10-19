@@ -79,6 +79,7 @@ fn decompressed_fasta(dir: &Path) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh37-hgvs");
     let compressed = std::fs::File::open(corpus.join("reference.fa.gz")).unwrap();
     let mut data = Vec::new();
+    // The reference is bgzipped, one gzip member per block.
     flate2::read::MultiGzDecoder::new(compressed)
         .read_to_end(&mut data)
         .unwrap();
@@ -721,23 +722,21 @@ fn dont_skip_keeps_an_absent_chromosome_record_as_intergenic() {
 /// A skip in the ensembl, region and HGVS formats names the record's number as
 /// Ensembl VEP counts it, one per record read (Parser/VEP_input.pm:119,
 /// Parser/Region.pm:167, Parser/HGVS.pm:151), so two records skipped for one
-/// reason are two warnings. The line Ensembl VEP quotes from its parser's
-/// `current_block` (BaseVEP.pm:846-851) is quoted for an Ensembl-format record
-/// and absent for the region format, whose parser exposes no line text. The
-/// region and HGVS runs name a FASTA, which both formats need
-/// (Parser/Region.pm:115; the HGVS notation is resolved against it), so a
-/// chromosome the FASTA lacks fails an HGVS notation before the cache is
-/// consulted, with the parser's own warning, as the slice fetch fails it in
-/// Ensembl VEP.
+/// reason are two warnings, each quoting its line as Ensembl VEP quotes its
+/// parser's `current_block` (BaseVEP.pm:846-851). The region and HGVS runs name
+/// a FASTA, which both formats need (Parser/Region.pm:115; the HGVS notation is
+/// resolved against it), so a chromosome the FASTA lacks fails an HGVS notation
+/// before the cache is consulted, with the parser's own warning, as the slice
+/// fetch fails it in Ensembl VEP.
 #[test]
 fn non_vcf_skips_carry_the_record_number() {
     let dir = tempfile::tempdir().unwrap();
     let fasta = decompressed_fasta(dir.path());
-    let not_in_cache = |quoted: &str| {
-        format!("{quoted}Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features")
+    let not_in_cache = |line: &str| {
+        format!("({line}): Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features")
     };
     let not_in_fasta = |notation: &str| {
-        format!("Unable to parse HGVS notation '{notation}': The reference FASTA has no sequence named Z")
+        format!("({notation}): Unable to parse HGVS notation '{notation}': The reference FASTA has no sequence named Z")
     };
     for (format, records, warnings) in [
         (
@@ -747,8 +746,8 @@ fn non_vcf_skips_carry_the_record_number() {
              Z\t2000\t2000\tA/G\t1\n\
              21\t30165811\t30165811\tA/G\t1\n",
             [
-                not_in_cache("(Z 1000 1000 A/G 1): "),
-                not_in_cache("(Z 2000 2000 A/G 1): "),
+                not_in_cache("Z 1000 1000 A/G 1"),
+                not_in_cache("Z 2000 2000 A/G 1"),
             ],
         ),
         (
@@ -757,7 +756,10 @@ fn non_vcf_skips_carry_the_record_number() {
              Z:1000-1000:1/G\n\
              Z:2000-2000:1/G\n\
              21:30165811-30165811:1/G\n",
-            [not_in_cache(""), not_in_cache("")],
+            [
+                not_in_cache("Z:1000-1000:1/G"),
+                not_in_cache("Z:2000-2000:1/G"),
+            ],
         ),
         (
             "hgvs",

@@ -103,7 +103,7 @@ the full list, with every flag's parity note, is
 | Fields    | `--everything` and the field flags it implies: `--symbol`, `--canonical`, `--mane`, `--hgvs`, `--sift`, `--polyphen`, `--numbers`, `--domains`, `--variant_class`, `--af`, `--af_1kg`, `--af_gnomade`, `--af_gnomadg`, `--max_af`, `--pubmed`, `--check_existing` and the rest |
 | Picking   | `--pick`, `--pick_allele`, `--per_gene`, `--pick_allele_gene`, `--most_severe`, `--summary`, `--flag_pick`, `--flag_pick_allele`, `--flag_pick_allele_gene`                                                                                                 |
 | Plugins   | `--plugin Name,key=value,...`, repeatable; `--dir_plugins`, where dynamic-library plugins are found                                                                                                                                                         |
-| Parsing   | `--dont_skip` aborts on a malformed line instead of skipping it; `--allow_non_variant` passes reference-only VCF records through unchanged                                                                                                                  |
+| Parsing   | `--dont_skip` keeps a record that fails a check; `--allow_non_variant` keeps reference-only VCF records in every output format; `--chr`, `--check_ref` and `--lookup_ref` filter and check records as Ensembl VEP does                                 |
 | Verbosity | `-v`/`--verbose` (debug logging); `-q`/`--quiet` (errors only, no progress line)                                                                                                                                                                           |
 
 Three declared flags are refused with an error rather than ignored, because the feature they

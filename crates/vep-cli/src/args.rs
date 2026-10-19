@@ -88,6 +88,25 @@ pub struct Args {
     #[arg(help_heading = "Input", long = "no_check_variants_order")]
     pub no_check_variants_order: bool,
 
+    /// Annotate the records of these chromosomes alone, a comma-separated list matched against each
+    /// record's chromosome as the input spells it (`21` does not admit `chr21`); a pair of integers
+    /// joined by `-` names every chromosome between them (`1-5,10,MT`), which Ensembl VEP matches
+    /// literally. A record outside the list is dropped without a warning, or kept by --dont_skip
+    #[arg(help_heading = "Input", long, value_name = "LIST")]
+    pub chr: Option<String>,
+
+    /// Check each record's reference allele against the --fasta sequence over its span, on its strand;
+    /// a mismatch skips the record with Ensembl VEP's warning, or keeps it under --dont_skip with
+    /// CHECK_REF `failed`. Needs --fasta; cannot be combined with --lookup_ref
+    #[arg(help_heading = "Input", long = "check_ref")]
+    pub check_ref: bool,
+
+    /// Replace each record's reference allele with the --fasta sequence over its span, on its strand,
+    /// before annotation; the record's name keeps the allele as written. Needs --fasta; cannot be
+    /// combined with --check_ref
+    #[arg(help_heading = "Input", long = "lookup_ref")]
+    pub lookup_ref: bool,
+
     /// Output file path (use "STDOUT" for standard output, in any case); the last of several wins
     #[arg(
         help_heading = "Output",
@@ -402,12 +421,12 @@ pub struct Args {
     /// oversize record before annotation and writes nothing for it in any format;
     /// vep-rs annotates it: rows in the default, tab and parquet outputs, its VCF
     /// line without consequences, no JSON object (docs/output-formats.md and
-    /// docs/intended-divergences.md describe the divergence). An SPDI record whose
-    /// span exceeds the limit is skipped with Ensembl VEP's warning, as every
-    /// oversize record is in Ensembl VEP 116. An HGVS genomic notation's end minus
-    /// its start must be smaller than this value, 0 reading as 5000 and -1 as -1
-    /// itself, so under -1 a notation written in genome order is skipped, as
-    /// Ensembl VEP 116 skips it
+    /// docs/intended-divergences.md describe the divergence). A region or SPDI
+    /// record whose span exceeds the limit is skipped with Ensembl VEP's warning,
+    /// as every oversize record is in Ensembl VEP 116. An HGVS genomic notation's
+    /// end minus its start must be smaller than this value, 0 reading as 5000 and
+    /// -1 as -1 itself, so under -1 a notation written in genome order is
+    /// skipped, as Ensembl VEP 116 skips it
     #[arg(
         help_heading = "Runtime",
         long = "max_sv_size",
@@ -1058,11 +1077,15 @@ pub struct Args {
     #[arg(help_heading = "Verbosity", short = 'q', long)]
     pub quiet: bool,
 
-    /// Abort the run on a variant that fails parsing instead of skipping it (VEP keeps the variant)
+    /// Keep and annotate a record that fails a validation check (an unknown chromosome, an invalid
+    /// allele string, a reference allele --check_ref rejects, a chromosome --chr leaves out) instead of
+    /// skipping it; the skip warning is still written. A line that cannot be parsed is skipped either way
     #[arg(help_heading = "Miscellaneous", long = "dont_skip")]
     pub dont_skip: bool,
 
-    /// Process non-variant lines in VCF (e.g., reference-only calls)
+    /// Keep a VCF record whose ALT is `.` (a reference-only call): the VCF output carries its line with
+    /// any earlier CSQ removed unless --keep_csq, the JSON output writes its object with no consequence,
+    /// and the default and tab outputs write no row for it
     #[arg(help_heading = "Miscellaneous", long = "allow_non_variant")]
     pub allow_non_variant: bool,
 

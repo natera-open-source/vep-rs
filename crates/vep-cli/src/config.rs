@@ -708,6 +708,13 @@ pub struct Config {
     pub fields: Option<Vec<String>>,
     pub dont_skip: bool,
     pub allow_non_variant: bool,
+    /// `--chr` as given, split on commas (`Config.pm:760-762`); `None` without the
+    /// flag. The names it admits are read by `validate::ChromosomeList`.
+    pub chr: Option<Vec<String>>,
+    /// `--check_ref`: the reference allele is checked against the FASTA.
+    pub check_ref: bool,
+    /// `--lookup_ref`: the reference allele is read from the FASTA.
+    pub lookup_ref: bool,
 }
 
 /// The output format as the writers name it: `OutputFactory.pm:229-231` lower-cases
@@ -1072,6 +1079,9 @@ impl Config {
             fields,
             dont_skip: args.dont_skip,
             allow_non_variant: on("allow_non_variant"),
+            chr: state.is_given("chr").then(|| state.list("chr")),
+            check_ref: args.check_ref,
+            lookup_ref: args.lookup_ref,
         }
     }
 }

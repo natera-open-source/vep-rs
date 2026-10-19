@@ -56,13 +56,17 @@ fn vep_command(
     cmd
 }
 
-/// Runs `vep` with `-o out`, where `out` is a path or `STDOUT`. A run to
+/// Runs `vep` with `-o out`, where `out` is a path or `STDOUT`.
+fn vep(input: &Path, json_cache: &Path, assembly: &str, out: &Path, args: &[&str]) -> Run {
+    run_command(vep_command(input, json_cache, assembly, out, args), out)
+}
+
+/// Runs a `vep` command that writes to `out`, a path or `STDOUT`. A run to
 /// `STDOUT` writes its warnings file into the working directory, so it runs in
 /// a directory of its own rather than the crate's.
-fn vep(input: &Path, json_cache: &Path, assembly: &str, out: &Path, args: &[&str]) -> Run {
+fn run_command(mut cmd: Command, out: &Path) -> Run {
     let to_stdout = out.as_os_str() == "STDOUT";
     let scratch = tempfile::tempdir().unwrap();
-    let mut cmd = vep_command(input, json_cache, assembly, out, args);
     if to_stdout {
         cmd.current_dir(scratch.path());
     }
@@ -741,6 +745,9 @@ fn record_key(line: &str) -> String {
     format!("{}:{}:{}:{}:{}", f[0], f[1], f[2], f[3], f[4])
 }
 
+/// Every corpus runs under its own flags and reference, so a record its
+/// manifest marks dropped is dropped by the same checks here (a reference
+/// allele `--check_ref` rejects is kept without the flag).
 #[test]
 fn allow_non_variant_lines_stay_in_input_order_at_every_buffer_size_in_both_modes() {
     let tmp = tempfile::tempdir().unwrap();
@@ -752,16 +759,21 @@ fn allow_non_variant_lines_stay_in_input_order_at_every_buffer_size_in_both_mode
                 let out = tmp
                     .path()
                     .join(format!("nv_{}_{mode}_{buffer}.vcf", corpus.name));
-                let mut args = vec![
-                    "--vcf",
-                    "--allow_non_variant",
-                    "--buffer_size",
-                    buffer,
-                    "--fork",
-                    "4",
-                ];
-                args.extend(mode_flags);
-                let run = vep(&input, &corpus.cache_dir(), &corpus.assembly, &out, &args);
+                let mut corpus_run = common::default_run(corpus);
+                corpus_run.input = input.display().to_string();
+                let mut cmd = common::vep_command(&corpus_run, tmp.path());
+                cmd.arg("-o")
+                    .arg(&out)
+                    .args([
+                        "--vcf",
+                        "--allow_non_variant",
+                        "--buffer_size",
+                        buffer,
+                        "--fork",
+                        "4",
+                    ])
+                    .args(mode_flags);
+                let run = run_command(cmd, &out);
                 assert!(
                     run.success,
                     "{} {mode} buffer {buffer}: {}",
@@ -979,13 +991,11 @@ fn output_within(mut cmd: Command, limit: Duration) -> std::process::Output {
     }
 }
 
-/// In both modes, `--dont_skip` names the malformed line and exits, with the
-/// same error line, and the output is exactly the batches before it: the
-/// malformed record opens the third batch of 10, so a clean run over the first
-/// 20 records is the reference for both. (A malformed record inside a batch
-/// stops the batched coordinator at that batch while the streaming writer puts
-/// out the tasks before the failing one, so only a fault at a batch start pins
-/// both modes to one reference.)
+/// In both modes, a malformed line in a later batch is skipped with Ensembl
+/// VEP's warning at the record's own number under `--dont_skip`, the run
+/// completes with exit 0, and every other record is written: `--dont_skip`
+/// keeps records that fail a check (Parser.pm:189), and a line that yields no
+/// record has nothing to keep.
 #[test]
 fn dont_skip_reports_the_malformed_line_in_a_later_batch_and_exits() {
     let tmp = tempfile::tempdir().unwrap();
@@ -1000,8 +1010,6 @@ fn dont_skip_reports_the_malformed_line_in_a_later_batch_and_exits() {
     );
     let mut lines: Vec<String> = header.iter().map(|l| l.to_string()).collect();
     lines.extend(data[..20].iter().map(|l| l.to_string()));
-    let clean = tmp.path().join("clean.vcf");
-    fs::write(&clean, lines.join("\n") + "\n").unwrap();
     // Data record 21, the first of the third batch of 10, with a non-numeric
     // POS; the number reported is the record's, as Ensembl VEP counts lines
     // (Parser/VCF.pm:228), header lines not counted.
@@ -1011,52 +1019,42 @@ fn dont_skip_reports_the_malformed_line_in_a_later_batch_and_exits() {
     let input = tmp.path().join("malformed.vcf");
     fs::write(&input, lines.join("\n") + "\n").unwrap();
 
-    let reference_out = tmp.path().join("clean.out");
-    let reference = vep(
-        &clean,
-        &corpus.cache_dir(),
-        &corpus.assembly,
-        &reference_out,
-        &["--dont_skip", "--buffer_size", "10", "--fork", "4"],
-    );
-    assert!(reference.success, "clean run: {}", reference.stderr);
-    let reference = without_run_headers(&reference.output);
-    assert!(!reference.is_empty());
-
-    let mut error_lines: Vec<String> = Vec::new();
     for (mode, mode_flags) in MODES {
         let out = tmp.path().join(format!("malformed_{mode}.out"));
         let mut args = vec!["--dont_skip", "--buffer_size", "10", "--fork", "4"];
         args.extend(mode_flags);
         let cmd = vep_command(&input, &corpus.cache_dir(), &corpus.assembly, &out, &args);
         let output = output_within(cmd, Duration::from_secs(120));
-        assert!(
-            !output.status.success(),
-            "{mode}: --dont_skip must fail on a malformed line"
-        );
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            stderr.contains(&format!("line {bad_line_number}: parse error")),
-            "{mode}: stderr does not name line {bad_line_number}:\n{stderr}"
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{mode}: --dont_skip keeps the run going past a malformed line:\n{stderr}"
         );
-        assert!(
-            stderr.contains("Invalid POS"),
-            "{mode}: stderr lacks the parse error:\n{stderr}"
+        let warnings = fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
+        assert_eq!(
+            warnings.lines().collect::<Vec<_>>(),
+            [format!(
+                "WARNING: line {bad_line_number} skipped (21 not_a_position . A G . PASS .): Invalid start 'not_a_position' or end '0' coordinate"
+            )],
+            "{mode}: the malformed line is the one skip, at its record number"
         );
-        error_lines.push(
-            stderr
-                .lines()
-                .find(|l| l.starts_with("ERROR: "))
-                .unwrap_or_else(|| panic!("{mode}: no ERROR line:\n{stderr}"))
-                .to_string(),
-        );
-        assert_same(
-            &reference,
-            &without_run_headers(&fs::read(&out).unwrap()),
-            &format!("{mode}: the output is not the two batches before the malformed line"),
-        );
+        let written: Vec<String> = fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .map(|l| l.split('\t').next().unwrap().to_string())
+            .collect();
+        let expected_ids = |range: std::ops::Range<usize>| {
+            data[range]
+                .iter()
+                .map(|l| l.split('\t').nth(2).unwrap().to_string())
+                .filter(|id| id != ".")
+        };
+        for id in expected_ids(0..20).chain(expected_ids(21..30)) {
+            assert!(written.contains(&id), "{mode}: record {id} is written");
+        }
     }
-    assert_eq!(error_lines[0], error_lines[1]);
 }
 
 /// The line numbers of a warnings file's `line N skipped` lines, in file order;
