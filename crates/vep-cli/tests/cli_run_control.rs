@@ -1071,6 +1071,53 @@ fn verbose_prints_the_detected_format() {
     assert!(!text(&plain.stderr).contains("detected vcf format"));
 }
 
+/// Under `--verbose`, a run with `--decompression_threads auto` reports the
+/// worker count it resolved and the shape it read it from: the run-control
+/// input is a plain VCF, so the shape is unknown and the count the `0` rule's;
+/// a run with `0` reports no resolution.
+#[test]
+fn verbose_prints_the_auto_decompression_resolution() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let auto = run_control(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            "--verbose",
+            "--decompression_threads",
+            "auto",
+        ],
+        dir.path(),
+    );
+    assert_eq!(auto.status.code(), Some(0), "{}", text(&auto.stderr));
+    let workers =
+        vep_cli::config::host_parallelism().min(vep_cli::config::DECOMPRESSION_THREADS_AUTO_CAP);
+    assert!(
+        text(&auto.stderr).contains(&format!(
+            "--decompression_threads auto resolved {workers} workers from an input of unknown shape"
+        )),
+        "{}",
+        text(&auto.stderr)
+    );
+    let host_capped = run_control(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            "--verbose",
+            "--decompression_threads",
+            "0",
+        ],
+        dir.path(),
+    );
+    assert_eq!(
+        host_capped.status.code(),
+        Some(0),
+        "{}",
+        text(&host_capped.stderr)
+    );
+    assert!(!text(&host_capped.stderr).contains("--decompression_threads auto resolved"));
+}
+
 /// `--buffer_size` (Config.pm:118, default 5000 at :300) sets how many records
 /// are annotated per batch and changes nothing in the output: 1, 7 and the
 /// default write byte-identical rows for the run-control corpus. Ensembl VEP's
@@ -1111,7 +1158,7 @@ fn buffer_size_changes_no_output() {
 
 /// `--decompression_threads` sets the BGZF block reader's worker count and
 /// changes nothing in the output: a BGZF copy of the run-control input annotates
-/// to the same rows with one worker, four, and the auto count, and to the
+/// to the same rows with one worker, four, and the `0` rule's count, and to the
 /// uncompressed file's rows.
 #[test]
 fn decompression_threads_changes_no_output() {

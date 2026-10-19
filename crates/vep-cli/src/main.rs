@@ -94,6 +94,22 @@ fn run(argv: Vec<OsString>) -> i32 {
         config::input_data_for(&parsed.args).is_some(),
     );
 
+    let config = match config::Config::from_parsed(parsed) {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("{error}");
+            return 1;
+        }
+    };
+
+    // The resolved knobs are a property of the configuration and the input, so
+    // they print before any cache is resolved or opened.
+    if config.resolved_config {
+        let written =
+            vep_cli::runner::write_resolved_config(&config, &mut std::io::stdout().lock());
+        return exit_status(written);
+    }
+
     // Cache shards parse on rayon's global pool, whose threads would otherwise
     // inherit the name of whichever thread first touches it.
     if let Err(error) = rayon::ThreadPoolBuilder::new()
@@ -103,14 +119,6 @@ fn run(argv: Vec<OsString>) -> i32 {
         eprintln!("{}", CliError::new("run", error.to_string()));
         return 1;
     }
-
-    let config = match config::Config::from_parsed(parsed) {
-        Ok(config) => config,
-        Err(error) => {
-            eprintln!("{error}");
-            return 1;
-        }
-    };
 
     if !quiet {
         eprintln!("-------------------- -------------------- --------------------");
@@ -122,7 +130,13 @@ fn run(argv: Vec<OsString>) -> i32 {
         eprintln!("-------------------- -------------------- --------------------");
     }
 
-    match vep_cli::runner::Runner::new(config).and_then(|runner| runner.run()) {
+    exit_status(vep_cli::runner::Runner::new(config).and_then(|runner| runner.run()))
+}
+
+/// The exit status of a run or a `--resolved_config` probe: 0 when it succeeded,
+/// else 1 after its `ERROR: [<component>] <message>` line on standard error.
+fn exit_status(result: anyhow::Result<()>) -> i32 {
+    match result {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("{}", CliError::from_run(&error));

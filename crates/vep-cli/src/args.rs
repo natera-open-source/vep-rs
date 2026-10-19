@@ -428,17 +428,23 @@ pub struct Args {
 
     /// Number of BGZF decompression worker threads for a BGZF-compressed input
     /// (a plain gzip input is decompressed on one thread).
-    /// Default 0 = auto: uses the number of available logical CPUs, capped
+    /// Default 0: uses the number of available logical CPUs, capped
     /// at 10 (measured sweet-spot: throughput plateaus around 4-10 threads
-    /// and is flat past that). A positive value pins the worker count,
+    /// and is flat past that). `auto` chooses the count from the input's
+    /// inflated bytes per record: a BGZF input with a .tbi or .csi index beside
+    /// it whose records inflate to at least 8,000 bytes gets 32 workers on an
+    /// aarch64 host, capped at the available logical CPUs; any other input, and
+    /// every input on another architecture, gets the 0 rule. `auto` is opt-in,
+    /// never the default. A positive value pins the worker count,
     /// e.g. `--decompression_threads=1` for single-threaded; a value above the
     /// number of available logical CPUs is lowered to that number.
     #[arg(
         help_heading = "Runtime",
         long = "decompression_threads",
-        default_value_t = 0
+        default_value = "0",
+        value_parser = crate::config::decompression_threads_text
     )]
-    pub decompression_threads: usize,
+    pub decompression_threads: String,
 
     /// Transcript overlap index implementation (hidden, for A/B benchmarking).
     /// Options: bin (UCSC binning, default), coitrees (implicit interval tree),
@@ -517,6 +523,11 @@ pub struct Args {
         value_parser = clap::value_parser!(u64).range(0..=1_073_741_824)
     )]
     pub output_buffer_size: u64,
+
+    /// Print the resolved runtime knobs and the input's shape as name<TAB>value
+    /// lines and exit without annotating
+    #[arg(help_heading = "Runtime", long = "resolved_config", hide = true)]
+    pub resolved_config: bool,
 
     /// Upstream and downstream distance in bp: one integer, or the pair "up,down"
     /// (a downstream part written 0 reads as the upstream value)

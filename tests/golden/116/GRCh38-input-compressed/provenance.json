@@ -20,7 +20,7 @@
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
  "input": "the 39 hand-built records of GRCh38-release116, and the same records as a BGZF file under the .gz and .bgz suffixes, as a one-member gzip file, with CRLF line ends and no line end on the last line, and, gzipped, with a Latin-1 byte in a ##source meta line and in a sample name over one GT column per record",
- "generator": "copied from tests/golden/116/GRCh38-release116 (cache, expected outputs, manifest records); the BGZF twins written as one block per 65280 (0xff00) bytes of input plus the empty end-of-file block, each with the BC extra subfield; the gzip twin as one member with no name or time; the CRLF and Latin-1 twins by rewriting the line ends and the header bytes. Ensembl VEP decompresses its input with gzip -dc and reads bytes with no decoding layer, so every twin's reference output is the plain file's.",
+ "generator": "copied from tests/golden/116/GRCh38-release116 (cache, expected outputs, manifest records); the BGZF twins written as one block per 65280 (0xff00) bytes of input plus the empty end-of-file block, each with the BC extra subfield, and a tabix index written beside the .gz twin from its own records (one chunk per record, the virtual positions the block reader reports), so the twin is a bgzipped, indexed input whose shape --decompression_threads auto and --resolved_config read; the gzip twin as one member with no name or time; the CRLF and Latin-1 twins by rewriting the line ends and the header bytes. Ensembl VEP decompresses its input with gzip -dc and reads bytes with no decoding layer, so every twin's reference output is the plain file's.",
  "sha256": {
   "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
   "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
@@ -33,7 +33,8 @@
   "variants.vcf.bgz": "f8e0ddefcad2e65bfc3be8e171a64d05ddcbf1c3a926c027f1d45c575927ca9c",
   "variants.plain.vcf.gz": "e961cb46b192af87fa342b44612f25bee4ea067e8e9240d7f43673e6af757808",
   "variants.crlf.vcf": "2cb1632e9ca6b06a18e2ad227929d232d276c635a67a2cd49bec58ba91c3f847",
-  "variants.latin1.vcf.gz": "c648b717e6ea765e48fcb5c04fb82a916e76dfbd8b50850bf20c86b137a39531"
+  "variants.latin1.vcf.gz": "c648b717e6ea765e48fcb5c04fb82a916e76dfbd8b50850bf20c86b137a39531",
+  "variants.vcf.gz.tbi": "9f033a6cdc0fc9d194af612e7a202f10bef643a9132cfa3f3d31430b8c76df1b"
  },
  "pruned_cache": {
   "transcripts_per_chromosome": {
@@ -145,6 +146,23 @@
    "sha256": {
     "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
     "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0"
+   }
+  },
+  "decompression-auto": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.vcf.gz -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --protein --protein_version --mask_header_cache_path --max_sv_size -1 --decompression_threads auto [--tab|--vcf|--json]",
+   "input": "variants.vcf.gz",
+   "expected_outputs": "the default run's files (expected/): the same BGZF twin read with the inflater count its indexed shape resolves (the records are narrower than the inflate-bound width, so the count is the 0 rule's), which changes no output",
+   "sha256": {
+    "default.txt": "5344b8e22dd3dc6fb5e8169409508e864af0149cfb50c72c9acc172fc627bf03",
+    "tab.txt": "014ffa601182c582e5e7d44db51a52bf37874ccd29cf287f887b368067237fe0",
+    "vcf.vcf": "9f17d1eee9025fc9d7fd7fb90f667a3f635b626de92854193fefc0327386cd11",
+    "json.jsonl": "781aa112996fed3c395c44ef7472273e7039b7f287b814243c86dcfe4b58bcd2"
    }
   }
  }

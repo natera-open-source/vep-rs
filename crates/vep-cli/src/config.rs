@@ -18,6 +18,7 @@ use vep_core::terms::Vocabulary;
 use vep_io::input::Delimiter;
 
 use crate::args::Args;
+use crate::input_shape::InputShape;
 use crate::nearest::NearestType;
 use crate::option_rules::{FlagState, OWN_RULES};
 use crate::transcript_index::TranscriptIndexImpl;
@@ -543,8 +544,11 @@ pub struct Config {
     /// and omits it from the JSON output (`docs/intended-divergences.md`).
     pub max_sv_size: Option<u64>,
     pub fork: usize,
-    /// BGZF decompression worker threads for a BGZF input in any format (1 = single-threaded; a plain gzip input decompresses on one thread).
-    pub decompression_threads: usize,
+    /// BGZF decompression worker threads for a BGZF input in any format, as the
+    /// flag was given (a plain gzip input decompresses on one thread);
+    /// [`resolve_decompression_threads`] turns it into a count once the input's
+    /// shape is known.
+    pub decompression_threads: DecompressionThreads,
     pub distance: (u64, u64),
     /// Transcript-overlap index implementation (A/B benchmarking flag).
     /// Default [`TranscriptIndexImpl::Bin`].
@@ -563,6 +567,8 @@ pub struct Config {
     /// The `buffered` writer strategy's buffer, in bytes (`--output_buffer_size`,
     /// resolved).
     pub output_buffer_size: usize,
+    /// Print the resolved runtime knobs and the input's shape, then exit.
+    pub resolved_config: bool,
 
     /// `--everything` was given: the HGVS flags it switched on are dropped, not
     /// refused, when no FASTA is found (Runner.pm:745-754).
@@ -967,7 +973,8 @@ impl Config {
             buffer_size: args.buffer_size,
             max_sv_size: u64::try_from(args.max_sv_size).ok(),
             fork: resolve_fork(args.fork),
-            decompression_threads: resolve_decompression_threads(args.decompression_threads),
+            // clap validated the text with `decompression_threads_text`.
+            decompression_threads: args.decompression_threads.parse().unwrap_or_default(),
             distance,
             // clap validates the flag at parse time; a failure here means the
             // validator drifted from `TranscriptIndexImpl::from_str`, and the
@@ -981,6 +988,7 @@ impl Config {
             render_task_records: resolve_render_task_records(args.render_task_records),
             writer_strategy: args.writer_strategy.parse().unwrap_or_default(),
             output_buffer_size: resolve_output_buffer_size(args.output_buffer_size),
+            resolved_config: args.resolved_config,
             everything: on("everything"),
             symbol: on("symbol") || vcf_output,
             biotype: on("biotype") || vcf_output,
@@ -1079,11 +1087,10 @@ impl Config {
     }
 }
 
-/// Auto-detect cap for `--decompression_threads=0`: decompression throughput
-/// plateaus between 4 and 10 threads and is flat past that, so the auto default
-/// stops at 10 rather than oversubscribing large hosts. A positive value pins the
-/// worker count up to the host's logical CPUs.
-const DECOMPRESSION_THREADS_AUTO_CAP: usize = 10;
+/// Cap for the `0` rule of `--decompression_threads`, the default: decompression
+/// throughput plateaus between 4 and 10 threads and is flat past that, so the
+/// rule stops at 10 rather than oversubscribing large hosts.
+pub const DECOMPRESSION_THREADS_AUTO_CAP: usize = 10;
 
 /// Auto-detect cap for `--fork=0`. One reader thread parses and hands out the
 /// batches, so the wall time stops falling past about 32 workers and rises on
@@ -1108,20 +1115,135 @@ pub fn resolve_fork(raw: usize) -> usize {
         .unwrap_or(1)
 }
 
-/// Resolve the --decompression_threads value. `0` means "auto": use the
-/// number of available logical CPUs, capped at
-/// [`DECOMPRESSION_THREADS_AUTO_CAP`]. A non-zero value pins the worker count,
-/// lowered to the number of available logical CPUs: the block reader starts one
-/// thread and one block buffer per worker, so a count far above the host's CPUs
-/// would exhaust threads or memory before it read a block, and workers beyond
-/// the CPUs decompress nothing more.
-fn resolve_decompression_threads(raw: usize) -> usize {
-    let available = std::thread::available_parallelism().map(|n| n.get());
-    match (raw, available) {
-        (0, Ok(cpus)) => cpus.min(DECOMPRESSION_THREADS_AUTO_CAP),
-        (0, Err(_)) => 4,
-        (pinned, Ok(cpus)) => pinned.min(cpus),
-        (pinned, Err(_)) => pinned,
+/// An input whose records inflate to at least this many bytes is bound by
+/// inflation rather than annotation; a wider inflater pool only pays there.
+pub const INFLATE_BOUND_BYTES_PER_RECORD: u64 = 8_000;
+
+/// Inflaters for an input bound by inflation on an aarch64 host, before the
+/// host's parallelism caps them: the count past which such an input stopped
+/// gaining.
+#[cfg(target_arch = "aarch64")]
+pub const INFLATE_BOUND_INFLATERS: usize = 32;
+
+/// Inflaters for an input bound by inflation on any other architecture: on
+/// x86_64 no count above the `0` rule's cap read such an input faster, so the
+/// `auto` rule keeps that cap there.
+#[cfg(not(target_arch = "aarch64"))]
+pub const INFLATE_BOUND_INFLATERS: usize = DECOMPRESSION_THREADS_AUTO_CAP;
+
+/// The `--decompression_threads` value: the form the flag was given in, resolved
+/// to a count once the input's shape is known.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DecompressionThreads {
+    /// `0`: the host's available parallelism, capped at
+    /// [`DECOMPRESSION_THREADS_AUTO_CAP`].
+    #[default]
+    HostCapped,
+    /// `auto`: the count the input's shape asks for
+    /// ([`resolve_decompression_threads_auto`]).
+    Auto,
+    /// A positive count, lowered to the host's available parallelism.
+    Fixed(usize),
+}
+
+impl FromStr for DecompressionThreads {
+    type Err = String;
+
+    /// Accepts exactly `0`, `auto` and a positive integer written in digits
+    /// alone (`usize` also parses a leading `+`, which the flag refuses).
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "0" {
+            return Ok(DecompressionThreads::HostCapped);
+        }
+        if s == "auto" {
+            return Ok(DecompressionThreads::Auto);
+        }
+        let digits_only = s.bytes().all(|b| b.is_ascii_digit());
+        match s.parse::<usize>() {
+            Ok(count) if count > 0 && digits_only => Ok(DecompressionThreads::Fixed(count)),
+            _ => Err(format!(
+                "'{s}' is not 0, auto or a positive whole number of threads"
+            )),
+        }
+    }
+}
+
+impl fmt::Display for DecompressionThreads {
+    /// The value as the flag spells it.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DecompressionThreads::HostCapped => f.write_str("0"),
+            DecompressionThreads::Auto => f.write_str("auto"),
+            DecompressionThreads::Fixed(n) => write!(f, "{n}"),
+        }
+    }
+}
+
+/// The `--decompression_threads` text, validated as [`DecompressionThreads`]
+/// parses it; the command-line parser's value parser.
+pub fn decompression_threads_text(text: &str) -> Result<String, String> {
+    text.parse::<DecompressionThreads>()
+        .map(|_| text.to_string())
+}
+
+/// The logical CPUs the decompression rules assume on a host that reports no
+/// count.
+const UNREPORTED_HOST_CPUS: usize = 4;
+
+/// The host's logical CPU count, `None` when the host does not report one.
+pub fn reported_parallelism() -> Option<usize> {
+    std::thread::available_parallelism().ok().map(|n| n.get())
+}
+
+/// The host's logical CPUs as the decompression rules read them:
+/// [`UNREPORTED_HOST_CPUS`] when the host does not report a count.
+pub fn host_parallelism() -> usize {
+    reported_parallelism().unwrap_or(UNREPORTED_HOST_CPUS)
+}
+
+/// Resolve the --decompression_threads value against the input's shape, on a
+/// host of [`host_parallelism`] CPUs: a fixed count lowered to the host's CPUs
+/// when the host reports them (the block reader starts one thread and one block
+/// buffer per worker, so a count far above them would exhaust threads or memory
+/// before it read a block, and workers beyond the CPUs decompress nothing more),
+/// else kept as given; `0` as the host's CPUs capped at
+/// [`DECOMPRESSION_THREADS_AUTO_CAP`]; `auto` by
+/// [`resolve_decompression_threads_auto`].
+pub fn resolve_decompression_threads(value: DecompressionThreads, shape: &InputShape) -> usize {
+    resolve_decompression_threads_on(value, shape, reported_parallelism())
+}
+
+/// [`resolve_decompression_threads`] on a host whose logical CPU count is
+/// `reported`, `None` when the host does not report one.
+fn resolve_decompression_threads_on(
+    value: DecompressionThreads,
+    shape: &InputShape,
+    reported: Option<usize>,
+) -> usize {
+    let cpus = reported.unwrap_or(UNREPORTED_HOST_CPUS);
+    match value {
+        DecompressionThreads::Fixed(n) => reported.map_or(n, |reported_cpus| n.min(reported_cpus)),
+        DecompressionThreads::HostCapped => cpus.min(DECOMPRESSION_THREADS_AUTO_CAP),
+        DecompressionThreads::Auto => resolve_decompression_threads_auto(shape, cpus),
+    }
+}
+
+/// The `auto` rule: an indexed input whose records inflate to at least
+/// [`INFLATE_BOUND_BYTES_PER_RECORD`] bytes gets [`INFLATE_BOUND_INFLATERS`]
+/// inflaters, capped at `available_parallelism`; any other shape gets the `0`
+/// rule, `available_parallelism` capped at [`DECOMPRESSION_THREADS_AUTO_CAP`].
+pub fn resolve_decompression_threads_auto(
+    shape: &InputShape,
+    available_parallelism: usize,
+) -> usize {
+    match shape {
+        InputShape::Indexed {
+            inflated_bytes_per_record,
+            ..
+        } if *inflated_bytes_per_record >= INFLATE_BOUND_BYTES_PER_RECORD => {
+            INFLATE_BOUND_INFLATERS.min(available_parallelism)
+        }
+        _ => available_parallelism.min(DECOMPRESSION_THREADS_AUTO_CAP),
     }
 }
 
@@ -1318,6 +1440,108 @@ mod tests {
         assert_eq!(resolve_output_buffer_size(4096), 4096);
     }
 
+    /// `--decompression_threads` takes exactly `0`, `auto` and a positive whole
+    /// number; everything else is clap's usage error.
+    #[test]
+    fn decompression_threads_parses_its_three_forms() {
+        for (text, value) in [
+            ("0", DecompressionThreads::HostCapped),
+            ("auto", DecompressionThreads::Auto),
+            ("1", DecompressionThreads::Fixed(1)),
+            ("32", DecompressionThreads::Fixed(32)),
+        ] {
+            assert_eq!(
+                text.parse::<DecompressionThreads>().unwrap(),
+                value,
+                "{text}"
+            );
+            assert_eq!(decompression_threads_text(text).unwrap(), text);
+            assert_eq!(
+                config(&["vep", "--decompression_threads", text]).decompression_threads,
+                value,
+                "{text}"
+            );
+        }
+        assert_eq!(
+            config(&["vep"]).decompression_threads,
+            DecompressionThreads::HostCapped
+        );
+        assert_eq!(DecompressionThreads::Fixed(7).to_string(), "7");
+        assert_eq!(DecompressionThreads::Auto.to_string(), "auto");
+        assert_eq!(DecompressionThreads::HostCapped.to_string(), "0");
+        for text in ["-1", "1.5", "AUTO", "", "+1", "0x10", "auto1"] {
+            assert!(text.parse::<DecompressionThreads>().is_err(), "{text}");
+            assert!(decompression_threads_text(text).is_err(), "{text}");
+            match Config::from_argv(["vep", "--decompression_threads", text]).unwrap_err() {
+                ParseFailure::Usage(e) => assert!(
+                    matches!(
+                        e.kind(),
+                        clap::error::ErrorKind::ValueValidation
+                            | clap::error::ErrorKind::UnknownArgument
+                    ),
+                    "{text}: {e}"
+                ),
+                ParseFailure::Refused(e) => panic!("{text} refused instead: {e}"),
+            }
+        }
+    }
+
+    /// The `auto` rule over the three shapes and both sides of the threshold:
+    /// an unknown shape and an input below the threshold take the `0` rule, an
+    /// input at or above it takes the inflate-bound pool, and the host's
+    /// parallelism caps both.
+    #[test]
+    fn auto_decompression_threads_follow_the_input_shape() {
+        let indexed = |inflated_bytes_per_record: u64| InputShape::Indexed {
+            inflated_bytes_per_record,
+            records_estimate: 1_000,
+            file_bytes: 1 << 20,
+        };
+        let wide = 64;
+        assert_eq!(
+            resolve_decompression_threads_auto(&InputShape::Unknown, wide),
+            DECOMPRESSION_THREADS_AUTO_CAP
+        );
+        assert_eq!(
+            resolve_decompression_threads_auto(&InputShape::Unknown, 4),
+            4
+        );
+        assert_eq!(
+            resolve_decompression_threads_auto(&indexed(INFLATE_BOUND_BYTES_PER_RECORD - 1), wide),
+            DECOMPRESSION_THREADS_AUTO_CAP
+        );
+        assert_eq!(
+            resolve_decompression_threads_auto(&indexed(INFLATE_BOUND_BYTES_PER_RECORD), wide),
+            INFLATE_BOUND_INFLATERS
+        );
+        assert_eq!(
+            resolve_decompression_threads_auto(&indexed(INFLATE_BOUND_BYTES_PER_RECORD * 2), 16),
+            INFLATE_BOUND_INFLATERS.min(16)
+        );
+        assert_eq!(
+            resolve_decompression_threads_auto(&indexed(INFLATE_BOUND_BYTES_PER_RECORD * 2), 1),
+            1
+        );
+
+        let host = host_parallelism();
+        assert_eq!(
+            resolve_decompression_threads(DecompressionThreads::Fixed(3), &InputShape::Unknown),
+            3.min(host)
+        );
+        assert_eq!(
+            resolve_decompression_threads(DecompressionThreads::HostCapped, &indexed(1 << 20)),
+            host.min(DECOMPRESSION_THREADS_AUTO_CAP)
+        );
+        assert_eq!(
+            resolve_decompression_threads(DecompressionThreads::Auto, &indexed(1 << 20)),
+            INFLATE_BOUND_INFLATERS.min(host)
+        );
+        assert_eq!(
+            resolve_decompression_threads(DecompressionThreads::Auto, &InputShape::Unknown),
+            host.min(DECOMPRESSION_THREADS_AUTO_CAP)
+        );
+    }
+
     /// Every value of each runtime knob reaches its resolved `Config` field, an
     /// absent flag resolves as `0` does and the modes and strategies as their
     /// defaults (`streaming`, `buffered`), and a value outside the enumeration or
@@ -1325,6 +1549,8 @@ mod tests {
     #[test]
     fn runtime_knobs_reach_the_config() {
         let plain = config(&["vep"]);
+        assert!(!plain.resolved_config);
+        assert!(config(&["vep", "--resolved_config"]).resolved_config);
         assert_eq!(plain.pipeline_mode, PipelineMode::Streaming);
         assert_eq!(plain.pipeline_mode, PipelineMode::default());
         assert_eq!(plain.pipeline_depth, crate::pipeline::PIPELINE_DEPTH);
@@ -1419,17 +1645,37 @@ mod tests {
         }
     }
 
-    /// The auto decompression worker count stays within its cap; a pinned count
-    /// is kept up to the host's logical CPUs and lowered to them above that.
+    /// The `0` decompression worker count stays within its cap; a pinned count
+    /// is kept up to the host's logical CPUs and lowered to them above that,
+    /// and kept whole on a host that reports no count.
     #[test]
     fn decompression_threads_pinned_up_to_the_host_cpus() {
         let cpus = std::thread::available_parallelism().unwrap().get();
-        let auto = resolve_decompression_threads(0);
-        assert!((1..=DECOMPRESSION_THREADS_AUTO_CAP).contains(&auto));
-        assert_eq!(resolve_decompression_threads(1), 1);
-        assert_eq!(resolve_decompression_threads(cpus), cpus);
-        assert_eq!(resolve_decompression_threads(cpus + 1), cpus);
-        assert_eq!(resolve_decompression_threads(usize::MAX), cpus);
+        let resolve = |value| resolve_decompression_threads(value, &InputShape::Unknown);
+        let host_capped = resolve(DecompressionThreads::HostCapped);
+        assert!((1..=DECOMPRESSION_THREADS_AUTO_CAP).contains(&host_capped));
+        assert_eq!(resolve(DecompressionThreads::Fixed(1)), 1);
+        assert_eq!(resolve(DecompressionThreads::Fixed(cpus)), cpus);
+        assert_eq!(resolve(DecompressionThreads::Fixed(cpus + 1)), cpus);
+        assert_eq!(resolve(DecompressionThreads::Fixed(usize::MAX)), cpus);
+
+        let unreported =
+            |value| resolve_decompression_threads_on(value, &InputShape::Unknown, None);
+        assert_eq!(unreported(DecompressionThreads::Fixed(1)), 1);
+        assert_eq!(unreported(DecompressionThreads::Fixed(64)), 64);
+        assert_eq!(
+            unreported(DecompressionThreads::HostCapped),
+            UNREPORTED_HOST_CPUS
+        );
+        assert_eq!(unreported(DecompressionThreads::Auto), UNREPORTED_HOST_CPUS);
+        assert_eq!(
+            resolve_decompression_threads_on(
+                DecompressionThreads::Fixed(64),
+                &InputShape::Unknown,
+                Some(16)
+            ),
+            16
+        );
     }
 
     /// The flags `--everything` turns on are Ensembl VEP's set (Config.pm:351-380)

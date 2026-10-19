@@ -3,8 +3,9 @@
 
 //! Pipeline parity: the reader, coordinator and writer stages must produce the
 //! same bytes whatever the batch size, thread count, pipeline mode, pipeline
-//! depth, task size and writer strategy, keep passthrough lines in input order,
-//! and fail cleanly rather than hang when a stage errors.
+//! depth, task size, writer strategy and decompression thread count, keep
+//! passthrough lines in input order, and fail cleanly rather than hang when a
+//! stage errors.
 
 mod common;
 
@@ -798,6 +799,162 @@ fn allow_non_variant_lines_stay_in_input_order_at_every_buffer_size_in_both_mode
                             corpus.name
                         ),
                     ),
+                }
+            }
+        }
+    }
+}
+
+/// A copy of `vcf` at `out`, bgzipped with its tabix index beside it, one block
+/// closed every `records_per_block` records; `padding` bytes of an extra INFO
+/// field widen every record. A plain copy is written beside it too, and its
+/// path returned.
+fn bgzip_with_index(
+    vcf: &Path,
+    out: &Path,
+    records_per_block: usize,
+    padding: usize,
+) -> std::path::PathBuf {
+    use std::io::Write;
+
+    use noodles::bgzf;
+    use noodles::core::Position;
+    use noodles::csi::binning_index::index::header::Builder as HeaderBuilder;
+    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+
+    let text = fs::read_to_string(vcf).unwrap();
+    let plain_path = out.with_extension("");
+    let mut plain = fs::File::create(&plain_path).unwrap();
+    let mut writer = bgzf::io::Writer::new(fs::File::create(out).unwrap());
+    let mut indexer = noodles::tabix::index::Indexer::default();
+    indexer.set_header(HeaderBuilder::vcf().build());
+    let pad = format!("PAD={}", "x".repeat(padding));
+    let mut records = 0usize;
+    for line in text.lines() {
+        if line.starts_with('#') {
+            writeln!(plain, "{line}").unwrap();
+            writeln!(writer, "{line}").unwrap();
+            continue;
+        }
+        let mut fields: Vec<String> = line.split('\t').map(str::to_string).collect();
+        if padding > 0 {
+            fields[7] = if fields[7] == "." {
+                pad.clone()
+            } else {
+                format!("{};{pad}", fields[7])
+            };
+        }
+        let line = fields.join("\t");
+        writeln!(plain, "{line}").unwrap();
+        let start = writer.virtual_position();
+        writeln!(writer, "{line}").unwrap();
+        let pos: usize = fields[1].parse().unwrap();
+        let end = pos + fields[3].len() - 1;
+        indexer
+            .add_record(
+                &fields[0],
+                Position::try_from(pos).unwrap(),
+                Position::try_from(end).unwrap(),
+                Chunk::new(start, writer.virtual_position()),
+            )
+            .unwrap();
+        records += 1;
+        if records.is_multiple_of(records_per_block) {
+            writer.flush().unwrap();
+        }
+    }
+    writer.finish().unwrap();
+    let mut index_path = out.as_os_str().to_owned();
+    index_path.push(".tbi");
+    noodles::tabix::fs::write(index_path, &indexer.build()).unwrap();
+    plain_path
+}
+
+/// A bgzipped, tabix-indexed copy of the corpus annotates to the plain file's
+/// bytes under every form of `--decompression_threads`, in both modes, whether
+/// its records inflate to a few hundred bytes or past the width that asks for
+/// the inflate-bound pool; the probe arm asserts which side of the threshold
+/// each copy's shape falls on and the count `auto` resolves there.
+#[test]
+fn bgzipped_input_matches_the_plain_file_under_every_decompression_thread_count() {
+    let tmp = tempfile::tempdir().unwrap();
+    let corpus = &corpora()[0];
+    let cpus = vep_cli::config::host_parallelism();
+    let bound = vep_cli::config::INFLATE_BOUND_BYTES_PER_RECORD;
+    let host_capped = cpus.min(vep_cli::config::DECOMPRESSION_THREADS_AUTO_CAP);
+    let inflate_bound = cpus.min(vep_cli::config::INFLATE_BOUND_INFLATERS);
+    for (width, padding, auto_threads, inflated_bytes) in [
+        ("narrow", 0usize, host_capped, 0..bound),
+        ("wide", 8_192, inflate_bound, bound..u64::MAX),
+    ] {
+        let gz = tmp.path().join(format!("{width}.vcf.gz"));
+        let plain = bgzip_with_index(&corpus.dir.join("variants.vcf"), &gz, 40, padding);
+        // On a host with no more CPUs than the `0` rule's cap, and on an
+        // architecture whose inflate-bound pool is that cap, both widths resolve
+        // `auto` to one count, so the inflated width is asserted as well.
+        let probe = vep(
+            &gz,
+            &corpus.cache_dir(),
+            &corpus.assembly,
+            Path::new("STDOUT"),
+            &["--resolved_config", "--decompression_threads", "auto"],
+        );
+        assert!(probe.success, "{width} probe: {}", probe.stderr);
+        let resolved = String::from_utf8_lossy(&probe.output);
+        assert!(
+            resolved.contains(&format!("\ndecompression_threads\t{auto_threads}\n"))
+                && resolved.contains("\ninput_shape\tindexed\n"),
+            "{width}: {resolved}"
+        );
+        let inflated: u64 = resolved
+            .lines()
+            .find_map(|line| line.strip_prefix("inflated_bytes_per_record\t"))
+            .and_then(|value| value.parse().ok())
+            .unwrap_or_else(|| panic!("{width}: {resolved}"));
+        assert!(
+            inflated_bytes.contains(&inflated),
+            "{width}: {inflated} inflated bytes per record"
+        );
+        for (name, flags) in [FORMATS[0], FORMATS[2]] {
+            let reference_out = tmp.path().join(format!("gz_{width}_{name}_reference.out"));
+            let mut args: Vec<&str> = flags.to_vec();
+            args.extend(["--buffer_size", "100", "--fork", "4"]);
+            let reference = vep(
+                &plain,
+                &corpus.cache_dir(),
+                &corpus.assembly,
+                &reference_out,
+                &args,
+            );
+            assert!(
+                reference.success,
+                "{width}/{name} reference: {}",
+                reference.stderr
+            );
+            let reference = without_run_headers(&reference.output);
+            assert!(!reference.is_empty());
+            for (mode, mode_flags) in MODES {
+                for threads in ["auto", "1", "0"] {
+                    let out = tmp
+                        .path()
+                        .join(format!("gz_{width}_{name}_{mode}_{threads}.out"));
+                    let mut args: Vec<&str> = flags.to_vec();
+                    args.extend(["--buffer_size", "100", "--fork", "4"]);
+                    args.extend(mode_flags);
+                    args.extend(["--decompression_threads", threads]);
+                    let run = vep(&gz, &corpus.cache_dir(), &corpus.assembly, &out, &args);
+                    assert!(
+                        run.success,
+                        "{width}/{name} {mode} --decompression_threads {threads}: {}",
+                        run.stderr
+                    );
+                    assert_same(
+                        &reference,
+                        &without_run_headers(&run.output),
+                        &format!(
+                            "{width}/{name}: {mode} --decompression_threads {threads} on the bgzipped copy differs from the plain file"
+                        ),
+                    );
                 }
             }
         }

@@ -32,9 +32,12 @@ use crate::annotator::{
     HGVS_NEEDS_FASTA,
 };
 use crate::cache_resolve::ResolvedCache;
-use crate::config::{CliError, Config};
+use crate::config::{
+    reported_parallelism, resolve_decompression_threads, CliError, Config, DecompressionThreads,
+};
 use crate::filter_set::FilterSet;
 use crate::frequency_filter::{check_frequency_filter, FrequencyFilter};
+use crate::input_shape::InputShape;
 use crate::nearest::NearestType;
 use crate::output_compress::OutputCompression;
 use crate::pick::FilterConfig;
@@ -79,7 +82,7 @@ const GZIP_FEXTRA: u8 = 0x04;
 
 /// The fixed gzip header (magic, method, flags, mtime, xfl, os: ten bytes) and
 /// the two-byte length of the extra field that follows it when FEXTRA is set.
-const GZIP_HEADER_BYTES: usize = 12;
+pub(crate) const GZIP_HEADER_BYTES: usize = 12;
 
 /// The input as [`Runner::open_input`] leaves it: the source the reader stage
 /// consumes and whether the input is a BGZF file, whose `.tbi` index may name its
@@ -135,18 +138,31 @@ fn peek_bytes<R: BufRead + Send + 'static>(
     Ok((prefix.clone(), Box::new(Cursor::new(prefix).chain(reader))))
 }
 
-/// Whether a gzip extra field carries the BGZF subfield (RFC 1952 extra
-/// subfields: `SI1 SI2 LEN(le16) data`; BGZF's is `BC` with a two-byte length,
-/// SAM specification section 4.1).
-fn has_bgzf_subfield(mut extra: &[u8]) -> bool {
+/// The size in bytes of the BGZF block `header` opens, or `None` when `header`
+/// does not open one. A BGZF block is recognised by its header alone, never by
+/// the file name: the gzip magic with FEXTRA set and, in the extra field (RFC
+/// 1952 extra subfields: `SI1 SI2 LEN(le16) data`), the `BC` subfield of two
+/// bytes holding the block size less one (SAM specification section 4.1).
+/// `header` holds at least the fixed gzip header and the whole extra field; a
+/// shorter one is not a block header.
+pub(crate) fn bgzf_block_size(header: &[u8]) -> Option<usize> {
+    if header.len() < GZIP_HEADER_BYTES
+        || !header.starts_with(&GZIP_MAGIC)
+        || header[3] & GZIP_FEXTRA == 0
+    {
+        return None;
+    }
+    let extra_len = u16::from_le_bytes([header[10], header[11]]) as usize;
+    let mut extra = header.get(GZIP_HEADER_BYTES..GZIP_HEADER_BYTES + extra_len)?;
     while extra.len() >= 4 {
         let len = u16::from_le_bytes([extra[2], extra[3]]) as usize;
+        let data = extra.get(4..4 + len)?;
         if extra[0] == b'B' && extra[1] == b'C' && len == 2 {
-            return true;
+            return Some(u16::from_le_bytes([data[0], data[1]]) as usize + 1);
         }
-        extra = extra.get(4 + len..).unwrap_or(&[]);
+        extra = &extra[4 + len..];
     }
-    false
+    None
 }
 
 /// The multithreaded BGZF reader with its end of input checked. `MultithreadedReader`
@@ -257,7 +273,7 @@ fn decompressed<R: BufRead + Send + 'static>(
         let extra_len = u16::from_le_bytes([header[10], header[11]]) as usize;
         let (header, replayed) = peek_bytes(reader, GZIP_HEADER_BYTES + extra_len)?;
         reader = replayed;
-        bgzf = has_bgzf_subfield(header.get(GZIP_HEADER_BYTES..).unwrap_or(&[]));
+        bgzf = bgzf_block_size(&header).is_some();
     }
     if !bgzf {
         let gunzip = MemberwiseGunzip {
@@ -276,6 +292,69 @@ fn decompressed<R: BufRead + Send + 'static>(
         _ => Box::new(bgzf::io::Reader::new(reader)),
     };
     Ok((block_reader, true))
+}
+
+/// The shape of the run's input: `--input_data` and standard input have none,
+/// so they read as `Unknown` without opening a file.
+fn input_shape(config: &Config) -> InputShape {
+    if config.input_data.is_some() {
+        return InputShape::Unknown;
+    }
+    InputShape::read(&config.input_file)
+}
+
+/// Writes the resolved runtime knobs and the input's shape as `<name>\t<value>`
+/// lines: the thread counts resolved, the pipeline and writer knobs as the
+/// configuration holds them, then the input shape with its two figures (`-`
+/// when the shape is unknown) and the host's parallelism (`-` when the host
+/// reports none). Reads the input's header blocks and index alone, never the
+/// cache, so `--resolved_config` answers before the cache is resolved; a named
+/// input file that is not there is refused as the run refuses it, before any
+/// line prints. `pipeline_mode` prints as asked: a run with plugins or a
+/// known-variant source open is batched whatever it says
+/// (`pipeline::Coordinator::streaming`).
+pub fn write_resolved_config(config: &Config, out: &mut dyn Write) -> anyhow::Result<()> {
+    check_input_file_exists(config)?;
+    let shape = input_shape(config);
+    let (inflated_bytes_per_record, records_estimate) = match shape {
+        InputShape::Indexed {
+            inflated_bytes_per_record,
+            records_estimate,
+            ..
+        } => (
+            inflated_bytes_per_record.to_string(),
+            records_estimate.to_string(),
+        ),
+        InputShape::Unknown => ("-".to_string(), "-".to_string()),
+    };
+    let lines = [
+        ("fork", config.fork.to_string()),
+        ("buffer_size", config.buffer_size.to_string()),
+        (
+            "decompression_threads",
+            resolve_decompression_threads(config.decompression_threads, &shape).to_string(),
+        ),
+        ("pipeline_mode", config.pipeline_mode.name().to_string()),
+        ("pipeline_depth", config.pipeline_depth.to_string()),
+        (
+            "render_task_records",
+            config.render_task_records.unwrap_or(0).to_string(),
+        ),
+        ("writer_strategy", config.writer_strategy.name().to_string()),
+        ("output_buffer_size", config.output_buffer_size.to_string()),
+        ("input_shape", shape.name().to_string()),
+        ("inflated_bytes_per_record", inflated_bytes_per_record),
+        ("records_estimate", records_estimate),
+        (
+            "available_parallelism",
+            reported_parallelism().map_or("-".to_string(), |n| n.to_string()),
+        ),
+    ];
+    for (name, value) in lines {
+        writeln!(out, "{name}\t{value}")?;
+    }
+    out.flush()?;
+    Ok(())
 }
 
 /// Atomic counters for pipeline statistics.
@@ -1302,6 +1381,24 @@ impl Runner {
         )
     }
 
+    /// The BGZF decompression worker count for the input, which the block reader
+    /// takes when the input turns out to be BGZF. The input's shape is read only
+    /// under `auto`, the one value whose count depends on it, and the count it
+    /// resolves is logged at the debug level with the shape it read.
+    fn decompression_worker_count(&self) -> usize {
+        let value = self.config.decompression_threads;
+        if value != DecompressionThreads::Auto {
+            return resolve_decompression_threads(value, &InputShape::Unknown);
+        }
+        let shape = input_shape(&self.config);
+        let workers = resolve_decompression_threads(value, &shape);
+        debug!(
+            "--decompression_threads auto resolved {workers} workers from an input of {} shape",
+            shape.name()
+        );
+        workers
+    }
+
     /// Opens the input as Ensembl VEP's parser does (Parser.pm:122-160, 227-249):
     /// `--input_data` as an in-memory file (Runner.pm:817-821), `STDIN` as standard
     /// input, else the named file, which must exist; a gzip stream is decompressed
@@ -1341,8 +1438,8 @@ impl Runner {
                     ));
                 }
                 let stdin = BufReader::with_capacity(INPUT_BUFFER_BYTES, io::stdin());
-                let (reader, _) =
-                    decompressed(stdin, config.decompression_threads).with_context(read_failed)?;
+                let (reader, _) = decompressed(stdin, self.decompression_worker_count())
+                    .with_context(read_failed)?;
                 (reader, false)
             }
             None => {
@@ -1350,7 +1447,7 @@ impl Runner {
                     format!("Failed to open input file '{}'", config.input_file)
                 })?;
                 let file = BufReader::with_capacity(INPUT_BUFFER_BYTES, file);
-                decompressed(file, config.decompression_threads).with_context(read_failed)?
+                decompressed(file, self.decompression_worker_count()).with_context(read_failed)?
             }
         };
 
@@ -2573,6 +2670,37 @@ mod tests {
         assert_eq!(parquet_row_group_rows(5_000), 6_144);
         assert_eq!(parquet_row_group_rows(1), 2_048);
         assert_eq!(parquet_row_group_rows(0), 2_048);
+    }
+
+    /// A BGZF block header is the gzip magic with FEXTRA set and a `BC` subfield
+    /// holding the block size less one; a plain gzip header, text, a header cut
+    /// short and an extra field of another subfield are not.
+    #[test]
+    fn bgzf_block_header_is_the_gzip_magic_with_a_bc_subfield() {
+        let mut block = Vec::new();
+        bgzf::io::Writer::new(&mut block)
+            .write_all(b"21\t100\t.\tA\tG\t.\tPASS\t.\n")
+            .unwrap();
+        // The writer closes with the 28-byte empty end-of-file block, a BGZF
+        // block of its own.
+        let data_block = block.len() - 28;
+        assert_eq!(bgzf_block_size(&block), Some(data_block));
+        assert_eq!(bgzf_block_size(&block[data_block..]), Some(28));
+
+        let mut gzip = Vec::new();
+        flate2::write::GzEncoder::new(&mut gzip, flate2::Compression::default())
+            .write_all(b"21\t100\t.\tA\tG\t.\tPASS\t.\n")
+            .unwrap();
+        assert_eq!(bgzf_block_size(&gzip), None);
+        assert_eq!(bgzf_block_size(b"##fileformat=VCFv4.2\n"), None);
+        assert_eq!(bgzf_block_size(&block[..11]), None);
+        // The extra field cut short.
+        assert_eq!(bgzf_block_size(&block[..14]), None);
+        // FEXTRA set, an extra field of another subfield.
+        let other_subfield = [
+            0x1f, 0x8b, 8, 4, 0, 0, 0, 0, 0, 0xff, 6, 0, b'X', b'Y', 2, 0, 1, 2,
+        ];
+        assert_eq!(bgzf_block_size(&other_subfield), None);
     }
 
     /// A BGZF stream cut inside a block delivers the blocks before the cut and

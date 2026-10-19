@@ -13,7 +13,8 @@
   "gzip-bgzip-compressed-input",
   "stdin-input",
   "crlf-blank-lines-whitespace",
-  "byte_transparent_input"
+  "byte_transparent_input",
+  "resolved_config"
  ],
  "suites": {
   "GRCh38-release116": {
@@ -636,6 +637,31 @@
    "expected_dir": "expected",
    "covers": [
     "byte_transparent_input"
+   ]
+  },
+  {
+   "name": "decompression-auto",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--decompression_threads",
+    "auto"
+   ],
+   "input": "variants.vcf.gz",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "decompression_threads"
    ]
   }
  ]
