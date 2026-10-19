@@ -10,6 +10,7 @@
 
 use std::ffi::OsString;
 use std::fmt;
+use std::str::FromStr;
 
 use clap::FromArgMatches;
 
@@ -543,6 +544,20 @@ pub struct Config {
     /// Transcript-overlap index implementation (A/B benchmarking flag).
     /// Default [`TranscriptIndexImpl::Bin`].
     pub transcript_index_impl: TranscriptIndexImpl,
+    /// How the batches move through the pipeline (`--pipeline_mode`).
+    pub pipeline_mode: PipelineMode,
+    /// Batches a pipeline stage may hold ahead of the next one
+    /// (`--pipeline_depth`, resolved).
+    pub pipeline_depth: usize,
+    /// Input records per pool task; `None` is the built-in sizing
+    /// (`--render_task_records 0`).
+    pub render_task_records: Option<usize>,
+    /// How rendered output reaches the file or standard output
+    /// (`--writer_strategy`).
+    pub writer_strategy: WriterStrategy,
+    /// The `buffered` writer strategy's buffer, in bytes (`--output_buffer_size`,
+    /// resolved).
+    pub output_buffer_size: usize,
 
     /// `--everything` was given: the HGVS flags it switched on are dropped, not
     /// refused, when no FASTA is found (Runner.pm:745-754).
@@ -933,6 +948,11 @@ impl Config {
                 .transcript_index_impl
                 .parse::<TranscriptIndexImpl>()
                 .unwrap_or_default(),
+            pipeline_mode: args.pipeline_mode.parse().unwrap_or_default(),
+            pipeline_depth: resolve_pipeline_depth(args.pipeline_depth),
+            render_task_records: resolve_render_task_records(args.render_task_records),
+            writer_strategy: args.writer_strategy.parse().unwrap_or_default(),
+            output_buffer_size: resolve_output_buffer_size(args.output_buffer_size),
             everything: on("everything"),
             symbol: on("symbol") || vcf_output,
             biotype: on("biotype") || vcf_output,
@@ -1072,6 +1092,109 @@ fn resolve_decompression_threads(raw: usize) -> usize {
     }
 }
 
+/// How the batches move through the pipeline (`--pipeline_mode`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PipelineMode {
+    /// Each batch is parsed, annotated and rendered on the worker pool as a
+    /// whole before the next one starts.
+    Batched,
+    /// Each batch is handed to the pool as independent tasks that parse,
+    /// annotate and render their own records; the next batch follows without
+    /// waiting for them and the writer restores the input order.
+    #[default]
+    Streaming,
+}
+
+impl PipelineMode {
+    /// The value as the flag spells it.
+    pub fn name(self) -> &'static str {
+        match self {
+            PipelineMode::Batched => "batched",
+            PipelineMode::Streaming => "streaming",
+        }
+    }
+}
+
+impl FromStr for PipelineMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "batched" => Ok(PipelineMode::Batched),
+            "streaming" => Ok(PipelineMode::Streaming),
+            other => Err(format!("unknown pipeline mode '{other}'")),
+        }
+    }
+}
+
+/// How rendered output reaches the file or standard output (`--writer_strategy`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WriterStrategy {
+    /// Through a buffer of [`Config::output_buffer_size`] bytes.
+    #[default]
+    Buffered,
+    /// Each rendered chunk with one write call.
+    Direct,
+    /// The chunks that are ready together with one vectored write call,
+    /// repeated until every byte is written.
+    Vectored,
+}
+
+impl WriterStrategy {
+    /// The value as the flag spells it.
+    pub fn name(self) -> &'static str {
+        match self {
+            WriterStrategy::Buffered => "buffered",
+            WriterStrategy::Direct => "direct",
+            WriterStrategy::Vectored => "vectored",
+        }
+    }
+}
+
+impl FromStr for WriterStrategy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "buffered" => Ok(WriterStrategy::Buffered),
+            "direct" => Ok(WriterStrategy::Direct),
+            "vectored" => Ok(WriterStrategy::Vectored),
+            other => Err(format!("unknown writer strategy '{other}'")),
+        }
+    }
+}
+
+/// Resolve the `--pipeline_depth` value: `0` is `crate::pipeline::PIPELINE_DEPTH`.
+/// The flag's parser bounds the value, so it fits a `usize` on every target.
+pub fn resolve_pipeline_depth(raw: u64) -> usize {
+    if raw == 0 {
+        crate::pipeline::PIPELINE_DEPTH
+    } else {
+        raw as usize
+    }
+}
+
+/// Resolve the `--render_task_records` value: `0` is `None`, the built-in sizing
+/// (per batch from the worker count on the fused path, a fixed chunk on the
+/// plugin path).
+pub fn resolve_render_task_records(raw: u64) -> Option<usize> {
+    if raw == 0 {
+        None
+    } else {
+        Some(raw as usize)
+    }
+}
+
+/// Resolve the `--output_buffer_size` value: `0` is
+/// `crate::runner::OUTPUT_BUFFER_BYTES`.
+pub fn resolve_output_buffer_size(raw: u64) -> usize {
+    if raw == 0 {
+        crate::runner::OUTPUT_BUFFER_BYTES
+    } else {
+        raw as usize
+    }
+}
+
 /// The `--distance` value as (upstream, downstream) bp: one integer for both, or
 /// the pair `up,down`. Ensembl VEP reads the pair with `$d ||= $u` (`BaseRunner.pm`
 /// 506), which fires on the false string `0` alone, so the downstream part `0` is
@@ -1142,6 +1265,125 @@ mod tests {
         );
         assert_eq!(resolve_fork(1), 1);
         assert_eq!(resolve_fork(64), 64);
+    }
+
+    /// `0` on each numeric runtime knob is the built-in value; any other value
+    /// passes through.
+    #[test]
+    fn zero_resolves_to_the_built_in_runtime_values() {
+        assert_eq!(resolve_pipeline_depth(0), crate::pipeline::PIPELINE_DEPTH);
+        assert_eq!(resolve_pipeline_depth(1), 1);
+        assert_eq!(resolve_pipeline_depth(8), 8);
+        assert_eq!(resolve_render_task_records(0), None);
+        assert_eq!(resolve_render_task_records(1), Some(1));
+        assert_eq!(resolve_render_task_records(64), Some(64));
+        assert_eq!(
+            resolve_output_buffer_size(0),
+            crate::runner::OUTPUT_BUFFER_BYTES
+        );
+        assert_eq!(resolve_output_buffer_size(1), 1);
+        assert_eq!(resolve_output_buffer_size(4096), 4096);
+    }
+
+    /// Every value of each runtime knob reaches its resolved `Config` field, an
+    /// absent flag resolves as `0` does and the modes and strategies as their
+    /// defaults (`streaming`, `buffered`), and a value outside the enumeration or
+    /// the bounds is clap's usage error.
+    #[test]
+    fn runtime_knobs_reach_the_config() {
+        let plain = config(&["vep"]);
+        assert_eq!(plain.pipeline_mode, PipelineMode::Streaming);
+        assert_eq!(plain.pipeline_mode, PipelineMode::default());
+        assert_eq!(plain.pipeline_depth, crate::pipeline::PIPELINE_DEPTH);
+        assert_eq!(plain.render_task_records, None);
+        assert_eq!(plain.writer_strategy, WriterStrategy::Buffered);
+        assert_eq!(plain.writer_strategy, WriterStrategy::default());
+        assert_eq!(plain.output_buffer_size, crate::runner::OUTPUT_BUFFER_BYTES);
+
+        for (value, mode) in [
+            ("batched", PipelineMode::Batched),
+            ("streaming", PipelineMode::Streaming),
+        ] {
+            let c = config(&["vep", "--pipeline_mode", value]);
+            assert_eq!(c.pipeline_mode, mode, "{value}");
+            assert_eq!(mode.name(), value);
+            assert_eq!(value.parse::<PipelineMode>().unwrap(), mode);
+        }
+        for (value, strategy) in [
+            ("buffered", WriterStrategy::Buffered),
+            ("direct", WriterStrategy::Direct),
+            ("vectored", WriterStrategy::Vectored),
+        ] {
+            let c = config(&["vep", "--writer_strategy", value]);
+            assert_eq!(c.writer_strategy, strategy, "{value}");
+            assert_eq!(strategy.name(), value);
+            assert_eq!(value.parse::<WriterStrategy>().unwrap(), strategy);
+        }
+        assert!("Batched".parse::<PipelineMode>().is_err());
+        assert!("buffer".parse::<WriterStrategy>().is_err());
+
+        let zeros = config(&[
+            "vep",
+            "--pipeline_depth",
+            "0",
+            "--render_task_records",
+            "0",
+            "--output_buffer_size",
+            "0",
+        ]);
+        assert_eq!(zeros.pipeline_depth, crate::pipeline::PIPELINE_DEPTH);
+        assert_eq!(zeros.render_task_records, None);
+        assert_eq!(zeros.output_buffer_size, crate::runner::OUTPUT_BUFFER_BYTES);
+        let set = config(&[
+            "vep",
+            "--pipeline_depth",
+            "8",
+            "--render_task_records",
+            "7",
+            "--output_buffer_size",
+            "4096",
+        ]);
+        assert_eq!(set.pipeline_depth, 8);
+        assert_eq!(set.render_task_records, Some(7));
+        assert_eq!(set.output_buffer_size, 4096);
+        let bounds = config(&[
+            "vep",
+            "--pipeline_depth",
+            "1024",
+            "--render_task_records",
+            "1000000",
+            "--output_buffer_size",
+            "1073741824",
+        ]);
+        assert_eq!(bounds.pipeline_depth, 1024);
+        assert_eq!(bounds.render_task_records, Some(1_000_000));
+        assert_eq!(bounds.output_buffer_size, 1_073_741_824);
+
+        for argv in [
+            &["vep", "--pipeline_mode", "fused"][..],
+            &["vep", "--writer_strategy", "mmap"][..],
+            &["vep", "--pipeline_depth", "-1"][..],
+            &["vep", "--pipeline_depth", "1025"][..],
+            &["vep", "--pipeline_depth", "18446744073709551615"][..],
+            &["vep", "--render_task_records", "many"][..],
+            &["vep", "--render_task_records", "1000001"][..],
+            &["vep", "--output_buffer_size", "4k"][..],
+            &["vep", "--output_buffer_size", "1073741825"][..],
+            &["vep", "--output_buffer_size", "18446744073709551615"][..],
+        ] {
+            match Config::from_argv(argv).unwrap_err() {
+                ParseFailure::Usage(e) => assert!(
+                    matches!(
+                        e.kind(),
+                        clap::error::ErrorKind::InvalidValue
+                            | clap::error::ErrorKind::ValueValidation
+                            | clap::error::ErrorKind::UnknownArgument
+                    ),
+                    "{argv:?}: {e}"
+                ),
+                ParseFailure::Refused(e) => panic!("{argv:?} refused instead: {e}"),
+            }
+        }
     }
 
     /// The auto decompression worker count stays within its cap; a pinned count

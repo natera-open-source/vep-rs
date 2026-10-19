@@ -35,7 +35,7 @@ use crate::cache_resolve::ResolvedCache;
 use crate::config::{CliError, Config};
 use crate::filter_set::FilterSet;
 use crate::nearest::NearestType;
-use crate::output_compress::{CompressedOutput, OutputCompression};
+use crate::output_compress::OutputCompression;
 use crate::pick::FilterConfig;
 use crate::pipeline;
 use crate::row_filter::RowFilters;
@@ -64,7 +64,7 @@ const INPUT_BUFFER_BYTES: usize = 1 << 20;
 
 /// Write buffer over the output file: annotated rows come out in batches of
 /// several megabytes, so the default 8 KiB would flush hundreds of times per batch.
-const OUTPUT_BUFFER_BYTES: usize = 4 << 20;
+pub(crate) const OUTPUT_BUFFER_BYTES: usize = 4 << 20;
 
 /// The first bytes of a BCF2 stream: the magic `BCF` and the major version.
 const BCF_MAGIC: &[u8] = b"BCF\x02";
@@ -920,36 +920,45 @@ impl Runner {
                 None
             };
 
-        let mut writer: Box<dyn Write + Send> = if self.config.output_file == "STDOUT" {
-            Box::new(BufWriter::with_capacity(OUTPUT_BUFFER_BYTES, io::stdout()))
+        let output: Box<dyn Write + Send> = if self.config.output_file == "STDOUT" {
+            Box::new(io::stdout())
         } else if let Some(ref intermediate) = parquet_intermediate_path {
-            let f = File::create(intermediate).with_context(|| {
+            Box::new(File::create(intermediate).with_context(|| {
                 format!(
                     "Failed to create Parquet intermediate TSV '{}'",
                     intermediate
                 )
-            })?;
-            Box::new(BufWriter::with_capacity(OUTPUT_BUFFER_BYTES, f))
+            })?)
         } else {
-            let f = File::create(&self.config.output_file).with_context(|| {
+            Box::new(File::create(&self.config.output_file).with_context(|| {
                 format!("Failed to create output file '{}'", self.config.output_file)
-            })?;
-            Box::new(BufWriter::with_capacity(OUTPUT_BUFFER_BYTES, f))
+            })?)
         };
         // The option rules refuse the flag with Parquet, so a compressed writer is
         // never the DuckDB intermediate.
-        let mut compressed_output: Option<CompressedOutput> = None;
-        if let Some(value) = self.config.compress_output.as_deref() {
-            let compression = OutputCompression::parse(value).ok_or_else(|| {
-                CliError::new(
-                    "output",
-                    format!("\"{value}\" is not a valid value for --compress_output"),
-                )
-            })?;
-            let (compressed, handle) = compression.open(writer);
-            writer = compressed;
-            compressed_output = Some(handle);
-        }
+        let (output, compressed_output) = match self.config.compress_output.as_deref() {
+            Some(value) => {
+                let compression = OutputCompression::parse(value).ok_or_else(|| {
+                    CliError::new(
+                        "output",
+                        format!("\"{value}\" is not a valid value for --compress_output"),
+                    )
+                })?;
+                // The encoder emits each block as it closes it, so the file sees
+                // the plain output's write sizes through a buffer of its own
+                // beneath the encoder; the writer strategy's buffer sits above it.
+                let buffered: Box<dyn Write + Send> =
+                    Box::new(BufWriter::with_capacity(OUTPUT_BUFFER_BYTES, output));
+                let (compressed, handle) = compression.open(buffered);
+                (compressed, Some(handle))
+            }
+            None => (output, None),
+        };
+        let mut writer = pipeline::OutputSink::new(
+            self.config.writer_strategy,
+            self.config.output_buffer_size,
+            output,
+        );
 
         let filter_config = FilterConfig {
             row_filters: RowFilters {
@@ -1037,7 +1046,8 @@ impl Runner {
         // VEP-default-tab flag.
         if output_format == "parquet" {
             if let Some(ref mut fmt) = parquet_formatter {
-                fmt.write_header(&mut writer)?;
+                fmt.write_header(&mut writer)
+                    .context("Failed to write output")?;
             }
         } else if !self.config.no_headers {
             match output_format {
@@ -1050,11 +1060,13 @@ impl Runner {
                 }
                 "tab" => {
                     if let Some(ref mut fmt) = tab_formatter {
-                        fmt.write_header(&mut writer)?;
+                        fmt.write_header(&mut writer)
+                            .context("Failed to write output")?;
                     }
                 }
                 _ => {
-                    self.write_header(&mut writer, &extra_plan.options, &plugin_headers)?;
+                    self.write_header(&mut writer, &extra_plan.options, &plugin_headers)
+                        .context("Failed to write output")?;
                 }
             }
         }
@@ -1095,7 +1107,7 @@ impl Runner {
         {
             if let Some(ref fmt) = vcf_formatter {
                 for h in fmt.header_lines(&[]) {
-                    writeln!(writer, "{}", h)?;
+                    writeln!(writer, "{}", h).context("Failed to write output")?;
                 }
             }
         }
@@ -1142,8 +1154,10 @@ impl Runner {
             capture_raw_input,
             dont_skip: self.config.dont_skip,
             max_sv_size: self.config.max_sv_size,
-            batch_size,
             progress: !self.config.quiet,
+            mode: self.config.pipeline_mode,
+            depth: self.config.pipeline_depth,
+            task_records: self.config.render_task_records,
         };
 
         // The writer thread flushes and closes the output before this returns.
@@ -1694,6 +1708,12 @@ impl AnnotationResources {
     /// Whether any plugin runs on a batch; plugins see a whole batch at once.
     pub(crate) fn plugins_active(&self) -> bool {
         !self.builtin_plugins.is_empty() || self.dylib_plugins.plugin_count() > 0
+    }
+
+    /// Whether a known-variant source is open: the cache's variation files or
+    /// the `--check_svs` file; each prefetch holds one batch's regions at a time.
+    pub(crate) fn known_variant_source_active(&self) -> bool {
+        self.variation_source.is_some() || self.sv_source.is_some()
     }
 }
 
@@ -2320,6 +2340,37 @@ pub(crate) fn default_rows_for_test(
     let mut out = Vec::new();
     crate::render::render_default_record(&mut out, &alleles, &plan, &mut Vec::new()).unwrap();
     String::from_utf8(out).unwrap()
+}
+
+/// Resources over `transcripts` alone, for the runner and pipeline tests.
+/// Test-only, outside `mod tests` so the pipeline tests can reach it.
+#[cfg(test)]
+pub(crate) fn resources_over(transcripts: Arc<LazyTranscriptIndexes>) -> AnnotationResources {
+    AnnotationResources {
+        transcripts,
+        variation_source: None,
+        sv_source: None,
+        colocation: ColocationRules::default(),
+        effects_config: Arc::new(vep_effects::EffectsConfig {
+            upstream_distance: 5_000,
+            downstream_distance: 5_000,
+            ..Default::default()
+        }),
+        builtin_plugins: Arc::new(BuiltinRegistry::new()),
+        dylib_plugins: Arc::new(PluginRegistry::new()),
+        prediction_config: PredictionConfig::default(),
+        transcript_filter: None,
+        synonyms: Arc::default(),
+        nearest: None,
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn zero_stats() -> PipelineStats {
+    PipelineStats {
+        variants_processed: AtomicU64::new(0),
+        consequences_calculated: AtomicU64::new(0),
+    }
 }
 
 /// Two-exon test transcript on `chr` at `start` (1 kb span), shared by the runner
@@ -3397,26 +3448,6 @@ mod tests {
         }
     }
 
-    fn resources_over(transcripts: Arc<LazyTranscriptIndexes>) -> AnnotationResources {
-        AnnotationResources {
-            transcripts,
-            variation_source: None,
-            sv_source: None,
-            colocation: ColocationRules::default(),
-            effects_config: Arc::new(vep_effects::EffectsConfig {
-                upstream_distance: 5_000,
-                downstream_distance: 5_000,
-                ..Default::default()
-            }),
-            builtin_plugins: Arc::new(BuiltinRegistry::new()),
-            dylib_plugins: Arc::new(PluginRegistry::new()),
-            prediction_config: PredictionConfig::default(),
-            transcript_filter: None,
-            synonyms: Arc::default(),
-            nearest: None,
-        }
-    }
-
     /// NEAREST is set on every record of the buffer (AnnotationType/Transcript.pm:170-174),
     /// a record whose only ALT is `*` included: it is annotated against nothing, yet
     /// Ensembl VEP writes its `nearest` beside the other record keys.
@@ -3446,13 +3477,6 @@ mod tests {
         let mut plain = parse_vcf_line("21\t20000\trs1\tA\tG\t.\t.\t.", true).expect("parse");
         annotate_one(&mut plain[0], &resources, &failure);
         assert_eq!(plain[0].nearest, None);
-    }
-
-    fn zero_stats() -> PipelineStats {
-        PipelineStats {
-            variants_processed: AtomicU64::new(0),
-            consequences_calculated: AtomicU64::new(0),
-        }
     }
 
     /// A malformed shard must abort `annotate_batch` with an error, even under

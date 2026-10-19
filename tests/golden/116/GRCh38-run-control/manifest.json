@@ -118,6 +118,170 @@
     "stdin-when-input-file-absent",
     "format"
    ]
+  },
+  {
+   "name": "pipeline-batched",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--pipeline_mode",
+    "batched"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "pipeline_mode"
+   ]
+  },
+  {
+   "name": "pipeline-knobs",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--pipeline_mode",
+    "streaming",
+    "--pipeline_depth",
+    "2",
+    "--render_task_records",
+    "3"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "pipeline_mode",
+    "pipeline_depth",
+    "render_task_records"
+   ]
+  },
+  {
+   "name": "pipeline-knobs-batched",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--pipeline_mode",
+    "batched",
+    "--pipeline_depth",
+    "2",
+    "--render_task_records",
+    "3"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "pipeline_depth",
+    "render_task_records"
+   ]
+  },
+  {
+   "name": "writer-direct",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--writer_strategy",
+    "direct"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "writer_strategy"
+   ]
+  },
+  {
+   "name": "writer-vectored",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--writer_strategy",
+    "vectored"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "writer_strategy"
+   ]
+  },
+  {
+   "name": "writer-buffered-one-byte",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--writer_strategy",
+    "buffered",
+    "--output_buffer_size",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "writer_strategy",
+    "output_buffer_size"
+   ]
   }
  ],
  "suites": {

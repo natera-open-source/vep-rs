@@ -25,8 +25,9 @@ them. The run then proceeds as three stages joined by bounded channels. The read
 thread scans the input line by line: a `#` line is held for the VCF writer's header block, a
 data line is appended to the current `LineBatch` with its line number, and the first record of
 a new chromosome asks a helper thread to warm that chromosome's transcript index and the next
-one in the input's tabix contig order. The coordinator, the calling thread, parses the batch's
-lines on the pool: `parse_vcf_line_with_max_sv_size` routes the record through `vep-core`'s
+one in the input's tabix contig order. The coordinator, the calling thread, has the batch's
+lines parsed on the pool, by its streaming tasks or as one pass of the batched mode (both
+below): `parse_vcf_line_with_max_sv_size` routes the record through `vep-core`'s
 structural-variant rules and splits a sequence record into one `InputVariant` per alternate
 allele, alleles trimmed. Each variant then passes through `annotate_one`: `annotate_variant`
 visits every transcript overlapping the variant's span and calls
@@ -38,11 +39,16 @@ chromosome that overlaps nothing becomes `intergenic_variant`. Built-in
 plugins see the whole batch in one `run_batch` call and dynamic-library plugins run per
 consequence; `pick::apply_to_batch` applies the pick flags and summaries to each record's
 alleles together; `render_record` hands each record's alleles to the chosen `vep-io` formatter,
-or to `render_default_record` for VEP's default text format. Without plugins the coordinator
-fuses annotation, filtering, rendering and freeing into one pass over the pool per batch. The
-writer thread receives the rendered batches in sequence order and streams their bytes to the
-output; a Parquet run writes a TSV (tab-separated values) intermediate and converts it with a
-DuckDB subprocess once the pipeline has drained.
+or to `render_default_record` for VEP's default text format. Without plugins or a known-variant
+source the coordinator streams: it warms the chromosomes a batch names and hands the batch to the
+pool as independent tasks that each annotate, filter, render and free their own records (and
+parse them first, for a VCF input; the other formats are parsed on the reader thread),
+then takes the next batch without waiting for them; with plugins, or with the cache's variation
+files or the `--check_svs` file open, each batch crosses the pool whole, one pass after another
+(`--pipeline_mode batched` asks for that path on any run). The writer thread puts the rendered
+chunks back in input order and writes them to the output; a Parquet run writes a TSV
+(tab-separated values) intermediate and converts it with a DuckDB subprocess once the pipeline
+has drained.
 
 ## Modules
 
@@ -55,7 +61,7 @@ DuckDB subprocess once the pipeline has drained.
 | `src/option_rules.rs`       | Ensembl VEP's option rules as data (`Config.pm:327-645`): the lists, option sets, valid values, requirements, incompatibilities and deprecations, and the flag state they are applied to and checked on |
 | `src/cache_resolve.rs`      | `resolve`: the cache directory from `--json_cache`, else from `--dir_cache`, `--species`, `--refseq`/`--merged`, `--cache_version` and `--assembly` in Ensembl VEP's layout; requires `transcripts/` and `info.json` and an assembly that agrees with the cache, and picks up an indexed FASTA inside it unless `--fasta` or `--no_fasta` is given |
 | `src/runner.rs`             | `Runner::run`: opens input and output, loads FASTA, plugins, transcripts and variations, picks the output formatter, drives the pipeline and finalizes Parquet; owns `annotate_one`, `annotate_batch` and `annotate_variant` |
-| `src/pipeline.rs`           | The three-stage pipeline: reader thread, coordinator and writer thread over bounded channels, the resolution of each input chromosome name to the cache's through the synonym table, the chromosome prewarmer and the fused annotate-render pass |
+| `src/pipeline.rs`           | The three-stage pipeline: reader thread, coordinator (streaming by default, batched on request or when plugins or a known-variant source are in play) and writer thread over bounded channels, the resolution of each input chromosome name to the cache's through the synonym table, the chromosome prewarmer, the fused annotate-render pass and the output sink behind `--writer_strategy` |
 | `src/warnings.rs`           | The warning `Sink`: every `warn!` event and skipped-variant report, written once per text to the warnings file (`--warning_file`, default `<output_file>_warnings.txt`) and echoed on standard error unless `--quiet`; the `--skipped_variants_file` written when the run ends |
 | `src/render.rs`             | `render_record` and `render_default_record`: one input record's rows, through the chosen `vep-io` formatter or as VEP's default text format, appended to a render task's output bytes                                        |
 | `src/output_compress.rs`    | `OutputCompression`: `--compress_output` gzip or bgzip encoding of the output in process, in place of the `gzip -c` or `bgzip -c` pipe Ensembl VEP opens; `CompressedOutput::finish` writes the stream's trailer once every line is written |
@@ -137,8 +143,9 @@ cargo run -p vep-cli --bin vep -- --help   # the full flag list
 instead of mimalloc. Each integration suite under `tests/` covers one contract:
 `integration_test.rs` runs the built binary as a subprocess; `golden.rs` and `format_parity.rs`
 compare every output format on the golden corpora with the Ensembl VEP files committed beside
-them; `pipeline_parity.rs` checks that the output bytes do not change with the batch size or the
-thread count; `parity_matrix.rs` checks that every long flag has a row in
+them; `pipeline_parity.rs` checks that the output bytes do not change with the batch size, the
+thread count, the pipeline mode, depth and task size or the writer strategy; `parity_matrix.rs`
+checks that every long flag has a row in
 `tests/parity/matrix.tsv` at the repository root; `dylib_plugins.rs` exercises the
 dynamic-library plugin path. `cargo bench -p vep-cli --bench cache_load_bench` times cache
 loading and skips itself when `$VEP_JSON_CACHE_DIR` names no cache. The repository's standard

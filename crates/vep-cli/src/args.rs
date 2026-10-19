@@ -447,6 +447,71 @@ pub struct Args {
     )]
     pub transcript_index_impl: String,
 
+    /// How the batches move through the pipeline. `streaming` hands each batch to
+    /// the worker pool as independent tasks that annotate and render their own
+    /// records (and parse them, for a VCF input) and takes the next batch without
+    /// waiting for them; the writer puts the rendered output back in input order.
+    /// `batched` parses, annotates and renders each batch on the pool as a whole
+    /// before the next one starts.
+    /// A run with plugins, or one reading known variants from the cache's variation
+    /// files or from the --check_svs file, uses `batched` whatever this says: plugins
+    /// see a whole batch at once, and each of those sources prefetches one batch's
+    /// regions at a time
+    #[arg(
+        help_heading = "Runtime",
+        long = "pipeline_mode",
+        default_value = "streaming",
+        hide = true,
+        value_parser = ["batched", "streaming"]
+    )]
+    pub pipeline_mode: String,
+
+    /// Batches a pipeline stage may hold ahead of the next one, at most 1024; 0 is
+    /// the built-in depth
+    #[arg(
+        help_heading = "Runtime",
+        long = "pipeline_depth",
+        default_value_t = 0,
+        hide = true,
+        value_parser = clap::value_parser!(u64).range(0..=1024)
+    )]
+    pub pipeline_depth: u64,
+
+    /// Input records per pool task in both pipeline modes (per render task on the
+    /// plugin path), at most 1,000,000; 0 is the built-in sizing
+    #[arg(
+        help_heading = "Runtime",
+        long = "render_task_records",
+        default_value_t = 0,
+        hide = true,
+        value_parser = clap::value_parser!(u64).range(0..=1_000_000)
+    )]
+    pub render_task_records: u64,
+
+    /// How rendered output reaches the file or standard output. `buffered` collects
+    /// it in a buffer of --output_buffer_size bytes; `direct` writes each rendered
+    /// chunk with one call; `vectored` writes the chunks that are ready together with
+    /// one vectored call. Every strategy writes the same uncompressed bytes
+    #[arg(
+        help_heading = "Runtime",
+        long = "writer_strategy",
+        default_value = "buffered",
+        hide = true,
+        value_parser = ["buffered", "direct", "vectored"]
+    )]
+    pub writer_strategy: String,
+
+    /// Bytes of the `buffered` writer strategy's buffer, at most 1073741824 (1 GiB);
+    /// 0 is the built-in size. The other strategies ignore it
+    #[arg(
+        help_heading = "Runtime",
+        long = "output_buffer_size",
+        default_value_t = 0,
+        hide = true,
+        value_parser = clap::value_parser!(u64).range(0..=1_073_741_824)
+    )]
+    pub output_buffer_size: u64,
+
     /// Upstream and downstream distance in bp: one integer, or the pair "up,down"
     /// (a downstream part written 0 reads as the upstream value)
     #[arg(help_heading = "Runtime", long, default_value = "5000")]
