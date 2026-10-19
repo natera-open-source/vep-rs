@@ -7,7 +7,8 @@
 //! it, in every output format.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+
+mod common;
 
 fn corpus(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -24,7 +25,7 @@ fn hgvsg_without_fasta_exits_with_vep_message() {
     let dir = corpus("GRCh38-release116");
     let out = tempfile::tempdir().unwrap();
     let out_file = out.path().join("out.txt");
-    let output = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let output = common::isolated_vep_anywhere()
         .args(["--hgvsg", "--json_cache"])
         .arg(dir.join("json_cache"))
         .arg("-i")
@@ -144,7 +145,7 @@ fn annotate(dir: &Path, fasta: &Path, format: &str) -> Vec<String> {
     }
     std::fs::write(&input, text).unwrap();
     let output = dir.join(format!("out.{format}"));
-    let result = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let result = common::isolated_vep_anywhere()
         .args(["-i", input.to_str().unwrap()])
         .args(["-o", output.to_str().unwrap()])
         .args([

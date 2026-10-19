@@ -8,8 +8,10 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+mod common;
+
 fn vep() -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    let mut cmd = common::isolated_vep_anywhere();
     cmd.stdin(Stdio::null());
     cmd
 }

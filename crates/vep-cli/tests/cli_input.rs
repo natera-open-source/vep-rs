@@ -9,7 +9,9 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Output, Stdio};
+
+mod common;
 
 fn cache() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -79,7 +81,7 @@ fn args(out: &Path, extra: &[&str]) -> Vec<String> {
 }
 
 fn vep(input: &[&str], out: &Path, extra: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_vep"))
+    common::isolated_vep_anywhere()
         .args(input)
         .args(args(out, extra))
         .stdin(Stdio::null())
@@ -88,7 +90,7 @@ fn vep(input: &[&str], out: &Path, extra: &[&str]) -> Output {
 }
 
 fn vep_with_stdin(input: &[&str], stdin: &[u8], out: &Path, extra: &[&str]) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let mut child = common::isolated_vep_anywhere()
         .args(input)
         .args(args(out, extra))
         .stdin(Stdio::piped())
@@ -338,7 +340,7 @@ fn format_is_detected_from_the_first_data_line() {
     let out = output_path(dir.path());
     let mut verbose = args(&out, &["--verbose"]);
     verbose.retain(|a| a != "--quiet");
-    let output = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let output = common::isolated_vep_anywhere()
         .args(["-i", vcf.to_str().unwrap()])
         .args(&verbose)
         .stdin(Stdio::null())
@@ -440,7 +442,7 @@ fn stdin_without_format_is_fatal() {
         "ERROR: [input] Cannot detect format from STDIN - specify format with --format [format]",
     );
     assert!(!out.exists());
-    let output = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let output = common::isolated_vep_anywhere()
         .args(args(&out, &[]))
         .stdin(Stdio::null())
         .output()

@@ -67,7 +67,7 @@ Blosum62	Blosum62.pm	error	open
 bnd_intergenic_rows_116	Variation/StructuralVariationOverlap.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::breakend_record_with_both_sides_intergenic_writes_two_intergenic_rows;crates/vep-cli/src/runner.rs::breakend_record_whose_mate_is_genic_writes_no_intergenic_row;crates/vep-cli/src/runner.rs::single_breakend_record_with_no_transcript_writes_one_intergenic_row;crates/vep-cli/src/runner.rs::genic_breakend_record_with_intergenic_mate_names_its_own_allele_n_dot;crates/vep-cli/src/runner.rs::breakend_intergenic_verdict_is_per_record;crates/vep-cli/src/annotator.rs::annotator_applies_the_breakend_record_verdict;crates/vep-cli/src/vcf_parser.rs::bracket_breakend_without_mateid_names_its_own_allele_n_dot	tests/golden/116/GRCh38-release116	
 breakends	VCF.pm	implemented	open			
 buffer_size	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::buffer_size_changes_no_output	tests/golden/116/GRCh38-run-control	
-byte_transparent_input	-	implemented	open			
+byte_transparent_input	-	implemented	landed:implemented	crates/vep-cli/tests/input_io.rs::latin1_header_and_sample_name_pass_through;crates/vep-cli/tests/input_io.rs::latin1_data_line_is_annotated;crates/vep-cli/src/pipeline.rs::read_vcf_keeps_header_and_data_bytes_that_are_not_utf8;crates/vep-cli/src/pipeline.rs::trim_line_keeps_a_line_that_is_not_utf8	tests/golden/116/GRCh38-input-compressed	
 cache	Config.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::perl_layout_resolves_leaf;crates/vep-cli/tests/cli_run_control.rs::no_cache_is_fatal_before_first_variant	tests/golden/116/GRCh38-run-control	
 cache-chr-synonyms	CacheDir.pm	implemented	landed:implemented	crates/vep-core/src/synonyms.rs::cache_synonyms_loaded_from_json_cache;crates/vep-cli/src/cache_resolve.rs::synonyms_come_from_the_flag_else_the_cache_file;crates/vep-cache-builder/src/info.rs::chr_synonyms_match_the_ensembl_dumper	tests/golden/116/GRCh38-synonyms	
 cache-clin-sig-allele	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::parses_clin_sig_allele_entries_by_allele	tests/golden/116/GRCh38-colocated	
@@ -115,7 +115,7 @@ Conservation	Conservation.pm	error	open
 conservation-shortcuts	Config.pm	documented_subset	open			
 convert	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::convert_is_deprecated_error		
 convert-cache-pl	convert_cache.pl	accepted_noop	open			
-crlf-blank-lines-whitespace	Parser.pm	implemented	open			
+crlf-blank-lines-whitespace	Parser.pm	implemented	landed:implemented	crates/vep-cli/src/pipeline.rs::line_scanner_matches_bufread_lines;crates/vep-cli/src/pipeline.rs::trim_line_matches_str_trim_start;crates/vep-cli/src/pipeline.rs::read_vcf_numbers_trims_and_cuts_lines;crates/vep-cli/src/pipeline.rs::last_line_without_newline_keeps_its_cr;crates/vep-cli/src/pipeline.rs::blank_lines_counted;crates/vep-cli/tests/input_io.rs::crlf_input_annotates_as_lf_input;crates/vep-cli/tests/input_io.rs::blank_lines_are_skipped_and_warned	tests/golden/116/GRCh38-input-compressed	
 CSN	CSN.pm	error	open			
 custom	Config.pm	documented_subset	open			
 custom-argument-grammar	AnnotationSourceAdaptor.pm	documented_subset	open			
@@ -128,7 +128,7 @@ database-only-features	AnnotationSourceAdaptor.pm	error	landed:error	crates/vep-
 db_version	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::db_version_is_refused		
 dbNSFP	dbNSFP.pm	implemented	open			
 dbscSNV	dbscSNV.pm	implemented	open			
-dead-input-code	-	removed	open			
+dead-input-code	-	removed	landed:removed	crates/vep-io/src/lib.rs::no_second_vcf_parser		
 debug	Config.pm	accepted_noop	open			
 decompression_threads	-	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::decompression_threads_changes_no_output	tests/golden/116/GRCh38-run-control	
 default-format-header-lines	BaseTab.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/fields.rs::default_header_lists_plugin_key_descriptions	tests/golden/116/GRCh38-writers	
@@ -221,7 +221,7 @@ gtf	Config.pm	error	open
 gvcf-non-ref-alleles	VCF.pm	implemented	open			
 GWAS	GWAS.pm	implemented	open			
 GXA	GXA.pm	error	open			
-gzip-bgzip-compressed-input	Parser.pm	implemented	open			
+gzip-bgzip-compressed-input	Parser.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_input.rs::plain_gzip_input_is_read;crates/vep-cli/tests/cli_input.rs::bgzf_input_without_gz_suffix_is_read;crates/vep-cli/tests/cli_input.rs::gzip_on_stdin_is_read;crates/vep-cli/tests/cli_input.rs::truncated_bgzf_input_is_a_read_error;crates/vep-cli/tests/input_io.rs::decompression_threads_above_the_host_cpus_still_reads_the_input	tests/golden/116/GRCh38-input-compressed	
 gzip-bgzip-input	Parser.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_input.rs::plain_gzip_input_is_read;crates/vep-cli/tests/cli_input.rs::bgzf_input_without_gz_suffix_is_read;crates/vep-cli/tests/cli_input.rs::gzip_on_stdin_is_read;crates/vep-cli/tests/cli_input.rs::truncated_bgzf_input_is_a_read_error	tests/golden/116/GRCh38-run-control	
 haplo	haplo	documented_subset	open			
 help	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::empty_argv_prints_help_and_exits_0;crates/vep-cli/tests/cli_run_control.rs::help_and_version_win_over_a_flag_refused_before_parsing	tests/golden/116/GRCh38-run-control	
@@ -469,7 +469,7 @@ stats_file	BaseRunner.pm	implemented	open
 stats_html	Runner.pm	implemented	open			
 stats_text	BaseRunner.pm	implemented	open			
 status-messages	BaseVEP.pm	implemented	open			
-stdin-input	Parser.pm	implemented	open			
+stdin-input	Parser.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_input.rs::stdin_literal_is_case_insensitive;crates/vep-cli/tests/cli_input.rs::stdin_without_format_is_fatal;crates/vep-cli/tests/cli_input.rs::gzip_on_stdin_is_read	tests/golden/116/GRCh38-input-compressed	
 stdin-when-input-file-absent	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_input.rs::stdin_without_format_is_fatal;crates/vep-cli/tests/cli_input.rs::undetectable_input_is_refused	tests/golden/116/GRCh38-run-control	
 stdout-output	BaseRunner.pm	documented_subset	landed:documented_subset	crates/vep-cli/tests/cli_run_control.rs::stdout_any_case_writes_stdout;crates/vep-cli/tests/cli_run_control.rs::parquet_to_stdout_is_refused	tests/golden/116/GRCh38-run-control	
 stop_codon_predicates_116	Variation/Utils/VariationEffect.pm	implemented	landed:implemented	crates/vep-effects/src/concordance_tests.rs::release116_insertion_keeping_a_lone_stop_is_stop_retained_without_inframe_insertion;crates/vep-effects/src/concordance_tests.rs::release116_deleting_the_stop_codon_is_stop_lost_without_inframe_deletion;crates/vep-effects/src/coding.rs::test_stop_gained_yields_to_stop_lost;crates/vep-effects/src/concordance_tests.rs::release116_partial_codon_deletion_is_never_stop_lost;crates/vep-effects/src/concordance_tests.rs::release116_stop_lost_with_an_x_peptide_reads_the_edited_stop_codon_as_lost;crates/vep-effects/src/concordance_tests.rs::release116_stop_lost_with_an_x_peptide_reads_the_edited_stop_codon_as_kept;crates/vep-effects/src/concordance_tests.rs::release116_stop_retained_cil_forward_strand_drops_a_four_base_insertion;crates/vep-effects/src/concordance_tests.rs::release116_stop_retained_cil_reverse_strand_keeps_a_four_base_insertion;crates/vep-effects/src/concordance_tests.rs::release116_frameshift_starting_at_the_stop_codon_is_not_a_frameshift;crates/vep-effects/src/concordance_tests.rs::release116_ref_eq_alt_sequence_reads_the_first_residue_past_the_protein;crates/vep-effects/src/sv/deletion.rs::stop_lost_withheld_in_the_partial_terminal_codon_forward_strand;crates/vep-effects/src/sv/deletion.rs::stop_lost_withheld_in_the_partial_terminal_codon_reverse_strand;crates/vep-effects/src/sv/deletion.rs::stop_lost_withheld_in_the_partial_terminal_codon_of_a_spliced_transcript;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_clipped_terminal_codon_is_complete;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_on_a_complete_last_codon_of_an_open_ended_segment;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_deletion_enters_the_partial_codon_from_the_utr;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_deletion_starts_on_the_last_complete_codon_forward_strand;crates/vep-effects/src/sv/deletion.rs::stop_lost_kept_when_the_deletion_starts_on_the_last_complete_codon_reverse_strand;crates/vep-effects/src/sv/cnv.rs::cn0_keeps_stop_lost_on_the_complete_last_codon_of_an_open_ended_segment;crates/vep-effects/src/sv/cnv.rs::cn0_withholds_stop_lost_in_the_partial_terminal_codon;crates/vep-effects/src/sv/cnv.rs::cn0_keeps_stop_lost_on_a_cds_start_nf_transcript_with_a_complete_stop_codon	tests/golden/116/GRCh38-release116	

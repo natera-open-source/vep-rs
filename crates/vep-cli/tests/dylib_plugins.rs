@@ -7,7 +7,9 @@
 //! `--dir_plugins` lands its fields in the Extra column of every transcript row.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Output;
+
+mod common;
 
 /// The warning an unresolvable name writes, up to the plugins directory it names.
 const SKIPPED_WARNING: &str =
@@ -21,7 +23,7 @@ fn corpus_dir() -> PathBuf {
 /// warnings reach stderr.
 fn vep_on_corpus(out: &Path, extra: &[&str]) -> Output {
     let corpus = corpus_dir();
-    Command::new(env!("CARGO_BIN_EXE_vep"))
+    common::isolated_vep_anywhere()
         .arg("-i")
         .arg(corpus.join("variants.vcf"))
         .arg("-o")

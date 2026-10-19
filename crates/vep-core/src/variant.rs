@@ -135,9 +135,16 @@ impl VariantClass {
 pub struct InputVariant {
     /// Chromosome name, normalized for cache lookup (e.g., "21", "X", "MT").
     pub chr: String,
-    /// Original chromosome name from input VCF (e.g., "chr21", "chrX", "chrM").
-    /// Used in output to preserve the input naming convention, matching Perl VEP behavior.
+    /// The chromosome name the record prints (Location, `seq_region_name`): the
+    /// input's spelling (`chr21`, `chrX`, `chrM`), which Ensembl VEP keeps, or
+    /// `MT` for an input `M` that reaches the cache only through the rename of
+    /// Parser.pm:794-796.
     pub original_chr: String,
+    /// The input's spelling where `original_chr` carries the renamed `MT`:
+    /// Ensembl VEP names a record (Parser.pm:462) before it renames `M` to `MT`,
+    /// so the names built from the input keep `M`. `None` when the two agree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_chr: Option<Arc<str>>,
     /// 1-based start position.
     pub start: u64,
     /// 1-based end position (inclusive).
@@ -382,6 +389,7 @@ impl Default for InputVariant {
         Self {
             chr: String::new(),
             original_chr: String::new(),
+            input_chr: None,
             start: 0,
             end: 0,
             strand: Strand::Forward,
@@ -461,6 +469,7 @@ impl InputVariant {
         let normalized_chr = normalize_chromosome(&chr);
         Self {
             original_chr: chr,
+            input_chr: None,
             chr: normalized_chr,
             start,
             end,
@@ -552,9 +561,10 @@ impl InputVariant {
             && self.uploaded_allele_string == other.uploaded_allele_string
     }
 
-    /// Location string in VEP format ("chr:start" or "chr:start-end").
-    /// Uses the original chromosome name from the input VCF to preserve
-    /// the naming convention (e.g., "chr21:100-200" for chr-prefixed input).
+    /// Location string in VEP format ("chr:start" or "chr:start-end"), under
+    /// the chromosome name the record prints ([`Self::original_chr`]: the
+    /// input's spelling, "chr21:100-200" for chr-prefixed input, or "MT" for a
+    /// renamed bare "M").
     pub fn location(&self) -> String {
         let mut out = Vec::new();
         self.write_location(&mut out);
@@ -584,12 +594,20 @@ impl InputVariant {
         self.id.as_deref().filter(|id| id_names_record(id))
     }
 
+    /// The chromosome spelling the record's generated names are built from: the
+    /// input's, which Ensembl VEP reads before it renames `M` (Parser.pm:462).
+    fn name_chr(&self) -> &str {
+        self.input_chr.as_deref().unwrap_or(&self.original_chr)
+    }
+
     /// `Uploaded_variation` as VEP prints it (OutputFactory.pm
     /// `VariationFeature_to_output_hash`): the identifier `explicit_id` admits unless
-    /// it is the `chr_start_alleles` name VEP gives an ID-less record; else the name built
-    /// from the input line ([`Self::input_line_name`]); else, for an input format
-    /// VEP names from the variant, `chr_start_alleles` where start is the
-    /// anchor-trimmed start and the alleles are [`Self::uploaded_allele_string`].
+    /// it is the `chr_start_alleles` name VEP gives an ID-less record; else, for a
+    /// record renamed from `M` whose ID Perl reads as false, the name of
+    /// Parser.pm:462 ([`Self::variation_name`]); else the name built from the input
+    /// line ([`Self::input_line_name`]); else, for an input format VEP names from
+    /// the variant, `chr_start_alleles` where start is the anchor-trimmed start and
+    /// the alleles are [`Self::uploaded_allele_string`].
     pub fn uploaded_variation(&self) -> String {
         let mut out = Vec::new();
         self.write_uploaded_variation(&mut out);
@@ -603,6 +621,14 @@ impl InputVariant {
             out.extend_from_slice(id.as_bytes());
             return;
         }
+        // A record whose ID column Perl reads as false is named before the
+        // `M` rename (Parser.pm:462) and prints that name when it differs from
+        // the one built at output (OutputFactory.pm:887-900), as the rename
+        // makes it; a `.` ID falls through to the line's name there as here.
+        if self.input_chr.is_some() && !self.id.as_deref().is_some_and(perl_true) {
+            out.extend_from_slice(self.variation_name().as_bytes());
+            return;
+        }
         if let Some(name) = &self.input_line_name {
             out.extend_from_slice(name.as_bytes());
             return;
@@ -613,7 +639,7 @@ impl InputVariant {
             .as_deref()
             .or(self.original_allele_string.as_deref())
             .unwrap_or(&self.allele_string);
-        out.extend_from_slice(self.original_chr.as_bytes());
+        out.extend_from_slice(self.name_chr().as_bytes());
         out.push(b'_');
         push_decimal(out, start);
         out.push(b'_');
@@ -621,18 +647,22 @@ impl InputVariant {
     }
 
     /// Whether `id` is the `chr_start_alleles` name VEP gives a record whose ID
-    /// column is empty (Parser.pm `validate_vf`). The prefix test keeps an
-    /// identifier such as `rs123` from building the name on every row.
+    /// column is empty (Parser.pm `validate_vf`). The name is built as
+    /// `VariationFeature_to_output_hash` builds the one it compares the ID with
+    /// (OutputFactory.pm:887-891), from the record's chromosome as it stands at
+    /// output, `MT` for a renamed `M`, so [`Self::original_chr`] rather than
+    /// [`Self::name_chr`]. The prefix test keeps an identifier such as `rs123`
+    /// from building the name on every row.
     fn is_generated_name(&self, id: &str) -> bool {
-        if !id.starts_with(self.original_chr.as_str()) {
+        let chr = self.original_chr.as_str();
+        if !id.starts_with(chr) {
             return false;
         }
-        id == format!(
-            "{}_{}_{}",
-            self.original_chr,
-            self.start,
-            self.record_allele_string()
-        )
+        // The start as the output reads it: `rejoin_variants_in_InputBuffer`
+        // (OutputFactory.pm:294) restores a minimised record's own start before the
+        // output hash is built.
+        let start = self.original_start.unwrap_or(self.start);
+        id == format!("{}_{}_{}", chr, start, self.record_allele_string())
     }
 
     /// The allele string of the whole input record as VEP holds it: the symbolic
@@ -661,7 +691,7 @@ impl InputVariant {
         let start = self.original_start.unwrap_or(self.start);
         format!(
             "{}_{}_{}",
-            self.original_chr,
+            self.name_chr(),
             start,
             self.record_allele_string()
         )
@@ -1197,6 +1227,63 @@ pub fn colocated_in_output_order(variants: &[ColocatedVariant]) -> Vec<&Colocate
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A `chr` prefix is removed for the cache lookup and kept for the output, as
+    /// `_have_chr` accepts the name through its `chr` rule without rewriting it
+    /// (Parser.pm:788-792).
+    #[test]
+    fn chr_prefix_stripped_for_lookup() {
+        let v = InputVariant::new("chr21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(v.chr, "21");
+        assert_eq!(v.original_chr, "chr21");
+        assert_eq!(v.location(), "chr21:100");
+        assert_eq!(v.variation_name(), "chr21_100_A/G");
+    }
+
+    /// A record renamed from `M` to `MT` (Parser.pm:794-796, applied by the
+    /// pipeline once the cache's names are known) prints `MT` in its Location and
+    /// keeps `M` in the names Ensembl VEP built before the rename (Parser.pm:462):
+    /// the generated `Uploaded_variation` and the JSON `id`.
+    #[test]
+    fn bare_m_prints_mt() {
+        let mut v = InputVariant::new("M".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(v.chr, "MT");
+        v.input_chr = Some("M".into());
+        v.original_chr = "MT".to_string();
+        assert_eq!(v.location(), "MT:100");
+        assert_eq!(v.uploaded_variation(), "M_100_A/G");
+        assert_eq!(v.variation_name(), "M_100_A/G");
+        // The name an ID is compared with is built at output from the renamed
+        // chromosome (OutputFactory.pm:887-891, :900): an ID spelled `M_...`
+        // differs from it and prints; one spelled `MT_...` equals it, so the line
+        // name stands in for it.
+        v.id = Some("M_100_A/G".to_string());
+        v.input_line_name = Some("M_100_A/G/T".into());
+        assert_eq!(v.uploaded_variation(), "M_100_A/G");
+        v.id = Some("MT_100_A/G".to_string());
+        assert_eq!(v.uploaded_variation(), "M_100_A/G/T");
+        // An ID column Perl reads as false, empty or `0`, takes the name of
+        // Parser.pm:462, which differs from the output-time name after the rename
+        // and so prints over the line name; a `.` ID takes the line name.
+        v.id = None;
+        assert_eq!(v.uploaded_variation(), "M_100_A/G");
+        v.id = Some("0".to_string());
+        assert_eq!(v.uploaded_variation(), "M_100_A/G");
+        v.id = Some(".".to_string());
+        assert_eq!(v.uploaded_variation(), "M_100_A/G/T");
+    }
+
+    /// `chrM` is found through the cache's synonyms or its `chr` rule and keeps
+    /// its spelling everywhere, as every name but a bare `M` does.
+    #[test]
+    fn chrm_keeps_input_name() {
+        let v = InputVariant::new("chrM".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(v.chr, "MT");
+        assert_eq!(v.original_chr, "chrM");
+        assert!(v.input_chr.is_none());
+        assert_eq!(v.location(), "chrM:100");
+        assert_eq!(v.variation_name(), "chrM_100_A/G");
+    }
 
     #[test]
     fn test_classify_variant() {

@@ -1015,8 +1015,8 @@ impl Config {
 
 /// Auto-detect cap for `--decompression_threads=0`: decompression throughput
 /// plateaus between 4 and 10 threads and is flat past that, so the auto default
-/// stops at 10 rather than oversubscribing large hosts. User-supplied values are
-/// not capped; any positive integer pins the worker count.
+/// stops at 10 rather than oversubscribing large hosts. A positive value pins the
+/// worker count up to the host's logical CPUs.
 const DECOMPRESSION_THREADS_AUTO_CAP: usize = 10;
 
 /// Auto-detect cap for `--fork=0`. One reader thread parses and hands out the
@@ -1044,15 +1044,19 @@ pub fn resolve_fork(raw: usize) -> usize {
 
 /// Resolve the --decompression_threads value. `0` means "auto": use the
 /// number of available logical CPUs, capped at
-/// [`DECOMPRESSION_THREADS_AUTO_CAP`]. Any non-zero value is returned as-is
-/// so users can tune the worker count for their workload and hardware.
+/// [`DECOMPRESSION_THREADS_AUTO_CAP`]. A non-zero value pins the worker count,
+/// lowered to the number of available logical CPUs: the block reader starts one
+/// thread and one block buffer per worker, so a count far above the host's CPUs
+/// would exhaust threads or memory before it read a block, and workers beyond
+/// the CPUs decompress nothing more.
 fn resolve_decompression_threads(raw: usize) -> usize {
-    if raw != 0 {
-        return raw;
+    let available = std::thread::available_parallelism().map(|n| n.get());
+    match (raw, available) {
+        (0, Ok(cpus)) => cpus.min(DECOMPRESSION_THREADS_AUTO_CAP),
+        (0, Err(_)) => 4,
+        (pinned, Ok(cpus)) => pinned.min(cpus),
+        (pinned, Err(_)) => pinned,
     }
-    std::thread::available_parallelism()
-        .map(|n| n.get().min(DECOMPRESSION_THREADS_AUTO_CAP))
-        .unwrap_or(4)
 }
 
 /// The `--distance` value as (upstream, downstream) bp: one integer for both, or
@@ -1125,6 +1129,19 @@ mod tests {
         );
         assert_eq!(resolve_fork(1), 1);
         assert_eq!(resolve_fork(64), 64);
+    }
+
+    /// The auto decompression worker count stays within its cap; a pinned count
+    /// is kept up to the host's logical CPUs and lowered to them above that.
+    #[test]
+    fn decompression_threads_pinned_up_to_the_host_cpus() {
+        let cpus = std::thread::available_parallelism().unwrap().get();
+        let auto = resolve_decompression_threads(0);
+        assert!((1..=DECOMPRESSION_THREADS_AUTO_CAP).contains(&auto));
+        assert_eq!(resolve_decompression_threads(1), 1);
+        assert_eq!(resolve_decompression_threads(cpus), cpus);
+        assert_eq!(resolve_decompression_threads(cpus + 1), cpus);
+        assert_eq!(resolve_decompression_threads(usize::MAX), cpus);
     }
 
     /// The flags `--everything` turns on are Ensembl VEP's set (Config.pm:351-380)

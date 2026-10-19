@@ -19,7 +19,7 @@ use noodles_bgzf::gzi;
 use common::{corpora, execute_manifest_run, manifest_runs, warning_entries, Corpus, WarningEntry};
 
 fn vep() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_vep"))
+    common::isolated_vep_anywhere()
 }
 
 fn corpus_dir() -> PathBuf {

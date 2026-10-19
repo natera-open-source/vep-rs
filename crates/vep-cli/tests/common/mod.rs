@@ -294,18 +294,21 @@ fn read_maybe_gz(path: &Path) -> String {
     text
 }
 
-/// The data lines of an input file (a `.gz` is decompressed), in order.
+/// The data lines of an input file (a `.gz` or `.bgz` is decompressed), in
+/// order; a line that is not UTF-8 is read with its invalid bytes replaced, as
+/// the binary reads it for its text outputs.
 fn data_lines(path: &Path) -> Vec<String> {
-    let text = if path.extension().is_some_and(|e| e == "gz") {
-        let mut text = String::new();
+    let bytes = if path.extension().is_some_and(|e| e == "gz" || e == "bgz") {
+        let mut decompressed = Vec::new();
         flate2::read::MultiGzDecoder::new(fs::File::open(path).unwrap())
-            .read_to_string(&mut text)
+            .read_to_end(&mut decompressed)
             .unwrap();
-        text
+        decompressed
     } else {
-        fs::read_to_string(path).unwrap()
+        fs::read(path).unwrap()
     };
-    text.lines()
+    String::from_utf8_lossy(&bytes)
+        .lines()
         .filter(|l| !l.starts_with('#'))
         .map(str::to_string)
         .collect()
@@ -687,6 +690,28 @@ fn base_args(run: &Run, out_dir: &Path) -> Vec<String> {
     args
 }
 
+/// The binary with no `VEP_*` variable and no `vep.ini` of the machine's own
+/// reaching it: every `VEP_*` variable is removed and `HOME` is an empty
+/// directory under `out_dir`, so a run reads only the flags the test gives.
+pub fn isolated_vep(out_dir: &Path) -> Command {
+    let home = out_dir.join("home");
+    fs::create_dir_all(&home).unwrap();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("VEP_") {
+            cmd.env_remove(&key);
+        }
+    }
+    cmd.env("HOME", home);
+    cmd
+}
+
+/// [`isolated_vep`] with its `HOME` under the test target directory, for a test
+/// that spawns the binary outside any output directory.
+pub fn isolated_vep_anywhere() -> Command {
+    isolated_vep(Path::new(env!("CARGO_TARGET_TMPDIR")))
+}
+
 /// The `vep` invocation a run starts from: the run's input (`-i STDIN` when it
 /// is piped) and the corpus cache, the fixed arguments, then the run's `flags`
 /// and the corpus `fasta`; `out_dir` holds the staged cache of a
@@ -696,7 +721,7 @@ fn base_args(run: &Run, out_dir: &Path) -> Vec<String> {
 /// `--transcript_filter` list file beside the manifest) names a corpus file.
 pub fn vep_command(run: &Run, out_dir: &Path) -> Command {
     let corpus = run.corpus;
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    let mut cmd = isolated_vep(out_dir);
     cmd.current_dir(&corpus.dir);
     cmd.arg("-i");
     if run.stdin {
@@ -2272,7 +2297,7 @@ pub fn expand_argv(corpus: &Corpus, argv: &[String], out: &Path, out_dir: &Path)
 pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) -> String {
     let out = out_dir.join(format!("{}-run-{}.out", corpus.name, run.name));
     let argv = expand_argv(corpus, &run.argv, &out, out_dir);
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    let mut cmd = isolated_vep(out_dir);
     cmd.args(&argv)
         .envs(&run.env)
         .current_dir(out_dir)

@@ -9,14 +9,16 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use vep_cli::config::{error_table_entry, Treatment, ERROR_TABLE};
+
+mod common;
 
 /// Runs the binary with `flags` ahead of an input that does not exist, so a flag
 /// that were accepted would fail later, on the input, under another component.
 fn refusal(flags: &[&str]) -> (Option<i32>, String) {
-    let output = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let output = common::isolated_vep_anywhere()
         .args(flags)
         .args(["-i", "/nonexistent/input.vcf", "--quiet"])
         .stdin(Stdio::null())
@@ -193,7 +195,7 @@ fn lrg_is_refused() {
 fn input_refusal(input: &Path, out: &Path) -> (Option<i32>, String) {
     let cache = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/golden/116/GRCh38-release116/json_cache");
-    let output = Command::new(env!("CARGO_BIN_EXE_vep"))
+    let output = common::isolated_vep_anywhere()
         .arg("-i")
         .arg(input)
         .arg("-o")

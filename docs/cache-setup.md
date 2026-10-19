@@ -75,11 +75,14 @@ An input may name a chromosome as the cache does (`21`), with a `chr` prefix (`c
 an accession (`NC_000021.9`, `CM000683.2`). Each name is resolved to the cache's own before any
 lookup, as Ensembl VEP's `get_source_chr_name` resolves it: the name itself when the cache holds
 it, else a synonym of it the cache holds, else the name with a leading `chr` removed or added
-when the cache holds that, else a bare `M` as `MT`; a name that resolves to nothing skips the
-record with Ensembl VEP's warning (`Chromosome NC_000022.11 not found in annotation sources or
-synonyms`). The output keeps the input's spelling in `Location`, the VCF `CHROM` column and the
-JSON `seq_region_name`; Ensembl VEP alone renames a bare `M` to `MT` in `Location` and
-`seq_region_name`. The synonyms come from the cache's `chr_synonyms.txt`, the file the Ensembl
+when the cache holds that, else a bare `M` as the cache's `MT`, under whatever name the cache
+holds it; a name that resolves to nothing skips the record with Ensembl VEP's warning
+(`Chromosome NC_000022.11 not found in annotation sources or synonyms`). The output keeps the
+input's spelling in `Location`, in the JSON `seq_region_name` and in a VCF input's `CHROM`
+column, which is written as read; a bare `M` the cache knows as `MT` but not as `M` or `chrM`
+prints `MT` in `Location` and `seq_region_name`, as Ensembl VEP renames it
+(`docs/intended-divergences.md` describes the one case where the two engines then differ).
+The synonyms come from the cache's `chr_synonyms.txt`, the file the Ensembl
 VEP cache ships and the converter copies (the native builder writes it from the core
 `seq_region_synonym` table with `--core-dumps`), or from `--synonyms <file>`, which replaces the
 cache's file rather than adding to it. The file holds, per line, whitespace-separated names of

@@ -98,15 +98,18 @@ enum Item {
 /// rendered so the next batch reuses them.
 #[derive(Default)]
 struct LineBuffers {
-    text: String,
+    text: Vec<u8>,
     items: Vec<Item>,
 }
 
 /// A batch of VCF lines: the bytes of every line in one buffer and the spans
-/// that address them, in input order.
+/// that address them, in input order. The lines are kept as read, so a header
+/// or passthrough line that is not UTF-8 is written out unchanged, as Ensembl
+/// VEP writes the bytes it read (Parser.pm:235-242 opens the input with no
+/// decoding layer).
 pub(crate) struct LineBatch {
     seq: u64,
-    text: String,
+    text: Vec<u8>,
     items: Vec<Item>,
 }
 
@@ -121,23 +124,23 @@ impl LineBatch {
         }
     }
 
-    fn push_text(&mut self, line: &str) {
+    fn push_text(&mut self, line: &[u8]) {
         let start = self.text.len();
-        self.text.push_str(line);
+        self.text.extend_from_slice(line);
         self.items.push(Item::Text(start..self.text.len()));
     }
 
     /// One data line stored as `head` followed by `tail`, then `quoted`, the raw
     /// line's quotable prefix, when the reader passes one.
-    fn push_data(&mut self, head: &str, tail: &str, quoted: Option<&str>, line_number: u64) {
+    fn push_data(&mut self, head: &[u8], tail: &[u8], quoted: Option<&[u8]>, line_number: u64) {
         let start = self.text.len();
-        self.text.push_str(head);
-        self.text.push_str(tail);
+        self.text.extend_from_slice(head);
+        self.text.extend_from_slice(tail);
         let span = start..self.text.len();
         let quoted = match quoted {
             Some(prefix) => {
                 let start = self.text.len();
-                self.text.push_str(prefix);
+                self.text.extend_from_slice(prefix);
                 start..self.text.len()
             }
             None => span.clone(),
@@ -162,7 +165,7 @@ enum Unit {
 /// interleaves them with passthrough text.
 pub(crate) struct ParsedBatch {
     seq: u64,
-    text: String,
+    text: Vec<u8>,
     /// The reader's item list, emptied by parsing and carried along so it
     /// returns to the reader with `text`.
     items: Vec<Item>,
@@ -174,7 +177,7 @@ impl ParsedBatch {
     fn new(seq: u64) -> Self {
         Self {
             seq,
-            text: String::new(),
+            text: Vec::new(),
             items: Vec::new(),
             units: Vec::new(),
             variants: Vec::new(),
@@ -254,7 +257,9 @@ pub(crate) fn cache_chr_name(
 /// then `:179`; the parser's own call on `CHR2`, `Parser/VCF.pm:492`, maps
 /// every name to itself, since `BaseVEP.pm:702` reads the parser's hash of
 /// valid names as one list entry), and `_have_chr` (`Parser.pm:770-800`) skips
-/// a record whose name reaches no cache chromosome.
+/// a record whose name reaches no cache chromosome. A record whose `M` reaches
+/// the cache only through the rename of `Parser.pm:794-796` prints `MT`, as
+/// Ensembl VEP renames the record itself ([`renames_m_to_mt`]).
 pub(crate) fn name_source_chromosomes(
     variant: &mut InputVariant,
     synonyms: &ChromosomeSynonyms,
@@ -265,10 +270,47 @@ pub(crate) fn name_source_chromosomes(
     } else {
         variant.original_chr.as_str()
     };
-    variant.chr = cache_chr_name(input_name, synonyms, transcripts);
+    let holds = |name: &str| transcripts.contains_key(name);
+    let known = |name: &str| known_as(synonyms, &holds, name);
+    let renames_m = renames_m_to_mt(input_name, synonyms, holds);
+    // An `M` the cache knows only as `MT` is looked up as `MT`, which the cache
+    // may hold under a synonym of its own, whether or not the record is renamed:
+    // Ensembl VEP's `get_source_chr_name` has no such step and leaves a kept `M`
+    // unresolved, the divergence the intended-divergences page states.
+    let source_name = if input_name == "M" && !known("M") && known("MT") {
+        "MT"
+    } else {
+        input_name
+    };
+    let chr = cache_chr_name(source_name, synonyms, transcripts);
+    if renames_m {
+        variant.input_chr = Some(input_name.into());
+        variant.original_chr = "MT".to_string();
+    }
+    variant.chr = chr;
     if let Some(mate) = variant.mate_chr.as_deref() {
         variant.mate_chr = Some(cache_chr_name(mate, synonyms, transcripts));
     }
+}
+
+/// Whether `_have_chr` (`Parser.pm:770-800`) renames the record's chromosome
+/// `M` to `MT`. The check tries, against the cache's chromosomes and the
+/// synonyms of each, the name itself (`:777-787`), then `chrM` (`:789-792`), and
+/// renames only when every one of those misses and `MT` is a cache chromosome
+/// or a synonym of one (`:794-796`, read against the same expanded set); a
+/// name found through a synonym or the `chr` rule keeps its spelling. An
+/// Ensembl cache lists `chrM` as a synonym of `MT` in its `chr_synonyms.txt`,
+/// so under it an input `M` is found as `chrM` and keeps its name; a cache
+/// without that synonym renames it.
+fn renames_m_to_mt(chr: &str, synonyms: &ChromosomeSynonyms, holds: impl Fn(&str) -> bool) -> bool {
+    let known = |name: &str| known_as(synonyms, &holds, name);
+    chr == "M" && known("MT") && !known("M") && !known("chrM")
+}
+
+/// Whether `name` is a cache chromosome or a synonym of one: membership in the
+/// valid set `_have_chr` expands with every chromosome's synonyms (`Parser.pm:782`).
+fn known_as(synonyms: &ChromosomeSynonyms, holds: &impl Fn(&str) -> bool, name: &str) -> bool {
+    holds(name) || synonyms.synonyms_of(name).iter().any(|s| holds(s))
 }
 
 /// The contigs of a bgzipped input in file order, read from its `.tbi` index
@@ -545,24 +587,23 @@ fn is_ascii_space(b: u8) -> bool {
 }
 
 /// `str::trim_start` of a line. A line whose first non-blank byte is ASCII is
-/// trimmed as bytes; one opening with a non-ASCII byte is validated and trimmed as
-/// a `str`, so Unicode blanks are handled as `str::trim_start` handles them. The
-/// end of the line is kept as read, since Ensembl VEP's `chomp` removes the newline
-/// alone (ensembl-io ColumnBasedParser.pm:249): a blank after the last INFO value
-/// is part of that value, so `END2=30425949 ` names the mate `N[21:30425949 [`.
-fn trim_line(line: &[u8]) -> anyhow::Result<&[u8]> {
+/// trimmed as bytes; one opening with a non-ASCII byte is trimmed as a `str`
+/// when it is UTF-8, so Unicode blanks are handled as `str::trim_start` handles
+/// them, and as bytes otherwise. The end of the line is kept as read, since
+/// Ensembl VEP's `chomp` removes the newline alone (ensembl-io
+/// ColumnBasedParser.pm:249): a blank after the last INFO value is part of that
+/// value, so `END2=30425949 ` names the mate `N[21:30425949 [`.
+fn trim_line(line: &[u8]) -> &[u8] {
     let Some(start) = line.iter().position(|&b| !is_ascii_space(b)) else {
-        return Ok(&line[..0]);
+        return &line[..0];
     };
     if line[start].is_ascii() {
-        return Ok(&line[start..]);
+        return &line[start..];
     }
-    let text = std::str::from_utf8(line).context("Failed to read input line")?;
-    Ok(text.trim_start().as_bytes())
-}
-
-fn as_str(bytes: &[u8]) -> anyhow::Result<&str> {
-    std::str::from_utf8(bytes).context("Failed to read input line")
+    match std::str::from_utf8(line) {
+        Ok(text) => text.trim_start().as_bytes(),
+        Err(_) => &line[start..],
+    }
 }
 
 /// The part of a data line the parser reads when no output format re-emits
@@ -607,12 +648,46 @@ fn parser_columns(line: &[u8]) -> (&[u8], &'static [u8]) {
     }
 }
 
-fn push_vcf_header(batch: &mut LineBatch, cfg: &ReaderConfig<'_>, input_headers: &[String]) {
-    if let Some(fmt) = cfg.vcf_formatter {
-        for h in fmt.header_lines(input_headers) {
-            batch.push_text(&h);
+/// Writes the VCF output's header block. The formatter decides which input
+/// header lines stay and where its own go, reading the input lines as text; a
+/// kept input line is copied into the block in its order among them, so it is
+/// written here as the bytes it was read from and a header that is not UTF-8
+/// reaches the output unchanged.
+fn push_vcf_header(batch: &mut LineBatch, cfg: &ReaderConfig<'_>, input_headers: &[Vec<u8>]) {
+    let Some(fmt) = cfg.vcf_formatter else {
+        return;
+    };
+    let text: Vec<String> = input_headers
+        .iter()
+        .map(|h| String::from_utf8_lossy(h).into_owned())
+        .collect();
+    let mut next_input = 0;
+    for line in fmt.header_lines(&text) {
+        match text[next_input..].iter().position(|h| *h == line) {
+            Some(offset) => {
+                batch.push_text(&input_headers[next_input + offset]);
+                next_input += offset + 1;
+            }
+            None => batch.push_text(line.as_bytes()),
         }
     }
+}
+
+/// The warning for a run of empty lines, in the words of `skip_empty_lines`
+/// (Parser.pm:284), which Ensembl VEP's parsers for every input format but VCF
+/// call. Its VCF parser yields no variant for an empty line (Parser/VCF.pm:226),
+/// which ends the buffer fill (InputBuffer.pm:212), and a fill that opens on one
+/// ends the run with the output written so far (Runner.pm:424); here the run of
+/// lines is skipped instead. `from_line` is the number of the data record that
+/// follows the run: an empty line takes no record number, as Parser/VCF.pm:228
+/// counts none.
+fn empty_lines_warning(skipped: u64, from_line: u64) -> String {
+    let plural = if skipped > 1 { "s" } else { "" };
+    format!("Skipped {skipped} empty line{plural} from line {from_line}")
+}
+
+fn warn_empty_lines(skipped: u64, from_line: u64) {
+    crate::warnings::global().warn(&empty_lines_warning(skipped, from_line));
 }
 
 fn read_vcf(
@@ -642,16 +717,18 @@ fn read_vcf_lines(
     let mut batch = LineBatch::new(seq, LineBuffers::default());
     let mut records_in_batch = 0usize;
     let mut record_count = 0u64;
-    let mut input_headers: Vec<String> = Vec::new();
+    let mut input_headers: Vec<Vec<u8>> = Vec::new();
     let mut vcf_header_written = false;
-    let mut last_chr = String::new();
+    let mut last_chr: Vec<u8> = Vec::new();
+    // The empty lines met since the last record, warned about as one run.
+    let mut empty_lines = 0u64;
 
     loop {
         let mut send_batch = false;
         let more = scanner.with_next_line(|line| {
             if line.first() == Some(&b'#') {
                 if vcf_out && !cfg.no_headers && !vcf_header_written {
-                    input_headers.push(as_str(line)?.to_string());
+                    input_headers.push(line.to_vec());
                     if line.starts_with(b"#CHROM") {
                         push_vcf_header(&mut batch, cfg, &input_headers);
                         vcf_header_written = true;
@@ -660,14 +737,19 @@ fn read_vcf_lines(
                 return Ok(());
             }
 
+            let line = trim_line(line);
+            if line.is_empty() {
+                empty_lines += 1;
+                return Ok(());
+            }
+            if empty_lines > 0 {
+                warn_empty_lines(empty_lines, record_count + 1);
+                empty_lines = 0;
+            }
+
             if vcf_out && !vcf_header_written && !cfg.no_headers {
                 push_vcf_header(&mut batch, cfg, &input_headers);
                 vcf_header_written = true;
-            }
-
-            let line = trim_line(line)?;
-            if line.is_empty() {
-                return Ok(());
             }
             record_count += 1;
 
@@ -676,9 +758,8 @@ fn read_vcf_lines(
             } else {
                 parser_columns(line)
             };
-            let head = as_str(head)?;
 
-            if vcf_line_is_non_variant(head) {
+            if vcf_line_is_non_variant(&String::from_utf8_lossy(head)) {
                 // A non-variant record (ALT='.') without `--allow_non_variant` is
                 // dropped with no warning (Parser/VCF.pm:259-267 moves to the next
                 // record); with the flag, a VCF output writes it unchanged in its
@@ -692,11 +773,11 @@ fn read_vcf_lines(
                 }
             }
 
-            let chr = head.split('\t').next().unwrap_or(head);
+            let chr = head.find_byte(b'\t').map_or(head, |tab| &head[..tab]);
             if chr != last_chr {
-                prewarmer.reached(chr);
+                prewarmer.reached(&String::from_utf8_lossy(chr));
                 last_chr.clear();
-                last_chr.push_str(chr);
+                last_chr.extend_from_slice(chr);
             }
 
             // A skip warning quotes the raw line, of which `head` and `tail` may
@@ -705,8 +786,8 @@ fn read_vcf_lines(
             // begins (a prefix that ends inside `head` quotes alike either way).
             let prefix = crate::warnings::quotable_prefix(line);
             let past_head = prefix.get(head.len()..).unwrap_or(b"");
-            let quoted = (!tail.starts_with(past_head)).then(|| String::from_utf8_lossy(prefix));
-            batch.push_data(head, as_str(tail)?, quoted.as_deref(), record_count);
+            let quoted = (!tail.starts_with(past_head)).then_some(prefix);
+            batch.push_data(head, tail, quoted, record_count);
             records_in_batch += 1;
             send_batch = records_in_batch >= cfg.batch_size;
             Ok(())
@@ -722,6 +803,9 @@ fn read_vcf_lines(
             batch = LineBatch::new(seq, buffers_back.try_recv().unwrap_or_default());
             records_in_batch = 0;
         }
+    }
+    if empty_lines > 0 {
+        warn_empty_lines(empty_lines, record_count + 1);
     }
 
     if !batch.items.is_empty() {
@@ -821,12 +905,12 @@ struct SkipRules<'a> {
 
 /// The input record as the skip rules read it: `number` Ensembl VEP's count of
 /// the records read, `columns` the parser's columns (INFO complete for a
-/// structural record) and `quoted` the text a skip warning quotes, both `None`
+/// structural record) and `quoted` the bytes a skip warning quotes, both `None`
 /// for a parser that exposes no line text.
 struct RecordLine<'a> {
     number: u64,
-    columns: Option<&'a str>,
-    quoted: Option<&'a str>,
+    columns: Option<&'a [u8]>,
+    quoted: Option<&'a [u8]>,
 }
 
 impl SkipRules<'_> {
@@ -846,8 +930,10 @@ impl SkipRules<'_> {
             return false;
         };
         let sink = crate::warnings::global();
-        let skip =
-            |description: &str| sink.skipped_variant(description, Some(line.number), line.quoted);
+        let skip = |description: &str| {
+            let quoted = line.quoted.map(String::from_utf8_lossy);
+            sink.skipped_variant(description, Some(line.number), quoted.as_deref());
+        };
         let joined_alts = first.uploaded_allele_string.as_deref().unwrap_or("");
         let svtype = first.sv_type.as_deref();
         if first.vep_skip {
@@ -913,16 +999,18 @@ impl SkipRules<'_> {
 /// term `so_term`) is incomplete when its start lies past its end or its INFO
 /// carries neither SVLEN nor END; the INFO is read from the line when the reader
 /// kept it.
-fn incomplete_deletion(variant: &InputVariant, so_term: &str, line: Option<&str>) -> bool {
+fn incomplete_deletion(variant: &InputVariant, so_term: &str, line: Option<&[u8]>) -> bool {
     if !so_term.to_ascii_lowercase().contains("del") {
         return false;
     }
     if variant.start > variant.end {
         return true;
     }
-    line.and_then(|line| line.split('\t').nth(7))
+    line.and_then(|line| line.split(|&b| b == b'\t').nth(7))
         .is_some_and(|info| {
-            info_value_written(info, "SVLEN").is_none() && info_value_written(info, "END").is_none()
+            let info = String::from_utf8_lossy(info);
+            info_value_written(&info, "SVLEN").is_none()
+                && info_value_written(&info, "END").is_none()
         })
 }
 
@@ -1142,12 +1230,15 @@ fn parse_lines(
     } = lines;
     let capture = c.capture_raw_input;
     let max_sv_size = c.max_sv_size;
+    // The parser reads text: a line that is not UTF-8 is read with each invalid
+    // sequence replaced, so its identifiers and INFO values may print the
+    // replacement character where Ensembl VEP prints the bytes.
     let parsed: Vec<ParsedLine> = c.pool.install(|| {
         items
             .par_iter()
             .map(|item| match item {
                 Item::Data { span, .. } => Some(parse_vcf_line_with_max_sv_size(
-                    &text[span.clone()],
+                    &String::from_utf8_lossy(&text[span.clone()]),
                     capture,
                     max_sv_size,
                 )),
@@ -1209,9 +1300,10 @@ fn parse_lines(
                     bail!("line {}: parse error: {}", line_number, e);
                 }
                 let sink = crate::warnings::global();
-                let quoted = &text[quoted];
-                for description in refused_record_descriptions(&e, &text[span]) {
-                    sink.skipped_variant(&description, Some(line_number), Some(quoted));
+                let quoted = String::from_utf8_lossy(&text[quoted]);
+                let columns = String::from_utf8_lossy(&text[span]);
+                for description in refused_record_descriptions(&e, &columns) {
+                    sink.skipped_variant(&description, Some(line_number), Some(&quoted));
                 }
             }
             (Item::Data { .. }, None) => unreachable!("every data item is parsed"),
@@ -1276,7 +1368,7 @@ fn annotate_render_batch(
     }
     debug_assert!(rest.is_empty(), "every variant belongs to a unit chunk");
 
-    let text: &String = text;
+    let text: &Vec<u8> = text;
     let failure = ReadFailure::default();
     let results: Vec<(Vec<u8>, u64)> = c.pool.install(|| {
         tasks
@@ -1299,7 +1391,7 @@ fn annotate_render_batch(
                     for unit in chunk {
                         match unit {
                             Unit::Text(span) => {
-                                out.extend_from_slice(text[span.clone()].as_bytes());
+                                out.extend_from_slice(&text[span.clone()]);
                                 out.push(b'\n');
                             }
                             Unit::Record(range) => {
@@ -1361,7 +1453,7 @@ fn render_batch(
                 for unit in chunk {
                     match unit {
                         Unit::Text(span) => {
-                            out.extend_from_slice(text[span.clone()].as_bytes());
+                            out.extend_from_slice(&text[span.clone()]);
                             out.push(b'\n');
                         }
                         Unit::Record(range) => {
@@ -1435,6 +1527,11 @@ mod tests {
         lines
     }
 
+    /// The text a span of a batch holds, for a batch whose lines are UTF-8.
+    fn text<'a>(batch: &'a LineBatch, span: &Range<usize>) -> &'a str {
+        std::str::from_utf8(&batch.text[span.clone()]).unwrap()
+    }
+
     /// Every line the scanner yields, at fill sizes that split lines across
     /// fills, equals what `BufRead::lines` yields.
     #[test]
@@ -1477,9 +1574,34 @@ mod tests {
             " 21\té",
         ] {
             assert_eq!(
-                trim_line(line.as_bytes()).unwrap(),
+                trim_line(line.as_bytes()),
                 line.trim_start().as_bytes(),
                 "line {line:?}"
+            );
+        }
+    }
+
+    /// A line that is not UTF-8 is trimmed as bytes, never refused: a Latin-1
+    /// byte at the start is kept with everything after it, and ASCII blanks
+    /// before one are removed.
+    #[test]
+    fn trim_line_keeps_a_line_that_is_not_utf8() {
+        assert_eq!(trim_line(b"\xe9\t100"), b"\xe9\t100");
+        assert_eq!(trim_line(b"  \xe9\t100"), b"\xe9\t100");
+        assert_eq!(trim_line(b"21\t100\tCaf\xe9"), b"21\t100\tCaf\xe9");
+    }
+
+    /// `LineScanner` keeps a `\r` that ends the input without a `\n`, as
+    /// ensembl-io's `TextParser.pm:138` keeps it: its `s/\r\n/\n/` replaces the
+    /// pair alone, and `chomp` removes a newline alone, so the last column of a
+    /// final line without a line end carries the `\r` in both readers.
+    #[test]
+    fn last_line_without_newline_keeps_its_cr() {
+        for fill in [1, 4, 4096] {
+            assert_eq!(
+                scan_all(b"a\tb\r\nc\td\r", fill),
+                [b"a\tb".to_vec(), b"c\td\r".to_vec()],
+                "fill {fill}"
             );
         }
     }
@@ -1539,7 +1661,7 @@ mod tests {
     fn elided_info_parses_like_the_full_line() {
         let line = "21\t25000100\trs123\tA\tG,T\t50\tPASS\tDP=42;AF=0.5\tGT\t0/1";
         let (head, tail) = parser_columns(line.as_bytes());
-        let elided = format!("{}{}", as_str(head).unwrap(), as_str(tail).unwrap());
+        let elided = String::from_utf8([head, tail].concat()).unwrap();
         let a = parse_vcf_line(line, false).unwrap();
         let b = parse_vcf_line(&elided, false).unwrap();
         assert_eq!(
@@ -1692,7 +1814,7 @@ mod tests {
                     b.items.iter().map(move |item| match item {
                         Item::Data {
                             span, line_number, ..
-                        } => (*line_number, &b.text[span.clone()]),
+                        } => (*line_number, text(b, span)),
                         Item::Text(_) => panic!("no passthrough without --allow_non_variant"),
                     })
                 })
@@ -1750,9 +1872,7 @@ mod tests {
             .items
             .iter()
             .map(|item| match item {
-                Item::Data { span, quoted, .. } => {
-                    (&batch.text[span.clone()], &batch.text[quoted.clone()])
-                }
+                Item::Data { span, quoted, .. } => (text(batch, span), text(batch, quoted)),
                 Item::Text(_) => panic!("no passthrough without --allow_non_variant"),
             })
             .collect();
@@ -1920,14 +2040,14 @@ mod tests {
             .items
             .iter()
             .map(|item| match item {
-                Item::Text(span) => format!("text:{}", &batch.text[span.clone()]),
+                Item::Text(span) => format!("text:{}", text(batch, span)),
                 Item::Data {
                     span,
                     quoted,
                     line_number,
                 } => {
                     assert_eq!(quoted, span, "a raw line is quoted as read");
-                    format!("data:{line_number}:{}", &batch.text[span.clone()])
+                    format!("data:{line_number}:{}", text(batch, span))
                 }
             })
             .collect();
@@ -2134,6 +2254,155 @@ mod tests {
         assert_eq!(named("NC_000021.9", None, &none).0, "NC_000021.9");
     }
 
+    /// `_have_chr` renames an input `M` to `MT` only when nothing else reaches the
+    /// cache (`Parser.pm:777-796`): under a cache whose synonyms list `chrM` for
+    /// `MT`, as an Ensembl cache's `chr_synonyms.txt` does, `M` is found as `chrM`
+    /// and keeps its name; without that synonym the record prints `MT` and keeps
+    /// `M` for the names built from the input. `chrM`, a cache holding `M`, and a
+    /// cache that knows `MT` neither as a chromosome nor as a synonym never
+    /// rename; one that knows `MT` as a synonym of its own name renames. An `M`
+    /// the cache knows only as `MT` is looked up as `MT` whether or not it is
+    /// renamed.
+    #[test]
+    fn bare_m_is_renamed_mt_only_when_no_synonym_reaches_the_cache() {
+        let holds = |names: &'static [&'static str]| move |name: &str| names.contains(&name);
+        let none = ChromosomeSynonyms::new();
+        let ensembl = ChromosomeSynonyms::parse("MT\tchrM\nMT\tNC_012920.1\n");
+        assert!(renames_m_to_mt("M", &none, holds(&["21", "MT"])));
+        assert!(!renames_m_to_mt("M", &ensembl, holds(&["21", "MT"])));
+        assert!(!renames_m_to_mt("M", &none, holds(&["21", "MT", "M"])));
+        assert!(!renames_m_to_mt("M", &none, holds(&["21", "MT", "chrM"])));
+        assert!(!renames_m_to_mt("M", &none, holds(&["21"])));
+        assert!(!renames_m_to_mt("chrM", &none, holds(&["21", "MT"])));
+        assert!(!renames_m_to_mt(
+            "M",
+            &ChromosomeSynonyms::parse("MT\tM\n"),
+            holds(&["MT"])
+        ));
+        // `MT` reached through a synonym of a cache chromosome counts as held.
+        let accession = ChromosomeSynonyms::parse("NC_012920.1\tMT\n");
+        assert!(renames_m_to_mt("M", &accession, holds(&["NC_012920.1"])));
+
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("MT".to_string(), Vec::new())]),
+            crate::transcript_index::TranscriptIndexImpl::default(),
+            0,
+            0,
+        );
+        let named = |synonyms: &ChromosomeSynonyms, cache: &LazyTranscriptIndexes| {
+            let mut variant =
+                InputVariant::new("M".to_string(), 100, 100, b"A".to_vec(), b"G".to_vec());
+            name_source_chromosomes(&mut variant, synonyms, cache);
+            (
+                variant.chr,
+                variant.original_chr,
+                variant.input_chr.as_deref().map(str::to_string),
+            )
+        };
+        assert_eq!(
+            named(&none, &transcripts),
+            ("MT".into(), "MT".into(), Some("M".into()))
+        );
+        assert_eq!(
+            named(&ensembl, &transcripts),
+            ("MT".into(), "M".into(), None)
+        );
+        // A cache naming the chromosome by accession, `MT` its synonym: the
+        // record is renamed and looked up under the accession.
+        let by_accession = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("NC_012920.1".to_string(), Vec::new())]),
+            crate::transcript_index::TranscriptIndexImpl::default(),
+            0,
+            0,
+        );
+        assert_eq!(
+            named(&accession, &by_accession),
+            ("NC_012920.1".into(), "MT".into(), Some("M".into()))
+        );
+        // With `chrM` a synonym too the record keeps its name, as `_have_chr`
+        // accepts it through `chrM`, and is still looked up under the accession.
+        let both = ChromosomeSynonyms::parse("NC_012920.1\tMT\tchrM\n");
+        assert_eq!(
+            named(&both, &by_accession),
+            ("NC_012920.1".into(), "M".into(), None)
+        );
+    }
+
+    /// The warning for a run of empty lines takes Ensembl VEP's words
+    /// (`Parser.pm:283-290`), singular for one line, and names the data record
+    /// the run precedes.
+    #[test]
+    fn blank_lines_counted() {
+        assert_eq!(
+            empty_lines_warning(1, 2),
+            "Skipped 1 empty line from line 2"
+        );
+        assert_eq!(
+            empty_lines_warning(3, 1),
+            "Skipped 3 empty lines from line 1"
+        );
+    }
+
+    /// A header line that is not UTF-8 reaches the VCF header block as the bytes
+    /// it was read from, in its place among the lines the formatter writes; a
+    /// data line that is not UTF-8 is kept as read.
+    #[test]
+    fn read_vcf_keeps_header_and_data_bytes_that_are_not_utf8() {
+        let input: &[u8] = b"##fileformat=VCFv4.2\n##source=Caf\xe9\n\
+            #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\xe9bastien\n\
+            21\t100\trs\xe9\tA\tG\t.\tPASS\t.\tGT\t0/1\n";
+        let transcripts = LazyTranscriptIndexes::empty();
+        let fmt = VcfOutputFormatter::new(
+            "CSQ".to_string(),
+            vep_io::output::fields::FieldOptions::default(),
+            vec![],
+            None,
+        );
+        let cfg = ReaderConfig {
+            batch_size: 5000,
+            capture_raw_input: true,
+            allow_non_variant: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            output_format: "vcf",
+            no_headers: false,
+            vcf_formatter: Some(&fmt),
+            transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
+            prewarm_order: &[],
+        };
+        let (tx, rx) = mpsc::sync_channel(64);
+        let (_back_tx, back_rx) = mpsc::sync_channel(4);
+        let reader: Box<dyn BufRead + Send> = Box::new(Cursor::new(input.to_vec()));
+        read_vcf(reader, &cfg, tx, back_rx).unwrap();
+        let batch = match rx.recv().unwrap() {
+            InputBatch::Lines(lines) => lines,
+            InputBatch::Parsed(_) => unreachable!(),
+        };
+        let headers: Vec<&[u8]> = batch
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Text(span) => Some(&batch.text[span.clone()]),
+                Item::Data { .. } => None,
+            })
+            .collect();
+        assert_eq!(headers[0], b"##fileformat=VCFv4.2");
+        assert_eq!(headers[1], b"##source=Caf\xe9");
+        assert_eq!(
+            *headers.last().unwrap(),
+            &b"#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\xe9bastien"[..]
+        );
+        assert!(headers.iter().any(|h| h.starts_with(b"##INFO=<ID=CSQ,")));
+        let Some(Item::Data { span, .. }) = batch.items.last() else {
+            panic!("the data line is the last item");
+        };
+        assert_eq!(
+            &batch.text[span.clone()],
+            b"21\t100\trs\xe9\tA\tG\t.\tPASS\t.\tGT\t0/1"
+        );
+    }
+
     /// Reaching a chromosome starts it and the next one in the input's order,
     /// once each, and skips chromosomes the cache does not cover.
     #[test]
@@ -2184,8 +2453,8 @@ mod tests {
         };
         let (tx, rx) = mpsc::sync_channel(64);
         let (back_tx, back_rx) = mpsc::sync_channel(4);
-        let mut text = String::with_capacity(1 << 16);
-        text.push_str("stale");
+        let mut text = Vec::with_capacity(1 << 16);
+        text.extend_from_slice(b"stale");
         assert!(back_tx
             .send(LineBuffers {
                 text,
@@ -2206,7 +2475,7 @@ mod tests {
             batches[1].text.capacity() >= 1 << 16,
             "second batch reused the returned text buffer"
         );
-        assert_eq!(&batches[1].text, "21\t200\t.\tC\tT\t.\tPASS\t.");
+        assert_eq!(batches[1].text, b"21\t200\t.\tC\tT\t.\tPASS\t.");
     }
 
     /// A multi-allelic Ensembl-format line is one record: its alleles share one

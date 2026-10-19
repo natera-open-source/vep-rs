@@ -287,7 +287,7 @@ One row per crate under `crates/`, in directory order; each links the crate's ow
 | [vep-core](crates/vep-core/README.md) | The shared types: variants, transcripts, consequences and coordinates | library |
 | [vep-effects](crates/vep-effects/README.md) | The consequence-calculation engine, with HGVS and protein prediction | library |
 | [vep-fasta](crates/vep-fasta/README.md) | Indexed FASTA access for the reference genome | library |
-| [vep-io](crates/vep-io/README.md) | Input parsers (VCF, Ensembl default, HGVS, region) and the output writers (VEP, VCF, JSON, Tab, Parquet) | library |
+| [vep-io](crates/vep-io/README.md) | Input parsers (Ensembl default, HGVS, region) with format detection, and the output writers (VEP, VCF, JSON, Tab, Parquet) | library |
 | [vep-plugin](crates/vep-plugin/README.md) | The plugin trait, the dynamic-library loader and the registry | library |
 
 ## Contributing

@@ -1,32 +1,24 @@
 # vep-io
 
 Input parsers and output formatters for vep-rs, the Rust reimplementation of the
-Ensembl Variant Effect Predictor (VEP). The crate turns one line of Variant Call
-Format (VCF), Ensembl default, region or genomic Human Genome Variation Society
-(HGVS) input into `vep_core::variant::InputVariant` values, and renders annotated
-variants as VEP's `--tab`, VCF, JSON (JavaScript Object Notation) and Parquet
-outputs through one shared field table. `vep-cli` is its only dependent in the
-workspace, and `vep-core` is the only sibling crate it depends on.
+Ensembl Variant Effect Predictor (VEP). The crate turns one line of Ensembl
+default, region or genomic Human Genome Variation Society (HGVS) input into
+`vep_core::variant::InputVariant` values, detects an input's format from its
+first data line, and renders annotated variants as VEP's `--tab`, Variant Call
+Format (VCF), JSON (JavaScript Object Notation) and Parquet outputs through one
+shared field table. `vep-cli` is its only dependent in the workspace, and
+`vep-core` is the only sibling crate it depends on.
 
 ## How it works
 
-Take the VCF line `21 25000100 rs123 A G,T . PASS .` (tabs between columns).
-`VcfParser::next_variant` reads the line, removes the line terminator, lets
-`noodles` parse the record and reads POS and the ID column from the line's own
-text, so a spelling such as `3e7` is numified as Ensembl VEP numifies it and a
-`.` ID is told from an empty column. `parse_record` lists the written ALT
-alleles, keeps `rs123` as the record's name (the first `;`-joined ID), drops `*`
-and `.` from the alleles, and asks `vep_core::sv_routing` whether the INFO/SVTYPE
-key (the structural variant type) or a symbolic ALT routes the record to the
-structural path; nothing does here, so `trim_multi_alleles` removes the prefix
-every allele but a `*` shares (never a suffix; a `.` beside an allele vetoes it),
-upper-cases the alleles, and `compute_vep_coords` places each allele at start
-25000100 and end 25000100 (an insertion gets `end = start - 1`). Two
-`InputVariant` values leave the parser in ALT order, `allele_index` 0 and 1, both
-marked `minimised` because the site is multi-allelic, both carrying the line name
-`21_25000100_A/G/T` that an ID-less record prints as `Uploaded_variation`.
-Annotation happens outside this crate, and the two variants return as one record
-slice. `OutputFormatter::format_record` receives that slice: `fields::record_rows`
+Take the Ensembl-format line `21 25000100 25000100 A/G/T 1 rs123` (one record,
+two ALT alleles). `EnsemblParser::next_variant` splits the columns, reads the
+allele string and the strand, and yields two `InputVariant` values in ALT order,
+`allele_index` 0 and 1, both marked `minimised` because the site is
+multi-allelic, both carrying `rs123` as the record's name. A VCF record follows
+the same path through the `vep-cli` crate's line parser. Annotation happens
+outside this crate, and the two variants return as one record slice.
+`OutputFormatter::format_record` receives that slice: `fields::record_rows`
 orders the rows transcript-major (by transcript id) and allele-minor (ALT order),
 then adds one intergenic row per allele that overlapped nothing, and
 `fields::field_value` answers every column name from the row, reading plugin data
@@ -40,9 +32,9 @@ with `chrom`, `pos`, `end`, `ref` and `alt` ahead of the `--tab` columns, for th
 `duckdb` subprocess the command-line runner spawns at end of run.
 
 The `vep` binary reads VCF through its own line parser in `vep-cli`, which keeps
-the input's header lines for VCF output passthrough; a test there holds this
-crate's `VcfParser` to the same routing, allele by allele. The Ensembl, region
-and HGVS parsers are the ones the binary runs. VEP's default text format has no
+the input's header lines for VCF output passthrough; this crate has no VCF
+parser of its own. The Ensembl, region and HGVS parsers are the ones the binary
+runs. VEP's default text format has no
 formatter struct here: `vep-cli` renders its rows from this crate's field table
 (`record_rows_into`, `extra_keys_with`, `field_value`) and takes its header from
 `default_format_header`.
@@ -53,7 +45,7 @@ formatter struct here: `vep-cli` renders its rows from this crate's field table
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `error`              | `IoError`: `Io`, `VcfParse` (every parse failure, whichever input format raised it) and `NotImplemented` (transcript-level HGVS).                                                                                                      |
 | `input`              | The `InputParser` trait: `next_variant` yields one `InputVariant` per ALT allele and `None` at end of input.                                                                                                                           |
-| `input::vcf`         | `VcfParser`: a `noodles` VCF reader with blocked gzip (BGZF) decompression on a configurable worker count, shared-prefix trimming, and structural records built by `vep_core::sv_record::structural_variants` under `--max_sv_size`.   |
+| `input::detect`      | `detect_format`: Ensembl VEP's format detection from the first data line, returning the verdict and the bytes read to reach it.                                                                                                      |
 | `input::ensembl`     | `EnsemblParser`: VEP's five- or six-column default format, tab or whitespace delimited, one variant per ALT of the allele string.                                                                                                      |
 | `input::region`      | `RegionParser`: `chr:start-end:strand/allele` or `chr:start-end/allele`; the reference allele is `-` and the strand defaults to forward.                                                                                              |
 | `input::hgvs`        | `HgvsParser`: genomic `:g.` substitutions, deletions, insertions, delins and duplications (a duplication is read as an insertion of the duplicated bases); `:c.`, `:p.`, `:n.` and `:r.` expressions fail with `NotImplemented`.       |
@@ -77,10 +69,7 @@ Input:
 | Item                                           | Phrase                                                                                                                                       |
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `InputParser::next_variant`                    | The one method every parser implements.                                                                                                      |
-| `VcfParser::new(reader)`                       | Reads the header from any `BufRead + Send`, then records on demand.                                                                          |
-| `VcfParser::from_path(path)`                   | Opens a plain, `.gz` or `.bgz` file with single-threaded decompression.                                                                      |
-| `VcfParser::from_path_with_decompression_threads(path, n)` | Uses `noodles::bgzf::io::MultithreadedReader` with `n` workers when `n > 1` and the file is gzipped.                              |
-| `VcfParser::with_max_sv_size(Option<u64>)`     | The span cap a `<CNV:TR>` allele is expanded under; `None` for no cap.                                                                       |
+| `detect::detect_format(reader)`                | The format of the first data line and the bytes read to find it, for the caller to replay.                                                   |
 | `EnsemblParser::new`, `RegionParser::new`, `HgvsParser::new` | Line parsers over any `BufRead`; blank and `#` lines are skipped.                                                               |
 
 Output:

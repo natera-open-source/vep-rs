@@ -1881,6 +1881,28 @@ vep-rs              "hgvsp":"ENSP00000290200.2:p.Asp215="
 
 With `--json` in place of `--output_format json` both engines write `p.Asp215=`, and in the default, tab and VCF outputs both write `p.Asp215%3D` unless `--no_escape` is given, under which both write `p.Asp215=`; the `no-escape` flag set of the same corpus compares those. The golden corpora pass `--json` to both engines, so no JSON comparison reads the difference.
 
+## Input bytes that are not UTF-8
+
+A difference in the text of a field, not in any tuple: the comparators key rows by Location, Allele and Feature, which are ASCII, and nothing is set aside.
+
+Ensembl VEP opens its input with no decoding layer (`Parser.pm` lines 235-242) and writes the bytes it read: a Latin-1 `é` (the byte `0xE9`) in a header line, an ID, an INFO value or a sample name comes out as that byte in every format, the JSON output included, where it leaves the document invalid as UTF-8. vep-rs reads the input as bytes and writes a header line and a passthrough record under `--allow_non_variant` as the bytes they were read from, so the VCF output's header block carries the input's `##` lines and sample names unchanged. A record it annotates is read as UTF-8 with each invalid sequence replaced by U+FFFD, sample columns included: an ID, an INFO value or a genotype field that is not UTF-8 prints the replacement character in `Uploaded_variation`, in the VCF output's record line, in the JSON `input` string (`serde_json` writes UTF-8 alone) and in a warning that quotes the line; of those columns the default and tab outputs print the ID alone. A file that is UTF-8 throughout, non-ASCII characters included, is written by both engines as read.
+
+## A bare `M` under a cache whose synonyms name `chrM`
+
+A difference in which rows a record gets, on an input chromosome no measured dataset uses; nothing is set aside, and a record on `M` is charged to vep-rs in both figures.
+
+Ensembl VEP validates a record's chromosome against the cache's chromosomes and the synonyms of each (`Parser.pm` lines 770-800, `_have_chr`): the name itself, then the name with `chr` removed or added, and, when every one of those misses and `MT` is a cache chromosome or a synonym of one, it renames `M` to `MT` on the record (lines 794-796). An Ensembl cache's `chr_synonyms.txt` lists `chrM` as a synonym of `MT`, so under it an input `M` is accepted as `chrM` and never renamed. The annotation sources then resolve the name on their own (`BaseVEP.pm` lines 689-738, `get_source_chr_name`), through the cache's chromosomes and the synonyms of the input name alone, with no rename, so `M` reaches no cache chromosome: the record passes validation, overlaps nothing and is written as `intergenic_variant` with Location `M:<pos>`. Under a cache without that synonym the record is renamed and annotated as `MT`, with Location `MT:<pos>`.
+
+vep-rs prints the name Ensembl VEP prints in both cases (`M` under the Ensembl cache, `MT` without the synonym) and resolves a bare `M` the cache does not know to the cache's `MT`, under whatever name the cache holds it, for its lookups, so the record is annotated against the mitochondrial transcripts in both cases. `chrM` and `MT` are read alike by both engines.
+
+## Empty lines in a VCF input
+
+A difference in which records are written, on an input shape no measured dataset has; nothing is set aside.
+
+Ensembl VEP's parsers for the Ensembl default, HGVS, ID, SPDI and region formats skip a run of empty lines and warn `Skipped N empty line(s) from line M` (`Parser.pm` lines 266-293, `skip_empty_lines`). Its VCF parser does not call that routine: an empty line is a record with no column, for which it yields no variant (`Parser/VCF.pm` line 226), and the input buffer reads that as the end of its fill (`InputBuffer.pm` line 212). A fill that begins on an empty line holds nothing, and the run ends with the output written so far (`Runner.pm` line 424): a VCF whose first data line is empty, or that has two empty lines in a row, is annotated up to that point and no further, with no message.
+
+vep-rs skips a run of empty or whitespace-only lines in a VCF, annotates every record around it, and writes the warning in `skip_empty_lines`'s words, where `M` is the number of the record that follows the run.
+
 ## Scoring against Ensembl VEP 116.2
 
 The comparators score against one Ensembl VEP release at a time, chosen by `--reference-release`, and `116.2` is the default: against it they apply the classes of this page, and every class the 116.2 registry sets aside or counts is listed with its treatment in [docs/concordance-provenance/116.2-divergence-classes.md](concordance-provenance/116.2-divergence-classes.md). Under `--reference-release 115.2`, the release the paper was measured against, they apply the paper's twelve classes instead, classes 1 to 12 as the paper's supplement and this page's previous version document them, and write exactly the reports they wrote for the paper; the five masks of the paper's classes 5 to 10 are listed as not applied in every 116.2 report, each with its reason.

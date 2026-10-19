@@ -424,9 +424,9 @@ pub struct Args {
     /// (a plain gzip input is decompressed on one thread).
     /// Default 0 = auto: uses the number of available logical CPUs, capped
     /// at 10 (measured sweet-spot: throughput plateaus around 4-10 threads
-    /// and is flat past that). User-supplied positive
-    /// values are not capped: pass any integer to pin the worker count,
-    /// e.g. `--decompression_threads=1` for single-threaded.
+    /// and is flat past that). A positive value pins the worker count,
+    /// e.g. `--decompression_threads=1` for single-threaded; a value above the
+    /// number of available logical CPUs is lowered to that number.
     #[arg(
         help_heading = "Runtime",
         long = "decompression_threads",

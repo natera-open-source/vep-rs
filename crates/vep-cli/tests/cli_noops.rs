@@ -7,7 +7,9 @@
 //! checked.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+
+mod common;
 
 fn cache() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -40,7 +42,7 @@ fn annotate(dir: &Path, input: &Path, format: &str, extra: &[&str]) -> (String, 
         "out-{format}-{}.txt",
         extra.join("_").replace('/', "_")
     ));
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    let mut cmd = common::isolated_vep(dir);
     cmd.arg("-i")
         .arg(input)
         .arg("-o")

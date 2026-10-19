@@ -8,7 +8,6 @@ pub mod detect;
 pub mod ensembl;
 pub mod hgvs;
 pub mod region;
-pub mod vcf;
 
 use vep_core::variant::InputVariant;
 

@@ -24,7 +24,7 @@ struct Run {
 }
 
 fn vep(input: &Path, json_cache: &Path, assembly: &str, out: &Path, args: &[&str]) -> Run {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    let mut cmd = common::isolated_vep_anywhere();
     cmd.arg("-i")
         .arg(input)
         .arg("-o")
@@ -486,7 +486,7 @@ fn dont_skip_reports_the_malformed_line_in_a_later_batch_and_exits() {
     fs::write(&input, lines.join("\n") + "\n").unwrap();
     let out = tmp.path().join("malformed.out");
 
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    let mut cmd = common::isolated_vep_anywhere();
     cmd.arg("-i")
         .arg(&input)
         .arg("-o")
@@ -517,7 +517,7 @@ fn dont_skip_reports_the_malformed_line_in_a_later_batch_and_exits() {
 #[test]
 fn unwritable_output_fails_instead_of_hanging() {
     let corpus = &corpora()[0];
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
+    let mut cmd = common::isolated_vep_anywhere();
     cmd.arg("-i")
         .arg(corpus.dir.join("variants.vcf"))
         .arg("-o")

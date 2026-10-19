@@ -8,8 +8,10 @@
 
 use std::process::Command;
 
+mod common;
+
 fn vep_binary() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_vep"))
+    common::isolated_vep_anywhere()
 }
 
 fn test_input_vcf() -> String {
