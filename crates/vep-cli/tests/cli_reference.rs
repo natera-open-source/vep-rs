@@ -19,8 +19,8 @@ use vep_cli::argv::{
 };
 use vep_cli::config::{Treatment, COMPONENTS, ENVIRONMENT, ERROR_TABLE};
 use vep_cli::option_rules::{
-    ALLOW_MULTIPLE, DEPRECATED, INCOMPATIBLE, LIST_FLAGS, OPTION_SETS, OWN_RULES, REQUIRES,
-    UNSORTABLE, VALID,
+    ALLOW_MULTIPLE, DEPRECATED, INCOMPATIBLE, INCOMPATIBLE_LIFTED, LIST_FLAGS, OPTION_SETS,
+    OWN_RULES, REQUIRES, UNSORTABLE, VALID,
 };
 
 fn reference_path() -> PathBuf {
@@ -271,6 +271,16 @@ fn render(command: &Command) -> String {
         .map(|(flag, others)| vec![flag_in_code(flag), flags_in_code(others)])
         .collect();
     table(&mut out, &["Flag", "Cannot be combined with"], &rows);
+    for pair in INCOMPATIBLE_LIFTED {
+        writeln!(
+            out,
+            "{} beside {} is accepted here: {}.\n",
+            flag_in_code(pair.flag),
+            flag_in_code(pair.other),
+            cell(pair.reason)
+        )
+        .unwrap();
+    }
     out.push_str("### Required flags (`Config.pm:607-612`)\n\n");
     out.push_str("`You must set --<required> to use --<flag>`.\n\n");
     let rows: Vec<Vec<String>> = REQUIRES

@@ -259,7 +259,7 @@ const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
     group("check_frequency", &["FREQS"]),
     group("check_existing", &["CLIN_SIG", "SOMATIC", "PHENO"]),
     group("pubmed", &["PUBMED"]),
-    group("check_svs", &["SV"]),
+    vf_group("check_svs", &["SV"]),
     vf_group("dont_skip", &["CHECK_REF"]),
     group("overlaps", &["OverlapBP", "OverlapPC"]),
     group("shift_length", &["SHIFT_LENGTH"]),
@@ -3024,6 +3024,34 @@ mod tests {
         assert_eq!(
             field_value("VARIANT_CLASS", &summary, None, &opts, ","),
             "SNV"
+        );
+        assert_eq!(field_value("SYMBOL", &summary, None, &opts, ","), "");
+    }
+
+    /// `SV` is set from the variant alone too (`OutputFactory.pm:962-964`), so a
+    /// summary row carries it, and only `--check_svs` lists it.
+    #[test]
+    fn sv_survives_on_summary_rows() {
+        let opts = FieldOptions {
+            check_svs: true,
+            symbol: true,
+            ..Default::default()
+        };
+        assert_eq!(vf_level_flag_fields(&opts), ["SV"]);
+        assert_eq!(
+            vf_level_flag_fields(&FieldOptions {
+                symbol: true,
+                ..Default::default()
+            }),
+            Vec::<&str>::new()
+        );
+        let mut summary = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        summary.overlapping_svs = vec!["nsv2770691".into(), "nsv533679".into()];
+        summary.most_severe_consequence = Some(Consequence::MissenseVariant);
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(
+            field_value("SV", &summary, None, &opts, ","),
+            "nsv2770691,nsv533679"
         );
         assert_eq!(field_value("SYMBOL", &summary, None, &opts, ","), "");
     }

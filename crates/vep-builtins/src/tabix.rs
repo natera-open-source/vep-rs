@@ -137,7 +137,12 @@ pub struct TabixConfig {
     /// A record is matched by its `start..=end` span, as `tabix` matches it by
     /// the columns its index was built on (`-b` and `-e`), so this names the
     /// index's `-e` column and is `None` for an index built with `-b` and `-e`
-    /// on the same column.
+    /// on the same column. A column of `;`-separated `key=value` pairs (a VCF
+    /// `INFO` column) ends the record at its `END` key, read as `tabix -p vcf`
+    /// reads it (the key's leading integer, ignored when it lies before the
+    /// start); without one the record ends at its start plus the length of its
+    /// `ref_col` allele less one, htslib's rule for a VCF record, or at its
+    /// start when no `ref_col` is set.
     pub end_col: Option<usize>,
     /// 0-based column index for reference allele, if applicable.
     pub ref_col: Option<usize>,
@@ -466,7 +471,7 @@ impl TabixAnnotator {
             .end_col
             .is_none_or(|end_col| end_col == self.config.start_col);
         let mut line = Vec::new();
-        for chunk in chunks {
+        'chunks: for chunk in chunks {
             self.seek_to_chunk_start(&mut bgzf_reader, chunk.start())?;
 
             while bgzf_reader.virtual_position() < chunk.end() {
@@ -486,14 +491,15 @@ impl TabixAnnotator {
 
                 // A bin of a dense file holds thousands of records, so the
                 // start is read before the record is built: the file is sorted
-                // by start, so the first line past the interval ends the chunk,
-                // as htslib's iterator ends there, and on a start-only index
-                // the lines before it need no record either.
+                // by start, so the first line past the interval ends the read,
+                // as htslib's iterator ends there (the chunks come in file
+                // order, so every later chunk holds later starts), and on a
+                // start-only index the lines before it need no record either.
                 let Some(line_start) = self.line_start(trimmed) else {
                     continue;
                 };
                 if line_start > end {
-                    break;
+                    break 'chunks;
                 }
                 if start_is_span && line_start < start {
                     continue;
@@ -594,14 +600,30 @@ impl TabixAnnotator {
         let chr = std::mem::take(&mut columns[self.config.chr_col]);
         let start = self.line_start(line)?;
 
+        let ref_allele_end = || {
+            let ref_len = self
+                .config
+                .ref_col
+                .and_then(|ref_col| columns.get(ref_col))
+                .map_or(1, |allele| allele.len().max(1)) as u64;
+            start + ref_len - 1
+        };
         // An end column that is the start column names a single base, as
         // `tabix -b N -e N` does, so it takes the start's zero-based shift too.
-        let end = match self.config.end_col {
-            Some(end_col) if end_col != self.config.start_col => columns
-                .get(end_col)
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(start),
-            _ => start,
+        let end_cell = self
+            .config
+            .end_col
+            .filter(|&end_col| end_col != self.config.start_col)
+            .and_then(|end_col| columns.get(end_col))
+            .map(String::as_str);
+        let end = match end_cell {
+            None => start,
+            Some(cell) => match cell.parse::<u64>() {
+                Ok(end) => end,
+                Err(_) => info_end(cell)
+                    .filter(|&end| end >= start)
+                    .unwrap_or_else(ref_allele_end),
+            },
         };
 
         Some(TabixRecord {
@@ -629,6 +651,19 @@ impl TabixAnnotator {
     pub fn config(&self) -> &TabixConfig {
         &self.config
     }
+}
+
+/// The `END` key of a `;`-separated `key=value` column (a VCF `INFO` column):
+/// the value's leading decimal digits, `None` for a column without the key or
+/// a value that opens with none. htslib's VCF preset reads the value with
+/// `strtoll`, which also takes a sign, blanks and a hex or octal prefix; no
+/// VCF writer emits those, and a plain decimal reads the same both ways.
+fn info_end(column: &str) -> Option<u64> {
+    let value = column
+        .split(';')
+        .find_map(|pair| pair.strip_prefix("END="))?;
+    let digits: String = value.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
 }
 
 /// A gap of up to this many bases between two regions is read with them: one
@@ -1776,6 +1811,88 @@ mod tests {
 
         let batch = ann.query_batch(&[("21", 100, 102)]).unwrap();
         assert_eq!(batch.lookup("21", 100, 102).len(), 3);
+    }
+
+    /// A VCF's records end at their INFO `END` when `end_col` names the INFO
+    /// column, as `tabix -p vcf` (htslib 1.11 or later) reads them (`tabix -p
+    /// vcf` on this file prints the deletion for `21:250-250` and `21:300-300`,
+    /// nothing for `21:301-301`); an `END` is read to its first non-digit
+    /// (`END=165abc` ends at 165) and one before the start is ignored (htslib
+    /// 1.10 refuses to index such a record, and 1.9 indexes the inverted span,
+    /// so `tabix` 1.9 prints nothing for `21:153-153`); a record without a
+    /// usable `END` ends at its start plus its REF allele's length less one
+    /// when `ref_col` is set (`tabix -p vcf` prints the four-base `del_ref`
+    /// for `21:143-143` and not for `21:144-144`, and the `END=50` record for
+    /// `21:153-153`), and at its start without a `ref_col`.
+    #[test]
+    fn vcf_info_end_key_is_the_record_end() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+
+        let dir = tempfile::tempdir().unwrap();
+        let lines_in = [
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+            "21\t100\tsv_del\tN\t<deletion>\t.\t.\tdbVar;SVTYPE=deletion;END=300;IMPRECISE",
+            "21\t120\tsv_no_end\tN\t<insertion>\t.\t.\tSVTYPE=insertion",
+            "21\t130\tsv_bad_end\tN\t<insertion>\t.\t.\tSVTYPE=insertion;END=x",
+            "21\t140\tdel_ref\tACGT\tA\t.\t.\tDP=3",
+            "21\t150\tend_before_start\tACGT\t<deletion>\t.\t.\tSVTYPE=deletion;END=50",
+            "21\t160\tend_with_tail\tN\t<deletion>\t.\t.\tSVTYPE=deletion;END=165abc",
+        ];
+        let path = write_tabix_fixture(dir.path(), "svs.vcf.gz", &lines_in, IndexSpec::standard());
+        let spans_at = |ann: &TabixAnnotator, pos: u64| -> Vec<String> {
+            ann.query("21", pos, pos)
+                .unwrap()
+                .iter()
+                .map(|r| format!("{}:{}-{}", r.columns[2], r.start, r.end))
+                .collect()
+        };
+
+        let without_ref = open(path.clone(), Some(7));
+        assert_eq!(spans_at(&without_ref, 250), ["sv_del:100-300"]);
+        assert_eq!(spans_at(&without_ref, 300), ["sv_del:100-300"]);
+        assert!(spans_at(&without_ref, 301).is_empty());
+        assert_eq!(
+            spans_at(&without_ref, 120),
+            ["sv_del:100-300", "sv_no_end:120-120"]
+        );
+        assert_eq!(
+            spans_at(&without_ref, 130),
+            ["sv_del:100-300", "sv_bad_end:130-130"]
+        );
+        assert_eq!(spans_at(&without_ref, 121), ["sv_del:100-300"]);
+        assert_eq!(spans_at(&without_ref, 141), ["sv_del:100-300"]);
+
+        let with_ref = TabixAnnotator::open(TabixConfig {
+            ref_col: Some(3),
+            ..config(path, Some(7))
+        })
+        .unwrap();
+        assert_eq!(
+            spans_at(&with_ref, 143),
+            ["sv_del:100-300", "del_ref:140-143"]
+        );
+        assert_eq!(spans_at(&with_ref, 144), ["sv_del:100-300"]);
+        assert_eq!(spans_at(&with_ref, 131), ["sv_del:100-300"]);
+        assert_eq!(
+            spans_at(&with_ref, 153),
+            ["sv_del:100-300", "end_before_start:150-153"]
+        );
+        assert_eq!(spans_at(&with_ref, 154), ["sv_del:100-300"]);
+        assert_eq!(
+            spans_at(&with_ref, 165),
+            ["sv_del:100-300", "end_with_tail:160-165"]
+        );
+        assert_eq!(
+            spans_at(&without_ref, 150),
+            ["sv_del:100-300", "end_before_start:150-150"]
+        );
+
+        assert_eq!(info_end("SVTYPE=deletion;END=300;IMPRECISE"), Some(300));
+        assert_eq!(info_end("END=300"), Some(300));
+        assert_eq!(info_end("END=300abc"), Some(300));
+        assert_eq!(info_end("SVTYPE=deletion;END=x"), None);
+        assert_eq!(info_end("SVTYPE=deletion"), None);
+        assert_eq!(info_end("CIEND=1;SEND=5"), None);
     }
 
     #[test]

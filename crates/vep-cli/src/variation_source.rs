@@ -82,21 +82,33 @@ impl RegionCache {
     }
 }
 
-/// The first failure to read a variation file during one batch's lookups.
-/// The lookups run inside the annotation closure, which has no error channel
-/// of its own, so each batch records its first failure here for its driver to
-/// end the run with; a failure never reaches another batch.
+/// The first failure to read an annotation file during one batch's lookups,
+/// with the error component it is reported under. The lookups run inside the
+/// annotation closure, which has no error channel of its own, so each batch
+/// records its first failure here for its driver to end the run with; a
+/// failure never reaches another batch.
 #[derive(Default)]
-pub struct ReadFailure(Mutex<Option<String>>);
+pub struct ReadFailure(Mutex<Option<(&'static str, String)>>);
 
 impl ReadFailure {
-    /// Keeps `message` unless a failure is already recorded.
+    /// Keeps `message`, a variation file's (the `cache` component), unless a
+    /// failure is already recorded.
     pub fn record(&self, message: String) {
-        self.0.lock().unwrap().get_or_insert(message);
+        self.record_under("cache", message);
     }
 
-    /// The recorded failure, cleared.
+    /// Keeps `message` under `component` unless a failure is already recorded.
+    pub fn record_under(&self, component: &'static str, message: String) {
+        self.0.lock().unwrap().get_or_insert((component, message));
+    }
+
+    /// The recorded failure's message, cleared.
     pub fn take(&self) -> Option<String> {
+        self.take_with_component().map(|(_, message)| message)
+    }
+
+    /// The recorded failure with its component, cleared.
+    pub fn take_with_component(&self) -> Option<(&'static str, String)> {
         self.0.lock().unwrap().take()
     }
 }
@@ -488,7 +500,7 @@ fn region_window(start: u64, end: u64) -> (u64, u64) {
 }
 
 /// Sorted windows merged where they overlap or touch.
-fn merge_windows(windows: &[(u64, u64)]) -> Vec<(u64, u64)> {
+pub(crate) fn merge_windows(windows: &[(u64, u64)]) -> Vec<(u64, u64)> {
     let mut merged: Vec<(u64, u64)> = Vec::new();
     for &(low, high) in windows {
         match merged.last_mut() {

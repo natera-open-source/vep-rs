@@ -342,6 +342,24 @@ pub const INCOMPATIBLE: &[(&str, &[&str])] = &[
     ("lrg", &["offline"]),
 ];
 
+/// An [`INCOMPATIBLE`] pair that is not refused here, with the reason: the
+/// pair guards a resource vep-rs does without.
+pub struct LiftedPair {
+    pub flag: &'static str,
+    pub other: &'static str,
+    pub reason: &'static str,
+}
+
+/// The pairs of [`INCOMPATIBLE`] that hold in Ensembl VEP and not here.
+pub const INCOMPATIBLE_LIFTED: &[LiftedPair] = &[LiftedPair {
+    flag: "check_svs",
+    other: "offline",
+    reason: "Ensembl VEP reads the overlapping structural variants from its database, which \
+             `--offline` forgoes (`AnnotationSourceAdaptor.pm:203-206`); `--check_svs <file>` \
+             reads them from Ensembl's structural-variant VCF and needs no database, so the \
+             pair is accepted and the file is read offline",
+}];
+
 /// Flags Ensembl VEP refuses as deprecated, with their replacement when one
 /// exists (`Config.pm:636-638`).
 pub const DEPRECATED: &[(&str, Option<&str>)] = &[("convert", None)];
@@ -574,9 +592,10 @@ impl FlagState {
 
     /// The checks of `check_config` (`Config.pm:944-985`) on the state after the
     /// option sets: a value outside its flag's [`VALID`] list, an
-    /// [`INCOMPATIBLE`] pair (skipped under `--safe`, `:961`), a [`REQUIRES`]
-    /// rule unmet, a [`DEPRECATED`] flag. The first failure is returned as
-    /// Ensembl VEP's message without its `ERROR: ` prefix.
+    /// [`INCOMPATIBLE`] pair (skipped under `--safe`, `:961`, and the
+    /// [`INCOMPATIBLE_LIFTED`] pairs), a [`REQUIRES`] rule unmet, a
+    /// [`DEPRECATED`] flag. The first failure is returned as Ensembl VEP's
+    /// message without its `ERROR: ` prefix.
     pub fn check(&self, safe: bool) -> Result<(), String> {
         for (flag, allowed) in VALID {
             if !self.is_active(flag) {
@@ -601,7 +620,12 @@ impl FlagState {
                 if !self.is_active(flag) {
                     continue;
                 }
-                if let Some(other) = invalid.iter().find(|f| self.is_active(f)) {
+                let lifted = |other: &str| {
+                    INCOMPATIBLE_LIFTED
+                        .iter()
+                        .any(|pair| pair.flag == *flag && pair.other == other)
+                };
+                if let Some(other) = invalid.iter().find(|f| self.is_active(f) && !lifted(f)) {
                     return Err(format!("Can't use --{flag} and --{other} together"));
                 }
             }
@@ -1097,6 +1121,32 @@ our %DEPRECATED = (
         assert!(
             state.check(true).is_ok(),
             "--safe skips the incompatibility check"
+        );
+    }
+
+    /// The lifted pairs are pairs of the Perl table, and the one lifted pair
+    /// passes the check while its neighbour in the table, `lrg` beside
+    /// `offline`, is still refused.
+    #[test]
+    fn lifted_pairs_are_perl_pairs_the_check_passes() {
+        for pair in INCOMPATIBLE_LIFTED {
+            assert!(
+                INCOMPATIBLE
+                    .iter()
+                    .any(|(flag, others)| *flag == pair.flag && others.contains(&pair.other)),
+                "{} beside {} is not a pair of %INCOMPATIBLE",
+                pair.flag,
+                pair.other
+            );
+        }
+        let mut state = parse(&["vep", "--check_svs", "svs.vcf.gz", "--offline"]);
+        state.apply_option_sets();
+        assert!(state.check(false).is_ok());
+        let mut state = parse(&["vep", "--lrg", "--offline"]);
+        state.apply_option_sets();
+        assert_eq!(
+            state.check(false).unwrap_err(),
+            "Can't use --lrg and --offline together"
         );
     }
 

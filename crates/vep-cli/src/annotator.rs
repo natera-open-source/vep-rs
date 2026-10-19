@@ -17,6 +17,7 @@ use crate::config::{CliError, Config};
 use crate::filter_set::FilterSet;
 use crate::json_cache;
 use crate::nearest::NearestType;
+use crate::sv_source::{self, SvSource};
 use crate::transcript_index::{
     LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl, TranscriptSet,
 };
@@ -37,6 +38,9 @@ pub(crate) const HGVS_NEEDS_FASTA: &str = "Cannot generate HGVS coordinates (--h
 pub struct AnnotationResources {
     pub transcripts: Arc<LazyTranscriptIndexes>,
     pub variation_source: Option<Arc<VariationSource>>,
+    /// The known structural variants of `--check_svs <file>`, `None` without
+    /// the flag.
+    pub sv_source: Option<Arc<SvSource>>,
     /// Which known variants of a window co-locate with an input variant.
     pub colocation: ColocationRules,
     pub effects_config: Arc<vep_effects::EffectsConfig>,
@@ -103,8 +107,9 @@ pub enum AnnotationError {
     /// Assembly string did not match a loaded annotator.
     #[error("unsupported assembly: {0}")]
     UnsupportedAssembly(String),
-    /// A variation file of the cache could not be read, so the batch's
-    /// co-located variants are unknown; every row of that batch carries it.
+    /// A variation file of the cache or the `--check_svs` file could not be
+    /// read, so the batch's co-located or overlapping known variants are
+    /// unknown; every row of that batch carries it.
     #[error("annotation engine error: {0}")]
     Annotation(String),
 }
@@ -280,11 +285,13 @@ impl Annotator {
             TranscriptSet::from_config(config),
         )?;
         let variation_source = crate::runner::open_variation_source(config, &cache)?;
+        let sv_source = crate::runner::open_sv_source(config)?;
 
         Self::new(
             AnnotationResources {
                 transcripts,
                 variation_source,
+                sv_source,
                 colocation: ColocationRules::from_config(config),
                 effects_config,
                 builtin_plugins,
@@ -339,22 +346,23 @@ impl Annotator {
         use_parallel: bool,
     ) -> AnnotationStats {
         let (stats, failure) = self.run_batch(batch, use_parallel);
-        // This entry point returns statistics, not a result, so a variation-file
-        // read failure is logged under the error contract's component;
-        // `try_annotate_batch` returns it per row.
-        if let Some(message) = failure {
-            tracing::error!("{}", CliError::new("cache", message));
+        // This entry point returns statistics, not a result, so a read failure
+        // of a variation or structural-variant file is logged under the error
+        // contract's component; `try_annotate_batch` returns it per row.
+        if let Some((component, message)) = failure {
+            tracing::error!("{}", CliError::new(component, message));
         }
         stats
     }
 
     /// Annotates the batch on the annotator's pool; the second value is the
-    /// batch's variation-file read failure, if one occurred.
+    /// batch's read failure of a variation or structural-variant file, if one
+    /// occurred, with the error component it is reported under.
     fn run_batch(
         &self,
         batch: &mut Vec<InputVariant>,
         use_parallel: bool,
-    ) -> (AnnotationStats, Option<String>) {
+    ) -> (AnnotationStats, Option<(&'static str, String)>) {
         let resources = &self.inner.resources;
         let pool = &self.inner.pool;
         let use_parallel = use_parallel && pool.current_num_threads() > 1;
@@ -363,7 +371,7 @@ impl Annotator {
         // rayon closure and `get` never parses, so the index must already be
         // materialized; `Annotator::new` enforces that, hence no per-batch check.
         let stats = pool.install(|| annotate_batch(batch, resources, use_parallel, &failure));
-        (stats, failure.take())
+        (stats, failure.take_with_component())
     }
 
     pub fn annotate_variants(&self, batch: &mut Vec<InputVariant>) -> AnnotationStats {
@@ -383,9 +391,9 @@ impl Annotator {
     /// Mutates each variant in place (same as [`annotate_batch`]) and returns
     /// a parallel `Vec<Result<(), AnnotationError>>` where the i-th entry maps
     /// to `batch[i]`. Every entry is `Ok` unless a variation file of the cache
-    /// could not be read, when every entry carries that failure as
-    /// [`AnnotationError::Annotation`]: the rows were annotated without their
-    /// co-located variants.
+    /// or the `--check_svs` file could not be read, when every entry carries
+    /// that failure as [`AnnotationError::Annotation`]: the rows were annotated
+    /// without their co-located or overlapping known variants.
     pub fn try_annotate_batch(
         &self,
         batch: &mut Vec<InputVariant>,
@@ -401,7 +409,7 @@ impl Annotator {
         let len = batch.len();
         let (_, failure) = self.run_batch(batch, use_parallel);
         let row_result = match failure {
-            Some(message) => Err(AnnotationError::Annotation(message)),
+            Some((_component, message)) => Err(AnnotationError::Annotation(message)),
             None => Ok(()),
         };
         vec![row_result; len]
@@ -409,8 +417,8 @@ impl Annotator {
 
     /// Annotate a batch of [`RawRow`]s, producing one annotated `InputVariant`
     /// per row or an [`AnnotationError`] for rows that fail validation/parse,
-    /// and for every parsed row when a variation file of the cache could not
-    /// be read.
+    /// and for every parsed row when a variation file of the cache or the
+    /// `--check_svs` file could not be read.
     ///
     /// This is the high-level per-row entry point intended for embedding consumers
     /// that already speak the simple-allele input shape (chr, pos, ref, alt).
@@ -449,7 +457,9 @@ impl Annotator {
                         .next()
                         .expect("annotated batch length must equal success-row count");
                     match &read_failure {
-                        Some(message) => Err(AnnotationError::Annotation(message.clone())),
+                        Some((_component, message)) => {
+                            Err(AnnotationError::Annotation(message.clone()))
+                        }
                         None => Ok(variant),
                     }
                 }
@@ -669,11 +679,11 @@ pub fn load_transcript_indexes(
 
 /// Annotate a batch of variants, optionally in parallel using rayon.
 ///
-/// A failure to read a variation file of the cache lands in `failure`, the
-/// caller's per-batch slot: this function returns statistics, and the lookups
-/// inside the closure have no error channel of their own. A caller that drops
-/// the slot unread annotates the batch without its co-located variants and
-/// never learns it.
+/// A failure to read a variation file of the cache or the `--check_svs` file
+/// lands in `failure`, the caller's per-batch slot: this function returns
+/// statistics, and the lookups inside the closure have no error channel of
+/// their own. A caller that drops the slot unread annotates the batch without
+/// its co-located or overlapping known variants and never learns it.
 pub fn annotate_batch(
     batch: &mut Vec<InputVariant>,
     resources: &AnnotationResources,
@@ -686,6 +696,11 @@ pub fn annotate_batch(
         if let Err(error) = source.prefetch(batch.iter().map(|v| (v.chr.as_str(), v.start, v.end)))
         {
             failure.record(format!("{error:#}"));
+        }
+    }
+    if let Some(source) = &resources.sv_source {
+        if let Err(error) = source.prefetch(sv_source::batch_spans(batch)) {
+            failure.record_under("check_svs", format!("{error:#}"));
         }
     }
     let annotate_one = |variant: &mut InputVariant| {
@@ -732,6 +747,9 @@ pub fn annotate_batch(
 
         if let Some(source) = &resources.variation_source {
             variation_matcher::annotate_colocated(variant, source, &resources.colocation, failure);
+        }
+        if let Some(source) = &resources.sv_source {
+            sv_source::annotate_overlapping_svs(variant, source, failure);
         }
 
         // A breakend's intergenic verdict is its record's: `apply_record_rules`.
@@ -812,6 +830,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts,
             variation_source: None,
+            sv_source: None,
             colocation: ColocationRules::default(),
             effects_config: Arc::new(vep_effects::EffectsConfig::default()),
             builtin_plugins: Arc::new(BuiltinRegistry::new()),
@@ -1179,6 +1198,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts: Arc::new(LazyTranscriptIndexes::empty()),
             variation_source: Some(Arc::new(source)),
+            sv_source: None,
             colocation: ColocationRules::default(),
             effects_config: Arc::new(vep_effects::EffectsConfig::default()),
             builtin_plugins: Arc::new(BuiltinRegistry::new()),

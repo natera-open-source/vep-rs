@@ -355,6 +355,10 @@ pub const COMPONENTS: &[(&str, &str)] = &[
         "a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect",
     ),
     (
+        "check_svs",
+        "the `--check_svs` file: it is not a file, has no `.csi` or `.tbi` index beside it, or cannot be read",
+    ),
+    (
         "config",
         "the `--config` file, or a `vep.ini` that is a file, cannot be read; or a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer",
     ),
@@ -610,6 +614,9 @@ pub struct Config {
     pub clin_sig_allele: bool,
     pub clinvar_somatic_classification: bool,
     pub var_synonyms: bool,
+    /// `--check_svs <file>`: the indexed structural-variant VCF the `SV` column
+    /// is read from; `None` without the flag.
+    pub check_svs: Option<String>,
     pub coding_only: bool,
     pub no_intergenic: bool,
 
@@ -971,6 +978,7 @@ impl Config {
             clin_sig_allele: args.clin_sig_allele != 0,
             clinvar_somatic_classification: args.clinvar_somatic_classification,
             var_synonyms: on("var_synonyms"),
+            check_svs: args.check_svs.as_deref().map(expand_tilde),
             coding_only: args.coding_only,
             no_intergenic: args.no_intergenic,
             pick: args.pick,
@@ -2083,7 +2091,15 @@ mod tests {
             COMPONENTS.iter().map(|(name, _)| *name).collect();
         assert_eq!(names.len(), COMPONENTS.len(), "{COMPONENTS:?}");
         for component in [
-            "cli", "input", "output", "cache", "fasta", "filter", "config", "run",
+            "cli",
+            "input",
+            "output",
+            "cache",
+            "fasta",
+            "filter",
+            "check_svs",
+            "config",
+            "run",
         ] {
             assert!(names.contains(component), "{component}");
         }

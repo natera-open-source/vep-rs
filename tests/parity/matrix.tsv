@@ -90,11 +90,11 @@ cdna-and-coding-region-bounds	-	implemented	open
 cell-type-header-and-field-group	Constants.pm	implemented	open			
 cell_type	Config.pm	implemented	open			
 check-ref-column	Constants.pm	implemented	open			
-check-svs-offline-source	-	documented_subset	open			
+check-svs-offline-source	-	documented_subset	landed:documented_subset	crates/vep-cli/src/sv_source.rs::parent_records_and_probe_class_are_excluded;crates/vep-cli/src/sv_source.rs::documented_exclusion_is_stated	tests/golden/116/GRCh38-checksvs	
 check_existing	Config.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::snv_with_different_alt_does_not_match;crates/vep-cli/src/variation_matcher.rs::indel_matches_after_trimming_both_directions;crates/vep-cli/src/variation_matcher.rs::committed_corpus_slices_match_ensembl_vep_existing_variation	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 check_frequency	Config.pm	implemented	open			
 check_ref	Parser.pm::validate_vf	implemented	open			
-check_svs	Config.pm	implemented	open			
+check_svs	Config.pm	implemented	landed:implemented	crates/vep-cli/src/sv_source.rs::overlapping_svs_sorted_into_sv_column;crates/vep-cli/src/args.rs::check_svs_takes_the_sv_file	tests/golden/116/GRCh38-checksvs	
 chr	Config.pm	implemented	open			
 chromosome-absent-from-cache	Parser.pm	implemented	open			
 chromosome-name-normalisation	Parser.pm	implemented	open			

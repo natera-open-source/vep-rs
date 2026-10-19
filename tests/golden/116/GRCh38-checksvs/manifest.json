@@ -1,0 +1,182 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "max_span": 1000000,
+ "covers": [
+  "check_svs",
+  "check-svs-offline-source"
+ ],
+ "suites": {
+  "GRCh38-checksvs": {
+   "reference": "reference.txt",
+   "input": "candidates.vcf",
+   "rows": 28,
+   "combinations": 5
+  }
+ },
+ "combinations": {
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intergenic_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 11
+  },
+  "intron_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  }
+ },
+ "variant_classes": {
+  "deletion": 2,
+  "insertion": 2,
+  "snv": 23,
+  "symbolic_deletion": 1
+ },
+ "records": [
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5028997\t.\tTCA\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5028998\t.\tCAT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5028999\t.\tA\tAT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5028999\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5029000\t.\tT\t<DEL>\t.\t.\tSVTYPE=DEL;END=5047000",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5029000\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5029000\t.\tT\tTG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5030192\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5030602\t.\tA\tC,T\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5047000\t.\tT\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5047001\t.\tT\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t44195140\t.\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "check-svs",
+   "flags": [
+    "--check_svs",
+    "structural_variants.vcf.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_check-svs",
+   "covers": [
+    "check_svs",
+    "check-svs-offline-source"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "SV"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

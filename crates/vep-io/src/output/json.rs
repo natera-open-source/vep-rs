@@ -107,16 +107,26 @@ impl JsonOutputFormatter {
             if *name == "NEAREST" {
                 continue;
             }
-            let value = fields::field_value(name, first, None, &self.options, ",");
-            if !value.is_empty() {
-                let key = json_key(name);
-                let v = numberify(&key, value);
-                root.insert(key, v);
-            }
+            let key = json_key(name);
+            // The structural variants stay a list (`[sort keys ...]`,
+            // OutputFactory.pm:962-964), each name numberified (JSON.pm:288).
+            let value = if *name == "SV" {
+                if first.overlapping_svs.is_empty() {
+                    continue;
+                }
+                numberified_list(&first.overlapping_svs)
+            } else {
+                let value = fields::field_value(name, first, None, &self.options, ",");
+                if value.is_empty() {
+                    continue;
+                }
+                numberify(&key, value)
+            };
+            root.insert(key, value);
         }
-        // `nearest` is the one record key that is a list (`JSON.pm:262` writes the
-        // record hash's array as is), so the loop above skips it and it is written
-        // here as an array, the empty list included.
+        // `nearest` is a record key that is a list (`JSON.pm:262` writes the
+        // record hash's array as is) and is kept when empty, so the loop above
+        // skips it and it is written here as an array, the empty list included.
         if let Some(nearest) = &first.nearest {
             root.insert(
                 "nearest".to_string(),
@@ -216,7 +226,9 @@ impl JsonOutputFormatter {
             .collect();
         // The co-located variant and frequency fields are stubbed out of the
         // consequence hash by the JSON factory (OutputFactory/JSON.pm:493-515) and
-        // written under `colocated_variants` instead.
+        // written under `colocated_variants` instead; `SV` is the record's key
+        // (OutputFactory.pm:962-964), written at the top level as
+        // `colocated_structural_variants` and in no consequence object.
         for k in fields::extra_keys(variant, tc, &self.options) {
             if !names.contains(&k)
                 && !self.vf_level_fields.contains(&k)
@@ -398,6 +410,7 @@ fn json_key(field: &str) -> String {
         "OverlapPC" => "percentage_overlap".to_string(),
         "RefSeq" => "refseq_transcript_ids".to_string(),
         "ENSP" => "protein_id".to_string(),
+        "SV" => "colocated_structural_variants".to_string(),
         other => other.to_lowercase(),
     }
 }
@@ -1411,6 +1424,36 @@ mod tests {
         assert_eq!(past_the_end["mirna"], json!([null, "miRNA_stem"]));
         let none = attribute_object(|_| {});
         assert!(none.get("mirna").is_none());
+    }
+
+    /// The overlapping structural variants are one record-level list,
+    /// `colocated_structural_variants` (JSON.pm:110 renames `sv`), in no
+    /// consequence object (the factory builds those from an empty hash,
+    /// JSON.pm:320), and absent when the record overlaps none; Ensembl VEP
+    /// 116.2 writes `["nsv2770691","nsv3109934","nsv3163927","nsv3167562",
+    /// "nsv533679"]` for `21 5028999 A G` of the `GRCh38-checksvs` corpus.
+    #[test]
+    fn colocated_structural_variants_is_a_record_level_list() {
+        let mut v = make_annotated_variant();
+        v.overlapping_svs = ["nsv2770691", "nsv3109934", "nsv533679"]
+            .map(String::from)
+            .to_vec();
+        let formatter = fmt(FieldOptions {
+            check_svs: true,
+            ..Default::default()
+        });
+        let parsed = formatter.format_variant_value(&v);
+        assert_eq!(
+            parsed["colocated_structural_variants"],
+            json!(["nsv2770691", "nsv3109934", "nsv533679"])
+        );
+        let consequence = &parsed["transcript_consequences"][0];
+        for key in ["sv", "colocated_structural_variants"] {
+            assert!(consequence.get(key).is_none(), "{key} in {consequence}");
+        }
+        v.overlapping_svs.clear();
+        let parsed = formatter.format_variant_value(&v);
+        assert!(parsed.get("colocated_structural_variants").is_none());
     }
 
     #[test]

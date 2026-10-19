@@ -51,6 +51,7 @@ pub(crate) mod pipeline;
 pub(crate) mod render;
 pub mod row_filter;
 pub mod runner;
+pub mod sv_source;
 pub mod transcript_index;
 pub mod variation_matcher;
 pub mod variation_source;

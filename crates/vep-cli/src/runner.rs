@@ -13,6 +13,7 @@
 //!
 //! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`).
 
+use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Cursor, Read, Write};
 use std::path::Path;
@@ -38,6 +39,7 @@ use crate::output_compress::{CompressedOutput, OutputCompression};
 use crate::pick::FilterConfig;
 use crate::pipeline;
 use crate::row_filter::RowFilters;
+use crate::sv_source::{self, SvSource};
 use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex, TranscriptSet};
 use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_source::{ReadFailure, VariationSource};
@@ -508,6 +510,11 @@ pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: Option<u
 /// hold gets no verdict (the library path, which has no skip step and leaves such
 /// a record to its caller); the binary's records reach here only when the skip
 /// rules kept them, so it passes `None`.
+///
+/// The known structural variants of `--check_svs` are the record's as well
+/// (`$vf->{overlapping_svs}`, `OutputFactory.pm:962-964`): every allele's rows
+/// print the union over the record's alleles, which differ only when a breakend
+/// allele's mate position reaches names its own position does not.
 pub(crate) fn apply_record_rules(
     batch: &mut [InputVariant],
     loaded: Option<&LazyTranscriptIndexes>,
@@ -522,6 +529,21 @@ pub(crate) fn apply_record_rules(
         if intergenic_breakend_record {
             for v in alleles.iter_mut() {
                 v.most_severe_consequence = Some(Consequence::IntergenicVariant);
+            }
+        }
+        let svs_differ = alleles.iter().any(|v| v.mate_pos.is_some())
+            && alleles
+                .windows(2)
+                .any(|pair| pair[0].overlapping_svs != pair[1].overlapping_svs);
+        if svs_differ {
+            let union: Vec<String> = alleles
+                .iter()
+                .flat_map(|v| v.overlapping_svs.iter().cloned())
+                .collect::<BTreeSet<String>>()
+                .into_iter()
+                .collect();
+            for v in alleles.iter_mut() {
+                v.overlapping_svs.clone_from(&union);
             }
         }
     }
@@ -609,7 +631,7 @@ impl Runner {
             check_frequency: false,
             check_existing: c.check_existing,
             pubmed: c.pubmed,
-            check_svs: false,
+            check_svs: c.check_svs.is_some(),
             dont_skip: c.dont_skip,
             overlaps: c.overlaps,
             nearest: c.nearest.is_some(),
@@ -815,6 +837,7 @@ impl Runner {
         )?);
 
         let variation_source = open_variation_source(&self.config, &self.cache)?;
+        let sv_source = open_sv_source(&self.config)?;
 
         // Parquet: a TSV intermediate at `<output_file>.tsv.tmp`, converted by a
         // DuckDB subprocess after the write loop.
@@ -977,6 +1000,7 @@ impl Runner {
         let annotation_resources = AnnotationResources {
             transcripts,
             variation_source,
+            sv_source,
             colocation: ColocationRules::from_config(&self.config),
             effects_config,
             builtin_plugins,
@@ -1516,6 +1540,18 @@ pub(crate) fn open_variation_source(
     }
 }
 
+/// The structural-variant source of `--check_svs <file>`, `None` without the
+/// flag; a file that cannot be opened is the `check_svs` error.
+pub(crate) fn open_sv_source(config: &Config) -> anyhow::Result<Option<Arc<SvSource>>> {
+    let Some(path) = &config.check_svs else {
+        return Ok(None);
+    };
+    let source = SvSource::open(Path::new(path))
+        .map_err(|error| CliError::new("check_svs", format!("{error:#}")))?;
+    info!("Structural variants: {path}");
+    Ok(Some(Arc::new(source)))
+}
+
 /// Ensembl VEP's refusal of `--af_gnomad` on a cache whose declared variation
 /// columns lack `gnomADe` (CacheDir.pm:179-197): checked for that spelling
 /// alone, under `--check_existing`, on a cache that declares columns, and not
@@ -1541,6 +1577,8 @@ fn check_gnomad_columns(config: &Config, info: &CacheInfo) -> Result<(), CliErro
 pub(crate) struct AnnotationResources {
     transcripts: Arc<LazyTranscriptIndexes>,
     variation_source: Option<Arc<VariationSource>>,
+    /// The known structural variants of `--check_svs`, `None` without the flag.
+    sv_source: Option<Arc<SvSource>>,
     /// Which known variants of a window co-locate with an input variant.
     colocation: ColocationRules,
     effects_config: Arc<vep_effects::EffectsConfig>,
@@ -1660,13 +1698,19 @@ pub(crate) fn prewarm_batch(
         pool.install(|| source.prefetch(batch.iter().map(|v| (v.chr.as_str(), v.start, v.end))))
             .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
     }
+    if let Some(source) = &resources.sv_source {
+        pool.install(|| source.prefetch(sv_source::batch_spans(batch)))
+            .map_err(|error| CliError::new("check_svs", format!("{error:#}")))?;
+    }
     Ok(())
 }
 
-/// Ends the run on a variation-file read failure a batch's lookups recorded.
+/// Ends the run on a read failure a batch's lookups recorded, under the
+/// component the failure was recorded for: a variation file's is `cache`, the
+/// `--check_svs` file's is `check_svs`.
 pub(crate) fn check_variation_reads(failure: &ReadFailure) -> anyhow::Result<()> {
-    match failure.take() {
-        Some(message) => Err(CliError::new("cache", message).into()),
+    match failure.take_with_component() {
+        Some((component, message)) => Err(CliError::new(component, message).into()),
         None => Ok(()),
     }
 }
@@ -1725,6 +1769,9 @@ pub(crate) fn annotate_one(
 
     if let Some(source) = &resources.variation_source {
         variation_matcher::annotate_colocated(variant, source, &resources.colocation, failure);
+    }
+    if let Some(source) = &resources.sv_source {
+        sv_source::annotate_overlapping_svs(variant, source, failure);
     }
 
     // A record on a chromosome the cache lacks reaches annotation only under
@@ -2089,6 +2136,7 @@ pub(crate) fn annotate_batch_for_test(
     let resources = AnnotationResources {
         transcripts,
         variation_source: None,
+        sv_source: None,
         colocation: ColocationRules::default(),
         effects_config: Arc::new(vep_effects::EffectsConfig {
             upstream_distance: 5_000,
@@ -2147,6 +2195,7 @@ pub(crate) fn default_rows_for_test(
     let resources = AnnotationResources {
         transcripts,
         variation_source,
+        sv_source: None,
         colocation: ColocationRules::default(),
         effects_config: Arc::new(vep_effects::EffectsConfig {
             upstream_distance: 5_000,
@@ -2944,6 +2993,7 @@ mod tests {
         AnnotationResources {
             transcripts,
             variation_source: None,
+            sv_source: None,
             colocation: ColocationRules::default(),
             effects_config: Arc::new(vep_effects::EffectsConfig {
                 upstream_distance: 5_000,
@@ -3496,6 +3546,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts,
             variation_source: None,
+            sv_source: None,
             colocation: ColocationRules::default(),
             effects_config,
             builtin_plugins,
@@ -3554,6 +3605,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts,
             variation_source: None,
+            sv_source: None,
             colocation: ColocationRules::default(),
             effects_config,
             builtin_plugins,
@@ -3617,6 +3669,7 @@ mod tests {
             let resources = AnnotationResources {
                 transcripts: Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)),
                 variation_source: None,
+                sv_source: None,
                 colocation: ColocationRules::default(),
                 effects_config: Arc::new(vep_effects::EffectsConfig::default()),
                 builtin_plugins: Arc::new(BuiltinRegistry::new()),
@@ -4055,6 +4108,38 @@ mod tests {
                 None,
             ]
         );
+    }
+
+    /// The `SV` names are the record's: a breakend record's own allele and its
+    /// mate allele both print the union of what either position reached, sorted
+    /// and unique (`$vf->{overlapping_svs}`, `OutputFactory.pm:962-964`), while
+    /// a record whose alleles agree, and a record without a breakend, is left as
+    /// annotated.
+    #[test]
+    fn breakend_record_alleles_share_the_structural_variant_names() {
+        let mut batch = Vec::new();
+        for (n, line) in [
+            "21\t100\tbnd_a\tN\tN[21:500[\t.\t.\tSVTYPE=BND;MATEID=bnd_b",
+            "21\t200\tsnv\tA\tC,G\t.\t.\t.",
+        ]
+        .iter()
+        .enumerate()
+        {
+            for mut v in parse_vcf_line(line, true).unwrap() {
+                v.input_record = n as u64 + 1;
+                batch.push(v);
+            }
+        }
+        assert_eq!(batch.len(), 4);
+        batch[0].overlapping_svs = vec!["nsv2".to_string(), "nsv9".to_string()];
+        batch[1].overlapping_svs = vec!["esv1".to_string(), "nsv9".to_string()];
+        batch[2].overlapping_svs = vec!["nsv5".to_string()];
+        batch[3].overlapping_svs = vec!["nsv5".to_string()];
+        apply_record_rules(&mut batch, None);
+        assert_eq!(batch[0].overlapping_svs, ["esv1", "nsv2", "nsv9"]);
+        assert_eq!(batch[1].overlapping_svs, ["esv1", "nsv2", "nsv9"]);
+        assert_eq!(batch[2].overlapping_svs, ["nsv5"]);
+        assert_eq!(batch[3].overlapping_svs, ["nsv5"]);
     }
 
     /// `--max_sv_size -1` lifts the size limit: the 10.6 Mb deletion of the

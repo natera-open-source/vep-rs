@@ -1638,7 +1638,9 @@ pub fn compare_json_identity(actual: &str) -> String {
 }
 
 /// Version lines of the Ensembl Perl API components, which vep-rs has no
-/// counterpart for; they may be absent.
+/// counterpart for, and the `## Connected to <database> on <host>` line of a
+/// reference generated with a database connection (a `--check_svs` run), which
+/// vep-rs, reading a local cache only, never writes; they may be absent.
 fn is_api_component_line(line: &str) -> bool {
     [
         "ensembl",
@@ -1649,6 +1651,20 @@ fn is_api_component_line(line: &str) -> bool {
     ]
     .iter()
     .any(|c| line.starts_with(&format!("## {c} version ")))
+        || line.starts_with("## Connected to ")
+}
+
+/// The `## Using API version <n>, DB version <m>` line as an offline run writes
+/// it: a reference generated with a database connection names the database's
+/// version where an offline run, and vep-rs, write `?`.
+fn with_unknown_db_version(line: &str) -> String {
+    let api_and_db_versions = line
+        .strip_prefix("## Using API version ")
+        .and_then(|versions| versions.split_once(", DB version "));
+    match api_and_db_versions {
+        Some((api, _db)) => format!("## Using API version {api}, DB version ?"),
+        None => line.to_string(),
+    }
 }
 
 /// Compares the `#`-prefixed header lines of a default or tab output, the
@@ -1678,7 +1694,7 @@ pub fn compare_tab_headers(expected: &str, actual: &str) -> String {
                     i + 1
                 );
             }
-        } else if a != e {
+        } else if *a != with_unknown_db_version(e) {
             return format!("header line {}: expected {e:?}, got {a:?}", i + 1);
         }
         ai += 1;
@@ -1731,7 +1747,7 @@ pub fn compare_column_descriptions(expected: &str, actual: &str) -> String {
 }
 
 /// Compares VCF meta lines: `##fileformat` and `##INFO` exact, the `##VEP=`
-/// line with its `time`, `cache` and API-component tokens removed, the
+/// line with its `time`, `cache`, `db` and API-component tokens removed, the
 /// command line by prefix, the `##vep-rs=` identity line set aside; the
 /// `#CHROM` line exact.
 pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
@@ -1757,8 +1773,11 @@ pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
                 let sp = after.find(' ').unwrap_or(after.len());
                 (&after[..sp], &after[sp..])
             };
-            let drop =
-                matches!(key, "time" | "cache") || key == "ensembl" || key.starts_with("ensembl-");
+            // `db` names the database a reference generated with a connection
+            // read; an offline run writes no such token, nor does vep-rs.
+            let drop = matches!(key, "time" | "cache" | "db")
+                || key == "ensembl"
+                || key.starts_with("ensembl-");
             if !drop {
                 tokens.push(format!("{key}={value}"));
             }

@@ -670,6 +670,14 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long = "var_synonyms")]
     pub var_synonyms: bool,
 
+    /// Report the known structural variants overlapping each variant (SV) from Ensembl's indexed structural-variant VCF (homo_sapiens_structural_variations.vcf.gz with its .csi or .tbi beside it), Ensembl's dump of the database Ensembl VEP reads them from; Ensembl VEP takes the flag without a value and refuses it offline
+    #[arg(
+        help_heading = "Output Control",
+        long = "check_svs",
+        value_name = "FILE"
+    )]
+    pub check_svs: Option<String>,
+
     /// Keep only the rows whose allele lies in a transcript's coding sequence (a
     /// CDS position or a coding consequence term, a variant covering a translated
     /// transcript whole included); intergenic and non-coding rows go, and a record
@@ -1200,6 +1208,25 @@ mod tests {
         assert!(
             matches!(err, ParseFailure::Usage(_)),
             "a non-integer is clap's own error: {err}"
+        );
+    }
+
+    /// `--check_svs` names the structural-variant file to read, where Ensembl
+    /// VEP's `check_svs` (Config.pm:125) is a switch reading its database; the
+    /// flag beside `--offline`, which Ensembl VEP refuses (`%INCOMPATIBLE`,
+    /// Config.pm:628), is accepted here, the file needing no database.
+    #[test]
+    fn check_svs_takes_the_sv_file() {
+        assert_eq!(Config::from_argv(["vep"]).unwrap().check_svs, None);
+        let config = Config::from_argv(["vep", "--check_svs", "svs.vcf.gz"]).unwrap();
+        assert_eq!(config.check_svs.as_deref(), Some("svs.vcf.gz"));
+        let offline = Config::from_argv(["vep", "--offline", "--check_svs=svs.vcf.gz"]).unwrap();
+        assert_eq!(offline.check_svs.as_deref(), Some("svs.vcf.gz"));
+        assert!(offline.offline);
+        let err = Config::from_argv(["vep", "--check_svs"]).unwrap_err();
+        assert!(
+            matches!(err, ParseFailure::Usage(_)),
+            "the bare flag is clap's own error: {err}"
         );
     }
 

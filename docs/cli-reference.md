@@ -156,6 +156,7 @@ Grouped by section as `--help` groups them. A repeated single-value flag keeps i
 | `--clin_sig_allele` | i64 | `1` | Report the ClinVar significance of the row's own allele where a co-located variant carries allele-specific entries (1, the default); 0 reports every variant's significance whatever the allele |
 | `--clinvar_somatic_classification` | bool | false | Add the ClinVar somatic classification of co-located variants (CLINVAR_SOMATIC_CLASSIFICATION), the cache's string as written |
 | `--var_synonyms` | bool | false | Add the known synonyms of co-located variants and their sources (VAR_SYNONYMS); switches on --check_existing |
+| `--check_svs` | String | -- | Report the known structural variants overlapping each variant (SV) from Ensembl's indexed structural-variant VCF (homo_sapiens_structural_variations.vcf.gz with its .csi or .tbi beside it), Ensembl's dump of the database Ensembl VEP reads them from; Ensembl VEP takes the flag without a value and refuses it offline |
 | `--coding_only` | bool | false | Keep only the rows whose allele lies in a transcript's coding sequence (a CDS position or a coding consequence term, a variant covering a translated transcript whole included); intergenic and non-coding rows go, and a record left with no row is written as an unannotated one |
 | `--no_intergenic` | bool | false | Write no row for a record that overlaps no transcript: no intergenic row in the default and tab formats, the VCF line without a CSQ entry, and in JSON a most_severe_consequence of "?" with no intergenic_consequences |
 | `--hgnc` | bool | false | Accepted without effect: Ensembl VEP declares it and reads nothing from it |
@@ -308,6 +309,8 @@ Ensembl VEP's option rules are applied as data, from `Config.pm:327-645` at rele
 | `--shift_hgvs` | `--shift_3prime`, `--shift_genomic` |
 | `--lrg` | `--offline` |
 
+`--check_svs` beside `--offline` is accepted here: Ensembl VEP reads the overlapping structural variants from its database, which `--offline` forgoes (`AnnotationSourceAdaptor.pm:203-206`); `--check_svs <file>` reads them from Ensembl's structural-variant VCF and needs no database, so the pair is accepted and the file is read offline.
+
 ### Required flags (`Config.pm:607-612`)
 
 `You must set --<required> to use --<flag>`.
@@ -439,6 +442,7 @@ Getopt::Long's defaults apply to the command line: a long option is read in any 
   - `cache`: the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read
   - `fasta`: the reference FASTA: the file or directory named cannot be read as an indexed FASTA, or a flag that reads it (`--hgvs`, `--hgvsg`, `--shift_3prime 1`) was given and none was named or found in the cache directory
   - `filter`: a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect
+  - `check_svs`: the `--check_svs` file: it is not a file, has no `.csi` or `.tbi` index beside it, or cannot be read
   - `config`: the `--config` file, or a `vep.ini` that is a file, cannot be read; or a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer
   - `run`: any other failure of the annotation run, with its cause chain
 - `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown flag, a prefix of several flags, a missing value, a value outside an enumeration.

@@ -32,8 +32,9 @@ allele, alleles trimmed. Each variant then passes through `annotate_one`: `annot
 visits every transcript overlapping the variant's span and calls
 `vep_effects::calculate_consequences` on each, a missense consequence gains its SIFT (Sorting
 Intolerant From Tolerant) and PolyPhen (Polymorphism Phenotyping) predictions, a breakend
-gains its mate's consequences, `variation_matcher` attaches the co-located known variants, and
-a variant on a cached chromosome that overlaps nothing becomes `intergenic_variant`. Built-in
+gains its mate's consequences, `variation_matcher` attaches the co-located known variants,
+`sv_source` the known structural variants of `--check_svs`, and a variant on a cached
+chromosome that overlaps nothing becomes `intergenic_variant`. Built-in
 plugins see the whole batch in one `run_batch` call and dynamic-library plugins run per
 consequence; `pick::apply_to_batch` applies the pick flags and summaries to each record's
 alleles together; `render_record` hands each record's alleles to the chosen `vep-io` formatter,
@@ -65,6 +66,7 @@ DuckDB subprocess once the pipeline has drained.
 | `src/nearest.rs`            | `--nearest`: the protein-coding transcription start sites nearest a record, found as Ensembl VEP's `TranscriptTree::nearest` finds them over the chromosome's site table, and the identifiers reported for them                                                                                   |
 | `src/vcf_parser.rs`         | Parses one VCF data line into `InputVariant`s: the fixed fields, allele trimming and minimisation per alternate allele, structural records through `vep-core`'s routing, the `--max_sv_size` limit                          |
 | `src/variation_matcher.rs`  | Matches input variants to the known variants of their window as Ensembl VEP does (by allele after trimming from either end, strand-aware, span-only for null alleles and under `--no_check_alleles`, `--failed` applied), and writes the Extra column fields (IMPACT, STRAND, the frequency and clinical fields, plugin keys) |
+| `src/sv_source.rs`          | `SvSource`: Ensembl's structural-variant VCF of `--check_svs <file>`, read through its index for the top-level records overlapping each variant, with a per-batch prefetch; the names fill `SV` and the JSON `colocated_structural_variants`                                                                                  |
 | `src/pick.rs`               | `FilterConfig`, `apply_to_record` and `apply_to_batch`: the record-level steps over an input record, the row filters of `src/row_filter.rs` first, then VEP's pick algorithm and summaries for `--pick`, `--per_gene`, `--pick_order`, `--most_severe`, `--summary` and the `--flag_pick` variants |
 | `src/row_filter.rs`         | `RowFilters` and `affects_cds`: the `--no_intergenic` and `--coding_only` row filters, applied to each input record before the pick family as Ensembl VEP applies them |
 | `src/filter_set.rs`         | `FilterSet`: Ensembl VEP's filter grammar (`field operator value` units joined by `and` and `or`, grouped by parentheses and inverted by `not`), compiled from `--transcript_filter` over the cache's transcript keys and evaluated on each overlapping transcript before its consequences are calculated |
