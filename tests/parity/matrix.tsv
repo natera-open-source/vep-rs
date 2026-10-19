@@ -71,7 +71,7 @@ byte_transparent_input	-	implemented	landed:implemented	crates/vep-cli/tests/inp
 cache	Config.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::perl_layout_resolves_leaf;crates/vep-cli/tests/cli_run_control.rs::no_cache_is_fatal_before_first_variant	tests/golden/116/GRCh38-run-control	
 cache-chr-synonyms	CacheDir.pm	implemented	landed:implemented	crates/vep-core/src/synonyms.rs::cache_synonyms_loaded_from_json_cache;crates/vep-cli/src/cache_resolve.rs::synonyms_come_from_the_flag_else_the_cache_file;crates/vep-cache-builder/src/info.rs::chr_synonyms_match_the_ensembl_dumper	tests/golden/116/GRCh38-synonyms	
 cache-clin-sig-allele	Database/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_source.rs::parses_clin_sig_allele_entries_by_allele	tests/golden/116/GRCh38-colocated	
-cache-clinical-impact	Database/Variation.pm	implemented	open			
+cache-clinical-impact	Database/Variation.pm	implemented	landed:implemented	crates/vep-cache-builder/src/variation.rs::clinical_impact_from_clinvar_dumps	tests/golden/116/GRCh38-native-builder	
 cache-dir-resolution	CacheDir.pm	accepted_noop	open			
 cache-fasta-auto-detection	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_resolve.rs::no_fasta_suppresses_autodetect	tests/golden/116/GRCh37-hgvs	
 cache-refseq-merged-tarballs	JoinVEP.pm	documented_subset	open			

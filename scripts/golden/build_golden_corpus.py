@@ -24,7 +24,24 @@ Subcommands:
             written) and its `flag_sets` (each set's run definition and
             `covers`; the divergence keys `classify --flag-set` wrote describe the old
             records and are dropped, as the manifest's own are), and a run with neither
-            writes nothing. `--keep-samples N` keeps `FORMAT` and the first N sample
+            writes nothing. `--include <sid>=<name>` (repeatable) names a record of suite
+            `sid`'s input, by its ID or by VEP's name for an ID-less record, that the
+            corpus carries whatever the sampling chooses: its rows in the suite's
+            reference join the chosen exemplars after the sampling, so a record chosen
+            for what it co-locates with rather than for its consequence set stays in
+            even when another record of the same stratum is sampled; the names are
+            recorded as `included_records`. `--keep-records` keeps every record of the
+            manifest being regenerated the same way, each resolved again from its
+            suite's input and rowed again from its suite's reference, so a regeneration
+            loses no record (the count is recorded as `kept_records`, and the manifest's
+            `included_records` are carried into the new map as named records). A named or
+            kept record is an exemplar of every combination its reference rows show, so
+            `variant_classes` and `family_strata` count each of those rows, and it survives
+            `--max-records`; one with no row in its suite's reference is an error, and
+            nothing is written, so a corpus whose manifest carries a record the reference
+            skipped (`reference_warning`) is regenerated without `--keep-records`, which
+            keeps no record by name: that record returns only when the sampling picks it.
+            `--keep-samples N` keeps `FORMAT` and the first N sample
             columns of every record and of the `#CHROM` header, and adds records until
             every genotype class the inputs show among those samples has
             `--genotype-exemplars` records (`--require-genotype-class` names a class the
@@ -503,18 +520,25 @@ def reservoir_step(rng: random.Random, bucket: list, item, offered: int, capacit
 
 
 def reservoir_pass(
-    suites: list[tuple[str, Path, Path]], seed: int, family_specs: list[str] | None = None
-) -> tuple[dict[str, list[Row]], Counter[str], dict[str, Counter[str]], dict[str, list[Row]]]:
+    suites: list[tuple[str, Path, Path]],
+    seed: int,
+    family_specs: list[str] | None = None,
+    named: dict[str, set[str]] | None = None,
+) -> tuple[dict[str, list[Row]], Counter[str], dict[str, Counter[str]], dict[str, list[Row]], dict[tuple[str, str], list[Row]]]:
     """One streaming pass: per consequence set, a bounded uniform sample of rows plus counts,
-    and per family stratum (when `family_specs` is given) a smaller sample of its own, so a
-    stratum too rare to reach any consequence set's sample still has candidates."""
+    per family stratum (when `family_specs` is given) a smaller sample of its own, so a
+    stratum too rare to reach any consequence set's sample still has candidates, and every
+    row of the records `named` (per suite, their Uploaded_variation names), keyed by suite
+    and name, which the samples' bounds never touch."""
     rng = random.Random(seed)
     reservoir: dict[str, list[Row]] = defaultdict(list)
     seen: Counter[str] = Counter()
     per_suite: dict[str, Counter[str]] = defaultdict(Counter)
     families: dict[str, list[Row]] = defaultdict(list)
     family_seen: Counter[str] = Counter()
+    named_rows: dict[tuple[str, str], list[Row]] = defaultdict(list)
     for sid, ref, _inp in suites:
+        wanted_names = (named or {}).get(sid, set())
         for row in iter_rows(ref, sid, family_specs):
             c = row.consequence_set
             seen[c] += 1
@@ -524,7 +548,9 @@ def reservoir_pass(
                 stratum = row.family_stratum
                 family_seen[stratum] += 1
                 reservoir_step(rng, families[stratum], row, family_seen[stratum], FAMILY_RESERVOIR)
-    return reservoir, seen, per_suite, families
+            if row.uploaded_variation in wanted_names:
+                named_rows[(sid, row.uploaded_variation)].append(row)
+    return reservoir, seen, per_suite, families, named_rows
 
 
 def exemplar_order(row: Row, max_span: int, cost: Callable[[Row], int] | None) -> tuple[int, int, int]:
@@ -832,14 +858,16 @@ def flag_set_shape_error(fs: object) -> str | None:
 
 
 def manifest_shape_error(manifest: dict) -> str | None:
-    """The reason a manifest's `covers`, `masks`, `flag_sets`, `cache_layout`, `fasta_in_cache` or
-    sample keys cannot be read: `covers` and `masks` must be lists of non-empty names, `flag_sets` a
+    """The reason a manifest's `covers`, `masks`, `flag_sets`, `cache_layout`, `fasta_in_cache`,
+    `included_records` or sample keys cannot be read: `covers` and `masks` must be lists of non-empty names, `flag_sets` a
     list of entries of the shape `flag_set_shape_error` holds them to, with distinct names,
     `cache_layout`, when present, `ensembl` (the cache at `cache_root/homo_sapiens/<release>_<assembly>`,
     so `release` and `assembly` must be named) rather than the default `json_cache/`, `fasta_in_cache`,
     when present, a boolean that is true only beside a `fasta` (the golden run then finds the reference
-    inside its cache directory instead of receiving `--fasta`), `keep_samples` a count, and
-    `samples` the names of that many kept samples when the count is above zero."""
+    inside its cache directory instead of receiving `--fasta`), `keep_samples` a count,
+    `samples` the names of that many kept samples when the count is above zero, and
+    `included_records`, when present, a map of non-empty suite names to non-empty lists of
+    record names."""
     if "covers" in manifest and not is_name_list(manifest["covers"]):
         return "covers is not a list of names"
     if "masks" in manifest and not is_name_list(manifest["masks"]):
@@ -867,6 +895,10 @@ def manifest_shape_error(manifest: dict) -> str | None:
         return f'cache_layout is {json.dumps(manifest["cache_layout"])}, not "ensembl"'
     if manifest.get("cache_layout") == "ensembl" and not all(isinstance(manifest.get(k), str) and manifest[k] for k in ("release", "assembly")):
         return "cache_layout ensembl wants release and assembly"
+    included = manifest.get("included_records", {})
+    if not (isinstance(included, dict)
+            and all(isinstance(sid, str) and sid.strip() and entry and is_name_list(entry) for sid, entry in included.items())):
+        return "included_records is not a map of suite to record names"
     if "fasta_in_cache" in manifest and not isinstance(manifest["fasta_in_cache"], bool):
         return f'fasta_in_cache is {json.dumps(manifest["fasta_in_cache"])}, not a boolean'
     if manifest.get("fasta_in_cache") and not (isinstance(manifest.get("fasta"), str) and manifest["fasta"]):
@@ -947,10 +979,58 @@ def path_inside_corpus(value: str, option: str) -> str:
     return value
 
 
+@dataclass
+class NamedRecord:
+    """A record the corpus carries outside the sampling: its suite, the label an error names it
+    by (the `--include` argument, a kept record's first five columns, or a carried
+    `included_records` name) and the Uploaded_variation names its reference rows can carry."""
+    suite: str
+    label: str
+    names: tuple[str, ...]
+
+
+def named_records(args: argparse.Namespace, existing: dict, suite_ids: set[str]) -> list[NamedRecord]:
+    """The records `--include` names and, under `--keep-records`, every record of the manifest
+    being regenerated and every name of its `included_records`, so a carried name is held to the
+    checks a `--include` gets; a record of a suite that is not among `--suite` is refused."""
+    named: list[NamedRecord] = []
+    for arg in args.include or []:
+        sid, sep, name = arg.partition("=")
+        if not (sep and sid and name):
+            raise failure(f"--include wants sid=name, got {arg!r}")
+        named.append(NamedRecord(sid, f"--include {arg}", (name,)))
+    if args.keep_records:
+        if not existing:
+            raise failure(f"--keep-records wants a manifest to regenerate in {args.out}")
+        for rec in existing.get("records") or []:
+            label = "kept record " + " ".join(rec["vcf"].split("\t")[:5])
+            named.append(NamedRecord(rec["suite"], label, tuple(record_names(rec["vcf"]))))
+        for sid, names in (existing.get("included_records") or {}).items():
+            named.extend(NamedRecord(sid, f"carried include {sid}={name}", (name,)) for name in names)
+    for n in named:
+        if n.suite not in suite_ids:
+            raise failure(f"{n.label} names suite {n.suite!r}, which is not among --suite")
+    return named
+
+
+def included_by_suite(includes: list[str], carried: dict[str, list[str]] | None = None) -> dict[str, list[str]]:
+    """The `--include` arguments as suite -> sorted names, merged with the `included_records` a
+    regeneration under `--keep-records` carries from the manifest it keeps: the new manifest's
+    `included_records`."""
+    by_suite: dict[str, set[str]] = defaultdict(set)
+    for sid, names in (carried or {}).items():
+        by_suite[sid].update(names)
+    for arg in includes:
+        sid, _sep, name = arg.partition("=")
+        by_suite[sid].add(name)
+    return {sid: sorted(names) for sid, names in sorted(by_suite.items())}
+
+
 def cmd_select(args: argparse.Namespace) -> int:
     suites = [parse_suite_arg(s) for s in args.suite]
     out = Path(args.out)
     existing = read_manifest(out) if (out / "manifest.json").is_file() else {}
+    named = named_records(args, existing, {sid for sid, _ref, _inp in suites})
     covers = list(dict.fromkeys([*(existing.get("covers") or []), *covers_names(args.covers)]))
     # The call refuses an unknown mask class before anything is written, as `classify` would.
     masked_feature_types(existing)
@@ -977,13 +1057,26 @@ def cmd_select(args: argparse.Namespace) -> int:
         raise failure(f"--genotype-exemplars wants a count of records per class, got {args.genotype_exemplars}")
     if required and not keep_samples:
         raise failure("--require-genotype-class wants --keep-samples: a corpus without sample columns shows no genotype")
+    names_by_suite: dict[str, set[str]] = defaultdict(set)
+    for n in named:
+        names_by_suite[n.suite].update(n.names)
     rng = random.Random(args.seed)
-    reservoir, seen, per_suite, families = reservoir_pass(suites, args.seed, family_specs)
+    reservoir, seen, per_suite, families, named_rows = reservoir_pass(suites, args.seed, family_specs, names_by_suite)
+    unrowed = [n for n in named if not any((n.suite, name) in named_rows for name in n.names)]
+    for n in unrowed:
+        print(f"ERROR: [build_golden_corpus] {n.label} has no row in the {n.suite} reference", file=sys.stderr)
+    if unrowed:
+        return 1
     cost = CacheCost(Path(args.cache), args.flank).row_cost if args.cache else None
     chosen = choose_exemplars(reservoir, args.k, rng, args.max_span, args.focus_term or (), args.focus_k, cost)
     chosen = ensure_class_exemplars(chosen, reservoir, args.max_span, cost)
     if family_specs:
         chosen = ensure_family_exemplars(chosen, families, args.max_span, cost)
+    for rows in named_rows.values():
+        for r in rows:
+            bucket = chosen.setdefault(r.consequence_set, [])
+            if r not in bucket:
+                bucket.append(r)
     wanted: dict[str, set[str]] = defaultdict(set)
     for combo, rows in chosen.items():
         for r in rows:
@@ -1031,9 +1124,9 @@ def cmd_select(args: argparse.Namespace) -> int:
                     records[key] = {"suite": sid, "vcf": line, "combinations": [], "exemplar_rows": [], "genotype_classes": classes}
                     showing.update(classes)
     if len(records) > args.max_records:
-        # The first record of every combination, family stratum and genotype class survives the
-        # cap, which the groups alone may exceed; the rest fill in sorted record order, so the
-        # cut is deterministic.
+        # The first record of every combination, family stratum and genotype class and every
+        # named record survive the cap, which those alone may exceed; the rest fill in sorted
+        # record order, so the cut is deterministic.
         by_group: dict[str, list[str]] = defaultdict(list)
         for key, rec in records.items():
             for c in rec["combinations"]:
@@ -1044,6 +1137,10 @@ def cmd_select(args: argparse.Namespace) -> int:
             for c in rec.get("genotype_classes", ()):
                 by_group[f"genotype class {c}"].append(key)
         keep = {keys[0] for keys in by_group.values()}
+        for key, rec in records.items():
+            suite_names = names_by_suite.get(rec["suite"], ())
+            if any(row["uploaded_variation"] in suite_names for row in rec["exemplar_rows"]):
+                keep.add(key)
         for key in sorted(records):
             if len(keep) >= args.max_records:
                 break
@@ -1066,6 +1163,8 @@ def cmd_select(args: argparse.Namespace) -> int:
     covered = {c for _k, rec in ordered for c in rec["combinations"]}
     genotype_classes = Counter(c for _k, rec in ordered for c in rec.get("genotype_classes", ()))
     uncovered_genotype_classes = sorted((set(resolved.genotype_seen) | set(required)) - set(genotype_classes))
+    carried = existing.get("included_records") if args.keep_records else None
+    included = included_by_suite(args.include or [], carried)
     manifest = {
         "release": args.release,
         "assembly": args.assembly,
@@ -1073,6 +1172,8 @@ def cmd_select(args: argparse.Namespace) -> int:
         "seed": args.seed,
         "exemplars_per_combination": args.k,
         **({"focus_terms": sorted(args.focus_term), "focus_exemplars_per_combination": args.focus_k} if args.focus_term else {}),
+        **({"included_records": included} if included else {}),
+        **({"kept_records": len(existing.get("records") or [])} if args.keep_records else {}),
         "max_span": args.max_span,
         **({"cache_cost_flank": args.flank} if args.cache else {}),
         **({"keep_samples": keep_samples, "samples": resolved.samples, "genotype_exemplars_per_class": args.genotype_exemplars,
@@ -1106,8 +1207,10 @@ def cmd_select(args: argparse.Namespace) -> int:
     class_counts = ", ".join(f"{k} {v}" for k, v in classes.items())
     genotype_note = (f", genotype classes observed {len(resolved.genotype_seen)}, covered {len(genotype_classes)}"
                      if keep_samples else "")
+    # A record both included and kept is two entries of `named` and one key of `named_rows`.
+    named_note = f", named records {len(named_rows)}" if named else ""
     print(f"combinations observed {len(seen)}, covered {len(covered)}, records {len(ordered)}, unresolved exemplars {len(missing)}, "
-          f"variant classes {len(classes)} ({class_counts}){genotype_note}")
+          f"variant classes {len(classes)} ({class_counts}){genotype_note}{named_note}")
     return 0 if not missing and not manifest["uncovered_combinations"] and not uncovered_genotype_classes else 1
 
 
@@ -1158,14 +1261,18 @@ def load_fields(path: Path, fields: list[str], masked: frozenset[str] = frozense
 
 
 
+def record_names(vcf_line: str) -> list[str]:
+    """The Uploaded_variation names a VCF record line can carry: its ID, else VEP's auto-names."""
+    f = vcf_line.split("\t")
+    chrom, pos, vid, ref, alt = f[0], int(f[1]), f[2], f[3], f[4]
+    return [vid.split(";")[0]] if vid != "." else vep_auto_names(chrom, pos, ref, alt.split(","))
+
+
 def record_name_index(records: list[dict]) -> dict[str, list[int]]:
     """Uploaded_variation (the ID, else VEP's auto-name) -> ordinals of the corpus records it names."""
     index: dict[str, list[int]] = defaultdict(list)
     for i, rec in enumerate(records):
-        f = rec["vcf"].split("\t")
-        chrom, pos, vid, ref, alt = f[0], int(f[1]), f[2], f[3], f[4]
-        names = [vid.split(";")[0]] if vid != "." else vep_auto_names(chrom, pos, ref, alt.split(","))
-        for n in names:
+        for n in record_names(rec["vcf"]):
             index[n].append(i)
     return index
 
@@ -1590,6 +1697,12 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--focus-term", action="append",
                    help="a consequence term; combinations containing it take --focus-k exemplars")
     s.add_argument("--focus-k", type=int, default=None, help="exemplars per focus combination")
+    s.add_argument("--include", action="append", metavar="SID=NAME",
+                   help="a record of suite SID's input, by its ID or VEP's name for an ID-less record, carried whatever "
+                        "the sampling chooses (repeatable), recorded as `included_records`")
+    s.add_argument("--keep-records", action="store_true",
+                   help="keep every record of the manifest being regenerated, resolved and rowed again from its suite; "
+                        "the count is recorded as `kept_records`")
     s.add_argument("--cache", default=None,
                    help="the JSON cache the fixture cache is pruned from; exemplars whose transcripts add fewer "
                         "bytes to it come first, ahead of the flag and position preferences")

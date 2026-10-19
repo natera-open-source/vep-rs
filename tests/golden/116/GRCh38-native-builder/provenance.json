@@ -6,27 +6,27 @@
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --symbol --biotype --canonical --mane --tsl --protein --protein_version [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
- "input": "161 chromosome 21 and MT records (148 on 21, 13 on MT), the union of two record sets selected over the native cache: the attribute set (SNVs, deletions, insertions and MNVs from the GRCh38 golden corpus's chromosome 21 records plus records placed on a Mt_tRNA, the MT-ND1 CDS (codon table 2), an intron of a cds_start_NF transcript, an exon of a readthrough transcript, the MIR548X miRNA, the Y_RNA gene named by RFAM, the CYP4F29P gene named by EntrezGene, the TMPRSS15 and CHODL coding sequences and a lncRNA without a symbol) and the frame set (coding, splice-region, UTR, start and stop positions of every protein-coding transcript of the 21:34000001-35000000, 42000001-43000000 and 45000001-47000000 windows and of every MT gene, where the exon phases, the N-padded translateable sequence, the UTRs and the codon table decide the consequence, codon and protein columns); the reference base is the GRCh38 primary assembly's",
+ "input": "163 chromosome 21 and MT records (150 on 21, 13 on MT): the union of two record sets selected over the native cache (the attribute set: SNVs, deletions, insertions and MNVs from the GRCh38 golden corpus's chromosome 21 records plus records placed on a Mt_tRNA, the MT-ND1 CDS (codon table 2), an intron of a cds_start_NF transcript, an exon of a readthrough transcript, the MIR548X miRNA, the Y_RNA gene named by RFAM, the CYP4F29P gene named by EntrezGene, the TMPRSS15 and CHODL coding sequences and a lncRNA without a symbol; the frame set: coding, splice-region, UTR, start and stop positions of every protein-coding transcript of the 21:34000001-35000000, 42000001-43000000 and 45000001-47000000 windows and of every MT gene, where the exon phases, the N-padded translateable sequence, the UTRs and the codon table decide the consequence, codon and protein columns), and two records placed on the chromosome's ClinVar records that carry a somatic classification, in RUNX1 (nb_runx1_oncogenic at 34859477 and nb_runx1_likely_oncogenic at 34859534; the first takes the T allele, the one allele of its record without an allele-specific ClinVar term, see flag_sets.variation.clin_sig_order); the reference base is the GRCh38 primary assembly's",
  "sha256": {
-  "default.txt": "a48f1454763ff26975adaa9b59ec70112e4f3653e064fc01ceef6ce84577595e",
-  "tab.txt": "172806d65a59be0d716f4c195b225b19b0bdc1540490b2420e4fd27238dc37bf",
-  "vcf.vcf": "aa7e3cfa2ebbb99845e11fffe127c6e62418c2ce4377035b24b4c82bb5d0a5b3",
-  "json.jsonl": "083d0695ef40614e5832c23cd11eba16e631da49b761fb10986732bbb4095ac7"
+  "default.txt": "751f0ae05b25fa0f5e3def883ddb7e29571b1ae94792fd5236d379e55dedeb34",
+  "tab.txt": "69fa879e077b74214f82ee99892fa714b9661688cd38c95a2d3112804326986a",
+  "vcf.vcf": "55c7424cc2dad21ded9cb47edbf579c6549d7dfc40aa33bf9a569d244849f42d",
+  "json.jsonl": "9b0085b6201906f8ed5f6678aa6d43dba13b1365d55eb6be7c4ff5cd6e0d275a"
  },
- "variants_vcf_sha256": "d310ec194676585bb2ba52de41f86f1e4641bed455858077780e2aa04f3c61c2",
+ "variants_vcf_sha256": "0e6f59b63776f66d4fc717bafd3706791fa593897f09f51387896c6e05fe726b",
  "json_cache": {
   "source": "built by vep-cache-builder from the release 116 GRCh38 GFF3 (the chromosome 21 and MT lines), the peptide FASTA, the chromosome 21 and MT genome FASTA and the core and variation MySQL table dumps (--core-dumps), then pruned to the records' transcripts with scripts/golden/prune_json_cache.py --gzip (no key dropped); the variation files under variations/ are vep-cache-builder's --include-variations output for chromosomes 21 and MT, built from the release 116 Ensembl variation VCFs (homo_sapiens-chr21.vcf.gz, homo_sapiens-chrMT.vcf.gz, homo_sapiens_somatic.vcf.gz, homo_sapiens_phenotype_associated.vcf.gz, homo_sapiens_clinically_associated.vcf.gz, 1000GENOMES-phase_3.vcf.gz) with the variation database's phenotype_feature and phenotype_feature_attrib dumps (--variation-dumps), then pruned to the records' windows with prune_json_cache.py --variations --variation-info --exclude-variation",
   "info_json": "derived from the Ensembl VEP cache's info.txt as every corpus's is, so the version header the format tests compare matches; variation_cols and var_type are the native build's own (prune_json_cache.py --variation-info), the 21 columns its all_vars.gz files carry; the native build's own info.json carries the assembly, gencode and genebuild versions alone"
  },
- "generator": "vep-cache-builder --release 116 --assembly GRCh38 --gff3 <chr21+MT lines of Homo_sapiens.GRCh38.116.gff3.gz> --fasta Homo_sapiens.GRCh38.pep.all.fa.gz --core-dumps <dir> --genome-fasta <chr21+MT .fa> --output-dir <cache>; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<designed and chr21 records> --suite <id>=<reference>=<frame records> --k 1 --seed 1 --cache <cache> --family-columns SYMBOL=,SYMBOL_SOURCE=,HGNC_ID,TSL,MANE_SELECT,CANONICAL,FLAGS=,ENSP,BIOTYPE= --covers ... --matrix tests/parity/matrix.tsv --flag=--symbol ... --out tests/golden/116/GRCh38-native-builder; scripts/golden/prune_json_cache.py --cache <cache> --out <corpus>/json_cache --vcf <corpus>/variants.vcf --gzip; scripts/golden/prune_json_cache.py --info-only --perl-info <perl cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus <corpus> --perl-cache-dir <dir>; scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and the ccds, gencode_basic, gencode_primary and flag_gencode_primary sets; each set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags); vep-cache-builder --release 116 --assembly GRCh38 --include-variations --variation-vcf-dir <release 116 variation VCFs> --variation-dumps <homo_sapiens_variation_116_38 dumps> --output-dir <native>; scripts/golden/prune_json_cache.py --cache <corpus>/json_cache --out <pruned> --vcf <corpus>/variants.vcf --gzip --perl-info <perl cache>/info.txt --cache-version 116 --variations <native>/variations --variation-info <native>/info.json --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}' (the transcript shards come out byte-identical; variations/ and info.json are taken); scripts/golden/build_golden_corpus.py flag-set and classify --flag-set variation (the variation set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags)",
+ "generator": "vep-cache-builder --release 116 --assembly GRCh38 --gff3 <chr21+MT lines of Homo_sapiens.GRCh38.116.gff3.gz> --fasta Homo_sapiens.GRCh38.pep.all.fa.gz --core-dumps <dir> --genome-fasta <chr21+MT .fa> --output-dir <cache>; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<designed and chr21 records> --suite <id>=<reference>=<frame records> --k 1 --seed 1 --cache <cache> --family-columns SYMBOL=,SYMBOL_SOURCE=,HGNC_ID,TSL,MANE_SELECT,CANONICAL,FLAGS=,ENSP,BIOTYPE= --covers ... --matrix tests/parity/matrix.tsv --flag=--symbol ... --out tests/golden/116/GRCh38-native-builder; scripts/golden/prune_json_cache.py --cache <cache> --out <corpus>/json_cache --vcf <corpus>/variants.vcf --gzip; scripts/golden/prune_json_cache.py --info-only --perl-info <perl cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus <corpus> --perl-cache-dir <dir>; scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and the ccds, gencode_basic, gencode_primary and flag_gencode_primary sets; each set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags); vep-cache-builder --release 116 --assembly GRCh38 --include-variations --variation-vcf-dir <release 116 variation VCFs> --variation-dumps <homo_sapiens_variation_116_38 dumps> --output-dir <native>; scripts/golden/prune_json_cache.py --cache <corpus>/json_cache --out <pruned> --vcf <corpus>/variants.vcf --gzip --perl-info <perl cache>/info.txt --cache-version 116 --variations <native>/variations --variation-info <native>/info.json --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}' (the transcript shards come out byte-identical; variations/ and info.json are taken); scripts/golden/build_golden_corpus.py flag-set and classify --flag-set variation (the variation set's expected outputs are Ensembl VEP's four formats on its own cache for the same records under the set's flags); the two clinical-impact records were added by a re-selection over the native chromosome 21 and MT build: scripts/golden/build_golden_corpus.py select with the same options over the previous selection's records as the two suites' inputs (each suite's reference Ensembl VEP 116.2's default output for them under the manifest's flags, the attribute set's input carrying the two RUNX1 records) with --keep-records --include attributes=nb_runx1_oncogenic --include attributes=nb_runx1_likely_oncogenic; prune_json_cache.py as above over the fresh build; generate_reference_output.sh --corpus for the manifest's run and for each flag set; classify for each",
  "pruned_cache": {
   "transcripts_per_chromosome": {
-   "21": 936,
+   "21": 949,
    "MT": 37
   },
   "shards": 28,
   "spans_by_chromosome": {
-   "21": 148,
+   "21": 150,
    "MT": 13
   }
  },
@@ -44,10 +44,10 @@
    ],
    "expected_dir": "expected_ccds",
    "sha256": {
-    "default.txt": "84cf187844449a7004f660df00c09151433d56d64bd0026ce18cc28fa5b5a2d5",
-    "tab.txt": "08ca3a4901be4053cb337fde9e37093e94e24c8c3db288bee98d66e5d457feeb",
-    "vcf.vcf": "dec7429ef48000104733b2527cd300a77885b1ee9e3d07891cf910c476402e0b",
-    "json.jsonl": "cec783036f479cf65758cde4dd5bc520a689923f48fced73d7c61df4829c6289"
+    "default.txt": "8e7d99ba10ed6ba9fde8297cca060b877e616412323c34ef29a196d90093559e",
+    "tab.txt": "6674f1fcb9a9d5ca9bd7d5baf6b06fbe6184435bd257f72c8c7794ee6a14af85",
+    "vcf.vcf": "04abb8989076e1932655f6ddaae42ff4cfa73e7e4c807cd3ff5c536a0e927348",
+    "json.jsonl": "a3a7ac6079593c1b368d2dcb9e6ac96d08bb53ba8bd113aa335c6d71c7873708"
    }
   },
   "gencode_basic": {
@@ -63,10 +63,10 @@
    ],
    "expected_dir": "expected_gencode_basic",
    "sha256": {
-    "default.txt": "a7e04d9f81ca426125bbc8352b0aff0f78020c9bfc368132d4822665d0afd576",
-    "tab.txt": "f40ebc18f08c47d040eee0a9a8ddf52f65f69b50352fed1b110e7e76cb30f48f",
-    "vcf.vcf": "a031490a2fc7fb68959fb22e22e8cf8f26935e8ece692dc21d14e57c52acde87",
-    "json.jsonl": "7295bf4df0ec732c283b2f082ea74b89bea36dd503b1d5c43ab0ed614efdeeaf"
+    "default.txt": "33245f4a352cc1bd42bce77a191b31d3f2bad417409f235dee1c372f6d6c5677",
+    "tab.txt": "c868ddc2724ade2c8db07ef66214142444eb883475c493232741eefb244a389c",
+    "vcf.vcf": "3a52ed76ec5e6436ff0c767788f613e4bf021f69121aaabdfed8ad297a78793c",
+    "json.jsonl": "9349d33afcd81d68757b1553d1704ae94a5523df48a02cf59d5fe4c1b3cb85e0"
    }
   },
   "gencode_primary": {
@@ -82,10 +82,10 @@
    ],
    "expected_dir": "expected_gencode_primary",
    "sha256": {
-    "default.txt": "42e98a6684577eea51f4164240e0235920a98cb63025579ed4d8c5b45f9d4422",
-    "tab.txt": "c1627d26fa324957adc930bbcdc7f6de1a71fb36323f5c15dbba1b75e5935148",
-    "vcf.vcf": "441285e54cece5893e090c54049cfde3e98c5613e680b0650b30565cf4a280ed",
-    "json.jsonl": "7a57afc30f2953c1ca1ac0c2fe35a65a351d891e1a81c964ec14cebf018224eb"
+    "default.txt": "955cc21475e35047b8ce4d7affc74f6a539e993c48b1547d74f59e59a564f044",
+    "tab.txt": "fb08cfb902c1d77381b16d5fac21b07b85f4265df5d0853c659ca2edeb774ecc",
+    "vcf.vcf": "1b6357c7ad6038856c3f38fe73e1afff9a4679136231537bb242ab11a1751993",
+    "json.jsonl": "a61da8df434e07a1b953ba6cb06a6a91c69e01be870c491edace82b57ecea8ea"
    }
   },
   "flag_gencode_primary": {
@@ -101,10 +101,10 @@
    ],
    "expected_dir": "expected_flag_gencode_primary",
    "sha256": {
-    "default.txt": "fa70e28494794a3ec65316ed760ff2cc7e04d1cd6b87acbbbd4771d9be244378",
-    "tab.txt": "98175c7cff4767bcaae7efcd73f2560cd43af591c4ccd99a10f194988027279e",
-    "vcf.vcf": "d5fb363c186bb0a6914827365ab296cde2b9ba02568d952b2b846a35a5b18c4d",
-    "json.jsonl": "cf49b46a3dbccc518137ed6378e6839ea90cb9f5fe6e5116fabc82208aca39d8"
+    "default.txt": "54d1c257b35548ee16af9d5c24900c39479253f1a39ffa2b10c1bd1dedb8d6bd",
+    "tab.txt": "5554994f771195000220148dfe0c5aa0536a70a155dce43dfd410f070594dc7c",
+    "vcf.vcf": "05b8446f3e1de7e8a1d94cd4e5a81b5800b0f01e147d4b91d682d7b7dd0b4703",
+    "json.jsonl": "69a1ff81d552c05e1517041c2d4c8c143efdb50c35c13490556ab816b363db50"
    }
   },
   "gene_version": {
@@ -120,10 +120,10 @@
    ],
    "expected_dir": "expected_gene_version",
    "sha256": {
-    "default.txt": "5d542e53f64d10881470391d5de0689eb94a63c73be462c7314b5d2734f2efa0",
-    "tab.txt": "86ed1453722ae4cfcd7aeb25ef40c1bb536ac622497971a8302a6194cfa9299d",
-    "vcf.vcf": "4efbe9fc33df5d94bd715c6589977af3cf05bd8574fb4a78f4e1864c6e849eef",
-    "json.jsonl": "66aa004c6ca2dd7c05cab7c0c837cd6e6bb2b63e99179f342542af4b6060105b"
+    "default.txt": "e656dd28cc6b22610c3ae7e43db1ed8335b36b5a3dc6e86c68f795a25204519f",
+    "tab.txt": "a1c3a88ede91f2e01d4a98a0c3d36d1c2abca9528705ce6bc37d69d22396527b",
+    "vcf.vcf": "e3ed6dfa8a4230c7cdc26352a9420bfd4e31507b92f43509ee874aee0cf05045",
+    "json.jsonl": "0bc0030f93c51e33529e8f93df150cbf182870842e9f4d721d1208589b93b5f5"
    }
   },
   "uniprot": {
@@ -139,10 +139,10 @@
    ],
    "expected_dir": "expected_uniprot",
    "sha256": {
-    "default.txt": "5e49d07b105470f9cf346918ba8a97ab57dd6ee7599fc2bb8cd515edae49e66e",
-    "tab.txt": "c7bad810dd9a2225237fd198badc6c308efdacb7b7a7f15e2176907cf75c5699",
-    "vcf.vcf": "ed4883acbdd09ce212d6f13c31733ab215cf513cf8fb77d20e8673fa6c7375e5",
-    "json.jsonl": "1101cd5c512d8c38982178ed065a456f2b24ee4536a4a1182c738a2635c44904"
+    "default.txt": "44ee655de3f54cf1b2bbac707f7eb6ac82821d6013e6f779ef2da0ad3059b20c",
+    "tab.txt": "68f7ec2de99a9910ad7480ea223138755bdb3a5fef268447ec631c040b0068f3",
+    "vcf.vcf": "f088713ceb76fc9e78b4cee1e3e082689bc848311b1403263ae099b8511e54ca",
+    "json.jsonl": "34956d068f28c8afcb12d03c4bea3fd5d48254abde396cdc309563494d3f6452"
    }
   },
   "mirna": {
@@ -158,10 +158,10 @@
    ],
    "expected_dir": "expected_mirna",
    "sha256": {
-    "default.txt": "404bcfab9ef31c7b3a682891bef77e0f7254364d7f9697431ce24f30eed66b04",
-    "tab.txt": "cf8dd90264b266ad424fcfcbe560f69ee7be26addffbc8080957b839d37f5476",
-    "vcf.vcf": "86c0be8b420c162a5eab4b9918e988f5de1feb3f01644d67658587d3685b0ef2",
-    "json.jsonl": "b8e55f0eceeb2063477b76c05b188ca6f1846c504c7ba9ca3e00cbe7da9c4a5c"
+    "default.txt": "ef662708dce0f001c57ef97250356029032afcc1b47026c6c3d50c28c02a0b08",
+    "tab.txt": "9a5d2095c7f9c38123e6b650e5bde5ce4effe15521dd32792b3ca5d07e290342",
+    "vcf.vcf": "3f942bd7f356e811c28fa69a39788f3c2d8e41daa1793c49ec687b3b3108152d",
+    "json.jsonl": "7690b82c1b3c33826a4c3d4cd837e8ef15ad0608608ed26394c60825686bff6c"
    }
   },
   "gene_phenotype": {
@@ -177,10 +177,10 @@
    ],
    "expected_dir": "expected_gene_phenotype",
    "sha256": {
-    "default.txt": "fe08d23200809c38af047b63401fc5a2218b744ae0d649dcba4e39b6005ebbad",
-    "tab.txt": "07c2ea3521ad1954051a354a043e8a4a2c72f971d0ad06b8aa98b6b005a08ab7",
-    "vcf.vcf": "57101ed174a55982eb9448944c2b3e0d30fccb7f06dfffc2ff5b82e6ae512ac3",
-    "json.jsonl": "71b18c730c2f626518ffed7d6570933e373a1e41fb9d1026ab3e8f275ad9e001"
+    "default.txt": "ab23eadaab137f64155487fea542d5e13c0c130d36a10f30c467a0e3077f3723",
+    "tab.txt": "3295f6ea0c03f58f17270f936f32402ad925cded59c8f677f36ffed5155ef337",
+    "vcf.vcf": "d701a0911cf14e9b0a1beee4ae91165ed00cdb2fa70b90869775817a8fbad97b",
+    "json.jsonl": "3ac3afc1a016f4548363ec4fdf1d28a6109ea988046c74ffd3e062389561817c"
    }
   },
   "xref_refseq": {
@@ -196,10 +196,10 @@
    ],
    "expected_dir": "expected_xref_refseq",
    "sha256": {
-    "default.txt": "c8e659199ee68859eb1b24400d49d4e08bdd773623041cc1d0bdf2f8c030ee89",
-    "tab.txt": "7ed095203d150620f9af66524c299f2c91a1c6eda5dba3d86d043aca94fa8542",
-    "vcf.vcf": "87835c80911cfceeb85be0891b9f97b46172c27ad8c3aaa4e0a3216a0297f72c",
-    "json.jsonl": "8c4835d3a17241011ba4a07f6c90ba75b94a6ff2ae821636bdf6617e9a08fe1c"
+    "default.txt": "ad8485700f8e1fd481c3317fdc82863f20c538b8174d9cace8a875f262c82aa6",
+    "tab.txt": "dc8e821a1079ad2b1d11f47b9a95d9d43a1fd9f271579070857a8009c8c1b832",
+    "vcf.vcf": "26c10018c47993535a4c9ebb4eed7e8bb9375f79823cf1782f276c1ec24e61d7",
+    "json.jsonl": "d4f3cf11e3f1e94cd7e050b5b01ee459ef3e76303ee423da343fe4918bac23d3"
    }
   },
   "variation": {
@@ -219,10 +219,10 @@
    ],
    "expected_dir": "expected_variation",
    "sha256": {
-    "default.txt": "da5dd8874ea2128157236e19aed27a8ff561d04faeecc287a852592b23eeff94",
-    "tab.txt": "438bdb978fe9234bd241cd7f63cd85a0bb2b760500a781f6735afb275ab497b6",
-    "vcf.vcf": "dcbd906cdab52a5df19637b94c37f065cb8a7aba4d61d80c6cfc08359ec741cb",
-    "json.jsonl": "9bc4f8fcb2144e9ec3de4403bbbea94398cfdd2706e1e5a9a58a494a0cd6b656"
+    "default.txt": "967e76ea4b477043b1814118b7102602ba417a766fc4598b438d8f87a1e80b31",
+    "tab.txt": "1da50b68771fa0b117446675758e6e32e2e358a6464c9ecda956791fd995f6c8",
+    "vcf.vcf": "5868f216f1855522faa72fa2393a29e135223b196c4874e33e2909f30a298cc2",
+    "json.jsonl": "73cf735353516f280440b7f209f6f62108a1490d58f8e94a59aaa44a21d04951"
    },
    "flags_left_out": {
     "--af_gnomade --af_gnomadg --max_af": "no gnomAD frequency enters a native cache (Ensembl publishes no release 116 gnomAD VCF), where the Ensembl cache's MAX_AF ranges over the gnomAD populations",
@@ -238,26 +238,28 @@
     "vcf"
    ],
    "format_left_out": {
-    "json": "colocated_variants prints every non-empty column of a co-located record whatever the flags (OutputFactory/JSON.pm:407-476), so the JSON output shows what the native files cannot carry: 43 of the 45 co-located records' objects (43 of the 2,034 JSON entries) differ, in the gnomAD frequencies the Ensembl cache holds (42 objects), in the allele string and end of a dbSNP indel the database spells over its whole run where the native record holds the export's right-trimmed one (14), in var_synonyms (2) and in pubmed (1), and in nothing else; the set compares the three formats whose columns the flags select"
+    "json": "colocated_variants prints every non-empty column of a co-located record whatever the flags (OutputFactory/JSON.pm:407-476), so the JSON output shows what the native files cannot carry: 45 of the 47 co-located records' objects (45 of the 2,062 JSON entries) differ, in the gnomAD frequencies the Ensembl cache holds (42 objects), in the allele string and end of a dbSNP indel the database spells over its whole run where the native record holds the export's right-trimmed one (14), in var_synonyms (4), in pubmed (3) and in the order of the clin_sig_allele terms of the record at 34859477 (1, see clin_sig_order), and in nothing else; the set compares the three formats whose columns the flags select"
    },
-   "columns_compared_empty": {
-    "CLINVAR_SOMATIC_CLASSIFICATION, SOMATIC": "no corpus record co-locates with a record carrying clinical_impact or somatic, so both columns are compared absent on every row; chromosome 21 holds three allele-bearing records with clinical_impact (34859477, 34859534 and 34880580, in RUNX1), none inside a corpus window, and the slice's 377 records carry neither value; the set therefore does not cover cache-clinical-impact"
-   }
+   "columns_compared": {
+    "CLINVAR_SOMATIC_CLASSIFICATION": "printed on every row of the two RUNX1 records, Neoplasm(oncogenicity:Oncogenic) at 34859477 and Neoplasm(oncogenicity:Likely oncogenic) at 34859534, the chromosome's clinical_impact records that lie inside a corpus window; absent on every other row",
+    "SOMATIC": "absent on every row: no corpus record co-locates with a somatic record"
+   },
+   "clin_sig_order": "a co-located record whose allele carries several allele-specific ClinVar terms prints them in its cache's order: the Ensembl dumper writes clin_sig_allele in Perl hash order and vep-cache-builder in the dumps' order, so the A and C alleles of the record at 34859477 (two terms each) and both alleles of the record at 34880580 print the same terms in different orders on the two caches; the corpus record at 34859477 takes the T allele, which carries clinical_impact and no allele-specific term, and the record at 34859534 the A allele, which carries one"
   }
  },
  "variation_slice": {
   "source": "variations/21/all_vars.gz and variations/MT/all_vars.gz of a vep-cache-builder --include-variations build from the release 116 Ensembl variation VCFs and variation database dumps",
   "window": "records whose start lies within one base of an input record's span",
   "windows": {
-   "21": 109,
+   "21": 111,
    "MT": 10
   },
   "records_kept": {
-   "21": 357,
+   "21": 363,
    "MT": 20
   },
   "records_excluded": {
-   "21": 43,
+   "21": 52,
    "MT": 4
   },
   "excludes": [
@@ -266,8 +268,8 @@
   ],
   "columns": 21,
   "sha256": {
-   "21/all_vars.gz": "d70ea066fe28901552f4aa5aea2becef46323f2a2e31792417874c8be2e1d2e8",
-   "21/all_vars.gz.csi": "a1aacbde474665c0e7ebe9ef5ddb9cfed21d91e05a9258ce107d7546feea084d",
+   "21/all_vars.gz": "279e0906053ed83407bf8deff158088752d89468a8740be0de0e009d546aa447",
+   "21/all_vars.gz.csi": "1b13cd737faaacab94479a5d383dd20e6d79cd526d908a360d931e51f820685e",
    "MT/all_vars.gz": "74698957161d65e58641288832ad6e0c3d048f20a29491e9717f0644567160fa",
    "MT/all_vars.gz.csi": "a6ea484f2e80a42fbbccc4b2c148216a474fdb5537d09b694fdf1a4d4bea3dbc"
   },

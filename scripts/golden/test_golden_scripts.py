@@ -517,6 +517,117 @@ def test_select_matrix_and_empty_names(tmp_path: Path, capsys):
     assert _select(ref, vcf, out, "--covers", "symbol", "--matrix", str(matrix)) == 0
 
 
+def _one_stratum_suite(tmp_path: Path) -> tuple[Path, Path]:
+    """Two SNVs of one combination on one strand: one stratum, so `--k 1` samples one of them."""
+    ref = tmp_path / "ref.txt"
+    ref.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant") + _row("rs2", "21:200", "T", "ENST1", "missense_variant"), encoding="utf-8")
+    vcf = tmp_path / "in.vcf"
+    vcf.write_text("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t100\trs1\tA\tG\t.\tPASS\t.\n21\t200\trs2\tC\tT\t.\tPASS\t.\n", encoding="utf-8")
+    return ref, vcf
+
+
+def _record_ids(out: Path) -> list[str]:
+    return [r["vcf"].split("\t")[2] for r in json.loads((out / "manifest.json").read_text())["records"]]
+
+
+def test_select_include_carries_the_named_record_outside_the_sampling(tmp_path: Path, capsys):
+    """`--include sid=name` carries the record whatever the sampling chose, with every combination
+    its rows show, and records the names under `included_records`; a name with no reference row is
+    refused before anything is written, as are a suite not among `--suite` and a malformed argument."""
+    ref, vcf = _one_stratum_suite(tmp_path)
+    out = tmp_path / "corpus"
+    assert _select(ref, vcf, out, "--covers", "symbol") == 0
+    sampled = _record_ids(out)
+    assert len(sampled) == 1
+    other = ({"rs1", "rs2"} - set(sampled)).pop()
+    assert _select(ref, vcf, out, "--covers", "symbol", "--include", f"s01={other}") == 0
+    m = json.loads((out / "manifest.json").read_text())
+    assert sorted(_record_ids(out)) == ["rs1", "rs2"]
+    assert m["included_records"] == {"s01": [other]}
+    combinations_by_id = {r["vcf"].split("\t")[2]: r["combinations"] for r in m["records"]}
+    assert combinations_by_id[other] == ["missense_variant"]
+    assert "kept_records" not in m
+    keys = list(m)
+    assert keys.index("exemplars_per_combination") < keys.index("included_records") < keys.index("max_span")
+    (out / "variants.vcf").unlink()
+    assert _select(ref, vcf, out, "--include", "s01=ghost", "--include", "s01=rs1") == 1
+    assert capsys.readouterr().err == "ERROR: [build_golden_corpus] --include s01=ghost has no row in the s01 reference\n"
+    assert not (out / "variants.vcf").exists() and json.loads((out / "manifest.json").read_text()) == m, "nothing is written"
+    with pytest.raises(SystemExit) as refusal:
+        _select(ref, vcf, out, "--include", "s02=rs1")
+    assert str(refusal.value) == "ERROR: [build_golden_corpus] --include s02=rs1 names suite 's02', which is not among --suite"
+    with pytest.raises(SystemExit) as refusal:
+        _select(ref, vcf, out, "--include", "rs1")
+    assert str(refusal.value) == "ERROR: [build_golden_corpus] --include wants sid=name, got 'rs1'"
+
+
+def test_select_keep_records_keeps_every_record_of_the_manifest(tmp_path: Path, capsys):
+    """A regeneration under `--keep-records` keeps each record of the manifest being regenerated,
+    rowed again from its suite's reference, records their count as `kept_records` and carries the
+    manifest's `included_records`; the summary counts the distinct named records; a kept record with
+    no reference row is refused before anything is written, a kept record of a suite not among
+    `--suite`, a run with no manifest to regenerate and a malformed `included_records` are refused."""
+    ref, vcf = _one_stratum_suite(tmp_path)
+    out = tmp_path / "corpus"
+    assert _select(ref, vcf, out, "--covers", "symbol", "--k", "2") == 0
+    assert sorted(_record_ids(out)) == ["rs1", "rs2"]
+    assert _select(ref, vcf, out) == 0
+    assert len(_record_ids(out)) == 1, "the sampling alone drops one of the two"
+    assert _select(ref, vcf, out, "--k", "2") == 0
+    capsys.readouterr()
+    assert _select(ref, vcf, out, "--keep-records") == 0
+    assert capsys.readouterr().out.rstrip().endswith(", named records 2")
+    m = json.loads((out / "manifest.json").read_text())
+    assert sorted(_record_ids(out)) == ["rs1", "rs2"]
+    assert m["kept_records"] == 2 and "included_records" not in m
+    assert _select(ref, vcf, out, "--keep-records", "--max-records", "1") == 0
+    assert sorted(_record_ids(out)) == ["rs1", "rs2"], "a kept record survives the record cap"
+    capsys.readouterr()
+    assert _select(ref, vcf, out, "--keep-records", "--include", "s01=rs1") == 0
+    assert capsys.readouterr().out.rstrip().endswith(", named records 2"), "a record both kept and included counts once"
+    assert json.loads((out / "manifest.json").read_text())["included_records"] == {"s01": ["rs1"]}
+    assert _select(ref, vcf, out, "--keep-records") == 0
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["included_records"] == {"s01": ["rs1"]}, "a regeneration that keeps the records keeps their included names"
+    assert _select(ref, vcf, out, "--keep-records", "--include", "s01=rs2") == 0
+    assert json.loads((out / "manifest.json").read_text())["included_records"] == {"s01": ["rs1", "rs2"]}, "carried and new names merge"
+    assert _select(ref, vcf, out) == 0
+    assert "included_records" not in json.loads((out / "manifest.json").read_text()), "a sampling run carries no included names"
+    m["included_records"] = {"s01": ["rs1"], "s02": ["rs9"]}
+    (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+    with pytest.raises(SystemExit) as refusal:
+        _select(ref, vcf, out, "--keep-records")
+    assert str(refusal.value) == "ERROR: [build_golden_corpus] carried include s02=rs9 names suite 's02', which is not among --suite"
+    m["included_records"] = {"s01": ["rs1", "rs9"]}
+    (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+    (out / "variants.vcf").unlink()
+    assert _select(ref, vcf, out, "--keep-records") == 1
+    assert capsys.readouterr().err == "ERROR: [build_golden_corpus] carried include s01=rs9 has no row in the s01 reference\n"
+    assert not (out / "variants.vcf").exists() and json.loads((out / "manifest.json").read_text()) == m, "nothing is written"
+    for malformed in (["rs1"], {"s01": []}, {"": ["rs1"]}, {"s01": [""]}):
+        m["included_records"] = malformed
+        (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+        with pytest.raises(SystemExit) as refusal:
+            _select(ref, vcf, out, "--keep-records")
+        assert str(refusal.value) == f"ERROR: [build_golden_corpus] {out / 'manifest.json'} included_records is not a map of suite to record names"
+    m["included_records"] = {"s01": ["rs1"]}
+    m["records"].append({"suite": "s01", "vcf": "21\t300\trs3\tA\tG\t.\tPASS\t.", "combinations": []})
+    (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+    assert _select(ref, vcf, out, "--keep-records") == 1
+    assert capsys.readouterr().err == "ERROR: [build_golden_corpus] kept record 21 300 rs3 A G has no row in the s01 reference\n"
+    assert not (out / "variants.vcf").exists() and json.loads((out / "manifest.json").read_text()) == m, "nothing is written"
+    m["records"][-1] = {"suite": "s02", "vcf": "21\t300\trs3\tA\tG\t.\tPASS\t.", "combinations": []}
+    (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+    with pytest.raises(SystemExit) as refusal:
+        _select(ref, vcf, out, "--keep-records")
+    assert str(refusal.value) == "ERROR: [build_golden_corpus] kept record 21 300 rs3 A G names suite 's02', which is not among --suite"
+    fresh = tmp_path / "fresh"
+    with pytest.raises(SystemExit) as refusal:
+        _select(ref, vcf, fresh, "--covers", "symbol", "--keep-records")
+    assert str(refusal.value) == f"ERROR: [build_golden_corpus] --keep-records wants a manifest to regenerate in {fresh}"
+    assert not fresh.exists()
+
+
 def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
     """A `covers` that is not a list of names, or a `flag_sets` that is not a list of named
     objects, is refused wherever a manifest is read, with the reason, before anything is
