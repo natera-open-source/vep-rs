@@ -42,8 +42,6 @@ pub struct Transcript {
     pub biotype: Arc<str>,
     /// Source (Ensembl or RefSeq).
     pub source: String,
-    /// Human-readable description.
-    pub description: Option<String>,
     /// Gene symbol (e.g., "SOD1").
     pub gene_symbol: Option<Arc<str>>,
     /// Gene symbol source (e.g., "HGNC").
@@ -806,7 +804,6 @@ mod tests {
             strand,
             biotype: "protein_coding".into(),
             source: "Ensembl".into(),
-            description: None,
             gene_symbol: None,
             gene_symbol_source: None,
             hgnc_id: None,

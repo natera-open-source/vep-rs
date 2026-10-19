@@ -131,7 +131,6 @@ fn build_bench_transcript() -> Transcript {
         strand: Strand::Forward,
         biotype: "protein_coding".into(),
         source: "Ensembl".into(),
-        description: None,
         gene_symbol: Some("TEST1".into()),
         gene_symbol_source: Some("HGNC".into()),
         hgnc_id: Some("HGNC:0001".into()),

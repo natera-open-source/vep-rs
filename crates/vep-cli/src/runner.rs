@@ -2369,7 +2369,6 @@ pub(crate) fn make_runner_test_transcript(
         strand: Strand::Forward,
         biotype: "lncRNA".into(),
         source: "Ensembl".into(),
-        description: None,
         gene_symbol: Some(stable_id.into()),
         gene_symbol_source: Some("TEST".into()),
         hgnc_id: None,

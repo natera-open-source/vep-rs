@@ -147,7 +147,7 @@ DosageSensitivity	DosageSensitivity.pm	implemented	open
 Downstream	Downstream.pm	error	open			
 Draw	Draw.pm	error	open			
 dump_time_transcript_filters	AnnotationSource/Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/gff3.rs::readthrough_and_artifact_transcripts_dropped;crates/vep-cache-builder/src/core_dumps.rs::readthrough_marker_from_transcript_attrib;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::dump_marked_readthrough_transcript_is_dropped	tests/golden/116/GRCh38-native-builder	
-dumper-deleted-fields	-	removed	open			
+dumper-deleted-fields	-	removed	landed:removed	crates/vep-cli/src/json_cache.rs::description_key_is_ignored		
 emars	Database/RegFeat.pm	implemented	open			
 Enformer	Enformer.pm	error	open			
 engine_identity_lines	-	implemented	landed:implemented	crates/vep-cli/tests/engine_identity.rs::default_tab_vcf_json_carry_vep_rs_version;crates/vep-cli/tests/engine_identity.rs::comparators_set_aside_exactly_the_identity_lines	tests/golden/116/GRCh37;tests/golden/116/GRCh37-colocated;tests/golden/116/GRCh37-hgvs;tests/golden/116/GRCh38;tests/golden/116/GRCh38-alt-contigs;tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh38-native-builder;tests/golden/116/GRCh38-oldmaf;tests/golden/116/GRCh38-release116;tests/golden/116/GRCh38-run-control;tests/golden/116/GRCh38-transcript-filter	

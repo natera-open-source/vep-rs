@@ -886,7 +886,6 @@ mod tests {
             strand: Strand::Forward,
             biotype: "protein_coding".into(),
             source: "Ensembl".into(),
-            description: None,
             gene_symbol: None,
             gene_symbol_source: None,
             hgnc_id: None,

@@ -1243,7 +1243,6 @@ mod tests {
             strand: Strand::Forward,
             biotype: "miRNA".into(),
             source: "Ensembl".into(),
-            description: None,
             gene_symbol: Some("MIR21".into()),
             gene_symbol_source: Some("HGNC".into()),
             hgnc_id: None,

@@ -306,8 +306,6 @@ struct JsonTranscript {
     #[serde(deserialize_with = "deserialize_arc_str")]
     biotype: Arc<str>,
     source: String,
-    #[serde(default)]
-    description: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_arc_str")]
     gene_symbol: Option<Arc<str>>,
     #[serde(default, deserialize_with = "deserialize_optional_arc_str")]
@@ -854,7 +852,6 @@ fn convert_transcript(jt: JsonTranscript, chr_override: &str) -> Transcript {
         strand: jt.strand,
         biotype: jt.biotype,
         source: jt.source,
-        description: jt.description,
         gene_symbol: jt.gene_symbol,
         gene_symbol_source: jt.gene_symbol_source,
         hgnc_id: jt.hgnc_id,
@@ -2179,6 +2176,21 @@ mod tests {
             r#","description":"keratin associated protein 10-1","variation_effect_feature_cache":{"_exon_interval_tree":{},"_intron_numbers":"1-2","_has_frameshift_intron":0,"translation_md5":"4fb6e2a4930c8b5aa1ac86f88fbc545b","spliced_seq":"ATG","codon_table":"2","bam":{}}"#,
         ));
         assert_eq!(tx.vefc.unwrap().codon_table, 2);
+    }
+
+    /// Ensembl VEP's cache dumper deletes a transcript's `description` when it
+    /// is defined, one of the keys it drops with `display_xref`, `external_name`
+    /// and `status` (`Pipeline/DumpVEP/Dumper/Core.pm:155-173`), so no cache
+    /// carries a value under the key: a record that does loads with the key
+    /// ignored and the transcript carries no such field.
+    #[test]
+    fn description_key_is_ignored() {
+        let tx = transcript_from(&minimal(
+            r#","description":"keratin associated protein 10-1 [Source:HGNC Symbol;Acc:HGNC:22966]""#,
+        ));
+        assert_eq!(&*tx.stable_id, "ENST00000400375");
+        let fields = serde_json::to_value(&tx).unwrap();
+        assert!(fields.get("description").is_none(), "{fields}");
     }
 
     /// A protein feature's `analysis` is its display label: a string, or the

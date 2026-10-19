@@ -1181,7 +1181,6 @@ mod tests {
             strand: tr.strand,
             biotype: tr.biotype.clone(),
             name: Some("GENE1".to_string()),
-            description: None,
             version: Some(3),
             transcripts: Vec::new(),
         }

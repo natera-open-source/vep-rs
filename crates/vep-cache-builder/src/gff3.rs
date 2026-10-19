@@ -41,7 +41,6 @@ pub struct GeneRecord {
     pub biotype: String,
     /// The gene's `Name`, its display xref's label.
     pub name: Option<String>,
-    pub description: Option<String>,
     /// The gene line's `version`.
     pub version: Option<u32>,
     pub transcripts: Vec<TranscriptRecord>,
@@ -178,7 +177,6 @@ pub fn parse_gff3(path: &Path) -> Result<HashMap<String, GeneRecord>> {
                     strand,
                     biotype: attrs.get("biotype").cloned().unwrap_or_default(),
                     name: attrs.get("Name").cloned(),
-                    description: attrs.get("description").cloned(),
                     version: parse_version(&attrs),
                     transcripts: Vec::new(),
                 },

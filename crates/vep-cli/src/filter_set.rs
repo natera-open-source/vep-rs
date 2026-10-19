@@ -148,7 +148,6 @@ impl FilterData for Transcript {
             "dbID" => self.db_id.map(|n| Cow::Owned(n.to_string())),
             "cdna_coding_start" => self.cdna_coding_start.map(|n| Cow::Owned(n.to_string())),
             "cdna_coding_end" => self.cdna_coding_end.map(|n| Cow::Owned(n.to_string())),
-            "description" => self.description.as_deref().map(Cow::Borrowed),
             // Perl stringifies a reference as its class and address and numifies
             // it as the address, so a value of that shape keeps `is`, `ne`, a
             // regex and a numeric comparison reading as they do there
@@ -982,7 +981,6 @@ mod tests {
             strand: Strand::Forward,
             biotype: "protein_coding".into(),
             source: "ensembl_havana".to_string(),
-            description: None,
             gene_symbol: Some("BRCA2".into()),
             gene_symbol_source: Some("HGNC".into()),
             hgnc_id: Some("HGNC:1101".into()),

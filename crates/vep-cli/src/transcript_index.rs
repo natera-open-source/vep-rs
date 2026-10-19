@@ -862,7 +862,6 @@ mod tests {
             strand,
             biotype: Arc::from("protein_coding"),
             source: String::new(),
-            description: None,
             gene_symbol: None,
             gene_symbol_source: None,
             hgnc_id: None,
