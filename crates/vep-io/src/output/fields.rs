@@ -1208,6 +1208,7 @@ fn row_field_value(
         | "VAR_SYNONYMS"
         | "CLINVAR_SOMATIC_CLASSIFICATION" => colocated_column(field, variant, options, list_sep),
         "SV" => variant.overlapping_svs.join(list_sep),
+        "FREQS" => variant.freqs.join(list_sep),
         "SIFT" => tc.and_then(|x| x.sift.clone()).unwrap_or_default(),
         "PolyPhen" => tc.and_then(|x| x.polyphen.clone()).unwrap_or_default(),
         "MOTIF_NAME"
@@ -4015,6 +4016,39 @@ mod tests {
         v.overlapping_svs = vec!["esv1".into(), "nsv2".into()];
         assert_eq!(field_value("SV", &v, None, &options, ","), "esv1,nsv2");
         assert_eq!(field_value("SV", &v, None, &options, "&"), "esv1&nsv2");
+    }
+
+    /// `FREQS` lists the record's `POPULATION:ALLELE:frequency` triplets as
+    /// `add_colocated_variant_info` writes them (OutputFactory.pm:1148-1163),
+    /// `,`-joined in the default and tab formats and `&`-joined in the VCF
+    /// entry, on every row of the record and empty without the filter's data:
+    /// Ensembl VEP 116.2 prints `FREQS=AF:A:NA,AF:G:1` on `21 7759128 T A,G`
+    /// under `--check_frequency --freq_pop AF` and `AF:A:NA&AF:G:1` in its CSQ.
+    #[test]
+    fn freqs_column_lists_population_allele_frequency_triplets() {
+        let options = FieldOptions {
+            check_frequency: true,
+            ..Default::default()
+        };
+        let mut v = InputVariant::new("21".into(), 7759128, 7759128, b"T".to_vec(), b"A".to_vec());
+        assert_eq!(field_value("FREQS", &v, None, &options, ","), "");
+        v.freqs = vec!["AF:A:NA".into(), "AF:G:1".into()];
+        assert_eq!(
+            field_value("FREQS", &v, None, &options, ","),
+            "AF:A:NA,AF:G:1"
+        );
+        assert_eq!(
+            field_value("FREQS", &v, None, &options, "&"),
+            "AF:A:NA&AF:G:1"
+        );
+        let tc = TranscriptConsequence::default();
+        assert_eq!(
+            field_value("FREQS", &v, Some(&tc), &options, ","),
+            "AF:A:NA,AF:G:1",
+            "a transcript row carries the record's list"
+        );
+        assert!(flag_fields(&options).contains(&"FREQS"));
+        assert!(!flag_fields(&FieldOptions::default()).contains(&"FREQS"));
     }
 
     /// The fields the JSON factory stubs out of the consequence hash

@@ -1,0 +1,57 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf",
+ "sha256": {
+  "default.txt": "f5d8d71996c30177b15615f32b8c5bf9a22f5421883e0ae643f1bcd3af7f46c7",
+  "tab.txt": "5a8da2a3ed133d93f81b1902b89f904d1c70f5d67a53352be2dce746c47d5a65",
+  "vcf.vcf": "dfa7e2309df024cfa074b0c4eaadf134f1fff0764677e18464c65e79758ddcaf",
+  "json.jsonl": "9225fd3be1fa6a61263498cdb6536e8d45eab5369b069fe3133786687a372aaf"
+ },
+ "variants_vcf_sha256": "7c36fefbd7337a5bd7314a0fe7a22ce6a28b3311cd1730f9a71ca117a40d47ad",
+ "flag_sets": {
+  "freqfilter-include": {
+   "flags": [
+    "--check_frequency",
+    "--freq_pop",
+    "gnomADe_AFR",
+    "--freq_freq",
+    "0.05",
+    "--freq_gt_lt",
+    "lt",
+    "--freq_filter",
+    "include"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_freqfilter-include",
+   "sha256": {
+    "default.txt": "230a35682c9bc80d8764fff16a4aee45c2c0332f1378f1504f40b9d2b3826201",
+    "tab.txt": "4b4b6735104a36e550ed00308b745970d6df206a7affa8124a22eecfb5622f0d",
+    "vcf.vcf": "95f845e232c9f3b37b03c324483a9787493fb798c72796dba1450ee408ad35be",
+    "json.jsonl": "2d89ee3402b0ad3a221bd51a0ba72e284107b09aae4f22c82092459c590d0826"
+   }
+  }
+ },
+ "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "variation_slice": {
+  "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
+  "window": "records whose start lies within one base of an input record's span",
+  "windows": 17,
+  "records_kept": 35,
+  "records_excluded": 2,
+  "excludes": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "sha256": {
+   "all_vars.gz": "c1a2efcb6f660ad96cd4865b559afea74831cb90409754a7f9a2a1322a8d8a97",
+   "all_vars.gz.csi": "d1ef3da92a8587f6886b5aabc7935c669bdb506043c64db0ea5d5f5e457d2355"
+  },
+  "slice_check": "Ensembl VEP 116.2 run on this slice and on the full cache wrote identical default-format output for every record under --check_frequency --freq_pop gnomADe_AFR --freq_freq 0.05 --freq_gt_lt lt --freq_filter include and under --check_existing"
+ }
+}

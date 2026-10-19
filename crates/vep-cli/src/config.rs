@@ -618,6 +618,17 @@ pub struct Config {
     pub max_af: bool,
     pub pubmed: bool,
     pub old_maf: bool,
+    /// `--check_frequency`, which `--filter_common` switches on (Config.pm:442-446):
+    /// the frequency filter of `crate::frequency_filter` runs.
+    pub check_frequency: bool,
+    /// `--freq_pop`, as given (Ensembl VEP's default `1KG_ALL`, Config.pm:321).
+    pub freq_pop: String,
+    /// `--freq_freq`, the filter's threshold (default 0.01, Config.pm:319).
+    pub freq_freq: f64,
+    /// `--freq_gt_lt`: `gt` or `lt` (default `gt`, Config.pm:322).
+    pub freq_gt_lt: String,
+    /// `--freq_filter`: `exclude` or `include` (default `exclude`, Config.pm:320).
+    pub freq_filter: String,
     pub gene_phenotype: bool,
     pub mirna: bool,
     pub check_existing: bool,
@@ -994,6 +1005,11 @@ impl Config {
             max_af: on("max_af"),
             pubmed: on("pubmed"),
             old_maf: on("old_maf"),
+            check_frequency: on("check_frequency"),
+            freq_pop: args.freq_pop,
+            freq_freq: args.freq_freq,
+            freq_gt_lt: args.freq_gt_lt,
+            freq_filter: args.freq_filter,
             gene_phenotype: on("gene_phenotype"),
             mirna: on("mirna"),
             check_existing: on("check_existing"),

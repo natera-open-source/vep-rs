@@ -1,0 +1,254 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "max_span": 1000000,
+ "covers": [
+  "check_frequency",
+  "freq_pop",
+  "freq_filter",
+  "filter_common",
+  "freqs-column"
+ ],
+ "excludes": {
+  "variation_records_named": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "reason": "COSMIC and HGMD-PUBLIC identifiers are not redistributed; the input records are chosen so that Ensembl VEP matches none of them"
+ },
+ "suites": {
+  "GRCh38-freqfilter": {
+   "reference": "grch38-freqfilter-default.txt",
+   "input": "grch38-freqfilter.vcf",
+   "rows": 291,
+   "combinations": 7
+  }
+ },
+ "combinations": {
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 19,
+   "exemplar_records": 3
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 38,
+   "exemplar_records": 8
+  },
+  "intergenic_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "intron_variant": {
+   "observed_rows": 146,
+   "exemplar_records": 7
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 61,
+   "exemplar_records": 8
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 24,
+   "exemplar_records": 7
+  }
+ },
+ "variant_classes": {
+  "deletion": 73,
+  "snv": 136
+ },
+ "records": [
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t25992449\t.\tATA\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t26865061\t.\tTT\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t30107044\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t30806721\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t31148973\t.\tGG\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t32288094\t.\tA\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t32803915\t.\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t33030010\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t38441162\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t42029386\t.\tGTG\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t42507853\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t44206463\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t45394866\t.\tA\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t45409802\t.\tA\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-freqfilter",
+   "vcf": "21\t45450351\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "freqfilter",
+   "flags": [
+    "--check_frequency",
+    "--freq_pop",
+    "AF",
+    "--freq_freq",
+    "0.01",
+    "--freq_gt_lt",
+    "gt",
+    "--freq_filter",
+    "exclude"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_freqfilter",
+   "covers": [
+    "check_frequency",
+    "freq_pop",
+    "freq_filter",
+    "filter_common",
+    "freqs-column"
+   ]
+  },
+  {
+   "name": "filter-common",
+   "flags": [
+    "--filter_common",
+    "--freq_pop",
+    "AF"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_filter-common",
+   "covers": [
+    "filter_common",
+    "check_frequency"
+   ]
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

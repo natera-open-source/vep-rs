@@ -100,6 +100,8 @@ fn flag_type(arg: &Arg) -> String {
             "u64"
         } else if id == TypeId::of::<i64>() {
             "i64"
+        } else if id == TypeId::of::<f64>() {
+            "f64"
         } else {
             panic!(
                 "--{}: a value type the reference does not name",

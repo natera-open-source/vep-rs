@@ -1,0 +1,105 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf",
+ "sha256": {
+  "default.txt": "582d38e6e673cc3ad1bd3b8b102b8df1cebfe10d40f476dd885e77921010733e",
+  "tab.txt": "d35394281049fb6211919ce128230d94388f1e4b637738311e625063da1496c1",
+  "vcf.vcf": "fa302acc428a04d9a258c1b6195dcae2169e21aa302e7725054884ebf4eb854b",
+  "json.jsonl": "53aafda796220263bd716cec11f6da618300f82d5f84728ed209a4d8bf878381"
+ },
+ "variants_vcf_sha256": "78342844cb3c6ef70b142100cc4320adae4003672ec9cc88d08eb1939545b790",
+ "flag_sets": {
+  "freqfilter": {
+   "flags": [
+    "--check_frequency",
+    "--freq_pop",
+    "AF",
+    "--freq_freq",
+    "0.01",
+    "--freq_gt_lt",
+    "gt",
+    "--freq_filter",
+    "exclude"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_freqfilter",
+   "sha256": {
+    "default.txt": "09bc015cf1c0fe83e78def0911dd12046423a88e6cc205f2f8db8bb1f8cb4490",
+    "tab.txt": "a05021d626fb113599cca368afbf27105023f4e9b02cbc4eaddd25d7f81f1e20",
+    "vcf.vcf": "fdd56ab2965cc6b4fea38e9a9f55b89e608aa051fe6e7a64431923488cd773ff",
+    "json.jsonl": "e81e0397a245568d254d6e39387229ba91b8cb5908a862bf657b1cb8c1cdb13f"
+   }
+  },
+  "filter-common": {
+   "flags": [
+    "--filter_common",
+    "--freq_pop",
+    "AF"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_filter-common",
+   "sha256": {
+    "default.txt": "81960c6cefefcd656da2b18e353f4897302af16a7333a3ab6f0e907d4e346966",
+    "tab.txt": "724ea7537bf3ac7bf46d0e5c44c248d2bb61abbef4b941de224c37d561786a20",
+    "vcf.vcf": "7d1ae38b2eb593c8d4d5b2a60ea819879bb795a5bee1f5f9c06fb6b81bf085f1",
+    "json.jsonl": "e939beb21f007d7e01a35141606850aab1462385173628dbb2d6c2b7702a5b8b"
+   }
+  }
+ },
+ "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "variation_slice": {
+  "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
+  "window": "records whose start lies within one base of an input record's span",
+  "windows": 15,
+  "records_kept": 38,
+  "records_excluded": 1,
+  "excludes": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "sha256": {
+   "all_vars.gz": "397370cc6625eeaf9cb708789a102ab3824e1ba46a24e4c63422c6a69cdb82e1",
+   "all_vars.gz.csi": "784e9f676514fc34283395c73a4ea190400def0fa72da1d558e081f9c9e274de"
+  },
+  "slice_check": "Ensembl VEP 116.2 run on this slice and on the full cache wrote identical default-format output for every record under --check_frequency --freq_pop AF --freq_freq 0.01 --freq_gt_lt gt --freq_filter exclude, under --check_existing and under --check_existing --filter_common"
+ },
+ "filter_common_check": {
+  "statement": "Ensembl VEP 116.2 on variants.vcf against the full release-116 GRCh38 cache writes the same records with the same values under --check_existing --filter_common as under --check_existing: its 1KG_ALL population reads minor_allele, 1KG_ALL and ALL, which a release-116 cache lacks (BaseCacheVariation.pm:214-244), so --filter_common filters nothing and FREQS stays empty; vep-rs reads the AF column for 1KG_ALL (docs/intended-divergences.md)",
+  "default": {
+   "bodies_identical": true,
+   "rows": 291
+  },
+  "tab": {
+   "identical_without_the_FREQS_column": true,
+   "FREQS_values": [
+    "-"
+   ]
+  },
+  "vcf": {
+   "identical_without_the_FREQS_subfield": true,
+   "FREQS_values": [
+    ""
+   ]
+  },
+  "json": {
+   "objects_equal": true,
+   "records": 15
+  },
+  "sha256": {
+   "check-existing.default": "bec4455498b5d82a37f6c777f0a2596fe001d555f6b89a57d41582fc0e22e501",
+   "check-existing.json": "0a19ed65f60757d48e539944c990004cb2697c7f0d13b435e1c0b64d24a7cfe3",
+   "check-existing.tab": "112e362033682df2dd63780a176eee39aabea25f34619e4c81fc84761b246e1f",
+   "check-existing.vcf": "24e290cda9efbb781744a9fede481ba312156e6c39d251e7555aea0183cb1280",
+   "filter-common.default": "4709bc02215e969d5018da9ce24c9deba497cf5bfe8e80a289ba64f758c30ed5",
+   "filter-common.json": "7f4aec36eb77c16edf14874bbb0cbaefcc8559ddda4d8ea094d76b6d4f99e050",
+   "filter-common.tab": "e2287b8be186a0e28cc638fe715f9f58afc7a89753420ef73f83a0ff9636e50d",
+   "filter-common.vcf": "97c633fa498b25f6c6a894ca21c1857adf7bfe3e788ffaf7951bc9a3b8b06aad"
+  }
+ }
+}

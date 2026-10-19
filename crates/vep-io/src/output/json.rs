@@ -91,7 +91,7 @@ impl JsonOutputFormatter {
             .unwrap_or(first);
         root.insert(
             "allele_string".to_string(),
-            Value::String(string_source.record_allele_string()),
+            Value::String(string_source.working_allele_string()),
         );
         if let Some(asm) = &self.assembly {
             root.insert("assembly_name".to_string(), Value::String(asm.clone()));

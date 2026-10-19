@@ -806,6 +806,54 @@ pub struct Args {
     #[arg(help_heading = "Allele Frequencies", long = "old_maf")]
     pub old_maf: bool,
 
+    /// Filter the input by the frequency of co-located known variants in the population --freq_pop names, against the threshold --freq_freq on the side --freq_gt_lt gives, dropping the alleles that pass or keeping the records whose alleles all pass as --freq_filter says; switches on --check_existing and adds the FREQS field (the frequencies the filter read, NA where an allele has none)
+    #[arg(help_heading = "Allele Frequencies", long = "check_frequency")]
+    pub check_frequency: bool,
+
+    /// The population --check_frequency reads: 1KG_ALL (the 1000 Genomes AF column of the cache), a frequency column of the cache in any case (AF, AFR, gnomADe_NFE; the gnomAD genome columns are refused, as Ensembl VEP refuses them), or 1KG_ followed by such a column
+    #[arg(
+        help_heading = "Allele Frequencies",
+        long = "freq_pop",
+        value_name = "POP",
+        default_value = "1KG_ALL"
+    )]
+    pub freq_pop: String,
+
+    /// The frequency --check_frequency compares against
+    #[arg(
+        help_heading = "Allele Frequencies",
+        long = "freq_freq",
+        value_name = "FLOAT",
+        default_value_t = 0.01,
+        value_parser = real_number,
+        allow_negative_numbers = true
+    )]
+    pub freq_freq: f64,
+
+    /// Whether an allele passes --check_frequency with a frequency at or above (gt) or at or below (lt) --freq_freq
+    #[arg(
+        help_heading = "Allele Frequencies",
+        long = "freq_gt_lt",
+        value_name = "gt|lt",
+        default_value = "gt",
+        value_parser = ["gt", "lt"]
+    )]
+    pub freq_gt_lt: String,
+
+    /// Whether --check_frequency drops the alleles that pass (exclude) or keeps a record only when every allele passes (include)
+    #[arg(
+        help_heading = "Allele Frequencies",
+        long = "freq_filter",
+        value_name = "exclude|include",
+        default_value = "exclude",
+        value_parser = ["exclude", "include"]
+    )]
+    pub freq_filter: String,
+
+    /// Drop the alleles with a 1000 Genomes frequency of 0.01 or more: --check_frequency with --freq_pop 1KG_ALL --freq_freq 0.01 --freq_gt_lt gt --freq_filter exclude
+    #[arg(help_heading = "Allele Frequencies", long = "filter_common")]
+    pub filter_common: bool,
+
     /// Add the GENE_PHENO column: 1 on a transcript whose gene the cache associates with a
     /// phenotype, disease or trait, empty otherwise
     #[arg(help_heading = "Allele Frequencies", long = "gene_phenotype")]
@@ -1021,6 +1069,28 @@ pub struct Args {
 
     #[arg(help_heading = "Miscellaneous", long, value_name = "DIR")]
     pub tmpdir: Option<String>,
+}
+
+/// A real number as Ensembl VEP's option parser reads one (Getopt::Long `=f`,
+/// `Config.pm:138`): an optional sign, digits or a leading `.`, a fraction of at
+/// least one digit and an optional exponent, with `_` allowed among the digits
+/// and dropped, so `.5`, `1e-2`, `+0.5` and `1_0` pass and `nan`, `inf` and `1.`
+/// are refused as the option's value.
+fn real_number(text: &str) -> Result<f64, String> {
+    let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
+    let mantissa = unsigned
+        .split_once(['e', 'E'])
+        .map_or(unsigned, |(mantissa, _)| mantissa);
+    let shaped = mantissa.starts_with(|c: char| c.is_ascii_digit() || c == '.')
+        && mantissa
+            .split_once('.')
+            .is_none_or(|(_, fraction)| !fraction.is_empty());
+    if !shaped {
+        return Err("real number expected".to_string());
+    }
+    text.replace('_', "")
+        .parse()
+        .map_err(|_| "real number expected".to_string())
 }
 
 impl Args {
@@ -1336,6 +1406,78 @@ mod tests {
             err.to_string(),
             "ERROR: [cli] Can't use --af_gnomade and --af_gnomad together"
         );
+    }
+
+    /// The frequency filter's flags take Ensembl VEP's defaults (Config.pm:319-322:
+    /// `freq_pop 1KG_ALL`, `freq_freq 0.01`, `freq_gt_lt gt`, `freq_filter exclude`),
+    /// `--check_frequency` switches `--check_existing` on (:449-452) and
+    /// `--filter_common` switches `--check_frequency` on (:442-446). A
+    /// `--freq_gt_lt` or `--freq_filter` value outside the two words is clap's
+    /// own error: Ensembl VEP takes any word, but its `check_pass`
+    /// (BaseCacheVariation.pm:467-468) passes an allele only under `gt` or `lt`,
+    /// so any other word passes nothing, and `frequency_check_buffer` (:319)
+    /// reads any `--freq_filter` but `include` as `exclude`. `--freq_freq` takes
+    /// the real-number shapes Getopt::Long takes (`.5`, `1e-2`, `+0.5`, `-1`,
+    /// `1_0` read as 10 with the `_` dropped) and refuses `nan`, `inf`, `1.`
+    /// and `_1`, which Ensembl VEP 116.2 refuses as the option's value.
+    #[test]
+    fn frequency_filter_flags_take_ensembl_veps_defaults() {
+        let plain = Config::from_argv(["vep"]).unwrap();
+        assert!(!plain.check_frequency && !plain.check_existing);
+        assert_eq!(plain.freq_pop, "1KG_ALL");
+        assert_eq!(plain.freq_freq, 0.01);
+        assert_eq!(plain.freq_gt_lt, "gt");
+        assert_eq!(plain.freq_filter, "exclude");
+        let on = Config::from_argv(["vep", "--check_frequency"]).unwrap();
+        assert!(on.check_frequency && on.check_existing);
+        let common = Config::from_argv(["vep", "--filter_common"]).unwrap();
+        assert!(common.check_frequency && common.check_existing);
+        let given = Config::from_argv([
+            "vep",
+            "--check_frequency",
+            "--freq_pop",
+            "gnomADe_AFR",
+            "--freq_freq",
+            "0.05",
+            "--freq_gt_lt",
+            "lt",
+            "--freq_filter",
+            "include",
+        ])
+        .unwrap();
+        assert_eq!(given.freq_pop, "gnomADe_AFR");
+        assert_eq!(given.freq_freq, 0.05);
+        assert_eq!(given.freq_gt_lt, "lt");
+        assert_eq!(given.freq_filter, "include");
+        for (text, value) in [
+            (".5", 0.5),
+            ("1e-2", 0.01),
+            ("+0.5", 0.5),
+            ("-1", -1.0),
+            ("1_0", 10.0),
+            ("0.0_1", 0.01),
+        ] {
+            let config =
+                Config::from_argv(["vep", "--check_frequency", "--freq_freq", text]).unwrap();
+            assert_eq!(config.freq_freq, value, "{text}");
+        }
+        for argv in [
+            ["vep", "--check_frequency", "--freq_gt_lt", "ge"],
+            ["vep", "--check_frequency", "--freq_filter", "Include"],
+            ["vep", "--check_frequency", "--freq_freq", "one"],
+            ["vep", "--check_frequency", "--freq_freq", "nan"],
+            ["vep", "--check_frequency", "--freq_freq", "inf"],
+            ["vep", "--check_frequency", "--freq_freq", "1."],
+            ["vep", "--check_frequency", "--freq_freq", "5e"],
+            ["vep", "--check_frequency", "--freq_freq", "_1"],
+        ] {
+            let err = Config::from_argv(argv).unwrap_err();
+            assert!(
+                matches!(err, ParseFailure::Usage(_)),
+                "{}: clap's own error: {err}",
+                argv.join(" ")
+            );
+        }
     }
 
     /// `--max_af` parses as a bare flag and switches `--check_existing` on

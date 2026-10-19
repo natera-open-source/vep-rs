@@ -60,6 +60,7 @@ use smallvec::SmallVec;
 use tracing::debug;
 
 use crate::config::{PipelineMode, WriterStrategy};
+use crate::frequency_filter::FrequencyFilter;
 use crate::pick::{self, FilterConfig};
 use crate::render::render_record;
 use crate::runner::{
@@ -67,7 +68,8 @@ use crate::runner::{
     prewarm_batch, AnnotationResources, PipelineStats,
 };
 use crate::transcript_index::LazyTranscriptIndexes;
-use crate::variation_source::ReadFailure;
+use crate::variation_matcher;
+use crate::variation_source::{ReadFailure, VariationSource};
 use crate::vcf_parser::{parse_vcf_line_with_max_sv_size, vcf_line_is_non_variant};
 use vep_core::coordinate::parse_pos;
 use vep_core::sv_record::StructuralRecordError;
@@ -1300,11 +1302,18 @@ fn coordinate(
             InputBatch::Parsed(parsed) => parsed,
         };
         let parse_ms = parse_start.elapsed().as_millis() as u64;
+        // The batch path prewarms itself; the fused path and the frequency
+        // filter, which co-locates the batch before it is annotated, need the
+        // chromosomes and the variation windows read ahead here.
+        let frequency_filter = c.resources.frequency_filter();
+        if !batch.variants.is_empty() && (fused || frequency_filter.is_some()) {
+            prewarm_batch(&batch.variants, c.resources, c.pool)?;
+        }
+        if let Some((filter, source)) = frequency_filter {
+            frequency_filter_stage(&mut batch, c, filter, source)?;
+        }
         let render_start;
         let rendered = if fused {
-            if !batch.variants.is_empty() {
-                prewarm_batch(&batch.variants, c.resources, c.pool)?;
-            }
             render_start = Instant::now();
             annotate_render_batch(&mut batch, c, &mut spare)?
         } else {
@@ -1388,6 +1397,140 @@ fn drop_annotations(variants: &mut Vec<InputVariant>, pool: &ThreadPool) {
         });
     });
     variants.clear();
+}
+
+/// The `--check_frequency` stage: co-locates every variant of the batch on the
+/// pool against `source`, judges each record with `filter` and drops the
+/// alleles and records it rejects before annotation, as Ensembl VEP's variation
+/// source filters the buffer before its transcript source reads it
+/// (`AnnotationSourceAdaptor.pm:98`, `AnnotationType/Variation.pm:96`). A
+/// non-variant record a VCF output writes through (`--allow_non_variant`) is
+/// judged as the allele-less feature Ensembl VEP builds from it, co-located
+/// here on its own. The records dropped whole are counted into the statistics
+/// (`BaseCacheVariation.pm:362-373`).
+fn frequency_filter_stage(
+    batch: &mut ParsedBatch,
+    c: &Coordinator<'_>,
+    filter: &FrequencyFilter,
+    source: &VariationSource,
+) -> anyhow::Result<()> {
+    let rules = c.resources.colocation();
+    if !batch.variants.is_empty() {
+        let failure = ReadFailure::default();
+        c.pool.install(|| {
+            batch.variants.par_iter_mut().for_each(|variant| {
+                variation_matcher::annotate_colocated(variant, source, rules, &failure);
+            });
+        });
+        check_variation_reads(&failure)?;
+    }
+    let mut keep = vec![true; batch.variants.len()];
+    for unit in &batch.units {
+        if let Unit::Record(range) = unit {
+            let verdict = filter.filter_record(&mut batch.variants[range.clone()]);
+            keep[range.clone()].copy_from_slice(&verdict);
+        }
+    }
+    let mut dropped = retain_alleles(&mut batch.units, &mut batch.variants, &keep);
+    if filter.drops_records_without_data() {
+        let failure = ReadFailure::default();
+        dropped += drop_passthrough_records(&mut batch.units, &batch.text, |line| {
+            let Some(mut feature) = non_variant_feature(line) else {
+                return true;
+            };
+            name_source_chromosomes(
+                &mut feature,
+                c.resources.synonyms(),
+                c.resources.transcripts(),
+            );
+            variation_matcher::annotate_colocated(&mut feature, source, rules, &failure);
+            filter.drops_record_without_alleles(&[feature])
+        });
+        check_variation_reads(&failure)?;
+    }
+    if c.stats_enabled {
+        c.stats.record_filtered(dropped);
+    }
+    Ok(())
+}
+
+/// Removes the non-variant records a VCF output writes through unparsed
+/// (`--allow_non_variant`) that `drops` rejects, given each line's bytes, and
+/// returns their number. Header lines, the other text units, begin with `#`
+/// and stay.
+fn drop_passthrough_records(
+    units: &mut Vec<Unit>,
+    text: &[u8],
+    mut drops: impl FnMut(&[u8]) -> bool,
+) -> u64 {
+    let before = units.len();
+    units.retain(|unit| match unit {
+        Unit::Text(span) => {
+            let line = &text[span.clone()];
+            line.first().is_none_or(|&b| b == b'#') || !drops(line)
+        }
+        Unit::Record(_) => true,
+    });
+    (before - units.len()) as u64
+}
+
+/// The variation feature Ensembl VEP builds from a non-variant line
+/// (`Parser/VCF.pm:248-254, 339-353`): the reference alone as its allele
+/// string, no alternate allele, from POS over the reference's length, INFO/END
+/// and INFO/SVLEN unread. `None` for a line a Perl-true INFO/SVTYPE routes to
+/// the structural path (`:237-245`), whose feature gets no co-located variant
+/// (`AnnotationType/Variation.pm:85`), and for one with fewer than four
+/// columns or a POS that is no coordinate. An empty REF column ends before
+/// POS (`Parser/VCF.pm:254`), the span Ensembl VEP judges when `--dont_skip`
+/// keeps the line its `validate_vf` otherwise skips (`Parser.pm:556-558`).
+fn non_variant_feature(line: &[u8]) -> Option<InputVariant> {
+    let line = String::from_utf8_lossy(line);
+    let mut fields = line.split('\t');
+    let chr = fields.next()?;
+    let pos = parse_pos(fields.next()?)?;
+    let reference = fields.nth(1)?;
+    let info = fields.nth(3).unwrap_or(".");
+    if info_value(info, "SVTYPE").is_some_and(perl_true) {
+        return None;
+    }
+    Some(InputVariant::without_allele(
+        chr.to_string(),
+        pos,
+        reference,
+        [],
+    ))
+}
+
+/// Keeps the variants `keep` marks and the units that still hold one: the
+/// variants are compacted in place in their order, each record unit renumbered
+/// to its kept alleles and a record left with none removed; text units stay.
+/// Returns the number of records removed.
+fn retain_alleles(units: &mut Vec<Unit>, variants: &mut Vec<InputVariant>, keep: &[bool]) -> u64 {
+    if keep.iter().all(|&k| k) {
+        return 0;
+    }
+    let mut write = 0usize;
+    let mut dropped = 0u64;
+    units.retain_mut(|unit| match unit {
+        Unit::Text(_) => true,
+        Unit::Record(range) => {
+            let start = write;
+            for index in range.clone() {
+                if keep[index] {
+                    variants.swap(write, index);
+                    write += 1;
+                }
+            }
+            if write == start {
+                dropped += 1;
+                return false;
+            }
+            *range = start..write;
+            true
+        }
+    });
+    variants.truncate(write);
+    dropped
 }
 
 /// The alleles parsed from one data line; `None` for a passthrough item.
@@ -2233,6 +2376,80 @@ mod tests {
         std::str::from_utf8(&batch.text[span.clone()]).unwrap()
     }
 
+    /// The passthrough pass offers the verdict every non-variant record a VCF
+    /// output writes through and never a header line, and removes the records
+    /// the verdict rejects; the units of parsed records stay.
+    #[test]
+    fn passthrough_pass_judges_non_variant_records_and_spares_headers() {
+        let header = b"#CHROM\tPOS\tID\tREF\tALT";
+        let kept = b"21\t5\t.\tC\t.";
+        let dropped = b"21\t9\t.\tA\t.";
+        let mut text = header.to_vec();
+        text.extend_from_slice(kept);
+        text.extend_from_slice(dropped);
+        let kept_span = header.len()..header.len() + kept.len();
+        let mut units = vec![
+            Unit::Text(0..header.len()),
+            Unit::Text(kept_span.clone()),
+            Unit::Record(0..1),
+            Unit::Text(kept_span.end..text.len()),
+        ];
+        let mut judged = Vec::new();
+        let removed = drop_passthrough_records(&mut units, &text, |line| {
+            judged.push(line.to_vec());
+            line == dropped
+        });
+        assert_eq!(removed, 1);
+        assert_eq!(judged, [kept.to_vec(), dropped.to_vec()]);
+        assert!(matches!(
+            units.as_slice(),
+            [Unit::Text(first), Unit::Text(second), Unit::Record(_)]
+                if *first == (0..header.len()) && *second == kept_span
+        ));
+    }
+
+    /// The feature of a non-variant line spans POS over the reference's length
+    /// with INFO/END and INFO/SVLEN unread (`Parser/VCF.pm:250-254`): Ensembl
+    /// VEP 116.2 under `--allow_non_variant --vcf --check_frequency --freq_pop AF
+    /// --freq_filter include` writes `21 10521659 . A . . . END=10521660`,
+    /// whose single base lies at a `COSMIC_MUTATION` record, and drops
+    /// `21 10521608 . CN . . . SVLEN=1`, whose two bases span none. Its allele
+    /// string is the reference alone, so it matches a known variant on its
+    /// span only. A Perl-true INFO/SVTYPE (`:237-245`) or a POS that is no
+    /// coordinate builds no feature; an empty REF column ends before POS, as
+    /// Ensembl VEP's feature does when `--dont_skip` keeps the line.
+    #[test]
+    fn non_variant_feature_spans_the_reference_alone() {
+        let span = |line: &str| {
+            let feature = non_variant_feature(line.as_bytes()).expect(line);
+            (
+                feature.chr.clone(),
+                feature.start,
+                feature.end,
+                feature.allele_string.clone(),
+            )
+        };
+        assert_eq!(
+            span("21\t100\t.\tCAT\t.\t.\t.\t."),
+            ("21".into(), 100, 102, "CAT".into())
+        );
+        assert_eq!(
+            span("21\t100\t.\tC\t."),
+            ("21".into(), 100, 100, "C".into())
+        );
+        assert_eq!(span("21\t100\t.\tC\t.\t.\t.\tEND=250").2, 100);
+        assert_eq!(span("21\t100\t.\tCN\t.\t.\t.\tSVLEN=1").2, 101);
+        assert_eq!(span("21\t100\t.\tC\t.\t.\t.\tSVTYPE=0").2, 100);
+        assert_eq!(span("21\t100\t.\tC\t.\t.\t.\tSVTYPE").2, 100);
+        assert_eq!(
+            span("21\t100\t.\t\t.\t.\t.\t."),
+            ("21".into(), 100, 99, String::new())
+        );
+        assert!(non_variant_feature(b"21\t100\t.\tCN\t.\t.\t.\tSVTYPE=DEL").is_none());
+        assert!(non_variant_feature(b"21\tx\t.\tC\t.").is_none());
+        assert!(non_variant_feature(b"21\t100").is_none());
+    }
+
     /// Every line the scanner yields, at fill sizes that split lines across
     /// fills, equals what `BufRead::lines` yields.
     #[test]
@@ -2695,7 +2912,7 @@ mod tests {
         )]));
         let pool = crate::annotator::build_thread_pool(2).unwrap();
         let resources = crate::runner::resources_over(Arc::new(transcripts));
-        let stats = crate::runner::zero_stats();
+        let stats = PipelineStats::new();
         let filter_config = FilterConfig::default();
         let extra_plan = ExtraFieldsPlan::new(vep_io::output::fields::FieldOptions::default());
         let write_ctx = WriteContext {

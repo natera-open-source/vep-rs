@@ -335,8 +335,9 @@ pub struct InputVariant {
     /// breakpoint record the reference base joined to its ALT side
     /// (`N/N[21:100[/N]21:200]`) unless that side opens or closes with `.`, a native
     /// single breakend VEP keeps bare (Parser/VCF.pm:469 and 499). VEP's JSON
-    /// `allele_string` prints this while Uploaded_variation prints the raw one. One
-    /// buffer shared by every allele of the record.
+    /// `allele_string` prints this unless `--check_frequency` dropped an allele
+    /// ([`Self::working_allele_string`]), while Uploaded_variation prints the raw
+    /// one. One buffer shared by every allele of the record.
     #[serde(default)]
     pub record_allele_string_multi: Option<Arc<str>>,
     /// The name VEP builds from the input line for a record its ID column cannot
@@ -379,6 +380,23 @@ pub struct InputVariant {
     /// flags a transcript allele (`OutputFactory.pm:1363` at release/116.2).
     #[serde(default)]
     pub intergenic_pick: bool,
+    /// The `FREQS` entries of the record under `--check_frequency`, one
+    /// `POPULATION:ALLELE:frequency` per alternate allele of the record as
+    /// uploaded, the alleles the filter dropped included, `NA` for an allele
+    /// with no frequency (`BaseCacheVariation.pm:434-440`,
+    /// `OutputFactory.pm:1148-1163` at release/116.2); empty when no
+    /// co-located variant carried frequency data for the population. Every
+    /// allele of the record carries the same list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub freqs: Vec<String>,
+    /// The record's allele string after `--check_frequency` dropped alleles:
+    /// the reference and the kept alternates (`BaseCacheVariation.pm:355`),
+    /// which the JSON `allele_string` and `AMBIGUITY` read in place of the
+    /// uploaded one, and `UPLOADED_ALLELE` where Ensembl VEP prints the
+    /// feature's string ([`Self::uploaded_allele`]), as Ensembl VEP rewrites
+    /// the variation feature's own string. `None` when every allele was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filtered_allele_string: Option<Arc<str>>,
 }
 
 /// An empty placeholder: no allocation, every field at its zero value. Lets a
@@ -441,6 +459,8 @@ impl Default for InputVariant {
             intergenic_shift: None,
             summary_terms: None,
             intergenic_pick: false,
+            freqs: Vec::new(),
+            filtered_allele_string: None,
         }
     }
 }
@@ -522,20 +542,24 @@ impl InputVariant {
             intergenic_shift: None,
             summary_terms: None,
             intergenic_pick: false,
+            freqs: Vec::new(),
+            filtered_allele_string: None,
         }
     }
 
-    /// The record of a line whose every ALT is `*` (`N *`, `N *,*`): the reference
-    /// bases from `pos`, the allele string REF and every ALT joined by `/`, and
-    /// [`Self::no_allele`] set, so no feature annotates it and every writer carries it
-    /// as Ensembl VEP carries its `N/*` feature.
+    /// The record of a line with no allele to annotate, every ALT `*` (`N *`,
+    /// `N *,*`) or a non-variant line's `.`: the reference bases from `pos`, ending
+    /// at `pos + length(REF) - 1` as Ensembl VEP's feature does (`Parser/VCF.pm:254`,
+    /// so an empty REF ends before it starts), the allele string REF and every ALT
+    /// joined by `/`, and [`Self::no_allele`] set, so no feature annotates it and
+    /// every writer carries it as Ensembl VEP carries its `N/*` feature.
     pub fn without_allele<'a>(
         chr: String,
         pos: u64,
         ref_allele: &'a str,
         alts: impl IntoIterator<Item = &'a str>,
     ) -> Self {
-        let end = pos + ref_allele.len().saturating_sub(1) as u64;
+        let end = (pos + ref_allele.len() as u64).saturating_sub(1);
         let mut variant = Self::new(chr, pos, end, ref_allele.as_bytes().to_vec(), b"*".to_vec());
         variant.allele_string = std::iter::once(ref_allele)
             .chain(alts)
@@ -603,8 +627,9 @@ impl InputVariant {
     /// `Uploaded_variation` as VEP prints it (OutputFactory.pm
     /// `VariationFeature_to_output_hash`): the identifier `explicit_id` admits unless
     /// it is the `chr_start_alleles` name VEP gives an ID-less record; else, for a
-    /// record renamed from `M` whose ID Perl reads as false, the name of
-    /// Parser.pm:462 ([`Self::variation_name`]); else the name built from the input
+    /// record whose ID Perl reads as false and whose string changed after
+    /// Parser.pm:462 named it, renamed from `M` or rewritten by `--check_frequency`,
+    /// that name ([`Self::variation_name`]); else the name built from the input
     /// line ([`Self::input_line_name`]); else, for an input format VEP names from
     /// the variant, `chr_start_alleles` where start is the anchor-trimmed start and
     /// the alleles are [`Self::uploaded_allele_string`].
@@ -622,10 +647,13 @@ impl InputVariant {
             return;
         }
         // A record whose ID column Perl reads as false is named before the
-        // `M` rename (Parser.pm:462) and prints that name when it differs from
-        // the one built at output (OutputFactory.pm:887-900), as the rename
-        // makes it; a `.` ID falls through to the line's name there as here.
-        if self.input_chr.is_some() && !self.id.as_deref().is_some_and(perl_true) {
+        // `M` rename and the `--check_frequency` rewrite (Parser.pm:462) and
+        // prints that name when it differs from the one built at output
+        // (OutputFactory.pm:887-900), as either makes it; a `.` ID falls through
+        // to the line's name there as here.
+        if (self.input_chr.is_some() || self.filtered_allele_string.is_some())
+            && !self.id.as_deref().is_some_and(perl_true)
+        {
             out.extend_from_slice(self.variation_name().as_bytes());
             return;
         }
@@ -649,10 +677,11 @@ impl InputVariant {
     /// Whether `id` is the `chr_start_alleles` name VEP gives a record whose ID
     /// column is empty (Parser.pm `validate_vf`). The name is built as
     /// `VariationFeature_to_output_hash` builds the one it compares the ID with
-    /// (OutputFactory.pm:887-891), from the record's chromosome as it stands at
-    /// output, `MT` for a renamed `M`, so [`Self::original_chr`] rather than
-    /// [`Self::name_chr`]. The prefix test keeps an identifier such as `rs123`
-    /// from building the name on every row.
+    /// (OutputFactory.pm:887-891), from the record's chromosome and allele string
+    /// as they stand at output, `MT` for a renamed `M`, so [`Self::original_chr`]
+    /// rather than [`Self::name_chr`], and [`Self::working_allele_string`]. The
+    /// prefix test keeps an identifier such as `rs123` from building the name on
+    /// every row.
     fn is_generated_name(&self, id: &str) -> bool {
         let chr = self.original_chr.as_str();
         if !id.starts_with(chr) {
@@ -662,7 +691,7 @@ impl InputVariant {
         // (OutputFactory.pm:294) restores a minimised record's own start before the
         // output hash is built.
         let start = self.original_start.unwrap_or(self.start);
-        id == format!("{}_{}_{}", chr, start, self.record_allele_string())
+        id == format!("{}_{}_{}", chr, start, self.working_allele_string())
     }
 
     /// The allele string of the whole input record as VEP holds it: the symbolic
@@ -676,6 +705,18 @@ impl InputVariant {
         match self.uploaded_allele_string.as_deref() {
             Some(s) if self.is_structural => s.to_string(),
             _ => self.allele_string.clone(),
+        }
+    }
+
+    /// The record's allele string as the run works with it after the input was
+    /// read: [`Self::filtered_allele_string`] once `--check_frequency` dropped
+    /// alleles, else [`Self::record_allele_string`]. Ensembl VEP's variation
+    /// feature holds this string; its `variation_name`, built before the
+    /// filter runs, keeps the uploaded one.
+    pub fn working_allele_string(&self) -> String {
+        match &self.filtered_allele_string {
+            Some(filtered) => filtered.to_string(),
+            None => self.record_allele_string(),
         }
     }
 
@@ -798,7 +839,7 @@ impl InputVariant {
     }
 
     /// The `AMBIGUITY` value of the record: [`ambiguity_code`] of
-    /// [`Self::record_allele_string`], the allele string Ensembl VEP's
+    /// [`Self::working_allele_string`], the allele string Ensembl VEP's
     /// `VariationFeature::ambig_code` reads, and `None` for a structural variant,
     /// whose feature class carries no code (OutputFactory.pm
     /// `VariationFeature_to_output_hash`).
@@ -806,7 +847,7 @@ impl InputVariant {
         if self.is_structural {
             return None;
         }
-        ambiguity_code(&self.record_allele_string())
+        ambiguity_code(&self.working_allele_string())
     }
 
     /// The `UPLOADED_ALLELE` value of the record: [`uploaded_allele`] of the
@@ -815,6 +856,10 @@ impl InputVariant {
     /// structural variant, whose rows carry neither it nor `REF_ALLELE`
     /// (`OutputFactory.pm` `BaseStructuralVariationOverlapAllele_to_output_hash`
     /// sets `Allele`, `ALLELE_NUM`, `Consequence`, `IMPACT` and `PICK` alone).
+    /// A record `--check_frequency` rewrote prints its
+    /// [`Self::filtered_allele_string`], upper-cased, in the cases where
+    /// Ensembl VEP prints the feature's `allele_string` rather than the
+    /// uploaded one.
     pub fn uploaded_allele(&self, minimal: bool) -> Option<String> {
         if self.is_structural {
             return None;
@@ -823,7 +868,12 @@ impl InputVariant {
             .uploaded_allele_string
             .as_deref()
             .unwrap_or(&self.allele_string);
-        Some(uploaded_allele(raw, minimal))
+        match &self.filtered_allele_string {
+            Some(filtered) if !keeps_uploaded_spelling(raw, minimal) => {
+                Some(filtered.to_ascii_uppercase())
+            }
+            _ => Some(uploaded_allele(raw, minimal)),
+        }
     }
 
     /// [`Self::location`] after a 3' shift of `shift` bases along `strand`
@@ -1042,15 +1092,22 @@ pub fn ambiguity_code(allele_string: &str) -> Option<u8> {
 /// record (`minimise_alleles`), and `validate_vf` upper-cases the working
 /// `allele_string` every other record prints.
 pub fn uploaded_allele(allele_string: &str, minimal: bool) -> String {
-    let mut parts = allele_string.split('/');
-    let reference_length = parts.next().map_or(0, str::len);
-    let minimised =
-        !allele_string.contains('-') && parts.any(|allele| allele.len() != reference_length);
-    if minimal || minimised {
+    if keeps_uploaded_spelling(allele_string, minimal) {
         allele_string.to_string()
     } else {
         allele_string.to_ascii_uppercase()
     }
+}
+
+/// Whether `UPLOADED_ALLELE` prints the record's allele string as uploaded
+/// (Ensembl VEP's `original_allele_string` is set) rather than the feature's
+/// working string: the run is `--minimal`, or the alleles differ in length with
+/// no `-` among them ([`uploaded_allele`]).
+fn keeps_uploaded_spelling(allele_string: &str, minimal: bool) -> bool {
+    let mut parts = allele_string.split('/');
+    let reference_length = parts.next().map_or(0, str::len);
+    minimal
+        || (!allele_string.contains('-') && parts.any(|allele| allele.len() != reference_length))
 }
 
 #[cfg(test)]
@@ -1543,6 +1600,87 @@ mod tests {
         sv.is_structural = true;
         sv.uploaded_allele_string = Some("<DEL>".into());
         assert_eq!(sv.uploaded_allele(false), None);
+    }
+
+    /// A record `--check_frequency` rewrote works with its kept alleles: the
+    /// JSON `allele_string`, `AMBIGUITY` and, where Ensembl VEP prints the
+    /// feature's string, `UPLOADED_ALLELE` read `T/A` for `21 7759128 T A,G`
+    /// after the `G` allele is dropped, while the names built before the
+    /// filter ran (`variation_name`, the line name) and the memoised
+    /// `class_SO_term` keep the uploaded one; `21 44195140 G A,GT` keeps its
+    /// uploaded `UPLOADED_ALLELE`, as a non-minimised indel does, and prints
+    /// `indel`. A record whose ID Perl reads as false is named by Parser.pm:462
+    /// before the filter, and `Uploaded_variation` prints that name once the
+    /// rewrite makes the output's `chr_start_alleles` differ from it
+    /// (OutputFactory.pm:887-900); an explicit ID equal to the output's name
+    /// yields the line name, as without the filter.
+    #[test]
+    fn a_frequency_filtered_record_prints_its_kept_alleles() {
+        let mut snv =
+            InputVariant::new("21".into(), 7759128, 7759128, b"T".to_vec(), b"A".to_vec());
+        snv.uploaded_allele_string = Some("T/A/G".into());
+        snv.record_allele_string_multi = Some("T/A/G".into());
+        snv.input_line_name = Some("21_7759128_T/A/G".into());
+        assert_eq!(snv.ambiguity_code(), Some(b'D'));
+        snv.filtered_allele_string = Some("T/A".into());
+        assert_eq!(snv.working_allele_string(), "T/A");
+        assert_eq!(snv.record_allele_string(), "T/A/G");
+        assert_eq!(snv.uploaded_allele(false).as_deref(), Some("T/A"));
+        assert_eq!(snv.uploaded_allele(true).as_deref(), Some("T/A/G"));
+        assert_eq!(snv.ambiguity_code(), Some(b'W'));
+        assert_eq!(snv.variation_name(), "21_7759128_T/A/G");
+        assert_eq!(snv.class_so_term(), "SNV");
+        snv.id = Some(".".into());
+        assert_eq!(snv.uploaded_variation(), "21_7759128_T/A/G");
+
+        let mut indel = InputVariant::new(
+            "21".into(),
+            44195140,
+            44195140,
+            b"G".to_vec(),
+            b"GT".to_vec(),
+        );
+        indel.uploaded_allele_string = Some("G/A/GT".into());
+        indel.record_allele_string_multi = Some("G/A/GT".into());
+        indel.filtered_allele_string = Some("G/GT".into());
+        assert_eq!(indel.working_allele_string(), "G/GT");
+        assert_eq!(indel.uploaded_allele(false).as_deref(), Some("G/A/GT"));
+        assert_eq!(indel.class_so_term(), "indel");
+
+        // `21 100 T A,TT` with the `TT` allele dropped: the class is the
+        // uploaded string's `indel`, not the kept `T/A`'s `SNV`.
+        let mut mixed = InputVariant::new("21".into(), 100, 100, b"T".to_vec(), b"A".to_vec());
+        mixed.uploaded_allele_string = Some("T/A/TT".into());
+        mixed.record_allele_string_multi = Some("T/A/TT".into());
+        mixed.filtered_allele_string = Some("T/A".into());
+        assert_eq!(mixed.uploaded_allele(false).as_deref(), Some("T/A/TT"));
+        assert_eq!(mixed.class_so_term(), "indel");
+
+        // `21 100 <ID> AT A,ATT`, anchor-chopped to `T/-/TT` at 101, after the
+        // `TT` allele is dropped.
+        let mut chopped = InputVariant::new("21".into(), 101, 101, b"T".to_vec(), b"-".to_vec());
+        chopped.uploaded_allele_string = Some("AT/A/ATT".into());
+        chopped.record_allele_string_multi = Some("T/-/TT".into());
+        chopped.input_line_name = Some("21_100_AT/A/ATT".into());
+        for id in [None, Some("."), Some("0"), Some("21_101_T/-/TT")] {
+            chopped.id = id.map(str::to_string);
+            assert_eq!(chopped.uploaded_variation(), "21_100_AT/A/ATT", "ID {id:?}");
+        }
+        chopped.filtered_allele_string = Some("T/-".into());
+        assert_eq!(chopped.uploaded_allele(false).as_deref(), Some("AT/A/ATT"));
+        for (id, name) in [
+            (None, "21_101_T/-/TT"),
+            (Some("0"), "21_101_T/-/TT"),
+            (Some("."), "21_100_AT/A/ATT"),
+            (Some("21_101_T/-/TT"), "21_101_T/-/TT"),
+            (Some("21_101_T/-"), "21_100_AT/A/ATT"),
+            (Some("rs1"), "rs1"),
+        ] {
+            chopped.id = id.map(str::to_string);
+            assert_eq!(chopped.uploaded_variation(), name, "ID {id:?}");
+        }
+        chopped.id = None;
+        assert_eq!(chopped.variation_name(), "21_101_T/-/TT");
     }
 
     /// The three byte writers append exactly the bytes of the `String` columns,

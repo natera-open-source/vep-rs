@@ -29,7 +29,10 @@ one in the input's tabix contig order. The coordinator, the calling thread, has 
 lines parsed on the pool, by its streaming tasks or as one pass of the batched mode (both
 below): `parse_vcf_line_with_max_sv_size` routes the record through `vep-core`'s
 structural-variant rules and splits a sequence record into one `InputVariant` per alternate
-allele, alleles trimmed. Each variant then passes through `annotate_one`: `annotate_variant`
+allele, alleles trimmed. Under `--check_frequency` the coordinator co-locates the batch first
+and `frequency_filter` drops each allele and record that the population's frequencies rule
+out, as Ensembl VEP's variation source filters its buffer before any transcript is read. Each
+remaining variant then passes through `annotate_one`: `annotate_variant`
 visits every transcript overlapping the variant's span and calls
 `vep_effects::calculate_consequences` on each, a single-residue substitution gains its SIFT (Sorting
 Intolerant From Tolerant) and PolyPhen (Polymorphism Phenotyping) predictions, a breakend
@@ -71,6 +74,7 @@ has drained.
 | `src/transcript_index.rs`   | Transcript interval indexes (UCSC binning, coitrees, sorted array) behind one `TranscriptIndex` surface, each chromosome's protein-coding transcription start sites beside it; `LazyTranscriptIndexes` loads each chromosome once; `MaterializedTranscriptIndexes` proves every chromosome loaded |
 | `src/nearest.rs`            | `--nearest`: the protein-coding transcription start sites nearest a record, found as Ensembl VEP's `TranscriptTree::nearest` finds them over the chromosome's site table, and the identifiers reported for them                                                                                   |
 | `src/vcf_parser.rs`         | Parses one VCF data line into `InputVariant`s: the fixed fields, allele trimming and minimisation per alternate allele, structural records through `vep-core`'s routing, the `--max_sv_size` limit                          |
+| `src/frequency_filter.rs`   | `FrequencyFilter`: the `--check_frequency` stage (`--freq_pop`, `--freq_freq`, `--freq_gt_lt`, `--freq_filter`, `--filter_common`), Ensembl VEP's population check, frequency lookup with the strand, remainder and matched-allele rules, the include and exclude verdicts, the `FREQS` entries and the rewritten allele string of a record that lost alleles |
 | `src/variation_matcher.rs`  | Matches input variants to the known variants of their window as Ensembl VEP does (by allele after trimming from either end, strand-aware, span-only for null alleles and under `--no_check_alleles`, `--failed` applied), and writes the Extra column fields (IMPACT, STRAND, the frequency and clinical fields, plugin keys) |
 | `src/sv_source.rs`          | `SvSource`: Ensembl's structural-variant VCF of `--check_svs <file>`, read through its index for the top-level records overlapping each variant, with a per-batch prefetch; the names fill `SV` and the JSON `colocated_structural_variants`                                                                                  |
 | `src/pick.rs`               | `FilterConfig`, `apply_to_record` and `apply_to_batch`: the record-level steps over an input record, the row filters of `src/row_filter.rs` first, then VEP's pick algorithm and summaries for `--pick`, `--per_gene`, `--pick_order`, `--most_severe`, `--summary` and the `--flag_pick` variants |

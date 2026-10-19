@@ -42,6 +42,7 @@ pub mod cache_resolve;
 pub mod config;
 pub mod dylib_plugins;
 pub mod filter_set;
+pub mod frequency_filter;
 pub mod json_cache;
 pub mod nearest;
 pub mod option_rules;

@@ -34,6 +34,7 @@ use crate::annotator::{
 use crate::cache_resolve::ResolvedCache;
 use crate::config::{CliError, Config};
 use crate::filter_set::FilterSet;
+use crate::frequency_filter::{check_frequency_filter, FrequencyFilter};
 use crate::nearest::NearestType;
 use crate::output_compress::OutputCompression;
 use crate::pick::FilterConfig;
@@ -268,15 +269,31 @@ fn decompressed<R: BufRead + Send + 'static>(
 pub(crate) struct PipelineStats {
     variants_processed: AtomicU64,
     consequences_calculated: AtomicU64,
+    /// Input records `--check_frequency` dropped whole, Ensembl VEP's
+    /// `filtered_variants` counter (`BaseCacheVariation.pm:362-373`).
+    records_filtered: AtomicU64,
 }
 
 impl PipelineStats {
+    pub(crate) fn new() -> Self {
+        Self {
+            variants_processed: AtomicU64::new(0),
+            consequences_calculated: AtomicU64::new(0),
+            records_filtered: AtomicU64::new(0),
+        }
+    }
+
     /// Adds one batch's variant and consequence counts.
     pub(crate) fn record(&self, variants: u64, consequences: u64) {
         self.variants_processed
             .fetch_add(variants, Ordering::Relaxed);
         self.consequences_calculated
             .fetch_add(consequences, Ordering::Relaxed);
+    }
+
+    /// Adds the records one batch's frequency filter dropped.
+    pub(crate) fn record_filtered(&self, records: u64) {
+        self.records_filtered.fetch_add(records, Ordering::Relaxed);
     }
 }
 
@@ -690,7 +707,7 @@ impl Runner {
             af_gnomade: c.af_gnomade,
             af_gnomadg: c.af_gnomadg,
             max_af: c.max_af,
-            check_frequency: false,
+            check_frequency: c.check_frequency,
             check_existing: c.check_existing,
             pubmed: c.pubmed,
             check_svs: c.check_svs.is_some(),
@@ -795,6 +812,7 @@ impl Runner {
             let predictions = prediction_checks(&self.config, &self.cache.info)?;
             self.print_notices(&predictions.notices);
             check_gnomad_columns(&self.config, &self.cache.info)?;
+            check_frequency_filter(&self.config, &self.cache.info)?;
             check_input_file_exists(&self.config)?;
             return self.write_cache_info(&mut io::stdout().lock());
         }
@@ -809,6 +827,7 @@ impl Runner {
         let predictions = prediction_checks(&self.config, &self.cache.info)?;
         self.print_notices(&predictions.notices);
         check_gnomad_columns(&self.config, &self.cache.info)?;
+        check_frequency_filter(&self.config, &self.cache.info)?;
         let reference_fasta = open_fasta(&self.config, &self.cache)?;
         let fasta_found = reference_fasta.is_some();
         let OpenedInput {
@@ -1071,16 +1090,18 @@ impl Runner {
             }
         }
 
-        let stats = PipelineStats {
-            variants_processed: AtomicU64::new(0),
-            consequences_calculated: AtomicU64::new(0),
-        };
+        let stats = PipelineStats::new();
 
         let batch_size = self.config.buffer_size;
         let use_parallel = num_threads > 1;
         let stats_enabled = !self.config.quiet;
         let capture_raw_input = needs_raw_input_capture(&self.config);
 
+        let frequency_filter = if variation_source.is_some() {
+            FrequencyFilter::from_config(&self.config).map(Arc::new)
+        } else {
+            None
+        };
         let annotation_resources = AnnotationResources {
             transcripts,
             variation_source,
@@ -1097,6 +1118,7 @@ impl Runner {
             transcript_filter,
             synonyms: Arc::clone(&self.cache.synonyms),
             nearest: self.config.nearest,
+            frequency_filter,
         };
 
         // A non-VCF input has no header lines of its own, so the VCF output's
@@ -1216,12 +1238,18 @@ impl Runner {
         let elapsed = start.elapsed();
         if !self.config.quiet {
             let conseqs = stats.consequences_calculated.load(Ordering::Relaxed);
+            let filtered = stats.records_filtered.load(Ordering::Relaxed);
             eprintln!(
-                "Processed {} variant{} ({} consequence{}) in {:.1}s{}",
+                "Processed {} variant{} ({} consequence{}{}) in {:.1}s{}",
                 variant_count,
                 if variant_count == 1 { "" } else { "s" },
                 conseqs,
                 if conseqs == 1 { "" } else { "s" },
+                if filtered > 0 {
+                    format!(", {filtered} filtered out")
+                } else {
+                    String::new()
+                },
                 elapsed.as_secs_f64(),
                 if num_threads > 1 {
                     format!(" using {} threads", num_threads)
@@ -1599,9 +1627,10 @@ fn sql_ident(name: &str) -> String {
 /// The variation source a run reads its co-located variants from: `None`
 /// without `--check_existing` (which the frequency and PubMed flags imply,
 /// `Config.pm:449-452`); otherwise the resolved cache's variation files, opened
-/// once [`check_gnomad_columns`] passes on the cache's declared columns. A
-/// cache without variation data warns once, as Ensembl VEP would annotate
-/// silently (`CacheDir.pm:179`), unless `--quiet`.
+/// once [`check_gnomad_columns`] and [`check_frequency_filter`] pass on the
+/// cache's declared columns (`CacheDir.pm:188-207` runs both as it builds the
+/// variation source). A cache without variation data warns once, as Ensembl
+/// VEP would annotate silently (`CacheDir.pm:179`), unless `--quiet`.
 pub(crate) fn open_variation_source(
     config: &Config,
     cache: &ResolvedCache,
@@ -1610,6 +1639,7 @@ pub(crate) fn open_variation_source(
         return Ok(None);
     }
     check_gnomad_columns(config, &cache.info)?;
+    check_frequency_filter(config, &cache.info)?;
     let cache_dir = cache.dir.as_str();
     let source = VariationSource::open(Path::new(cache_dir), &cache.info, config.old_maf)
         .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
@@ -1680,6 +1710,12 @@ pub(crate) struct AnnotationResources {
     synonyms: Arc<ChromosomeSynonyms>,
     /// The identifier `--nearest` reports; `None` without the flag.
     nearest: Option<NearestType>,
+    /// The `--check_frequency` filter, `None` without the flag or without a
+    /// variation source. When set, the pipeline's filter stage co-locates every
+    /// variant before annotation and [`annotate_one`] co-locates none. The
+    /// stage runs on the batched coordinator alone, which every run with a
+    /// variation source open takes ([`Self::known_variant_source_active`]).
+    frequency_filter: Option<Arc<FrequencyFilter>>,
 }
 
 /// The compiled `--transcript_filter`, `None` without the flag. A filter
@@ -1708,6 +1744,20 @@ impl AnnotationResources {
     /// Whether any plugin runs on a batch; plugins see a whole batch at once.
     pub(crate) fn plugins_active(&self) -> bool {
         !self.builtin_plugins.is_empty() || self.dylib_plugins.plugin_count() > 0
+    }
+
+    /// The `--check_frequency` filter and the variation source it reads, when
+    /// the run filters.
+    pub(crate) fn frequency_filter(&self) -> Option<(&FrequencyFilter, &VariationSource)> {
+        Some((
+            self.frequency_filter.as_deref()?,
+            self.variation_source.as_deref()?,
+        ))
+    }
+
+    /// Which known variants of a window co-locate with an input variant.
+    pub(crate) fn colocation(&self) -> &ColocationRules {
+        &self.colocation
     }
 
     /// Whether a known-variant source is open: the cache's variation files or
@@ -1860,8 +1910,12 @@ pub(crate) fn annotate_one(
     );
     let csq_count = variant.transcript_consequences.len() as u64;
 
-    if let Some(source) = &resources.variation_source {
-        variation_matcher::annotate_colocated(variant, source, &resources.colocation, failure);
+    // Under `--check_frequency` the filter stage co-located the batch before
+    // annotation, as Ensembl VEP's variation source runs before its transcripts.
+    if resources.frequency_filter.is_none() {
+        if let Some(source) = &resources.variation_source {
+            variation_matcher::annotate_colocated(variant, source, &resources.colocation, failure);
+        }
     }
     if let Some(source) = &resources.sv_source {
         sv_source::annotate_overlapping_svs(variant, source, failure);
@@ -1924,7 +1978,14 @@ pub(crate) fn annotate_batch(
     let batch_len = batch.len();
     let annotation_phase_start = Instant::now();
 
-    prewarm_batch(batch, resources, pool)?;
+    // Under `--check_frequency` the batch arrives pre-warmed: the pipeline's
+    // filter stage needs the chromosomes and variation windows before
+    // annotation and warms every batch itself, and `annotate_one` reads no
+    // variation window. A chromosome never warmed annotates every variant on
+    // it as intergenic, so a new caller under the filter must warm its batch.
+    if resources.frequency_filter.is_none() {
+        prewarm_batch(batch, resources, pool)?;
+    }
 
     let failure = ReadFailure::default();
     let annotate_one =
@@ -2268,11 +2329,9 @@ pub(crate) fn annotate_batch_for_test(
         transcript_filter: None,
         synonyms: Arc::default(),
         nearest: None,
+        frequency_filter: None,
     };
-    let stats = PipelineStats {
-        variants_processed: AtomicU64::new(0),
-        consequences_calculated: AtomicU64::new(0),
-    };
+    let stats = PipelineStats::new();
     let pool = build_thread_pool(1).unwrap();
     let mut batch = crate::vcf_parser::parse_vcf_line(vcf_line, true).expect("parse test VCF line");
     annotate_batch(&mut batch, &resources, &pool, false, &stats, false).expect("annotate");
@@ -2327,11 +2386,9 @@ pub(crate) fn default_rows_for_test(
         transcript_filter: None,
         synonyms: Arc::default(),
         nearest: None,
+        frequency_filter: None,
     };
-    let stats = PipelineStats {
-        variants_processed: AtomicU64::new(0),
-        consequences_calculated: AtomicU64::new(0),
-    };
+    let stats = PipelineStats::new();
     let pool = build_thread_pool(1).unwrap();
     let mut batch = crate::vcf_parser::parse_vcf_line(vcf_line, true).expect("parse test VCF line");
     annotate_batch(&mut batch, &resources, &pool, false, &stats, false).expect("annotate");
@@ -2362,14 +2419,7 @@ pub(crate) fn resources_over(transcripts: Arc<LazyTranscriptIndexes>) -> Annotat
         transcript_filter: None,
         synonyms: Arc::default(),
         nearest: None,
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn zero_stats() -> PipelineStats {
-    PipelineStats {
-        variants_processed: AtomicU64::new(0),
-        consequences_calculated: AtomicU64::new(0),
+        frequency_filter: None,
     }
 }
 
@@ -2463,7 +2513,6 @@ mod tests {
     use crate::transcript_index::TranscriptIndexImpl;
     use crate::vcf_parser::parse_vcf_line;
     use std::collections::HashMap;
-    use std::sync::atomic::AtomicU64;
 
     #[test]
     fn parquet_row_groups_are_whole_duckdb_vectors() {
@@ -3521,7 +3570,7 @@ mod tests {
         );
 
         let resources = resources_over(transcripts);
-        let stats = zero_stats();
+        let stats = PipelineStats::new();
         let pool = build_thread_pool(4).unwrap();
         let mut batch =
             parse_vcf_line("21\t1300\trs1\tA\tG\t.\t.\t.", true).expect("parse test variant");
@@ -3572,7 +3621,7 @@ mod tests {
         );
         let mut resources = resources_over(transcripts);
         resources.variation_source = Some(Arc::new(source));
-        let stats = zero_stats();
+        let stats = PipelineStats::new();
         let pool = build_thread_pool(4).unwrap();
         let mut batch =
             parse_vcf_line("21\t1300\trs1\tA\tG\t.\t.\t.", true).expect("parse test variant");
@@ -3609,6 +3658,57 @@ mod tests {
         );
     }
 
+    /// Under `--check_frequency` the pipeline's filter stage pre-warms the batch
+    /// and co-locates it before annotation, so `annotate_batch` reads no
+    /// variation window of its own: with the filter set it annotates the batch
+    /// and never opens the corrupt region that ends the run above.
+    #[test]
+    fn annotate_batch_reads_no_variation_window_under_the_frequency_filter() {
+        let dir = write_json_cache("filtered_variation", &[("21", 1_000)]);
+        let region = dir
+            .path()
+            .join("variations")
+            .join("21")
+            .join("1-1000000_var.gz");
+        std::fs::create_dir_all(region.parent().unwrap()).unwrap();
+        std::fs::write(&region, "not a gzip body").unwrap();
+        let info = vep_core::cache_info::CacheInfo {
+            variation_cols: ["variation_name", "failed", "start", "end", "allele_string"]
+                .iter()
+                .map(|name| name.to_string())
+                .collect(),
+            ..Default::default()
+        };
+        let source = VariationSource::open(dir.path(), &info, false)
+            .unwrap()
+            .expect("a region file is a variation source");
+        let transcripts = Arc::new(
+            LazyTranscriptIndexes::new(
+                dir.path().to_str().unwrap(),
+                TranscriptIndexImpl::Bin,
+                5_000,
+                5_000,
+            )
+            .unwrap(),
+        );
+        transcripts.prewarm("21").unwrap();
+        let mut resources = resources_over(transcripts);
+        resources.variation_source = Some(Arc::new(source));
+        let filter = FrequencyFilter::from_config(&config_from(&["--check_frequency"]))
+            .expect("--check_frequency is on");
+        resources.frequency_filter = Some(Arc::new(filter));
+        let stats = PipelineStats::new();
+        let pool = build_thread_pool(1).unwrap();
+        let mut batch =
+            parse_vcf_line("21\t1300\trs1\tA\tG\t.\t.\t.", true).expect("parse test variant");
+
+        annotate_batch(&mut batch, &resources, &pool, false, &stats, true)
+            .expect("no variation window is read");
+        assert!(batch[0].most_severe_consequence.is_some());
+        assert!(batch[0].colocated_variants.is_empty());
+        assert_eq!(stats.variants_processed.load(Ordering::Relaxed), 1);
+    }
+
     /// Inter-chromosomal BND annotation must be identical lazy vs eager.
     ///
     /// The mate chromosome is reached through `prewarm(mate_chr)` in the pre-warm
@@ -3629,7 +3729,7 @@ mod tests {
 
         let annotate_with = |transcripts: Arc<LazyTranscriptIndexes>| -> Vec<Vec<String>> {
             let resources = resources_over(transcripts);
-            let stats = zero_stats();
+            let stats = PipelineStats::new();
             let pool = build_thread_pool(1).unwrap();
             let mut batch = parse_vcf_line(bnd_line, true).expect("parse BND");
             annotate_batch(&mut batch, &resources, &pool, false, &stats, false).expect("annotate");
@@ -3752,7 +3852,7 @@ mod tests {
             }
             let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
             let resources = resources_over(transcripts);
-            let stats = zero_stats();
+            let stats = PipelineStats::new();
             let pool = build_thread_pool(threads).unwrap();
             let mut batch = Vec::new();
             for line in lines {
@@ -3987,11 +4087,9 @@ mod tests {
             transcript_filter: None,
             synonyms: Arc::default(),
             nearest: None,
+            frequency_filter: None,
         };
-        let stats = PipelineStats {
-            variants_processed: AtomicU64::new(0),
-            consequences_calculated: AtomicU64::new(0),
-        };
+        let stats = PipelineStats::new();
 
         let mut batch = parse_vcf_line(
             "1\t1300\tbnd_1\tA\tA[21:25001300[\t.\t.\tSVTYPE=BND;MATEID=bnd_2",
@@ -4046,11 +4144,9 @@ mod tests {
             transcript_filter: None,
             synonyms: Arc::default(),
             nearest: None,
+            frequency_filter: None,
         };
-        let stats = PipelineStats {
-            variants_processed: AtomicU64::new(0),
-            consequences_calculated: AtomicU64::new(0),
-        };
+        let stats = PipelineStats::new();
 
         let mut batch = parse_vcf_line(
             "21\t1300\tbnd_1\tA\tA[21:1800[\t.\t.\tSVTYPE=BND;MATEID=bnd_2",
@@ -4110,11 +4206,9 @@ mod tests {
                 transcript_filter: None,
                 synonyms: Arc::default(),
                 nearest: None,
+                frequency_filter: None,
             };
-            let stats = PipelineStats {
-                variants_processed: AtomicU64::new(0),
-                consequences_calculated: AtomicU64::new(0),
-            };
+            let stats = PipelineStats::new();
             let mut batch = Vec::new();
             if with_neighbor {
                 batch.extend(parse_vcf_line("21\t1500\tnearby\tA\tG\t.\t.\t.", true).unwrap());
@@ -4242,7 +4336,8 @@ mod tests {
             }
             let mut batch = parse_vcf_line("21\t1500\tsnv\tA\tG\t.\t.\t.", true).unwrap();
             let pool = build_thread_pool(1).unwrap();
-            annotate_batch(&mut batch, &resources, &pool, false, &zero_stats(), false).unwrap();
+            let stats = PipelineStats::new();
+            annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
             batch.remove(0)
         };
         let features = |variant: &InputVariant| -> Vec<String> {
@@ -4282,7 +4377,7 @@ mod tests {
     #[test]
     fn test_annotate_batch_reference_block_over_transcript_is_one_intergenic_row() {
         let resources = resources_over(one_transcript_on_21("ENSTBLOCK", 1_000));
-        let stats = zero_stats();
+        let stats = PipelineStats::new();
         let mut batch =
             parse_vcf_line("21\t1100\tblock\tA\t<NON_REF>\t.\t.\tEND=1900", true).unwrap();
         let pool = build_thread_pool(1).unwrap();
@@ -4400,7 +4495,7 @@ mod tests {
 
     fn annotate_line(line: &str, transcripts: Arc<LazyTranscriptIndexes>) -> Vec<InputVariant> {
         let resources = resources_over(transcripts);
-        let stats = zero_stats();
+        let stats = PipelineStats::new();
         let mut batch = parse_vcf_line(line, true).unwrap();
         let pool = build_thread_pool(1).unwrap();
         annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
@@ -4513,7 +4608,7 @@ mod tests {
     #[test]
     fn breakend_intergenic_verdict_is_per_record() {
         let resources = resources_over(one_transcript_on_21("ENSTGENIC", 1_000_000));
-        let stats = zero_stats();
+        let stats = PipelineStats::new();
         let mut batch = Vec::new();
         for (n, line) in [
             "21\t100\tbnd_a\tN\tN[21:500[\t.\t.\tSVTYPE=BND;MATEID=bnd_b",
