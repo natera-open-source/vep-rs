@@ -190,7 +190,7 @@ fn add_regional_consequences(
     // when there is NO exon overlap (within_non_coding_gene requires not non_coding_exon_variant
     // and not mature_miRNA).
     if !is_protein_coding
-        && !transcript.is_nmd_transcript()
+        && !transcript.facts().is_nmd
         && !consequences.contains(&Consequence::NonCodingTranscriptExonVariant)
         && !consequences.contains(&Consequence::MatureMirnaVariant)
         && !consequences.contains(&Consequence::NonCodingTranscriptVariant)
@@ -199,8 +199,7 @@ fn add_regional_consequences(
     }
 
     // NMD transcript context: always added alongside other consequences.
-    if transcript.is_nmd_transcript() && !consequences.contains(&Consequence::NmdTranscriptVariant)
-    {
+    if transcript.facts().is_nmd && !consequences.contains(&Consequence::NmdTranscriptVariant) {
         push_unique(consequences, Consequence::NmdTranscriptVariant);
     }
 }

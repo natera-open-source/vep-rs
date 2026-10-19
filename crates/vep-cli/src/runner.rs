@@ -1975,6 +1975,11 @@ pub(crate) fn annotate_batch(
     Ok(())
 }
 
+/// Capacity a variant's `transcript_consequences` takes at its first row: a
+/// locus overlaps a handful of transcripts and rarely more than sixteen, so one
+/// allocation holds them all.
+const TRANSCRIPT_ROWS_CAPACITY: usize = 16;
+
 /// Annotate a variant with transcript consequences and optional SIFT/PolyPhen
 /// predictions: the one implementation, which the library path (`annotator.rs`)
 /// calls too, so the two paths cannot diverge on a record. Under a
@@ -2008,6 +2013,13 @@ pub(crate) fn annotate_variant(
                 tc.loftee_ctx = Some(Box::new(
                     vep_core::consequence::LofteeContext::from_transcript(transcript),
                 ));
+            }
+            // Reserved at the first row rather than before the search, so a
+            // variant overlapping nothing never allocates.
+            if variant.transcript_consequences.capacity() == 0 {
+                variant
+                    .transcript_consequences
+                    .reserve_exact(TRANSCRIPT_ROWS_CAPACITY);
             }
             variant.transcript_consequences.push(tc);
         }

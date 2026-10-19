@@ -223,7 +223,7 @@ pub fn calculate(
     // `intergenic_variant`.
     let me_at_splice_boundary = is_point_me && consequences.is_empty();
     if !is_protein_coding
-        && !transcript.is_nmd_transcript()
+        && !transcript.facts().is_nmd
         && !me_at_splice_boundary
         && !consequences.contains(&Consequence::NonCodingTranscriptExonVariant)
         && !consequences.contains(&Consequence::MatureMirnaVariant)
@@ -244,8 +244,7 @@ pub fn calculate(
         }
     }
 
-    if transcript.is_nmd_transcript() && !consequences.contains(&Consequence::NmdTranscriptVariant)
-    {
+    if transcript.facts().is_nmd && !consequences.contains(&Consequence::NmdTranscriptVariant) {
         consequences.push(Consequence::NmdTranscriptVariant);
     }
 
@@ -393,7 +392,7 @@ pub(super) fn calculate_insertion_pair(
         let exon_variant = !mirna && transcript.exons.iter().any(|x| e >= x.start && s <= x.end);
         if exon_variant {
             consequences.push(Consequence::NonCodingTranscriptExonVariant);
-        } else if !mirna && !transcript.is_nmd_transcript() {
+        } else if !mirna && !facts.is_nmd {
             consequences.push(Consequence::NonCodingTranscriptVariant);
         }
     }
@@ -404,7 +403,7 @@ pub(super) fn calculate_insertion_pair(
     if overlaps_polypyrimidine_tract(transcript, lo, hi) {
         consequences.push(Consequence::SplicePolypyrimidineTractVariant);
     }
-    if transcript.is_nmd_transcript() {
+    if facts.is_nmd {
         consequences.push(Consequence::NmdTranscriptVariant);
     }
     if consequences.is_empty() {

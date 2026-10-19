@@ -119,9 +119,7 @@ pub fn calculate(
         }
 
         // NMD context: always add alongside other consequences.
-        if transcript.is_nmd_transcript()
-            && !consequences.contains(&Consequence::NmdTranscriptVariant)
-        {
+        if transcript.facts().is_nmd && !consequences.contains(&Consequence::NmdTranscriptVariant) {
             consequences.push(Consequence::NmdTranscriptVariant);
         }
 
@@ -202,7 +200,7 @@ fn calculate_non_coding_consequences(
     }
     // Perl VEP adds non_coding_transcript_variant to a non-coding transcript when
     // there is NO exon overlap and not mature_miRNA.
-    if !overlaps_exon && !transcript.is_nmd_transcript() {
+    if !overlaps_exon && !transcript.facts().is_nmd {
         push_unique(consequences, Consequence::NonCodingTranscriptVariant);
     }
 }

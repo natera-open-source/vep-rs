@@ -3805,41 +3805,44 @@ impl<'a> PerlCodingEval<'a> {
         })
     }
 
-    /// `_bvfo_preds` `coding`: the span is within the feature, overlaps the coding
-    /// region and an exon, and projects to at least one CDS segment (a lone gap
-    /// counts, as in Perl). `within_feature` is read from the coordinates as
-    /// given, so an insertion between the transcript's first base and the base
-    /// before it (`end < start`) is outside the feature; the tests after it read
-    /// the ordered span.
+    /// `_bvfo_preds` `coding`: [`coding_span_pred`] on the evaluation's span, and
+    /// the span projects to at least one CDS segment (a lone gap counts, as in
+    /// Perl).
     fn coding_pred(&self, transcript: &Transcript) -> bool {
-        let Some((crs, cre)) = self.coding_region else {
-            return false;
-        };
-        if !perl_overlap(
-            self.vf_start,
-            self.vf_end,
-            transcript.start as i64,
-            transcript.end as i64,
-        ) {
-            return false;
-        }
-        let (lo, hi) = (
-            self.vf_start.min(self.vf_end),
-            self.vf_start.max(self.vf_end),
-        );
-        if !perl_overlap(lo, hi, crs, cre) {
-            return false;
-        }
-        let Some(mapper) = transcript.vefc.as_ref().and_then(|v| v.mapper.as_ref()) else {
-            return false;
-        };
-        let exon_overlap = mapper
-            .exon_coord_mapper
-            .pairs
-            .iter()
-            .any(|p| perl_overlap(lo, hi, p.to_start as i64, p.to_end as i64));
-        exon_overlap && !self.span.cds_coords.is_empty()
+        coding_span_pred(transcript, self.vf_start, self.vf_end) && !self.span.cds_coords.is_empty()
     }
+}
+
+/// The tests of `_bvfo_preds` `coding` that read the span and the transcript
+/// alone: the span is within the feature and overlaps the coding region and an
+/// exon. `within_feature` is read from the coordinates as given, so an insertion
+/// between the transcript's first base and the base before it (`end < start`)
+/// is outside the feature; the tests after it read the ordered span.
+fn coding_span_pred(transcript: &Transcript, vf_start: i64, vf_end: i64) -> bool {
+    let (crs, cre) = match (transcript.coding_region_start, transcript.coding_region_end) {
+        (Some(s), Some(e)) if s > 0 && e > 0 => (s as i64, e as i64),
+        _ => return false,
+    };
+    if !perl_overlap(
+        vf_start,
+        vf_end,
+        transcript.start as i64,
+        transcript.end as i64,
+    ) {
+        return false;
+    }
+    let (lo, hi) = (vf_start.min(vf_end), vf_start.max(vf_end));
+    if !perl_overlap(lo, hi, crs, cre) {
+        return false;
+    }
+    let Some(mapper) = transcript.vefc.as_ref().and_then(|v| v.mapper.as_ref()) else {
+        return false;
+    };
+    mapper
+        .exon_coord_mapper
+        .pairs
+        .iter()
+        .any(|p| perl_overlap(lo, hi, p.to_start as i64, p.to_end as i64))
 }
 
 /// Whether the genomic position of an SNV maps into the transcript's first
@@ -3915,8 +3918,14 @@ pub fn perl_coding_terms(
     if ref_len == 1 && alt_len == 1 && !snv_in_first_codon(transcript, span_start) {
         return None;
     }
+    // A span the `coding` pre-predicate refuses yields `None` whether or not the
+    // evaluation state could be built, so its span tests run before the
+    // construction, which copies both UTRs.
+    if !coding_span_pred(transcript, span_start as i64, span_end as i64) {
+        return None;
+    }
     let mut ev = PerlCodingEval::new(variant, transcript, span_start, span_end, fasta)?;
-    if !ev.coding_pred(transcript) {
+    if ev.span.cds_coords.is_empty() {
         return None;
     }
     let mut terms = ev.terms();
@@ -4753,6 +4762,51 @@ mod tests {
         assert_eq!(
             ev.terms(),
             vec![Consequence::FrameshiftVariant, Consequence::StopLost]
+        );
+    }
+
+    /// A span the `coding` pre-predicate refuses yields `None` although the
+    /// evaluation state builds for it: a deletion inside intron 1 (inside the
+    /// genomic coding region, in no exon), one inside the 5' UTR and one before
+    /// the transcript. A deletion inside the coding sequence yields the terms of
+    /// the state built for it.
+    #[test]
+    fn perl_coding_terms_is_none_outside_the_coding_region() {
+        let tx = make_test_transcript();
+        let deletion = |start: u64, end: u64, bases: &str| {
+            InputVariant::new(
+                "21".into(),
+                start,
+                end,
+                bases.as_bytes().to_vec(),
+                b"-".to_vec(),
+            )
+        };
+        for variant in [
+            deletion(25_001_000, 25_001_003, "ACGT"),
+            deletion(25_000_010, 25_000_012, "ACG"),
+            deletion(24_999_990, 24_999_992, "ACG"),
+        ] {
+            let state = PerlCodingEval::new(&variant, &tx, variant.start, variant.end, None)
+                .expect("the state builds for a span the pre-predicate refuses");
+            assert!(!state.coding_pred(&tx), "{}", variant.allele_string);
+            assert_eq!(
+                perl_coding_terms(&variant, &tx, variant.start, variant.end, None),
+                None,
+                "{}",
+                variant.allele_string
+            );
+        }
+
+        let coding = deletion(25_000_100, 25_000_102, "TGC");
+        let mut state = PerlCodingEval::new(&coding, &tx, coding.start, coding.end, None)
+            .expect("the deletion lies in the coding sequence");
+        assert!(state.coding_pred(&tx));
+        let expected = state.terms();
+        assert!(expected.contains(&Consequence::InframeDeletion));
+        assert_eq!(
+            perl_coding_terms(&coding, &tx, coding.start, coding.end, None),
+            Some(expected)
         );
     }
 }

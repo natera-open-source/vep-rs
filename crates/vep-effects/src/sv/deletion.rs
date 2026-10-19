@@ -334,7 +334,7 @@ pub(super) fn calculate_span(
     // Context terms for non-coding transcripts (excluding NMD, handled separately).
     // Perl's within_non_coding_gene: not translation and not mature_miRNA and not non_coding_exon_variant
     if !is_coding
-        && !transcript.is_nmd_transcript()
+        && !transcript.facts().is_nmd
         && !consequences.contains(&Consequence::NonCodingTranscriptExonVariant)
         && !consequences.contains(&Consequence::MatureMirnaVariant)
     {
@@ -343,7 +343,7 @@ pub(super) fn calculate_span(
 
     // NMD transcript context: Perl adds NMD_transcript_variant alongside other
     // consequences (not just as a fallback), e.g., "feature_truncation,coding_sequence_variant,...,NMD_transcript_variant"
-    if transcript.is_nmd_transcript() {
+    if transcript.facts().is_nmd {
         push_unique(&mut consequences, Consequence::NmdTranscriptVariant);
     }
 

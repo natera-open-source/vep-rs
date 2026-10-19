@@ -166,6 +166,18 @@ pub struct TranscriptFacts {
     /// Phase of the 5' exon when positive, else 0: the number of padding bases
     /// the cached translateable sequence starts with.
     pub start_phase_offset: i8,
+    /// The biotype is `miRNA`, the one biotype whose `miRNA` attributes name
+    /// mature products.
+    pub is_mirna: bool,
+    /// The biotype is `protein_coding`, the one biotype whose rows take
+    /// `coding_transcript_variant` and never the non-coding context term.
+    pub is_protein_coding: bool,
+    /// The biotype is `nonsense_mediated_decay` in any ASCII case, the one
+    /// biotype whose rows take `NMD_transcript_variant`.
+    pub is_nmd: bool,
+    /// Neither `is_protein_coding` nor `is_nmd`: every other biotype, whose
+    /// rows take `non_coding_transcript_variant` as the context term.
+    pub is_non_coding_context: bool,
 }
 
 impl TranscriptFacts {
@@ -217,6 +229,10 @@ impl TranscriptFacts {
             cds_end_nf: tx.flags.iter().any(|f| f == "cds_end_NF"),
             has_coding_model,
             start_phase_offset,
+            is_mirna: &*tx.biotype == "miRNA",
+            is_protein_coding: tx.is_protein_coding(),
+            is_nmd: tx.is_nmd_transcript(),
+            is_non_coding_context: tx.is_non_coding_context_transcript(),
         }
     }
 }

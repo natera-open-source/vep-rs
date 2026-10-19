@@ -224,7 +224,7 @@ pub fn calculate(
                 if super::overlaps_polypyrimidine_tract(transcript, bp, bp) {
                     consequences.push(Consequence::SplicePolypyrimidineTractVariant);
                 }
-                if !is_coding && !transcript.is_nmd_transcript() {
+                if !is_coding && !transcript.facts().is_nmd {
                     consequences.push(Consequence::NonCodingTranscriptVariant);
                 }
             }
@@ -249,7 +249,7 @@ pub fn calculate(
     // from the breakend to the record's END when that lies past it.
     let local_end = variant.sv_end.unwrap_or(variant.end).max(bp);
     let local_within_transcript = bp <= transcript.end && local_end >= transcript.start;
-    if transcript.is_nmd_transcript()
+    if transcript.facts().is_nmd
         && local_within_transcript
         && !consequences.is_empty()
         && !consequences.contains(&Consequence::NmdTranscriptVariant)

@@ -38,7 +38,7 @@ pub(crate) fn is_mature_mirna_sv(transcript: &Transcript, sv_start: u64, sv_end:
 /// its `miRNA` attributes through the mapper pairs; empty for any other transcript.
 pub(crate) fn mature_mirna_genomic_ranges(transcript: &Transcript) -> Vec<(u64, u64)> {
     let mut ranges = Vec::new();
-    if &*transcript.biotype != "miRNA" {
+    if !transcript.facts().is_mirna {
         return ranges;
     }
     let Some(mapper) = transcript.vefc.as_ref().and_then(|v| v.mapper.as_ref()) else {
@@ -107,10 +107,11 @@ pub(crate) fn engulfed_transcript_context_terms(
         terms.push(Consequence::MatureMirnaVariant);
         return terms;
     }
-    if transcript.is_nmd_transcript() {
+    let facts = transcript.facts();
+    if facts.is_nmd {
         terms.push(Consequence::NmdTranscriptVariant);
     }
-    if transcript.is_protein_coding() {
+    if facts.is_protein_coding {
         if transcript.has_cds() {
             terms.push(Consequence::CodingTranscriptVariant);
         }

@@ -243,7 +243,7 @@ pub fn calculate(
     // even when other consequences (intron_variant, etc.) are already present.
     // Perl's within_non_coding_gene excludes mature_miRNA.
     if !is_coding
-        && !transcript.is_nmd_transcript()
+        && !transcript.facts().is_nmd
         && !consequences.iter().any(|c| {
             matches!(
                 c,
@@ -255,7 +255,7 @@ pub fn calculate(
     }
 
     // NMD transcript context is always added alongside other consequences.
-    if transcript.is_nmd_transcript() {
+    if transcript.facts().is_nmd {
         consequences.push(Consequence::NmdTranscriptVariant);
     }
 

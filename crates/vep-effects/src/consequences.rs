@@ -250,7 +250,7 @@ pub fn calculate_consequences(
 /// Ensembl structure is shorter than its span, so the case is not reached on
 /// its caches.
 fn mirna_structure_terms(variant: &InputVariant, transcript: &Transcript) -> Vec<String> {
-    if &*transcript.biotype != "miRNA" {
+    if !transcript.facts().is_mirna {
         return Vec::new();
     }
     let Some(attribute) = transcript.attributes.iter().find(|a| a.code == "ncRNA") else {
@@ -734,7 +734,7 @@ fn calculate_terms(
             &mut consequences,
             Consequence::NonCodingTranscriptExonVariant,
         );
-        if transcript.is_protein_coding() && transcript.translation.is_some() {
+        if transcript.facts().is_protein_coding && transcript.translation.is_some() {
             push_unique(&mut consequences, Consequence::CodingTranscriptVariant);
         }
     }
@@ -1827,7 +1827,7 @@ fn apply_position(
                         let hi = variant.start.max(variant.end);
                         if !insertion && allele_overlaps_any_exon(transcript, lo, hi) {
                             push_unique(consequences, Consequence::NonCodingTranscriptExonVariant);
-                        } else if transcript.is_non_coding_context_transcript() {
+                        } else if transcript.facts().is_non_coding_context {
                             push_unique(consequences, Consequence::NonCodingTranscriptVariant);
                         }
                     }
@@ -2033,10 +2033,10 @@ fn add_transcript_context_consequences(
         return;
     }
 
-    if transcript.is_nmd_transcript() {
+    let facts = transcript.facts();
+    if facts.is_nmd {
         push_unique(consequences, Consequence::NmdTranscriptVariant);
-    } else if transcript.is_non_coding_context_transcript() && !transcript.facts().has_coding_model
-    {
+    } else if facts.is_non_coding_context && !facts.has_coding_model {
         push_unique(consequences, Consequence::NonCodingTranscriptVariant);
     }
 }
@@ -3084,7 +3084,7 @@ fn add_intronic_non_insertion_splice_consequences(
     let frameshift_intron = is_frameshift_intron(intron_start, intron_end);
     let mut regions = get_differing_regions_perl_unclamped(variant);
     if frameshift_intron {
-        regions.retain(|&(rs, re)| !overlap_perl(rs, re, intron_start, intron_end));
+        regions.retain(|&mut (rs, re)| !overlap_perl(rs, re, intron_start, intron_end));
     }
     let any_region_overlap =
         |fs: u64, fe: u64| -> bool { regions.iter().any(|&(rs, re)| overlap_perl(rs, re, fs, fe)) };
@@ -3592,6 +3592,12 @@ fn add_short_intron_far_boundary_donor_terms(
     false
 }
 
+/// The differing regions of one allele pair as genomic `(start, end)` spans.
+/// The XOR of two alleles whose longer one has `n` bases groups into at most
+/// `n.div_ceil(2)` runs, so four inline slots hold every pair of up to eight
+/// bases and a longer delins spills to the heap.
+type DifferingRegions = SmallVec<[(u64, u64); 4]>;
+
 /// Compute all differing regions between ref and alt alleles, matching Perl's
 /// `VariationFeatureOverlapAllele::_get_differing_regions`.
 ///
@@ -3604,7 +3610,7 @@ fn add_short_intron_far_boundary_donor_terms(
 ///
 /// Each region is returned as absolute genomic coordinates (start, end). For pure
 /// insertions, returns a single inverted-coordinate region.
-fn get_differing_regions(variant: &InputVariant) -> Vec<(u64, u64)> {
+fn get_differing_regions(variant: &InputVariant) -> DifferingRegions {
     let lo = variant.start.min(variant.end);
     let hi = variant.start.max(variant.end);
 
@@ -3614,10 +3620,10 @@ fn get_differing_regions(variant: &InputVariant) -> Vec<(u64, u64)> {
     let alt_is_dash = alt_allele == b"-" || alt_allele.is_empty();
 
     if ref_is_dash {
-        return vec![(hi, lo)];
+        return smallvec![(hi, lo)];
     }
     if alt_is_dash {
-        return vec![(lo, hi)];
+        return smallvec![(lo, hi)];
     }
 
     let ref_len = ref_allele.len();
@@ -3626,7 +3632,7 @@ fn get_differing_regions(variant: &InputVariant) -> Vec<(u64, u64)> {
     // Perl's _get_differing_regions only does multi-region splitting when both
     // alleles are > 1 base. Otherwise, returns a single region.
     if ref_len <= 1 || alt_len <= 1 {
-        return vec![(lo, hi)];
+        return smallvec![(lo, hi)];
     }
 
     // Perl: `$m = $al1 ^ $al2;` then finds non-zero positions. XOR pads the
@@ -3643,10 +3649,10 @@ fn get_differing_regions(variant: &InputVariant) -> Vec<(u64, u64)> {
 
     if diff_positions.is_empty() {
         // Identical alleles.
-        return vec![(lo, hi)];
+        return smallvec![(lo, hi)];
     }
 
-    let mut regions = Vec::new();
+    let mut regions = DifferingRegions::new();
     let mut region_start = diff_positions[0];
     let mut prev = diff_positions[0];
 
@@ -3687,7 +3693,7 @@ fn get_differing_regions(variant: &InputVariant) -> Vec<(u64, u64)> {
 /// (`get_differing_regions`) is the one `add_exonic_splice_region` uses, which
 /// relies on inverted regions to signal "no overlap" against the exonic splice
 /// windows.
-fn get_differing_regions_perl_unclamped(variant: &InputVariant) -> Vec<(u64, u64)> {
+fn get_differing_regions_perl_unclamped(variant: &InputVariant) -> DifferingRegions {
     let lo = variant.start.min(variant.end);
     let hi = variant.start.max(variant.end);
 
@@ -3698,10 +3704,10 @@ fn get_differing_regions_perl_unclamped(variant: &InputVariant) -> Vec<(u64, u64
 
     if ref_is_dash {
         // Pure insertion: inverted coordinates (Perl emits {s: 0, e: -1}).
-        return vec![(hi, lo)];
+        return smallvec![(hi, lo)];
     }
     if alt_is_dash {
-        return vec![(lo, hi)];
+        return smallvec![(lo, hi)];
     }
 
     let ref_len = ref_allele.len();
@@ -3709,7 +3715,7 @@ fn get_differing_regions_perl_unclamped(variant: &InputVariant) -> Vec<(u64, u64
 
     // Perl's multi-region splitting only runs when both alleles are > 1 base.
     if ref_len <= 1 || alt_len <= 1 {
-        return vec![(lo, hi)];
+        return smallvec![(lo, hi)];
     }
 
     let max_len = ref_len.max(alt_len);
@@ -3723,10 +3729,10 @@ fn get_differing_regions_perl_unclamped(variant: &InputVariant) -> Vec<(u64, u64
     }
 
     if diff_positions.is_empty() {
-        return vec![(lo, hi)];
+        return smallvec![(lo, hi)];
     }
 
-    let mut regions = Vec::new();
+    let mut regions = DifferingRegions::new();
     let mut region_start = diff_positions[0];
     let mut prev = diff_positions[0];
 
@@ -3811,7 +3817,7 @@ fn exonic_splice_differing_region(variant: &InputVariant) -> (u64, u64) {
 /// deletion whose endpoints both lie outside the mature range but cover it is
 /// inside.
 fn variant_overlaps_mature_mirna(variant: &InputVariant, transcript: &Transcript) -> bool {
-    if &*transcript.biotype != "miRNA" {
+    if !transcript.facts().is_mirna {
         return false;
     }
     let Some(pairs) = transcript
@@ -4775,6 +4781,99 @@ mod tests {
         assert_eq!(regions.len(), 1);
         // Pure insertion: inverted coordinates (hi, lo) = (101, 100)
         assert_eq!(regions[0], (101, 100));
+    }
+
+    /// ACG to ATGTT: the XOR differs at offsets 1, 3 and 4, so the second region
+    /// starts past the 3-base reference span. The clamped form ends it at
+    /// `ref_len - 1` (an inverted span, no overlap), the Perl form at offset 4.
+    #[test]
+    fn test_get_differing_regions_clamps_only_the_exonic_form() {
+        let variant = InputVariant::new("10".into(), 500, 502, b"ACG".to_vec(), b"ATGTT".to_vec());
+        let clamped = get_differing_regions(&variant);
+        assert_eq!(clamped.as_slice(), &[(501, 501), (503, 502)]);
+        let unclamped = get_differing_regions_perl_unclamped(&variant);
+        assert_eq!(unclamped.as_slice(), &[(501, 501), (503, 504)]);
+    }
+
+    /// Ten alternating differences give five regions, one past the inline
+    /// capacity, in XOR order.
+    #[test]
+    fn test_get_differing_regions_past_the_inline_capacity() {
+        let variant = InputVariant::new(
+            "10".into(),
+            200,
+            209,
+            b"ACACACACAC".to_vec(),
+            b"GCGCGCGCGC".to_vec(),
+        );
+        let expected = [(200, 200), (202, 202), (204, 204), (206, 206), (208, 208)];
+        let regions = get_differing_regions(&variant);
+        assert_eq!(regions.as_slice(), &expected);
+        assert!(regions.spilled());
+        let unclamped = get_differing_regions_perl_unclamped(&variant);
+        assert_eq!(unclamped.as_slice(), &expected);
+    }
+
+    /// The biotype facts agree with the string predicates they stand for on every
+    /// biotype of the golden caches (`tests/golden/116/*/json_cache`) and on the
+    /// case variants only the NMD test admits.
+    #[test]
+    fn facts_biotype_fields_agree_with_the_string_predicates() {
+        const GOLDEN_BIOTYPES: [&str; 32] = [
+            "protein_coding",
+            "lncRNA",
+            "nonsense_mediated_decay",
+            "retained_intron",
+            "processed_transcript",
+            "protein_coding_CDS_not_defined",
+            "antisense",
+            "lincRNA",
+            "processed_pseudogene",
+            "miRNA",
+            "snoRNA",
+            "misc_RNA",
+            "snRNA",
+            "Mt_tRNA",
+            "unprocessed_pseudogene",
+            "sense_intronic",
+            "transcribed_processed_pseudogene",
+            "TEC",
+            "transcribed_unprocessed_pseudogene",
+            "sense_overlapping",
+            "pseudogene",
+            "rRNA",
+            "non_stop_decay",
+            "rRNA_pseudogene",
+            "Mt_rRNA",
+            "transcribed_unitary_pseudogene",
+            "ribozyme",
+            "polymorphic_pseudogene",
+            "LRG_gene",
+            "IG_J_gene",
+            "IG_C_gene",
+            "IG_V_gene",
+        ];
+        const CASE_VARIANTS: [&str; 6] = [
+            "Nonsense_Mediated_Decay",
+            "NONSENSE_MEDIATED_DECAY",
+            "Protein_Coding",
+            "MIRNA",
+            "mirna",
+            "",
+        ];
+        for biotype in GOLDEN_BIOTYPES.iter().chain(CASE_VARIANTS.iter()) {
+            let mut tx = make_test_transcript();
+            tx.biotype = (*biotype).into();
+            let facts = *tx.facts();
+            assert_eq!(facts.is_mirna, &*tx.biotype == "miRNA", "{biotype}");
+            assert_eq!(facts.is_protein_coding, tx.is_protein_coding(), "{biotype}");
+            assert_eq!(facts.is_nmd, tx.is_nmd_transcript(), "{biotype}");
+            assert_eq!(
+                facts.is_non_coding_context,
+                tx.is_non_coding_context_transcript(),
+                "{biotype}"
+            );
+        }
     }
 
     #[test]
