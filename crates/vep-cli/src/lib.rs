@@ -55,6 +55,7 @@ pub mod sv_source;
 pub mod transcript_index;
 pub(crate) mod validate;
 pub mod variation_matcher;
+pub mod variation_name_index;
 pub mod variation_source;
 pub mod vcf_parser;
 pub mod warnings;

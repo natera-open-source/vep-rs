@@ -84,7 +84,7 @@ use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{first_vcf_id, InputVariant};
 use vep_core::vcf_info::{info_value, info_value_written};
 use vep_io::input::detect::InputFormat;
-use vep_io::input::Delimiter;
+use vep_io::input::{empty_lines_warning, Delimiter};
 use vep_io::output::fields::{ExtraFieldsPlan, Row};
 use vep_io::output::json::JsonOutputFormatter;
 use vep_io::output::parquet::ParquetOutputFormatter;
@@ -999,7 +999,7 @@ fn push_vcf_header(batch: &mut LineBatch, cfg: &ReaderConfig<'_>, input_headers:
     }
 }
 
-/// The warning for a run of empty lines, in the words of `skip_empty_lines`
+/// Warns about a run of empty lines in the words of `skip_empty_lines`
 /// (Parser.pm:284), which Ensembl VEP's parsers for every input format but VCF
 /// call. Its VCF parser yields no variant for an empty line (Parser/VCF.pm:226),
 /// which ends the buffer fill (InputBuffer.pm:212), and a fill that opens on one
@@ -1007,11 +1007,6 @@ fn push_vcf_header(batch: &mut LineBatch, cfg: &ReaderConfig<'_>, input_headers:
 /// lines is skipped instead. `from_line` is the number of the data record that
 /// follows the run: an empty line takes no record number, as Parser/VCF.pm:228
 /// counts none.
-fn empty_lines_warning(skipped: u64, from_line: u64) -> String {
-    let plural = if skipped > 1 { "s" } else { "" };
-    format!("Skipped {skipped} empty line{plural} from line {from_line}")
-}
-
 fn warn_empty_lines(skipped: u64, from_line: u64) {
     crate::warnings::global().warn(&empty_lines_warning(skipped, from_line));
 }
@@ -1234,7 +1229,8 @@ fn read_parsed(
     let mut batch = ParsedBatch::new(seq);
     let mut report = report_skip;
     // Ensembl VEP's line number for these formats counts the records read
-    // (Parser/VEP_input.pm:119); a parser yields a record's alleles in turn, the
+    // (Parser/VEP_input.pm:119), unless the parser counts otherwise and says so
+    // (`record_line_number`); a parser yields a record's alleles in turn, the
     // first at allele index 0, and an unparsable line is a record of its own.
     let mut record_count = 0u64;
     // The verdict is the record's: Ensembl VEP builds one feature from a
@@ -1254,6 +1250,9 @@ fn read_parsed(
         if empty_lines > 0 {
             warn_empty_lines(empty_lines, record_count + 1);
         }
+        for warning in parser.take_warnings() {
+            crate::warnings::global().warn(&warning);
+        }
         match next {
             Some(Ok(mut variant)) => {
                 mark_oversize_sv(&mut variant, cfg.max_sv_size);
@@ -1272,7 +1271,7 @@ fn read_parsed(
                     record_count += 1;
                     let quoted = last_line_read(last_line);
                     let line = RecordLine {
-                        number: record_count,
+                        number: parser.record_line_number().unwrap_or(record_count),
                         columns: None,
                         quoted: &quoted,
                     };
@@ -1322,7 +1321,8 @@ fn read_parsed(
                         description = perls_text;
                     }
                 }
-                report(&description, record_count, Some(&quoted));
+                let number = parser.record_line_number().unwrap_or(record_count);
+                report(&description, number, Some(&quoted));
             }
             None => break,
         }

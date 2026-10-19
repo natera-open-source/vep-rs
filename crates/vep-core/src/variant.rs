@@ -355,7 +355,10 @@ pub struct InputVariant {
     /// subtype (`Alu_insertion`) and every ALT of a multi-allelic record carries the
     /// one term. The Allele column of every structural row prints it
     /// (OutputFactory.pm `BaseStructuralVariationOverlapAllele_to_output_hash`), and
-    /// the predicates follow it rather than the allele's own form. `None` for a
+    /// the predicates follow it rather than the allele's own form. For a sequence
+    /// variant resolved from a variant identifier, the class the variation
+    /// database stores for it (`VariationFeature.pm:1117`, read before any
+    /// minimisation), which [`Self::class_so_term`] prints. `None` for any other
     /// sequence variant and for a structural type the table lacks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub record_so_term: Option<String>,
@@ -828,7 +831,9 @@ impl InputVariant {
     /// column prints ([`Self::display_allele`], `CPX` for `<CPX>`), since Ensembl
     /// VEP prints the one `class_SO_term` in both columns of a structural row; a
     /// breakend row, whose `Allele` is its breakend string, prints the class term
-    /// `chromosome_breakpoint`. A sequence record prints [`so_variation_class`] of
+    /// `chromosome_breakpoint`. A sequence record prints the class its record
+    /// carries ([`Self::record_so_term`], the one a variation database stores for
+    /// a resolved identifier) or else [`so_variation_class`] of
     /// [`Self::record_allele_string`] upper-cased, the allele string the whole
     /// record works with after `validate_vf` (`Parser.pm:554`), so every allele of
     /// a multi-allelic record prints the one class (`sequence_alteration` for
@@ -844,7 +849,12 @@ impl InputVariant {
                 None => self.display_allele(),
             };
         }
-        so_variation_class(&self.record_allele_string().to_ascii_uppercase()).to_string()
+        match &self.record_so_term {
+            Some(term) => term.clone(),
+            None => {
+                so_variation_class(&self.record_allele_string().to_ascii_uppercase()).to_string()
+            }
+        }
     }
 
     /// The `AMBIGUITY` value of the record: [`ambiguity_code`] of
@@ -1599,6 +1609,11 @@ mod tests {
         let mut multi = InputVariant::new("21".into(), 101, 102, b"TG".to_vec(), b"T".to_vec());
         multi.record_allele_string_multi = Some("TG/T/-".into());
         assert_eq!(multi.class_so_term(), "sequence_alteration");
+        // A resolved identifier prints the class its record carries, the stored
+        // one, where its minimised alleles would read as a deletion.
+        let mut stored = InputVariant::new("21".into(), 102, 102, b"G".to_vec(), b"-".to_vec());
+        stored.record_so_term = Some("indel".into());
+        assert_eq!(stored.class_so_term(), "indel");
         let mut sv = InputVariant::new("21".into(), 100, 200, b"N".to_vec(), b"<DEL>".to_vec());
         sv.is_structural = true;
         sv.variant_class = VariantClass::StructuralDeletion;

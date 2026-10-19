@@ -62,7 +62,8 @@ pub struct Args {
     pub input_data: Option<String>,
 
     /// Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record.
-    /// ID and CAid input resolve through Ensembl's database and are refused; a region, SPDI or HGVS input needs --fasta, which fills or checks the reference allele of an SPDI record.
+    /// An identifier list (one variant name per line) is resolved in one pass over the cache's variation files, every name held in memory and every file read once: a name maps to each variation feature of that name in the cache (rsIDs and the other names the cache carries; structural variant names, synonyms and subsnp identifiers are not among them), a name the cache lacks is warned about and skipped, and a cache without variation files refuses the format.
+    /// CAid input resolves through Ensembl's database and is refused; a region, SPDI or HGVS input needs --fasta, which fills or checks the reference allele of an SPDI record.
     /// HGVS input is genomic (g., m.) and resolved against the FASTA as Ensembl VEP resolves it through its database: the reference allele is checked, a deletion, duplication or inversion takes its bases from the genome, and a genomic notation Ensembl VEP cannot resolve is skipped with its warning; a c., n. or p. notation is skipped as unimplemented and an r. notation is refused
     #[arg(
         help_heading = "Input",

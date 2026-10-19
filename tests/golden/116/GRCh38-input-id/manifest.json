@@ -1,0 +1,335 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "max_span": 1000000,
+ "covers": [
+  "id-input-format"
+ ],
+ "suites": {
+  "GRCh38-input-id": {
+   "reference": "ref_default.txt",
+   "input": "input.vcf",
+   "rows": 510,
+   "combinations": 19
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 16,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,frameshift_variant,splice_region_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 7
+  },
+  "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,stop_gained": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 91,
+   "exemplar_records": 8
+  },
+  "frameshift_variant": {
+   "observed_rows": 116,
+   "exemplar_records": 6
+  },
+  "frameshift_variant,splice_region_variant": {
+   "observed_rows": 42,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 38,
+   "exemplar_records": 9
+  },
+  "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 2
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 18,
+   "exemplar_records": 8
+  },
+  "stop_gained": {
+   "observed_rows": 26,
+   "exemplar_records": 2
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 78,
+   "exemplar_records": 7
+  }
+ },
+ "variant_classes": {
+  "deletion": 89,
+  "insertion": 79,
+  "mnv_or_complex": 106,
+  "snv": 143
+ },
+ "records": [
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t5230609\trs1979841086\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t25702257\trs781261918\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,stop_gained",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t31693357\trs2123538435\tG\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t32694271\trs886039732\tATTTGT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t33543115\trs1601245742\tTTTTT\tTTTTTT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t33553711\trs779189159\tC\tA,G\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t34886860\trs2057997486\tGGG\tGG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t37505341\trs797045539\tG\tGT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t44195140\trs2838519\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t44195140\tRS2838519\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t44229058\trs142566111\tT\tA,G\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant",
+    "intron_variant,splice_polypyrimidine_tract_variant",
+    "non_coding_transcript_exon_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t44286663\trs267606642\tT\tG\t.\t.\t.",
+   "combinations": [
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t44293150\trs759281545\tTGTGTGTG\tTGTGTG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t44597428\trs782416306\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t45510105\trs1160505542\tGCGGGGCATCCGCGGGGC\tGCGGGGC,GCGGGGCATCCGCGGGGCATCCGCGGGGC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,frameshift_variant",
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant"
+   ],
+   "strata": [
+    "multi_allelic_indel_trimmable"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-id",
+   "vcf": "21\t46121557\trs398123645\tGA\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "NMD_transcript_variant,frameshift_variant,splice_region_variant",
+    "frameshift_variant,splice_region_variant",
+    "intron_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flags": [
+  "--uploaded_allele",
+  "--variant_class",
+  "--mask_header_cache_path"
+ ],
+ "flag_sets": [
+  {
+   "name": "id",
+   "flags": [
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path",
+    "--format",
+    "id"
+   ],
+   "input": "variants.id.txt",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "json"
+   ],
+   "expected_dir": "expected_id",
+   "covers": [
+    "id-input-format"
+   ],
+   "perl_mode": "database"
+  },
+  {
+   "name": "id-guess",
+   "flags": [
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path"
+   ],
+   "input": "variants.id.txt",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "json"
+   ],
+   "expected_dir": "expected_id",
+   "covers": [
+    "id-input-format"
+   ],
+   "perl_mode": "database"
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

@@ -46,6 +46,7 @@ use crate::row_filter::RowFilters;
 use crate::sv_source::{self, SvSource};
 use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex, TranscriptSet};
 use crate::variation_matcher::{self, ColocationRules};
+use crate::variation_name_index;
 use crate::variation_source::{ReadFailure, VariationSource};
 use vep_builtins::BuiltinRegistry;
 use vep_core::cache_info::CacheInfo;
@@ -54,6 +55,7 @@ use vep_core::sv_routing::perl_true;
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
 use vep_io::input::detect::{self, InputFormat};
+use vep_io::input::id::IdParser;
 use vep_io::input::{Delimiter, ParserContext, ReferenceSequence};
 use vep_io::output::fields::{ClinSigAllele, ExtraFieldsPlan, FieldOptions, PluginHeader};
 use vep_io::output::json::JsonOutputFormatter;
@@ -88,7 +90,7 @@ pub(crate) const GZIP_HEADER_BYTES: usize = 12;
 /// consumes and whether the input is a BGZF file, whose `.tbi` index may name its
 /// contigs in file order.
 struct OpenedInput {
-    source: pipeline::InputSource,
+    source: PendingInput,
     bgzf_file: bool,
     /// The column delimiter the input is read with: the detected one under
     /// `--format guess`, else `--delimiter` (Parser.pm:135, 387-415).
@@ -97,8 +99,56 @@ struct OpenedInput {
     /// Ensembl VEP's region parser switches `lookup_ref` on (Parser/Region.pm:121-122).
     reads_reference: bool,
     /// The format's parser names each record from its line (Parser/Region.pm:198,
-    /// Parser/HGVS.pm:237, Parser/SPDI.pm:193), so no name is built from the alleles.
+    /// Parser/HGVS.pm:237, Parser/SPDI.pm:193, Parser/ID.pm:189), so no name is
+    /// built from the alleles.
     parser_names_records: bool,
+}
+
+/// A source the pipeline reads, or an identifier list still to be resolved,
+/// whose pass over the cache's variation files waits for the steps that follow
+/// the opening of the input (the FASTA checks, the output file's check and
+/// creation, the skipped-variants file, the plugins), as Ensembl VEP's
+/// identifier parser resolves its names only when the input buffer first pulls
+/// from it, after `post_setup_checks` and the output handle (BaseRunner.pm:203-204).
+enum PendingInput {
+    Ready(pipeline::InputSource),
+    Identifiers {
+        parser: IdParser,
+        source: Box<VariationSource>,
+    },
+}
+
+/// The identifier parser's records with the line of the name each came from
+/// kept as the reader stage's last line read, so a skip warning on one, or on
+/// a mapping whose alleles could not be built, quotes that line as Ensembl VEP
+/// quotes the list parser's `current_block` (BaseVEP.pm:846-852); a list read
+/// whole has no reader for a [`pipeline::LineCapture`] to sit on.
+struct IdentifierLines {
+    parser: IdParser,
+    last_line: pipeline::LastLine,
+}
+
+impl vep_io::InputParser for IdentifierLines {
+    fn next_variant(&mut self) -> Option<Result<InputVariant, vep_io::IoError>> {
+        let next = self.parser.next_variant();
+        if next.is_some() {
+            if let Some(line) = self.parser.attempted_line() {
+                *self
+                    .last_line
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = line.as_bytes().to_vec();
+            }
+        }
+        next
+    }
+
+    fn take_warnings(&mut self) -> Vec<String> {
+        self.parser.take_warnings()
+    }
+
+    fn record_line_number(&self) -> Option<u64> {
+        self.parser.record_line_number()
+    }
 }
 
 /// The run's FASTA as a parser reads it ([`ReferenceSequence`]).
@@ -985,7 +1035,7 @@ impl Runner {
         let reference_fasta = open_fasta(&self.config, &self.cache)?;
         let fasta_found = reference_fasta.is_some();
         let OpenedInput {
-            source: input,
+            source: pending,
             bgzf_file,
             delimiter,
             reads_reference,
@@ -1129,6 +1179,26 @@ impl Runner {
             self.config.output_buffer_size,
             output,
         );
+
+        // Ensembl VEP's identifier parser first asks its database when the
+        // input buffer pulls from it, after the plugins are loaded and the
+        // output is open (BaseRunner.pm:204); the pass over the variation files
+        // runs at that point, on the run's own thread pool.
+        let input = match pending {
+            PendingInput::Ready(source) => source,
+            PendingInput::Identifiers { mut parser, source } => {
+                pool.install(|| self.resolve_identifiers(&mut parser, &source))?;
+                let last_line = pipeline::LastLine::default();
+                pipeline::InputSource::Parser {
+                    parser: Box::new(IdentifierLines {
+                        parser,
+                        last_line: Arc::clone(&last_line),
+                    }),
+                    last_line,
+                    format: InputFormat::Id,
+                }
+            }
+        };
 
         let filter_config = FilterConfig {
             row_filters: RowFilters {
@@ -1479,15 +1549,17 @@ impl Runner {
     /// streaming gunzip (`get_compressed_filehandle`, Utils.pm:429-453); BCF is
     /// refused before any line is read. The format is `--format`'s, or detected
     /// from the first data line, which standard input cannot give (Parser.pm:377).
-    /// A format Ensembl VEP resolves through its database (ID, CAid) is
-    /// refused as it refuses them offline. A region input needs the run's
-    /// FASTA (Parser/Region.pm:115) and refuses `--check_ref` (:118), as its
-    /// records name no reference allele; an SPDI input needs the FASTA too,
-    /// as Ensembl VEP checks its reference allele against its database or
-    /// reads it from there (VariationFeatureAdaptor.pm:2557-2590), and so does
-    /// an HGVS input, which is resolved against it where Ensembl VEP's own
-    /// parser refuses the format offline (Parser/HGVS.pm:104). Opened where
-    /// Ensembl VEP's init() builds the parser (Runner.pm:136), before
+    /// An identifier list is resolved through the cache's variation files
+    /// ([`Runner::open_id_input`]); CAid input, which Ensembl VEP resolves
+    /// through its database alone, is refused as it refuses it offline. A
+    /// region input needs the run's FASTA (Parser/Region.pm:115) and refuses
+    /// `--check_ref` (:118), as its records name no reference allele; an SPDI
+    /// input needs the FASTA too, as Ensembl VEP checks its reference allele
+    /// against its database or reads it from there
+    /// (VariationFeatureAdaptor.pm:2557-2590), and so does an HGVS input, which
+    /// is resolved against it where Ensembl VEP's own parser refuses the format
+    /// offline (Parser/HGVS.pm:104). Opened where Ensembl VEP's init() builds
+    /// the parser (Runner.pm:136), before
     /// `post_setup_checks`. The parsers share the delimiter, the FASTA, the
     /// cache's synonyms and its chromosomes through a [`ParserContext`]; the
     /// delimiter is `--delimiter`'s under an explicit `--format` and, under
@@ -1565,14 +1637,14 @@ impl Runner {
         // capture of the last line for the skip warnings.
         let parser_source = |parser: Box<dyn vep_io::InputParser>,
                              last_line: pipeline::LastLine| {
-            pipeline::InputSource::Parser {
+            PendingInput::Ready(pipeline::InputSource::Parser {
                 parser,
                 last_line,
                 format,
-            }
+            })
         };
         let source = match format {
-            InputFormat::Vcf => pipeline::InputSource::Vcf(reader),
+            InputFormat::Vcf => PendingInput::Ready(pipeline::InputSource::Vcf(reader)),
             InputFormat::Ensembl => {
                 let (reader, last_line) = pipeline::LineCapture::new(reader);
                 parser_source(
@@ -1618,7 +1690,13 @@ impl Runner {
                     last_line,
                 )
             }
-            InputFormat::Id => return Err(input_error("Cannot use ID format in offline mode")),
+            InputFormat::Id => {
+                let (parser, source) = self.open_id_input(reader).with_context(read_failed)?;
+                PendingInput::Identifiers {
+                    parser,
+                    source: Box::new(source),
+                }
+            }
             InputFormat::Spdi => {
                 if !fasta_found {
                     return Err(input_error(
@@ -1644,9 +1722,70 @@ impl Runner {
             reads_reference: format == InputFormat::Region,
             parser_names_records: matches!(
                 format,
-                InputFormat::Region | InputFormat::Hgvs | InputFormat::Spdi
+                InputFormat::Region | InputFormat::Hgvs | InputFormat::Spdi | InputFormat::Id
             ),
         })
+    }
+
+    /// Reads an identifier list whole and opens the cache's variation files it
+    /// resolves through ([`Runner::resolve_identifiers`] runs the pass), where
+    /// Ensembl VEP's identifier parser connects to its variation database
+    /// (Parser/ID.pm:102). A cache without variation files cannot answer, so the
+    /// format is refused with it, as Ensembl VEP refuses the format offline
+    /// (Parser/ID.pm:100); a cache whose files are present but whose `info.json`
+    /// names no `variation_cols` is refused naming that, since the files cannot
+    /// be read without their column list.
+    fn open_id_input(
+        &self,
+        reader: Box<dyn BufRead + Send>,
+    ) -> anyhow::Result<(IdParser, VariationSource)> {
+        let parser = IdParser::read(reader)?;
+        let cache_dir = self.cache.dir.as_str();
+        // The pass reads names and spans alone, which `--old_maf` never rewrites.
+        let source = VariationSource::open(Path::new(cache_dir), &self.cache.info, false)
+            .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
+        let Some(source) = source else {
+            let files_without_columns = Path::new(cache_dir).join("variations").is_dir()
+                && self.cache.info.variation_columns().is_none();
+            let reason = if files_without_columns {
+                format!("whose info.json names no variation_cols for the files under {cache_dir}/variations")
+            } else {
+                format!(
+                    "that has no variation files (variations/<chr>/all_vars.gz under {cache_dir})"
+                )
+            };
+            return Err(CliError::new(
+                "input",
+                format!("Cannot use ID format with a cache {reason}"),
+            )
+            .into());
+        };
+        Ok((parser, source))
+    }
+
+    /// Resolves every name of the list in one pass over the variation files
+    /// ([`variation_name_index::resolve_names`]), where Ensembl VEP's identifier
+    /// parser asks its database for each name (Parser/ID.pm:162), and hands the
+    /// parser its mappings.
+    fn resolve_identifiers(
+        &self,
+        parser: &mut IdParser,
+        source: &VariationSource,
+    ) -> anyhow::Result<()> {
+        let names: Vec<&str> = parser.names().collect();
+        let listed = names.len();
+        let mappings = variation_name_index::resolve_names(source, &names)
+            .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
+        let resolved = mappings
+            .iter()
+            .filter(|name_mappings| !name_mappings.is_empty())
+            .count();
+        info!(
+            "Resolved {resolved} of {listed} identifiers through the variation files of {}",
+            self.cache.dir
+        );
+        parser.supply_mappings(mappings);
+        Ok(())
     }
 
     /// Write the default-format header lines VEP writes, then the column line.

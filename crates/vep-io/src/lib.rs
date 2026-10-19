@@ -4,9 +4,9 @@
 //! Input parsers and output formatters for VEP.
 //!
 //! This crate provides:
-//! - Input parsers for the Ensembl default, HGVS genomic and region formats,
-//!   and the detection of a format from the first data line; VCF is read by
-//!   the command-line crate's line parser
+//! - Input parsers for the Ensembl default, HGVS genomic, region and variant
+//!   identifier formats, and the detection of a format from the first data
+//!   line; VCF is read by the command-line crate's line parser
 //! - Default, tab, VCF, JSON and Parquet-intermediate output formatters
 
 pub mod error;

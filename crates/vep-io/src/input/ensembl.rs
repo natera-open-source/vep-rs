@@ -145,8 +145,10 @@ fn strand_from_token(token: Option<&str>) -> Strand {
 /// `VariationFeature_to_output_hash` compares it with, so it is what
 /// `Uploaded_variation` and the JSON `id` print, and it is stored here as the
 /// record's id. A record written in upper case takes the generated name through
-/// [`InputVariant::variation_name`] as Ensembl VEP builds it.
-fn sequence_variants(
+/// [`InputVariant::variation_name`] as Ensembl VEP builds it. The identifier
+/// parser builds a mapping's alleles through this too, since `post_process_vfs`
+/// runs on its features alike (Parser/ID.pm:196).
+pub(super) fn sequence_variants(
     chr: String,
     start: u64,
     end: u64,

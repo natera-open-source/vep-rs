@@ -228,6 +228,33 @@ impl VariationSource {
         self.opened.lock().unwrap().iter().cloned().collect()
     }
 
+    /// Whether the files are the start-indexed layout (`all_vars.gz`,
+    /// tab-delimited, the chromosome first) rather than the region layout
+    /// (`<start>-<end>_var.gz`, space-delimited, no chromosome column).
+    pub fn is_tabix(&self) -> bool {
+        self.tabix
+    }
+
+    /// Every variation file with its chromosome, for a pass over the whole
+    /// cache: the chromosomes in karyotype order ([`karyotype_rank`]) and, on
+    /// the region layout, a chromosome's files by their start.
+    pub fn files(&self) -> Vec<(&str, &Path)> {
+        let mut chromosomes: Vec<&str> = self.chromosomes.keys().map(String::as_str).collect();
+        chromosomes.sort_by_key(|&chr| karyotype_rank(chr));
+        chromosomes
+            .into_iter()
+            .flat_map(|chr| {
+                let files = &self.chromosomes[chr];
+                files
+                    .all_vars
+                    .iter()
+                    .map(PathBuf::as_path)
+                    .chain(files.regions.iter().map(|(_, _, path)| path.as_path()))
+                    .map(move |path| (chr, path))
+            })
+            .collect()
+    }
+
     /// Reads ahead the records every variant of a batch (`(chr, start, end)`
     /// per variant) can reach, so that the batch's lookups are answered from
     /// memory, and releases the previous batch's. On the indexed layout the
@@ -539,6 +566,20 @@ fn enumerate(dir: &Path) -> anyhow::Result<FxHashMap<String, ChromosomeFiles>> {
         }
     }
     Ok(chromosomes)
+}
+
+/// A chromosome name's place in karyotype order: the numbered chromosomes
+/// ascending, then `X`, `Y` and `MT`, then every other contig by name.
+fn karyotype_rank(chr: &str) -> (u8, u64, &str) {
+    match chr.parse::<u64>() {
+        Ok(number) => (0, number, ""),
+        Err(_) => match chr {
+            "X" => (1, 0, ""),
+            "Y" => (2, 0, ""),
+            "MT" => (3, 0, ""),
+            other => (4, 0, other),
+        },
+    }
 }
 
 /// The `(start, end)` a region file `<start>-<end>_var.gz` is named by.

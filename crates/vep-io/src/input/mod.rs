@@ -11,6 +11,7 @@
 pub mod detect;
 pub mod ensembl;
 pub mod hgvs;
+pub mod id;
 pub mod region;
 pub mod spdi;
 
@@ -30,10 +31,36 @@ pub trait InputParser: Send {
 
     /// The empty and whitespace-only lines read past since the last call, for
     /// the caller to warn about as Ensembl VEP's `skip_empty_lines` does
-    /// (Parser.pm:266-293). A parser whose format has no such lines returns 0.
+    /// (Parser.pm:266-293). A parser whose format has no such lines, or that
+    /// warns about them itself through [`InputParser::take_warnings`], returns 0.
     fn take_empty_lines(&mut self) -> u64 {
         0
     }
+
+    /// The warnings the parser raised since the last call, in the order they
+    /// arose and without the `WARNING: ` prefix, for the caller to write through
+    /// its warning sink: each skips no record, as Ensembl VEP's `warning_msg`
+    /// skips none. A parser that warns about nothing returns none.
+    fn take_warnings(&mut self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Ensembl VEP's line number for the record last yielded, from a parser
+    /// whose format counts its lines other than by the records read: the
+    /// identifier parser counts every line of its list, empty lines and names
+    /// the cache lacks included, and gives every mapping of a name the name's
+    /// line (Parser/ID.pm:148, Parser.pm:275). `None` from a parser whose
+    /// records the caller numbers by its own count of them.
+    fn record_line_number(&self) -> Option<u64> {
+        None
+    }
+}
+
+/// The warning `skip_empty_lines` writes for a run of empty lines
+/// (Parser.pm:280-288): `skipped` lines read past, the first at `from_line`.
+pub fn empty_lines_warning(skipped: u64, from_line: u64) -> String {
+    let plural = if skipped > 1 { "s" } else { "" };
+    format!("Skipped {skipped} empty line{plural} from line {from_line}")
 }
 
 /// A reference genome a parser reads bases from: the run's `--fasta`, which a

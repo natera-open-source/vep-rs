@@ -244,7 +244,7 @@ high-inf-pos-motif-score-change	MotifFeatureVariationAllele.pm	implemented	open
 homebrew-distribution	-	documented_subset	open			
 host	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
 humdiv	Config.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::humdiv_selects_humdiv_matrix	tests/golden/116/GRCh38-humdiv	
-id-input-format	ID.pm	documented_subset	open			
+id-input-format	ID.pm	documented_subset	landed:documented_subset	crates/vep-io/src/input/id.rs::rsid_resolves_to_locus;crates/vep-io/src/input/id.rs::multi_mapping_rsid_yields_several;crates/vep-io/src/input/id.rs::unknown_id_skipped_with_warning;crates/vep-io/src/input/id.rs::nsv_esv_documented_unsupported;crates/vep-cli/src/variation_name_index.rs::resolves_names_over_every_file_in_karyotype_order;crates/vep-cli/tests/input_id.rs::identifier_list_annotates_as_its_vcf_twins;crates/vep-cli/tests/input_id.rs::cache_without_variation_files_refuses_identifier_input	tests/golden/116/GRCh38-input-id	
 incomplete-del	VCF.pm	implemented	open			
 ind-zyg-columns	OutputFactory.pm	implemented	open			
 individual	Parser/VCF.pm	implemented	open			
