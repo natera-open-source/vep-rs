@@ -341,6 +341,91 @@ def test_reference_skipped_record_rows(texts, manifest, inputs):
     assert cvf.compare_entries(vcf_expected, vcf_actual, no_documented())["one_sided"]["actual_only"] == 1
 
 
+def test_regulatory_feature_rows_mask_drops_the_reference_rows(texts, inputs, tmp_path):
+    """Under ``regulatory_feature_rows`` the reference's RegulatoryFeature and MotifFeature
+    rows go in every format and a JSON record's most_severe_consequence is recomputed from
+    the rows that remain; without the mask the same rows are missing in the candidate, and
+    on a reference without such rows the class is unused."""
+    regulatory_row = (
+        "bnd_intergenic_pair_a\t21:11000001\tN.\t-\tENSR00000347123\tRegulatoryFeature\tregulatory_region_variant"
+        "\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;VARIANT_CLASS=SNV;BIOTYPE=promoter"
+    )
+    motif_row = (
+        "bnd_intergenic_pair_a\t21:11000001\tN.\t-\tENSM00000577720\tMotifFeature\tTF_binding_site_variant"
+        "\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=-1;MOTIF_NAME=ENSPFM0086;MOTIF_POS=3;HIGH_INF_POS=N;TRANSCRIPTION_FACTORS=EGR1"
+    )
+    rows = data_lines(texts["default"])
+    reference = cvf.parse_default(rebuild(texts["default"], rows[:1] + [regulatory_row, motif_row] + rows[1:]))
+    actual = cvf.parse_default(texts["default"])
+    assert cvf.compare_entries(reference, actual, no_documented())["one_sided"]["expected_only"] == 2
+    kept = cvf.without_regulatory_rows(reference)
+    assert [e.key for e in kept] == [e.key for e in actual]
+    assert cvf.compare_entries(kept, actual, no_documented())["verdict"] == "green"
+
+    vcf_rows = data_lines(texts["vcf"])
+    csq_header = next(line for line in header_lines(texts["vcf"]) if line.startswith("##INFO=<ID=CSQ,"))
+    csq_fields = cvf.csq_format_fields(csq_header)
+    values = {"Allele": "N.", "Consequence": "regulatory_region_variant", "IMPACT": "MODIFIER",
+              "Feature_type": "RegulatoryFeature", "Feature": "ENSR00000347123", "BIOTYPE": "promoter"}
+    chunk = "|".join(values.get(name, "") for name in csq_fields)
+    vcf_rows[0] = vcf_rows[0].replace(";CSQ=", f";CSQ={chunk},")
+    vcf_reference = cvf.parse_vcf(rebuild(texts["vcf"], vcf_rows), inputs)
+    vcf_actual = cvf.parse_vcf(texts["vcf"], inputs)
+    assert cvf.compare_entries(vcf_reference, vcf_actual, no_documented())["one_sided"]["expected_only"] == 1
+    assert cvf.compare_entries(cvf.without_regulatory_rows(vcf_reference), vcf_actual, no_documented())["verdict"] == "green"
+
+    json_lines = [line for line in cvf.text_lines(texts["json"]) if line]
+    first = json.loads(json_lines[0])
+    first["regulatory_feature_consequences"] = [{
+        "variant_allele": "N.", "regulatory_feature_id": "ENSR00000347123",
+        "consequence_terms": ["regulatory_region_variant"], "impact": "MODIFIER", "biotype": "promoter",
+    }]
+    first["most_severe_consequence"] = "regulatory_region_variant"
+    json_reference = cvf.parse_json("\n".join([json.dumps(first)] + json_lines[1:]) + "\n", inputs)
+    json_actual = cvf.parse_json(texts["json"], inputs)
+    unmasked = cvf.compare_entries(json_reference, json_actual, no_documented())
+    assert unmasked["one_sided"]["expected_only"] == 1
+    assert unmasked["columns"]["most_severe_consequence"]["differing"] == 1
+    kept = cvf.without_regulatory_rows(json_reference)
+    assert kept[0].fields["most_severe_consequence"] == "intergenic_variant"
+    assert "regulatory_feature_consequences" not in kept[0].fields
+    assert cvf.compare_entries(kept, json_actual, no_documented())["verdict"] == "green"
+    # A record that lost no row keeps the reference's term, so a wrong one stays red.
+    second = json.loads(json_lines[1])
+    second["most_severe_consequence"] = "stop_gained"
+    kept = cvf.without_regulatory_rows(cvf.parse_json("\n".join([json.dumps(first), json.dumps(second)] + json_lines[2:]) + "\n", inputs))
+    assert cvf.compare_entries(kept, json_actual, no_documented())["columns"]["most_severe_consequence"]["differing"] == 1
+
+    expected_warnings = tmp_path / "ref_warnings.txt"
+    expected_warnings.write_text("WARNING: line 2 skipped (21 1 x A G . . .): Invalid allele string\n", encoding="utf-8")
+    actual_warnings = tmp_path / "cand_warnings.txt"
+    notice = f"WARNING: --everything implies --regulatory, which has no effect: {cvf.REGULATORY_NOTICE}\n"
+    actual_warnings.write_text(notice + "WARNING: line 2 skipped (): Invalid allele string\n", encoding="utf-8")
+    assert cvf.compare_warnings(expected_warnings, actual_warnings, None, None)["verdict"] == "red"
+    masked_report = cvf.compare_warnings(expected_warnings, actual_warnings, None, None, {cvf.REGULATORY_FEATURE_ROWS})
+    assert masked_report["verdict"] == "green" and masked_report["warnings"]["shared"] == 1
+    actual_warnings.write_text("WARNING: line 2 skipped (): Invalid allele string\n", encoding="utf-8")
+    missing = cvf.compare_warnings(expected_warnings, actual_warnings, None, None, {cvf.REGULATORY_FEATURE_ROWS})
+    assert missing["verdict"] == "red" and missing["reasons"] == ["warnings: the regulatory notice is missing from the actual file"]
+
+    expected_path = tmp_path / "reference.txt"
+    expected_path.write_text(rebuild(texts["default"], rows[:1] + [regulatory_row] + rows[1:]), encoding="utf-8")
+    actual_path = tmp_path / "actual.txt"
+    actual_path.write_text(texts["default"], encoding="utf-8")
+    report = cvf.compare_files(
+        "default", expected_path, actual_path, None, no_documented(), {cvf.REGULATORY_FEATURE_ROWS}, {}, {}, 4
+    )
+    assert report["verdict"] == "green"
+    assert report["masks"] == {
+        "requested": ["regulatory_feature_rows"], "applied": {"regulatory_feature_rows": 1}, "unused": [], "available": {},
+    }
+    report = cvf.compare_files(
+        "default", actual_path, actual_path, None, no_documented(), {cvf.REGULATORY_FEATURE_ROWS}, {}, {}, 4
+    )
+    assert report["verdict"] == "green"
+    assert report["masks"]["applied"] == {} and report["masks"]["unused"] == ["regulatory_feature_rows"]
+
+
 def test_field_divergence_is_held_to_the_documented_value(texts, manifest):
     documented = dict(manifest)
     documented["field_divergences"] = [{

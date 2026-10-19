@@ -1,0 +1,53 @@
+{
+  "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+  "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+  "vep_version_reported": "ensembl-vep          : 116.2",
+  "cache_version": 116,
+  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+  "perl_cache": "homo_sapiens/116_GRCh38",
+  "fasta": "none on either side",
+  "input": "204 small-variant records on chromosome 21 selected from a pool of 1,750 candidates: the chromosome 21 records of the committed GRCh38 golden corpora, a sample of the clinically associated variants and a sample of the common variants of Ensembl release 116's chromosome 21 variation set, without symbolic or breakend alleles and without any record Ensembl VEP's --everything co-locates with a COSMIC or HGMD-PUBLIC identifier; one exemplar per consequence-set combination the pool shows under --everything, stratified by variant class, strand and the presence of the frequency, clinical and identifier columns the family columns name; the records inside a regulatory feature or a transcription-factor binding motif carry RegulatoryFeature or MotifFeature rows in the reference, which the manifest's mask class sets aside",
+  "sha256": {
+    "default.txt": "ecf740958bde6aec22cada4c3df05da4457c94a0b5fc10db39693666c07d724a",
+    "tab.txt": "530be2b3e73d9df7a16357b8c61209617b29485a7414909b7a4a6d3640d12c1d",
+    "vcf.vcf": "23a0886bbce790c1bce6a013b7269b964f60351fe39f61c98ddd806280a56024",
+    "json.jsonl": "ac3458d8a8eeeec44e69c840aca38f41b66b5134271589a71f5850e8283047b8"
+  },
+  "variants_vcf_sha256": "ab966378311fe097af6d6976997cfd7dff055083099efae7f7c930ac98e43554",
+  "generator": "candidate records annotated with Ensembl VEP under the corpus flags, then scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite everything=<reference>=<candidates> --k 1 --seed 1 --cache <converted slice> --flank 5000 --covers everything --matrix tests/parity/matrix.tsv --family-columns MAX_AF,AF,CLIN_SIG,PUBMED,SOMATIC,miRNA,GENE_PHENO,DOMAINS,SIFT,MANE_PLUS_CLINICAL --flag=--everything; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts whose rows carry SIFT or PolyPhen> --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}' over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache (protein features kept on every transcript, prediction matrices on the 359 transcripts that print SIFT or PolyPhen); scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify over the reference with its RegulatoryFeature and MotifFeature rows removed, the manifest's masks",
+  "pruned_cache": {
+    "transcripts_per_chromosome": {
+      "21": 1713
+    },
+    "shards": 28,
+    "spans_by_chromosome": {
+      "21": 204
+    },
+    "transcripts_with_prediction_matrices": 359
+  },
+  "variation_slice": {
+    "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
+    "window": "records whose start lies within one base of an input record's span",
+    "windows": 191,
+    "records_kept": 1813,
+    "records_excluded": 227,
+    "excludes": [
+      "^COSV\\d",
+      "^(C[A-Z]|BM|HM)\\d{6}"
+    ],
+    "sha256": {
+      "all_vars.gz": "06cc9ba041daebba6ba7d0a91caba2d2307e3ce93d7230ffc892dde4b0b49e49",
+      "all_vars.gz.csi": "16bbbf9b7db5a3478c2b43c7e733bb9b43832ed559aaaf02e62d976abd9a9b5a"
+    },
+    "slice_check": "the golden comparison: vep-rs on this slice writes the Existing_variation, frequency, CLIN_SIG, PHENO and PUBMED values Ensembl VEP 116.2 wrote on the full cache for every record"
+  },
+  "divergences_classified_against": {
+    "engine": "vep-rs",
+    "source": "the tree this corpus is committed with",
+    "binary_md5": "932a4f2e2cf6f89598a69216cc282d6a",
+    "arch": "aarch64",
+    "flags_passed": [
+      "--everything"
+    ]
+  }
+}

@@ -34,7 +34,9 @@
 //! HGVS string) is documented to differ, with the value vep-rs prints; every
 //! other field of such a key compares exactly. A run under `--nearest transcript`
 //! compares its `NEAREST` values as the coordinates of the named transcripts'
-//! start sites ([`nearest_as_coordinates`]).
+//! start sites ([`nearest_as_coordinates`]). `masks` lists the mask classes
+//! applied to the reference of every run of the corpus before the comparison
+//! ([`apply_masks`]); the one class is [`REGULATORY_FEATURE_ROWS`].
 //!
 //! A corpus is run once per [`Run`]: the manifest's own run (its `flags`,
 //! `variants.vcf`, every format, `expected/`) and once per `flag_sets` entry,
@@ -72,6 +74,8 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+
+use vep_core::consequence::Consequence;
 
 /// One corpus directory.
 pub struct Corpus {
@@ -177,6 +181,99 @@ impl Corpus {
             staged_cache(self, out_dir)
         } else {
             self.cache_dir()
+        }
+    }
+
+    /// The mask classes the manifest's `masks` list declares, each a known class.
+    pub fn masks(&self) -> Vec<String> {
+        let masks = strings(&self.manifest["masks"]);
+        for class in &masks {
+            assert!(
+                class == REGULATORY_FEATURE_ROWS,
+                "{}/{}: unknown mask class {class}",
+                self.release,
+                self.name
+            );
+        }
+        masks
+    }
+
+    /// Whether the corpus masks the reference's regulatory rows ([`REGULATORY_FEATURE_ROWS`]).
+    pub fn masks_regulatory_rows(&self) -> bool {
+        self.masks().iter().any(|m| m == REGULATORY_FEATURE_ROWS)
+    }
+}
+
+/// The mask class of a corpus run under `--regulatory` (which `--everything`
+/// switches on): vep-rs annotates no regulatory feature, so the reference's
+/// `RegulatoryFeature` and `MotifFeature` rows are dropped before the
+/// comparison, in every format ([`apply_masks`]), and the notice vep-rs writes
+/// to its warnings file about the exclusion is expected ([`compare_warnings`]).
+pub const REGULATORY_FEATURE_ROWS: &str = "regulatory_feature_rows";
+
+/// The `Feature_type` values of the rows [`REGULATORY_FEATURE_ROWS`] drops.
+const REGULATORY_FEATURE_TYPES: [&str; 2] = ["RegulatoryFeature", "MotifFeature"];
+/// The JSON record arrays holding those rows.
+const REGULATORY_JSON_ARRAYS: [&str; 2] = [
+    "regulatory_feature_consequences",
+    "motif_feature_consequences",
+];
+/// The phrase of the warnings-file line vep-rs writes when `--regulatory` is on
+/// (`crates/vep-cli/src/config.rs`, the notice `--everything` implies):
+/// [`REGULATORY_FEATURE_ROWS`] requires the line and compares the rest of the
+/// file without it.
+const REGULATORY_NOTICE: &str = "regulatory-feature annotation is not implemented";
+
+/// Applies the corpus's mask classes to the reference entries of one format.
+/// Under [`REGULATORY_FEATURE_ROWS`] the default and tab rows and the VCF CSQ
+/// entries whose `Feature_type` is regulatory go; a JSON record that carried a
+/// regulatory array loses it and has its `most_severe_consequence` recomputed
+/// from the consequence entries that remain, as vep-rs computes it from the rows
+/// it writes, so a record Ensembl VEP annotates against a regulatory feature and
+/// no transcript compares as its intergenic row; every other record keeps the
+/// reference's value.
+pub fn apply_masks(corpus: &Corpus, format: &str, expected: &mut Vec<Entry>) {
+    if !corpus.masks_regulatory_rows() {
+        return;
+    }
+    if format != "json" {
+        expected.retain(|e| {
+            !e.fields
+                .get("Feature_type")
+                .is_some_and(|t| REGULATORY_FEATURE_TYPES.contains(&t.as_str()))
+        });
+        return;
+    }
+    let record_of = |key: &str| key.split('|').next().unwrap_or_default().to_string();
+    let mut remaining: HashMap<String, Vec<Consequence>> = HashMap::new();
+    for entry in expected.iter().filter(|e| !e.key.ends_with("|record")) {
+        let terms = remaining.entry(record_of(&entry.key)).or_default();
+        for term in entry
+            .consequence
+            .split([',', '&'])
+            .filter(|t| !t.is_empty())
+        {
+            terms.push(
+                Consequence::from_so_term(term).unwrap_or_else(|| {
+                    panic!("{}: {term} is not an SO consequence term", entry.key)
+                }),
+            );
+        }
+    }
+    for entry in expected.iter_mut().filter(|e| e.key.ends_with("|record")) {
+        let mut dropped = false;
+        for array in REGULATORY_JSON_ARRAYS {
+            dropped |= entry.fields.remove(array).is_some();
+        }
+        // A record that lost no row keeps Ensembl VEP's own value under comparison.
+        if dropped && entry.fields.contains_key("most_severe_consequence") {
+            let terms = remaining.remove(&record_of(&entry.key)).unwrap_or_default();
+            let most_severe = Consequence::most_severe(&terms)
+                .map(|c| c.so_term().to_string())
+                .unwrap_or_else(|| "?".to_string());
+            entry
+                .fields
+                .insert("most_severe_consequence".to_string(), most_severe);
         }
     }
 }
@@ -1875,6 +1972,7 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
     };
     let mut expected_entries = parse(&expected);
     let mut actual_entries = parse(&actual);
+    apply_masks(run.corpus, format, &mut expected_entries);
     if run.nearest_by_coordinate() {
         let sites = protein_coding_start_sites(run.corpus);
         nearest_as_coordinates(&mut expected_entries, &sites);
@@ -2035,9 +2133,20 @@ fn warnings_file_beside(output: &Path) -> PathBuf {
 /// entries must agree with the manifest's. Returns a report, or an empty string.
 pub fn compare_warnings(run: &Run, out_dir: &Path) -> String {
     let path = warnings_file_beside(&output_path(run, "default", out_dir));
-    let actual = warning_entries(&fs::read_to_string(&path).unwrap_or_default());
+    let mut actual = warning_entries(&fs::read_to_string(&path).unwrap_or_default());
     let expected = reference_warnings(&run.corpus.manifest);
     let mut report = String::new();
+    if run.corpus.masks_regulatory_rows() {
+        let before = actual.len();
+        actual.retain(|(_, description)| !description.contains(REGULATORY_NOTICE));
+        if actual.len() == before {
+            report.push_str(&format!(
+                "{}: the regulatory notice ({REGULATORY_NOTICE}) is missing from {}\n",
+                run.label(),
+                path.display()
+            ));
+        }
+    }
     let stored = run
         .corpus
         .dir
@@ -2410,35 +2519,22 @@ pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) 
         let expected = read_expected(&corpus.dir, expected_name);
         let documented = Documented::from_manifest(&corpus.manifest);
         let inputs = input_records(corpus);
-        let (header, body) = match run.expect.format.as_str() {
-            "default" | "tab" => (
-                compare_tab_headers(&expected, &actual),
-                compare_entries(
-                    &parse_default(&expected),
-                    &parse_default(&actual),
-                    &documented,
-                    true,
-                ),
-            ),
-            "vcf" => (
-                compare_vcf_headers(&expected, &actual),
-                compare_entries(
-                    &parse_vcf(&expected, &inputs),
-                    &parse_vcf(&actual, &inputs),
-                    &documented,
-                    true,
-                ),
-            ),
-            _ => (
-                compare_json_identity(&actual),
-                compare_entries(
-                    &parse_json(&expected, &inputs),
-                    &parse_json(&actual, &inputs),
-                    &documented,
-                    true,
-                ),
-            ),
+        let format = run.expect.format.as_str();
+        let parse = |text: &str| -> Vec<Entry> {
+            match format {
+                "default" | "tab" => parse_default(text),
+                "vcf" => parse_vcf(text, &inputs),
+                _ => parse_json(text, &inputs),
+            }
         };
+        let mut expected_entries = parse(&expected);
+        apply_masks(corpus, format, &mut expected_entries);
+        let header = match format {
+            "default" | "tab" => compare_tab_headers(&expected, &actual),
+            "vcf" => compare_vcf_headers(&expected, &actual),
+            _ => compare_json_identity(&actual),
+        };
+        let body = compare_entries(&expected_entries, &parse(&actual), &documented, true);
         if !header.is_empty() || !body.is_empty() {
             report.push_str(&format!(
                 "{label}: output differs from {expected_name}\n{header}{body}"

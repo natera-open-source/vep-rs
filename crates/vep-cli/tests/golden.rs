@@ -19,8 +19,9 @@ use std::io::Write;
 use std::path::Path;
 
 use common::{
-    compare_run, compare_warnings, corpora, nearest_as_coordinates, parse_default, parse_json,
-    parse_vcf, protein_coding_start_sites, read_expected, runs, Corpus, REFERENCE_SKIPPED_RECORD,
+    apply_masks, compare_run, compare_warnings, corpora, nearest_as_coordinates, parse_default,
+    parse_json, parse_vcf, protein_coding_start_sites, read_expected, runs, Corpus,
+    REFERENCE_SKIPPED_RECORD, REGULATORY_FEATURE_ROWS,
 };
 
 /// Every run's default-format output matches the reference, and the warnings
@@ -512,4 +513,86 @@ fn nearest_transcript_values_compare_by_start_site() {
     assert_eq!(two, format!("29940022,{}", sites["ENST00000400546"]));
     assert_ne!(resolved("ENST00000400546").0, one.0);
     assert_eq!(resolved("ENST_UNKNOWN").0, "ENST_UNKNOWN");
+}
+
+/// Under `regulatory_feature_rows` the reference's RegulatoryFeature and
+/// MotifFeature rows go in the text formats and the VCF, a JSON record that
+/// carried a regulatory array loses it and has its most severe term recomputed
+/// from the rows left (`intergenic_variant` for a record Ensembl VEP annotated
+/// against a regulatory feature alone), and a record that lost nothing keeps the
+/// reference's term as written; a corpus without the mask keeps every row.
+#[test]
+fn regulatory_feature_rows_mask_drops_the_reference_rows() {
+    let masked = corpora()
+        .into_iter()
+        .find(|c| c.release == "116" && c.name == "GRCh38-everything")
+        .expect("the everything corpus");
+    assert_eq!(masked.masks(), [REGULATORY_FEATURE_ROWS]);
+    let unmasked = corpora()
+        .into_iter()
+        .find(|c| c.release == "116" && c.name == "GRCh38")
+        .expect("the GRCh38 corpus");
+    assert!(unmasked.masks().is_empty());
+
+    let header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n";
+    let text = format!(
+        "{header}rs1\t21:100\tA\t-\tENSR00000001\tRegulatoryFeature\tregulatory_region_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n\
+         rs1\t21:100\tA\t-\tENSM00000001\tMotifFeature\tTF_binding_site_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n\
+         rs1\t21:100\tA\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n\
+         rs2\t21:200\tG\tENSG1\tENST1\tTranscript\tmissense_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODERATE\n"
+    );
+    let mut entries = parse_default(&text);
+    apply_masks(&unmasked, "default", &mut entries);
+    assert_eq!(entries.len(), 4);
+    apply_masks(&masked, "default", &mut entries);
+    assert_eq!(
+        entries.iter().map(|e| e.key.as_str()).collect::<Vec<_>>(),
+        ["21:100|A|-|-", "21:200|G|ENST1|Transcript"]
+    );
+
+    let inputs = vec![
+        "21\t100\trs1\tC\tA\t.\t.\t.".to_string(),
+        "21\t200\trs2\tT\tG\t.\t.\t.".to_string(),
+    ];
+    let vcf = "##fileformat=VCFv4.2\n##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|Feature_type|Feature\">\n\
+               #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+               21\t100\trs1\tC\tA\t.\t.\tCSQ=A|regulatory_region_variant|MODIFIER|RegulatoryFeature|ENSR00000001,A|intergenic_variant|MODIFIER||\n\
+               21\t200\trs2\tT\tG\t.\t.\tCSQ=G|missense_variant|MODERATE|Transcript|ENST1\n";
+    let mut entries = parse_vcf(vcf, &inputs);
+    apply_masks(&masked, "vcf", &mut entries);
+    assert_eq!(
+        entries.iter().map(|e| e.key.as_str()).collect::<Vec<_>>(),
+        [
+            "rec0|record",
+            "rec0|A||",
+            "rec1|record",
+            "rec1|G|ENST1|Transcript"
+        ]
+    );
+
+    let json = "{\"input\":\"21\\t100\\trs1\\tC\\tA\\t.\\t.\\t.\",\"most_severe_consequence\":\"regulatory_region_variant\",\
+                \"regulatory_feature_consequences\":[{\"variant_allele\":\"A\",\"regulatory_feature_id\":\"ENSR00000001\",\"consequence_terms\":[\"regulatory_region_variant\"]}],\
+                \"intergenic_consequences\":[{\"variant_allele\":\"A\",\"consequence_terms\":[\"intergenic_variant\"]}]}\n\
+                {\"input\":\"21\\t200\\trs2\\tT\\tG\\t.\\t.\\t.\",\"most_severe_consequence\":\"splice_region_variant\",\
+                \"transcript_consequences\":[{\"variant_allele\":\"G\",\"transcript_id\":\"ENST1\",\"consequence_terms\":[\"missense_variant\"]}]}\n";
+    let mut entries = parse_json(json, &inputs);
+    assert_eq!(
+        entries[0].fields["regulatory_feature_consequences"],
+        "{\"consequence_terms\":[\"regulatory_region_variant\"],\"regulatory_feature_id\":\"ENSR00000001\",\"variant_allele\":\"A\"}"
+    );
+    apply_masks(&masked, "json", &mut entries);
+    assert!(!entries[0]
+        .fields
+        .contains_key("regulatory_feature_consequences"));
+    assert_eq!(
+        entries[0].fields["most_severe_consequence"],
+        "intergenic_variant"
+    );
+    // The second record lost no row, so a reference term that disagrees with its
+    // rows stays under comparison.
+    assert_eq!(
+        entries[2].fields["most_severe_consequence"],
+        "splice_region_variant"
+    );
+    assert_eq!(entries.len(), 4);
 }

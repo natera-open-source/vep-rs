@@ -31,7 +31,13 @@ Masks, floors and field pairs (comparison mode):
   actual instead of the expected (an actual value other than the documented one is a stale
   divergence, red); a key documented as candidate-only is set aside, and a record the
   reference skipped keeps its record-level line and object uncompared; a key of a class not
-  named is compared like any other.
+  named is compared like any other. The class ``regulatory_feature_rows`` is built in rather
+  than read from a manifest: it drops the expected ``RegulatoryFeature`` and ``MotifFeature``
+  rows in every format (the candidate annotates no regulatory feature under
+  ``--regulatory``, which ``--everything`` switches on), recomputes the
+  ``most_severe_consequence`` of each JSON record that lost a row from the rows that remain,
+  and in ``--warnings`` mode requires the candidate's notice about the exclusion and leaves
+  it out of the comparison.
 * ``--floors COL=MIN,...``: the populated (present and not ``-``) count of column ``COL``
   must reach ``MIN`` on both sides.
 * ``--field-pairs 'COL=EXPECTED=>ACTUAL;...'`` (repeatable): a value pair accepted as
@@ -76,7 +82,7 @@ import subprocess
 import sys
 import zlib
 from collections import Counter, defaultdict, deque
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Collection, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeVar
@@ -90,6 +96,11 @@ ABSENT = "<absent>"
 # The class a vep_rs_only_tuples entry carries when every record it names is one the
 # reference dropped before annotation.
 REFERENCE_SKIPPED_RECORD = "reference_skipped_record"
+# The built-in mask class dropping the reference's regulatory rows (``without_regulatory_rows``).
+REGULATORY_FEATURE_ROWS = "regulatory_feature_rows"
+REGULATORY_KINDS = {"regulatory_feature", "motif_feature"}
+# The phrase of the warnings-file line the candidate writes when --regulatory is on.
+REGULATORY_NOTICE = "regulatory-feature annotation is not implemented"
 EXAMPLES_PER_GROUP = 4
 
 # OutputFactory/JSON.pm:98-112 at release/116.2.
@@ -1022,6 +1033,38 @@ def compare_entries(
     }
 
 
+def is_regulatory_row(e: Entry) -> bool:
+    """A RegulatoryFeature or MotifFeature consequence entry in any format: the key's last
+    segment is the Feature_type (default, tab, VCF) or the JSON list's kind."""
+    last_segment = e.key.rsplit("|", 1)[-1].partition("#")[0]
+    return feature_kind(last_segment) in REGULATORY_KINDS
+
+
+def without_regulatory_rows(expected: list[Entry]) -> list[Entry]:
+    """The reference entries without their regulatory rows (``regulatory_feature_rows``). A
+    JSON record that lost a row has its ``most_severe_consequence`` recomputed from the
+    consequence entries that remain, as the candidate computes it from the rows it writes,
+    so a record the reference annotates against a regulatory feature and no transcript
+    compares as its intergenic row; every other record keeps the reference's value. Mutates
+    the kept record entries; raises ``ComparatorError`` on a term ``CONSEQUENCE_RANK`` lacks."""
+    kept = [e for e in expected if not is_regulatory_row(e)]
+    lost_rows = {e.key.split("|", 1)[0] for e in expected if is_regulatory_row(e)}
+    terms_by_record: dict[str, set[str]] = defaultdict(set)
+    for e in kept:
+        if not e.key.endswith("|record"):
+            terms_by_record[e.key.split("|", 1)[0]].update(t for t in re.split(r"[&,]", e.consequence) if t)
+    for e in kept:
+        record = e.key.split("|", 1)[0]
+        if not e.key.endswith("|record") or record not in lost_rows or "most_severe_consequence" not in e.fields:
+            continue
+        terms = terms_by_record.get(record, set())
+        unranked = sorted(terms.difference(CONSEQUENCE_RANK))
+        if unranked:
+            raise ComparatorError(f"{e.key}: no rank for the consequence terms {unranked}")
+        e.fields = {**e.fields, "most_severe_consequence": most_severe(terms)}
+    return kept
+
+
 def compare_files(
     fmt: str,
     expected_path: Path,
@@ -1038,6 +1081,12 @@ def compare_files(
     expected_format = "tab" if fmt == "parquet" else fmt
     expected = parse_format(expected_format, expected_path, inputs)
     actual = parse_format(fmt, actual_path, inputs)
+    if REGULATORY_FEATURE_ROWS in masks:
+        kept = without_regulatory_rows(expected)
+        # A class that dropped nothing is unused, as a manifest class matching no item is.
+        if len(kept) < len(expected):
+            documented.applied[REGULATORY_FEATURE_ROWS] += len(expected) - len(kept)
+        expected = kept
     report = compare_entries(
         expected,
         actual,
@@ -1612,9 +1661,16 @@ def parse_warning_lines(text: str) -> set[tuple[int | None, str]]:
     return out
 
 
-def compare_warning_files(expected_path: Path, actual_path: Path) -> dict:
+def compare_warning_files(expected_path: Path, actual_path: Path, masks: Collection[str] = ()) -> dict:
+    """The two files as one-sided entry sets. Under ``regulatory_feature_rows`` the candidate's
+    notice that it annotates no regulatory feature is required and left out of the sets."""
     expected = parse_warning_lines(read_text(expected_path))
     actual = parse_warning_lines(read_text(actual_path))
+    notice_missing = False
+    if REGULATORY_FEATURE_ROWS in masks:
+        notice = {entry for entry in actual if REGULATORY_NOTICE in entry[1]}
+        notice_missing = not notice
+        actual -= notice
 
     def rows(items):
         numbered_first = sorted(items, key=lambda x: (x[0] is None, x[0] or 0, x[1]))
@@ -1628,13 +1684,16 @@ def compare_warning_files(expected_path: Path, actual_path: Path) -> dict:
         "shared": len(expected & actual),
         "expected_only": rows(expected - actual),
         "actual_only": rows(actual - expected),
+        "regulatory_notice_missing": notice_missing,
     }
 
 
-def compare_warnings(expected: Path, actual: Path, expected_skipped: Path | None, actual_skipped: Path | None) -> dict:
+def compare_warnings(
+    expected: Path, actual: Path, expected_skipped: Path | None, actual_skipped: Path | None, masks: Collection[str] = ()
+) -> dict:
     """The warnings-mode report: the ``_warnings.txt`` pair and, when given, the
-    skipped-variants pair, each as one-sided sets."""
-    sections = {"warnings": compare_warning_files(expected, actual)}
+    skipped-variants pair, each as one-sided sets; ``masks`` applies to the warnings pair."""
+    sections = {"warnings": compare_warning_files(expected, actual, masks)}
     if expected_skipped is not None or actual_skipped is not None:
         if expected_skipped is None or actual_skipped is None:
             raise ComparatorError("--expected-skipped and --actual-skipped go together")
@@ -1645,6 +1704,8 @@ def compare_warnings(expected: Path, actual: Path, expected_skipped: Path | None
             reasons.append(f"{name}: {len(section['expected_only'])} entries only in the expected file")
         if section["actual_only"]:
             reasons.append(f"{name}: {len(section['actual_only'])} entries only in the actual file")
+        if section["regulatory_notice_missing"]:
+            reasons.append(f"{name}: the regulatory notice is missing from the actual file")
     return {
         "mode": "warnings",
         "format": "warnings",
@@ -1724,7 +1785,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--actual", type=Path, help="the candidate output, or its warnings file")
     ap.add_argument("--input", type=Path, help="the input VCF (needed for --format vcf and json)")
     ap.add_argument("--manifest", type=Path, help="the corpus manifest.json documenting divergences")
-    ap.add_argument("--masks", help="comma-separated intended-divergence classes applied from the manifest")
+    ap.add_argument(
+        "--masks",
+        help="comma-separated intended-divergence classes applied: the manifest's, and the built-in "
+        "regulatory_feature_rows, the one class --warnings mode takes",
+    )
     ap.add_argument("--floors", help="COL=MIN,... minimum populated counts per column, both sides")
     ap.add_argument("--field-pairs", action="append", help="COL=EXPECTED=>ACTUAL[;...] value pairs accepted as equal")
     ap.add_argument(
@@ -1746,7 +1811,7 @@ def run(args: argparse.Namespace) -> dict:
     if args.warnings:
         if args.expected is None or args.actual is None:
             raise ComparatorError("--warnings needs --expected and --actual")
-        return compare_warnings(args.expected, args.actual, args.expected_skipped, args.actual_skipped)
+        return compare_warnings(args.expected, args.actual, args.expected_skipped, args.actual_skipped, parse_masks(args.masks))
     if args.self_parity:
         missing = [name for name in ("default", "tab", "vcf", "json") if getattr(args, name) is None]
         if missing:

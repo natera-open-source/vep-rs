@@ -83,10 +83,10 @@ jobs:
           check scripts/validation/test_compare_sv_concordance.py 196
           check scripts/concordance/test_reference_release.py 17
           check scripts/validation/test_breakend_mate_context.py 24
-          check scripts/concordance/test_compare_vep_formats.py 41
+          check scripts/concordance/test_compare_vep_formats.py 42
           check scripts/concordance/test_compare_vep_fields.py 6
           check scripts/concordance/test_compare_plugin_outputs.py 3
-          check scripts/golden/test_golden_scripts.py 96
+          check scripts/golden/test_golden_scripts.py 109
           check scripts/release/test_render_release_notes.py 95
           check scripts/parity/test_check_parity_matrix.py 60
           check scripts/validation/test_diff_caches.py 4

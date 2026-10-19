@@ -75,7 +75,14 @@ its own `flags`, input, formats, expected directory and `covers`, `unordered`
 when Ensembl VEP emits the record's rows in hash order, and `perl_mode`
 (`database`) when its reference came from Ensembl VEP connected to a database
 rather than reading the cache, so its default and tab headers compare by their
-column descriptions alone (`flag-set`, `flag-set --perl-mode`).
+column descriptions alone (`flag-set`, `flag-set --perl-mode`). `masks` lists the
+mask classes applied to the reference of every run of the corpus before the
+comparison; the one class, `regulatory_feature_rows`, sets aside the reference's
+`RegulatoryFeature` and `MotifFeature` rows for a corpus run under `--regulatory`
+or `--everything`, which vep-rs accepts and annotates nothing for
+(`scripts/concordance/compare_vep_formats.py --masks` applies the same class). The
+list is written by hand into the manifest (no `select` option writes it), `select`
+keeps it when it regenerates the corpus, and `classify` applies it to the reference.
 `cargo test -p vep-cli --test golden --test format_parity` annotates each corpus
 once per run and compares every column of every format (the Parquet round trip
 needs the `duckdb` CLI; without it that one test skips). A failure lists every mismatch
@@ -96,7 +103,9 @@ write the four expected outputs and `provenance.json` with
 `assembly`, `flags` and `fasta`; the image digest, the vep command and the
 expected files' sha256 are recorded for you, and `--force` regenerates an existing
 corpus), then run `build_golden_corpus.py classify` against the pinned vep-rs
-binary and commit the new directory; older directories stay until their release
+binary (a manifest listing `regulatory_feature_rows` under `masks` has its
+reference's RegulatoryFeature and MotifFeature rows left out of the classification,
+as the golden test leaves them out of the comparison) and commit the new directory; older directories stay until their release
 is dropped. A corpus for Ensembl VEP's per-sample flags (`--individual`,
 `--individual_zyg`, `--process_ref_homs`) is selected with `--keep-samples N`, which
 keeps `FORMAT` and the first N sample columns and adds records until every genotype

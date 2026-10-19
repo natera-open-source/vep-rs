@@ -162,6 +162,33 @@ def test_classify_marks_documented_and_unexplained_divergences(tmp_path: Path):
     assert not any("reference_rows" in r for r in m["records"])
 
 
+def test_classify_leaves_out_the_masked_regulatory_rows(tmp_path: Path):
+    """Under `masks: ["regulatory_feature_rows"]` the reference's RegulatoryFeature and
+    MotifFeature rows are not VEP-only keys; without the mask they are unexplained
+    residuals, and an unknown class or a `masks` that is not a list of names is refused."""
+    regulatory = "rs1\t21:100\tG\t-\tENSR1\tRegulatoryFeature\tregulatory_region_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
+    motif = "rs1\t21:100\tG\t-\tENSM1\tMotifFeature\tTF_binding_site_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
+    vep = tmp_path / "vep.txt"
+    vep.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant") + regulatory + motif, encoding="utf-8")
+    rs = tmp_path / "rs.txt"
+    rs.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    for masks, expected in (([], {"unexplained_residual": 2}), (["regulatory_feature_rows"], {})):
+        corpus = tmp_path / f"c{len(masks)}"
+        corpus.mkdir()
+        (corpus / "manifest.json").write_text(json.dumps({"masks": masks, "records": [_record("21\t100\trs1\tA\tG\t.\tPASS\t.")]}), encoding="utf-8")
+        assert bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)]) == 0
+        m = json.loads((corpus / "manifest.json").read_text())
+        assert m["divergence_summary"] == expected and m["vep_rs_only_summary"] == {}
+    corpus = tmp_path / "unknown"
+    corpus.mkdir()
+    (corpus / "manifest.json").write_text(json.dumps({"masks": ["splice_rows"], "records": []}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="unknown classes \\['splice_rows'\\]"):
+        bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)])
+    (corpus / "manifest.json").write_text(json.dumps({"masks": "regulatory_feature_rows", "records": []}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="masks is not a list of names"):
+        bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)])
+
+
 def test_classify_marks_reference_skipped_records_and_their_tuples(tmp_path: Path):
     """A record no VEP row names carries VEP's reason as `reference_warning`; classify writes
     `reference_rows` 0 on it, classes every key only vep-rs emits for it
@@ -415,9 +442,11 @@ def test_select_refuses_a_corpus_without_covers(tmp_path: Path, capsys):
 
 
 def test_select_preserves_covers_on_regeneration(tmp_path: Path):
-    """Regenerating over an existing manifest keeps its `covers` (union with any new `--covers`)
-    and its `flag_sets`, so a regenerated corpus keeps certifying the rows it did; a set's
-    divergence keys name the old records by ordinal, so they go the way the manifest's own do."""
+    """Regenerating over an existing manifest keeps its `covers` (union with any new `--covers`),
+    its `masks` and its `flag_sets`, in that order before `suites`, so a regenerated corpus keeps
+    certifying the rows it did; a set's divergence keys name the old records by ordinal, so they go
+    the way the manifest's own do; a mask class `classify` does not know is refused before anything
+    is written."""
     ref, vcf = _two_record_suite(tmp_path)
     out = tmp_path / "corpus"
     matrix = _matrix(tmp_path, "symbol", "max_af", "pick")
@@ -425,17 +454,28 @@ def test_select_preserves_covers_on_regeneration(tmp_path: Path):
     assert bgc.main(["flag-set", str(out), "--name", "pick", "--flag=--pick", "--covers", "pick", "--matrix", str(matrix)]) == 0
     m = json.loads((out / "manifest.json").read_text())
     entry = dict(m["flag_sets"][0])
+    m["masks"] = ["regulatory_feature_rows"]
     m["divergences"] = [{"location": "21:100", "record_indices": [0]}]
     m["flag_sets"][0].update({"divergences": [{"location": "21:100", "record_indices": [0]}], "divergence_summary": {}})
     (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
     assert _select(ref, vcf, out) == 0, "the existing list satisfies the covers requirement"
     m = json.loads((out / "manifest.json").read_text())
     assert m["covers"] == ["symbol"]
+    assert m["masks"] == ["regulatory_feature_rows"]
     assert m["flag_sets"] == [entry] and "divergences" not in m
     assert _select(ref, vcf, out, "--covers", "max_af", "--covers", "symbol") == 0
     m = json.loads((out / "manifest.json").read_text())
     assert m["covers"] == ["symbol", "max_af"]
-    assert list(m).index("covers") < list(m).index("flag_sets") < list(m).index("suites")
+    assert m["masks"] == ["regulatory_feature_rows"] and m["flag_sets"] == [entry]
+    keys = list(m)
+    assert keys.index("covers") < keys.index("masks") < keys.index("flag_sets") < keys.index("suites")
+    m["masks"] = ["splice_rows"]
+    (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+    (out / "variants.vcf").unlink()
+    with pytest.raises(SystemExit) as refusal:
+        _select(ref, vcf, out)
+    assert str(refusal.value) == "ERROR: [build_golden_corpus] manifest masks name unknown classes ['splice_rows']"
+    assert json.loads((out / "manifest.json").read_text()) == m and not (out / "variants.vcf").exists(), "nothing is written"
 
 
 def test_select_matrix_and_empty_names(tmp_path: Path, capsys):
@@ -476,6 +516,8 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
         ('"covers": "symbol"', "covers is not a list of names"),
         ('"covers": [["symbol"]]', "covers is not a list of names"),
         ('"covers": ["symbol", ""]', "covers is not a list of names"),
+        ('"covers": ["symbol"], "masks": "regulatory_feature_rows"', "masks is not a list of names"),
+        ('"covers": ["symbol"], "masks": [["regulatory_feature_rows"]]', "masks is not a list of names"),
         ('"covers": ["symbol"], "flag_sets": "pick"', "flag_sets is not a list"),
         ('"covers": ["symbol"], "flag_sets": ["pick"]', "has a flag_sets entry without a name (letters, digits, _ and -, not default)"),
         ('"covers": ["symbol"], "flag_sets": [{"covers": []}]', "has a flag_sets entry without a name (letters, digits, _ and -, not default)"),

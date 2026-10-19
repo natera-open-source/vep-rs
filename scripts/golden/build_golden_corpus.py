@@ -19,8 +19,9 @@ Subcommands:
             record, and write `variants.vcf` plus `manifest.json`. The manifest's `covers`
             list names the parity-matrix rows the corpus exercises: `--covers <item>`
             (repeatable) writes it, each name a row of `--matrix` when one is given, a corpus
-            regenerated over an existing manifest keeps that manifest's list and its
-            `flag_sets` (each set's run definition and
+            regenerated over an existing manifest keeps that manifest's list, its `masks`
+            (each a class `classify` knows, else the run is refused before anything is
+            written) and its `flag_sets` (each set's run definition and
             `covers`; the divergence keys `classify --flag-set` wrote describe the old
             records and are dropped, as the manifest's own are), and a run with neither
             writes nothing. `--keep-samples N` keeps `FORMAT` and the first N sample
@@ -37,7 +38,10 @@ Subcommands:
             corpus is built), it gets `reference_rows` 0, and every key only vep-rs emits
             for it is classed `reference_skipped_record`; any other key only vep-rs emits is
             `unexplained_residual`. A zero-row record without the warning, or a warned record
-            with rows, is an error. `covers` and `flag_sets` are kept; with `--flag-set
+            with rows, is an error. A manifest listing `regulatory_feature_rows` under
+            `masks` has its VEP rows of `Feature_type` RegulatoryFeature and MotifFeature
+            left out first, the rows the golden test sets aside for a run under
+            `--regulatory`. `covers` and `flag_sets` are kept; with `--flag-set
             <name>` the divergence keys are written into that flag set instead of the
             manifest's top level, so each flag set documents its own run.
   check     Recompute the observed combination space from the reference outputs and fail
@@ -110,6 +114,10 @@ SEQUENCE_CLASSES = ("snv", "deletion", "insertion", "mnv_or_complex")
 OUTPUT_FORMATS = ("default", "tab", "vcf", "json")
 PERL_MODES = ("offline", "database")
 DEFAULT_INPUT = "variants.vcf"
+# The manifest `masks` class under which the reference's regulatory rows are left out, and
+# the `Feature_type` values of those rows.
+REGULATORY_FEATURE_ROWS = "regulatory_feature_rows"
+REGULATORY_FEATURE_TYPES = frozenset({"RegulatoryFeature", "MotifFeature"})
 CLASSIFY_KEYS = ("divergences", "vep_rs_only_tuples", "divergence_summary", "vep_rs_only_summary",
                  "fields_compared", "field_divergences", "field_divergence_summary")
 DEFAULT_COLUMNS = (
@@ -824,16 +832,18 @@ def flag_set_shape_error(fs: object) -> str | None:
 
 
 def manifest_shape_error(manifest: dict) -> str | None:
-    """The reason a manifest's `covers`, `flag_sets`, `cache_layout`, `fasta_in_cache` or sample
-    keys cannot be read: `covers` must be a list of non-empty names, `flag_sets` a list of entries
-    of the shape `flag_set_shape_error` holds them to, with distinct names, `cache_layout`, when
-    present, `ensembl` (the cache at `cache_root/homo_sapiens/<release>_<assembly>`, so `release`
-    and `assembly` must be named) rather than the default `json_cache/`, `fasta_in_cache`, when
-    present, a boolean that is true only beside a `fasta` (the golden run then finds the reference
+    """The reason a manifest's `covers`, `masks`, `flag_sets`, `cache_layout`, `fasta_in_cache` or
+    sample keys cannot be read: `covers` and `masks` must be lists of non-empty names, `flag_sets` a
+    list of entries of the shape `flag_set_shape_error` holds them to, with distinct names,
+    `cache_layout`, when present, `ensembl` (the cache at `cache_root/homo_sapiens/<release>_<assembly>`,
+    so `release` and `assembly` must be named) rather than the default `json_cache/`, `fasta_in_cache`,
+    when present, a boolean that is true only beside a `fasta` (the golden run then finds the reference
     inside its cache directory instead of receiving `--fasta`), `keep_samples` a count, and
     `samples` the names of that many kept samples when the count is above zero."""
     if "covers" in manifest and not is_name_list(manifest["covers"]):
         return "covers is not a list of names"
+    if "masks" in manifest and not is_name_list(manifest["masks"]):
+        return "masks is not a list of names"
     keep = manifest.get("keep_samples", 0)
     if not isinstance(keep, int) or isinstance(keep, bool) or keep < 0:
         return "keep_samples is not a count"
@@ -942,6 +952,9 @@ def cmd_select(args: argparse.Namespace) -> int:
     out = Path(args.out)
     existing = read_manifest(out) if (out / "manifest.json").is_file() else {}
     covers = list(dict.fromkeys([*(existing.get("covers") or []), *covers_names(args.covers)]))
+    # The call refuses an unknown mask class before anything is written, as `classify` would.
+    masked_feature_types(existing)
+    masks = existing.get("masks") or []
     # A set's divergence keys name the old records by ordinal; `classify --flag-set` rebuilds them.
     flag_sets = [{k: v for k, v in fs.items() if k not in CLASSIFY_KEYS} for fs in existing.get("flag_sets") or []]
     if not covers:
@@ -1066,6 +1079,7 @@ def cmd_select(args: argparse.Namespace) -> int:
             "required_genotype_classes": required} if keep_samples else {}),
         **run_options(args),
         "covers": covers,
+        **({"masks": masks} if masks else {}),
         **({"flag_sets": flag_sets} if flag_sets else {}),
         # File names only: the directory each suite was staged in belongs to the build
         # host, not to the corpus, and the tests read neither field.
@@ -1098,19 +1112,33 @@ def cmd_select(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- classify
-def load_tuples(path: Path) -> tuple[dict[tuple[str, str, str, str], set[str]], dict[tuple[str, str, str, str], set[str]]]:
-    """(Location, Allele, Feature, Feature_type) -> consequence-set strings, and -> Uploaded_variation names."""
+def masked_feature_types(manifest: dict) -> frozenset[str]:
+    """The `Feature_type` values the manifest's `masks` leave out of the reference; a class other
+    than `regulatory_feature_rows` is refused."""
+    masks = manifest.get("masks") or []
+    unknown = sorted(set(masks) - {REGULATORY_FEATURE_ROWS})
+    if unknown:
+        raise failure(f"manifest masks name unknown classes {unknown}")
+    return REGULATORY_FEATURE_TYPES if REGULATORY_FEATURE_ROWS in masks else frozenset()
+
+
+def load_tuples(path: Path, masked: frozenset[str] = frozenset()) -> tuple[dict[tuple[str, str, str, str], set[str]], dict[tuple[str, str, str, str], set[str]]]:
+    """(Location, Allele, Feature, Feature_type) -> consequence-set strings, and -> Uploaded_variation
+    names, leaving out the rows whose Feature_type is in `masked`."""
     out: dict[tuple[str, str, str, str], set[str]] = defaultdict(set)
     names: dict[tuple[str, str, str, str], set[str]] = defaultdict(set)
     for r in iter_rows(path, "x"):
+        if r.feature_type in masked:
+            continue
         key = (r.location, r.allele, r.feature, r.feature_type)
         out[key].add(r.consequence_set)
         names[key].add(r.uploaded_variation)
     return out, names
 
 
-def load_fields(path: Path, fields: list[str]) -> dict[tuple[str, str, str, str, str], dict[str, str]]:
-    """(Location, Allele, Feature, Feature_type, consequence set) -> the named Extra fields ('-' when absent)."""
+def load_fields(path: Path, fields: list[str], masked: frozenset[str] = frozenset()) -> dict[tuple[str, str, str, str, str], dict[str, str]]:
+    """(Location, Allele, Feature, Feature_type, consequence set) -> the named Extra fields ('-' when absent),
+    leaving out the rows whose Feature_type is in `masked`."""
     out: dict[tuple[str, str, str, str, str], dict[str, str]] = {}
     with opener(path)(path, "rt", encoding="utf-8", errors="replace") as handle:
         for line in handle:
@@ -1121,6 +1149,8 @@ def load_fields(path: Path, fields: list[str]) -> dict[tuple[str, str, str, str,
                 continue
             while len(f) < 14:
                 f.append("-")
+            if f[5] in masked:
+                continue
             extra = parse_extra(f[13])
             key = (f[1], f[2], f[4], f[5], normalize_consequence_set(f[6]))
             out.setdefault(key, {name: extra.get(name, "-") for name in fields})
@@ -1222,7 +1252,8 @@ def cmd_classify(args: argparse.Namespace) -> int:
         print("ERROR: [build_golden_corpus] --flag and --fasta-name describe the default run; "
               "a flag set's flags are its own entry's", file=sys.stderr)
         return 1
-    perl, perl_names = load_tuples(Path(args.vep_default))
+    masked = masked_feature_types(manifest)
+    perl, perl_names = load_tuples(Path(args.vep_default), masked)
     rust, rust_names = load_tuples(Path(args.vep_rs_output))
     by_name = record_name_index(manifest["records"])
     skipped, problems = reference_skipped_records(manifest["records"], perl_names, by_name)
@@ -1289,7 +1320,7 @@ def cmd_classify(args: argparse.Namespace) -> int:
         # prints `Met1?` wherever its start_lost predicate holds, vep-rs the peptide change
         # wherever it keeps start_retained_variant). No field difference on an agreeing key
         # is documented, so each one is an `unexplained_residual` the golden test fails on.
-        perl_fields = load_fields(Path(args.vep_default), args.field)
+        perl_fields = load_fields(Path(args.vep_default), args.field, masked)
         rust_fields = load_fields(Path(args.vep_rs_output), args.field)
         field_divergences: list[dict] = []
         for key, pvals in sorted(perl_fields.items()):
