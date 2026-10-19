@@ -190,7 +190,8 @@ pub fn calculate_consequences(
     // every predicate reads the moved span (`get_all_OverlapConsequences` moves
     // the feature's start and end for each one, BaseVariationFeatureOverlapAllele.pm:269-282,
     // and `_bvfo_preds` adds the offset, :454-463) and the rotated allele
-    // (`shift_feature_seqs`, TranscriptVariationAllele.pm:1330), as do the cDNA,
+    // (`shift_feature_seqs`, TranscriptVariationAllele.pm:1330, which rotates the
+    // allele as the input wrote it, on the input's strand), as do the cDNA,
     // CDS and translation coordinates (`clear_shifting_variables`, :502-528) and
     // the codons (:808-858). The input span keeps DISTANCE
     // (BaseTranscriptVariation.pm:587-601) and the HGVS notations, which shift on
@@ -206,7 +207,13 @@ pub fn calculate_consequences(
     let placed = placed.as_ref();
     let shifted = consequence_shift(placed, transcript, config);
     let shifted_allele = shifted.and_then(|span| {
-        crate::hgvs::shifted_variant(placed, transcript, span, config.reference_fasta.as_deref())
+        crate::hgvs::shifted_variant(
+            placed,
+            variant.strand,
+            transcript,
+            span,
+            config.reference_fasta.as_deref(),
+        )
     });
     let analysed = shifted_allele.as_ref().unwrap_or(placed);
     let mut tc = calculate_terms(analysed, variant, transcript, config)?;

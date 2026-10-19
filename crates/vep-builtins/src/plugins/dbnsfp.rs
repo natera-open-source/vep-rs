@@ -54,7 +54,9 @@ impl DbNsfpPlugin {
         self.column_headers.iter().position(|h| h == name)
     }
 
-    /// Check whether a dbNSFP record matches the variant's alleles.
+    /// Check whether a dbNSFP record matches the variant's alleles, on the forward
+    /// strand: `dbNSFP.pm:324` reverse-complements the allele of a record given on
+    /// the reverse strand before comparing it with the file's.
     fn allele_matches(&self, columns: &[String], variant: &InputVariant) -> bool {
         let file_ref = match columns.get(REF_COL) {
             Some(r) => r.as_str(),
@@ -65,10 +67,10 @@ impl DbNsfpPlugin {
             None => return false,
         };
 
-        let var_ref = String::from_utf8_lossy(&variant.ref_allele);
-        let var_alt = String::from_utf8_lossy(variant.alt_allele());
+        let (var_ref, var_alt) = variant.forward_strand_alleles();
 
-        file_ref.eq_ignore_ascii_case(&var_ref) && file_alt.eq_ignore_ascii_case(&var_alt)
+        file_ref.as_bytes().eq_ignore_ascii_case(&var_ref)
+            && file_alt.as_bytes().eq_ignore_ascii_case(&var_alt)
     }
 
     /// For a matched record, find the index within the semicolon-delimited
@@ -371,5 +373,20 @@ mod tests {
         plugin.column_headers = vec!["chr".into(), "score".into()];
         let columns = vec!["1".into(), ".".into()];
         assert_eq!(plugin.extract_field_value(&columns, "score", None), None);
+    }
+
+    /// A record given on the reverse strand matches the row of its forward-strand
+    /// alleles (`dbNSFP.pm:324` reverse-complements the allele): `T/C` on strand
+    /// -1 matches a `A G` row, not a `T C` one.
+    #[test]
+    fn reverse_strand_record_matches_the_complemented_row() {
+        let plugin = DbNsfpPlugin::new();
+        let row = |reference: &str, alt: &str| -> Vec<String> {
+            vec!["21".into(), "100".into(), reference.into(), alt.into()]
+        };
+        let mut reverse = InputVariant::new("21".into(), 100, 100, b"T".to_vec(), b"C".to_vec());
+        reverse.strand = vep_core::coordinate::Strand::Reverse;
+        assert!(plugin.allele_matches(&row("A", "G"), &reverse));
+        assert!(!plugin.allele_matches(&row("T", "C"), &reverse));
     }
 }

@@ -269,7 +269,9 @@ impl LofteePlugin {
 
     /// GC_TO_GT_DONOR: a donor SNV where the intron starts with GC and the
     /// variant changes C->T, making the donor more canonical (GT). LoFTEE checks
-    /// `feature_seq` ref C -> alt T against a GC intron start.
+    /// `feature_seq` ref C -> alt T against a GC intron start: the alleles on the
+    /// transcript's strand, so a record given on the reverse strand is read on the
+    /// forward strand first.
     fn gc_to_gt_donor(
         &self,
         ctx: &LofteeContext,
@@ -284,9 +286,10 @@ impl LofteePlugin {
         if variant.variant_class != VariantClass::Snv {
             return Some(false);
         }
+        let (forward_ref, forward_alt) = variant.forward_strand_alleles();
         let (mut r, mut a) = (
-            variant.ref_allele.first().copied()?.to_ascii_uppercase(),
-            variant.alt_allele().first().copied()?.to_ascii_uppercase(),
+            forward_ref.first().copied()?.to_ascii_uppercase(),
+            forward_alt.first().copied()?.to_ascii_uppercase(),
         );
         if ctx.strand == -1 {
             r = complement(r);
@@ -659,10 +662,10 @@ impl LofteePlugin {
     /// (from `human_ancestor.fa`). SNP-only, mirroring LoFTEE's
     /// `check_for_ancestral_allele` (which ignores indels and multi-base alleles).
     ///
-    /// LoFTEE compares the *variant_feature_seq* (the alt on the transcript
-    /// strand) to the ancestral base; the ancestral FASTA is forward-strand
-    /// genomic, so the comparison uses the forward-strand alt allele. `variant`
-    /// alleles are stored forward-strand, so no strand flip is needed here.
+    /// LoFTEE compares `variation_feature_seq`, the alt allele as the input record
+    /// writes it, with the forward-strand ancestral base (LoF.pm
+    /// `check_for_ancestral_allele`), so a record given on the reverse strand is
+    /// compared as written, not through its complement.
     fn is_ancestral_allele(&self, variant: &InputVariant) -> bool {
         if variant.variant_class != VariantClass::Snv {
             return false;
@@ -943,6 +946,7 @@ mod tests {
     use super::*;
     use smallvec::smallvec;
     use vep_core::consequence::ConsequenceList;
+    use vep_core::coordinate::Strand;
 
     #[test]
     fn name_and_header_fields() {
@@ -1240,6 +1244,82 @@ mod tests {
         assert_eq!(
             out.get("LoF_info").map(String::as_str),
             Some("INTRON_SIZE:6")
+        );
+    }
+
+    /// `GC_TO_GT_DONOR` reads `feature_seq`, the alleles on the transcript's
+    /// strand. Against a forward-strand transcript whose intron 2 opens `GC` at
+    /// 1490-1491, the donor SNV `C/T` at 1491 strengthens the donor, and the same
+    /// change given on the reverse strand (`G/A -1`) is the same `C/T` on the
+    /// transcript, while a `C/T -1` reads `G/A` and does not. Against a
+    /// reverse-strand transcript whose intron 2 opens `GC` at 1581-1580 (the
+    /// genome's `GC`), the donor SNV at 1580 is `G/A` on the genome: given on the
+    /// reverse strand it is written `C/T`, read back as `C/T` on the transcript,
+    /// and strengthens the donor, while `G/A -1` does not.
+    #[test]
+    fn gc_to_gt_donor_reads_a_reverse_strand_record_on_the_forward_strand() {
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        let mut sequence = vec![b'A'; 1600];
+        sequence[1489] = b'G';
+        sequence[1490] = b'C';
+        sequence[1579] = b'G';
+        sequence[1580] = b'C';
+        let mut contents = b">21\n".to_vec();
+        contents.extend_from_slice(&sequence);
+        contents.push(b'\n');
+        std::fs::write(&fa, contents).unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), "21\t1600\t4\t1600\t1601\n").unwrap();
+        let mut p = LofteePlugin::new();
+        p.set_reference_fasta(Some(Arc::new(
+            vep_fasta::IndexedFasta::from_path(&fa).unwrap(),
+        )));
+        let transcript = |strand: i8, intron_end: u64| {
+            let mut ctx = coding_ctx(strand);
+            ctx.introns = vec![vep_core::transcript::Intron {
+                start: 1490,
+                end: intron_end,
+                rank: 2,
+            }];
+            ctx
+        };
+        let snv = |position: u64, reference: &[u8], alt: &[u8], strand: Strand| {
+            let mut v = InputVariant::new(
+                "21".into(),
+                position,
+                position,
+                reference.to_vec(),
+                alt.to_vec(),
+            );
+            v.strand = strand;
+            v
+        };
+        let donor = |ctx: &LofteeContext, v: &InputVariant| p.gc_to_gt_donor(ctx, v, "21", 2);
+        let forward = transcript(1, 1580);
+        assert_eq!(
+            donor(&forward, &snv(1491, b"C", b"T", Strand::Forward)),
+            Some(true)
+        );
+        assert_eq!(
+            donor(&forward, &snv(1491, b"G", b"A", Strand::Reverse)),
+            Some(true)
+        );
+        assert_eq!(
+            donor(&forward, &snv(1491, b"C", b"T", Strand::Reverse)),
+            Some(false)
+        );
+        let reverse = transcript(-1, 1581);
+        assert_eq!(
+            donor(&reverse, &snv(1580, b"G", b"A", Strand::Forward)),
+            Some(true)
+        );
+        assert_eq!(
+            donor(&reverse, &snv(1580, b"C", b"T", Strand::Reverse)),
+            Some(true)
+        );
+        assert_eq!(
+            donor(&reverse, &snv(1580, b"G", b"A", Strand::Reverse)),
+            Some(false)
         );
     }
 }

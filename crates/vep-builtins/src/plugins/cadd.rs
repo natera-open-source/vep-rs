@@ -476,6 +476,58 @@ mod tests {
             .expect("an unmarked file must not be rejected");
     }
 
+    /// A record given on the reverse strand scores the row of its forward-strand
+    /// alleles: `get_matched_variant_alleles` (CADD.pm:239) reverse-complements
+    /// them, so `T/C -1` at 43774726 takes the `A G` row's 25.0 and 2.5, as
+    /// Ensembl VEP 116.2 with CADD.pm prints for this record over these two rows,
+    /// and not the `T C` row's 88.0.
+    #[test]
+    fn reverse_strand_record_scores_the_complemented_row() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+        use vep_core::coordinate::Strand;
+        let dir = tempfile::tempdir().unwrap();
+        let lines = [
+            "##CADD GRCh38-v1.7 (c) University of Washington 2013-2020",
+            "#Chrom\tPos\tRef\tAlt\tRawScore\tPHRED",
+            "21\t43774726\tA\tG\t2.5\t25.0",
+            "21\t43774726\tT\tC\t8.0\t88.0",
+        ];
+        let path = write_tabix_fixture(
+            dir.path(),
+            "cadd_strand.tsv.gz",
+            &lines,
+            IndexSpec::standard(),
+        );
+        let mut plugin = CaddPlugin::new();
+        plugin.init(&[format!("snv={}", path.display())]).unwrap();
+
+        let scores = |strand: Strand| {
+            let mut variant = InputVariant::new(
+                "21".into(),
+                43774726,
+                43774726,
+                b"T".to_vec(),
+                b"C".to_vec(),
+            );
+            variant.strand = strand;
+            let mut variants = vec![variant];
+            plugin.run_batch(&mut variants).unwrap();
+            let data = &variants[0].plugin_data;
+            (
+                data.get("CADD_PHRED").cloned(),
+                data.get("CADD_RAW").cloned(),
+            )
+        };
+        assert_eq!(
+            scores(Strand::Reverse),
+            (Some("25.0".to_string()), Some("2.5".to_string()))
+        );
+        assert_eq!(
+            scores(Strand::Forward),
+            (Some("88.0".to_string()), Some("8.0".to_string()))
+        );
+    }
+
     /// Without `--assembly` there is nothing to contradict, so any file loads.
     #[test]
     fn no_requested_assembly_skips_the_guard() {

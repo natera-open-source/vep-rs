@@ -77,13 +77,14 @@ fn hgvs_shift(
     crate::consequences::shift_indel_3prime_coords(variant, transcript, fasta)
 }
 
-/// The allele as the shift leaves it: the span `shifted`, the reference bases
-/// read there for a deletion, the inserted bases rotated along the shift for an
-/// insertion (`shift_feature_seqs`, TranscriptVariationAllele.pm 1330, and the
-/// `hgvs_allele_string` of the shift hash, 339-341 and 385). `None` for any
-/// other class.
+/// The allele as the shift leaves it for the codons and `hgvs_protein`: the span
+/// `shifted`, the reference bases read there for a deletion, the inserted bases
+/// as [`shift_feature_seq`] rotates them for an insertion. `variant` is the
+/// allele on the forward strand and `input_strand` the strand the input record
+/// wrote it on. `None` for any other class.
 pub(crate) fn shifted_variant(
     variant: &InputVariant,
+    input_strand: Strand,
     transcript: &Transcript,
     shifted: (u64, u64),
     reference_fasta: Option<&vep_fasta::IndexedFasta>,
@@ -97,7 +98,7 @@ pub(crate) fn shifted_variant(
     }
     let ref_allele = normalized_hgvs_ref_allele(variant, Some(shifted), reference_fasta)
         .unwrap_or_else(|| b"-".to_vec());
-    let alt_allele = normalized_hgvs_alt_allele(variant, transcript, Some(shifted))
+    let alt_allele = shifted_feature_alt(variant, input_strand, transcript.strand, Some(shifted))
         .unwrap_or_else(|| b"-".to_vec());
     Some(InputVariant::new(
         variant.chr.clone(),
@@ -106,6 +107,81 @@ pub(crate) fn shifted_variant(
         ref_allele,
         alt_allele,
     ))
+}
+
+/// The inserted allele of a shifted insertion as the codons and `hgvs_protein`
+/// read it, on the forward strand: [`shift_feature_seq`] of the forward-strand
+/// allele that `shift_motif` gives, moved `shifted` from the record's position.
+/// `None` for any other class, an unmoved insertion or an allele that shifts
+/// nothing.
+fn shifted_feature_alt(
+    variant: &InputVariant,
+    input_strand: Strand,
+    transcript_strand: Strand,
+    shifted: Option<(u64, u64)>,
+) -> Option<Vec<u8>> {
+    let (motif, shift) = moved_insertion_motif(variant, shifted)?;
+    Some(shift_feature_seq(
+        &motif,
+        input_strand,
+        transcript_strand,
+        shift,
+    ))
+}
+
+/// The forward-strand bases of an insertion the shift moved
+/// ([`crate::consequences::shift_motif`], whatever strand the input gave them
+/// on) and the bases it moved them by. `None` for any other class, an unmoved
+/// insertion or an allele of a record whose class shifts nothing.
+fn moved_insertion_motif(
+    variant: &InputVariant,
+    shifted: Option<(u64, u64)>,
+) -> Option<(Vec<u8>, usize)> {
+    if variant.variant_class != VariantClass::Insertion {
+        return None;
+    }
+    let shift = shifted?.0.abs_diff(variant.start) as usize;
+    if shift == 0 {
+        return None;
+    }
+    let motif = crate::consequences::shift_motif(variant)?;
+    Some((motif, shift))
+}
+
+/// `shift_feature_seqs` (TranscriptVariationAllele.pm 1330-1347) on an inserted
+/// allele, given and returned on the forward strand: the allele as the record
+/// writes it, on `input_strand`, moves its first base to its end once per step,
+/// `shift` steps along a forward-strand transcript and the allele's length less
+/// `shift` along a reverse-strand one, so a shift longer than the allele leaves
+/// it as written there. `hgvs_protein` (1777-1778) and `codon` (820) read the
+/// rotated allele back through `feature_seq`, which complements it onto the
+/// transcript's strand only when the two strands differ, so an allele given on
+/// the reverse strand rotates the other way round from its forward-strand twin.
+fn shift_feature_seq(
+    forward_allele: &[u8],
+    input_strand: Strand,
+    transcript_strand: Strand,
+    shift: usize,
+) -> Vec<u8> {
+    // Reverse-complementing is its own inverse, so one step moves an allele
+    // either way between the forward strand and the input's.
+    let between_strands = |allele: &[u8]| match input_strand {
+        Strand::Forward => allele.to_ascii_uppercase(),
+        Strand::Reverse => crate::coding::reverse_complement(&allele.to_ascii_uppercase()),
+    };
+    let mut written = between_strands(forward_allele);
+    if written.is_empty() {
+        return written;
+    }
+    let steps = match transcript_strand {
+        Strand::Forward => Some(shift),
+        Strand::Reverse => written.len().checked_sub(shift),
+    };
+    if let Some(steps) = steps {
+        let len = written.len();
+        written.rotate_left(steps % len);
+    }
+    between_strands(&written)
 }
 
 /// The transcript's genomic span read in transcript orientation (Perl's
@@ -799,20 +875,7 @@ fn normalized_hgvs_alt_allele(
     transcript: &Transcript,
     shifted: Option<(u64, u64)>,
 ) -> Option<Vec<u8>> {
-    if variant.variant_class != VariantClass::Insertion {
-        return None;
-    }
-
-    let shifted_start = shifted?.0;
-    let shift_steps = shifted_start.abs_diff(variant.start) as usize;
-    if shift_steps == 0 {
-        return None;
-    }
-
-    // The forward-strand allele the walk rotated, whatever strand the input
-    // gave it on.
-    let motif = crate::consequences::shift_motif(variant)?;
-
+    let (motif, shift_steps) = moved_insertion_motif(variant, shifted)?;
     Some(rotate_sequence_for_transcript_3prime(
         &motif,
         transcript.strand,
@@ -876,7 +939,8 @@ fn hgvsp_at(
     shifted: Option<(u64, u64)>,
     options: HgvsOptions,
 ) -> Option<String> {
-    let forward: Cow<InputVariant> = match variant.strand {
+    let input_strand = variant.strand;
+    let forward: Cow<InputVariant> = match input_strand {
         Strand::Forward => Cow::Borrowed(variant),
         Strand::Reverse => Cow::Owned(variant.on_forward_strand()),
     };
@@ -909,8 +973,8 @@ fn hgvsp_at(
     };
     let ref_name = versioned_reference_name(protein_id, version);
 
-    let shifted_variant =
-        shifted.and_then(|span| shifted_variant(variant, transcript, span, reference_fasta));
+    let shifted_variant = shifted
+        .and_then(|span| shifted_variant(variant, input_strand, transcript, span, reference_fasta));
     let notation = crate::coding::perl_hgvs_protein(
         variant,
         shifted_variant.as_ref().map(|v| (v, v.start, v.end)),
@@ -938,6 +1002,80 @@ mod tests {
         shift_hgvs: false,
         ..SHIFTED
     };
+
+    /// `shift_feature_seqs` on the inserted allele `CAG` (forward strand), as
+    /// Ensembl VEP 116.2 leaves it for the codons and HGVSp: along a forward
+    /// transcript the written allele turns one base per step of the shift; along
+    /// a reverse transcript it turns its length less the shift, so a shift of the
+    /// allele's length leaves it as written and a longer one turns it not at all
+    /// (`21 46302557 46302556 -/CAG 1` on ENST00000291691 shifts 4 and gives
+    /// `p.Gln249delinsProGlu`, not the `p.Leu248dup` of a turned allele). The
+    /// reverse-strand spelling `CTG` turns as written, so its forward reading
+    /// moves the other way round from its forward twin's: `-/CTT -1` on APP
+    /// (ENST00000346798, reverse) gives `p.Ala242_Asp243insLeu` where `-/AAG 1`
+    /// gives `insSer`.
+    #[test]
+    fn shift_feature_seq_turns_the_written_allele_by_the_transcript_strand_rule() {
+        use Strand::{Forward as F, Reverse as R};
+        let turned = |input, transcript, shift| {
+            String::from_utf8(shift_feature_seq(b"CAG", input, transcript, shift)).unwrap()
+        };
+        for (input, transcript, shift, expected) in [
+            (F, F, 1, "AGC"),
+            (F, F, 2, "GCA"),
+            (F, F, 4, "AGC"),
+            (F, R, 1, "GCA"),
+            (F, R, 3, "CAG"),
+            (F, R, 4, "CAG"),
+            (R, F, 1, "GCA"),
+            (R, F, 4, "GCA"),
+            (R, R, 1, "AGC"),
+            (R, R, 2, "GCA"),
+            (R, R, 4, "CAG"),
+        ] {
+            assert_eq!(
+                turned(input, transcript, shift),
+                expected,
+                "input {input:?}, transcript {transcript:?}, shift {shift}"
+            );
+        }
+        assert_eq!(shift_feature_seq(b"", F, F, 2), b"");
+    }
+
+    /// The shifted allele of an insertion follows [`shift_feature_seq`]; a
+    /// deletion's is `-`, an unmoved insertion's `None`.
+    #[test]
+    fn shifted_feature_alt_reads_the_input_strand() {
+        let insertion = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"CAG".to_vec());
+        let moved = Some((105u64, 104u64));
+        assert_eq!(
+            shifted_feature_alt(&insertion, Strand::Forward, Strand::Reverse, moved),
+            Some(b"CAG".to_vec())
+        );
+        assert_eq!(
+            shifted_feature_alt(&insertion, Strand::Reverse, Strand::Forward, moved),
+            Some(b"GCA".to_vec())
+        );
+        assert_eq!(
+            shifted_feature_alt(
+                &insertion,
+                Strand::Forward,
+                Strand::Forward,
+                Some((101, 100))
+            ),
+            None
+        );
+        let deletion = InputVariant::new("21".into(), 101, 103, b"CAG".to_vec(), b"-".to_vec());
+        assert_eq!(
+            shifted_feature_alt(
+                &deletion,
+                Strand::Forward,
+                Strand::Forward,
+                Some((105, 107))
+            ),
+            None
+        );
+    }
 
     #[test]
     fn test_amino_acid_three_letter() {

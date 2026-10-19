@@ -3,6 +3,7 @@
 
 //! Variant types: input variants and co-located known variants.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use crate::consequence::{Consequence, ConsequenceList, TranscriptConsequence};
@@ -918,29 +919,51 @@ impl InputVariant {
     /// ([`crate::codon::reverse_complement`]); any other allele is kept as given,
     /// and a `-` allele stays `-`.
     pub fn on_forward_strand(&self) -> InputVariant {
-        if self.strand == Strand::Forward
-            || self.is_structural
-            || self.variant_class.is_structural()
-        {
+        if !self.alleles_are_read_through_the_complement() {
             return self.clone();
         }
-        let flip = |allele: &[u8]| -> Vec<u8> {
-            if crate::codon::seq_is_dna(allele) {
-                crate::codon::reverse_complement(allele)
-            } else {
-                allele.to_vec()
-            }
-        };
         let mut forward = self.clone();
         forward.strand = Strand::Forward;
-        forward.ref_allele = flip(&self.ref_allele);
-        forward.alt_alleles = self.alt_alleles.iter().map(|a| flip(a)).collect();
+        forward.ref_allele = complement_dna_allele(&self.ref_allele);
+        forward.alt_alleles = self
+            .alt_alleles
+            .iter()
+            .map(|a| complement_dna_allele(a))
+            .collect();
         forward.allele_string = std::iter::once(&forward.ref_allele)
             .chain(&forward.alt_alleles)
             .map(|a| String::from_utf8_lossy(a).into_owned())
             .collect::<Vec<_>>()
             .join("/");
         forward
+    }
+
+    /// The reference allele and this row's alternate allele on the forward
+    /// strand, the orientation a data file keyed on the chromosome's strand
+    /// compares them in: a plugin reverse-complements the alleles of a record
+    /// given on the reverse strand before it looks a file row up
+    /// (`get_matched_variant_alleles`, Utils/Sequence.pm:1182 and 1196, and the
+    /// plugins' own `reverse_comp`). Borrowed as given unless
+    /// [`Self::on_forward_strand`] would complement them.
+    pub fn forward_strand_alleles(&self) -> (Cow<'_, [u8]>, Cow<'_, [u8]>) {
+        if self.alleles_are_read_through_the_complement() {
+            (
+                Cow::Owned(complement_dna_allele(&self.ref_allele)),
+                Cow::Owned(complement_dna_allele(self.alt_allele())),
+            )
+        } else {
+            (
+                Cow::Borrowed(&self.ref_allele),
+                Cow::Borrowed(self.alt_allele()),
+            )
+        }
+    }
+
+    /// Whether [`Self::on_forward_strand`] complements the alleles: given on the
+    /// reverse strand and not a structural variant, whose alleles are class words
+    /// that no `feature_seq` reads.
+    fn alleles_are_read_through_the_complement(&self) -> bool {
+        self.strand == Strand::Reverse && !self.is_structural && !self.variant_class.is_structural()
     }
 
     /// [`Self::display_allele`] after a 3' shift of `shift` bases along `strand`
@@ -968,6 +991,18 @@ impl InputVariant {
             rotated.rotate_right(steps);
         }
         String::from_utf8_lossy(&rotated).to_string()
+    }
+}
+
+/// An allele read on the other strand: Ensembl's `reverse_comp`
+/// ([`crate::codon::reverse_complement`]) of an allele `seq_is_dna` admits
+/// (VariationFeatureOverlapAllele.pm:315-321: the nucleotide and IUPAC letters
+/// and `-`, so a `-` allele stays `-`); any other allele as given.
+fn complement_dna_allele(allele: &[u8]) -> Vec<u8> {
+    if crate::codon::seq_is_dna(allele) {
+        crate::codon::reverse_complement(allele)
+    } else {
+        allele.to_vec()
     }
 }
 
@@ -1167,6 +1202,31 @@ mod strand_tests {
             (copy.strand, copy.allele_string.as_str()),
             (Strand::Reverse, "CNV/CNV")
         );
+    }
+
+    /// The alleles a data file is matched against are the record's on the forward
+    /// strand: `T/C` given on the reverse strand reads `A/G`, an insertion's `-`
+    /// stays `-`, a forward-strand record and a structural variant give their
+    /// alleles as written.
+    #[test]
+    fn forward_strand_alleles_complement_a_reverse_strand_record_only() {
+        let alleles = |variant: &InputVariant| {
+            let (reference, alt) = variant.forward_strand_alleles();
+            (reference.into_owned(), alt.into_owned())
+        };
+        let mut reverse = InputVariant::new("21".into(), 100, 100, b"T".to_vec(), b"C".to_vec());
+        reverse.strand = Strand::Reverse;
+        assert_eq!(alleles(&reverse), (b"A".to_vec(), b"G".to_vec()));
+        let mut insertion =
+            InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"TGA".to_vec());
+        insertion.strand = Strand::Reverse;
+        assert_eq!(alleles(&insertion), (b"-".to_vec(), b"TCA".to_vec()));
+        let forward = InputVariant::new("21".into(), 100, 100, b"T".to_vec(), b"C".to_vec());
+        assert_eq!(alleles(&forward), (b"T".to_vec(), b"C".to_vec()));
+        let mut sv = InputVariant::new("21".into(), 100, 900, b"CNV".to_vec(), b"CNV".to_vec());
+        sv.strand = Strand::Reverse;
+        sv.is_structural = true;
+        assert_eq!(alleles(&sv), (b"CNV".to_vec(), b"CNV".to_vec()));
     }
 
     /// `perform_shift` rotates the allele as given the other way when it was

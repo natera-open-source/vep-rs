@@ -1025,27 +1025,18 @@ pub mod allele_match {
         (ref_str, alt_str, prefix_len as u64)
     }
 
-    /// Check if a tabix record matches a variant by position and allele.
+    /// Check if a tabix record matches a variant by position and allele. The
+    /// file's alleles are on the forward strand, so a record given on the
+    /// reverse strand is compared through its forward-strand alleles
+    /// (`get_matched_variant_alleles`, ensembl-variation Utils/Sequence.pm:1182
+    /// and 1196).
     pub fn matches_allele(
         record: &TabixRecord,
         variant: &InputVariant,
         ref_col: usize,
         alt_col: usize,
     ) -> bool {
-        let file_ref = match record.columns.get(ref_col) {
-            Some(r) => r.as_str(),
-            None => return false,
-        };
-        let file_alt = match record.columns.get(alt_col) {
-            Some(a) => a.as_str(),
-            None => return false,
-        };
-
-        let (norm_ref, norm_alt, _offset) = normalize_alleles(file_ref, file_alt);
-        let var_ref = String::from_utf8_lossy(&variant.ref_allele);
-        let var_alt = String::from_utf8_lossy(variant.alt_allele());
-
-        norm_ref.eq_ignore_ascii_case(&var_ref) && norm_alt.eq_ignore_ascii_case(&var_alt)
+        matched_allele_offset(record, variant, ref_col, alt_col).is_some()
     }
 
     /// Like [`matches_allele`] but requires a normalized position match too.
@@ -1055,25 +1046,26 @@ pub mod allele_match {
         ref_col: usize,
         alt_col: usize,
     ) -> bool {
-        let file_ref = match record.columns.get(ref_col) {
-            Some(r) => r.as_str(),
-            None => return false,
-        };
-        let file_alt = match record.columns.get(alt_col) {
-            Some(a) => a.as_str(),
-            None => return false,
-        };
+        matched_allele_offset(record, variant, ref_col, alt_col)
+            .is_some_and(|offset| record.start.saturating_add(offset) == variant.start)
+    }
 
+    /// The prefix offset of the record's normalized alleles when they equal the
+    /// variant's forward-strand alleles, case-insensitively; `None` when a
+    /// column is absent or the alleles differ.
+    fn matched_allele_offset(
+        record: &TabixRecord,
+        variant: &InputVariant,
+        ref_col: usize,
+        alt_col: usize,
+    ) -> Option<u64> {
+        let file_ref = record.columns.get(ref_col)?.as_str();
+        let file_alt = record.columns.get(alt_col)?.as_str();
         let (norm_ref, norm_alt, offset) = normalize_alleles(file_ref, file_alt);
-        let var_ref = String::from_utf8_lossy(&variant.ref_allele);
-        let var_alt = String::from_utf8_lossy(variant.alt_allele());
-
-        if !(norm_ref.eq_ignore_ascii_case(&var_ref) && norm_alt.eq_ignore_ascii_case(&var_alt)) {
-            return false;
-        }
-
-        let normalized_record_start = record.start.saturating_add(offset);
-        normalized_record_start == variant.start
+        let (var_ref, var_alt) = variant.forward_strand_alleles();
+        let alleles_match = norm_ref.as_bytes().eq_ignore_ascii_case(&var_ref)
+            && norm_alt.as_bytes().eq_ignore_ascii_case(&var_alt);
+        alleles_match.then_some(offset)
     }
 }
 
@@ -1988,6 +1980,43 @@ mod tests {
         assert!(!allele_match::matches_allele_with_position(
             &record,
             &variant_wrong_pos,
+            2,
+            3
+        ));
+    }
+
+    /// A record given on the reverse strand is matched through its forward-strand
+    /// alleles, as `get_matched_variant_alleles` reverse-complements them
+    /// (Utils/Sequence.pm:1182, 1196): `T/C` on strand -1 matches the file's `A G`
+    /// row and not its `T C` row, by allele and by allele with position alike.
+    #[test]
+    fn reverse_strand_record_matches_the_complemented_file_row() {
+        use vep_core::coordinate::Strand;
+        let row = |reference: &str, alt: &str| TabixRecord {
+            chr: "21".to_string(),
+            start: 100,
+            end: 100,
+            columns: vec!["21".into(), "100".into(), reference.into(), alt.into()],
+            header: None,
+        };
+        let mut reverse = InputVariant::new("21".into(), 100, 100, b"T".to_vec(), b"C".to_vec());
+        reverse.strand = Strand::Reverse;
+        assert!(allele_match::matches_allele(&row("A", "G"), &reverse, 2, 3));
+        assert!(!allele_match::matches_allele(
+            &row("T", "C"),
+            &reverse,
+            2,
+            3
+        ));
+        assert!(allele_match::matches_allele_with_position(
+            &row("A", "G"),
+            &reverse,
+            2,
+            3
+        ));
+        assert!(!allele_match::matches_allele_with_position(
+            &row("T", "C"),
+            &reverse,
             2,
             3
         ));
