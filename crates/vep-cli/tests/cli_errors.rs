@@ -343,3 +343,22 @@ fn option_rule_violations_are_refused() {
         "Can't use --most_severe and --biotype together",
     );
 }
+
+/// `--transcript_index_impl` is not an option of vep-rs: the overlap index has
+/// one implementation (UCSC binning) and Ensembl VEP has no such flag, so clap
+/// refuses the name as an unknown argument (exit 2) in both value spellings,
+/// and a run that passes it stops before any input is read.
+#[test]
+fn transcript_index_impl_is_rejected() {
+    for flags in [
+        &["--transcript_index_impl", "bin"][..],
+        &["--transcript_index_impl=coitrees"][..],
+    ] {
+        let (code, stderr) = refusal(flags);
+        assert_eq!(code, Some(2), "{flags:?}: {stderr}");
+        assert!(
+            stderr.starts_with("error: unexpected argument '--transcript_index_impl'"),
+            "{flags:?}: {stderr}"
+        );
+    }
+}

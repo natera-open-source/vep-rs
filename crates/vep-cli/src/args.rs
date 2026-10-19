@@ -450,19 +450,6 @@ pub struct Args {
     )]
     pub decompression_threads: String,
 
-    /// Transcript overlap index implementation (hidden, for A/B benchmarking).
-    /// Options: bin (UCSC binning, default), coitrees (implicit interval tree),
-    /// sorted (sorted array + suffix_max_end). All three must produce identical
-    /// overlap sets; any difference between implementations indicates a bug.
-    #[arg(
-        help_heading = "Runtime",
-        long = "transcript_index_impl",
-        default_value = "bin",
-        hide = true,
-        value_parser = ["bin", "coitrees", "sorted"]
-    )]
-    pub transcript_index_impl: String,
-
     /// How the batches move through the pipeline. `streaming` hands each batch to
     /// the worker pool as independent tasks that annotate and render their own
     /// records (and parse them, for a VCF input) and takes the next batch without

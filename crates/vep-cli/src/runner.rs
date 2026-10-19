@@ -878,12 +878,8 @@ impl Runner {
         upstream_distance: u64,
         downstream_distance: u64,
     ) -> anyhow::Result<LazyTranscriptIndexes> {
-        let indexes = LazyTranscriptIndexes::new(
-            &self.cache.dir,
-            self.config.transcript_index_impl,
-            upstream_distance,
-            downstream_distance,
-        )?;
+        let indexes =
+            LazyTranscriptIndexes::new(&self.cache.dir, upstream_distance, downstream_distance)?;
         Ok(indexes.with_transcript_set(TranscriptSet::from_config(&self.config)))
     }
 
@@ -1010,13 +1006,7 @@ impl Runner {
         // Indexed lazily per chromosome: the key set comes from a `read_dir`
         // walk, so the Perl-parity presence predicates are complete immediately,
         // while a chromosome's JSON parses only when a variant queries it.
-        let cache_dir = self.cache.dir.as_str();
-        let index_impl = self.config.transcript_index_impl;
-        info!(
-            "Transcript cache: {} (lazy per-chromosome, index impl={})",
-            cache_dir,
-            index_impl.name()
-        );
+        info!("Transcript cache: {} (lazy per-chromosome)", self.cache.dir);
         let transcripts = Arc::new(self.transcript_indexes(
             effects_config.upstream_distance,
             effects_config.downstream_distance,
@@ -2673,7 +2663,6 @@ pub(crate) fn make_runner_test_transcript(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transcript_index::TranscriptIndexImpl;
     use crate::vcf_parser::parse_vcf_line;
     use std::collections::HashMap;
 
@@ -3440,9 +3429,7 @@ mod tests {
             argv.extend_from_slice(flags);
             let runner = Runner::new(config_from(&argv)).unwrap();
             let fasta_file = Arc::new(vep_fasta::IndexedFasta::from_path(&fasta).unwrap());
-            let transcripts = Arc::new(
-                LazyTranscriptIndexes::new(dir, TranscriptIndexImpl::Bin, 5_000, 5_000).unwrap(),
-            );
+            let transcripts = Arc::new(LazyTranscriptIndexes::new(dir, 5_000, 5_000).unwrap());
             let mut resources = resources_over(transcripts);
             resources.effects_config = Arc::new(vep_effects::EffectsConfig {
                 reference_fasta: Some(fasta_file),
@@ -3701,7 +3688,7 @@ mod tests {
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "21".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![coding], 5_000, 5_000),
+            TranscriptIndex::new(vec![coding], 5_000, 5_000),
         );
         let mut resources = resources_over(Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)));
         resources.nearest = Some(NearestType::Gene);
@@ -3750,13 +3737,7 @@ mod tests {
         .unwrap();
 
         let transcripts = Arc::new(
-            LazyTranscriptIndexes::new(
-                dir.path().to_str().unwrap(),
-                TranscriptIndexImpl::Bin,
-                5_000,
-                5_000,
-            )
-            .unwrap(),
+            LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap(),
         );
         assert!(
             transcripts.contains_key("21"),
@@ -3805,13 +3786,7 @@ mod tests {
             .unwrap()
             .expect("a region file is a variation source");
         let transcripts = Arc::new(
-            LazyTranscriptIndexes::new(
-                dir.path().to_str().unwrap(),
-                TranscriptIndexImpl::Bin,
-                5_000,
-                5_000,
-            )
-            .unwrap(),
+            LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap(),
         );
         let mut resources = resources_over(transcripts);
         resources.variation_source = Some(Arc::new(source));
@@ -3877,13 +3852,7 @@ mod tests {
             .unwrap()
             .expect("a region file is a variation source");
         let transcripts = Arc::new(
-            LazyTranscriptIndexes::new(
-                dir.path().to_str().unwrap(),
-                TranscriptIndexImpl::Bin,
-                5_000,
-                5_000,
-            )
-            .unwrap(),
+            LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap(),
         );
         transcripts.prewarm("21").unwrap();
         let mut resources = resources_over(transcripts);
@@ -3945,14 +3914,11 @@ mod tests {
             let dir = write_json_cache(tag, chrs);
             let path = dir.path().to_str().unwrap();
             let lazy = annotate_with(Arc::new(
-                LazyTranscriptIndexes::new(path, TranscriptIndexImpl::Bin, 5_000, 5_000).unwrap(),
+                LazyTranscriptIndexes::new(path, 5_000, 5_000).unwrap(),
             ));
             let eager_raw = crate::json_cache::load_all_transcripts(path).unwrap();
             let eager = annotate_with(Arc::new(LazyTranscriptIndexes::from_loaded(
-                eager_raw,
-                TranscriptIndexImpl::Bin,
-                5_000,
-                5_000,
+                eager_raw, 5_000, 5_000,
             )));
             assert_eq!(
                 lazy, eager,
@@ -4041,7 +4007,7 @@ mod tests {
                 );
                 by_chr.insert(
                     chr.to_string(),
-                    TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![tx], 5_000, 5_000),
+                    TranscriptIndex::new(vec![tx], 5_000, 5_000),
                 );
             }
             let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
@@ -4108,11 +4074,11 @@ mod tests {
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "1".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![local_tx], 5_000, 5_000),
+            TranscriptIndex::new(vec![local_tx], 5_000, 5_000),
         );
         by_chr.insert(
             "21".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![mate_tx], 5_000, 5_000),
+            TranscriptIndex::new(vec![mate_tx], 5_000, 5_000),
         );
 
         let config = vep_effects::EffectsConfig::default();
@@ -4163,11 +4129,11 @@ mod tests {
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "1".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![local_tx], 5_000, 5_000),
+            TranscriptIndex::new(vec![local_tx], 5_000, 5_000),
         );
         by_chr.insert(
             "21".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![mate_tx], 5_000, 5_000),
+            TranscriptIndex::new(vec![mate_tx], 5_000, 5_000),
         );
 
         let config = vep_effects::EffectsConfig::default();
@@ -4208,7 +4174,7 @@ mod tests {
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "1".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![local_tx], 5_000, 5_000),
+            TranscriptIndex::new(vec![local_tx], 5_000, 5_000),
         );
 
         let config = vep_effects::EffectsConfig::default();
@@ -4259,11 +4225,11 @@ mod tests {
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "1".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![local_tx], 5_000, 5_000),
+            TranscriptIndex::new(vec![local_tx], 5_000, 5_000),
         );
         by_chr.insert(
             "21".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![mate_tx], 5_000, 5_000),
+            TranscriptIndex::new(vec![mate_tx], 5_000, 5_000),
         );
 
         let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
@@ -4320,7 +4286,7 @@ mod tests {
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "21".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![local_tx], 5_000, 5_000),
+            TranscriptIndex::new(vec![local_tx], 5_000, 5_000),
         );
 
         let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
@@ -4381,12 +4347,7 @@ mod tests {
             let mut by_chr = HashMap::new();
             by_chr.insert(
                 "21".to_string(),
-                TranscriptIndex::new(
-                    TranscriptIndexImpl::Bin,
-                    vec![buffered_tx, distant_tx],
-                    5_000,
-                    5_000,
-                ),
+                TranscriptIndex::new(vec![buffered_tx, distant_tx], 5_000, 5_000),
             );
             let resources = AnnotationResources {
                 transcripts: Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)),
@@ -4454,7 +4415,7 @@ mod tests {
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "21".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![tx], 5_000, 5_000),
+            TranscriptIndex::new(vec![tx], 5_000, 5_000),
         );
         Arc::new(LazyTranscriptIndexes::from_indexes(by_chr))
     }
@@ -4514,12 +4475,7 @@ mod tests {
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "21".to_string(),
-            TranscriptIndex::new(
-                TranscriptIndexImpl::Bin,
-                vec![protein_coding, lncrna],
-                5_000,
-                5_000,
-            ),
+            TranscriptIndex::new(vec![protein_coding, lncrna], 5_000, 5_000),
         );
         let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
         let annotate = |filters: &[&str]| {
@@ -4603,7 +4559,7 @@ mod tests {
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "21".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![tx], 5_000, 5_000),
+            TranscriptIndex::new(vec![tx], 5_000, 5_000),
         );
         let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
 
@@ -4636,12 +4592,7 @@ mod tests {
         // plus upstream distance (5000bp). Even with CIPOS=-14500 it should not
         // be annotated because Perl VEP offline mode uses nominal coordinates.
         let tx_edge = make_runner_test_transcript("ENST_EDGE", "GENE_EDGE", "21", 27240000);
-        let transcripts = TranscriptIndex::new(
-            TranscriptIndexImpl::Bin,
-            vec![tx_inside, tx_edge],
-            5_000,
-            5_000,
-        );
+        let transcripts = TranscriptIndex::new(vec![tx_inside, tx_edge], 5_000, 5_000);
         let config = vep_effects::EffectsConfig::default();
 
         let mut variant = InputVariant::new(

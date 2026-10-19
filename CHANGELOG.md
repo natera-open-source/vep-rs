@@ -154,6 +154,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `vep_io::input::vcf::VcfParser` and its module; the `vep` binary's line parser is the one VCF reader. (#N)
 - The transcript `description` key, which Ensembl VEP's cache dumper deletes: the loader ignores it and `--transcript_filter` reads it as undefined on every cache, 0.4.0 native caches included. (#N)
+- `--transcript_index_impl` and the `coitrees` and sorted-array transcript indexes: UCSC binning is the one overlap index, and the flag is refused as an unknown argument. (#N)
 
 ### Fixed
 

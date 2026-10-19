@@ -317,12 +317,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
-name = "coitrees"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "240f9610db0e586042f50260506972820ef10d5eb9a0e867a00f8cfe0a238be3"
-
-[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2569,7 +2563,6 @@ dependencies = [
  "base64 0.22.1",
  "bstr",
  "clap",
- "coitrees",
  "criterion",
  "csv",
  "flate2",

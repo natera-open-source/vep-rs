@@ -21,7 +21,6 @@ use crate::args::Args;
 use crate::input_shape::InputShape;
 use crate::nearest::NearestType;
 use crate::option_rules::{FlagState, OWN_RULES};
-use crate::transcript_index::TranscriptIndexImpl;
 
 /// A refusal under the error contract: printed as one line on standard error,
 /// `ERROR: [<component>] <message>`, and the run exits 1. `<message>` is Ensembl
@@ -550,9 +549,6 @@ pub struct Config {
     /// shape is known.
     pub decompression_threads: DecompressionThreads,
     pub distance: (u64, u64),
-    /// Transcript-overlap index implementation (A/B benchmarking flag).
-    /// Default [`TranscriptIndexImpl::Bin`].
-    pub transcript_index_impl: TranscriptIndexImpl,
     /// How the batches move through the pipeline (`--pipeline_mode`).
     pub pipeline_mode: PipelineMode,
     /// Batches a pipeline stage may hold ahead of the next one
@@ -976,13 +972,6 @@ impl Config {
             // clap validated the text with `decompression_threads_text`.
             decompression_threads: args.decompression_threads.parse().unwrap_or_default(),
             distance,
-            // clap validates the flag at parse time; a failure here means the
-            // validator drifted from `TranscriptIndexImpl::from_str`, and the
-            // default is safer than a crash.
-            transcript_index_impl: args
-                .transcript_index_impl
-                .parse::<TranscriptIndexImpl>()
-                .unwrap_or_default(),
             pipeline_mode: args.pipeline_mode.parse().unwrap_or_default(),
             pipeline_depth: resolve_pipeline_depth(args.pipeline_depth),
             render_task_records: resolve_render_task_records(args.render_task_records),

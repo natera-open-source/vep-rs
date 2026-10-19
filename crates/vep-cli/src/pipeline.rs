@@ -2920,7 +2920,6 @@ mod tests {
                 .into_iter()
                 .map(|chr| (chr.to_string(), Vec::new()))
                 .collect(),
-            crate::transcript_index::TranscriptIndexImpl::default(),
             0,
             0,
         );
@@ -2941,7 +2940,6 @@ mod tests {
         batch.push_data(b"M\t100\t.\tA\tG\t.\tPASS\t.", b"", None, 1);
         let by_accession = LazyTranscriptIndexes::from_loaded(
             std::collections::HashMap::from([("NC_012920.1".to_string(), Vec::new())]),
-            crate::transcript_index::TranscriptIndexImpl::default(),
             0,
             0,
         );
@@ -2986,12 +2984,7 @@ mod tests {
     fn task_parsing_matches_batch_parsing() {
         let transcripts = LazyTranscriptIndexes::from_indexes(std::collections::HashMap::from([(
             "21".to_string(),
-            crate::transcript_index::TranscriptIndex::new(
-                crate::transcript_index::TranscriptIndexImpl::Bin,
-                Vec::new(),
-                5_000,
-                5_000,
-            ),
+            crate::transcript_index::TranscriptIndex::new(Vec::new(), 5_000, 5_000),
         )]));
         let pool = crate::annotator::build_thread_pool(2).unwrap();
         let resources = crate::runner::resources_over(Arc::new(transcripts));
@@ -3353,7 +3346,6 @@ mod tests {
                      21 400 400 G/A 1\n";
         let transcripts = LazyTranscriptIndexes::from_loaded(
             std::collections::HashMap::from([("21".to_string(), Vec::new())]),
-            crate::transcript_index::TranscriptIndexImpl::default(),
             0,
             0,
         );
@@ -3662,7 +3654,6 @@ mod tests {
                 ("21".to_string(), Vec::new()),
                 ("MT".to_string(), Vec::new()),
             ]),
-            crate::transcript_index::TranscriptIndexImpl::default(),
             0,
             0,
         );
@@ -3718,7 +3709,6 @@ mod tests {
 
         let transcripts = LazyTranscriptIndexes::from_loaded(
             std::collections::HashMap::from([("MT".to_string(), Vec::new())]),
-            crate::transcript_index::TranscriptIndexImpl::default(),
             0,
             0,
         );
@@ -3744,7 +3734,6 @@ mod tests {
         // record is renamed and looked up under the accession.
         let by_accession = LazyTranscriptIndexes::from_loaded(
             std::collections::HashMap::from([("NC_012920.1".to_string(), Vec::new())]),
-            crate::transcript_index::TranscriptIndexImpl::default(),
             0,
             0,
         );
@@ -3841,15 +3830,10 @@ mod tests {
     /// once each, and skips chromosomes the cache does not cover.
     #[test]
     fn prewarmer_starts_the_reached_chromosome_and_its_successor_once() {
-        use crate::transcript_index::{TranscriptIndex, TranscriptIndexImpl};
+        use crate::transcript_index::TranscriptIndex;
         let by_chr: std::collections::HashMap<String, TranscriptIndex> = ["21", "22"]
             .into_iter()
-            .map(|c| {
-                (
-                    c.to_string(),
-                    TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![], 5_000, 5_000),
-                )
-            })
+            .map(|c| (c.to_string(), TranscriptIndex::new(vec![], 5_000, 5_000)))
             .collect();
         let transcripts = LazyTranscriptIndexes::from_indexes(by_chr);
         let no_synonyms = ChromosomeSynonyms::new();
@@ -3925,7 +3909,6 @@ mod tests {
                      21\t300\t300\tG/A\t1\trs3\n";
         let transcripts = LazyTranscriptIndexes::from_loaded(
             std::collections::HashMap::from([("21".to_string(), Vec::new())]),
-            crate::transcript_index::TranscriptIndexImpl::default(),
             0,
             0,
         );

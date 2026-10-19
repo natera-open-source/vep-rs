@@ -505,7 +505,7 @@ transcript-filter-grammar	FilterSet.pm	implemented	landed:implemented	crates/vep
 transcript-source	Core.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::transcript_source_changes_no_output		
 transcript-stable-id-version	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::version_from_number_or_string	tests/golden/116/GRCh38-attributes	
 transcript_filter	AnnotationSource.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::filtered_transcripts_are_invisible_downstream;crates/vep-cli/src/args.rs::transcript_filter_repeats;crates/vep-cli/tests/integration_test.rs::transcript_filter_refusal_is_one_error_line_and_exit_1;crates/vep-cli/src/filter_set.rs::transcript_keys_read_the_transcript;crates/vep-cli/src/filter_set.rs::repeated_filters_are_joined_by_and	tests/golden/116/GRCh38-transcript-filter	
-transcript_index_impl	-	removed	open			
+transcript_index_impl	-	removed	landed:removed	crates/vep-cli/tests/cli_errors.rs::transcript_index_impl_is_rejected		
 transcript_version	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::transcript_version_suffix_on_feature;crates/vep-cli/src/render.rs::default_format_appends_the_versions_under_their_flags	tests/golden/116/GRCh38-attributes	
 TranscriptAnnotator	TranscriptAnnotator.pm	implemented	open			
 translation-object	Core.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::translation_exon_fields_change_no_output		

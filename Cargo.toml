@@ -86,10 +86,6 @@ indexmap = { version = "2", features = ["serde"] }
 # TranscriptConsequence derives Serialize/Deserialize; `union` saves a word for
 # the Copy `Consequence` payload.
 smallvec = { version = "1", features = ["serde", "union"] }
-# Implicit interval tree (Jones 2024, Rust port of cgranges; Heng Li 2021).
-# An opt-in transcript-overlap index (`--transcript_index_impl=coitrees`); the
-# default is the UCSC binning index (`bin`, see crates/vep-cli/src/args.rs).
-coitrees = "0.4"
 
 # Error handling
 thiserror = "2"

@@ -35,7 +35,6 @@ flate2 = { workspace = true }
 rayon = { workspace = true }
 rustc-hash = { workspace = true }
 bstr = { workspace = true }
-coitrees = { workspace = true }
 smallvec = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }

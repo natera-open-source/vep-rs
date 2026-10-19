@@ -22,9 +22,7 @@ pub use annotator::{
 pub use config::Config;
 pub use pick::{apply_to_batch, apply_to_record, FilterConfig, PickCriterion};
 pub use row_filter::RowFilters;
-pub use transcript_index::{
-    LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl, TranscriptSet,
-};
+pub use transcript_index::{LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptSet};
 
 // The per-variant data type and core consequence types are re-exported so
 // callers can construct and inspect annotations without a direct `vep-core`

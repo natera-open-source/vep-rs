@@ -282,7 +282,7 @@ mod tests {
         use vep_core::coordinate::Strand;
 
         use crate::runner::make_runner_test_transcript;
-        use crate::transcript_index::{TranscriptIndex, TranscriptIndexImpl};
+        use crate::transcript_index::TranscriptIndex;
 
         let transcript = |id: &str, biotype: &str, strand: Strand| {
             let mut t = make_runner_test_transcript(id, "ENSG_X", "21", 100);
@@ -292,7 +292,6 @@ mod tests {
             t
         };
         let index = TranscriptIndex::new(
-            TranscriptIndexImpl::Bin,
             vec![
                 transcript("ENST_LNC", "lncRNA", Strand::Forward),
                 transcript("ENST_PC", "protein_coding", Strand::Reverse),

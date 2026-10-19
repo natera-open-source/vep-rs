@@ -1212,7 +1212,7 @@ pub fn load_all_transcripts(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndexImpl};
+    use crate::transcript_index::LazyTranscriptIndexes;
     use crate::variation_source::VariationSource;
     use std::io::Write;
     use vep_core::variation::CachedVariation;
@@ -1666,12 +1666,7 @@ mod tests {
         let jt: JsonTranscript = serde_json::from_str(transcript_json).unwrap();
         let mut raw = HashMap::new();
         raw.insert("21".to_string(), vec![convert_transcript(jt, "21")]);
-        let transcripts = Arc::new(LazyTranscriptIndexes::from_loaded(
-            raw,
-            TranscriptIndexImpl::default(),
-            5_000,
-            5_000,
-        ));
+        let transcripts = Arc::new(LazyTranscriptIndexes::from_loaded(raw, 5_000, 5_000));
         let options = FieldOptions {
             check_existing: variations.is_some(),
             ..Default::default()

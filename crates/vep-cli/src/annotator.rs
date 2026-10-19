@@ -19,7 +19,7 @@ use crate::json_cache;
 use crate::nearest::NearestType;
 use crate::sv_source::{self, SvSource};
 use crate::transcript_index::{
-    LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptIndexImpl, TranscriptSet,
+    LazyTranscriptIndexes, MaterializedTranscriptIndexes, TranscriptSet,
 };
 use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_source::{ReadFailure, VariationSource};
@@ -286,7 +286,6 @@ impl Annotator {
         let transcripts = load_transcript_indexes(
             &cache.dir,
             &effects_config,
-            config.transcript_index_impl,
             TranscriptSet::from_config(config),
         )?;
         let variation_source = crate::runner::open_variation_source(config, &cache)?;
@@ -667,7 +666,6 @@ fn nc_accessions(synonyms: &ChromosomeSynonyms) -> HashMap<String, String> {
 pub fn load_transcript_indexes(
     json_cache_path: &str,
     effects_config: &vep_effects::EffectsConfig,
-    index_impl: TranscriptIndexImpl,
     transcript_set: TranscriptSet,
 ) -> anyhow::Result<Arc<LazyTranscriptIndexes>> {
     info!("Loading transcripts from JSON cache: {}", json_cache_path);
@@ -675,10 +673,9 @@ pub fn load_transcript_indexes(
     for transcripts in raw.values_mut() {
         transcripts.retain(|transcript| transcript_set.accepts(transcript));
     }
-    info!("Building transcript index with impl={}", index_impl.name());
+    info!("Building transcript index");
     Ok(Arc::new(LazyTranscriptIndexes::from_loaded(
         raw,
-        index_impl,
         effects_config.upstream_distance,
         effects_config.downstream_distance,
     )))
@@ -877,7 +874,7 @@ mod tests {
     #[test]
     fn test_annotator_batch_large_bnd_is_batch_independent() {
         use crate::runner::make_runner_test_transcript;
-        use crate::transcript_index::{TranscriptIndex, TranscriptIndexImpl};
+        use crate::transcript_index::TranscriptIndex;
         use std::collections::HashMap;
 
         fn two_transcript_index() -> Arc<LazyTranscriptIndexes> {
@@ -888,12 +885,7 @@ mod tests {
             let mut by_chr = HashMap::new();
             by_chr.insert(
                 "21".to_string(),
-                TranscriptIndex::new(
-                    TranscriptIndexImpl::Bin,
-                    vec![buffered_tx, distant_tx],
-                    5_000,
-                    5_000,
-                ),
+                TranscriptIndex::new(vec![buffered_tx, distant_tx], 5_000, 5_000),
             );
             Arc::new(LazyTranscriptIndexes::from_indexes(by_chr))
         }
@@ -975,13 +967,7 @@ mod tests {
     #[test]
     fn annotator_rejects_unmaterialized_transcript_index() {
         let dir = tmp_json_cache("annotator_guard");
-        let lazy = LazyTranscriptIndexes::new(
-            dir.path().to_str().unwrap(),
-            TranscriptIndexImpl::Bin,
-            5_000,
-            5_000,
-        )
-        .unwrap();
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
         assert!(
             lazy.contains_key("21"),
             "chromosome reads as present pre-parse; that is the trap"
@@ -1002,7 +988,7 @@ mod tests {
         );
 
         let raw = crate::json_cache::load_all_transcripts(dir.path().to_str().unwrap()).unwrap();
-        let eager = LazyTranscriptIndexes::from_loaded(raw, TranscriptIndexImpl::Bin, 5_000, 5_000);
+        let eager = LazyTranscriptIndexes::from_loaded(raw, 5_000, 5_000);
         assert!(eager.get("21").is_some());
         annotator_over(Arc::new(eager)).expect("an eagerly-built index is accepted");
     }
@@ -1061,20 +1047,13 @@ mod tests {
         };
 
         let eager_raw = crate::json_cache::load_all_transcripts(path).unwrap();
-        let eager = Arc::new(LazyTranscriptIndexes::from_loaded(
-            eager_raw,
-            TranscriptIndexImpl::Bin,
-            5_000,
-            5_000,
-        ));
+        let eager = Arc::new(LazyTranscriptIndexes::from_loaded(eager_raw, 5_000, 5_000));
         let annotator = annotator_over(eager).expect("eager index is accepted");
         let mut worker_batch =
             crate::vcf_parser::parse_vcf_line(bnd_line, true).expect("parse BND");
         let _ = annotator.annotate_batch(&mut worker_batch);
 
-        let lazy = Arc::new(
-            LazyTranscriptIndexes::new(path, TranscriptIndexImpl::Bin, 5_000, 5_000).unwrap(),
-        );
+        let lazy = Arc::new(LazyTranscriptIndexes::new(path, 5_000, 5_000).unwrap());
         let cli_ids = crate::runner::annotate_batch_for_test(bnd_line, lazy);
 
         let worker_ids: Vec<Vec<String>> = worker_batch.iter().map(ids_of).collect();
@@ -1337,12 +1316,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR")
         );
         let raw = crate::json_cache::load_all_transcripts(&cache).unwrap();
-        let transcripts = Arc::new(LazyTranscriptIndexes::from_loaded(
-            raw,
-            TranscriptIndexImpl::Bin,
-            5_000,
-            5_000,
-        ));
+        let transcripts = Arc::new(LazyTranscriptIndexes::from_loaded(raw, 5_000, 5_000));
         let annotator = annotator_over(Arc::clone(&transcripts)).unwrap();
         let rows = |variant: &InputVariant| -> Vec<String> {
             let mut ids: Vec<String> = variant
@@ -1395,7 +1369,7 @@ mod tests {
         let mut by_chr = HashMap::new();
         by_chr.insert(
             "21".to_string(),
-            TranscriptIndex::new(TranscriptIndexImpl::Bin, vec![coding], 5_000, 5_000),
+            TranscriptIndex::new(vec![coding], 5_000, 5_000),
         );
         let transcripts = Arc::new(LazyTranscriptIndexes::from_indexes(by_chr));
         let annotator = annotator_with_nearest(transcripts, Some(NearestType::Gene)).unwrap();
@@ -1441,9 +1415,8 @@ mod tests {
                 .sum::<usize>()
         };
         let count = |set: TranscriptSet| {
-            let eager =
-                load_transcript_indexes(&cache, &effects, TranscriptIndexImpl::Bin, set).unwrap();
-            let lazy = LazyTranscriptIndexes::new(&cache, TranscriptIndexImpl::Bin, 5_000, 5_000)
+            let eager = load_transcript_indexes(&cache, &effects, set).unwrap();
+            let lazy = LazyTranscriptIndexes::new(&cache, 5_000, 5_000)
                 .unwrap()
                 .with_transcript_set(set);
             for chr in CHROMOSOMES {
@@ -1847,13 +1820,7 @@ mod tests {
     fn annotator_applies_the_breakend_record_verdict() {
         let dir = tmp_json_cache("bnd_record");
         let lazy = Arc::new(
-            LazyTranscriptIndexes::new(
-                dir.path().to_str().unwrap(),
-                TranscriptIndexImpl::Bin,
-                5_000,
-                5_000,
-            )
-            .unwrap(),
+            LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap(),
         );
         lazy.prewarm("21").unwrap();
         let annotator = annotator_over(lazy).unwrap();

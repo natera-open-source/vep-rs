@@ -1,99 +1,32 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Transcript interval index with selectable implementations.
+//! Per-chromosome transcript interval index.
 //!
-//! Three implementations share the same public surface ([`TranscriptIndex`]):
-//!
-//! - **Bin** (UCSC hierarchical binning, Kent et al. 2002): the default.
-//!   Each transcript's extended region is assigned to a single bin; overlap
-//!   queries enumerate candidate bins. O(1) typical, O(N_bin) worst case.
-//!   Reference: <https://genome.ucsc.edu/FAQ/FAQtracks.html#tracks1>
-//!
-//! - **Coitrees** (Jones 2024, Rust port of Heng Li's cgranges 2021): implicit
-//!   interval tree in a flat array with excellent cache locality.
-//!   O(log n + k) for overlap queries. Independent benchmarks show it beating
-//!   AIList and sorted-array approaches on point queries.
-//!   Reference: <https://github.com/dcjones/coitrees>
-//!
-//! - **Sorted** (augmented sorted array, Alekseyenko & Lee 2007): transcripts
-//!   sorted by start, plus a parallel `suffix_max_end` array. `partition_point`
-//!   + reverse scan with early termination. O(log n + k).
-//!
-//! The implementation is selected via [`TranscriptIndexImpl`], typically from
-//! the hidden `--transcript_index_impl` CLI flag. The default is [`Bin`].
-//!
-//! All three implementations are required to be semantically identical: they
-//! must return the same set of overlapping transcripts for any query. A test in
-//! this module enforces this on a synthetic workload.
-//!
-//! [`Bin`]: TranscriptIndexImpl::Bin
+//! [`TranscriptIndex`] answers overlap queries through UCSC hierarchical binning
+//! (Kent et al. 2002): each transcript's extended region is assigned to a single
+//! bin and an overlap query enumerates the candidate bins, O(1) typical and
+//! O(N_bin) worst case. Reference:
+//! <https://genome.ucsc.edu/FAQ/FAQtracks.html#tracks1>. Beside the overlap
+//! index it holds the transcription start sites Ensembl VEP's `--nearest`
+//! searches.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use anyhow::Context;
-use coitrees::{BasicCOITree, Interval, IntervalTree};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 
-/// Which overlap-index implementation to use.
-///
-/// Exposed via the hidden `--transcript_index_impl` CLI flag for A/B benchmarking.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum TranscriptIndexImpl {
-    /// UCSC hierarchical binning (Kent et al. 2002). The default.
-    #[default]
-    Bin,
-    /// Implicit interval tree (Jones 2024 `coitrees` crate).
-    Coitrees,
-    /// Sorted Vec with suffix-max-end early termination.
-    Sorted,
-}
-
-impl FromStr for TranscriptIndexImpl {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "bin" => Ok(Self::Bin),
-            "coitrees" => Ok(Self::Coitrees),
-            "sorted" => Ok(Self::Sorted),
-            other => Err(format!(
-                "unknown transcript_index_impl '{other}' (expected bin|coitrees|sorted)"
-            )),
-        }
-    }
-}
-
-impl TranscriptIndexImpl {
-    /// Short name for logging.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Bin => "bin",
-            Self::Coitrees => "coitrees",
-            Self::Sorted => "sorted",
-        }
-    }
-}
-
-/// One chromosome's transcripts: the overlap index of the selected kind and the
-/// transcription start sites Ensembl VEP's `--nearest` searches.
+/// One chromosome's transcripts: the overlap index and the transcription start
+/// sites Ensembl VEP's `--nearest` searches.
 pub struct TranscriptIndex {
-    overlap: OverlapIndex,
+    overlap: TranscriptBinIndex,
     tss: Vec<TssPoint>,
-}
-
-/// Selectable transcript interval index. Variants share identical semantics;
-/// only the data structure differs.
-enum OverlapIndex {
-    Bin(TranscriptBinIndex),
-    Coitrees(TranscriptCoitreesIndex),
-    Sorted(TranscriptSortedIndex),
 }
 
 /// A protein-coding transcript's transcription start site with the identifiers
@@ -110,31 +43,14 @@ pub struct TssPoint {
 }
 
 impl TranscriptIndex {
-    /// Build an index of the requested kind.
+    /// Index `transcripts`, each extended by the two distances on its own strand.
     pub fn new(
-        kind: TranscriptIndexImpl,
         transcripts: Vec<Transcript>,
         upstream_distance: u64,
         downstream_distance: u64,
     ) -> Self {
         let tss = protein_coding_tss_points(&transcripts);
-        let overlap = match kind {
-            TranscriptIndexImpl::Bin => OverlapIndex::Bin(TranscriptBinIndex::new(
-                transcripts,
-                upstream_distance,
-                downstream_distance,
-            )),
-            TranscriptIndexImpl::Coitrees => OverlapIndex::Coitrees(TranscriptCoitreesIndex::new(
-                transcripts,
-                upstream_distance,
-                downstream_distance,
-            )),
-            TranscriptIndexImpl::Sorted => OverlapIndex::Sorted(TranscriptSortedIndex::new(
-                transcripts,
-                upstream_distance,
-                downstream_distance,
-            )),
-        };
+        let overlap = TranscriptBinIndex::new(transcripts, upstream_distance, downstream_distance);
         Self { overlap, tss }
     }
 
@@ -147,20 +63,12 @@ impl TranscriptIndex {
         query_end: u64,
         f: impl FnMut(&Transcript),
     ) {
-        match &self.overlap {
-            OverlapIndex::Bin(idx) => idx.for_each_overlapping(query_start, query_end, f),
-            OverlapIndex::Coitrees(idx) => idx.for_each_overlapping(query_start, query_end, f),
-            OverlapIndex::Sorted(idx) => idx.for_each_overlapping(query_start, query_end, f),
-        }
+        self.overlap.for_each_overlapping(query_start, query_end, f);
     }
 
     /// Number of transcripts in the index.
     pub fn len(&self) -> usize {
-        match &self.overlap {
-            OverlapIndex::Bin(idx) => idx.len(),
-            OverlapIndex::Coitrees(idx) => idx.len(),
-            OverlapIndex::Sorted(idx) => idx.len(),
-        }
+        self.overlap.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -355,157 +263,6 @@ fn for_each_reg2bin(beg: u64, end: u64, mut f: impl FnMut(u32)) {
     }
 }
 
-/// Coitrees-backed transcript index. Builds a flat implicit interval tree
-/// over extended transcript regions. `metadata` is the transcript index into
-/// the owned `Vec<Transcript>`, matching the binning index layout.
-///
-/// coitrees uses `i32` coordinates throughout; genomic positions are well
-/// within range for all vertebrate assemblies. Overflow is clamped anyway (the
-/// expected path never hits the clamp).
-pub struct TranscriptCoitreesIndex {
-    transcripts: Vec<Transcript>,
-    tree: BasicCOITree<usize, usize>,
-}
-
-impl TranscriptCoitreesIndex {
-    pub fn new(
-        transcripts: Vec<Transcript>,
-        upstream_distance: u64,
-        downstream_distance: u64,
-    ) -> Self {
-        let intervals: Vec<Interval<usize>> = transcripts
-            .iter()
-            .enumerate()
-            .map(|(idx, tx)| {
-                let (start, end) = extended_region(tx, upstream_distance, downstream_distance);
-                // coitrees uses inclusive [first, last] with i32 coords; VEP's
-                // 1-based inclusive semantics carry over directly.
-                let first = clamp_i32(start);
-                let last = clamp_i32(end);
-                Interval::new(first, last, idx)
-            })
-            .collect();
-        let tree = BasicCOITree::new(&intervals);
-        Self { transcripts, tree }
-    }
-
-    pub fn for_each_overlapping(
-        &self,
-        query_start: u64,
-        query_end: u64,
-        mut f: impl FnMut(&Transcript),
-    ) {
-        let lo = query_start.min(query_end);
-        let hi = query_start.max(query_end);
-        let first = clamp_i32(lo);
-        let last = clamp_i32(hi);
-        self.tree.query(first, last, |node| {
-            let idx = node.metadata;
-            f(&self.transcripts[idx]);
-        });
-    }
-
-    pub fn len(&self) -> usize {
-        self.transcripts.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.transcripts.is_empty()
-    }
-}
-
-#[inline]
-fn clamp_i32(v: u64) -> i32 {
-    if v > i32::MAX as u64 {
-        i32::MAX
-    } else {
-        v as i32
-    }
-}
-
-/// Transcripts sorted by extended-region start; `suffix_max_end[i]` is the
-/// maximum extended-region end over transcripts `i..`. Query uses
-/// `partition_point` to find the upper bound, then reverse-scans with
-/// early termination when `suffix_max_end[i] < query_start`.
-pub struct TranscriptSortedIndex {
-    /// Sorted by `starts[i]` ascending.
-    transcripts: Vec<Transcript>,
-    starts: Vec<u64>,
-    ends: Vec<u64>,
-    suffix_max_end: Vec<u64>,
-}
-
-impl TranscriptSortedIndex {
-    pub fn new(
-        transcripts: Vec<Transcript>,
-        upstream_distance: u64,
-        downstream_distance: u64,
-    ) -> Self {
-        let n = transcripts.len();
-        let mut entries: Vec<(u64, u64, Transcript)> = transcripts
-            .into_iter()
-            .map(|tx| {
-                let (s, e) = extended_region(&tx, upstream_distance, downstream_distance);
-                (s, e, tx)
-            })
-            .collect();
-        entries.sort_by_key(|(s, _, _)| *s);
-
-        let mut starts = Vec::with_capacity(n);
-        let mut ends = Vec::with_capacity(n);
-        let mut sorted_transcripts = Vec::with_capacity(n);
-        for (s, e, tx) in entries {
-            starts.push(s);
-            ends.push(e);
-            sorted_transcripts.push(tx);
-        }
-
-        let mut suffix_max_end = vec![0u64; n];
-        let mut running_max = 0u64;
-        for i in (0..n).rev() {
-            running_max = running_max.max(ends[i]);
-            suffix_max_end[i] = running_max;
-        }
-
-        Self {
-            transcripts: sorted_transcripts,
-            starts,
-            ends,
-            suffix_max_end,
-        }
-    }
-
-    pub fn for_each_overlapping(
-        &self,
-        query_start: u64,
-        query_end: u64,
-        mut f: impl FnMut(&Transcript),
-    ) {
-        let q_lo = query_start.min(query_end);
-        let q_hi = query_start.max(query_end);
-        let upper = self.starts.partition_point(|&s| s <= q_hi);
-        if upper == 0 {
-            return;
-        }
-        for i in (0..upper).rev() {
-            if self.suffix_max_end[i] < q_lo {
-                break;
-            }
-            if self.ends[i] >= q_lo {
-                f(&self.transcripts[i]);
-            }
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.transcripts.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.transcripts.is_empty()
-    }
-}
-
 /// The transcript set a run annotates against: every transcript of the cache,
 /// or the GENCODE basic or primary set under `--gencode_basic` or
 /// `--gencode_primary`. A transcript outside the set never enters an index, as
@@ -569,7 +326,6 @@ pub struct LazyTranscriptIndexes {
     shards: FxHashMap<String, Vec<PathBuf>>,
     slots: FxHashMap<String, OnceLock<TranscriptIndex>>,
     load_locks: FxHashMap<String, Mutex<()>>,
-    impl_kind: TranscriptIndexImpl,
     upstream_distance: u64,
     downstream_distance: u64,
     transcript_set: TranscriptSet,
@@ -579,7 +335,6 @@ impl LazyTranscriptIndexes {
     /// Enumerate `json_cache_dir` and prepare one lazy slot per chromosome.
     pub fn new(
         json_cache_dir: &str,
-        impl_kind: TranscriptIndexImpl,
         upstream_distance: u64,
         downstream_distance: u64,
     ) -> anyhow::Result<Self> {
@@ -596,7 +351,6 @@ impl LazyTranscriptIndexes {
             shards,
             slots,
             load_locks,
-            impl_kind,
             upstream_distance,
             downstream_distance,
             transcript_set: TranscriptSet::default(),
@@ -616,7 +370,6 @@ impl LazyTranscriptIndexes {
             shards: FxHashMap::default(),
             slots: FxHashMap::default(),
             load_locks: FxHashMap::default(),
-            impl_kind: TranscriptIndexImpl::default(),
             upstream_distance: 0,
             downstream_distance: 0,
             transcript_set: TranscriptSet::default(),
@@ -630,7 +383,6 @@ impl LazyTranscriptIndexes {
     /// parses.
     pub fn from_loaded(
         raw: HashMap<String, Vec<Transcript>>,
-        impl_kind: TranscriptIndexImpl,
         upstream_distance: u64,
         downstream_distance: u64,
     ) -> Self {
@@ -643,7 +395,6 @@ impl LazyTranscriptIndexes {
             .map(|(chr, txs)| {
                 let cell = OnceLock::new();
                 let _ = cell.set(TranscriptIndex::new(
-                    impl_kind,
                     txs,
                     upstream_distance,
                     downstream_distance,
@@ -655,7 +406,6 @@ impl LazyTranscriptIndexes {
             shards: FxHashMap::default(),
             slots,
             load_locks: FxHashMap::default(),
-            impl_kind,
             upstream_distance,
             downstream_distance,
             transcript_set: TranscriptSet::default(),
@@ -664,12 +414,12 @@ impl LazyTranscriptIndexes {
 
     /// Wrap already-built indexes. **Test-only.**
     ///
-    /// Gated behind `cfg(test)` deliberately: it hardcodes
-    /// `TranscriptIndexImpl::default()` and both extension distances to `0`, which
-    /// is wrong for any production caller (the real defaults are nonzero). Since it
-    /// takes finished indexes, those fields only matter to a later `prewarm`, which
-    /// a test never reaches; but a non-test caller would get silently wrong
-    /// extension geometry on any chromosome it did not pre-build.
+    /// Gated behind `cfg(test)` deliberately: it hardcodes both extension
+    /// distances to `0`, which is wrong for any production caller (the real
+    /// defaults are nonzero). Since it takes finished indexes, those fields only
+    /// matter to a later `prewarm`, which a test never reaches; but a non-test
+    /// caller would get silently wrong extension geometry on any chromosome it
+    /// did not pre-build.
     #[cfg(test)]
     pub fn from_indexes(indexes: HashMap<String, TranscriptIndex>) -> Self {
         let slots = indexes
@@ -684,7 +434,6 @@ impl LazyTranscriptIndexes {
             shards: FxHashMap::default(),
             slots,
             load_locks: FxHashMap::default(),
-            impl_kind: TranscriptIndexImpl::default(),
             upstream_distance: 0,
             downstream_distance: 0,
             transcript_set: TranscriptSet::default(),
@@ -781,12 +530,7 @@ impl LazyTranscriptIndexes {
             .with_context(|| format!("chr{chr} transcript load failed"))?;
         txs.retain(|tx| self.transcript_set.accepts(tx));
         tracing::info!("  chr{}: {} transcripts", chr, txs.len());
-        let built = TranscriptIndex::new(
-            self.impl_kind,
-            txs,
-            self.upstream_distance,
-            self.downstream_distance,
-        );
+        let built = TranscriptIndex::new(txs, self.upstream_distance, self.downstream_distance);
         // Losing this race is harmless: the winner's index is equivalent.
         let _ = slot.set(built);
         Ok(())
@@ -910,17 +654,20 @@ mod tests {
         sorted_ids(ids)
     }
 
-    fn build_set(kind: TranscriptIndexImpl) -> TranscriptIndex {
-        // Deliberately mixed: forward/reverse, overlapping, contained, disjoint.
-        let transcripts = vec![
+    /// Deliberately mixed: forward/reverse, overlapping, contained, disjoint.
+    fn mixed_transcripts() -> Vec<Transcript> {
+        vec![
             mk_tx("a_fwd", 1_000, 2_000, Strand::Forward),
             mk_tx("b_rev", 1_500, 3_000, Strand::Reverse),
             mk_tx("c_fwd", 5_000, 6_000, Strand::Forward),
             mk_tx("d_far", 100_000_000, 100_000_100, Strand::Forward),
             mk_tx("e_contained_in_b", 1_800, 1_900, Strand::Forward),
             mk_tx("f_abuts", 6_000, 7_000, Strand::Forward),
-        ];
-        TranscriptIndex::new(kind, transcripts, 0, 0)
+        ]
+    }
+
+    fn build_set() -> TranscriptIndex {
+        TranscriptIndex::new(mixed_transcripts(), 0, 0)
     }
 
     #[test]
@@ -957,7 +704,7 @@ mod tests {
     /// ceiling lands in the last finest bin, where such a query looks.
     #[test]
     fn a_query_to_the_largest_end_neither_panics_nor_misses() {
-        let idx = build_set(TranscriptIndexImpl::Bin);
+        let idx = build_set();
         assert_eq!(
             collect_ids(&idx, 1_750, u64::MAX),
             sorted_ids(vec![
@@ -980,10 +727,11 @@ mod tests {
         assert_eq!(reg2bin(u64::MAX - 1, u64::MAX), 37448);
     }
 
+    /// The binned index, built with no extension distance, returns exactly the
+    /// transcripts a linear scan of the transcript bodies finds, on point
+    /// queries, spans, an abutting end and a query touching nothing.
     #[test]
-    fn all_three_impls_agree_on_point_query() {
-        // The critical invariant: bin, coitrees, sorted must return the same set
-        // for every query. Any divergence breaks concordance.
+    fn bin_index_matches_a_linear_scan_on_every_query() {
         let queries = [
             (1_750u64, 1_750u64),       // inside a_fwd + b_rev
             (1_850, 1_850),             // inside a_fwd + b_rev + e_contained
@@ -994,33 +742,22 @@ mod tests {
             (50_000, 50_000),           // empty
             (999, 1_000),               // boundary left of a_fwd
         ];
+        let transcripts = mixed_transcripts();
+        let idx = build_set();
         for (qs, qe) in queries {
-            let bin_ids = collect_ids(&build_set(TranscriptIndexImpl::Bin), qs, qe);
-            let co_ids = collect_ids(&build_set(TranscriptIndexImpl::Coitrees), qs, qe);
-            let sorted_ids_ = collect_ids(&build_set(TranscriptIndexImpl::Sorted), qs, qe);
-            assert_eq!(bin_ids, co_ids, "bin vs coitrees diverged on [{qs},{qe}]");
+            let scanned = sorted_ids(
+                transcripts
+                    .iter()
+                    .filter(|tx| qs <= tx.end && qe >= tx.start)
+                    .map(|tx| tx.stable_id.to_string())
+                    .collect(),
+            );
             assert_eq!(
-                bin_ids, sorted_ids_,
-                "bin vs sorted diverged on [{qs},{qe}]"
+                collect_ids(&idx, qs, qe),
+                scanned,
+                "bin index diverged from the scan on [{qs},{qe}]"
             );
         }
-    }
-
-    #[test]
-    fn impl_from_str() {
-        assert_eq!(
-            "bin".parse::<TranscriptIndexImpl>().unwrap(),
-            TranscriptIndexImpl::Bin
-        );
-        assert_eq!(
-            "COITREES".parse::<TranscriptIndexImpl>().unwrap(),
-            TranscriptIndexImpl::Coitrees
-        );
-        assert_eq!(
-            "Sorted".parse::<TranscriptIndexImpl>().unwrap(),
-            TranscriptIndexImpl::Sorted
-        );
-        assert!("nope".parse::<TranscriptIndexImpl>().is_err());
     }
 
     /// Write a minimal JSON cache: `{dir}/transcripts/{chr}/0-1000.json`, one
@@ -1069,13 +806,7 @@ mod tests {
     #[test]
     fn lazy_key_set_is_complete_before_any_get() {
         let dir = tmp_cache("keyset", &[("21", 3), ("1", 2)]);
-        let lazy = LazyTranscriptIndexes::new(
-            dir.path().to_str().unwrap(),
-            TranscriptIndexImpl::Bin,
-            5_000,
-            5_000,
-        )
-        .unwrap();
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
 
         assert!(lazy.contains_key("21"), "chr21 must be known pre-parse");
         assert!(lazy.contains_key("1"), "chr1 must be known pre-parse");
@@ -1109,13 +840,7 @@ mod tests {
         )
         .unwrap();
 
-        let lazy = LazyTranscriptIndexes::new(
-            dir.path().to_str().unwrap(),
-            TranscriptIndexImpl::Bin,
-            5_000,
-            5_000,
-        )
-        .unwrap();
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
 
         assert!(lazy.contains_key("21"), "populated chromosome is present");
         assert!(
@@ -1152,7 +877,6 @@ mod tests {
             shards: FxHashMap::default(),
             slots: [("21".to_string(), OnceLock::new())].into_iter().collect(),
             load_locks: FxHashMap::default(),
-            impl_kind: TranscriptIndexImpl::Bin,
             upstream_distance: 5_000,
             downstream_distance: 5_000,
             transcript_set: TranscriptSet::default(),
@@ -1183,11 +907,9 @@ mod tests {
         let dir = tmp_cache("parity", &[("21", 4), ("2", 1)]);
         let path = dir.path().to_str().unwrap();
 
-        let lazy =
-            LazyTranscriptIndexes::new(path, TranscriptIndexImpl::Bin, 5_000, 5_000).unwrap();
+        let lazy = LazyTranscriptIndexes::new(path, 5_000, 5_000).unwrap();
         let eager_raw = crate::json_cache::load_all_transcripts(path).unwrap();
-        let eager =
-            LazyTranscriptIndexes::from_loaded(eager_raw, TranscriptIndexImpl::Bin, 5_000, 5_000);
+        let eager = LazyTranscriptIndexes::from_loaded(eager_raw, 5_000, 5_000);
 
         for chr in ["21", "2"] {
             lazy.prewarm(chr).expect("prewarm");
@@ -1224,13 +946,7 @@ mod tests {
     #[test]
     fn lazy_concurrent_first_touch_is_consistent() {
         let dir = tmp_cache("race", &[("21", 6)]);
-        let lazy = LazyTranscriptIndexes::new(
-            dir.path().to_str().unwrap(),
-            TranscriptIndexImpl::Bin,
-            5_000,
-            5_000,
-        )
-        .unwrap();
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
         lazy.prewarm("21").expect("prewarm");
 
         let sets: Vec<Vec<String>> = (0..16)
@@ -1268,13 +984,7 @@ mod tests {
     #[test]
     fn lazy_get_does_not_parse_without_prewarm() {
         let dir = tmp_cache("noparse", &[("21", 3)]);
-        let lazy = LazyTranscriptIndexes::new(
-            dir.path().to_str().unwrap(),
-            TranscriptIndexImpl::Bin,
-            5_000,
-            5_000,
-        )
-        .unwrap();
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
 
         assert!(lazy.contains_key("21"), "present in the directory listing");
         assert!(
@@ -1313,13 +1023,7 @@ mod tests {
         )
         .unwrap();
 
-        let lazy = LazyTranscriptIndexes::new(
-            dir.path().to_str().unwrap(),
-            TranscriptIndexImpl::Bin,
-            5_000,
-            5_000,
-        )
-        .unwrap();
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
 
         // Enumeration still sees the chromosome; that is exactly the trap.
         assert!(lazy.contains_key("21"));
@@ -1354,12 +1058,12 @@ mod tests {
         let path = dir.path().to_str().unwrap();
 
         // Materialize chr21 first, with nothing else warmed.
-        let a = LazyTranscriptIndexes::new(path, TranscriptIndexImpl::Bin, 5_000, 5_000).unwrap();
+        let a = LazyTranscriptIndexes::new(path, 5_000, 5_000).unwrap();
         a.prewarm("21").expect("prewarm");
         let cold = collect_ids(a.get("21").expect("index"), 1, 5_000);
 
         // Materialize chr21 last, after other chromosomes.
-        let b = LazyTranscriptIndexes::new(path, TranscriptIndexImpl::Bin, 5_000, 5_000).unwrap();
+        let b = LazyTranscriptIndexes::new(path, 5_000, 5_000).unwrap();
         b.prewarm("1").expect("prewarm");
         b.prewarm("2").expect("prewarm");
         b.prewarm("21").expect("prewarm");
@@ -1458,13 +1162,7 @@ mod tests {
             ),
         )
         .unwrap();
-        let lazy = LazyTranscriptIndexes::new(
-            dir.path().to_str().unwrap(),
-            TranscriptIndexImpl::Bin,
-            5_000,
-            5_000,
-        )
-        .unwrap();
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
         lazy.prewarm("21").unwrap();
         let points: Vec<(u64, &str, &str, &str)> = lazy
             .get("21")
