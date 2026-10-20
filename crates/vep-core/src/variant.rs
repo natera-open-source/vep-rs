@@ -437,6 +437,40 @@ pub struct InputVariant {
     /// (OutputFactory.pm:1020).
     #[serde(default)]
     pub check_ref_failed: bool,
+    /// The sample this allele was copied for under `--individual`: Ensembl VEP
+    /// copies the record's feature once per named individual
+    /// (`Parser/VCF.pm:629-664`) and prints the name as `IND`
+    /// (`OutputFactory.pm:971`). `None` for a record read without the flag or
+    /// for a structural record, which is annotated before the per-individual
+    /// step (`:244`). Every allele of one individual's copy carries the same
+    /// name, and [`Self::same_record`] keeps the copies apart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub individual: Option<Arc<str>>,
+    /// The individual's genotype as Ensembl VEP stores it (`Parser/VCF.pm:657`):
+    /// each called allele of the GT field, `.` left out, as the chopped allele
+    /// string it stands for, the reference and a `*` included. `ZYG` counts the
+    /// distinct values ([`Self::zygosity`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub genotype: Vec<String>,
+    /// The position of the individual's copy in the `--individual` list, 0 for the
+    /// first: Ensembl VEP copies the record once per listed name, a repeated name
+    /// included (`Parser/VCF.pm:622`), and [`Self::same_record`] keeps two copies
+    /// of one name apart by it.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub copy_ordinal: u32,
+    /// The individual carries no alternate allele of the record
+    /// (`Parser/VCF.pm:643`): `ZYG` ends in `REF`, and the copy is the reference
+    /// alone, the record's reference row under `--process_ref_homs` or a feature
+    /// with no allele to annotate otherwise.
+    #[serde(default)]
+    pub hom_ref: bool,
+    /// The record's reference-allele row under `--process_ref_homs`: the allele is
+    /// the reference itself, numbered 0 and listed before the alternates of every
+    /// feature (`OutputFactory.pm:509-516`, `VariationFeatureOverlap.pm:469-474`,
+    /// `BaseVariationFeatureOverlap.pm:363-373`), and no HGVS notation is built for
+    /// it (`TranscriptVariationAllele.pm:1400`).
+    #[serde(default)]
+    pub reference_allele_row: bool,
 }
 
 /// An empty placeholder: no allocation, every field at its zero value. Lets a
@@ -503,6 +537,11 @@ impl Default for InputVariant {
             freqs: Vec::new(),
             filtered_allele_string: None,
             check_ref_failed: false,
+            individual: None,
+            genotype: Vec::new(),
+            copy_ordinal: 0,
+            hom_ref: false,
+            reference_allele_row: false,
         }
     }
 }
@@ -588,6 +627,11 @@ impl InputVariant {
             freqs: Vec::new(),
             filtered_allele_string: None,
             check_ref_failed: false,
+            individual: None,
+            genotype: Vec::new(),
+            copy_ordinal: 0,
+            hom_ref: false,
+            reference_allele_row: false,
         }
     }
 
@@ -614,12 +658,19 @@ impl InputVariant {
         variant
     }
 
-    /// Whether two alleles were split from one input record: both carry the same
-    /// record ordinal, or, when neither carries one (alleles built from a line
-    /// alone), they share the line's identity. The pipeline lays a batch out in
+    /// Whether two alleles were split from one input record for the same
+    /// individual: both carry the same record ordinal, or, when neither carries
+    /// one (alleles built from a line alone), they share the line's identity; and
+    /// the same [`Self::individual`] at the same [`Self::copy_ordinal`], since
+    /// each individual's copy of a record is a feature of its own in Ensembl VEP,
+    /// picked and written apart from the others. The pipeline lays a batch out in
     /// record order, so the alleles of one record are adjacent and
-    /// `chunk_by_mut(InputVariant::same_record)` yields one chunk per record.
+    /// `chunk_by_mut(InputVariant::same_record)` yields one chunk per record, or
+    /// per individual's copy of it.
     pub fn same_record(&self, other: &InputVariant) -> bool {
+        if self.individual != other.individual || self.copy_ordinal != other.copy_ordinal {
+            return false;
+        }
         if self.input_record != 0 || other.input_record != 0 {
             return self.input_record == other.input_record;
         }
@@ -628,6 +679,89 @@ impl InputVariant {
             && self.id == other.id
             && self.ref_allele == other.ref_allele
             && self.uploaded_allele_string == other.uploaded_allele_string
+    }
+
+    /// The `ZYG` value of an individual's copy (`OutputFactory.pm:974-976`): `HET`
+    /// when the genotype holds more than one distinct allele, else `HOM` (a
+    /// genotype with no called allele included), with `REF` appended when the
+    /// individual carries no alternate allele; `None` for an allele that is no
+    /// individual's copy.
+    pub fn zygosity(&self) -> Option<String> {
+        self.individual.as_ref()?;
+        let heterozygous = match self.genotype.split_first() {
+            Some((first, rest)) => rest.iter().any(|allele| allele != first),
+            None => false,
+        };
+        let mut zyg = String::from(if heterozygous { "HET" } else { "HOM" });
+        if self.hom_ref {
+            zyg.push_str("REF");
+        }
+        Some(zyg)
+    }
+
+    /// The record's reference-allele row (`--process_ref_homs`): the allele is
+    /// the reference over the record's span, numbered 0, and the row carries the
+    /// record-level fields of `self`, one allele of the record. Ensembl VEP builds
+    /// it from the reference allele of the feature's string, so it takes the
+    /// reference of the record's working string, which an individual's copy sets
+    /// to its own (`record_allele_string_multi`), or, for an allele of a
+    /// `--minimal` split, the allele's own trimmed reference over its trimmed
+    /// span, the split feature's string and coordinates (InputBuffer.pm:674-676),
+    /// with the record's span as [`Self::original_start`] and `original_end` and
+    /// the allele's [`Self::rejoin_key_prefix`], so the row sorts with the
+    /// allele's.
+    pub fn reference_allele_row(&self) -> InputVariant {
+        let record_allele_string = self.record_allele_string();
+        let reference = if self.original_start.is_some() {
+            self.ref_allele.clone()
+        } else {
+            record_allele_string
+                .split('/')
+                .next()
+                .unwrap_or("-")
+                .as_bytes()
+                .to_vec()
+        };
+        let mut row = InputVariant::new(
+            self.original_chr.clone(),
+            self.start,
+            self.end,
+            reference.clone(),
+            reference,
+        );
+        row.chr.clone_from(&self.chr);
+        row.input_chr.clone_from(&self.input_chr);
+        row.strand = self.strand;
+        // The predicates read an allele of the reference's length as a
+        // substitution (BaseVariationFeatureOverlapAllele.pm:377-378) and the
+        // record's span as the feature's, so an insertion's reference row keeps
+        // the insertion span's class for the span-based predicates.
+        if self.variant_class == VariantClass::Insertion {
+            row.variant_class = VariantClass::Insertion;
+        }
+        row.allele_num = Some(0);
+        row.id.clone_from(&self.id);
+        row.minimised = self.minimised;
+        row.original_allele_string
+            .clone_from(&self.original_allele_string);
+        row.original_start = self.original_start;
+        row.original_end = self.original_end;
+        row.rejoin_key_prefix.clone_from(&self.rejoin_key_prefix);
+        row.raw_input.clone_from(&self.raw_input);
+        row.raw_input_bytes.clone_from(&self.raw_input_bytes);
+        row.uploaded_allele_string
+            .clone_from(&self.uploaded_allele_string);
+        row.record_allele_string_multi = Some(record_allele_string.into());
+        row.input_line_name.clone_from(&self.input_line_name);
+        row.record_so_term.clone_from(&self.record_so_term);
+        row.input_record = self.input_record;
+        row.check_ref_failed = self.check_ref_failed;
+        row.individual.clone_from(&self.individual);
+        row.copy_ordinal = self.copy_ordinal;
+        row.genotype.clone_from(&self.genotype);
+        row.hom_ref = self.hom_ref;
+        row.reference_allele_row = true;
+        row
     }
 
     /// Location string in VEP format ("chr:start" or "chr:start-end"), under
@@ -1029,6 +1163,11 @@ impl InputVariant {
     }
 }
 
+/// The `skip_serializing_if` predicate of [`InputVariant::copy_ordinal`].
+fn is_zero(value: &u32) -> bool {
+    *value == 0
+}
+
 /// An allele read on the other strand: Ensembl's `reverse_comp`
 /// ([`crate::codon::reverse_complement`]) of an allele `seq_is_dna` admits
 /// (VariationFeatureOverlapAllele.pm:315-321: the nucleotide and IUPAC letters
@@ -1164,7 +1303,8 @@ pub fn ambiguity_code(allele_string: &str) -> Option<u8> {
 /// working string: the run is `--minimal` (`minimise_alleles` sets it for every
 /// record), or the alleles differ in length with no `-` among them (`Parser.pm`
 /// `post_process_vfs` ends its length test at the first `-`); `validate_vf`
-/// upper-cases the working string every other record prints.
+/// upper-cases the working string every other record prints
+/// ([`InputVariant::uploaded_allele`]).
 pub fn keeps_uploaded_spelling(allele_string: &str, minimal: bool) -> bool {
     let mut parts = allele_string.split('/');
     let reference_length = parts.next().map_or(0, str::len);
@@ -1979,6 +2119,58 @@ mod tests {
         sv.uploaded_allele_string = Some("<CN0>".into());
         assert_eq!(sv.uploaded_variation(), "21_46222496_<CN0>");
         assert_eq!(sv.record_allele_string(), "<CN0>");
+    }
+
+    /// The reference row is the reference of the record's working string, numbered
+    /// 0 over the record's span, and shares the record's `minimised` mark
+    /// (`VariationFeature_to_output_hash` sets `MINIMISED` from the feature) and
+    /// line; for an allele of a `--minimal` split it is the allele's own trimmed
+    /// reference over the trimmed span (InputBuffer.pm:674-676), with the record's
+    /// span restored for Location and the allele's rejoin key.
+    #[test]
+    fn reference_row_shares_the_records_fields_and_a_split_alleles_span() {
+        let mut minimised = InputVariant::new("21".into(), 101, 102, b"AA".to_vec(), b"-".to_vec());
+        minimised.uploaded_allele_string = Some("AAA/A".into());
+        minimised.original_allele_string = Some("AAA/A".into());
+        minimised.minimised = true;
+        minimised.raw_input = Some("21\t100\t.\tAAA\tA".into());
+        minimised.raw_input_bytes = Some(Arc::from(b"21\t100\t.\tAAA\tA".as_slice()));
+        let row = minimised.reference_allele_row();
+        assert!(row.reference_allele_row && row.minimised);
+        assert_eq!(
+            (row.ref_allele.as_slice(), row.alt_allele()),
+            (b"AA".as_slice(), b"AA".as_slice())
+        );
+        assert_eq!((row.start, row.end, row.allele_num), (101, 102, Some(0)));
+        assert_eq!(row.original_allele_string.as_deref(), Some("AAA/A"));
+        assert_eq!(row.raw_input_bytes, minimised.raw_input_bytes);
+        assert_eq!(row.record_allele_string(), "AA/-");
+
+        // `21 100 . AAA AGG,AAG` under `--minimal`: the second allele trims to `A/G`
+        // at 102 and its rows sort under `A/G_`.
+        let mut second = InputVariant::new("21".into(), 100, 102, b"AAA".to_vec(), b"AAG".to_vec());
+        second.allele_index = 1;
+        second.record_allele_string_multi = Some("AAA/AGG/AAG".into());
+        assert_eq!(
+            crate::minimal::apply_minimal_split(&mut second, 1),
+            crate::minimal::MinimalSplit::Trimmed
+        );
+        let row = second.reference_allele_row();
+        assert_eq!(
+            (row.ref_allele.as_slice(), row.alt_allele()),
+            (b"A".as_slice(), b"A".as_slice())
+        );
+        assert_eq!((row.start, row.end), (102, 102));
+        assert_eq!(
+            (row.original_start, row.original_end),
+            (Some(100), Some(102))
+        );
+        assert_eq!(row.rejoin_key_prefix.as_deref(), Some("A/G_"));
+        assert!(row.minimised);
+        assert_eq!(row.location(), "21:100-102");
+        assert_eq!(row.record_allele_string(), "AAA/AGG/AAG");
+        assert_eq!(row.uploaded_allele(true).as_deref(), Some("AAA/AGG/AAG"));
+        assert_eq!(row.class_so_term(), "substitution");
     }
 
     #[test]

@@ -218,9 +218,10 @@ impl Row {
 
 /// The record's rows in Ensembl VEP's order: transcript-major in stable-id
 /// order, allele-minor (`VariationFeature.pm:666` of ensembl-variation sorts
-/// the transcript keys, and each transcript lists its alternate alleles in
-/// allele-string order), then the intergenic row of every allele that overlaps
-/// no transcript. An allele whose chromosome has no transcripts has no row.
+/// the transcript keys, and each transcript lists its reference allele's row
+/// under `--process_ref_homs` and then its alternate alleles in allele-string
+/// order), then the intergenic row of every allele that overlaps no transcript.
+/// An allele whose chromosome has no transcripts has no row.
 fn record_rows(record: &[InputVariant]) -> Vec<Row> {
     let mut transcript_rows: Vec<(usize, usize)> = Vec::new();
     for (allele, variant) in record.iter().enumerate() {
@@ -231,6 +232,7 @@ fn record_rows(record: &[InputVariant]) -> Vec<Row> {
     transcript_rows.sort_by_key(|&(allele, tc)| {
         (
             &record[allele].transcript_consequences[tc].transcript_id,
+            !record[allele].reference_allele_row,
             allele,
         )
     });
@@ -562,7 +564,10 @@ fn push_flag(tc: &mut TranscriptConsequence, flag: &str) {
 /// `summary_only` (`OutputFactory.pm:426-458`): the consequence terms of the rows
 /// left on the record, sorted by rank, each once (`--summary`) or the first alone
 /// (`--most_severe`), carried by the record's first allele as its one row while
-/// every other allele keeps none. A record with no row stays without one.
+/// every other allele keeps none. A record with no row keeps its one summary row
+/// with no term and warns `Unable to assign consequence type` (`:454-458` warn
+/// and return the record's hash with no `Consequence`): a reference-homozygous
+/// individual's copy, or a non-variant record.
 fn summarise(record: &mut [InputVariant], most_severe_only: bool) {
     let mut terms: Vec<Consequence> = Vec::new();
     for row in record_rows(record) {
@@ -576,21 +581,23 @@ fn summarise(record: &mut [InputVariant], most_severe_only: bool) {
     }
     terms.sort_by_key(|c| c.rank());
     terms.dedup();
-    let Some(&first) = terms.first() else {
-        return;
-    };
-    let summary: ConsequenceList = if most_severe_only {
-        SmallVec::from_slice(&[first])
-    } else {
-        SmallVec::from_vec(terms)
-    };
+    if most_severe_only {
+        terms.truncate(1);
+    }
+    if terms.is_empty() {
+        crate::warnings::global().warn("Unable to assign consequence type");
+    }
     for variant in record.iter_mut() {
         variant.transcript_consequences.clear();
         variant.most_severe_consequence = None;
         variant.intergenic_pick = false;
     }
-    record[0].most_severe_consequence = Some(first);
-    record[0].summary_terms = Some(summary);
+    let Some(leader) = record.first_mut() else {
+        return;
+    };
+    let summary: ConsequenceList = SmallVec::from_vec(terms);
+    leader.most_severe_consequence = summary.first().copied();
+    leader.summary_terms = Some(summary);
 }
 
 #[cfg(test)]
@@ -707,6 +714,46 @@ mod tests {
         assert_eq!(
             record[0].most_severe_consequence,
             Some(Consequence::MissenseVariant)
+        );
+    }
+
+    /// Each individual's copy of a record is a feature of its own in Ensembl VEP
+    /// (`Parser/VCF.pm:629-664`), picked apart from the record's other copies
+    /// (`filter_VariationFeatureOverlapAlleles` runs per feature,
+    /// `OutputFactory.pm:514`): `--pick` over a batch of two copies keeps one row
+    /// per copy, and the reference row of `--process_ref_homs` ranks with the
+    /// copy's other rows.
+    #[test]
+    fn pick_is_per_individual_variant() {
+        let mut batch = two_gene_record();
+        let mut second = two_gene_record();
+        for v in batch.iter_mut() {
+            v.individual = Some("S1".into());
+        }
+        for v in second.iter_mut() {
+            v.individual = Some("S2".into());
+        }
+        batch.extend(second);
+        assert!(!batch[1].same_record(&batch[2]) && batch[0].same_record(&batch[1]));
+        apply_to_batch(&mut batch, &config(|c| c.pick = true));
+        assert_eq!(
+            kept(&batch),
+            vec![(0, "ENST1".to_string()), (0, "ENST1".to_string())]
+        );
+        assert_eq!(batch[0].individual.as_deref(), Some("S1"));
+        assert_eq!(batch[2].individual.as_deref(), Some("S2"));
+
+        let mut record = two_gene_record();
+        let mut reference = record[0].reference_allele_row();
+        let mut t1 = tc("ENST1", "G1", smallvec![Consequence::SynonymousVariant]);
+        t1.canonical = true;
+        reference.transcript_consequences = vec![t1];
+        record.insert(0, reference);
+        apply_to_batch(&mut record, &config(|c| c.pick = true));
+        assert_eq!(kept(&record), vec![(0, "ENST1".to_string())]);
+        assert!(
+            record[0].transcript_consequences.is_empty(),
+            "the reference row's synonymous ENST1 loses to the G allele's missense ENST1"
         );
     }
 
@@ -1029,15 +1076,17 @@ mod tests {
         );
     }
 
-    /// A record whose alleles have no row (a chromosome absent from the cache)
-    /// gains no summary row.
+    /// A record whose alleles have no row (a reference-homozygous copy, a
+    /// non-variant record) keeps the one summary row `summary_only` returns for
+    /// it (`OutputFactory.pm:454-458`), with no term.
     #[test]
-    fn summary_of_a_record_without_rows_adds_none() {
+    fn summary_of_a_record_without_rows_is_a_row_with_no_term() {
         let mut v = allele(b"G", 0, vec![]);
         v.most_severe_consequence = None;
         let mut record = vec![v];
         apply_to_record(&mut record, &config(|c| c.summary = true));
-        assert_eq!(record[0].summary_terms, None);
+        assert_eq!(record[0].summary_terms, Some(SmallVec::new()));
+        assert_eq!(record[0].most_severe_consequence, None);
         assert_eq!(kept(&record), Vec::<(usize, String)>::new());
     }
 

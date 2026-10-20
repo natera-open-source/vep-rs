@@ -794,9 +794,10 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
                 bgc.main(argv)
             assert str(refusal.value) == f"ERROR: [build_golden_corpus] {manifest} {reason}", argv[0]
     # Both mask classes pass at both levels, an empty list on a set (its run masks nothing) too.
-    manifest.write_text(good.replace('"covers": [', '"masks": ["order_only", "regulatory_feature_rows"], "flag_sets": '
-                                     '[{"name": "a", "masks": ["order_only"]}, {"name": "b", "masks": []}], "covers": [', 1),
-                        encoding="utf-8")
+    accepted = json.loads(good)
+    accepted["masks"] = ["order_only", "regulatory_feature_rows"]
+    accepted["flag_sets"] = [{"name": "a", "masks": ["order_only"]}, {"name": "b", "masks": []}]
+    manifest.write_text(json.dumps(accepted), encoding="utf-8")
     assert bgc.main(commands[1]) == 0
     manifest.write_text("[]", encoding="utf-8")
     with pytest.raises(SystemExit) as refusal:
@@ -1478,6 +1479,7 @@ def test_classify_applies_the_runs_own_masks(tmp_path: Path):
     `FREQS` values of `--field` agree as multisets of their items while an item that differs
     is still a field divergence, and a flag set's own `masks` (an empty list included) replace
     the manifest's for `classify --flag-set`, the regulatory class among them."""
+
     def row(domains: str) -> str:
         return _row("rs1", "21:100", "G", "ENST1", "missense_variant", f"IMPACT=MODERATE;DOMAINS={domains}")
 

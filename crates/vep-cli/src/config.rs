@@ -709,6 +709,13 @@ pub struct Config {
     pub fields: Option<Vec<String>>,
     pub dont_skip: bool,
     pub allow_non_variant: bool,
+    /// `--individual` as given, split on commas (`Config.pm:328`): `all` or the
+    /// sample names; `None` without the flag. Switches `allow_non_variant` on
+    /// (`:413-417`) and refuses `--minimal` (`:626`).
+    pub individual: Option<Vec<String>>,
+    /// `--process_ref_homs` (`Config.pm:143`): every sequence record gains the
+    /// reference allele's row, and a reference-homozygous individual annotates it.
+    pub process_ref_homs: bool,
     /// `--chr` as given, split on commas (`Config.pm:760-762`); `None` without the
     /// flag. The names it admits are read by `validate::ChromosomeList`.
     pub chr: Option<Vec<String>>,
@@ -1080,6 +1087,10 @@ impl Config {
             fields,
             dont_skip: args.dont_skip,
             allow_non_variant: on("allow_non_variant"),
+            individual: state
+                .is_given("individual")
+                .then(|| state.list("individual")),
+            process_ref_homs: args.process_ref_homs,
             chr: state.is_given("chr").then(|| state.list("chr")),
             check_ref: args.check_ref,
             lookup_ref: args.lookup_ref,
@@ -2784,5 +2795,40 @@ mod tests {
                 .as_deref(),
             Some("s.txt")
         );
+    }
+
+    /// `--individual` sets `allow_non_variant` through its option set
+    /// (Config.pm:413-417) and refuses `--minimal` (:626, the message of :964),
+    /// in any order and under `--safe` not at all (:961); its value is a
+    /// comma-separated list (:328) kept as given, `all` included.
+    /// `--process_ref_homs` (:143) is a bare flag and implies nothing.
+    #[test]
+    fn individual_implies_allow_non_variant_and_refuses_minimal() {
+        let c = config(&["vep", "--individual", "all"]);
+        assert_eq!(
+            c.individual.as_deref(),
+            Some(["all".to_string()].as_slice())
+        );
+        assert!(c.allow_non_variant);
+        assert!(!c.process_ref_homs);
+        let c = config(&["vep", "--individual", "S1,S3", "--process_ref_homs"]);
+        assert_eq!(
+            c.individual.as_deref(),
+            Some(["S1".to_string(), "S3".to_string()].as_slice())
+        );
+        assert!(c.allow_non_variant && c.process_ref_homs);
+        let c = config(&["vep", "--process_ref_homs"]);
+        assert!(c.process_ref_homs && !c.allow_non_variant && c.individual.is_none());
+        assert_eq!(
+            refusal(&["vep", "--individual", "all", "--minimal"]),
+            "ERROR: [cli] Can't use --individual and --minimal together"
+        );
+        assert_eq!(
+            refusal(&["vep", "--minimal", "--individual", "S1"]),
+            "ERROR: [cli] Can't use --individual and --minimal together"
+        );
+        let safe = config(&["vep", "--safe", "--individual", "all", "--minimal"]);
+        assert!(safe.minimal && safe.individual.is_some());
+        assert_eq!(FlagState::implied_by("individual"), ["allow_non_variant"]);
     }
 }

@@ -986,9 +986,13 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
         vf_seq: &variant.ref_allele,
         is_reference: true,
     };
+    // The reference row of `--process_ref_homs` is Ensembl VEP's reference
+    // allele object itself, whose codon and peptide are read as the reference's
+    // (TranscriptVariationAllele.pm:716, 742-770, 868), so its two alleles print
+    // the one edited peptide.
     let alt = Allele {
         vf_seq: variant.alt_allele(),
-        is_reference: false,
+        is_reference: variant.reference_allele_row,
     };
     let windows = AlleleWindows::new(&ctx, &reference, &alt);
     out.amino_acids = windows.pep_allele_string(&ctx, &reference, &alt);

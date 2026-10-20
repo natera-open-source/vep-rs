@@ -52,6 +52,15 @@ pub const DEFAULT_OUTPUT_COLS: [&str; 13] = [
 /// fixed by [`flag_fields`]; a group's fields appear only when its flag is set.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct FieldOptions {
+    /// `--individual`: the `IND` and `ZYG` columns (Constants.pm:69).
+    pub individual: bool,
+    /// `--process_ref_homs`: every feature writes its reference allele's row, so a
+    /// `--minimal` split record's `REF_ALLELE` is its first allele's trimmed
+    /// reference whatever that allele equals.
+    pub process_ref_homs: bool,
+    /// `--coding_only`: a feature with no alternate allele in a coding sequence
+    /// writes no row, its reference row included.
+    pub coding_only: bool,
     pub allele_number: bool,
     pub show_ref_allele: bool,
     pub uploaded_allele: bool,
@@ -201,6 +210,7 @@ const fn vf_group(flag: &'static str, fields: &'static [&'static str]) -> FieldG
 /// The flag-driven field groups in VEP's order (`@FLAG_FIELDS`). The `user`
 /// group is unconditional and comes first among the groups that can fire here.
 const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
+    vf_group("individual", &["IND", "ZYG"]),
     group("allele_number", &["ALLELE_NUM"]),
     group("show_ref_allele", &["REF_ALLELE"]),
     group("uploaded_allele", &["UPLOADED_ALLELE"]),
@@ -287,6 +297,7 @@ impl FieldOptions {
     fn group_active(&self, group: &str) -> bool {
         match group {
             "user" => true,
+            "individual" => self.individual,
             "allele_number" => self.allele_number,
             "show_ref_allele" => self.show_ref_allele,
             "uploaded_allele" => self.uploaded_allele,
@@ -707,6 +718,8 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
         "Indicates if this consequence has been picked as the most severe",
     ),
     ("SOMATIC", "Somatic status of existing variant"),
+    ("IND", "Individual name"),
+    ("ZYG", "Zygosity of individual genotype at this locus"),
     ("VARIANT_CLASS", "SO variant class"),
     (
         "PHENO",
@@ -822,16 +835,17 @@ pub fn row_ga4gh_vrs<'a>(
 pub type Row<'a> = (&'a InputVariant, Option<&'a TranscriptConsequence>);
 
 /// The rows one input record produces, in VEP's order: transcript-major (by
-/// transcript id) and allele-minor (ALT order) across every allele split from
-/// the record, then one intergenic row per allele that overlapped nothing, or
-/// the one `--summary` or `--most_severe` row the record's first allele carries.
+/// transcript id) and allele-minor (the reference row of `--process_ref_homs`
+/// first, then ALT order) across every allele split from the record, then one
+/// intergenic row per allele that overlapped nothing, or the one `--summary` or
+/// `--most_severe` row the record's first allele carries.
 /// The alleles of a `--minimal` split sort by the keys Ensembl VEP's rejoin
 /// stores their transcript variations under ([`InputVariant::rejoin_key_prefix`]
 /// before the transcript id), so an allele whose key prefix sorts before the
 /// letters of a transcript id prints every one of its rows first.
 ///
-/// An allele whose chromosome had no transcripts at all (no `most_severe_consequence`)
-/// produces no row, as VEP writes nothing for it.
+/// An allele whose chromosome had no transcripts at all (no `most_severe_consequence`
+/// and no summary row) produces no row, as VEP writes nothing for it.
 pub fn record_rows<'a>(record: &[&'a InputVariant]) -> Vec<Row<'a>> {
     let mut rows = Vec::new();
     record_rows_into(record, &mut rows);
@@ -848,13 +862,21 @@ pub fn record_rows_into<'a>(record: &[&'a InputVariant], rows: &mut Vec<Row<'a>>
         }
     }
     // Stable, so rows with one transcript and allele keep their consequence order.
+    // The reference allele's row of `--process_ref_homs` leads each feature's
+    // alleles (BaseVariationFeatureOverlap.pm:363-373 lists it first).
     rows.sort_by(|a, b| {
         rejoin_key(a)
             .cmp(rejoin_key(b))
+            .then(b.0.reference_allele_row.cmp(&a.0.reference_allele_row))
             .then(a.0.allele_index.cmp(&b.0.allele_index))
     });
+    // An allele with no feature row writes its intergenic row, or the record's
+    // `--summary` or `--most_severe` row, which stands even with no term
+    // (OutputFactory.pm:454-458).
     for variant in record {
-        if variant.transcript_consequences.is_empty() && variant.most_severe_consequence.is_some() {
+        if variant.transcript_consequences.is_empty()
+            && (variant.most_severe_consequence.is_some() || variant.summary_terms.is_some())
+        {
             rows.push((variant, None));
         }
     }
@@ -965,7 +987,14 @@ pub fn field_value(
 ) -> String {
     if let (None, Some(terms)) = (tc, &variant.summary_terms) {
         return match field {
-            "Consequence" => rendered_terms(terms, options.terms, true).join(list_sep),
+            "Consequence" => {
+                let rendered = rendered_terms(terms, options.terms, true);
+                if rendered.is_empty() {
+                    "-".to_string()
+                } else {
+                    rendered.join(list_sep)
+                }
+            }
             // The record hash places the row at the input span; the
             // `--shift_genomic 1` move is written by the feature and intergenic
             // row builders alone (OutputFactory.pm:1702-1706, 1992-1998).
@@ -1073,13 +1102,24 @@ fn row_field_value(
             .allele_num
             .unwrap_or(variant.allele_index as u32 + 1)
             .to_string(),
+        "IND" => variant
+            .individual
+            .as_deref()
+            .unwrap_or_default()
+            .to_string(),
+        "ZYG" => variant.zygosity().unwrap_or_default(),
         // A structural row carries neither `REF_ALLELE` nor `UPLOADED_ALLELE`
         // (OutputFactory.pm `BaseStructuralVariationOverlapAllele_to_output_hash`).
         "REF_ALLELE" if variant.is_structural => String::new(),
-        // Every row of a `--minimal` split prints the record feature's reference.
+        // Every row of a `--minimal` split prints the record feature's reference:
+        // the first feature's, when its reference row was built, which under
+        // `--coding_only` a feature with no alternate never is.
         "REF_ALLELE" => match variant.record_allele_string_multi.as_deref() {
             Some(record) if variant.original_start.is_some() => {
-                vep_core::minimal::rejoined_reference(record)
+                vep_core::minimal::rejoined_reference(
+                    record,
+                    options.process_ref_homs && !options.coding_only,
+                )
             }
             _ => String::from_utf8_lossy(&variant.ref_allele).to_string(),
         },
@@ -2395,6 +2435,38 @@ mod tests {
         );
     }
 
+    /// The reference row of `--process_ref_homs` leads each transcript's rows
+    /// (BaseVariationFeatureOverlap.pm:363-373 lists the reference allele first),
+    /// then the alternates in allele order.
+    #[test]
+    fn reference_row_leads_each_transcripts_rows() {
+        let tc = |id: &str| TranscriptConsequence {
+            transcript_id: std::sync::Arc::from(id),
+            ..Default::default()
+        };
+        let mut alt1 = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        alt1.transcript_consequences = vec![tc("ENST2"), tc("ENST1")];
+        let mut alt2 = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"T".to_vec());
+        alt2.allele_index = 1;
+        alt2.transcript_consequences = vec![tc("ENST1")];
+        let mut reference = alt1.reference_allele_row();
+        reference.transcript_consequences = vec![tc("ENST1"), tc("ENST2")];
+        let order: Vec<(String, &[u8])> = record_rows(&[&reference, &alt1, &alt2])
+            .iter()
+            .map(|(v, tc)| (tc.unwrap().transcript_id.to_string(), v.alt_allele()))
+            .collect();
+        assert_eq!(
+            order,
+            [
+                ("ENST1".to_string(), b"A".as_slice()),
+                ("ENST1".to_string(), b"G"),
+                ("ENST1".to_string(), b"T"),
+                ("ENST2".to_string(), b"A"),
+                ("ENST2".to_string(), b"G"),
+            ]
+        );
+    }
+
     /// The reusable form clears what an earlier record left behind and orders
     /// rows exactly as `record_rows` does.
     #[test]
@@ -3080,6 +3152,66 @@ mod tests {
         };
         assert_eq!(vf_level_flag_fields(&opts), Vec::<&str>::new());
         assert!(flag_fields(&opts).contains(&"REF_ALLELE"));
+    }
+
+    /// `--individual` adds `IND` and `ZYG` first among the flag fields
+    /// (Constants.pm:69, the first `@FLAG_FIELDS` entry) with Constants.pm:193-194's
+    /// descriptions; both are set from the variant alone
+    /// (`VariationFeature_to_output_hash`, OutputFactory.pm:969-977), so a summary
+    /// row keeps them; neither is listed without the flag, and both are empty on an
+    /// allele that is no individual's copy. `ZYG` is `HET` for more than one
+    /// distinct genotype allele, else `HOM`, with `REF` appended for a
+    /// reference-homozygous copy (:976); the reference row of `--process_ref_homs`
+    /// numbers 0 under `ALLELE_NUM` and prints the reference as its `Allele`.
+    #[test]
+    fn ind_and_zyg_columns_follow_the_individual_flags() {
+        let opts = FieldOptions {
+            individual: true,
+            allele_number: true,
+            symbol: true,
+            ..Default::default()
+        };
+        assert_eq!(flag_fields(&opts)[..3], ["IND", "ZYG", "ALLELE_NUM"]);
+        assert_eq!(vf_level_flag_fields(&opts), ["IND", "ZYG"]);
+        assert_eq!(field_description("IND"), Some("Individual name"));
+        assert_eq!(
+            field_description("ZYG"),
+            Some("Zygosity of individual genotype at this locus")
+        );
+        assert!(!flag_fields(&FieldOptions::default()).contains(&"IND"));
+        assert!(!field_is_produced("ZYG", &FieldOptions::default()));
+
+        let mut het = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        het.individual = Some("S1".into());
+        het.genotype = vec!["A".into(), "G".into()];
+        assert_eq!(field_value("IND", &het, None, &opts, ","), "S1");
+        assert_eq!(field_value("ZYG", &het, None, &opts, ","), "HET");
+        let mut hom = het.clone();
+        hom.genotype = vec!["G".into(), "G".into()];
+        assert_eq!(field_value("ZYG", &hom, None, &opts, ","), "HOM");
+        hom.genotype = vec!["G".into()];
+        assert_eq!(field_value("ZYG", &hom, None, &opts, ","), "HOM");
+        let mut hom_ref = het.clone();
+        hom_ref.genotype = vec!["A".into(), "A".into()];
+        hom_ref.hom_ref = true;
+        assert_eq!(field_value("ZYG", &hom_ref, None, &opts, ","), "HOMREF");
+        hom_ref.genotype = vec!["A".into(), "*".into()];
+        assert_eq!(field_value("ZYG", &hom_ref, None, &opts, ","), "HETREF");
+        let plain = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(field_value("IND", &plain, None, &opts, ","), "");
+        assert_eq!(field_value("ZYG", &plain, None, &opts, ","), "");
+        let mut summary = het.clone();
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(field_value("IND", &summary, None, &opts, ","), "S1");
+        assert_eq!(field_value("ZYG", &summary, None, &opts, ","), "HET");
+        assert_eq!(field_value("SYMBOL", &summary, None, &opts, ","), "");
+
+        let reference = hom_ref.reference_allele_row();
+        assert_eq!(field_value("Allele", &reference, None, &opts, ","), "A");
+        assert_eq!(field_value("ALLELE_NUM", &reference, None, &opts, ","), "0");
+        assert_eq!(field_value("ZYG", &reference, None, &opts, ","), "HETREF");
+        let rows = record_rows(&[&reference, &het]);
+        assert!(rows.is_empty(), "no feature, no intergenic verdict, no row");
     }
 
     /// `VARIANT_CLASS`, `MINIMISED`, `AMBIGUITY` and `CHECK_REF` are set from the

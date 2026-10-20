@@ -1208,6 +1208,52 @@ mod tests {
         );
     }
 
+    /// Each individual's copy is one VCF line (OutputFactory/VCF.pm:310-355 writes
+    /// one per feature): the raw record, sample columns included, with that copy's
+    /// CSQ, whose entries carry `IND` and `ZYG`; a reference-homozygous copy with
+    /// no allele to annotate is the record without consequences, INFO `.` when it
+    /// had none.
+    #[test]
+    fn individual_writes_one_line_per_individual_per_record() {
+        let formatter = VcfOutputFormatter::new(
+            "CSQ".into(),
+            FieldOptions {
+                individual: true,
+                ..Default::default()
+            },
+            Vec::new(),
+            Some(vec![
+                "Allele".into(),
+                "Feature".into(),
+                "IND".into(),
+                "ZYG".into(),
+            ]),
+        );
+        let line = "21\t100\t.\tA\tG\t.\t.\t.\tGT\t0/1\t0/0";
+        let mut het = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        het.raw_input = Some(line.into());
+        het.individual = Some("S1".into());
+        het.genotype = vec!["A".into(), "G".into()];
+        het.transcript_consequences = vec![TranscriptConsequence {
+            transcript_id: "ENST1".into(),
+            consequences: smallvec![Consequence::MissenseVariant],
+            ..Default::default()
+        }];
+        let mut hom_ref = InputVariant::without_allele("21".into(), 100, "A", std::iter::empty());
+        hom_ref.raw_input = Some(line.into());
+        hom_ref.individual = Some("S2".into());
+        hom_ref.genotype = vec!["A".into(), "A".into()];
+        hom_ref.hom_ref = true;
+        assert_eq!(
+            formatter.format_record(&[&het]).unwrap(),
+            ["21\t100\t.\tA\tG\t.\t.\tCSQ=G|ENST1|S1|HET\tGT\t0/1\t0/0"]
+        );
+        assert_eq!(
+            formatter.format_record(&[&hom_ref]).unwrap(),
+            ["21\t100\t.\tA\tG\t.\t.\t.\tGT\t0/1\t0/0"]
+        );
+    }
+
     /// A record the pipeline judged intergenic (`most_severe_consequence` set,
     /// no transcript consequence) gets one intergenic CSQ entry; a record with
     /// neither a consequence nor a verdict is carried through without a CSQ

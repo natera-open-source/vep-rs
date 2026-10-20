@@ -71,6 +71,35 @@ The rules the formatters follow are VEP's own, cited to their Perl sources in `c
 - **`--minimal`**, which trims every bi-allelic record from both ends and splits a multi-allelic record whose alleles trim: [How structural variants are written](output/structural-variants.md#multi-allelic-records). A split allele's `cDNA_position`, `CDS_position` and `Protein_position` follow the format. The default and tab outputs print the record span's values, in the columns the allele's own span admits, as Ensembl VEP recomputes them after its rejoin (`OutputFactory.pm` lines 294-299). The VCF and JSON outputs print the allele's own, as their factories recompute them before it (`OutputFactory/VCF.pm` lines 305-308, `OutputFactory/JSON.pm` lines 217-220). Codons, Amino_acids and the terms are the trimmed allele's in every format.
 - **Records Ensembl VEP skips**, which vep-rs annotates: [How structural variants are written](output/structural-variants.md#skipped-records).
 - **Breakends**, points, spans, mates and the rows on each side: [How structural variants are written](output/structural-variants.md#breakends).
+- **Per-sample copies and the reference row**, `--individual` and `--process_ref_homs`: [below](#per-sample-copies-and-the-reference-row).
+
+## Per-sample copies and the reference row
+
+Under `--individual all|<list>`, each record is written once per individual named (`all` is every sample column in header order; a list is read in its order), as Ensembl VEP copies the record's feature per individual. The default and tab formats repeat `Uploaded_variation` and `Location` for each copy's rows; the VCF output writes one line per copy, the input record with that copy's `CSQ`; the JSON output writes one object per copy. Every row and object carries `IND` and `ZYG` (`ind`, `zyg` in JSON): `HET` when the genotype holds more than one distinct allele, else `HOM`, with `REF` appended for an individual carrying no alternate allele.
+
+A copy carries the alleles its genotype names, so `./1` and a haploid `1` annotate the one allele as `HOM`, `1/2` both alleles as `HET`, `*` is no alternate allele, and `./.` writes no copy. An individual carrying no alternate allele writes no default or tab row; its VCF line has no `CSQ` and its JSON object no consequence (`most_severe_consequence` `?`), unless `--process_ref_homs` gives it the reference row.
+
+Under `--most_severe` or `--summary` such a copy writes the record's one row with `-` in every allele and feature column, as Ensembl VEP does. The copy's JSON object has no consequence entry, where Ensembl VEP's JSON writer dies ([a JSON summary row with no consequence](divergences/json-summary-without-term.md)).
+
+A record whose every named individual has a missing genotype is written in no format. A structural variant is written once, without `IND` or `ZYG`, since Ensembl VEP builds it before the per-individual step.
+
+`UPLOADED_ALLELE` on a copy is the record's allele string as uploaded when its alleles differ in length, and otherwise the copy's own string: `C/C` for a reference-homozygous copy under `--process_ref_homs`, `C/T` for the carrier of one allele of `C/T,G`. Ensembl VEP prints the feature's string where it kept no original. Two per-individual readings differ from Ensembl VEP's: [an individual carrying two alternate alleles](divergences/individual-allele-order.md) and [an individual's copy of an indel the anchor chop leaves trimmable](divergences/individual-trimmable-indel.md).
+
+The sample columns are read as ensembl-io reads them. A genotype bit is a Perl array index: `-1` is the last allele and `+1` is 1. A bit past the record's alleles is an empty allele, which makes its copy heterozygous with no alternate row (`3/0`) or vanishes when it trails (`0/3`).
+
+A header repeating a sample name has one sample of that name, reading its last column. A list may name a sample twice and gets two copies. A header whose ninth column is not `FORMAT` names its samples from that column and yields no genotype, so no copy.
+
+A genotype naming the `.` of a non-variant record is annotated as an allele by Ensembl VEP ([Defect J](divergences/defect-j.md)) and as none here. Under `--individual`, `--buffer_size` bounds the copies a batch holds, as Ensembl VEP's buffer counts them.
+
+Under `--process_ref_homs`, every feature of every sequence record gains the reference allele's row first, `ALLELE_NUM` 0, its `Allele` the reference. The row carries the consequences the predicates give an allele equal to the reference: `synonymous_variant` in a coding sequence, `stop_retained_variant` at a stop codon, the single reference peptide in `Amino_acids` and the reference codon twice in `Codons`.
+
+A reference allele of two or more bases carries no intron or splice-site term, since Ensembl VEP reads those over the bases where the allele differs from the reference, and a row left with no term prints `intergenic_variant`. An intergenic record gains an `intergenic_variant` row for the reference too. Under `--coding_only` the reference row stays where its feature has an alternate allele in the coding sequence, since Ensembl VEP's `affects_cds` asks the alternates alone. It goes with a reference-homozygous copy, a non-variant record and a `--minimal` split feature whose allele equals the reference or is `*` or `<DEL:*>`.
+
+Under `--minimal`, a multi-allelic record that splits writes one reference row per alternate allele, before that allele's rows and under its key. The row's allele is the allele's own trimmed reference over its trimmed span, `-` for an insertion's. An allele equal to the reference once trimmed writes its reference row alone, as does a `*` or `<DEL:*>` allele. The record's one intergenic row for the reference comes from its first intergenic allele.
+
+The `REF_ALLELE` of every row of a split record under `--process_ref_homs` is the first allele's trimmed reference, `-` when that allele equals the reference, or the record's own reference where `--coding_only` drops that equal allele's feature. One VCF shape differs under `--lookup_ref`: [a repeated alternate allele the looked-up reference equals](divergences/minimal-lookup-ref-repeated-allele.md).
+
+The reference row has no `HGVSc` or `HGVSp`; under `--hgvsg` it prints the alternate allele's `HGVSg` on a bi-allelic record, as Ensembl VEP does. Under `--spdi` it carries no `SPDI`, except on a reference-homozygous individual's copy, whose allele string is the reference twice in Ensembl VEP, so the row prints the reference described against itself (`21:99:A:A`; an insertion's empty reference prints as `21:30284295::-`).
 
 ## Engine identity
 

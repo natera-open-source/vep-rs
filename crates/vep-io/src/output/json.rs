@@ -137,6 +137,14 @@ impl JsonOutputFormatter {
         let mut buckets: IndexMap<String, Vec<Value>> = IndexMap::new();
         let mut all_terms: Vec<Consequence> = Vec::new();
         for (variant, tc) in fields::record_rows(record) {
+            // A summary row with no term is the record's hash alone, written here
+            // as the object with no consequence entry; Ensembl VEP's JSON factory
+            // dereferences the hash's absent consequence list and dies on it
+            // (OutputFactory/JSON.pm:374), the divergence
+            // `docs/divergences/json-summary-without-term.md` lists.
+            if tc.is_none() && variant.summary_terms.as_ref().is_some_and(|t| t.is_empty()) {
+                continue;
+            }
             let bucket = match tc {
                 Some(tc) => {
                     all_terms.extend(tc.consequences.iter().copied());
@@ -855,6 +863,41 @@ mod tests {
         let plain =
             &fmt(FieldOptions::default()).format_variant_value(&v)["transcript_consequences"][0];
         assert!(plain.get("spdi").is_none() && plain.get("ga4gh_vrs").is_none());
+    }
+
+    /// An individual's copy writes `ind` and `zyg` at the top level
+    /// (OutputFactory/JSON.pm:261-262 lower-cases the VF-level keys), its own
+    /// `allele_string` and `id`; a reference-homozygous copy without
+    /// `--process_ref_homs` is an object with no consequence and
+    /// `most_severe_consequence` `?`.
+    #[test]
+    fn individual_copy_writes_ind_and_zyg_at_the_top_level() {
+        let mut v = make_annotated_variant();
+        v.individual = Some("S2".into());
+        v.genotype = vec!["A".into(), "G".into()];
+        let options = FieldOptions {
+            individual: true,
+            ..Default::default()
+        };
+        let parsed = fmt(options.clone()).format_variant_value(&v);
+        assert_eq!(parsed["ind"], "S2");
+        assert_eq!(parsed["zyg"], "HET");
+        assert_eq!(parsed["id"], "rs123");
+        assert!(parsed["transcript_consequences"][0].get("ind").is_none());
+        let mut hom_ref =
+            InputVariant::without_allele("21".into(), 25000100, "A", std::iter::empty());
+        hom_ref.id = Some("rs123".into());
+        hom_ref.individual = Some("S3".into());
+        hom_ref.genotype = vec!["A".into(), "A".into()];
+        hom_ref.hom_ref = true;
+        let parsed = fmt(options).format_variant_value(&hom_ref);
+        assert_eq!(parsed["ind"], "S3");
+        assert_eq!(parsed["zyg"], "HOMREF");
+        assert_eq!(parsed["allele_string"], "A");
+        assert_eq!(parsed["most_severe_consequence"], "?");
+        assert!(parsed.get("transcript_consequences").is_none());
+        let plain = fmt(FieldOptions::default()).format_variant_value(&make_annotated_variant());
+        assert!(plain.get("ind").is_none() && plain.get("zyg").is_none());
     }
 
     /// An unannotated record keeps VEP's input-only shape plus the identity key.

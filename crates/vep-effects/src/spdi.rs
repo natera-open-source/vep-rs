@@ -37,7 +37,13 @@ pub fn annotate(variant: &mut InputVariant, config: &EffectsConfig) {
     let Some(options) = &config.spdi else {
         return;
     };
-    if variant.is_structural {
+    // Ensembl VEP builds a notation per allele after the first of the feature's
+    // string and looks the row's allele up among them (OutputFactory.pm:1396-1400;
+    // VariationFeature.pm:2153 drops the first), so the reference row of
+    // `--process_ref_homs` carries none, except on a reference-homozygous
+    // individual's copy, whose string is the reference twice (Parser/VCF.pm:646)
+    // and whose one notation is the reference against itself.
+    if variant.is_structural || (variant.reference_allele_row && !variant.hom_ref) {
         return;
     }
     let spdi = |name: &str, alt: &[u8]| {
@@ -296,5 +302,48 @@ mod tests {
         annotate(&mut bi_allelic, &config);
         assert_eq!(bi_allelic.spdi.as_deref(), Some("21:13620283::TCA"));
         assert!(bi_allelic.sibling_spdi.is_empty());
+    }
+
+    /// Ensembl VEP keys the notations by the alleles after the first of the
+    /// feature's string (VariationFeature.pm:2153-2167), so the reference row of
+    /// `--process_ref_homs` finds none on a record or an individual's copy whose
+    /// string names an alternate, and on a reference-homozygous individual's copy,
+    /// whose string is the reference twice (Parser/VCF.pm:646), finds the
+    /// reference described against itself, in each class's own shape (:2185-2220):
+    /// `21:99:A:A` for a base, `21:100:AC:AC` for a deletion's bases, and
+    /// `21:30284295::-` for an insertion's empty reference.
+    #[test]
+    fn reference_row_carries_a_notation_only_on_a_reference_homozygous_copy() {
+        let config = spdi_only();
+        let mut plain = variant("21", 100, 100, "A", "G").reference_allele_row();
+        assert_eq!(spdi_of(&mut plain, &config), None);
+        let mut het = variant("21", 100, 100, "A", "G");
+        het.individual = Some("S1".into());
+        het.genotype = vec!["A".into(), "G".into()];
+        let mut het_reference = het.reference_allele_row();
+        assert_eq!(spdi_of(&mut het_reference, &config), None);
+        assert!(het_reference.sibling_spdi.is_empty());
+
+        let hom_ref_copy = |start: u64, end: u64, reference: &str| {
+            let mut copy = variant("21", start, end, reference, "*");
+            copy.record_allele_string_multi = Some(Arc::from(format!("{reference}/{reference}")));
+            copy.individual = Some("S2".into());
+            copy.genotype = vec![reference.into(), reference.into()];
+            copy.hom_ref = true;
+            copy.reference_allele_row()
+        };
+        let mut snv = hom_ref_copy(100, 100, "A");
+        assert_eq!(spdi_of(&mut snv, &config).as_deref(), Some("21:99:A:A"));
+        assert!(snv.sibling_spdi.is_empty());
+        let mut deletion = hom_ref_copy(101, 102, "AC");
+        assert_eq!(
+            spdi_of(&mut deletion, &config).as_deref(),
+            Some("21:100:AC:AC")
+        );
+        let mut insertion = hom_ref_copy(30284296, 30284295, "-");
+        assert_eq!(
+            spdi_of(&mut insertion, &config).as_deref(),
+            Some("21:30284295::-")
+        );
     }
 }

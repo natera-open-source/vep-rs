@@ -1,6 +1,6 @@
 # Intended divergences from Ensembl VEP
 
-This page indexes every disagreement between vep-rs and Ensembl VEP that the adjusted concordance figure sets aside, and the twelve differences outside the classes, which it does not. Each defect has a page of its own, which shows why its disagreement is set aside.
+This page indexes every disagreement between vep-rs and Ensembl VEP that the adjusted concordance figure sets aside, and the sixteen differences outside the classes, which it does not. Each defect has a page of its own, which shows why its disagreement is set aside.
 
 ## The defects
 
@@ -27,7 +27,7 @@ The defects in page order, each with the classes it produces and its page:
 
 ## Differences outside the classes
 
-Twelve differences lie outside every class, each in a field's text, in which records or rows are written, or in which inputs resolve, and nothing is set aside for them. A disagreement from one is charged to vep-rs in both figures, and each has a page:
+Sixteen differences lie outside every class, each in a field's text, in which records or rows are written, or in which inputs resolve, and nothing is set aside for them. A disagreement from one is charged to vep-rs in both figures, and each has a page:
 
 | Difference | In one sentence | Set aside | Page |
 | --- | --- | --- | --- |
@@ -42,7 +42,11 @@ Twelve differences lie outside every class, each in a field's text, in which rec
 | [Empty REF at POS 0](divergences/empty-ref-pos-0.md) | Ensembl VEP reads a record whose REF column is empty at POS 0 over the coordinates 0 to -1 and writes it as `intergenic_variant` at `21:-1-0`; vep-rs holds no coordinate before 0 and skips it with Ensembl VEP's insertion warning | nothing | [An empty REF column at POS 0](divergences/empty-ref-pos-0.md) |
 | [`--dont_skip`](divergences/dont-skip-cannot-keep.md) | `--dont_skip` returns a record whatever `validate_vf` returned for it; four refused shapes have no record vep-rs can hold, and it skips them under the flag too | nothing | [Records `--dont_skip` cannot keep](divergences/dont-skip-cannot-keep.md) |
 | [Identifier input](divergences/id-input.md) | Ensembl VEP resolves an identifier list only through its variation database; vep-rs resolves it from the cache's variation files in one read of them | nothing: no measured dataset uses the format | [Identifier input resolved from the cache's variation files](divergences/id-input.md) |
+| [Two alternate alleles in one genotype](divergences/individual-allele-order.md) | Under `--individual`, Ensembl VEP lists the two alternate alleles of a `1/2` genotype in Perl's hash order, which changes between runs; vep-rs lists them in the record's ALT order | nothing: no measured run names the flag | [An individual carrying two alternate alleles](divergences/individual-allele-order.md) |
+| [A trimmable indel per individual](divergences/individual-trimmable-indel.md) | Ensembl VEP builds an individual's copy of a bi-allelic indel minimised past the anchor chop from the chopped alleles against the minimised reference, so a `0/0` genotype carries `CAC`; vep-rs compares chopped with chopped and keeps the minimised alleles | nothing: no measured dataset has such an indel | [An individual's copy of an indel the anchor chop leaves trimmable](divergences/individual-trimmable-indel.md) |
+| [A JSON summary row with no consequence](divergences/json-summary-without-term.md) | Under `--most_severe` or `--summary`, Ensembl VEP's JSON factory dies on a record with no consequence (a reference-homozygous copy, a non-variant record), which the default and tab formats write as one row; vep-rs writes the record's object with no consequence entry | nothing: no measured run names the flags | [A JSON summary row with no consequence](divergences/json-summary-without-term.md) |
 | [`--minimal` alleles of one trimmed string](divergences/minimal-same-trimmed-allele.md) | Under `--minimal` Ensembl VEP merges two alternate alleles that trim to the same allele string under one key and drops the earlier allele's rows; vep-rs writes every allele's rows | nothing: no measured dataset runs the flag | [Two `--minimal` alleles that trim to the same allele string](divergences/minimal-same-trimmed-allele.md) |
+| [A repeated allele the looked-up reference equals](divergences/minimal-lookup-ref-repeated-allele.md) | Under `--lookup_ref --minimal`, Ensembl VEP splits a VCF record after the reference is looked up, so a repeated alternate allele that equals the looked-up reference or trims against it is one feature per repeat, each with its rows and, under `--process_ref_homs`, its reference row; vep-rs reads the repeat as one allele before the reference is looked up when the written alleles do not trim, and writes one feature | nothing: no measured dataset runs the flags | [A repeated alternate allele the looked-up reference equals](divergences/minimal-lookup-ref-repeated-allele.md) |
 
 ## Concordance figures and classes
 
@@ -54,7 +58,7 @@ Seventeen of the nineteen classes are the output of fourteen defects in Ensembl 
 
 ## How the pages are organised
 
-The pages are organised by defect. There is one page for each of the fifteen defects that produce a class (A to C and E to P; D is retired) and one for the `<CNV:TR>` representation difference. Each defect page opens with the defect in one sentence, why it is a defect, what vep-rs does instead, where it is in Ensembl VEP's source and what correcting it would change. The classes it produces follow. Each of the twelve [differences outside the classes](#differences-outside-the-classes) has a page of its own: the difference in one sentence, then what each engine does and where in Ensembl VEP's source its behaviour is.
+The pages are organised by defect. There is one page for each of the fifteen defects that produce a class (A to C and E to P; D is retired) and one for the `<CNV:TR>` representation difference. Each defect page opens with the defect in one sentence, why it is a defect, what vep-rs does instead, where it is in Ensembl VEP's source and what correcting it would change. The classes it produces follow. Each of the sixteen [differences outside the classes](#differences-outside-the-classes) has a page of its own: the difference in one sentence, then what each engine does and where in Ensembl VEP's source its behaviour is.
 
 Each class is a walkthrough of one record, from a public dataset or hand-written and printed in full on the page. It opens with an **In short** paragraph that states the class in a few sentences. It then gives the background a reader needs, the record, both engines' rows and why Ensembl VEP writes what it writes. It closes with why vep-rs's row is the correct one, what a reader can reproduce, and how the comparator scripts recognise the class. The engines, inputs, caches and commands every walkthrough uses are on [Reproducing these examples](divergences/reproducing.md).
 

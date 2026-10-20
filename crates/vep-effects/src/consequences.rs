@@ -382,9 +382,11 @@ fn consequence_shift(
     transcript: &Transcript,
     config: &EffectsConfig,
 ) -> Option<(u64, u64)> {
+    // The reference allele is never shifted (TranscriptVariationAllele.pm:116).
     if !config.enable_indel_3prime_shift
         || variant.is_structural
         || variant.variant_class.is_structural()
+        || variant.reference_allele_row
     {
         return None;
     }
@@ -450,6 +452,18 @@ fn domains_overlapping_protein_position(
         })
         .collect()
 }
+
+/// The terms Ensembl VEP's `_intron_effects` decides (VariationEffect.pm
+/// `within_intron`, the splice-site predicates and `splice_region`).
+const INTRON_EFFECT_TERMS: [Consequence; 7] = [
+    Consequence::IntronVariant,
+    Consequence::SpliceAcceptorVariant,
+    Consequence::SpliceDonorVariant,
+    Consequence::SpliceDonor5thBaseVariant,
+    Consequence::SpliceDonorRegionVariant,
+    Consequence::SplicePolypyrimidineTractVariant,
+    Consequence::SpliceRegionVariant,
+];
 
 /// Consequence terms and the fields the analysis derives alongside them.
 /// `variant` is the allele as analysed, `input` the allele as the input gave
@@ -752,6 +766,24 @@ fn calculate_terms(
     // (end = tr.start - 1 or start = tr.end + 1) is outside.
     let within_feature = variant.end >= transcript.start && variant.start <= transcript.end;
     add_transcript_context_consequences(transcript, within_feature, &mut consequences);
+
+    // Ensembl VEP reads the intron and splice-site predicates over the regions
+    // where the allele differs from the reference (BaseTranscriptVariationAllele.pm:117-218
+    // over `_get_differing_regions`, VariationFeatureOverlapAllele.pm:405-460): a
+    // reference allele of two or more bases differs nowhere, so its row carries
+    // no intron or splice term, while a one-base or empty reference allele keeps
+    // the one region its span is. A reference row left with no term takes the
+    // default consequence on its transcript (BaseVariationFeatureOverlapAllele.pm:285):
+    // an insertion's empty reference allele in a coding exon at a codon boundary
+    // earns no coding term, since its reference peptide is empty.
+    if variant.reference_allele_row {
+        if variant.ref_allele.len() > 1 {
+            consequences.retain(|c| !INTRON_EFFECT_TERMS.contains(c));
+        }
+        if consequences.is_empty() {
+            consequences.push(Consequence::IntergenicVariant);
+        }
+    }
 
     if consequences.is_empty() {
         return None;

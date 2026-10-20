@@ -1306,6 +1306,11 @@ pub fn get_codon_change(
         );
         cc.ref_amino_acid = ref_aa[0];
     }
+    // The reference row of `--process_ref_homs` reads the edited peptide for its
+    // allele as well (TranscriptVariationAllele.pm:716, 742-770).
+    if variant.reference_allele_row {
+        cc.alt_amino_acid = cc.ref_amino_acid;
+    }
     Some(cc)
 }
 

@@ -245,10 +245,14 @@ impl AllelePatch {
 /// to the reference writes no row and takes no number (`:481`), and the alleles
 /// after it are numbered without it (`:483`); the one ALT of a bi-allelic record, or
 /// the last allele left of a record, then makes it the feature with no allele to
-/// annotate, written as a non-variant line is. Returns whether the allele still
-/// writes a row; `last` says it is the record's last allele still standing.
+/// annotate, written as a non-variant line is. The reference row of
+/// `--process_ref_homs` stands whatever the alternates equal: Ensembl VEP builds the
+/// reference overlap allele, numbered 0, before it tests any alternate (`:469-474`),
+/// so a record whose every alternate equals the looked-up reference keeps that row
+/// alone. Returns whether the allele still writes a row; `last` says it is the
+/// record's last allele still standing.
 pub(crate) fn keep_overlap_allele(variant: &mut InputVariant, last: bool) -> bool {
-    if variant.is_structural || variant.no_allele {
+    if variant.is_structural || variant.no_allele || variant.reference_allele_row {
         return true;
     }
     let equal_to_reference = match variant.record_allele_string_multi.as_deref() {
@@ -539,6 +543,18 @@ fn upper_case_alleles(variant: &mut InputVariant) {
             variant.record_allele_string_multi = Some(multi.to_ascii_uppercase().into());
         }
     }
+    reclassify(variant);
+}
+
+/// The class of the rewritten alleles. The reference row keeps the record's
+/// class: its allele equals the reference, which `classify_variant` would read
+/// as a substitution, while Ensembl VEP's reference overlap allele shares the
+/// feature overlaps of the record's own class (OutputFactory.pm:509-516), an
+/// insertion's included.
+fn reclassify(variant: &mut InputVariant) {
+    if variant.reference_allele_row {
+        return;
+    }
     variant.variant_class = classify_variant(&variant.ref_allele, variant.alt_allele());
 }
 
@@ -553,6 +569,11 @@ fn replace_reference(variant: &mut InputVariant, reference: &[u8]) {
         reference.to_vec()
     };
     let reference_text = String::from_utf8_lossy(&reference).into_owned();
+    // The reference row's allele is the reference (`VariationFeatureOverlap.pm:469`
+    // builds it from the replaced string).
+    if variant.reference_allele_row {
+        variant.alt_alleles = vec![reference.clone()];
+    }
     variant.allele_string = if variant.no_allele {
         reference_text.clone()
     } else {
@@ -566,7 +587,7 @@ fn replace_reference(variant: &mut InputVariant, reference: &[u8]) {
         variant.record_allele_string_multi = Some(format!("{reference_text}/{alts}").into());
     }
     variant.ref_allele = reference;
-    variant.variant_class = classify_variant(&variant.ref_allele, variant.alt_allele());
+    reclassify(variant);
 }
 
 /// Parser/VCF.pm:555: a VCF record whose type reads as a deletion (`/del/i` on the
@@ -1070,6 +1091,40 @@ mod tests {
         assert!(judge(&rules, &mut kept_alt, dir.path()).0);
         assert!(keep_overlap_allele(&mut kept_alt, true));
         assert!(!kept_alt.no_allele);
+    }
+
+    /// The reference row of `--process_ref_homs` stands under `--lookup_ref`
+    /// (VariationFeatureOverlap.pm:469-474 builds it before any alternate is
+    /// tested against the reference): its allele is the looked-up reference,
+    /// numbered 0, and a record whose one ALT that reference now equals keeps the
+    /// row alone, the ALT dropped behind it.
+    #[test]
+    fn lookup_ref_keeps_the_reference_row() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let fasta = fasta_in(dir.path());
+        let checks = checks(&fasta, false, true);
+        let rules = rules(&transcripts, &checks, false);
+        // Position 1 of the FASTA is `A`, so the one ALT of `T A` equals it.
+        let mut alt = variant("21", 1, 1, "T", "A");
+        let mut row = alt.reference_allele_row();
+        let (kept, warnings, patch) = judge(&rules, &mut row, dir.path());
+        assert!(kept && warnings.is_empty() && patch.replaced_reference());
+        assert_eq!(row.alt_alleles, [b"A".to_vec()]);
+        assert_eq!(row.allele_string, "A/A");
+        assert!(keep_overlap_allele(&mut row, false));
+        assert!(row.reference_allele_row && !row.no_allele);
+        assert_eq!(row.allele_num, Some(0));
+        patch.apply(&mut alt);
+        assert!(!keep_overlap_allele(&mut alt, false));
+        let mut multi = variant("21", 1, 1, "T", "A");
+        multi.record_allele_string_multi = Some("T/A/G".into());
+        let mut row = multi.reference_allele_row();
+        assert!(judge(&rules, &mut row, dir.path()).0);
+        assert!(keep_overlap_allele(&mut row, false));
+        assert_eq!(row.allele_num, Some(0));
+        assert_eq!(row.record_allele_string_multi.as_deref(), Some("A/A/G"));
     }
 
     /// `lookup_ref` (Parser.pm:635-646): the reference allele is replaced by the

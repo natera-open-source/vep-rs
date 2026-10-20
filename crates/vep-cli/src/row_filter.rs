@@ -41,11 +41,31 @@ pub fn apply_to_record(record: &mut [InputVariant], filters: RowFilters) {
     if !filters.any_active() {
         return;
     }
-    for variant in record.iter_mut() {
+    // `affects_cds` asks the overlap's alternate alleles alone
+    // (BaseTranscriptVariation.pm:662-665), so the reference row of
+    // `--process_ref_homs` stays only where its feature has an alternate allele:
+    // a reference-homozygous copy and a non-variant record lose every overlap,
+    // and so does the feature of a `--minimal` split whose allele equals the
+    // reference once trimmed, one feature among the record's (the rows of one
+    // feature share a rejoin key prefix).
+    let feature_has_alternate: Vec<bool> = record
+        .iter()
+        .map(|row| {
+            record.iter().any(|v| {
+                !v.reference_allele_row
+                    && !v.no_allele
+                    && v.rejoin_key_prefix == row.rejoin_key_prefix
+            })
+        })
+        .collect();
+    for (variant, has_alternate) in record.iter_mut().zip(feature_has_alternate) {
         if filters.no_intergenic && variant.transcript_consequences.is_empty() {
             variant.most_severe_consequence = None;
         }
         if filters.coding_only {
+            if variant.reference_allele_row && !has_alternate {
+                variant.transcript_consequences.clear();
+            }
             let (start, end) = crate::runner::structural_variant_bounds(variant);
             variant
                 .transcript_consequences
@@ -239,6 +259,42 @@ mod tests {
         apply_to_record(&mut utr_only, CODING);
         assert!(kept(&utr_only).is_empty());
         assert_eq!(utr_only[0].most_severe_consequence, None);
+    }
+
+    /// Under `--coding_only` a reference row (`--process_ref_homs`) stays with the
+    /// rows of its own feature alone: of a `--minimal` split record `A A,G`, the
+    /// feature `-/-` of the allele equal to the reference has no alternate, so its
+    /// reference row loses every overlap (`affects_cds` asks the alternates,
+    /// BaseTranscriptVariation.pm:662-665), while the feature `A/G`, whose rows
+    /// share the key prefix `A/G_`, keeps its reference row beside `G`.
+    #[test]
+    fn coding_only_judges_a_reference_row_by_its_own_feature() {
+        let coding = || {
+            vec![tc(
+                "ENST1",
+                smallvec![Consequence::SynonymousVariant],
+                Some("301"),
+                Some(900),
+            )]
+        };
+        let mut equal = allele(b"-", 0, coding());
+        equal.reference_allele_row = true;
+        equal.original_start = Some(5);
+        let mut reference = allele(b"A", 0, coding());
+        reference.reference_allele_row = true;
+        reference.original_start = Some(5);
+        reference.rejoin_key_prefix = Some("A/G_".into());
+        let mut alternate = allele(b"G", 1, coding());
+        alternate.original_start = Some(5);
+        alternate.rejoin_key_prefix = Some("A/G_".into());
+        let mut record = vec![equal, reference, alternate];
+        apply_to_record(&mut record, CODING);
+        assert_eq!(
+            kept(&record),
+            [(0, "ENST1".to_string()), (1, "ENST1".to_string())]
+        );
+        assert!(record[1].reference_allele_row && !record[1].transcript_consequences.is_empty());
+        assert_eq!(record[0].most_severe_consequence, None);
     }
 
     /// `--no_intergenic` removes the intergenic row of every allele that

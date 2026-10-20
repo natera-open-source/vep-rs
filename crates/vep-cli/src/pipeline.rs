@@ -63,6 +63,9 @@ use tracing::debug;
 
 use crate::config::{PipelineMode, WriterStrategy};
 use crate::frequency_filter::FrequencyFilter;
+use crate::individuals::{
+    add_reference_allele_row, IndividualRequest, IndividualSplit, RecordReading,
+};
 use crate::pick::{self, FilterConfig};
 use crate::render::render_record;
 use crate::runner::{
@@ -77,18 +80,21 @@ use crate::validate::{
 use crate::variation_matcher;
 use crate::variation_source::{ReadFailure, VariationSource};
 use crate::vcf_parser::{
-    parse_vcf_line_with, parse_vcf_line_with_max_sv_size, record_splits, split_minimal_record,
-    tandem_repeat_warnings, vcf_columns, vcf_line_is_non_variant, VcfParse,
+    non_variant_record, parse_vcf_line_with, parse_vcf_line_with_max_sv_size, record_splits,
+    sample_columns, split_minimal_record, tandem_repeat_warnings, vcf_columns,
+    vcf_line_is_non_variant, SampleColumns, VcfParse,
 };
 use vep_core::coordinate::parse_pos;
-use vep_core::minimal::{apply_minimal_split, minimise_bi_allelic, MinimalSplit};
+use vep_core::minimal::{
+    apply_minimal_split, minimise_bi_allelic, split_reference_row, MinimalSplit,
+};
 use vep_core::sv_record::StructuralRecordError;
 use vep_core::sv_routing::{
     joined, perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string, written_alts,
 };
 use vep_core::sv_span::{structural_end, SpanClass, SpanError};
 use vep_core::synonyms::ChromosomeSynonyms;
-use vep_core::variant::{first_vcf_id, InputVariant};
+use vep_core::variant::InputVariant;
 use vep_core::vcf_info::{info_value, info_value_written};
 use vep_io::input::detect::InputFormat;
 use vep_io::input::{empty_lines_warning, Delimiter};
@@ -152,16 +158,21 @@ pub(crate) struct LineBatch {
     seq: u64,
     text: Vec<u8>,
     items: Vec<Item>,
+    /// The per-individual split of the batch's records under `--individual`,
+    /// resolved against the input's `#CHROM` header once the reader met it
+    /// ([`read_vcf_lines`]); `None` for a run without the flag.
+    individuals: Option<Arc<IndividualSplit>>,
 }
 
 impl LineBatch {
-    fn new(seq: u64, mut buffers: LineBuffers) -> Self {
+    fn new(seq: u64, mut buffers: LineBuffers, individuals: Option<Arc<IndividualSplit>>) -> Self {
         buffers.text.clear();
         buffers.items.clear();
         Self {
             seq,
             text: buffers.text,
             items: buffers.items,
+            individuals,
         }
     }
 
@@ -461,6 +472,13 @@ pub(crate) struct ReaderConfig<'a> {
     /// column scan ([`rejoin_with_tabs`]).
     pub delimiter: &'a Delimiter,
     pub allow_non_variant: bool,
+    /// `--individual`: the individuals to read each record for, resolved against
+    /// the `#CHROM` header's sample names when the reader meets it; a line is then
+    /// kept whole, FORMAT and sample columns included.
+    pub individual: Option<&'a IndividualRequest>,
+    /// `--process_ref_homs`: a reference-homozygous individual annotates the
+    /// reference allele, and every record gains its reference row.
+    pub process_ref_homs: bool,
     pub dont_skip: bool,
     pub max_sv_size: Option<u64>,
     /// `--minimal`: the alleles of every record are trimmed as `vep_core::minimal`
@@ -691,6 +709,8 @@ pub(crate) struct Coordinator<'a> {
     pub capture_raw_input: bool,
     /// The column delimiter of a VCF input, for the line a JSON object re-emits.
     pub delimiter: &'a Delimiter,
+    /// `--process_ref_homs`: every sequence record gains its reference row.
+    pub process_ref_homs: bool,
     pub dont_skip: bool,
     pub max_sv_size: Option<u64>,
     /// `--minimal` ([`ReaderConfig::minimal`]).
@@ -736,13 +756,17 @@ impl Coordinator<'_> {
     }
 
     /// How a parse on this coordinator reads each data line, in either mode.
-    fn line_parse(&self) -> LineParse<'_> {
+    fn line_parse<'b>(&'b self, individuals: Option<&'b IndividualSplit>) -> LineParse<'b> {
         LineParse {
             parse: VcfParse {
                 capture_raw_input: self.capture_raw_input,
                 max_sv_size: self.max_sv_size,
                 minimal: self.minimal,
                 fasta: self.checks.fasta,
+                reading: RecordReading {
+                    individuals,
+                    process_ref_homs: self.process_ref_homs,
+                },
             },
             // Ensembl VEP's JSON `input` joins the record's fields with the run's
             // delimiter (OutputFactory/JSON.pm:172, 247) where its VCF output
@@ -1112,7 +1136,7 @@ fn read_vcf_lines(
     let vcf_out = cfg.output_format == "vcf";
     let mut scanner = LineScanner::new(reader);
     let mut seq = 0u64;
-    let mut batch = LineBatch::new(seq, LineBuffers::default());
+    let mut batch = LineBatch::new(seq, LineBuffers::default(), None);
     let mut records_in_batch = 0usize;
     let mut record_count = 0u64;
     let mut input_headers: Vec<Vec<u8>> = Vec::new();
@@ -1122,6 +1146,14 @@ fn read_vcf_lines(
     let mut empty_lines = 0u64;
     // The line re-joined with tabs when the delimiter is another pattern.
     let mut rejoined: Vec<u8> = Vec::new();
+    // The `#CHROM` header's sample names, read for `--individual`; a VCF without
+    // the line names no sample (ensembl-io BaseVCF4.pm:785-793 reads the names
+    // from it), so `--individual all` reads nothing and a named list is refused.
+    let mut samples = SampleColumns::default();
+    let mut individuals: Option<Arc<IndividualSplit>> = None;
+    // A record's FORMAT and sample columns are read under `--individual`; the
+    // parser columns alone otherwise.
+    let keep_whole_line = cfg.capture_raw_input || cfg.individual.is_some();
 
     loop {
         let mut send_batch = false;
@@ -1133,6 +1165,9 @@ fn read_vcf_lines(
                         push_vcf_header(&mut batch, cfg, &input_headers);
                         vcf_header_written = true;
                     }
+                }
+                if cfg.individual.is_some() && line.starts_with(b"#CHROM") {
+                    samples = sample_columns(&String::from_utf8_lossy(trim_line(line)));
                 }
                 return Ok(());
             }
@@ -1158,8 +1193,18 @@ fn read_vcf_lines(
                 vcf_header_written = true;
             }
             record_count += 1;
+            // The individuals are settled at the first record, when the header
+            // has been read whole (Parser/VCF.pm:609-617 reads the sample names
+            // and dies on an unknown one as it reads the first record).
+            if let (Some(request), None) = (cfg.individual, &individuals) {
+                let split = IndividualSplit::new(request, &samples)
+                    .map_err(|message| crate::config::CliError::new("input", message))?;
+                let split = Arc::new(split);
+                batch.individuals = Some(Arc::clone(&split));
+                individuals = Some(split);
+            }
 
-            let (head, tail) = if cfg.capture_raw_input {
+            let (head, tail) = if keep_whole_line {
                 (line, &b""[..])
             } else {
                 parser_columns(line)
@@ -1187,7 +1232,12 @@ fn read_vcf_lines(
             let past_head = prefix.get(head.len()..).unwrap_or(b"");
             let quoted = (!tail.starts_with(past_head)).then_some(prefix);
             batch.push_data(head, tail, quoted, record_count);
-            records_in_batch += 1;
+            // Ensembl VEP fills its buffer with the per-individual copies
+            // (InputBuffer.pm:212 counts what `$parser->next` yields, one copy at a
+            // time), so a line counts once per individual named under
+            // `--individual`, an upper bound on the copies it yields, and
+            // `--buffer_size` bounds the copies a batch holds.
+            records_in_batch += individuals.as_ref().map_or(1, |split| split.len().max(1));
             send_batch = records_in_batch >= cfg.batch_size;
             Ok(())
         })?;
@@ -1199,7 +1249,11 @@ fn read_vcf_lines(
                 return Ok(());
             }
             seq += 1;
-            batch = LineBatch::new(seq, buffers_back.try_recv().unwrap_or_default());
+            batch = LineBatch::new(
+                seq,
+                buffers_back.try_recv().unwrap_or_default(),
+                individuals.clone(),
+            );
             records_in_batch = 0;
         }
     }
@@ -1335,6 +1389,9 @@ fn read_parsed(
     // split trimmed it) is known only when the record closes: its first such
     // allele is held and becomes the feature with no allele to annotate.
     let mut held_none: Option<InputVariant> = None;
+    // The record closes as one unit, with its reference row first under
+    // `--process_ref_homs`, which Ensembl VEP adds to every sequence feature
+    // whatever the input format (OutputFactory.pm:509-516).
     let close_record = |batch: &mut ParsedBatch, start: usize, held: Option<InputVariant>| {
         if batch.variants.len() == start {
             if let Some(mut none) = held {
@@ -1345,6 +1402,11 @@ fn read_parsed(
                 }
                 batch.variants.push(none);
             }
+        }
+        if cfg.process_ref_homs {
+            let mut record: Vec<InputVariant> = batch.variants.drain(start..).collect();
+            add_reference_allele_row(&mut record);
+            batch.variants.extend(record);
         }
         batch.units.push(Unit::Record(start..batch.variants.len()));
     };
@@ -1420,9 +1482,21 @@ fn read_parsed(
                 // record's allele string, so `allele_index` is this allele's place among
                 // that string's alternate alleles.
                 let own = variant.allele_index;
-                if cfg.minimal && apply_minimal_split(&mut variant, own) == MinimalSplit::NoAllele {
-                    held_none.get_or_insert(variant);
-                    continue;
+                if cfg.minimal {
+                    let outcome = apply_minimal_split(&mut variant, own);
+                    // Every allele of a split record writes its own feature's
+                    // reference row (VariationFeatureOverlap.pm:469-481 per feature,
+                    // carried into the record by OutputFactory.pm:2299-2340), so
+                    // the row goes in per allele here, and `close_record` finds it
+                    // in place.
+                    if outcome != MinimalSplit::Unchanged && cfg.process_ref_homs {
+                        cfg.transcripts.prewarm(&variant.chr)?;
+                        batch.variants.push(split_reference_row(&variant, own));
+                    }
+                    if outcome == MinimalSplit::NoAllele {
+                        held_none.get_or_insert(variant);
+                        continue;
+                    }
                 }
                 cfg.transcripts.prewarm(&variant.chr)?;
                 batch.variants.push(variant);
@@ -1799,31 +1873,6 @@ fn retain_alleles(units: &mut Vec<Unit>, variants: &mut Vec<InputVariant>, keep:
 /// The alleles parsed from one data line; `None` for a passthrough item.
 type ParsedLine = Option<anyhow::Result<Vec<InputVariant>>>;
 
-/// The record of a VCF line whose ALT is `.` under `--allow_non_variant`
-/// (Parser/VCF.pm:259-267, 342): the reference bases from POS with the reference
-/// allele as its whole allele string and no allele to annotate, so no format
-/// writes a row for it, the VCF output carries its line and the JSON output its
-/// object with `most_severe_consequence` `?`, as Ensembl VEP writes them. A
-/// Perl-true INFO/SVTYPE is kept as the record's type, the mark of the line
-/// Ensembl VEP routes to its structural path (`:237-245`).
-fn non_variant_record(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec<InputVariant>> {
-    let mut columns = line.split('\t');
-    let chr = columns.next().unwrap_or("").to_string();
-    let pos_text = columns.next().unwrap_or("");
-    let pos = parse_pos(pos_text).with_context(|| format!("Invalid POS: '{pos_text}'"))?;
-    let id = columns.next().unwrap_or("");
-    let reference = columns.next().unwrap_or("");
-    let info = columns.nth(3).unwrap_or(".");
-    let mut variant = InputVariant::without_allele(chr, pos, reference, std::iter::empty());
-    variant.uploaded_allele_string = Some(variant.allele_string.as_str().into());
-    variant.id = first_vcf_id(id).map(str::to_string);
-    variant.sv_type = info_value(info, "SVTYPE")
-        .filter(|v| perl_true(v))
-        .map(str::to_string);
-    variant.raw_input = capture_raw_input.then(|| line.into());
-    Ok(vec![variant])
-}
-
 /// What every data line of a run is parsed with.
 #[derive(Clone, Copy)]
 struct LineParse<'a> {
@@ -1843,7 +1892,7 @@ impl LineParse<'_> {
         // replacement character where Ensembl VEP prints the bytes.
         let text = String::from_utf8_lossy(line);
         let mut alleles = if vcf_line_is_non_variant(&text) {
-            non_variant_record(&text, self.parse.capture_raw_input)?
+            non_variant_record(&text, &self.parse)?
         } else {
             parse_vcf_line_with(&text, &self.parse)?
         };
@@ -1876,8 +1925,9 @@ fn parse_lines(
         seq,
         text,
         mut items,
+        individuals,
     } = lines;
-    let line_parse = c.line_parse();
+    let line_parse = c.line_parse(individuals.as_deref());
     let parsed: Vec<ParsedLine> = c.pool.install(|| {
         items
             .par_iter()
@@ -1966,40 +2016,53 @@ fn place_parsed_line(
                 columns: Some(&text[span.clone()]),
                 quoted: &text[quoted.clone()],
             };
-            let Some((first, siblings)) = alleles.split_first_mut() else {
-                return Ok(());
-            };
-            let (kept, patch) = rules.validate(first, &line, report);
-            if !kept {
-                return Ok(());
-            }
-            for sibling in siblings {
-                patch.apply(sibling);
-            }
-            // `split_variants` reads the record after `validate_vf` (InputBuffer.pm:638),
-            // so a reference `--lookup_ref` replaced is the one each allele trims
-            // against, and the split decides each allele's row in place of the
-            // overlap rule: a repeated ALT keeps its rows (:658).
-            let splits = rules.minimal && record_splits(first);
-            if patch.replaced_reference() && !splits {
-                // An allele the looked-up reference made equal to it writes no row;
-                // a record left with none is the feature with no allele.
-                let count = alleles.len();
-                let mut kept = Vec::with_capacity(count);
-                for (i, mut allele) in alleles.into_iter().enumerate() {
-                    let last_standing = kept.is_empty() && i + 1 == count;
-                    if keep_overlap_allele(&mut allele, last_standing) {
-                        kept.push(allele);
-                    }
+            // Each individual's copy of the record is a feature of its own:
+            // validated, warned about and written apart from the others
+            // (Parser.pm:189 runs `validate_vf` on every feature the parser returns).
+            for copy in alleles.chunk_by_mut(InputVariant::same_record) {
+                let Some((first, siblings)) = copy.split_first_mut() else {
+                    continue;
+                };
+                let (kept, patch) = rules.validate(first, &line, report);
+                if !kept {
+                    continue;
                 }
-                alleles = kept;
+                for sibling in siblings {
+                    patch.apply(sibling);
+                }
+                // `split_variants` reads the record after `validate_vf` (InputBuffer.pm:638),
+                // so a reference `--lookup_ref` replaced is the one each allele trims
+                // against, and the split decides each allele's row in place of the
+                // overlap rule: a repeated ALT keeps its rows (:658). The record's
+                // first allele proper decides, not the reference row that may lead
+                // it (`--process_ref_homs`): the row carries the record's string
+                // whether or not the record is multi-allelic.
+                let splits = rules.minimal
+                    && copy
+                        .iter()
+                        .find(|allele| !allele.reference_allele_row)
+                        .is_some_and(record_splits);
+                let mut record: Vec<InputVariant> = copy.iter_mut().map(std::mem::take).collect();
+                if patch.replaced_reference() && !splits {
+                    // An allele the looked-up reference made equal to it writes no row;
+                    // a record left with none is the feature with no allele.
+                    let count = record.len();
+                    let mut kept = Vec::with_capacity(count);
+                    for (i, mut allele) in record.into_iter().enumerate() {
+                        let last_standing = kept.is_empty() && i + 1 == count;
+                        if keep_overlap_allele(&mut allele, last_standing) {
+                            kept.push(allele);
+                        }
+                    }
+                    record = kept;
+                }
+                if splits {
+                    record = split_minimal_record(record);
+                }
+                let start = variants.len();
+                variants.extend(record);
+                units.push(Unit::Record(start..variants.len()));
             }
-            if splits {
-                alleles = split_minimal_record(alleles);
-            }
-            let start = variants.len();
-            variants.extend(alleles);
-            units.push(Unit::Record(start..variants.len()));
         }
         Err(e) => {
             // A line the parser cannot read is skipped with its warning under
@@ -2430,7 +2493,7 @@ fn parse_task_lines(
     skips: &mut Vec<SkipReport>,
 ) -> anyhow::Result<(Vec<Unit>, Vec<InputVariant>)> {
     let rules = c.skip_rules();
-    let line_parse = c.line_parse();
+    let line_parse = c.line_parse(lines.individuals.as_deref());
     let mut units = Vec::with_capacity(items.len());
     let mut variants = Vec::with_capacity(items.len());
     let mut report = |reported: Reported<'_>| skips.push(reported.owned());
@@ -3120,7 +3183,7 @@ mod tests {
     /// the ALT or INFO names it.
     #[test]
     fn batch_chromosomes_names_each_chromosome_and_breakend_mate_once() {
-        let mut batch = LineBatch::new(0, LineBuffers::default());
+        let mut batch = LineBatch::new(0, LineBuffers::default(), None);
         batch.push_text(b"##fileformat=VCFv4.2");
         batch.push_data(b"chr21\t100\t.\tA\tG\t.\tPASS\t.", b"", None, 3);
         batch.push_data(b"21\t200\t.\tC\tT,G\t.\tPASS\t.", b"", None, 4);
@@ -3166,7 +3229,7 @@ mod tests {
     /// record, so the task finds it loaded.
     #[test]
     fn batch_chromosomes_warms_the_chromosome_a_bare_m_record_is_named_on() {
-        let mut batch = LineBatch::new(0, LineBuffers::default());
+        let mut batch = LineBatch::new(0, LineBuffers::default(), None);
         batch.push_data(b"M\t100\t.\tA\tG\t.\tPASS\t.", b"", None, 1);
         let by_accession = LazyTranscriptIndexes::from_loaded(
             std::collections::HashMap::from([("NC_012920.1".to_string(), Vec::new())]),
@@ -3241,6 +3304,7 @@ mod tests {
             write_ctx: &write_ctx,
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: false,
@@ -3254,7 +3318,7 @@ mod tests {
         let negative_tandem =
             "21\t500\t.\tG\t<CNV:TR>,<CNV:TR>\t.\tPASS\tSVLEN=-9,-3;RN=1,1;RUS=TCA,TCA;RUC=4,2";
         let lines = || {
-            let mut batch = LineBatch::new(0, LineBuffers::default());
+            let mut batch = LineBatch::new(0, LineBuffers::default(), None);
             batch.push_text(b"#CHROM\tPOS");
             batch.push_data(b"21\t100\t.\tA\tG,T\t.\tPASS\t.", b"", None, 2);
             batch.push_data(malformed.as_bytes(), b"", None, 3);
@@ -3344,7 +3408,7 @@ mod tests {
         // skipped alike; a chromosome the cache lacks is warned about and kept.
         c.dont_skip = true;
         let unknown_chr = "Z\t100\t.\tA\tG\t.\tPASS\t.";
-        let mut batch = LineBatch::new(1, LineBuffers::default());
+        let mut batch = LineBatch::new(1, LineBuffers::default(), None);
         batch.push_data(unknown_chr.as_bytes(), b"", None, 7);
         batch.push_data(malformed.as_bytes(), b"", None, 8);
         let mut skips = Vec::new();
@@ -3372,7 +3436,16 @@ mod tests {
     /// deletion keeping its two-base reference; `1 ACG AGG,AGG` keeps both rows of
     /// its repeated allele; `1 T A,G` is looked up as `A/A/G`, which then splits,
     /// so `A` writes no row and `G` is numbered 2 under the string `A/A/G`; and
-    /// `1 T A,A`, looked up as `A/A/A`, is the feature with no allele.
+    /// `1 T A,A`, looked up as `A/A/A`, is the feature with no allele, as is the
+    /// bi-allelic `1 T A`, looked up as `A/A`, which `split_variants` leaves alone.
+    /// Under `--process_ref_homs` every allele's feature writes its own reference
+    /// row before the allele's, over the feature's trimmed span and under its
+    /// rejoin key, an allele equal to the reference once trimmed writing its
+    /// feature's row `-/-` alone, so the record left with no allele holds that row
+    /// and no allele-less feature (one row, not two: the reader dropped the
+    /// repeated `A` of `T A,A` as a repeat before the looked-up reference made the
+    /// record split); the bi-allelic record keeps its one reference row `A/A` and
+    /// drops the allele (VariationFeatureOverlap.pm:469-481).
     #[test]
     fn minimal_splits_after_the_looked_up_reference() {
         let _guard = crate::validate::sink_test_guard();
@@ -3407,7 +3480,7 @@ mod tests {
             tab_formatter: None,
             extra_plan: &extra_plan,
         };
-        let c = Coordinator {
+        let mut c = Coordinator {
             pool: &pool,
             use_parallel: false,
             resources: &resources,
@@ -3416,6 +3489,7 @@ mod tests {
             write_ctx: &write_ctx,
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: true,
@@ -3425,12 +3499,16 @@ mod tests {
             depth: PIPELINE_DEPTH,
             task_records: None,
         };
-        let mut batch = LineBatch::new(0, LineBuffers::default());
-        batch.push_data(b"21\t1\tthree\tACG\tAGG,ATG,A\t.\t.\t.", b"", None, 1);
-        batch.push_data(b"21\t1\trepeat\tACG\tAGG,AGG\t.\t.\t.", b"", None, 2);
-        batch.push_data(b"21\t1\tequal\tT\tA,G\t.\t.\t.", b"", None, 3);
-        batch.push_data(b"21\t1\tnone\tT\tA,A\t.\t.\t.", b"", None, 4);
-        let parsed = parse_lines(batch, &c, &mut Spare::default()).unwrap();
+        let lines = || {
+            let mut batch = LineBatch::new(0, LineBuffers::default(), None);
+            batch.push_data(b"21\t1\tthree\tACG\tAGG,ATG,A\t.\t.\t.", b"", None, 1);
+            batch.push_data(b"21\t1\trepeat\tACG\tAGG,AGG\t.\t.\t.", b"", None, 2);
+            batch.push_data(b"21\t1\tequal\tT\tA,G\t.\t.\t.", b"", None, 3);
+            batch.push_data(b"21\t1\tnone\tT\tA,A\t.\t.\t.", b"", None, 4);
+            batch.push_data(b"21\t1\tbi\tT\tA\t.\t.\t.", b"", None, 5);
+            batch
+        };
+        let parsed = parse_lines(lines(), &c, &mut Spare::default()).unwrap();
         let shape = |v: &InputVariant| {
             (
                 v.input_record,
@@ -3465,6 +3543,7 @@ mod tests {
                 shaped(2, "C/G", 2, 2, 2, "ACG/AGG/AGG"),
                 shaped(3, "A/G", 1, 1, 2, "A/A/G"),
                 shaped(4, "A/A/A", 1, 1, 1, "A/A/A"),
+                shaped(5, "A/A", 1, 1, 1, "T/A"),
             ]
         );
         assert!(parsed.variants.iter().take(6).all(|v| v.minimised));
@@ -3473,8 +3552,8 @@ mod tests {
             parsed.variants[4].rejoin_key_prefix.as_deref(),
             Some("C/G_")
         );
-        assert!(parsed.variants[6].no_allele);
-        assert_eq!(
+        assert!(parsed.variants[6].no_allele && parsed.variants[7].no_allele);
+        let unit_ranges = |parsed: &ParsedBatch| {
             parsed
                 .units
                 .iter()
@@ -3482,8 +3561,77 @@ mod tests {
                     Unit::Record(range) => format!("record {range:?}"),
                     Unit::Text(span) => format!("text {span:?}"),
                 })
-                .collect::<Vec<_>>(),
-            ["record 0..3", "record 3..5", "record 5..6", "record 6..7"]
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            unit_ranges(&parsed),
+            [
+                "record 0..3",
+                "record 3..5",
+                "record 5..6",
+                "record 6..7",
+                "record 7..8"
+            ]
+        );
+
+        c.process_ref_homs = true;
+        let parsed = parse_lines(lines(), &c, &mut Spare::default()).unwrap();
+        let shapes: Vec<_> = parsed.variants.iter().map(shape).collect();
+        assert_eq!(
+            shapes,
+            [
+                shaped(1, "C/C", 2, 2, 0, "CG/GG/TG/-"),
+                shaped(1, "C/G", 2, 2, 1, "CG/GG/TG/-"),
+                shaped(1, "C/C", 2, 2, 0, "CG/GG/TG/-"),
+                shaped(1, "C/T", 2, 2, 2, "CG/GG/TG/-"),
+                shaped(1, "CG/CG", 2, 3, 0, "CG/GG/TG/-"),
+                shaped(1, "CG/-", 2, 3, 3, "CG/GG/TG/-"),
+                shaped(2, "C/C", 2, 2, 0, "ACG/AGG/AGG"),
+                shaped(2, "C/G", 2, 2, 1, "ACG/AGG/AGG"),
+                shaped(2, "C/C", 2, 2, 0, "ACG/AGG/AGG"),
+                shaped(2, "C/G", 2, 2, 2, "ACG/AGG/AGG"),
+                shaped(3, "-/-", 2, 1, 0, "A/A/G"),
+                shaped(3, "A/A", 1, 1, 0, "A/A/G"),
+                shaped(3, "A/G", 1, 1, 2, "A/A/G"),
+                shaped(4, "-/-", 2, 1, 0, "A/A/A"),
+                shaped(5, "A/A", 1, 1, 0, "T/A"),
+            ]
+        );
+        let reference_rows: Vec<(bool, Option<&str>)> = parsed
+            .variants
+            .iter()
+            .map(|v| (v.reference_allele_row, v.rejoin_key_prefix.as_deref()))
+            .collect();
+        assert_eq!(
+            reference_rows,
+            [
+                (true, None),
+                (false, None),
+                (true, Some("C/T_")),
+                (false, Some("C/T_")),
+                (true, Some("CG/-_")),
+                (false, Some("CG/-_")),
+                (true, None),
+                (false, None),
+                (true, Some("C/G_")),
+                (false, Some("C/G_")),
+                (true, None),
+                (true, Some("A/G_")),
+                (false, Some("A/G_")),
+                (true, None),
+                (true, None),
+            ]
+        );
+        assert!(parsed.variants.iter().all(|v| !v.no_allele));
+        assert_eq!(
+            unit_ranges(&parsed),
+            [
+                "record 0..6",
+                "record 6..10",
+                "record 10..13",
+                "record 13..14",
+                "record 14..15"
+            ]
         );
     }
 
@@ -3559,6 +3707,51 @@ mod tests {
             .collect()
     }
 
+    /// Under `--individual` a line counts once per individual named, whether or
+    /// not that individual's genotype yields a copy, an upper bound on the copies
+    /// Ensembl VEP's buffer counts (InputBuffer.pm:212), so four samples over a
+    /// batch size of eight close a batch every two lines.
+    #[test]
+    fn read_vcf_counts_a_line_once_per_individual_toward_the_batch() {
+        let input = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3\tS4\n\
+                     21\t100\t.\tA\tG\t.\tPASS\t.\tGT\t0/1\t0/0\t1/1\t./.\n\
+                     21\t200\t.\tC\tT\t.\tPASS\t.\tGT\t0/1\t0/0\t1/1\t./.\n\
+                     21\t300\t.\tG\tA\t.\tPASS\t.\tGT\t0/1\t0/0\t1/1\t./.\n\
+                     21\t400\t.\tT\tC\t.\tPASS\t.\tGT\t0/1\t0/0\t1/1\t./.\n\
+                     21\t500\t.\tA\tC\t.\tPASS\t.\tGT\t0/1\t0/0\t1/1\t./.";
+        let transcripts = LazyTranscriptIndexes::empty();
+        let request = IndividualRequest::All;
+        let cfg = ReaderConfig {
+            batch_size: 8,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            allow_non_variant: true,
+            individual: Some(&request),
+            process_ref_homs: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: false,
+            output_format: "vep",
+            no_headers: false,
+            vcf_formatter: None,
+            transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
+            prewarm_order: &[],
+            checks: &crate::validate::NO_CHECKS,
+        };
+        let batches = line_batches(input, &cfg, 8192);
+        let data_lines: Vec<usize> = batches
+            .iter()
+            .map(|b| {
+                b.items
+                    .iter()
+                    .filter(|item| matches!(item, Item::Data { .. }))
+                    .count()
+            })
+            .collect();
+        assert_eq!(data_lines, [2, 2, 1]);
+    }
+
     /// Reader-side line handling: line numbers count the data records as Ensembl
     /// VEP counts them (header and blank lines not counted, Parser/VCF.pm:228),
     /// header lines are dropped for a non-VCF output, data lines are trimmed and
@@ -3578,6 +3771,8 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
+            individual: None,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: false,
@@ -3642,6 +3837,8 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
+            individual: None,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: false,
@@ -3730,6 +3927,8 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Whitespace,
             allow_non_variant: false,
+            individual: None,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: false,
@@ -3888,6 +4087,8 @@ mod tests {
             capture_raw_input: true,
             delimiter: &Delimiter::Tab,
             allow_non_variant: true,
+            individual: None,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: false,
@@ -3943,6 +4144,8 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
+            individual: None,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: false,
@@ -4252,6 +4455,8 @@ mod tests {
             capture_raw_input: true,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
+            individual: None,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: false,
@@ -4330,6 +4535,8 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
+            individual: None,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: false,
@@ -4388,6 +4595,8 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
+            individual: None,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: false,
@@ -4463,6 +4672,8 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
+            individual: None,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: true,
@@ -4544,6 +4755,8 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
+            individual: None,
+            process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
             minimal: false,
@@ -4590,6 +4803,108 @@ mod tests {
         assert_eq!(batch.units.len(), 2);
     }
 
+    /// Under `--minimal --process_ref_homs` an Ensembl-format record that splits
+    /// writes a reference row per allele as a VCF record does, each over its
+    /// feature's trimmed span and under its key, the allele equal to the looked-up
+    /// reference writing its feature's row `-/-` alone (`T/A/G` over the reference
+    /// `A`: `-/-`, then `A/A` and `A/G` numbered 2 under `A/G_`); a record whose
+    /// every allele equals it holds one such row per allele and no allele-less
+    /// feature; a record that does not split keeps the record's one row in front.
+    #[test]
+    fn read_parsed_writes_a_reference_row_per_split_allele_under_minimal() {
+        let dir = tempfile::tempdir().unwrap();
+        let fasta_path = dir.path().join("ref.fa");
+        std::fs::write(&fasta_path, ">21\nAAAAAAAAAAAAAAAAAAAA\n").unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), "21\t20\t4\t20\t21\n").unwrap();
+        let fasta = vep_fasta::IndexedFasta::from_path(&fasta_path).unwrap();
+        let checks = crate::validate::ReferenceChecks {
+            chr: None,
+            check_ref: false,
+            lookup_ref: true,
+            fasta: Some(&fasta),
+            parser_names_records: false,
+        };
+        let input =
+            "21\t5\t5\tT/A/G\t1\tsplit\n21\t6\t6\tT/A/A\t1\tnone\n21\t7\t7\tT/G/C\t1\tplain\n";
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("21".to_string(), Vec::new())]),
+            0,
+            0,
+        );
+        let cfg = ReaderConfig {
+            batch_size: 8,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            allow_non_variant: false,
+            individual: None,
+            process_ref_homs: true,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: true,
+            output_format: "json",
+            no_headers: false,
+            vcf_formatter: None,
+            transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
+            prewarm_order: &[],
+            checks: &checks,
+        };
+        let _in_turn = crate::validate::sink_test_guard();
+        let (tx, rx) = mpsc::sync_channel(64);
+        let (reader, last_line) = LineCapture::new(Cursor::new(input.to_string()));
+        let parser: Box<dyn vep_io::InputParser> =
+            Box::new(vep_io::input::ensembl::EnsemblParser::new(
+                reader,
+                &vep_io::input::ParserContext::default(),
+            ));
+        read_parsed(parser, &last_line, InputFormat::Ensembl, &cfg, tx).unwrap();
+        let batch = match rx.iter().next().unwrap() {
+            InputBatch::Parsed(p) => p,
+            InputBatch::Lines(_) => unreachable!(),
+        };
+        // The number a row prints: `allele_num`, else the allele's place.
+        let shape: Vec<_> = batch
+            .variants
+            .iter()
+            .map(|v| {
+                (
+                    v.input_record,
+                    v.allele_string.as_str(),
+                    v.start,
+                    v.end,
+                    v.allele_num.unwrap_or(v.allele_index as u32 + 1),
+                    v.reference_allele_row,
+                    v.rejoin_key_prefix.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            shape,
+            [
+                (1, "-/-", 6, 5, 0, true, None),
+                (1, "A/A", 5, 5, 0, true, Some("A/G_")),
+                (1, "A/G", 5, 5, 2, false, Some("A/G_")),
+                (2, "-/-", 7, 6, 0, true, None),
+                (2, "-/-", 7, 6, 0, true, Some("-/-_")),
+                (3, "A/A", 7, 7, 0, true, None),
+                (3, "A/G", 7, 7, 1, false, None),
+                (3, "A/C", 7, 7, 2, false, None),
+            ]
+        );
+        assert!(batch.variants.iter().all(|v| !v.no_allele));
+        assert_eq!(
+            batch
+                .units
+                .iter()
+                .map(|u| match u {
+                    Unit::Record(range) => range.clone(),
+                    Unit::Text(_) => unreachable!(),
+                })
+                .collect::<Vec<_>>(),
+            [0..3, 3..5, 5..8]
+        );
+    }
+
     /// The `--max_sv_size` test measures the span `--minimal` leaves: Ensembl VEP
     /// minimises a bi-allelic record in `post_process_vfs` before `validate_vf`
     /// runs its size test (Parser.pm:852, :491-499), so an Ensembl-format
@@ -4611,6 +4926,8 @@ mod tests {
                 capture_raw_input: false,
                 delimiter: &Delimiter::Tab,
                 allow_non_variant: false,
+                individual: None,
+                process_ref_homs: false,
                 dont_skip: false,
                 max_sv_size: Some(5),
                 minimal,

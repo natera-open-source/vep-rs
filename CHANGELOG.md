@@ -108,6 +108,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A protein notation finds its transcript by translation id, transcript id or its gene's transcripts, and the `--ambiguous_hgvs` refusal names protein notations among the inputs resolved to one variant. (#N)
 - Golden-corpus manifests may mask `DOMAINS` and `FREQS` order: a manifest or flag set naming `order_only` under `masks` compares their items as multisets in the golden tests. (#N)
 - Golden corpora `GRCh38-vcf-minimal` (23 records under `--minimal --uploaded_allele`) and `GRCh38-vcf-tandem-repeats` (15 `<CNV:TR>` records without a FASTA, with one, and under `--max_sv_size 10`). (#N)
+- `--individual all|<list>` annotates a VCF record once per named sample, with `IND` and `ZYG` on every row, one VCF line and one JSON object per individual. (#N)
+- `--process_ref_homs` adds the reference allele's row to every feature of every record, numbered 0 and first, with the terms an allele equal to the reference takes. (#N)
+- The `GRCh38-individual` corpus runs eight sample columns of the 1000 Genomes high-coverage chromosome 21 panel plain and under five per-sample flag sets, and `GRCh38-vcf-minimal` gains a reference-row flag set. (#N)
 
 ### Changed
 

@@ -1,0 +1,120 @@
+{
+  "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+  "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+  "vep_version_reported": "ensembl-vep          : 116.2",
+  "cache_version": 116,
+  "divergences_classified_against": {
+    "engine": "vep-rs",
+    "source": "the tree this corpus is committed with",
+    "binary_md5": "70c8734b2867de5a6d36f8d757b65515",
+    "arch": "arm64",
+    "flags_passed": [
+      "--allow_non_variant"
+    ]
+  },
+  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allow_non_variant [--tab|--vcf|--json]",
+  "perl_environment": "PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0 on every container run, so the order Ensembl VEP gives an individual's two alternate alleles, a hash order, is the same on every run; the hand-built multi-allelic records list their ALTs in that order",
+  "perl_cache": "homo_sapiens/116_GRCh38",
+  "fasta": "none on either side",
+  "input": "126 records of the 1000 Genomes high-coverage chromosome 21 phased panel (GRCh38; FORMAT and the first eight sample columns kept, the sample columns renamed S1 to S8 in column order) sampled by consequence combination and by the genotype classes those samples show, and 14 hand-built records at chromosome 21 sites of the same panel whose genotypes and extra alleles are synthetic (the IDs beginning hb_): missing, partially missing, haploid, phased, star and multi-allelic genotypes, a repeated ALT, a record with one reference-homozygous sample and the rest missing, a non-variant record and a record whose only ALT is *. The sample names S1 to S8 are labels of the corpus, not of any individual.",
+  "generator": "build_golden_corpus.py select --keep-samples 8 --genotype-exemplars 8 --k 1 --seed 1 --multi-allelic-per-suite 0 over the two inputs (the panel against Ensembl VEP 116.2's default output for the sites-only file, the hand-built records against their own container run), every hand-built record with a reference row named by --include; json_cache: prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions from the GRCh38 release-116 JSON cache; expected outputs: one Ensembl VEP 116.2 container run per format per set (five flag sets: the per-sample modes, the list, the reference row with and without the per-sample modes, and the reference row with --allele_number, --show_ref_allele and --uploaded_allele); manifest: classify on the manifest run and each flag set against the committed tree's binary.",
+  "sha256": {
+    "default.txt": "acee8dba11afdb1c07be71537563ad8ac8b0734c9d20168ea1d1bb699c0251a5",
+    "tab.txt": "7a25f96dcebdf907ded7aef116ade5410865c844fd0d4264c836372907a5487a",
+    "vcf.vcf": "206af5449d7e04d8b4263948b846d8ac7d8249ea042bc1512c3ec020678e3706",
+    "json.jsonl": "e6a37d17342a08dfb1ebbd1bdf0f9d97929d9606c7663802272f05bc8386bca4"
+  },
+  "variants_vcf_sha256": "a84fd69e5c5ae4f32968a51617d883e10f3ffe28f250140dc652a50850fd4b83",
+  "pruned_cache": {
+    "transcripts_per_chromosome": {
+      "21": 1890
+    },
+    "shards": 31,
+    "spans_by_chromosome": {
+      "21": 140
+    },
+    "chr_synonyms": "the chromosome 21 lines of homo_sapiens/116_GRCh38/chr_synonyms.txt"
+  },
+  "flag_sets": {
+    "individual-all": {
+      "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --individual all [--tab|--vcf|--json]",
+      "formats_compared": [
+        "default",
+        "tab",
+        "vcf",
+        "json"
+      ],
+      "expected_dir": "expected_individual-all",
+      "sha256": {
+        "default.txt": "356abce5d890590f96992a2855a22dfebed930a0abce961612313fb03cb6c8c7",
+        "tab.txt": "a088de6e540e4924b71a480ca4bdcfb84e04f3f7c38ee3124de8b84ac194ce7a",
+        "vcf.vcf": "479e69053c414e788714f2d557e1ace58b86097139c33dd02d3da0549e2f0dca",
+        "json.jsonl": "1548e1d8d55691e5dd2db77b22ae93f34027afa82f39103ba2e8657390dd140e"
+      }
+    },
+    "individual-list": {
+      "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --individual S1,S3 [--tab|--vcf|--json]",
+      "formats_compared": [
+        "default",
+        "tab",
+        "vcf",
+        "json"
+      ],
+      "expected_dir": "expected_individual-list",
+      "sha256": {
+        "default.txt": "242d8bb8e3b9683a7d40892b9f60f6454420ea026a385cf25357462975c81947",
+        "tab.txt": "439da9673d7ad125ac2b9ac46bc9e4f513aa96262dcc02af5a2168729bd45b90",
+        "vcf.vcf": "ed7bdcb042cd44d6a06a73834ad66fac066128c77566990caa4d3b6a1ced2e6c",
+        "json.jsonl": "cde395ed7e0b12045ea9d79958000add74e749a8047b58b419dabd04ffa8427e"
+      }
+    },
+    "individual-refhoms": {
+      "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --individual all --process_ref_homs [--tab|--vcf|--json]",
+      "formats_compared": [
+        "default",
+        "tab",
+        "vcf",
+        "json"
+      ],
+      "expected_dir": "expected_individual-refhoms",
+      "sha256": {
+        "default.txt": "d49f57b77d8ee984bf6fb0e61051f1726164b10e02f84d236a098a6152c2e5d1",
+        "tab.txt": "60741a56e34b9ff06248ec7b4e9a436b3145a144c8922242c9821466ed5e4f1e",
+        "vcf.vcf": "384443193daaa1439af070987b029740bd491c2e3808fc744ab1269cf2cc3b51",
+        "json.jsonl": "ab5a9b4aa4e39897a0ff3890b46214b3ae6209f1510e7c040262d1149800fe60"
+      }
+    },
+    "refhoms-alone": {
+      "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --process_ref_homs [--tab|--vcf|--json]",
+      "formats_compared": [
+        "default",
+        "tab",
+        "vcf",
+        "json"
+      ],
+      "expected_dir": "expected_refhoms-alone",
+      "sha256": {
+        "default.txt": "58326e9e807b9906e49bdcaf620b0febfbcb84d790ca281d02baf76312d2a435",
+        "tab.txt": "db38c44be33ec42fde6f2cf127717052f51adaa4e2c6eb805fe51626fedc3a90",
+        "vcf.vcf": "049c62c830762036271639e2e4e491509a90bff0722980dc863562b83d0370c5",
+        "json.jsonl": "4df4a74e8956df746e8163fe07ac16578a8f653b35aad95591806525a3e41db7"
+      }
+    },
+    "individual-refhoms-fields": {
+      "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --individual all --process_ref_homs --allele_number --show_ref_allele --uploaded_allele [--tab|--vcf|--json]",
+      "formats_compared": [
+        "default",
+        "tab",
+        "vcf",
+        "json"
+      ],
+      "expected_dir": "expected_individual-refhoms-fields",
+      "sha256": {
+        "default.txt": "12ac281eee67e0d578a7c498400a08251d43e1e50a58c2dc7ed9de0bf94f3b4d",
+        "tab.txt": "e33585103a7c9bafdd3e4d9e5969f3d5aa195cc5827d61850e4c1bf961b17df2",
+        "vcf.vcf": "0273bf4767d2bbb2c99061d6864303861c0612f3ca403873b16ff4c48b2ae83c",
+        "json.jsonl": "b3778756f26a30d8cb14d8241808e5744bcf23724dbaf035eb8945318463f100"
+      }
+    }
+  }
+}

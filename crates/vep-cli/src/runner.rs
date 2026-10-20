@@ -791,6 +791,35 @@ pub(crate) fn apply_record_rules(
                 v.overlapping_svs.clone_from(&union);
             }
         }
+        // The reference row of a bi-allelic record prints the alternate allele's
+        // HGVSg: Ensembl VEP looks a row's notation up by the record's second
+        // allele whenever the record's allele string has two
+        // (OutputFactory.pm:1386-1394), the allele number deciding only for a
+        // string of three or more, which a `*` ALT with no row of its own still
+        // counts towards (`C/T/*`).
+        if let [reference, alternate] = alleles {
+            if reference.reference_allele_row
+                && !alternate.reference_allele_row
+                && alternate.working_allele_string().split('/').count() == 2
+            {
+                reference.hgvsg.clone_from(&alternate.hgvsg);
+            }
+        }
+        // A `--minimal` split record has one intergenic variation: the rejoin
+        // moves a later feature's intergenic alleles into the first intergenic
+        // feature's and leaves that feature's reference allele behind
+        // (OutputFactory.pm:2323-2338), so of the reference rows
+        // (`--process_ref_homs`) the split features carry, the first that overlaps
+        // no feature writes the record's intergenic row and the others none.
+        let intergenic_reference_rows = alleles.iter_mut().filter(|v| {
+            v.reference_allele_row
+                && v.original_start.is_some()
+                && v.transcript_consequences.is_empty()
+                && v.most_severe_consequence.is_some()
+        });
+        for later_row in intergenic_reference_rows.skip(1) {
+            later_row.most_severe_consequence = None;
+        }
     }
 }
 
@@ -842,6 +871,9 @@ impl Runner {
             // `@FLAG_FIELDS` lists PICK under the three flagging variants alone
             // (Constants.pm:75-77); the removing variants add no column.
             include_pick: c.flag_pick || c.flag_pick_allele || c.flag_pick_allele_gene,
+            individual: c.individual.is_some(),
+            process_ref_homs: c.process_ref_homs,
+            coding_only: c.coding_only,
             variant_class: c.variant_class,
             minimal: c.minimal,
             clinvar_somatic_classification: c.clinvar_somatic_classification,
@@ -1339,11 +1371,18 @@ impl Runner {
             fasta: reference_fasta.as_deref(),
             parser_names_records,
         };
+        let individual_request = self
+            .config
+            .individual
+            .as_deref()
+            .map(crate::individuals::IndividualRequest::from_list);
         let reader_cfg = pipeline::ReaderConfig {
             batch_size,
             capture_raw_input,
             delimiter: &delimiter,
             allow_non_variant: self.config.allow_non_variant,
+            individual: individual_request.as_ref(),
+            process_ref_homs: self.config.process_ref_homs,
             dont_skip: self.config.dont_skip,
             max_sv_size: self.config.max_sv_size,
             minimal: self.config.minimal,
@@ -1374,6 +1413,7 @@ impl Runner {
             write_ctx: &write_ctx,
             capture_raw_input,
             delimiter: &delimiter,
+            process_ref_homs: self.config.process_ref_homs,
             dont_skip: self.config.dont_skip,
             max_sv_size: self.config.max_sv_size,
             minimal: self.config.minimal,
@@ -1846,12 +1886,16 @@ fn parquet_column_sql(name: &str) -> String {
 }
 
 /// Columns of the nested shape that describe the input record rather than one
-/// consequence; they stay scalar and join the grouping key.
-const PARQUET_PER_VARIANT_COLUMNS: [&str; 4] = [
+/// consequence; they stay scalar and join the grouping key. `IND` and `ZYG` name
+/// the individual whose copy of the record the row belongs to (`--individual`),
+/// so one record's copies stay as many rows.
+const PARQUET_PER_VARIANT_COLUMNS: [&str; 6] = [
     "Uploaded_variation",
     "Location",
     "Allele",
     "Existing_variation",
+    "IND",
+    "ZYG",
 ];
 
 /// Subprocesses the `duckdb` CLI to turn the TSV intermediate into a
@@ -5032,6 +5076,134 @@ mod tests {
         assert_eq!(batch[1].overlapping_svs, ["esv1", "nsv2", "nsv9"]);
         assert_eq!(batch[2].overlapping_svs, ["nsv5"]);
         assert_eq!(batch[3].overlapping_svs, ["nsv5"]);
+    }
+
+    /// The reference row of `--process_ref_homs` takes the alternate's `HGVSg`
+    /// when the record's allele string has two alleles (OutputFactory.pm:1386-1394
+    /// reads the string's second allele for every row of such a record), and none
+    /// when it has three, a `*` ALT counted although it writes no row: `C T,*` is
+    /// the string `C/T/*` with the one alternate row, and its reference row prints
+    /// no `HGVSg`, as Ensembl VEP 116.2 writes it.
+    #[test]
+    fn reference_row_takes_the_alternate_hgvsg_on_a_two_allele_string_alone() {
+        use crate::individuals::RecordReading;
+        use crate::vcf_parser::{parse_vcf_line_with, VcfParse};
+
+        let parse = VcfParse {
+            reading: RecordReading {
+                individuals: None,
+                process_ref_homs: true,
+            },
+            ..VcfParse::default_run(false)
+        };
+        let mut batch = Vec::new();
+        for (n, line) in [
+            "21\t100\tbi\tA\tG\t.\t.\t.",
+            "21\t200\tstar\tC\tT,*\t.\t.\t.",
+            "21\t300\tmulti\tG\tA,T\t.\t.\t.",
+        ]
+        .iter()
+        .enumerate()
+        {
+            for mut v in parse_vcf_line_with(line, &parse).unwrap() {
+                v.input_record = n as u64 + 1;
+                if !v.reference_allele_row {
+                    v.hgvsg = Some(format!("21:g.{}{}", v.start, v.display_allele()));
+                }
+                batch.push(v);
+            }
+        }
+        let rows: Vec<(String, bool)> = batch
+            .iter()
+            .map(|v| (v.id.clone().unwrap(), v.reference_allele_row))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("bi".to_string(), true),
+                ("bi".to_string(), false),
+                ("star".to_string(), true),
+                ("star".to_string(), false),
+                ("multi".to_string(), true),
+                ("multi".to_string(), false),
+                ("multi".to_string(), false),
+            ]
+        );
+        apply_record_rules(&mut batch, None);
+        assert_eq!(batch[0].hgvsg.as_deref(), Some("21:g.100G"));
+        assert_eq!(batch[2].hgvsg, None);
+        assert_eq!(batch[3].hgvsg.as_deref(), Some("21:g.200T"));
+        assert_eq!(batch[4].hgvsg, None);
+    }
+
+    /// A `--minimal` split record that overlaps no feature writes one intergenic
+    /// reference row (`--process_ref_homs`), the first split feature's: the rejoin
+    /// moves a later feature's intergenic alleles into the first intergenic
+    /// variation and leaves that feature's reference allele behind
+    /// (OutputFactory.pm:2323-2338), as Ensembl VEP 116.2 writes `T` 0, `A` 1 and
+    /// `AA` 2 for `21 20000326 TT TA,TTAA`; a record whose first feature overlaps a
+    /// transcript takes its intergenic reference row from the first that does not.
+    #[test]
+    fn a_split_record_writes_one_intergenic_reference_row() {
+        use crate::individuals::RecordReading;
+        use crate::vcf_parser::{parse_vcf_line_with, split_minimal_record, VcfParse};
+        use vep_core::consequence::TranscriptConsequence;
+
+        let parse = VcfParse {
+            minimal: true,
+            reading: RecordReading {
+                individuals: None,
+                process_ref_homs: true,
+            },
+            ..VcfParse::default_run(false)
+        };
+        let intergenic = |batch: &mut Vec<InputVariant>| {
+            for v in batch.iter_mut() {
+                v.input_record = 1;
+                v.most_severe_consequence = Some(Consequence::IntergenicVariant);
+            }
+        };
+        let mut batch = split_minimal_record(
+            parse_vcf_line_with("21\t20000326\tx\tTT\tTA,TTAA\t.\t.\t.", &parse).unwrap(),
+        );
+        intergenic(&mut batch);
+        apply_record_rules(&mut batch, None);
+        let rows: Vec<(String, bool, bool)> = batch
+            .iter()
+            .map(|v| {
+                (
+                    v.allele_string.clone(),
+                    v.reference_allele_row,
+                    v.most_severe_consequence.is_some(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("T/T".to_string(), true, true),
+                ("T/A".to_string(), false, true),
+                ("-/-".to_string(), true, false),
+                ("-/AA".to_string(), false, true),
+            ]
+        );
+
+        let mut batch = split_minimal_record(
+            parse_vcf_line_with("21\t20000326\tx\tTT\tTA,TTAA\t.\t.\t.", &parse).unwrap(),
+        );
+        intergenic(&mut batch);
+        batch[0]
+            .transcript_consequences
+            .push(TranscriptConsequence {
+                transcript_id: "ENST1".into(),
+                ..Default::default()
+            });
+        apply_record_rules(&mut batch, None);
+        let verdicts: Vec<bool> = batch
+            .iter()
+            .map(|v| v.most_severe_consequence.is_some())
+            .collect();
+        assert_eq!(verdicts, [true, true, true, true]);
     }
 
     /// `--max_sv_size -1` lifts the size limit: the 10.6 Mb deletion of the

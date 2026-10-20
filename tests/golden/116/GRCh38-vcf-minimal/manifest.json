@@ -306,6 +306,38 @@
  ],
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "minimal-refhoms",
+   "flags": [
+    "--minimal",
+    "--process_ref_homs",
+    "--allele_number",
+    "--show_ref_allele",
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_minimal-refhoms",
+   "covers": [
+    "process_ref_homs",
+    "minimal"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
  "divergences": [],
  "vep_rs_only_tuples": [],
  "divergence_summary": {},

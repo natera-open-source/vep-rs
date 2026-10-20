@@ -132,7 +132,11 @@ pub(crate) fn render_default_record<'a>(
                 // holds the variant-level keys or `-` (VEP_output.pm:104).
                 out.extend_from_slice(b"-\t-\t-\t-\t");
                 let rendered = rendered_terms(terms, plan.options.terms, true);
-                out.extend_from_slice(rendered.join(",").as_bytes());
+                if rendered.is_empty() {
+                    out.push(b'-');
+                } else {
+                    out.extend_from_slice(rendered.join(",").as_bytes());
+                }
                 out.extend_from_slice(b"\t-\t-\t-\t-\t-\t-\t");
                 variation_matcher::write_extra_fields(variant, None, plan, out)?;
                 out.push(b'\n');

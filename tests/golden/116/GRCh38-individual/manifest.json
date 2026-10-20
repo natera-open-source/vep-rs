@@ -1,0 +1,2376 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 1,
+ "included_records": {
+  "hb": [
+   "hb_del_het",
+   "hb_del_long",
+   "hb_dup_alt",
+   "hb_haploid",
+   "hb_ins",
+   "hb_missing",
+   "hb_multi",
+   "hb_multi_indel",
+   "hb_one_homref",
+   "hb_partial",
+   "hb_phased",
+   "hb_star"
+  ]
+ },
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "keep_samples": 8,
+ "samples": [
+  "S1",
+  "S2",
+  "S3",
+  "S4",
+  "S5",
+  "S6",
+  "S7",
+  "S8"
+ ],
+ "genotype_exemplars_per_class": 8,
+ "required_genotype_classes": [],
+ "flags": [
+  "--allow_non_variant"
+ ],
+ "covers": [
+  "individual",
+  "individual-modes",
+  "ind-zyg-columns"
+ ],
+ "suites": {
+  "s06": {
+   "reference": "s06_vep116_default.txt",
+   "input": "s06m8.vcf",
+   "rows": 12947344,
+   "combinations": 140
+  },
+  "hb": {
+   "reference": "default.txt",
+   "input": "handbuilt.vcf",
+   "rows": 45,
+   "combinations": 6
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 104153,
+   "exemplar_records": 4
+  },
+  "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 36919,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,feature_truncation,intron_variant,stop_lost": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant": {
+   "observed_rows": 34,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,feature_elongation": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,feature_elongation,intron_variant": {
+   "observed_rows": 21,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,feature_truncation": {
+   "observed_rows": 11,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,feature_truncation,intron_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,intron_variant": {
+   "observed_rows": 44,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 470,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,stop_lost": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant,stop_lost": {
+   "observed_rows": 13,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,coding_sequence_variant,intron_variant": {
+   "observed_rows": 208,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,feature_elongation": {
+   "observed_rows": 36,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,feature_truncation": {
+   "observed_rows": 72,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,splice_region_variant": {
+   "observed_rows": 35,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,stop_lost": {
+   "observed_rows": 14,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant": {
+   "observed_rows": 33421,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 5112,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,feature_truncation,intron_variant": {
+   "observed_rows": 13,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant,feature_truncation": {
+   "observed_rows": 9,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant,feature_truncation,intron_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant,intron_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 40,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant,feature_elongation,intron_variant": {
+   "observed_rows": 16,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant,feature_truncation": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant": {
+   "observed_rows": 32,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,coding_sequence_variant,intron_variant": {
+   "observed_rows": 24,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,feature_elongation": {
+   "observed_rows": 33,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,feature_elongation,intron_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,feature_truncation": {
+   "observed_rows": 42,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,feature_truncation,intron_variant": {
+   "observed_rows": 41,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,intron_variant": {
+   "observed_rows": 55,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,splice_acceptor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,splice_region_variant": {
+   "observed_rows": 459,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,start_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,coding_sequence_variant,feature_elongation": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,coding_sequence_variant,feature_elongation,intron_variant": {
+   "observed_rows": 20,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,coding_sequence_variant,feature_truncation,intron_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 47,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_deletion": {
+   "observed_rows": 54,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_insertion": {
+   "observed_rows": 31,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 970755,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant": {
+   "observed_rows": 89,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_donor_region_variant": {
+   "observed_rows": 391,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 2732,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 1218,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_region_variant": {
+   "observed_rows": 573,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 5670,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant,splice_region_variant": {
+   "observed_rows": 242,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 43,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_donor_variant": {
+   "observed_rows": 115,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_region_variant,stop_gained": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_region_variant,stop_lost": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_region_variant,synonymous_variant": {
+   "observed_rows": 117,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,start_lost": {
+   "observed_rows": 59,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,stop_gained": {
+   "observed_rows": 160,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,stop_lost": {
+   "observed_rows": 37,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 4473,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,feature_elongation": {
+   "observed_rows": 9,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,feature_elongation,intron_variant": {
+   "observed_rows": 92,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,feature_truncation,intron_variant": {
+   "observed_rows": 33,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,incomplete_terminal_codon_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,intron_variant,splice_acceptor_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 26,
+   "exemplar_records": 1
+  },
+  "coding_sequence_variant,splice_acceptor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "coding_transcript_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 1098023,
+   "exemplar_records": 3
+  },
+  "feature_elongation,intron_variant,non_coding_transcript_exon_variant": {
+   "observed_rows": 35,
+   "exemplar_records": 1
+  },
+  "feature_elongation,non_coding_transcript_exon_variant": {
+   "observed_rows": 20,
+   "exemplar_records": 1
+  },
+  "feature_truncation,frameshift_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "feature_truncation,frameshift_variant,stop_lost": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "feature_truncation,inframe_deletion": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "feature_truncation,intron_variant,non_coding_transcript_exon_variant": {
+   "observed_rows": 255,
+   "exemplar_records": 1
+  },
+  "feature_truncation,non_coding_transcript_exon_variant": {
+   "observed_rows": 44,
+   "exemplar_records": 1
+  },
+  "frameshift_variant": {
+   "observed_rows": 274,
+   "exemplar_records": 1
+  },
+  "frameshift_variant,splice_region_variant": {
+   "observed_rows": 43,
+   "exemplar_records": 1
+  },
+  "frameshift_variant,stop_gained": {
+   "observed_rows": 91,
+   "exemplar_records": 1
+  },
+  "inframe_deletion": {
+   "observed_rows": 666,
+   "exemplar_records": 1
+  },
+  "inframe_insertion": {
+   "observed_rows": 329,
+   "exemplar_records": 1
+  },
+  "inframe_insertion,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intergenic_variant": {
+   "observed_rows": 239500,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 3883338,
+   "exemplar_records": 5
+  },
+  "intron_variant,non_coding_transcript_exon_variant": {
+   "observed_rows": 149,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_exon_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 5266276,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant": {
+   "observed_rows": 211,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 52,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_donor_region_variant": {
+   "observed_rows": 1026,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 3236,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 1746,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_region_variant": {
+   "observed_rows": 565,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_5th_base_variant": {
+   "observed_rows": 463,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_region_variant": {
+   "observed_rows": 1284,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 7042,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 3600,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_region_variant": {
+   "observed_rows": 1950,
+   "exemplar_records": 1
+  },
+  "mature_miRNA_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 38913,
+   "exemplar_records": 2
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 1485,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 114119,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant,splice_acceptor_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant,splice_donor_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 1861,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 369,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 309,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_variant,splice_region_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "protein_altering_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "protein_altering_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "splice_acceptor_variant": {
+   "observed_rows": 154,
+   "exemplar_records": 1
+  },
+  "splice_donor_variant": {
+   "observed_rows": 214,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,stop_gained": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,stop_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,synonymous_variant": {
+   "observed_rows": 805,
+   "exemplar_records": 1
+  },
+  "start_lost": {
+   "observed_rows": 118,
+   "exemplar_records": 1
+  },
+  "stop_gained": {
+   "observed_rows": 701,
+   "exemplar_records": 1
+  },
+  "stop_lost": {
+   "observed_rows": 26,
+   "exemplar_records": 1
+  },
+  "stop_retained_variant": {
+   "observed_rows": 15,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 33229,
+   "exemplar_records": 2
+  },
+  "transcript_ablation": {
+   "observed_rows": 38,
+   "exemplar_records": 1
+  },
+  "transcript_amplification": {
+   "observed_rows": 333,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 1075968,
+   "exemplar_records": 3
+  }
+ },
+ "variant_classes": {
+  "deletion": 34,
+  "insertion": 13,
+  "snv": 92,
+  "symbolic_Alu_insertion": 3,
+  "symbolic_LINE1_insertion": 1,
+  "symbolic_SVA_insertion": 1,
+  "symbolic_deletion": 21,
+  "symbolic_duplication": 15,
+  "symbolic_insertion": 4,
+  "symbolic_inversion": 1
+ },
+ "genotype_classes": {
+  "haploid": 7,
+  "het": 17,
+  "hom_alt": 14,
+  "hom_ref": 100,
+  "missing": 14,
+  "multi_allelic": 3,
+  "no_carrier": 85,
+  "one_hom_ref_rest_missing": 1,
+  "partially_missing": 8,
+  "star": 2
+ },
+ "records": [
+  {
+   "suite": "s06",
+   "vcf": "21\t9614116\t21:9614116:ATGGGAGTGC:A\tATGGGAGTGCCGGGGTGTGGAGTGCAGCGTGTGAGTGCCGGGGTGTGGGGTGCAGCGTGGGAGTGCCGGGGTGTGGGGTGCAGCG\tA\t.\t.\tAC=2;AF=0.000312305;CM=8.19488;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.00166389;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00102249;MAF_SAS_unrel=0.00102249;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=2;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=1;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=2;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=0.999167;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_exon_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t10561166\t21:10561166:GTTC:G\tGTTC\tG\t.\t.\tAC=11;AF=0.00171768;CM=10.0417;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00615901;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00453858;MAF_AFR_unrel=0.00453858;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=11;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=6;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=11;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=6;AC_Het=11;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.969498;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.991434\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,inframe_deletion"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t13310276\t21:13310276:C:T\tC\tT\t.\t.\tAC=5;AF=0.000780762;CM=11.3551;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00279955;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00226929;MAF_AFR_unrel=0.00226929;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=5;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=3;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=5;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=3;AC_Het=5;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.994402;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.998439\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t13451758\t21:13451758:C:T\tC\tT\t.\t.\tAC=2;AF=0.000312305;CM=11.3859;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00204082;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=2;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=2;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.998979;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t13452185\t21:13452185:T:C\tT\tC\t.\t.\tAC=3;AF=0.000468457;CM=11.3859;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00306122;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00432277;MAF_AMR_unrel=0.00432277;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=3;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=3;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=3;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=3;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.996936;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999531\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t13643682\tHGSV_241292\tC\t<INS>\t.\t.\tAC=7;AF=0.00109307;CM=11.4817;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00391937;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00302572;MAF_AFR_unrel=0.00302572;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=7;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=4;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=7;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=4;AC_Het=7;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.988268;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.996723;END=13643733;SVTYPE=INS;SVLEN=72;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,feature_elongation"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t14189118\t21:14189118:A:ACCC\tA\tACCC\t.\t.\tAC=20;AF=0.00312305;CM=12.205;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00306122;AF_EUR=0;AF_AFR=0.00951848;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00288184;MAF_AMR_unrel=0.00288184;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.01059;MAF_AFR_unrel=0.01059;AC_EAS=0;AC_AMR=3;AC_EUR=0;AC_AFR=17;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=2;AC_SAS_unrel=0;AC_AFR_unrel=14;AC_Het_EAS=0;AC_Het_AMR=3;AC_Het_EUR=0;AC_Het_AFR=17;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=2;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=14;AC_Het=20;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.996936;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.92602;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.970679\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,inframe_insertion"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t14221151\t21:14221151:T:C\tT\tC\t.\t.\tAC=102;AF=0.0159275;CM=12.3371;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00204082;AF_EUR=0.000789889;AF_AFR=0.0554311;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.0521936;MAF_AFR_unrel=0.0521936;AC_EAS=0;AC_AMR=2;AC_EUR=1;AC_AFR=99;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=69;AC_Het_EAS=0;AC_Het_AMR=2;AC_Het_EUR=1;AC_Het_AFR=97;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=67;AC_Het=100;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=2;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=2;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.998979;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=0.513925;ExcHet_AFR=0.228241;HWE_SAS=1;ExcHet_SAS=1;HWE=0.558391;ExcHet=0.808383\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,stop_lost"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t14375818\t21:14375818:T:A\tT\tA\t.\t.\tAC=2;AF=0.000312305;CM=12.5227;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.00166389;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00102249;MAF_SAS_unrel=0.00102249;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=2;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=1;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=2;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=0.999167;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t14569985\tHGSV_241383\tC\t<DUP>\t.\t.\tAC=2;AF=0.000312305;CM=12.9526;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=14827418;SVTYPE=DUP;SVLEN=257433;CHR2=chr21;ALGORITHMS=depth,manta;SOURCE=gatksv,svtools;EVIDENCE=BAF,PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,coding_sequence_variant,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t14740399\t21:14740399:CTAG:C\tCTAG\tC\t.\t.\tAC=2;AF=0.000312305;CM=13.2628;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t15002174\t21:15002174:CCCTA:C\tCCCTA\tC\t.\t.\tAC=18;AF=0.00281074;CM=14.1135;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00102041;AF_EUR=0;AF_AFR=0.00951848;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.0121029;MAF_AFR_unrel=0.0121029;AC_EAS=0;AC_AMR=1;AC_EUR=0;AC_AFR=17;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=16;AC_Het_EAS=0;AC_Het_AMR=1;AC_Het_EUR=0;AC_Het_AFR=17;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=16;AC_Het=18;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.92602;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.976328\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t15283351\t21:15283351:ACCTTCATTG:A\tACCTTCATTGTT\tA\t.\t.\tAC=2;AF=0.000312305;CM=14.6621;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=2;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "non_coding_transcript_exon_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t15353864\t21:15353864:G:C\tG\tC\t.\t.\tAC=15;AF=0.00234229;CM=14.9494;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0128205;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.0128968;MAF_EAS_unrel=0.0128968;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=15;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=13;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=15;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=13;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=15;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.913134;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.983701\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "non_coding_transcript_variant,splice_acceptor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t15698063\t21:15698063:A:C\tA\tC\t.\t.\tAC=2;AF=0.000312305;CM=15.673;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.00166389;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00102249;MAF_SAS_unrel=0.00102249;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=2;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=1;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=2;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=0.999167;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "upstream_gene_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t16564809\t21:16564809:TGTAA:T\tTGTAA\tT\t.\t.\tAC=2;AF=0.000312305;CM=18.0028;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t16755673\t21:16755673:C:T\tC\tT\t.\t.\tAC=771;AF=0.120394;CM=18.5693;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0042735;AF_AMR=0.0928571;AF_EUR=0.0963665;AF_AFR=0.221165;AF_SAS=0.131448;AF_EUR_unrel=0.0964215;MAF_EUR_unrel=0.0964215;AF_EAS_unrel=0.00198413;MAF_EAS_unrel=0.00198413;AF_AMR_unrel=0.092219;MAF_AMR_unrel=0.092219;AF_SAS_unrel=0.132924;MAF_SAS_unrel=0.132924;AF_AFR_unrel=0.217095;MAF_AFR_unrel=0.217095;AC_EAS=5;AC_AMR=91;AC_EUR=122;AC_AFR=395;AC_SAS=158;AC_EUR_unrel=97;AC_EAS_unrel=2;AC_AMR_unrel=64;AC_SAS_unrel=130;AC_AFR_unrel=287;AC_Het_EAS=5;AC_Het_AMR=79;AC_Het_EUR=112;AC_Het_AFR=315;AC_Het_SAS=128;AC_Het_EUR_unrel=89;AC_Het_EAS_unrel=2;AC_Het_AMR_unrel=54;AC_Het_SAS_unrel=102;AC_Het_AFR_unrel=229;AC_Het=639;AC_Hom_EAS=0;AC_Hom_AMR=12;AC_Hom_EUR=10;AC_Hom_AFR=80;AC_Hom_SAS=30;AC_Hom_EUR_unrel=8;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=10;AC_Hom_SAS_unrel=28;AC_Hom_AFR_unrel=58;AC_Hom=132;HWE_EAS=1;ExcHet_EAS=0.991457;HWE_AMR=0.290427;ExcHet_AMR=0.890105;HWE_EUR=0.822362;ExcHet_EUR=0.459087;HWE_AFR=0.559709;ExcHet_AFR=0.275968;HWE_SAS=0.106467;ExcHet_SAS=0.963313;HWE=0.00191184;ExcHet=0.999371\tGT\t0|0\t0|0\t0|0\t0|0\t0|1\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_ref"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t18315264\t21:18315264:G:C\tG\tC\t.\t.\tAC=2;AF=0.000312305;CM=22.6378;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0017094;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.00198413;MAF_EAS_unrel=0.00198413;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=2;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=2;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=2;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=2;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.999145;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t18485806\t21:18485806:C:A\tC\tA\t.\t.\tAC=2;AF=0.000312305;CM=23.0071;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "start_lost"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t18935359\t21:18935359:C:T\tC\tT\t.\t.\tAC=27;AF=0.00421611;CM=23.6126;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.0224626;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.0255624;MAF_SAS_unrel=0.0255624;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=27;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=25;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=25;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=23;AC_Het_AFR_unrel=0;AC_Het=25;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=2;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=2;AC_Hom_AFR_unrel=0;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=0.25816;ExcHet_SAS=0.968263;HWE=0.0535502;ExcHet=0.998749\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "non_coding_transcript_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t19494686\tHGSV_241797\tA\t<DUP>\t.\t.\tAC=6;AF=0.000936914;CM=24.2836;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00306122;AF_EUR=0.00236967;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.00298211;MAF_EUR_unrel=0.00298211;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00432277;MAF_AMR_unrel=0.00432277;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=3;AC_EUR=3;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=3;AC_EAS_unrel=0;AC_AMR_unrel=3;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=3;AC_Het_EUR=3;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=3;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=3;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=6;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.996936;HWE_EUR=1;ExcHet_EUR=0.997628;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.997658;END=19494742;SVTYPE=DUP;SVLEN=56;CHR2=chr21;ALGORITHMS=wham;SOURCE=gatksv;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "feature_elongation,non_coding_transcript_exon_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t20034606\t21:20034609:CATCTATCTA:C\tCATCTATCTATCT\tC\t.\t.\tAC=98;AF=0.0153029;CM=25.102;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0675214;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.015807;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.0634921;MAF_EAS_unrel=0.0634921;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.0163599;MAF_SAS_unrel=0.0163599;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=79;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=19;AC_EUR_unrel=0;AC_EAS_unrel=64;AC_AMR_unrel=0;AC_SAS_unrel=16;AC_AFR_unrel=0;AC_Het_EAS=75;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=17;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=62;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=14;AC_Het_AFR_unrel=0;AC_Het=92;AC_Hom_EAS=4;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=2;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=2;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=2;AC_Hom_AFR_unrel=0;AC_Hom=6;HWE_EAS=1;ExcHet_EAS=0.498928;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=0.134539;ExcHet_SAS=0.992386;HWE=0.0369648;ExcHet=0.994034\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intergenic_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t20778637\t21:20778637:TCTTA:T\tTCTTA\tT\t.\t.\tAC=5;AF=0.000780762;CM=26.9518;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00279955;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00302572;MAF_AFR_unrel=0.00302572;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=5;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=4;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=5;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=4;AC_Het=5;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.994402;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.998439\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t21407599\tHGSV_241982\tT\t<DUP>\t.\t.\tAC=4;AF=0.00062461;CM=28.0662;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00223964;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00226929;MAF_AFR_unrel=0.00226929;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=4;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=3;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=4;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=3;AC_Het=4;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99664;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999063;END=21410401;SVTYPE=DUP;SVLEN=2802;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv,svtools;EVIDENCE=PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t22647808\tHGSV_242126\tA\t<DEL>\t.\t.\tAC=16;AF=0.00249844;CM=29.7918;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.000854701;AF_AMR=0.00306122;AF_EUR=0.00315956;AF_AFR=0;AF_SAS=0.00665557;AF_EUR_unrel=0.00298211;MAF_EUR_unrel=0.00298211;AF_EAS_unrel=0.000992064;MAF_EAS_unrel=0.000992064;AF_AMR_unrel=0.00288184;MAF_AMR_unrel=0.00288184;AF_SAS_unrel=0.00613497;MAF_SAS_unrel=0.00613497;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=1;AC_AMR=3;AC_EUR=4;AC_AFR=0;AC_SAS=8;AC_EUR_unrel=3;AC_EAS_unrel=1;AC_AMR_unrel=2;AC_SAS_unrel=6;AC_AFR_unrel=0;AC_Het_EAS=1;AC_Het_AMR=3;AC_Het_EUR=4;AC_Het_AFR=0;AC_Het_SAS=8;AC_Het_EUR_unrel=3;AC_Het_EAS_unrel=1;AC_Het_AMR_unrel=2;AC_Het_SAS_unrel=6;AC_Het_AFR_unrel=0;AC_Het=16;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.996936;HWE_EUR=1;ExcHet_EUR=0.995259;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=0.976832;HWE=1;ExcHet=0.981392;END=22671904;SVTYPE=DEL;SVLEN=-24096;CHR2=chr21;ALGORITHMS=depth;SOURCE=gatksv;EVIDENCE=RD\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "feature_truncation,intron_variant,non_coding_transcript_exon_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t22972945\tHGSV_242184\tC\t<DUP>\t.\t.\tAC=4;AF=0.00062461;CM=30.1321;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.00332779;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=4;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=0;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=4;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=4;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=2.08333e-06;ExcHet_SAS=1;HWE=7.31964e-08;ExcHet=1;END=23023418;SVTYPE=DUP;SVLEN=50473;SOURCE=svtools\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "transcript_amplification"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t24181236\tHGSV_242360\tT\t<DUP>\t.\t.\tAC=2;AF=0.000312305;CM=31.8016;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0017094;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.00198413;MAF_EAS_unrel=0.00198413;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=2;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=2;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=2;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=2;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.999145;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=24221899;SVTYPE=DUP;SVLEN=40663;CHR2=chr21;ALGORITHMS=depth,manta;SOURCE=gatksv,svtools;EVIDENCE=BAF,PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_exon_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t26482638\tHGSV_242592\tA\t<INS>\t.\t.\tAC=3;AF=0.000468457;CM=35.0494;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.00249584;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00204499;MAF_SAS_unrel=0.00204499;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=3;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=2;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=3;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=2;AC_Het_AFR_unrel=0;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=0.997502;HWE=1;ExcHet=0.999531;END=26482638;SVTYPE=INS;SVLEN=238;SOURCE=novelins\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,feature_elongation"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t26566265\t21:26566265:C:T\tC\tT\t.\t.\tAC=3;AF=0.000468457;CM=35.3647;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00157978;AF_AFR=0.00055991;AF_SAS=0;AF_EUR_unrel=0.00198807;MAF_EUR_unrel=0.00198807;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=2;AC_AFR=1;AC_SAS=0;AC_EUR_unrel=2;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=2;AC_Het_AFR=1;AC_Het_SAS=0;AC_Het_EUR_unrel=2;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.999209;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999531\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t26598116\tHGSV_242599\tA\t<DEL>\t.\t.\tAC=8;AF=0.00124922;CM=35.3715;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00447928;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00378215;MAF_AFR_unrel=0.00378215;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=8;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=5;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=8;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=5;AC_Het=8;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.98438;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.995632;END=26602885;SVTYPE=DEL;SVLEN=-4769;CHR2=chr21;ALGORITHMS=depth,manta;SOURCE=gatksv,svtools;EVIDENCE=PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "transcript_ablation"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t28885165\t21:28885165:C:A\tC\tA\t.\t.\tAC=11;AF=0.00171768;CM=39.4619;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00816326;AF_EUR=0.00157978;AF_AFR=0.00055991;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00864553;MAF_AMR_unrel=0.00864553;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=8;AC_EUR=2;AC_AFR=1;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=0;AC_AMR_unrel=6;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=8;AC_Het_EUR=2;AC_Het_AFR=1;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=6;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=11;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.971618;HWE_EUR=1;ExcHet_EUR=0.999209;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.991434\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,stop_gained"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t29006645\t21:29006645:TCTGAGTC:T\tTCTGAGTC\tT\t.\t.\tAC=2;AF=0.000312305;CM=39.4838;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00204082;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00288184;MAF_AMR_unrel=0.00288184;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=2;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=2;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=2;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=2;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.998979;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant",
+    "coding_sequence_variant,splice_acceptor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t29019334\t21:29019334:A:G\tA\tG\t.\t.\tAC=5;AF=0.000780762;CM=39.484;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0042735;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.00396825;MAF_EAS_unrel=0.00396825;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=5;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=4;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=5;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=4;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=5;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.991457;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.998439\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t29071989\t21:29071990:CTGT:C\tCTGT\tC\t.\t.\tAC=22;AF=0.00343535;CM=39.5012;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00204082;AF_EUR=0.0126382;AF_AFR=0.00111982;AF_SAS=0.00166389;AF_EUR_unrel=0.0109344;MAF_EUR_unrel=0.0109344;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0.00204499;MAF_SAS_unrel=0.00204499;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=2;AC_EUR=16;AC_AFR=2;AC_SAS=2;AC_EUR_unrel=11;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=2;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=2;AC_Het_EUR=16;AC_Het_AFR=2;AC_Het_SAS=2;AC_Het_EUR_unrel=11;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=2;AC_Het_AFR_unrel=2;AC_Het=22;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.998979;HWE_EUR=1;ExcHet_EUR=0.908497;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=0.999167;HWE=1;ExcHet=0.964454\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
+    "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t29259288\t21:29259288:T:G\tT\tG\t.\t.\tAC=4;AF=0.00062461;CM=39.5881;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0034188;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.00198413;MAF_EAS_unrel=0.00198413;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=4;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=2;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=4;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=2;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=4;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.99487;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999063\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t30284295\thb_ins\tC\tCT\t.\t.\t.\tGT\t1|0\t0|1\t1|1\t0|0\t./.\t1\t./1\t0|0",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ],
+   "genotype_classes": [
+    "haploid",
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing",
+    "partially_missing"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t30288258\thb_del_long\tTATAAG\tT\t.\t.\t.\tGT\t1|0\t0|0\t0|1\t1|1\t./.\t0|0\t.|1\t0",
+   "combinations": [
+    "downstream_gene_variant"
+   ],
+   "genotype_classes": [
+    "haploid",
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing",
+    "partially_missing"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t30292516\thb_multi_indel\tT\tTA,TAA\t.\t.\t.\tGT\t0/1\t0/2\t2/2\t1/2\t1/1\t0/0\t./.\t./1",
+   "combinations": [
+    "upstream_gene_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing",
+    "multi_allelic",
+    "partially_missing"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t30541662\t21:30541662:AG:A\tAG\tA\t.\t.\tAC=5067;AF=0.791224;CM=40.9591;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.696581;AF_AMR=0.736735;AF_EUR=0.71722;AF_AFR=0.927772;AF_SAS=0.802829;AF_EUR_unrel=0.712724;MAF_EUR_unrel=0.287276;AF_EAS_unrel=0.703373;MAF_EAS_unrel=0.296627;AF_AMR_unrel=0.742075;MAF_AMR_unrel=0.257925;AF_SAS_unrel=0.792434;MAF_SAS_unrel=0.207566;AF_AFR_unrel=0.926626;MAF_AFR_unrel=0.0733737;AC_EAS=815;AC_AMR=722;AC_EUR=908;AC_AFR=1657;AC_SAS=965;AC_EUR_unrel=717;AC_EAS_unrel=709;AC_AMR_unrel=515;AC_SAS_unrel=775;AC_AFR_unrel=1225;AC_Het_EAS=257;AC_Het_AMR=184;AC_Het_EUR=256;AC_Het_AFR=113;AC_Het_SAS=185;AC_Het_EUR_unrel=209;AC_Het_EAS_unrel=213;AC_Het_AMR_unrel=127;AC_Het_SAS_unrel=159;AC_Het_AFR_unrel=83;AC_Het=995;AC_Hom_EAS=558;AC_Hom_AMR=538;AC_Hom_EUR=652;AC_Hom_AFR=1544;AC_Hom_SAS=780;AC_Hom_EUR_unrel=508;AC_Hom_EAS_unrel=496;AC_Hom_AMR_unrel=388;AC_Hom_SAS_unrel=616;AC_Hom_AFR_unrel=1142;AC_Hom=4072;HWE_EAS=0.379211;ExcHet_EAS=0.203115;HWE_AMR=0.485114;ExcHet_AMR=0.802389;HWE_EUR=0.922169;ExcHet_EUR=0.578807;HWE_AFR=0.12529;ExcHet_AFR=0.965804;HWE_SAS=0.518939;ExcHet_SAS=0.797977;HWE=0.000903302;ExcHet=0.999622\tGT\t1|0\t1|1\t1|0\t1|1\t1|0\t0|1\t1|0\t0|1",
+   "combinations": [
+    "frameshift_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_alt"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t30567981\t21:30567981:TGCCAGGTAC:T\tTGCCAGGTACACA\tT\t.\t.\tAC=3;AF=0.000468457;CM=40.9623;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00306122;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00288184;MAF_AMR_unrel=0.00288184;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=3;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=2;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=3;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=2;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.996936;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999531\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t30590311\t21:30590311:C:T\tC\tT\t.\t.\tAC=5;AF=0.000780762;CM=40.9662;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.000854701;AF_AMR=0;AF_EUR=0;AF_AFR=0.00223964;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.000992064;MAF_EAS_unrel=0.000992064;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00302572;MAF_AFR_unrel=0.00302572;AC_EAS=1;AC_AMR=0;AC_EUR=0;AC_AFR=4;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=1;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=4;AC_Het_EAS=1;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=4;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=1;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=4;AC_Het=5;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99664;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.998439\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "missense_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t30634770\tHGSV_242969\tT\t<INS:ME:SVA>\t.\t.\tAC=7;AF=0.00109307;CM=40.9724;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00391937;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00378215;MAF_AFR_unrel=0.00378215;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=7;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=5;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=7;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=5;AC_Het=7;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.988268;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.996723;END=30634821;SVTYPE=INS;SVLEN=1261;CHR2=chr21;ALGORITHMS=melt;SOURCE=gatksv;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "coding_transcript_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t30746952\t21:30746952:T:C\tT\tC\t.\t.\tAC=2;AF=0.000312305;CM=41.0047;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0017094;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.000992064;MAF_EAS_unrel=0.000992064;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=2;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=1;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=2;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=1;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.999145;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "stop_retained_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t30746992\t21:30746992:G:A\tG\tA\t.\t.\tAC=3;AF=0.000468457;CM=41.0047;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00236967;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.00198807;MAF_EUR_unrel=0.00198807;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=3;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=2;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=3;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=2;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.997628;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999531\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "stop_gained"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t30755350\t21:30755350:CAGGAGTTGC:C\tCAGGAGTTGCCGTAGTAGTTGCAACACATGTTGTCAAG\tC\t.\t.\tAC=4;AF=0.00062461;CM=41.0047;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00223964;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00302572;MAF_AFR_unrel=0.00302572;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=4;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=4;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=4;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=4;AC_Het=4;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99664;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999063\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,start_lost"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t30755355\tHGSV_242982\tG\t<DEL>\t.\t.\tAC=4;AF=0.00062461;CM=41.0047;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00223964;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00302572;MAF_AFR_unrel=0.00302572;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=4;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=4;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=4;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=4;AC_Het=4;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99664;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999063;END=30755423;SVTYPE=DEL;SVLEN=-68;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t31433336\tHGSV_243055\tA\t<DUP>\t.\t.\tAC=2;AF=0.000312305;CM=42.4639;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=31500638;SVTYPE=DUP;SVLEN=67302;CHR2=chr21;ALGORITHMS=depth,manta;SOURCE=gatksv,svtools;EVIDENCE=PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,feature_elongation,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t31659891\t21:31659891:TC:T\tTC\tT\t.\t.\tAC=3;AF=0.000468457;CM=42.7388;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00236967;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.00198807;MAF_EUR_unrel=0.00198807;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=3;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=2;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=3;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=2;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.997628;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999531\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t32268951\t21:32268951:T:G\tT\tG\t.\t.\tAC=2;AF=0.000312305;CM=43.9247;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t32345373\t21:32345373:C:CGA\tC\tCGA\t.\t.\tAC=6;AF=0.000936914;CM=44.0128;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00335946;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00302572;MAF_AFR_unrel=0.00302572;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=6;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=4;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=6;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=4;AC_Het=6;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.991611;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.997658\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t32546968\t21:32546969:G:GA\tG\tGA\t.\t.\tAC=57;AF=0.00890069;CM=44.2361;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00102041;AF_EUR=0;AF_AFR=0.031355;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.03177;MAF_AFR_unrel=0.03177;AC_EAS=0;AC_AMR=1;AC_EUR=0;AC_AFR=56;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=42;AC_Het_EAS=0;AC_Het_AMR=1;AC_Het_EUR=0;AC_Het_AFR=54;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=42;AC_Het=55;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=2;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=0.589372;ExcHet_AFR=0.787934;HWE_SAS=1;ExcHet_SAS=1;HWE=0.222321;ExcHet=0.974942\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "non_coding_transcript_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t32671949\tHGSV_243177\tC\t<DUP>\t.\t.\tAC=2;AF=0.000312305;CM=44.3686;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00157978;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=2;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=2;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.999209;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=32758884;SVTYPE=DUP;SVLEN=86935;CHR2=chr21;ALGORITHMS=depth,manta,wham;SOURCE=gatksv;EVIDENCE=BAF,PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t33065835\t21:33065835:GGTTTCAGAG:G\tGGTTTCAGAGTGAGATTCT\tG\t.\t.\tAC=3;AF=0.000468457;CM=44.8691;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00167973;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=3;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=3;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=2;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.998319;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999531\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "non_coding_transcript_exon_variant,splice_acceptor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t33070547\t21:33070547:G:GAGC\tG\tGAGC\t.\t.\tAC=4;AF=0.00062461;CM=44.8714;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00236967;AF_AFR=0;AF_SAS=0.000831947;AF_EUR_unrel=0.00198807;MAF_EUR_unrel=0.00198807;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=3;AC_AFR=0;AC_SAS=1;AC_EUR_unrel=2;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=3;AC_Het_AFR=0;AC_Het_SAS=1;AC_Het_EUR_unrel=2;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=4;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.997628;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999063\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "inframe_insertion"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t33355531\t21:33355531:ACAGCAGGAC:A\tACAGCAGGACTTTGTATGACCAGAAATGAACTGTGTCAAGTATAAGGTTTTT\tA\t.\t.\tAC=2;AF=0.000312305;CM=45.768;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=0;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=2;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=2;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=0.000560224;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=0.000156177;ExcHet=1\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,stop_lost",
+    "3_prime_UTR_variant,stop_lost"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t33488227\tHGSV_243249\tT\t<DEL>\t.\t.\tAC=5;AF=0.000780762;CM=45.8482;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00279955;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00226929;MAF_AFR_unrel=0.00226929;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=5;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=3;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=3;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=3;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=2;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=0.00559753;ExcHet_AFR=0.999995;HWE_SAS=1;ExcHet_SAS=1;HWE=0.0015614;ExcHet=1;END=33488295;SVTYPE=DEL;SVLEN=-68;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv,svtools;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "feature_truncation,frameshift_variant,stop_lost"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t33542105\tHGSV_243254\tC\t<DEL>\t.\t.\tAC=2;AF=0.000312305;CM=45.8563;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=33542307;SVTYPE=DEL;SVLEN=-202;SOURCE=svtools\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant,feature_truncation"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t33552917\tHGSV_243256\tA\t<DUP>\t.\t.\tAC=2;AF=0.000312305;CM=45.8568;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00102041;AF_EUR=0.000789889;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=1;AC_EUR=1;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=1;AC_Het_EUR=1;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=33552972;SVTYPE=DUP;SVLEN=55;CHR2=chr21;ALGORITHMS=wham;SOURCE=gatksv;EVIDENCE=RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,coding_sequence_variant,feature_elongation",
+    "coding_sequence_variant,feature_elongation"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t33735204\t21:33735204:G:A\tG\tA\t.\t.\tAC=2;AF=0.000312305;CM=45.8845;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=2;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "coding_sequence_variant,incomplete_terminal_codon_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t33893080\t21:33893080:G:A\tG\tA\t.\t.\tAC=1718;AF=0.26827;CM=46.2908;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.34188;AF_AMR=0.192857;AF_EUR=0.293049;AF_AFR=0.215006;AF_SAS=0.311148;AF_EUR_unrel=0.298211;MAF_EUR_unrel=0.298211;AF_EAS_unrel=0.335317;MAF_EAS_unrel=0.335317;AF_AMR_unrel=0.201729;MAF_AMR_unrel=0.201729;AF_SAS_unrel=0.311861;MAF_SAS_unrel=0.311861;AF_AFR_unrel=0.221634;MAF_AFR_unrel=0.221634;AC_EAS=400;AC_AMR=189;AC_EUR=371;AC_AFR=384;AC_SAS=374;AC_EUR_unrel=300;AC_EAS_unrel=338;AC_AMR_unrel=140;AC_SAS_unrel=305;AC_AFR_unrel=293;AC_Het_EAS=280;AC_Het_AMR=149;AC_Het_EUR=261;AC_Het_AFR=286;AC_Het_SAS=266;AC_Het_EUR_unrel=212;AC_Het_EAS_unrel=240;AC_Het_AMR_unrel=108;AC_Het_SAS_unrel=219;AC_Het_AFR_unrel=213;AC_Het=1242;AC_Hom_EAS=120;AC_Hom_AMR=40;AC_Hom_EUR=110;AC_Hom_AFR=98;AC_Hom_SAS=108;AC_Hom_EUR_unrel=88;AC_Hom_EAS_unrel=98;AC_Hom_AMR_unrel=32;AC_Hom_SAS_unrel=86;AC_Hom_AFR_unrel=80;AC_Hom=476;HWE_EAS=0.141585;ExcHet_EAS=0.0761977;HWE_AMR=0.564555;ExcHet_AMR=0.756035;HWE_EUR=0.923585;ExcHet_EUR=0.596298;HWE_AFR=0.136464;ExcHet_AFR=0.948595;HWE_SAS=0.44812;ExcHet_SAS=0.248652;HWE=0.499601;ExcHet=0.76904\tGT\t0|0\t0|1\t1|1\t0|1\t0|0\t0|1\t0|0\t1|0",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_alt",
+    "hom_ref"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t33907222\tHGSV_243286\tC\t<INS:ME:ALU>\t.\t.\tAC=19;AF=0.0029669;CM=46.2987;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.0106383;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00983359;MAF_AFR_unrel=0.00983359;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=19;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=13;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=19;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=13;AC_Het=19;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.907784;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.973576;END=33907273;SVTYPE=INS;SVLEN=193;CHR2=chr21;ALGORITHMS=melt;SOURCE=gatksv;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,feature_elongation,intron_variant",
+    "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant",
+    "NMD_transcript_variant,coding_sequence_variant,feature_elongation,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t34123425\tHGSV_243299\tT\t<DEL>\t.\t.\tAC=2;AF=0.000312305;CM=46.5196;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=0;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=2;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=2;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=0.000560224;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=0.000156177;ExcHet=1;END=34126348;SVTYPE=DEL;SVLEN=-2923;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv,svtools;EVIDENCE=PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,feature_truncation,intron_variant,stop_lost",
+    "NMD_transcript_variant,coding_sequence_variant,feature_truncation,intron_variant",
+    "coding_sequence_variant,feature_truncation,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t34142438\t21:34142438:C:T\tC\tT\t.\t.\tAC=3;AF=0.000468457;CM=46.5228;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00167973;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=3;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=3;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=2;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.998319;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999531\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t34142449\t21:34142449:A:T\tA\tT\t.\t.\tAC=35;AF=0.00546533;CM=46.5228;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.0132653;AF_EUR=0.0165877;AF_AFR=0.00055991;AF_SAS=0;AF_EUR_unrel=0.0159046;MAF_EUR_unrel=0.0159046;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.0144092;MAF_AMR_unrel=0.0144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=13;AC_EUR=21;AC_AFR=1;AC_SAS=0;AC_EUR_unrel=16;AC_EAS_unrel=0;AC_AMR_unrel=10;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=13;AC_Het_EUR=21;AC_Het_AFR=1;AC_Het_SAS=0;AC_Het_EUR_unrel=16;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=10;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=35;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.922542;HWE_EUR=1;ExcHet_EUR=0.844834;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.910816\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t1|0\t0|0\t0|0",
+   "combinations": [
+    "stop_lost"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_ref"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t34164917\t21:34164917:G:A\tG\tA\t.\t.\tAC=22;AF=0.00343535;CM=46.5417;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0017094;AF_AMR=0;AF_EUR=0.000789889;AF_AFR=0.0106383;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0.000992064;MAF_EAS_unrel=0.000992064;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00983359;MAF_AFR_unrel=0.00983359;AC_EAS=2;AC_AMR=0;AC_EUR=1;AC_AFR=19;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=1;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=13;AC_Het_EAS=2;AC_Het_AMR=0;AC_Het_EUR=1;AC_Het_AFR=19;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=1;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=13;AC_Het=22;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.999145;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.907784;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.964454\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t34175878\t21:34175878:T:C\tT\tC\t.\t.\tAC=9;AF=0.00140537;CM=46.5607;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00503919;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00453858;MAF_AFR_unrel=0.00453858;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=9;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=6;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=9;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=6;AC_Het=9;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.97995;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.994387\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t34181129\tHGSV_243302\tT\t<DUP>\t.\t.\tAC=2;AF=0.000312305;CM=46.5657;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00204082;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=2;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=2;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.998979;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=34183869;SVTYPE=DUP;SVLEN=2740;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv,svtools;EVIDENCE=PE,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t34510506\tHGSV_243312\tC\t<DEL>\t.\t.\tAC=2;AF=0.000312305;CM=47.4331;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=0;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=2;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=2;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=0.000560224;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=0.000156177;ExcHet=1;END=34511798;SVTYPE=DEL;SVLEN=-1292;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv,svtools;EVIDENCE=PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,feature_truncation,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t34614796\t21:34614796:G:A\tG\tA\t.\t.\tAC=2;AF=0.000312305;CM=47.5148;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "synonymous_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716050\thb_missing\tG\tA\t.\t.\t.\tGT\t0/1\t./.\t./.\t1/1\t./.\t0/0\t./.\t./.",
+   "combinations": [
+    "intron_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716177\thb_partial\tC\tT\t.\t.\t.\tGT\t./1\t0/.\t./0\t1/.\t0/1\t./.\t0/0\t1/1",
+   "combinations": [
+    "intron_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing",
+    "partially_missing"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716192\thb_haploid\tG\tA\t.\t.\t.\tGT\t1\t0\t1\t0/1\t0\t.\t1\t0",
+   "combinations": [
+    "intron_variant"
+   ],
+   "genotype_classes": [
+    "haploid",
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716301\thb_star\tC\tT,*\t.\t.\t.\tGT\t1/2\t0/2\t2/2\t0/1\t./.\t1/1\t0/0\t2",
+   "combinations": [
+    "intron_variant"
+   ],
+   "genotype_classes": [
+    "haploid",
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing",
+    "star"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716340\thb_multi\tG\tA,T\t.\t.\t.\tGT\t0/1\t1/2\t0/0\t2/2\t0/2\t1/1\t./2\t./.",
+   "combinations": [
+    "missense_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing",
+    "multi_allelic",
+    "partially_missing"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716422\thb_one_homref\tG\tA\t.\t.\t.\tGT\t0/0\t./.\t./.\t./.\t./.\t./.\t./.\t./.",
+   "combinations": [
+    "synonymous_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "missing",
+    "no_carrier",
+    "one_hom_ref_rest_missing"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716449\thb_nonvariant\tC\t.\t.\t.\t.\tGT\t0/0\t./.\t0/0\t0\t0|0\t./.\t0/0\t0/0",
+   "combinations": [],
+   "genotype_classes": [
+    "haploid",
+    "hom_ref",
+    "missing",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716540\thb_phased\tG\tA\t.\t.\t.\tGT\t0|1\t1|0\t1|1\t0|0\t.|1\t1|.\t0|1\t./.",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing",
+    "partially_missing"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716570\thb_dup_alt\tA\tG,G\t.\t.\t.\tGT\t1/2\t0/2\t2/2\t0/1\t0/0\t./.\t1/1\t1/2",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing",
+    "multi_allelic"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716697\thb_del_het\tGAC\tG\t.\t.\t.\tGT\t0/1\t1/1\t0/0\t./1\t1\t0/0\t./.\t0|1",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ],
+   "genotype_classes": [
+    "haploid",
+    "het",
+    "hom_alt",
+    "hom_ref",
+    "missing",
+    "partially_missing"
+   ]
+  },
+  {
+   "suite": "hb",
+   "vcf": "21\t34716756\thb_star_only\tC\t*\t.\t.\t.\tGT\t0/1\t1/1\t0/0\t./.\t0/1\t1\t./1\t0/0",
+   "combinations": [],
+   "genotype_classes": [
+    "haploid",
+    "hom_ref",
+    "missing",
+    "no_carrier",
+    "partially_missing",
+    "star"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t35048959\t21:35048959:C:T\tC\tT\t.\t.\tAC=12;AF=0.00187383;CM=49.0492;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.0112245;AF_EUR=0;AF_AFR=0;AF_SAS=0.000831947;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.0100865;MAF_AMR_unrel=0.0100865;AF_SAS_unrel=0.00102249;MAF_SAS_unrel=0.00102249;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=11;AC_EUR=0;AC_AFR=0;AC_SAS=1;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=7;AC_SAS_unrel=1;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=11;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=1;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=7;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=0;AC_Het=12;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.944848;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.989729\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t36576412\t21:36576412:G:A\tG\tA\t.\t.\tAC=42;AF=0.0065584;CM=50.9573;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.034188;AF_AMR=0;AF_EUR=0.000789889;AF_AFR=0;AF_SAS=0.000831947;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0.0277778;MAF_EAS_unrel=0.0277778;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00102249;MAF_SAS_unrel=0.00102249;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=40;AC_AMR=0;AC_EUR=1;AC_AFR=0;AC_SAS=1;AC_EUR_unrel=1;AC_EAS_unrel=28;AC_AMR_unrel=0;AC_SAS_unrel=1;AC_AFR_unrel=0;AC_Het_EAS=40;AC_Het_AMR=0;AC_Het_EUR=1;AC_Het_AFR=0;AC_Het_SAS=1;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=28;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=0;AC_Het=42;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.501526;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.873432\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t36958225\tHGSV_243558\tA\t<DEL>\t.\t.\tAC=2;AF=0.000312305;CM=52.0238;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00204082;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=2;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=2;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.998979;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=36973952;SVTYPE=DEL;SVLEN=-15727;CHR2=chr21;ALGORITHMS=depth,manta,wham;SOURCE=gatksv;EVIDENCE=BAF,PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant,feature_truncation,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t37375114\t21:37375114:TAAAG:T\tTAAAG\tT\t.\t.\tAC=3;AF=0.000468457;CM=52.4361;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00167973;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=3;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=3;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=2;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.998319;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999531\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t38157093\t21:38157093:A:G\tA\tG\t.\t.\tAC=2;AF=0.000312305;CM=53.7277;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00157978;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=2;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=2;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.999209;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t38660933\tHGSV_243718\tC\t<DEL>\t.\t.\tAC=5;AF=0.000780762;CM=54.6042;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00510204;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00576369;MAF_AMR_unrel=0.00576369;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=5;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=4;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=5;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=4;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=5;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.989801;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.998439;END=38661060;SVTYPE=DEL;SVLEN=-127;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,feature_truncation"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t39345273\t21:39345273:T:C\tT\tC\t.\t.\tAC=12;AF=0.00187383;CM=56.0313;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00102041;AF_EUR=0;AF_AFR=0.00615901;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.0075643;MAF_AFR_unrel=0.0075643;AC_EAS=0;AC_AMR=1;AC_EUR=0;AC_AFR=11;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=10;AC_Het_EAS=0;AC_Het_AMR=1;AC_Het_EUR=0;AC_Het_AFR=11;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=10;AC_Het=12;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.969498;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.989729\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,splice_region_variant,stop_lost"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t39348924\t21:39348925:GGCGGGGAAG:G\tGGCGGGGAAGGCGCGTGCCGGGTGCCT\tG\t.\t.\tAC=12;AF=0.00187383;CM=56.036;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.000854701;AF_AMR=0.00102041;AF_EUR=0.00157978;AF_AFR=0.00279955;AF_SAS=0.00249584;AF_EUR_unrel=0.00198807;MAF_EUR_unrel=0.00198807;AF_EAS_unrel=0.000992064;MAF_EAS_unrel=0.000992064;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0.00306748;MAF_SAS_unrel=0.00306748;AF_AFR_unrel=0.00302572;MAF_AFR_unrel=0.00302572;AC_EAS=1;AC_AMR=1;AC_EUR=2;AC_AFR=5;AC_SAS=3;AC_EUR_unrel=2;AC_EAS_unrel=1;AC_AMR_unrel=1;AC_SAS_unrel=3;AC_AFR_unrel=4;AC_Het_EAS=1;AC_Het_AMR=1;AC_Het_EUR=2;AC_Het_AFR=5;AC_Het_SAS=1;AC_Het_EUR_unrel=2;AC_Het_EAS_unrel=1;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=4;AC_Het=10;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=2;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=2;AC_Hom_AFR_unrel=0;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.999209;HWE_AFR=1;ExcHet_AFR=0.994402;HWE_SAS=0.00249792;ExcHet_SAS=1;HWE=0.0102715;ExcHet=0.999964\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,splice_acceptor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t39428491\tHGSV_243785\tC\t<DUP>\t.\t.\tAC=13;AF=0.00202998;CM=56.06;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.00854701;AF_AMR=0;AF_EUR=0.00157978;AF_AFR=0;AF_SAS=0.000831947;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0.00892857;MAF_EAS_unrel=0.00892857;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00102249;MAF_SAS_unrel=0.00102249;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=10;AC_AMR=0;AC_EUR=2;AC_AFR=0;AC_SAS=1;AC_EUR_unrel=1;AC_EAS_unrel=9;AC_AMR_unrel=0;AC_SAS_unrel=1;AC_AFR_unrel=0;AC_Het_EAS=10;AC_Het_AMR=0;AC_Het_EUR=2;AC_Het_AFR=0;AC_Het_SAS=1;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=9;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=0;AC_Het=13;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.961965;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.999209;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.98787;END=39428582;SVTYPE=DUP;SVLEN=91;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,coding_sequence_variant",
+    "5_prime_UTR_variant,coding_sequence_variant,feature_elongation,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t39511807\t21:39511807:C:CAGGT\tC\tCAGGT\t.\t.\tAC=2;AF=0.000312305;CM=56.098;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t39746297\t21:39746297:C:T\tC\tT\t.\t.\tAC=2;AF=0.000312305;CM=56.8978;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "splice_region_variant,synonymous_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t39788192\t21:39788192:A:T\tA\tT\t.\t.\tAC=3;AF=0.000468457;CM=56.9302;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00167973;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00226929;MAF_AFR_unrel=0.00226929;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=3;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=3;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=3;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=3;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.998319;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999531\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,splice_donor_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t39984361\tHGSV_243837\tT\t<INS>\t.\t.\tAC=2;AF=0.000312305;CM=57.6947;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=2;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=39984399;SVTYPE=INS;SVLEN=310;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "feature_elongation,intron_variant,non_coding_transcript_exon_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t41316761\tHGSV_243942\tG\t<DEL>\t.\t.\tAC=2;AF=0.000312305;CM=61.794;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0017094;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.00198413;MAF_EAS_unrel=0.00198413;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=2;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=2;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=2;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=2;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.999145;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=41318383;SVTYPE=DEL;SVLEN=-1622;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv,svtools;EVIDENCE=PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,feature_truncation,intron_variant",
+    "5_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t41354658\tHGSV_243945\tA\t<DUP>\t.\t.\tAC=2;AF=0.000312305;CM=61.9415;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=41413944;SVTYPE=DUP;SVLEN=59286;CHR2=chr21;ALGORITHMS=depth,manta;SOURCE=gatksv,svtools;EVIDENCE=BAF,PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,coding_sequence_variant,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t41506669\tHGSV_243957\tC\t<DUP>\t.\t.\tAC=2;AF=0.000312305;CM=62.4745;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.00166389;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00102249;MAF_SAS_unrel=0.00102249;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=2;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=1;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=2;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=0.999167;HWE=1;ExcHet=0.999844;END=41527633;SVTYPE=DUP;SVLEN=20964;SOURCE=svtools\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant,intron_variant",
+    "5_prime_UTR_variant,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t41562907\t21:41562907:C:A\tC\tA\t.\t.\tAC=4;AF=0.00062461;CM=62.6257;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00223964;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=4;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=4;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=2;AC_Het=4;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99664;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999063\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t41734245\t21:41734245:C:T\tC\tT\t.\t.\tAC=11;AF=0.00171768;CM=63.6313;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00615901;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00378215;MAF_AFR_unrel=0.00378215;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=11;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=5;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=11;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=5;AC_Het=11;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.969498;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.991434\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t42084951\tHGSV_244022\tT\t<INS:ME:LINE1>\t.\t.\tAC=66;AF=0.0103061;CM=64.9905;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00204082;AF_EUR=0;AF_AFR=0.0358343;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.0370651;MAF_AFR_unrel=0.0370651;AC_EAS=0;AC_AMR=2;AC_EUR=0;AC_AFR=64;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=49;AC_Het_EAS=0;AC_Het_AMR=2;AC_Het_EUR=0;AC_Het_AFR=44;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=33;AC_Het=46;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=20;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=16;AC_Hom=20;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.998979;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=2.50278e-08;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=2.00968e-13;ExcHet=1;END=42084984;SVTYPE=INS;SVLEN=5709;CHR2=chr21;ALGORITHMS=melt;SOURCE=gatksv;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t42137625\t21:42137625:CGCAGGCTGA:C\tCGCAGGCTGACAGGAAGGTGGGTGCGGAGTGGGGTGGGAGGT\tC\t.\t.\tAC=1373;AF=0.214397;CM=65.1656;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.247863;AF_AMR=0.246939;AF_EUR=0.170616;AF_AFR=0.148936;AF_SAS=0.298669;AF_EUR_unrel=0.170974;MAF_EUR_unrel=0.170974;AF_EAS_unrel=0.252976;MAF_EAS_unrel=0.252976;AF_AMR_unrel=0.240634;MAF_AMR_unrel=0.240634;AF_SAS_unrel=0.311861;MAF_SAS_unrel=0.311861;AF_AFR_unrel=0.142965;MAF_AFR_unrel=0.142965;AC_EAS=290;AC_AMR=242;AC_EUR=216;AC_AFR=266;AC_SAS=359;AC_EUR_unrel=172;AC_EAS_unrel=255;AC_AMR_unrel=167;AC_SAS_unrel=305;AC_AFR_unrel=189;AC_Het_EAS=214;AC_Het_AMR=166;AC_Het_EUR=190;AC_Het_AFR=220;AC_Het_SAS=255;AC_Het_EUR_unrel=150;AC_Het_EAS_unrel=189;AC_Het_AMR_unrel=117;AC_Het_SAS_unrel=209;AC_Het_AFR_unrel=159;AC_Het=1045;AC_Hom_EAS=76;AC_Hom_AMR=76;AC_Hom_EUR=26;AC_Hom_AFR=46;AC_Hom_SAS=104;AC_Hom_EUR_unrel=22;AC_Hom_EAS_unrel=66;AC_Hom_AMR_unrel=50;AC_Hom_SAS_unrel=96;AC_Hom_AFR_unrel=30;AC_Hom=328;HWE_EAS=0.657502;ExcHet_EAS=0.724072;HWE_AMR=0.0518434;ExcHet_AMR=0.981655;HWE_EUR=0.159248;ExcHet_EUR=0.0826754;HWE_AFR=0.42718;ExcHet_AFR=0.839815;HWE_SAS=0.845542;ExcHet_SAS=0.424289;HWE=0.0832357;ExcHet=0.965139\tGT\t0|0\t0|1\t1|0\t1|0\t0|0\t0|0\t0|0\t1|0",
+   "combinations": [
+    "3_prime_UTR_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_ref"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t42362504\t21:42362504:G:A\tG\tA\t.\t.\tAC=23;AF=0.00359151;CM=65.8046;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00408163;AF_EUR=0.0110585;AF_AFR=0.00111982;AF_SAS=0.00249584;AF_EUR_unrel=0.00994036;MAF_EUR_unrel=0.00994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00288184;MAF_AMR_unrel=0.00288184;AF_SAS_unrel=0.00306748;MAF_SAS_unrel=0.00306748;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=4;AC_EUR=14;AC_AFR=2;AC_SAS=3;AC_EUR_unrel=10;AC_EAS_unrel=0;AC_AMR_unrel=2;AC_SAS_unrel=3;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=4;AC_Het_EUR=12;AC_Het_AFR=2;AC_Het_SAS=3;AC_Het_EUR_unrel=8;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=2;AC_Het_SAS_unrel=3;AC_Het_AFR_unrel=1;AC_Het=21;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=2;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=2;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.993874;HWE_EUR=0.0700794;ExcHet_EUR=0.998165;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=0.997502;HWE=0.0388703;ExcHet=0.999363\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t42363404\t21:42363404:G:A\tG\tA\t.\t.\tAC=4;AF=0.00062461;CM=65.8056;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0017094;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.00198413;MAF_EAS_unrel=0.00198413;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=2;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=2;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=2;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=2;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=4;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.999145;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999063\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,splice_region_variant,synonymous_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t42366465\t21:42366465:C:T\tC\tT\t.\t.\tAC=16;AF=0.00249844;CM=65.8263;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00204082;AF_EUR=0;AF_AFR=0.00727884;AF_SAS=0.000831947;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00288184;MAF_AMR_unrel=0.00288184;AF_SAS_unrel=0.00102249;MAF_SAS_unrel=0.00102249;AF_AFR_unrel=0.00907716;MAF_AFR_unrel=0.00907716;AC_EAS=0;AC_AMR=2;AC_EUR=0;AC_AFR=13;AC_SAS=1;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=2;AC_SAS_unrel=1;AC_AFR_unrel=12;AC_Het_EAS=0;AC_Het_AMR=2;AC_Het_EUR=0;AC_Het_AFR=13;AC_Het_SAS=1;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=2;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=12;AC_Het=16;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.998979;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.956972;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.981392\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t42366503\t21:42366503:T:A\tT\tA\t.\t.\tAC=11;AF=0.00171768;CM=65.8267;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00615901;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.0075643;MAF_AFR_unrel=0.0075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=11;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=10;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=11;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=10;AC_Het=11;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.969498;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.991434\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t42726749\t21:42726749:C:CTGTGTG\tC\tCTGTGTG\t.\t.\tAC=5;AF=0.000780762;CM=66.8174;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.00415973;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00204499;MAF_SAS_unrel=0.00204499;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=5;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=2;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=5;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=2;AC_Het_AFR_unrel=0;AC_Het=5;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=0.991684;HWE=1;ExcHet=0.998439\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "inframe_insertion,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t42893336\t21:42893336:G:T\tG\tT\t.\t.\tAC=2;AF=0.000312305;CM=67.0672;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00204082;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=2;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=2;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.998979;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,start_lost"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t42951004\t21:42951004:T:C\tT\tC\t.\t.\tAC=5588;AF=0.87258;CM=67.1501;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.876068;AF_AMR=0.780612;AF_EUR=0.865719;AF_AFR=0.93729;AF_SAS=0.855241;AF_EUR_unrel=0.868787;MAF_EUR_unrel=0.131213;AF_EAS_unrel=0.873016;MAF_EAS_unrel=0.126984;AF_AMR_unrel=0.783862;MAF_AMR_unrel=0.216138;AF_SAS_unrel=0.858896;MAF_SAS_unrel=0.141104;AF_AFR_unrel=0.939486;MAF_AFR_unrel=0.0605144;AC_EAS=1025;AC_AMR=765;AC_EUR=1096;AC_AFR=1674;AC_SAS=1028;AC_EUR_unrel=874;AC_EAS_unrel=880;AC_AMR_unrel=544;AC_SAS_unrel=840;AC_AFR_unrel=1242;AC_Het_EAS=125;AC_Het_AMR=159;AC_Het_EUR=146;AC_Het_AFR=108;AC_Het_SAS=144;AC_Het_EUR_unrel=122;AC_Het_EAS_unrel=112;AC_Het_AMR_unrel=112;AC_Het_SAS_unrel=112;AC_Het_AFR_unrel=76;AC_Het=682;AC_Hom_EAS=900;AC_Hom_AMR=606;AC_Hom_EUR=950;AC_Hom_AFR=1566;AC_Hom_SAS=884;AC_Hom_EUR_unrel=752;AC_Hom_EAS_unrel=768;AC_Hom_AMR_unrel=432;AC_Hom_SAS_unrel=728;AC_Hom_AFR_unrel=1166;AC_Hom=4906;HWE_EAS=0.70239;ExcHet_EAS=0.733052;HWE_AMR=0.236842;ExcHet_AMR=0.90531;HWE_EUR=0.863829;ExcHet_EUR=0.661913;HWE_AFR=0.570694;ExcHet_AFR=0.306469;HWE_SAS=0.410951;ExcHet_SAS=0.836983;HWE=0.0208391;ExcHet=0.99202\tGT\t1|0\t1|1\t1|1\t1|1\t1|0\t1|1\t1|0\t1|1",
+   "combinations": [
+    "mature_miRNA_variant"
+   ],
+   "genotype_classes": [
+    "het",
+    "hom_alt"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t43737513\tHGSV_244162\tG\t<DEL>\t.\t.\tAC=42;AF=0.0065584;CM=69.2849;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00918367;AF_EUR=0.00157978;AF_AFR=0.0173572;AF_SAS=0;AF_EUR_unrel=0.00198807;MAF_EUR_unrel=0.00198807;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00720461;MAF_AMR_unrel=0.00720461;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.0173979;MAF_AFR_unrel=0.0173979;AC_EAS=0;AC_AMR=9;AC_EUR=2;AC_AFR=31;AC_SAS=0;AC_EUR_unrel=2;AC_EAS_unrel=0;AC_AMR_unrel=5;AC_SAS_unrel=0;AC_AFR_unrel=23;AC_Het_EAS=0;AC_Het_AMR=1;AC_Het_EUR=0;AC_Het_AFR=13;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=11;AC_Het=14;AC_Hom_EAS=0;AC_Hom_AMR=8;AC_Hom_EUR=2;AC_Hom_AFR=18;AC_Hom_SAS=0;AC_Hom_EUR_unrel=2;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=4;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=12;AC_Hom=28;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1.04145e-09;ExcHet_AMR=1;HWE_EUR=0.000790514;ExcHet_EUR=1;HWE_AFR=3.86532e-14;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=5.88353e-29;ExcHet=1;END=43737617;SVTYPE=DEL;SVLEN=-104;CHR2=chr21;ALGORITHMS=manta,wham;SOURCE=gatksv;EVIDENCE=RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,feature_truncation"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t43772253\tHGSV_244167\tT\t<DEL>\t.\t.\tAC=14;AF=0.00218613;CM=69.315;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.0116473;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.0143149;MAF_SAS_unrel=0.0143149;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=14;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=14;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=14;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=14;AC_Het_AFR_unrel=0;AC_Het=14;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=0.926289;HWE=1;ExcHet=0.985861;END=43772996;SVTYPE=DEL;SVLEN=-743;CHR2=chr21;ALGORITHMS=manta,wham;SOURCE=gatksv;EVIDENCE=PE,RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t43774690\t21:43774690:G:A\tG\tA\t.\t.\tAC=2;AF=0.000312305;CM=69.3231;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00157978;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=2;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=2;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.999209;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "splice_region_variant,stop_gained"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t43776479\tHGSV_244168\tG\t<INS>\t.\t.\tAC=16;AF=0.00249844;CM=69.3305;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00315956;AF_AFR=0.00615901;AF_SAS=0.000831947;AF_EUR_unrel=0.00397614;MAF_EUR_unrel=0.00397614;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00102249;MAF_SAS_unrel=0.00102249;AF_AFR_unrel=0.00605144;MAF_AFR_unrel=0.00605144;AC_EAS=0;AC_AMR=0;AC_EUR=4;AC_AFR=11;AC_SAS=1;AC_EUR_unrel=4;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=1;AC_AFR_unrel=8;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=4;AC_Het_AFR=11;AC_Het_SAS=1;AC_Het_EUR_unrel=4;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=8;AC_Het=16;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.995259;HWE_AFR=1;ExcHet_AFR=0.969498;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.981392;END=43776481;SVTYPE=INS;SVLEN=50;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv;EVIDENCE=SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,feature_elongation"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t43812925\tHGSV_244176\tA\t<DEL>\t.\t.\tAC=54;AF=0.00843223;CM=69.3465;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00408163;AF_EUR=0.000789889;AF_AFR=0.0274356;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00432277;MAF_AMR_unrel=0.00432277;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.0242057;MAF_AFR_unrel=0.0242057;AC_EAS=0;AC_AMR=4;AC_EUR=1;AC_AFR=49;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=0;AC_AMR_unrel=3;AC_SAS_unrel=0;AC_AFR_unrel=32;AC_Het_EAS=0;AC_Het_AMR=4;AC_Het_EUR=1;AC_Het_AFR=49;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=3;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=32;AC_Het=54;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.993874;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.508179;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.798245;END=43822031;SVTYPE=DEL;SVLEN=-9106;CHR2=chr21;ALGORITHMS=depth;SOURCE=gatksv;EVIDENCE=BAF,RD\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,coding_sequence_variant,feature_truncation,intron_variant,stop_lost"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t43914240\t21:43914240:GATGGTGATT:G\tGATGGTGATTTAGACAA\tG\t.\t.\tAC=11;AF=0.00171768;CM=69.4259;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.00915141;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.0102249;MAF_SAS_unrel=0.0102249;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=11;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=10;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=11;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=10;AC_Het_AFR_unrel=0;AC_Het=11;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=0.954888;HWE=1;ExcHet=0.991434\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44288459\t21:44288459:G:T\tG\tT\t.\t.\tAC=6;AF=0.000936914;CM=69.9156;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.00512821;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.00396825;MAF_EAS_unrel=0.00396825;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=6;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=4;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=6;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=4;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=6;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.987202;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.997658\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44292979\t21:44292979:C:A\tC\tA\t.\t.\tAC=2;AF=0.000312305;CM=69.9415;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,splice_polypyrimidine_tract_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44294403\t21:44294403:C:T\tC\tT\t.\t.\tAC=2;AF=0.000312305;CM=69.9526;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0017094;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.000992064;MAF_EAS_unrel=0.000992064;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=2;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=1;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=2;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=1;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.999145;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "missense_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44325862\t21:44325862:GCCTGGGAGG:G\tGCCTGGGAGGCTCCC\tG\t.\t.\tAC=2;AF=0.000312305;CM=69.9948;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "coding_sequence_variant,intron_variant,splice_acceptor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44499072\tHGSV_244245\tA\t<DEL>\t.\t.\tAC=2;AF=0.000312305;CM=70.2893;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0017094;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.000992064;MAF_EAS_unrel=0.000992064;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=2;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=1;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=2;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=1;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.999145;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=44516431;SVTYPE=DEL;SVLEN=-17359;SOURCE=svtools\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,feature_truncation,intron_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44499941\t21:44499941:G:A\tG\tA\t.\t.\tAC=2;AF=0.000312305;CM=70.2905;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00102041;AF_EUR=0.000789889;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=1;AC_EUR=1;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=1;AC_Het_EUR=1;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44521878\t21:44521878:C:T\tC\tT\t.\t.\tAC=4;AF=0.00062461;CM=70.3612;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00315956;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.00198807;MAF_EUR_unrel=0.00198807;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=4;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=2;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=4;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=2;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=4;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.995259;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999063\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant",
+    "intron_variant,splice_donor_5th_base_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44539545\tHGSV_244250\tG\t<DEL>\t.\t.\tAC=2;AF=0.000312305;CM=70.4351;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=2;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=44539619;SVTYPE=DEL;SVLEN=-74;CHR2=chr21;ALGORITHMS=manta;SOURCE=gatksv;EVIDENCE=RD,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "feature_truncation,frameshift_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44591021\tHGSV_244254\tG\t<INV>\t.\t.\tAC=148;AF=0.0231106;CM=70.6726;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0213675;AF_AMR=0.0326531;AF_EUR=0.0339652;AF_AFR=0.0151176;AF_SAS=0.0174709;AF_EUR_unrel=0.0298211;MAF_EUR_unrel=0.0298211;AF_EAS_unrel=0.0218254;MAF_EAS_unrel=0.0218254;AF_AMR_unrel=0.0302594;MAF_AMR_unrel=0.0302594;AF_SAS_unrel=0.0163599;MAF_SAS_unrel=0.0163599;AF_AFR_unrel=0.0136157;MAF_AFR_unrel=0.0136157;AC_EAS=25;AC_AMR=32;AC_EUR=43;AC_AFR=27;AC_SAS=21;AC_EUR_unrel=30;AC_EAS_unrel=22;AC_AMR_unrel=21;AC_SAS_unrel=16;AC_AFR_unrel=18;AC_Het_EAS=25;AC_Het_AMR=32;AC_Het_EUR=43;AC_Het_AFR=27;AC_Het_SAS=21;AC_Het_EUR_unrel=30;AC_Het_EAS_unrel=22;AC_Het_AMR_unrel=21;AC_Het_SAS_unrel=16;AC_Het_AFR_unrel=18;AC_Het=148;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.769577;HWE_AMR=1;ExcHet_AMR=0.592724;HWE_EUR=1;ExcHet_EUR=0.477976;HWE_AFR=1;ExcHet_AFR=0.819143;HWE_SAS=1;ExcHet_SAS=0.837152;HWE=0.416239;ExcHet=0.175725;END=44638540;SVTYPE=INV;SVLEN=47519;SOURCE=svtools\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "non_coding_transcript_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44592279\t21:44592279:G:GCCT\tG\tGCCT\t.\t.\tAC=81;AF=0.0126483;CM=70.6778;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0179487;AF_AMR=0.00612245;AF_EUR=0.00394945;AF_AFR=0.0257559;AF_SAS=0.00249584;AF_EUR_unrel=0.00397614;MAF_EUR_unrel=0.00397614;AF_EAS_unrel=0.0198413;MAF_EAS_unrel=0.0198413;AF_AMR_unrel=0.00720461;MAF_AMR_unrel=0.00720461;AF_SAS_unrel=0.00102249;MAF_SAS_unrel=0.00102249;AF_AFR_unrel=0.0272315;MAF_AFR_unrel=0.0272315;AC_EAS=21;AC_AMR=6;AC_EUR=5;AC_AFR=46;AC_SAS=3;AC_EUR_unrel=4;AC_EAS_unrel=20;AC_AMR_unrel=5;AC_SAS_unrel=1;AC_AFR_unrel=36;AC_Het_EAS=21;AC_Het_AMR=6;AC_Het_EUR=5;AC_Het_AFR=46;AC_Het_SAS=3;AC_Het_EUR_unrel=4;AC_Het_EAS_unrel=20;AC_Het_AMR_unrel=5;AC_Het_SAS_unrel=1;AC_Het_AFR_unrel=36;AC_Het=81;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.83302;HWE_AMR=1;ExcHet_AMR=0.984725;HWE_EUR=1;ExcHet_EUR=0.992104;HWE_AFR=1;ExcHet_AFR=0.551715;HWE_SAS=1;ExcHet_SAS=0.997502;HWE=1;ExcHet=0.599063\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "protein_altering_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44600389\tHGSV_244255\tC\t<DEL>\t.\t.\tAC=2;AF=0.000312305;CM=70.6945;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=44601316;SVTYPE=DEL;SVLEN=-927;CHR2=chr21;ALGORITHMS=wham;SOURCE=gatksv;EVIDENCE=PE,SR\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,coding_sequence_variant,feature_truncation"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44600827\t21:44600829:G:GTGACCTGTG\tG\tGTGACCTGTGAGCCCAGCCCCTGCCGCCC\t.\t.\tAC=3;AF=0.000468457;CM=70.6948;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00167973;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00151286;MAF_AFR_unrel=0.00151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=3;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=2;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=1;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=1;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=2;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=2;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=0.00168067;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=0.00046853;ExcHet=1\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "frameshift_variant,stop_gained"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44600907\tHGSV_244256\tC\t<DEL>\t.\t.\tAC=2;AF=0.000312305;CM=70.6948;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844;END=44601264;SVTYPE=DEL;SVLEN=-357;SOURCE=svtools\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "feature_truncation,inframe_deletion"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44637708\t21:44637708:TGTCTGCTGT:T\tTGTCTGCTGTGTGCCC\tT\t.\t.\tAC=334;AF=0.0521549;CM=70.9018;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.00940171;AF_AMR=0.044898;AF_EUR=0.0505529;AF_AFR=0.0431131;AF_SAS=0.114809;AF_EUR_unrel=0.054672;MAF_EUR_unrel=0.054672;AF_EAS_unrel=0.00892857;MAF_EAS_unrel=0.00892857;AF_AMR_unrel=0.0417867;MAF_AMR_unrel=0.0417867;AF_SAS_unrel=0.120654;MAF_SAS_unrel=0.120654;AF_AFR_unrel=0.0431165;MAF_AFR_unrel=0.0431165;AC_EAS=11;AC_AMR=44;AC_EUR=64;AC_AFR=77;AC_SAS=138;AC_EUR_unrel=55;AC_EAS_unrel=9;AC_AMR_unrel=29;AC_SAS_unrel=118;AC_AFR_unrel=57;AC_Het_EAS=11;AC_Het_AMR=44;AC_Het_EUR=64;AC_Het_AFR=69;AC_Het_SAS=116;AC_Het_EUR_unrel=55;AC_Het_EAS_unrel=9;AC_Het_AMR_unrel=29;AC_Het_SAS_unrel=96;AC_Het_AFR_unrel=49;AC_Het=304;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=8;AC_Hom_SAS=22;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=22;AC_Hom_AFR_unrel=8;AC_Hom=30;HWE_EAS=1;ExcHet_EAS=0.953673;HWE_AMR=0.614792;ExcHet_AMR=0.364034;HWE_EUR=0.395899;ExcHet_EUR=0.18688;HWE_AFR=0.0756986;ExcHet_AFR=0.979827;HWE_SAS=0.225757;ExcHet_SAS=0.923087;HWE=0.0309094;ExcHet=0.988231\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "inframe_deletion"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44690537\t21:44690537:A:G\tA\tG\t.\t.\tAC=2;AF=0.000312305;CM=70.9319;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00157978;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.00198807;MAF_EUR_unrel=0.00198807;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=2;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=2;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=2;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=2;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.999209;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t44943783\t21:44943783:GTCAGGAGAG:G\tGTCAGGAGAGGTGAGGCAGGCTCGAGTGCACGGAGCGTCCCTTCCA\tG\t.\t.\tAC=9;AF=0.00140537;CM=71.7068;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.00748752;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00613497;MAF_SAS_unrel=0.00613497;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=9;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=6;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=7;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=6;AC_Het_AFR_unrel=0;AC_Het=7;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=2;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=2;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=0.0297133;ExcHet_SAS=0.999739;HWE=0.00561315;ExcHet=0.999991\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t45562742\t21:45562742:G:A\tG\tA\t.\t.\tAC=30;AF=0.00468457;CM=73.0127;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.0167973;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.0151286;MAF_AFR_unrel=0.0151286;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=30;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=20;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=30;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=20;AC_Het=30;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.780623;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.934035\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t45579973\t21:45579973:C:T\tC\tT\t.\t.\tAC=2;AF=0.000312305;CM=73.0162;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0017094;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.00198413;MAF_EAS_unrel=0.00198413;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=2;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=2;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=2;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=2;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.999145;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "downstream_gene_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t45990407\t21:45990407:GGTGGACGGC:G\tGGTGGACGGCGTGAAGGTGACTGGGGGGAGATAGGATGGACGGGGAGGGACGAGGAGGAATGGGGCGAGATGGGGAGGGACGGA\tG\t.\t.\tAC=14;AF=0.00218613;CM=73.6053;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0034188;AF_AMR=0.00102041;AF_EUR=0.00157978;AF_AFR=0.00167973;AF_SAS=0.00332779;AF_EUR_unrel=0.00198807;MAF_EUR_unrel=0.00198807;AF_EAS_unrel=0.00396825;MAF_EAS_unrel=0.00396825;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0.00306748;MAF_SAS_unrel=0.00306748;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=4;AC_AMR=1;AC_EUR=2;AC_AFR=3;AC_SAS=4;AC_EUR_unrel=2;AC_EAS_unrel=4;AC_AMR_unrel=1;AC_SAS_unrel=3;AC_AFR_unrel=1;AC_Het_EAS=4;AC_Het_AMR=1;AC_Het_EUR=2;AC_Het_AFR=3;AC_Het_SAS=4;AC_Het_EUR_unrel=2;AC_Het_EAS_unrel=4;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=3;AC_Het_AFR_unrel=1;AC_Het=14;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.99487;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.999209;HWE_AFR=1;ExcHet_AFR=0.998319;HWE_SAS=1;ExcHet_SAS=0.995006;HWE=1;ExcHet=0.985861\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+    "coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t45992075\t21:45992075:G:A\tG\tA\t.\t.\tAC=7;AF=0.00109307;CM=73.6091;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00204082;AF_EUR=0.00315956;AF_AFR=0.00055991;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00288184;MAF_AMR_unrel=0.00288184;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=2;AC_EUR=4;AC_AFR=1;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=0;AC_AMR_unrel=2;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=2;AC_Het_EUR=4;AC_Het_AFR=1;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=2;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=7;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=0.998979;HWE_EUR=1;ExcHet_EUR=0.995259;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.996723\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_donor_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t46001963\t21:46001963:C:T\tC\tT\t.\t.\tAC=2;AF=0.000312305;CM=73.6299;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,splice_region_variant,stop_gained"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t46038451\t21:46038451:G:A\tG\tA\t.\t.\tAC=2;AF=0.000312305;CM=73.668;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0.00157978;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0.000994036;MAF_EUR_unrel=0.000994036;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=2;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=1;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=2;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=1;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=0.999209;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t46038855\t21:46038855:C:T\tC\tT\t.\t.\tAC=2;AF=0.000312305;CM=73.6681;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=2;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999844\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "non_coding_transcript_exon_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t46038903\tHGSV_244447\tC\t<DEL>\t.\t.\tAC=7;AF=0.00109307;CM=73.6681;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0.00582363;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0.00511247;MAF_SAS_unrel=0.00511247;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=0;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=7;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=0;AC_SAS_unrel=5;AC_AFR_unrel=0;AC_Het_EAS=0;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=7;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=5;AC_Het_AFR_unrel=0;AC_Het=7;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=0.982587;HWE=1;ExcHet=0.996723;END=46041859;SVTYPE=DEL;SVLEN=-2956;SOURCE=svtools\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "feature_truncation,non_coding_transcript_exon_variant"
+   ],
+   "genotype_classes": []
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t46117558\t21:46117558:GCAGCCCAGC:G\tGCAGCCCAGCAGCCC\tG\t.\t.\tAC=42;AF=0.0065584;CM=74.1883;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0042735;AF_AMR=0.00408163;AF_EUR=0.00315956;AF_AFR=0.0106383;AF_SAS=0.00831947;AF_EUR_unrel=0.00298211;MAF_EUR_unrel=0.00298211;AF_EAS_unrel=0.00496032;MAF_EAS_unrel=0.00496032;AF_AMR_unrel=0.00288184;MAF_AMR_unrel=0.00288184;AF_SAS_unrel=0.00511247;MAF_SAS_unrel=0.00511247;AF_AFR_unrel=0.00983359;MAF_AFR_unrel=0.00983359;AC_EAS=5;AC_AMR=4;AC_EUR=4;AC_AFR=19;AC_SAS=10;AC_EUR_unrel=3;AC_EAS_unrel=5;AC_AMR_unrel=2;AC_SAS_unrel=5;AC_AFR_unrel=13;AC_Het_EAS=5;AC_Het_AMR=4;AC_Het_EUR=4;AC_Het_AFR=19;AC_Het_SAS=10;AC_Het_EUR_unrel=3;AC_Het_EAS_unrel=5;AC_Het_AMR_unrel=2;AC_Het_SAS_unrel=5;AC_Het_AFR_unrel=13;AC_Het=42;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.991457;HWE_AMR=1;ExcHet_AMR=0.993874;HWE_EUR=1;ExcHet_EUR=0.995259;HWE_AFR=1;ExcHet_AFR=0.907784;HWE_SAS=1;ExcHet_SAS=0.962967;HWE=1;ExcHet=0.873432\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t46126295\t21:46126295:A:C\tA\tC\t.\t.\tAC=5;AF=0.000780762;CM=74.1933;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0.0042735;AF_AMR=0;AF_EUR=0;AF_AFR=0;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0.000992064;MAF_EAS_unrel=0.000992064;AF_AMR_unrel=0;MAF_AMR_unrel=0;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0;MAF_AFR_unrel=0;AC_EAS=5;AC_AMR=0;AC_EUR=0;AC_AFR=0;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=1;AC_AMR_unrel=0;AC_SAS_unrel=0;AC_AFR_unrel=0;AC_Het_EAS=5;AC_Het_AMR=0;AC_Het_EUR=0;AC_Het_AFR=0;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=1;AC_Het_AMR_unrel=0;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=0;AC_Het=5;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=0.991457;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=1;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.998439\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "splice_region_variant,stop_lost"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  },
+  {
+   "suite": "s06",
+   "vcf": "21\t46334535\t21:46334535:G:GGTGACCACC\tG\tGGTGACCACCCACCAGAACAGCGTGGGATGTTCACAGTCA\t.\t.\tAC=3;AF=0.000468457;CM=74.3502;AN=6404;AN_EAS=1170;AN_AMR=980;AN_EUR=1266;AN_AFR=1786;AN_SAS=1202;AN_EUR_unrel=1006;AN_EAS_unrel=1008;AN_AMR_unrel=694;AN_SAS_unrel=978;AN_AFR_unrel=1322;AF_EAS=0;AF_AMR=0.00102041;AF_EUR=0;AF_AFR=0.00111982;AF_SAS=0;AF_EUR_unrel=0;MAF_EUR_unrel=0;AF_EAS_unrel=0;MAF_EAS_unrel=0;AF_AMR_unrel=0.00144092;MAF_AMR_unrel=0.00144092;AF_SAS_unrel=0;MAF_SAS_unrel=0;AF_AFR_unrel=0.00075643;MAF_AFR_unrel=0.00075643;AC_EAS=0;AC_AMR=1;AC_EUR=0;AC_AFR=2;AC_SAS=0;AC_EUR_unrel=0;AC_EAS_unrel=0;AC_AMR_unrel=1;AC_SAS_unrel=0;AC_AFR_unrel=1;AC_Het_EAS=0;AC_Het_AMR=1;AC_Het_EUR=0;AC_Het_AFR=2;AC_Het_SAS=0;AC_Het_EUR_unrel=0;AC_Het_EAS_unrel=0;AC_Het_AMR_unrel=1;AC_Het_SAS_unrel=0;AC_Het_AFR_unrel=1;AC_Het=3;AC_Hom_EAS=0;AC_Hom_AMR=0;AC_Hom_EUR=0;AC_Hom_AFR=0;AC_Hom_SAS=0;AC_Hom_EUR_unrel=0;AC_Hom_EAS_unrel=0;AC_Hom_AMR_unrel=0;AC_Hom_SAS_unrel=0;AC_Hom_AFR_unrel=0;AC_Hom=0;HWE_EAS=1;ExcHet_EAS=1;HWE_AMR=1;ExcHet_AMR=1;HWE_EUR=1;ExcHet_EUR=1;HWE_AFR=1;ExcHet_AFR=0.99944;HWE_SAS=1;ExcHet_SAS=1;HWE=1;ExcHet=0.999531\tGT\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0\t0|0",
+   "combinations": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "genotype_classes": [
+    "hom_ref",
+    "no_carrier"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 0,
+ "uncovered_combinations": [],
+ "uncovered_genotype_classes": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "individual-all",
+   "flags": [
+    "--individual",
+    "all"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_individual-all",
+   "covers": [
+    "individual",
+    "individual-modes",
+    "ind-zyg-columns"
+   ],
+   "divergences": [
+    {
+     "location": "21:30755356-30755423",
+     "allele": "deletion",
+     "feature": "ENST00000335093",
+     "feature_type": "Transcript",
+     "record_indices": [
+      45
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 1
+   },
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "individual-list",
+   "flags": [
+    "--individual",
+    "S1,S3"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_individual-list",
+   "covers": [
+    "individual",
+    "individual-modes",
+    "ind-zyg-columns"
+   ],
+   "divergences": [
+    {
+     "location": "21:30755356-30755423",
+     "allele": "deletion",
+     "feature": "ENST00000335093",
+     "feature_type": "Transcript",
+     "record_indices": [
+      45
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 1
+   },
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "individual-refhoms",
+   "flags": [
+    "--individual",
+    "all",
+    "--process_ref_homs"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_individual-refhoms",
+   "covers": [
+    "individual",
+    "process_ref_homs",
+    "ind-zyg-columns"
+   ],
+   "divergences": [
+    {
+     "location": "21:30755356-30755423",
+     "allele": "deletion",
+     "feature": "ENST00000335093",
+     "feature_type": "Transcript",
+     "record_indices": [
+      45
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 1
+   },
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "refhoms-alone",
+   "flags": [
+    "--process_ref_homs"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_refhoms-alone",
+   "covers": [
+    "process_ref_homs"
+   ],
+   "divergences": [
+    {
+     "location": "21:30755356-30755423",
+     "allele": "deletion",
+     "feature": "ENST00000335093",
+     "feature_type": "Transcript",
+     "record_indices": [
+      45
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 1
+   },
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "individual-refhoms-fields",
+   "flags": [
+    "--individual",
+    "all",
+    "--process_ref_homs",
+    "--allele_number",
+    "--show_ref_allele",
+    "--uploaded_allele"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_individual-refhoms-fields",
+   "covers": [
+    "individual",
+    "process_ref_homs",
+    "ind-zyg-columns"
+   ],
+   "divergences": [
+    {
+     "location": "21:30755356-30755423",
+     "allele": "deletion",
+     "feature": "ENST00000335093",
+     "feature_type": "Transcript",
+     "record_indices": [
+      45
+     ],
+     "vep_consequence_set": "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant",
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost"
+     ],
+     "expected_divergence": "start_cooccurrence_swap"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "start_cooccurrence_swap": 1
+   },
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [
+  {
+   "location": "21:30755356-30755423",
+   "allele": "deletion",
+   "feature": "ENST00000335093",
+   "feature_type": "Transcript",
+   "record_indices": [
+    45
+   ],
+   "vep_consequence_set": "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost,start_retained_variant",
+   "vep_rs_consequence_sets": [
+    "5_prime_UTR_variant,feature_truncation,frameshift_variant,start_lost"
+   ],
+   "expected_divergence": "start_cooccurrence_swap"
+  }
+ ],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {
+  "start_cooccurrence_swap": 1
+ },
+ "vep_rs_only_summary": {}
+}
