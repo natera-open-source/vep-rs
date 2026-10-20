@@ -19,9 +19,12 @@
 //! `(gene)` qualifier and a `(p.…)` suffix are removed (`Notation`). The
 //! genomic types `g.` and `m.` are read by [`genomic`] against the run's
 //! reference FASTA, which stands in for the slice Ensembl VEP fetches from its
-//! database (its own parser accepts no HGVS input offline, `:104`); a `c.`,
-//! `n.` or `p.` notation fails its line as unimplemented. An `r.` notation is
-//! one Ensembl VEP's resolver throws on (`HGVS type r not recognised`, `:1989`)
+//! database (its own parser accepts no HGVS input offline, `:104`); the
+//! transcript types `c.` and `n.` by [`transcript`] against the run's
+//! transcript cache and the FASTA, which stand in for its core database, with
+//! the parser's warning when the reference reads as a gene name (`:219-229`);
+//! a `p.` notation fails its line as unimplemented. An `r.` notation is one
+//! Ensembl VEP's resolver throws on (`HGVS type r not recognised`, `:1989`)
 //! and its parser then skips with that message; here it fails the line with
 //! [`IoError::Unsupported`], which stops the run.
 //!
@@ -37,7 +40,9 @@
 //! whitespace-only line is counted for the caller's `skip_empty_lines`
 //! warning.
 
+mod components;
 pub mod genomic;
+pub mod transcript;
 
 use std::io::BufRead;
 use std::sync::Arc;
@@ -46,12 +51,14 @@ use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
 
-use super::{is_perl_space, InputParser, ParserContext, ReferenceSequence};
+use super::{is_perl_space, InputParser, ParserContext, ReferenceSequence, TranscriptSource};
 
 /// Parser for HGVS notation input.
 pub struct HgvsParser<R: BufRead> {
     reader: R,
     reference: Option<Arc<dyn ReferenceSequence>>,
+    /// The run's transcripts, which a `c.` or `n.` notation is resolved against.
+    transcripts: Option<Arc<dyn TranscriptSource>>,
     /// `--lookup_ref`: the reference allele a notation writes is replaced by
     /// the genome's instead of being checked against it (`-replace_ref`,
     /// Parser/HGVS.pm:192).
@@ -59,41 +66,48 @@ pub struct HgvsParser<R: BufRead> {
     /// `--max_sv_size` as given, the span a genomic notation must stay under
     /// (`max_size`, `:169`): `None` is the flag's `-1`, kept and compared as
     /// written (`$end - $start < -1`), so only a span written end first by two
-    /// or more bases passes under it; `0` reads as 5000.
+    /// or more bases passes under it; `0` reads as 5000. A transcript
+    /// notation's record is bounded by `validate_vf` instead (Parser.pm:491-499,
+    /// the span being end minus start), `None` for no bound.
     max_sv_size: Option<u64>,
     line_buf: Vec<u8>,
     /// Empty lines read since the last [`InputParser::take_empty_lines`].
     empty_lines: u64,
+    /// Warnings since the last [`InputParser::take_warnings`].
+    warnings: Vec<String>,
 }
 
 impl<R: BufRead> HgvsParser<R> {
     /// A parser over `reader` resolving its notations against the context's
-    /// reference under its `--max_sv_size`, replacing each written reference
-    /// allele by the genome's when `lookup_ref` is set.
+    /// reference and transcripts under its `--max_sv_size`, replacing each
+    /// written reference allele by the genome's when `lookup_ref` is set.
     pub fn new(reader: R, context: &ParserContext, lookup_ref: bool) -> Self {
         Self {
             reader,
             reference: context.fasta.clone(),
+            transcripts: context.transcripts.clone(),
             lookup_ref,
             max_sv_size: context.max_sv_size,
             line_buf: Vec::new(),
             empty_lines: 0,
+            warnings: Vec::new(),
         }
     }
 
     /// The variant of one notation, its whitespace already removed.
-    fn read_notation(&self, hgvs: &str) -> Result<InputVariant, IoError> {
+    fn read_notation(&mut self, hgvs: &str) -> Result<InputVariant, IoError> {
         if hgvs.contains(['[', ']']) {
             return Err(unable(hgvs, None));
         }
         let notation = Notation::split(hgvs).map_err(|message| unable(hgvs, Some(&message)))?;
+        let no_reference = || {
+            IoError::Unsupported(
+                "Cannot use HGVS format in offline mode without a FASTA file".into(),
+            )
+        };
         match notation.kind.map(|kind| kind.to_ascii_lowercase()) {
             Some('g' | 'm') => {
-                let Some(reference) = &self.reference else {
-                    return Err(IoError::Unsupported(
-                        "Cannot use HGVS format in offline mode without a FASTA file".into(),
-                    ));
-                };
+                let reference = self.reference.as_ref().ok_or_else(no_reference)?;
                 genomic::variant(
                     hgvs,
                     &notation,
@@ -102,8 +116,35 @@ impl<R: BufRead> HgvsParser<R> {
                     self.max_sv_size,
                 )
             }
-            Some('c' | 'n' | 'p') => Err(IoError::NotImplemented(
-                "transcript HGVS is not supported".into(),
+            Some('c' | 'n') => {
+                let reference = self.reference.as_ref().ok_or_else(no_reference)?;
+                let Some(transcripts) = &self.transcripts else {
+                    return Err(IoError::Unsupported(
+                        "Cannot use HGVS transcript notation without a transcript cache".into(),
+                    ));
+                };
+                let variant = transcript::variant(
+                    hgvs,
+                    &notation,
+                    reference.as_ref(),
+                    transcripts.as_ref(),
+                    self.lookup_ref,
+                )?;
+                // Parser/HGVS.pm:219 warns before the base parser's `validate_vf`
+                // (Parser.pm:189) reads the record's span.
+                if let Some(warning) = gene_identifier_warning(hgvs) {
+                    self.warnings.push(warning);
+                }
+                let span = variant.end.saturating_sub(variant.start);
+                match self.max_sv_size {
+                    Some(max) if span > max => Err(IoError::SkippedLine(format!(
+                        "variant size ({span}) is bigger than --max_sv_size ({max})"
+                    ))),
+                    _ => Ok(variant),
+                }
+            }
+            Some('p') => Err(IoError::NotImplemented(
+                "protein HGVS is not supported".into(),
             )),
             Some('r') => Err(IoError::Unsupported(
                 "HGVS r. notation is not supported (Ensembl VEP refuses it too: HGVS type r not recognised)"
@@ -129,6 +170,31 @@ pub(super) fn unable(hgvs: &str, message: Option<&str>) -> IoError {
         Some(message) => format!("Unable to parse HGVS notation '{hgvs}': {message}"),
         None => format!("Unable to parse HGVS notation '{hgvs}'"),
     })
+}
+
+/// The warning Ensembl VEP's parser writes once a transcript or protein
+/// notation resolves under a reference that is not an Ensembl, RefSeq or LRG
+/// identifier (Parser/HGVS.pm:219-229, `/\:[cnp]\./` and not
+/// `/^(ENS|[NX][CGMRP]\_|LRG\_)/`): the text before the first colon is
+/// most likely a gene name, and one transcript of the gene was selected.
+fn gene_identifier_warning(hgvs: &str) -> Option<String> {
+    let is_transcript_notation = hgvs
+        .match_indices(':')
+        .any(|(at, _)| matches!(&hgvs.as_bytes()[at + 1..], [b'c' | b'n' | b'p', b'.', ..]));
+    let is_ensembl_refseq_or_lrg = hgvs.starts_with("ENS")
+        || hgvs.starts_with("LRG_")
+        || matches!(
+            hgvs.as_bytes(),
+            [b'N' | b'X', b'C' | b'G' | b'M' | b'R' | b'P', b'_', ..]
+        );
+    if !is_transcript_notation || is_ensembl_refseq_or_lrg {
+        return None;
+    }
+    let reference = hgvs.split(':').next().unwrap_or_default();
+    Some(format!(
+        "Possible invalid use of gene or protein identifier '{reference}' as HGVS reference; \
+         most likely transcript will be selected"
+    ))
 }
 
 /// A notation split as `fetch_by_hgvs_notation` splits it
@@ -325,6 +391,10 @@ impl<R: BufRead + Send> InputParser for HgvsParser<R> {
 
     fn take_empty_lines(&mut self) -> u64 {
         std::mem::take(&mut self.empty_lines)
+    }
+
+    fn take_warnings(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.warnings)
     }
 }
 
@@ -523,23 +593,31 @@ mod tests {
     }
 
     /// The types Ensembl VEP's resolver knows (VariationFeatureAdaptor.pm:1829,
-    /// 1882, 1900): `c.`, `n.` and `p.` notations fail their line as
-    /// unimplemented; a notation with no type letter is skipped with Ensembl
-    /// VEP's `HGVS type  not recognised` (two spaces, the empty type).
+    /// 1882, 1900): a `c.` or `n.` notation is resolved through the context's
+    /// transcripts, and stops the run when the context has none; a `p.`
+    /// notation fails its line as unimplemented; a notation with no type
+    /// letter is skipped with Ensembl VEP's `HGVS type  not recognised` (two
+    /// spaces, the empty type).
     #[test]
     fn type_letters_dispatch_as_ensembl_vep_dispatches_them() {
         let mut parser = parser(
             "ENST00000366667:c.803C>T\nENST00000366667:n.803C>T\nENSP00000366667:p.Arg97Ter\n\
              21:30282169C>A\n21:g.30282169C>A\n",
         );
-        for _ in 0..3 {
+        for _ in 0..2 {
             let err = parser.next_variant().unwrap().unwrap_err();
-            assert!(matches!(err, IoError::NotImplemented(_)), "{err:?}");
+            assert!(matches!(err, IoError::Unsupported(_)), "{err:?}");
             assert_eq!(
                 err.to_string(),
-                "format not implemented: transcript HGVS is not supported"
+                "Cannot use HGVS transcript notation without a transcript cache"
             );
         }
+        let err = parser.next_variant().unwrap().unwrap_err();
+        assert!(matches!(err, IoError::NotImplemented(_)), "{err:?}");
+        assert_eq!(
+            err.to_string(),
+            "format not implemented: protein HGVS is not supported"
+        );
         let err = parser.next_variant().unwrap().unwrap_err();
         assert!(matches!(err, IoError::SkippedLine(_)), "{err:?}");
         assert_eq!(

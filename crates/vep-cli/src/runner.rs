@@ -45,6 +45,7 @@ use crate::pipeline;
 use crate::row_filter::RowFilters;
 use crate::sv_source::{self, SvSource};
 use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex, TranscriptSet};
+use crate::transcript_lookup::TranscriptLookup;
 use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_name_index;
 use crate::variation_source::{ReadFailure, VariationSource};
@@ -991,13 +992,19 @@ impl Runner {
         check_frequency_filter(&self.config, &self.cache.info)?;
         let reference_fasta = open_fasta(&self.config, &self.cache)?;
         let fasta_found = reference_fasta.is_some();
+        // Indexed lazily per chromosome: the key set comes from a `read_dir`
+        // walk, so the Perl-parity presence predicates are complete immediately,
+        // while a chromosome's JSON parses only when a variant queries it, or
+        // when an HGVS transcript notation looks a transcript up by name.
+        let transcripts =
+            Arc::new(self.transcript_indexes(self.config.distance.0, self.config.distance.1)?);
         let OpenedInput {
             source: pending,
             bgzf_file,
             delimiter,
             reads_reference,
             parser_names_records,
-        } = self.open_input(reference_fasta.as_ref())?;
+        } = self.open_input(reference_fasta.as_ref(), &transcripts)?;
         let checks = fasta_setup_checks(&self.config, fasta_found)?;
         self.print_notices(&checks.notices);
 
@@ -1074,14 +1081,7 @@ impl Runner {
             info!("Loaded {} dylib plugin(s)", dylib_plugins.plugin_count());
         }
 
-        // Indexed lazily per chromosome: the key set comes from a `read_dir`
-        // walk, so the Perl-parity presence predicates are complete immediately,
-        // while a chromosome's JSON parses only when a variant queries it.
         info!("Transcript cache: {} (lazy per-chromosome)", self.cache.dir);
-        let transcripts = Arc::new(self.transcript_indexes(
-            effects_config.upstream_distance,
-            effects_config.downstream_distance,
-        )?);
 
         let variation_source = open_variation_source(&self.config, &self.cache)?;
         let sv_source = open_sv_source(&self.config)?;
@@ -1518,13 +1518,16 @@ impl Runner {
     /// offline (Parser/HGVS.pm:104). Opened where Ensembl VEP's init() builds
     /// the parser (Runner.pm:136), before
     /// `post_setup_checks`. The parsers share the delimiter, the FASTA, the
-    /// cache's synonyms and its chromosomes through a [`ParserContext`]; the
-    /// delimiter is `--delimiter`'s under an explicit `--format` and, under
-    /// `guess`, the one detection chose from the first data line, as Ensembl
-    /// VEP's detection overrides the flag (Parser.pm:414).
+    /// cache's synonyms, its chromosomes and its transcripts (a lookup by
+    /// stable id and gene name over `transcripts`, for an HGVS transcript
+    /// notation) through a [`ParserContext`]; the delimiter is
+    /// `--delimiter`'s under an explicit `--format` and, under `guess`, the one
+    /// detection chose from the first data line, as Ensembl VEP's detection
+    /// overrides the flag (Parser.pm:414).
     fn open_input(
         &self,
         reference_fasta: Option<&Arc<vep_fasta::IndexedFasta>>,
+        transcripts: &Arc<LazyTranscriptIndexes>,
     ) -> anyhow::Result<OpenedInput> {
         let config = &self.config;
         let fasta_found = reference_fasta.is_some();
@@ -1581,12 +1584,13 @@ impl Runner {
                 Arc::new(FastaReference(Arc::clone(fasta))) as Arc<dyn ReferenceSequence>
             }),
             synonyms: Arc::clone(&self.cache.synonyms),
-            chromosomes: Arc::new(
-                crate::json_cache::enumerate_transcript_shards(&self.cache.dir)?
-                    .into_keys()
-                    .collect(),
-            ),
+            chromosomes: Arc::new(transcripts.chromosomes().map(str::to_string).collect()),
             max_sv_size: config.max_sv_size,
+            transcripts: Some(Arc::new(TranscriptLookup::new(
+                Arc::clone(transcripts),
+                &self.cache.info.contig_order,
+                config.refseq,
+            ))),
         };
 
         // VCF is read line by line because header passthrough needs the lines;

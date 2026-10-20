@@ -1,11 +1,13 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! How the `vep` binary reads HGVS genomic notation: the format needs the
-//! reference FASTA, each notation annotates as its VCF twin does and is named
-//! by itself, a notation Ensembl VEP cannot resolve is skipped with its
-//! warning, and `--max_sv_size` bounds the span a notation may describe.
+//! How the `vep` binary reads HGVS genomic and transcript notation: the format
+//! needs the reference FASTA, each notation annotates as its VCF twin does and
+//! is named by itself, a notation Ensembl VEP cannot resolve is skipped with
+//! its warning, a gene name as the reference is warned about, and
+//! `--max_sv_size` bounds the span a genomic notation may describe.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
 
@@ -109,12 +111,42 @@ fn hgvs_input_needs_a_fasta() {
     }
 }
 
-/// Every notation of the corpus annotates as its VCF twin does, row for row
-/// past the name column, under `--format hgvs` and under format detection, and
-/// `Uploaded_variation` is the notation itself, as Ensembl VEP names the
-/// record (Parser/HGVS.pm:237): the accession `NC_000021.9` and the `chr21`
-/// spelling print their rows at `21:`, the reference FASTA's name for the
-/// chromosome, and the `(p.=)` suffix stays in the name.
+/// The rows of a run grouped by `Uploaded_variation`, in output order.
+fn rows_by_name(rows: &[String]) -> BTreeMap<&str, Vec<&str>> {
+    let mut grouped: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for row in rows {
+        grouped.entry(name(row)).or_default().push(row);
+    }
+    grouped
+}
+
+/// A row past its name with its `Allele` column reverse-complemented.
+fn with_allele_complemented(row: &str) -> String {
+    let mut columns: Vec<String> = after_name(row).split('\t').map(str::to_string).collect();
+    columns[1] = columns[1]
+        .bytes()
+        .rev()
+        .map(|b| match b {
+            b'A' => 'T',
+            b'C' => 'G',
+            b'G' => 'C',
+            b'T' => 'A',
+            other => other as char,
+        })
+        .collect();
+    columns.join("\t")
+}
+
+/// Every notation of the corpus annotates as its VCF twin does: the twin is
+/// the `variants.vcf` record of the same ordinal, named by the notation, and
+/// its rows match the notation's past the name column, under `--format hgvs`
+/// and under format detection. A notation on a reverse-strand transcript
+/// carries its alleles on that strand (VariationFeatureAdaptor.pm:2132), so
+/// its `Allele` column is the twin's reverse complement. `Uploaded_variation`
+/// is the notation itself, as Ensembl VEP names the record
+/// (Parser/HGVS.pm:237): the accession `NC_000021.9` and the `chr21` spelling
+/// print their rows at `21:`, the reference FASTA's name for the chromosome,
+/// and the `(p.=)` suffix stays in the name.
 #[test]
 fn hgvs_records_annotate_as_their_vcf_twins_and_are_named_by_the_notation() {
     let dir = tempfile::tempdir().unwrap();
@@ -124,12 +156,14 @@ fn hgvs_records_annotate_as_their_vcf_twins_and_are_named_by_the_notation() {
         &dir.path().join("vcf.txt"),
         &[],
     );
+    let twins = rows_by_name(&vcf_rows);
     let notations: Vec<String> = std::fs::read_to_string(corpus().join("variants.hgvs.txt"))
         .unwrap()
         .lines()
         .map(str::to_string)
         .collect();
-    assert_eq!(notations.len(), 25);
+    assert_eq!(notations.len(), 56);
+    assert_eq!(twins.len(), 56);
     for (label, extra) in [("explicit", &["--format", "hgvs"][..]), ("guess", &[][..])] {
         let hgvs_rows = annotate(
             dir.path(),
@@ -137,22 +171,110 @@ fn hgvs_records_annotate_as_their_vcf_twins_and_are_named_by_the_notation() {
             &dir.path().join(format!("{label}.txt")),
             extra,
         );
-        assert_eq!(hgvs_rows.len(), vcf_rows.len(), "{label}");
-        for (hgvs_row, vcf_row) in hgvs_rows.iter().zip(&vcf_rows) {
-            assert_eq!(after_name(hgvs_row), after_name(vcf_row), "{label}");
-        }
-        let names: Vec<&str> = hgvs_rows.iter().map(|row| name(row)).collect();
+        let by_name = rows_by_name(&hgvs_rows);
+        assert_eq!(by_name.len(), notations.len(), "{label}");
         for notation in &notations {
-            assert!(names.contains(&notation.as_str()), "{label}: {notation}");
+            let twin_rows = &twins[notation.as_str()];
+            let hgvs_rows = by_name
+                .get(notation.as_str())
+                .unwrap_or_else(|| panic!("{label}: {notation} has no rows"));
+            let same: Vec<&str> = hgvs_rows.iter().map(|row| after_name(row)).collect();
+            let twin: Vec<&str> = twin_rows.iter().map(|row| after_name(row)).collect();
+            if same != twin {
+                let complemented: Vec<String> = hgvs_rows
+                    .iter()
+                    .map(|row| with_allele_complemented(row))
+                    .collect();
+                assert_eq!(complemented, twin, "{label}: {notation}");
+            }
         }
         for notation in ["NC_000021.9:g.30282169C>A", "chr21:g.30282169C>A"] {
-            let row = hgvs_rows.iter().find(|row| name(row) == notation).unwrap();
+            let row = by_name[notation][0];
             assert_eq!(
                 row.split('\t').nth(1),
                 Some("21:30282169"),
                 "{label}: {row}"
             );
         }
+    }
+}
+
+/// A transcript notation resolves through the cache: on the reverse-strand
+/// TFF3 transcript `c.5C>T` lands at 21:42315370 with the allele `T`, as
+/// written on the transcript (its twin's `A`), and the `n.` notations of a
+/// non-coding transcript annotate on its exons and introns (`n.135+5` is the
+/// fifth intronic base past a splice donor). A gene name as the reference
+/// picks the gene's likely transcript (its MANE Select) with Ensembl VEP's
+/// warning (Parser/HGVS.pm:219-229), and Ensembl VEP 116.2 in database mode
+/// writes the rows of `CRYAA:c.100T>C` and `TFF3:c.5C>T` as it writes those of
+/// the two transcripts' own notations. A transcript the cache lacks, a
+/// position before the transcript's first base and a reference allele the
+/// genome contradicts are skipped with the resolver's messages, the texts
+/// Ensembl VEP 116.2 writes for the same lines.
+#[test]
+fn transcript_notations_resolve_through_the_cache_and_warn_about_gene_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus_rows = annotate(
+        dir.path(),
+        &corpus().join("variants.hgvs.txt"),
+        &dir.path().join("corpus.txt"),
+        &["--format", "hgvs"],
+    );
+    let by_name = rows_by_name(&corpus_rows);
+    let tff3 = &by_name["ENST00000518498:c.5C>T"];
+    assert!(tff3.iter().all(|row| {
+        row.split('\t').nth(1) == Some("21:42315370") && row.split('\t').nth(2) == Some("T")
+    }));
+    assert!(by_name["ENST00000807019:n.135+5A>G"].iter().any(|row| {
+        row.contains(
+            "ENST00000807019\tTranscript\tsplice_donor_5th_base_variant,intron_variant,non_coding_transcript_variant",
+        )
+    }));
+    let input = write(
+        dir.path(),
+        "genes.hgvs",
+        "CRYAA:c.100T>C\nTFF3:c.5C>T\nENST00000291554:c.1T>G\nENST00000291554:c.-200A>G\n\
+         ENST00009999999:c.1A>G\n",
+    );
+    let out = dir.path().join("genes.txt");
+    let rows = annotate(dir.path(), &input, &out, &["--format", "hgvs"]);
+    let picked = rows_by_name(&rows);
+    assert_eq!(picked.len(), 2, "{rows:?}");
+    for (gene, transcript) in [
+        ("CRYAA:c.100T>C", "ENST00000291554:c.100T>C"),
+        ("TFF3:c.5C>T", "ENST00000518498:c.5C>T"),
+    ] {
+        assert_eq!(
+            picked[gene]
+                .iter()
+                .map(|row| after_name(row))
+                .collect::<Vec<_>>(),
+            by_name[transcript]
+                .iter()
+                .map(|row| after_name(row))
+                .collect::<Vec<_>>(),
+            "{gene}"
+        );
+    }
+    let warnings = std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
+    let gene_warning = |gene: &str| {
+        format!(
+            "WARNING: Possible invalid use of gene or protein identifier '{gene}' as HGVS reference; \
+             most likely transcript will be selected\n"
+        )
+    };
+    assert!(warnings.starts_with(&gene_warning("CRYAA")), "{warnings}");
+    assert!(warnings.contains(&gene_warning("TFF3")), "{warnings}");
+    for text in [
+        "Unable to parse HGVS notation 'ENST00000291554:c.1T>G': Reference allele extracted from \
+         ENST00000291554:43169100-43169100 (A) does not match reference allele given by HGVS notation \
+         ENST00000291554:c.1T>G (T)\n",
+        "Unable to parse HGVS notation 'ENST00000291554:c.-200A>G': Unable to map the cDNA coordinates \
+         -200--200 to genomic coordinates for Transcript ENST00000291554\n",
+        "Unable to parse HGVS notation 'ENST00009999999:c.1A>G': Could not get a Transcript object for \
+         'ENST00009999999'\n",
+    ] {
+        assert!(warnings.contains(text), "{warnings}");
     }
 }
 

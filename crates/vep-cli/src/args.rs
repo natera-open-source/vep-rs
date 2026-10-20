@@ -64,7 +64,7 @@ pub struct Args {
     /// Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record.
     /// An identifier list (one variant name per line) is resolved in one pass over the cache's variation files, every name held in memory and every file read once: a name maps to each variation feature of that name in the cache (rsIDs and the other names the cache carries; structural variant names, synonyms and subsnp identifiers are not among them), a name the cache lacks is warned about and skipped, and a cache without variation files refuses the format.
     /// CAid input resolves through Ensembl's database and is refused; a region, SPDI or HGVS input needs --fasta, which fills or checks the reference allele of an SPDI record.
-    /// HGVS input is genomic (g., m.) and resolved against the FASTA as Ensembl VEP resolves it through its database: the reference allele is checked, a deletion, duplication or inversion takes its bases from the genome, and a genomic notation Ensembl VEP cannot resolve is skipped with its warning; a c., n. or p. notation is skipped as unimplemented and an r. notation is refused
+    /// HGVS input is resolved against the FASTA and the transcript cache as Ensembl VEP resolves it through its database: a genomic notation (g., m.) reads its bases from the genome, a transcript notation (c., n.) finds its transcript by stable id, else by gene name through Ensembl VEP's pick order with its warning, places the position through the transcript's exons and keeps the transcript's strand, the reference allele is checked, a deletion, duplication or inversion takes its bases from the genome, and a notation Ensembl VEP cannot resolve is skipped with its warning; a run with transcript notations reads the cache's assembled chromosomes and scaffolds once to find them, its alternate loci and patches only for an id found on none; a p. notation is skipped as unimplemented and an r. notation is refused
     #[arg(
         help_heading = "Input",
         long,
@@ -422,12 +422,12 @@ pub struct Args {
     /// oversize record before annotation and writes nothing for it in any format;
     /// vep-rs annotates it: rows in the default, tab and parquet outputs, its VCF
     /// line without consequences, no JSON object (docs/output-formats.md and
-    /// docs/intended-divergences.md describe the divergence). A region or SPDI
-    /// record whose span exceeds the limit is skipped with Ensembl VEP's warning,
-    /// as every oversize record is in Ensembl VEP 116. An HGVS genomic notation's
-    /// end minus its start must be smaller than this value, 0 reading as 5000 and
-    /// -1 as -1 itself, so under -1 a notation written in genome order is
-    /// skipped, as Ensembl VEP 116 skips it
+    /// docs/intended-divergences.md describe the divergence). A region, SPDI or
+    /// HGVS transcript record whose span exceeds the limit is skipped with Ensembl
+    /// VEP's warning, as every oversize record is in Ensembl VEP 116. An HGVS
+    /// genomic notation's end minus its start must be smaller than this value, 0
+    /// reading as 5000 and -1 as -1 itself, so under -1 a notation written in
+    /// genome order is skipped, as Ensembl VEP 116 skips it
     #[arg(
         help_heading = "Runtime",
         long = "max_sv_size",
@@ -1028,7 +1028,7 @@ pub struct Args {
     #[arg(help_heading = "Plugins", long)]
     pub safe: bool,
 
-    /// Reads the cache under the species directory suffixed _refseq (the transcripts annotated are that cache's contents); no effect under --json_cache
+    /// Reads the cache under the species directory suffixed _refseq (the transcripts annotated are that cache's contents), and resolves an HGVS gene name among the RefSeq transcripts before the Ensembl ones, as Ensembl VEP's --refseq orders its core groups; under --json_cache only that order applies
     #[arg(help_heading = "Transcript Sets", long)]
     pub refseq: bool,
 

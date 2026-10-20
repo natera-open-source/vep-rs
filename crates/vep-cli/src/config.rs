@@ -232,9 +232,9 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     ),
     refused(
         "ambiguous_hgvs",
-        "--ambiguous_hgvs is not supported: it resolves an HGVSp input to every matching variant through the Ensembl database; HGVS input is genomic (g.) only",
+        "--ambiguous_hgvs is not supported: it resolves an HGVSp input to every matching variant through the Ensembl database; HGVS input is genomic (g., m.) and transcript (c., n.) notation, each resolved to one variant",
         "Config.pm:202; Parser/HGVS.pm:178-186, 224 resolves the protein notation through the database",
-        "genomic HGVS input",
+        "genomic and transcript HGVS input",
     ),
     ErrorTableEntry {
         flag: "af_exac",

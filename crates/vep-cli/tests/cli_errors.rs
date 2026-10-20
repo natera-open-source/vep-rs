@@ -37,12 +37,13 @@ fn assert_refused(flags: &[&str], message: &str) {
 }
 
 /// Ensembl VEP resolves an ambiguous HGVSp through its database
-/// (Parser/HGVS.pm:178-186, 224); vep-rs reads genomic HGVS only.
+/// (Parser/HGVS.pm:178-186, 224); vep-rs resolves a genomic or transcript
+/// notation to one variant and no protein notation.
 #[test]
 fn ambiguous_hgvs_is_refused() {
     assert_refused(
         &["--ambiguous_hgvs"],
-        "--ambiguous_hgvs is not supported: it resolves an HGVSp input to every matching variant through the Ensembl database; HGVS input is genomic (g.) only",
+        "--ambiguous_hgvs is not supported: it resolves an HGVSp input to every matching variant through the Ensembl database; HGVS input is genomic (g., m.) and transcript (c., n.) notation, each resolved to one variant",
     );
 }
 

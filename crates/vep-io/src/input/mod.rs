@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use vep_core::synonyms::ChromosomeSynonyms;
+use vep_core::transcript::Transcript;
 use vep_core::variant::{classify_variant, InputVariant};
 
 use crate::error::IoError;
@@ -78,6 +79,27 @@ pub trait ReferenceSequence: Send + Sync {
     fn record_name(&self, chr: &str) -> Option<String>;
 }
 
+/// The transcripts an HGVS `c.` or `n.` notation is resolved against: the
+/// run's transcript cache, standing in for the core database Ensembl VEP's
+/// `fetch_by_hgvs_notation` queries (VariationFeatureAdaptor.pm:1829-1849).
+/// A lookup that cannot read the cache reports why.
+pub trait TranscriptSource: Send + Sync {
+    /// `TranscriptAdaptor::fetch_by_stable_id` (TranscriptAdaptor.pm:164-181):
+    /// the transcript whose stable id is `stable_id`, else, when `stable_id`
+    /// ends in `.<version>`, the one with the id before the dot and that
+    /// version; `None` when the cache has neither.
+    fn by_stable_id(&self, stable_id: &str) -> Result<Option<Transcript>, String>;
+
+    /// `_get_gene_transcripts` (VariationFeatureAdaptor.pm:1993-2012) in each
+    /// core group the run reads, in the run's group order (Parser/HGVS.pm:164:
+    /// the Ensembl transcripts first, the RefSeq ones first under `--refseq`):
+    /// one entry per group, holding every transcript of the group's reference
+    /// gene named `name` in database order (the order `fetch_all_by_Gene`
+    /// returns them, which the pick's stable sort keeps among equals), empty
+    /// for a group that carries no gene of the name.
+    fn gene_transcripts(&self, name: &str) -> Result<Vec<Vec<Transcript>>, String>;
+}
+
 /// What the text-format parsers are built against beyond their reader
 /// (Parser.pm:128-135 and :159 hand the format's parser the delimiter; the
 /// reference, the synonyms and the valid chromosomes, `Runner.pm:827`, reach it
@@ -97,6 +119,10 @@ pub struct ParserContext {
     /// `--max_sv_size`, the span `validate_vf` refuses a record beyond
     /// (Parser.pm:491-499); `None` for the flag's `-1`, no limit.
     pub max_sv_size: Option<u64>,
+    /// The run's transcripts, for a parser that names a position on a
+    /// transcript (HGVS `c.` and `n.`); `None` when the run annotates without a
+    /// transcript cache.
+    pub transcripts: Option<Arc<dyn TranscriptSource>>,
 }
 
 impl ParserContext {

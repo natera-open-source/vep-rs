@@ -75,6 +75,11 @@ impl TranscriptIndex {
         self.len() == 0
     }
 
+    /// The indexed transcripts, in the order they were given.
+    pub fn transcripts(&self) -> &[Transcript] {
+        &self.overlap.transcripts
+    }
+
     /// The chromosome's protein-coding transcription start sites in ascending
     /// coordinate order; transcripts sharing a coordinate keep their cache
     /// order.
@@ -443,6 +448,25 @@ impl LazyTranscriptIndexes {
     /// Whether the cache covers `chr`, answered without parsing it.
     pub fn contains_key(&self, chr: &str) -> bool {
         self.slots.contains_key(chr)
+    }
+
+    /// The chromosomes the cache covers, in no particular order, answered
+    /// without parsing any.
+    pub fn chromosomes(&self) -> impl Iterator<Item = &str> {
+        self.slots.keys().map(String::as_str)
+    }
+
+    /// The shard files of `chr`, for a reader that parses them itself and keeps
+    /// nothing; `None` for a chromosome the cache does not cover or one built
+    /// from loaded transcripts, whose index [`Self::get`] already holds.
+    pub fn shards_of(&self, chr: &str) -> Option<&[PathBuf]> {
+        self.shards.get(chr).map(Vec::as_slice)
+    }
+
+    /// Whether the run's transcript set admits `transcript`, the test every
+    /// index this set materializes applies.
+    pub fn accepts(&self, transcript: &Transcript) -> bool {
+        self.transcript_set.accepts(transcript)
     }
 
     /// Number of chromosomes the cache covers. **Test-only.**

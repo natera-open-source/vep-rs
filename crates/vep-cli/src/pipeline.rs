@@ -1173,10 +1173,14 @@ fn invalid_ensembl_coordinate(line: &str, delimiter: &Delimiter) -> Option<Strin
 /// where a resolver's refusal opens with `Unable to parse`. The region parser's
 /// other refusals are its own: a line outside its expression, and a structural
 /// class `%SO_TERMS` lacks, which `get_SO_term` warns about before `validate_vf`
-/// runs (Parser/Region.pm:171, 205-206).
+/// runs (Parser/Region.pm:171, 205-206). The HGVS parser writes the size text
+/// for a transcript notation over the size, but its line names a transcript or
+/// a gene, not a chromosome the `--chr` test could read, so the refusal is
+/// warned about whatever the list holds.
 fn refused_by_validate_vf(format: InputFormat, error: &vep_io::IoError) -> bool {
     match (format, error) {
         (InputFormat::Ensembl, _) => true,
+        (InputFormat::Hgvs, _) => false,
         (InputFormat::Region, vep_io::IoError::SkippedLine(message)) => {
             message.starts_with("variant size (")
         }
@@ -1199,8 +1203,8 @@ fn without_perl_blanks(line: &str) -> String {
 /// on the run's delimiter; the text before the first `:` of a region or SPDI
 /// line, an SPDI accession resolved to the cache's name as the SPDI parser
 /// resolves it before `validate_vf` runs (Parser/SPDI.pm:196), the line's blanks
-/// removed first as the parser removes them. An HGVS parser's refusal is never
-/// `validate_vf`'s, so no HGVS line reaches here.
+/// removed first as the parser removes them. No HGVS line reaches here
+/// ([`refused_by_validate_vf`]).
 fn refused_line_chromosome(line: &str, format: InputFormat, cfg: &ReaderConfig<'_>) -> String {
     match format {
         InputFormat::Ensembl => cfg
@@ -2546,11 +2550,12 @@ mod tests {
     use std::io::{BufReader, Cursor};
 
     /// Which parser refusals the `--chr` list silences: every refusal of an
-    /// Ensembl-format line; a skipped SPDI or HGVS line unless its text opens
-    /// with `Unable to parse`; a skipped region line only for the size check,
-    /// since a line outside the region expression or a class word the table
-    /// lacks is refused before `validate_vf` runs (Parser/Region.pm:171,
-    /// 205-206); never a reader or format error.
+    /// Ensembl-format line; a skipped SPDI line unless its text opens with
+    /// `Unable to parse`; a skipped region line only for the size check, since
+    /// a line outside the region expression or a class word `%SO_TERMS` lacks
+    /// is refused before `validate_vf` runs (Parser/Region.pm:171, 205-206);
+    /// never an HGVS line, whose text names no chromosome, and never a reader
+    /// or format error.
     #[test]
     fn refused_by_validate_vf_names_the_checks_behind_the_chr_list() {
         let skipped = |text: &str| vep_io::IoError::SkippedLine(text.to_string());
@@ -3869,6 +3874,29 @@ mod tests {
             named(&both, &by_accession),
             ("NC_012920.1".into(), "M".into(), None)
         );
+    }
+
+    /// `validate_vf`'s size text marks a refusal the `--chr` test gates for an
+    /// SPDI or region line, whose chromosome the line names, and not for an
+    /// HGVS line, which names a transcript or a gene; a resolver's `Unable to
+    /// parse` refusal is the parser's own for an HGVS or SPDI line, and every
+    /// refusal of an Ensembl-format line is `validate_vf`'s.
+    #[test]
+    fn a_size_refusal_is_validate_vfs_except_on_an_hgvs_line() {
+        let size = vep_io::IoError::SkippedLine(
+            "variant size (601) is bigger than --max_sv_size (100)".to_string(),
+        );
+        let resolver = vep_io::IoError::SkippedLine(
+            "Unable to parse HGVS notation 'ENST00000000001:c.1A>G': Could not get a Transcript \
+             object for 'ENST00000000001'"
+                .to_string(),
+        );
+        assert!(refused_by_validate_vf(InputFormat::Spdi, &size));
+        assert!(refused_by_validate_vf(InputFormat::Region, &size));
+        assert!(!refused_by_validate_vf(InputFormat::Hgvs, &size));
+        assert!(!refused_by_validate_vf(InputFormat::Hgvs, &resolver));
+        assert!(!refused_by_validate_vf(InputFormat::Spdi, &resolver));
+        assert!(refused_by_validate_vf(InputFormat::Ensembl, &resolver));
     }
 
     /// The warning for a run of empty lines takes Ensembl VEP's words

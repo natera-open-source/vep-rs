@@ -50,19 +50,14 @@
 //! `positions` cannot parse where Ensembl VEP's `^([\-\*]?\d+)` reads it as a
 //! position below one and fails it on the mismatch with the `N` padding.
 
-use vep_core::codon::reverse_complement;
-use vep_core::coordinate::parse_coordinate;
+use vep_core::coordinate::{parse_coordinate, Strand};
 use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
-use crate::input::ensembl::upper_case_alleles;
-use crate::input::{minimise_alleles, ReferenceSequence};
+use crate::input::ReferenceSequence;
 
+use super::components::{self, Placement};
 use super::{unable, Notation};
-
-/// An allele as `get_hgvs_alleles` captures it: `None` where the regular
-/// expression leaves the capture undefined.
-type Written = Option<Vec<u8>>;
 
 /// The variant a genomic notation describes, read against `reference`, its
 /// written reference allele replaced by the genome's under `lookup_ref` and its
@@ -76,7 +71,7 @@ pub(super) fn variant(
 ) -> Result<InputVariant, IoError> {
     let refuse = |message: String| unable(hgvs, Some(&message));
     let description = notation.description.as_str();
-    let (mut start, mut end) = positions(description, &notation.cleaned).map_err(refuse)?;
+    let (start, end) = positions(description, &notation.cleaned).map_err(refuse)?;
     // `max_sv_size || 5000`, then `$end - $start < $max_size`: a `0` reads as
     // 5000 and the flag's `-1` is kept, so only a span written end first by
     // two or more bases passes under it.
@@ -96,109 +91,13 @@ pub(super) fn variant(
             notation.reference
         ))
     })?;
-    let (low, high) = (start.min(end), start.max(end));
-    let no_bases = || {
-        refuse(format!(
-            "The reference FASTA has no bases at {}:{low}-{high}",
-            notation.reference
-        ))
-    };
-    let genome = match u64::try_from(low) {
-        Ok(low) if low >= 1 => reference
-            .sequence(&chr, low, high as u64)
-            .ok_or_else(no_bases)?,
-        _ => return Err(no_bases()),
-    };
-    let (mut reference_allele, mut alt_allele) =
-        written_alleles(description, &notation.cleaned).map_err(refuse)?;
-    let text = |allele: &Written| {
-        String::from_utf8_lossy(allele.as_deref().unwrap_or_default()).into_owned()
-    };
-    let extracted = |start: i128, end: i128| {
-        format!(
-            "Reference allele extracted from {}:{start}-{end} ({})",
-            notation.reference,
-            String::from_utf8_lossy(&genome)
-        )
-    };
-    let lower = description.to_ascii_lowercase();
-    if matches!(notation.kind, Some('g' | 'c' | 'n' | 'm')) && description.contains("del") {
-        reference_allele = Some(genome.clone());
-    }
-    if reference_allele.as_deref() == Some(b"") {
-        reference_allele = None;
-    }
-    if description.contains("dup") {
-        end = start - 1;
-        reference_allele = Some(b"-".to_vec());
-        alt_allele = Some(genome.clone());
-    } else if lower.contains("ins") && lower.contains("del") {
-        let (Some(reference_bases), Some(alt_bases)) = (&reference_allele, &alt_allele) else {
-            return Err(refuse(
-                "Missing reference or alternate sequence".to_string(),
-            ));
-        };
-        let (trimmed_reference, trimmed_alt) =
-            trim(reference_bases, alt_bases, &mut start, &mut end);
-        reference_allele = Some(trimmed_reference);
-        alt_allele = Some(trimmed_alt);
-    } else if lower.contains("ins") {
-        if alt_allele.is_none() {
-            return Err(refuse(format!(
-                "The insertion in HGVS notation {} names no bases",
-                notation.cleaned
-            )));
-        }
-        if end > start {
-            std::mem::swap(&mut start, &mut end);
-        }
-    } else if lower.contains("inv") {
-        reference_allele = Some(genome.clone());
-        alt_allele = Some(reverse_complement(&genome));
-    } else if let Some(written) = &reference_allele {
-        if lookup_ref {
-            reference_allele = Some(genome.clone());
-        } else if *written != genome {
-            return Err(refuse(format!(
-                "{} does not match reference allele given by HGVS notation {} ({})",
-                extracted(start, end),
-                notation.cleaned,
-                text(&reference_allele)
-            )));
-        }
-    }
-    if reference_allele.is_some() && reference_allele == alt_allele {
-        return Err(refuse(format!(
-            "{} matches alt allele given by HGVS notation {} ({})",
-            extracted(start, end),
-            notation.cleaned,
-            text(&alt_allele)
-        )));
-    }
-    if start > end + 1 {
-        return Err(refuse(format!(
-            "Start ({start}) must be less than or equal to end+1 ({})",
-            end + 1
-        )));
-    }
-    let (Ok(start), Ok(end)) = (u64::try_from(start), u64::try_from(end)) else {
-        return Err(refuse(format!(
-            "Could not parse the HGVS notation {}",
-            notation.cleaned
-        )));
-    };
-    let mut variant = InputVariant::new(
+    let placement = Placement {
         chr,
         start,
         end,
-        reference_allele.unwrap_or_default(),
-        alt_allele.unwrap_or_default(),
-    );
-    variant.id = Some(hgvs.to_string());
-    variant.raw_input = Some(hgvs.into());
-    minimise_alleles(&mut variant);
-    upper_case_alleles(&mut variant);
-    Ok(variant)
+        strand: Strand::Forward,
+    };
+    components::variant(hgvs, notation, reference, placement, lookup_ref)
 }
 
 /// `_parse_hgvs_genomic_position` (`:1595-1605`): the description's leading
@@ -232,7 +131,7 @@ fn positions(description: &str, cleaned: &str) -> Result<(i128, i128), String> {
 
 /// The run of digits `text` opens with and the text after it; `None` when it
 /// opens with none.
-fn leading_digits(text: &str) -> Option<(&str, &str)> {
+pub(super) fn leading_digits(text: &str) -> Option<(&str, &str)> {
     let digits = text.bytes().take_while(u8::is_ascii_digit).count();
     if digits == 0 {
         return None;
@@ -250,123 +149,6 @@ fn past_offset(text: &str) -> &str {
     text.strip_prefix(['+', '-'])
         .and_then(leading_digits)
         .map_or(text, |(_, rest)| rest)
-}
-
-/// The written alleles of a description by the shape `get_hgvs_alleles`
-/// matches first (Utils/Sequence.pm:712-772, every word in either case): the
-/// reference and alternate of a substitution (`([A-Z]+)>([A-Z]+)$`), the
-/// deleted and inserted bases of `del…ins` (`del(.*?)ins([A-Z]+)$`), the
-/// listed bases of `del` (alternate `-`), `-` and the listed bases of `dup`,
-/// the listed bases of `inv` and their reverse complement, `-` and the inserted
-/// bases of `ins`, the one allele of `=` twice. A capture the regular
-/// expression leaves undefined is `None`, and a deleted-bases capture with a
-/// digit in it is dropped (`:775`); an unknown shape is Ensembl VEP's error.
-fn written_alleles(description: &str, cleaned: &str) -> Result<(Written, Written), String> {
-    let lower = description.to_ascii_lowercase();
-    let bytes = |text: &str| text.as_bytes().to_vec();
-    let dash = Some(b"-".to_vec());
-    let (reference, alt) = if description.contains('>') {
-        let (head, alt) = trailing_letters(description);
-        match head
-            .strip_suffix('>')
-            .map(|before| trailing_letters(before).1)
-        {
-            Some(reference) if !reference.is_empty() && !alt.is_empty() => {
-                (Some(bytes(reference)), Some(bytes(alt)))
-            }
-            _ => (None, None),
-        }
-    } else if let Some(del) = lower
-        .find("del")
-        .filter(|del| lower[del + 3..].contains("ins"))
-    {
-        match inserted_bases(description, del + 3) {
-            Some(alt) => {
-                let deleted = &description[del + 3..description.len() - alt.len() - 3];
-                (Some(bytes(deleted)), Some(bytes(alt)))
-            }
-            None => (None, None),
-        }
-    } else if lower.contains("del") {
-        (letters_after(description, "del"), dash)
-    } else if lower.contains("dup") {
-        (dash, letters_after(description, "dup"))
-    } else if lower.contains("inv") {
-        let listed = letters_after(description, "inv");
-        let complemented = Some(reverse_complement(listed.as_deref().unwrap_or_default()));
-        (listed, complemented)
-    } else if lower.contains("ins") {
-        (dash, inserted_bases(description, 0).map(bytes))
-    } else if description.contains('=') {
-        let listed = description
-            .strip_suffix('=')
-            .map(|before| bytes(trailing_letters(before).1));
-        (listed.clone(), listed)
-    } else {
-        return Err(format!(
-            "The variant class for HGVS notation '{cleaned}' is unknown or could not be correctly recognized"
-        ));
-    };
-    let reference = reference.filter(|bases| !bases.iter().any(u8::is_ascii_digit));
-    Ok((reference, alt))
-}
-
-/// `<word>([A-Z]*)$` in either case: the letters, possibly none, that run from
-/// the first `word` nothing but letters follows to the end of the description;
-/// `None` when no `word` is followed by letters alone.
-fn letters_after(description: &str, word: &str) -> Written {
-    let lower = description.to_ascii_lowercase();
-    lower.match_indices(word).find_map(|(at, _)| {
-        let letters = &description[at + word.len()..];
-        letters
-            .chars()
-            .all(|c| c.is_ascii_alphabetic())
-            .then(|| letters.as_bytes().to_vec())
-    })
-}
-
-/// `text` split before its run of trailing letters (`([A-Z]*)$` in either
-/// case): the head and the letters, which may be none.
-fn trailing_letters(text: &str) -> (&str, &str) {
-    let head = text.trim_end_matches(|c: char| c.is_ascii_alphabetic());
-    (head, &text[head.len()..])
-}
-
-/// The bases `ins([A-Z]+)$` captures from `from` on: the letters after the
-/// first `ins` (in either case) that nothing but letters follows, so
-/// `delinsTAA` yields `TAA`; `None` when no `ins` is followed by letters alone.
-fn inserted_bases(description: &str, from: usize) -> Option<&str> {
-    let lower = description.to_ascii_lowercase();
-    lower[from..].match_indices("ins").find_map(|(at, _)| {
-        let bases = &description[from + at + 3..];
-        (!bases.is_empty() && bases.chars().all(|c| c.is_ascii_alphabetic())).then_some(bases)
-    })
-}
-
-/// `trim_sequences($ref, $alt, $start, $end, 1, 0, 1)` (Utils/Sequence.pm:
-/// 965-1038): the bases the alleles share are trimmed from the left, the start
-/// moving up with each, then from the right, the end moving down; an emptied
-/// allele is `-`. Every pair is trimmed, where [`minimise_alleles`] leaves a
-/// pair of one length alone.
-fn trim(reference: &[u8], alt: &[u8], start: &mut i128, end: &mut i128) -> (Vec<u8>, Vec<u8>) {
-    let prefix_len = reference
-        .iter()
-        .zip(alt.iter())
-        .take_while(|(r, a)| r == a)
-        .count();
-    let suffix_len = reference[prefix_len..]
-        .iter()
-        .rev()
-        .zip(alt[prefix_len..].iter().rev())
-        .take_while(|(r, a)| r == a)
-        .count();
-    *start += prefix_len as i128;
-    *end -= suffix_len as i128;
-    let trimmed = |allele: &[u8]| match &allele[prefix_len..allele.len() - suffix_len] {
-        [] => b"-".to_vec(),
-        kept => kept.to_vec(),
-    };
-    (trimmed(reference), trimmed(alt))
 }
 
 #[cfg(test)]

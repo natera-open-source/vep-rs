@@ -53,6 +53,7 @@ pub mod row_filter;
 pub mod runner;
 pub mod sv_source;
 pub mod transcript_index;
+pub mod transcript_lookup;
 pub(crate) mod validate;
 pub mod variation_matcher;
 pub mod variation_name_index;

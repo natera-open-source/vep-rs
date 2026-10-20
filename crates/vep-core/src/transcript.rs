@@ -425,6 +425,135 @@ impl ExonCoordMapper {
     pub fn rebuild_genomic_index(&mut self) {
         self.by_genomic_start = Self::build_genomic_index(&self.pairs);
     }
+
+    /// The genomic pieces of the cDNA range `start..=end`, as
+    /// `Bio::EnsEMBL::Mapper::map_coordinates` lists them for the forward
+    /// strand (Mapper.pm, `TranscriptMapper::cdna2genomic`): for each pair the
+    /// range overlaps, in cDNA order, a [`MappedPiece::Gap`] over the cDNA
+    /// bases before the pair that no pair covers, then a
+    /// [`MappedPiece::Coordinate`] over the bases the pair places on the
+    /// genome, on the pair's strand; a gap after the last pair when the range
+    /// runs past it; one gap over the whole range when no pair overlaps it. A
+    /// range of the shape `end + 1 .. end` is an insertion point, mapped as
+    /// `map_insert` maps it: the two bases around it are mapped and the piece
+    /// is turned around (`start = end + 1` on the genome too); when the point
+    /// falls between two pairs each piece is moved to its side of the point
+    /// and a gap among them is dropped. A range whose start lies more than one
+    /// past its end is one gap: the mapper's interval arithmetic has no
+    /// reading for it.
+    pub fn cdna2genomic(&self, start: i64, end: i64) -> Vec<MappedPiece> {
+        if start == end + 1 {
+            return self.map_insert(start, end);
+        }
+        if start > end {
+            return vec![MappedPiece::Gap { start, end }];
+        }
+        let mut pieces = Vec::new();
+        let mut cursor = start;
+        let mut last_used: Option<&MapperPair> = None;
+        let overlapping = self
+            .pairs
+            .iter()
+            .filter(|pair| pair.from_start as i64 <= end && pair.from_end as i64 >= start);
+        for pair in overlapping {
+            let (from_start, from_end) = (pair.from_start as i64, pair.from_end as i64);
+            let (to_start, to_end) = (pair.to_start as i64, pair.to_end as i64);
+            if cursor < from_start {
+                pieces.push(MappedPiece::Gap {
+                    start: cursor,
+                    end: from_start - 1,
+                });
+                cursor = from_start;
+            }
+            let forward = pair.ori == 1;
+            let enveloped = end > from_end;
+            let (target_start, target_end) = if forward {
+                let target_end = if enveloped {
+                    to_end
+                } else {
+                    to_start + (end - from_start)
+                };
+                (to_start + (cursor - from_start), target_end)
+            } else {
+                let target_start = if enveloped {
+                    to_start
+                } else {
+                    to_end - (end - from_start)
+                };
+                (target_start, to_end - (cursor - from_start))
+            };
+            pieces.push(MappedPiece::Coordinate {
+                start: target_start,
+                end: target_end,
+                strand: if forward {
+                    Strand::Forward
+                } else {
+                    Strand::Reverse
+                },
+            });
+            last_used = Some(pair);
+            cursor = from_end + 1;
+        }
+        match last_used {
+            None => pieces.push(MappedPiece::Gap { start, end }),
+            Some(pair) if (pair.from_end as i64) < end => pieces.push(MappedPiece::Gap {
+                start: pair.from_end as i64 + 1,
+                end,
+            }),
+            Some(_) => {}
+        }
+        pieces
+    }
+
+    /// `Mapper::map_insert` for the forward strand: the two bases around the
+    /// insertion point `start = end + 1` are mapped, a single piece is turned
+    /// around, and two pieces are each moved off the point onto their own side,
+    /// a gap among them dropped. Any other count of pieces is returned as
+    /// mapped, where the Perl mapper throws.
+    fn map_insert(&self, start: i64, end: i64) -> Vec<MappedPiece> {
+        let mut pieces = self.cdna2genomic(end, start);
+        match pieces.as_mut_slice() {
+            [MappedPiece::Coordinate { start, end, .. }] | [MappedPiece::Gap { start, end }] => {
+                std::mem::swap(start, end);
+                pieces
+            }
+            [first, second] => {
+                let mut moved = Vec::with_capacity(2);
+                if let MappedPiece::Coordinate { start, end, strand } = first {
+                    match strand {
+                        Strand::Reverse => *end -= 1,
+                        Strand::Forward => *start += 1,
+                    }
+                    moved.push(*first);
+                }
+                if let MappedPiece::Coordinate { start, end, strand } = second {
+                    match strand {
+                        Strand::Reverse => *start += 1,
+                        Strand::Forward => *end -= 1,
+                    }
+                    moved.push(*second);
+                }
+                moved
+            }
+            _ => pieces,
+        }
+    }
+}
+
+/// One piece of a cDNA range mapped onto the genome by
+/// [`ExonCoordMapper::cdna2genomic`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MappedPiece {
+    /// `Bio::EnsEMBL::Mapper::Coordinate`: the genomic bases `start..=end` on
+    /// `strand`; an insertion point has `start = end + 1`.
+    Coordinate {
+        start: i64,
+        end: i64,
+        strand: Strand,
+    },
+    /// `Bio::EnsEMBL::Mapper::Gap`: the cDNA bases `start..=end` no pair of the
+    /// mapper covers.
+    Gap { start: i64, end: i64 },
 }
 
 /// A single coordinate mapping pair (cDNA <-> genomic).
@@ -1053,6 +1182,216 @@ mod tests {
         let mut over_padded = coding_transcript("", "ATGCCCTAA", "TTT", 0);
         over_padded.vefc.as_mut().unwrap().translateable_seq = Some("NNNATGCCCTAA".into());
         assert_eq!(over_padded.spliced_seq(), None);
+    }
+
+    /// A three-exon mapper on `strand`: cDNA 1-100 on the first exon, 101-300
+    /// on the second, 301-350 on the third, the exons at 1001-1100, 2001-2200
+    /// and 3001-3050 read in genomic order on the forward strand and from the
+    /// top on the reverse.
+    fn three_exon_mapper(strand: Strand) -> ExonCoordMapper {
+        let ori = strand.as_i8();
+        let genomic = [(1001, 1100), (2001, 2200), (3001, 3050)];
+        let mut pairs = Vec::new();
+        let mut cdna_start = 1;
+        let order: Vec<(u64, u64)> = match strand {
+            Strand::Forward => genomic.to_vec(),
+            Strand::Reverse => genomic.iter().rev().copied().collect(),
+        };
+        for (to_start, to_end) in order {
+            let len = to_end - to_start + 1;
+            pairs.push(MapperPair {
+                from_start: cdna_start,
+                from_end: cdna_start + len - 1,
+                to_start,
+                to_end,
+                ori,
+            });
+            cdna_start += len;
+        }
+        ExonCoordMapper::new(pairs)
+    }
+
+    /// The genomic base a cDNA position names, read from the pairs directly.
+    fn genomic_of(mapper: &ExonCoordMapper, cdna: u64) -> u64 {
+        let pair = mapper
+            .pairs
+            .iter()
+            .find(|p| p.from_start <= cdna && cdna <= p.from_end)
+            .unwrap();
+        match pair.ori {
+            1 => pair.to_start + (cdna - pair.from_start),
+            _ => pair.to_end - (cdna - pair.from_start),
+        }
+    }
+
+    /// Every cDNA base of a transcript on either strand maps to the genomic
+    /// base its pair places it on and to nothing else, and a range within one
+    /// exon maps to one coordinate over the same bases, so the mapping inverts
+    /// the pairs the cache stores (`TranscriptMapper::cdna2genomic` over the
+    /// `exon_coord_mapper` pairs `_load_mapper` adds, one per exon).
+    #[test]
+    fn cdna2genomic_roundtrip() {
+        for strand in [Strand::Forward, Strand::Reverse] {
+            let mapper = three_exon_mapper(strand);
+            for cdna in 1..=350u64 {
+                let genomic = genomic_of(&mapper, cdna);
+                assert_eq!(
+                    mapper.cdna2genomic(cdna as i64, cdna as i64),
+                    [MappedPiece::Coordinate {
+                        start: genomic as i64,
+                        end: genomic as i64,
+                        strand
+                    }],
+                    "{strand:?} cDNA {cdna}"
+                );
+            }
+            let (lo, hi) = (genomic_of(&mapper, 110), genomic_of(&mapper, 120));
+            assert_eq!(
+                mapper.cdna2genomic(110, 120),
+                [MappedPiece::Coordinate {
+                    start: lo.min(hi) as i64,
+                    end: lo.max(hi) as i64,
+                    strand
+                }]
+            );
+        }
+    }
+
+    /// A range over an exon boundary is one coordinate per exon in cDNA order,
+    /// so on the reverse strand the genomic coordinates descend; a range that
+    /// starts before the first cDNA base opens with a gap, one that runs past
+    /// the last base closes with one, and one wholly outside the pairs is a
+    /// single gap, as `map_coordinates` reports them.
+    #[test]
+    fn cdna2genomic_lists_gaps_and_exon_pieces_in_cdna_order() {
+        let forward = three_exon_mapper(Strand::Forward);
+        assert_eq!(
+            forward.cdna2genomic(99, 102),
+            [
+                MappedPiece::Coordinate {
+                    start: 1099,
+                    end: 1100,
+                    strand: Strand::Forward
+                },
+                MappedPiece::Coordinate {
+                    start: 2001,
+                    end: 2002,
+                    strand: Strand::Forward
+                },
+            ]
+        );
+        let reverse = three_exon_mapper(Strand::Reverse);
+        assert_eq!(
+            reverse.cdna2genomic(49, 52),
+            [
+                MappedPiece::Coordinate {
+                    start: 3001,
+                    end: 3002,
+                    strand: Strand::Reverse
+                },
+                MappedPiece::Coordinate {
+                    start: 2199,
+                    end: 2200,
+                    strand: Strand::Reverse
+                },
+            ]
+        );
+        assert_eq!(
+            forward.cdna2genomic(-2, 3),
+            [
+                MappedPiece::Gap { start: -2, end: 0 },
+                MappedPiece::Coordinate {
+                    start: 1001,
+                    end: 1003,
+                    strand: Strand::Forward
+                },
+            ]
+        );
+        assert_eq!(
+            forward.cdna2genomic(349, 355),
+            [
+                MappedPiece::Coordinate {
+                    start: 3049,
+                    end: 3050,
+                    strand: Strand::Forward
+                },
+                MappedPiece::Gap {
+                    start: 351,
+                    end: 355
+                },
+            ]
+        );
+        assert_eq!(
+            forward.cdna2genomic(400, 410),
+            [MappedPiece::Gap {
+                start: 400,
+                end: 410
+            }]
+        );
+        assert_eq!(
+            forward.cdna2genomic(-5, -1),
+            [MappedPiece::Gap { start: -5, end: -1 }]
+        );
+        assert_eq!(
+            forward.cdna2genomic(10, 5),
+            [MappedPiece::Gap { start: 10, end: 5 }]
+        );
+    }
+
+    /// An insertion point (`start = end + 1`) inside an exon maps to the two
+    /// genomic bases around it turned around, on either strand; one on an exon
+    /// boundary maps to a piece on each side, each moved off the point
+    /// (`map_insert`).
+    #[test]
+    fn cdna2genomic_maps_an_insertion_point_as_map_insert_does() {
+        let forward = three_exon_mapper(Strand::Forward);
+        assert_eq!(
+            forward.cdna2genomic(11, 10),
+            [MappedPiece::Coordinate {
+                start: 1011,
+                end: 1010,
+                strand: Strand::Forward
+            }]
+        );
+        let reverse = three_exon_mapper(Strand::Reverse);
+        assert_eq!(
+            reverse.cdna2genomic(11, 10),
+            [MappedPiece::Coordinate {
+                start: 3041,
+                end: 3040,
+                strand: Strand::Reverse
+            }]
+        );
+        assert_eq!(
+            forward.cdna2genomic(101, 100),
+            [
+                MappedPiece::Coordinate {
+                    start: 1101,
+                    end: 1100,
+                    strand: Strand::Forward
+                },
+                MappedPiece::Coordinate {
+                    start: 2001,
+                    end: 2000,
+                    strand: Strand::Forward
+                },
+            ]
+        );
+        assert_eq!(
+            reverse.cdna2genomic(51, 50),
+            [
+                MappedPiece::Coordinate {
+                    start: 3001,
+                    end: 3000,
+                    strand: Strand::Reverse
+                },
+                MappedPiece::Coordinate {
+                    start: 2201,
+                    end: 2200,
+                    strand: Strand::Reverse
+                },
+            ]
+        );
     }
 
     #[test]
