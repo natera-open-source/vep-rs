@@ -308,6 +308,11 @@ pub struct InputVariant {
     /// sequence variant and for a structural type the table lacks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub record_so_term: Option<String>,
+    /// The HGVSg notation of this allele (`21:g.100del`) under `--hgvsg`, one value
+    /// for every row of the allele; `None` when not computed or when Ensembl VEP
+    /// would leave the column empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hgvsg: Option<String>,
 }
 
 /// An empty placeholder: no allocation, every field at its zero value. Lets a
@@ -360,6 +365,7 @@ impl Default for InputVariant {
             record_allele_string_multi: None,
             input_line_name: None,
             record_so_term: None,
+            hgvsg: None,
         }
     }
 }
@@ -431,6 +437,7 @@ impl InputVariant {
             uploaded_allele_string: None,
             input_line_name: None,
             record_so_term: None,
+            hgvsg: None,
         }
     }
 

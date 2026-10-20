@@ -251,7 +251,7 @@ pub struct Args {
     #[arg(long)]
     pub hgvs: bool,
 
-    /// Add the HGVSg column (accepted for VEP compatibility; the value is not computed and stays empty)
+    /// Add the HGVS genomic notation of each allele (HGVSg); needs --fasta
     #[arg(long)]
     pub hgvsg: bool,
 

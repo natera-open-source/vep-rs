@@ -30,7 +30,7 @@ Every option has an entry on one of these pages, with a summary table per topic 
 | Flag | Note |
 | --- | --- |
 | `--max_sv_size` | Ensembl VEP 116 drops an oversize record before annotation and writes nothing for it in any format; vep-rs annotates it: rows in the default, `--tab` and `parquet` outputs, its VCF line without consequences, no JSON object. See [class 5 on the Defect C page](divergences/defect-c.md#5-a-record-ensembl-vep-drops-before-annotation) of [the intended divergences](intended-divergences.md) and the [entry](cli/cache-species-runtime.md#opt_max_sv_size). |
-| `--everything` | Also switches on `--allele_number` and `--hgvsg`, which Ensembl VEP's `--everything` does not, so the `ALLELE_NUM` and `HGVSg` header keys differ there ([entry](cli/output-control.md#opt_everything)). |
+| `--everything` | Also switches on `--allele_number` and `--hgvsg`, which Ensembl VEP's `--everything` does not, so the `ALLELE_NUM` and `HGVSg` header keys differ there and the rows carry both fields (`HGVSg` filled when `--fasta` is given; [entry](cli/output-control.md#opt_everything)). |
 | `--uniprot` | The `UNIPARC` and `UNIPROT_ISOFORM` columns are added but never computed ([entry](cli/output-control.md#opt_uniprot)). |
 | `--domains` | The `DOMAINS` column is added but never populated ([entry](cli/output-control.md#opt_domains)). |
 | `--minimal` | Per-allele minimisation of multi-allelic records is not implemented ([entry](cli/filtering-picking.md#opt_minimal)). |

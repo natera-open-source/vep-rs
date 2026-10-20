@@ -20,7 +20,7 @@ These flags control which annotation fields appear in the output. `--everything`
 | [`--uniprot`](#opt_uniprot) | off | UniProt cross-references `SWISSPROT` and `TREMBL` |
 | [`--xref_refseq`](#opt_xref_refseq) | off | RefSeq transcript cross-references |
 | [`--hgvs`](#opt_hgvs) | off | HGVS coding and protein notations |
-| [`--hgvsg`](#opt_hgvsg) | off | Adds the `HGVSg` column, which stays empty |
+| [`--hgvsg`](#opt_hgvsg) | off | HGVS genomic notation of each allele, read from `--fasta` |
 | [`--sift`](#opt_sift) | none | SIFT predictions: `p`, `s` or `b` |
 | [`--polyphen`](#opt_polyphen) | none | PolyPhen predictions: `p`, `s` or `b` |
 | [`--numbers`](#opt_numbers) | off | Exon and intron numbers |
@@ -37,7 +37,6 @@ These flags control which annotation fields appear in the output. `--everything`
 
 | Flag | What Ensembl VEP does with it |
 | --- | --- |
-| `--hgvsg` | Adds genomic HGVS notation computed from the input coordinates |
 | `--regulatory` | Reports overlaps with regulatory regions and transcription factor binding sites |
 | `--coding_only` | Keeps only the consequences in the coding regions of transcripts |
 | `--no_intergenic` | Drops intergenic consequences from the output |
@@ -50,7 +49,7 @@ These flags control which annotation fields appear in the output. `--everything`
 
 Switches on every flag in the summary table except `--xref_refseq`, `--coding_only` and `--no_intergenic`, plus every [allele frequency flag](allele-frequencies.md), `--mirna`, `--allele_number`, `--sift b` and `--polyphen b`. It implies `--regulatory`, so the not-implemented warning is logged on every `--everything` run.
 
-Ensembl VEP's `--everything` does not switch on `--allele_number` or `--hgvsg`, so the `ALLELE_NUM` and `HGVSg` header keys differ there.
+Ensembl VEP's `--everything` does not switch on `--allele_number` or `--hgvsg`, so the `ALLELE_NUM` and `HGVSg` header keys differ there and the rows carry both fields (`HGVSg` filled when `--fasta` is given).
 
 ### `--symbol` {#opt_symbol}
 
@@ -139,9 +138,13 @@ p.Ter124IleextTer14
 
 ### `--hgvsg` {#opt_hgvsg}
 
-**`--hgvsg`**, boolean, default off. Ensembl VEP: accepted, no effect.
+**`--hgvsg`**, boolean, default off. Ensembl VEP: same flag and default.
 
-HGVSg is not computed: the `HGVSg` column is added but always empty.
+Adds each allele's genomic notation (`HGVSg`; JSON `hgvsg`), as Ensembl VEP 116 writes it, named by the input chromosome (`21:g.`, `chr21:g.`). It uses `m.` when the FASTA names the contig `MT`, so a UCSC `chrM` FASTA gives `chrM:g.`, as in Ensembl VEP. The reference bases come from `--fasta`.
+
+An insertion or deletion is shifted 3' along the forward strand whatever the transcript strand, at most as far as the flank Ensembl VEP reads: 100 bases, or 50 more than an allele longer than 50 (`21:g.14dup`, `21:g.25_26del`). Each ALT of a multi-allelic record is trimmed against the reference first.
+
+Empty without `--fasta` (Ensembl VEP refuses `--hgvsg` offline without one), on a chromosome the FASTA lacks, for an ALT outside `ACGT-`, and for structural variants. Under [`--minimal`](filtering-picking.md#opt_minimal) it describes the record's unminimised alleles, since per-allele minimisation is not implemented.
 
 ### `--sift` {#opt_sift}
 

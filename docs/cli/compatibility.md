@@ -58,7 +58,6 @@ Every flag below is parsed and changes no annotation. The group page of each car
 | `--cache`, `--offline` | The annotation cache is `--json_cache`; vep-rs always runs offline | [Cache, species and runtime](cache-species-runtime.md#opt_cache) |
 | `--dir`, `--dir_cache`, `--cache_version` | They locate no cache; they name the cache path the output header prints | [Cache, species and runtime](cache-species-runtime.md#opt_dir) |
 | `--species` | Names the species in the header's cache path; the data annotated is the `--json_cache` contents | [Cache, species and runtime](cache-species-runtime.md#opt_species) |
-| `--hgvsg` | The `HGVSg` column is added and always empty | [Output control](output-control.md#opt_hgvsg) |
 | `--regulatory` | Regulatory-feature annotation is not implemented; the flag warns | [Output control](output-control.md#opt_regulatory) |
 | `--coding_only`, `--no_intergenic` | Not implemented | [Output control](output-control.md#opt_coding_only) |
 | `--pick_order` | The pick order is fixed to Ensembl VEP's default | [Filtering, picking and transcript sets](filtering-picking.md#opt_pick_order) |

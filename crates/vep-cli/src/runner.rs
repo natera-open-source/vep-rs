@@ -394,6 +394,7 @@ impl Runner {
             max_indel_3prime_shift: 2000,
             populate_loftee_context: needs_loftee_context,
             compute_hgvs: needs_hgvs_computation(&self.config),
+            compute_hgvsg: self.config.hgvsg,
             compute_exon_intron_numbers: needs_exon_intron_numbers(&self.config),
             protein_version: self.config.protein_version,
         });
@@ -1280,6 +1281,10 @@ pub(crate) fn annotate_variant(
     config: &vep_effects::EffectsConfig,
     prediction_config: &PredictionConfig,
 ) {
+    if config.compute_hgvsg {
+        variant.hgvsg =
+            vep_effects::hgvs::generate_hgvsg(variant, config.reference_fasta.as_deref());
+    }
     let (variant_start, variant_end) = structural_variant_bounds(variant);
     let has_predictions = prediction_config.sift.is_some() || prediction_config.polyphen.is_some();
 

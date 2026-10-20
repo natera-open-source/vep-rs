@@ -1724,6 +1724,40 @@ fn concordance_hgvsc_reverse_strand_insertion_rotates_after_shift() {
     );
 }
 
+/// HGVSg is genomic: a deletion in the `GGG` run at 201-203 moves to 203 on the
+/// forward strand (`1:g.203del`, Ensembl VEP 116's `hgvs_genomic` on this
+/// sequence) whichever strand the overlapping transcript is on, while the HGVSc
+/// shift follows the transcript: one base up the forward-strand transcript and
+/// one base down the reverse-strand one.
+#[test]
+fn concordance_hgvsg_shift_ignores_the_transcript_strand() {
+    use crate::hgvs::{generate_hgvs, generate_hgvsg};
+
+    let mut sequence = vec![b'C'; 7000];
+    sequence[199] = b'T';
+    sequence[200..203].copy_from_slice(b"GGG");
+    sequence[203] = b'A';
+    let sequence = String::from_utf8(sequence).expect("ASCII reference");
+    let (_dir, fasta) = load_test_fasta("1", &sequence);
+    let variant = InputVariant::new("1".into(), 202, 202, b"G".to_vec(), b"-".to_vec());
+
+    for (tx, hgvs_offset) in [
+        (make_compact_test_transcript(), 1),
+        (make_compact_reverse_strand_transcript(), -1),
+    ] {
+        assert_eq!(
+            generate_hgvs(&variant, &tx, Some(&fasta)).offset,
+            Some(hgvs_offset),
+            "{:?}",
+            tx.strand
+        );
+    }
+    assert_eq!(
+        generate_hgvsg(&variant, Some(&fasta)).as_deref(),
+        Some("1:g.203del")
+    );
+}
+
 #[test]
 fn concordance_hgvsc_forward_strand_insertion_rotates_after_shift() {
     use crate::hgvs::generate_hgvsc;

@@ -765,9 +765,8 @@ pub fn field_value(
             .to_string(),
         "SWISSPROT" => tc.and_then(|x| x.swissprot.clone()).unwrap_or_default(),
         "TREMBL" => tc.and_then(|x| x.trembl.clone()).unwrap_or_default(),
-        "UNIPARC" | "UNIPROT_ISOFORM" | "GENCODE_PRIMARY" | "miRNA" | "HGVSg" | "CHECK_REF" => {
-            String::new()
-        }
+        "HGVSg" => variant.hgvsg.clone().unwrap_or_default(),
+        "UNIPARC" | "UNIPROT_ISOFORM" | "GENCODE_PRIMARY" | "miRNA" | "CHECK_REF" => String::new(),
         "RefSeq" => tc.and_then(|x| x.refseq.clone()).unwrap_or_default(),
         "GENE_PHENO" => {
             if options.gene_phenotype && variant.colocated_variants.iter().any(|cv| cv.phenotype) {

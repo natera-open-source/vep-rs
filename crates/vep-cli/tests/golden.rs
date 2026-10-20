@@ -45,6 +45,108 @@ fn default_output_matches_vep_on_every_corpus() {
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
 
+/// `--hgvsg` on the GRCh37-hgvs corpus: every row of a record carries the HGVSg
+/// Ensembl VEP 116 prints for it (`vep --hgvsg --fasta reference.fa` on the
+/// corpus input and reference), in the tab, VCF and JSON (`hgvsg`) formats alike:
+/// an SNV, a deletion left where it is, a deletion and an insertion moved 3'
+/// along the forward strand (one a `dup`), an insertion that duplicates nothing,
+/// and a `delins`. The committed expected output was written without the flag,
+/// so the values are listed here.
+#[test]
+fn hgvsg_matches_vep_in_every_format() {
+    // (the record's first five VCF columns, Location, Allele, HGVSg)
+    const EXPECTED: [(&str, &str, &str, &str); 6] = [
+        (
+            "21\t9937918\trs867932594\tG\tA",
+            "21:9937918",
+            "A",
+            "21:g.9937918G>A",
+        ),
+        (
+            "21\t9937918\trs867932594\tGGAGGGTCTGAATGTTTGTCCCTCACATAGGATTCCAGAACACTGCTACAAGGT\tG",
+            "21:9937919-9937971",
+            "-",
+            "21:g.9937919_9937971del",
+        ),
+        (
+            "21\t10910400\trs149363218\tCTA\tC",
+            "21:10910401-10910402",
+            "-",
+            "21:g.10910402_10910403del",
+        ),
+        (
+            "21\t18981461\trs768550367\tA\tATT",
+            "21:18981461-18981462",
+            "TT",
+            "21:g.18981467_18981468dup",
+        ),
+        (
+            "21\t19653357\trs62213417\tC\tCTT",
+            "21:19653357-19653358",
+            "TT",
+            "21:g.19653358_19653359insTT",
+        ),
+        (
+            "21\t27369678\t662051\tTAACAGGATC\tG",
+            "21:27369678-27369687",
+            "G",
+            "21:g.27369678_27369687delinsG",
+        ),
+    ];
+    let corpus = corpora()
+        .into_iter()
+        .find(|c| c.release == "116" && c.name == "GRCh37-hgvs")
+        .expect("tests/golden/116/GRCh37-hgvs");
+    let tmp = tempfile::tempdir().unwrap();
+    let inputs = common::input_records(&corpus);
+    let tab = parse_default(&run_vep(&corpus, "tab", tmp.path(), &["--hgvsg"]));
+    let vcf = parse_vcf(&run_vep(&corpus, "vcf", tmp.path(), &["--hgvsg"]), &inputs);
+    let json = parse_json(&run_vep(&corpus, "json", tmp.path(), &["--hgvsg"]), &inputs);
+    for (line, location, allele, hgvsg) in EXPECTED {
+        let record = inputs
+            .iter()
+            .position(|input| input.starts_with(&format!("{line}\t")))
+            .unwrap_or_else(|| panic!("no input record {line}"));
+        let rows = [
+            (
+                "tab",
+                "HGVSg",
+                tab.iter()
+                    .filter(|e| e.location.as_deref() == Some(location) && e.allele == allele)
+                    .collect::<Vec<_>>(),
+            ),
+            (
+                "vcf",
+                "HGVSg",
+                vcf.iter()
+                    .filter(|e| e.record == Some(record) && e.allele == allele)
+                    .collect(),
+            ),
+            (
+                "json",
+                "hgvsg",
+                json.iter()
+                    .filter(|e| e.record == Some(record) && e.allele == allele)
+                    .collect(),
+            ),
+        ];
+        for (format, field, entries) in rows {
+            assert!(
+                !entries.is_empty(),
+                "{format}: no row for {location} {allele}"
+            );
+            for e in entries {
+                assert_eq!(
+                    e.fields.get(field).map(String::as_str),
+                    Some(hgvsg),
+                    "{format}: {}",
+                    e.key
+                );
+            }
+        }
+    }
+}
+
 /// The manifest is internally consistent with the committed inputs and
 /// expected output: every record it lists is in `variants.vcf`, every
 /// combination it claims to cover appears in VEP's output for the corpus, and
