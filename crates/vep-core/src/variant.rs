@@ -227,6 +227,13 @@ pub struct InputVariant {
     /// Raw input line (for passthrough in some output formats), one buffer shared by
     /// every allele of the record.
     pub raw_input: Option<Arc<str>>,
+    /// The bytes of a captured VCF line that is not UTF-8, which the VCF output
+    /// writes as read, where [`Self::raw_input`] holds the line with each invalid
+    /// sequence replaced; `None` for a line that is UTF-8. One buffer shared by
+    /// every allele of the record. Not part of the variant's JSON form, which
+    /// carries the text of `raw_input`.
+    #[serde(skip)]
+    pub raw_input_bytes: Option<Arc<[u8]>>,
     /// The names of [`Self::colocated_variants`] that print on this allele's rows,
     /// in Ensembl VEP's order: non-somatic variants first, then by name prefix
     /// ([`colocated_in_output_order`]), keeping those matched on this allele or on
@@ -448,6 +455,7 @@ impl Default for InputVariant {
             original_start: None,
             original_end: None,
             raw_input: None,
+            raw_input_bytes: None,
             existing_variation: Vec::new(),
             overlapping_svs: Vec::new(),
             plugin_data: indexmap::IndexMap::new(),
@@ -532,6 +540,7 @@ impl InputVariant {
             original_start: None,
             original_end: None,
             raw_input: None,
+            raw_input_bytes: None,
             existing_variation: Vec::new(),
             overlapping_svs: Vec::new(),
             plugin_data: indexmap::IndexMap::new(),

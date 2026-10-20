@@ -41,6 +41,7 @@
 //! [`run`] reports the reader's error before the coordinator's before the
 //! writer's.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
 use std::io::{self, BufRead, BufWriter, IoSlice, Write};
 use std::ops::Range;
@@ -919,16 +920,15 @@ fn trim_line(line: &[u8]) -> &[u8] {
 /// `split` splits them, joined by tabs: the record Ensembl VEP's VCF parser
 /// holds for a line read under another delimiter (Parser/VCF.pm:129, ensembl-io
 /// ColumnBasedParser.pm:250), which its VCF output joins with tabs
-/// (OutputFactory/VCF.pm:355). The line is read as text, its invalid UTF-8
-/// replaced, since the patterns are character classes.
+/// (OutputFactory/VCF.pm:355). The fields keep their bytes, so a line that is
+/// not UTF-8 is re-joined as read.
 fn rejoin_with_tabs(line: &[u8], delimiter: &Delimiter, out: &mut Vec<u8>) {
-    let text = String::from_utf8_lossy(line);
     out.clear();
-    for (i, field) in delimiter.split(&text).into_iter().enumerate() {
+    for (i, field) in delimiter.split_bytes(line).into_iter().enumerate() {
         if i > 0 {
             out.push(b'\t');
         }
-        out.extend_from_slice(field.as_bytes());
+        out.extend_from_slice(field);
     }
 }
 
@@ -1712,20 +1712,32 @@ struct LineParse<'a> {
 
 impl LineParse<'_> {
     /// The alleles of one data line, each carrying the line as the JSON `input`
-    /// prints it when the run captures lines.
-    fn parse(&self, line: &str) -> anyhow::Result<Vec<InputVariant>> {
-        let mut parsed = if vcf_line_is_non_variant(line) {
-            non_variant_record(line, self.capture_raw_input)
+    /// prints it when the run captures lines, and the line's bytes when the
+    /// line is not UTF-8, for the VCF output to write as read.
+    fn parse(&self, line: &[u8]) -> anyhow::Result<Vec<InputVariant>> {
+        // The parser reads text: a line that is not UTF-8 is read with each invalid
+        // sequence replaced, so its identifiers and INFO values may print the
+        // replacement character where Ensembl VEP prints the bytes.
+        let text = String::from_utf8_lossy(line);
+        let mut alleles = if vcf_line_is_non_variant(&text) {
+            non_variant_record(&text, self.capture_raw_input)?
         } else {
-            parse_vcf_line_with_max_sv_size(line, self.capture_raw_input, self.max_sv_size)
+            parse_vcf_line_with_max_sv_size(&text, self.capture_raw_input, self.max_sv_size)?
         };
-        if let (Some(join), Ok(alleles)) = (self.json_input_join, &mut parsed) {
-            let input: Arc<str> = line.replace('\t', join).into();
-            for allele in alleles.iter_mut() {
+        let line_is_not_utf8 = matches!(text, Cow::Owned(_));
+        if self.capture_raw_input && line_is_not_utf8 {
+            let bytes: Arc<[u8]> = Arc::from(line);
+            for allele in &mut alleles {
+                allele.raw_input_bytes = Some(Arc::clone(&bytes));
+            }
+        }
+        if let Some(join) = self.json_input_join {
+            let input: Arc<str> = text.replace('\t', join).into();
+            for allele in &mut alleles {
                 allele.raw_input = Some(Arc::clone(&input));
             }
         }
-        parsed
+        Ok(alleles)
     }
 }
 
@@ -1743,16 +1755,11 @@ fn parse_lines(
         mut items,
     } = lines;
     let line_parse = c.line_parse();
-    // The parser reads text: a line that is not UTF-8 is read with each invalid
-    // sequence replaced, so its identifiers and INFO values may print the
-    // replacement character where Ensembl VEP prints the bytes.
     let parsed: Vec<ParsedLine> = c.pool.install(|| {
         items
             .par_iter()
             .map(|item| match item {
-                Item::Data { span, .. } => {
-                    Some(line_parse.parse(&String::from_utf8_lossy(&text[span.clone()])))
-                }
+                Item::Data { span, .. } => Some(line_parse.parse(&text[span.clone()])),
                 Item::Text(_) => None,
             })
             .collect()
@@ -2278,7 +2285,7 @@ fn parse_task_lines(
         match item {
             Item::Text(span) => units.push(Unit::Text(span.clone())),
             Item::Data { span, .. } => {
-                let result = line_parse.parse(&String::from_utf8_lossy(&lines.text[span.clone()]));
+                let result = line_parse.parse(&lines.text[span.clone()]);
                 place_parsed_line(
                     item,
                     result,

@@ -418,6 +418,9 @@ fn empty_lines_are_skipped_with_a_warning() {
 /// structural variant type`, quoting the line (Parser.pm:725, BaseVEP.pm:
 /// 846-851), and the record is annotated under the word in every output
 /// format, where a VCF record of such a type is carried without consequences.
+/// Its VCF line is the structural one `to_VCF_record` builds
+/// (StructuralVariationFeature.pm:1149-1171): the class term in angle brackets
+/// one base before the span, with `END=`.
 #[test]
 fn unsupported_class_word_is_warned_and_annotated() {
     let dir = tempfile::tempdir().unwrap();
@@ -461,7 +464,7 @@ fn unsupported_class_word_is_warned_and_annotated() {
     let vcf = annotate(dir.path(), &input, &["--format", "ensembl", "--vcf"]);
     assert_eq!(vcf.len(), 1);
     assert!(
-        vcf[0].starts_with("21\t30213501\tfoo_word\tN\tFOO\t.\t.\tCSQ="),
+        vcf[0].starts_with("21\t30213500\tfoo_word\tN\t<FOO>\t.\t.\tEND=30214300;CSQ="),
         "{}",
         vcf[0]
     );

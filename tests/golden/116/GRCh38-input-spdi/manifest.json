@@ -30,11 +30,13 @@
    "formats": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "expected_dir": "expected_spdi",
    "covers": [
-    "spdi-input-format"
+    "spdi-input-format",
+    "vcf_output_from_non_vcf_input"
    ],
    "perl_mode": "database"
   },
@@ -51,11 +53,13 @@
    "formats": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "expected_dir": "expected_spdi",
    "covers": [
-    "spdi-input-format"
+    "spdi-input-format",
+    "vcf_output_from_non_vcf_input"
    ],
    "perl_mode": "database"
   }

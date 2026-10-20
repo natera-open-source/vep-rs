@@ -270,6 +270,24 @@ mod tests {
         assert_eq!(sorted_keys(&tc), expected);
     }
 
+    /// The variant document a plugin receives names the input line under
+    /// `raw_input` alone: the bytes of a line that is not UTF-8, kept for the
+    /// VCF output, are no key of it.
+    #[test]
+    fn variant_json_carries_the_input_line_as_text_only() {
+        let mut variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let line: &[u8] = b"21\t100\tid_\xE9\tA\tG\t.\t.\t.";
+        variant.raw_input = Some(String::from_utf8_lossy(line).into());
+        variant.raw_input_bytes = Some(line.into());
+        let value = serde_json::to_value(&variant).unwrap();
+        let object = value.as_object().unwrap();
+        assert_eq!(
+            object["raw_input"].as_str(),
+            Some("21\t100\tid_\u{FFFD}\tA\tG\t.\t.\t.")
+        );
+        assert!(!object.contains_key("raw_input_bytes"), "{value}");
+    }
+
     #[test]
     fn run_over_an_empty_registry_touches_nothing() {
         let mut variant =

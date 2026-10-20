@@ -30,11 +30,13 @@
    "formats": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "expected_dir": "expected_ensembl",
    "covers": [
-    "ensembl-input-format"
+    "ensembl-input-format",
+    "vcf_output_from_non_vcf_input"
    ]
   },
   {
@@ -50,11 +52,13 @@
    "formats": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "expected_dir": "expected_ensembl",
    "covers": [
-    "ensembl-input-format"
+    "ensembl-input-format",
+    "vcf_output_from_non_vcf_input"
    ]
   },
   {
@@ -74,12 +78,14 @@
    "formats": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "expected_dir": "expected_ensembl-space",
    "covers": [
     "delimiter",
-    "ensembl-input-format"
+    "ensembl-input-format",
+    "vcf_output_from_non_vcf_input"
    ]
   },
   {
@@ -95,11 +101,13 @@
    "formats": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "expected_dir": "expected_ensembl-space",
    "covers": [
-    "delimiter"
+    "delimiter",
+    "vcf_output_from_non_vcf_input"
    ]
   },
   {

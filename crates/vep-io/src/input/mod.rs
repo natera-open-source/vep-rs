@@ -222,15 +222,29 @@ impl Delimiter {
     /// field kept, trailing empty fields dropped, and under
     /// [`Delimiter::Whitespace`] the leading whitespace ignored.
     pub fn split<'a>(&self, line: &'a str) -> Vec<&'a str> {
-        let mut fields: Vec<&str> = match self {
-            Delimiter::Tab => line.split('\t').collect(),
-            Delimiter::SpaceRun => split_on_runs(line, |c| c == ' '),
-            Delimiter::WhitespaceRun => split_on_runs(line, is_perl_space),
+        self.split_bytes(line.as_bytes())
+            .into_iter()
+            .map(|field| {
+                // A separator is an ASCII byte or a whole UTF-8 literal, so a
+                // field ends on character bounds.
+                std::str::from_utf8(field).expect("a field of a str is a str")
+            })
+            .collect()
+    }
+
+    /// [`Self::split`] on the bytes of a line, for a line that may not be
+    /// UTF-8: the fields are byte slices of `line`, and a byte outside ASCII
+    /// is a separator only inside a literal delimiter, matched byte for byte.
+    pub fn split_bytes<'a>(&self, line: &'a [u8]) -> Vec<&'a [u8]> {
+        let mut fields: Vec<&[u8]> = match self {
+            Delimiter::Tab => line.split(|b| *b == b'\t').collect(),
+            Delimiter::SpaceRun => split_on_runs(line, |b| b == b' '),
+            Delimiter::WhitespaceRun => split_on_runs(line, is_perl_space_byte),
             Delimiter::Whitespace => line
-                .split(is_perl_space)
+                .split(|b| is_perl_space_byte(*b))
                 .filter(|field| !field.is_empty())
                 .collect(),
-            Delimiter::Literal(text) => line.split(text.as_str()).collect(),
+            Delimiter::Literal(text) => split_on_literal(line, text.as_bytes()),
         };
         while fields.last().is_some_and(|field| field.is_empty()) {
             fields.pop();
@@ -250,14 +264,38 @@ impl Delimiter {
     }
 }
 
+/// [`is_perl_space`] on a byte.
+fn is_perl_space_byte(b: u8) -> bool {
+    b.is_ascii_whitespace() || b == 0x0B
+}
+
 /// Perl's `split / +/` (or `/\s+/`): each run of separator characters is one
 /// separator, so a leading run yields a leading empty field.
-fn split_on_runs(line: &str, is_separator: impl Fn(char) -> bool + Copy) -> Vec<&str> {
-    let mut fields = Vec::new();
-    if line.starts_with(is_separator) {
-        fields.push("");
+fn split_on_runs(line: &[u8], is_separator: impl Fn(u8) -> bool) -> Vec<&[u8]> {
+    let mut fields: Vec<&[u8]> = Vec::new();
+    if line.first().is_some_and(|b| is_separator(*b)) {
+        fields.push(b"");
     }
-    fields.extend(line.split(is_separator).filter(|field| !field.is_empty()));
+    fields.extend(
+        line.split(|b| is_separator(*b))
+            .filter(|field| !field.is_empty()),
+    );
+    fields
+}
+
+/// Perl's `split` on literal text: the fields between each occurrence of
+/// `text`, empty fields kept.
+fn split_on_literal<'a>(line: &'a [u8], text: &[u8]) -> Vec<&'a [u8]> {
+    if text.is_empty() {
+        return vec![line];
+    }
+    let mut fields = Vec::new();
+    let mut rest = line;
+    while let Some(at) = rest.windows(text.len()).position(|window| window == text) {
+        fields.push(&rest[..at]);
+        rest = &rest[at + text.len()..];
+    }
+    fields.push(rest);
     fields
 }
 
@@ -363,6 +401,40 @@ mod tests {
         );
         assert!(Delimiter::Tab.split("").is_empty());
         assert!(Delimiter::Whitespace.split("   ").is_empty());
+    }
+
+    /// The byte split gives the same fields as the text split, and a byte
+    /// outside ASCII (`0xE9`) is kept whole in its field under every pattern.
+    #[test]
+    fn delimiter_split_bytes_keeps_bytes_outside_ascii() {
+        let line = b"21 30282169 caf\xe9 C A . . .";
+        let fields = Delimiter::Whitespace.split_bytes(line);
+        assert_eq!(fields[2], b"caf\xe9");
+        assert_eq!(fields.len(), 8);
+        assert_eq!(
+            Delimiter::SpaceRun.split_bytes(b" a  caf\xe9 "),
+            [&b""[..], b"a", b"caf\xe9"]
+        );
+        assert_eq!(
+            Delimiter::Literal(",".to_string()).split_bytes(b",caf\xe9,,b,,"),
+            [&b""[..], b"caf\xe9", b"", b"b"]
+        );
+        for delimiter in [
+            Delimiter::Tab,
+            Delimiter::SpaceRun,
+            Delimiter::Whitespace,
+            Delimiter::WhitespaceRun,
+            Delimiter::Literal("::".to_string()),
+        ] {
+            let text = " a::b\tc  d \x0Be ";
+            let from_text: Vec<&[u8]> =
+                delimiter.split(text).iter().map(|f| f.as_bytes()).collect();
+            assert_eq!(
+                delimiter.split_bytes(text.as_bytes()),
+                from_text,
+                "{delimiter:?}"
+            );
+        }
     }
 
     #[test]

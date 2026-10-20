@@ -27,16 +27,18 @@ pub(crate) fn render_record<'a>(
     ctx: &WriteContext<'_>,
     rows: &mut Vec<Row<'a>>,
 ) -> anyhow::Result<()> {
+    // Bytes rather than text, so a VCF input's line that is not UTF-8 comes
+    // out as it was read.
     let lines = match ctx.output_format {
-        "vcf" => ctx.vcf_formatter.map(|f| f.format_record(record)),
-        "json" => ctx.json_formatter.map(|f| f.format_record(record)),
-        "parquet" => ctx.parquet_formatter.map(|f| f.format_record(record)),
-        "tab" => ctx.tab_formatter.map(|f| f.format_record(record)),
+        "vcf" => ctx.vcf_formatter.map(|f| f.format_record_bytes(record)),
+        "json" => ctx.json_formatter.map(|f| f.format_record_bytes(record)),
+        "parquet" => ctx.parquet_formatter.map(|f| f.format_record_bytes(record)),
+        "tab" => ctx.tab_formatter.map(|f| f.format_record_bytes(record)),
         _ => return render_default_record(out, record, ctx.extra_plan, rows),
     };
     if let Some(lines) = lines {
         for line in lines.map_err(|e| anyhow::anyhow!("{}", e))? {
-            out.extend_from_slice(line.as_bytes());
+            out.extend_from_slice(&line);
             out.push(b'\n');
         }
     }

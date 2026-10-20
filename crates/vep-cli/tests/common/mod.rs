@@ -47,7 +47,8 @@
 //! compared without their order, for a set whose rows the reference emits in
 //! hash order) and `perl_mode` (`offline` by default; `database` for a reference
 //! Ensembl VEP wrote connected to its database, whose default and tab headers
-//! compare by their column descriptions alone). An entry carrying its own
+//! compare by their column descriptions alone and whose VCF `##VEP=` line by
+//! the tokens it names). An entry carrying its own
 //! `divergences` documents its run; one without inherits the manifest's lists.
 //!
 //! A manifest may also carry `runs`, command lines executed after the default
@@ -1848,7 +1849,21 @@ pub fn compare_column_descriptions(expected: &str, actual: &str) -> String {
 /// command line by prefix, the `##vep-rs=` identity line set aside; the
 /// `#CHROM` line exact.
 pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
-    fn normalise_vep_line(line: &str) -> String {
+    compare_vcf_headers_of(expected, actual, false)
+}
+
+/// [`compare_vcf_headers`] for a reference Ensembl VEP wrote connected to its
+/// database, whose `##VEP=` line names the assembly and gene build alone where a
+/// cache run names its cache's source versions too: the reference's tokens must
+/// each appear with their value in the actual line, which may carry more.
+pub fn compare_database_vcf_headers(expected: &str, actual: &str) -> String {
+    compare_vcf_headers_of(expected, actual, true)
+}
+
+fn compare_vcf_headers_of(expected: &str, actual: &str, database: bool) -> String {
+    /// The `key=value` tokens of a `##VEP=` line, a quoted value kept whole,
+    /// without the tokens an offline vep-rs run never writes.
+    fn vep_line_tokens(line: &str) -> Vec<String> {
         // Tokens are `key=value` or `key="quoted value"`; quoted values may hold spaces.
         let mut tokens: Vec<String> = Vec::new();
         let mut rest = line;
@@ -1880,7 +1895,7 @@ pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
             }
             rest = remainder;
         }
-        tokens.join(" ")
+        tokens
     }
     let exp: Vec<&str> = expected.lines().filter(|l| l.starts_with('#')).collect();
     let mut act: Vec<&str> = actual.lines().filter(|l| l.starts_with('#')).collect();
@@ -1898,9 +1913,19 @@ pub fn compare_vcf_headers(expected: &str, actual: &str) -> String {
     }
     for (i, (e, a)) in exp.iter().zip(act.iter()).enumerate() {
         if e.starts_with("##VEP=") {
-            let (ne, na) = (normalise_vep_line(e), normalise_vep_line(a));
-            if ne != na {
-                return format!("header line {}: expected {ne:?}, got {na:?}", i + 1);
+            let (ne, na) = (vep_line_tokens(e), vep_line_tokens(a));
+            let agree = if database {
+                ne.iter().all(|token| na.contains(token))
+            } else {
+                ne == na
+            };
+            if !agree {
+                return format!(
+                    "header line {}: expected {:?}, got {:?}",
+                    i + 1,
+                    ne.join(" "),
+                    na.join(" ")
+                );
             }
         } else if e.starts_with("##VEP-command-line=") {
             if !a.starts_with("##VEP-command-line=") {
@@ -1983,6 +2008,7 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
             compare_column_descriptions(&expected, &actual)
         }
         "default" | "tab" => compare_tab_headers(&expected, &actual),
+        "vcf" if run.perl_mode == "database" => compare_database_vcf_headers(&expected, &actual),
         "vcf" => compare_vcf_headers(&expected, &actual),
         _ => compare_json_identity(&actual),
     };

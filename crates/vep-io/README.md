@@ -30,7 +30,11 @@ then adds one intergenic row per allele that overlapped nothing, and
 for a name the table lacks. The tab formatter prints each column with `-` for an
 absent value; the VCF formatter folds every row into a `|`-joined CSQ entry (the
 INFO key VEP uses for its annotations), joins the entries with `,` and appends
-`CSQ=...` to the record's own INFO column; the JSON formatter buckets the rows into
+`CSQ=...` to the record's own INFO column, a VCF input's line kept as the bytes
+it was read from and any other input's line built as Ensembl VEP's
+`to_VCF_record` builds it (`output::vcf_output::to_vcf_record`: the anchor base
+before an indel from the run's reference or `N`, reverse-strand alleles
+reverse-complemented, a structural class as `<DEL>` with `END=`); the JSON formatter buckets the rows into
 `transcript_consequences` and its sibling arrays under VEP's lowercased, renamed
 keys; the Parquet formatter writes one tab-separated row per (allele, consequence)
 with `chrom`, `pos`, `end`, `ref` and `alt` ahead of the `--tab` columns, for the
@@ -58,10 +62,10 @@ formatter struct here: `vep-cli` renders its rows from this crate's field table
 | `input::spdi`        | `SpdiParser`: `sequence:position:deletion:insertion`, the position 0-based, a deletion or insertion written as bases or as a length; the reference allele is checked against or read from the context's reference, the sequence name resolves to the source's chromosome through its synonyms, and a refused notation is a `SkippedLine` carrying Ensembl VEP's text. |
 | `input::hgvs`        | `HgvsParser`: HGVS notation resolved against the context's reference sequence as Ensembl VEP resolves it through its database; `input::hgvs::genomic` reads the `g.` and `m.` shapes (substitution, `del`, `dup`, `delins`, `ins`, `inv`, `=`) with the genome's bases, the reference check and `--lookup_ref`; `input::hgvs::transcript` reads `c.` and `n.` on the transcript the context's `TranscriptSource` finds by stable id or, through Ensembl VEP's pick order, by gene name, placing the position through the transcript's exon mapper and keeping its strand; `p.` fails with `NotImplemented`, `r.` with `Unsupported`, and a notation Ensembl VEP's resolver refuses or `validate_vf` skips is a `SkippedLine` carrying its text. |
 | `input::id`          | `IdParser`: one variant identifier per line, whitespace removed, the list read whole; `names` for the caller to resolve and `supply_mappings` to hand back one `NameMapping` list per name; a name without a mapping is a `No variant found` warning and a run of empty lines `skip_empty_lines`'s, both through `take_warnings`, the empty lines numbered as Ensembl VEP counts the list's lines. |
-| `output`             | The `OutputFormatter` trait: `write_header`, `format_variant`, `format_record` (every allele split from one input record together) and `finish`.                                                                                       |
+| `output`             | The `OutputFormatter` trait: `write_header`, `format_variant`, `format_record` (every allele split from one input record together), `format_record_bytes` (the same lines as bytes, for a format that writes input bytes back) and `finish`. |
 | `output::fields`     | The field table every text format shares: the thirteen default columns, the flag-to-field order, header descriptions, `record_rows` ordering, `field_value`, the `Extra` column keys, the default and tab headers and the VCF `##VEP=` meta line. |
 | `output::tab`        | `TabOutputFormatter`: the default columns, then the active flag fields, then plugin fields, each as its own column, `-` where a value is absent.                                                                                        |
-| `output::vcf_output` | `VcfOutputFormatter`: the input line with one CSQ entry per row, VEP's escaping, an earlier CSQ entry replaced, and the header block built from the input's own header lines.                                                           |
+| `output::vcf_output` | `VcfOutputFormatter`: the input line, or the line `to_vcf_record` builds for a non-VCF input, with one CSQ entry per row, VEP's escaping, an earlier CSQ entry replaced, and the header block built from the input's own header lines. |
 | `output::json`       | `JsonOutputFormatter`: one JSON Lines object per record, keys lowercased and renamed as VEP renames them, numeric-looking values emitted as numbers except for identifier keys.                                                         |
 | `output::parquet`    | `ParquetOutputFormatter`: the tab-separated intermediate the command-line runner hands to `duckdb`; a `-` becomes an empty cell except in `Allele`, `ref` and `alt`, where a dash is a real allele.                                     |
 
@@ -87,7 +91,7 @@ Output:
 
 | Item                                                    | Phrase                                                                                                                                              |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OutputFormatter`                                       | `write_header`, `format_variant`, `format_record`, `finish`; the default `format_record` formats each allele on its own.                            |
+| `OutputFormatter`                                       | `write_header`, `format_variant`, `format_record`, `format_record_bytes`, `finish`; the default `format_record` formats each allele on its own.      |
 | `fields::FieldOptions`                                  | One `bool` per field group, mirroring the command-line flags, plus `no_escape` (HGVSp keeps `=` instead of `%3D`).                                  |
 | `fields::ExtraFieldsPlan::new(options)`                 | The row-invariant part of the `Extra` column, computed once per run.                                                                                |
 | `fields::flag_fields`, `fields::field_description`      | The active optional fields in VEP's order; VEP's description of a field for the header blocks.                                                      |

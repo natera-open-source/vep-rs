@@ -8,14 +8,20 @@
 //! VEP's `@VCF_COLS` followed by the active flag fields and plugin fields, or the
 //! `--fields` list alone (`build_csq_field_list`); values inside an entry are
 //! escaped as VEP escapes them (`,` and `|` to `&`, `;` to `%3B`, whitespace to
-//! `_`), lists join with `&`, and an absent value is empty.
+//! `_`), lists join with `&`, and an absent value is empty. A record of another
+//! input format gets the VCF line Ensembl VEP builds for it ([`to_vcf_record`]).
 
+use std::borrow::Cow;
+use std::collections::HashSet;
 use std::io::Write;
+use std::sync::Arc;
 
+use vep_core::codon::reverse_complement;
 use vep_core::consequence::TranscriptConsequence;
 use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
+use crate::input::ReferenceSequence;
 
 use super::fields::{self, FieldOptions, PluginHeader};
 use super::OutputFormatter;
@@ -53,6 +59,9 @@ pub struct VcfOutputFormatter {
     /// extends (OutputFactory/VCF.pm:314-317); a record of another input format
     /// carries its input line too, and its VCF line is built from the record.
     vcf_input: bool,
+    /// The run's reference FASTA, read for the base before an indel of a record
+    /// built into a VCF line; without one that base is `N`.
+    reference: Option<Arc<dyn ReferenceSequence>>,
 }
 
 impl VcfOutputFormatter {
@@ -82,6 +91,7 @@ impl VcfOutputFormatter {
             vep_meta_line: fields::vcf_vep_meta_line("", None),
             command_line: String::new(),
             vcf_input: true,
+            reference: None,
         }
     }
 
@@ -98,6 +108,29 @@ impl VcfOutputFormatter {
     pub fn with_vcf_input(mut self, vcf_input: bool) -> Self {
         self.vcf_input = vcf_input;
         self
+    }
+
+    /// Sets the reference the base before an indel is read from when a record
+    /// of a non-VCF input is built into a VCF line (`--fasta`); `N` without one.
+    pub fn with_reference(mut self, reference: Option<Arc<dyn ReferenceSequence>>) -> Self {
+        self.reference = reference;
+        self
+    }
+
+    /// The record's VCF line, read from any allele `first` of it: a VCF input's
+    /// own line as read, the bytes when the line is not UTF-8
+    /// (`OutputFactory/VCF.pm:315`), else the line Ensembl VEP builds from the
+    /// record (`:336-337`, [`to_vcf_record`]).
+    fn record_line<'a>(&self, first: &'a InputVariant) -> Cow<'a, [u8]> {
+        if self.vcf_input {
+            if let Some(bytes) = &first.raw_input_bytes {
+                return Cow::Borrowed(bytes);
+            }
+            if let Some(line) = &first.raw_input {
+                return Cow::Borrowed(line.as_bytes());
+            }
+        }
+        Cow::Owned(to_vcf_record(first, self.reference.as_deref()))
     }
 
     /// Sets the run description the meta lines carry: the cache directory,
@@ -267,7 +300,10 @@ pub(crate) fn value_for_field(
 /// One CSQ entry. A gene symbol's whitespace is percent-encoded before the
 /// subfield escaping turns whitespace into `_`, so it reaches the output as
 /// `%20`; `--no_escape` leaves it to the `_` rule (`OutputFactory.pm`,
-/// `BaseTranscriptVariationAllele_to_output_hash`, the `symbol` block).
+/// `BaseTranscriptVariationAllele_to_output_hash`, the `symbol` block). The
+/// `Allele` of a record on the reverse strand is reverse-complemented, whatever
+/// its text (`OutputFactory/VCF.pm:392-393`, `reverse_comp` on the value), so
+/// it names the allele as the record's VCF line does.
 fn format_csq_entry(
     fields: &[String],
     produced: &[bool],
@@ -285,6 +321,8 @@ fn format_csq_entry(
             let v = value_for_field(field, variant, tc, options);
             if v == "-" && field != "Allele" {
                 String::new()
+            } else if field == "Allele" && variant.strand.as_i8() < 0 {
+                vcf_encode(&String::from_utf8_lossy(&reverse_complement(v.as_bytes())))
             } else if field == "SYMBOL" && !options.no_escape {
                 vcf_encode(&v.replace(is_perl_whitespace, "%20"))
             } else {
@@ -295,26 +333,210 @@ fn format_csq_entry(
         .join("|")
 }
 
-/// The record's VCF line: the raw input line when captured from a VCF, else a
-/// minimal record rebuilt from the first allele's coordinates and every ALT.
-fn record_line(record: &[&InputVariant], vcf_input: bool) -> String {
-    let first = record[0];
-    if vcf_input {
-        if let Some(line) = &first.raw_input {
-            return line.to_string();
+/// Whether `allele` is one or more of the bases `A`, `C`, `G`, `T`, `N`
+/// (Perl's `/^[ACGTN]+$/`).
+fn is_acgtn(allele: &[u8]) -> bool {
+    !allele.is_empty() && allele.iter().all(|b| b"ACGTN".contains(b))
+}
+
+/// Perl's truth of an allele's text: the empty string and `0` are false, every
+/// other text true.
+fn perl_true_bytes(text: &[u8]) -> bool {
+    !text.is_empty() && text != b"0"
+}
+
+/// ensembl-variation `Utils/Sequence.pm` `trim_right` (release 116, lines
+/// 1058-1096): while every allele ends in the same base and none is one base
+/// long, that base is removed from each; an allele with no base counts as
+/// ending in no base, so nothing is trimmed beside one.
+fn trim_right(alleles: &mut [Vec<u8>]) {
+    if alleles.len() < 2 {
+        return;
+    }
+    loop {
+        if alleles.iter().any(|allele| allele.len() == 1) {
+            return;
+        }
+        let Some(last) = alleles[0].last().copied() else {
+            return;
+        };
+        if alleles.iter().any(|allele| allele.last() != Some(&last)) {
+            return;
+        }
+        for allele in alleles.iter_mut() {
+            allele.pop();
         }
     }
-    let ref_str = String::from_utf8_lossy(&first.ref_allele);
-    let alts = record
+}
+
+/// The base before `start` on the record's chromosome, upper-cased, read from
+/// `reference`; `N` without a reference, for a chromosome it lacks or at the
+/// chromosome's first base (`BaseVariationFeature.pm` `_get_prev_base`, release
+/// 116, lines 339-353).
+fn base_before(
+    reference: Option<&dyn ReferenceSequence>,
+    variant: &InputVariant,
+    start: u64,
+) -> Vec<u8> {
+    if start <= 1 {
+        return b"N".to_vec();
+    }
+    let position = start - 1;
+    reference
+        .and_then(|reference| {
+            reference
+                .sequence(&variant.chr, position, position)
+                .or_else(|| reference.sequence(&variant.original_chr, position, position))
+        })
+        .unwrap_or_else(|| b"N".to_vec())
+}
+
+/// The eight fixed VCF columns `chr`, `pos`, `id`, `ref`, `alt`, `.`, `.`,
+/// `info`, tab-separated.
+fn fixed_columns(
+    chr: &str,
+    pos: u64,
+    id: &str,
+    reference: &[u8],
+    alt: &[u8],
+    info: &[u8],
+) -> Vec<u8> {
+    [
+        chr.as_bytes(),
+        pos.to_string().as_bytes(),
+        id.as_bytes(),
+        reference,
+        alt,
+        b".",
+        b".",
+        info,
+    ]
+    .join(&b"\t"[..])
+}
+
+/// The VCF line Ensembl VEP builds for a record that did not come from a VCF,
+/// as `OutputFactory/VCF.pm:336-337` (release 116.2) builds one for every such
+/// record: ensembl-variation `VariationFeature.pm` `to_VCF_record` (release
+/// 116, lines 2340-2444) for a sequence variant and
+/// `StructuralVariationFeature.pm` `to_VCF_record` (lines 1149-1171) for a
+/// structural one. `first` is any allele of the record: the line is built from
+/// the record's own allele string, strand, start and name, which every allele
+/// carries.
+///
+/// A sequence variant's alleles are the record's allele string split on `/`;
+/// on the reverse strand each allele of `A`, `C`, `G`, `T` and `N` alone is
+/// reverse-complemented (`:2376`), and every `-` is removed (`:2381`). Alleles
+/// of one length that are all bases or empty make a balanced record: the
+/// record's start, the first allele as REF and the rest comma-joined as ALT,
+/// `.` when the join is empty or `0` (`:2432-2441`). Otherwise the alleles are
+/// trimmed on the right (`trim_right`, `:2390`, unless one holds a character
+/// outside `ACGTN.`; an allele Perl reads as false, empty or `0`, is never
+/// such a one, `:2383`), a lone allele gets `-` before it (`:2392`), and the
+/// alleles get an anchor base: none when every allele free of `*` opens with
+/// the same base (`:2399-2402`), else the base before the record's start and
+/// the record's position moved one base back (`:2404-2407`, `base_before`).
+/// An allele of bases or empty is written after the anchor, any other inside
+/// `<` and `>` (`:2409-2419`). The ID column is the record's name (`:2425`).
+/// The `COSMIC_MUTATION` and `HGMD_MUTATION` strings (`:2356-2373`) name
+/// database records and are not an input shape.
+///
+/// A structural variant's line is the base before its start and its position
+/// moved one base back, `<INS>`, `<DEL>`, `<TDUP>` or `<DUP>` for an
+/// insertion, deletion, tandem duplication or duplication and the record's
+/// class term inside `<` and `>` for any other class, with `END=` and the
+/// record's end as INFO.
+pub fn to_vcf_record(first: &InputVariant, reference: Option<&dyn ReferenceSequence>) -> Vec<u8> {
+    let chr = &first.original_chr;
+    let name = first.variation_name();
+    let start = first.original_start.unwrap_or(first.start);
+
+    if first.is_structural {
+        let class: Cow<str> = match &first.record_so_term {
+            Some(term) => Cow::Borrowed(term),
+            None => String::from_utf8_lossy(first.alt_allele()),
+        };
+        let term = match class.as_ref() {
+            "insertion" => "INS",
+            "deletion" => "DEL",
+            "tandem_duplication" => "TDUP",
+            "duplication" => "DUP",
+            other => other,
+        };
+        let end = first.original_end.unwrap_or(first.end);
+        return fixed_columns(
+            chr,
+            start.saturating_sub(1),
+            &name,
+            &base_before(reference, first, start),
+            format!("<{term}>").as_bytes(),
+            format!("END={end}").as_bytes(),
+        );
+    }
+
+    let allele_string = first.working_allele_string();
+    let mut alleles: Vec<Vec<u8>> = allele_string
+        .split('/')
+        .map(|allele| {
+            let allele = allele.as_bytes();
+            if first.strand.as_i8() < 0 && is_acgtn(allele) {
+                reverse_complement(allele)
+            } else {
+                allele.to_vec()
+            }
+        })
+        .collect();
+    for allele in &mut alleles {
+        allele.retain(|b| *b != b'-');
+    }
+    let lengths: HashSet<usize> = alleles.iter().map(Vec::len).collect();
+    let non_acgt = alleles
         .iter()
-        .map(|v| String::from_utf8_lossy(v.alt_allele()).to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-    let id = first.id.as_deref().unwrap_or(".");
-    format!(
-        "{}\t{}\t{}\t{}\t{}\t.\t.\t.",
-        first.original_chr, first.start, id, ref_str, alts
-    )
+        .any(|allele| perl_true_bytes(allele) && !allele.iter().all(|b| b"ACGTN.".contains(b)));
+
+    let position = if non_acgt || lengths.len() > 1 {
+        if !non_acgt {
+            trim_right(&mut alleles);
+        }
+        if alleles.len() == 1 {
+            alleles.insert(0, b"-".to_vec());
+        }
+        let first_bases: HashSet<Option<u8>> = alleles
+            .iter()
+            .filter(|allele| !allele.contains(&b'*'))
+            .map(|allele| allele.first().copied())
+            .collect();
+        let (anchor, position) = if first_bases.len() == 1 {
+            (Vec::new(), start)
+        } else {
+            (
+                base_before(reference, first, start),
+                start.saturating_sub(1),
+            )
+        };
+        for allele in &mut alleles {
+            allele.retain(|b| *b != b'-');
+            if allele.is_empty() || is_acgtn(allele) {
+                let mut anchored = anchor.clone();
+                anchored.extend_from_slice(allele);
+                *allele = anchored;
+            } else {
+                allele.insert(0, b'<');
+                allele.push(b'>');
+            }
+        }
+        position
+    } else {
+        start
+    };
+
+    let reference_allele = alleles.remove(0);
+    // The alternates joined with `,`, then Perl's truth test for the `.`
+    // fallback (lines 2427 and 2440).
+    let mut alt = alleles.join(&b","[..]);
+    if !perl_true_bytes(&alt) {
+        alt = b".".to_vec();
+    }
+    fixed_columns(chr, position, &name, &reference_allele, &alt, b".")
 }
 
 impl OutputFormatter for VcfOutputFormatter {
@@ -327,32 +549,43 @@ impl OutputFormatter for VcfOutputFormatter {
         self.format_record(&[variant])
     }
 
+    /// The line's bytes read as text, each invalid sequence replaced; the
+    /// pipeline writes the bytes of [`Self::format_record_bytes`].
     fn format_record(&self, record: &[&InputVariant]) -> Result<Vec<String>, IoError> {
+        Ok(self
+            .format_record_bytes(record)?
+            .into_iter()
+            .map(|line| String::from_utf8_lossy(&line).into_owned())
+            .collect())
+    }
+
+    fn format_record_bytes(&self, record: &[&InputVariant]) -> Result<Vec<Vec<u8>>, IoError> {
         if record.is_empty() {
             return Ok(Vec::new());
         }
-        let mut cols: Vec<String> = record_line(record, self.vcf_input)
-            .split('\t')
-            .map(str::to_string)
-            .collect();
+        let line = self.record_line(record[0]);
+        let mut cols: Vec<&[u8]> = line.split(|b| *b == b'\t').collect();
         while cols.len() < 8 {
-            cols.push(".".to_string());
+            cols.push(&b"."[..]);
         }
         // An earlier annotation's first entry under the field's name is removed
         // whether or not new consequences follow, as OutputFactory/VCF.pm:323-331
         // clears the field (one substitution, one entry) before it looks for
         // anything to append; --keep_csq keeps it beside the new one.
         let csq_key = format!("{}=", self.info_field_name);
-        let info: String = if cols[7] == "." {
-            String::new()
+        let mut info: Vec<u8> = if cols[7] == b"." {
+            Vec::new()
         } else if self.keep_csq {
-            cols[7].clone()
+            cols[7].to_vec()
         } else {
-            let mut entries: Vec<&str> = cols[7].split(';').collect();
-            if let Some(first) = entries.iter().position(|kv| kv.starts_with(&csq_key)) {
+            let mut entries: Vec<&[u8]> = cols[7].split(|b| *b == b';').collect();
+            if let Some(first) = entries
+                .iter()
+                .position(|kv| kv.starts_with(csq_key.as_bytes()))
+            {
                 entries.remove(first);
             }
-            entries.join(";")
+            entries.join(&b";"[..])
         };
         let carried_without_csq = record
             .iter()
@@ -370,13 +603,18 @@ impl OutputFormatter for VcfOutputFormatter {
         // A record with no consequences is carried through without the field, as
         // Ensembl VEP writes a record it annotates nothing for (OutputFactory/VCF.pm:341-353
         // appends the field only when there is a chunk and leaves `.` otherwise).
-        cols[7] = match (csq_parts.is_empty(), info.is_empty()) {
-            (true, true) => ".".to_string(),
-            (true, false) => info,
-            (false, true) => format!("{csq_key}{}", csq_parts.join(",")),
-            (false, false) => format!("{info};{csq_key}{}", csq_parts.join(",")),
-        };
-        Ok(vec![cols.join("\t")])
+        if !csq_parts.is_empty() {
+            if !info.is_empty() {
+                info.push(b';');
+            }
+            info.extend_from_slice(csq_key.as_bytes());
+            info.extend_from_slice(csq_parts.join(",").as_bytes());
+        }
+        if info.is_empty() {
+            info.push(b'.');
+        }
+        cols[7] = &info;
+        Ok(vec![cols.join(&b"\t"[..])])
     }
 
     fn finish(&mut self, _writer: &mut dyn Write) -> Result<(), IoError> {
@@ -1094,5 +1332,307 @@ mod tests {
         // And it fails silently: the line is well-formed and CSQ is populated, which
         // is why header-plus-`CSQ=` assertions cannot detect a wrong gate.
         assert!(fields[7].len() > "CSQ=".len(), "CSQ is populated");
+    }
+
+    /// A reference of one run of bases on one chromosome, for the anchor base.
+    struct Bases {
+        chr: &'static str,
+        start: u64,
+        bases: &'static [u8],
+    }
+
+    impl ReferenceSequence for Bases {
+        fn sequence(&self, chr: &str, start: u64, end: u64) -> Option<Vec<u8>> {
+            if chr != self.chr || start < self.start || end < start {
+                return None;
+            }
+            let from = usize::try_from(start - self.start).ok()?;
+            let to = usize::try_from(end - self.start + 1).ok()?;
+            self.bases.get(from..to).map(<[u8]>::to_vec)
+        }
+
+        fn record_name(&self, chr: &str) -> Option<String> {
+            (chr == self.chr).then(|| chr.to_string())
+        }
+    }
+
+    /// A record of a non-VCF input: `alleles` is the record's allele string.
+    fn text_record(start: u64, end: u64, alleles: &str, id: Option<&str>) -> InputVariant {
+        let (reference, alt) = alleles.split_once('/').unwrap();
+        let mut v = InputVariant::new(
+            "21".into(),
+            start,
+            end,
+            reference.as_bytes().to_vec(),
+            alt.as_bytes().to_vec(),
+        );
+        v.id = id.map(str::to_string);
+        v
+    }
+
+    /// A structural record of a non-VCF input: `word` is the class word written
+    /// and `term` the SO term the parser gave it, `None` for a word the table
+    /// lacks.
+    fn structural_record(
+        start: u64,
+        end: u64,
+        word: &str,
+        term: Option<&str>,
+        id: &str,
+    ) -> InputVariant {
+        let mut v = InputVariant::new("21".into(), start, end, b"N".to_vec(), word.into());
+        v.is_structural = true;
+        v.record_so_term = term.map(str::to_string);
+        v.id = Some(id.to_string());
+        v
+    }
+
+    fn line_of(variant: &InputVariant, reference: Option<&dyn ReferenceSequence>) -> String {
+        String::from_utf8(to_vcf_record(variant, reference)).unwrap()
+    }
+
+    /// `VariationFeature.pm` `to_VCF_record` (release 116, lines 2385-2430) on an
+    /// indel: the alleles differ in length, so each takes the base before the
+    /// record's start and the position moves one base back; without a reference
+    /// that base is `N` (`BaseVariationFeature.pm:345`). Ensembl VEP 116.2's VCF
+    /// output for the `GRCh38-input-ensembl` corpus (no FASTA) writes
+    /// `21 30289183 stop_ins1_lost_rev N NG` for the insertion `-/G` at
+    /// 30289184-30289183 and `21 30348409 21_30348410_ta/- NTA N` for the
+    /// deletion the parser minimised to `TA/-` at 30348410-30348411; the
+    /// `GRCh38-input-hgvs` corpus (FASTA) writes `21 30282168 ... TC TAT` for
+    /// `21:g.30282169delCinsAT`, the `C/AT` at 30282169, and `21 30282170 ...
+    /// AATA A` for `21:g.30282171_30282173del`, the `ATA/-` at 30282171-30282173.
+    #[test]
+    fn to_vcf_record_indel_reanchored_pos_minus_one() {
+        let insertion = text_record(30289184, 30289183, "-/G", Some("stop_ins1_lost_rev"));
+        assert_eq!(
+            line_of(&insertion, None),
+            "21\t30289183\tstop_ins1_lost_rev\tN\tNG\t.\t.\t."
+        );
+        let deletion = text_record(30348410, 30348411, "TA/-", Some("21_30348410_ta/-"));
+        assert_eq!(
+            line_of(&deletion, None),
+            "21\t30348409\t21_30348410_ta/-\tNTA\tN\t.\t.\t."
+        );
+        // Chromosome 21 from 30282168: TCAATA (GRCh38).
+        let genome = Bases {
+            chr: "21",
+            start: 30282168,
+            bases: b"TCAATA",
+        };
+        let delins = text_record(30282169, 30282169, "C/AT", Some("21:g.30282169delCinsAT"));
+        assert_eq!(
+            line_of(&delins, Some(&genome)),
+            "21\t30282168\t21:g.30282169delCinsAT\tTC\tTAT\t.\t.\t."
+        );
+        let deletion = text_record(
+            30282171,
+            30282173,
+            "ATA/-",
+            Some("21:g.30282171_30282173del"),
+        );
+        assert_eq!(
+            line_of(&deletion, Some(&genome)),
+            "21\t30282170\t21:g.30282171_30282173del\tAATA\tA\t.\t.\t."
+        );
+    }
+
+    /// Lines 2399-2402: alleles that all open with the same base need no anchor
+    /// and keep the record's position, the shape of a record written with its
+    /// anchor base (a multi-allelic `TC/T/TG` left unminimised); lines 2432-2441:
+    /// alleles of one length are a balanced record at its position, every
+    /// alternate comma-joined. Ensembl VEP 116.2 writes `21 30282169 multi C A,T`
+    /// for the `GRCh38-input-ensembl` corpus's `C/A/T` and names an ID-less
+    /// record `chr_start_alleles` (`21_30282169_C/A`, Parser.pm:462).
+    #[test]
+    fn to_vcf_record_shared_first_base_and_balanced_alleles() {
+        let mut anchored = text_record(100, 101, "TC/T", None);
+        anchored.record_allele_string_multi = Some("TC/T/TG".into());
+        assert_eq!(
+            line_of(&anchored, None),
+            "21\t100\t21_100_TC/T/TG\tTC\tT,TG\t.\t.\t."
+        );
+        let mut multi = text_record(30282169, 30282169, "C/A", Some("multi"));
+        multi.record_allele_string_multi = Some("C/A/T".into());
+        assert_eq!(
+            line_of(&multi, None),
+            "21\t30282169\tmulti\tC\tA,T\t.\t.\t."
+        );
+        let unnamed = text_record(30282169, 30282169, "C/A", None);
+        assert_eq!(
+            line_of(&unnamed, None),
+            "21\t30282169\t21_30282169_C/A\tC\tA\t.\t.\t."
+        );
+    }
+
+    /// Line 2376: on the reverse strand every allele of `A`, `C`, `G`, `T` and
+    /// `N` alone is reverse-complemented, a `-` left as it is. Ensembl VEP
+    /// 116.2 writes `21 11000000 intergenic_rev T C` for the
+    /// `GRCh38-input-ensembl` corpus's `A/G` on strand `-1`; an insertion `-/G`
+    /// on that strand is `N NC` one base back.
+    #[test]
+    fn to_vcf_record_strand_minus_one_revcomp() {
+        let mut snv = text_record(11000000, 11000000, "A/G", Some("intergenic_rev"));
+        snv.strand = vep_core::coordinate::Strand::Reverse;
+        assert_eq!(
+            line_of(&snv, None),
+            "21\t11000000\tintergenic_rev\tT\tC\t.\t.\t."
+        );
+        let mut insertion = text_record(30289184, 30289183, "-/G", Some("rev_ins"));
+        insertion.strand = vep_core::coordinate::Strand::Reverse;
+        assert_eq!(
+            line_of(&insertion, None),
+            "21\t30289183\trev_ins\tN\tNC\t.\t.\t."
+        );
+        // The CSQ `Allele` of the record is reverse-complemented too
+        // (`OutputFactory/VCF.pm:392-393`): Ensembl VEP 116.2's entry for
+        // `intergenic_rev` opens `C|intergenic_variant|`, where the default
+        // format's Allele column prints `G`.
+        snv.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let formatter = VcfOutputFormatter::default().with_vcf_input(false);
+        let line = formatter.format_record(&[&snv]).unwrap().remove(0);
+        assert!(
+            line.starts_with(
+                "21\t11000000\tintergenic_rev\tT\tC\t.\t.\tCSQ=C|intergenic_variant|MODIFIER|"
+            ),
+            "{line}"
+        );
+        assert_eq!(
+            info_of(&line).matches('|').count(),
+            formatter.fields.len() - 1
+        );
+    }
+
+    /// `StructuralVariationFeature.pm` `to_VCF_record` (release 116, lines
+    /// 1149-1171): the base before the span and the position one base back,
+    /// the class as `<DEL>`, `<DUP>`, `<INS>` or `<TDUP>` and any other class
+    /// term inside the brackets, and `END=` as INFO. Ensembl VEP 116.2 writes
+    /// `21 30213500 del_from_before_transcript N <DEL> . . END=30214300` and
+    /// `21 30215900 dup_past_transcript_end N <DUP> . . END=30216600` for the
+    /// `GRCh38-input-ensembl` corpus's `DEL` and `DUP` records (no FASTA).
+    #[test]
+    fn to_vcf_record_sv_symbolic() {
+        let deletion = structural_record(
+            30213501,
+            30214300,
+            "DEL",
+            Some("deletion"),
+            "del_from_before_transcript",
+        );
+        assert_eq!(
+            line_of(&deletion, None),
+            "21\t30213500\tdel_from_before_transcript\tN\t<DEL>\t.\t.\tEND=30214300"
+        );
+        let duplication = structural_record(
+            30215901,
+            30216600,
+            "DUP",
+            Some("duplication"),
+            "dup_past_transcript_end",
+        );
+        assert_eq!(
+            line_of(&duplication, None),
+            "21\t30215900\tdup_past_transcript_end\tN\t<DUP>\t.\t.\tEND=30216600"
+        );
+        let inversion = structural_record(1001, 2000, "INV", Some("inversion"), "inv");
+        let genome = Bases {
+            chr: "21",
+            start: 1000,
+            bases: b"G",
+        };
+        assert_eq!(
+            line_of(&inversion, Some(&genome)),
+            "21\t1000\tinv\tG\t<inversion>\t.\t.\tEND=2000"
+        );
+        let unsupported = structural_record(1001, 2000, "FOO", None, "foo");
+        assert_eq!(
+            line_of(&unsupported, None),
+            "21\t1000\tfoo\tN\t<FOO>\t.\t.\tEND=2000"
+        );
+    }
+
+    /// Lines 2409-2419: an allele that is not bases alone is written inside `<`
+    /// and `>`; `*` alleles are left out of the shared-first-base test (line
+    /// 2399), so `A/*` keeps its position and `A` its one base. An allele `0`
+    /// is false to Perl (line 2383), so `A/0` is a balanced record, and its
+    /// joined ALT `0` is false too (lines 2427 and 2440), so the ALT column is
+    /// `.`.
+    #[test]
+    fn to_vcf_record_writes_a_symbolic_allele_in_brackets() {
+        let spanning = text_record(100, 100, "A/*", Some("star"));
+        assert_eq!(line_of(&spanning, None), "21\t100\tstar\tA\t<*>\t.\t.\t.");
+        let zero = text_record(100, 100, "A/0", Some("zero"));
+        assert_eq!(line_of(&zero, None), "21\t100\tzero\tA\t.\t.\t.\t.");
+    }
+
+    /// `trim_right` (ensembl-variation `Utils/Sequence.pm:1058-1096`): the last
+    /// base is removed from every allele while they all share it and none is
+    /// one base long; an empty allele ends the trimming.
+    #[test]
+    fn trim_right_follows_perl() {
+        let mut shared = vec![b"ACGT".to_vec(), b"AGT".to_vec()];
+        trim_right(&mut shared);
+        assert_eq!(shared, [b"AC".to_vec(), b"A".to_vec()]);
+        let mut different = vec![b"AC".to_vec(), b"AG".to_vec()];
+        trim_right(&mut different);
+        assert_eq!(different, [b"AC".to_vec(), b"AG".to_vec()]);
+        let mut one_base = vec![b"T".to_vec(), b"GT".to_vec()];
+        trim_right(&mut one_base);
+        assert_eq!(one_base, [b"T".to_vec(), b"GT".to_vec()]);
+        let mut empty = vec![Vec::new(), b"TT".to_vec()];
+        trim_right(&mut empty);
+        assert_eq!(empty, [Vec::new(), b"TT".to_vec()]);
+        let mut alone = vec![b"AA".to_vec()];
+        trim_right(&mut alone);
+        assert_eq!(alone, [b"AA".to_vec()]);
+    }
+
+    /// A record built into a VCF line gets its consequences as a VCF record
+    /// does: `CSQ=` alone as INFO (`OutputFactory/VCF.pm:338, 345-347`), after
+    /// a structural record's `END=` with a `;`.
+    #[test]
+    fn built_line_carries_csq_after_its_info() {
+        let formatter = VcfOutputFormatter::default().with_vcf_input(false);
+        let mut v = text_record(30282169, 30282169, "C/A", Some("snv_fwd"));
+        v.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let line = formatter.format_record(&[&v]).unwrap().remove(0);
+        assert!(
+            line.starts_with("21\t30282169\tsnv_fwd\tC\tA\t.\t.\tCSQ=A|intergenic_variant|"),
+            "{line}"
+        );
+        let mut sv = structural_record(30213501, 30214300, "DEL", Some("deletion"), "del");
+        sv.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let line = formatter.format_record(&[&sv]).unwrap().remove(0);
+        assert!(
+            line.starts_with(
+                "21\t30213500\tdel\tN\t<DEL>\t.\t.\tEND=30214300;CSQ=deletion|intergenic_variant|"
+            ),
+            "{line}"
+        );
+    }
+
+    /// A VCF input's line that is not UTF-8 is written back byte for byte, as
+    /// Ensembl VEP writes the bytes it read (`Parser.pm:235-242` opens the input
+    /// with no decoding layer): the Latin-1 `é` of an ID stays the byte `0xE9`
+    /// in the bytes the pipeline writes, and the text form of the line carries
+    /// the replacement character.
+    #[test]
+    fn a_line_that_is_not_utf8_is_written_as_read() {
+        let formatter = VcfOutputFormatter::default();
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let bytes: &[u8] = b"21\t100\tid_\xE9\tA\tG\t.\t.\tDP=3";
+        v.raw_input = Some(String::from_utf8_lossy(bytes).into());
+        v.raw_input_bytes = Some(Arc::from(bytes));
+        v.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let line = formatter.format_record_bytes(&[&v]).unwrap().remove(0);
+        assert!(
+            line.starts_with(b"21\t100\tid_\xE9\tA\tG\t.\t.\tDP=3;CSQ=G|"),
+            "{line:?}"
+        );
+        let text = formatter.format_record(&[&v]).unwrap().remove(0);
+        assert!(
+            text.starts_with("21\t100\tid_\u{FFFD}\tA\tG\t.\t.\tDP=3;CSQ=G|"),
+            "{text}"
+        );
     }
 }

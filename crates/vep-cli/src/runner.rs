@@ -1200,6 +1200,9 @@ impl Runner {
                     )
                     .with_keep_csq(self.config.keep_csq)
                     .with_vcf_input(matches!(input, pipeline::InputSource::Vcf(_)))
+                    .with_reference(reference_fasta.as_ref().map(|fasta| {
+                        Arc::new(FastaReference(Arc::clone(fasta))) as Arc<dyn ReferenceSequence>
+                    }))
                     .with_run_info(
                         &self.header_cache_dir(),
                         Some(&self.cache.info),
@@ -2146,12 +2149,11 @@ pub(crate) fn needs_exon_intron_numbers(config: &Config) -> bool {
 ///
 /// The VCF writer re-emits each original record with a CSQ INFO field appended,
 /// and the JSON writer carries the line as VEP's `input` key. Every other format
-/// builds its rows from the variant's own fields. The VCF writer also has a
-/// fallback that reconstructs a minimal record from `original_chr`/`start`/`id`/
-/// `ref_allele`/`alt_alleles` when `raw_input` is `None` or the input is not a
-/// VCF, so a missing capture degrades silently to a rebuilt line rather than
-/// erroring, which is why the capture must be gated on the format list here
-/// rather than on a heuristic.
+/// builds its rows from the variant's own fields. The VCF writer builds a line
+/// from the record (`vep_io::output::vcf_output::to_vcf_record`) when
+/// `raw_input` is `None` or the input is not a VCF, so a missing capture
+/// degrades silently to a built line rather than erroring, which is why the
+/// capture must be gated on the format list here rather than on a heuristic.
 const RAW_INPUT_OUTPUT_FORMATS: [&str; 2] = ["vcf", "json"];
 
 /// Whether the parser must retain the source VCF line on each variant.
