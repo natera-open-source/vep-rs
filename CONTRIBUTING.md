@@ -94,28 +94,38 @@ one class under which the harness accepts a record-level VCF line or JSON
 object with no reference counterpart.
 
 To add a release or assembly, run the generator where the VEP reference outputs,
-their inputs and the JSON cache are (`scripts/golden/build_golden_corpus.py
-select`, `scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop
-protein_features --drop protein_function_predictions --perl-info <cache>/info.txt`),
-write the four expected outputs and `provenance.json` with
-`scripts/concordance/generate_reference_output.sh --corpus <dir> --perl-cache-dir
-<perl cache>` (one Ensembl VEP container run per format from the manifest's
-`assembly`, `flags` and `fasta`; the image digest, the vep command and the
-expected files' sha256 are recorded for you, and `--force` regenerates an existing
-corpus), then run `build_golden_corpus.py classify` against the pinned vep-rs
-binary (a manifest listing `regulatory_feature_rows` under `masks` has its
-reference's RegulatoryFeature and MotifFeature rows left out of the classification,
-as the golden test leaves them out of the comparison) and commit the new directory; older directories stay until their release
-is dropped. A corpus for Ensembl VEP's per-sample flags (`--individual`,
-`--individual_zyg`, `--process_ref_homs`) is selected with `--keep-samples N`, which
-keeps `FORMAT` and the first N sample columns and adds records until every genotype
-class those samples show in the source has exemplars (`check` refuses a corpus
-missing one); a class the corpus must carry whether or not the source shows it is
-named with `--require-genotype-class`, which `select` and `check` both enforce.
-Each corpus must stay under 15 MB on disk (`each_corpus_fits_its_size_budget`),
-every flag set's expected directory included; prefer narrower exemplars
-(`--max-span`) and, with `select --cache <json cache>`, the exemplars whose
-transcripts add the fewest bytes to the pruned cache, over a larger cache.
+their inputs and the JSON cache are: select the exemplars, prune the cache, write
+the four expected outputs with `generate_reference_output.sh --corpus`, then
+classify against the pinned vep-rs binary.
+
+```sh
+scripts/golden/build_golden_corpus.py select
+scripts/golden/prune_json_cache.py --gzip --drop sorted_exons \
+    --drop protein_features --drop protein_function_predictions \
+    --perl-info <cache>/info.txt
+scripts/concordance/generate_reference_output.sh --corpus <dir> \
+    --perl-cache-dir <perl cache>
+scripts/golden/build_golden_corpus.py classify
+```
+
+`generate_reference_output.sh --corpus` runs one Ensembl VEP container per format
+from the manifest's `assembly`, `flags` and `fasta`, records the image digest, the
+vep command and the expected files' sha256 in `provenance.json` for you, and
+`--force` regenerates an existing corpus. A manifest listing
+`regulatory_feature_rows` under `masks` has its reference's `RegulatoryFeature` and
+`MotifFeature` rows left out of the classification, as the golden test leaves them
+out of the comparison. Commit the new directory; older directories stay until
+their release is dropped. A corpus for Ensembl VEP's
+per-sample flags (`--individual`, `--individual_zyg`, `--process_ref_homs`) is
+selected with `--keep-samples N`, which keeps `FORMAT` and the first N sample
+columns and adds records until every genotype class those samples show in the
+source has exemplars (`check` refuses a corpus missing one); a class the corpus
+must carry whether or not the source shows it is named with
+`--require-genotype-class`, which `select` and `check` both enforce. Each corpus
+must stay under 15 MB on disk (`each_corpus_fits_its_size_budget`), every flag
+set's expected directory included; prefer narrower exemplars (`--max-span`) and,
+with `select --cache <json cache>`, the exemplars whose transcripts add the fewest
+bytes to the pruned cache, over a larger cache.
 
 ## Parity matrix
 
@@ -140,8 +150,9 @@ word, so each entry is written for the page: one bullet per user-visible change,
 the subject first (the flag, format, input or behaviour, identifiers in backticks), then what it now
 does; one sentence, a second only for a consequence the user must act on; the measured effect inline
 where the change claims speed or memory; no type prefix, bold lead-in or author handle; a trailing
-`(#N)` naming the pull request; at most 30 words. Refactors, CI and dependency bumps appear only when
-behaviour changes.
+`(#N)` naming the pull request; at most 30 words. The pull request number is written only after the
+pull request exists, never predicted. Refactors, CI and dependency bumps appear only when behaviour
+changes.
 
 ## Sign your commits
 
@@ -164,7 +175,7 @@ Before submitting a PR:
 
 1. All CI checks pass: `cargo test --workspace`, `cargo clippy --workspace -- -D warnings`, `cargo fmt --all -- --check`.
 2. Add tests for new features or bug fixes.
-3. Update the affected page under `docs/`: `output-formats.md` for output layouts, `plugins.md` for plugins, `cache-setup.md` for the cache builder and converter. `cli-reference.md` is generated from the flag definitions and the option tables: regenerate it with `VEP_UPDATE_CLI_REFERENCE=1 cargo test -p vep-cli --test cli_reference` and commit the result.
+3. Update the affected page under `docs/`: the format's page under `output/` for output layouts, the mechanism's page under `plugins/` and the plugin table in `plugins.md` for plugins, `cache-setup.md` for the cache builder and converter. A flag is documented by its help text in `crates/vep-cli/src/args.rs` and by the option tables, from which the CLI reference (`cli-reference.md` and the group pages under `cli/`) is generated: regenerate it with `VEP_UPDATE_CLI_REFERENCE=1 cargo test -p vep-cli --test cli_reference` and commit the result.
 4. For consequence or plugin changes, run concordance smoke to confirm no regressions.
 
 ## Comment and write-up discipline

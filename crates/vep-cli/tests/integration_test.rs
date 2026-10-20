@@ -1379,19 +1379,20 @@ fn a_refused_record_is_skipped_with_a_visible_warning() {
     );
 }
 
-/// The `--max_sv_size` row of `docs/cli-reference.md` states the documented
-/// exclusion: Ensembl VEP 116 drops an oversize record and vep-rs annotates it.
+/// The `--max_sv_size` row of `docs/cli/cache-species-runtime.md` states the
+/// documented exclusion: Ensembl VEP 116 drops an oversize record and vep-rs
+/// annotates it.
 #[test]
 fn max_sv_size_exclusion_is_documented() {
     let page = std::fs::read_to_string(format!(
-        "{}/../../docs/cli-reference.md",
+        "{}/../../docs/cli/cache-species-runtime.md",
         env!("CARGO_MANIFEST_DIR")
     ))
     .unwrap();
     let row = page
         .lines()
         .find(|l| l.starts_with("| `--max_sv_size`"))
-        .expect("docs/cli-reference.md has a --max_sv_size row");
+        .expect("docs/cli/cache-species-runtime.md has a --max_sv_size row");
     for phrase in [
         "Ensembl VEP 116 drops an oversize record before annotation and writes nothing for it in any format",
         "vep-rs annotates it",

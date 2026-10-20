@@ -1,0 +1,48 @@
+# Input and output
+
+These flags name the input file and how it is read, and the output file, its format, its compression and its header lines. The formats themselves are described under [Output formats](../output-formats.md).
+
+## Input
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--config` | String | none | Configuration file, one flag per line as `<name> <value>` without the dashes (`format vcf`, `offline 1`); a flag the command line also gives keeps the command line's value |
+| `--input_file`, `-i` | String | `STDIN` | Input file path, or "STDIN" (in any case) for standard input, which needs `--format`. A gzip or BGZF file is decompressed whatever its name; BCF is refused |
+| `--input_data`, `--id` | String | none | Input records as a string, read in place of `--input_file`; one record per line, the format detected as for a file |
+| `--format` | `ensembl`, `vcf`, `hgvs`, `id`, `spdi`, `region`, `guess` | `guess` | Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record. An identifier list (one variant name per line) is resolved in one pass over the cache's variation files, every name held in memory and every file read once: a name maps to each variation feature of that name in the cache (rsIDs and the other names the cache carries; structural variant names, synonyms and subsnp identifiers are not among them), a name the cache lacks is warned about and skipped, and a cache without variation files refuses the format. CAid input resolves through Ensembl's database and is refused; a region, SPDI or HGVS input needs `--fasta`, which fills or checks the reference allele of an SPDI record. HGVS input is resolved against the FASTA and the transcript cache as Ensembl VEP resolves it through its database: a genomic notation (g., m.) reads its bases from the genome, a transcript notation (c., n.) finds its transcript by stable id, else by gene name through Ensembl VEP's pick order with its warning, places the position through the transcript's exons and keeps the transcript's strand, the reference allele is checked, a deletion, duplication or inversion takes its bases from the genome, and a notation Ensembl VEP cannot resolve is skipped with its warning; a run with transcript notations reads the cache's assembled chromosomes and scaffolds once to find them, its alternate loci and patches only for an id found on none; a p. notation is skipped as unimplemented and an r. notation is refused |
+| `--delimiter` | String | none | Delimiter between the columns of an Ensembl-format or VCF input, a tab unless given: \t for a tab (a JSON `input` then joins its fields with a tab, where Ensembl VEP writes the two characters), a space to split on whitespace, a space and a plus (` +`) to split on runs of spaces, `\s+`, or literal text; a VCF record read under another delimiter is re-joined with tabs. With `--format` guess the delimiter is detected from the first data line instead, as Ensembl VEP detects it, and this flag is not read |
+| `--gp` | bool | false | Refused with an error: `--gp` is not supported: it reads 1000 Genomes pilot coordinates from INFO/GP, which no current VCF carries |
+| `--ambiguous_hgvs` | bool | false | Refused with an error: `--ambiguous_hgvs` is not supported: it resolves an HGVSp input to every matching variant through the Ensembl database; HGVS input is genomic (g., m.) and transcript (c., n.) notation, each resolved to one variant |
+| `--phased` | bool | false | Accepted without effect: Ensembl VEP marks the genotypes as phased and nothing reads the mark |
+| `--no_check_variants_order` | bool | false | Accepted without effect: vep-rs never checks the input order: every record is annotated where it stands, and an input whose chromosomes interleave keeps more transcript indexes in memory |
+| `--chr` | String | none | Annotate the records of these chromosomes alone, a comma-separated list matched against each record's chromosome as the input spells it (`21` does not admit `chr21`); a pair of integers joined by `-` names every chromosome between them (`1-5,10,MT`), which Ensembl VEP matches literally. A record outside the list is dropped without a warning, or kept by `--dont_skip` |
+| `--check_ref` | bool | false | Check each record's reference allele against the `--fasta` sequence over its span, on its strand; a mismatch skips the record with Ensembl VEP's warning, or keeps it under `--dont_skip` with CHECK\_REF `failed`. Needs `--fasta`; cannot be combined with `--lookup_ref` |
+| `--lookup_ref` | bool | false | Replace each record's reference allele with the `--fasta` sequence over its span, on its strand, before annotation; the record's name keeps the allele as written. Needs `--fasta`; cannot be combined with `--check_ref` |
+
+## Output
+
+| Flag | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--output_file`, `-o` | String (repeatable) | `variant_effect_output.txt` | Output file path (use "STDOUT" for standard output, in any case); the last of several wins |
+| `--output_format` | `vep`, `ensembl`, `vcf`, `json`, `tab`, `parquet` | `vep` | Output format, matched in any case; `ensembl` is another name for the default `vep` format. `parquet` is vep-rs's own: it writes a TSV intermediate and post-processes it to Parquet through a `duckdb` CLI subprocess; the `duckdb` binary must be on PATH |
+| `--parquet_shape` | `nested`, `flat` | `nested` | Parquet row shape (only effective when `--output_format=parquet`). nested (default): one row per variant, CSQ subfields are LIST\<T\>. flat: one row per (variant × transcript-consequence) tuple, CSQ subfields are scalar |
+| `--keep_intermediate` (hidden) | bool | false | Keep the Parquet intermediate TSV after DuckDB finalize succeeds. Debug aid: normally the intermediate is deleted once the Parquet directory is written |
+| `--parquet_row_group_size` (hidden) | u64 | 122880 | Rows per Parquet row group (only effective when `--output_format=parquet`). Rounded up to a multiple of 2,048, DuckDB's vector size, which is also the dictionary size limit. Test aid for producing several row groups from a small input |
+| `--vcf` | bool | false | Shorthand for `--output_format` vcf; also switches on `--symbol`, `--biotype` and `--numbers` |
+| `--json` | bool | false | Shorthand for `--output_format` json |
+| `--tab` | bool | false | Shorthand for `--output_format` tab |
+| `--compress_output` | `gzip`, `bgzip` | none | Compress the output, STDOUT included: `gzip` writes a single-member gzip stream, `bgzip` a BGZF stream (a gzip file that bgzip, tabix and samtools read); the output file keeps the name given. Not accepted with `--output_format` parquet, which carries its own compression |
+| `--force_overwrite`, `--force` | bool | false | Overwrite output file if it already exists |
+| `--no_headers` | bool | false | Suppress header lines in output |
+| `--mask_header_cache_path` | bool | false | Print the cache directory in the output headers as [PATH]/\<leaf\> |
+| `--warning_file` | String | none | File the warnings of the run are written to, created at the first warning; default \<output\_file\>\_warnings.txt beside the output (STDOUT\_warnings.txt in the working directory for -o STDOUT). STDERR, in any case, keeps them on standard error alone. A warning is also echoed on standard error unless `--quiet` |
+| `--skipped_variants_file` | String | none | File listing every input record the run skipped: a header line naming the input, then one line per record with its line number, the record's first 40 characters and the reason. An existing file is refused before the run without `--force_overwrite`; the file is written when the run ends |
+| `--fields` | String | none | The columns of the `--tab` output and the subfields of the VCF CSQ entry, comma-separated, in this order and replacing the whole default list; any field name a flag or a plugin produces is valid, and a name nothing produces prints `-` (tab) or an empty subfield (VCF) under a `?` description. The default and JSON formats ignore it; `--output_format` parquet refuses it |
+| `--vcf_info_field` | String | `CSQ` | VCF INFO field name for VEP annotation |
+| `--terms`, `-t` | `SO`, `display`, `NCBI` | `SO` | The vocabulary consequence terms are printed in: SO (Sequence Ontology terms), display (Ensembl display labels such as NON\_SYNONYMOUS\_CODING) or NCBI (labels such as missense), the SO term standing in for a consequence without a label in the chosen vocabulary. Severity ranks stay on the SO term, so the most severe term (`--most_severe`, JSON's most\_severe\_consequence) is chosen by SO rank and printed in the vocabulary; a display or NCBI JSON output is one Ensembl VEP does not produce, since it exits when it ranks a label against another term there |
+| `--no_escape` | bool | false | Do not percent-encode the two characters Ensembl VEP escapes: HGVSp keeps its = (else %3D) and whitespace in a gene symbol is left to the VCF subfield rule, which writes it as \_ (else %20); implied by `--json` and by `--output_format` json |
+| `--keep_csq` | bool | false | Keep an input VCF's existing annotation: its `##INFO` and `##VEP` header lines and the INFO entry under `--vcf_info_field`'s name stay, and the new entry is appended under the same name, so the line carries both |
+| `--keep_ann` | bool | false | Accepted without effect: Ensembl VEP declares it as a synonym of `--keep_csq` and reads nothing from it |
+| `--solr` | bool | false | Accepted without effect: Ensembl VEP declares it and writes no Solr output |
+| `--convert` | String | none | Refused with an error: `--convert` has been deprecated |
+

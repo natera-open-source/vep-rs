@@ -814,19 +814,19 @@ mod tests {
     /// structural variant row with a positive overlap whatever the feature
     /// (`OutputFactory.pm` `StructuralVariationOverlapAllele_to_output_hash`),
     /// regulatory- and motif-feature rows included; vep-rs annotates no regulatory
-    /// features, so the output-formats page states that the two values are reported
-    /// on transcript rows only.
+    /// features, so `docs/output/vep-and-tab.md` states that the two values are
+    /// reported on transcript rows only.
     #[test]
     fn documented_subset_names_the_regulatory_sv_rows() {
         let page = std::fs::read_to_string(format!(
-            "{}/../../docs/output-formats.md",
+            "{}/../../docs/output/vep-and-tab.md",
             env!("CARGO_MANIFEST_DIR")
         ))
         .unwrap();
-        let bullet = page
+        let paragraph = page
             .lines()
             .find(|l| l.contains("**OverlapBP** and **OverlapPC**"))
-            .expect("docs/output-formats.md describes OverlapBP and OverlapPC");
+            .expect("docs/output/vep-and-tab.md describes OverlapBP and OverlapPC");
         for phrase in [
             "`--overlaps` adds them as columns to the `tab` and `vcf` outputs",
             "and to Parquet",
@@ -835,8 +835,8 @@ mod tests {
             "regulatory annotation is not implemented",
         ] {
             assert!(
-                bullet.contains(phrase),
-                "the OverlapBP/OverlapPC bullet lacks {phrase:?}: {bullet}"
+                paragraph.contains(phrase),
+                "the OverlapBP/OverlapPC paragraph lacks {phrase:?}: {paragraph}"
             );
         }
     }

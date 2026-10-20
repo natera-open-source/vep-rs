@@ -1,0 +1,1007 @@
+/* Loaded after the default theme through additional-css; every rule here
+   relies on winning the cascade against css/general.css and css/chrome.css. */
+
+:root {
+    /* At most 80 characters per line of Open Sans prose at each body size;
+       the 17 and 18 px glyphs are a little narrower than their scale, so the
+       measure grows by less than the type does. */
+    --content-max-width: 566px;
+    --content-bleed-width: 54.5em;
+    --pagetoc-width: 15em;
+    --pagetoc-gap: 32px;
+    --edge-fade-width: 32px;
+    /* The page's 15 px and the content's 5 px of side padding. */
+    --gutter: 20px;
+    --focus-ring: 2px solid var(--links);
+}
+
+@media only screen and (min-width: 1600px) {
+    :root {
+        --content-max-width: 576px;
+        /* A narrower bleed keeps the page list within reach of the text. */
+        --content-bleed-width: 44em;
+    }
+}
+
+@media only screen and (min-width: 2000px) {
+    :root {
+        --content-max-width: 608px;
+    }
+}
+
+/* On a phone the gutter belongs to the content box, so a code block may run
+   into it without leaving the column. */
+@media only screen and (max-width: 479px) {
+    :root {
+        --page-padding: 0px;
+    }
+
+    .content {
+        padding-inline: var(--gutter);
+    }
+}
+
+/* Palette corrections: on the light and navy themes every text colour reaches
+   4.5:1 on the surface it is used on and every code token at least 4.5:1 on its
+   block background; coal, rust and ayu take the corrections below without that
+   guarantee on every surface. */
+
+.light, html:not(.js) {
+    --code-bg: #f6f7f6;
+}
+
+/* The one light token below 4.5:1 on the code background. */
+.light .hljs-addition,
+html:not(.js) .hljs-addition {
+    color: #1e7b34;
+}
+
+.light {
+    --sidebar-active: var(--links);
+}
+
+.rust {
+    --links: #176189;
+    --inline-code-color: #5c594d;
+    --blockquote-tip-color: #006600;
+    --blockquote-important-color: #6a3fc9;
+    --code-bg: #f6f7f6;
+}
+
+.navy {
+    --links: #52a8e8;
+    --sidebar-active: #52a8e8;
+    --icons: #8b949c;
+    --searchresults-header-fg: #9a9bb0;
+    --blockquote-caution-color: #ff7b72;
+    --code-bg: #1d1f21;
+}
+
+.coal {
+    --links: #52a8e8;
+    --sidebar-active: #52a8e8;
+    --icons: #8b949c;
+    --table-header-bg: hsl(200, 7%, 20%);
+    --searchresults-header-fg: #8b949c;
+    --blockquote-caution-color: #ff7b72;
+    --code-bg: #1d1f21;
+}
+
+.ayu {
+    --searchresults-header-fg: #8b949c;
+    --blockquote-caution-color: #ff7b72;
+    --code-bg: #191f26;
+}
+
+/* The tomorrow-night tokens below 4.5:1 on #1d1f21, replaced by the a11y-dark
+   palette's values for the same roles. */
+.navy .hljs-variable,
+.navy .hljs-attribute,
+.navy .hljs-attr,
+.navy .hljs-tag,
+.navy .hljs-regexp,
+.navy .hljs-deletion,
+.navy .ruby .hljs-constant,
+.navy .xml .hljs-tag .hljs-title,
+.navy .xml .hljs-pi,
+.navy .xml .hljs-doctype,
+.navy .html .hljs-doctype,
+.navy .css .hljs-id,
+.navy .css .hljs-class,
+.navy .css .hljs-pseudo,
+.coal .hljs-variable,
+.coal .hljs-attribute,
+.coal .hljs-attr,
+.coal .hljs-tag,
+.coal .hljs-regexp,
+.coal .hljs-deletion,
+.coal .ruby .hljs-constant,
+.coal .xml .hljs-tag .hljs-title,
+.coal .xml .hljs-pi,
+.coal .xml .hljs-doctype,
+.coal .html .hljs-doctype,
+.coal .css .hljs-id,
+.coal .css .hljs-class,
+.coal .css .hljs-pseudo {
+    color: #ffa07a;
+}
+
+.navy .hljs-addition,
+.coal .hljs-addition {
+    color: #abe338;
+}
+
+/* The ayu tokens below 4.5:1 on #191f26. */
+.ayu .hljs-comment,
+.ayu .hljs-quote {
+    color: #d4d0ab;
+}
+
+.ayu .hljs-tag {
+    color: #6bbeff;
+}
+
+/* Type */
+
+@media only screen and (min-width: 1600px) {
+    body {
+        font-size: 1.7rem;
+    }
+}
+
+@media only screen and (min-width: 2000px) {
+    body {
+        font-size: 1.8rem;
+    }
+}
+
+.content p,
+.content ol,
+.content ul,
+.content dl {
+    line-height: 1.6;
+}
+
+.content p {
+    margin-block: 1em;
+    text-wrap: pretty;
+}
+
+.content main li + li {
+    margin-block-start: 0.4em;
+}
+
+.content h1,
+.content h2,
+.content h3,
+.content h4,
+.content h5,
+.content h6 {
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.content h1,
+.content h2,
+.content h3 {
+    text-wrap: balance;
+}
+
+.content h1 {
+    font-size: 2em;
+}
+
+.content h2 {
+    font-size: 1.5em;
+}
+
+.content h3 {
+    font-size: 1.25em;
+}
+
+/* The stock stacked-heading rule matches .header + .header, which is not the
+   markup of a heading that wraps its text in an anchor. */
+.content h2 + h3 {
+    margin-block-start: 1em;
+}
+
+@media only screen and (max-width: 479px) {
+    .content h1 {
+        font-size: 1.5em;
+    }
+
+    .content h2 {
+        font-size: 1.3em;
+    }
+
+    .content h3 {
+        font-size: 1.15em;
+    }
+
+    .content h2,
+    .content h3 {
+        margin-block-start: 1.75em;
+    }
+
+    .content main ul,
+    .content main ol {
+        padding-inline-start: 1.5em;
+    }
+}
+
+@media only screen and (max-width: 399px) {
+    .content h2 code,
+    .content h3 code {
+        font-size: 0.875em;
+    }
+}
+
+.content h4,
+.content h5,
+.content h6 {
+    font-size: 1em;
+}
+
+/* An h4 is set at the body size, like a bold run-in lead, so its spacing ties
+   it to the text it heads. */
+.content h4 {
+    margin-block: 2.5em 0.5em;
+}
+
+.content main a:not(.header) {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+/* Layout: a grid of the content column and the page table of contents. Text
+   keeps the measure; from 1280 px tables, code blocks and the chart may use
+   the wider content column. The stock .content is a scroll container
+   (overflow-y: auto), which pins every sticky descendant to a box that never
+   scrolls. */
+
+.content {
+    overflow: visible;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: center;
+}
+
+.content main,
+.content .nav-wrapper,
+.content .vep-banner {
+    grid-column: 1;
+    width: 100%;
+    max-width: var(--content-max-width);
+    justify-self: center;
+}
+
+@media only screen and (min-width: 1280px) {
+    /* The first track is as wide as the widest block, so the list sits one gap
+       from the text on a page with nothing wider than the measure; the grid is
+       anchored at the left, so the text starts at one x on every page. */
+    .content {
+        grid-template-columns: minmax(0, max-content) var(--pagetoc-width);
+        column-gap: var(--pagetoc-gap);
+        padding-inline: 32px;
+        justify-content: start;
+    }
+
+    .content:not(:has(> .pagetoc)) {
+        grid-template-columns: minmax(0, max-content);
+    }
+
+    /* The stock auto side margins would size main to its content and let it
+       overrun a track narrower than the bleed width. */
+    .content main {
+        grid-row: 2;
+        margin-inline: 0;
+        max-width: var(--content-bleed-width);
+        justify-self: stretch;
+    }
+
+    /* The landing page: the chart keeps its first screen short, and its
+       blocks sit closer together. */
+    .content main > svg.benchmark-chart {
+        width: auto;
+        height: auto;
+        max-height: 36vh;
+    }
+
+    .content main:has(> svg.benchmark-chart) > p,
+    .content main:has(> svg.benchmark-chart) > pre {
+        margin-block: 0.75em;
+    }
+
+    .content main > :not(.table-scroll, .table-wrapper, pre, svg, details),
+    .content main > details > :not(.table-scroll, .table-wrapper, pre) {
+        max-width: var(--content-max-width);
+        box-sizing: border-box;
+    }
+
+    .content main > pre {
+        width: fit-content;
+        min-width: min(100%, var(--content-max-width));
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* A two-column table is a label and its prose, which keeps the measure. */
+    .content main > .table-scroll:has(tr > :nth-child(2):last-child),
+    .content main > .table-wrapper:has(tr > :nth-child(2):last-child) {
+        max-width: var(--content-max-width);
+    }
+
+    .content .nav-wrapper {
+        grid-row: 3;
+        justify-self: start;
+    }
+
+    .content > .pagetoc {
+        grid-column: 2;
+        grid-row: 2;
+        align-self: start;
+        position: sticky;
+        top: calc(var(--menu-bar-height) + 1.5rem);
+        max-height: calc(100vh - var(--menu-bar-height) - 2rem);
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-width: thin;
+    }
+
+    /* Spanning both tracks, the banner would otherwise widen the first one to
+       its own unwrapped length. */
+    .content .vep-banner {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        max-width: none;
+        contain: inline-size;
+    }
+}
+
+/* Chapter navigation: the in-flow buttons at the end of the page at every
+   width, never the fixed chevrons, which would sit on the page table of
+   contents. */
+
+.nav-wide-wrapper {
+    display: none;
+}
+
+.nav-wrapper {
+    display: block;
+}
+
+/* Tables */
+
+.content table {
+    font-size: 0.85em;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 0;
+}
+
+.content table th {
+    text-align: start;
+}
+
+@media only screen and (min-width: 768px) {
+    .content table th {
+        white-space: nowrap;
+    }
+
+    /* vep-rs.js marks a table that overflows even with its code wrapped. */
+    .content .table-wrapper.wrap-heads th {
+        white-space: normal;
+        min-width: 7em;
+        box-sizing: border-box;
+    }
+
+    /* vep-rs.js marks a table that overflows its wrapper by a tenth or less;
+       tighter cell padding lets it fit instead of scrolling a few pixels. */
+    .content .table-wrapper.tight td,
+    .content .table-wrapper.tight th {
+        padding: 4px 6px;
+    }
+}
+
+.content table td > a:only-child {
+    display: inline-block;
+    min-height: 24px;
+    box-sizing: border-box;
+}
+
+.content table code {
+    font-size: 1em;
+}
+
+.content table th code {
+    background: none;
+}
+
+.content table th a:link,
+.content table th a:visited {
+    color: var(--fg);
+}
+
+/* A link naming two flags underlines the flags, not the comma between them. */
+.content table a:has(code) {
+    text-decoration: none;
+}
+
+.content table a code {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.content main .table-scroll:has(tr > :nth-child(2):last-child) table {
+    width: 100%;
+}
+
+.content table td,
+.content table th {
+    padding: 4px 10px;
+    vertical-align: top;
+    border: 0;
+    border-block-end: 1px solid var(--table-border-color);
+    border-inline-start: 1px solid var(--table-border-color);
+}
+
+.content table tr > :last-child {
+    border-inline-end: 1px solid var(--table-border-color);
+}
+
+.content table thead th {
+    border-color: var(--table-header-bg);
+    border-block-start: 1px solid var(--table-header-bg);
+}
+
+.content table tbody tr:first-child td {
+    border-block-start: 1px solid var(--table-border-color);
+}
+
+.content table thead + tbody tr:first-child td {
+    border-block-start: 0;
+}
+
+.content table thead.empty-head {
+    display: none;
+}
+
+.content table thead.empty-head + tbody tr:first-child td {
+    border-block-start: 1px solid var(--table-border-color);
+}
+
+@media only screen and (max-width: 479px) {
+    .content table td,
+    .content table th {
+        padding: 4px 6px;
+    }
+
+    .content table td.cell-long {
+        min-width: var(--cell-floor, 10em);
+        box-sizing: border-box;
+    }
+
+    .content table td.cell-short,
+    .content table td.cell-short code.code-wrap {
+        white-space: nowrap;
+    }
+
+    .content table td.cell-brief {
+        min-width: 8em;
+        box-sizing: border-box;
+    }
+
+    /* A two-column table has one value column, which wraps rather than
+       scrolls, and a label column that keeps a few words per line. */
+    .content table:has(tr > :nth-child(2):last-child) td.cell-long {
+        min-width: 0;
+    }
+
+    .content table:has(tr > :nth-child(2):last-child) tr > :first-child {
+        min-width: 7.5em;
+        box-sizing: border-box;
+    }
+
+    /* Column, parameter and property tables stack on a phone: a row is a
+       block led by its first cell, every other cell carries its column
+       header, written by vep-rs.js into data-label. */
+    .content table.stack-rows thead {
+        display: none;
+    }
+
+    .content table.stack-rows,
+    .content table.stack-rows tbody,
+    .content table.stack-rows tr,
+    .content table.stack-rows td {
+        display: block;
+        width: auto;
+        min-width: 0;
+        white-space: normal;
+    }
+
+    .content table.stack-rows tr {
+        margin-block-end: 0.75em;
+        border: 1px solid var(--table-border-color);
+    }
+
+    .content table.stack-rows tbody tr:nth-child(2n) {
+        background: transparent;
+    }
+
+    .content table.stack-rows td {
+        border: 0;
+        border-block-start: 1px solid var(--table-border-color);
+    }
+
+    /* The row stripe, not the header tint: a link keeps 4.5:1 on it in every
+       theme. */
+    .content table.stack-rows td:first-child {
+        border-block-start: 0;
+        background: var(--table-alternate-bg);
+        font-weight: 600;
+    }
+
+    .content table.stack-rows td:not(:first-child)::before {
+        content: attr(data-label);
+        display: block;
+        margin-block-end: 2px;
+        font-size: 0.9em;
+        font-weight: 600;
+        opacity: 0.8;
+    }
+
+    /* A two-column row is a title and its one value; the value needs no label. */
+    .content table.stack-rows td:nth-child(2):last-child::before {
+        display: none;
+    }
+
+    /* A value wider than its block scrolls inside the cell; code never
+       breaks inside a flag or identifier. */
+    .content table.stack-rows td {
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .content table.stack-rows td:empty {
+        display: none;
+    }
+}
+
+@media only screen and (max-width: 399px) {
+    .content table td,
+    .content table th {
+        padding: 4px;
+    }
+}
+
+@media only screen and (min-width: 600px) {
+    .content table.short-labels tr > :first-child,
+    .content table.short-labels tr > :first-child code.code-wrap {
+        white-space: nowrap;
+    }
+}
+
+.table-wrapper,
+.table-scroll {
+    margin-block: 1em;
+}
+
+.table-scroll > .table-wrapper {
+    margin: 0;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+/* Below 480 px a wide table scrolls as a whole: a pinned column would leave
+   too little of the view beside it. A collapsed border is painted by the
+   table, not by the cell, so it stays put while a sticky cell moves; separate
+   borders travel with the cell. */
+@media only screen and (min-width: 480px) {
+    .table-wrapper:not(.no-sticky) td:first-child,
+    .table-wrapper:not(.no-sticky) th:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background: var(--bg);
+    }
+
+    .table-wrapper:not(.no-sticky) thead th:first-child {
+        background: var(--table-header-bg);
+    }
+
+    .table-wrapper:not(.no-sticky) tbody tr:nth-child(2n) td:first-child {
+        background: var(--table-alternate-bg);
+    }
+}
+
+.table-wrapper::-webkit-scrollbar,
+pre > code::-webkit-scrollbar {
+    height: 8px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb,
+pre > code::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: 4px;
+}
+
+.table-wrapper::-webkit-scrollbar-track,
+pre > code::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* Edge fades on a scrolled table or code block; vep-rs.js sets data-scroll on
+   the host from the scroller's position. A fade exists only while its edge
+   hides content, and never below 480 px, where the scrollbar is the one
+   affordance: an accessibility scan treats any pseudo-element box over text
+   as unmeasurable. */
+
+.table-scroll,
+.content pre {
+    position: relative;
+}
+
+.table-scroll::before,
+.table-scroll::after,
+.content pre::before,
+.content pre::after {
+    content: none;
+    position: absolute;
+    top: 0;
+    bottom: 8px;
+    width: var(--edge-fade-width);
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* A table's rows alternate two backgrounds, so its fade is a tint of the text
+   colour: a fade to the page background vanishes on rows painted with it. */
+.table-scroll::before {
+    left: var(--sticky-width, 0px);
+    background: linear-gradient(to right, color-mix(in srgb, var(--fg) 18%, transparent), transparent);
+}
+
+.table-scroll::after {
+    right: 0;
+    background: linear-gradient(to left, color-mix(in srgb, var(--fg) 18%, transparent), transparent);
+}
+
+.content pre::before {
+    left: 0;
+    background: linear-gradient(to right, var(--code-bg), transparent);
+}
+
+.content pre::after {
+    right: 0;
+    background: linear-gradient(to left, var(--code-bg), transparent);
+}
+
+@media only screen and (min-width: 480px) {
+    .table-scroll[data-scroll~="left"]::before,
+    .table-scroll[data-scroll~="right"]::after,
+    .content pre[data-scroll~="left"]::before,
+    .content pre[data-scroll~="right"]::after {
+        content: "";
+    }
+}
+
+/* On a phone a table that hides columns to the right says so above its top
+   right corner, in the margin, where no text sits under the cue. */
+@media only screen and (max-width: 479px) {
+    .table-scroll[data-scroll~="right"]::after {
+        content: "scroll \2192";
+        top: -1.3em;
+        bottom: auto;
+        right: 0;
+        width: auto;
+        font-size: 0.75em;
+        line-height: 1.2;
+        color: var(--icons);
+        background: none;
+    }
+}
+
+/* Code */
+
+.content :not(pre) > code {
+    white-space: nowrap;
+}
+
+.content :not(pre) > .hljs {
+    padding-inline: 0.15em;
+}
+
+.content :not(pre) > code.code-wrap {
+    white-space: normal;
+}
+
+/* A cell value that is one token wider than its room breaks at any
+   character; vep-rs.js marks it. */
+.content :not(pre) > code.code-wide,
+.content code.code-wide .code-run {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+/* A break opportunity element inside no-wrap text still breaks the line in
+   some engines, so the cut points exist only while the span may wrap. */
+.content code[data-runs]:not(.code-wrap) wbr {
+    display: none;
+}
+
+.content code.code-wrap .code-run {
+    white-space: nowrap;
+}
+
+.content code.code-wrap .code-run-wide {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.content pre,
+.content pre > code {
+    line-height: 1.45;
+    tab-size: 4;
+}
+
+.content pre > code {
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+/* On a phone a code block runs into the side gutters, and one inside a list
+   item starts at the column edge rather than the list's indent, so 42
+   characters of a line show at 375 px. */
+@media only screen and (max-width: 479px) {
+    .content main > pre {
+        margin-inline: calc(0px - var(--gutter));
+    }
+
+    .content main li > pre {
+        margin-inline: calc(-1.5em - var(--gutter)) calc(0px - var(--gutter));
+    }
+}
+
+.content pre > .buttons {
+    z-index: 3;
+}
+
+/* The dark code surfaces sit within a few shades of their page. */
+.navy .content pre,
+.coal .content pre,
+.ayu .content pre {
+    border: 1px solid color-mix(in srgb, var(--fg) 22%, var(--bg));
+}
+
+/* Callouts */
+
+.content .blockquote-tag {
+    font-size: 0.95em;
+}
+
+/* Figures */
+
+.content main svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.bar-vep-rs {
+    fill: #2a78d6;
+}
+
+.bar-ensembl-vep {
+    fill: #eb6834;
+}
+
+.bar-fastvep {
+    fill: #1baf7a;
+}
+
+.navy .bar-vep-rs,
+.coal .bar-vep-rs,
+.ayu .bar-vep-rs {
+    fill: #3987e5;
+}
+
+.navy .bar-ensembl-vep,
+.coal .bar-ensembl-vep,
+.ayu .bar-ensembl-vep {
+    fill: #d95926;
+}
+
+.navy .bar-fastvep,
+.coal .bar-fastvep,
+.ayu .bar-fastvep {
+    fill: #199e70;
+}
+
+/* Sidebar */
+
+.sidebar-dim {
+    display: none;
+}
+
+@media only screen and (max-width: 1023px) {
+    #mdbook-sidebar-toggle-anchor:checked ~ .page-wrapper {
+        transform: none;
+        margin-inline-start: 0;
+    }
+
+    .sidebar {
+        z-index: 200;
+        box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
+    }
+
+    #mdbook-sidebar-toggle-anchor:not(:checked) ~ .sidebar {
+        box-shadow: none;
+    }
+
+    .sidebar-dim {
+        position: fixed;
+        inset: 0;
+        z-index: 150;
+        background: var(--overlay-bg);
+    }
+
+    #mdbook-sidebar-toggle-anchor:checked ~ .sidebar-dim {
+        display: block;
+    }
+}
+
+.chapter-fold-toggle {
+    min-height: 24px;
+    min-width: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.chapter .chapter-link-wrapper > a:not(.chapter-fold-toggle) {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-height: 24px;
+    box-sizing: border-box;
+}
+
+.content summary {
+    min-height: 24px;
+    box-sizing: border-box;
+    padding-block: 1px;
+}
+
+#mdbook-menu-bar .icon-button,
+#mdbook-menu-bar .right-buttons a {
+    min-width: 24px;
+    min-height: 24px;
+}
+
+.right-buttons {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.menu-title {
+    color: var(--fg);
+    font-weight: 300;
+}
+
+/* The version select names the release, so the title gives it the room. */
+@media only screen and (max-width: 479px) {
+    #mdbook-menu-bar.has-version .menu-title {
+        display: none;
+    }
+}
+
+/* Header controls added by vep-rs.js */
+
+.skip-link {
+    position: absolute;
+    top: -100px;
+    left: 8px;
+    z-index: 2000;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--links);
+    text-decoration: underline;
+}
+
+.skip-link:focus {
+    top: 8px;
+}
+
+#mdbook-content:focus {
+    outline: none;
+}
+
+.vep-version {
+    display: inline-flex;
+    align-items: center;
+    margin-inline-end: 6px;
+}
+
+.vep-version select {
+    font: inherit;
+    font-size: 0.8em;
+    line-height: 1.4;
+    padding: 3px 6px;
+    min-height: 24px;
+    max-width: 34vw;
+    text-overflow: ellipsis;
+    border: 1px solid var(--theme-popup-border);
+    border-radius: 4px;
+    background: var(--theme-popup-bg);
+    color: var(--fg);
+}
+
+.vep-banner {
+    box-sizing: border-box;
+    margin-block: 0.5em 0;
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--blockquote-warning-color);
+    background: var(--quote-bg);
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+.vep-banner a {
+    color: var(--links);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Focus */
+
+.icon-button:focus-visible,
+.skip-link:focus-visible,
+.table-wrapper:focus-visible,
+.content pre > code:focus-visible,
+.right-buttons a:focus-visible,
+.vep-version select:focus-visible,
+.content a:focus-visible,
+.pagetoc a:focus-visible,
+.pagetoc summary:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+}
+
+/* Motion: the stock theme animates the sidebar, the page wrapper, icon colours
+   and the fold chevrons without a reduced-motion guard. book.js waits for the
+   sidebar's transitionend before hiding it, so the duration is shortened
+   rather than removed. */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .skip-link {
+        transition: top 0.15s ease;
+    }
+}

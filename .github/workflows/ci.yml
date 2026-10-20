@@ -91,6 +91,7 @@ jobs:
           check scripts/release/test_check_glibc_floor.py 8
           check scripts/parity/test_check_parity_matrix.py 60
           check scripts/validation/test_diff_caches.py 4
+          check scripts/docs/test_site_tools.py 77
           [ "$fail" -eq 0 ]
           python3 -m pytest -q \
             scripts/validation/test_compare_sv_concordance.py \
@@ -104,7 +105,8 @@ jobs:
             scripts/release/test_render_release_notes.py \
             scripts/release/test_check_glibc_floor.py \
             scripts/parity/test_check_parity_matrix.py \
-            scripts/validation/test_diff_caches.py
+            scripts/validation/test_diff_caches.py \
+            scripts/docs/test_site_tools.py
       # The Rust field comparator's goldens are what compare_vep_fields.py writes over its
       # fixture pairs; the Test job holds the binary to them, this step holds the Python,
       # so a change to either side that moves the contract fails here or there. From the
@@ -112,16 +114,16 @@ jobs:
       - run: |
           set -e
           cd tools/vep-fields-compare
-          golden=$(mktemp -d)
+          actual=$(mktemp -d)
           py=../../scripts/concordance/compare_vep_fields.py
-          python3 "$py" --perl tests/fixtures/reference.txt --rust tests/fixtures/scored.txt --out "$golden/fields.json" --tmp-dir "$golden" > "$golden/stdout.txt"
-          cmp "$golden/fields.json" tests/fixtures/expected_fields.json
-          cmp "$golden/stdout.txt" tests/fixtures/expected_stdout.txt
-          python3 "$py" --perl tests/fixtures/reference.txt --rust tests/fixtures/scored.txt --out "$golden/fields_examples1.json" --tmp-dir "$golden" --examples 1 > /dev/null
-          cmp "$golden/fields_examples1.json" tests/fixtures/expected_fields_examples1.json
-          python3 "$py" --perl tests/fixtures/disjoint_reference.txt --rust tests/fixtures/disjoint_scored.txt --out "$golden/disjoint_fields.json" --tmp-dir "$golden" > "$golden/disjoint_stdout.txt"
-          cmp "$golden/disjoint_fields.json" tests/fixtures/expected_disjoint_fields.json
-          cmp "$golden/disjoint_stdout.txt" tests/fixtures/expected_disjoint_stdout.txt
+          python3 "$py" --perl tests/fixtures/reference.txt --rust tests/fixtures/scored.txt --out "$actual/fields.json" --tmp-dir "$actual" > "$actual/stdout.txt"
+          cmp "$actual/fields.json" tests/fixtures/expected_fields.json
+          cmp "$actual/stdout.txt" tests/fixtures/expected_stdout.txt
+          python3 "$py" --perl tests/fixtures/reference.txt --rust tests/fixtures/scored.txt --out "$actual/fields_examples1.json" --tmp-dir "$actual" --examples 1 > /dev/null
+          cmp "$actual/fields_examples1.json" tests/fixtures/expected_fields_examples1.json
+          python3 "$py" --perl tests/fixtures/disjoint_reference.txt --rust tests/fixtures/disjoint_scored.txt --out "$actual/disjoint_fields.json" --tmp-dir "$actual" > "$actual/disjoint_stdout.txt"
+          cmp "$actual/disjoint_fields.json" tests/fixtures/expected_disjoint_fields.json
+          cmp "$actual/disjoint_stdout.txt" tests/fixtures/expected_disjoint_stdout.txt
       # The parity matrix (tests/parity/matrix.tsv) must name every flag args.rs declares,
       # and every landed row's tests must resolve in this tree.
       - run: python3 scripts/parity/check_parity_matrix.py

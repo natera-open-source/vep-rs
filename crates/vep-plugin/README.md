@@ -56,9 +56,9 @@ directory.
 
 A plugin library exports eight symbols. `VEP_PLUGIN_ABI_VERSION` is `1`; the loader refuses
 any other value before it touches the remaining seven. The signatures and the field lists of
-the two JSON documents are in docs/plugins.md under
-[The C ABI](../../docs/plugins.md#the-c-abi-version-1) and
-[What `run` receives](../../docs/plugins.md#what-run-receives); this table states when the
+the two JSON documents are in docs/developers/writing-a-plugin.md under
+[The C ABI](../../docs/developers/writing-a-plugin.md#the-c-abi-version-1) and
+[What `run` receives](../../docs/developers/writing-a-plugin.md#what-run-receives); this table states when the
 host calls each symbol.
 
 | Symbol                                   | When the host calls it                                                                                                  |

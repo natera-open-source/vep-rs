@@ -20,10 +20,13 @@ Take the VCF (Variant Call Format) line `chr21 25000100 . ACG A . . .`, a two-ba
 | `consequence.rs` | The 41 SO consequence terms with rank, impact, accession and text; `TranscriptConsequence`, the row the effects engine produces; `LofteeContext`, the transcript structure a consequence-filtering plugin reads       |
 | `coordinate.rs`  | `Strand`, `GenomicPosition`, `GenomicRange`, the coordinate ceiling `MAX_COORD`, Perl-faithful `POS` parsing and `normalize_chromosome`                                                                                |
 | `prediction.rs`  | Decoder for the gzip-compressed SIFT (Sorting Intolerant From Tolerant) and PolyPhen prediction matrices embedded in the cache, and the Perl-style formatting of a score                                               |
+| `so_ontology.rs` | The `is_a` ancestry of the 41 consequence terms within the Sequence Ontology, 57 terms with their accessions and direct parents, whose `descendants` the `is_child` filter operator reads                           |
+| `spdi.rs`        | `spdi_genomic`, one allele's SPDI notation as Ensembl VEP writes it, and `ga4gh_vrs_from_spdi`, the GA4GH VRS (Variation Representation Specification) allele derived from it, for the `--spdi` and `--ga4gh_vrs` columns |
 | `sv_record.rs`   | `structural_variants`, which turns one structural VCF record into the variants it writes rows for: class, span, breakends and mates, tandem-repeat expansion, allele numbering                                        |
 | `sv_routing.rs`  | Whether a line is structural, how its `ALT` list is read, the type abbreviation Perl VEP derives from the joined ALTs and the SO term and class that abbreviation names                                                  |
 | `sv_span.rs`     | The start and end of a symbolic record from `POS`, `SVLEN` and `END` under the breakpoint, tandem and general rules, with the errors under which Perl VEP skips the record                                                   |
 | `synonyms.rs`    | `ChromosomeSynonyms`, the chromosome synonym table of a `chr_synonyms.txt` or `--synonyms` file (whitespace-split lines, the first token the reference name and every later token a synonym of it, both ways) and the name a source holds a chromosome under, as Ensembl VEP's `get_source_chr_name` resolves it |
+| `terms.rs`       | `Vocabulary`, the `--terms` choice (`SO`, `display` or `NCBI`) of the name a consequence prints under, each label falling back to the SO term                                                                        |
 | `transcript.rs`  | `Transcript` and its parts: `Exon`, `Intron`, `Translation`, `TranscriptVEFC`, the cDNA-to-genome `ExonCoordMapper`, protein features, prediction matrices, and the lazily computed per-transcript facts and ordinals |
 | `variant.rs`     | `InputVariant`, one allele of one input record with its annotation results; `VariantClass` and its SO term; `ColocatedVariant`; the output helpers that print a variant as Perl VEP names it                            |
 | `variation.rs`   | `CachedVariation`, one known variant from the variation cache: name, alleles, minor allele frequency, clinical significance, population frequencies                                                                   |
@@ -31,7 +34,7 @@ Take the VCF (Variant Call Format) line `chr21 25000100 . ACG A . . .`, a two-ba
 
 ## Public API
 
-The items a caller reaches for, by module. The record types (`InputVariant`, `TranscriptConsequence`, `Transcript`, `CachedVariation`, `CacheInfo`) derive `serde::Serialize` and `serde::Deserialize`, and `InputVariant` and `TranscriptConsequence` are the JSON (JavaScript Object Notation) documents a dynamic-library plugin receives ([docs/plugins.md](../../docs/plugins.md#what-run-receives)).
+The items a caller reaches for, by module. The record types (`InputVariant`, `TranscriptConsequence`, `Transcript`, `CachedVariation`, `CacheInfo`) derive `serde::Serialize` and `serde::Deserialize`, and `InputVariant` and `TranscriptConsequence` are the JSON (JavaScript Object Notation) documents a dynamic-library plugin receives ([docs/developers/writing-a-plugin.md](../../docs/developers/writing-a-plugin.md#what-run-receives)).
 
 | Item                                                             | Module        | What it gives a caller                                                                                                                                   |
 | ---------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -74,7 +77,7 @@ cargo doc --no-deps -p vep-core
 
 - Depends on vep-core: [vep-io](../vep-io/README.md) (readers build `InputVariant`, writers print it), [vep-effects](../vep-effects/README.md) (fills `transcript_consequences` against `Transcript`), [vep-cli](../vep-cli/README.md) (loads the cache into `Transcript`, `CachedVariation` and `CacheInfo`, drives the pipeline), [vep-builtins](../vep-builtins/README.md) and [vep-plugin](../vep-plugin/README.md) (read and extend the rows), [vep-fasta](../vep-fasta/README.md), [vep-cache-builder](../vep-cache-builder/README.md) and [vep-cache-converter](../vep-cache-converter/README.md).
 - vep-core depends on no other workspace crate.
-- [docs/plugins.md](../../docs/plugins.md): the plugin interface, whose JSON documents are the serde form of `InputVariant` and `TranscriptConsequence`.
+- [docs/developers/writing-a-plugin.md](../../docs/developers/writing-a-plugin.md): the plugin interface, whose JSON documents are the serde form of `InputVariant` and `TranscriptConsequence`.
 - [docs/cache-setup.md](../../docs/cache-setup.md#sift-and-polyphen-predictions): where the prediction matrices come from and how the decoder prints them.
 - [docs/intended-divergences.md](../../docs/intended-divergences.md): the records Perl VEP drops before annotation, which `sv_routing` and `sv_record` carry under the `vep_skip` mark, and the symbolic `<CNV:TR>` reading whose expanded length `tr_alt_bases` holds.
 - [docs/output-formats.md](../../docs/output-formats.md): the columns the output helpers of `InputVariant` and `Consequence` print.

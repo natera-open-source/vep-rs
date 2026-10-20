@@ -704,14 +704,18 @@ mod tests {
     #[test]
     fn documented_exclusion_is_stated() {
         let page = std::fs::read_to_string(format!(
-            "{}/../../docs/output-formats.md",
+            "{}/../../docs/output/known-variants.md",
             env!("CARGO_MANIFEST_DIR")
         ))
         .unwrap();
-        let paragraph = page
-            .lines()
-            .find(|l| l.contains("**SV** (under `--check_svs <file>`)"))
-            .expect("docs/output-formats.md describes the SV column");
+        let section = page
+            .split("\n## ")
+            .find(|section| section.starts_with("SV\n"))
+            .expect("docs/output/known-variants.md has an `## SV` section");
+        assert!(
+            section.contains("**SV** (under `--check_svs <file>`)"),
+            "the SV section describes the SV column"
+        );
         for phrase in [
             "homo_sapiens_structural_variations.vcf.gz",
             "Ensembl VEP reads them from its variation database",
@@ -724,10 +728,7 @@ mod tests {
             "`POS + 1` to `END`",
             "a breakend allele's mate position is read as well",
         ] {
-            assert!(
-                paragraph.contains(phrase),
-                "the SV paragraph lacks {phrase:?}: {paragraph}"
-            );
+            assert!(section.contains(phrase), "the SV section lacks {phrase:?}");
         }
     }
 

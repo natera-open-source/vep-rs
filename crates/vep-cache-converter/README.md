@@ -25,6 +25,7 @@ The functions of `main.rs`:
 | `verify_concordance`    | Reopens the store with `BinaryAnnotator` and compares sampled or all positions against the source records.  |
 | `convert_cache`         | Creates the output directory, then runs `copy_info_json`, `convert_data_files` over `transcripts/` and `copy_variation_files` over `variations/`. |
 | `copy_info_json`        | Parses and checks `info.json`, logs `species` and `assembly`, copies it unchanged with `chr_synonyms.txt`.  |
+| `validate_info`         | Checks that `info.json` is an object with a non-empty `species` and `assembly`, and that `contig_order` and `variation_cols`, when present, are lists of strings. |
 | `convert_data_files`    | Re-shelves each `{chr}_{start}-{end}.json` region file as `<chr>/<start>-<end>.json`, counting entries.     |
 | `parse_region_filename` | Splits a region file stem at its last underscore into `(chromosome, start, end)`.                           |
 | `copy_variation_files`  | Copies `all_vars.gz` with its index, or the `_var.gz` region files, into `variations/<chr>/`; refuses a `.json` and an unindexed `all_vars.gz`. |
@@ -78,7 +79,7 @@ vep-cache-converter convert-plugin-data \
   --output whole_genome_SNVs.tsv.vpd
 ```
 
-The unit tests cover `parse_region_filename`, `variation_file_kind`, `split_flat_variation_name` and `copy_variation_files`. The workspace's standard build, test, lint and format commands are in [the contributing guide](../../CONTRIBUTING.md).
+The unit tests cover `parse_region_filename`, `variation_file_kind`, `split_flat_variation_name`, `copy_variation_files` and `copy_info_json`. The workspace's standard build, test, lint and format commands are in [the contributing guide](../../CONTRIBUTING.md).
 
 ## Related
 
@@ -87,5 +88,5 @@ The unit tests cover `parse_region_filename`, `variation_file_kind`, `split_flat
 - [`vep-core`](../vep-core/README.md): declared in `Cargo.toml`, not imported by `main.rs`.
 - [`vep-cache-builder`](../vep-cache-builder/README.md): writes the per-chromosome layout directly, so a natively built cache needs no conversion.
 - [docs/cache-setup.md](../../docs/cache-setup.md): the routes to the per-chromosome JSON transcript cache the flat copy targets.
-- [docs/plugins.md § Data File Preparation](../../docs/plugins.md#data-file-preparation): how a plugin finds a `.vpd` store beside its data file.
+- [docs/plugins/data-files.md § Tabix indexes and `.vpd` stores](../../docs/plugins/data-files.md#tabix-indexes-and-vpd-stores): how a plugin finds a `.vpd` store beside its data file.
 - [Root README § Installation](../../README.md#installation): the release archives and the container image that ship this binary.

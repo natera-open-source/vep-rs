@@ -32,10 +32,12 @@ vep -i input.vcf -o output.json \
 ## Clinical plugins
 
 ```bash
+cadd_snv=/path/to/cadd/whole_genome_SNVs.tsv.gz
+cadd_indels=/path/to/cadd/gnomad.genomes.r4.0.indel.tsv.gz
 vep -i input.vcf -o output.txt \
     --offline --cache --json_cache /path/to/json_cache \
     --assembly GRCh38 \
-    --plugin CADD,snv=/path/to/cadd/whole_genome_SNVs.tsv.gz,indels=/path/to/cadd/gnomad.genomes.r4.0.indel.tsv.gz \
+    --plugin CADD,snv=$cadd_snv,indels=$cadd_indels \
     --plugin REVEL,file=/path/to/revel/revel_scores.tsv.gz \
     --plugin SpliceAI,snv=/path/to/spliceai/spliceai_scores.raw.snv.vcf.gz \
     --everything --force
@@ -48,7 +50,7 @@ column. Without it those guards are inert and REVEL falls back to the GRCh37
 column with a warning, so a GRCh38-indexed file annotates nothing. SpliceAI also
 accepts `indel=` and `cutoff=`; only the openly published GRCh38 SNV file is
 validated, and the indel files, distributed through Illumina BaseSpace, are
-unsupported data rather than a rejected parameter (see [plugins.md](plugins.md)).
+unsupported data rather than a rejected parameter (see [Plugins](plugins.md)).
 
 ## Parallel annotation
 
@@ -77,4 +79,4 @@ vep -i input.vcf -o out.parquet \
 
 The `duckdb` CLI must be on `PATH`; the output is a directory, read with
 `read_parquet('out.parquet/**/*.parquet', hive_partitioning=false)` as
-[output-formats.md](output-formats.md#parquet-format) describes.
+the [Parquet](output/parquet.md#directory-layout) page describes.

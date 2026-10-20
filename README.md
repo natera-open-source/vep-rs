@@ -4,6 +4,8 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](#installation)
 
+Documentation: https://natera-open-source.github.io/vep-rs/
+
 A fast, memory-efficient reimplementation of the Ensembl Variant Effect Predictor (VEP) in Rust. It takes VEP's inputs and flags, writes VEP's consequence vocabulary in VEP's output formats, and annotates population-scale callsets two orders of magnitude faster than the Perl implementation.
 
 In this README, "Perl VEP" is the reference implementation, `ensemblorg/ensembl-vep` release 116.2. The accompanying paper calls the same engine "VEP".
@@ -136,13 +138,7 @@ Every value above is recorded in these files:
 
 ## Installation
 
-### Pre-built binaries
-
-Binaries for Linux x86_64, Linux aarch64 and macOS aarch64 are on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page. Each Linux architecture has two archives: the measured one, built for the CPU floor below, and a generic one that runs on almost every 64-bit CPU of that architecture; both run on glibc 2.17 or later. See [CPU floor](#cpu-floor).
-
-### Build from source
-
-Building needs Rust 1.88+ ([rustup](https://rustup.rs/)):
+Pre-built binaries for Linux x86_64, Linux aarch64 and macOS aarch64 are on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page; each Linux architecture has a measured archive and a generic one, and both run on glibc 2.17 or later. Building from source needs Rust 1.88+ ([rustup](https://rustup.rs/)):
 
 ```bash
 git clone https://github.com/natera-open-source/vep-rs.git
@@ -151,45 +147,7 @@ cargo build --release
 # Binary at target/release/vep
 ```
 
-### CPU floor
-
-`.cargo/config.toml` compiles every build for a fixed CPU baseline, and the measured release binaries are built the same way; the generic Linux archives are built for a CPU floor almost every machine of their architecture meets:
-
-| Archive | `-C target-cpu` | Runs on |
-| --- | --- | --- |
-| `x86_64-unknown-linux-gnu` | `x86-64-v3` | AVX2, BMI2 and FMA: Intel Haswell (2013) or later, AMD Zen or later |
-| `x86_64-unknown-linux-gnu-v2` | `x86-64-v2` | SSE4.2 and POPCNT: Intel Nehalem (2008) or later, AMD Bulldozer (2011) or later, VMs that hide AVX2 included |
-| `aarch64-unknown-linux-gnu` | `neoverse-v1` | SVE: AWS Graviton3 and later, Arm Neoverse V1, V2 and N2 |
-| `aarch64-unknown-linux-gnu-generic` | `generic` | any 64-bit Arm: Graviton2, Ampere Altra, Raspberry Pi, Apple silicon under Linux |
-| `aarch64-apple-darwin` | `apple-m1` | any Apple M-series Mac |
-
-On an older CPU, a binary built or downloaded this way aborts with an illegal-instruction fault rather than running slowly. The generic archives are slower than the measured ones; each release page reports the measured difference, or that the release did not measure it. To build for the machine you are on, override the flag for that build:
-
-```bash
-RUSTFLAGS="-C target-cpu=native" cargo build --release
-```
-
-`RUSTFLAGS` replaces the file's setting; it does not add to it. You can also edit the `rustflags` line for your target in `.cargo/config.toml`.
-
-### Container image
-
-Each published release from 0.2.0 on is also an image on the GitHub Container Registry; from 0.5.0 it is a multi-platform image. The `X.Y.Z`, `X.Y` and `latest` tags carry the generic Linux binaries (`x86-64-v2` on linux/amd64, generic aarch64 on linux/arm64), so `docker run` works on almost every 64-bit host, Apple silicon and Graviton2 included, with no `--platform` flag. The `X.Y.Z-x86-64-v3` and `X.Y.Z-neoverse-v1` tags carry the measured binaries for hosts that meet their CPU floors. Every image holds the release's own `vep`, `vep-cache-builder` and `vep-cache-converter`, and the `duckdb` CLI that Parquet output needs.
-
-```bash
-docker run --rm --user "$(id -u):$(id -g)" \
-  -v "$PWD/tests/golden/116/GRCh37:/corpus:ro" -v "$PWD:/data" \
-  ghcr.io/natera-open-source/vep-rs:0.4.0 \
-  vep --json_cache /corpus/json_cache --assembly GRCh37 -i /corpus/variants.vcf -o /data/output.txt
-```
-
-- Tags are `X.Y.Z`, `X.Y` (the newest patch of that line) and `latest`, each a manifest list over linux/amd64 and linux/arm64, plus the single-platform `X.Y.Z-x86-64-v3` (linux/amd64) and `X.Y.Z-neoverse-v1` (linux/arm64).
-- The multi-platform tags run on any 64-bit Arm CPU and almost every 64-bit x86 CPU; their generic binaries are slower than the measured ones by an amount each release page reports, or states as not measured. The `-x86-64-v3` tag needs AVX2 and the `-neoverse-v1` tag SVE (AWS Graviton3 and later); below those floors they abort with an illegal-instruction fault.
-- On Apple silicon the multi-platform tags run natively as linux/arm64. Their speed there is not measured, so don't cite it for timing.
-- Each image carries a build-provenance attestation:
-
-  ```bash
-  gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:0.4.0 --repo natera-open-source/vep-rs
-  ```
+Each release from 0.2.0 on is also a container image, `ghcr.io/natera-open-source/vep-rs`, multi-platform from 0.5.0: the `X.Y.Z`, `X.Y` and `latest` tags carry the generic Linux binaries for linux/amd64 and linux/arm64 and run on Apple silicon and Graviton2 without a platform flag; `X.Y.Z-x86-64-v3` and `X.Y.Z-neoverse-v1` carry the measured binaries. The [Installation](docs/getting-started/installation.md) page covers each archive's CPU floor, how much slower the generic archives are (each release page reports it, or that the release did not time them), how to build for an older CPU, and the image's tags, platforms and attestation.
 
 ## Quick start
 
@@ -204,77 +162,13 @@ target/release/vep \
   -i tests/golden/116/GRCh37/variants.vcf -o output.txt
 ```
 
-### 2. Get a transcript cache
+### 2. Annotate your own data
 
-For real data you need a JSON transcript cache. Build one natively with `vep-cache-builder` (GRCh38 shown; [docs/cache-setup.md](docs/cache-setup.md) explains each input and gives the GRCh37 command):
-
-```bash
-# Ensembl release 116, GRCh38
-wget https://ftp.ensembl.org/pub/release-116/gtf/homo_sapiens/Homo_sapiens.GRCh38.116.gtf.gz
-wget https://ftp.ensembl.org/pub/release-116/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-samtools faidx Homo_sapiens.GRCh38.dna.primary_assembly.fa
-
-cargo build --release -p vep-cache-builder
-target/release/vep-cache-builder \
-  --species homo_sapiens --assembly GRCh38 --release 116 \
-  --gtf Homo_sapiens.GRCh38.116.gtf.gz \
-  --genome-fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa \
-  --output-dir $HOME/.vep/json_cache/homo_sapiens/116_GRCh38
-```
-
-Or convert an existing Perl VEP cache with `scripts/data/storable_to_json.pl` ([scripts/README.md](scripts/README.md)).
-
-### 3. Annotate
-
-Run the same VEP command you run today, with `--json_cache` naming the cache directory. That is the directory holding `info.json` and `transcripts/`, so `116_GRCh38` itself, not its parent:
-
-```bash
-target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
-  --assembly GRCh38 \
-  -i input.vcf -o output.txt
-```
-
-## Usage
-
-```bash
-# With annotation plugins, on data staged by scripts/data/setup_plugin_data.sh
-target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
-  --assembly GRCh38 \
-  --plugin CADD,snv=$HOME/.vep/plugin_data/grch38/full/cadd/whole_genome_SNVs.tsv.gz \
-  --plugin REVEL,file=$HOME/.vep/plugin_data/grch38/full/revel/revel.tsv.gz \
-  -i input.vcf -o output.txt --force_overwrite
-
-# JSON output with HGVS notation
-target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
-  --assembly GRCh38 --json \
-  --fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa \
-  --hgvs --everything \
-  -i input.vcf -o output.json
-```
-
-- **Output formats.** VEP default (the tab-delimited text format with the `Extra` column), `--vcf` (annotations in the `CSQ` INFO field), `--json` (one object per variant) and `--tab` match Perl VEP's layouts. `--parquet` is a vep-rs extension written through the `duckdb` CLI (1.2 or newer on PATH). Field-level specs are in [docs/output-formats.md](docs/output-formats.md).
-- **Plugins.** `--plugin <Name>,<params>` resolves one of the eleven built-in plugins first (ten with supported data), and otherwise loads a C-ABI dynamic library from `--dir_plugins`. Support is per reference genome: `--assembly` selects the right column and refuses a data file whose own assembly contradicts it. The support matrix, the data files and how to write a plugin are in [docs/plugins.md](docs/plugins.md).
-- **HGVS.** `--fasta` takes a `samtools faidx`-indexed genome, plain or compressed with `bgzip` (Ensembl's `dna_index` files), and gives `--hgvs` the reference context for the 3' shifting of indels; `--hgvs` without a FASTA is refused, as Ensembl VEP refuses it offline.
-- **All flags.** [docs/cli-reference.md](docs/cli-reference.md) is the complete flag reference, including the flags accepted for Perl VEP compatibility but not implemented.
+Real data needs a JSON transcript cache, built natively with `vep-cache-builder` or converted from a Perl VEP cache. Then run the same VEP command you run today, with `--json_cache` naming the cache directory. The [Quick start](docs/getting-started/quick-start.md) page gives the cache-builder command, the annotation command and the plugin and HGVS options. [Cache setup](docs/cache-setup.md) explains each input of the cache build.
 
 ## Documentation
 
-| Document | Covers |
-| --- | --- |
-| [CLI reference](docs/cli-reference.md) | Every flag, the option rules, the flags refused or accepted without effect, and the exit-status contract |
-| [Examples](docs/examples.md) | The common shapes of a run |
-| [Output formats](docs/output-formats.md) | VEP, VCF, JSON, Tab and Parquet output specs |
-| [Plugins](docs/plugins.md) | Support matrix, data files, preparation, development, concordance testing |
-| [Cache setup](docs/cache-setup.md) | Building a JSON transcript cache natively or converting a Perl VEP cache; SIFT and PolyPhen matrices |
-| [Intended divergences](docs/intended-divergences.md) | Every class the adjusted F1 sets aside against release 116.2 (the fourteen Perl VEP defects, the records release 116 drops before annotation, the one representation difference), each with the record, both engines' rows, the mechanism in Perl VEP's source and how to reproduce it |
-| [Published figures](docs/published-figures.md) | The paper's concordance and wall-time tables as published, and the released data they re-derive from |
-| [Scripts](scripts/README.md) | Script index and the runbook for reproducing the published concordance |
-| [Released data](manuscript/data/README.md) | The measurement CSVs every published figure re-derives from |
-| [Contributing](CONTRIBUTING.md) | Build, test, code conventions, sign-off and pull-request guidelines |
+The documentation site, https://natera-open-source.github.io/vep-rs/, describes the latest release; its pages are the `docs/` tree of this repository, in six sections. [Getting started](docs/getting-started/installation.md) covers installation, the transcript cache, the move from Ensembl VEP and, on the [Examples](docs/examples.md) page, the common shapes of a run. The reference pages cover [every flag](docs/cli-reference.md), with the option rules, the flags refused or accepted without effect and the exit-status contract, [every output format](docs/output-formats.md) and [every plugin](docs/plugins.md). [Concordance with Ensembl VEP](docs/intended-divergences.md) documents each divergence class the adjusted F1 sets aside, the [Current release](#current-release-v040) section above states the release's figures beside [the paper's](docs/published-figures.md), [Writing a plugin](docs/developers/writing-a-plugin.md) is the developer guide, and [Project](docs/project/citing.md) holds the citation and the changelog.
 
 ## Crates
 
@@ -289,7 +183,7 @@ One row per crate under `crates/`, in directory order; each links the crate's ow
 | [vep-core](crates/vep-core/README.md) | The shared types: variants, transcripts, consequences and coordinates | library |
 | [vep-effects](crates/vep-effects/README.md) | The consequence-calculation engine, with HGVS and protein prediction | library |
 | [vep-fasta](crates/vep-fasta/README.md) | Indexed FASTA access for the reference genome | library |
-| [vep-io](crates/vep-io/README.md) | Input parsers (Ensembl default, HGVS, region, variant identifier) with format detection, and the output writers (VEP, VCF, JSON, Tab, Parquet) | library |
+| [vep-io](crates/vep-io/README.md) | Input parsers (Ensembl default, HGVS, SPDI, region, variant identifier) with format detection, and the output writers (VEP, VCF, JSON, Tab, Parquet) | library |
 | [vep-plugin](crates/vep-plugin/README.md) | The plugin trait, the dynamic-library loader and the registry | library |
 
 ## Contributing

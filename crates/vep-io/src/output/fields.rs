@@ -3884,25 +3884,22 @@ mod tests {
         );
     }
 
-    /// The output-formats page states the subset: the cache's classification
-    /// string as written, which Ensembl VEP builds from ClinVar's somatic
-    /// records when it dumps the cache or reads a database and vep-rs never
-    /// rebuilds.
+    /// `docs/output/known-variants.md` states the subset: the cache's
+    /// classification string as written, which Ensembl VEP builds from ClinVar's
+    /// somatic records when it dumps the cache or reads a database and vep-rs
+    /// never rebuilds.
     #[test]
     fn documented_subset_is_stated() {
         let page = std::fs::read_to_string(format!(
-            "{}/../../docs/output-formats.md",
+            "{}/../../docs/output/known-variants.md",
             env!("CARGO_MANIFEST_DIR")
         ))
         .unwrap();
+        let anchor = "`CLINVAR_SOMATIC_CLASSIFICATION` (under `--clinvar_somatic_classification`)";
         let paragraph = page
             .lines()
-            .find(|l| {
-                l.contains(
-                    "`CLINVAR_SOMATIC_CLASSIFICATION` (under `--clinvar_somatic_classification`)",
-                )
-            })
-            .expect("docs/output-formats.md describes CLINVAR_SOMATIC_CLASSIFICATION");
+            .find(|l| l.contains(anchor))
+            .expect("docs/output/known-variants.md describes CLINVAR_SOMATIC_CLASSIFICATION");
         for phrase in [
             "the cache's classification string as written",
             "Ensembl VEP builds that string from ClinVar's somatic records",
