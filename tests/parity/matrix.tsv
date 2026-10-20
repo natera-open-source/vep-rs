@@ -414,7 +414,7 @@ resolved_config	-	implemented	landed:implemented	crates/vep-cli/tests/resolved_c
 rest-option-set	Config.pm	implemented	open			
 rest_service_surface	-	excluded	open			
 REVEL	REVEL.pm	implemented	open			
-reverse-strand-input	VEP_input.pm	implemented	open			
+reverse-strand-input	VEP_input.pm	implemented	landed:implemented	crates/vep-effects/src/coding.rs::reverse_strand_input_alleles_revcomp_for_every_predicate;crates/vep-effects/src/coding.rs::feature_seq_follows_the_strands_and_the_dna_gate;crates/vep-cli/tests/input_strand.rs::reverse_strand_snvs_annotate_on_their_forward_alleles;crates/vep-cli/tests/input_strand.rs::reverse_strand_records_take_ensembl_veps_hgvs	tests/golden/116/GRCh38-input-ensembl;tests/golden/116/GRCh38-input-region	
 RiboseqORFs	RiboseqORFs.pm	error	open			
 safe	Runner.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_run_control.rs::safe_makes_unknown_plugin_fatal;crates/vep-cli/tests/cli_run_control.rs::safe_skips_incompatible_check;crates/vep-cli/tests/cli_run_control.rs::missing_plugins_dir_warns_only_when_a_plugin_is_named;crates/vep-cli/src/annotator.rs::missing_plugins_dir_dies_under_safe	tests/golden/116/GRCh38-run-control	
 SameCodon	SameCodon.pm	error	open			

@@ -30,11 +30,13 @@
    "formats": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "expected_dir": "expected_region",
    "covers": [
-    "region-input-format"
+    "region-input-format",
+    "reverse-strand-input"
    ]
   },
   {
@@ -50,11 +52,13 @@
    "formats": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "expected_dir": "expected_region",
    "covers": [
-    "region-input-format"
+    "region-input-format",
+    "reverse-strand-input"
    ]
   }
  ],

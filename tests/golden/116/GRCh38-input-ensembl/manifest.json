@@ -36,7 +36,8 @@
    "expected_dir": "expected_ensembl",
    "covers": [
     "ensembl-input-format",
-    "vcf_output_from_non_vcf_input"
+    "vcf_output_from_non_vcf_input",
+    "reverse-strand-input"
    ]
   },
   {
@@ -58,7 +59,8 @@
    "expected_dir": "expected_ensembl",
    "covers": [
     "ensembl-input-format",
-    "vcf_output_from_non_vcf_input"
+    "vcf_output_from_non_vcf_input",
+    "reverse-strand-input"
    ]
   },
   {
@@ -85,7 +87,8 @@
    "covers": [
     "delimiter",
     "ensembl-input-format",
-    "vcf_output_from_non_vcf_input"
+    "vcf_output_from_non_vcf_input",
+    "reverse-strand-input"
    ]
   },
   {
@@ -107,7 +110,8 @@
    "expected_dir": "expected_ensembl-space",
    "covers": [
     "delimiter",
-    "vcf_output_from_non_vcf_input"
+    "vcf_output_from_non_vcf_input",
+    "reverse-strand-input"
    ]
   },
   {
@@ -144,8 +148,8 @@
   "GRCh38-input-ensembl": {
    "reference": "ref_default.txt",
    "input": "input.vcf",
-   "rows": 32,
-   "combinations": 10
+   "rows": 45,
+   "combinations": 17
   }
  },
  "combinations": {
@@ -160,6 +164,18 @@
   "downstream_gene_variant": {
    "observed_rows": 2,
    "exemplar_records": 2
+  },
+  "frameshift_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "inframe_deletion": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "inframe_insertion": {
+   "observed_rows": 1,
+   "exemplar_records": 1
   },
   "inframe_insertion,stop_lost": {
    "observed_rows": 1,
@@ -177,13 +193,29 @@
    "observed_rows": 1,
    "exemplar_records": 1
   },
+  "missense_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 3
+  },
+  "start_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "stop_gained": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
   "stop_lost": {
-   "observed_rows": 10,
-   "exemplar_records": 10
+   "observed_rows": 11,
+   "exemplar_records": 11
   },
   "stop_retained_variant": {
    "observed_rows": 4,
    "exemplar_records": 4
+  },
+  "synonymous_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
   },
   "upstream_gene_variant": {
    "observed_rows": 6,
@@ -191,9 +223,9 @@
   }
  },
  "variant_classes": {
-  "deletion": 7,
-  "insertion": 8,
-  "snv": 13,
+  "deletion": 10,
+  "insertion": 9,
+  "snv": 22,
   "symbolic_deletion": 2,
   "symbolic_duplication": 2
  },
@@ -222,7 +254,7 @@
   },
   {
    "suite": "GRCh38-input-ensembl",
-   "vcf": "21\t30214000\tutr_rev_dash\tA\tG\t.\t.\t.",
+   "vcf": "21\t30214000\tutr_snv\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
     "upstream_gene_variant"
@@ -230,7 +262,7 @@
   },
   {
    "suite": "GRCh38-input-ensembl",
-   "vcf": "21\t30214000\tutr_snv\tA\tG\t.\t.\t.",
+   "vcf": "21\t30214000\tutr_rev_dash\tA\tG\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant",
     "upstream_gene_variant"
@@ -242,6 +274,27 @@
    "combinations": [
     "5_prime_UTR_variant,coding_sequence_variant",
     "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282169\tsnv_fwd\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282169\tdot_id\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282169\tminus_snv_stop_lost_rev\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
    ]
   },
   {
@@ -260,21 +313,7 @@
   },
   {
    "suite": "GRCh38-input-ensembl",
-   "vcf": "21\t30282169\tdot_id\tC\tA\t.\t.\t.",
-   "combinations": [
-    "stop_lost"
-   ]
-  },
-  {
-   "suite": "GRCh38-input-ensembl",
    "vcf": "21\t30282169\tlower_snv\tC\tA\t.\t.\t.",
-   "combinations": [
-    "stop_lost"
-   ]
-  },
-  {
-   "suite": "GRCh38-input-ensembl",
-   "vcf": "21\t30282169\tsnv_fwd\tC\tA\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
@@ -292,14 +331,35 @@
   },
   {
    "suite": "GRCh38-input-ensembl",
-   "vcf": "21\t30289183\tstop_ins1_lost_rev\tC\tCG\t.\t.\t.",
+   "vcf": "21\t30282911\tminus_del3_inframe_rev\tTAGA\tT\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282923\tminus_anchored_del_frameshift_rev\tCT\tC\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30282928\tminus_snv_missense_rev\tG\tT\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30289183\tzero_id\tC\tCG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
   },
   {
    "suite": "GRCh38-input-ensembl",
-   "vcf": "21\t30289183\tzero_id\tC\tCG\t.\t.\t.",
+   "vcf": "21\t30289183\tstop_ins1_lost_rev\tC\tCG\t.\t.\t.",
    "combinations": [
     "stop_lost"
    ]
@@ -330,6 +390,65 @@
    "vcf": "21\t30348409\tlower_unminimised\tCTA\tC\t.\t.\t.",
    "combinations": [
     "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30396087\tminus_snv_start_lost_fwd\tA\tG\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30396091\tminus_snv_missense_fwd\tC\tT\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30396091\tminus_multi_missense_fwd\tC\tT,G\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30396095\tdash_snv_synonymous_fwd\tC\tT\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30396096\tminus_snv_ref_mismatch_fwd\tT\tA\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30396100\tminus_anchored_del_frameshift_fwd\tGC\tG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30396101\tminus_snv_stop_gained_fwd\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "GRCh38-input-ensembl",
+   "vcf": "21\t30396107\tminus_ins3_inframe_fwd\tT\tTGCT\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion"
    ]
   },
   {
