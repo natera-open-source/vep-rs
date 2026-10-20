@@ -35,8 +35,10 @@
 //! other field of such a key compares exactly. A run under `--nearest transcript`
 //! compares its `NEAREST` values as the coordinates of the named transcripts'
 //! start sites ([`nearest_as_coordinates`]). `masks` lists the mask classes
-//! applied to the reference of every run of the corpus before the comparison
-//! ([`apply_masks`]); the one class is [`REGULATORY_FEATURE_ROWS`].
+//! applied to every run of the corpus before the comparison: under
+//! [`REGULATORY_FEATURE_ROWS`] the reference loses its regulatory rows
+//! ([`apply_masks`]), and under [`ORDER_ONLY`] the `DOMAINS` and `FREQS` items
+//! of both sides compare as a multiset ([`list_columns_as_multisets`]).
 //!
 //! A corpus is run once per [`Run`]: the manifest's own run (its `flags`,
 //! `variants.vcf`, every format, `expected/`) and once per `flag_sets` entry,
@@ -50,6 +52,8 @@
 //! compare by their column descriptions alone and whose VCF `##VEP=` line by
 //! the tokens it names). An entry carrying its own
 //! `divergences` documents its run; one without inherits the manifest's lists.
+//! An entry carrying its own `masks` lists the classes of its run; one without
+//! inherits the manifest's.
 //!
 //! A manifest may also carry `runs`, command lines executed after the default
 //! run whose expectations are about the process rather than the annotation: each
@@ -187,21 +191,10 @@ impl Corpus {
 
     /// The mask classes the manifest's `masks` list declares, each a known class.
     pub fn masks(&self) -> Vec<String> {
-        let masks = strings(&self.manifest["masks"]);
-        for class in &masks {
-            assert!(
-                class == REGULATORY_FEATURE_ROWS,
-                "{}/{}: unknown mask class {class}",
-                self.release,
-                self.name
-            );
-        }
-        masks
-    }
-
-    /// Whether the corpus masks the reference's regulatory rows ([`REGULATORY_FEATURE_ROWS`]).
-    pub fn masks_regulatory_rows(&self) -> bool {
-        self.masks().iter().any(|m| m == REGULATORY_FEATURE_ROWS)
+        mask_classes(
+            &format!("{}/{}", self.release, self.name),
+            &self.manifest["masks"],
+        )
     }
 }
 
@@ -211,6 +204,38 @@ impl Corpus {
 /// comparison, in every format ([`apply_masks`]), and the notice vep-rs writes
 /// to its warnings file about the exclusion is expected ([`compare_warnings`]).
 pub const REGULATORY_FEATURE_ROWS: &str = "regulatory_feature_rows";
+
+/// The mask class of a run whose list-valued columns carry the same items in
+/// another order. Ensembl VEP prints a transcript's protein features in the
+/// order of its cache's array (`Variation/BaseTranscriptVariation.pm:634-643`),
+/// which the core API fills by analysis in Perl hash order with the database's
+/// rows inside each analysis, while vep-cache-builder writes them by feature
+/// identifier, so `DOMAINS` agrees as a set and not in order; `FREQS` lists the
+/// frequencies that filtered a record in hash order (`OutputFactory.pm:1152-1153`).
+/// Under the class the items of both columns in the default, tab and VCF
+/// formats and the objects of the JSON `domains` array compare as a multiset
+/// ([`list_columns_as_multisets`]); every other field compares exactly.
+pub const ORDER_ONLY: &str = "order_only";
+
+/// Every mask class a manifest may name.
+const MASK_CLASSES: [&str; 2] = [REGULATORY_FEATURE_ROWS, ORDER_ONLY];
+
+/// The classes a `masks` list names, each one of [`MASK_CLASSES`].
+fn mask_classes(label: &str, masks: &serde_json::Value) -> Vec<String> {
+    let masks = strings(masks);
+    for class in &masks {
+        assert!(
+            MASK_CLASSES.contains(&class.as_str()),
+            "{label}: unknown mask class {class}"
+        );
+    }
+    masks
+}
+
+/// Whether a `masks` list names `class`.
+fn masks_name(masks: &[String], class: &str) -> bool {
+    masks.iter().any(|m| m == class)
+}
 
 /// The `Feature_type` values of the rows [`REGULATORY_FEATURE_ROWS`] drops.
 const REGULATORY_FEATURE_TYPES: [&str; 2] = ["RegulatoryFeature", "MotifFeature"];
@@ -225,16 +250,17 @@ const REGULATORY_JSON_ARRAYS: [&str; 2] = [
 /// file without it.
 const REGULATORY_NOTICE: &str = "regulatory-feature annotation is not implemented";
 
-/// Applies the corpus's mask classes to the reference entries of one format.
+/// Applies a run's mask classes to the reference entries of one format.
 /// Under [`REGULATORY_FEATURE_ROWS`] the default and tab rows and the VCF CSQ
 /// entries whose `Feature_type` is regulatory go; a JSON record that carried a
 /// regulatory array loses it and has its `most_severe_consequence` recomputed
 /// from the consequence entries that remain, as vep-rs computes it from the rows
 /// it writes, so a record Ensembl VEP annotates against a regulatory feature and
 /// no transcript compares as its intergenic row; every other record keeps the
-/// reference's value.
-pub fn apply_masks(corpus: &Corpus, format: &str, expected: &mut Vec<Entry>) {
-    if !corpus.masks_regulatory_rows() {
+/// reference's value. [`ORDER_ONLY`] rewrites both sides, so it is applied by
+/// [`mask_entries`] through [`list_columns_as_multisets`].
+pub fn apply_masks(masks: &[String], format: &str, expected: &mut Vec<Entry>) {
+    if !masks_name(masks, REGULATORY_FEATURE_ROWS) {
         return;
     }
     if format != "json" {
@@ -276,6 +302,67 @@ pub fn apply_masks(corpus: &Corpus, format: &str, expected: &mut Vec<Entry>) {
                 .fields
                 .insert("most_severe_consequence".to_string(), most_severe);
         }
+    }
+}
+
+/// The columns [`ORDER_ONLY`] compares as multisets in the text formats; the
+/// JSON format carries `DOMAINS` alone as a consequence's `domains` array.
+const ORDER_ONLY_COLUMNS: [&str; 2] = ["DOMAINS", "FREQS"];
+
+/// Rewrites every [`ORDER_ONLY_COLUMNS`] value of one side into its items in
+/// sorted order: the default and tab formats' `,`-joined items
+/// (`Utils.pm:185-198`), the VCF's `&`-joined items (`OutputFactory/VCF.pm:391`)
+/// and the JSON `domains` array's objects by their compact text. Applied to
+/// both sides under [`ORDER_ONLY`], it makes two lists of the same items in
+/// any order compare equal while lists differing in an item, or in how often
+/// one occurs, still differ. The default format's raw `Extra` text is
+/// rewritten with each field; an absent or `-` value stays as written.
+pub fn list_columns_as_multisets(entries: &mut [Entry], format: &str) {
+    if format == "json" {
+        for entry in entries {
+            let Some(value) = entry.fields.get("domains").cloned() else {
+                continue;
+            };
+            let Ok(serde_json::Value::Array(objects)) =
+                serde_json::from_str::<serde_json::Value>(&format!("[{value}]"))
+            else {
+                continue;
+            };
+            let mut items: Vec<String> = objects.iter().map(json_scalar).collect();
+            items.sort_unstable();
+            entry.fields.insert("domains".to_string(), items.join(","));
+        }
+        return;
+    }
+    let separator = if format == "vcf" { "&" } else { "," };
+    for entry in entries {
+        for column in ORDER_ONLY_COLUMNS {
+            let Some(value) = entry.fields.get(column).cloned() else {
+                continue;
+            };
+            if value.is_empty() || value == "-" {
+                continue;
+            }
+            let mut items: Vec<&str> = value.split(separator).collect();
+            items.sort_unstable();
+            let sorted = items.join(separator);
+            if let Some(extra) = entry.fields.get_mut("Extra") {
+                *extra = extra.replace(&format!("{column}={value}"), &format!("{column}={sorted}"));
+            }
+            entry.fields.insert(column.to_string(), sorted);
+        }
+    }
+}
+
+/// Applies a run's mask classes to the parsed entries of one format before
+/// they are compared: the reference loses what [`apply_masks`] drops, and under
+/// [`ORDER_ONLY`] both sides have their list columns rewritten by
+/// [`list_columns_as_multisets`].
+fn mask_entries(masks: &[String], format: &str, expected: &mut Vec<Entry>, actual: &mut [Entry]) {
+    apply_masks(masks, format, expected);
+    if masks_name(masks, ORDER_ONLY) {
+        list_columns_as_multisets(expected, format);
+        list_columns_as_multisets(actual, format);
     }
 }
 
@@ -440,6 +527,9 @@ pub struct Run<'a> {
     /// preamble describes a connection rather than a cache, so its default and
     /// tab headers compare by their column descriptions and column line alone.
     pub perl_mode: String,
+    /// The mask classes applied to the run: the flag set's own `masks`, else
+    /// the manifest's ([`Corpus::masks`]).
+    pub masks: Vec<String>,
     /// The manifest object whose divergence lists apply to this run.
     documented: &'a serde_json::Value,
 }
@@ -509,6 +599,16 @@ impl Run<'_> {
     /// coordinates and not on the ids ([`nearest_as_coordinates`]).
     pub fn nearest_by_coordinate(&self) -> bool {
         self.flag_value("--nearest") == Some("transcript")
+    }
+
+    /// Whether the run masks the reference's regulatory rows ([`REGULATORY_FEATURE_ROWS`]).
+    pub fn masks_regulatory_rows(&self) -> bool {
+        masks_name(&self.masks, REGULATORY_FEATURE_ROWS)
+    }
+
+    /// Whether the run compares `DOMAINS` and `FREQS` as multisets ([`ORDER_ONLY`]).
+    pub fn order_only(&self) -> bool {
+        masks_name(&self.masks, ORDER_ONLY)
     }
 }
 
@@ -608,6 +708,7 @@ pub fn default_run(corpus: &Corpus) -> Run<'_> {
         expected_dir: "expected".to_string(),
         unordered: false,
         perl_mode: "offline".to_string(),
+        masks: corpus.masks(),
         documented: &corpus.manifest,
     }
 }
@@ -672,6 +773,12 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
         typed("stdin", set["stdin"].is_boolean());
         typed("unordered", set["unordered"].is_boolean());
         typed("perl_mode", set["perl_mode"].is_string());
+        typed("masks", set["masks"].is_array());
+        let masks = if set.get("masks").is_some() {
+            mask_classes(&format!("{label} flag set {name}"), &set["masks"])
+        } else {
+            corpus.masks()
+        };
         let perl_mode = set["perl_mode"].as_str().unwrap_or("offline").to_string();
         assert!(
             matches!(perl_mode.as_str(), "offline" | "database"),
@@ -722,6 +829,7 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
             expected_dir,
             unordered: set["unordered"].as_bool().unwrap_or(false),
             perl_mode,
+            masks,
             documented: if set.get("divergences").is_some() {
                 set
             } else {
@@ -1997,7 +2105,12 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
     };
     let mut expected_entries = parse(&expected);
     let mut actual_entries = parse(&actual);
-    apply_masks(run.corpus, format, &mut expected_entries);
+    mask_entries(
+        &run.masks,
+        format,
+        &mut expected_entries,
+        &mut actual_entries,
+    );
     if run.nearest_by_coordinate() {
         let sites = protein_coding_start_sites(run.corpus);
         nearest_as_coordinates(&mut expected_entries, &sites);
@@ -2162,7 +2275,7 @@ pub fn compare_warnings(run: &Run, out_dir: &Path) -> String {
     let mut actual = warning_entries(&fs::read_to_string(&path).unwrap_or_default());
     let expected = reference_warnings(&run.corpus.manifest);
     let mut report = String::new();
-    if run.corpus.masks_regulatory_rows() {
+    if run.masks_regulatory_rows() {
         let before = actual.len();
         actual.retain(|(_, description)| !description.contains(REGULATORY_NOTICE));
         if actual.len() == before {
@@ -2554,13 +2667,19 @@ pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) 
             }
         };
         let mut expected_entries = parse(&expected);
-        apply_masks(corpus, format, &mut expected_entries);
+        let mut actual_entries = parse(&actual);
+        mask_entries(
+            &corpus.masks(),
+            format,
+            &mut expected_entries,
+            &mut actual_entries,
+        );
         let header = match format {
             "default" | "tab" => compare_tab_headers(&expected, &actual),
             "vcf" => compare_vcf_headers(&expected, &actual),
             _ => compare_json_identity(&actual),
         };
-        let body = compare_entries(&expected_entries, &parse(&actual), &documented, true);
+        let body = compare_entries(&expected_entries, &actual_entries, &documented, true);
         if !header.is_empty() || !body.is_empty() {
             report.push_str(&format!(
                 "{label}: output differs from {expected_name}\n{header}{body}"

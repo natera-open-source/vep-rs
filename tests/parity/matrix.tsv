@@ -542,7 +542,7 @@ vefc-five-prime-utr	Database/Transcript.pm	implemented	landed:implemented	crates
 vefc-introns	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::vefc_introns_preferred_over_derived	tests/golden/116/GRCh38	
 vefc-mapper	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/mapper.rs::start_phase_is_ensembl_phase	tests/golden/116/GRCh38-native-builder	
 vefc-peptide	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::peptide_loaded_when_translated	tests/golden/116/GRCh38	
-vefc-protein-features	Database/Transcript.pm	implemented	open			
+vefc-protein-features	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cache-builder/src/core_dumps.rs::protein_features_with_display_label;crates/vep-cache-builder/tests/native_cache_matches_ensembl_cache.rs::native_cache_matches_the_ensembl_cache_with_core_dumps	tests/golden/116/GRCh38-native-builder	
 vefc-protein-function-predictions	Database/Transcript.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::storable_matrix_decodes	tests/golden/116/GRCh38-protein-features	
 vefc-runtime-only-keys	BaseTranscriptVariation.pm	implemented	landed:implemented	crates/vep-cli/src/json_cache.rs::unknown_vefc_keys_ignored	tests/golden/116/GRCh38	
 vefc-seq-edits	Database/Transcript.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/json_cache.rs::seq_edits_loaded	tests/golden/116/GRCh38	

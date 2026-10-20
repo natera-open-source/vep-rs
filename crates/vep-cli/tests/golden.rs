@@ -19,8 +19,9 @@ use std::io::Write;
 use std::path::Path;
 
 use common::{
-    apply_masks, compare_run, compare_warnings, corpora, nearest_as_coordinates, parse_default,
-    parse_json, parse_vcf, protein_coding_start_sites, read_expected, runs, Corpus,
+    apply_masks, compare_entries, compare_run, compare_warnings, corpora,
+    list_columns_as_multisets, nearest_as_coordinates, parse_default, parse_json, parse_vcf,
+    protein_coding_start_sites, read_expected, runs, Corpus, Documented, Entry, ORDER_ONLY,
     REFERENCE_SKIPPED_RECORD, REGULATORY_FEATURE_ROWS,
 };
 
@@ -542,9 +543,9 @@ fn regulatory_feature_rows_mask_drops_the_reference_rows() {
          rs2\t21:200\tG\tENSG1\tENST1\tTranscript\tmissense_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODERATE\n"
     );
     let mut entries = parse_default(&text);
-    apply_masks(&unmasked, "default", &mut entries);
+    apply_masks(&unmasked.masks(), "default", &mut entries);
     assert_eq!(entries.len(), 4);
-    apply_masks(&masked, "default", &mut entries);
+    apply_masks(&masked.masks(), "default", &mut entries);
     assert_eq!(
         entries.iter().map(|e| e.key.as_str()).collect::<Vec<_>>(),
         ["21:100|A|-|-", "21:200|G|ENST1|Transcript"]
@@ -559,7 +560,7 @@ fn regulatory_feature_rows_mask_drops_the_reference_rows() {
                21\t100\trs1\tC\tA\t.\t.\tCSQ=A|regulatory_region_variant|MODIFIER|RegulatoryFeature|ENSR00000001,A|intergenic_variant|MODIFIER||\n\
                21\t200\trs2\tT\tG\t.\t.\tCSQ=G|missense_variant|MODERATE|Transcript|ENST1\n";
     let mut entries = parse_vcf(vcf, &inputs);
-    apply_masks(&masked, "vcf", &mut entries);
+    apply_masks(&masked.masks(), "vcf", &mut entries);
     assert_eq!(
         entries.iter().map(|e| e.key.as_str()).collect::<Vec<_>>(),
         [
@@ -580,7 +581,7 @@ fn regulatory_feature_rows_mask_drops_the_reference_rows() {
         entries[0].fields["regulatory_feature_consequences"],
         "{\"consequence_terms\":[\"regulatory_region_variant\"],\"regulatory_feature_id\":\"ENSR00000001\",\"variant_allele\":\"A\"}"
     );
-    apply_masks(&masked, "json", &mut entries);
+    apply_masks(&masked.masks(), "json", &mut entries);
     assert!(!entries[0]
         .fields
         .contains_key("regulatory_feature_consequences"));
@@ -595,4 +596,152 @@ fn regulatory_feature_rows_mask_drops_the_reference_rows() {
         "splice_region_variant"
     );
     assert_eq!(entries.len(), 4);
+}
+
+/// Under `order_only` the `DOMAINS` and `FREQS` items of both sides compare as
+/// a multiset: the same items in another order agree in the default format (the
+/// field and the raw `Extra` text), in the VCF's `&`-joined form and in the JSON
+/// `domains` array, while a changed item, or one listed a different number of
+/// times, still differs; an empty value stays as written. The native-builder
+/// corpus's `domains` set declares the class for its run alone.
+#[test]
+fn order_only_mask_compares_domains_as_a_multiset() {
+    let corpus = corpora()
+        .into_iter()
+        .find(|c| c.release == "116" && c.name == "GRCh38-native-builder")
+        .expect("the native-builder corpus");
+    assert!(corpus.masks().is_empty());
+    assert!(!common::default_run(&corpus).order_only());
+    let set = runs(&corpus)
+        .into_iter()
+        .find(|r| r.name == "domains")
+        .expect("the domains set");
+    assert_eq!(set.masks, [ORDER_ONLY]);
+    assert!(set.order_only() && !set.masks_regulatory_rows());
+
+    let documented = Documented::from_manifest(&serde_json::json!({}));
+    let inputs = vec!["21\t18256600\t.\tA\tG\t.\t.\t.".to_string()];
+    let compare = |format: &str, expected: &str, actual: &str| -> String {
+        let parse = |text: &str| -> Vec<Entry> {
+            let mut entries = match format {
+                "default" => parse_default(text),
+                "vcf" => parse_vcf(text, &inputs),
+                _ => parse_json(text, &inputs),
+            };
+            list_columns_as_multisets(&mut entries, format);
+            entries
+        };
+        compare_entries(&parse(expected), &parse(actual), &documented, true)
+    };
+
+    let header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n";
+    let row = |domains: &str| {
+        format!(
+            "{header}rs1\t21:18256600\tG\tENSG1\tENST1\tTranscript\tmissense_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODERATE;DOMAINS={domains};SYMBOL=CHODL\n"
+        )
+    };
+    let reference = row("Gene3D:3.10.100.10,Pfam:PF00059,SMART:SM00034,Pfam:PF00059");
+    assert_eq!(
+        compare(
+            "default",
+            &reference,
+            &row("SMART:SM00034,Pfam:PF00059,Pfam:PF00059,Gene3D:3.10.100.10")
+        ),
+        ""
+    );
+    let changed = compare(
+        "default",
+        &reference,
+        &row("SMART:SM00034,Pfam:PF00060,Pfam:PF00059,Gene3D:3.10.100.10"),
+    );
+    assert!(
+        changed.contains("FIELD DOMAINS: 1 mismatching"),
+        "{changed}"
+    );
+    assert!(changed.contains("FIELD Extra: 1 mismatching"), "{changed}");
+    let fewer = compare(
+        "default",
+        &reference,
+        &row("SMART:SM00034,Pfam:PF00059,Gene3D:3.10.100.10"),
+    );
+    assert!(fewer.contains("FIELD DOMAINS: 1 mismatching"), "{fewer}");
+    let mut empty = parse_default(&row("-"));
+    list_columns_as_multisets(&mut empty, "default");
+    assert_eq!(empty[0].fields["DOMAINS"], "-");
+    assert_eq!(
+        empty[0].fields["Extra"],
+        "IMPACT=MODERATE;DOMAINS=-;SYMBOL=CHODL"
+    );
+    let freqs_row = |freqs: &str| {
+        format!(
+            "{header}rs1\t21:18256600\tG\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;FREQS={freqs}\n"
+        )
+    };
+    assert_eq!(
+        compare(
+            "default",
+            &freqs_row("1KG_ALL:G:0.0456,1KG_ALL:T:0.0012"),
+            &freqs_row("1KG_ALL:T:0.0012,1KG_ALL:G:0.0456")
+        ),
+        ""
+    );
+    let changed_freqs = compare(
+        "default",
+        &freqs_row("1KG_ALL:G:0.0456,1KG_ALL:T:0.0012"),
+        &freqs_row("1KG_ALL:T:0.0012,1KG_ALL:G:0.0457"),
+    );
+    assert!(
+        changed_freqs.contains("FIELD FREQS: 1 mismatching"),
+        "{changed_freqs}"
+    );
+
+    let vcf = |domains: &str| {
+        format!(
+            "##fileformat=VCFv4.2\n##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|Feature_type|Feature|DOMAINS\">\n\
+             #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+             21\t18256600\t.\tA\tG\t.\t.\tCSQ=G|missense_variant|MODERATE|Transcript|ENST1|{domains}\n"
+        )
+    };
+    assert_eq!(
+        compare(
+            "vcf",
+            &vcf("Gene3D:3.10.100.10&Pfam:PF00059&SMART:SM00034"),
+            &vcf("SMART:SM00034&Gene3D:3.10.100.10&Pfam:PF00059")
+        ),
+        ""
+    );
+    let changed_vcf = compare(
+        "vcf",
+        &vcf("Gene3D:3.10.100.10&Pfam:PF00059&SMART:SM00034"),
+        &vcf("SMART:SM00034&Gene3D:3.10.100.10&Pfam:PF00060"),
+    );
+    assert!(
+        changed_vcf.contains("FIELD DOMAINS: 1 mismatching"),
+        "{changed_vcf}"
+    );
+
+    let json = |domains: &str| {
+        format!(
+            "{{\"input\":\"21\\t18256600\\t.\\tA\\tG\\t.\\t.\\t.\",\"most_severe_consequence\":\"missense_variant\",\
+             \"transcript_consequences\":[{{\"variant_allele\":\"G\",\"transcript_id\":\"ENST1\",\"consequence_terms\":[\"missense_variant\"],\"domains\":[{domains}]}}]}}\n"
+        )
+    };
+    let objects = "{\"db\":\"Gene3D\",\"name\":3},{\"db\":\"Pfam\",\"name\":\"PF00059\"},{\"name\":\"SM00034\",\"db\":\"SMART\"}";
+    assert_eq!(
+        compare(
+            "json",
+            &json(objects),
+            &json("{\"db\":\"SMART\",\"name\":\"SM00034\"},{\"db\":\"Gene3D\",\"name\":3},{\"db\":\"Pfam\",\"name\":\"PF00059\"}")
+        ),
+        ""
+    );
+    let changed_json = compare(
+        "json",
+        &json(objects),
+        &json("{\"db\":\"SMART\",\"name\":\"SM00034\"},{\"db\":\"Gene3D\",\"name\":3},{\"db\":\"Pfam\",\"name\":\"PF00060\"}"),
+    );
+    assert!(
+        changed_json.contains("FIELD domains: 1 mismatching"),
+        "{changed_json}"
+    );
 }
