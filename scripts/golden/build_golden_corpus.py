@@ -60,12 +60,15 @@ Subcommands:
             with rows, is an error, unless the record carries no row by its nature: a
             non-variant record (ALT `.`), or one the run's expected JSON names as a feature
             with no allele to annotate (`most_severe_consequence` `?`: every ALT a `*` or
-            `<DEL:*>`, equal to the reference or a repeat). A manifest listing `regulatory_feature_rows` under
-            `masks` has its VEP rows of `Feature_type` RegulatoryFeature and MotifFeature
-            left out first, the rows the golden test sets aside for a run under
-            `--regulatory`. `covers` and `flag_sets` are kept; with `--flag-set
+            `<DEL:*>`, equal to the reference or a repeat). A run whose `masks` list
+            `regulatory_feature_rows` has its VEP rows of `Feature_type` RegulatoryFeature
+            and MotifFeature left out first, the rows the golden test sets aside for a run
+            under `--regulatory`; one whose `masks` list `order_only` has its `DOMAINS` and
+            `FREQS` values compared as multisets of their items under `--field`, as the
+            golden test compares them. `covers` and `flag_sets` are kept; with `--flag-set
             <name>` the divergence keys are written into that flag set instead of the
-            manifest's top level, so each flag set documents its own run.
+            manifest's top level, so each flag set documents its own run, under its own
+            `masks` when its entry carries the key and the manifest's otherwise.
   check     Recompute the observed combination space from the reference outputs and fail
             when a combination has no exemplar in the manifest; with `--matrix` fail when a
             `covers` name (the manifest's or a flag set's) is not a matrix row; with
@@ -89,8 +92,12 @@ Subcommands:
             `expected_dir` (`expected_<name>` by default), `perl_mode` (written as
             `database` when the reference was generated against the Ensembl database
             rather than offline) and `covers`; `input` and `expected_dir` are paths inside
-            the corpus directory. A set that exists is rewritten from the options, so
-            `classify --flag-set` runs after it.
+            the corpus directory. A set that exists has those keys rewritten from the
+            options and keeps every other key of its entry, its hand-written `masks` (the
+            classes of its run alone, each one of `regulatory_feature_rows` and
+            `order_only`, as the manifest's) and `reference_warnings` (the texts Ensembl
+            VEP wrote about its run alone) among them; its divergence keys describe the
+            run before the rewrite and go, so `classify --flag-set` runs after it.
 
 Row keys follow `compare_vep_outputs.py`: (Location, Allele, Feature, Feature_type,
 consequence set), consequence terms sorted and comma-joined. A record is identified by
@@ -140,6 +147,14 @@ DEFAULT_INPUT = "variants.vcf"
 # the `Feature_type` values of those rows.
 REGULATORY_FEATURE_ROWS = "regulatory_feature_rows"
 REGULATORY_FEATURE_TYPES = frozenset({"RegulatoryFeature", "MotifFeature"})
+# The `masks` class under which the set-valued columns agree as a multiset of their items
+# in any order (Ensembl VEP prints DOMAINS in the cache's protein_features order,
+# BaseTranscriptVariation.pm:634-643, and FREQS in hash order, OutputFactory.pm:1152-1153),
+# and those columns; the default format joins the items with `,` (Utils.pm:185-198).
+ORDER_ONLY = "order_only"
+ORDER_ONLY_COLUMNS = ("DOMAINS", "FREQS")
+# Every class a `masks` list, the manifest's or a flag set's, may name.
+MASK_CLASSES = (REGULATORY_FEATURE_ROWS, ORDER_ONLY)
 CLASSIFY_KEYS = ("divergences", "vep_rs_only_tuples", "divergence_summary", "vep_rs_only_summary",
                  "fields_compared", "field_divergences", "field_divergence_summary")
 DEFAULT_COLUMNS = (
@@ -816,6 +831,17 @@ def is_name_list(value: object) -> bool:
     return isinstance(value, list) and all(isinstance(n, str) and n.strip() for n in value)
 
 
+def masks_shape_error(masks: object, owner: str) -> str | None:
+    """The reason a `masks` list (`owner` names it: the manifest's own or a flag set's)
+    cannot be applied: not a list of names, or a class other than `MASK_CLASSES`."""
+    if not is_name_list(masks):
+        return f"{owner} is not a list of names"
+    unknown = sorted(set(masks) - set(MASK_CLASSES))
+    if unknown:
+        return f"{owner} names unknown classes {unknown} (the classes are {' and '.join(MASK_CLASSES)})"
+    return None
+
+
 FLAG_SET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 
 
@@ -838,8 +864,9 @@ def names_format(flags: list[str]) -> bool:
 
 def flag_set_shape_error(fs: object) -> str | None:
     """The reason one `flag_sets` entry cannot be run: the shapes `flag-set` writes, so a
-    hand-written entry is held to the same rules; its hand-written `masks` and
-    `reference_warnings` must be lists of non-empty strings, as the manifest's own must."""
+    hand-written entry is held to the same rules; its hand-written `masks` (classes of
+    `MASK_CLASSES`) and `reference_warnings` (non-empty texts) are held to the rules the
+    manifest's own are, as the golden harness holds them."""
     name = fs.get("name") if isinstance(fs, dict) else None
     if not is_flag_set_name(name):
         return "has a flag_sets entry without a name (letters, digits, _ and -, not default)"
@@ -858,16 +885,19 @@ def flag_set_shape_error(fs: object) -> str | None:
         return f"flag set {name} runs on stdin without --format among its flags"
     if "perl_mode" in fs and fs["perl_mode"] not in PERL_MODES:
         return f"flag set {name} perl_mode is not one of {', '.join(PERL_MODES)}"
-    for key, kind in (("covers", "names"), ("masks", "names"), ("reference_warnings", "texts")):
+    for key, kind in (("covers", "names"), ("reference_warnings", "texts")):
         if key in fs and not is_name_list(fs[key]):
             return f"flag set {name} {key} is not a list of {kind}"
+    if "masks" in fs:
+        return masks_shape_error(fs["masks"], f"flag set {name} masks")
     return None
 
 
 def manifest_shape_error(manifest: dict) -> str | None:
     """The reason a manifest's `covers`, `masks`, `reference_warnings`, `flag_sets`, `cache_layout`,
-    `fasta_in_cache`, `included_records` or sample keys cannot be read: `covers`, `masks` and
-    `reference_warnings` must be lists of non-empty strings, `flag_sets` a
+    `fasta_in_cache`, `included_records` or sample keys cannot be read: `covers` and
+    `reference_warnings` must be lists of non-empty strings, `masks` a list of `MASK_CLASSES`
+    (`masks_shape_error`), `flag_sets` a
     list of entries of the shape `flag_set_shape_error` holds them to, with distinct names,
     `cache_layout`, when present, `ensembl` (the cache at `cache_root/homo_sapiens/<release>_<assembly>`,
     so `release` and `assembly` must be named) rather than the default `json_cache/`, `fasta_in_cache`,
@@ -878,8 +908,10 @@ def manifest_shape_error(manifest: dict) -> str | None:
     record names."""
     if "covers" in manifest and not is_name_list(manifest["covers"]):
         return "covers is not a list of names"
-    if "masks" in manifest and not is_name_list(manifest["masks"]):
-        return "masks is not a list of names"
+    if "masks" in manifest:
+        reason = masks_shape_error(manifest["masks"], "masks")
+        if reason:
+            return reason
     if "reference_warnings" in manifest and not is_name_list(manifest["reference_warnings"]):
         return "reference_warnings is not a list of texts"
     keep = manifest.get("keep_samples", 0)
@@ -1042,8 +1074,6 @@ def cmd_select(args: argparse.Namespace) -> int:
     existing = read_manifest(out) if (out / "manifest.json").is_file() else {}
     named = named_records(args, existing, {sid for sid, _ref, _inp in suites})
     covers = list(dict.fromkeys([*(existing.get("covers") or []), *covers_names(args.covers)]))
-    # The call refuses an unknown mask class before anything is written, as `classify` would.
-    masked_feature_types(existing)
     masks = existing.get("masks") or []
     reference_warnings = existing.get("reference_warnings") or []
     # A set's divergence keys name the old records by ordinal; `classify --flag-set` rebuilds them.
@@ -1227,14 +1257,29 @@ def cmd_select(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- classify
-def masked_feature_types(manifest: dict) -> frozenset[str]:
-    """The `Feature_type` values the manifest's `masks` leave out of the reference; a class other
-    than `regulatory_feature_rows` is refused."""
-    masks = manifest.get("masks") or []
-    unknown = sorted(set(masks) - {REGULATORY_FEATURE_ROWS})
-    if unknown:
-        raise failure(f"manifest masks name unknown classes {unknown}")
+def run_masks(manifest: dict, target: dict) -> list[str]:
+    """The mask classes of a run, as the golden harness reads them: the flag set's own `masks`
+    when its entry (`target`) carries the key, else the manifest's; `target` is the manifest
+    itself for the default run."""
+    if "masks" in target:
+        return list(target["masks"])
+    return list(manifest.get("masks") or [])
+
+
+def masked_feature_types(masks: Iterable[str]) -> frozenset[str]:
+    """The `Feature_type` values a run's `masks` leave out of the reference: the regulatory
+    rows' under `regulatory_feature_rows`; `order_only` leaves out no row (`fields_agree`
+    gives it its meaning)."""
     return REGULATORY_FEATURE_TYPES if REGULATORY_FEATURE_ROWS in masks else frozenset()
+
+
+def fields_agree(name: str, vep: str, vep_rs: str, order_only: bool) -> bool:
+    """Whether two values of the Extra field `name` agree: exactly, or, for a column of
+    `ORDER_ONLY_COLUMNS` under `order_only`, as a multiset of their comma-separated items;
+    an absent value (`-`) agrees with itself alone."""
+    if order_only and name in ORDER_ONLY_COLUMNS and "-" not in (vep, vep_rs):
+        return Counter(vep.split(",")) == Counter(vep_rs.split(","))
+    return vep == vep_rs
 
 
 def load_tuples(path: Path, masked: frozenset[str] = frozenset()) -> tuple[dict[tuple[str, str, str, str], set[str]], dict[tuple[str, str, str, str], set[str]]]:
@@ -1419,7 +1464,8 @@ def cmd_classify(args: argparse.Namespace) -> int:
         print("ERROR: [build_golden_corpus] --flag and --fasta-name describe the default run; "
               "a flag set's flags are its own entry's", file=sys.stderr)
         return 1
-    masked = masked_feature_types(manifest)
+    masks = run_masks(manifest, target)
+    masked = masked_feature_types(masks)
     perl, perl_names = load_tuples(Path(args.vep_default), masked)
     rust, rust_names = load_tuples(Path(args.vep_rs_output))
     by_name = record_name_index(manifest["records"])
@@ -1504,7 +1550,7 @@ def cmd_classify(args: argparse.Namespace) -> int:
             if rvals is None:
                 continue
             for name in args.field:
-                if pvals[name] != rvals[name]:
+                if not fields_agree(name, pvals[name], rvals[name], ORDER_ONLY in masks):
                     field_divergences.append({
                         "location": key[0], "allele": key[1], "feature": key[2], "feature_type": key[3],
                         "record_indices": records_for(key[:4]),
@@ -1702,7 +1748,7 @@ def cmd_flag_set(args: argparse.Namespace) -> int:
             print(f"ERROR: [build_golden_corpus] {e}", file=sys.stderr)
         if errors:
             return 1
-    entry = {
+    written = {
         "name": args.name,
         "flags": flags,
         "input": args.input,
@@ -1713,12 +1759,19 @@ def cmd_flag_set(args: argparse.Namespace) -> int:
         "covers": covers,
     }
     if args.perl_mode != "offline":
-        entry["perl_mode"] = args.perl_mode
+        written["perl_mode"] = args.perl_mode
     for i, fs in enumerate(sets):
         if fs["name"] == args.name:
+            # The options set their keys where they sit and the entry's other keys (`masks`,
+            # `reference_warnings`, any hand-written key) stay. The divergence keys go, since
+            # they describe the run before the rewrite (`classify --flag-set` rewrites them), and
+            # so does `perl_mode`, which `written` carries only for a database reference.
+            entry = {k: v for k, v in fs.items() if k not in CLASSIFY_KEYS and k != "perl_mode"}
+            entry.update(written)
             sets[i] = entry
             break
     else:
+        entry = written
         sets.append(entry)
     write_manifest(corpus, manifest)
     print(f"flag set {args.name}: {len(entry['flags'])} flags, input {entry['input']}"
@@ -1811,7 +1864,13 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--flag-set", default=None, help="the flag set whose list is read or extended")
     v.add_argument("--matrix", default=DEFAULT_MATRIX, help=f"{MATRIX_HELP} (default: {DEFAULT_MATRIX})")
     v.set_defaults(fn=cmd_covers)
-    f = sub.add_parser("flag-set")
+    f = sub.add_parser(
+        "flag-set",
+        description="Write one flag_sets entry of the corpus manifest: a run of the corpus under its own flags. "
+                    "A set that exists has the keys the options below set rewritten and keeps every other key "
+                    "of its entry (its hand-written `masks` and `reference_warnings` among them); its divergence "
+                    "keys go, so `classify --flag-set` runs after it.",
+    )
     f.add_argument("corpus")
     f.add_argument("--name", default=None, help="the set's name; `expected_<name>` holds its outputs unless --expected-dir")
     f.add_argument("--flag", action="append", help="a command-line flag of the run, written --flag=--pick (repeatable)")

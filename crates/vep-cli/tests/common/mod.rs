@@ -701,6 +701,25 @@ fn strings(value: &serde_json::Value) -> Vec<String> {
         .collect()
 }
 
+/// Holds a `reference_warnings` list, the manifest's or a flag set's (`label`
+/// names which), to the shape the corpus tool holds the key to: strings, none
+/// empty or blank, so no run expects a warning with no text.
+fn assert_warning_texts(label: &str, list: &serde_json::Value) {
+    let texts: Vec<&str> = list
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|v| {
+            v.as_str()
+                .unwrap_or_else(|| panic!("{label}: reference_warnings is not of its type"))
+        })
+        .collect();
+    assert!(
+        texts.iter().all(|t| !t.trim().is_empty()),
+        "{label}: reference_warnings has an empty text"
+    );
+}
+
 /// The manifest's own run.
 pub fn default_run(corpus: &Corpus) -> Run<'_> {
     Run {
@@ -744,14 +763,18 @@ fn plain_name(name: &str) -> bool {
 /// plain word, no format to compare, an empty path or one outside the corpus,
 /// a stdin run whose flags name no `--format`) fails here, so a hand-written
 /// entry cannot certify its `covers` with a run that compares nothing; so does
-/// a manifest whose `reference_warnings` is not a list, before any run.
+/// a manifest or an entry whose `masks` is not a list, or whose
+/// `reference_warnings` is not a list of texts or holds an empty one
+/// ([`assert_warning_texts`]), before any run.
 pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
     let label = format!("{}/{}", corpus.release, corpus.name);
-    assert!(
-        corpus.manifest.get("reference_warnings").is_none()
-            || corpus.manifest["reference_warnings"].is_array(),
-        "{label}: reference_warnings is not of its type"
-    );
+    for key in ["masks", "reference_warnings"] {
+        assert!(
+            corpus.manifest.get(key).is_none() || corpus.manifest[key].is_array(),
+            "{label}: {key} is not of its type"
+        );
+    }
+    assert_warning_texts(&label, &corpus.manifest["reference_warnings"]);
     let mut out = vec![default_run(corpus)];
     for set in corpus.manifest["flag_sets"]
         .as_array()
@@ -787,8 +810,10 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
         typed("perl_mode", set["perl_mode"].is_string());
         typed("masks", set["masks"].is_array());
         typed("reference_warnings", set["reference_warnings"].is_array());
+        let set_label = format!("{label} flag set {name}");
+        assert_warning_texts(&set_label, &set["reference_warnings"]);
         let masks = if set.get("masks").is_some() {
-            mask_classes(&format!("{label} flag set {name}"), &set["masks"])
+            mask_classes(&set_label, &set["masks"])
         } else {
             corpus.masks()
         };
@@ -2278,8 +2303,8 @@ pub fn reference_warnings(manifest: &serde_json::Value) -> BTreeSet<WarningEntry
 /// The warnings Ensembl VEP wrote for a run about no one record, each text of
 /// its `reference_warnings` list as an unnumbered entry: the flag set's own list
 /// when its entry carries one, else the manifest's ([`runs`] holds both to
-/// lists). A tandem repeat or tandem duplication record read without a FASTA
-/// draws one such warning (Parser/VCF.pm:521-524).
+/// lists of non-empty texts). A tandem repeat or tandem duplication record
+/// read without a FASTA draws one such warning (Parser/VCF.pm:521-524).
 pub fn run_reference_warnings(run: &Run) -> BTreeSet<WarningEntry> {
     let list = run
         .entry

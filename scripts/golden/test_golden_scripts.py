@@ -585,7 +585,8 @@ def test_select_preserves_covers_on_regeneration(tmp_path: Path):
     (out / "variants.vcf").unlink()
     with pytest.raises(SystemExit) as refusal:
         _select(ref, vcf, out)
-    assert str(refusal.value) == "ERROR: [build_golden_corpus] manifest masks name unknown classes ['splice_rows']"
+    assert str(refusal.value) == (f"ERROR: [build_golden_corpus] {out / 'manifest.json'} masks names unknown classes "
+                                  "['splice_rows'] (the classes are regulatory_feature_rows and order_only)")
     assert json.loads((out / "manifest.json").read_text()) == m and not (out / "variants.vcf").exists(), "nothing is written"
     m["masks"] = ["regulatory_feature_rows"]
     m["reference_warnings"] = notice
@@ -746,6 +747,8 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
         ('"covers": ["symbol", ""]', "covers is not a list of names"),
         ('"covers": ["symbol"], "masks": "regulatory_feature_rows"', "masks is not a list of names"),
         ('"covers": ["symbol"], "masks": [["regulatory_feature_rows"]]', "masks is not a list of names"),
+        ('"covers": ["symbol"], "masks": ["order_only", "splice_rows"]',
+         "masks names unknown classes ['splice_rows'] (the classes are regulatory_feature_rows and order_only)"),
         ('"covers": ["symbol"], "reference_warnings": "no FASTA"', "reference_warnings is not a list of texts"),
         ('"covers": ["symbol"], "reference_warnings": ["no FASTA", ""]', "reference_warnings is not a list of texts"),
         ('"covers": ["symbol"], "flag_sets": "pick"', "flag_sets is not a list"),
@@ -756,8 +759,11 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
         ('"covers": ["symbol"], "flag_sets": [{"name": "a"}, {"name": "a"}]', "names flag set a twice"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "covers": "x"}]', "flag set a covers is not a list of names"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "masks": "order_only"}]', "flag set a masks is not a list of names"),
+        ('"covers": ["symbol"], "flag_sets": [{"name": "a", "masks": ["order_only", "splice_rows"]}]',
+         "flag set a masks names unknown classes ['splice_rows'] (the classes are regulatory_feature_rows and order_only)"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "reference_warnings": "no FASTA"}]', "flag set a reference_warnings is not a list of texts"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "reference_warnings": [["no FASTA"]]}]', "flag set a reference_warnings is not a list of texts"),
+        ('"covers": ["symbol"], "flag_sets": [{"name": "a", "reference_warnings": ["no FASTA", " "]}]', "flag set a reference_warnings is not a list of texts"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "flags": "--pick"}]', "flag set a flags is not a list of strings"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "input": 5}]', "flag set a input is not a path inside the corpus directory"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "input": "../x.vcf"}]', "flag set a input is not a path inside the corpus directory"),
@@ -787,6 +793,11 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
             with pytest.raises(SystemExit) as refusal:
                 bgc.main(argv)
             assert str(refusal.value) == f"ERROR: [build_golden_corpus] {manifest} {reason}", argv[0]
+    # Both mask classes pass at both levels, an empty list on a set (its run masks nothing) too.
+    manifest.write_text(good.replace('"covers": [', '"masks": ["order_only", "regulatory_feature_rows"], "flag_sets": '
+                                     '[{"name": "a", "masks": ["order_only"]}, {"name": "b", "masks": []}], "covers": [', 1),
+                        encoding="utf-8")
+    assert bgc.main(commands[1]) == 0
     manifest.write_text("[]", encoding="utf-8")
     with pytest.raises(SystemExit) as refusal:
         bgc.main(commands[1])
@@ -1407,6 +1418,98 @@ def test_flag_set_subcommand_writes_an_entry(tmp_path: Path, capsys):
             bgc.main(["flag-set", str(out), "--name", "x", *extra, "--matrix", str(matrix)])
         assert str(refusal.value) == f"ERROR: [build_golden_corpus] {message}"
     assert (out / "manifest.json").read_text() == before
+
+
+def test_flag_set_rewrite_keeps_the_sets_hand_written_keys(tmp_path: Path, capsys):
+    """Rewriting a set by name sets the options' keys where they sit and keeps every other key of
+    the entry (`masks` and `reference_warnings` are written by hand and have no option); the
+    divergence keys describe the run before the rewrite and go, and `perl_mode` follows the
+    option like the rest."""
+    ref, vcf = _two_record_suite(tmp_path)
+    out = tmp_path / "corpus"
+    matrix = _matrix(tmp_path, "symbol", "domains", "per_gene")
+    assert _select(ref, vcf, out, "--covers", "symbol") == 0
+    assert bgc.main(["flag-set", str(out), "--name", "domains", "--flag=--domains", "--covers", "domains",
+                     "--perl-mode", "database", "--matrix", str(matrix)]) == 0
+    m = json.loads((out / "manifest.json").read_text())
+    entry = m["flag_sets"][0]
+    notice = "found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size"
+    # The hand-written keys sit before `covers`, as a hand-edited manifest places them.
+    m["flag_sets"][0] = {
+        **{k: v for k, v in entry.items() if k != "covers"},
+        "masks": ["order_only"], "reference_warnings": [notice], "covers": entry["covers"],
+        "divergences": [{"location": "21:100", "record_indices": [0]}], "divergence_summary": {},
+        "note": "kept as written",
+    }
+    (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+    capsys.readouterr()
+    assert bgc.main(["flag-set", str(out), "--name", "domains", "--flag=--domains", "--flag=--per_gene", "--unordered",
+                     "--covers", "domains", "--covers", "per_gene", "--matrix", str(matrix)]) == 0
+    assert capsys.readouterr().out == ("flag set domains: 2 flags, input variants.vcf, unordered, "
+                                       "formats default,tab,vcf,json, expected expected_domains, covers 2\n")
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["flag_sets"] == [{
+        "name": "domains", "flags": ["--domains", "--per_gene"], "input": "variants.vcf", "stdin": False,
+        "unordered": True, "formats": ["default", "tab", "vcf", "json"], "expected_dir": "expected_domains",
+        "masks": ["order_only"], "reference_warnings": [notice], "covers": ["domains", "per_gene"],
+        "note": "kept as written",
+    }]
+    assert bgc.manifest_shape_error(m) is None
+    # A kept key is still held to its shape at the next read, so a rewrite never writes
+    # past a `masks` or `reference_warnings` the harness would refuse.
+    for body, reason in (
+        ({"masks": ["splice_rows"]},
+         "flag set domains masks names unknown classes ['splice_rows'] (the classes are regulatory_feature_rows and order_only)"),
+        ({"masks": "order_only"}, "flag set domains masks is not a list of names"),
+        ({"reference_warnings": [notice, ""]}, "flag set domains reference_warnings is not a list of texts"),
+        ({"reference_warnings": notice}, "flag set domains reference_warnings is not a list of texts"),
+    ):
+        broken = json.loads((out / "manifest.json").read_text())
+        broken["flag_sets"][0].update(body)
+        (out / "manifest.json").write_text(json.dumps(broken), encoding="utf-8")
+        with pytest.raises(SystemExit) as refusal:
+            bgc.main(["flag-set", str(out), "--name", "domains", "--flag=--domains", "--matrix", str(matrix)])
+        assert str(refusal.value) == f"ERROR: [build_golden_corpus] {out / 'manifest.json'} {reason}"
+        assert json.loads((out / "manifest.json").read_text()) == broken, "nothing is written"
+
+
+def test_classify_applies_the_runs_own_masks(tmp_path: Path):
+    """`classify` masks a run as the golden harness does: under `order_only` the `DOMAINS` and
+    `FREQS` values of `--field` agree as multisets of their items while an item that differs
+    is still a field divergence, and a flag set's own `masks` (an empty list included) replace
+    the manifest's for `classify --flag-set`, the regulatory class among them."""
+    def row(domains: str) -> str:
+        return _row("rs1", "21:100", "G", "ENST1", "missense_variant", f"IMPACT=MODERATE;DOMAINS={domains}")
+
+    regulatory = "rs1\t21:100\tG\t-\tENSR1\tRegulatoryFeature\tregulatory_region_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER\n"
+    vep = tmp_path / "vep.txt"
+    vep.write_text(row("Pfam:PF00059,PANTHER:PTHR14789") + regulatory, encoding="utf-8")
+    reordered = tmp_path / "reordered.txt"
+    reordered.write_text(row("PANTHER:PTHR14789,Pfam:PF00059"), encoding="utf-8")
+    changed = tmp_path / "changed.txt"
+    changed.write_text(row("PANTHER:PTHR14789,Pfam:PF00060"), encoding="utf-8")
+    corpus = tmp_path / "c"
+    corpus.mkdir()
+    manifest = corpus / "manifest.json"
+
+    def classify(rs: Path, flag_set: str | None = None) -> dict:
+        flag_set_option = [] if flag_set is None else ["--flag-set", flag_set]
+        assert bgc.main(["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs),
+                         "--field", "DOMAINS", *flag_set_option]) == 0
+        m = json.loads(manifest.read_text())
+        target = m if flag_set is None else bgc.flag_set_named(m, flag_set)
+        return {"fields": target["field_divergence_summary"], "vep_only": target["divergence_summary"]}
+
+    records = [_record("21\t100\trs1\tA\tG\t.\tPASS\t.")]
+    sets = [{"name": "plain", "masks": []}, {"name": "regulatory", "masks": ["regulatory_feature_rows"]}, {"name": "inherits"}]
+    manifest.write_text(json.dumps({"masks": ["order_only"], "records": records, "flag_sets": sets}), encoding="utf-8")
+    assert classify(reordered) == {"fields": {}, "vep_only": {"unexplained_residual": 1}}
+    assert classify(changed) == {"fields": {"unexplained_residual": 1}, "vep_only": {"unexplained_residual": 1}}
+    assert classify(reordered, "inherits") == {"fields": {}, "vep_only": {"unexplained_residual": 1}}
+    assert classify(reordered, "plain") == {"fields": {"unexplained_residual": 1}, "vep_only": {"unexplained_residual": 1}}
+    assert classify(reordered, "regulatory") == {"fields": {"unexplained_residual": 1}, "vep_only": {}}
+    manifest.write_text(json.dumps({"records": records}), encoding="utf-8")
+    assert classify(reordered) == {"fields": {"unexplained_residual": 1}, "vep_only": {"unexplained_residual": 1}}
 
 
 def test_classify_writes_a_flag_sets_divergences_into_its_entry(tmp_path: Path, capsys):

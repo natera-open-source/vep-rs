@@ -83,9 +83,11 @@ vep-rs accepts and annotates nothing for, and `order_only` compares the `DOMAINS
 and `FREQS` items of both sides as multisets, for a native cache that lists a
 transcript's protein features in another order than the Ensembl cache
 (`scripts/concordance/compare_vep_formats.py --masks` applies the same classes). A
-flag set may carry its own `masks` for its run alone. The list is written into the
-manifest by hand (no `select` option writes it), `select` keeps it when it
-regenerates the corpus, and `classify` applies the regulatory class to the reference.
+flag set may carry its own `masks` for its run alone, kept when `flag-set` rewrites
+the set's entry. The list is written into the manifest by hand (no `select` option
+writes it), `select` keeps it when it regenerates the corpus, every subcommand
+refuses a class other than those two, and `classify` applies the regulatory class
+to the reference and compares `DOMAINS` and `FREQS` as multisets under `order_only`.
 `cargo test -p vep-cli --test golden --test format_parity` annotates each corpus
 once per run and compares every column of every format (the Parquet round trip
 needs the `duckdb` CLI; without it that one test skips). A failure lists every mismatch
@@ -100,7 +102,8 @@ the run rather than about one record (the notice a `<CNV:TR>` record draws
 without a FASTA, for one); the harness expects them in the run's warnings file
 beside the numbered reasons. A flag set may carry its own list for its run
 alone; one without inherits the manifest's. Like `masks`, the list is written
-by hand and kept by `select`.
+by hand, kept by `select` and by a `flag-set` rewrite of the set, and refused
+by `build_golden_corpus.py` and the golden tests alike when a text is empty.
 
 To add a release or assembly, run the generator where the VEP reference outputs,
 their inputs and the JSON cache are: select the exemplars, prune the cache, write

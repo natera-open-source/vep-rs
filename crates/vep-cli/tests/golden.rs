@@ -237,9 +237,9 @@ fn flag_sets_run_once_per_entry_with_their_input_and_stdin() {
 /// `runs` refuses the `flag_sets` entries the corpus tool's `flag-set` refuses,
 /// naming the entry and the reason, so a manifest edited by hand cannot certify
 /// a set's `covers` with a run the tool would not have written, and refuses a
-/// manifest whose own `reference_warnings` is not a list; the shapes the tool
-/// writes (a name of letters, digits, `_` and `-` that starts with a letter or
-/// digit) run.
+/// manifest whose own `masks` or `reference_warnings` is not a list; the shapes
+/// the tool writes (a name of letters, digits, `_` and `-` that starts with a
+/// letter or digit) run.
 #[test]
 fn runs_refuses_the_flag_set_entries_the_corpus_tool_refuses() {
     let source = corpora()
@@ -356,13 +356,19 @@ fn runs_refuses_the_flag_set_entries_the_corpus_tool_refuses() {
         }
     }
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
-    let mut corpus = with_flag_sets(serde_json::json!([]));
-    corpus.manifest["reference_warnings"] = serde_json::json!("text");
-    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| runs(&corpus).len()));
-    assert_eq!(
-        outcome.unwrap_err().downcast_ref::<String>().cloned(),
-        Some(format!("{label}: reference_warnings is not of its type"))
-    );
+    for (key, value) in [
+        ("reference_warnings", serde_json::json!("text")),
+        ("masks", serde_json::json!("order_only")),
+    ] {
+        let mut corpus = with_flag_sets(serde_json::json!([]));
+        corpus.manifest[key] = value;
+        let outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| runs(&corpus).len()));
+        assert_eq!(
+            outcome.unwrap_err().downcast_ref::<String>().cloned(),
+            Some(format!("{label}: {key} is not of its type"))
+        );
+    }
     let corpus = with_flag_sets(serde_json::json!([
         {"name": "x1_-", "flags": ["--format", "vcf"], "stdin": true, "formats": ["vcf"], "expected_dir": "expected"},
         {"name": "eq", "flags": ["--format=vcf"], "stdin": true},
@@ -372,6 +378,76 @@ fn runs_refuses_the_flag_set_entries_the_corpus_tool_refuses() {
     assert_eq!(runs.len(), 4);
     assert_eq!(runs[3].perl_mode, "database");
     assert_eq!(runs[1].perl_mode, "offline");
+}
+
+/// A `reference_warnings` text that is empty, or blank, is refused with the
+/// corpus or the flag set named, as the corpus tool refuses it (a text of
+/// nothing is a warning no run can write); a text that is not a string is
+/// refused as the other typed keys are; a non-empty text runs.
+#[test]
+fn runs_refuses_an_empty_reference_warning_text() {
+    let source = corpora()
+        .into_iter()
+        .find(|c| c.name == "GRCh38-release116")
+        .expect("the GRCh38-release116 corpus is committed");
+    let label = format!("{}/{}", source.release, source.name);
+    let with_warning_lists = |manifest_list: serde_json::Value, set_list: serde_json::Value| {
+        let mut manifest = source.manifest.clone();
+        manifest["reference_warnings"] = manifest_list;
+        manifest["flag_sets"] = serde_json::json!([{"name": "x", "reference_warnings": set_list}]);
+        Corpus {
+            release: source.release.clone(),
+            name: source.name.clone(),
+            assembly: source.assembly.clone(),
+            dir: source.dir.clone(),
+            manifest,
+        }
+    };
+    let panic_of = |corpus: &Corpus| -> Option<String> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| runs(corpus).len()))
+            .err()
+            .and_then(|p| p.downcast_ref::<String>().cloned())
+    };
+    let notice = "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta";
+    let empty = |owner: &str| Some(format!("{owner}: reference_warnings has an empty text"));
+    let set_label = format!("{label} flag set x");
+    assert_eq!(
+        panic_of(&with_warning_lists(
+            serde_json::json!([notice, ""]),
+            serde_json::json!([notice])
+        )),
+        empty(&label)
+    );
+    assert_eq!(
+        panic_of(&with_warning_lists(
+            serde_json::json!([notice]),
+            serde_json::json!([notice, " "])
+        )),
+        empty(&set_label)
+    );
+    assert_eq!(
+        panic_of(&with_warning_lists(
+            serde_json::json!([5]),
+            serde_json::json!([notice])
+        )),
+        Some(format!("{label}: reference_warnings is not of its type"))
+    );
+    assert_eq!(
+        panic_of(&with_warning_lists(
+            serde_json::json!([notice]),
+            serde_json::json!([notice, 5])
+        )),
+        Some(format!(
+            "{set_label}: reference_warnings is not of its type"
+        ))
+    );
+    assert_eq!(
+        panic_of(&with_warning_lists(
+            serde_json::json!([notice]),
+            serde_json::json!([notice])
+        )),
+        None
+    );
 }
 
 /// The records the reference dropped before annotation are marked consistently
