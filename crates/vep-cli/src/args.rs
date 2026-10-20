@@ -22,9 +22,9 @@
 
 use clap::{ArgAction, CommandFactory, Parser};
 
-/// Ensembl VEP's `--max_sv_size` default: the span above which a structural variant
-/// is oversize, and the repeat-sequence length above which a tandem repeat stays
-/// symbolic.
+/// Ensembl VEP's `--max_sv_size` default: the span, end minus start, above which a
+/// record is oversize, and the repeat-sequence length above which a tandem repeat
+/// stays symbolic.
 pub const DEFAULT_MAX_SV_SIZE: i64 = vep_core::sv_record::DEFAULT_MAX_SV_SIZE as i64;
 
 /// The help's first line is the binary's name and version, as `--version` prints.
@@ -415,10 +415,11 @@ pub struct Args {
     #[arg(help_heading = "Runtime", long = "buffer_size", default_value_t = 5000)]
     pub buffer_size: usize,
 
-    /// A structural variant spanning more than this many bases is oversize; -1 lifts
-    /// the limit, as in Ensembl VEP 116. A <CNV:TR> record whose repeat sequence is
-    /// longer than this stays symbolic rather than reading a direction of change
-    /// (under -1 every one does), as in Ensembl VEP 116. Ensembl VEP 116 drops an
+    /// A record whose end minus start exceeds this many bases is oversize, a sequence
+    /// record included; -1 lifts the limit, as in Ensembl VEP 116. With a FASTA, a
+    /// <CNV:TR> record whose repeat sequence is longer than this stays a symbolic
+    /// tandem repeat rather than expanding to its alleles (under -1 every one does,
+    /// and 0 reads as 5000), as in Ensembl VEP 116. Ensembl VEP 116 drops an
     /// oversize record before annotation and writes nothing for it in any format;
     /// vep-rs annotates it: rows in the default, tab and parquet outputs, its VCF
     /// line without consequences, no JSON object (docs/output-formats.md and
@@ -995,7 +996,9 @@ pub struct Args {
     #[arg(help_heading = "Filtering / Picking", long)]
     pub ambiguity: bool,
 
-    /// Convert alleles to minimal representation; switches on --allele_number as in Ensembl VEP
+    /// Trim every bi-allelic record's alleles from both ends and split a multi-allelic
+    /// record whose alleles trim into one allele per row, each on its own trimmed span,
+    /// as Ensembl VEP minimises; switches on --allele_number as in Ensembl VEP
     #[arg(help_heading = "Filtering / Picking", long)]
     pub minimal: bool,
 

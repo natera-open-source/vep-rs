@@ -5,7 +5,9 @@
 //!
 //! Parses a VCF data line into `InputVariant`s: the line is routed through
 //! `vep_core::sv_routing`, a sequence record is split per ALT with its alleles
-//! trimmed and minimised here, and a structural record's alleles are built by
+//! trimmed and minimised here, a `<CNV:TR>` record with the reference sequence to
+//! hand is expanded to explicit alleles and read as a sequence record, and any
+//! other structural record's alleles are built by
 //! `vep_core::sv_record::structural_variants`.
 //!
 //! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`);
@@ -16,43 +18,88 @@ use std::sync::Arc;
 
 use anyhow::{bail, Context};
 
-use vep_core::allele::trim_alleles;
-use vep_core::coordinate::parse_pos;
-use vep_core::sv_record::{structural_variants, DEFAULT_MAX_SV_SIZE};
-use vep_core::sv_routing::{perl_true, routes_to_structural, variant_alts, written_alts};
-use vep_core::variant::{first_vcf_id, id_names_record, InputVariant};
-use vep_core::vcf_info::info_value;
+use vep_core::coordinate::{parse_pos, MAX_COORD};
+use vep_core::minimal::{apply_minimal_split, split_changes_record, trim_sequences, MinimalSplit};
+use vep_core::sv_record::{structural_variants, tandem_repeat_allele_string, DEFAULT_MAX_SV_SIZE};
+use vep_core::sv_routing::{
+    joined, perl_split, perl_true, routes_to_structural, sv_so_term_and_class,
+    sv_type_abbreviation, sv_type_string, variant_alts, written_alts,
+};
+use vep_core::sv_span::{structural_end, structural_start, SpanClass, SpanError};
+use vep_core::variant::{
+    first_vcf_id, id_names_record, so_variation_class, InputVariant, VariantClass,
+};
+use vep_core::vcf_info::{info_value, info_value_written};
+use vep_fasta::IndexedFasta;
+
+/// What a run parses every VCF data line with.
+#[derive(Clone, Copy)]
+pub struct VcfParse<'a> {
+    /// Whether each produced variant keeps a copy of the source line in
+    /// `InputVariant::raw_input`. Only the VCF output formatter reads that field
+    /// (it re-emits the original record with a CSQ INFO field appended); every other
+    /// output format ignores it, and the formatter has a complete fallback that
+    /// rebuilds a minimal record from the variant's own coordinates and alleles.
+    /// Capturing unconditionally would allocate one line-length `String` per
+    /// variant only to drop it, so callers pass `true` only when the output format
+    /// needs it; see `RAW_INPUT_OUTPUT_FORMATS` in `runner.rs`.
+    pub capture_raw_input: bool,
+    /// The run's `--max_sv_size` (`None` for `-1`), which decides whether a
+    /// `<CNV:TR>` record's alternate allele is expanded to an explicit sequence or
+    /// kept symbolic, as `_expand_tandem_repeat_allele_string` (`Parser/VCF.pm:403`)
+    /// decides under `max_sv_size`.
+    pub max_sv_size: Option<u64>,
+    /// `--minimal`: every bi-allelic sequence record is trimmed and marked
+    /// (`vep_core::minimal`), and a multi-allelic record one of whose alleles trims
+    /// keeps every ALT, a repeated one and one equal to the reference included, for
+    /// the split [`split_minimal_record`] applies once the record is validated.
+    pub minimal: bool,
+    /// The run's reference FASTA, which a `<CNV:TR>` record's expansion reads the
+    /// run's reference bases from (`Parser/VCF.pm:516-518`); without one the record
+    /// keeps its symbolic reading.
+    pub fasta: Option<&'a IndexedFasta>,
+}
+
+impl VcfParse<'_> {
+    /// Ensembl VEP's default `--max_sv_size`, no `--minimal` and no FASTA.
+    pub fn default_run(capture_raw_input: bool) -> Self {
+        VcfParse {
+            capture_raw_input,
+            max_sv_size: Some(DEFAULT_MAX_SV_SIZE),
+            minimal: false,
+            fasta: None,
+        }
+    }
+}
 
 /// Parse a VCF data line into one or more `InputVariant`s.
 ///
 /// Multi-allelic sites are split into separate records, one per ALT allele.
 /// This is the `vep` binary's one VCF reader: `vep-io` declares no VCF input
-/// module.
-///
-/// `capture_raw_input` controls whether each produced variant retains a copy of
-/// the source line in `InputVariant::raw_input`. Only the VCF output formatter
-/// reads that field (it re-emits the original record with a CSQ INFO field
-/// appended); every other output format ignores it, and the formatter has a
-/// complete fallback that rebuilds a minimal record from the variant's own
-/// coordinates and alleles. Capturing unconditionally would allocate one
-/// line-length `String` per variant only to drop it. Callers pass `true` only
-/// when the output format needs it; see `RAW_INPUT_OUTPUT_FORMATS` in `runner.rs`.
-///
-/// Tandem-repeat lengths are read under Ensembl VEP's default `--max_sv_size`;
-/// [`parse_vcf_line_with_max_sv_size`] takes the run's own limit.
+/// module. `capture_raw_input` is [`VcfParse::capture_raw_input`]; the line is read
+/// under Ensembl VEP's default `--max_sv_size`, without `--minimal` and without a
+/// FASTA ([`parse_vcf_line_with`] takes the run's own settings).
 pub fn parse_vcf_line(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec<InputVariant>> {
-    parse_vcf_line_with_max_sv_size(line, capture_raw_input, Some(DEFAULT_MAX_SV_SIZE))
+    parse_vcf_line_with(line, &VcfParse::default_run(capture_raw_input))
 }
 
-/// [`parse_vcf_line`] under the run's `--max_sv_size` (`None` for `-1`), which
-/// decides whether a `<CNV:TR>` record's alternate allele is expanded to a length
-/// or kept symbolic, as `_expand_tandem_repeat_allele_string` (`Parser/VCF.pm`)
-/// decides under `max_sv_size`.
+/// [`parse_vcf_line`] under the run's `--max_sv_size` (`None` for `-1`).
 pub fn parse_vcf_line_with_max_sv_size(
     line: &str,
     capture_raw_input: bool,
     max_sv_size: Option<u64>,
 ) -> anyhow::Result<Vec<InputVariant>> {
+    parse_vcf_line_with(
+        line,
+        &VcfParse {
+            max_sv_size,
+            ..VcfParse::default_run(capture_raw_input)
+        },
+    )
+}
+
+/// [`parse_vcf_line`] under the run's settings.
+pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<Vec<InputVariant>> {
     let fields = vcf_columns(line)?.fixed;
 
     let chr = fields[0].to_string();
@@ -88,158 +135,442 @@ pub fn parse_vcf_line_with_max_sv_size(
         .filter(|(_, alt)| *alt != "*" && *alt != ".")
         .collect();
 
-    let raw_input: Option<Arc<str>> = capture_raw_input.then(|| Arc::from(line));
+    let raw_input: Option<Arc<str>> = parse.capture_raw_input.then(|| Arc::from(line));
     let record_id = first_vcf_id(id).map(str::to_string);
     let explicit_id = record_id.as_deref().filter(|id| id_names_record(id));
     let line_name: Arc<str> = input_line_name(&chr, pos, ref_allele, alt_field).into();
 
-    if valid_alts.is_empty() {
+    let mut variants = if valid_alts.is_empty() {
         if written.is_empty() || written.iter().any(|(_, alt)| *alt != "*") {
             bail!("No alternate allele");
         }
-        let mut variant = allele_less_record(chr, pos, ref_allele, &written);
-        variant.raw_input = raw_input;
-        variant.id = record_id;
-        variant.input_line_name = Some(line_name);
-        return Ok(vec![variant]);
-    }
-
-    let mut variants = Vec::with_capacity(valid_alts.len());
-
-    if !routes_to_structural(ref_allele, &alts, svtype) {
-        let Chopped {
-            reference: trimmed_ref,
-            alts: trimmed_alts,
-            start: vep_start,
-            end: vep_end,
-            uploaded: uploaded_alleles,
-            working: chopped,
-            written_case_reference,
-            written_case_alts,
-        } = chop_record(ref_allele, &alts, pos);
-
-        let numbers = perl_allele_numbers(&trimmed_ref, &trimmed_alts);
-        for (k, (((allele_idx, alt), vep_alt), number)) in
-            alts.iter().zip(&trimmed_alts).zip(&numbers).enumerate()
-        {
-            // A dropped allele, or one Ensembl VEP numbers and writes no row for.
-            let Some(number) = *number else {
-                continue;
-            };
-            if *alt == "*" || *alt == "." || vep_alt == "<DEL:*>" {
-                continue;
-            }
-            // A gVCF block `variant_alts` left out keeps its written position's
-            // number, a record Ensembl VEP drops whole (`sv_routing::variant_alts`).
-            let number = number + (*allele_idx - k) as u32;
-            let mut variant = InputVariant::new(
-                chr.clone(),
-                vep_start,
-                vep_end,
-                trimmed_ref.as_bytes().to_vec(),
-                vep_alt.as_bytes().to_vec(),
-            );
-
-            // `trim_sequences` (ensembl-variation Sequence.pm:971) reads an end of 0
-            // as no end and resets it to `start + length(ref) - 1`, so the one
-            // record it reaches with that end, an insertion at POS 0 whose REF is one
-            // base (`0 A AT`), leaves the parser as `-/T` at 1-1 and `validate_vf`
-            // refuses it as an insertion whose coordinates are not start = end + 1.
-            // An empty REF never reaches it: unchopped, its string `/A` fails the
-            // `.+/.+` test of `minimise_alleles` (Parser.pm:974), so `1 <empty> A`
-            // keeps the end of 0.
-            if alts.len() == 1
-                && !ref_allele.is_empty()
-                && perl_minimises(ref_allele, alt)
-                && variant.end == 0
-            {
-                variant.end = variant.start + variant.ref_allele.len() as u64 - 1;
-            }
-
-            // Secondary minimisation of a bi-allelic indel. Perl VEP
-            // (Parser.pm `post_process_vfs`) minimises a bi-allelic record whose
-            // alleles differ in length whatever the flags: `trim_sequences`
-            // (Sequence.pm) trims from the left while both alleles are non-empty,
-            // then from the right, and maps an emptied allele to `-`, so `T/TT`
-            // at pos P becomes `-/T` at P+1. It compares the bases as written
-            // (`eq`), before `validate_vf` upper-cases the string (Parser.pm:554), so
-            // `TTGA t` stays `TTGA/T`. `minimise_alleles` returns a multi-allelic
-            // string (`.+/.+/.+`) unchanged, a `*` part counted (Parser.pm:978-984):
-            // without `--minimal` a multi-allelic record keeps its anchor-chopped
-            // alleles, and every position, codon and distance is computed on that
-            // representation.
-            if alts.len() == 1
-                && variant.ref_allele != b"-"
-                && variant.alt_alleles[0] != b"-"
-                && variant.ref_allele.len() != variant.alt_alleles[0].len()
-            {
-                let (min_ref, min_alt, extra_prefix) = trim_alleles(
-                    written_case_reference.as_bytes(),
-                    written_case_alts[k].as_bytes(),
-                );
-                let min_ref = min_ref.to_ascii_uppercase();
-                let min_alt = min_alt.to_ascii_uppercase();
-                if extra_prefix > 0
-                    || min_ref != variant.ref_allele
-                    || min_alt != variant.alt_alleles[0]
-                {
-                    let (new_start, new_end) =
-                        vep_coords_from_trimmed(vep_start, extra_prefix, &min_ref);
-                    variant.original_allele_string = Some(variant.allele_string.clone());
-                    variant.allele_string = format!(
-                        "{}/{}",
-                        String::from_utf8_lossy(&min_ref),
-                        String::from_utf8_lossy(&min_alt),
-                    );
-                    variant.ref_allele = min_ref;
-                    variant.alt_alleles = vec![min_alt];
-                    variant.start = new_start;
-                    variant.end = new_end;
-                    variant.variant_class = vep_core::variant::classify_variant(
-                        &variant.ref_allele,
-                        &variant.alt_alleles[0],
-                    );
-                    variant.minimised = true;
-                }
-            }
-
-            variant.allele_index = *allele_idx;
-            // ALLELE_NUM is Ensembl VEP's count of the alleles it kept, which falls
-            // behind the written position once an ALT was dropped.
-            variant.allele_num = (number as usize != *allele_idx + 1).then_some(number);
-            variant.uploaded_allele_string = Some(uploaded_alleles.clone());
-            variant.record_allele_string_multi = chopped.clone();
-            variant.raw_input = raw_input.clone();
-            variant.id = record_id.clone();
-            variants.push(variant);
-        }
-        if variants.is_empty() {
-            let mut variant = allele_less_record(chr, pos, ref_allele, &alts);
-            variant.raw_input = raw_input;
-            variant.id = record_id;
-            variants.push(variant);
-        }
-    } else {
-        variants = structural_variants(
+        with_allele_less_fallback(
             &chr,
-            pos,
-            ref_allele,
-            &written,
-            info_field,
-            max_sv_size,
-            explicit_id,
-        )?;
-        for variant in &mut variants {
-            variant.raw_input = raw_input.clone();
-            variant.id = record_id.clone();
-        }
-    }
+            chop_record(ref_allele, &written, pos),
+            Vec::new(),
+            parse.minimal,
+        )
+    } else if !routes_to_structural(ref_allele, &alts, svtype) {
+        let chopped = chop_record(ref_allele, &alts, pos);
+        let variants = sequence_variants(&chr, &chopped, ref_allele, &alts, parse);
+        with_allele_less_fallback(&chr, chopped, variants, parse.minimal)
+    } else if let Some(expanded) =
+        tandem_repeat_record(&chr, pos, ref_allele, &alts, info_field, parse)
+    {
+        // The expansion's own strings are the record's alleles as given.
+        let expanded_alts: Vec<(usize, &str)> = expanded
+            .written_case_alts
+            .iter()
+            .map(String::as_str)
+            .enumerate()
+            .collect();
+        let variants = sequence_variants(
+            &chr,
+            &expanded,
+            &expanded.written_case_reference,
+            &expanded_alts,
+            parse,
+        );
+        with_allele_less_fallback(&chr, expanded, variants, parse.minimal)
+    } else {
+        structural_variants(&chr, pos, ref_allele, &written, info_field, explicit_id)?
+    };
 
     for variant in &mut variants {
+        variant.raw_input = raw_input.clone();
+        variant.id = record_id.clone();
         variant.input_line_name = Some(line_name.clone());
     }
 
     Ok(variants)
+}
+
+/// `variants`, or, when a sequence record's ALTs write no row, the record as the
+/// allele-less feature over its chopped alleles ([`allele_less_record`]). Under
+/// `--minimal` a bi-allelic record is minimised and marked whatever its allele
+/// writes (`minimise_alleles`, Parser.pm:987-1011, runs before the alleles are
+/// read): `A A` at POS is the feature `-/-` at POS + 1 to POS, its class
+/// `sequence_alteration`, and `A *` keeps its alleles, both marked minimised.
+fn with_allele_less_fallback(
+    chr: &str,
+    chopped: Chopped,
+    variants: Vec<InputVariant>,
+    minimal: bool,
+) -> Vec<InputVariant> {
+    if !variants.is_empty() {
+        return variants;
+    }
+    let minimised = minimal && chopped.written_case_alts.len() == 1;
+    let trimmed = minimised.then(|| {
+        trim_sequences(
+            chopped.written_case_reference.as_bytes(),
+            chopped.written_case_alts[0].as_bytes(),
+            chopped.start,
+            chopped.end,
+        )
+    });
+    let mut record = allele_less_record(chr.to_string(), chopped);
+    record.minimised = minimised;
+    if let Some((reference, alt, start, end, true)) = trimmed {
+        let reference = reference.to_ascii_uppercase();
+        let alt = alt.to_ascii_uppercase();
+        record.allele_string = format!(
+            "{}/{}",
+            String::from_utf8_lossy(&reference),
+            String::from_utf8_lossy(&alt)
+        );
+        record.record_so_term = Some(so_variation_class(&record.allele_string).to_string());
+        record.ref_allele = reference;
+        record.start = start;
+        record.end = end;
+    }
+    vec![record]
+}
+
+/// The variants of a sequence record, one per ALT that writes a row, over its
+/// chopped alleles: `raw_reference` and `alts` are the alleles as the record gave
+/// them (the VCF columns, or the expansion of a `<CNV:TR>` record), each ALT with
+/// its written position, which the `*` and `.` tests and `post_process_vfs`'s
+/// length test read.
+fn sequence_variants(
+    chr: &str,
+    chopped: &Chopped,
+    raw_reference: &str,
+    alts: &[(usize, &str)],
+    parse: &VcfParse<'_>,
+) -> Vec<InputVariant> {
+    let Chopped {
+        reference: trimmed_ref,
+        alts: trimmed_alts,
+        uploaded: uploaded_alleles,
+        working: record_string,
+        written_case_reference,
+        written_case_alts,
+        ..
+    } = chopped;
+    let (vep_start, vep_end) = (chopped.start, chopped.end);
+    let bi_allelic = alts.len() == 1;
+    // Under `--minimal` a multi-allelic record splits when any of its chopped alleles
+    // trims (InputBuffer.pm:665-666, :700); every ALT then takes its written position
+    // as its number and a repeated ALT writes its own rows (:684), so the overlap
+    // rules of `perl_allele_numbers` give way to the split's, which
+    // `split_minimal_record` applies once `validate_vf` has read the record.
+    let split_changes = parse.minimal
+        && !bi_allelic
+        && split_changes_record(trimmed_ref, trimmed_alts.iter().map(String::as_str));
+    let numbers = perl_allele_numbers(trimmed_ref, trimmed_alts);
+    let mut variants = Vec::with_capacity(alts.len());
+    for (k, (((allele_idx, alt), vep_alt), number)) in
+        alts.iter().zip(trimmed_alts).zip(&numbers).enumerate()
+    {
+        if *alt == "*" || *alt == "." || vep_alt == "<DEL:*>" {
+            continue;
+        }
+        // A dropped allele, or one Ensembl VEP numbers and writes no row for; under
+        // the split it writes its rows under its written position. A gVCF block
+        // `variant_alts` left out keeps its written position's number, a record
+        // Ensembl VEP drops whole (`sv_routing::variant_alts`).
+        let number = match *number {
+            Some(number) => Some(number + (*allele_idx - k) as u32),
+            None if split_changes => None,
+            None => continue,
+        };
+        let mut variant = InputVariant::new(
+            chr.to_string(),
+            vep_start,
+            vep_end,
+            trimmed_ref.as_bytes().to_vec(),
+            vep_alt.as_bytes().to_vec(),
+        );
+
+        // `trim_sequences` (ensembl-variation Sequence.pm:971) reads an end of 0
+        // as no end and resets it to `start + length(ref) - 1`, so the one
+        // record it reaches with that end, an insertion at POS 0 whose REF is one
+        // base (`0 A AT`), leaves the parser as `-/T` at 1-1 and `validate_vf`
+        // refuses it as an insertion whose coordinates are not start = end + 1.
+        // An empty REF never reaches it: unchopped, its string `/A` fails the
+        // `.+/.+` test of `minimise_alleles` (Parser.pm:974), so `1 <empty> A`
+        // keeps the end of 0.
+        if bi_allelic
+            && !raw_reference.is_empty()
+            && perl_minimises(raw_reference, alt)
+            && variant.end == 0
+        {
+            variant.end = variant.start + variant.ref_allele.len() as u64 - 1;
+        }
+
+        // Secondary minimisation of a bi-allelic record. Perl VEP
+        // (Parser.pm `post_process_vfs`) minimises a bi-allelic record whose
+        // alleles differ in length whatever the flags, and under `--minimal`
+        // every bi-allelic record (`minimise_alleles`, :852, :995): `trim_sequences`
+        // (Sequence.pm) trims from the left while both alleles are non-empty,
+        // then from the right, and maps an emptied allele to `-`, so `T/TT`
+        // at pos P becomes `-/T` at P+1 and `CAT/CCT` under the flag `A/C` at P+1.
+        // It compares the bases as written (`eq`), before `validate_vf` upper-cases
+        // the string (Parser.pm:554), so `TTGA t` stays `TTGA/T`. `minimise_alleles`
+        // returns a multi-allelic string (`.+/.+/.+`) unchanged, a `*` part counted
+        // (Parser.pm:978-984): without `--minimal` a multi-allelic record keeps its
+        // anchor-chopped alleles, and every position, codon and distance is
+        // computed on that representation.
+        if bi_allelic
+            && variant.ref_allele != b"-"
+            && variant.alt_alleles[0] != b"-"
+            && (parse.minimal || variant.ref_allele.len() != variant.alt_alleles[0].len())
+        {
+            // The end is the record's own, not derived from the trimmed reference
+            // (Sequence.pm:1004-1031): a `<CNV:TR>` expansion over the REF column spans
+            // the run, which its reference does not measure, so the span `validate_vf`
+            // refuses stays refused.
+            let (min_ref, min_alt, new_start, new_end, changed) = trim_sequences(
+                written_case_reference.as_bytes(),
+                written_case_alts[k].as_bytes(),
+                variant.start,
+                variant.end,
+            );
+            if changed {
+                let min_ref = min_ref.to_ascii_uppercase();
+                let min_alt = min_alt.to_ascii_uppercase();
+                variant.original_allele_string = Some(variant.allele_string.clone());
+                variant.allele_string = format!(
+                    "{}/{}",
+                    String::from_utf8_lossy(&min_ref),
+                    String::from_utf8_lossy(&min_alt),
+                );
+                variant.ref_allele = min_ref;
+                variant.alt_alleles = vec![min_alt];
+                variant.start = new_start;
+                variant.end = new_end;
+                variant.variant_class = vep_core::variant::classify_variant(
+                    &variant.ref_allele,
+                    &variant.alt_alleles[0],
+                );
+                variant.minimised = true;
+            }
+        }
+        // `minimise_alleles` marks every bi-allelic record it handles (Parser.pm:1011),
+        // trimmed or not.
+        if bi_allelic && parse.minimal {
+            variant.minimised = true;
+        }
+
+        variant.allele_index = *allele_idx;
+        // ALLELE_NUM is Ensembl VEP's count of the alleles it kept, which falls
+        // behind the written position once an ALT was dropped.
+        variant.allele_num = number.filter(|number| *number as usize != *allele_idx + 1);
+        variant.uploaded_allele_string = Some(uploaded_alleles.clone());
+        variant.record_allele_string_multi = record_string.clone();
+        variants.push(variant);
+    }
+    variants
+}
+
+/// Whether `split_variants` splits a validated record (InputBuffer.pm:665-666,
+/// :700): a sequence record with a working string one of whose alleles trims
+/// against its reference, the reference as it stands after `validate_vf`.
+pub(crate) fn record_splits(variant: &InputVariant) -> bool {
+    if variant.is_structural || variant.no_allele {
+        return false;
+    }
+    variant
+        .record_allele_string_multi
+        .as_deref()
+        .is_some_and(|working| {
+            let mut parts = working.split('/');
+            let reference = parts.next().unwrap_or("");
+            split_changes_record(reference, parts)
+        })
+}
+
+/// `split_variants` (InputBuffer.pm:638-718) over the alleles of one validated
+/// record, in their written order. A record [`record_splits`] names takes each
+/// allele on its own trimmed span (`vep_core::minimal::apply_minimal_split`), a
+/// repeated ALT with its own rows (:658) and an allele equal to the reference
+/// once trimmed with none (VariationFeatureOverlap.pm:481); a record left with no
+/// allele is the feature with no allele to annotate, over the record's span and
+/// working string, as [`allele_less_record`] builds it. The alleles are, in order,
+/// the working string's alternate alleles that write a row, so each finds its
+/// place in that string by its chopped allele. Any other record is returned as it
+/// stands. Runs after `validate_vf` read the record, so a reference `--lookup_ref`
+/// replaced is the one every allele trims against.
+pub(crate) fn split_minimal_record(alleles: Vec<InputVariant>) -> Vec<InputVariant> {
+    let Some(first) = alleles.first() else {
+        return alleles;
+    };
+    if !record_splits(first) {
+        return alleles;
+    }
+    let Some(working) = first.record_allele_string_multi.clone() else {
+        return alleles;
+    };
+    let working_alts: Vec<&str> = working.split('/').skip(1).collect();
+    let mut kept = Vec::with_capacity(alleles.len());
+    let mut first_without_allele = None;
+    let mut cursor = 0;
+    for mut allele in alleles {
+        let own = working_alts[cursor.min(working_alts.len())..]
+            .iter()
+            .position(|alt| alt.as_bytes() == allele.alt_allele())
+            .map_or(cursor, |found| cursor + found);
+        cursor = own + 1;
+        if apply_minimal_split(&mut allele, own) == MinimalSplit::NoAllele {
+            first_without_allele.get_or_insert(allele);
+        } else {
+            kept.push(allele);
+        }
+    }
+    if kept.is_empty() {
+        if let Some(mut record) = first_without_allele {
+            record.no_allele = true;
+            record.alt_alleles = vec![b"*".to_vec()];
+            record.allele_string = working.to_string();
+            kept.push(record);
+        }
+    }
+    kept
+}
+
+/// Whether a VCF record is one Ensembl VEP's tandem-repeat branch reads
+/// (`$so_term =~ /tandem/`, Parser/VCF.pm:502): its type abbreviation, from the
+/// ALTs joined by `/` with a Perl-true INFO/SVTYPE standing in for a string
+/// outside the VCF 4.4 forms, names a tandem repeat or a tandem duplication.
+fn is_tandem_record(alts: &[(usize, &str)], info_field: &str) -> bool {
+    let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
+    matches!(
+        sv_so_term_and_class(&sv_type_abbreviation(&joined(alts, "/"), svtype)),
+        Some((
+            _,
+            VariantClass::TandemRepeat | VariantClass::TandemDuplication
+        ))
+    )
+}
+
+/// The warnings Ensembl VEP's tandem-repeat branch writes for a record
+/// (Parser/VCF.pm:502-527, 382-388), in its order, for the VCF columns `fixed` of
+/// a line the reader parsed: that the largest of several SVLEN values is used
+/// (`:507-510`, the values compared as written); without a FASTA, once per run
+/// through the sink's deduplication, that the calculation is less precise
+/// (`:521-524`); and with one, when the record carries RUS and RUC or RB, that
+/// CIRUC and CIRB are ignored (`:387-388`). Empty for any other record: one the
+/// structural routing (`:237-245`) leaves on the sequence path, INFO/SVTYPE included,
+/// or one of another structural class.
+pub(crate) fn tandem_repeat_warnings(fixed: &[&str; 8], fasta_present: bool) -> Vec<String> {
+    let (ref_allele, alt_field, info_field) = (fixed[3], fixed[4], fixed[7]);
+    let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
+    let mut alts = written_alts(alt_field);
+    variant_alts(&mut alts, svtype);
+    if !routes_to_structural(ref_allele, &alts, svtype) || !is_tandem_record(&alts, info_field) {
+        return Vec::new();
+    }
+    let mut warnings = Vec::new();
+    if let Some(svlen) = info_value_written(info_field, "SVLEN") {
+        // `uniq(split(/,/, $info->{SVLEN}))` (`:505`): a trailing empty value is no
+        // value, so `SVLEN=9,` is one reference.
+        let mut values = perl_split(svlen, &[',']);
+        let first = values.next().unwrap_or("");
+        if values.any(|value| value != first) {
+            warnings.push(format!(
+                "found tandem repeats with different references per alternative allele: SVLEN={svlen}; only using reference with largest size"
+            ));
+        }
+    }
+    let has_units = |key: &str| info_value(info_field, key).is_some_and(perl_true);
+    if !fasta_present {
+        warnings.push(
+            "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta"
+                .to_string(),
+        );
+    } else if has_units("RUS")
+        && (has_units("RUC") || has_units("RB"))
+        && (has_units("CIRUC") || has_units("CIRB"))
+    {
+        warnings.push(
+            "CIRUC and CIRB INFO fields are ignored when calculating alternative alleles in tandem repeats"
+                .to_string(),
+        );
+    }
+    warnings
+}
+
+/// A `<CNV:TR>` record expanded to explicit alleles as `create_StructuralVariationFeatures`
+/// expands it with a reference sequence to hand (Parser/VCF.pm:502-545): the run is
+/// the bases from POS + 1 to the end the largest SVLEN or END gives (`:505-511`),
+/// its reference read from the FASTA (`:516-518`; the record's REF column when the
+/// FASTA has no such span, as `sub_Slice` then yields nothing and `$ref` keeps the
+/// column) and each alternate allele the repeat sequence `tandem_repeat_allele_string`
+/// builds from INFO. The record is then a sequence record (`:529-543`), an
+/// insertion or deletion of repeat units once `post_process_vfs` minimises it.
+/// `None`, the symbolic reading, without a FASTA, for a record that is no tandem
+/// repeat or tandem duplication (`$so_term =~ /tandem/`, `:502`), for one the
+/// expansion leaves symbolic (no RUS, no RUC or RB, a sequence over
+/// `--max_sv_size`) and for a span Ensembl VEP refuses. The branch's warnings
+/// are [`tandem_repeat_warnings`]'s, written by the reader.
+fn tandem_repeat_record(
+    chr: &str,
+    pos: u64,
+    ref_allele: &str,
+    alts: &[(usize, &str)],
+    info_field: &str,
+    parse: &VcfParse<'_>,
+) -> Option<Chopped> {
+    let fasta = parse.fasta?;
+    if !is_tandem_record(alts, info_field) {
+        return None;
+    }
+    let start = structural_start(pos, VariantClass::TandemRepeat);
+    if start > MAX_COORD {
+        return None;
+    }
+    let end = match structural_end(
+        pos,
+        info_value_written(info_field, "SVLEN"),
+        info_value_written(info_field, "END"),
+        SpanClass::Tandem,
+    ) {
+        Ok(end) => end,
+        // A negative largest SVLEN puts the end before the start (`$start +
+        // max(@svlen) - 1`, Parser/VCF.pm:511); with a reference sequence to hand the
+        // record is still built, over the REF column (`sub_Slice` yields nothing), and
+        // `validate_vf` refuses it as `start > end+1`. An end before the chromosome's
+        // first base has no coordinate here and leaves the record to the symbolic
+        // path, whose refusal names the same start and end.
+        Err(SpanError::StartPastEnd { end, .. }) => u64::try_from(end).ok()?,
+        Err(_) => return None,
+    };
+    let run_bases = fasta
+        .sequence(chr, start, end)
+        .map(|bases| String::from_utf8_lossy(&bases).into_owned())
+        .unwrap_or_else(|| ref_allele.to_string());
+    // Without RN the record has one repeat sequence per `CNV:TR` in Perl's type
+    // string (`() = $type =~ /CNV:TR/g`, Parser/VCF.pm:397), which is INFO/SVTYPE
+    // when the ALTs open outside the VCF 4.4 forms (`:473-474`) and is matched
+    // case-sensitively where `get_SO_term` matches the type without case.
+    let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
+    let tandem_alts = sv_type_string(&joined(alts, "/"), svtype)
+        .matches("CNV:TR")
+        .count();
+    let expanded =
+        tandem_repeat_allele_string(info_field, tandem_alts, parse.max_sv_size, &run_bases)?;
+    // The string as Perl's `split` reads it (a trailing empty part is no part), an
+    // empty part the `-` allele `_raw_allele_hashes` makes of it
+    // (VariationFeatureOverlap.pm:466).
+    let mut parts = perl_split(&expanded, &['/']);
+    let reference = parts.next().unwrap_or("").to_string();
+    let written_case_alts: Vec<String> = parts
+        .map(|alt| {
+            if alt.is_empty() {
+                "-".to_string()
+            } else {
+                alt.to_string()
+            }
+        })
+        .collect();
+    Some(Chopped::unchopped(
+        reference,
+        written_case_alts,
+        expanded.into(),
+        start,
+        end,
+    ))
 }
 
 /// `REF/ALT1/ALT2`: the reference and every ALT joined by `/`, one buffer for every
@@ -339,24 +670,6 @@ pub(crate) fn vcf_line_is_non_variant(line: &str) -> bool {
     matches!(fields.next(), Some("."))
 }
 
-/// Compute VEP coordinates from already-trimmed alleles. An insertion's end is the
-/// base before its start, which for a start of 0 is 0, not a base before the
-/// chromosome; `validate_vf` then refuses the insertion's coordinates.
-pub(crate) fn vep_coords_from_trimmed(
-    pos: u64,
-    prefix_trimmed: usize,
-    trimmed_ref: &[u8],
-) -> (u64, u64) {
-    let start = pos + prefix_trimmed as u64;
-    let end = if trimmed_ref == b"-" {
-        // VEP insertion convention: end < start.
-        start.saturating_sub(1)
-    } else {
-        start + trimmed_ref.len() as u64 - 1
-    };
-    (start, end)
-}
-
 /// A sequence record after the anchor chop of Parser/VCF.pm:294-335, upper-cased as
 /// `validate_vf` upper-cases the allele string (Parser.pm:554), except
 /// `written_case_reference` and `written_case_alts`, which keep the written case the
@@ -415,21 +728,47 @@ fn chop_record(ref_allele: &str, alts: &[(usize, &str)], pos: u64) -> Chopped {
     }
 }
 
-/// The record of a line none of whose ALTs writes a row: every ALT a `*` or a
-/// `<DEL:*>`, equal to the reference or a repeat of an earlier one. Ensembl VEP
-/// builds the feature over the chopped alleles and finds no allele to annotate
-/// (VariationFeatureOverlap.pm:459-491), so it writes no row in the default and tab
-/// formats, carries the VCF line without consequences and writes the JSON object
-/// with `most_severe_consequence` `?`: `21 30396602 x TTGA *,*` is the feature
-/// `TGA/*/*` at 30396603-30396605 and `21 30289183 x C C,<DEL:*>` the feature
-/// `-/-/<DEL:*>` at 30289184-30289183 in Ensembl VEP 116.2's JSON.
-fn allele_less_record(
-    chr: String,
-    pos: u64,
-    ref_allele: &str,
-    alts: &[(usize, &str)],
-) -> InputVariant {
-    let chopped = chop_record(ref_allele, alts, pos);
+impl Chopped {
+    /// A record whose alleles are given over the span `start..=end` with no anchor
+    /// to chop: the expansion of a `<CNV:TR>` record, whose feature Ensembl VEP
+    /// builds from the run's bases and the repeat sequences as they stand
+    /// (Parser/VCF.pm:529-543). The strings are upper-cased as `validate_vf`
+    /// upper-cases them, the written case kept for the minimisation's comparison;
+    /// `uploaded` is the string as built, which `UPLOADED_ALLELE` prints.
+    fn unchopped(
+        reference: String,
+        alts: Vec<String>,
+        uploaded: Arc<str>,
+        start: u64,
+        end: u64,
+    ) -> Chopped {
+        let upper_alts: Vec<String> = alts.iter().map(|alt| alt.to_ascii_uppercase()).collect();
+        let upper_reference = reference.to_ascii_uppercase();
+        let working = (alts.len() > 1)
+            .then(|| allele_string(&upper_reference, upper_alts.iter().map(String::as_str)));
+        Chopped {
+            reference: upper_reference,
+            alts: upper_alts,
+            start,
+            end,
+            uploaded,
+            working,
+            written_case_reference: reference,
+            written_case_alts: alts,
+        }
+    }
+}
+
+/// The record of a line none of whose ALTs writes a row, over its chopped (or
+/// expanded) alleles: every ALT a `*` or a `<DEL:*>`, equal to the reference or a
+/// repeat of an earlier one. Ensembl VEP builds the feature over the chopped alleles
+/// and finds no allele to annotate (VariationFeatureOverlap.pm:459-491), so it writes
+/// no row in the default and tab formats, carries the VCF line without consequences
+/// and writes the JSON object with `most_severe_consequence` `?`:
+/// `21 30396602 x TTGA *,*` is the feature `TGA/*/*` at 30396603-30396605 and
+/// `21 30289183 x C C,<DEL:*>` the feature `-/-/<DEL:*>` at 30289184-30289183 in
+/// Ensembl VEP 116.2's JSON.
+fn allele_less_record(chr: String, chopped: Chopped) -> InputVariant {
     let mut variant = InputVariant::new(
         chr,
         chopped.start,
@@ -455,7 +794,7 @@ fn allele_less_record(
 /// without a row (`:484`). So `C G,C` numbers `G` 1 alone, `C G,G,T` numbers `G` 1
 /// and `T` 2, and `C CG,<DEL:*>` numbers the insertion 1 and the `<DEL:*>` 2, as
 /// Ensembl VEP 116.2 prints under `--allele_number`.
-fn perl_allele_numbers(reference: &str, alts: &[String]) -> Vec<Option<u32>> {
+pub(crate) fn perl_allele_numbers(reference: &str, alts: &[String]) -> Vec<Option<u32>> {
     let mut seen: Vec<&str> = vec![reference];
     let mut number = 0;
     alts.iter()
@@ -534,24 +873,92 @@ fn vcf_to_vep_alleles(
     alt_allele: &str,
     pos: u64,
 ) -> (Vec<u8>, Vec<u8>, u64, u64) {
-    let (trimmed_ref, trimmed_alt, prefix_trimmed) =
-        trim_alleles(ref_allele.as_bytes(), alt_allele.as_bytes());
-    let (start, end) = vep_coords_from_trimmed(pos, prefix_trimmed, &trimmed_ref);
+    let (trimmed_ref, trimmed_alt, start, end, _) = trim_sequences(
+        ref_allele.as_bytes(),
+        alt_allele.as_bytes(),
+        pos,
+        pos + ref_allele.len() as u64 - 1,
+    );
     (trimmed_ref, trimmed_alt, start, end)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vep_core::coordinate::MAX_COORD;
-    use vep_core::sv_record::{parse_ci_field, tandem_repeat_alt_bases};
+    use vep_core::sv_record::parse_ci_field;
     use vep_core::sv_routing::{classify_symbolic_alt, sv_so_term_and_class, sv_type_abbreviation};
-    use vep_core::variant::VariantClass;
 
-    /// `tandem_repeat_alt_bases` for a record of `ordinal + 1` tandem-repeat alleles
-    /// under Ensembl VEP's default `--max_sv_size`.
-    fn alt_bases(info: &str, ordinal: usize) -> Option<u64> {
-        tandem_repeat_alt_bases(info, ordinal, ordinal + 1, Some(DEFAULT_MAX_SV_SIZE))
+    /// A FASTA of one record `21` reading `bases` from position 1, with its index, in a
+    /// fresh temporary directory (kept alive by the returned handle).
+    fn fasta_of(bases: &str) -> (tempfile::TempDir, IndexedFasta) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ref.fa");
+        std::fs::write(&path, format!(">21\n{bases}\n")).unwrap();
+        std::fs::write(
+            dir.path().join("ref.fa.fai"),
+            format!(
+                "21\t{}\t4\t{}\t{}\n",
+                bases.len(),
+                bases.len(),
+                bases.len() + 1
+            ),
+        )
+        .unwrap();
+        let fasta = IndexedFasta::from_path(&path).unwrap();
+        (dir, fasta)
+    }
+
+    /// The run `TCATCATCA` at 11-19 of chromosome 21, behind ten `G`s and before ten
+    /// `A`s: the shape of the run at 21:13620284-13620292 of GRCh38, whose padding
+    /// base `G` sits at POS 10 here.
+    const RUN_FASTA: &str = "GGGGGGGGGGTCATCATCAAAAAAAAAAA";
+
+    /// Parses `line` with `fasta` as the run's reference FASTA under `max_sv_size`.
+    fn parse_with_fasta(
+        line: &str,
+        fasta: Option<&IndexedFasta>,
+        max_sv_size: Option<u64>,
+    ) -> Vec<InputVariant> {
+        parse_vcf_line_with(
+            line,
+            &VcfParse {
+                capture_raw_input: true,
+                max_sv_size,
+                minimal: false,
+                fasta,
+            },
+        )
+        .unwrap()
+    }
+
+    /// `(location, allele string, variant class, structural)` of each variant.
+    fn shapes(variants: &[InputVariant]) -> Vec<(String, String, VariantClass, bool)> {
+        variants
+            .iter()
+            .map(|v| {
+                (
+                    v.location(),
+                    v.allele_string.clone(),
+                    v.variant_class,
+                    v.is_structural,
+                )
+            })
+            .collect()
+    }
+
+    /// Parses `line` under `--minimal` and splits a multi-allelic record as the
+    /// reader splits it once validated.
+    fn parse_minimal(line: &str) -> Vec<InputVariant> {
+        split_minimal_record(
+            parse_vcf_line_with(
+                line,
+                &VcfParse {
+                    minimal: true,
+                    ..VcfParse::default_run(true)
+                },
+            )
+            .unwrap(),
+        )
     }
 
     #[test]
@@ -1096,7 +1503,6 @@ mod tests {
         let empty_star = parse_vcf_line("21\t0\tx\t\t*\t.\t.\t.", true).unwrap();
         assert!(empty_star[0].no_allele);
         assert_eq!(empty_star[0].allele_string, "/*");
-        assert_eq!(vep_coords_from_trimmed(0, 0, b"-"), (0, 0));
     }
 
     #[test]
@@ -2406,27 +2812,36 @@ mod tests {
         }
     }
 
-    /// A unit of no bases under RUC is the empty allele (`'' x 5`, Parser/VCF.pm:419), no
-    /// bases and so the loss of the run; under RB it divides by zero (`:414`) and keeps the
-    /// symbolic reading; a count is read as Perl numifies it (`RUC=2abc` repeats twice, a
-    /// loss of three bases on a nine-base run).
+    /// A unit of no bases under RUC is the empty allele (`'' x 5`, Parser/VCF.pm:419), an
+    /// allele string `REF/` that names no alternate allele, so the record is the feature
+    /// with no allele to annotate, carrying that string; under RB it divides by zero
+    /// (`:414`) and keeps the symbolic reading; a count is read as Perl numifies it
+    /// (`RUC=2abc` repeats twice, `TCATCATCA/TCATCA`, the loss of the run's last unit).
     #[test]
     fn a_zero_length_repeat_unit_is_read_as_perl_expands_it() {
-        let run = "SVTYPE=CNV;END=30425949;SVLEN=300;";
-        for (info, bases) in [("RUS=,AC;RUC=5", Some(0)), ("RUS=,AC;RB=12", None)] {
-            let v = parse_vcf_line(
-                &format!("21\t30425650\tx\tN\t<CNV:TR>\t.\t.\t{run}{info}"),
-                true,
+        let (_dir, fasta) = fasta_of(RUN_FASTA);
+        let record = |info: &str| {
+            parse_with_fasta(
+                &format!("21\t10\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;{info}"),
+                Some(&fasta),
+                Some(DEFAULT_MAX_SV_SIZE),
             )
-            .unwrap();
-            assert_eq!(v[0].tr_alt_bases, bases, "{info}");
-        }
-        let numified = parse_vcf_line(
-            "21\t30425587\tx\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;RUC=2abc",
-            true,
-        )
-        .unwrap();
-        assert_eq!(numified[0].tr_alt_bases, Some(6));
+        };
+        let empty = record("RUS=,AC;RUC=5");
+        assert!(empty[0].no_allele, "{empty:?}");
+        assert_eq!(empty[0].allele_string, "TCATCATCA/");
+        let by_zero = record("RUS=,AC;RB=12");
+        assert!(by_zero[0].is_structural);
+        assert_eq!(by_zero[0].variant_class, VariantClass::TandemRepeat);
+        assert_eq!(
+            shapes(&record("RUS=TCA;RUC=2abc")),
+            [(
+                "21:17-19".to_string(),
+                "TCA/-".to_string(),
+                VariantClass::Deletion,
+                false
+            )]
+        );
     }
 
     /// The record-wide strings (the uploaded allele string, the record's working string,
@@ -2537,7 +2952,10 @@ mod tests {
             )
             .unwrap_err()
             .to_string();
-            assert!(err.contains("Invalid SVLEN"), "{info}: {err}");
+            assert!(
+                err.contains("start > end+1 : (START=30425601, END=30425300)"),
+                "{info}: {err}"
+            );
         }
         for info in ["SVTYPE=DUP;SVLEN=300,400", "SVTYPE=DUP;SVLEN=-300"] {
             let dup =
@@ -2666,7 +3084,10 @@ mod tests {
         )
         .unwrap_err()
         .to_string();
-        assert!(err.contains("Invalid SVLEN"), "{err}");
+        assert!(
+            err.contains("start > end+1 : (START=101, END=-200)"),
+            "{err}"
+        );
         let kept = parse_vcf_line(
             &format!("21\t100\t.\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END={MAX_COORD}"),
             true,
@@ -3379,203 +3800,409 @@ mod tests {
         assert_eq!(v.sv_end, Some(27254244));
     }
 
-    /// `_expand_tandem_repeat_allele_string` (`Parser/VCF.pm`) builds `RUS x RUC` when
-    /// the record carries RUC and `RUS x (RB / length(RUS))` otherwise (`:414`), so
-    /// `RB=42;RUC=7;RUS=CAG` is `CAG x 7`, 21 bases, and `RB=307;RUS=AT` is
-    /// `AT x 153.5`, which Perl's `x` truncates to 306 bases (`:419`); a `.` unit is
-    /// the one base `N` and RUL is never read (`:413`), so `RUC=7;RUS=.;RUL=4` is
-    /// `NNNNNNN`, 7 bases; an empty or `0` RUC is no RUC (`:399`, Perl's `||`); without
-    /// RUS nothing expands (`:385`).
+    /// With the reference sequence to hand a `<CNV:TR>` record is the sequence record
+    /// Ensembl VEP 116.2 builds over its run (the run `TCATCATCA` at
+    /// 21:13620284-13620292 of GRCh38): `RUC=4` and `RB=12` are
+    /// `TCATCATCA/TCATCATCATCA`, minimised to the insertion `-/TCA` after the run
+    /// (`21:19-20`); `RUC=2` the deletion `TCA/-` of its last unit (`21:17-19`);
+    /// `RUC=3` an allele equal to the reference, a feature with
+    /// no allele; `RUC=4.9` four units (`x` truncates); `RUS=TCA;RUC=5` without RN one
+    /// sequence of five; `RN=2;RUS=TCA,TC;RUC=3,1` the two sequences joined, `-/TC`;
+    /// `RUS=.` the base `N` four times, `TCATCATCA/NNNN` left unminimised; a lower-case
+    /// `RUS=tca` never trims against the upper-case run and is upper-cased after; two
+    /// ALTs two alleles over the run, left unminimised, with the chopped string as the
+    /// record's; `END` without `SVLEN` the same run; and `UPLOADED_ALLELE` prints the
+    /// expansion as built.
     #[test]
-    fn tandem_repeat_alt_bases_reads_ruc_before_rb_and_never_rul() {
-        assert_eq!(alt_bases("SVTYPE=CNV;RB=42;RUC=7;RUS=CAG", 0), Some(21));
-        assert_eq!(alt_bases("SVTYPE=CNV;RUC=7;RUS=CAG", 0), Some(21));
-        assert_eq!(alt_bases("SVTYPE=CNV;RUC=7.9;RUS=CAG", 0), Some(21));
-        assert_eq!(alt_bases("SVTYPE=CNV;RB=42;RUS=CAG", 0), Some(42));
-        assert_eq!(alt_bases("SVTYPE=CNV;RB=307;RUS=AT", 0), Some(306));
+    fn cnv_tr_expanded_with_fasta() {
+        let (_dir, fasta) = fasta_of(RUN_FASTA);
+        let record = |alt: &str, info: &str| {
+            parse_with_fasta(
+                &format!("21\t10\tx\tG\t{alt}\t.\t.\t{info}"),
+                Some(&fasta),
+                Some(DEFAULT_MAX_SV_SIZE),
+            )
+        };
+        let one = |info: &str| shapes(&record("<CNV:TR>", info));
+        let ins = |alt: &str| {
+            vec![(
+                "21:19-20".to_string(),
+                format!("-/{alt}"),
+                VariantClass::Insertion,
+                false,
+            )]
+        };
+        assert_eq!(one("SVLEN=9;RN=1;RUS=TCA;RUC=4"), ins("TCA"));
+        assert_eq!(one("SVLEN=9;RUS=TCA;RB=12"), ins("TCA"));
+        assert_eq!(one("SVLEN=9;RN=1;RUS=TCA;RUC=4.9"), ins("TCA"));
+        assert_eq!(one("END=19;RN=1;RUS=TCA;RUC=4"), ins("TCA"));
+        assert_eq!(one("SVLEN=9;RUS=TCA;RUC=5"), ins("TCATCA"));
+        assert_eq!(one("SVLEN=9;RN=2;RUS=TCA,TC;RUC=3,1"), ins("TC"));
         assert_eq!(
-            alt_bases("SVTYPE=CNV;RUC=153.9;RB=307;RUS=AT", 0),
-            Some(306)
+            one("SVLEN=9;RN=1;RUS=TCA;RUC=2"),
+            [(
+                "21:17-19".to_string(),
+                "TCA/-".to_string(),
+                VariantClass::Deletion,
+                false
+            )]
         );
-        assert_eq!(alt_bases("SVTYPE=CNV;RUC=7;RUS=.;RUL=4", 0), Some(7));
-        assert_eq!(alt_bases("SVTYPE=CNV;RUC=;RB=42;RUS=CAG", 0), Some(42));
-        assert_eq!(alt_bases("SVTYPE=CNV;RUC=0;RB=42;RUS=CAG", 0), Some(42));
-        assert_eq!(alt_bases("SVTYPE=CNV;RB=42,60;RUS=CAG,AT", 0), Some(42));
-        assert_eq!(alt_bases("SVTYPE=CNV;RUC=7;RUL=4", 0), None);
-        assert_eq!(alt_bases("SVTYPE=CNV;RUC=7", 0), None);
-        assert_eq!(alt_bases("SVTYPE=CNV;SVLEN=300", 0), None);
+        let same = record("<CNV:TR>", "SVLEN=9;RN=1;RUS=TCA;RUC=3");
+        assert!(same[0].no_allele);
+        assert_eq!(same[0].allele_string, "TCATCATCA/TCATCATCA");
+        assert_eq!(
+            one("SVLEN=9;RN=1;RUS=.;RUC=4"),
+            [(
+                "21:11-19".to_string(),
+                "TCATCATCA/NNNN".to_string(),
+                VariantClass::Indel,
+                false
+            )]
+        );
+        let lower = record("<CNV:TR>", "SVLEN=9;RN=1;RUS=tca;RUC=4");
+        assert_eq!(lower[0].allele_string, "TCATCATCA/TCATCATCATCA");
+        assert_eq!(lower[0].location(), "21:11-19");
+        assert_eq!(
+            lower[0].uploaded_allele_string.as_deref(),
+            Some("TCATCATCA/tcatcatcatca")
+        );
+        let gain = record("<CNV:TR>", "SVLEN=9;RN=1;RUS=TCA;RUC=4");
+        assert_eq!(
+            gain[0].uploaded_allele_string.as_deref(),
+            Some("TCATCATCA/TCATCATCATCA")
+        );
+        assert_eq!(gain[0].input_line_name.as_deref(), Some("21_10_G/<CNV:TR>"));
+        let multi = record("<CNV:TR>,<CNV:TR>", "SVLEN=9,9;RN=1,1;RUS=TCA,TCA;RUC=4,2");
+        assert_eq!(
+            shapes(&multi),
+            [
+                (
+                    "21:11-19".to_string(),
+                    "TCATCATCA/TCATCATCATCA".to_string(),
+                    VariantClass::Indel,
+                    false
+                ),
+                (
+                    "21:11-19".to_string(),
+                    "TCATCATCA/TCATCA".to_string(),
+                    VariantClass::Indel,
+                    false
+                ),
+            ]
+        );
+        assert_eq!(multi[0].class_so_term(), "indel");
+        assert_eq!(
+            multi[1].record_allele_string_multi.as_deref(),
+            Some("TCATCATCA/TCATCATCATCA/TCATCA")
+        );
+        assert_eq!(multi[1].allele_index, 1);
     }
 
-    /// `_expand_tandem_repeat_allele_string` (Parser/VCF.pm) builds one alternate
-    /// allele per RN entry (one per `<CNV:TR>` allele when RN is absent) by
-    /// concatenating that many RUS x RUC repeat sequences in order, so the allele's
-    /// length is their sum: `RN=2;RUS=CT,GA;RUC=2,1` expands to `CTCTGA`, 6 bases,
-    /// as does `RB=4,2`; with two `<CNV:TR>` alleles and `RUS=CT,CT;RUC=2,8` the
-    /// first allele is `CTCT` (4 bases) and the second `CT` x 8 (16 bases); a
-    /// second allele whose entries the lists lack has no length.
+    /// Two SVLEN values give the run the largest (`uniq`, `max`, Parser/VCF.pm:505-511):
+    /// `SVLEN=9,6` with `RUC=4,1` is the run `TCATCATCA`, so the second allele `TCA` is
+    /// the loss of two units; the reader's warning names the values as written.
     #[test]
-    fn tandem_repeat_alt_bases_sums_an_allele_s_repeat_sequences() {
+    fn cnv_tr_svlen_max_of_uniq() {
+        let (_dir, fasta) = fasta_of(RUN_FASTA);
+        let line = "21\t10\tx\tG\t<CNV:TR>,<CNV:TR>\t.\t.\tSVLEN=9,6;RN=1,1;RUS=TCA,TCA;RUC=4,1";
+        let variants = parse_with_fasta(line, Some(&fasta), Some(DEFAULT_MAX_SV_SIZE));
         assert_eq!(
-            alt_bases("SVTYPE=CNV;SVLEN=10;RN=2;RUS=CT,GA;RUC=2,1", 0),
-            Some(6)
+            shapes(&variants),
+            [
+                (
+                    "21:11-19".to_string(),
+                    "TCATCATCA/TCATCATCATCA".to_string(),
+                    VariantClass::Indel,
+                    false
+                ),
+                (
+                    "21:11-19".to_string(),
+                    "TCATCATCA/TCA".to_string(),
+                    VariantClass::Indel,
+                    false
+                ),
+            ]
         );
+        let columns = vcf_columns(line).unwrap();
         assert_eq!(
-            alt_bases("SVTYPE=CNV;SVLEN=10;RN=2;RUS=CT,GA;RB=4,2", 0),
-            Some(6)
+            tandem_repeat_warnings(&columns.fixed, true),
+            ["found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size"]
         );
-        let two_alleles = "SVTYPE=CNV;SVLEN=10;RUS=CT,CT;RUC=2,8";
-        assert_eq!(alt_bases(two_alleles, 0), Some(4));
-        assert_eq!(alt_bases(two_alleles, 1), Some(16));
+        let ciruc =
+            vcf_columns("21\t10\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4;CIRUC=3,5")
+                .unwrap();
         assert_eq!(
-            alt_bases("SVTYPE=CNV;SVLEN=10;RN=1,2;RUS=CT,GA,TTA;RUC=2,1,2", 1),
-            Some(8)
+            tandem_repeat_warnings(&ciruc.fixed, true),
+            ["CIRUC and CIRB INFO fields are ignored when calculating alternative alleles in tandem repeats"]
         );
-        assert_eq!(alt_bases("SVTYPE=CNV;RUS=CT;RUC=2", 1), None);
-        assert_eq!(alt_bases("SVTYPE=CNV;RN=.;RUS=CT;RUC=2", 0), None);
-
-        let line = "21\t25002099\tmulti_tr\tA\t<CNV:TR>,<CNV:TR>\t.\t.\tSVTYPE=CNV;END=25002109;SVLEN=10;RUS=CT,CT;RUC=2,8";
-        let variants = parse_vcf_line(line, true).unwrap();
-        assert_eq!(variants.len(), 2);
-        assert_eq!(variants[0].tr_alt_bases, Some(4));
-        assert_eq!(variants[1].tr_alt_bases, Some(16));
+        assert!(tandem_repeat_warnings(&ciruc.fixed, false)
+            .iter()
+            .any(|w| w.starts_with("could not fetch sequence for tandem repeats;")));
+        assert!(tandem_repeat_warnings(
+            &vcf_columns("21\t10\tx\tG\t<DEL>\t.\t.\tSVLEN=-9")
+                .unwrap()
+                .fixed,
+            false
+        )
+        .is_empty());
     }
 
-    /// An RN count that pushes the running sum past the machine word states no
-    /// length for any allele: the first allele's `usize::MAX` sequences exhaust the
-    /// two RUS entries, the second allele's one sequence takes the sum past
-    /// `usize::MAX`, and a third allele's offset lies past it. An RN of `usize::MAX`
-    /// on its own sums without overflow: the oversize check reads only the one
-    /// sequence RUS lists, and the allele's second sequence finds no unit, so it
-    /// states no length. Under a limit of `u64::MAX`, which admits a `1e19`-base
-    /// sequence, one such sequence is its length and two sum past `u64::MAX`.
+    /// The warnings follow Ensembl VEP's routing (Parser/VCF.pm:237-245, :473-474):
+    /// `N N` under `SVTYPE=CNV:TR` is a tandem repeat (the alleles are not all
+    /// `ACGT` and the type comes from SVTYPE), as is `<CNV:TR>` under `SVTYPE=DEL`
+    /// (the ALT names a VCF 4.4 type, so SVTYPE is not read); `G A` under
+    /// `SVTYPE=CNV:TR` is a sequence record and `<DEL>` under `SVTYPE=CNV:TR` a
+    /// deletion, and neither warns. Ensembl VEP 116.2 writes the no-FASTA notice
+    /// for the first two records and three `tandem_repeat` rows for each.
     #[test]
-    fn tandem_repeat_alt_bases_refuses_an_rn_sum_past_the_machine_word() {
-        let info = "SVTYPE=CNV;SVLEN=10;RN=18446744073709551615,1;RUS=AT,AT;RUC=100,100";
-        assert_eq!(alt_bases(info, 0), None);
-        assert_eq!(alt_bases(info, 1), None);
-        assert_eq!(alt_bases(info, 2), None);
-        let line = format!("21\t25002099\tmulti_tr\tA\t<CNV:TR>,<CNV:TR>\t.\t.\t{info}");
-        let variants = parse_vcf_line(&line, true).unwrap();
-        assert_eq!(variants.len(), 2);
-        assert_eq!(variants[0].tr_alt_bases, None);
-        assert_eq!(variants[1].tr_alt_bases, None);
-        assert_eq!(
-            alt_bases("SVTYPE=CNV;RN=18446744073709551615;RUS=AT;RUC=100", 0),
-            None
-        );
-        let unlimited = Some(u64::MAX);
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUS=A;RUC=1e19", 0, 1, unlimited),
-            Some(10_000_000_000_000_000_000)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RN=2;RUS=A,A;RUC=1e19,1e19", 0, 1, unlimited),
-            None
-        );
+    fn tandem_warnings_follow_the_structural_routing() {
+        let warns = |line: &str| {
+            !tandem_repeat_warnings(&vcf_columns(line).unwrap().fixed, false).is_empty()
+        };
+        assert!(warns(
+            "21\t13620283\tx\tN\tN\t.\t.\tSVTYPE=CNV:TR;SVLEN=9;RN=1;RUS=TCA;RUC=4"
+        ));
+        assert!(warns(
+            "21\t13620283\tx\tG\t<CNV:TR>\t.\t.\tSVTYPE=DEL;SVLEN=9;RN=1;RUS=TCA;RUC=4"
+        ));
+        assert!(!warns(
+            "21\t13620283\tx\tG\tA\t.\t.\tSVTYPE=CNV:TR;SVLEN=9;RN=1;RUS=TCA;RUC=4"
+        ));
+        assert!(!warns(
+            "21\t13620283\tx\tN\t<DEL>\t.\t.\tSVTYPE=CNV:TR;SVLEN=9"
+        ));
     }
 
-    /// `_expand_tandem_repeat_allele_string` keeps the symbolic reading when any repeat
-    /// sequence is longer than `max_sv_size` (`Parser/VCF.pm:417-418`, `:428`), read
-    /// as `$self->param('max_sv_size') || 5000` (`:403`), so `-1` passes `||` unchanged
-    /// and nothing expands under it: `RUS=AT;RUC=100` is 200 bases under the
-    /// 10,000,000 default and under a cap of 200, symbolic under 199 and under `-1`;
-    /// `RUS=CAG;RUC=4000000`, 12,000,000 bases, is symbolic under the default; one
-    /// oversized allele keeps every allele of its record symbolic; a cap of `0` is
-    /// Perl's 5000.
+    /// The SVLEN values are read as Perl's `split` reads them (`:505`): `SVLEN=9,`
+    /// is the one value `9`, so it warns of no second reference, where `SVLEN=,9`
+    /// and `SVLEN=9,,9` each hold an empty value beside the `9` and warn.
     #[test]
-    fn tandem_repeat_expansion_stops_at_max_sv_size() {
-        let info = "SVTYPE=CNV;RUS=AT;RUC=100;RB=300";
-        assert_eq!(
-            tandem_repeat_alt_bases(info, 0, 1, Some(10_000_000)),
-            Some(200)
-        );
-        assert_eq!(tandem_repeat_alt_bases(info, 0, 1, Some(200)), Some(200));
-        assert_eq!(tandem_repeat_alt_bases(info, 0, 1, Some(199)), None);
-        assert_eq!(tandem_repeat_alt_bases(info, 0, 1, None), None);
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUS=AT;RUC=4000000", 0, 1, Some(10_000_000)),
-            Some(8_000_000)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUS=CAG;RUC=4000000", 0, 1, Some(10_000_000)),
-            None
-        );
-        let two = "SVTYPE=CNV;RUS=AT,CAG;RUC=10,4000000";
-        assert_eq!(tandem_repeat_alt_bases(two, 0, 2, Some(10_000_000)), None);
-        assert_eq!(
-            tandem_repeat_alt_bases(two, 0, 2, Some(20_000_000)),
-            Some(20)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases(two, 1, 2, Some(20_000_000)),
-            Some(12_000_000)
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUS=AT;RUC=2600", 0, 1, Some(0)),
-            None
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RUS=AT;RUC=2500", 0, 1, Some(0)),
-            Some(5000)
-        );
-
-        let line = "21\t27253937\ttr\tC\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=27254237;SVLEN=300;RUS=AT;RUC=100;RB=300";
-        assert_eq!(
-            parse_vcf_line(line, true).unwrap()[0].tr_alt_bases,
-            Some(200)
-        );
-        for limit in [None, Some(100)] {
-            let variants = parse_vcf_line_with_max_sv_size(line, true, limit).unwrap();
-            assert_eq!(variants[0].tr_alt_bases, None, "{limit:?}");
-        }
+    fn a_trailing_empty_svlen_value_is_one_reference() {
+        let svlen_warning = |svlen: &str| {
+            let line =
+                format!("21\t13620283\tx\tG\t<CNV:TR>\t.\t.\tSVLEN={svlen};RN=1;RUS=TCA;RUC=4");
+            tandem_repeat_warnings(&vcf_columns(&line).unwrap().fixed, true)
+                .iter()
+                .any(|w| w.starts_with("found tandem repeats with different references"))
+        };
+        assert!(!svlen_warning("9,"));
+        assert!(!svlen_warning("9"));
+        assert!(svlen_warning(",9"));
+        assert!(svlen_warning("9,,9"));
+        assert!(svlen_warning("9,6"));
     }
 
-    /// `_expand_tandem_repeat_allele_string` builds one allele per RN entry (`:408`,
-    /// `for my $records (@RN)`), so a `<CNV:TR>` ALT past a short RN list has no
-    /// materialised allele and states no length, and the oversize scan covers only the
-    /// sequences the list materialises: `RN=1;RUS=AT,CAGA;RUC=10,4000000` on two ALTs
-    /// is 20 bases for the first and nothing for the second, whose 16,000,000-base
-    /// sequence is never built; `RN=1;RUS=AT,AT;RUC=10,10` likewise leaves the second
-    /// ALT without a length, where `RN=1,1` gives both 20.
+    /// Without RN the number of repeat sequences is the number of `CNV:TR` in Perl's
+    /// type string (`() = $type =~ /CNV:TR/g`, Parser/VCF.pm:397), INFO/SVTYPE when the
+    /// ALT opens outside the VCF 4.4 forms (`:473-474`), matched with case where
+    /// `get_SO_term` matches without it: `N N` under `SVTYPE=CNV:TR` builds one
+    /// sequence, the insertion `-/TCA` Ensembl VEP 116.2 writes for it, and `<cnv:tr>`
+    /// is a tandem repeat whose type string holds no `CNV:TR`, so its expansion `REF/`
+    /// names no allele.
     #[test]
-    fn an_alt_past_the_rn_list_states_no_length() {
-        let limit = Some(10_000_000);
-        let record = |info: &str| {
-            let line = format!("21\t30425600\tx\tN\t<CNV:TR>,<CNV:TR>\t.\t.\tEND=30425899;{info}");
-            let variants = parse_vcf_line_with_max_sv_size(&line, true, limit).unwrap();
-            (variants[0].tr_alt_bases, variants[1].tr_alt_bases)
+    fn repeat_sequences_without_rn_are_counted_in_perls_type_string() {
+        let (_dir, fasta) = fasta_of(RUN_FASTA);
+        let record = |alt: &str, info: &str| {
+            parse_with_fasta(
+                &format!("21\t10\tx\tN\t{alt}\t.\t.\t{info}"),
+                Some(&fasta),
+                Some(DEFAULT_MAX_SV_SIZE),
+            )
         };
         assert_eq!(
-            record("SVTYPE=CNV;RN=1;RUS=AT,CAGA;RUC=10,4000000"),
-            (Some(20), None)
+            shapes(&record("N", "SVTYPE=CNV:TR;SVLEN=9;RUS=TCA;RUC=4")),
+            [(
+                "21:19-20".to_string(),
+                "-/TCA".to_string(),
+                VariantClass::Insertion,
+                false
+            )]
         );
+        let lower = record("<cnv:tr>", "SVLEN=9;RUS=TCA;RUC=4");
+        assert!(lower[0].no_allele, "{lower:?}");
+        assert_eq!(lower[0].allele_string, "TCATCATCA/");
         assert_eq!(
-            record("SVTYPE=CNV;RN=1;RUS=AT,AT;RUC=10,10"),
-            (Some(20), None)
-        );
-        assert_eq!(
-            record("SVTYPE=CNV;RN=1,1;RUS=AT,AT;RUC=10,10"),
-            (Some(20), Some(20))
-        );
-        assert_eq!(
-            record("SVTYPE=CNV;RUS=AT,AT;RUC=10,10"),
-            (Some(20), Some(20))
-        );
-        assert_eq!(
-            tandem_repeat_alt_bases("SVTYPE=CNV;RN=1;RUS=AT,CAGA;RUC=10,4000000", 1, 2, limit),
-            None
+            shapes(&record("<CNV:TR>", "SVTYPE=cnv:tr;SVLEN=9;RUS=TCA;RUC=4")),
+            [(
+                "21:19-20".to_string(),
+                "-/TCA".to_string(),
+                VariantClass::Insertion,
+                false
+            )]
         );
     }
 
+    /// Without a FASTA, under `--max_sv_size -1`, under a limit a repeat sequence
+    /// exceeds (`RUC=4`, twelve bases, at 10; `RUC=2` expands) and without RUS or a
+    /// count list, a `<CNV:TR>` record keeps Ensembl VEP's symbolic reading over the run
+    /// SVLEN spans (Parser/VCF.pm:385, :403, :417-418, :428, :521-527); one oversized
+    /// allele keeps every allele of its record symbolic; a cap of `0` is Perl's 5000.
     #[test]
-    fn test_parse_vcf_line_tandem_repeat_carries_alt_bases() {
-        let line = "21\t27253937\t.\tC\t<CNV:TR>\t.\tPASS\tSVTYPE=CNV;END=27254237;SVLEN=300;RN=1;RUS=CAG;RUL=3;RUC=120;RB=360";
-        let v = &parse_vcf_line(line, true).unwrap()[0];
-        assert_eq!(v.variant_class, VariantClass::TandemRepeat);
-        assert_eq!(v.tr_alt_bases, Some(360));
-        // The field is read for tandem repeats only.
-        let cnv = "21\t27253937\t.\tC\t<CNV>\t.\tPASS\tSVTYPE=CNV;END=27254237;SVLEN=300;RB=360";
-        assert_eq!(parse_vcf_line(cnv, true).unwrap()[0].tr_alt_bases, None);
+    fn cnv_tr_stays_sv_without_fasta() {
+        let (_dir, fasta) = fasta_of(RUN_FASTA);
+        let gain = "21\t10\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4";
+        let symbolic = vec![(
+            "21:11-19".to_string(),
+            "G/<CNV:TR>".to_string(),
+            VariantClass::TandemRepeat,
+            true,
+        )];
+        assert_eq!(
+            shapes(&parse_with_fasta(gain, None, Some(DEFAULT_MAX_SV_SIZE))),
+            symbolic
+        );
+        assert_eq!(
+            shapes(&parse_with_fasta(gain, Some(&fasta), None)),
+            symbolic
+        );
+        assert_eq!(
+            shapes(&parse_with_fasta(gain, Some(&fasta), Some(10))),
+            symbolic
+        );
+        assert_eq!(
+            shapes(&parse_with_fasta(
+                "21\t10\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=2",
+                Some(&fasta),
+                Some(10)
+            )),
+            [(
+                "21:17-19".to_string(),
+                "TCA/-".to_string(),
+                VariantClass::Deletion,
+                false
+            )]
+        );
+        for info in [
+            "SVLEN=9",
+            "SVLEN=9;RUS=TCA",
+            "SVLEN=9;RUC=4",
+            "SVLEN=9;RUS=TCA;RUC=0",
+        ] {
+            let line = format!("21\t10\tx\tG\t<CNV:TR>\t.\t.\t{info}");
+            assert_eq!(
+                shapes(&parse_with_fasta(
+                    &line,
+                    Some(&fasta),
+                    Some(DEFAULT_MAX_SV_SIZE)
+                )),
+                symbolic,
+                "{info}"
+            );
+        }
+        let multi = "21\t10\tx\tG\t<CNV:TR>,<CNV:TR>\t.\t.\tSVLEN=9;RN=1,1;RUS=TCA,TCA;RUC=4,2";
+        let both = parse_with_fasta(multi, Some(&fasta), Some(10));
+        assert_eq!(both.len(), 2);
+        assert!(both.iter().all(|v| v.is_structural));
+        let five_thousand = "21\t10\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RUS=AT;RUC=2500";
+        assert!(!parse_with_fasta(five_thousand, Some(&fasta), Some(0))[0].is_structural);
+        let over = "21\t10\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RUS=AT;RUC=2501";
+        assert!(parse_with_fasta(over, Some(&fasta), Some(0))[0].is_structural);
+    }
+
+    /// `_expand_tandem_repeat_allele_string` builds one allele per RN entry (`:408`), so
+    /// a `<CNV:TR>` ALT past a short RN list has no allele: `RN=1;RUS=AT,CAGA;RUC=10,4000000`
+    /// on two ALTs is the one allele `AT x 10`, whose 16,000,000-base sibling is never
+    /// built and so never oversizes the record; `RN=1,1` builds both, and two alleles
+    /// that expand to one sequence are one allele, as a repeated ALT is
+    /// (VariationFeatureOverlap.pm:461).
+    #[test]
+    fn an_alt_past_the_rn_list_builds_no_allele() {
+        let (_dir, fasta) = fasta_of(RUN_FASTA);
+        let record = |info: &str| {
+            let line = format!("21\t10\tx\tG\t<CNV:TR>,<CNV:TR>\t.\t.\tSVLEN=9;{info}");
+            parse_with_fasta(&line, Some(&fasta), Some(DEFAULT_MAX_SV_SIZE))
+        };
+        let one = record("RN=1;RUS=AT,CAGA;RUC=10,4000000");
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].allele_string, "TCATCATCA/ATATATATATATATATATAT");
+        assert_eq!(record("RN=1;RUS=AT,CA;RUC=10,10").len(), 1);
+        assert_eq!(record("RN=1,1;RUS=AT,CA;RUC=10,10").len(), 2);
+        assert_eq!(record("RUS=AT,CA;RUC=10,10").len(), 2);
+        assert_eq!(record("RN=1,1;RUS=AT,AT;RUC=10,10").len(), 1);
+    }
+
+    /// A span the FASTA lacks leaves the record's REF column as the run's reference, as
+    /// `sub_Slice` yields nothing and `$ref` keeps the column (Parser/VCF.pm:516-518):
+    /// `G/TCATCATCATCA` over 21:31-39, which `validate_vf` then refuses as a reference
+    /// allele whose length is not the span's. A negative SVLEN puts the end before the
+    /// start (`:511`), so `SVLEN=-9` at 10 is `G/TCATCATCATCA` over 11-1, which
+    /// `validate_vf` refuses as `start > end+1`, as Ensembl VEP 116.2 refuses it with
+    /// a FASTA; an end before the chromosome's first base (`SVLEN=-20` at 10) is the
+    /// symbolic path's refusal, `start > end+1 : (START=11, END=-10)`.
+    #[test]
+    fn a_run_past_the_fasta_keeps_the_ref_column() {
+        let (_dir, fasta) = fasta_of(RUN_FASTA);
+        let past = parse_with_fasta(
+            "21\t30\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4",
+            Some(&fasta),
+            Some(DEFAULT_MAX_SV_SIZE),
+        );
+        assert_eq!(
+            shapes(&past),
+            [(
+                "21:31-39".to_string(),
+                "G/TCATCATCATCA".to_string(),
+                VariantClass::Indel,
+                false
+            )]
+        );
+        let negative = parse_with_fasta(
+            "21\t10\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=-9;RN=1;RUS=TCA;RUC=4",
+            Some(&fasta),
+            Some(DEFAULT_MAX_SV_SIZE),
+        );
+        assert_eq!(negative.len(), 1);
+        assert_eq!((negative[0].start, negative[0].end), (11, 1));
+        assert_eq!(negative[0].allele_string, "G/TCATCATCATCA");
+        assert!(!negative[0].is_structural);
+        let before_the_chromosome = parse_vcf_line_with(
+            "21\t10\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=-20;RN=1;RUS=TCA;RUC=4",
+            &VcfParse {
+                fasta: Some(&fasta),
+                ..VcfParse::default_run(true)
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            before_the_chromosome.contains("start > end+1 : (START=11, END=-10)"),
+            "{before_the_chromosome}"
+        );
+    }
+
+    /// A REF column that shares a base with the expansion is trimmed as any
+    /// bi-allelic indel is (`post_process_vfs`, Parser.pm:862-881), the start moving
+    /// past the bases trimmed on the left and the end before those trimmed on the
+    /// right, the run's own end kept otherwise (Sequence.pm:1004-1031): Ensembl VEP
+    /// 116.2 with a FASTA refuses `T <CNV:TR>` with `SVLEN=-9` as `start > end+1`
+    /// with the start one past the run's and the end the run's, `A <CNV:TR>` with the
+    /// start the run's and the end one before it, and a run past the FASTA from a `T`
+    /// as an insertion whose coordinates are not `start = end + 1`; none of the three
+    /// is an insertion on a span its alleles measure.
+    #[test]
+    fn a_ref_column_sharing_a_base_with_the_expansion_keeps_the_runs_end() {
+        let (_dir, fasta) = fasta_of(RUN_FASTA);
+        let span_and_string = |line: &str| {
+            let parsed = parse_with_fasta(line, Some(&fasta), Some(DEFAULT_MAX_SV_SIZE));
+            assert_eq!(parsed.len(), 1, "{line}");
+            (
+                parsed[0].start,
+                parsed[0].end,
+                parsed[0].allele_string.clone(),
+            )
+        };
+        assert_eq!(
+            span_and_string("21\t10\tx\tT\t<CNV:TR>\t.\t.\tSVLEN=-9;RN=1;RUS=TCA;RUC=4"),
+            (12, 1, "-/CATCATCATCA".to_string())
+        );
+        assert_eq!(
+            span_and_string("21\t10\tx\tA\t<CNV:TR>\t.\t.\tSVLEN=-9;RN=1;RUS=TCA;RUC=4"),
+            (11, 0, "-/TCATCATCATC".to_string())
+        );
+        assert_eq!(
+            span_and_string("21\t30\tx\tT\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4"),
+            (32, 39, "-/CATCATCATCA".to_string())
+        );
     }
 
     #[test]
@@ -3701,6 +4328,231 @@ mod tests {
         assert_eq!((upper[0].start, upper[0].end), (30396606, 30396605));
         assert_eq!(upper[0].allele_string, "-/TC");
         assert!(upper[0].minimised);
+    }
+
+    /// Under `--minimal` every bi-allelic record goes through `minimise_alleles`
+    /// (Parser.pm:852, :987-1014): `GAAG/GGGG` at 10542414 is two-side trimmed to
+    /// `AA/GG` at 10542415-10542416 (Ensembl VEP 116.2's `21:10542415-10542416 GG`),
+    /// `GAA/GGG` and `AAG/GGG` lose one side, `GAAG/GGGg` keeps its right `G` (the
+    /// bases compare as written, `GGG` at 15-17), `gaag/gggg` is `AA/GG` and an SNV
+    /// keeps its alleles; each is marked minimised, trimmed or not, and
+    /// `UPLOADED_ALLELE` keeps the raw string. Without the flag `GAAG/GGGG` is left
+    /// as it is.
+    #[test]
+    fn minimal_two_sided_trims_mnp() {
+        let record = |alleles: &str| {
+            let (reference, alt) = alleles.split_once('/').unwrap();
+            parse_minimal(&format!("21\t10542414\tx\t{reference}\t{alt}\t.\t.\t."))
+        };
+        let shape = |alleles: &str| {
+            let v = record(alleles);
+            (v[0].location(), v[0].allele_string.clone(), v[0].minimised)
+        };
+        assert_eq!(
+            shape("GAAG/GGGG"),
+            ("21:10542415-10542416".into(), "AA/GG".into(), true)
+        );
+        assert_eq!(
+            shape("GAA/GGG"),
+            ("21:10542415-10542416".into(), "AA/GG".into(), true)
+        );
+        assert_eq!(
+            shape("AAG/GGG"),
+            ("21:10542414-10542415".into(), "AA/GG".into(), true)
+        );
+        assert_eq!(
+            shape("GAAG/GGGg"),
+            ("21:10542415-10542417".into(), "AAG/GGG".into(), true)
+        );
+        assert_eq!(
+            shape("gaag/gggg"),
+            ("21:10542415-10542416".into(), "AA/GG".into(), true)
+        );
+        assert_eq!(shape("A/G"), ("21:10542414".into(), "A/G".into(), true));
+        assert_eq!(
+            record("gaag/gggg")[0].uploaded_allele(true).as_deref(),
+            Some("gaag/gggg")
+        );
+        let plain = parse_vcf_line("21\t10542414\tx\tGAAG\tGGGG\t.\t.\t.", true).unwrap();
+        assert_eq!(plain[0].allele_string, "GAAG/GGGG");
+        assert!(!plain[0].minimised);
+    }
+
+    /// A bi-allelic record whose one allele equals the reference is minimised under
+    /// `--minimal` like any other (Parser.pm:987-1011): `21 10542414 x A A` is the
+    /// feature with no allele `-/-` at 10542415-10542414, marked minimised, its class
+    /// `sequence_alteration`, as Ensembl VEP 116.2's JSON object carries it; without
+    /// the flag it stays `A/A` at 10542414. `A *` trims nothing and is marked too
+    /// (`:1011` marks every bi-allelic record).
+    #[test]
+    fn a_reference_equal_bi_allelic_record_is_minimised_under_the_flag() {
+        let line = "21\t10542414\tx\tA\tA\t.\t.\t.";
+        let minimal = parse_minimal(line);
+        assert_eq!(minimal.len(), 1);
+        let record = &minimal[0];
+        assert!(record.no_allele);
+        assert_eq!(
+            (record.start, record.end, record.allele_string.as_str()),
+            (10542415, 10542414, "-/-")
+        );
+        assert!(record.minimised);
+        assert_eq!(record.class_so_term(), "sequence_alteration");
+        let plain = parse_vcf_line(line, true).unwrap();
+        assert_eq!(
+            (
+                plain[0].start,
+                plain[0].end,
+                plain[0].allele_string.as_str()
+            ),
+            (10542414, 10542414, "A/A")
+        );
+        assert!(!plain[0].minimised);
+        let star = parse_minimal("21\t10542414\tx\tA\t*\t.\t.\t.");
+        assert!(star[0].no_allele && star[0].minimised);
+        assert_eq!(star[0].allele_string, "A/*");
+    }
+
+    /// Under `--minimal` a multi-allelic record splits per allele when any allele
+    /// trims (InputBuffer.pm:638-718): `G T,GA` at 10542414 keeps `G/T` and trims
+    /// `G/GA` to `-/A` at 10542415-10542414, every allele numbered by its written
+    /// position, Location printing the record's span (`21:10542414` for both, as
+    /// Ensembl VEP 116.2 prints after the rejoin) and the record's class that of the
+    /// first trimmed pair; `GAA GGA,GGA` keeps its repeated allele as a second row
+    /// (ALLELE_NUM 1 and 2); `A A,G` drops the allele equal to the reference and
+    /// numbers `G` 2; `G T,C` trims nothing and stays as it is, unmarked;
+    /// `G GA,*` is chopped to `-/A/*`, which trims nothing more; a gVCF block
+    /// before the alleles (`G <NON_REF>,T,GA`, a record Ensembl VEP drops whole)
+    /// leaves each allele trimmed against its own part of the string, numbered by
+    /// its written position.
+    #[test]
+    fn minimal_per_alt_trim_multi_allelic() {
+        let record = |reference: &str, alts: &str| {
+            parse_minimal(&format!("21\t10542414\tx\t{reference}\t{alts}\t.\t.\t."))
+        };
+        let rows = |variants: &[InputVariant]| -> Vec<(String, String, u32, bool, String)> {
+            variants
+                .iter()
+                .map(|v| {
+                    (
+                        v.location(),
+                        v.allele_string.clone(),
+                        v.allele_num.unwrap_or(v.allele_index as u32 + 1),
+                        v.minimised,
+                        v.class_so_term(),
+                    )
+                })
+                .collect()
+        };
+        let split = record("G", "T,GA");
+        assert_eq!(
+            rows(&split),
+            [
+                ("21:10542414".into(), "G/T".into(), 1, true, "SNV".into()),
+                ("21:10542414".into(), "-/A".into(), 2, true, "SNV".into()),
+            ]
+        );
+        assert_eq!((split[1].start, split[1].end), (10542415, 10542414));
+        assert_eq!(split[1].rejoin_key_prefix.as_deref(), Some("-/A_"));
+        assert_eq!(split[0].rejoin_key_prefix, None);
+        assert_eq!(
+            rows(&record("GAA", "GGA,GGA")),
+            [
+                (
+                    "21:10542414-10542416".into(),
+                    "A/G".into(),
+                    1,
+                    true,
+                    "SNV".into()
+                ),
+                (
+                    "21:10542414-10542416".into(),
+                    "A/G".into(),
+                    2,
+                    true,
+                    "SNV".into()
+                ),
+            ]
+        );
+        assert_eq!(
+            rows(&record("A", "A,G")),
+            [(
+                "21:10542414".into(),
+                "A/G".into(),
+                2,
+                true,
+                "sequence_alteration".into()
+            )]
+        );
+        assert_eq!(
+            rows(&record("G", "T,C")),
+            [
+                ("21:10542414".into(), "G/T".into(), 1, false, "SNV".into()),
+                ("21:10542414".into(), "G/C".into(), 2, false, "SNV".into()),
+            ]
+        );
+        assert_eq!(
+            rows(&record("G", "GA,*")),
+            [(
+                "21:10542414-10542415".into(),
+                "-/A".into(),
+                1,
+                false,
+                "sequence_alteration".into()
+            )]
+        );
+        let gvcf = record("G", "<NON_REF>,T,GA");
+        assert_eq!(
+            rows(&gvcf),
+            [
+                ("21:10542414".into(), "G/T".into(), 2, true, "SNV".into()),
+                ("21:10542414".into(), "-/A".into(), 3, true, "SNV".into()),
+            ]
+        );
+        assert_eq!(gvcf[0].rejoin_key_prefix, None);
+        assert_eq!(gvcf[1].rejoin_key_prefix.as_deref(), Some("-/A_"));
+    }
+
+    /// A split allele carries the record's span as its original span and the record's
+    /// chopped string as its `UPLOADED_ALLELE` (InputBuffer.pm:694-697, the string
+    /// `split_variants` writes over the raw one): `GAAG GGAG,GAGG,G` at 10542414 is
+    /// chopped to `AAG/GAG/AGG/-` at 15-17, its three alleles `A/G` at 15, `A/G` at 16
+    /// and `AAG/-` at 15-17 (Ensembl VEP 116.2's rows `G` 1, `G` 2 and `-` 3, each
+    /// `UPLOADED_ALLELE=AAG/GAG/AGG/-` at `21:10542415-10542417`); a bi-allelic record's
+    /// `UPLOADED_ALLELE` stays the raw `GAAG/GGGG`.
+    #[test]
+    fn minimal_sets_minimised_and_original() {
+        let three = parse_minimal("21\t10542414\tx\tGAAG\tGGAG,GAGG,G\t.\t.\t.");
+        let spans: Vec<(u64, u64, Option<u64>, Option<u64>)> = three
+            .iter()
+            .map(|v| (v.start, v.end, v.original_start, v.original_end))
+            .collect();
+        assert_eq!(
+            spans,
+            [
+                (10542415, 10542415, Some(10542415), Some(10542417)),
+                (10542416, 10542416, Some(10542415), Some(10542417)),
+                (10542415, 10542417, Some(10542415), Some(10542417)),
+            ]
+        );
+        for v in &three {
+            assert!(v.minimised);
+            assert_eq!(v.location(), "21:10542415-10542417");
+            assert_eq!(v.uploaded_allele(true).as_deref(), Some("AAG/GAG/AGG/-"));
+            assert_eq!(
+                v.record_allele_string_multi.as_deref(),
+                Some("AAG/GAG/AGG/-")
+            );
+        }
+        assert_eq!(
+            three
+                .iter()
+                .map(|v| v.rejoin_key_prefix.as_deref())
+                .collect::<Vec<_>>(),
+            [None, Some("A/G_"), Some("AAG/-_")]
+        );
+        let two = parse_minimal("21\t10542414\tx\tGAAG\tGGGG\t.\t.\t.");
+        assert_eq!(two[0].uploaded_allele(true).as_deref(), Some("GAAG/GGGG"));
+        assert_eq!(two[0].original_start, None);
     }
 
     /// Guard: the same shape with a second ALT must not be re-minimised.

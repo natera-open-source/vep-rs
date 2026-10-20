@@ -296,7 +296,7 @@ MaxEntScan	MaxEntScan.pm	implemented	open
 MechPredict	MechPredict.pm	error	open			
 memory_footprint_statement	-	documented_subset	open			
 merged	CacheDir.pm	documented_subset	open			
-minimal	Config.pm	implemented	open			
+minimal	Config.pm	implemented	landed:implemented	crates/vep-cli/src/vcf_parser.rs::minimal_two_sided_trims_mnp;crates/vep-cli/src/vcf_parser.rs::minimal_per_alt_trim_multi_allelic;crates/vep-cli/src/vcf_parser.rs::minimal_sets_minimised_and_original;crates/vep-cli/src/pipeline.rs::minimal_splits_after_the_looked_up_reference;crates/vep-cli/tests/input_minimal.rs::minimal_implies_allele_number;crates/vep-cli/tests/input_minimal.rs::a_split_record_rejoins_as_ensembl_vep_rejoins_it	tests/golden/116/GRCh38-vcf-minimal	
 minor-allele-columns	BaseCacheVariation.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::minor_allele_columns_change_no_output		
 mirna	OutputFactory.pm	implemented	landed:implemented	crates/vep-effects/src/consequences.rs::mirna_stem_and_loop_from_structure;crates/vep-io/src/output/fields.rs::mirna_column_joins_the_terms;crates/vep-io/src/output/json.rs::mirna_and_mane_are_arrays	tests/golden/116/GRCh38-attributes	
 most-severe-summary-output-shape	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/render.rs::most_severe_row_prints_dash_allele_feature_columns_and_extra;crates/vep-io/src/output/fields.rs::summary_row_tab_cells_are_dashes;crates/vep-io/src/output/json.rs::summary_entry_is_intergenic_consequences_with_consequence_terms_only	tests/golden/116/GRCh38-pick-summary	
@@ -491,7 +491,7 @@ synonyms	BaseVEP.pm::chromosome_synonyms	implemented	landed:implemented	crates/v
 tab	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::tab_with_vcf_or_json_is_perls_error	tests/golden/116/GRCh38-writers	
 tab-column-order-and-placeholder	Tab.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::tab_header_describes_plugin_columns_with_their_own_text	tests/golden/116/GRCh38-writers	
 tabix-and-bigwig-readers	File.pm	documented_subset	open			
-tandem-repeats-cnv-tr	VCF.pm	documented_subset	open			
+tandem-repeats-cnv-tr	VCF.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/vcf_parser.rs::cnv_tr_expanded_with_fasta;crates/vep-cli/src/vcf_parser.rs::cnv_tr_svlen_max_of_uniq;crates/vep-cli/src/vcf_parser.rs::cnv_tr_stays_sv_without_fasta;crates/vep-cli/src/vcf_parser.rs::tandem_warnings_follow_the_structural_routing	tests/golden/116/GRCh38-vcf-tandem-repeats	
 terms	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::terms_rejects_ensembl_as_a_value_outside_the_enumeration;crates/vep-io/src/output/fields.rs::consequence_column_renders_in_the_terms_vocabulary;crates/vep-io/src/output/json.rs::terms_vocabulary_renders_json_consequences;crates/vep-io/src/output/fields.rs::distance_follows_the_rendered_terms;crates/vep-io/src/output/fields.rs::summary_rows_list_each_rendered_label_once	tests/golden/116/GRCh37-output-flags	
 terms-vocabularies	Variation/Utils/Constants.pm	implemented	landed:implemented	crates/vep-core/src/terms.rs::display_and_ncbi_vocabularies_match_ensembl_variation;crates/vep-core/src/terms.rs::flag_values_name_their_vocabulary	tests/golden/116/GRCh37-output-flags	
 threads	-	implemented	landed:implemented	crates/vep-cli/src/args.rs::test_threads_alias	tests/golden/116/GRCh38-run-control	

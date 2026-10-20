@@ -65,8 +65,10 @@
 //!
 //! Every run's warnings file is compared with the warnings the reference wrote
 //! for the corpus ([`compare_warnings`]): the manifest's `records[].reference_warning`
-//! strings, each at its record's ordinal, with paths masked and the quoted input
-//! line left out.
+//! strings, each at its record's ordinal, and the unnumbered texts of a
+//! `reference_warnings` list (the flag set's own, else the manifest's;
+//! [`run_reference_warnings`]), with paths masked and the quoted input line
+//! left out.
 //!
 //! The VCF and JSON formats carry no `Location`, so their entries are keyed by
 //! the corpus record ordinal, found by matching each output record to its
@@ -532,6 +534,9 @@ pub struct Run<'a> {
     pub masks: Vec<String>,
     /// The manifest object whose divergence lists apply to this run.
     documented: &'a serde_json::Value,
+    /// The run's own manifest entry: the manifest for its own run, the flag
+    /// set's object for a flag set.
+    entry: &'a serde_json::Value,
 }
 
 impl Run<'_> {
@@ -710,6 +715,7 @@ pub fn default_run(corpus: &Corpus) -> Run<'_> {
         perl_mode: "offline".to_string(),
         masks: corpus.masks(),
         documented: &corpus.manifest,
+        entry: &corpus.manifest,
     }
 }
 
@@ -737,9 +743,15 @@ fn plain_name(name: &str) -> bool {
 /// the corpus tool would refuse (a name that is `default`, repeated or not a
 /// plain word, no format to compare, an empty path or one outside the corpus,
 /// a stdin run whose flags name no `--format`) fails here, so a hand-written
-/// entry cannot certify its `covers` with a run that compares nothing.
+/// entry cannot certify its `covers` with a run that compares nothing; so does
+/// a manifest whose `reference_warnings` is not a list, before any run.
 pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
     let label = format!("{}/{}", corpus.release, corpus.name);
+    assert!(
+        corpus.manifest.get("reference_warnings").is_none()
+            || corpus.manifest["reference_warnings"].is_array(),
+        "{label}: reference_warnings is not of its type"
+    );
     let mut out = vec![default_run(corpus)];
     for set in corpus.manifest["flag_sets"]
         .as_array()
@@ -774,6 +786,7 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
         typed("unordered", set["unordered"].is_boolean());
         typed("perl_mode", set["perl_mode"].is_string());
         typed("masks", set["masks"].is_array());
+        typed("reference_warnings", set["reference_warnings"].is_array());
         let masks = if set.get("masks").is_some() {
             mask_classes(&format!("{label} flag set {name}"), &set["masks"])
         } else {
@@ -835,6 +848,7 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
             } else {
                 &corpus.manifest
             },
+            entry: set,
         });
     }
     out
@@ -2245,7 +2259,8 @@ pub fn compare_warning_sets(expected: &str, actual: &str) -> String {
 /// The warnings Ensembl VEP wrote for the run's records, from the manifest: one
 /// entry per record carrying `reference_warning`, at the record's 1-based
 /// ordinal, which is the line number Ensembl VEP reports (header lines are not
-/// counted).
+/// counted). Those it wrote about no one record are
+/// [`run_reference_warnings`]'s.
 pub fn reference_warnings(manifest: &serde_json::Value) -> BTreeSet<WarningEntry> {
     manifest["records"]
         .as_array()
@@ -2260,6 +2275,22 @@ pub fn reference_warnings(manifest: &serde_json::Value) -> BTreeSet<WarningEntry
         .collect()
 }
 
+/// The warnings Ensembl VEP wrote for a run about no one record, each text of
+/// its `reference_warnings` list as an unnumbered entry: the flag set's own list
+/// when its entry carries one, else the manifest's ([`runs`] holds both to
+/// lists). A tandem repeat or tandem duplication record read without a FASTA
+/// draws one such warning (Parser/VCF.pm:521-524).
+pub fn run_reference_warnings(run: &Run) -> BTreeSet<WarningEntry> {
+    let list = run
+        .entry
+        .get("reference_warnings")
+        .unwrap_or(&run.corpus.manifest["reference_warnings"]);
+    strings(list)
+        .iter()
+        .map(|text| (None, mask_paths(text)))
+        .collect()
+}
+
 /// The warnings file a run leaves beside its output: `<output>_warnings.txt`.
 fn warnings_file_beside(output: &Path) -> PathBuf {
     PathBuf::from(format!("{}_warnings.txt", output.display()))
@@ -2267,13 +2298,15 @@ fn warnings_file_beside(output: &Path) -> PathBuf {
 
 /// Compares the warnings file the run's default-format output left beside it
 /// (`run_vep` in the `default` format must have run first) with the reference's
-/// warnings, which are the manifest's `reference_warning` entries and, when the
-/// run's expected directory holds `default.txt_warnings.txt`, that file, whose
-/// entries must agree with the manifest's. Returns a report, or an empty string.
+/// warnings, which are the manifest's `reference_warning` entries, the run's
+/// `reference_warnings` list and, when the run's expected directory holds
+/// `default.txt_warnings.txt`, that file, whose entries must agree with the
+/// manifest's. Returns a report, or an empty string.
 pub fn compare_warnings(run: &Run, out_dir: &Path) -> String {
     let path = warnings_file_beside(&output_path(run, "default", out_dir));
     let mut actual = warning_entries(&fs::read_to_string(&path).unwrap_or_default());
-    let expected = reference_warnings(&run.corpus.manifest);
+    let mut expected = reference_warnings(&run.corpus.manifest);
+    expected.extend(run_reference_warnings(run));
     let mut report = String::new();
     if run.masks_regulatory_rows() {
         let before = actual.len();

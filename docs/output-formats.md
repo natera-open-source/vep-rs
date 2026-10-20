@@ -68,6 +68,7 @@ The rules the formatters follow are VEP's own, cited to their Perl sources in `c
 - **Structural routing**, what makes a record structural and how its type is read: [How structural variants are written](output/structural-variants.md#routing).
 - **Structural spans**, where a symbolic record starts and ends: [How structural variants are written](output/structural-variants.md#spans).
 - **Multi-allelic records**, sequence and structural: [How structural variants are written](output/structural-variants.md#multi-allelic-records).
+- **`--minimal`**, which trims every bi-allelic record from both ends and splits a multi-allelic record whose alleles trim: [How structural variants are written](output/structural-variants.md#multi-allelic-records). A split allele's `cDNA_position`, `CDS_position` and `Protein_position` follow the format. The default and tab outputs print the record span's values, in the columns the allele's own span admits, as Ensembl VEP recomputes them after its rejoin (`OutputFactory.pm` lines 294-299). The VCF and JSON outputs print the allele's own, as their factories recompute them before it (`OutputFactory/VCF.pm` lines 305-308, `OutputFactory/JSON.pm` lines 217-220). Codons, Amino_acids and the terms are the trimmed allele's in every format.
 - **Records Ensembl VEP skips**, which vep-rs annotates: [How structural variants are written](output/structural-variants.md#skipped-records).
 - **Breakends**, points, spans, mates and the rows on each side: [How structural variants are written](output/structural-variants.md#breakends).
 

@@ -188,7 +188,7 @@ pub fn calculate(
         }
         if hits_intron {
             consequences.push(Consequence::IntronVariant);
-            add_polypyrimidine_tract(&mut consequences, variant, transcript, sv_start, sv_end);
+            add_polypyrimidine_tract(&mut consequences, transcript, sv_start, sv_end);
         }
 
         // Intron-only overlap gets the context term instead of feature_elongation.
@@ -211,7 +211,7 @@ pub fn calculate(
         }
         if hits_intron {
             consequences.push(Consequence::IntronVariant);
-            add_polypyrimidine_tract(&mut consequences, variant, transcript, sv_start, sv_end);
+            add_polypyrimidine_tract(&mut consequences, transcript, sv_start, sv_end);
         }
     }
 
@@ -467,96 +467,51 @@ fn mature_mirna_contains_pair(transcript: &Transcript, s: u64, e: u64) -> bool {
         .any(|&(lo, hi)| e >= lo && s <= hi)
 }
 
-/// Add `splice_polypyrimidine_tract_variant` for an insertion that overlaps an intron.
-///
-/// Ensembl reads a `<CNV:TR>` as a `VariationFeature` carrying the literal allele
-/// string (ensembl-vep `Parser/VCF.pm:530-543`), so the structural rule in
-/// `overlaps_polypyrimidine_tract` is not its rule; a tandem repeat is tested by its
-/// endpoints. Every other insertion, point or ranged, is a
+/// Add `splice_polypyrimidine_tract_variant` for an insertion that overlaps an intron:
+/// every insertion, point or ranged, a symbolic tandem repeat included, is a
 /// `StructuralVariationFeature` and takes the structural rule over its whole span.
 fn add_polypyrimidine_tract(
     consequences: &mut ConsequenceList,
-    variant: &InputVariant,
     transcript: &Transcript,
     sv_start: u64,
     sv_end: u64,
 ) {
-    if variant.variant_class == VariantClass::TandemRepeat {
-        add_ranged_endpoint_splice_consequences(consequences, transcript, sv_start, sv_end);
-    } else if overlaps_polypyrimidine_tract(transcript, sv_start, sv_end)
+    if overlaps_polypyrimidine_tract(transcript, sv_start, sv_end)
         && !consequences.contains(&Consequence::SplicePolypyrimidineTractVariant)
     {
         consequences.push(Consequence::SplicePolypyrimidineTractVariant);
     }
 }
 
-/// Add splice_polypyrimidine_tract_variant for a tandem repeat when an
-/// endpoint falls in the polypyrimidine tract.
-///
-/// Each endpoint is checked individually against every intron (a point repeat
-/// has one). Fires when an endpoint, not the full span, falls 2-16bp from the
-/// intron acceptor (strand-aware).
-fn add_ranged_endpoint_splice_consequences(
-    consequences: &mut ConsequenceList,
-    transcript: &Transcript,
-    sv_start: u64,
-    sv_end: u64,
-) {
-    let exons = transcript
-        .vefc
-        .as_ref()
-        .map(|v| v.sorted_exons.as_slice())
-        .unwrap_or(transcript.exons.as_slice());
-
-    for pair in exons.windows(2) {
-        let intron_start = pair[0].end + 1;
-        let intron_end = pair[1].start.saturating_sub(1);
-        if intron_end < intron_start {
-            continue;
-        }
-
-        for &endpoint in &[sv_start, sv_end] {
-            if endpoint < intron_start || endpoint > intron_end {
-                continue;
-            }
-
-            let dist_to_genomic_start = endpoint - intron_start;
-            let dist_to_genomic_end = intron_end - endpoint;
-
-            let dist_to_acceptor = match transcript.strand {
-                Strand::Forward => dist_to_genomic_end,
-                Strand::Reverse => dist_to_genomic_start,
-            };
-
-            if (2..=16).contains(&dist_to_acceptor)
-                && !consequences.contains(&Consequence::SplicePolypyrimidineTractVariant)
-            {
-                consequences.push(Consequence::SplicePolypyrimidineTractVariant);
-                return;
-            }
-        }
-    }
-}
-
-/// Classify whether the SV is upstream or downstream of the transcript.
+/// Classify whether the SV is upstream or downstream of the transcript, within the
+/// flank of its own direction: `_before_start` admits an end at or past
+/// `feat.start - dist` and `_after_end` a start at or before `feat.end + dist`
+/// (Utils/VariationEffect.pm:404-414), each with the distance of the term its
+/// strand makes it (`_upstream`, `_downstream`, :418-432), and Ensembl VEP's
+/// annotation source fetches a transcript for a variant within the strand's own
+/// flanks alone (AnnotationType/Transcript.pm:101-102), so a record inside the
+/// wider flank but past its own direction's writes no row. `up_boundary` and
+/// `down_boundary` are the two limits as genomic positions.
 ///
 /// Returns the consequence and the distance in bases.
 fn classify_upstream_downstream(
     sv_start: u64,
     sv_end: u64,
     transcript: &Transcript,
-    _up_boundary: u64,
-    _down_boundary: u64,
+    up_boundary: u64,
+    down_boundary: u64,
 ) -> Option<(Consequence, u64)> {
     let tx_start = transcript.start;
     let tx_end = transcript.end;
     let before = sv_end < tx_start;
     let after = sv_start > tx_end;
     let consequence = match (transcript.strand, before, after) {
-        (Strand::Forward, true, _) | (Strand::Reverse, _, true) => Consequence::UpstreamGeneVariant,
-        (Strand::Forward, _, true) | (Strand::Reverse, true, _) => {
+        (Strand::Forward, true, _) if sv_end >= up_boundary => Consequence::UpstreamGeneVariant,
+        (Strand::Reverse, _, true) if sv_start <= up_boundary => Consequence::UpstreamGeneVariant,
+        (Strand::Forward, _, true) if sv_start <= down_boundary => {
             Consequence::DownstreamGeneVariant
         }
+        (Strand::Reverse, true, _) if sv_end >= down_boundary => Consequence::DownstreamGeneVariant,
         _ => return None,
     };
     // `distance_to_transcript` (BaseTranscriptVariation.pm:582-605): the smallest of
@@ -671,6 +626,35 @@ mod tests {
             .consequences
             .contains(&Consequence::DownstreamGeneVariant));
         assert_eq!(tc.distance, Some(2000));
+    }
+
+    /// Under `--distance 5000,1000` a point insertion 3,000 bases past the end of the
+    /// forward-strand test transcript lies inside the 5,000-base upstream flank but
+    /// past the 1,000-base downstream one: Ensembl VEP fetches no transcript for it
+    /// (AnnotationType/Transcript.pm:101-102, `fe = end + down_size` on the forward
+    /// strand) and writes no row, as the deletion and inversion paths write none; an
+    /// insertion 3,000 bases before the start is `upstream_gene_variant`, and on a
+    /// reverse-strand transcript the two flanks swap.
+    #[test]
+    fn an_insertion_past_its_own_flank_writes_no_row() {
+        let tx = make_test_transcript();
+        assert!(calculate(&make_point_ins(25_009_000), &tx, 5000, 1000).is_none());
+        assert!(calculate(&make_ins(25_009_000, 25_009_100), &tx, 5000, 1000).is_none());
+        let upstream = calculate(&make_point_ins(24_997_000), &tx, 5000, 1000)
+            .expect("3,000 bases before the start is inside the upstream flank");
+        assert!(upstream
+            .consequences
+            .contains(&Consequence::UpstreamGeneVariant));
+        assert_eq!(upstream.distance, Some(3000));
+        let mut reverse = make_test_transcript();
+        reverse.strand = Strand::Reverse;
+        let downstream = calculate(&make_point_ins(24_997_000), &reverse, 5000, 1000);
+        assert!(downstream.is_none());
+        let upstream = calculate(&make_point_ins(25_009_000), &reverse, 5000, 1000)
+            .expect("3,000 bases past the end is upstream of a reverse-strand transcript");
+        assert!(upstream
+            .consequences
+            .contains(&Consequence::UpstreamGeneVariant));
     }
 
     #[test]
@@ -1105,25 +1089,26 @@ mod tests {
         );
     }
 
+    /// A symbolic tandem repeat is a `StructuralVariationFeature` like any other
+    /// insertion, so Perl's `_intron_effects` tests its whole span against the
+    /// tract: the run 25_001_980-25_001_998 covers the tract of intron 1
+    /// (25_001_983-25_001_997) with both ends outside it and takes the term, as
+    /// Ensembl VEP 116.2 prints `splice_polypyrimidine_tract_variant,intron_variant`
+    /// for a `<CNV:TR>` read without a FASTA over `21:10542360-10542394` and for the
+    /// `<INS>` and `<DUP>` of the same span.
     #[test]
-    fn test_tandem_repeat_no_polypyrimidine_endpoints_outside_tract() {
+    fn a_tandem_repeat_over_the_tract_takes_the_structural_rule() {
         let tx = make_test_transcript();
-        // Tandem repeat (sv_start != sv_end) near the acceptor but both endpoints
-        // outside the 2-16bp polypyrimidine window.
-        // Intron 1: 25_000_300 - 25_001_999, acceptor at 25_001_999 (forward strand).
-        // sv_start=25_001_980: dist_to_acceptor = 19 (>16, outside)
-        // sv_end=25_001_998: dist_to_acceptor = 1 (<2, outside)
         let mut v = make_ins(25_001_980, 25_001_998);
         v.variant_class = vep_core::variant::VariantClass::TandemRepeat;
-        let result = calculate(&v, &tx, 5000, 5000);
-        assert!(result.is_some());
-        let tc = result.unwrap();
+        let tc = calculate(&v, &tx, 5000, 5000).expect("the run lies in the transcript");
         assert!(
-            !tc.consequences
+            tc.consequences
                 .contains(&Consequence::SplicePolypyrimidineTractVariant),
-            "Tandem repeat with both endpoints outside tract should not get polypyrimidine, got: {:?}",
+            "got: {:?}",
             tc.consequences
         );
+        assert!(tc.consequences.contains(&Consequence::IntronVariant));
     }
 
     #[test]
@@ -1148,10 +1133,10 @@ mod tests {
     #[test]
     fn test_ranged_insertion_endpoint_in_polypyrimidine_tract() {
         let tx = make_test_transcript();
-        // Ranged tandem repeat where sv_end falls in the polypyrimidine tract.
+        // Ranged tandem repeat whose span reaches into the polypyrimidine tract.
         // Intron 1: 25_000_300 - 25_001_999, acceptor at 25_001_999 (forward strand).
-        // sv_start=25_001_500: dist_to_acceptor = 499 (far outside tract)
-        // sv_end=25_001_990: dist_to_acceptor = 9 (within 2..=16)
+        // sv_start=25_001_500: deep in the intron; sv_end=25_001_990: 9 bases from
+        // the acceptor, so the span overlaps the tract and touches no exon.
         let mut v = make_ins(25_001_500, 25_001_990);
         v.variant_class = vep_core::variant::VariantClass::TandemRepeat;
         let result = calculate(&v, &tx, 5000, 5000);
@@ -1169,24 +1154,25 @@ mod tests {
         );
     }
 
+    /// A tandem repeat that starts in the tract (25_001_993, six bases from the
+    /// acceptor) and ends in exon 2 (25_002_100) overlaps an exon, so Perl's `exon`
+    /// pre-predicate drops the tract term: Ensembl VEP 116.2 prints
+    /// `feature_elongation,coding_sequence_variant,intron_variant` for a `<CNV:TR>`
+    /// read without a FASTA over `21:10542385-10542400` and for the `<INS>` of the
+    /// same span.
     #[test]
-    fn test_ranged_insertion_start_endpoint_in_polypyrimidine_tract() {
+    fn a_tandem_repeat_from_the_tract_into_the_exon_writes_no_tract_term() {
         let tx = make_test_transcript();
-        // Ranged tandem repeat where sv_start falls in the polypyrimidine tract.
-        // Intron 1: 25_000_300 - 25_001_999, acceptor at 25_001_999 (forward strand).
-        // sv_start=25_001_993: dist_to_acceptor = 6 (within 2..=16)
-        // sv_end=25_002_100: in exon 2 (not in intron)
         let mut v = make_ins(25_001_993, 25_002_100);
         v.variant_class = vep_core::variant::VariantClass::TandemRepeat;
-        let result = calculate(&v, &tx, 5000, 5000);
-        assert!(result.is_some());
-        let tc = result.unwrap();
+        let tc = calculate(&v, &tx, 5000, 5000).expect("the run lies in the transcript");
         assert!(
-            tc.consequences
+            !tc.consequences
                 .contains(&Consequence::SplicePolypyrimidineTractVariant),
-            "Ranged insertion with sv_start 6bp from acceptor should get polypyrimidine, got: {:?}",
+            "got: {:?}",
             tc.consequences
         );
+        assert!(tc.consequences.contains(&Consequence::IntronVariant));
     }
 
     #[test]

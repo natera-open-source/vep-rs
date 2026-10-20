@@ -1,0 +1,415 @@
+// Copyright (c) 2026-present Natera, Inc.
+// Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+//! Ensembl VEP's `--minimal` over the alleles vep-rs parsed from one record.
+//!
+//! Ensembl VEP minimises in two places (ensembl-vep release/116.2). A record with
+//! one alternate allele goes through `minimise_alleles` (Parser.pm:964-1019) as
+//! it is parsed: `trim_sequences` (ensembl-variation Utils/Sequence.pm:965-1038)
+//! trims the bases the two alleles share from the left while both are non-empty,
+//! then from the right, the start and end moving in by the bases trimmed on their
+//! side and an emptied allele written `-`; the record is marked `minimised`
+//! whether or not a base was trimmed (:1011). A record with several alternate
+//! alleles is split in the input buffer after it was validated
+//! (InputBuffer.pm:638-718): every allele is trimmed against the reference the
+//! same way, and when any allele changed (:665-666, :700-705) the record becomes
+//! one feature per allele, each annotated on its own trimmed span, every allele
+//! after the first numbered by its written position (`_base_allele_number`,
+//! :684, read by VariationFeatureOverlap.pm:477), the first carrying the record's
+//! chopped allele string and span as its originals (:694-697) and the `minimised`
+//! mark. At output the features are merged back (OutputFactory.pm:2272-2354): the
+//! record prints its own span and allele string, the alleles print trimmed, and
+//! an allele equal to the reference once trimmed writes no row
+//! (VariationFeatureOverlap.pm:481). A record none of whose alleles changed is
+//! left as it stands, with no mark.
+
+use std::sync::Arc;
+
+use crate::variant::{classify_variant, so_variation_class, InputVariant};
+
+/// What the `--minimal` split made of one allele of a multi-allelic record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MinimalSplit {
+    /// No allele of the record changed: the record is annotated as it stands.
+    Unchanged,
+    /// The record split and this allele is annotated on its trimmed span.
+    Trimmed,
+    /// The record split and this allele equals the reference once trimmed, so
+    /// Ensembl VEP writes no row for it.
+    NoAllele,
+}
+
+/// `trim_sequences` (Utils/Sequence.pm:965-1038) on one pair with its span:
+/// the trimmed reference and allele (`-` when emptied), the span they leave
+/// on the forward strand (the start moves by the bases trimmed on the left,
+/// the end by those trimmed on the right), and whether a base was trimmed.
+pub fn trim_sequences(
+    reference: &[u8],
+    alt: &[u8],
+    start: u64,
+    end: u64,
+) -> (Vec<u8>, Vec<u8>, u64, u64, bool) {
+    // The left loop runs while both alleles have a base (`$ref && $alt`), so the
+    // shared prefix stops at the shorter allele; the right loop then runs on what
+    // is left of each. A `-` is a byte like any other here, as it is for `eq`.
+    let prefix = reference
+        .iter()
+        .zip(alt)
+        .take_while(|(r, a)| r == a)
+        .count();
+    let (kept_ref, kept_alt) = (&reference[prefix..], &alt[prefix..]);
+    let suffix = kept_ref
+        .iter()
+        .rev()
+        .zip(kept_alt.iter().rev())
+        .take_while(|(r, a)| r == a)
+        .count();
+    let dash_if_empty = |allele: &[u8]| {
+        if allele.is_empty() {
+            b"-".to_vec()
+        } else {
+            allele.to_vec()
+        }
+    };
+    (
+        dash_if_empty(&kept_ref[..kept_ref.len() - suffix]),
+        dash_if_empty(&kept_alt[..kept_alt.len() - suffix]),
+        start + prefix as u64,
+        end.saturating_sub(suffix as u64),
+        prefix > 0 || suffix > 0,
+    )
+}
+
+/// Whether `split_variants` changes a record whose chopped working string is
+/// `reference` and `alts` (InputBuffer.pm:665-666, :700): any allele that trims,
+/// an allele equal to the reference included.
+pub fn split_changes_record<'a>(reference: &str, alts: impl IntoIterator<Item = &'a str>) -> bool {
+    alts.into_iter().any(|alt| {
+        let (_, _, _, _, changed) = trim_sequences(reference.as_bytes(), alt.as_bytes(), 0, 0);
+        changed
+    })
+}
+
+/// `minimise_alleles` under `--minimal` on a bi-allelic sequence record
+/// (Parser.pm:987-1014): the alleles trimmed by [`trim_sequences`], the span
+/// moved with them, and the record marked `minimised` whether or not a base was
+/// trimmed. The written string stays in `uploaded_allele_string` for
+/// `UPLOADED_ALLELE`. A structural record, a record with no allele to annotate
+/// and a multi-allelic record (one carrying `record_allele_string_multi`) are
+/// left alone: the split handles the last ([`apply_minimal_split`]).
+pub fn minimise_bi_allelic(variant: &mut InputVariant) {
+    if variant.is_structural
+        || variant.no_allele
+        || variant.record_allele_string_multi.is_some()
+        || variant.alt_alleles.len() != 1
+    {
+        return;
+    }
+    let (reference, alt, start, end, changed) = trim_sequences(
+        &variant.ref_allele,
+        &variant.alt_alleles[0],
+        variant.start,
+        variant.end,
+    );
+    if changed {
+        set_alleles(variant, reference, alt, start, end);
+    }
+    variant.minimised = true;
+}
+
+/// `split_variants` under `--minimal` on one allele of a multi-allelic record
+/// (InputBuffer.pm:638-718), the record's chopped working string in
+/// `record_allele_string_multi` and its span in `start` and `end`, `own` the
+/// allele's position among that string's alternate alleles (its written position
+/// in a VCF record unless a gVCF block before it was left out). When no allele of
+/// the record trims, the record is annotated as it stands and carries no
+/// `minimised` mark ([`MinimalSplit::Unchanged`]). Otherwise this allele takes
+/// its trimmed alleles and span, the record's span as `original_start` and
+/// `original_end` for the columns the rejoin restores, the chopped string as its
+/// `UPLOADED_ALLELE` (:694), the class `VARIANT_CLASS` prints under the split
+/// (the first allele's trimmed pair: OutputFactory.pm:2287 builds the first
+/// feature's hash, which caches `class_SO_term`, before the rejoin; a record
+/// carrying a class already, a resolved identifier's stored one, keeps it, as
+/// `class_SO_term` keeps a set value, VariationFeature.pm:1117), its written
+/// position as its ALLELE_NUM (:684) and, after the first allele, the key prefix
+/// the rejoin sorts its rows by; an allele equal to the reference once trimmed is
+/// [`MinimalSplit::NoAllele`]. A structural record, a record with no allele to
+/// annotate and a bi-allelic record are left alone.
+pub fn apply_minimal_split(variant: &mut InputVariant, own: usize) -> MinimalSplit {
+    if variant.is_structural || variant.no_allele {
+        return MinimalSplit::Unchanged;
+    }
+    let Some(working) = variant.record_allele_string_multi.clone() else {
+        return MinimalSplit::Unchanged;
+    };
+    let mut parts = working.split('/');
+    let reference = parts.next().unwrap_or("");
+    let alts: Vec<&str> = parts.collect();
+    if !split_changes_record(reference, alts.iter().copied()) {
+        variant.minimised = false;
+        return MinimalSplit::Unchanged;
+    }
+    let Some(own_alt) = alts.get(own) else {
+        return MinimalSplit::Unchanged;
+    };
+    let (start, end) = (variant.start, variant.end);
+    let (trimmed_ref, trimmed_alt, new_start, new_end, _) =
+        trim_sequences(reference.as_bytes(), own_alt.as_bytes(), start, end);
+    if variant.record_so_term.is_none() {
+        let (first_ref, first_alt, _, _, _) =
+            trim_sequences(reference.as_bytes(), alts[0].as_bytes(), start, end);
+        variant.record_so_term =
+            Some(so_variation_class(&allele_pair(&first_ref, &first_alt)).to_string());
+    }
+    variant.original_start = Some(start);
+    variant.original_end = Some(end);
+    variant.minimised = true;
+    variant.allele_num = None;
+    variant.uploaded_allele_string = Some(Arc::clone(&working));
+    if trimmed_ref == trimmed_alt {
+        return MinimalSplit::NoAllele;
+    }
+    if own > 0 {
+        variant.rejoin_key_prefix =
+            Some(format!("{}_", allele_pair(&trimmed_ref, &trimmed_alt)).into());
+    }
+    set_alleles(variant, trimmed_ref, trimmed_alt, new_start, new_end);
+    MinimalSplit::Trimmed
+}
+
+/// The `REF_ALLELE` of every row of a split record, `working` the record's
+/// chopped allele string: the rows print the record's feature, whose
+/// `ref_allele_string` was cached while the first allele's rows were built
+/// before the rejoin restored the record's string (OutputFactory.pm:1357 at
+/// :2287, VariationFeature.pm:1533-1539), so it is the first allele's trimmed
+/// reference, or the record's own when the first allele equals the reference once
+/// trimmed and so built no row to cache it.
+pub fn rejoined_reference(working: &str) -> String {
+    let mut parts = working.split('/');
+    let reference = parts.next().unwrap_or("");
+    let first = parts.next().unwrap_or("");
+    let (trimmed_ref, trimmed_alt, _, _, _) =
+        trim_sequences(reference.as_bytes(), first.as_bytes(), 0, 0);
+    if trimmed_ref == trimmed_alt {
+        reference.to_string()
+    } else {
+        String::from_utf8_lossy(&trimmed_ref).into_owned()
+    }
+}
+
+/// The allele string of one pair, `reference/alt`.
+fn allele_pair(reference: &[u8], alt: &[u8]) -> String {
+    format!(
+        "{}/{}",
+        String::from_utf8_lossy(reference),
+        String::from_utf8_lossy(alt)
+    )
+}
+
+/// Gives `variant` the alleles and span a trim left.
+fn set_alleles(variant: &mut InputVariant, reference: Vec<u8>, alt: Vec<u8>, start: u64, end: u64) {
+    variant.allele_string = allele_pair(&reference, &alt);
+    variant.variant_class = classify_variant(&reference, &alt);
+    variant.ref_allele = reference;
+    variant.alt_alleles = vec![alt];
+    variant.start = start;
+    variant.end = end;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `trim_sequences` trims from the left while both alleles have a base, then
+    /// from the right, moves the span with the trims and writes an emptied allele
+    /// `-`: `GAAG/GGGG` at 14-17 is `AA/GG` at 15-16, `G/GT` at 14 is `-/T` at
+    /// 15-14, `GAA/G` at 14-16 is `AA/-` at 15-16 and `A/A` at 15 is `-/-` at 16-15
+    /// (every base trimmed, so `changed`); `A/G` and `-/T` are left as they are.
+    #[test]
+    fn trim_sequences_moves_the_span_with_the_trims() {
+        let trim = |r: &str, a: &str, s, e| {
+            let (tr, ta, ts, te, changed) = trim_sequences(r.as_bytes(), a.as_bytes(), s, e);
+            (
+                String::from_utf8(tr).unwrap(),
+                String::from_utf8(ta).unwrap(),
+                ts,
+                te,
+                changed,
+            )
+        };
+        assert_eq!(
+            trim("GAAG", "GGGG", 14, 17),
+            ("AA".into(), "GG".into(), 15, 16, true)
+        );
+        assert_eq!(
+            trim("G", "GT", 14, 14),
+            ("-".into(), "T".into(), 15, 14, true)
+        );
+        assert_eq!(
+            trim("GAA", "G", 14, 16),
+            ("AA".into(), "-".into(), 15, 16, true)
+        );
+        assert_eq!(
+            trim("A", "A", 15, 15),
+            ("-".into(), "-".into(), 16, 15, true)
+        );
+        assert_eq!(
+            trim("A", "G", 15, 15),
+            ("A".into(), "G".into(), 15, 15, false)
+        );
+        assert_eq!(
+            trim("-", "T", 15, 14),
+            ("-".into(), "T".into(), 15, 14, false)
+        );
+        assert_eq!(
+            trim("A", "*", 15, 15),
+            ("A".into(), "*".into(), 15, 15, false)
+        );
+    }
+
+    /// A record splits when any allele trims, an allele equal to the reference
+    /// included, and not when none does: `G/T/C` stays, `G/T/GA`, `A/A/G` and
+    /// `GAA/GGA/GGA` split.
+    #[test]
+    fn a_record_splits_when_any_allele_trims() {
+        assert!(!split_changes_record("G", ["T", "C"]));
+        assert!(!split_changes_record("G", ["*", "<DEL:*>"]));
+        assert!(split_changes_record("G", ["T", "GA"]));
+        assert!(split_changes_record("A", ["A", "G"]));
+        assert!(split_changes_record("GAA", ["GGA", "GGA"]));
+        assert!(!split_changes_record("-", ["A", "*"]));
+    }
+
+    /// A bi-allelic record is marked minimised whether or not a base was trimmed:
+    /// `GAAG/GGGG` at 14-17 becomes `AA/GG` at 15-16 and `A/G` keeps its alleles;
+    /// a structural record and a multi-allelic one are left alone.
+    #[test]
+    fn a_bi_allelic_record_is_trimmed_and_marked() {
+        let mut mnp = InputVariant::new("21".into(), 14, 17, b"GAAG".to_vec(), b"GGGG".to_vec());
+        minimise_bi_allelic(&mut mnp);
+        assert_eq!(
+            (mnp.start, mnp.end, mnp.allele_string.as_str()),
+            (15, 16, "AA/GG")
+        );
+        assert!(mnp.minimised);
+        let mut snv = InputVariant::new("21".into(), 15, 15, b"A".to_vec(), b"G".to_vec());
+        minimise_bi_allelic(&mut snv);
+        assert_eq!(
+            (snv.start, snv.end, snv.allele_string.as_str()),
+            (15, 15, "A/G")
+        );
+        assert!(snv.minimised);
+        let mut structural =
+            InputVariant::new("21".into(), 15, 20, b"N".to_vec(), b"<DEL>".to_vec());
+        structural.is_structural = true;
+        minimise_bi_allelic(&mut structural);
+        assert!(!structural.minimised);
+        let mut multi = InputVariant::new("21".into(), 14, 14, b"G".to_vec(), b"GA".to_vec());
+        multi.record_allele_string_multi = Some("G/T/GA".into());
+        minimise_bi_allelic(&mut multi);
+        assert!(!multi.minimised);
+        assert_eq!(multi.allele_string, "G/GA");
+    }
+
+    /// The split of `G/T/GA` at 14 (Ensembl VEP 116.2 on `21 10542414 x G T,GA`
+    /// under `--minimal`): the `T` allele keeps its alleles under the record's
+    /// span with no key prefix, the `GA` allele becomes `-/A` at 15-14 with
+    /// `original_start` and `original_end` at 14, the prefix `-/A_`, the chopped
+    /// string as its `UPLOADED_ALLELE` and the class of the first trimmed pair,
+    /// `SNV`; both are minimised and numbered by their written position.
+    #[test]
+    fn a_split_allele_takes_its_trimmed_span_and_the_record_s_span_as_its_original() {
+        let working: Arc<str> = "G/T/GA".into();
+        let mut first = InputVariant::new("21".into(), 14, 14, b"G".to_vec(), b"T".to_vec());
+        first.record_allele_string_multi = Some(Arc::clone(&working));
+        first.uploaded_allele_string = Some("G/T/GA".into());
+        assert_eq!(apply_minimal_split(&mut first, 0), MinimalSplit::Trimmed);
+        assert_eq!(
+            (first.start, first.end, first.allele_string.as_str()),
+            (14, 14, "G/T")
+        );
+        assert_eq!(
+            (first.original_start, first.original_end),
+            (Some(14), Some(14))
+        );
+        assert!(first.minimised);
+        assert_eq!(first.rejoin_key_prefix, None);
+        assert_eq!(first.record_so_term.as_deref(), Some("SNV"));
+
+        let mut second = InputVariant::new("21".into(), 14, 14, b"G".to_vec(), b"GA".to_vec());
+        second.allele_index = 1;
+        second.allele_num = Some(1);
+        second.record_allele_string_multi = Some(Arc::clone(&working));
+        assert_eq!(apply_minimal_split(&mut second, 1), MinimalSplit::Trimmed);
+        assert_eq!(
+            (second.start, second.end, second.allele_string.as_str()),
+            (15, 14, "-/A")
+        );
+        assert_eq!(
+            (second.original_start, second.original_end),
+            (Some(14), Some(14))
+        );
+        assert_eq!(second.rejoin_key_prefix.as_deref(), Some("-/A_"));
+        assert_eq!(second.uploaded_allele_string.as_deref(), Some("G/T/GA"));
+        assert_eq!(second.allele_num, None);
+        assert!(second.minimised);
+        assert_eq!(second.location(), "21:14");
+        assert_eq!(second.display_allele(), "A");
+        assert_eq!(second.class_so_term(), "SNV");
+    }
+
+    /// `REF_ALLELE` on a split record is the first allele's trimmed reference (`A`
+    /// for `AAG/GAG/AGG/-` and for `AG/GG/-`, `-` for `G/GA/T`), or the record's
+    /// own reference when the first allele equals it once trimmed (`A` for
+    /// `A/A/G`), as Ensembl VEP 116.2 prints under `--minimal --show_ref_allele`
+    /// for `21 10542414 AAAG AGAG,AAGG,A`, `21 10542414 AAG AGG,A`,
+    /// `21 10542414 G GA,T` and `21 10542415 A A,G`.
+    #[test]
+    fn the_rejoined_reference_is_the_first_alleles_unless_it_equals_the_reference() {
+        assert_eq!(rejoined_reference("AAG/GAG/AGG/-"), "A");
+        assert_eq!(rejoined_reference("AG/GG/-"), "A");
+        assert_eq!(rejoined_reference("A/A/G"), "A");
+        assert_eq!(rejoined_reference("A/T/AT"), "A");
+        assert_eq!(rejoined_reference("G/GA/T"), "-");
+    }
+
+    /// A record none of whose alleles trims (`G/T/C`) is left as it stands with no
+    /// mark, and an allele equal to the reference once trimmed (`A` of `A/A/G`)
+    /// writes no row while its record's class is that of its trimmed pair, `-/-`,
+    /// `sequence_alteration`, as Ensembl VEP 116.2 prints for `21 10542415 x A A,G`;
+    /// a record that carries a class already (a resolved identifier's stored
+    /// `indel`) keeps it through the split.
+    #[test]
+    fn an_unchanged_record_keeps_its_alleles_and_a_reference_allele_writes_no_row() {
+        let mut snv = InputVariant::new("21".into(), 14, 14, b"G".to_vec(), b"C".to_vec());
+        snv.allele_index = 1;
+        snv.minimised = true;
+        snv.record_allele_string_multi = Some("G/T/C".into());
+        assert_eq!(apply_minimal_split(&mut snv, 1), MinimalSplit::Unchanged);
+        assert!(!snv.minimised);
+        assert_eq!(snv.original_start, None);
+
+        let mut same = InputVariant::new("21".into(), 15, 15, b"A".to_vec(), b"A".to_vec());
+        same.record_allele_string_multi = Some("A/A/G".into());
+        assert_eq!(apply_minimal_split(&mut same, 0), MinimalSplit::NoAllele);
+        assert_eq!(same.record_so_term.as_deref(), Some("sequence_alteration"));
+        let mut g = InputVariant::new("21".into(), 15, 15, b"A".to_vec(), b"G".to_vec());
+        g.allele_index = 1;
+        g.allele_num = Some(1);
+        g.record_allele_string_multi = Some("A/A/G".into());
+        assert_eq!(apply_minimal_split(&mut g, 1), MinimalSplit::Trimmed);
+        assert_eq!(g.allele_num, None);
+        assert_eq!(g.rejoin_key_prefix.as_deref(), Some("A/G_"));
+        assert_eq!(g.class_so_term(), "sequence_alteration");
+
+        let mut stored = InputVariant::new("21".into(), 14, 15, b"TA".to_vec(), b"T".to_vec());
+        stored.record_allele_string_multi = Some("TA/T/TAA".into());
+        stored.record_so_term = Some("indel".into());
+        assert_eq!(apply_minimal_split(&mut stored, 0), MinimalSplit::Trimmed);
+        assert_eq!(
+            (stored.start, stored.end, stored.allele_string.as_str()),
+            (15, 15, "A/-")
+        );
+        assert_eq!(stored.class_so_term(), "indel");
+    }
+}

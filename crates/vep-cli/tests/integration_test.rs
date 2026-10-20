@@ -704,13 +704,16 @@ fn bare_symbolic_bnd_prints_the_class_term() {
     }
 }
 
-/// `--max_sv_size` governs a `<CNV:TR>` record's expansion as it does Ensembl VEP
-/// 116.2's (`Parser/VCF.pm:403`, `:417-418`, `:428`): under the default a 200-base
-/// allele against a 300-base run is a 100-base contraction, `frameshift_variant`; under
-/// `-1`, and under a limit the 200-base allele exceeds, the record keeps the symbolic
-/// reading, a gain over the run, `feature_elongation`.
+/// Without a FASTA a `<CNV:TR>` record keeps Ensembl VEP's symbolic reading whatever
+/// `--max_sv_size` says (the expansion of `Parser/VCF.pm:382-431` needs the run's
+/// reference sequence, `:516-527`): a 200-base allele against a 300-base run is the
+/// gain over the run, `feature_elongation,coding_sequence_variant`, under the default
+/// and under `-1`, as Ensembl VEP 116.2 writes for a contraction read without a FASTA,
+/// and under a limit the run's 299-base span exceeds, where Ensembl VEP skips the
+/// record as oversize (`Parser.pm:491-501`) and vep-rs annotates it, the divergence
+/// `docs/intended-divergences.md` documents for a record Ensembl VEP drops.
 #[test]
-fn max_sv_size_governs_tandem_repeat_expansion() {
+fn a_tandem_repeat_without_a_fasta_keeps_the_symbolic_reading_under_every_max_sv_size() {
     let record = "21\t30425600\ttr\tN\t<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30425899;SVLEN=300;RUS=AT;RUC=100;RB=300";
     let consequences = |extra: &[&str]| -> String {
         annotate_record(record, &[], extra)
@@ -719,12 +722,11 @@ fn max_sv_size_governs_tandem_repeat_expansion() {
             .map(|row| row.split('\t').nth(6).unwrap().to_string())
             .expect("the run overlaps ENST00000390690")
     };
-    assert_eq!(consequences(&[]), "frameshift_variant,feature_truncation");
-    for limit in ["-1", "100"] {
+    for extra in [&[][..], &["--max_sv_size", "-1"], &["--max_sv_size", "100"]] {
         assert_eq!(
-            consequences(&["--max_sv_size", limit]),
+            consequences(extra),
             "feature_elongation,coding_sequence_variant",
-            "--max_sv_size {limit}"
+            "{extra:?}"
         );
     }
 }
@@ -1115,14 +1117,12 @@ fn a_star_only_record_is_carried_without_rows() {
     }
 }
 
-/// With a FASTA, Ensembl VEP 116.2 reads `21 30425587 x N <CNV:TR>,<CNV:TR> . .
-/// SVTYPE=CNV;END=30425596;SVLEN=9;RN=0,1;RUS=AGC;RUC=4` as `AGCAGCAGC//AGCAGCAGCAGC`,
-/// keeps the first minimised allele alone and writes `21:30425588-30425596 -
-/// ENST00000390690 inframe_deletion ALLELE_NUM=1`: the RN=0 allele as the run's loss, the
-/// real allele dropped. Both alleles are written here, the RN=0 allele as the loss of
-/// the run and the four-unit allele as the gain.
+/// Without a FASTA every allele of a `<CNV:TR>` record is the symbolic gain over the
+/// run, whatever its RN entry says (`RN=0,1`): two rows, numbered 1 and 2, each
+/// `feature_elongation,coding_sequence_variant`, as Ensembl VEP 116.2 writes a
+/// tandem repeat it could not read the sequence of.
 #[test]
-fn an_rn_zero_allele_is_the_loss_of_the_run_beside_its_sibling() {
+fn every_allele_of_a_tandem_repeat_without_a_fasta_is_the_symbolic_gain() {
     let rows: Vec<(String, String)> = annotate_record(
         "21\t30425587\trn0\tN\t<CNV:TR>,<CNV:TR>\t.\t.\tSVTYPE=CNV;END=30425596;SVLEN=9;RN=0,1;RUS=AGC;RUC=4",
         &[],
@@ -1140,18 +1140,10 @@ fn an_rn_zero_allele_is_the_loss_of_the_run_beside_its_sibling() {
         (num, c[6].to_string())
     })
     .collect();
+    let gain = "feature_elongation,coding_sequence_variant".to_string();
     assert_eq!(
         rows,
-        [
-            (
-                "1".to_string(),
-                "feature_truncation,inframe_deletion".to_string()
-            ),
-            (
-                "2".to_string(),
-                "feature_elongation,coding_sequence_variant".to_string()
-            ),
-        ]
+        [("1".to_string(), gain.clone()), ("2".to_string(), gain)]
     );
 }
 

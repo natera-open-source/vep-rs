@@ -1,0 +1,2 @@
+WARNING: found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size
+WARNING: CIRUC and CIRB INFO fields are ignored when calculating alternative alleles in tandem repeats

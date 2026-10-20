@@ -331,7 +331,11 @@ impl FrequencyFilter {
                     .filter(|f| f.is_true());
             }
             let text = frequency.map_or_else(|| "NA".to_string(), Frequency::text);
-            freqs.push(format!("{}:{allele}:{text}", self.freqs_key));
+            // `%used_freqs` is keyed by allele (:433), so a repeated ALT lists once.
+            let entry = format!("{}:{allele}:{text}", self.freqs_key);
+            if !freqs.contains(&entry) {
+                freqs.push(entry);
+            }
             passes.push(frequency.is_some_and(|f| self.passes(f)));
         }
         let passed = passes.iter().filter(|&&p| p).count();
@@ -641,6 +645,26 @@ mod tests {
         assert_eq!(record[1].filtered_allele_string.as_deref(), Some("G/C"));
         assert_eq!(record[1].allele_num, Some(1));
         assert_eq!(record[1].display_allele(), "C");
+    }
+
+    /// A repeated ALT is one key of Ensembl VEP's `%used_freqs`
+    /// (`BaseCacheVariation.pm:433`), so `FREQS` lists it once: `21 7759128 T A,G,G`
+    /// against `rs1555870136` lists `AF:A:NA,AF:G:1`.
+    #[test]
+    fn a_repeated_alt_is_listed_once_in_freqs() {
+        let f = filter(&["--check_frequency", "--freq_pop", "AF"]);
+        let mut record = alleles_of(
+            "T",
+            &["A", "G", "G"],
+            vec![known(
+                "rs1555870136",
+                "T/A/G/G",
+                &[("AF", "G:1")],
+                &[("A", "A"), ("G", "G")],
+            )],
+        );
+        f.filter_record(&mut record);
+        assert_eq!(record[0].freqs, ["AF:A:NA", "AF:G:1"]);
     }
 
     /// A library caller may hand the filter an empty record; the binary's

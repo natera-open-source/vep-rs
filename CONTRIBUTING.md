@@ -94,7 +94,13 @@ annotation carries `reference_warning` (VEP's reason, from its warnings file,
 recorded when the corpus is built); `classify` writes `reference_rows` 0 on it
 and classes the keys only vep-rs emits for it `reference_skipped_record`, the
 one class under which the harness accepts a record-level VCF line or JSON
-object with no reference counterpart.
+object with no reference counterpart. A manifest may also carry
+`reference_warnings`, the texts Ensembl VEP wrote to its warnings file about
+the run rather than about one record (the notice a `<CNV:TR>` record draws
+without a FASTA, for one); the harness expects them in the run's warnings file
+beside the numbered reasons. A flag set may carry its own list for its run
+alone; one without inherits the manifest's. Like `masks`, the list is written
+by hand and kept by `select`.
 
 To add a release or assembly, run the generator where the VEP reference outputs,
 their inputs and the JSON cache are: select the exemplars, prune the cache, write

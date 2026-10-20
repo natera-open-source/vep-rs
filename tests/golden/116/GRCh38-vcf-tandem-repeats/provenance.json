@@ -1,0 +1,77 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "c78a477c9d0bd48b1ef4e6433e746be3",
+  "arch": "aarch64",
+  "flags_passed": [
+   "--uploaded_allele",
+   "--allele_number",
+   "--variant_class",
+   "--mask_header_cache_path"
+  ]
+ },
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --allele_number --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none for the manifest's run; the fasta and fasta-max10 sets pass the GRCh38-identifiers corpus's reference.fa.gz (chromosome 21, the corpus's transcript spans with N elsewhere) to both engines, decompressed for Ensembl VEP",
+ "input": "15 hand-built `<CNV:TR>` records (VCF 4.4) at 21:13620283, the padding base before the run TCATCATCA of a coding exon on the forward strand: a gain and a loss of one unit, an allele equal to the run, RB in place of RUC, no RN, two alleles, two SVLEN values, CIRUC, no RUS, a fractional RUC, a lower-case RUS, END without SVLEN, two repeat sequences in one allele, a `.` unit and a record with INFO/SVTYPE",
+ "generator": "json_cache: the GRCh38-identifiers corpus's pruned cache; expected outputs: one Ensembl VEP 116.2 container run per format and per run (without a FASTA, with one, with one under --max_sv_size 10) on the committed records",
+ "pruned_cache_transcripts": {
+  "21": 726
+ },
+ "sha256": {
+  "default.txt": "9bd197c1d19b1fc9b04b124d61d4efd65423130f542ef59d210009d81d0502fa",
+  "tab.txt": "d9b5aa265ba00466dc89620ce24e68cf5908fbd74739a65e43dcab342522db4b",
+  "vcf.vcf": "008f10186445f70efff64ff91a0e79e47cab40987703abf76dbad640a36e1a06",
+  "json.jsonl": "3fd8fb4fd79d5368bdf7f93fdbe7c952d7efe722093b8a921603c6e575ad02e9"
+ },
+ "variants_vcf_sha256": "94f6cdc8895108c32061ba1547ac6817c91eb55042e4d47fe14ae0f576dc5559",
+ "flag_sets": {
+  "fasta": {
+   "flags": [
+    "--uploaded_allele",
+    "--allele_number",
+    "--variant_class",
+    "--mask_header_cache_path",
+    "--fasta",
+    "../GRCh38-identifiers/reference.fa.gz"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_fasta",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --allele_number --variant_class --mask_header_cache_path --fasta reference.fa [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "4c037726e0df976beb3b2dc45035ebacd357fd231944c5e50779e52a8200da77",
+    "tab.txt": "ae67dc6bd57486b04affbce496b84a126d11920ccc50f8e70c2ce077ec6ed85d",
+    "vcf.vcf": "fb224d6064023ccf3012c9c16a073fc271e5c7ddfbf50cf98f7ff7c5a7eab84a",
+    "json.jsonl": "a636bd186c047a9eaeb34ad05f97886c08d0834ffeb7a001fd8ffac9fc2ebf69"
+   }
+  },
+  "fasta-max10": {
+   "flags": [
+    "--uploaded_allele",
+    "--allele_number",
+    "--variant_class",
+    "--mask_header_cache_path",
+    "--fasta",
+    "../GRCh38-identifiers/reference.fa.gz",
+    "--max_sv_size",
+    "10"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_fasta-max10",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --allele_number --variant_class --mask_header_cache_path --fasta reference.fa --max_sv_size 10 [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "d680c61c436f2eb60d82052b01953dd8af46be8d258589992600425c9730b867",
+    "tab.txt": "7ccba0da5a9207c91c5b21a3dfb0f069e031576fa3412f220713a2d78557cbf2",
+    "vcf.vcf": "81decc0bc46abbf88bdda2c0a5783df229ae929efe8168e76508ed33368459f9",
+    "json.jsonl": "9aeccadb2ccb1fe6fd670e6ba04e98a3e2b43d58250c4fae6c18b59db7c4a8ce"
+   }
+  }
+ }
+}

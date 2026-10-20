@@ -117,10 +117,11 @@ pub fn structural_start(pos: u64, class: VariantClass) -> u64 {
 pub enum SpanError {
     /// INFO/END is not a coordinate (`validate_vf`: "Invalid start or end coordinate").
     EndNotACoordinate(String),
-    /// The end lies more than one base before the start (`validate_vf`: `start > end+1`).
-    StartPastEnd { start: u64, end: u64 },
-    /// A tandem class whose largest SVLEN is negative ends before its start.
-    NegativeTandemLength(i64),
+    /// The end lies more than one base before the start (`validate_vf`: `start > end+1`),
+    /// the end as Ensembl VEP computes it, below zero for a tandem class whose
+    /// largest SVLEN reaches before the chromosome (`$start + max(@svlen) - 1`,
+    /// Parser/VCF.pm:511).
+    StartPastEnd { start: u64, end: i64 },
     /// The record's first base, `pos + 1`, lies past [`MAX_COORD`].
     StartPastCeiling(u64),
 }
@@ -132,10 +133,6 @@ impl fmt::Display for SpanError {
             SpanError::StartPastEnd { start, end } => {
                 write!(f, "start > end+1 : (START={start}, END={end})")
             }
-            SpanError::NegativeTandemLength(len) => write!(
-                f,
-                "Invalid SVLEN for a tandem repeat or a tandem duplication: '{len}'"
-            ),
             SpanError::StartPastCeiling(pos) => write!(f, "Invalid POS: '{pos}'"),
         }
     }
@@ -147,15 +144,16 @@ impl std::error::Error for SpanError {}
 /// with the INFO values `svlen` and `end` as written (`END=` is `Some("")`), `None` for
 /// an absent key or a bare `SVLEN` or `END` flag with no `=`.
 ///
-/// With SVLEN defined the end is `pos + |SVLEN|` from the first value, or from the
-/// largest for a tandem class, which refuses a negative one; SVLEN=0 or a value that
-/// is not a number ends the record at `pos`, one base before its start, the pair
-/// Ensembl VEP carries for an insertion of unknown length. Without SVLEN a breakpoint
-/// ends at its start unless END is written empty or `0`, the two values Perl reads as
-/// false and so never replaces (the record is then skipped as Ensembl VEP skips it);
-/// every other class ends at END, read with the blanks around it dropped, refused when
-/// it is not a coordinate or lies more than one base before the start, and at the start
-/// when END is absent. The end saturates at [`MAX_COORD`].
+/// With SVLEN defined the end is `pos + |SVLEN|` from the first value, or `pos` plus
+/// the largest for a tandem class, refused as `start > end+1` when that largest is
+/// negative; SVLEN=0 or a value that is not a number ends the record at `pos`, one
+/// base before its start, the pair Ensembl VEP carries for an insertion of unknown
+/// length. Without SVLEN a breakpoint ends at its start unless END is written empty
+/// or `0`, the two values Perl reads as false and so never replaces (the record is
+/// then skipped as Ensembl VEP skips it); every other class ends at END, read with
+/// the blanks around it dropped, refused when it is not a coordinate or lies more
+/// than one base before the start, and at the start when END is absent. The end
+/// saturates at [`MAX_COORD`].
 pub fn structural_end(
     pos: u64,
     svlen: Option<&str>,
@@ -168,7 +166,10 @@ pub fn structural_end(
         let len = if class == SpanClass::Tandem {
             let largest = values.iter().copied().max().unwrap_or(0);
             if largest < 0 {
-                return Err(SpanError::NegativeTandemLength(largest));
+                let end = i64::try_from(pos)
+                    .unwrap_or(i64::MAX)
+                    .saturating_add(largest);
+                return Err(SpanError::StartPastEnd { start, end });
             }
             largest
         } else {
@@ -185,7 +186,10 @@ pub fn structural_end(
             let end = parse_coordinate(text.trim_ascii())
                 .ok_or_else(|| SpanError::EndNotACoordinate(text.to_string()))?;
             if end.saturating_add(1) < start {
-                return Err(SpanError::StartPastEnd { start, end });
+                return Err(SpanError::StartPastEnd {
+                    start,
+                    end: i64::try_from(end).unwrap_or(i64::MAX),
+                });
             }
             Ok(end)
         }
@@ -373,7 +377,17 @@ mod tests {
         );
         assert_eq!(
             structural_end(pos, Some("-300"), None, SpanClass::Tandem),
-            Err(SpanError::NegativeTandemLength(-300))
+            Err(SpanError::StartPastEnd {
+                start: pos + 1,
+                end: pos as i64 - 300
+            })
+        );
+        assert_eq!(
+            structural_end(10, Some("-20"), None, SpanClass::Tandem),
+            Err(SpanError::StartPastEnd {
+                start: 11,
+                end: -10
+            })
         );
     }
 

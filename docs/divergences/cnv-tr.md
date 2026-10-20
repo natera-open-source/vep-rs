@@ -1,10 +1,10 @@
 # A representation difference, not a defect: `<CNV:TR>`
 
-**In one sentence.** A `<CNV:TR>` record describes a change in the copy number of a tandem repeat without spelling the alternate allele out, and the two engines read it in two different, equally faithful ways.
+**In one sentence.** A `<CNV:TR>` record describes a change in the copy number of a tandem repeat without spelling the alternate allele out, and there are two equally faithful ways to read it. Each engine gives the same reading on the same input; the class pairs the readings of two runs that read the record differently.
 
-**The two readings.** Ensembl VEP materialises the allele: it repeats the unit the stated number of times and annotates the difference as an ordinary insertion or deletion of bases. vep-rs keeps the allele symbolic, as a copy-number change of the run, and annotates the run's span for its direction. Ensembl VEP itself gives the symbolic reading when the expanded allele would exceed `--max_sv_size`.
+**The two readings.** With a FASTA, both engines materialise the allele: they repeat the unit the stated number of times, read the run's reference bases from the FASTA and annotate the difference as an ordinary insertion or deletion of bases. Without a FASTA, both keep the allele symbolic, as a copy-number change of the run, and annotate the run's span as a gain whatever the stated count. Both give the symbolic reading when the expanded allele would exceed `--max_sv_size`.
 
-**Why neither is wrong.** Ensembl VEP's row is a faithful annotation of a real molecule: a run of 121 units where the reference has nine is, base for base, an insertion. vep-rs's row keeps the record in the terms its author chose: a copy-number change of a repeat, located on the repeat, with the region term and the direction term. Nothing in either row is false, so the comparator pairs the two readings rather than ranking them.
+**Why neither is wrong.** The expanded row is a faithful annotation of a real molecule: a run of 121 units where the reference has nine is, base for base, an insertion. The symbolic row keeps the record in the terms its author chose: a copy-number change of a repeat, located on the repeat, with the region term and the direction term. Nothing in either row is false, so the comparator pairs the two readings rather than ranking them when one run read a FASTA and the other did not.
 
 **Where the readings part** (`ensembl-vep`): `Bio/EnsEMBL/VEP/Parser/VCF.pm`, `_expand_tandem_repeat_allele_string`, lines 382-431, called from `create_StructuralVariationFeatures` at line 520.
 
@@ -15,7 +15,9 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 12. `<CNV:TR>` read symbolically, not expanded
 
-**In short.** A `<CNV:TR>` record states a copy-number change of a tandem repeat without spelling the alternate allele out, and Ensembl VEP rebuilds that allele and annotates its difference from the reference run as an insertion or deletion of bases. vep-rs keeps the allele symbolic: its Location is the run, its Allele `tandem_repeat`, its consequence the region the run lies in, plus `feature_elongation` on a gain or `feature_truncation` on a loss where the run touches exonic sequence. Ensembl VEP itself gives the record this symbolic reading when the expanded allele would exceed `--max_sv_size` (and, for a gain, when no FASTA is given), and nothing in either row is false, so the comparator pairs the readings rather than ranking them.
+**In short.** A `<CNV:TR>` record states a copy-number change of a tandem repeat without spelling the alternate allele out. A run that reads a FASTA rebuilds that allele and annotates its difference from the reference run as an insertion or deletion of bases. A run without a FASTA keeps the allele symbolic: its Location is the run, its Allele `tandem_repeat`, its consequence the region the run lies in, plus `feature_elongation` where the run touches exonic sequence. Both engines read the record both ways on the same terms, and both give the symbolic reading when the expanded allele would exceed `--max_sv_size`. Nothing in either row is false, so the comparator pairs the readings rather than ranking them.
+
+The rows below are the expanded reading on Ensembl VEP's side and the symbolic reading on vep-rs's, the two runs of the paper's measurement: the reference ran with the FASTA and vep-rs without one.
 
 ### 12.1 What a reader needs to know first
 
@@ -32,7 +34,7 @@ A `<CNV:TR>` record (VCF 4.4) describes a change in the copy number of a tandem 
 
 The record `T <CNV:TR>` with `END=25896436;SVLEN=18;RUS=CA;RUC=121;RB=242` says: the run of nine CA units at 25896419-25896436 carries 121 units in the alternate allele, a gain of 112 units (224 bases).
 
-There are two ways to annotate such a record. One is to reconstruct the alternate sequence, compare it with the reference run and annotate the difference as an ordinary insertion or deletion of bases. The other is to keep the allele symbolic, as a copy-number change of the run itself, and annotate the run's span for its direction. Ensembl VEP does the first; vep-rs does the second.
+There are two ways to annotate such a record. One is to reconstruct the alternate sequence, compare it with the reference run and annotate the difference as an ordinary insertion or deletion of bases. The other is to keep the allele symbolic, as a copy-number change of the run itself, and annotate the run's span for its direction. Both engines do the first with a FASTA to read the run from and the second without one (`Parser/VCF.pm` lines 516-527); the rows below set a run with a FASTA against one without.
 
 The terms involved are:
 
@@ -113,29 +115,29 @@ The `OverlapBP` and `OverlapPC` fields of the symbolic rows are described under 
 
 Ensembl VEP builds the alternate allele as a literal sequence (it materialises the allele). It reads the reference bases of the run and builds the alternate as `RUS` repeated `RUC` times (or `RB` divided by the unit's length, in whole units, when `RUC` is absent). It then hands the pair to its sequence-variant machinery, which trims the common prefix. What is left is a gain as an insertion of whole units after the run's last base, or a loss as a deletion of whole units ending at the run's last base.
 
-The materialisation is skipped for the whole record when any repeat sequence of any of its alleles is longer than `--max_sv_size` bases (the same 10,000,000 default; under `-1` it is always skipped), and every allele of the record is then annotated symbolically. vep-rs reads the direction of change under the same limit, so above it the two engines agree on the symbolic gain.
+The materialisation is skipped for the whole record when any repeat sequence of any of its alleles is longer than `--max_sv_size` bases (the same 10,000,000 default; under `-1` it is always skipped), and every allele of the record is then annotated symbolically. vep-rs expands under the same limit, so above it both engines give the symbolic gain.
 
 The materialisation also needs the run's reference bases. A run without `--fasta` (`--offline` with no FASTA, the protocol of the golden corpora; the measured structural-variant sets ran with the FASTA, so their reference rows are the expanded alleles) fetches no slice and builds no literal allele. Every `<CNV:TR>` record is then annotated as a symbolic `tandem_repeat` over the run, which `copy_number_gain` reads as a gain, so a loss is labelled `feature_elongation` with the region terms (lines 516-527 of the same file; `Utils/VariationEffect.pm` lines 246-256).
 
-vep-rs reads the direction from the INFO fields with or without a FASTA, so against a FASTA-less reference a loss is `feature_truncation` with the deletion's terms where the reference writes `feature_elongation`. A gain keeps the run as its span on both sides and agrees.
+vep-rs reads the record the same way. With a FASTA it expands the allele from the run's bases, the record then a sequence record; without one it keeps the symbolic `tandem_repeat` over the run, a gain whatever `RUC` says, and writes the same warning once per run.
 
 Source (`ensembl-vep`):
 
 - `Bio/EnsEMBL/VEP/Parser/VCF.pm`, `_expand_tandem_repeat_allele_string`, lines 382-431: builds the literal alternate allele; called from `create_StructuralVariationFeatures` at line 520 once the reference sequence of the run has been fetched.
 
-### 12.5 Why vep-rs keeps the symbolic reading, and why Ensembl VEP's reading is not a defect
+### 12.5 Why the symbolic reading stands, and why Ensembl VEP's reading is not a defect
 
 Ensembl VEP's reading is a faithful annotation of a real molecule. A run of 121 CA units where the reference has nine is, base for base, an insertion of 224 bases after the run, and an in-frame gain of 39 GTG units inside a coding exon does insert 39 codons. Nothing in its rows is false, and this class is not a defect.
 
 When `RUC` is exact the literal reading also carries what the symbolic one does not: the reading frame and the inserted residues, and an IMPACT of MODERATE for an in-frame gain where the symbolic reading's `feature_elongation` is HIGH.
 
-vep-rs keeps the record in the terms the VCF author chose: the variant is a copy-number change of a repeat, its location is the repeat, its allele is the repeat class, and its consequence is the region the run lies in. Where the run touches exonic sequence, the consequence adds what a longer or shorter run does to the feature (`feature_elongation` or `feature_truncation`).
+The symbolic reading keeps the record in the terms the VCF author chose: the variant is a copy-number change of a repeat, its location is the repeat, its allele is the repeat class, and its consequence is the region the run lies in. Where the run touches exonic sequence, the consequence adds `feature_elongation`, the term `copy_number_gain` gives a tandem repeat.
 
 That reading is stable under the information the record carries and does not carry:
 
 - it does not depend on the reference sequence of the run being fetched;
 - it does not turn a copy-number call into a literal sequence the caller never asserted (a `<CNV:TR>` record may carry confidence intervals on the unit count, `CIRUC` and `CIRB`, which Ensembl VEP's expansion ignores with a warning);
-- it is the reading Ensembl VEP itself gives the record when it does not expand the allele ([12.6](#126-try-it-yourself)).
+- it is the reading both engines give the record when neither reads a FASTA, and Ensembl VEP gives it with one when it does not expand the allele ([12.6](#126-try-it-yourself)).
 
 Neither reading is wrong; the comparator pairs them rather than ranking them.
 
@@ -169,15 +171,15 @@ Both rows are byte for byte the vep-rs rows of [12.3](#123-what-each-engine-writ
 - for a literal reading the expansion does not trim to a unit indel, any other sequence allele (`N` bases included) whose span touches the run or the base after it. Those readings are a multi-allelic `<CNV:TR>` record, whose allele string is never prefix-trimmed, a unit that is not the reference's repeat, a `.` unit read as `N`, or an `SVLEN` that disagrees with the unit count. Each is a substitution across the run (`AGCAGCAGCAGC protein_altering_variant`, `AGCAGC inframe_deletion`, `NNNN frameshift_variant`);
 - for an unexpanded reading, the reference's own `tandem_repeat` tuple at the run, written without a FASTA ([12.4](#124-why-ensembl-vep-writes-that)).
 
-Both members of the pair are set aside when the two consequence sets agree after the symbolic reading's direction term is disregarded. That term, where present, is `feature_elongation` on a gain and `feature_truncation` on a loss, either one on a literal reading.
+Both members of the pair are set aside when the two consequence sets agree after the symbolic reading's direction term is disregarded. That term, where present, is `feature_elongation` on the symbolic reading, a gain whatever the count, and `feature_elongation` or `feature_truncation` on a literal reading.
 
 Inside a coding sequence, the literal reading's coding effect is also treated as matching the symbolic reading's `coding_sequence_variant`. That effect is `inframe_insertion`, `inframe_deletion` or `frameshift_variant` for a unit indel, and any coding term, `protein_altering_variant` or `missense_variant` included, for a literal substitution. An unexpanded pair may differ in the direction and coding terms alone (`_is_cnv_tr_representation_pair`). Any other difference, a start or splice term one side carries and the other lacks, stays charged.
 
 The pairing reads every shape the expansion can take, the ones below included. The run at 30425588-30425596 is three copies of `AGC`, the run at 30425756-30425763 four copies of `AG`, the run at 30430410-30430417 four copies of `CT`, each with `--fasta` unless stated:
 
 - a unit that is not DNA, which Ensembl VEP repeats verbatim across the run and vep-rs keeps symbolic. `RUS=123;RUC=4` gives `21:30425588-30425596 123123123123 ENSG00000240432 ENST00000390690 Transcript coding_sequence_variant`. `RUS=R;RUC=10` gives `RRRRRRRRRR` with `frameshift_variant`, `RUS=*;RUC=9` gives `*********` with `coding_sequence_variant`, and `RUS=X;RUC=10` gives `XXXXXXXXXX` with `frameshift_variant`. Each pairs with vep-rs's `tandem_repeat feature_elongation,coding_sequence_variant` at the run;
-- a loss whose literal reading is a substitution with a coding term other than a deletion's. `RN=3;RUS=AG,AG,C;RUC=1,1,1` gives `21:30425760-30425763 C ENSG00000240432 ENST00000390690 Transcript protein_altering_variant`. `RUS=.;RB=5` gives `21:30425756-30425763 NNNNN ENSG00000240432 ENST00000390690 Transcript coding_sequence_variant`. `SVLEN=30_425_949;RUS=AGC;RUC=4` (an `SVLEN` Perl reads as 30) gives `21:30425597-30425617 AGC ENSG00000240432 ENST00000390690 Transcript protein_altering_variant`. `SVLEN=4000;RUS=CT;RUC=5` on the run at 30430410 gives `21:30430418-30434408 C ENSG00000186971 ENST00000334068 Transcript stop_retained_variant,3_prime_UTR_variant` against vep-rs's `21:30430410-30434409 tandem_repeat` with `stop_lost,feature_truncation,coding_sequence_variant,3_prime_UTR_variant`, the literal reading's stop term against the symbolic reading's;
-- a multi-allelic record whose reference rows collapse to one tuple, without a FASTA. `<CNV:TR>,<CNV:TR>,<CNV:TR>` with `RN=1,1,1;RUS=AGC,AGC,AGC;RUC=4,2,3` is one tuple in the reference, `21:30425588-30425596 tandem_repeat ENSG00000240432 ENST00000390690 Transcript feature_elongation,coding_sequence_variant` for all three alleles (every allele a gain without a FASTA, [12.4](#124-why-ensembl-vep-writes-that)). In vep-rs it is a gain tuple and a loss tuple (`feature_truncation,inframe_deletion`), both paired with it.
+- a loss whose literal reading is a substitution with a coding term other than a deletion's. `RN=3;RUS=AG,AG,C;RUC=1,1,1` gives `21:30425760-30425763 C ENSG00000240432 ENST00000390690 Transcript protein_altering_variant`. `RUS=.;RB=5` gives `21:30425756-30425763 NNNNN ENSG00000240432 ENST00000390690 Transcript coding_sequence_variant`. `SVLEN=30_425_949;RUS=AGC;RUC=4` (an `SVLEN` Perl reads as 30) gives `21:30425597-30425617 AGC ENSG00000240432 ENST00000390690 Transcript protein_altering_variant`. `SVLEN=4000;RUS=CT;RUC=5` on the run at 30430410 gives `21:30430418-30434408 C ENSG00000186971 ENST00000334068 Transcript stop_retained_variant,3_prime_UTR_variant` against the symbolic reading `21:30430410-30434409 tandem_repeat` over the whole run, the literal reading's stop term against the span's;
+- a multi-allelic record whose reference rows collapse to one tuple, the reference run without a FASTA. `<CNV:TR>,<CNV:TR>,<CNV:TR>` with `RN=1,1,1;RUS=AGC,AGC,AGC;RUC=4,2,3` is one tuple in the reference, `21:30425588-30425596 tandem_repeat ENSG00000240432 ENST00000390690 Transcript feature_elongation,coding_sequence_variant` for all three alleles (every allele a gain without a FASTA, [12.4](#124-why-ensembl-vep-writes-that)). In vep-rs with a FASTA it is a gain tuple and a loss tuple (`feature_truncation,inframe_deletion`), both paired with it; without one it is the same one tuple.
 
 An expansion the reference drops without a row is not a pair but [class 19](defect-l.md#19-an-empty-or-unchanged-cnvtr-expansion-dropped-without-a-row) ([19.7](defect-l.md#197-how-the-comparator-treats-this-class)): an unchanged expansion over several repeat sequences (`RN=3;RUS=AGC,AGC,AGC;RUC=1,1,1`, `RN=2;RUS=AGC,AG;RUC=3,0`), a unit of no bases under `RUC` (`RUS=,AGC;RUC=4,4`) and a count in fullwidth digits (`RUC=４`, which Perl numifies to 0).
 

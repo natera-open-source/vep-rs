@@ -35,7 +35,7 @@
 //! `OutputFactory.pm` (ensembl-vep release/115, `Bio/EnsEMBL/VEP/`).
 
 use smallvec::SmallVec;
-use vep_core::consequence::TranscriptConsequence;
+use vep_core::consequence::{OwnSpanPositions, TranscriptConsequence};
 use vep_core::transcript::{ExonCoordMapper, MapperPair, SeqEdit, Transcript, TranscriptMapper};
 use vep_core::variant::InputVariant;
 
@@ -775,10 +775,22 @@ pub struct DisplayFields {
     /// orders them: an insertion's start is one past its end. `None` when
     /// either end is unmapped.
     pub translation_span: Option<(i64, i64)>,
+    /// The span's own positions once [`Self::record_span_positions`] has put
+    /// another span's in the three position columns; `None` while the columns
+    /// are the span's own.
+    pub own_span_positions: Option<Box<OwnSpanPositions>>,
+    /// The span's `exon` predicate (`_bvfo_preds`,
+    /// BaseVariationFeatureOverlapAllele.pm:511-516), which admits
+    /// `cDNA_position`.
+    exon: bool,
+    /// The span's `coding` predicate (:540-557), which admits `CDS_position`
+    /// and `Protein_position`.
+    coding: bool,
 }
 
 impl DisplayFields {
-    /// Writes the five columns and the three totals onto `tc`.
+    /// Writes the five columns, the three totals and the own-span positions
+    /// onto `tc`.
     pub(crate) fn write_to(self, tc: &mut TranscriptConsequence) {
         tc.cdna_position = self.cdna_position;
         tc.cds_position = self.cds_position;
@@ -788,13 +800,66 @@ impl DisplayFields {
         tc.protein_total = self.protein_total;
         tc.amino_acids = self.amino_acids;
         tc.codons = self.codons;
+        tc.own_span_positions = self.own_span_positions;
+    }
+
+    /// An allele of a `--minimal` split prints the positions of the record's
+    /// span ([`InputVariant::original_start`] to `original_end`) in the columns
+    /// its own span admits: Ensembl VEP clears every merged allele's cached
+    /// positions (`clear_shifting_variables`, TranscriptVariationAllele.pm:502-517)
+    /// and recomputes them from the feature the rejoin pointed it at, the record
+    /// (OutputFactory.pm:2291-2293, 2315), while the `exon` and `coding`
+    /// predicates that gate the columns (OutputFactory.pm:1724-1741) were cached
+    /// on the allele before the rejoin (BaseVariationFeatureOverlapAllele.pm:340,
+    /// 394), as its codons and consequences were; the allele's own positions
+    /// move to `own_span_positions` for the VCF and JSON formats, which clear the
+    /// cached positions before the rejoin (OutputFactory/VCF.pm:305-308,
+    /// OutputFactory/JSON.pm:217-220). Any other allele keeps the positions of
+    /// its own span.
+    pub fn record_span_positions(&mut self, variant: &InputVariant, transcript: &Transcript) {
+        let (Some(start), Some(end)) = (variant.original_start, variant.original_end) else {
+            return;
+        };
+        let (record, _) =
+            span_positions(variant.is_structural, transcript, start as i64, end as i64);
+        let own = OwnSpanPositions {
+            cdna: self.cdna_position.take(),
+            cds: self.cds_position.take(),
+            protein: self.protein_position.take(),
+        };
+        if self.exon {
+            self.cdna_position = record.cdna_position;
+        }
+        if self.coding {
+            self.cds_position = record.cds_position;
+            self.protein_position = record.protein_position;
+        }
+        self.own_span_positions = Some(Box::new(own));
     }
 }
 
-/// Computes the display columns for `variant` against `transcript`.
-pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> DisplayFields {
+/// What the coding part of the display columns reads once the span's positions
+/// are mapped: the span's cDNA coordinates and its CDS and peptide bounds.
+struct CodingSpan {
+    cdna: Segments,
+    cds_start: Option<i64>,
+    cds_end: Option<i64>,
+    pep_start: Option<i64>,
+    pep_end: Option<i64>,
+}
+
+/// The position columns and totals of the span `vf_start..=vf_end` against
+/// `transcript` (`cDNA_position`, `CDS_position`, `Protein_position`), with the
+/// coding coordinates the codon columns read when the span reaches the coding
+/// sequence. `is_structural` is the variant's class: a structural variant
+/// covering the whole transcript carries no exon predicate and so no positions.
+fn span_positions(
+    is_structural: bool,
+    transcript: &Transcript,
+    vf_start: i64,
+    vf_end: i64,
+) -> (DisplayFields, Option<CodingSpan>) {
     let mut out = DisplayFields::default();
-    let (vf_start, vf_end) = (variant.start as i64, variant.end as i64);
     let (tx_start, tx_end) = (transcript.start as i64, transcript.end as i64);
     let (min_vf, max_vf) = if vf_start > vf_end {
         (vf_end, vf_start)
@@ -805,19 +870,20 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
     // within_feature; a structural variant covering the whole transcript
     // carries no exon predicate and so no positions.
     if !overlap(vf_start, vf_end, tx_start, tx_end) {
-        return out;
+        return (out, None);
     }
-    if variant.is_structural && vf_start <= tx_start && vf_end >= tx_end {
-        return out;
+    if is_structural && vf_start <= tx_start && vf_end >= tx_end {
+        return (out, None);
     }
     if !overlaps_an_exon(transcript, min_vf, max_vf) {
-        return out;
+        return (out, None);
     }
     let Some(mapper) = transcript.vefc.as_ref().and_then(|v| v.mapper.as_ref()) else {
-        return out;
+        return (out, None);
     };
     let strand = transcript.strand.as_i8();
     let cdna = genomic2cdna(mapper, vf_start, vf_end, strand);
+    out.exon = true;
     out.cdna_position = coords_column(first_start(&cdna), last_end(&cdna));
     out.cdna_total = Some(transcript.spliced_length());
 
@@ -825,13 +891,13 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
     let (Some(coding_start), Some(coding_end)) =
         (transcript.coding_region_start, transcript.coding_region_end)
     else {
-        return out;
+        return (out, None);
     };
     if coding_start == 0 || coding_end == 0 {
-        return out;
+        return (out, None);
     }
     if !overlap(min_vf, max_vf, coding_start as i64, coding_end as i64) {
-        return out;
+        return (out, None);
     }
     let cds = cds_from_cdna(mapper, &cdna, vf_start, vf_end);
     let coding = match cds.as_slice() {
@@ -840,11 +906,49 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
         _ => true,
     };
     if !coding {
-        return out;
+        return (out, None);
     }
     let phase_offset = transcript.facts().start_phase_offset as i64;
     let cds_start = first_start(&cds).map(|s| s + phase_offset);
     let cds_end = last_end(&cds).map(|e| e + phase_offset);
+    let vefc = transcript.vefc.as_ref();
+    let cached_length =
+        |sequence: Option<&str>| sequence.filter(|s| !s.is_empty()).map(|s| s.len() as u32);
+    out.coding = true;
+    out.cds_position = coords_column(cds_start, cds_end);
+    out.cds_total = cached_length(vefc.and_then(|v| v.translateable_seq.as_deref()));
+    let pep = pep_from_cds(mapper, &cds);
+    let (pep_start, pep_end) = (first_start(&pep), last_end(&pep));
+    out.protein_position = coords_column(pep_start, pep_end);
+    out.protein_total = cached_length(vefc.and_then(|v| v.peptide.as_deref()));
+    out.translation_span = pep_start.zip(pep_end);
+    (
+        out,
+        Some(CodingSpan {
+            cdna,
+            cds_start,
+            cds_end,
+            pep_start,
+            pep_end,
+        }),
+    )
+}
+
+/// Computes the display columns for `variant` against `transcript`.
+pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> DisplayFields {
+    let (mut out, coding) = span_positions(
+        variant.is_structural,
+        transcript,
+        variant.start as i64,
+        variant.end as i64,
+    );
+    let Some(coding) = coding else {
+        return out;
+    };
+    if variant.is_structural {
+        return out;
+    }
+    let strand = transcript.strand.as_i8();
     let vefc = transcript.vefc.as_ref();
     let cds_seq = vefc
         .and_then(|v| v.translateable_seq.as_deref())
@@ -854,23 +958,12 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
         .and_then(|v| v.peptide.as_deref())
         .unwrap_or("")
         .as_bytes();
-    let cached_length = |seq: &[u8]| (!seq.is_empty()).then_some(seq.len() as u32);
-    out.cds_position = coords_column(cds_start, cds_end);
-    out.cds_total = cached_length(cds_seq);
-    let pep = pep_from_cds(mapper, &cds);
-    let (pep_start, pep_end) = (first_start(&pep), last_end(&pep));
-    out.protein_position = coords_column(pep_start, pep_end);
-    out.protein_total = cached_length(pep_seq);
-    out.translation_span = pep_start.zip(pep_end);
-
-    if variant.is_structural {
-        return out;
-    }
     let utr3 = vefc
         .and_then(|v| v.three_prime_utr.as_deref())
         .unwrap_or("")
         .as_bytes();
     let seq_edits: &[SeqEdit] = vefc.map_or(&[], |v| v.seq_edits.as_slice());
+    let phase_offset = transcript.facts().start_phase_offset as i64;
     let ctx = CodingContext {
         cds: cds_seq,
         utr3,
@@ -882,11 +975,11 @@ pub fn display_fields(variant: &InputVariant, transcript: &Transcript) -> Displa
             .filter(|s| *s > 0)
             .map(|s| s as i64),
         phase_offset,
-        cdna_start: first_start(&cdna),
-        cds_start,
-        cds_end,
-        pep_start,
-        pep_end,
+        cdna_start: first_start(&coding.cdna),
+        cds_start: coding.cds_start,
+        cds_end: coding.cds_end,
+        pep_start: coding.pep_start,
+        pep_end: coding.pep_end,
         reverse: variant.strand.as_i8() != strand,
     };
     let reference = Allele {
@@ -911,7 +1004,9 @@ pub fn apply_display_fields(
     transcript: &Transcript,
     numbers: bool,
 ) {
-    display_fields(variant, transcript).write_to(tc);
+    let mut fields = display_fields(variant, transcript);
+    fields.record_span_positions(variant, transcript);
+    fields.write_to(tc);
     let (exon, intron) = if numbers {
         exon_intron_numbers(variant, variant, transcript)
     } else {
@@ -1247,6 +1342,68 @@ mod tests {
             display_fields(&snv(900, "A", "G"), &tx),
             DisplayFields::default()
         );
+    }
+
+    /// A `--minimal` split allele's columns print the record's span where its own
+    /// span admits the column, the own positions kept aside: Ensembl VEP 116.2
+    /// prints `?-418`, `?-66` and `?-22` for the exonic allele of a record over an
+    /// intron-exon boundary and `-` three times for its intronic allele, whose
+    /// cached `exon` predicate is false. On the fixture a record 1198-1200 (the
+    /// last two coding bases of exon 1 and the first intronic base) maps to cDNA
+    /// `199-?`, CDS `149-?` and protein `50-?`; an allele in the 5' UTR of a
+    /// record reaching the CDS prints the record's cDNA span alone.
+    #[test]
+    fn a_split_allele_prints_the_record_span_in_the_columns_its_own_span_admits() {
+        let tx = forward_transcript();
+        let split = |pos: u64, original: (u64, u64)| {
+            let mut variant = snv(pos, "G", "A");
+            variant.original_start = Some(original.0);
+            variant.original_end = Some(original.1);
+            let mut fields = display_fields(&variant, &tx);
+            fields.record_span_positions(&variant, &tx);
+            fields
+        };
+        let exonic = split(1198, (1198, 1200));
+        assert_eq!(
+            (
+                exonic.cdna_position.as_deref(),
+                exonic.cds_position.as_deref(),
+                exonic.protein_position.as_deref()
+            ),
+            (Some("199-?"), Some("149-?"), Some("50-?"))
+        );
+        assert_eq!(
+            exonic.own_span_positions.as_deref(),
+            Some(&OwnSpanPositions {
+                cdna: Some("199".into()),
+                cds: Some("149".into()),
+                protein: Some("50".into()),
+            })
+        );
+        let intronic = split(1200, (1198, 1200));
+        assert_eq!(
+            (
+                intronic.cdna_position,
+                intronic.cds_position,
+                intronic.protein_position
+            ),
+            (None, None, None)
+        );
+        assert_eq!(
+            intronic.own_span_positions.as_deref(),
+            Some(&OwnSpanPositions {
+                cdna: None,
+                cds: None,
+                protein: None,
+            })
+        );
+        let utr = split(1049, (1049, 1051));
+        assert_eq!(utr.cdna_position.as_deref(), Some("50-52"));
+        assert_eq!((utr.cds_position, utr.protein_position), (None, None));
+        let mut unsplit = display_fields(&snv(1198, "G", "A"), &tx);
+        unsplit.record_span_positions(&snv(1198, "G", "A"), &tx);
+        assert_eq!(unsplit.cdna_position.as_deref(), Some("199"));
+        assert_eq!(unsplit.own_span_positions, None);
     }
 
     #[test]

@@ -217,10 +217,11 @@ pub fn calculate_consequences(
     });
     let analysed = shifted_allele.as_ref().unwrap_or(placed);
     let mut tc = calculate_terms(analysed, variant, transcript, config)?;
-    let fields = crate::display::display_fields(analysed, transcript);
+    let mut fields = crate::display::display_fields(analysed, transcript);
     if config.domains {
         tc.domains = domains_overlapping_protein_position(transcript, fields.translation_span);
     }
+    fields.record_span_positions(variant, transcript);
     fields.write_to(&mut tc);
     if config.compute_exon_intron_numbers {
         (tc.exon, tc.intron) = crate::display::exon_intron_numbers(analysed, placed, transcript);

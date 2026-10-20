@@ -537,10 +537,11 @@ pub struct Config {
 
     pub buffer_size: usize,
     /// The `--max_sv_size` limit; `None` is the flag's `-1`, no limit. Ensembl VEP
-    /// 116 drops a wider structural variant before annotation and writes nothing
-    /// for it in any format (`Parser.pm` `validate_vf`); vep-rs annotates it in the
-    /// default, tab and Parquet outputs, carries its VCF line without consequences
-    /// and omits it from the JSON output (`docs/intended-divergences.md`).
+    /// 116 drops a record whose span, end minus start, is wider before annotation
+    /// and writes nothing for it in any format (`Parser.pm` `validate_vf`), a
+    /// sequence record included; vep-rs annotates it in the default, tab and
+    /// Parquet outputs, carries its VCF line without consequences and omits it
+    /// from the JSON output (`docs/intended-divergences.md`).
     pub max_sv_size: Option<u64>,
     pub fork: usize,
     /// BGZF decompression worker threads for a BGZF input in any format, as the

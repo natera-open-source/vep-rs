@@ -21,9 +21,11 @@ Subcommands:
             (repeatable) writes it, each name a row of `--matrix` when one is given, a corpus
             regenerated over an existing manifest keeps that manifest's list, its `masks`
             (each a class `classify` knows, else the run is refused before anything is
-            written) and its `flag_sets` (each set's run definition and
-            `covers`; the divergence keys `classify --flag-set` wrote describe the old
-            records and are dropped, as the manifest's own are), and a run with neither
+            written), its `reference_warnings` (the texts Ensembl VEP wrote about the
+            run rather than about one record) and its `flag_sets` (each set's run
+            definition and `covers`; the divergence keys `classify --flag-set` wrote
+            describe the old records and are dropped, as the manifest's own are), and a
+            run with neither
             writes nothing. `--include <sid>=<name>` (repeatable) names a record of suite
             `sid`'s input, by its ID or by VEP's name for an ID-less record, that the
             corpus carries whatever the sampling chooses: its rows in the suite's
@@ -836,7 +838,8 @@ def names_format(flags: list[str]) -> bool:
 
 def flag_set_shape_error(fs: object) -> str | None:
     """The reason one `flag_sets` entry cannot be run: the shapes `flag-set` writes, so a
-    hand-written entry is held to the same rules."""
+    hand-written entry is held to the same rules; its hand-written `masks` and
+    `reference_warnings` must be lists of non-empty strings, as the manifest's own must."""
     name = fs.get("name") if isinstance(fs, dict) else None
     if not is_flag_set_name(name):
         return "has a flag_sets entry without a name (letters, digits, _ and -, not default)"
@@ -855,14 +858,16 @@ def flag_set_shape_error(fs: object) -> str | None:
         return f"flag set {name} runs on stdin without --format among its flags"
     if "perl_mode" in fs and fs["perl_mode"] not in PERL_MODES:
         return f"flag set {name} perl_mode is not one of {', '.join(PERL_MODES)}"
-    if "covers" in fs and not is_name_list(fs["covers"]):
-        return f"flag set {name} covers is not a list of names"
+    for key, kind in (("covers", "names"), ("masks", "names"), ("reference_warnings", "texts")):
+        if key in fs and not is_name_list(fs[key]):
+            return f"flag set {name} {key} is not a list of {kind}"
     return None
 
 
 def manifest_shape_error(manifest: dict) -> str | None:
-    """The reason a manifest's `covers`, `masks`, `flag_sets`, `cache_layout`, `fasta_in_cache`,
-    `included_records` or sample keys cannot be read: `covers` and `masks` must be lists of non-empty names, `flag_sets` a
+    """The reason a manifest's `covers`, `masks`, `reference_warnings`, `flag_sets`, `cache_layout`,
+    `fasta_in_cache`, `included_records` or sample keys cannot be read: `covers`, `masks` and
+    `reference_warnings` must be lists of non-empty strings, `flag_sets` a
     list of entries of the shape `flag_set_shape_error` holds them to, with distinct names,
     `cache_layout`, when present, `ensembl` (the cache at `cache_root/homo_sapiens/<release>_<assembly>`,
     so `release` and `assembly` must be named) rather than the default `json_cache/`, `fasta_in_cache`,
@@ -875,6 +880,8 @@ def manifest_shape_error(manifest: dict) -> str | None:
         return "covers is not a list of names"
     if "masks" in manifest and not is_name_list(manifest["masks"]):
         return "masks is not a list of names"
+    if "reference_warnings" in manifest and not is_name_list(manifest["reference_warnings"]):
+        return "reference_warnings is not a list of texts"
     keep = manifest.get("keep_samples", 0)
     if not isinstance(keep, int) or isinstance(keep, bool) or keep < 0:
         return "keep_samples is not a count"
@@ -1038,6 +1045,7 @@ def cmd_select(args: argparse.Namespace) -> int:
     # The call refuses an unknown mask class before anything is written, as `classify` would.
     masked_feature_types(existing)
     masks = existing.get("masks") or []
+    reference_warnings = existing.get("reference_warnings") or []
     # A set's divergence keys name the old records by ordinal; `classify --flag-set` rebuilds them.
     flag_sets = [{k: v for k, v in fs.items() if k not in CLASSIFY_KEYS} for fs in existing.get("flag_sets") or []]
     if not covers:
@@ -1184,6 +1192,7 @@ def cmd_select(args: argparse.Namespace) -> int:
         **run_options(args),
         "covers": covers,
         **({"masks": masks} if masks else {}),
+        **({"reference_warnings": reference_warnings} if reference_warnings else {}),
         **({"flag_sets": flag_sets} if flag_sets else {}),
         # File names only: the directory each suite was staged in belongs to the build
         # host, not to the corpus, and the tests read neither field.

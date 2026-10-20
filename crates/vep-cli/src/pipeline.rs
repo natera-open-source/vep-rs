@@ -23,14 +23,15 @@
 //! the next batch at once; the writer reorders the chunks by batch and chunk
 //! index, and a permit per batch, returned by the writer once the batch's last
 //! chunk is queued for writing, keeps the batches in flight within the pipeline
-//! depth. A task's skip warnings travel with its chunk and the writer reports
-//! them as it reaches the chunk, so the warnings file and the skipped-variants
-//! file list skips in input order in both modes. Batched: each batch is parsed
-//! on the pool, its chromosomes warmed, then annotated and rendered on the
-//! pool, one pass after another, and sent whole. A run with plugins, or one
-//! reading known variants from the cache's variation files or from the
-//! `--check_svs` file, is batched whatever the mode: plugins see a whole batch
-//! at once, and each of those sources prefetches one batch's regions at a time.
+//! depth. A task's skip warnings, and the warnings its records draw, travel with
+//! its chunk and the writer reports them as it reaches the chunk, so the warnings
+//! file and the skipped-variants file list them in input order in both modes.
+//! Batched: each batch is parsed on the pool, its chromosomes warmed, then
+//! annotated and rendered on the pool, one pass after another, and sent whole. A
+//! run with plugins, or one reading known variants from the cache's variation
+//! files or from the `--check_svs` file, is batched whatever the mode: plugins
+//! see a whole batch at once, and each of those sources prefetches one batch's
+//! regions at a time.
 //!
 //! Errors: each stage returns the first error it meets; a stage whose peer has
 //! hung up returns `Ok`, so the stage that failed is the only one reporting.
@@ -70,12 +71,17 @@ use crate::runner::{
 };
 use crate::transcript_index::LazyTranscriptIndexes;
 use crate::validate::{
-    invalid_vcf_coordinate, looks_like_number, AllelePatch, RecordLine, ReferenceChecks, SkipRules,
+    invalid_vcf_coordinate, keep_overlap_allele, looks_like_number, AllelePatch, RecordLine,
+    ReferenceChecks, SkipRules,
 };
 use crate::variation_matcher;
 use crate::variation_source::{ReadFailure, VariationSource};
-use crate::vcf_parser::{parse_vcf_line_with_max_sv_size, vcf_line_is_non_variant};
+use crate::vcf_parser::{
+    parse_vcf_line_with, parse_vcf_line_with_max_sv_size, record_splits, split_minimal_record,
+    tandem_repeat_warnings, vcf_columns, vcf_line_is_non_variant, VcfParse,
+};
 use vep_core::coordinate::parse_pos;
+use vep_core::minimal::{apply_minimal_split, minimise_bi_allelic, MinimalSplit};
 use vep_core::sv_record::StructuralRecordError;
 use vep_core::sv_routing::{
     joined, perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string, written_alts,
@@ -240,9 +246,9 @@ pub(crate) struct Rendered {
     first: u32,
     total: u32,
     chunks: anyhow::Result<Vec<Vec<u8>>>,
-    /// The skips a streaming task's parse finds, which the writer reports when
-    /// the task's chunk is due; a batch sent whole reports its skips as it
-    /// parses, so it carries none.
+    /// The skips and record warnings a streaming task's parse finds, which the
+    /// writer reports when the task's chunk is due; a batch sent whole reports
+    /// them as it parses, so it carries none.
     skips: Vec<SkipReport>,
 }
 
@@ -259,26 +265,84 @@ impl Rendered {
     }
 }
 
-/// One skipped record as a streaming task reports it: what
-/// [`Sink::skipped_variant`](crate::warnings::Sink::skipped_variant) takes,
-/// held until the writer reaches the task's chunk.
+/// What a streaming task reports about a record, held until the writer reaches
+/// the task's chunk so the run's warnings keep record order: a skipped record, what
+/// [`Sink::skipped_variant`](crate::warnings::Sink::skipped_variant) takes, or a
+/// warning the record draws (Ensembl VEP's tandem-repeat branch writes its
+/// warnings as it reads the record, Parser/VCF.pm:502-527).
 #[derive(Debug)]
-struct SkipReport {
-    description: String,
-    line_number: u64,
-    /// The text the warning quotes, when the parser exposes the line.
-    quoted: Option<String>,
+enum SkipReport {
+    Skip {
+        description: String,
+        line_number: u64,
+        /// The text the warning quotes, when the parser exposes the line.
+        quoted: Option<String>,
+    },
+    Warning(String),
 }
 
-/// Where a parse reports a skipped record: the description, the record's line
-/// number and the text the warning quotes. A parse on the coordinator or the
-/// reader thread reports to the run's sink at once ([`report_skip`]); a
-/// streaming task collects its skips for the writer.
-pub(crate) type SkipSink<'a> = dyn FnMut(&str, u64, Option<&str>) + 'a;
+impl SkipReport {
+    fn as_reported(&self) -> Reported<'_> {
+        match self {
+            SkipReport::Skip {
+                description,
+                line_number,
+                quoted,
+            } => Reported::Skip {
+                description,
+                line_number: *line_number,
+                quoted: quoted.as_deref(),
+            },
+            SkipReport::Warning(text) => Reported::Warning(text),
+        }
+    }
+}
 
-/// Reports one skip to the run's warning sink at once.
-fn report_skip(description: &str, line_number: u64, quoted: Option<&str>) {
-    crate::warnings::global().skipped_variant(description, Some(line_number), quoted);
+/// What a parse reports about one record: a skip, with the description, the
+/// record's line number and the text the warning quotes, or a warning the record
+/// draws.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Reported<'a> {
+    Skip {
+        description: &'a str,
+        line_number: u64,
+        quoted: Option<&'a str>,
+    },
+    Warning(&'a str),
+}
+
+impl<'a> Reported<'a> {
+    fn owned(self) -> SkipReport {
+        match self {
+            Reported::Skip {
+                description,
+                line_number,
+                quoted,
+            } => SkipReport::Skip {
+                description: description.to_string(),
+                line_number,
+                quoted: quoted.map(str::to_string),
+            },
+            Reported::Warning(text) => SkipReport::Warning(text.to_string()),
+        }
+    }
+}
+
+/// Where a parse reports what a record draws. A parse on the coordinator or the
+/// reader thread reports to the run's sink at once ([`report_to_sink`]); a
+/// streaming task collects its reports for the writer.
+pub(crate) type SkipSink<'a> = dyn FnMut(Reported<'_>) + 'a;
+
+/// Reports one skip or warning to the run's warning sink at once.
+pub(crate) fn report_to_sink(reported: Reported<'_>) {
+    match reported {
+        Reported::Skip {
+            description,
+            line_number,
+            quoted,
+        } => crate::warnings::global().skipped_variant(description, Some(line_number), quoted),
+        Reported::Warning(text) => crate::warnings::global().warn(text),
+    }
 }
 
 /// The input, as the reader thread consumes it.
@@ -399,6 +463,9 @@ pub(crate) struct ReaderConfig<'a> {
     pub allow_non_variant: bool,
     pub dont_skip: bool,
     pub max_sv_size: Option<u64>,
+    /// `--minimal`: the alleles of every record are trimmed as `vep_core::minimal`
+    /// describes, the VCF reader's at parse and another format's as they arrive.
+    pub minimal: bool,
     pub output_format: &'a str,
     pub no_headers: bool,
     /// The VCF writer, for the header block a VCF input's own header lines feed.
@@ -626,6 +693,8 @@ pub(crate) struct Coordinator<'a> {
     pub delimiter: &'a Delimiter,
     pub dont_skip: bool,
     pub max_sv_size: Option<u64>,
+    /// `--minimal` ([`ReaderConfig::minimal`]).
+    pub minimal: bool,
     /// The `--chr` list and the reference-sequence checks every record passes.
     pub checks: &'a ReferenceChecks<'a>,
     /// `--quiet` off: progress goes to stderr every 10,000 variants.
@@ -662,14 +731,19 @@ impl Coordinator<'_> {
             max_sv_size: self.max_sv_size,
             dont_skip: self.dont_skip,
             checks: self.checks,
+            minimal: self.minimal,
         }
     }
 
     /// How a parse on this coordinator reads each data line, in either mode.
     fn line_parse(&self) -> LineParse<'_> {
         LineParse {
-            capture_raw_input: self.capture_raw_input,
-            max_sv_size: self.max_sv_size,
+            parse: VcfParse {
+                capture_raw_input: self.capture_raw_input,
+                max_sv_size: self.max_sv_size,
+                minimal: self.minimal,
+                fasta: self.checks.fasta,
+            },
             // Ensembl VEP's JSON `input` joins the record's fields with the run's
             // delimiter (OutputFactory/JSON.pm:172, 247) where its VCF output
             // joins them with tabs (OutputFactory/VCF.pm:355), so under another
@@ -1236,10 +1310,11 @@ fn read_parsed(
         max_sv_size: cfg.max_sv_size,
         dont_skip: cfg.dont_skip,
         checks: cfg.checks,
+        minimal: cfg.minimal,
     };
     let mut seq = 0u64;
     let mut batch = ParsedBatch::new(seq);
-    let mut report = report_skip;
+    let mut report = report_to_sink;
     // Ensembl VEP's line number for these formats counts the records read and
     // the empty lines read past (Parser/VEP_input.pm:115-119, Parser.pm:273-276),
     // unless the parser counts otherwise and says so (`record_line_number`); a
@@ -1255,6 +1330,24 @@ fn read_parsed(
     // allele or the end of the input, and lays out as one unit, as
     // `parse_lines` lays out a VCF line.
     let mut open_record: Option<usize> = None;
+    // The parser yields one allele at a time, so a record whose every allele
+    // writes no row (each equal to the looked-up reference, or to it once the
+    // split trimmed it) is known only when the record closes: its first such
+    // allele is held and becomes the feature with no allele to annotate.
+    let mut held_none: Option<InputVariant> = None;
+    let close_record = |batch: &mut ParsedBatch, start: usize, held: Option<InputVariant>| {
+        if batch.variants.len() == start {
+            if let Some(mut none) = held {
+                none.no_allele = true;
+                none.alt_alleles = vec![b"*".to_vec()];
+                if let Some(working) = &none.record_allele_string_multi {
+                    none.allele_string = working.to_string();
+                }
+                batch.variants.push(none);
+            }
+        }
+        batch.units.push(Unit::Record(start..batch.variants.len()));
+    };
     loop {
         let next = parser.next_variant();
         // The empty lines the parser read past before this record, warned as the
@@ -1270,11 +1363,17 @@ fn read_parsed(
         }
         match next {
             Some(Ok(mut variant)) => {
-                mark_oversize_sv(&mut variant, cfg.max_sv_size);
                 name_source_chromosomes(&mut variant, cfg.synonyms, cfg.transcripts);
+                // `post_process_vfs` minimises a bi-allelic record before `validate_vf`
+                // reads it (Parser.pm:852), so the size test measures the trimmed span;
+                // the multi-allelic split comes after (InputBuffer.pm:638-718), below.
+                if cfg.minimal {
+                    minimise_bi_allelic(&mut variant);
+                }
+                mark_oversize_sv(&mut variant, cfg.max_sv_size);
                 if variant.allele_index == 0 {
                     if let Some(start) = open_record.take() {
-                        batch.units.push(Unit::Record(start..batch.variants.len()));
+                        close_record(&mut batch, start, held_none.take());
                     }
                     if batch.variants.len() >= cfg.batch_size {
                         if tx.send(InputBatch::Parsed(batch)).is_err() {
@@ -1302,6 +1401,27 @@ fn read_parsed(
                 }
                 variant.input_record = record_count;
                 if record_patch.is_none() {
+                    continue;
+                }
+                // The overlap-allele rule (VariationFeatureOverlap.pm:459-491) runs on
+                // every record of these formats, whose parsers keep an allele equal to
+                // the reference: a bi-allelic record's one allele is its last; a
+                // multi-allelic record's dropped alleles are held until the record
+                // closes. A record the split handles keeps a repeated ALT
+                // (InputBuffer.pm:658), so the overlap rule gives way to the split's own
+                // test.
+                let bi_allelic = variant.record_allele_string_multi.is_none();
+                let splits = cfg.minimal && record_splits(&variant);
+                if !splits && !keep_overlap_allele(&mut variant, bi_allelic) {
+                    held_none.get_or_insert(variant);
+                    continue;
+                }
+                // A parser of another format numbers the alleles by their place in the
+                // record's allele string, so `allele_index` is this allele's place among
+                // that string's alternate alleles.
+                let own = variant.allele_index;
+                if cfg.minimal && apply_minimal_split(&mut variant, own) == MinimalSplit::NoAllele {
+                    held_none.get_or_insert(variant);
                     continue;
                 }
                 cfg.transcripts.prewarm(&variant.chr)?;
@@ -1337,13 +1457,17 @@ fn read_parsed(
                     }
                 }
                 let number = parser.record_line_number().unwrap_or(record_count);
-                report(&description, number, Some(&quoted));
+                report(Reported::Skip {
+                    description: &description,
+                    line_number: number,
+                    quoted: Some(&quoted),
+                });
             }
             None => break,
         }
     }
     if let Some(start) = open_record {
-        batch.units.push(Unit::Record(start..batch.variants.len()));
+        close_record(&mut batch, start, held_none.take());
     }
     if !batch.units.is_empty() {
         let _ = tx.send(InputBatch::Parsed(batch));
@@ -1703,8 +1827,7 @@ fn non_variant_record(line: &str, capture_raw_input: bool) -> anyhow::Result<Vec
 /// What every data line of a run is parsed with.
 #[derive(Clone, Copy)]
 struct LineParse<'a> {
-    capture_raw_input: bool,
-    max_sv_size: Option<u64>,
+    parse: VcfParse<'a>,
     /// The text the JSON `input` joins the line's fields with, when it is not the
     /// tab the fields were read with.
     json_input_join: Option<&'a str>,
@@ -1720,12 +1843,12 @@ impl LineParse<'_> {
         // replacement character where Ensembl VEP prints the bytes.
         let text = String::from_utf8_lossy(line);
         let mut alleles = if vcf_line_is_non_variant(&text) {
-            non_variant_record(&text, self.capture_raw_input)?
+            non_variant_record(&text, self.parse.capture_raw_input)?
         } else {
-            parse_vcf_line_with_max_sv_size(&text, self.capture_raw_input, self.max_sv_size)?
+            parse_vcf_line_with(&text, &self.parse)?
         };
         let line_is_not_utf8 = matches!(text, Cow::Owned(_));
-        if self.capture_raw_input && line_is_not_utf8 {
+        if self.parse.capture_raw_input && line_is_not_utf8 {
             let bytes: Arc<[u8]> = Arc::from(line);
             for allele in &mut alleles {
                 allele.raw_input_bytes = Some(Arc::clone(&bytes));
@@ -1770,7 +1893,7 @@ fn parse_lines(
     let mut variants = spare.variants.pop().unwrap_or_default();
     units.clear();
     variants.clear();
-    let mut report = report_skip;
+    let mut report = report_to_sink;
     for (item, result) in items.drain(..).zip(parsed) {
         match (item, result) {
             (Item::Text(span), _) => units.push(Unit::Text(span)),
@@ -1799,9 +1922,11 @@ fn parse_lines(
 
 /// Lays one parsed data line into `units` and `variants`: the record's alleles
 /// numbered and marked, kept or dropped as [`SkipRules::validate`] decides with
-/// its changes carried to every allele, or its parse error reported to `report`
-/// as Ensembl VEP reports a refused record. Both the batched parse and a
-/// streaming task's parse place their lines here, so they cannot diverge.
+/// its changes carried to every allele and, under `--minimal`, the
+/// validated record split per allele ([`split_minimal_record`]), or its parse
+/// error reported to `report` as Ensembl VEP reports a refused record. Both the
+/// batched parse and a streaming task's parse place their lines here, so they
+/// cannot diverge.
 fn place_parsed_line(
     item: &Item,
     result: anyhow::Result<Vec<InputVariant>>,
@@ -1819,6 +1944,16 @@ fn place_parsed_line(
     else {
         unreachable!("a passthrough item has no parse");
     };
+    let columns = String::from_utf8_lossy(&text[span.clone()]);
+    // Ensembl VEP's tandem-repeat branch writes its warnings as it reads the record
+    // (Parser/VCF.pm:502-527), before `validate_vf` runs and before any refusal, so
+    // they are reported ahead of the parse result, through the same path as the
+    // record's skips, and keep record order.
+    if let Ok(parsed) = vcf_columns(&columns) {
+        for warning in tandem_repeat_warnings(&parsed.fixed, rules.checks.fasta.is_some()) {
+            report(Reported::Warning(&warning));
+        }
+    }
     match result {
         Ok(mut alleles) => {
             for variant in &mut alleles {
@@ -1841,6 +1976,27 @@ fn place_parsed_line(
             for sibling in siblings {
                 patch.apply(sibling);
             }
+            // `split_variants` reads the record after `validate_vf` (InputBuffer.pm:638),
+            // so a reference `--lookup_ref` replaced is the one each allele trims
+            // against, and the split decides each allele's row in place of the
+            // overlap rule: a repeated ALT keeps its rows (:658).
+            let splits = rules.minimal && record_splits(first);
+            if patch.replaced_reference() && !splits {
+                // An allele the looked-up reference made equal to it writes no row;
+                // a record left with none is the feature with no allele.
+                let count = alleles.len();
+                let mut kept = Vec::with_capacity(count);
+                for (i, mut allele) in alleles.into_iter().enumerate() {
+                    let last_standing = kept.is_empty() && i + 1 == count;
+                    if keep_overlap_allele(&mut allele, last_standing) {
+                        kept.push(allele);
+                    }
+                }
+                alleles = kept;
+            }
+            if splits {
+                alleles = split_minimal_record(alleles);
+            }
             let start = variants.len();
             variants.extend(alleles);
             units.push(Unit::Record(start..variants.len()));
@@ -1852,7 +2008,6 @@ fn place_parsed_line(
             // (Parser.pm:470-472), so its `validate_vf` skips are silent for a
             // line the list leaves out unless `--dont_skip` would have kept it.
             let quoted = String::from_utf8_lossy(&text[quoted.clone()]);
-            let columns = String::from_utf8_lossy(&text[span.clone()]);
             let refusal = refused_record(&e, &columns);
             let chromosome = columns.split('\t').next().unwrap_or("");
             let silenced = !rules.dont_skip && !rules.checks.admits(chromosome);
@@ -1862,7 +2017,11 @@ fn place_parsed_line(
                 refusal.validated
             };
             for description in refusal.parsed.into_iter().chain(validated) {
-                report(&description, *line_number, Some(&quoted));
+                report(Reported::Skip {
+                    description: &description,
+                    line_number: *line_number,
+                    quoted: Some(&quoted),
+                });
             }
         }
     }
@@ -2274,13 +2433,7 @@ fn parse_task_lines(
     let line_parse = c.line_parse();
     let mut units = Vec::with_capacity(items.len());
     let mut variants = Vec::with_capacity(items.len());
-    let mut report = |description: &str, line_number: u64, quoted: Option<&str>| {
-        skips.push(SkipReport {
-            description: description.to_string(),
-            line_number,
-            quoted: quoted.map(str::to_string),
-        });
-    };
+    let mut report = |reported: Reported<'_>| skips.push(reported.owned());
     for item in &lines.items[items] {
         match item {
             Item::Text(span) => units.push(Unit::Text(span.clone())),
@@ -2489,12 +2642,12 @@ fn fail_after_writing(
 /// Writes the rendered output in input order. A message is held until every
 /// chunk before it is due; a batch is complete when its last chunk is queued for
 /// the write that follows, and `permits`, the streaming coordinator's, gets one
-/// token back per complete batch. A message's skips are reported as the message
-/// comes due, before its chunks or its error are read, so the warnings file
-/// lists them in input order; on the streaming coordinator's behalf, a warnings
-/// file that could not be written ends the stage once the batch whose skip met
-/// the failure is complete. The first error in output order ends the stage, as
-/// does a stream that ends with a chunk still due.
+/// token back per complete batch. A message's skips and record warnings are
+/// reported as the message comes due, before its chunks or its error are read, so
+/// the warnings file lists them in input order; on the streaming coordinator's
+/// behalf, a warnings file that could not be written ends the stage once the
+/// batch whose skip met the failure is complete. The first error in output order
+/// ends the stage, as does a stream that ends with a chunk still due.
 fn write_stage(
     rx: Receiver<Rendered>,
     mut sink: OutputSink,
@@ -2508,7 +2661,7 @@ fn write_stage(
         pending.insert((message.seq, message.first), message);
         while let Some(message) = pending.remove(&(due_seq, due_chunk)) {
             for skip in &message.skips {
-                report_skip(&skip.description, skip.line_number, skip.quoted.as_deref());
+                report_to_sink(skip.as_reported());
             }
             let chunks = match message.chunks {
                 Ok(chunks) => chunks,
@@ -3055,7 +3208,9 @@ mod tests {
     /// numbers and the same skip on a malformed line, under `--dont_skip` too.
     /// The cache carries chromosome 21, so the skip rules keep its records. A
     /// task lists its skips, with Ensembl VEP's description, instead of
-    /// reporting them.
+    /// reporting them, and a refused tandem-repeat line lists the warnings
+    /// Ensembl VEP's tandem branch writes before the refusal (Parser/VCF.pm:505-524
+    /// runs before `validate_vf`), the refusal after them.
     #[test]
     fn task_parsing_matches_batch_parsing() {
         let transcripts = LazyTranscriptIndexes::from_indexes(std::collections::HashMap::from([(
@@ -3088,6 +3243,7 @@ mod tests {
             delimiter: &Delimiter::Tab,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
+            minimal: false,
             checks: &crate::validate::NO_CHECKS,
             progress: false,
             mode: PipelineMode::Streaming,
@@ -3095,6 +3251,8 @@ mod tests {
             task_records: Some(2),
         };
         let malformed = "21\tbad\t.\tA\tG\t.\tPASS\t.";
+        let negative_tandem =
+            "21\t500\t.\tG\t<CNV:TR>,<CNV:TR>\t.\tPASS\tSVLEN=-9,-3;RN=1,1;RUS=TCA,TCA;RUC=4,2";
         let lines = || {
             let mut batch = LineBatch::new(0, LineBuffers::default());
             batch.push_text(b"#CHROM\tPOS");
@@ -3103,6 +3261,7 @@ mod tests {
             batch.push_data(b"21\t300\t.\tC\tT\t.\tPASS\t.", b"", None, 4);
             batch.push_text(b"21\t350\t.\tA\t.\t.\tPASS\t.");
             batch.push_data(b"21\t400\t.\tG\tA\t.\tPASS\t.", b"", None, 6);
+            batch.push_data(negative_tandem.as_bytes(), b"", None, 7);
             batch
         };
         let whole = parse_lines(lines(), &c, &mut Spare::default()).unwrap();
@@ -3126,13 +3285,37 @@ mod tests {
         let describe_skips = |skips: &[SkipReport]| -> Vec<(String, u64, Option<String>)> {
             skips
                 .iter()
-                .map(|s| (s.description.clone(), s.line_number, s.quoted.clone()))
+                .map(|s| match s {
+                    SkipReport::Skip {
+                        description,
+                        line_number,
+                        quoted,
+                    } => (description.clone(), *line_number, quoted.clone()),
+                    SkipReport::Warning(text) => (text.clone(), 0, None),
+                })
                 .collect()
         };
         let parse_error = "Invalid start 'bad' or end '0' coordinate".to_string();
         assert_eq!(
             describe_skips(&skips),
-            [(parse_error.clone(), 3, Some(malformed.to_string()))]
+            [
+                (parse_error.clone(), 3, Some(malformed.to_string())),
+                (
+                    "found tandem repeats with different references per alternative allele: SVLEN=-9,-3; only using reference with largest size".to_string(),
+                    0,
+                    None
+                ),
+                (
+                    "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta".to_string(),
+                    0,
+                    None
+                ),
+                (
+                    "start > end+1 : (START=501, END=497)".to_string(),
+                    7,
+                    Some(negative_tandem.to_string())
+                ),
+            ]
         );
         let describe = |units: &[Unit]| -> Vec<String> {
             units
@@ -3178,6 +3361,129 @@ mod tests {
                 ),
                 (parse_error, 8, Some(malformed.to_string())),
             ]
+        );
+    }
+
+    /// Under `--minimal` with `--lookup_ref` a multi-allelic record is looked up
+    /// over its chopped span and split afterwards, as `validate_vf` runs before
+    /// `split_variants` (Parser.pm:645, InputBuffer.pm:638): over the reference
+    /// `ACGTACGT...`, `1 ACG AGG,ATG,A` is chopped to `CG/GG/TG/-` at 2-3, looked up
+    /// as itself, and split into `C/G` at 2, `C/T` at 2 and `CG/-` at 2-3, the
+    /// deletion keeping its two-base reference; `1 ACG AGG,AGG` keeps both rows of
+    /// its repeated allele; `1 T A,G` is looked up as `A/A/G`, which then splits,
+    /// so `A` writes no row and `G` is numbered 2 under the string `A/A/G`; and
+    /// `1 T A,A`, looked up as `A/A/A`, is the feature with no allele.
+    #[test]
+    fn minimal_splits_after_the_looked_up_reference() {
+        let _guard = crate::validate::sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let fasta_path = dir.path().join("ref.fa");
+        std::fs::write(&fasta_path, ">21\nACGTACGTACGTACGTACGT\n").unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), "21\t20\t4\t20\t21\n").unwrap();
+        let fasta = vep_fasta::IndexedFasta::from_path(&fasta_path).unwrap();
+        let checks = crate::validate::ReferenceChecks {
+            chr: None,
+            check_ref: false,
+            lookup_ref: true,
+            fasta: Some(&fasta),
+            parser_names_records: false,
+        };
+        let transcripts = LazyTranscriptIndexes::from_indexes(std::collections::HashMap::from([(
+            "21".to_string(),
+            crate::transcript_index::TranscriptIndex::new(Vec::new(), 5_000, 5_000),
+        )]));
+        let pool = crate::annotator::build_thread_pool(1).unwrap();
+        let resources = crate::runner::resources_over(Arc::new(transcripts));
+        let stats = PipelineStats::new();
+        let filter_config = FilterConfig::default();
+        let extra_plan = ExtraFieldsPlan::new(vep_io::output::fields::FieldOptions::default());
+        let write_ctx = WriteContext {
+            filter_config: &filter_config,
+            filters_active: false,
+            output_format: "vep",
+            vcf_formatter: None,
+            json_formatter: None,
+            parquet_formatter: None,
+            tab_formatter: None,
+            extra_plan: &extra_plan,
+        };
+        let c = Coordinator {
+            pool: &pool,
+            use_parallel: false,
+            resources: &resources,
+            stats: &stats,
+            stats_enabled: false,
+            write_ctx: &write_ctx,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: true,
+            checks: &checks,
+            progress: false,
+            mode: PipelineMode::Batched,
+            depth: PIPELINE_DEPTH,
+            task_records: None,
+        };
+        let mut batch = LineBatch::new(0, LineBuffers::default());
+        batch.push_data(b"21\t1\tthree\tACG\tAGG,ATG,A\t.\t.\t.", b"", None, 1);
+        batch.push_data(b"21\t1\trepeat\tACG\tAGG,AGG\t.\t.\t.", b"", None, 2);
+        batch.push_data(b"21\t1\tequal\tT\tA,G\t.\t.\t.", b"", None, 3);
+        batch.push_data(b"21\t1\tnone\tT\tA,A\t.\t.\t.", b"", None, 4);
+        let parsed = parse_lines(batch, &c, &mut Spare::default()).unwrap();
+        let shape = |v: &InputVariant| {
+            (
+                v.input_record,
+                v.allele_string.clone(),
+                v.start,
+                v.end,
+                v.allele_num.map_or(v.allele_index as u32 + 1, |n| n),
+                v.uploaded_allele_string
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_string(),
+            )
+        };
+        let shapes: Vec<_> = parsed.variants.iter().map(shape).collect();
+        let shaped = |record, alleles: &str, start, end, number, uploaded: &str| {
+            (
+                record,
+                alleles.to_string(),
+                start,
+                end,
+                number,
+                uploaded.to_string(),
+            )
+        };
+        assert_eq!(
+            shapes,
+            [
+                shaped(1, "C/G", 2, 2, 1, "CG/GG/TG/-"),
+                shaped(1, "C/T", 2, 2, 2, "CG/GG/TG/-"),
+                shaped(1, "CG/-", 2, 3, 3, "CG/GG/TG/-"),
+                shaped(2, "C/G", 2, 2, 1, "ACG/AGG/AGG"),
+                shaped(2, "C/G", 2, 2, 2, "ACG/AGG/AGG"),
+                shaped(3, "A/G", 1, 1, 2, "A/A/G"),
+                shaped(4, "A/A/A", 1, 1, 1, "A/A/A"),
+            ]
+        );
+        assert!(parsed.variants.iter().take(6).all(|v| v.minimised));
+        assert_eq!(parsed.variants[2].ref_allele, b"CG");
+        assert_eq!(
+            parsed.variants[4].rejoin_key_prefix.as_deref(),
+            Some("C/G_")
+        );
+        assert!(parsed.variants[6].no_allele);
+        assert_eq!(
+            parsed
+                .units
+                .iter()
+                .map(|u| match u {
+                    Unit::Record(range) => format!("record {range:?}"),
+                    Unit::Text(span) => format!("text {span:?}"),
+                })
+                .collect::<Vec<_>>(),
+            ["record 0..3", "record 3..5", "record 5..6", "record 6..7"]
         );
     }
 
@@ -3274,6 +3580,7 @@ mod tests {
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
+            minimal: false,
             output_format: "vep",
             no_headers: false,
             vcf_formatter: None,
@@ -3337,6 +3644,7 @@ mod tests {
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
+            minimal: false,
             output_format: "vep",
             no_headers: false,
             vcf_formatter: None,
@@ -3424,6 +3732,7 @@ mod tests {
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
+            minimal: false,
             output_format: "vep",
             no_headers: false,
             vcf_formatter: None,
@@ -3581,6 +3890,7 @@ mod tests {
             allow_non_variant: true,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
+            minimal: false,
             output_format: "vcf",
             no_headers: false,
             vcf_formatter: Some(&fmt),
@@ -3635,6 +3945,7 @@ mod tests {
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
+            minimal: false,
             output_format: "vep",
             no_headers: false,
             vcf_formatter: None,
@@ -3943,6 +4254,7 @@ mod tests {
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
+            minimal: false,
             output_format: "vcf",
             no_headers: false,
             vcf_formatter: Some(&fmt),
@@ -4020,6 +4332,7 @@ mod tests {
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
+            minimal: false,
             output_format: "vep",
             no_headers: false,
             vcf_formatter: None,
@@ -4077,6 +4390,7 @@ mod tests {
             allow_non_variant: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
+            minimal: false,
             output_format: "vep",
             no_headers: false,
             vcf_formatter: None,
@@ -4129,5 +4443,209 @@ mod tests {
         assert_eq!(batches[0].variants[0].alt_allele(), b"G");
         assert_eq!(batches[0].variants[1].alt_allele(), b"T");
         assert!(batches[0].variants[0].same_record(&batches[0].variants[1]));
+    }
+
+    /// The overlap-allele rule runs on every Ensembl-format record, whose parser
+    /// keeps an allele equal to the reference (VariationFeatureOverlap.pm:481): `A/A`
+    /// is the feature with no allele, under `--minimal` trimmed to `-/-` at 101-100
+    /// and marked (Parser.pm:1011), as Ensembl VEP 116.2's JSON object carries it,
+    /// and `A/G/G` keeps its first `G` alone, the repeat dropped (:461).
+    #[test]
+    fn read_parsed_applies_the_overlap_rule_to_every_record() {
+        let input = "21\t100\t100\tA/A\t1\teq\n21\t200\t200\tA/G/G\t1\trepeat\n";
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("21".to_string(), Vec::new())]),
+            0,
+            0,
+        );
+        let cfg = ReaderConfig {
+            batch_size: 8,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            allow_non_variant: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: true,
+            output_format: "json",
+            no_headers: false,
+            vcf_formatter: None,
+            transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
+            prewarm_order: &[],
+            checks: &crate::validate::NO_CHECKS,
+        };
+        let _in_turn = crate::validate::sink_test_guard();
+        let (tx, rx) = mpsc::sync_channel(64);
+        let (reader, last_line) = LineCapture::new(Cursor::new(input.to_string()));
+        let parser: Box<dyn vep_io::InputParser> =
+            Box::new(vep_io::input::ensembl::EnsemblParser::new(
+                reader,
+                &vep_io::input::ParserContext::default(),
+            ));
+        read_parsed(parser, &last_line, InputFormat::Ensembl, &cfg, tx).unwrap();
+        let batch = match rx.iter().next().unwrap() {
+            InputBatch::Parsed(p) => p,
+            InputBatch::Lines(_) => unreachable!(),
+        };
+        let shape: Vec<(u64, bool, String, u64, u64, bool)> = batch
+            .variants
+            .iter()
+            .map(|v| {
+                (
+                    v.input_record,
+                    v.no_allele,
+                    v.allele_string.clone(),
+                    v.start,
+                    v.end,
+                    v.minimised,
+                )
+            })
+            .collect();
+        assert_eq!(
+            shape,
+            [
+                (1, true, "-/-".to_string(), 101, 100, true),
+                (2, false, "A/G".to_string(), 200, 200, false),
+            ]
+        );
+        assert_eq!(batch.variants[1].allele_num, None);
+        assert_eq!(batch.units.len(), 2);
+    }
+
+    /// An Ensembl-format record whose every allele `--lookup_ref` makes equal to
+    /// the reference is the feature with no allele to annotate, as a VCF record's
+    /// is (`T/A/A` over the reference `A` is `A/A/A`, which Ensembl VEP 116.2
+    /// writes as the JSON object with `most_severe_consequence` `?`), and a record
+    /// left with one allele keeps that allele alone, numbered without the dropped
+    /// one (`T/A/G` is `A/A/G`, the one allele `G` numbered 1,
+    /// VariationFeatureOverlap.pm:483).
+    #[test]
+    fn read_parsed_keeps_a_record_whose_alleles_all_equal_the_looked_up_reference() {
+        let dir = tempfile::tempdir().unwrap();
+        let fasta_path = dir.path().join("ref.fa");
+        std::fs::write(&fasta_path, ">21\nAAAAAAAAAAAAAAAAAAAA\n").unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), "21\t20\t4\t20\t21\n").unwrap();
+        let fasta = vep_fasta::IndexedFasta::from_path(&fasta_path).unwrap();
+        let checks = crate::validate::ReferenceChecks {
+            chr: None,
+            check_ref: false,
+            lookup_ref: true,
+            fasta: Some(&fasta),
+            parser_names_records: false,
+        };
+        let input = "21\t5\t5\tT/A/A\t1\tnone\n21\t6\t6\tT/A/G\t1\tone\n";
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("21".to_string(), Vec::new())]),
+            0,
+            0,
+        );
+        let cfg = ReaderConfig {
+            batch_size: 8,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            allow_non_variant: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: false,
+            output_format: "json",
+            no_headers: false,
+            vcf_formatter: None,
+            transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
+            prewarm_order: &[],
+            checks: &checks,
+        };
+        let _in_turn = crate::validate::sink_test_guard();
+        let (tx, rx) = mpsc::sync_channel(64);
+        let (reader, last_line) = LineCapture::new(Cursor::new(input.to_string()));
+        let parser: Box<dyn vep_io::InputParser> =
+            Box::new(vep_io::input::ensembl::EnsemblParser::new(
+                reader,
+                &vep_io::input::ParserContext::default(),
+            ));
+        read_parsed(parser, &last_line, InputFormat::Ensembl, &cfg, tx).unwrap();
+        let batch = match rx.iter().next().unwrap() {
+            InputBatch::Parsed(p) => p,
+            InputBatch::Lines(_) => unreachable!(),
+        };
+        let shape: Vec<(u64, bool, String, Option<u32>)> = batch
+            .variants
+            .iter()
+            .map(|v| {
+                (
+                    v.input_record,
+                    v.no_allele,
+                    v.allele_string.clone(),
+                    v.allele_num,
+                )
+            })
+            .collect();
+        assert_eq!(
+            shape,
+            [
+                (1, true, "A/A/A".to_string(), None),
+                (2, false, "A/G".to_string(), Some(1)),
+            ]
+        );
+        assert_eq!(batch.units.len(), 2);
+    }
+
+    /// The `--max_sv_size` test measures the span `--minimal` leaves: Ensembl VEP
+    /// minimises a bi-allelic record in `post_process_vfs` before `validate_vf`
+    /// runs its size test (Parser.pm:852, :491-499), so an Ensembl-format
+    /// `GGGGGGGGGGA/GGGGGGGGGGT` over eleven bases is `A/T` on its last base, within
+    /// a limit of 5, where the same record without the flag spans ten and is over
+    /// it.
+    #[test]
+    fn read_parsed_measures_the_size_of_the_minimised_record() {
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("21".to_string(), Vec::new())]),
+            0,
+            0,
+        );
+        let input = "21\t10542404\t10542414\tGGGGGGGGGGA/GGGGGGGGGGT\t+\twide\n";
+        let _in_turn = crate::validate::sink_test_guard();
+        let read = |minimal: bool| {
+            let cfg = ReaderConfig {
+                batch_size: 8,
+                capture_raw_input: false,
+                delimiter: &Delimiter::Tab,
+                allow_non_variant: false,
+                dont_skip: false,
+                max_sv_size: Some(5),
+                minimal,
+                output_format: "json",
+                no_headers: false,
+                vcf_formatter: None,
+                transcripts: &transcripts,
+                synonyms: &ChromosomeSynonyms::new(),
+                prewarm_order: &[],
+                checks: &crate::validate::NO_CHECKS,
+            };
+            let (tx, rx) = mpsc::sync_channel(8);
+            let (reader, last_line) = LineCapture::new(Cursor::new(input.to_string()));
+            let parser: Box<dyn vep_io::InputParser> =
+                Box::new(vep_io::input::ensembl::EnsemblParser::new(
+                    reader,
+                    &vep_io::input::ParserContext::default(),
+                ));
+            read_parsed(parser, &last_line, InputFormat::Ensembl, &cfg, tx).unwrap();
+            let batch = match rx.iter().next().unwrap() {
+                InputBatch::Parsed(p) => p,
+                InputBatch::Lines(_) => unreachable!(),
+            };
+            let v = &batch.variants[0];
+            (v.start, v.end, v.allele_string.clone(), v.oversize_sv)
+        };
+        assert_eq!(read(true), (10542414, 10542414, "A/T".to_string(), false));
+        assert_eq!(
+            read(false),
+            (
+                10542404,
+                10542414,
+                "GGGGGGGGGGA/GGGGGGGGGGT".to_string(),
+                true
+            )
+        );
     }
 }

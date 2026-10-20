@@ -1,0 +1,313 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "flags": [
+  "--minimal",
+  "--uploaded_allele",
+  "--variant_class",
+  "--mask_header_cache_path"
+ ],
+ "covers": [
+  "minimal"
+ ],
+ "suites": {
+  "GRCh38-vcf-minimal": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 293,
+   "combinations": 14
+  }
+ },
+ "combinations": {
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 15,
+   "exemplar_records": 8
+  },
+  "NMD_transcript_variant,inframe_deletion": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 30,
+   "exemplar_records": 15
+  },
+  "NMD_transcript_variant,stop_gained": {
+   "observed_rows": 10,
+   "exemplar_records": 4
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 2
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "frameshift_variant": {
+   "observed_rows": 41,
+   "exemplar_records": 8
+  },
+  "inframe_deletion": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "intergenic_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 61,
+   "exemplar_records": 22
+  },
+  "missense_variant": {
+   "observed_rows": 82,
+   "exemplar_records": 15
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "stop_gained": {
+   "observed_rows": 25,
+   "exemplar_records": 4
+  },
+  "synonymous_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 2
+  }
+ },
+ "records": [
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542415\tsnv\tA\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmnp_two_sided\tAAAG\tAGGG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmnp_left\tAAA\tAGG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542415\tmnp_right\tAAG\tGGG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tins_padded\tA\tAT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tdel_padded\tAAA\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmulti_snv_ins\tA\tT,AG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "NMD_transcript_variant,stop_gained",
+    "frameshift_variant",
+    "intron_variant",
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmulti_no_change\tA\tT,C\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,stop_gained",
+    "intron_variant",
+    "missense_variant",
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmulti_mnp_two\tAAA\tAGG,AAG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "intron_variant",
+    "missense_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542415\tmulti_eq_ref_first\tA\tA,G\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542415\tmulti_eq_ref_second\tA\tG,A\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmulti_dup_trimmable\tAAA\tAGA,AGA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmulti_dup_plus_ins\tA\tT,T,AG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "NMD_transcript_variant,stop_gained",
+    "frameshift_variant",
+    "intron_variant",
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmulti_star_ins\tA\tAG,*\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmulti_three\tAAAG\tAGAG,AAGG,A\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_deletion",
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "inframe_deletion",
+    "intron_variant",
+    "missense_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tlower_mnp\taaag\taggg\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmixed_case_mnp\tAAAG\tAGGg\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542415\tsnv_star\tA\tG,*\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\tmulti_delstar\tA\tAG,<DEL:*>\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t10542414\t.\tA\tT,AG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "NMD_transcript_variant,stop_gained",
+    "frameshift_variant",
+    "intron_variant",
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t14512454\trev_mnp\tCTGT\tCAGT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t14512454\trev_multi\tCTGT\tCAGT,CTGTA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-minimal",
+   "vcf": "21\t20000326\tinter_multi\tTT\tTA,TTAA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  }
+ ],
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

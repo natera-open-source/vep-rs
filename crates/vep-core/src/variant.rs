@@ -214,16 +214,33 @@ pub struct InputVariant {
     /// empty for a bi-allelic record.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sibling_spdi: Vec<crate::spdi::SiblingSpdi>,
-    /// Whether the variant was minimised from a multi-allelic site.
+    /// Ensembl VEP's `minimised` mark, which `MINIMISED` prints under `--minimal`:
+    /// set on a bi-allelic record `minimise_alleles` handled (Parser.pm:1011, so
+    /// under `--minimal` on every bi-allelic sequence record, trimmed or not, and
+    /// without the flag on a bi-allelic indel) and on every allele of a
+    /// multi-allelic record whose `--minimal` split trimmed an allele
+    /// (InputBuffer.pm:696).
     pub minimised: bool,
     /// Original allele string before minimisation.
     pub original_allele_string: Option<String>,
-    /// Original start coordinate before per-allele secondary minimisation.
-    /// Used for output parity with Perl VEP, which reverts multi-allelic
-    /// records to their shared window coordinates after consequence calculation.
+    /// The record's start before its `--minimal` split, for every allele of a
+    /// multi-allelic record the split trimmed: `rejoin_variants_in_InputBuffer`
+    /// (OutputFactory.pm:2291-2293) restores the record's own string and span
+    /// before the output hash is built, so Location, the JSON `start` and `end`
+    /// and the generated name read the record's span while the alleles and their
+    /// consequences stay the trimmed ones. `None` for any other record.
     pub original_start: Option<u64>,
-    /// Original end coordinate before per-allele secondary minimisation.
+    /// The record's end before its `--minimal` split ([`Self::original_start`]).
     pub original_end: Option<u64>,
+    /// The prefix Ensembl VEP's rejoin puts on this allele's transcript keys when
+    /// it merges the alleles of a `--minimal` split back into the record: an
+    /// allele after the first is stored under `<its allele string>_<transcript
+    /// key>` (OutputFactory.pm:2316) and the rows print in the sorted key order
+    /// (VariationFeature.pm:666), so `-/T_ENST...` sorts before the first
+    /// allele's bare `ENST...` and `G/T_ENST...` after it. `None` for the first
+    /// allele and for every record the split left alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rejoin_key_prefix: Option<Arc<str>>,
     /// Raw input line (for passthrough in some output formats), one buffer shared by
     /// every allele of the record.
     pub raw_input: Option<Arc<str>>,
@@ -260,13 +277,6 @@ pub struct InputVariant {
     /// For structural variants: SVLEN from VCF INFO field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sv_len: Option<i64>,
-    /// For a tandem repeat (`<CNV:TR>`): the alternate allele's length in bases, RUC
-    /// times the repeat unit's length when the record carries INFO/RUC, else INFO/RB
-    /// rounded down to whole units. `None` when the record states no length or any
-    /// repeat sequence of the record is longer than `--max_sv_size`: the record then
-    /// describes no direction of change and is read symbolically.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tr_alt_bases: Option<u64>,
     /// For imprecise SVs: CIPOS confidence interval (two i64 values).
     /// First value is typically negative (leftward expansion), second positive (rightward).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -300,9 +310,9 @@ pub struct InputVariant {
     /// `input`-only JSON object; the default and tab formats still list the rows.
     #[serde(default)]
     pub vep_skip: bool,
-    /// A structural variant wider than `--max_sv_size`. VEP carries its VCF
-    /// line without CSQ and drops it from the JSON output altogether (`--json`
-    /// sets the REST mode in which the parser skips it).
+    /// A record whose span, end minus start, exceeds `--max_sv_size`. VEP carries
+    /// its VCF line without CSQ and drops it from the JSON output altogether
+    /// (`--json` sets the REST mode in which the parser skips it).
     #[serde(default)]
     pub oversize_sv: bool,
     /// The record of a line none of whose ALTs is an allele to annotate: every ALT a
@@ -339,7 +349,10 @@ pub struct InputVariant {
     /// minimises those and reports the untrimmed alleles), the anchor-trimmed
     /// alleles of every other record with all ALTs joined by `/`, or, for a
     /// structural variant, its ALTs joined by `/`, a breakpoint record's carrying the
-    /// mate INFO/CHR2 names (`N[21:100[`). One buffer shared by every allele of the
+    /// mate INFO/CHR2 names (`N[21:100[`). For a multi-allelic record whose
+    /// `--minimal` split trimmed an allele, the record's chopped working string,
+    /// which `split_variants` writes over the raw one (InputBuffer.pm:694) and
+    /// `UPLOADED_ALLELE` then prints. One buffer shared by every allele of the
     /// record. `None` falls back to `allele_string`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uploaded_allele_string: Option<Arc<str>>,
@@ -372,8 +385,11 @@ pub struct InputVariant {
     /// the predicates follow it rather than the allele's own form. For a sequence
     /// variant resolved from a variant identifier, the class the variation
     /// database stores for it (`VariationFeature.pm:1117`, read before any
-    /// minimisation), which [`Self::class_so_term`] prints. `None` for any other
-    /// sequence variant and for a structural type the table lacks.
+    /// minimisation), and for an allele of a `--minimal` split of a record without
+    /// one the class of the first allele's trimmed pair
+    /// ([`crate::minimal::apply_minimal_split`]), which [`Self::class_so_term`]
+    /// prints. `None` for any other sequence variant and for a structural type the
+    /// table lacks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub record_so_term: Option<String>,
     /// Bases a 3' shift along the genome moves this insertion or deletion when it
@@ -454,6 +470,7 @@ impl Default for InputVariant {
             original_allele_string: None,
             original_start: None,
             original_end: None,
+            rejoin_key_prefix: None,
             raw_input: None,
             raw_input_bytes: None,
             existing_variation: Vec::new(),
@@ -462,7 +479,6 @@ impl Default for InputVariant {
             sv_end: None,
             sv_type: None,
             sv_len: None,
-            tr_alt_bases: None,
             ci_pos: None,
             ci_end: None,
             is_structural: false,
@@ -539,6 +555,7 @@ impl InputVariant {
             original_allele_string: None,
             original_start: None,
             original_end: None,
+            rejoin_key_prefix: None,
             raw_input: None,
             raw_input_bytes: None,
             existing_variation: Vec::new(),
@@ -547,7 +564,6 @@ impl InputVariant {
             sv_end: None,
             sv_type: None,
             sv_len: None,
-            tr_alt_bases: None,
             ci_pos: None,
             ci_end: None,
             is_structural: false,
@@ -829,14 +845,10 @@ impl InputVariant {
             } else {
                 self.variant_class.so_term()
             }
-        } else if self.original_start.is_some() {
-            // Perl VEP outputs the pre-minimised alt of a multi-allelic record;
-            // `original_start` is set only for those records.
-            self.original_allele_string
-                .as_deref()
-                .and_then(|s| s.split('/').nth(1))
-                .unwrap_or("-")
         } else {
+            // The allele as the row's overlap allele holds it, `variation_feature_seq`
+            // (OutputFactory.pm:1347): for an allele of a `--minimal` split that is
+            // the trimmed allele, while Location prints the record's span.
             &raw
         };
         out.extend_from_slice(allele.as_bytes());
@@ -886,16 +898,16 @@ impl InputVariant {
         ambiguity_code(&self.working_allele_string())
     }
 
-    /// The `UPLOADED_ALLELE` value of the record: [`uploaded_allele`] of the
-    /// allele string as uploaded ([`Self::uploaded_allele_string`], else the
-    /// allele's own) under the run's `--minimal` setting, and `None` for a
-    /// structural variant, whose rows carry neither it nor `REF_ALLELE`
-    /// (`OutputFactory.pm` `BaseStructuralVariationOverlapAllele_to_output_hash`
-    /// sets `Allele`, `ALLELE_NUM`, `Consequence`, `IMPACT` and `PICK` alone).
-    /// A record `--check_frequency` rewrote prints its
-    /// [`Self::filtered_allele_string`], upper-cased, in the cases where
-    /// Ensembl VEP prints the feature's `allele_string` rather than the
-    /// uploaded one.
+    /// The `UPLOADED_ALLELE` value of the record: the allele string as uploaded
+    /// ([`Self::uploaded_allele_string`], else the allele's own) where Ensembl VEP
+    /// keeps it as `original_allele_string` ([`keeps_uploaded_spelling`] under the
+    /// run's `--minimal` setting), else the feature's working string, upper-cased
+    /// ([`Self::working_allele_string`]: the string `--check_frequency` rewrote or
+    /// `--lookup_ref` gave its reference), as `OutputFactory.pm:1360` prints
+    /// `original_allele_string || allele_string`; `None` for a structural variant,
+    /// whose rows carry neither it nor `REF_ALLELE`
+    /// (`BaseStructuralVariationOverlapAllele_to_output_hash` sets `Allele`,
+    /// `ALLELE_NUM`, `Consequence`, `IMPACT` and `PICK` alone).
     pub fn uploaded_allele(&self, minimal: bool) -> Option<String> {
         if self.is_structural {
             return None;
@@ -904,11 +916,10 @@ impl InputVariant {
             .uploaded_allele_string
             .as_deref()
             .unwrap_or(&self.allele_string);
-        match &self.filtered_allele_string {
-            Some(filtered) if !keeps_uploaded_spelling(raw, minimal) => {
-                Some(filtered.to_ascii_uppercase())
-            }
-            _ => Some(uploaded_allele(raw, minimal)),
+        if keeps_uploaded_spelling(raw, minimal) {
+            Some(raw.to_string())
+        } else {
+            Some(self.working_allele_string().to_ascii_uppercase())
         }
     }
 
@@ -1001,10 +1012,7 @@ impl InputVariant {
     /// unchanged.
     pub fn display_allele_shifted(&self, shift: u64, strand: i8) -> String {
         let inserted = self.alt_allele();
-        if self.variant_class != VariantClass::Insertion
-            || self.original_start.is_some()
-            || inserted.is_empty()
-            || inserted == b"-"
+        if self.variant_class != VariantClass::Insertion || inserted.is_empty() || inserted == b"-"
         {
             return self.display_allele();
         }
@@ -1151,29 +1159,13 @@ pub fn ambiguity_code(allele_string: &str) -> Option<u8> {
     }
 }
 
-/// The `UPLOADED_ALLELE` value: the record's allele string as uploaded when its
-/// alleles differ in length with no `-` among them, or the run is `--minimal`,
-/// else that string upper-cased. Ensembl VEP prints
-/// `original_allele_string || allele_string` (`OutputFactory.pm`
-/// `VariationFeatureOverlapAllele_to_output_hash`); the parser keeps the raw
-/// string as `original_allele_string` for a record whose alleles differ in
-/// length, a string carrying a `-` excepted (`Parser.pm` `post_process_vfs`
-/// ends its length test at the first `-`), and, under `--minimal`, for every
-/// record (`minimise_alleles`), and `validate_vf` upper-cases the working
-/// `allele_string` every other record prints.
-pub fn uploaded_allele(allele_string: &str, minimal: bool) -> String {
-    if keeps_uploaded_spelling(allele_string, minimal) {
-        allele_string.to_string()
-    } else {
-        allele_string.to_ascii_uppercase()
-    }
-}
-
 /// Whether `UPLOADED_ALLELE` prints the record's allele string as uploaded
 /// (Ensembl VEP's `original_allele_string` is set) rather than the feature's
-/// working string: the run is `--minimal`, or the alleles differ in length with
-/// no `-` among them ([`uploaded_allele`]).
-fn keeps_uploaded_spelling(allele_string: &str, minimal: bool) -> bool {
+/// working string: the run is `--minimal` (`minimise_alleles` sets it for every
+/// record), or the alleles differ in length with no `-` among them (`Parser.pm`
+/// `post_process_vfs` ends its length test at the first `-`); `validate_vf`
+/// upper-cases the working string every other record prints.
+pub fn keeps_uploaded_spelling(allele_string: &str, minimal: bool) -> bool {
     let mut parts = allele_string.split('/');
     let reference_length = parts.next().map_or(0, str::len);
     minimal
@@ -1675,27 +1667,36 @@ mod tests {
     /// sets the former when a length differs, ending its test at the first `-`,
     /// `minimise_alleles` sets it for every record, and `validate_vf` upper-cases
     /// the latter), and a structural row has none. An Ensembl-format column
-    /// written `at/-` or `tt/-/t` therefore prints upper-cased, as `t/-` does.
+    /// written `at/-` or `tt/-/t` therefore prints upper-cased, as `t/-` does, and
+    /// a record whose reference `--lookup_ref` replaced prints the replaced string
+    /// (`A/A/G` for `T A,G` over a reference `A`, as Ensembl VEP 116.2 prints).
     #[test]
     fn uploaded_allele_follows_perls_two_sources() {
-        assert_eq!(uploaded_allele("a/g", false), "A/G");
-        assert_eq!(uploaded_allele("A/C/*", false), "A/C/*");
-        assert_eq!(uploaded_allele("at/a", false), "at/a");
-        assert_eq!(uploaded_allele("TAG/TA/T", false), "TAG/TA/T");
-        assert_eq!(uploaded_allele("AT/A/*", false), "AT/A/*");
-        assert_eq!(uploaded_allele("t/-", false), "T/-");
-        assert_eq!(uploaded_allele("at/-", false), "AT/-");
-        assert_eq!(uploaded_allele("-/at", false), "-/AT");
-        assert_eq!(uploaded_allele("tt/-/t", false), "TT/-/T");
-        assert_eq!(uploaded_allele("a/g", true), "a/g");
-        assert_eq!(uploaded_allele("a/c/g", true), "a/c/g");
-        assert_eq!(uploaded_allele("at/-", true), "at/-");
+        for (raw, kept) in [
+            ("a/g", false),
+            ("A/C/*", false),
+            ("at/a", true),
+            ("TAG/TA/T", true),
+            ("AT/A/*", true),
+            ("t/-", false),
+            ("at/-", false),
+            ("-/at", false),
+            ("tt/-/t", false),
+        ] {
+            assert_eq!(keeps_uploaded_spelling(raw, false), kept, "{raw}");
+            assert!(keeps_uploaded_spelling(raw, true), "{raw} under --minimal");
+        }
         let mut snv = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         snv.uploaded_allele_string = Some("a/g".into());
         assert_eq!(snv.uploaded_allele(false).as_deref(), Some("A/G"));
         assert_eq!(snv.uploaded_allele(true).as_deref(), Some("a/g"));
         let plain = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         assert_eq!(plain.uploaded_allele(false).as_deref(), Some("A/G"));
+        let mut looked_up = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        looked_up.allele_index = 1;
+        looked_up.uploaded_allele_string = Some("T/A/G".into());
+        looked_up.record_allele_string_multi = Some("A/A/G".into());
+        assert_eq!(looked_up.uploaded_allele(false).as_deref(), Some("A/A/G"));
         let mut sv = InputVariant::new("21".into(), 100, 200, b"N".to_vec(), b"<DEL>".to_vec());
         sv.is_structural = true;
         sv.uploaded_allele_string = Some("<DEL>".into());
@@ -1786,9 +1787,10 @@ mod tests {
     /// The three byte writers append exactly the bytes of the `String` columns,
     /// on every branch each column has: the location of a point, a span and an
     /// insertion; a record named by its ID, by its input line and by its
-    /// alleles at the trimmed start; the allele of a sequence variant, a
-    /// pre-minimised multi-allelic record, every structural class term and a
-    /// breakend with and without a mate.
+    /// alleles at the trimmed start; the allele of a sequence variant, an
+    /// allele of a `--minimal` split (the trimmed allele under the record's
+    /// span), every structural class term and a breakend with and without a
+    /// mate.
     #[test]
     fn byte_writers_match_the_string_columns() {
         let mut named = InputVariant::new("chr21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
@@ -1839,7 +1841,7 @@ mod tests {
             (&named, "rs123", "chr21:100", "G"),
             (&del, "21_25000100_ACGTAC/-", "21:25000100-25000105", "-"),
             (&ins, "21_25000100_A/ATT", "21:25000100-25000101", "TT"),
-            (&multi, "21_100_TAG/TA/T", "21:100-102", "TA"),
+            (&multi, "21_100_TAG/TA/T", "21:100-102", "A"),
             (&cpx, "21_100_N/<CPX:X>", "21:100-300", "CPX"),
             (&alu, "1_100_N/<INS:ME:ALU>", "1:100-200", "Alu_insertion"),
             (

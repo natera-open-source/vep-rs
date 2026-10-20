@@ -724,8 +724,9 @@ fn mask_segment(segment: &str) -> String {
     }
 }
 
-/// VEP's `--max_sv_size` check (Parser.pm `validate_vf`); `None` is the flag's
-/// `-1`, no limit. Ensembl VEP 116 drops a structural variant whose span exceeds
+/// VEP's `--max_sv_size` check (Parser.pm:491-499, `validate_vf`), the span
+/// measured as end minus start on every record, sequence records included; `None`
+/// is the flag's `-1`, no limit. Ensembl VEP 116 drops a record whose span exceeds
 /// the limit before annotation and writes nothing for it in any format; vep-rs
 /// annotates it in the default, tab and Parquet outputs, keeps its VCF line
 /// without consequences and omits it from the JSON output
@@ -734,7 +735,7 @@ pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: Option<u
     let Some(max_sv_size) = max_sv_size else {
         return;
     };
-    if variant.is_structural && variant.end.saturating_sub(variant.start) > max_sv_size {
+    if variant.end.saturating_sub(variant.start) > max_sv_size {
         variant.oversize_sv = true;
     }
 }
@@ -891,6 +892,7 @@ impl Runner {
             no_escape: c.no_escape,
             terms: c.terms,
             total_length: c.total_length,
+            positions_of_own_span: matches!(c.output_format.as_str(), "vcf" | "json"),
             clin_sig_allele: if c.clin_sig_allele {
                 ClinSigAllele::PerAllele
             } else {
@@ -1344,6 +1346,7 @@ impl Runner {
             allow_non_variant: self.config.allow_non_variant,
             dont_skip: self.config.dont_skip,
             max_sv_size: self.config.max_sv_size,
+            minimal: self.config.minimal,
             output_format,
             no_headers: self.config.no_headers,
             vcf_formatter: vcf_formatter.as_ref(),
@@ -1373,6 +1376,7 @@ impl Runner {
             delimiter: &delimiter,
             dont_skip: self.config.dont_skip,
             max_sv_size: self.config.max_sv_size,
+            minimal: self.config.minimal,
             progress: !self.config.quiet,
             checks: &checks,
             mode: self.config.pipeline_mode,
@@ -5044,6 +5048,15 @@ mod tests {
         let mut unlimited = parse_vcf_line(line, true).unwrap().remove(0);
         mark_oversize_sv(&mut unlimited, None);
         assert!(!unlimited.oversize_sv);
+        // The test runs on every record (Parser.pm:491-499): a nine-base deletion
+        // spans eight under Ensembl VEP's measure, over a limit of 5 and not of 8.
+        let deletion = "21\t10\tdel9\tGTCATCATCA\tG\t.\t.\t.";
+        let mut over = parse_vcf_line(deletion, true).unwrap().remove(0);
+        mark_oversize_sv(&mut over, Some(5));
+        assert!(over.oversize_sv);
+        let mut within = parse_vcf_line(deletion, true).unwrap().remove(0);
+        mark_oversize_sv(&mut within, Some(8));
+        assert!(!within.oversize_sv);
 
         assert_eq!(config_from(&["--max_sv_size", "-1"]).max_sv_size, None);
         assert_eq!(

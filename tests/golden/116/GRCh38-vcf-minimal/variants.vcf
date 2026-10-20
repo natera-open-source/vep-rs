@@ -1,0 +1,25 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	10542415	snv	A	G	.	.	.
+21	10542414	mnp_two_sided	AAAG	AGGG	.	.	.
+21	10542414	mnp_left	AAA	AGG	.	.	.
+21	10542415	mnp_right	AAG	GGG	.	.	.
+21	10542414	ins_padded	A	AT	.	.	.
+21	10542414	del_padded	AAA	A	.	.	.
+21	10542414	multi_snv_ins	A	T,AG	.	.	.
+21	10542414	multi_no_change	A	T,C	.	.	.
+21	10542414	multi_mnp_two	AAA	AGG,AAG	.	.	.
+21	10542415	multi_eq_ref_first	A	A,G	.	.	.
+21	10542415	multi_eq_ref_second	A	G,A	.	.	.
+21	10542414	multi_dup_trimmable	AAA	AGA,AGA	.	.	.
+21	10542414	multi_dup_plus_ins	A	T,T,AG	.	.	.
+21	10542414	multi_star_ins	A	AG,*	.	.	.
+21	10542414	multi_three	AAAG	AGAG,AAGG,A	.	.	.
+21	10542414	lower_mnp	aaag	aggg	.	.	.
+21	10542414	mixed_case_mnp	AAAG	AGGg	.	.	.
+21	10542415	snv_star	A	G,*	.	.	.
+21	10542414	multi_delstar	A	AG,<DEL:*>	.	.	.
+21	10542414	.	A	T,AG	.	.	.
+21	14512454	rev_mnp	CTGT	CAGT	.	.	.
+21	14512454	rev_multi	CTGT	CAGT,CTGTA	.	.	.
+21	20000326	inter_multi	TT	TA,TTAA	.	.	.

@@ -537,6 +537,15 @@ pub struct TranscriptConsequence {
     pub cds_total: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub protein_total: Option<u32>,
+    /// The three positions of the allele's own span where the columns print
+    /// another span's: for an allele of a `--minimal` split the columns print the
+    /// record's span, and these are the trimmed allele's own, which the VCF and
+    /// JSON formats print (`OutputFactory/VCF.pm:305-308` and
+    /// `OutputFactory/JSON.pm:217-220` clear the cached positions before the
+    /// rejoin, so they are recomputed on the trimmed feature and kept). `None`
+    /// when the columns are the allele's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub own_span_positions: Option<Box<OwnSpanPositions>>,
     /// Amino acid change (e.g., "A/V").
     pub amino_acids: Option<String>,
     /// Codon change (e.g., "gCc/gTc").
@@ -697,6 +706,15 @@ impl fmt::Display for FeatureType {
     }
 }
 
+/// `cDNA_position`, `CDS_position` and `Protein_position` of an allele's own span
+/// ([`TranscriptConsequence::own_span_positions`]).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct OwnSpanPositions {
+    pub cdna: Option<String>,
+    pub cds: Option<String>,
+    pub protein: Option<String>,
+}
+
 /// The cache a transcript of a merged cache came from: Ensembl VEP's
 /// `_source_cache` key, `Ensembl` or `RefSeq` (`Pipeline/DumpVEP/MergeVEP.pm`
 /// at release/116.2).
@@ -724,6 +742,7 @@ impl Default for TranscriptConsequence {
             cdna_total: None,
             cds_total: None,
             protein_total: None,
+            own_span_positions: None,
             amino_acids: None,
             codons: None,
             protein_id: None,
@@ -792,6 +811,7 @@ impl TranscriptConsequence {
             cdna_total: None,
             cds_total: None,
             protein_total: None,
+            own_span_positions: None,
             amino_acids: None,
             codons: None,
             protein_id: transcript.protein_id.clone(),

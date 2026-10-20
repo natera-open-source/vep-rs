@@ -16,7 +16,7 @@
 
 use std::collections::BTreeSet;
 
-use vep_core::consequence::{Consequence, TranscriptConsequence};
+use vep_core::consequence::{Consequence, OwnSpanPositions, TranscriptConsequence};
 use vep_core::spdi::VrsAllele;
 use vep_core::sv_routing::{perl_split, perl_true};
 use vep_core::terms::Vocabulary;
@@ -134,6 +134,13 @@ pub struct FieldOptions {
     pub terms: Vocabulary,
     /// Append `/<total>` to the three position columns (`--total_length`).
     pub total_length: bool,
+    /// The format clears the cached positions before it rejoins the alleles of a
+    /// `--minimal` split (the VCF and JSON factories, `OutputFactory/VCF.pm:305-308`,
+    /// `OutputFactory/JSON.pm:217-220`), so an allele of one prints its own
+    /// span's positions ([`TranscriptConsequence::own_span_positions`]); the
+    /// default and tab formats rejoin first (`OutputFactory.pm:294-299`) and print
+    /// the record's span.
+    pub positions_of_own_span: bool,
     /// `--clin_sig_allele`: which ClinVar entries CLIN_SIG reports.
     pub clin_sig_allele: ClinSigAllele,
 }
@@ -818,6 +825,10 @@ pub type Row<'a> = (&'a InputVariant, Option<&'a TranscriptConsequence>);
 /// transcript id) and allele-minor (ALT order) across every allele split from
 /// the record, then one intergenic row per allele that overlapped nothing, or
 /// the one `--summary` or `--most_severe` row the record's first allele carries.
+/// The alleles of a `--minimal` split sort by the keys Ensembl VEP's rejoin
+/// stores their transcript variations under ([`InputVariant::rejoin_key_prefix`]
+/// before the transcript id), so an allele whose key prefix sorts before the
+/// letters of a transcript id prints every one of its rows first.
 ///
 /// An allele whose chromosome had no transcripts at all (no `most_severe_consequence`)
 /// produces no row, as VEP writes nothing for it.
@@ -838,10 +849,8 @@ pub fn record_rows_into<'a>(record: &[&'a InputVariant], rows: &mut Vec<Row<'a>>
     }
     // Stable, so rows with one transcript and allele keep their consequence order.
     rows.sort_by(|a, b| {
-        let (ta, tb) = (a.1.expect("feature row"), b.1.expect("feature row"));
-        ta.transcript_id
-            .as_ref()
-            .cmp(tb.transcript_id.as_ref())
+        rejoin_key(a)
+            .cmp(rejoin_key(b))
             .then(a.0.allele_index.cmp(&b.0.allele_index))
     });
     for variant in record {
@@ -849,6 +858,18 @@ pub fn record_rows_into<'a>(record: &[&'a InputVariant], rows: &mut Vec<Row<'a>>
             rows.push((variant, None));
         }
     }
+}
+
+/// The key Ensembl VEP sorts a row's transcript variation by (VariationFeature.pm:666):
+/// the transcript id, behind the allele's rejoin prefix when it has one.
+fn rejoin_key<'a>(row: &Row<'a>) -> impl Iterator<Item = u8> + 'a {
+    let (variant, tc) = (row.0, row.1.expect("feature row"));
+    variant
+        .rejoin_key_prefix
+        .as_deref()
+        .unwrap_or("")
+        .bytes()
+        .chain(tc.transcript_id.bytes())
 }
 
 /// Consequence terms of a feature row in the configured vocabulary, joined by
@@ -1022,17 +1043,26 @@ fn row_field_value(
             }
         }
         "cDNA_position" => position_column(
-            tc.and_then(|x| x.cdna_position.as_deref()),
+            tc.and_then(|x| match own_span_positions(x, options) {
+                Some(own) => own.cdna.as_deref(),
+                None => x.cdna_position.as_deref(),
+            }),
             tc.and_then(|x| x.cdna_total)
                 .filter(|_| options.total_length),
         ),
         "CDS_position" => position_column(
-            tc.and_then(|x| x.cds_position.as_deref()),
+            tc.and_then(|x| match own_span_positions(x, options) {
+                Some(own) => own.cds.as_deref(),
+                None => x.cds_position.as_deref(),
+            }),
             tc.and_then(|x| x.cds_total)
                 .filter(|_| options.total_length),
         ),
         "Protein_position" => position_column(
-            tc.and_then(|x| x.protein_position.as_deref()),
+            tc.and_then(|x| match own_span_positions(x, options) {
+                Some(own) => own.protein.as_deref(),
+                None => x.protein_position.as_deref(),
+            }),
             tc.and_then(|x| x.protein_total)
                 .filter(|_| options.total_length),
         ),
@@ -1046,7 +1076,13 @@ fn row_field_value(
         // A structural row carries neither `REF_ALLELE` nor `UPLOADED_ALLELE`
         // (OutputFactory.pm `BaseStructuralVariationOverlapAllele_to_output_hash`).
         "REF_ALLELE" if variant.is_structural => String::new(),
-        "REF_ALLELE" => String::from_utf8_lossy(&variant.ref_allele).to_string(),
+        // Every row of a `--minimal` split prints the record feature's reference.
+        "REF_ALLELE" => match variant.record_allele_string_multi.as_deref() {
+            Some(record) if variant.original_start.is_some() => {
+                vep_core::minimal::rejoined_reference(record)
+            }
+            _ => String::from_utf8_lossy(&variant.ref_allele).to_string(),
+        },
         "UPLOADED_ALLELE" => variant.uploaded_allele(options.minimal).unwrap_or_default(),
         "DISTANCE" => tc
             .filter(|x| options.distance_shown(x))
@@ -1239,6 +1275,20 @@ fn row_field_value(
                 .cloned()
                 .unwrap_or_default(),
         },
+    }
+}
+
+/// The allele's own span's positions, which the three position columns print
+/// in place of their own under [`FieldOptions::positions_of_own_span`]. `None`
+/// when the option is off or the row carries none, so the columns print their own.
+fn own_span_positions<'a>(
+    tc: &'a TranscriptConsequence,
+    options: &FieldOptions,
+) -> Option<&'a OwnSpanPositions> {
+    if options.positions_of_own_span {
+        tc.own_span_positions.as_deref()
+    } else {
+        None
     }
 }
 

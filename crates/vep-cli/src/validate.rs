@@ -30,7 +30,7 @@ use vep_core::variation::{perl_number_string, perl_numeric};
 use vep_core::vcf_info::info_value_written;
 use vep_fasta::IndexedFasta;
 
-use crate::pipeline::SkipSink;
+use crate::pipeline::{Reported, SkipSink};
 use crate::transcript_index::LazyTranscriptIndexes;
 
 /// The reference-sequence checks of a run and the `--chr` list.
@@ -179,7 +179,8 @@ pub(crate) fn reference_sequence(
 }
 
 /// The checks Ensembl VEP's parser makes on a record before annotation, applied
-/// to the alleles vep-rs parsed from it.
+/// to the alleles vep-rs parsed from it, and what a record that passes them
+/// goes through next.
 pub(crate) struct SkipRules<'a> {
     pub transcripts: &'a LazyTranscriptIndexes,
     /// The chromosome synonyms an input name is resolved through before the
@@ -188,6 +189,9 @@ pub(crate) struct SkipRules<'a> {
     pub max_sv_size: Option<u64>,
     pub dont_skip: bool,
     pub checks: &'a ReferenceChecks<'a>,
+    /// `--minimal`: a validated multi-allelic record is split per allele
+    /// (`vcf_parser::split_minimal_record`), after the checks have read it.
+    pub minimal: bool,
 }
 
 /// The input record as the skip rules read it: `number` Ensembl VEP's count of
@@ -226,6 +230,52 @@ impl AllelePatch {
         }
         variant.check_ref_failed = self.check_ref_failed;
     }
+
+    /// Whether `--lookup_ref` replaced the record's reference, so the overlap-allele
+    /// rule runs again over its alleles ([`keep_overlap_allele`]).
+    pub(crate) fn replaced_reference(&self) -> bool {
+        self.reference.is_some()
+    }
+}
+
+/// The overlap-allele rule on a record whose alleles may equal its reference: every
+/// record of the parser-fed formats, whose parsers keep such an allele, and a VCF
+/// record once `--lookup_ref` replaced its reference. Ensembl VEP builds the overlap
+/// alleles at annotation time (VariationFeatureOverlap.pm:459-491), so an ALT equal
+/// to the reference writes no row and takes no number (`:481`), and the alleles
+/// after it are numbered without it (`:483`); the one ALT of a bi-allelic record, or
+/// the last allele left of a record, then makes it the feature with no allele to
+/// annotate, written as a non-variant line is. Returns whether the allele still
+/// writes a row; `last` says it is the record's last allele still standing.
+pub(crate) fn keep_overlap_allele(variant: &mut InputVariant, last: bool) -> bool {
+    if variant.is_structural || variant.no_allele {
+        return true;
+    }
+    let equal_to_reference = match variant.record_allele_string_multi.as_deref() {
+        None => variant.alt_allele() == variant.ref_allele.as_slice(),
+        Some(multi) => {
+            let reference = String::from_utf8_lossy(&variant.ref_allele);
+            let alts: Vec<String> = multi.split('/').skip(1).map(str::to_string).collect();
+            let numbers = crate::vcf_parser::perl_allele_numbers(&reference, &alts);
+            match numbers.get(variant.allele_index).copied().flatten() {
+                Some(number) => {
+                    variant.allele_num =
+                        (number as usize != variant.allele_index + 1).then_some(number);
+                    false
+                }
+                None => true,
+            }
+        }
+    };
+    if !equal_to_reference {
+        return true;
+    }
+    if last {
+        variant.no_allele = true;
+        variant.alt_alleles = vec![b"*".to_vec()];
+        return true;
+    }
+    false
 }
 
 impl SkipRules<'_> {
@@ -259,7 +309,13 @@ impl SkipRules<'_> {
             check_ref_failed: false,
         };
         let quoted = String::from_utf8_lossy(line.quoted);
-        let mut skip = |description: &str| report(description, line.number, Some(&quoted));
+        let mut skip = |description: &str| {
+            report(Reported::Skip {
+                description,
+                line_number: line.number,
+                quoted: Some(&quoted),
+            })
+        };
         let mut incomplete = false;
         if first.is_structural {
             let joined_alts = first.uploaded_allele_string.as_deref().unwrap_or("");
@@ -604,9 +660,7 @@ mod tests {
             columns: None,
             quoted: b"21\t100\tr1\tA\tG\t.\t.\t.",
         };
-        let mut report = |description: &str, number: u64, quoted: Option<&str>| {
-            sink.skipped_variant(description, Some(number), quoted);
-        };
+        let mut report = crate::pipeline::report_to_sink;
         let (kept, patch) = rules.validate(first, &line, &mut report);
         let lines = std::fs::read_to_string(&path)
             .unwrap_or_default()
@@ -642,6 +696,7 @@ mod tests {
             max_sv_size: None,
             dont_skip,
             checks,
+            minimal: false,
         }
     }
 
@@ -971,6 +1026,50 @@ mod tests {
             warnings,
             ["WARNING: line 7 skipped (21 100 r1 A G . . .): Specified reference allele AC does not match Ensembl reference allele"]
         );
+    }
+
+    /// An ALT the looked-up reference now equals writes no row and takes no number
+    /// (VariationFeatureOverlap.pm:481): Ensembl VEP 116.2 writes `21 10542415 x T A,G`
+    /// over the reference `A` as the one row `G` with ALLELE_NUM 1, `T G,A` the same,
+    /// `T A,G,C` as `G` 1 and `C` 2, and `T A` as the feature with no allele (`A/A`,
+    /// `?`); an allele the reference does not equal keeps its row.
+    #[test]
+    fn lookup_ref_drops_an_alt_the_reference_now_equals() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let fasta = fasta_in(dir.path());
+        let checks = checks(&fasta, false, true);
+        let rules = rules(&transcripts, &checks, false);
+        // Position 1 of the FASTA is `A`.
+        let mut first = variant("21", 1, 1, "T", "A");
+        first.record_allele_string_multi = Some("T/A/G".into());
+        let (kept, _, patch) = judge(&rules, &mut first, dir.path());
+        assert!(kept && patch.replaced_reference());
+        assert!(!keep_overlap_allele(&mut first, false));
+        let mut second = variant("21", 1, 1, "T", "G");
+        second.allele_index = 1;
+        second.record_allele_string_multi = Some("T/A/G".into());
+        patch.apply(&mut second);
+        assert!(keep_overlap_allele(&mut second, true));
+        assert_eq!(second.allele_string, "A/G");
+        assert_eq!(second.allele_num, Some(1));
+        assert_eq!(second.uploaded_allele(false).as_deref(), Some("A/A/G"));
+        let mut third = variant("21", 1, 1, "T", "C");
+        third.allele_index = 2;
+        third.record_allele_string_multi = Some("T/A/G/C".into());
+        patch.apply(&mut third);
+        assert!(keep_overlap_allele(&mut third, true));
+        assert_eq!(third.allele_num, Some(2));
+        let mut alone = variant("21", 1, 1, "T", "A");
+        assert!(judge(&rules, &mut alone, dir.path()).0);
+        assert!(keep_overlap_allele(&mut alone, true));
+        assert!(alone.no_allele);
+        assert_eq!(alone.allele_string, "A/A");
+        let mut kept_alt = variant("21", 1, 1, "T", "G");
+        assert!(judge(&rules, &mut kept_alt, dir.path()).0);
+        assert!(keep_overlap_allele(&mut kept_alt, true));
+        assert!(!kept_alt.no_allele);
     }
 
     /// `lookup_ref` (Parser.pm:635-646): the reference allele is replaced by the

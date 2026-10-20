@@ -1,0 +1,2 @@
+WARNING: could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta
+WARNING: found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size

@@ -148,7 +148,7 @@ An Ensembl-format line is named `chr_start_alleles`, start the lower of its two 
 
 ### DISTANCE
 
-The value is the shortest gap between the variant and the transcript: the smallest of the four gaps between the record's start or end and the transcript's start or end. So the pair `POS+1..POS` of a zero-length structural variant measures from whichever flank is nearer. A `<CNV:TR>` contraction read under the cap measures from the run it is located on, not from the units it removes. The key is printed on up- and downstream rows only.
+The value is the shortest gap between the variant and the transcript: the smallest of the four gaps between the record's start or end and the transcript's start or end. So the pair `POS+1..POS` of a zero-length structural variant measures from whichever flank is nearer. A `<CNV:TR>` read without a FASTA measures from the run it is located on. The key is printed on up- and downstream rows only.
 
 ### FLAGS, OverlapBP and OverlapPC
 

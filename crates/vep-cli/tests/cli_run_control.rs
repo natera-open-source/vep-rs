@@ -524,7 +524,9 @@ fn parquet_to_stdout_is_refused() {
 /// output (BaseVEP.pm:890), as `WARNING: line N skipped (<line>): <description>`
 /// for a skipped record (`:840-863`), and echoed on standard error; the file is
 /// Ensembl VEP's for the run-control corpus. A run without a warning leaves no
-/// file (`:881`: the handle is opened at the first warning).
+/// file (`:881`: the handle is opened at the first warning); the attributes
+/// corpus is such a run, where the release corpus's tandem duplication, read
+/// without a FASTA, draws Ensembl VEP's warning (Parser/VCF.pm:521-524).
 #[test]
 fn warnings_file_is_written_by_default() {
     let dir = tempfile::tempdir().unwrap();
@@ -539,7 +541,8 @@ fn warnings_file_is_written_by_default() {
         "every warning is echoed on standard error"
     );
 
-    let clean = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38");
+    let clean =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-attributes");
     let mut args = args_for(&clean);
     args.extend([
         "-o".to_string(),

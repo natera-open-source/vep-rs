@@ -38,6 +38,10 @@ A trailing blank at the end of a data line is kept as part of the last INFO valu
 
 A multi-allelic record is one variant, as in VEP without `--minimal`: no per-allele minimisation, and every allele's rows in one record.
 
+Under `--minimal` every bi-allelic sequence record is trimmed from both ends and marked `MINIMISED`, as `minimise_alleles` trims it (`Parser.pm` lines 964-1019). A multi-allelic record one of whose alleles trims is split as `split_variants` splits it (`InputBuffer.pm` lines 638-718). Each allele is annotated on its own trimmed span and numbered by its written position; a repeated ALT writes its own rows, and an allele equal to the reference once trimmed writes none.
+
+The rows of a split record are rejoined as Ensembl VEP rejoins them (`OutputFactory.pm` lines 2272-2354). Location and the JSON `start` and `end` keep the record's span, `UPLOADED_ALLELE` prints the record's chopped string and `REF_ALLELE` the first allele's trimmed reference. The rows sort by allele: an allele whose trimmed string sorts before the letters of a transcript id (`-/A`, `A/G`) comes ahead of the first allele's rows. A record none of whose alleles trims is annotated as it stands. The position columns of a split allele follow the format ([Output formats](../output-formats.md#where-each-rule-lives)).
+
 A record with more than one ALT and a symbolic allele among them has one class for the whole record, read from its ALTs joined by `/` as Ensembl VEP 116 reads them. Identical symbolic ALTs collapse to their type: `<INS>,<INS>` is an `insertion`, `<DEL>,<DEL>` a `deletion`. A DEL beside a DUP in either order, `<DEL>,<DUP:TANDEM>` included, is a `copy_number_variation`, and so is `<CN0>,<CN2>`. A sequence ALT beside a symbolic one (`G,<INV>` with `SVTYPE=DEL`) takes the type INFO/SVTYPE names.
 
 Every ALT then gets its own row for each transcript, labelled with the class term as its Allele. So the rows of one transcript repeat per ALT and differ only in `ALLELE_NUM`, which numbers the parts of Ensembl VEP's allele string from 1. A breakpoint record's reference base is part 1, so a bare `<BND>` prints 2; a record with parsed breakends prints 0 for its own breakend and numbers its mates from 1. A list VEP has no type for (`<INS>,<DEL>`, `<INV>,<DUP>`) keeps one row per ALT under each ALT's own class and the unsupported-type treatment of the [next section](#skipped-records).
@@ -46,7 +50,7 @@ Every ALT then gets its own row for each transcript, labelled with the class ter
 
 Ensembl VEP 116 drops a record it marks skipped before annotation and writes nothing for it in any format; its `--dont_skip` restores it. Four kinds of record are marked so:
 
-- a structural variant spanning more than `--max_sv_size` bases (default 10,000,000; `--max_sv_size -1` lifts the limit in both engines);
+- a record whose end minus start exceeds `--max_sv_size` bases (default 10,000,000; `--max_sv_size -1` lifts the limit in both engines). A sequence record is measured too, on its minimised alleles, so a `<CNV:TR>` expanded with a FASTA is measured as the sequence record it becomes;
 - a symbolic ALT its type table lacks (`<CPX>`, `<NON_REF>`);
 - a multi-allelic symbolic list it has no type for (`<INS>,<DEL>`, `<INV>,<DUP>`);
 - a `<DEL>` with neither `END` nor `SVLEN`.

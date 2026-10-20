@@ -549,10 +549,11 @@ def test_select_refuses_a_corpus_without_covers(tmp_path: Path, capsys):
 
 def test_select_preserves_covers_on_regeneration(tmp_path: Path):
     """Regenerating over an existing manifest keeps its `covers` (union with any new `--covers`),
-    its `masks` and its `flag_sets`, in that order before `suites`, so a regenerated corpus keeps
-    certifying the rows it did; a set's divergence keys name the old records by ordinal, so they go
-    the way the manifest's own do; a mask class `classify` does not know is refused before anything
-    is written."""
+    its `masks`, its `reference_warnings` and its `flag_sets`, in that order before `suites`, so a
+    regenerated corpus keeps certifying the rows it did and expecting the run-level warnings it did;
+    a set's divergence keys name the old records by ordinal, so they go the way the manifest's own
+    do; a mask class `classify` does not know, or a `reference_warnings` that is not a list of
+    texts, is refused before anything is written."""
     ref, vcf = _two_record_suite(tmp_path)
     out = tmp_path / "corpus"
     matrix = _matrix(tmp_path, "symbol", "max_af", "pick")
@@ -561,6 +562,8 @@ def test_select_preserves_covers_on_regeneration(tmp_path: Path):
     m = json.loads((out / "manifest.json").read_text())
     entry = dict(m["flag_sets"][0])
     m["masks"] = ["regulatory_feature_rows"]
+    notice = "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta"
+    m["reference_warnings"] = [notice]
     m["divergences"] = [{"location": "21:100", "record_indices": [0]}]
     m["flag_sets"][0].update({"divergences": [{"location": "21:100", "record_indices": [0]}], "divergence_summary": {}})
     (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
@@ -568,19 +571,27 @@ def test_select_preserves_covers_on_regeneration(tmp_path: Path):
     m = json.loads((out / "manifest.json").read_text())
     assert m["covers"] == ["symbol"]
     assert m["masks"] == ["regulatory_feature_rows"]
+    assert m["reference_warnings"] == [notice]
     assert m["flag_sets"] == [entry] and "divergences" not in m
     assert _select(ref, vcf, out, "--covers", "max_af", "--covers", "symbol") == 0
     m = json.loads((out / "manifest.json").read_text())
     assert m["covers"] == ["symbol", "max_af"]
     assert m["masks"] == ["regulatory_feature_rows"] and m["flag_sets"] == [entry]
+    assert m["reference_warnings"] == [notice]
     keys = list(m)
-    assert keys.index("covers") < keys.index("masks") < keys.index("flag_sets") < keys.index("suites")
+    assert keys.index("covers") < keys.index("masks") < keys.index("reference_warnings") < keys.index("flag_sets") < keys.index("suites")
     m["masks"] = ["splice_rows"]
     (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
     (out / "variants.vcf").unlink()
     with pytest.raises(SystemExit) as refusal:
         _select(ref, vcf, out)
     assert str(refusal.value) == "ERROR: [build_golden_corpus] manifest masks name unknown classes ['splice_rows']"
+    assert json.loads((out / "manifest.json").read_text()) == m and not (out / "variants.vcf").exists(), "nothing is written"
+    m["masks"] = ["regulatory_feature_rows"]
+    m["reference_warnings"] = notice
+    (out / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+    with pytest.raises(SystemExit, match="reference_warnings is not a list of texts"):
+        _select(ref, vcf, out)
     assert json.loads((out / "manifest.json").read_text()) == m and not (out / "variants.vcf").exists(), "nothing is written"
 
 
@@ -735,6 +746,8 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
         ('"covers": ["symbol", ""]', "covers is not a list of names"),
         ('"covers": ["symbol"], "masks": "regulatory_feature_rows"', "masks is not a list of names"),
         ('"covers": ["symbol"], "masks": [["regulatory_feature_rows"]]', "masks is not a list of names"),
+        ('"covers": ["symbol"], "reference_warnings": "no FASTA"', "reference_warnings is not a list of texts"),
+        ('"covers": ["symbol"], "reference_warnings": ["no FASTA", ""]', "reference_warnings is not a list of texts"),
         ('"covers": ["symbol"], "flag_sets": "pick"', "flag_sets is not a list"),
         ('"covers": ["symbol"], "flag_sets": ["pick"]', "has a flag_sets entry without a name (letters, digits, _ and -, not default)"),
         ('"covers": ["symbol"], "flag_sets": [{"covers": []}]', "has a flag_sets entry without a name (letters, digits, _ and -, not default)"),
@@ -742,6 +755,9 @@ def test_manifest_shapes_are_refused_by_every_subcommand(tmp_path: Path):
         ('"covers": ["symbol"], "flag_sets": [{"name": "-x"}]', "has a flag_sets entry without a name (letters, digits, _ and -, not default)"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a"}, {"name": "a"}]', "names flag set a twice"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "covers": "x"}]', "flag set a covers is not a list of names"),
+        ('"covers": ["symbol"], "flag_sets": [{"name": "a", "masks": "order_only"}]', "flag set a masks is not a list of names"),
+        ('"covers": ["symbol"], "flag_sets": [{"name": "a", "reference_warnings": "no FASTA"}]', "flag set a reference_warnings is not a list of texts"),
+        ('"covers": ["symbol"], "flag_sets": [{"name": "a", "reference_warnings": [["no FASTA"]]}]', "flag set a reference_warnings is not a list of texts"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "flags": "--pick"}]', "flag set a flags is not a list of strings"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "input": 5}]', "flag set a input is not a path inside the corpus directory"),
         ('"covers": ["symbol"], "flag_sets": [{"name": "a", "input": "../x.vcf"}]', "flag set a input is not a path inside the corpus directory"),

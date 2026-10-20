@@ -21,7 +21,7 @@ These flags reduce the rows reported per record, allele or gene, flag the ones a
 | `--show_ref_allele` | bool | false | Show reference allele in output |
 | `--uploaded_allele` | bool | false | Add the UPLOADED\_ALLELE column: the record's allele string as uploaded, REF and every ALT joined by / |
 | `--ambiguity` | bool | false | Add the AMBIGUITY column: the IUPAC ambiguity code of the record's alleles (R for A/G); absent on an indel or any other allele set without a code |
-| `--minimal` | bool | false | Convert alleles to minimal representation; switches on `--allele_number` as in Ensembl VEP |
+| `--minimal` | bool | false | Trim every bi-allelic record's alleles from both ends and split a multi-allelic record whose alleles trim into one allele per row, each on its own trimmed span, as Ensembl VEP minimises; switches on `--allele_number` as in Ensembl VEP |
 | `--total_length` | bool | false | Append /\<total length\> to the cDNA, CDS and protein positions: the transcript's cDNA length, its coding sequence length and its peptide length. JSON keeps Ensembl VEP's shape: a single base prints the string "428/1200" as both cdna\_start and cdna\_end, and a range prints its start as both |
 
 ## Transcript sets

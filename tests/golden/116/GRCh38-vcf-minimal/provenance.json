@@ -1,0 +1,33 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "c78a477c9d0bd48b1ef4e6433e746be3",
+  "arch": "aarch64",
+  "flags_passed": [
+   "--minimal",
+   "--uploaded_allele",
+   "--variant_class",
+   "--mask_header_cache_path"
+  ]
+ },
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --minimal --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "23 hand-built VCF records at coding sites of chromosome 21 of the release-116 cache (a forward-strand and a reverse-strand coding exon) and one intergenic site, by locus and shape: an SNV, substitutions trimmed on both sides, on the left and on the right, a padded insertion and deletion, multi-allelic records that split under --minimal (an SNV beside an insertion, two substitutions, a repeated ALT, a repeated ALT beside an insertion, four ALTs of three shapes, a reverse-strand pair, an intergenic pair), records that do not (two SNVs, an insertion beside a `*`, an SNV beside a `*`, an insertion beside `<DEL:*>`), an ALT equal to the reference first and second, lower-case and mixed-case substitutions and an ID-less record",
+ "generator": "json_cache: the GRCh38-identifiers corpus's pruned cache; expected outputs: one Ensembl VEP 116.2 container run per format on the committed records",
+ "pruned_cache_transcripts": {
+  "21": 726
+ },
+ "sha256": {
+  "default.txt": "4c37b238f59e8da63048b2dfc8e1d0c427db5be7903ba24cb468fc1fffd60694",
+  "tab.txt": "d11142174574936dfb13332b82b7f1e1cb0aa9ff78d53176d3cd42588ee6c537",
+  "vcf.vcf": "b1603481490d0066178adfb9a3c4f602392d85c4de92d234dd932ebef6e27fc6",
+  "json.jsonl": "676e441a38603d20b6bcec7e4d59ca2bb29fc36ab2b2509ac5fb20aac2f374d5"
+ },
+ "variants_vcf_sha256": "d2904b9b9aa4b7011752450c2c18c503a921064b0be540ef4e9afc728638ecb2"
+}

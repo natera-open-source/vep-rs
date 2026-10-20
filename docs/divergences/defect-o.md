@@ -6,14 +6,14 @@ Each allele is expanded to literal sequence before the join, and the reference c
 
 **Why this is a defect.** The record states two alleles, and both are annotated or neither. Which allele is lost depends on the order the ALTs are listed in, not on what they say, and the lost allele vanishes without a row or a warning.
 
-**What vep-rs does instead.** vep-rs reads `RN` per allele, gives the `RN=0` allele the length of no bases, a loss of the whole run, and annotates every allele of the record, the other as its own gain or loss.
+**What vep-rs does instead.** With a FASTA vep-rs expands the alleles as Ensembl VEP expands them and reads the joined string as a multi-allelic one. An empty middle part is the `RN=0` allele, the deletion of the whole run that Ensembl VEP writes alone, and the real allele keeps its own literal reading beside it. An empty last part is dropped by `split` in both engines, so a trailing `RN=0` allele is lost in both. Without a FASTA both engines write the symbolic rows for both alleles.
 
 **Where it is in Ensembl VEP's source** (`ensembl-vep`):
 - `Bio/EnsEMBL/VEP/Parser/VCF.pm`, `_expand_tandem_repeat_allele_string`, line 408: walks `RN` per allele. Line 411: for `RN=0` the loop `for ( 1 .. $records )` runs no iteration, so `$repeat` stays undefined and is pushed as the allele at line 424. Line 428: the reference and the alleles are joined with `/`, `AGCAGCAGC//AGCAGCAGCAGC` for `RN=0,1` and `AGCAGCAGC/AGCAGCAGCAGC/` for `RN=1,0`.
 - `Parser.pm`, line 978: a multi-allelic string is recognised by `/.+\/.+\/.+/`, which neither string matches, an empty part having no character, so the record is not split per allele.
 - `Parser.pm`, line 881: the string is minimised as one indel, where Perl's `split` on `/` drops a trailing empty part and keeps an empty middle one, and the first minimised feature is kept: `AGCAGCAGC/-` for `RN=0,1`, `-/AGC` for `RN=1,0` and `RN=2,0`.
 
-**What correcting it would change.** Both alleles would be annotated, as vep-rs annotates them; class 22 would vanish.
+**What correcting it would change.** Both alleles would be annotated whatever their order; the class would vanish for the records where vep-rs keeps the real allele, and both engines would gain the trailing `RN=0` allele.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
@@ -83,35 +83,27 @@ The second record on ENST00000390690: Ensembl VEP's `inframe_insertion` row, the
 | Consequence | `inframe_insertion` |  |
 | Extra | `ALLELE_NUM=1;IMPACT=MODERATE;STRAND=-1` |  |
 
-vep-rs writes both alleles of each record at the run, the `RN=0` allele as the loss of the run and the other as its gain, an unchanged allele read as a gain. Its two rows for the first record, and for the fourth under its own ID, are on ENST00000390690, beside Ensembl VEP's row there.
+With a FASTA vep-rs writes Ensembl VEP's row for the `RN=0` allele of the first and fourth records, byte for byte, and beside it a row for the real allele of the first record, its literal reading. For the second and third records it writes Ensembl VEP's `inframe_insertion` row alone, the trailing `RN=0` allele dropped by `split` in both engines. Without a FASTA both engines write the symbolic gain over the run for both alleles of every record, so nothing differs.
 
-The first record on ENST00000390690, the loss allele: Ensembl VEP's `inframe_deletion` row beside the first of vep-rs's two rows, the differing cells in bold.
-
-| Column | Ensembl VEP | vep-rs |
-| --- | --- | --- |
-| Uploaded_variation | `rn_0_1` | `rn_0_1` |
-| Location | `21:30425588-30425596` | `21:30425588-30425596` |
-| Allele | **`-`** | **`tandem_repeat`** |
-| Gene | `ENSG00000240432` | `ENSG00000240432` |
-| Feature | `ENST00000390690` | `ENST00000390690` |
-| Feature_type | `Transcript` | `Transcript` |
-| Consequence | **`inframe_deletion`** | **`feature_truncation,inframe_deletion`** |
-| Extra | **`ALLELE_NUM=1;IMPACT=MODERATE;STRAND=-1`** | **`ALLELE_NUM=1`** |
-
-The first record on ENST00000390690, the gain allele: the second of vep-rs's two rows, with no Ensembl VEP row.
+The first record on ENST00000390690, the real allele: the second of vep-rs's two rows, with no Ensembl VEP row.
 
 | Column | Ensembl VEP | vep-rs |
 | --- | --- | --- |
 | Uploaded_variation | no row | `rn_0_1` |
 | Location |  | `21:30425588-30425596` |
-| Allele |  | `tandem_repeat` |
+| Allele |  | `AGCAGCAGCAGC` |
 | Gene |  | `ENSG00000240432` |
 | Feature |  | `ENST00000390690` |
 | Feature_type |  | `Transcript` |
-| Consequence |  | `feature_elongation,coding_sequence_variant` |
-| Extra |  | `ALLELE_NUM=2` |
+| Consequence |  | `protein_altering_variant` |
+| cDNA_position |  | `331-339` |
+| CDS_position |  | `317-325` |
+| Protein_position |  | `106-109` |
+| Amino_acids |  | `SCCS/SCCCS` |
+| Codons |  | `aGCTGCTGCTcc/aGCTGCTGCTGCTcc` |
+| Extra |  | `ALLELE_NUM=2;IMPACT=MODERATE;STRAND=-1` |
 
-The loss row is the symbolic reading of Ensembl VEP's `inframe_deletion` row and pairs with it under class 12 ([12.7](cnv-tr.md#127-how-the-comparator-treats-this-class)); the gain row has no partner, for the fourth record as for the first. For the second and third records the gain row pairs with Ensembl VEP's `inframe_insertion` row and the loss row has none. Without a FASTA both engines write the symbolic rows for both alleles and agree.
+The allele is the run with one more unit, read against the run as a substitution of nine bases by twelve, so its term is `protein_altering_variant`. Ensembl VEP's reading of the same allele first in the list (`RN=1,0`, the second record) is an `inframe_insertion` of one unit after the run.
 
 ### 22.4 Why Ensembl VEP writes that
 
@@ -121,7 +113,7 @@ The loss row is the symbolic reading of Ensembl VEP's `inframe_deletion` row and
 
 ### 22.5 Why vep-rs's rows are the correct ones
 
-The record states two alleles, and both are annotated or neither. An allele of no repeat sequence is a real allele, the loss of the whole run, and Ensembl VEP itself annotates it as a deletion when it is the one that survives. The four-unit allele is a real allele too, and Ensembl VEP itself annotates it as an insertion when it comes first. Which allele is lost depends on the order the ALTs are listed in, not on what they say. vep-rs reads `RN` per allele, gives the `RN=0` allele the length of no bases, a loss of the run, and annotates every allele of the record.
+The record states two alleles, and both are annotated or neither. An allele of no repeat sequence is a real allele, the loss of the whole run, and Ensembl VEP itself annotates it as a deletion when it is the one that survives. The four-unit allele is a real allele too, and Ensembl VEP itself annotates it as an insertion when it comes first. Which allele is lost depends on the order the ALTs are listed in, not on what they say. vep-rs reads an empty middle part as the `RN=0` allele's sequence of no bases and keeps the real allele beside it.
 
 ### 22.6 Try it yourself
 
@@ -139,6 +131,10 @@ Swapping the two `RN` values (`RN=1,0`) loses the other allele.
 
 The class is `cnv_tr_rn_zero_allele_dropped` in the 116.2 registry. The structural-variant comparator reads the input record when the reference ran with a FASTA and expanded the record (a row at or beside the run under an allele other than `tandem_repeat`). The shape is a two-ALT `<CNV:TR>,<CNV:TR>` whose `RN` list has exactly one entry Perl's loop runs no iteration for (0 or negative; `.` is skipped at line 410 and leaves no part, so it is not the shape).
 
-It sets aside vep-rs's `tandem_repeat` rows at the run whose tuple is the dropped allele's alone. These are the `feature_elongation` rows when the `RN=0` allele comes first and the real allele is a gain or unchanged, which vep-rs reads as a gain, because the reference kept the `RN=0` deletion (the first and fourth records). They are the `feature_truncation` rows when the `RN=0` allele comes last and the real allele is a gain, because the reference kept the gain (the second and third).
+It sets aside vep-rs's `tandem_repeat` rows at the run whose tuple is the dropped allele's alone, the rows of a vep-rs run without a FASTA. These are the `feature_elongation` rows when the `RN=0` allele comes first and the real allele is a gain or unchanged, because the reference kept the `RN=0` deletion (the first and fourth records). They are the same rows when the `RN=0` allele comes last and the real allele is a gain, because the reference kept the gain (the second and third).
 
-A real allele that is a loss (`RUC=2` over the three-unit run) shares the `feature_truncation` tuple with the `RN=0` allele, so the reference's row pairs with that one tuple under [class 12](cnv-tr.md#12-cnvtr-read-symbolically-not-expanded) and nothing is left for this class to judge. An unchanged real allele before a trailing `RN=0` (`RN=1,0;RUC=3`) leaves the reference an allele string with no alternate and no row, which is [class 19](defect-l.md#19-an-empty-or-unchanged-cnvtr-expansion-dropped-without-a-row), not this one. The allele the reference kept pairs under class 12 as every expanded `<CNV:TR>` does. Without a FASTA both engines write the symbolic rows for both alleles and nothing is set aside. The SNP/indel comparator reads no input and does not judge the class.
+A real allele that is a loss (`RUC=2` over the three-unit run) shares the symbolic tuple with the `RN=0` allele, so the reference's row pairs with that one tuple under [class 12](cnv-tr.md#12-cnvtr-read-symbolically-not-expanded) and nothing is left for this class to judge.
+
+A vep-rs run that read a FASTA writes the dropped allele's literal reading instead for the first record, a sequence allele at the run the filter does not read. Against a reference that read one, the comparator charges that row, since its filter reads the symbolic `tandem_repeat` rows alone. For the other three records such a run writes what the reference writes, the fourth record's unchanged allele no row.
+
+An unchanged real allele before a trailing `RN=0` (`RN=1,0;RUC=3`) leaves the reference an allele string with no alternate and no row, which is [class 19](defect-l.md#19-an-empty-or-unchanged-cnvtr-expansion-dropped-without-a-row), not this one. The allele the reference kept pairs under class 12 as every expanded `<CNV:TR>` does. Without a FASTA both engines write the symbolic rows for both alleles and nothing is set aside. The SNP/indel comparator reads no input and does not judge the class.

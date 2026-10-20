@@ -65,17 +65,6 @@ pub fn calculate(
         );
     }
 
-    // Overlap metrics (OverlapBP/OverlapPC) use nominal coordinates.
-    let overlap_start = sv_start.max(tx_start);
-    let overlap_end = sv_end.min(tx_end);
-    let overlap_bp = overlap_end - overlap_start + 1;
-    let tx_length = tx_end - tx_start + 1;
-    let overlap_pc = if tx_length > 0 {
-        (overlap_bp as f64 / tx_length as f64) * 100.0
-    } else {
-        0.0
-    };
-
     let mut consequences: ConsequenceList = SmallVec::new();
 
     // Perl VEP `coding_transcript_variant` predicate:
@@ -97,8 +86,6 @@ pub fn calculate(
             transcript,
             smallvec![Consequence::MatureMirnaVariant],
             Impact::MODIFIER,
-            overlap_bp,
-            overlap_pc,
             None,
         ));
     }
@@ -145,8 +132,6 @@ pub fn calculate(
         transcript,
         consequences,
         impact,
-        overlap_bp,
-        overlap_pc,
         None,
     ))
 }
@@ -235,8 +220,6 @@ fn calculate_distance_consequence(
             transcript,
             smallvec![Consequence::UpstreamGeneVariant],
             Impact::MODIFIER,
-            0,
-            0.0,
             Some(distance),
         ))
     } else if !is_upstream && distance <= downstream_distance {
@@ -244,8 +227,6 @@ fn calculate_distance_consequence(
             transcript,
             smallvec![Consequence::DownstreamGeneVariant],
             Impact::MODIFIER,
-            0,
-            0.0,
             Some(distance),
         ))
     } else {
@@ -258,8 +239,6 @@ fn build_transcript_consequence(
     transcript: &Transcript,
     consequences: ConsequenceList,
     impact: Impact,
-    _overlap_bp: u64,
-    _overlap_pc: f64,
     distance: Option<u64>,
 ) -> TranscriptConsequence {
     TranscriptConsequence {

@@ -27,7 +27,9 @@ use common::{
 
 /// Every run's default-format output matches the reference, and the warnings
 /// file the run writes beside it names the records the reference skipped, with
-/// their reasons (the manifest's `reference_warning` strings), and no other.
+/// their reasons (the manifest's `reference_warning` strings), and the warnings
+/// the reference wrote about the run as a whole (its `reference_warnings`
+/// list), and no other.
 #[test]
 fn default_output_matches_vep_on_every_corpus() {
     let corpora = corpora();
@@ -234,9 +236,10 @@ fn flag_sets_run_once_per_entry_with_their_input_and_stdin() {
 
 /// `runs` refuses the `flag_sets` entries the corpus tool's `flag-set` refuses,
 /// naming the entry and the reason, so a manifest edited by hand cannot certify
-/// a set's `covers` with a run the tool would not have written; the shapes the
-/// tool writes (a name of letters, digits, `_` and `-` that starts with a letter
-/// or digit) run.
+/// a set's `covers` with a run the tool would not have written, and refuses a
+/// manifest whose own `reference_warnings` is not a list; the shapes the tool
+/// writes (a name of letters, digits, `_` and `-` that starts with a letter or
+/// digit) run.
 #[test]
 fn runs_refuses_the_flag_set_entries_the_corpus_tool_refuses() {
     let source = corpora()
@@ -330,6 +333,10 @@ fn runs_refuses_the_flag_set_entries_the_corpus_tool_refuses() {
             serde_json::json!([{"name": "x", "perl_mode": "cache"}]),
             format!("{label} flag set x: perl_mode is offline or database, not \"cache\""),
         ),
+        (
+            serde_json::json!([{"name": "x", "reference_warnings": "text"}]),
+            format!("{label} flag set x: reference_warnings is not of its type"),
+        ),
     ];
     let mut wrong = Vec::new();
     for (flag_sets, reason) in refused {
@@ -349,6 +356,13 @@ fn runs_refuses_the_flag_set_entries_the_corpus_tool_refuses() {
         }
     }
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
+    let mut corpus = with_flag_sets(serde_json::json!([]));
+    corpus.manifest["reference_warnings"] = serde_json::json!("text");
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| runs(&corpus).len()));
+    assert_eq!(
+        outcome.unwrap_err().downcast_ref::<String>().cloned(),
+        Some(format!("{label}: reference_warnings is not of its type"))
+    );
     let corpus = with_flag_sets(serde_json::json!([
         {"name": "x1_-", "flags": ["--format", "vcf"], "stdin": true, "formats": ["vcf"], "expected_dir": "expected"},
         {"name": "eq", "flags": ["--format=vcf"], "stdin": true},

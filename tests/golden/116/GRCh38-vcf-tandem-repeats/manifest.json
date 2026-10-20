@@ -1,0 +1,232 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "flags": [
+  "--uploaded_allele",
+  "--allele_number",
+  "--variant_class",
+  "--mask_header_cache_path"
+ ],
+ "covers": [
+  "tandem-repeats-cnv-tr"
+ ],
+ "reference_warnings": [
+  "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta",
+  "found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size"
+ ],
+ "suites": {
+  "GRCh38-vcf-tandem-repeats": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 51,
+   "combinations": 2
+  }
+ },
+ "combinations": {
+  "coding_sequence_variant,feature_elongation": {
+   "observed_rows": 34,
+   "exemplar_records": 15
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 17,
+   "exemplar_records": 15
+  }
+ },
+ "records": [
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_gain\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_loss\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=2",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_same\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=3",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_rb\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RUS=TCA;RB=12",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_no_rn\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RUS=TCA;RUC=5",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_multi\tG\t<CNV:TR>,<CNV:TR>\t.\t.\tSVLEN=9,9;RN=1,1;RUS=TCA,TCA;RUC=4,2",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_two_svlen\tG\t<CNV:TR>,<CNV:TR>\t.\t.\tSVLEN=9,6;RN=1,1;RUS=TCA,TCA;RUC=4,1",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_ciruc\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4;CIRUC=3,5",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_no_rus\tG\t<CNV:TR>\t.\t.\tSVLEN=9",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_frac\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4.9",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_lower_rus\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=tca;RUC=4",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_end_only\tG\t<CNV:TR>\t.\t.\tEND=13620292;RN=1;RUS=TCA;RUC=4",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_two_seqs\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=2;RUS=TCA,TC;RUC=3,1",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_dot_rus\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=.;RUC=4",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-tandem-repeats",
+   "vcf": "21\t13620283\ttr_svtype\tG\t<CNV:TR>\t.\t.\tSVTYPE=CNV;SVLEN=9;RN=1;RUS=TCA;RUC=4",
+   "combinations": [
+    "coding_sequence_variant,feature_elongation",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "fasta",
+   "flags": [
+    "--uploaded_allele",
+    "--allele_number",
+    "--variant_class",
+    "--mask_header_cache_path",
+    "--fasta",
+    "../GRCh38-identifiers/reference.fa.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_fasta",
+   "covers": [
+    "tandem-repeats-cnv-tr"
+   ],
+   "reference_warnings": [
+    "found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size",
+    "CIRUC and CIRB INFO fields are ignored when calculating alternative alleles in tandem repeats"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "fasta-max10",
+   "flags": [
+    "--uploaded_allele",
+    "--allele_number",
+    "--variant_class",
+    "--mask_header_cache_path",
+    "--fasta",
+    "../GRCh38-identifiers/reference.fa.gz",
+    "--max_sv_size",
+    "10"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_fasta-max10",
+   "covers": [
+    "tandem-repeats-cnv-tr"
+   ],
+   "reference_warnings": [
+    "found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size",
+    "CIRUC and CIRB INFO fields are ignored when calculating alternative alleles in tandem repeats"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

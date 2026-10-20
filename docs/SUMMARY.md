@@ -65,6 +65,7 @@
   - [An empty REF column at POS 0](divergences/empty-ref-pos-0.md)
   - [Records `--dont_skip` cannot keep](divergences/dont-skip-cannot-keep.md)
   - [Identifier input resolved from the cache's variation files](divergences/id-input.md)
+  - [Two `--minimal` alleles that trim to the same allele string](divergences/minimal-same-trimmed-allele.md)
   - [Reproducing the examples](divergences/reproducing.md)
 - [Divergence classes against 116.2](concordance-provenance/116.2-divergence-classes.md)
 

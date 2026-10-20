@@ -741,42 +741,16 @@ pub fn calculate_sv_consequences(
         VariantClass::ComplexStructural => {
             cnv::calculate(variant, transcript, upstream_distance, downstream_distance)
         }
-        // A `<CNV:TR>` record states its alternate allele's length (`tr_alt_bases`)
-        // against the reference run SVLEN spans. With the reference sequence to hand,
-        // Perl expands the record to `<run>/<RUS x RUC>` and `post_process_vfs`
-        // minimises the pair (`trim_sequences`, the common prefix first): for a run of
-        // one repeat unit a contraction is a deletion of the run's last `run - alt`
-        // bases, which the deletion path reads here for every run while the row keeps
-        // the run as its location. An alternate allele the run's length or longer, or
-        // no stated length, reads as Perl's symbolic tandem repeat, a copy-number gain
-        // (`copy_number_gain` in VariationEffect.pm) over the run:
-        // `feature_elongation`, and `transcript_amplification` when the run contains
-        // the transcript.
+        // A `<CNV:TR>` record read without a reference sequence stays Ensembl VEP's
+        // symbolic tandem repeat, a copy-number gain whatever its repeat counts
+        // (`copy_number_gain` includes `tandem_repeat`, Utils/VariationEffect.pm:246-256):
+        // `feature_elongation` over the run and `transcript_amplification` when the
+        // run contains the transcript, every positional term read on the run's own
+        // span (`:126-178`). With a reference sequence the reader expands the record
+        // to explicit alleles (`vcf_parser::tandem_repeat_record`), so only a record
+        // that expansion leaves symbolic reaches here.
         VariantClass::TandemRepeat => {
-            let run_end = variant.sv_end.unwrap_or(variant.end);
-            let run_bases = run_end.saturating_sub(variant.start).saturating_add(1);
-            match variant.tr_alt_bases {
-                Some(alt_bases) if alt_bases < run_bases => deletion::calculate_span(
-                    variant,
-                    run_end - (run_bases - alt_bases) + 1,
-                    run_end,
-                    transcript,
-                    upstream_distance,
-                    downstream_distance,
-                ),
-                // A gain keeps the run: Ensembl VEP evaluates every positional term of a
-                // symbolic record on the record's own span (`$bvf->{start}` and
-                // `{end}`, Utils/VariationEffect.pm:126-178) and the distance from that
-                // span, so a run crossing a transcript edge reads
-                // `coding_sequence_variant,5_prime_UTR_variant` and never an upstream
-                // term with a distance measured from the inserted bases.
-                _ => insertion::calculate(
-                    variant,
-                    transcript,
-                    upstream_distance,
-                    downstream_distance,
-                ),
-            }
+            insertion::calculate(variant, transcript, upstream_distance, downstream_distance)
         }
         // A reference-confidence block is annotated against no feature; the record's
         // one row is the intergenic fallback.
@@ -964,21 +938,13 @@ mod tests {
         );
     }
 
-    /// A `<CNV:TR>` over 300 reference bases from the first exon into the first intron
-    /// of the test transcript (25_000_101-25_000_400, the last 100 of them intronic),
-    /// with the alternate allele's length set by the caller.
-    fn make_tandem_repeat(tr_alt_bases: Option<u64>) -> InputVariant {
-        make_tandem_repeat_run(25_000_101, 25_000_400, tr_alt_bases)
-    }
-
-    /// A `<CNV:TR>` whose reference run spans `start..=end`, with the alternate
-    /// allele's length set by the caller.
-    fn make_tandem_repeat_run(start: u64, end: u64, tr_alt_bases: Option<u64>) -> InputVariant {
-        let mut v = InputVariant::new("21".into(), start, end, b"N".to_vec(), b"-".to_vec());
+    /// A `<CNV:TR>` whose reference run spans `start..=end`, read without a reference
+    /// sequence.
+    fn make_tandem_repeat_run(start: u64, end: u64) -> InputVariant {
+        let mut v = InputVariant::new("21".into(), start, end, b"N".to_vec(), b"<CNV:TR>".to_vec());
         v.variant_class = VariantClass::TandemRepeat;
         v.is_structural = true;
         v.sv_end = Some(end);
-        v.tr_alt_bases = tr_alt_bases;
         v
     }
 
@@ -987,60 +953,22 @@ mod tests {
         tc.consequences.iter().copied().collect()
     }
 
-    /// A contraction loses the run's tail. Ensembl VEP 116.2 expands
-    /// `21 25911663 A <CNV:TR>` with `END=25911673;SVLEN=10;RUS=CT;RUC=2;RB=4` to
-    /// `CTCTCTCTCT/CTCT`, trims the common prefix (`Parser/VCF.pm`
-    /// `_expand_tandem_repeat_allele_string`, `Parser.pm` `post_process_vfs`,
-    /// `Utils/Sequence.pm` `trim_sequences`) and annotates the 6-base deletion
-    /// 21:25911668-25911673 as `inframe_deletion` on ENST00001107674 and
-    /// ENST00001107675. The same run of ten bases with a two-unit alternate allele
-    /// inside the second exon's coding sequence is the loss of its last six bases:
-    /// `inframe_deletion`, with the symbolic reading's `feature_truncation` and
-    /// without `frameshift_variant`; a three-unit alternate allele loses four bases
-    /// and is a `frameshift_variant`.
+    /// A `<CNV:TR>` read without a reference sequence is Ensembl VEP's symbolic tandem
+    /// repeat whatever its repeat counts, a copy-number gain read over the run
+    /// (`copy_number_gain` includes `tandem_repeat`, Utils/VariationEffect.pm:246-256,
+    /// its positional terms on the record's own span, `:126-178`): Ensembl VEP 116.2
+    /// without a FASTA writes `feature_elongation,coding_sequence_variant` for
+    /// `21 13620283 x G <CNV:TR>` whether INFO says `RUC=4`, `RUC=2` or `RUC=3`, and
+    /// `coding_sequence_variant,5_prime_UTR_variant` for a 300-base gain crossing a
+    /// transcript's edge, never an upstream term. So a run inside the second exon's
+    /// coding sequence reads `coding_sequence_variant` with `feature_elongation`, and
+    /// the 300-base run 25_000_101-25_000_400, opening in the first exon and ending 100
+    /// bases into the first intron, reads the exon, the intron and the elongation together.
     #[test]
-    fn tandem_repeat_contraction_deletes_the_tail_of_the_run() {
-        let tx = crate::test_helpers::make_test_transcript();
-        let two_units = calculate_sv_consequences(
-            &make_tandem_repeat_run(25_002_100, 25_002_109, Some(4)),
-            &tx,
-            5000,
-            5000,
-        )
-        .expect("the run lies in the second exon");
-        assert_eq!(
-            terms(&two_units),
-            BTreeSet::from([Consequence::InframeDeletion, Consequence::FeatureTruncation])
-        );
-        let three_units = calculate_sv_consequences(
-            &make_tandem_repeat_run(25_002_100, 25_002_109, Some(6)),
-            &tx,
-            5000,
-            5000,
-        )
-        .expect("the run lies in the second exon");
-        assert_eq!(
-            terms(&three_units),
-            BTreeSet::from([
-                Consequence::FrameshiftVariant,
-                Consequence::FeatureTruncation
-            ])
-        );
-    }
-
-    /// An expansion is read over the run it lengthens: Ensembl VEP evaluates the
-    /// positional terms of a symbolic tandem repeat on the record's own span
-    /// (Utils/VariationEffect.pm:126-178) and `copy_number_gain` on the class, so a
-    /// run inside the second exon's coding sequence reads `coding_sequence_variant`
-    /// with `feature_elongation`, and the 300-base run that opens in the first exon
-    /// and ends in the first intron reads the exon, the intron and the elongation
-    /// together (Ensembl VEP 116.2 writes `coding_sequence_variant,5_prime_UTR_variant`
-    /// for a 300-base gain crossing a transcript's edge, never an upstream term).
-    #[test]
-    fn tandem_repeat_expansion_is_read_over_the_run() {
+    fn tandem_repeat_without_a_reference_sequence_is_the_symbolic_gain_over_the_run() {
         let tx = crate::test_helpers::make_test_transcript();
         let in_cds = calculate_sv_consequences(
-            &make_tandem_repeat_run(25_002_100, 25_002_109, Some(16)),
+            &make_tandem_repeat_run(25_002_100, 25_002_109),
             &tx,
             5000,
             5000,
@@ -1053,8 +981,13 @@ mod tests {
                 Consequence::FeatureElongation
             ])
         );
-        let crossing = calculate_sv_consequences(&make_tandem_repeat(Some(360)), &tx, 5000, 5000)
-            .expect("the run lies in the transcript");
+        let crossing = calculate_sv_consequences(
+            &make_tandem_repeat_run(25_000_101, 25_000_400),
+            &tx,
+            5000,
+            5000,
+        )
+        .expect("the run lies in the transcript");
         assert_eq!(
             terms(&crossing),
             BTreeSet::from([
@@ -1063,35 +996,20 @@ mod tests {
                 Consequence::IntronVariant
             ])
         );
-        let symbolic = calculate_sv_consequences(&make_tandem_repeat(None), &tx, 5000, 5000)
-            .expect("the run lies in the transcript");
-        assert_eq!(terms(&crossing), terms(&symbolic));
     }
 
-    /// A contraction whose lost bases lie in the first intron (the run's last 60
-    /// bases, 25_000_341-25_000_400) is an intronic deletion: `intron_variant`,
-    /// no `feature_truncation` and no `feature_elongation`.
-    #[test]
-    fn tandem_repeat_contraction_in_an_intron_is_intronic() {
-        let tx = crate::test_helpers::make_test_transcript();
-        let tc = calculate_sv_consequences(&make_tandem_repeat(Some(240)), &tx, 5000, 5000)
-            .expect("the run lies in the transcript");
-        assert_eq!(terms(&tc), BTreeSet::from([Consequence::IntronVariant]));
-    }
-
-    /// A contraction's DISTANCE is the run's, not its lost tail's: Ensembl VEP 116.2
-    /// writes `21 30430409 x N <CNV:TR>` with `END=30430417;SVLEN=8;RUS=CT;RUC=3` as
+    /// A symbolic tandem repeat's DISTANCE is the run's: Ensembl VEP 116.2 writes
+    /// `21 30430409 x N <CNV:TR>` with `END=30430417;SVLEN=8;RUS=CT;RUC=3` as
     /// `21:30430410-30430417 tandem_repeat ENST00000390690 upstream_gene_variant
     /// DISTANCE=4484`, 30430410 - 30425926, the smallest of the four gaps between the run
-    /// and the transcript (BaseTranscriptVariation.pm:582-605), where the lost two bases
-    /// 30430416-30430417 lie 4490 away. Here a ten-base run 1,000 bases past the
-    /// transcript's end losing its last six bases is `downstream_gene_variant` at 1,000,
-    /// and a run opening exactly 5,000 bases past it is still inside the flank.
+    /// and the transcript (BaseTranscriptVariation.pm:582-605). Here a ten-base run
+    /// 1,000 bases past the transcript's end is `downstream_gene_variant` at 1,000, and a
+    /// run opening exactly 5,000 bases past it is still inside the flank.
     #[test]
-    fn tandem_repeat_contraction_measures_distance_from_the_run() {
+    fn tandem_repeat_measures_distance_from_the_run() {
         let tx = crate::test_helpers::make_test_transcript();
         let near = calculate_sv_consequences(
-            &make_tandem_repeat_run(25_007_000, 25_007_009, Some(4)),
+            &make_tandem_repeat_run(25_007_000, 25_007_009),
             &tx,
             5000,
             5000,
@@ -1103,55 +1021,13 @@ mod tests {
         );
         assert_eq!(near.distance, Some(1000));
         let at_the_flank = calculate_sv_consequences(
-            &make_tandem_repeat_run(25_011_000, 25_011_009, Some(4)),
+            &make_tandem_repeat_run(25_011_000, 25_011_009),
             &tx,
             5000,
             5000,
         )
         .expect("the run opens 5,000 bases past the transcript");
         assert_eq!(at_the_flank.distance, Some(5000));
-    }
-
-    /// A record with two repeat sequences in one allele, `RN=2;RUS=CT,GA;RUC=2,1`
-    /// over the ten-base run `CTCTCTGAGA`, expands to `CTCTGA`, four bases fewer
-    /// than the run: Ensembl VEP's minimised pair is a four-base deletion inside the
-    /// run (the suffix `GA` trims too, so the deleted bases are `CTGA` at the run's
-    /// positions 5 to 8), a `frameshift_variant` in a coding exon. Reading no
-    /// sequence, the loss is placed at the run's tail here, which decides the same
-    /// frame.
-    #[test]
-    fn tandem_repeat_with_two_repeat_sequences_loses_their_difference() {
-        let tx = crate::test_helpers::make_test_transcript();
-        let tc = calculate_sv_consequences(
-            &make_tandem_repeat_run(25_002_100, 25_002_109, Some(6)),
-            &tx,
-            5000,
-            5000,
-        )
-        .expect("the run lies in the second exon");
-        assert_eq!(
-            terms(&tc),
-            BTreeSet::from([
-                Consequence::FrameshiftVariant,
-                Consequence::FeatureTruncation
-            ])
-        );
-    }
-
-    #[test]
-    fn test_tandem_repeat_without_alt_length_or_equal_keeps_the_gain_path() {
-        // Neither RUC nor RB, or an alternate allele the length of the run: no direction is
-        // stated, and the record reads as Perl's symbolic tandem repeat, a gain over the run.
-        let tx = crate::test_helpers::make_test_transcript();
-        for alt in [None, Some(300)] {
-            let tc = calculate_sv_consequences(&make_tandem_repeat(alt), &tx, 5000, 5000)
-                .expect("tandem repeat overlapping the transcript annotates");
-            assert!(
-                tc.consequences.contains(&Consequence::FeatureElongation),
-                "tr_alt_bases {alt:?} should take the gain path, got {:?}",
-                tc.consequences
-            );
-        }
     }
 
     #[test]

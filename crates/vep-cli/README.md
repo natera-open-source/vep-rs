@@ -28,13 +28,16 @@ data line is appended to the current `LineBatch` with its line number, and the f
 a new chromosome asks a helper thread to warm that chromosome's transcript index and the next
 one in the input's tabix contig order. The coordinator, the calling thread, has the batch's
 lines parsed on the pool, by its streaming tasks or as one pass of the batched mode (both
-below): `parse_vcf_line_with_max_sv_size` routes the record through `vep-core`'s
-structural-variant rules and splits a sequence record into one `InputVariant` per alternate
-allele, alleles trimmed. Under `--check_frequency` the coordinator co-locates the batch first
-and `frequency_filter` drops each allele and record that the population's frequencies rule
-out, as Ensembl VEP's variation source filters its buffer before any transcript is read. Each
-remaining variant then passes through `annotate_one`: `annotate_variant`
-visits every transcript overlapping the variant's span and calls
+below): `parse_vcf_line_with` routes the record through `vep-core`'s structural-variant
+rules (a `<CNV:TR>` record expanded to explicit alleles when a FASTA is given) and splits
+a sequence record into one `InputVariant` per alternate allele, alleles trimmed, a
+bi-allelic record's from both ends under `--minimal`; the record then passes the
+reference checks of `validate`, after which `split_minimal_record` trims each allele of a
+multi-allelic record under `--minimal`. Under `--check_frequency` the coordinator
+co-locates the batch first and `frequency_filter` drops each allele and record that the
+population's frequencies rule out, as Ensembl VEP's variation source filters its buffer
+before any transcript is read. Each remaining variant then passes through `annotate_one`:
+`annotate_variant` visits every transcript overlapping the variant's span and calls
 `vep_effects::calculate_consequences` on each, a single-residue substitution gains its SIFT (Sorting
 Intolerant From Tolerant) and PolyPhen (Polymorphism Phenotyping) predictions, a breakend
 gains its mate's consequences, `variation_matcher` attaches the co-located known variants,

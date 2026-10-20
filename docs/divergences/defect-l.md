@@ -6,14 +6,14 @@ The expansion may yield no alternate allele (`RN=.` on the only allele, a `RUC` 
 
 **Why this is a defect.** A record the input states is a variant and the parser accepts should be annotated or refused with a message, never dropped in silence. Ensembl VEP itself annotates the same record as a symbolic `tandem_repeat` over the run when no FASTA is given.
 
-**What vep-rs does instead.** vep-rs reads the record as the symbolic tandem repeat it is, with or without a FASTA, and writes the symbolic rows over the run.
+**What vep-rs does instead.** Without a FASTA vep-rs writes the symbolic rows over the run, as Ensembl VEP does without one. With a FASTA it expands the record as Ensembl VEP expands it and reads the result as Ensembl VEP reads it, the feature with no allele to annotate. That feature writes no default or tab row, its VCF line without consequences and its JSON object with `most_severe_consequence` `?`.
 
 **Where it is in Ensembl VEP's source** (`ensembl-vep`):
 - `Bio/EnsEMBL/VEP/Parser/VCF.pm`, `_expand_tandem_repeat_allele_string`, lines 382-431: line 410 skips an `RN` of `.` (`next if $records eq '.'`). Lines 414 and 419 numify `RUC` as Perl does, so `abc` and `-2` give zero or fewer repeats and `$seq x 0` the empty string. The function returns `REF/` with no alternate, or `AGCAGCAGC/AGCAGCAGC` when the count matches the run.
 - `Parser/VCF.pm`, `create_StructuralVariationFeatures`, lines 532-543: builds a VariationFeature from that string.
 - `Parser.pm`, lines 553-592: pass the feature, and no allele reaches a consequence.
 
-**What correcting it would change.** The record would be annotated symbolically over its run, as it is without a FASTA and as vep-rs annotates it; [class 19](#19-an-empty-or-unchanged-cnvtr-expansion-dropped-without-a-row) would vanish.
+**What correcting it would change.** The record would be annotated symbolically over its run, as both engines annotate it without a FASTA; [class 19](#19-an-empty-or-unchanged-cnvtr-expansion-dropped-without-a-row) would vanish.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
 
@@ -39,7 +39,7 @@ The run at 30425588-30425596 is three copies of `AGC` in the GRCh38 sequence. Ex
 
 ### 19.3 What each engine writes
 
-Ensembl VEP 116.2 with `--fasta`, two rows for the fifth record and none for the first four, with no warning; one table per row, the differing cells in bold. vep-rs, for each of the five records (the gain's literal reading pairs with the fifth under [class 12](cnv-tr.md#12-cnvtr-read-symbolically-not-expanded)), one row, its ID column left out in the last table.
+Ensembl VEP 116.2 with `--fasta`, two rows for the fifth record and none for the first four, with no warning; one table per row, the differing cells in bold. vep-rs without a FASTA, for each of the five records (the gain's literal reading pairs with the fifth under [class 12](cnv-tr.md#12-cnvtr-read-symbolically-not-expanded)), one row, its ID column left out in the last table; with a FASTA vep-rs writes what Ensembl VEP writes.
 
 The fifth record, `gain1_ruc`, on ENST00000334068:
 
@@ -82,7 +82,7 @@ The vep-rs row, for each of the five records:
 
 ### 19.5 Why vep-rs's rows are the correct ones
 
-A record the input states is a variant and the parser accepts should be annotated or refused with a message, never dropped in silence; and the same record is annotated by Ensembl VEP itself when no FASTA is given. vep-rs reads the record as the symbolic tandem repeat it is in both cases.
+A record the input states is a variant and the parser accepts should be annotated or refused with a message, never dropped in silence; and the same record is annotated by both engines when no FASTA is given. The symbolic rows are that reading. With a FASTA vep-rs follows Ensembl VEP's expansion so that the two engines agree on every expanded record, this shape included.
 
 ### 19.6 Try it yourself
 
@@ -96,7 +96,7 @@ vep -i empty.vcf -o empty.vep-rs.txt --offline --json_cache tests/golden/116/GRC
 
 ### 19.7 How the comparator treats this class
 
-The class is `cnv_tr_empty_expansion_dropped` in the 116.2 registry. The structural-variant comparator reads the input record and sets aside vep-rs's `tandem_repeat` rows at the run when the reference wrote nothing on the chromosome from the base before the run to the base after it. A reference that wrote the symbolic rows (no FASTA) or the literal rows (a real gain) leaves nothing to set aside.
+The class is `cnv_tr_empty_expansion_dropped` in the 116.2 registry. The structural-variant comparator reads the input record and sets aside vep-rs's `tandem_repeat` rows at the run when the reference wrote nothing on the chromosome from the base before the run to the base after it. A reference that wrote the symbolic rows (no FASTA) or the literal rows (a real gain) leaves nothing to set aside, and so does a vep-rs run that read a FASTA, which writes nothing for the record either.
 
 The input record is a single `<CNV:TR>` of one of three shapes: its `RN` is `.`; its repeat counts, `RUC` or `RB` in whole units, truncated as Perl's `x` operator truncates them, repeat nothing; or its counts times the unit lengths equal `SVLEN`.
 

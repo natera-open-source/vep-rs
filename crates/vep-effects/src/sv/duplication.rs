@@ -112,7 +112,7 @@ pub fn calculate(
                 consequences.push(Consequence::FeatureElongation);
             }
 
-            add_regional_consequences(variant, transcript, sv_lo, sv_hi, &mut consequences);
+            add_regional_consequences(transcript, sv_lo, sv_hi, &mut consequences);
         }
 
         let impact = determine_impact(&consequences);
@@ -146,7 +146,6 @@ pub fn calculate(
 
 /// Add regional sub-consequences based on which transcript regions the DUP overlaps.
 fn add_regional_consequences(
-    _variant: &InputVariant,
     transcript: &Transcript,
     sv_lo: u64,
     sv_hi: u64,

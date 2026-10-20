@@ -35,36 +35,13 @@ pub fn calculate(
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
-    calculate_span(
-        variant,
-        variant.start,
-        variant.sv_end.unwrap_or(variant.end),
-        transcript,
-        upstream_distance,
-        downstream_distance,
-    )
-}
-
-/// [`calculate`] over an explicit deleted span, for a record whose lost bases are a
-/// part of its own span: a `<CNV:TR>` contraction loses the run's tail, not the run.
-/// The region terms read the deleted span; the flank window and DISTANCE read the
-/// record's own span, the Location its row prints, as `distance_to_transcript`
-/// (BaseTranscriptVariation.pm:582-605) reads `$vf->{start}` and `{end}`.
-pub(super) fn calculate_span(
-    variant: &InputVariant,
-    del_start: u64,
-    del_end: u64,
-    transcript: &Transcript,
-    upstream_distance: u64,
-    downstream_distance: u64,
-) -> Option<TranscriptConsequence> {
     let tx_start = transcript.start;
     let tx_end = transcript.end;
-    let span_start = variant.start;
-    let span_end = variant.sv_end.unwrap_or(variant.end);
+    let del_start = variant.start;
+    let del_end = variant.sv_end.unwrap_or(variant.end);
 
-    if span_end < tx_start.saturating_sub(upstream_distance.max(downstream_distance))
-        || span_start > tx_end.saturating_add(upstream_distance.max(downstream_distance))
+    if del_end < tx_start.saturating_sub(upstream_distance.max(downstream_distance))
+        || del_start > tx_end.saturating_add(upstream_distance.max(downstream_distance))
     {
         return None;
     }
@@ -83,7 +60,7 @@ pub(super) fn calculate_span(
         } else {
             (Consequence::DownstreamGeneVariant, downstream_distance)
         };
-        let dist = distance_to_transcript(span_start, span_end, transcript);
+        let dist = distance_to_transcript(del_start, del_end, transcript);
         if dist > flank {
             return None;
         }
@@ -319,12 +296,7 @@ pub(super) fn calculate_span(
         push_unique(&mut consequences, Consequence::IntronVariant);
     }
 
-    // A `<CNV:TR>` loss reaches this arm, but Ensembl reads a tandem repeat as a
-    // `VariationFeature` carrying the literal allele string (ensembl-vep
-    // `Parser/VCF.pm:530-543`), so the structural tract rule is not its rule.
-    if variant.variant_class != VariantClass::TandemRepeat
-        && overlaps_polypyrimidine_tract(transcript, del_start, del_end)
-    {
+    if overlaps_polypyrimidine_tract(transcript, del_start, del_end) {
         push_unique(
             &mut consequences,
             Consequence::SplicePolypyrimidineTractVariant,
