@@ -69,12 +69,25 @@ fn default_tab_vcf_json_carry_vep_rs_version() {
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
-    assert_eq!(
+    // One object per record the run writes: every record without a reference
+    // warning, and of the warned ones those vep-rs annotates where Ensembl VEP
+    // dropped them (the input line names the record).
+    let records = corpus.manifest["records"].as_array().unwrap();
+    let unwarned = records
+        .iter()
+        .filter(|r| r["reference_warning"].is_null())
+        .count();
+    assert!(
+        (unwarned..=records.len()).contains(&objects.len()),
+        "one object per written record: {} objects for {} records, {unwarned} unwarned",
         objects.len(),
-        corpus.manifest["records"].as_array().unwrap().len(),
-        "one object per record"
+        records.len()
     );
     for obj in &objects {
+        assert!(
+            records.iter().any(|r| r["vcf"] == obj["input"]),
+            "the object names a record of the corpus: {obj}"
+        );
         assert_eq!(obj["vep_rs_version"], VERSION, "{obj}");
     }
 }

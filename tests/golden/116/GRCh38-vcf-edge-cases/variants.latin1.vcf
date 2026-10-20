@@ -1,0 +1,55 @@
+##fileformat=VCFv4.2
+##source=Café
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant">
+##INFO=<ID=SVLEN,Number=A,Type=Integer,Description="Difference in length between REF and ALT alleles">
+##INFO=<ID=CIPOS,Number=2,Type=Integer,Description="Confidence interval around POS">
+##INFO=<ID=CIEND,Number=2,Type=Integer,Description="Confidence interval around END">
+##INFO=<ID=CHR2,Number=1,Type=String,Description="Chromosome of the breakend mate">
+##INFO=<ID=END2,Number=1,Type=Integer,Description="Position of the breakend mate">
+##contig=<ID=21>
+##contig=<ID=chr21>
+##contig=<ID=chrM>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	Sébastien
+21	30289183	alt_eq_ref	C	C	.	.	.	GT	0/1
+21	30289183	second_alt_eq_ref	C	G,C	.	.	.	GT	0/1
+21	30289183	dup_alt	C	G,G,T	.	.	.	GT	0/1
+21	30289183	dup_alt_apart	C	G,T,G	.	.	.	GT	0/1
+21	30289183	dup_only	C	G,G	.	.	.	GT	0/1
+21	30289183	lower_dup	C	g,G	.	.	.	GT	0/1
+21	30289183	lower_eq_ref	C	c	.	.	.	GT	0/1
+21	30289183	ins_beside_delstar	C	CG,<DEL:*>	.	.	.	GT	0/1
+21	30289183	lone_delstar	C	<DEL:*>	.	.	.	GT	0/1
+21	30289183	snv_beside_delstar	C	G,<DEL:*>	.	.	.	GT	0/1
+21	30289183	snv_beside_star	C	G,*	.	.	.	GT	0/1
+21	30289183	star_only	C	*	.	.	.	GT	0/1
+21	30289183	ins_second_eq_ref	C	CG,C	.	.	.	GT	0/1
+21	30396602	del_alt_eq_ref	TTGA	T,TTGA	.	.	.	GT	0/1
+21	30396602	mnp_eq_ref	TTGA	TTGA	.	.	.	GT	0/1
+21	30396602	star_star_multi	TTGA	*,*	.	.	.	GT	0/1
+21	30396602	eq_ref_delstar	TTGA	TTGA,<DEL:*>	.	.	.	GT	0/1
+21	30289183	rs1;rs2	C	G	.	.	.	GT	0/1
+21	30289183	.	C	G,T	.	.	.	GT	0/1
+21	30289183	anchor_multi_ins	C	CG,CT	.	.	.	GT	0/1
+21	30396602	anchor_star_indel	TTGA	TTGC,*	.	.	.	GT	0/1
+21	30396602	two_sided_minimised	TTGAT	TTGT	.	.	.	GT	0/1
+21	30396602	multi_indel	TTGA	T,TTGATC	.	.	.	GT	0/1
+21	30289183	multi_snv	C	G,T	.	.	.	GT	0/1
+21	30289183	gvcf_block	C	<NON_REF>	.	.	END=30289190	GT	0/1
+21	30165850	star_block_svtype	N	<*>	.	.	SVTYPE=DEL;END=30165950	GT	0/1
+21	30165850	multi_svlen	N	<DEL>,<DEL>	.	.	SVTYPE=DEL;SVLEN=-100,-200	GT	0/1
+21	30165850	cipos_ciend	N	<DEL>	.	.	SVTYPE=DEL;END=30165950;CIPOS=-10,10;CIEND=-5,5	GT	0/1
+21	30165850	svlen_over_end	N	<DEL>	.	.	SVTYPE=DEL;SVLEN=-300;END=30165900	GT	0/1
+21	30165850	bnd_bracket	N	N[21:30165950[	.	.	SVTYPE=BND	GT	0/1
+21	30165850	bnd_chr2_end2	N	<BND>	.	.	SVTYPE=BND;CHR2=21;END2=30165950	GT	0/1
+21	30165850	del_no_end_no_svlen	N	<DEL>	.	.	SVTYPE=DEL	GT	0/1
+21	30165850	del_end_eq_pos	N	<DEL>	.	.	END=30165850	GT	0/1
+21	30165850	del_svlen_only	N	<DEL>	.	.	SVLEN=-100	GT	0/1
+21	30165850	delstar_svtype	N	<DEL:*>	.	.	SVTYPE=DEL;END=30165950	GT	0/1
+21	30289183	name_21	C	CG	.	.	.	GT	0/1
+chr21	30289183	name_chr21	C	CG	.	.	.	GT	0/1
+chrM	100	name_chrm	G	A	.	.	.	GT	0/1
+GL000999.1	100	unknown_contig	A	G	.	.	.	GT	0/1
+21	0	pos0_snv	A	G	.	.	.	GT	0/1
+21	0	pos0_ins	A	AT	.	.	.	GT	0/1
+21	0	pos0_del	AT	A	.	.	.	GT	0/1

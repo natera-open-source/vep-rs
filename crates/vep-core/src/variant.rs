@@ -164,7 +164,10 @@ pub struct InputVariant {
     /// The ALLELE_NUM Ensembl VEP prints when it is not `allele_index + 1`: the
     /// position of the allele in a breakpoint record's allele string, whose reference
     /// base is part 1 (`N/<BND>` prints 2; StructuralVariationOverlap.pm:64-77), with 0
-    /// for the record's own breakend and 1 upward for its mates (`:89-101`).
+    /// for the record's own breakend and 1 upward for its mates (`:89-101`); or the
+    /// allele's number among the alleles Ensembl VEP kept, counted from 1, of a
+    /// sequence record whose earlier ALT was dropped as a repeat or the reference
+    /// (VariationFeatureOverlap.pm:459-491; `T` of `C G,G,T` prints 2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allele_num: Option<u32>,
     /// The record's name as Ensembl VEP's parser stores it before `validate_vf`: the
@@ -283,9 +286,11 @@ pub struct InputVariant {
     /// For BND: whether this is the single-breakend allele form (e.g., "T.").
     #[serde(default)]
     pub is_single_breakend: bool,
-    /// A structural variant of a type VEP's `%SO_TERMS` table lacks (`<CPX>`,
-    /// `<NON_REF>`). VEP carries its VCF line without CSQ and emits only its
-    /// `input` in JSON; the default and tab formats still list the rows.
+    /// Ensembl VEP's `vep_skip` mark: a structural variant of a type its `%SO_TERMS`
+    /// table lacks (`<CPX>`, `<NON_REF>`) or a deletion with neither `END` nor
+    /// `SVLEN`, or whose start lies past its end (Parser/VCF.pm:477-481, 555-558).
+    /// A marked record VEP keeps is carried in its VCF line without CSQ and as an
+    /// `input`-only JSON object; the default and tab formats still list the rows.
     #[serde(default)]
     pub vep_skip: bool,
     /// A structural variant wider than `--max_sv_size`. VEP carries its VCF
@@ -293,10 +298,12 @@ pub struct InputVariant {
     /// sets the REST mode in which the parser skips it).
     #[serde(default)]
     pub oversize_sv: bool,
-    /// The record of a line whose every ALT is `*`, the VCF marker for a base an
-    /// upstream deletion covers: Ensembl VEP builds the feature over the reference
-    /// bases with the allele string `N/*` and no allele to annotate, writes no row in
-    /// the default and tab formats, carries the VCF line without CSQ and writes the
+    /// The record of a line none of whose ALTs is an allele to annotate: every ALT a
+    /// `*` (the VCF marker for a base an upstream deletion covers) or a `<DEL:*>`,
+    /// equal to the reference or a repeat of an earlier ALT, or the `.` of a
+    /// non-variant line. Ensembl VEP builds the feature over the reference bases with
+    /// the allele string of every ALT (`N/*`) and no allele to annotate, writes no row
+    /// in the default and tab formats, carries the VCF line without CSQ and writes the
     /// JSON object with `most_severe_consequence` `?`. No feature annotates it;
     /// `--nearest` still sets [`Self::nearest`].
     #[serde(default)]
@@ -559,12 +566,13 @@ impl InputVariant {
         }
     }
 
-    /// The record of a line with no allele to annotate, every ALT `*` (`N *`,
-    /// `N *,*`) or a non-variant line's `.`: the reference bases from `pos`, ending
-    /// at `pos + length(REF) - 1` as Ensembl VEP's feature does (`Parser/VCF.pm:254`,
-    /// so an empty REF ends before it starts), the allele string REF and every ALT
-    /// joined by `/`, and [`Self::no_allele`] set, so no feature annotates it and
-    /// every writer carries it as Ensembl VEP carries its `N/*` feature.
+    /// A record with no allele to annotate, built over its reference alone: a
+    /// non-variant VCF line (ALT `.`) or an identifier whose mapping names no
+    /// alternate allele. The reference bases from `pos`, ending at
+    /// `pos + length(REF) - 1` as Ensembl VEP's feature does (`Parser/VCF.pm:254`, so
+    /// an empty REF ends before it starts), the allele string REF and every ALT of
+    /// `alts` joined by `/`, and [`Self::no_allele`] set, so no feature annotates it
+    /// and every writer carries it as Ensembl VEP carries a feature with no allele.
     pub fn without_allele<'a>(
         chr: String,
         pos: u64,

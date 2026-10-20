@@ -305,7 +305,7 @@ def test_mask_application(texts, manifest):
 
     masked = cvf.Documented.from_manifest(manifest, {"breakend_mate_local_read"})
     assert masked.applied == {"breakend_mate_local_read": 2}
-    assert masked.available == {"breakend_mate_local_read": 2, "reference_skipped_record": 5}
+    assert masked.available == {"breakend_mate_local_read": 2, "reference_skipped_record": 4}
     report = cvf.compare_entries(expected, actual, masked)
     assert report["verdict"] == "green"
     assert report["counts"]["documented_divergences_skipped"] == 2

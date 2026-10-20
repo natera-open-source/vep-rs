@@ -803,26 +803,13 @@
     "3_prime_UTR_variant,coding_sequence_variant"
    ],
    "expected_divergence": "reference_skipped_record"
-  },
-  {
-   "location": "21:30165851",
-   "allele": "deletion",
-   "feature": "ENST00000286808",
-   "feature_type": "Transcript",
-   "record_indices": [
-    15
-   ],
-   "vep_rs_consequence_sets": [
-    "3_prime_UTR_variant,feature_truncation"
-   ],
-   "expected_divergence": "reference_skipped_record"
   }
  ],
  "divergence_summary": {
   "breakend_mate_local_read": 2
  },
  "vep_rs_only_summary": {
-  "reference_skipped_record": 5
+  "reference_skipped_record": 4
  },
  "runs": [
   {

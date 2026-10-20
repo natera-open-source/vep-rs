@@ -1,0 +1,547 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "flags": [
+  "--allele_number",
+  "--uploaded_allele",
+  "--variant_class",
+  "--mask_header_cache_path"
+ ],
+ "covers": [
+  "del-star-allele",
+  "spanning-deletion-allele",
+  "alt_equals_ref_and_duplicate_alts",
+  "incomplete-del",
+  "sv-coordinates",
+  "breakends",
+  "gvcf-non-ref-alleles",
+  "anchor-base-trimming",
+  "multi-allelic-splitting",
+  "multiple-ids",
+  "chromosome-name-normalisation",
+  "chromosome-absent-from-cache"
+ ],
+ "suites": {
+  "GRCh38-vcf-edge-cases": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 48,
+   "combinations": 8
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant,coding_sequence_variant,feature_truncation,stop_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,feature_truncation": {
+   "observed_rows": 4,
+   "exemplar_records": 2
+  },
+  "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost": {
+   "observed_rows": 6,
+   "exemplar_records": 5
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intergenic_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "stop_lost": {
+   "observed_rows": 19,
+   "exemplar_records": 19
+  },
+  "stop_retained_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 6
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 9,
+   "exemplar_records": 1
+  }
+ },
+ "records": [
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\talt_eq_ref\tC\tC\t.\t.\t.",
+   "combinations": []
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tsecond_alt_eq_ref\tC\tG,C\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tdup_alt\tC\tG,G,T\t.\t.\t.",
+   "combinations": [
+    "stop_lost",
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tdup_alt_apart\tC\tG,T,G\t.\t.\t.",
+   "combinations": [
+    "stop_lost",
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tdup_only\tC\tG,G\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tlower_dup\tC\tg,G\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tlower_eq_ref\tC\tc\t.\t.\t.",
+   "combinations": []
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tins_beside_delstar\tC\tCG,<DEL:*>\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tlone_delstar\tC\t<DEL:*>\t.\t.\t.",
+   "combinations": []
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tsnv_beside_delstar\tC\tG,<DEL:*>\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tsnv_beside_star\tC\tG,*\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tstar_only\tC\t*\t.\t.\t.",
+   "combinations": []
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tins_second_eq_ref\tC\tCG,C\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30396602\tdel_alt_eq_ref\tTTGA\tT,TTGA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30396602\tmnp_eq_ref\tTTGA\tTTGA\t.\t.\t.",
+   "combinations": []
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30396602\tstar_star_multi\tTTGA\t*,*\t.\t.\t.",
+   "combinations": []
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30396602\teq_ref_delstar\tTTGA\tTTGA,<DEL:*>\t.\t.\t.",
+   "combinations": []
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\trs1;rs2\tC\tG\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\t.\tC\tG,T\t.\t.\t.",
+   "combinations": [
+    "stop_lost",
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tanchor_multi_ins\tC\tCG,CT\t.\t.\t.",
+   "combinations": [
+    "stop_lost",
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30396602\tanchor_star_indel\tTTGA\tTTGC,*\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30396602\ttwo_sided_minimised\tTTGAT\tTTGT\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30396602\tmulti_indel\tTTGA\tT,TTGATC\t.\t.\t.",
+   "combinations": [
+    "stop_lost",
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tmulti_snv\tC\tG,T\t.\t.\t.",
+   "combinations": [
+    "stop_lost",
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tgvcf_block\tC\t<NON_REF>\t.\t.\tEND=30289190",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "NON_REF is not a supported structural variant type"
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30165850\tstar_block_svtype\tN\t<*>\t.\t.\tSVTYPE=DEL;END=30165950",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30165850\tmulti_svlen\tN\t<DEL>,<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=-100,-200",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30165850\tcipos_ciend\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30165950;CIPOS=-10,10;CIEND=-5,5",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30165850\tsvlen_over_end\tN\t<DEL>\t.\t.\tSVTYPE=DEL;SVLEN=-300;END=30165900",
+   "combinations": [
+    "3_prime_UTR_variant,coding_sequence_variant,feature_truncation,stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30165850\tbnd_bracket\tN\tN[21:30165950[\t.\t.\tSVTYPE=BND",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30165850\tbnd_chr2_end2\tN\t<BND>\t.\t.\tSVTYPE=BND;CHR2=21;END2=30165950",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30165850\tdel_no_end_no_svlen\tN\t<DEL>\t.\t.\tSVTYPE=DEL",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "deletion looks incomplete"
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30165850\tdel_end_eq_pos\tN\t<DEL>\t.\t.\tEND=30165850",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "deletion looks incomplete"
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30165850\tdel_svlen_only\tN\t<DEL>\t.\t.\tSVLEN=-100",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30165850\tdelstar_svtype\tN\t<DEL:*>\t.\t.\tSVTYPE=DEL;END=30165950",
+   "combinations": [
+    "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\tname_21\tC\tCG\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "chr21\t30289183\tname_chr21\tC\tCG\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "chrM\t100\tname_chrm\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "GL000999.1\t100\tunknown_contig\tA\tG\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Chromosome GL000999.1 not found in annotation sources or synonyms; chromosome GL000999.1 does not overlap any features"
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t0\tpos0_snv\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t0\tpos0_ins\tA\tAT\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Alleles look like an insertion (-/T) but coordinates are not start = end + 1 (START=1, END=1) for variant (pos0_ins) "
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t0\tpos0_del\tAT\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  }
+ ],
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "short",
+   "flags": [
+    "--allele_number",
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path"
+   ],
+   "input": "variants.short.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "vcf-short-records"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [
+    {
+     "location": "21:30289184-30289190",
+     "allele": "<NON_REF>",
+     "feature": "-",
+     "feature_type": "-",
+     "record_indices": [
+      24
+     ],
+     "vep_rs_consequence_sets": [
+      "intergenic_variant"
+     ],
+     "expected_divergence": "reference_skipped_record"
+    }
+   ],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {
+    "reference_skipped_record": 1
+   }
+  },
+  {
+   "name": "crlf",
+   "flags": [
+    "--allele_number",
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path"
+   ],
+   "input": "variants.crlf.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "crlf-blank-lines-whitespace"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [
+    {
+     "location": "21:30289184-30289190",
+     "allele": "<NON_REF>",
+     "feature": "-",
+     "feature_type": "-",
+     "record_indices": [
+      24
+     ],
+     "vep_rs_consequence_sets": [
+      "intergenic_variant"
+     ],
+     "expected_divergence": "reference_skipped_record"
+    }
+   ],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {
+    "reference_skipped_record": 1
+   }
+  },
+  {
+   "name": "latin1",
+   "flags": [
+    "--allele_number",
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path"
+   ],
+   "input": "variants.latin1.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab"
+   ],
+   "expected_dir": "expected_latin1",
+   "covers": [
+    "byte_transparent_input"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [
+    {
+     "location": "21:30289184-30289190",
+     "allele": "<NON_REF>",
+     "feature": "-",
+     "feature_type": "-",
+     "record_indices": [
+      24
+     ],
+     "vep_rs_consequence_sets": [
+      "intergenic_variant"
+     ],
+     "expected_divergence": "reference_skipped_record"
+    }
+   ],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {
+    "reference_skipped_record": 1
+   }
+  },
+  {
+   "name": "stdin",
+   "flags": [
+    "--allele_number",
+    "--uploaded_allele",
+    "--variant_class",
+    "--mask_header_cache_path",
+    "--format",
+    "vcf"
+   ],
+   "input": "variants.vcf",
+   "stdin": true,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "stdin-input"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [
+    {
+     "location": "21:30289184-30289190",
+     "allele": "<NON_REF>",
+     "feature": "-",
+     "feature_type": "-",
+     "record_indices": [
+      24
+     ],
+     "vep_rs_consequence_sets": [
+      "intergenic_variant"
+     ],
+     "expected_divergence": "reference_skipped_record"
+    }
+   ],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {
+    "reference_skipped_record": 1
+   }
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [
+  {
+   "location": "21:30289184-30289190",
+   "allele": "<NON_REF>",
+   "feature": "-",
+   "feature_type": "-",
+   "record_indices": [
+    24
+   ],
+   "vep_rs_consequence_sets": [
+    "intergenic_variant"
+   ],
+   "expected_divergence": "reference_skipped_record"
+  }
+ ],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {
+  "reference_skipped_record": 1
+ }
+}

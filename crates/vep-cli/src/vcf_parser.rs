@@ -53,7 +53,7 @@ pub fn parse_vcf_line_with_max_sv_size(
     capture_raw_input: bool,
     max_sv_size: Option<u64>,
 ) -> anyhow::Result<Vec<InputVariant>> {
-    let fields = split_fixed_fields(line)?;
+    let fields = vcf_columns(line)?.fixed;
 
     let chr = fields[0].to_string();
     let pos = parse_pos(fields[1]).with_context(|| format!("Invalid POS: '{}'", fields[1]))?;
@@ -79,7 +79,9 @@ pub fn parse_vcf_line_with_max_sv_size(
     // beside another ALT as an allele of its own. `<*>` is not filtered: Perl treats
     // it as a non-SV allele at POS unless INFO/SVTYPE routes the record. `<CPX>` is
     // not filtered: absent from `%SO_TERMS`, it is parsed with the `vep_skip` mark
-    // (`sv_so_term_and_class`).
+    // (`sv_so_term_and_class`). `<DEL:*>` is routed first: under a true INFO/SVTYPE
+    // it is a structural allele of the record's class, and on the sequence path an
+    // allele Ensembl VEP numbers and writes no row for (`perl_allele_numbers`).
     let valid_alts: Vec<(usize, &str)> = alts
         .iter()
         .copied()
@@ -95,10 +97,7 @@ pub fn parse_vcf_line_with_max_sv_size(
         if written.is_empty() || written.iter().any(|(_, alt)| *alt != "*") {
             bail!("No alternate allele");
         }
-        let mut variant =
-            InputVariant::without_allele(chr, pos, ref_allele, written.iter().map(|(_, alt)| *alt));
-        // The record's raw string, as on the sequence path.
-        variant.uploaded_allele_string = Some(variant.allele_string.as_str().into());
+        let mut variant = allele_less_record(chr, pos, ref_allele, &written);
         variant.raw_input = raw_input;
         variant.id = record_id;
         variant.input_line_name = Some(line_name);
@@ -108,35 +107,31 @@ pub fn parse_vcf_line_with_max_sv_size(
     let mut variants = Vec::with_capacity(valid_alts.len());
 
     if !routes_to_structural(ref_allele, &alts, svtype) {
-        let alt_strings: Vec<&str> = alts.iter().map(|(_, alt)| *alt).collect();
-        let (mut trimmed_ref, mut trimmed_alts, prefix_trimmed) =
-            trim_multi_alleles(ref_allele, &alt_strings);
-        // `validate_vf` upper-cases the allele string after the anchor chop and before
-        // `post_process_vfs` minimises it (Parser.pm:554, `tr/[a-z]/[A-Z]/`).
-        trimmed_ref.make_ascii_uppercase();
-        trimmed_alts
-            .iter_mut()
-            .for_each(|alt| alt.make_ascii_uppercase());
-        let (vep_start, vep_end) =
-            vep_coords_from_trimmed(pos, prefix_trimmed, trimmed_ref.as_bytes());
+        let Chopped {
+            reference: trimmed_ref,
+            alts: trimmed_alts,
+            start: vep_start,
+            end: vep_end,
+            uploaded: uploaded_alleles,
+            working: chopped,
+            written_case_reference,
+            written_case_alts,
+        } = chop_record(ref_allele, &alts, pos);
 
-        // The allele string VEP names an ID-less record by: the raw REF and every
-        // ALT joined by `/`, `*` and `.` at their places. VEP keeps the raw string as
-        // `nontrimmed_allele_string` and promotes it to `original_allele_string` for
-        // any record whose alleles differ in length; a record without an indel allele
-        // is never trimmed, so its raw and working strings coincide (Parser/VCF.pm,
-        // Parser.pm `post_process_vfs` and `minimise_alleles`, OutputFactory.pm).
-        let uploaded_alleles = allele_string(ref_allele, alts.iter().map(|(_, alt)| *alt));
-        // Perl's working string of a record with several ALTs, `*` and `.` counted
-        // (`scalar @$alts > 1`, Parser/VCF.pm:301-322): every allele behind the chopped
-        // anchor, a string `minimise_alleles` leaves as it is.
-        let chopped = (alts.len() > 1)
-            .then(|| allele_string(&trimmed_ref, trimmed_alts.iter().map(String::as_str)));
-
-        for ((allele_idx, alt), vep_alt) in alts.iter().zip(&trimmed_alts) {
-            if *alt == "*" || *alt == "." {
+        let numbers = perl_allele_numbers(&trimmed_ref, &trimmed_alts);
+        for (k, (((allele_idx, alt), vep_alt), number)) in
+            alts.iter().zip(&trimmed_alts).zip(&numbers).enumerate()
+        {
+            // A dropped allele, or one Ensembl VEP numbers and writes no row for.
+            let Some(number) = *number else {
+                continue;
+            };
+            if *alt == "*" || *alt == "." || vep_alt == "<DEL:*>" {
                 continue;
             }
+            // A gVCF block `variant_alts` left out keeps its written position's
+            // number, a record Ensembl VEP drops whole (`sv_routing::variant_alts`).
+            let number = number + (*allele_idx - k) as u32;
             let mut variant = InputVariant::new(
                 chr.clone(),
                 vep_start,
@@ -145,29 +140,51 @@ pub fn parse_vcf_line_with_max_sv_size(
                 vep_alt.as_bytes().to_vec(),
             );
 
+            // `trim_sequences` (ensembl-variation Sequence.pm:971) reads an end of 0
+            // as no end and resets it to `start + length(ref) - 1`, so the one
+            // record it reaches with that end, an insertion at POS 0 whose REF is one
+            // base (`0 A AT`), leaves the parser as `-/T` at 1-1 and `validate_vf`
+            // refuses it as an insertion whose coordinates are not start = end + 1.
+            // An empty REF never reaches it: unchopped, its string `/A` fails the
+            // `.+/.+` test of `minimise_alleles` (Parser.pm:974), so `1 <empty> A`
+            // keeps the end of 0.
+            if alts.len() == 1
+                && !ref_allele.is_empty()
+                && perl_minimises(ref_allele, alt)
+                && variant.end == 0
+            {
+                variant.end = variant.start + variant.ref_allele.len() as u64 - 1;
+            }
+
             // Secondary minimisation of a bi-allelic indel. Perl VEP
             // (Parser.pm `post_process_vfs`) minimises a bi-allelic record whose
             // alleles differ in length whatever the flags: `trim_sequences`
             // (Sequence.pm) trims from the left while both alleles are non-empty,
             // then from the right, and maps an emptied allele to `-`, so `T/TT`
-            // at pos P becomes `-/T` at P+1. `minimise_alleles` returns a
-            // multi-allelic string (`.+/.+/.+`) unchanged, a `*` part counted
-            // (Parser.pm:978-984): without `--minimal` a multi-allelic record keeps
-            // its anchor-chopped alleles, and every position, codon and distance is
-            // computed on that representation.
+            // at pos P becomes `-/T` at P+1. It compares the bases as written
+            // (`eq`), before `validate_vf` upper-cases the string (Parser.pm:554), so
+            // `TTGA t` stays `TTGA/T`. `minimise_alleles` returns a multi-allelic
+            // string (`.+/.+/.+`) unchanged, a `*` part counted (Parser.pm:978-984):
+            // without `--minimal` a multi-allelic record keeps its anchor-chopped
+            // alleles, and every position, codon and distance is computed on that
+            // representation.
             if alts.len() == 1
                 && variant.ref_allele != b"-"
                 && variant.alt_alleles[0] != b"-"
                 && variant.ref_allele.len() != variant.alt_alleles[0].len()
             {
-                let (min_ref, min_alt, extra_prefix) =
-                    trim_alleles(&variant.ref_allele, &variant.alt_alleles[0]);
+                let (min_ref, min_alt, extra_prefix) = trim_alleles(
+                    written_case_reference.as_bytes(),
+                    written_case_alts[k].as_bytes(),
+                );
+                let min_ref = min_ref.to_ascii_uppercase();
+                let min_alt = min_alt.to_ascii_uppercase();
                 if extra_prefix > 0
                     || min_ref != variant.ref_allele
                     || min_alt != variant.alt_alleles[0]
                 {
-                    let total_prefix = prefix_trimmed + extra_prefix;
-                    let (new_start, new_end) = vep_coords_from_trimmed(pos, total_prefix, &min_ref);
+                    let (new_start, new_end) =
+                        vep_coords_from_trimmed(vep_start, extra_prefix, &min_ref);
                     variant.original_allele_string = Some(variant.allele_string.clone());
                     variant.allele_string = format!(
                         "{}/{}",
@@ -187,10 +204,19 @@ pub fn parse_vcf_line_with_max_sv_size(
             }
 
             variant.allele_index = *allele_idx;
+            // ALLELE_NUM is Ensembl VEP's count of the alleles it kept, which falls
+            // behind the written position once an ALT was dropped.
+            variant.allele_num = (number as usize != *allele_idx + 1).then_some(number);
             variant.uploaded_allele_string = Some(uploaded_alleles.clone());
             variant.record_allele_string_multi = chopped.clone();
             variant.raw_input = raw_input.clone();
             variant.id = record_id.clone();
+            variants.push(variant);
+        }
+        if variants.is_empty() {
+            let mut variant = allele_less_record(chr, pos, ref_allele, &alts);
+            variant.raw_input = raw_input;
+            variant.id = record_id;
             variants.push(variant);
         }
     } else {
@@ -239,19 +265,68 @@ fn input_line_name(chr: &str, pos: u64, ref_allele: &str, alt_field: &str) -> St
     }
 }
 
-/// The eight fixed columns of a VCF data line (CHROM through INFO). The split
-/// stops after INFO: FORMAT and the sample columns are never read, and a
-/// multisample line can carry thousands of them.
-fn split_fixed_fields(line: &str) -> anyhow::Result<[&str; 8]> {
-    let mut parts = line.splitn(9, '\t');
-    let mut fields = [""; 8];
-    for field in fields.iter_mut() {
-        match parts.next() {
-            Some(part) => *field = part,
-            None => bail!("VCF line has fewer than 8 fields"),
-        }
+/// The columns of a VCF data line as Ensembl VEP's parser holds them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VcfColumns<'a> {
+    /// CHROM through INFO. A line that stops after ALT, QUAL or FILTER reads `.` for
+    /// the columns it lacks: Ensembl VEP accepts a record of five columns
+    /// (Parser/VCF.pm:464-466 fills QUAL, FILTER and INFO; `t/Parser_VCF.t:265-282`).
+    pub fixed: [&'a str; 8],
+    /// The FORMAT column, when the line carries one.
+    pub format: Option<&'a str>,
+    /// The sample columns after FORMAT, tab-joined as written; empty when the line
+    /// stops at FORMAT or earlier. [`Self::samples`] splits them.
+    samples: &'a str,
+}
+
+impl<'a> VcfColumns<'a> {
+    /// The sample columns in their written order (ensembl-io BaseVCF4.pm:928-956 reads
+    /// a genotype per sample from them under `--individual`).
+    pub fn samples(&self) -> impl Iterator<Item = &'a str> + 'a {
+        let samples = self.samples;
+        (!samples.is_empty())
+            .then(|| samples.split('\t'))
+            .into_iter()
+            .flatten()
     }
-    Ok(fields)
+}
+
+/// Splits a VCF data line into its columns. FORMAT and the samples are not split
+/// until asked for, since a multisample line can carry thousands of them. A line
+/// with fewer than five columns names no ALT and is refused here, where Ensembl
+/// VEP reads the missing ALT as an empty string and carries the record as a
+/// feature with no allele to annotate.
+pub fn vcf_columns(line: &str) -> anyhow::Result<VcfColumns<'_>> {
+    let mut parts = line.splitn(10, '\t');
+    let mut fixed = ["."; 8];
+    let mut present = 0;
+    for field in fixed.iter_mut() {
+        let Some(part) = parts.next() else {
+            break;
+        };
+        *field = part;
+        present += 1;
+    }
+    if present < 5 {
+        bail!("VCF line has fewer than 5 fields");
+    }
+    Ok(VcfColumns {
+        fixed,
+        format: parts.next(),
+        samples: parts.next().unwrap_or(""),
+    })
+}
+
+/// The sample names of a `#CHROM` header line: the columns after FORMAT, the
+/// names Ensembl VEP matches `--individual` against (ensembl-io
+/// BaseVCF4.pm:928-956 reads them from the header); empty for a header without
+/// FORMAT.
+pub fn sample_names(header_line: &str) -> Vec<String> {
+    header_line
+        .split('\t')
+        .skip(9)
+        .map(str::to_string)
+        .collect()
 }
 
 pub(crate) fn vcf_line_is_non_variant(line: &str) -> bool {
@@ -264,7 +339,9 @@ pub(crate) fn vcf_line_is_non_variant(line: &str) -> bool {
     matches!(fields.next(), Some("."))
 }
 
-/// Compute VEP coordinates from already-trimmed alleles.
+/// Compute VEP coordinates from already-trimmed alleles. An insertion's end is the
+/// base before its start, which for a start of 0 is 0, not a base before the
+/// chromosome; `validate_vf` then refuses the insertion's coordinates.
 pub(crate) fn vep_coords_from_trimmed(
     pos: u64,
     prefix_trimmed: usize,
@@ -273,11 +350,130 @@ pub(crate) fn vep_coords_from_trimmed(
     let start = pos + prefix_trimmed as u64;
     let end = if trimmed_ref == b"-" {
         // VEP insertion convention: end < start.
-        start - 1
+        start.saturating_sub(1)
     } else {
         start + trimmed_ref.len() as u64 - 1
     };
     (start, end)
+}
+
+/// A sequence record after the anchor chop of Parser/VCF.pm:294-335, upper-cased as
+/// `validate_vf` upper-cases the allele string (Parser.pm:554), except
+/// `written_case_reference` and `written_case_alts`, which keep the written case the
+/// minimisation compares before that upper-casing.
+struct Chopped {
+    reference: String,
+    /// The chopped ALTs in their written order, `*`, `.` and `<DEL:*>` as written.
+    alts: Vec<String>,
+    start: u64,
+    end: u64,
+    /// The allele string Ensembl VEP names an ID-less record by: the raw REF and
+    /// every ALT joined by `/`. Ensembl VEP keeps the raw string as
+    /// `nontrimmed_allele_string` and promotes it to `original_allele_string` for any
+    /// record whose alleles differ in length; a record without an indel allele is
+    /// never trimmed, so its raw and working strings coincide (Parser/VCF.pm,
+    /// Parser.pm `post_process_vfs` and `minimise_alleles`, OutputFactory.pm).
+    uploaded: Arc<str>,
+    /// Ensembl VEP's working string of a record with several ALTs, `*` and `.`
+    /// counted (`scalar @$alts > 1`, Parser/VCF.pm:301-322): every allele behind the
+    /// chopped anchor, a string `minimise_alleles` leaves as it is; `None` for one ALT.
+    working: Option<Arc<str>>,
+    /// The chopped reference and ALTs in their written case, which `trim_sequences`
+    /// compares with `eq` (Sequence.pm:1006, :1019) before `validate_vf` upper-cases
+    /// the string, so `TTGA t` is never minimised to `TGA/-`.
+    written_case_reference: String,
+    written_case_alts: Vec<String>,
+}
+
+fn chop_record(ref_allele: &str, alts: &[(usize, &str)], pos: u64) -> Chopped {
+    let alt_strings: Vec<&str> = alts.iter().map(|(_, alt)| *alt).collect();
+    let (written_case_reference, written_case_alts, prefix_trimmed) =
+        trim_multi_alleles(ref_allele, &alt_strings);
+    let reference = written_case_reference.to_ascii_uppercase();
+    let chopped_alts: Vec<String> = written_case_alts
+        .iter()
+        .map(|alt| alt.to_ascii_uppercase())
+        .collect();
+    // Ensembl VEP fixes the end before the chop, `POS + length(REF) - 1`
+    // (Parser/VCF.pm:254), and moves the start alone (`:310`), so an empty REF
+    // column ends the record one base before POS whether or not it is chopped;
+    // here the end stops at 0, where Ensembl VEP carries -1.
+    let start = pos + prefix_trimmed as u64;
+    let end = (pos + ref_allele.len() as u64).saturating_sub(1);
+    let uploaded = allele_string(ref_allele, alt_strings.iter().copied());
+    let working = (alts.len() > 1)
+        .then(|| allele_string(&reference, chopped_alts.iter().map(String::as_str)));
+    Chopped {
+        reference,
+        alts: chopped_alts,
+        start,
+        end,
+        uploaded,
+        working,
+        written_case_reference,
+        written_case_alts,
+    }
+}
+
+/// The record of a line none of whose ALTs writes a row: every ALT a `*` or a
+/// `<DEL:*>`, equal to the reference or a repeat of an earlier one. Ensembl VEP
+/// builds the feature over the chopped alleles and finds no allele to annotate
+/// (VariationFeatureOverlap.pm:459-491), so it writes no row in the default and tab
+/// formats, carries the VCF line without consequences and writes the JSON object
+/// with `most_severe_consequence` `?`: `21 30396602 x TTGA *,*` is the feature
+/// `TGA/*/*` at 30396603-30396605 and `21 30289183 x C C,<DEL:*>` the feature
+/// `-/-/<DEL:*>` at 30289184-30289183 in Ensembl VEP 116.2's JSON.
+fn allele_less_record(
+    chr: String,
+    pos: u64,
+    ref_allele: &str,
+    alts: &[(usize, &str)],
+) -> InputVariant {
+    let chopped = chop_record(ref_allele, alts, pos);
+    let mut variant = InputVariant::new(
+        chr,
+        chopped.start,
+        chopped.end,
+        chopped.reference.as_bytes().to_vec(),
+        b"*".to_vec(),
+    );
+    variant.allele_string = chopped
+        .working
+        .as_deref()
+        .map_or_else(|| chopped.uploaded.to_ascii_uppercase(), str::to_string);
+    variant.no_allele = true;
+    variant.uploaded_allele_string = Some(chopped.uploaded);
+    variant.record_allele_string_multi = chopped.working;
+    variant
+}
+
+/// The allele numbers Ensembl VEP gives a sequence record's ALTs when it builds the
+/// overlap alleles (VariationFeatureOverlap.pm:459-491), one entry per chopped ALT
+/// in written order: the reference is seen first and an allele seen before is dropped
+/// without a number (`:461`, an ALT equal to the reference or a repeat of an earlier
+/// ALT), every other ALT takes the next number (`:483`), `*` and `<DEL:*>` theirs
+/// without a row (`:484`). So `C G,C` numbers `G` 1 alone, `C G,G,T` numbers `G` 1
+/// and `T` 2, and `C CG,<DEL:*>` numbers the insertion 1 and the `<DEL:*>` 2, as
+/// Ensembl VEP 116.2 prints under `--allele_number`.
+fn perl_allele_numbers(reference: &str, alts: &[String]) -> Vec<Option<u32>> {
+    let mut seen: Vec<&str> = vec![reference];
+    let mut number = 0;
+    alts.iter()
+        .map(|alt| {
+            if seen.contains(&alt.as_str()) {
+                return None;
+            }
+            seen.push(alt);
+            number += 1;
+            Some(number)
+        })
+        .collect()
+}
+
+/// Whether `post_process_vfs` (Parser.pm:866-881) hands a bi-allelic record to
+/// `minimise_alleles`: its alleles as written differ in length and carry no `-`.
+fn perl_minimises(ref_allele: &str, alt: &str) -> bool {
+    ref_allele.len() != alt.len() && !ref_allele.contains('-') && !alt.contains('-')
 }
 
 /// The anchor chop of Parser/VCF.pm:294-335 over every written ALT, `*` and `.` included:
@@ -285,25 +481,23 @@ pub(crate) fn vep_coords_from_trimmed(
 /// against a two-base REF counts, so `AG AC,*` is chopped where `AG AC` is not, :296-298),
 /// and the first base is chopped when REF and every ALT other than `*` share it (:306-308
 /// with several ALTs, :328 with one), `*` kept as written and an emptied allele reading
-/// `-` (:315-316). Same-length alleles are never trimmed; the secondary minimisation of a
-/// bi-allelic indel is `parse_vcf_line`'s (Parser.pm:860-881). Returns the trimmed REF, the
-/// trimmed ALTs in their written order and the number of bases chopped.
+/// `-` (:315-316). The comparison is Perl's `eq` on the first characters, case-sensitive
+/// (the upper-casing comes later, Parser.pm:554), so `C c,<DEL:*>` is not chopped, and an
+/// empty REF is chopped when every ALT carries a `*`, its first character the empty
+/// string alone in the vote. Same-length alleles are never trimmed; the secondary
+/// minimisation of a bi-allelic indel is `parse_vcf_line`'s (Parser.pm:860-881). Returns
+/// the trimmed REF, the trimmed ALTs in their written order and the number of bases
+/// chopped.
 pub(crate) fn trim_multi_alleles(
     ref_allele: &str,
     alt_alleles: &[&str],
 ) -> (String, Vec<String>, usize) {
     let ref_bytes = ref_allele.as_bytes();
     let is_indel = alt_alleles.iter().any(|a| a.len() != ref_bytes.len());
-    let shares_first_base = |allele: &&str| {
-        allele
-            .as_bytes()
-            .first()
-            .is_some_and(|b| b.eq_ignore_ascii_case(&ref_bytes[0]))
-    };
+    let shares_first_base = |allele: &&str| allele.as_bytes().first() == ref_bytes.first();
     // With one ALT its own first base decides (`<*>` against `N` is not chopped); with
     // several, the alleles carrying a `*` are left out of the comparison.
     let anchored = is_indel
-        && !ref_bytes.is_empty()
         && match alt_alleles {
             [single] => shares_first_base(single),
             _ => alt_alleles
@@ -312,7 +506,7 @@ pub(crate) fn trim_multi_alleles(
                 .all(shares_first_base),
         };
     let prefix_len = usize::from(anchored);
-    let chop = |allele: &str| match &allele.as_bytes()[prefix_len..] {
+    let chop = |allele: &str| match allele.as_bytes().get(prefix_len..).unwrap_or(&[]) {
         [] => "-".to_string(),
         rest => String::from_utf8_lossy(rest).into_owned(),
     };
@@ -455,7 +649,7 @@ mod tests {
         assert!(on.iter().all(|v| v.raw_input.as_deref() == Some(line)));
     }
 
-    /// FORMAT and the sample columns are never read, so a multisample line
+    /// FORMAT and the sample columns name no allele, so a multisample line
     /// must parse exactly as its eight-column prefix does, `raw_input` aside.
     #[test]
     fn multisample_line_parses_like_its_eight_field_prefix() {
@@ -486,12 +680,423 @@ mod tests {
         assert_eq!(variants[0].sv_end, Some(25001000));
     }
 
+    /// Ensembl VEP accepts a VCF record of five columns (Parser/VCF.pm:464-466 fills
+    /// QUAL, FILTER and INFO with `.`; its own test `t/Parser_VCF.t:265-282` reads
+    /// `21 25587759 test G C` as the feature `G/C` at 25587759): 116.2 annotates
+    /// `21 30289183 x C G`, `... G 50` and `... G 50 PASS` as it annotates the
+    /// eight-column line, writes `21 30289183 x C G . . CSQ=...` and
+    /// `... G 50 PASS CSQ=...` in its VCF output, keeps the short line as the JSON
+    /// `input`, and drops a five-column `N <DEL>` as `deletion looks incomplete`.
+    /// A line with fewer than five columns names no ALT and is refused here (Ensembl VEP
+    /// carries it as a feature with no allele, the missing ALT read as an empty string).
     #[test]
-    fn seven_field_line_keeps_its_error_text() {
-        let err = parse_vcf_line("21\t25000100\trs123\tA\tG\t50\tPASS", false).unwrap_err();
-        assert_eq!(err.to_string(), "VCF line has fewer than 8 fields");
-        let err = parse_vcf_line("", false).unwrap_err();
-        assert_eq!(err.to_string(), "VCF line has fewer than 8 fields");
+    fn five_to_seven_column_records_parse() {
+        let full = parse_vcf_line("21\t30289183\tx\tC\tG\t50\tPASS\t.", true).unwrap();
+        for short in [
+            "21\t30289183\tx\tC\tG",
+            "21\t30289183\tx\tC\tG\t50",
+            "21\t30289183\tx\tC\tG\t50\tPASS",
+        ] {
+            let variants = parse_vcf_line(short, true).unwrap();
+            assert_eq!(variants.len(), 1, "{short}");
+            let (v, f) = (&variants[0], &full[0]);
+            assert_eq!(
+                (
+                    v.chr.as_str(),
+                    v.start,
+                    v.end,
+                    &v.ref_allele,
+                    v.alt_allele(),
+                    &v.id
+                ),
+                (
+                    f.chr.as_str(),
+                    f.start,
+                    f.end,
+                    &f.ref_allele,
+                    f.alt_allele(),
+                    &f.id
+                ),
+                "{short}"
+            );
+            assert_eq!(v.raw_input.as_deref(), Some(short));
+        }
+        let columns = vcf_columns("21\t30289183\tx\tC\tG\t50").unwrap();
+        assert_eq!(
+            columns.fixed,
+            ["21", "30289183", "x", "C", "G", "50", ".", "."]
+        );
+        assert_eq!(columns.format, None);
+        assert_eq!(columns.samples().count(), 0);
+        let sv = parse_vcf_line("21\t30289183\tx\tN\t<DEL>", true).unwrap();
+        assert_eq!(sv.len(), 1);
+        assert!(sv[0].is_structural && sv[0].vep_skip);
+        assert_eq!((sv[0].start, sv[0].end), (30289184, 30289184));
+        for too_short in ["21\t25000100\trs123\tA", "21\t25000100", ""] {
+            let err = parse_vcf_line(too_short, false).unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                "VCF line has fewer than 5 fields",
+                "{too_short:?}"
+            );
+        }
+    }
+
+    /// The parser keeps FORMAT and the sample columns for the per-sample modes and
+    /// reads the sample names from the `#CHROM` header, as ensembl-io
+    /// BaseVCF4.pm:928-956 reads a genotype per named sample under `--individual`.
+    /// The columns are split on demand, so a line with thousands of samples costs
+    /// the allele parser nothing.
+    #[test]
+    fn sample_columns_retained_and_header_names_captured() {
+        let line = "21\t30289183\tx\tC\tG\t50\tPASS\tDP=4\tGT:DP\t0/1:3\t1/1:5";
+        let columns = vcf_columns(line).unwrap();
+        assert_eq!(
+            columns.fixed,
+            ["21", "30289183", "x", "C", "G", "50", "PASS", "DP=4"]
+        );
+        assert_eq!(columns.format, Some("GT:DP"));
+        assert_eq!(columns.samples().collect::<Vec<_>>(), ["0/1:3", "1/1:5"]);
+        let format_only = vcf_columns("21\t30289183\tx\tC\tG\t50\tPASS\tDP=4\tGT").unwrap();
+        assert_eq!(format_only.format, Some("GT"));
+        assert_eq!(format_only.samples().count(), 0);
+        let one_sample = vcf_columns("21\t30289183\tx\tC\tG\t.\t.\t.\tGT\t0/1").unwrap();
+        assert_eq!(one_sample.samples().collect::<Vec<_>>(), ["0/1"]);
+        assert_eq!(
+            sample_names("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2"),
+            ["S1", "S2"]
+        );
+        assert!(sample_names("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO").is_empty());
+        assert!(sample_names("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT").is_empty());
+        // The alleles are read from the fixed columns alone.
+        let variants = parse_vcf_line(line, false).unwrap();
+        assert_eq!(variants.len(), 1);
+        assert_eq!(variants[0].alt_allele(), b"G");
+    }
+
+    /// `<DEL:*>` on the sequence path (Parser/VCF.pm:237-245 route a record there when
+    /// no bracket token is free of `*` and INFO/SVTYPE is not true) is an allele Ensembl
+    /// VEP numbers and writes no row for (VariationFeatureOverlap.pm:483-484, beside
+    /// `*`), left whole by the anchor chop (`:315`). Ensembl VEP 116.2 writes for
+    /// `21 30289183 x C CG,<DEL:*>` one row, `21:30289183-30289184 G` with ALLELE_NUM 1
+    /// and VARIANT_CLASS `sequence_alteration`, and for `C G,<DEL:*>` one row `G`,
+    /// ALLELE_NUM 1; under `SVTYPE=DEL` with an END the token is the record's structural
+    /// deletion (`21:30165851-30165950 deletion`).
+    #[test]
+    fn del_star_kept_as_small_variant_allele() {
+        let ins = parse_vcf_line("21\t30289183\tx\tC\tCG,<DEL:*>\t.\t.\t.", true).unwrap();
+        assert_eq!(ins.len(), 1);
+        let v = &ins[0];
+        assert!(!v.is_structural && !v.no_allele);
+        assert_eq!((v.start, v.end), (30289184, 30289183));
+        assert_eq!(
+            (v.ref_allele.as_slice(), v.alt_allele()),
+            (&b"-"[..], &b"G"[..])
+        );
+        assert_eq!((v.allele_index, v.allele_num), (0, None));
+        assert_eq!(v.uploaded_allele_string.as_deref(), Some("C/CG/<DEL:*>"));
+        assert_eq!(v.record_allele_string(), "-/G/<DEL:*>");
+        assert_eq!(v.class_so_term(), "sequence_alteration");
+
+        let snv = parse_vcf_line("21\t30289183\tx\tC\tG,<DEL:*>\t.\t.\t.", true).unwrap();
+        assert_eq!(snv.len(), 1);
+        assert_eq!(
+            (snv[0].start, snv[0].end, snv[0].alt_allele()),
+            (30289183, 30289183, &b"G"[..])
+        );
+        assert_eq!(snv[0].record_allele_string(), "C/G/<DEL:*>");
+        assert_eq!(snv[0].class_so_term(), "sequence_alteration");
+
+        let structural = parse_vcf_line(
+            "21\t30165850\tx\tN\t<DEL:*>\t.\t.\tSVTYPE=DEL;END=30165950",
+            true,
+        )
+        .unwrap();
+        assert_eq!(structural.len(), 1);
+        assert!(structural[0].is_structural && !structural[0].vep_skip);
+        assert_eq!(
+            structural[0].variant_class,
+            VariantClass::StructuralDeletion
+        );
+        assert_eq!(
+            (structural[0].start, structural[0].end),
+            (30165851, 30165950)
+        );
+    }
+
+    /// A record whose only ALT is `<DEL:*>` has no allele to annotate: Ensembl VEP
+    /// 116.2 writes no row for `21 30289183 x C <DEL:*>` in the default and tab
+    /// formats, carries its VCF line without CSQ and writes the JSON object
+    /// `allele_string` `C/<DEL:*>`, 30289183-30289183, `most_severe_consequence` `?`,
+    /// `variant_class` `deletion`; `C C,<DEL:*>` is chopped first (`:306-316`) and is
+    /// the feature `-/-/<DEL:*>` at 30289184-30289183.
+    #[test]
+    fn lone_del_star_no_rows() {
+        let lone = parse_vcf_line("21\t30289183\tx\tC\t<DEL:*>\t.\t.\t.", true).unwrap();
+        assert_eq!(lone.len(), 1);
+        let v = &lone[0];
+        assert!(v.no_allele && !v.is_structural);
+        assert_eq!((v.start, v.end), (30289183, 30289183));
+        assert_eq!(v.allele_string, "C/<DEL:*>");
+        assert_eq!(v.record_allele_string(), "C/<DEL:*>");
+        assert_eq!(v.class_so_term(), "deletion");
+        assert_eq!(v.uploaded_variation(), "x");
+
+        let chopped = parse_vcf_line("21\t30289183\t.\tC\tC,<DEL:*>\t.\t.\t.", true).unwrap();
+        assert_eq!(chopped.len(), 1);
+        let v = &chopped[0];
+        assert!(v.no_allele);
+        assert_eq!((v.start, v.end), (30289184, 30289183));
+        assert_eq!(v.record_allele_string(), "-/-/<DEL:*>");
+        assert_eq!(v.uploaded_allele_string.as_deref(), Some("C/C/<DEL:*>"));
+        assert_eq!(v.uploaded_variation(), "21_30289183_C/C/<DEL:*>");
+
+        // The chop compares the first characters as written (Parser/VCF.pm:306, before
+        // the upper-casing at Parser.pm:554): Ensembl VEP 116.2 leaves `C c,<DEL:*>`
+        // unchopped, the JSON object `C/C/<DEL:*>` at 30289183-30289183.
+        let lower = parse_vcf_line("21\t30289183\t.\tC\tc,<DEL:*>\t.\t.\t.", true).unwrap();
+        assert!(lower[0].no_allele);
+        assert_eq!((lower[0].start, lower[0].end), (30289183, 30289183));
+        assert_eq!(lower[0].record_allele_string(), "C/C/<DEL:*>");
+    }
+
+    /// An empty REF column (no base, not valid VCF) keeps Ensembl VEP's end, POS - 1
+    /// (Parser/VCF.pm:254), whether or not the record is chopped: with every ALT a `*`
+    /// the vote holds the empty string alone and the start moves (`:306-310`), so
+    /// `21 30289183 x <empty> *,*` is `-/*/*` at 30289184-30289182, the span
+    /// `validate_vf` refuses as `start > end+1 : (START=30289184, END=30289182)` on both
+    /// engines; `<empty> G` is `-/G` at 30289183-30289182 on both, and at POS 1 the
+    /// insertion `-/G` at 1-0, an end `minimise_alleles` never resets since the
+    /// unchopped `/G` fails its `.+/.+` test (Parser.pm:974).
+    #[test]
+    fn an_empty_ref_keeps_ensembl_veps_end() {
+        let stars = parse_vcf_line("21\t30289183\tx\t\t*,*\t.\t.\t.", true).unwrap();
+        assert_eq!(stars.len(), 1);
+        assert!(stars[0].no_allele);
+        assert_eq!((stars[0].start, stars[0].end), (30289184, 30289182));
+        assert_eq!(stars[0].record_allele_string(), "-/*/*");
+        let insertion = parse_vcf_line("21\t30289183\tx\t\tG\t.\t.\t.", true).unwrap();
+        assert_eq!((insertion[0].start, insertion[0].end), (30289183, 30289182));
+        assert_eq!(insertion[0].allele_string, "-/G");
+        let at_one = parse_vcf_line("21\t1\tx\t\tG\t.\t.\t.", true).unwrap();
+        assert_eq!((at_one[0].start, at_one[0].end), (1, 0));
+        assert_eq!(at_one[0].allele_string, "-/G");
+        assert_eq!(
+            trim_multi_alleles("", &["*", "*"]),
+            ("-".to_string(), vec!["*".to_string(), "*".to_string()], 1)
+        );
+        assert_eq!(
+            trim_multi_alleles("TTGA", &["T", "ttga"]),
+            (
+                "TTGA".to_string(),
+                vec!["T".to_string(), "ttga".to_string()],
+                0
+            )
+        );
+    }
+
+    /// An ALT equal to the reference is dropped when Ensembl VEP builds the overlap
+    /// alleles (VariationFeatureOverlap.pm:461 and :481, before the counter at :483), so
+    /// it takes no row and no allele number, after the anchor chop and the upper-casing
+    /// of `validate_vf` (Parser.pm:554). Ensembl VEP 116.2 writes for `21 30289183 x C C`
+    /// no row and the JSON object `C/C`, `?`, `variant_class` `SNV`; for `C G,C` the one
+    /// row `G` with ALLELE_NUM 1; for `21 30396602 x TTGA T,TTGA` the one row
+    /// `21:30396603-30396605 -` with ALLELE_NUM 1 under the string `TGA/-/TGA`; for
+    /// `C CG,C` the one row `21:30289183-30289184 G`; for `TTGA TTGA` no row and the
+    /// object `TTGA/TTGA`, `substitution`; and for `C c` no row and the object `C/C`.
+    #[test]
+    fn alt_equal_to_ref_dropped_no_row() {
+        let same = parse_vcf_line("21\t30289183\tx\tC\tC\t.\t.\t.", true).unwrap();
+        assert_eq!(same.len(), 1);
+        assert!(same[0].no_allele);
+        assert_eq!((same[0].start, same[0].end), (30289183, 30289183));
+        assert_eq!(same[0].record_allele_string(), "C/C");
+        assert_eq!(same[0].class_so_term(), "SNV");
+
+        let second = parse_vcf_line("21\t30289183\tx\tC\tG,C\t.\t.\t.", true).unwrap();
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].alt_allele(), b"G");
+        assert_eq!((second[0].allele_index, second[0].allele_num), (0, None));
+        assert_eq!(second[0].record_allele_string(), "C/G/C");
+
+        let deletion = parse_vcf_line("21\t30396602\tx\tTTGA\tT,TTGA\t.\t.\t.", true).unwrap();
+        assert_eq!(deletion.len(), 1);
+        let v = &deletion[0];
+        assert_eq!((v.start, v.end), (30396603, 30396605));
+        assert_eq!(
+            (v.ref_allele.as_slice(), v.alt_allele()),
+            (&b"TGA"[..], &b"-"[..])
+        );
+        assert_eq!((v.allele_index, v.allele_num), (0, None));
+        assert_eq!(v.record_allele_string(), "TGA/-/TGA");
+        assert_eq!(v.class_so_term(), "sequence_alteration");
+
+        let insertion = parse_vcf_line("21\t30289183\tx\tC\tCG,C\t.\t.\t.", true).unwrap();
+        assert_eq!(insertion.len(), 1);
+        assert_eq!((insertion[0].start, insertion[0].end), (30289184, 30289183));
+        assert_eq!(insertion[0].alt_allele(), b"G");
+        assert_eq!(insertion[0].record_allele_string(), "-/G/-");
+
+        let mnp = parse_vcf_line("21\t30396602\tx\tTTGA\tTTGA\t.\t.\t.", true).unwrap();
+        assert!(mnp[0].no_allele);
+        assert_eq!((mnp[0].start, mnp[0].end), (30396602, 30396605));
+        assert_eq!(mnp[0].record_allele_string(), "TTGA/TTGA");
+        assert_eq!(mnp[0].class_so_term(), "substitution");
+
+        let lower = parse_vcf_line("21\t30289183\t.\tC\tc\t.\t.\t.", true).unwrap();
+        assert!(lower[0].no_allele);
+        assert_eq!(lower[0].record_allele_string(), "C/C");
+        assert_eq!(lower[0].uploaded_variation(), "21_30289183_C/c");
+    }
+
+    /// A repeated ALT is dropped at VariationFeatureOverlap.pm:461 before the counter,
+    /// so the alleles after it take the next numbers: Ensembl VEP 116.2 writes for
+    /// `21 30289183 x C G,G,T` the rows `G` ALLELE_NUM 1 and `T` ALLELE_NUM 2, for
+    /// `C G,T,G` the same two rows, for `C G,G` and `C g,G` the one row `G`, and keeps
+    /// the written string (`C/G/G/T`) as the record's allele string; `*` and `<DEL:*>`
+    /// take a number without a row (`:483-484`), so `C *,G` numbers `G` 2.
+    #[test]
+    fn duplicate_alts_deduplicated_allele_num() {
+        let repeated = parse_vcf_line("21\t30289183\tx\tC\tG,G,T\t.\t.\t.", true).unwrap();
+        assert_eq!(
+            repeated
+                .iter()
+                .map(|v| (v.alt_allele(), v.allele_index, v.allele_num))
+                .collect::<Vec<_>>(),
+            [(&b"G"[..], 0, None), (&b"T"[..], 2, Some(2))]
+        );
+        assert!(repeated
+            .iter()
+            .all(|v| v.record_allele_string() == "C/G/G/T"));
+
+        let apart = parse_vcf_line("21\t30289183\tx\tC\tG,T,G\t.\t.\t.", true).unwrap();
+        assert_eq!(
+            apart
+                .iter()
+                .map(|v| (v.alt_allele(), v.allele_index, v.allele_num))
+                .collect::<Vec<_>>(),
+            [(&b"G"[..], 0, None), (&b"T"[..], 1, None)]
+        );
+        for line in [
+            "21\t30289183\tx\tC\tG,G\t.\t.\t.",
+            "21\t30289183\tx\tC\tg,G\t.\t.\t.",
+        ] {
+            let variants = parse_vcf_line(line, true).unwrap();
+            assert_eq!(variants.len(), 1, "{line}");
+            assert_eq!(variants[0].alt_allele(), b"G");
+            assert_eq!(variants[0].record_allele_string(), "C/G/G");
+        }
+        let star_first = parse_vcf_line("21\t30289183\tx\tC\t*,G\t.\t.\t.", true).unwrap();
+        assert_eq!(star_first.len(), 1);
+        assert_eq!(
+            (star_first[0].allele_index, star_first[0].allele_num),
+            (1, None)
+        );
+        assert_eq!(
+            perl_allele_numbers("C", &["*".into(), "G".into()]),
+            [Some(1), Some(2)]
+        );
+        assert_eq!(
+            perl_allele_numbers("-", &["T".into(), "-".into(), "T".into()]),
+            [Some(1), None, None]
+        );
+    }
+
+    /// Parser/VCF.pm:555-558 marks a deletion with neither END nor SVLEN `vep_skip`
+    /// and warns `deletion looks incomplete`; at 116.2 `validate_svf` (Parser.pm:821-826)
+    /// then drops the record unless `--dont_skip` keeps it. The test runs on the term
+    /// (`deletion` for `<DEL>` and `<CN0>`, `mobile_element_deletion` for
+    /// `<DEL:ME:ALU>`) or on the type string of a type `%SO_TERMS` lacks
+    /// (`<INS>/<DEL>`), so Ensembl VEP 116.2 drops `21 30165850 x N <DEL>` with
+    /// `SVTYPE=DEL`, keeps it with `SVLEN=-100` or `END=30165851`, and never marks a
+    /// `<DUP>` or `<INV>` for a missing extent.
+    #[test]
+    fn del_without_end_or_svlen_flagged() {
+        let parse = |alt: &str, info: &str| {
+            parse_vcf_line(&format!("21\t30165850\tx\tN\t{alt}\t.\t.\t{info}"), true).unwrap()
+        };
+        let bare = parse("<DEL>", "SVTYPE=DEL");
+        assert!(bare[0].vep_skip && bare[0].is_structural);
+        assert_eq!((bare[0].start, bare[0].end), (30165851, 30165851));
+        assert_eq!(bare[0].record_so_term.as_deref(), Some("deletion"));
+        for (alt, info) in [
+            ("<DEL>", "."),
+            ("<CN0>", "."),
+            ("<DEL:ME:ALU>", "SVTYPE=DEL"),
+            ("<INS>,<DEL>", "."),
+        ] {
+            assert!(parse(alt, info)[0].vep_skip, "{alt} {info}");
+        }
+        for (alt, info) in [
+            ("<DEL>", "SVLEN=-100"),
+            ("<DEL>", "END=30165851"),
+            ("<DEL>", "SVTYPE=DEL;END=30165950"),
+            ("<DUP>", "."),
+            ("<INV>", "SVTYPE=INV"),
+            ("<INS>", "."),
+        ] {
+            assert!(!parse(alt, info)[0].vep_skip, "{alt} {info}");
+        }
+        // The unsupported type with an extent keeps the type's mark alone.
+        let unsupported = parse("<INS>,<DEL>", "END=30166000");
+        assert!(unsupported
+            .iter()
+            .all(|v| v.vep_skip && v.record_so_term.is_none()));
+    }
+
+    /// A deletion whose END is POS has an empty span (`$start > $end`, Parser/VCF.pm:555):
+    /// Ensembl VEP 116.2 marks it, warns `deletion looks incomplete` and drops
+    /// `21 30165850 x N <DEL> . . END=30165850`, which `--dont_skip` keeps as the pair
+    /// 30165851-30165850; an END before POS fails `validate_vf`'s own coordinate check
+    /// too (`start > end+1 : (START=30165851, END=30165800)`, Parser.pm:484-486) and is
+    /// refused here, as Ensembl VEP writes both warnings; an END at POS + 1 is a
+    /// one-base deletion and is kept.
+    #[test]
+    fn del_end_le_pos_flagged() {
+        let at_pos = parse_vcf_line("21\t30165850\tx\tN\t<DEL>\t.\t.\tEND=30165850", true).unwrap();
+        assert!(at_pos[0].vep_skip);
+        assert_eq!((at_pos[0].start, at_pos[0].end), (30165851, 30165850));
+        let after_pos =
+            parse_vcf_line("21\t30165850\tx\tN\t<DEL>\t.\t.\tEND=30165851", true).unwrap();
+        assert!(!after_pos[0].vep_skip);
+        assert_eq!((after_pos[0].start, after_pos[0].end), (30165851, 30165851));
+        let before_pos =
+            parse_vcf_line("21\t30165850\tx\tN\t<DEL>\t.\t.\tEND=30165800", true).unwrap_err();
+        assert_eq!(
+            before_pos.to_string(),
+            "start > end+1 : (START=30165851, END=30165800)"
+        );
+    }
+
+    /// POS 0 is the telomere's position in VCF. Ensembl VEP 116.2 annotates `21 0 x A G`
+    /// at `21:0` and `21 0 x AT A` at `21:1`, and skips `21 0 x A AT` with `Alleles look
+    /// like an insertion (-/T) but coordinates are not start = end + 1 (START=1, END=1)`,
+    /// because `trim_sequences` (Sequence.pm:971) reads the chopped record's end of 0 as
+    /// no end and resets it to the start; the end an empty REF column gives at POS 0,
+    /// -1 in Ensembl VEP, is 0 here, the insertion check refusing the record where
+    /// Ensembl VEP writes an intergenic row at `21:-1-0`.
+    #[test]
+    fn pos_zero_records_follow_ensembl_vep_without_underflow() {
+        let snv = parse_vcf_line("21\t0\tx\tA\tG\t.\t.\t.", true).unwrap();
+        assert_eq!((snv[0].start, snv[0].end), (0, 0));
+        let deletion = parse_vcf_line("21\t0\tx\tAT\tA\t.\t.\t.", true).unwrap();
+        assert_eq!((deletion[0].start, deletion[0].end), (1, 1));
+        assert_eq!(deletion[0].allele_string, "T/-");
+        let insertion = parse_vcf_line("21\t0\tx\tA\tAT\t.\t.\t.", true).unwrap();
+        assert_eq!((insertion[0].start, insertion[0].end), (1, 1));
+        assert_eq!(insertion[0].allele_string, "-/T");
+        let later = parse_vcf_line("21\t5\tx\tA\tAT\t.\t.\t.", true).unwrap();
+        assert_eq!((later[0].start, later[0].end), (6, 5));
+        let empty_ref = parse_vcf_line("21\t0\tx\t\tA\t.\t.\t.", true).unwrap();
+        assert_eq!((empty_ref[0].start, empty_ref[0].end), (0, 0));
+        assert_eq!(empty_ref[0].allele_string, "-/A");
+        let star = parse_vcf_line("21\t0\tx\tA\t*\t.\t.\t.", true).unwrap();
+        assert!(star[0].no_allele);
+        assert_eq!((star[0].start, star[0].end), (0, 0));
+        let empty_star = parse_vcf_line("21\t0\tx\t\t*\t.\t.\t.", true).unwrap();
+        assert!(empty_star[0].no_allele);
+        assert_eq!(empty_star[0].allele_string, "/*");
+        assert_eq!(vep_coords_from_trimmed(0, 0, b"-"), (0, 0));
     }
 
     #[test]
@@ -3075,6 +3680,29 @@ mod tests {
         assert!(v.minimised);
     }
 
+    /// `trim_sequences` compares the bases as written (`eq`, Sequence.pm:1006, :1019)
+    /// and `validate_vf` upper-cases the string afterwards (Parser.pm:554), so a
+    /// lowercase ALT is minimised only where its letters match the reference's case:
+    /// Ensembl VEP 116.2 annotates `21 30396602 x TTGA t` as `TTGA/T` at
+    /// 30396602-30396605 (`stop_lost,inframe_deletion`), `TTGA Ttgatc` as `TGA/TGATC`
+    /// at 30396603-30396605 (`stop_retained_variant`), and the upper-cased
+    /// `TTGA TTGATC` as `-/TC` at 30396606-30396605.
+    #[test]
+    fn minimisation_compares_the_written_case_as_trim_sequences_does() {
+        let lower = parse_vcf_line("21\t30396602\tx\tTTGA\tt\t.\t.\t.", true).unwrap();
+        assert_eq!((lower[0].start, lower[0].end), (30396602, 30396605));
+        assert_eq!(lower[0].allele_string, "TTGA/T");
+        assert!(!lower[0].minimised);
+        let mixed = parse_vcf_line("21\t30396602\tx\tTTGA\tTtgatc\t.\t.\t.", true).unwrap();
+        assert_eq!((mixed[0].start, mixed[0].end), (30396603, 30396605));
+        assert_eq!(mixed[0].allele_string, "TGA/TGATC");
+        assert!(!mixed[0].minimised);
+        let upper = parse_vcf_line("21\t30396602\tx\tTTGA\tTTGATC\t.\t.\t.", true).unwrap();
+        assert_eq!((upper[0].start, upper[0].end), (30396606, 30396605));
+        assert_eq!(upper[0].allele_string, "-/TC");
+        assert!(upper[0].minimised);
+    }
+
     /// Guard: the same shape with a second ALT must not be re-minimised.
     ///
     /// `minimise_alleles` returns any allele string matching `.+/.+/.+` unchanged
@@ -3305,25 +3933,30 @@ mod tests {
     /// A line whose every ALT is `*` names no allele: Ensembl VEP 116.2 writes
     /// `21 30425650 x N * . . .` and `N *,*` with no row, the VCF line without CSQ and a
     /// JSON object (`"allele_string":"N/*"`, start and end 30425650,
-    /// `"most_severe_consequence":"?"`), with or without a true SVTYPE. The one variant
-    /// carries the record and is never annotated; a `*` beside an allele stays filtered.
+    /// `"most_severe_consequence":"?"`), with or without a true SVTYPE. The anchor chop
+    /// counts the REF alone in its first-base vote when every ALT carries a `*`
+    /// (Parser/VCF.pm:306), so `21 30396602 x TTGA *,*` is the feature `TGA/*/*` at
+    /// 30396603-30396605 and `TTGA *` stays `TTGA/*` at 30396602-30396605. The one
+    /// variant carries the record and is never annotated; a `*` beside an allele stays
+    /// filtered.
     #[test]
     fn a_star_only_record_is_carried_as_the_allele_less_feature() {
-        for (line, allele_string) in [
-            ("21\t100\t.\tA\t*\t.\tPASS\t.", "A/*"),
-            ("21\t100\t.\tNAC\t*,*\t.\tPASS\t.", "NAC/*/*"),
-            ("21\t100\t.\tN\t*\t.\tPASS\tSVTYPE=DEL;END=400", "N/*"),
+        for (line, allele_string, span) in [
+            ("21\t100\t.\tA\t*\t.\tPASS\t.", "A/*", (100, 100)),
+            ("21\t100\t.\tNAC\t*,*\t.\tPASS\t.", "AC/*/*", (101, 102)),
+            ("21\t100\t.\tNAC\t*\t.\tPASS\t.", "NAC/*", (100, 102)),
+            (
+                "21\t100\t.\tN\t*\t.\tPASS\tSVTYPE=DEL;END=400",
+                "N/*",
+                (100, 100),
+            ),
         ] {
             let variants = parse_vcf_line(line, true).unwrap();
             assert_eq!(variants.len(), 1, "{line}");
             let v = &variants[0];
             assert!(v.no_allele, "{line}");
             assert_eq!(v.allele_string, allele_string, "{line}");
-            assert_eq!(
-                (v.start, v.end),
-                (100, 99 + v.ref_allele.len() as u64),
-                "{line}"
-            );
+            assert_eq!((v.start, v.end), span, "{line}");
             assert!(!v.is_structural && v.transcript_consequences.is_empty());
             assert_eq!(v.record_allele_string(), allele_string, "{line}");
         }

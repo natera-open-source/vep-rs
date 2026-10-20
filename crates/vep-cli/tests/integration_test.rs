@@ -1437,7 +1437,7 @@ fn test_dont_skip_skips_an_invalid_vcf_line() {
         std::fs::read_to_string(format!("{}_warnings.txt", output_path.display())).unwrap();
     assert_eq!(
         warnings.lines().collect::<Vec<_>>(),
-        ["WARNING: line 2 skipped (21 100 . A): VCF line has fewer than 8 fields"]
+        ["WARNING: line 2 skipped (21 100 . A): VCF line has fewer than 5 fields"]
     );
     let ids: Vec<String> = std::fs::read_to_string(&output_path)
         .unwrap()

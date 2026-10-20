@@ -330,7 +330,7 @@ fn dont_skip_never_aborts() {
             warning_lines(&warnings),
             [
                 "WARNING: line 2 skipped (21 abc bad_pos A G . . .): Invalid start 'abc' or end '0' coordinate",
-                "WARNING: line 3 skipped (21 10538885 short A): VCF line has fewer than 8 fields",
+                "WARNING: line 3 skipped (21 10538885 short A): VCF line has fewer than 5 fields",
             ],
             "{extra:?}"
         );

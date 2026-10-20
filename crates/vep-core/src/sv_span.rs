@@ -192,9 +192,101 @@ pub fn structural_end(
     }
 }
 
+/// Parser/VCF.pm:555-558: a record whose type reads as a deletion (`/del/i` on its
+/// Sequence Ontology term, or on its type string when `%SO_TERMS` has no entry for it)
+/// looks incomplete when its start lies past its end or its INFO carries neither SVLEN
+/// nor END, `svlen` and `end` here as written (`None` for an absent key). Ensembl VEP
+/// warns `deletion looks incomplete`, marks the record `vep_skip` and drops it unless
+/// `--dont_skip` keeps it (`validate_svf`, Parser.pm:821-826), so `21 30165850 x N <DEL>`
+/// with `SVTYPE=DEL` alone and with `END=30165850` are both dropped by 116.2.
+pub fn deletion_looks_incomplete(
+    so_term: &str,
+    start: u64,
+    end: u64,
+    svlen: Option<&str>,
+    end_text: Option<&str>,
+) -> bool {
+    so_term.to_ascii_lowercase().contains("del")
+        && (start > end || (svlen.is_none() && end_text.is_none()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The deletion test runs on the term, or on the type string of a type the table
+    /// lacks, and reads an END at or before POS as an empty span: 116.2 drops `<DEL>`
+    /// without SVLEN or END, `<DEL>` with `END=POS` (`start > end`), `<CN0>` (term
+    /// `deletion`) without an extent and `<INS>,<DEL>` (type string `<INS>/<DEL>`)
+    /// without one, and keeps `<DEL>` with `SVLEN=-100`, with `END=POS+1`, and a
+    /// `<DUP>` or `<INV>` whatever its INFO says.
+    #[test]
+    fn a_deletion_without_an_extent_or_with_an_empty_span_looks_incomplete() {
+        let pos = 30165850;
+        assert!(deletion_looks_incomplete(
+            "deletion",
+            pos + 1,
+            pos + 1,
+            None,
+            None
+        ));
+        assert!(deletion_looks_incomplete(
+            "deletion",
+            pos + 1,
+            pos,
+            None,
+            Some("30165850")
+        ));
+        assert!(deletion_looks_incomplete(
+            "<INS>/<DEL>",
+            pos + 1,
+            pos + 1,
+            None,
+            None
+        ));
+        assert!(deletion_looks_incomplete(
+            "mobile_element_deletion",
+            pos + 1,
+            pos + 1,
+            None,
+            None
+        ));
+        assert!(!deletion_looks_incomplete(
+            "deletion",
+            pos + 1,
+            pos + 100,
+            Some("-100"),
+            None
+        ));
+        assert!(!deletion_looks_incomplete(
+            "deletion",
+            pos + 1,
+            pos + 1,
+            None,
+            Some("30165851")
+        ));
+        assert!(!deletion_looks_incomplete(
+            "duplication",
+            pos + 1,
+            pos + 1,
+            None,
+            None
+        ));
+        assert!(!deletion_looks_incomplete(
+            "inversion",
+            pos + 1,
+            pos,
+            None,
+            Some("30165850")
+        ));
+        assert!(!deletion_looks_incomplete(
+            "insertion",
+            pos,
+            pos,
+            None,
+            None
+        ));
+    }
 
     /// Perl's `abs()` numifies the string: Ensembl VEP 116.2 ends a `<DUP>` at POS 30425650
     /// at 30425950 for `SVLEN=300abc`, `SVLEN= 300` and `SVLEN=3e2`, and at 30425650 (the

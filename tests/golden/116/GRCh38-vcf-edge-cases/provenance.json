@@ -1,0 +1,120 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "3544fd1be7f7a1ca43dffece70b0c662",
+  "arch": "arm64",
+  "flags_passed": [
+   "--allele_number",
+   "--uploaded_allele",
+   "--variant_class",
+   "--mask_header_cache_path"
+  ]
+ },
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "hand-built records at chromosome 21 sites of the GRCh38-release116 corpus's cache and one on chrM: the overlap-allele rules (an ALT equal to the reference, repeated ALTs, `*`, `<DEL:*>`), the anchor chop and minimisation, the ID column, gVCF alleles, structural spans and breakends, the incomplete deletion, chromosome spellings, a contig no cache carries and POS 0; twins of the same records at five columns, with CRLF line ends, with a Latin-1 header and sample column, and on standard input",
+ "generator": "json_cache: the GRCh38-release116 corpus's pruned cache plus the GRCh38-native-builder corpus's MT shard and the chromosome 21 and MT lines of the Ensembl cache's chr_synonyms.txt; expected outputs: one Ensembl VEP 116.2 container run per format per input; manifest: the records' consequence sets and skip warnings from the default output, scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and every flag set)",
+ "sha256": {
+  "default.txt": "b3f3abb684dcd8a416414e560c567fda43b483923d1700a060a96e02f4fd2504",
+  "tab.txt": "88a0dbbe2ef8c4791209039fcb021b1326dbcc0fa8fc19e978704f9fe09812ad",
+  "vcf.vcf": "d138e916f68919e3954cc8bb195aa44231d66c8edac736be2ef16e64669d2300",
+  "json.jsonl": "0be7c67ec65836a042ecb3ba13ca8b41c0092a202efae720dda7a07fb2c2381f"
+ },
+ "variants_vcf_sha256": "4217ac9103b922aff3e8a903bb43639e8ccbf9d4b9b43adefc6f52f3ae63fe90",
+ "inputs_sha256": {
+  "variants.vcf": "4217ac9103b922aff3e8a903bb43639e8ccbf9d4b9b43adefc6f52f3ae63fe90",
+  "variants.short.vcf": "26cf9b579d2a0bba475ac340b99405f42407787a86c6bfe857e18e2ce9df7a9e",
+  "variants.crlf.vcf": "e175e56f8466acd2a1379961f7434da252cf3e290940e9fe6d68c82b22b333bf",
+  "variants.latin1.vcf": "84ddfef0b0765378bb8c34e00ed422ddb19fe38bcd11d7eda4b4a46dae0704a3"
+ },
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 2741,
+   "22": 90,
+   "MT": 37
+  },
+  "source": "GRCh38-release116 (21, 22) and GRCh38-native-builder (MT)",
+  "chr_synonyms": "the 21 and MT lines of homo_sapiens/116_GRCh38/chr_synonyms.txt"
+ },
+ "flag_sets": {
+  "short": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.short.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.short.vcf",
+   "expected_dir": "expected",
+   "reference_run": "the manifest's run: the twin carries the same records, so expected/ is its reference; a container run on the twin wrote the same default, tab and VCF outputs and the same warning descriptions, each quoting the line as the twin spells it",
+   "sha256": {
+    "default.txt": "b3f3abb684dcd8a416414e560c567fda43b483923d1700a060a96e02f4fd2504",
+    "tab.txt": "88a0dbbe2ef8c4791209039fcb021b1326dbcc0fa8fc19e978704f9fe09812ad",
+    "vcf.vcf": "d138e916f68919e3954cc8bb195aa44231d66c8edac736be2ef16e64669d2300"
+   }
+  },
+  "crlf": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.crlf.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.crlf.vcf",
+   "expected_dir": "expected",
+   "reference_run": "the manifest's run: the twin carries the same records, so expected/ is its reference; a container run on the twin wrote the same default, tab and VCF outputs and the same warning descriptions, each quoting the line as the twin spells it",
+   "sha256": {
+    "default.txt": "b3f3abb684dcd8a416414e560c567fda43b483923d1700a060a96e02f4fd2504",
+    "tab.txt": "88a0dbbe2ef8c4791209039fcb021b1326dbcc0fa8fc19e978704f9fe09812ad",
+    "vcf.vcf": "d138e916f68919e3954cc8bb195aa44231d66c8edac736be2ef16e64669d2300",
+    "json.jsonl": "0be7c67ec65836a042ecb3ba13ca8b41c0092a202efae720dda7a07fb2c2381f"
+   }
+  },
+  "latin1": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.latin1.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path [--tab]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.latin1.vcf",
+   "expected_dir": "expected_latin1",
+   "sha256": {
+    "default.txt": "2ff8293fc96e577b5c79b75160c1e9d9692a83b73f3bc61d1be9f65e6577a44f",
+    "tab.txt": "8e834e7d1ab9692e4e44234c39042a06b644e3659890577bb27f767a022ca6e1"
+   },
+   "formats_compared": [
+    "default",
+    "tab"
+   ],
+   "reference_run": "its own run on the twin; the default and tab outputs compared, the VCF header carrying the Latin-1 bytes as read and the JSON input the sample columns, neither a text the harness reads"
+  },
+  "stdin": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path --format vcf [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "expected_dir": "expected",
+   "reference_run": "the manifest's run: the same file piped on standard input",
+   "sha256": {
+    "default.txt": "b3f3abb684dcd8a416414e560c567fda43b483923d1700a060a96e02f4fd2504",
+    "tab.txt": "88a0dbbe2ef8c4791209039fcb021b1326dbcc0fa8fc19e978704f9fe09812ad",
+    "vcf.vcf": "d138e916f68919e3954cc8bb195aa44231d66c8edac736be2ef16e64669d2300",
+    "json.jsonl": "0be7c67ec65836a042ecb3ba13ca8b41c0092a202efae720dda7a07fb2c2381f"
+   }
+  }
+ }
+}

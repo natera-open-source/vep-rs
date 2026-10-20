@@ -14,10 +14,12 @@ use std::sync::Arc;
 
 use crate::coordinate::{normalize_chromosome, MAX_COORD};
 use crate::sv_routing::{
-    joined, per_alt_classes, perl_true, sv_so_term_and_class, sv_type_abbreviation, variant_alts,
+    joined, per_alt_classes, perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string,
+    variant_alts,
 };
 use crate::sv_span::{
-    perl_numeric_f64, structural_end, structural_start, svlen_values, SpanClass, SpanError,
+    deletion_looks_incomplete, perl_numeric_f64, structural_end, structural_start, svlen_values,
+    SpanClass, SpanError,
 };
 use crate::variant::{InputVariant, VariantClass};
 use crate::vcf_info::{info_value, info_value_written};
@@ -94,6 +96,11 @@ pub fn structural_variants(
     let joined_alts = joined(&alts, "/");
     let record_term = sv_so_term_and_class(&sv_type_abbreviation(&joined_alts, svtype));
     let record_class = record_term.map(|(_, class)| class);
+    // The deletion test of Parser/VCF.pm:555 runs on the term, or on the raw type
+    // string when `%SO_TERMS` has no entry for it (`:477-481`).
+    let deletion_test_term = record_term
+        .map(|(term, _)| term.to_string())
+        .unwrap_or_else(|| sv_type_string(&joined_alts, svtype));
     // VEP's allele string for a structural variant record is every ALT of the
     // record joined by `/`, `*`, a `<NON_REF>` block and the sequence alleles of a
     // mixed record included (Parser/VCF.pm:469); a breakend record's carries the mate
@@ -144,7 +151,16 @@ pub fn structural_variants(
         );
         variant.variant_class = sv_class;
         variant.is_structural = true;
-        variant.vep_skip = record_term.is_none();
+        // Ensembl VEP's `vep_skip` mark (Parser/VCF.pm:575): a type `%SO_TERMS` lacks
+        // (`:477-481`) or a deletion without an extent (`:555-558`).
+        variant.vep_skip = record_term.is_none()
+            || deletion_looks_incomplete(
+                &deletion_test_term,
+                sv_start,
+                sv_end_val,
+                svlen_text,
+                end_text,
+            );
         variant.record_so_term = record_term.map(|(term, _)| term.to_string());
         variant.uploaded_allele_string = Some(uploaded.clone());
         variant.record_allele_string_multi = record_string.clone();

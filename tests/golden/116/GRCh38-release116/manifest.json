@@ -20,7 +20,6 @@
   "protein",
   "breakends",
   "incomplete-del",
-  "skipped-variant-semantics",
   "flag_matrix_concordance",
   "engine_identity_lines"
  ],
@@ -447,6 +446,108 @@
  ],
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "distance",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--distance",
+    "2000,0"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_distance",
+   "covers": [
+    "distance"
+   ],
+   "divergences": [
+    {
+     "location": "21:11200001",
+     "allele": "N[21:30425600[",
+     "feature": "ENST00000390690",
+     "feature_type": "Transcript",
+     "record_indices": [
+      1
+     ],
+     "vep_consequence_set": "feature_truncation",
+     "vep_rs_consequence_sets": [
+      "coding_sequence_variant,feature_truncation"
+     ],
+     "expected_divergence": "breakend_mate_local_read"
+    }
+   ],
+   "vep_rs_only_tuples": [
+    {
+     "location": "21:30165801-30166000",
+     "allele": "deletion",
+     "feature": "ENST00000286808",
+     "feature_type": "Transcript",
+     "record_indices": [
+      12
+     ],
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,feature_truncation,frameshift_variant,stop_lost"
+     ],
+     "expected_divergence": "reference_skipped_record"
+    },
+    {
+     "location": "21:30165801-30166000",
+     "allele": "insertion",
+     "feature": "ENST00000286808",
+     "feature_type": "Transcript",
+     "record_indices": [
+      12
+     ],
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant,feature_elongation"
+     ],
+     "expected_divergence": "reference_skipped_record"
+    },
+    {
+     "location": "21:30165821-30166020",
+     "allele": "duplication",
+     "feature": "ENST00000286808",
+     "feature_type": "Transcript",
+     "record_indices": [
+      13
+     ],
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant,feature_elongation"
+     ],
+     "expected_divergence": "reference_skipped_record"
+    },
+    {
+     "location": "21:30165821-30166020",
+     "allele": "inversion",
+     "feature": "ENST00000286808",
+     "feature_type": "Transcript",
+     "record_indices": [
+      13
+     ],
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,coding_sequence_variant"
+     ],
+     "expected_divergence": "reference_skipped_record"
+    }
+   ],
+   "divergence_summary": {
+    "breakend_mate_local_read": 1
+   },
+   "vep_rs_only_summary": {
+    "reference_skipped_record": 4
+   }
+  }
+ ],
  "divergences": [
   {
    "location": "21:11200001",
@@ -529,51 +630,12 @@
     "3_prime_UTR_variant,coding_sequence_variant"
    ],
    "expected_divergence": "reference_skipped_record"
-  },
-  {
-   "location": "21:30165851",
-   "allele": "deletion",
-   "feature": "ENST00000286808",
-   "feature_type": "Transcript",
-   "record_indices": [
-    15
-   ],
-   "vep_rs_consequence_sets": [
-    "3_prime_UTR_variant,feature_truncation"
-   ],
-   "expected_divergence": "reference_skipped_record"
   }
  ],
  "divergence_summary": {
   "breakend_mate_local_read": 2
  },
  "vep_rs_only_summary": {
-  "reference_skipped_record": 5
- },
- "flag_sets": [
-  {
-   "name": "distance",
-   "flags": [
-    "--protein",
-    "--protein_version",
-    "--mask_header_cache_path",
-    "--max_sv_size",
-    "-1",
-    "--distance",
-    "2000,0"
-   ],
-   "input": "variants.vcf",
-   "stdin": false,
-   "formats": [
-    "default",
-    "tab",
-    "vcf",
-    "json"
-   ],
-   "expected_dir": "expected_distance",
-   "covers": [
-    "distance"
-   ]
-  }
- ]
+  "reference_skipped_record": 4
+ }
 }

@@ -55,7 +55,10 @@ Subcommands:
             corpus is built), it gets `reference_rows` 0, and every key only vep-rs emits
             for it is classed `reference_skipped_record`; any other key only vep-rs emits is
             `unexplained_residual`. A zero-row record without the warning, or a warned record
-            with rows, is an error. A manifest listing `regulatory_feature_rows` under
+            with rows, is an error, unless the record carries no row by its nature: a
+            non-variant record (ALT `.`), or one the run's expected JSON names as a feature
+            with no allele to annotate (`most_severe_consequence` `?`: every ALT a `*` or
+            `<DEL:*>`, equal to the reference or a repeat). A manifest listing `regulatory_feature_rows` under
             `masks` has its VEP rows of `Feature_type` RegulatoryFeature and MotifFeature
             left out first, the rows the golden test sets aside for a run under
             `--regulatory`. `covers` and `flag_sets` are kept; with `--flag-set
@@ -1281,15 +1284,55 @@ REFERENCE_SKIPPED = "reference_skipped_record"
 UNEXPLAINED = "unexplained_residual"
 
 
+def carried_records(records: list[dict], json_path: Path) -> set[int]:
+    """Ordinals of the records the reference carried with no allele to annotate: the JSON
+    output at `json_path`, when the file exists, has an object for the record whose
+    `most_severe_consequence` is `?`, the object VEP writes for a feature with no overlap
+    allele (every ALT a `*` or `<DEL:*>`, equal to the reference or a repeat of an earlier
+    one; VariationFeatureOverlap.pm:459-491). A record is the object whose `input` opens
+    with its first five columns, so a twin input carrying sample columns names it too. A
+    file that is not gzip, or holds a line that is not a JSON object, is refused with its
+    path."""
+    if not json_path.is_file():
+        return set()
+
+    def first_five_columns(line: str) -> str:
+        return "\t".join(line.split("\t")[:5])
+
+    by_head: dict[str, list[int]] = defaultdict(list)
+    for i, rec in enumerate(records):
+        by_head[first_five_columns(rec["vcf"])].append(i)
+    carried: set[int] = set()
+    try:
+        with gzip.open(json_path, "rt", encoding="utf-8", errors="replace") as fh:
+            for number, line in enumerate(fh, 1):
+                if not line.strip():
+                    continue
+                obj = json.loads(line)
+                if not isinstance(obj, dict):
+                    raise failure(f"{json_path} is not a readable JSON output (line {number} is not a JSON object)")
+                if obj.get("most_severe_consequence") != "?":
+                    continue
+                head = first_five_columns(str(obj.get("input", "")))
+                carried.update(by_head.get(head, []))
+    except (OSError, EOFError, zlib.error, json.JSONDecodeError) as exc:
+        raise failure(f"{json_path} is not a readable JSON output ({exc})") from None
+    return carried
+
+
 def reference_skipped_records(
-    records: list[dict], perl_names: dict[tuple[str, str, str, str], set[str]], by_name: dict[str, list[int]]
+    records: list[dict],
+    perl_names: dict[tuple[str, str, str, str], set[str]],
+    by_name: dict[str, list[int]],
+    carried: set[int] = frozenset(),
 ) -> tuple[set[int], list[str]]:
     """Ordinals of the records no VEP row names (VEP dropped them before annotation), and the
     records that contradict their `reference_warning`: a zero-row record without one (its name
-    unresolved, or the reason unrecorded) and a warned record with rows. A non-variant record (ALT
-    `.`) carries no row by its nature: under `--allow_non_variant` VEP writes its VCF line and
-    JSON object and no default row (Parser/VCF.pm:259-267), so one without a warning is kept,
-    not skipped."""
+    unresolved, or the reason unrecorded) and a warned record with rows. A record that carries
+    no row by its nature is kept, not skipped, when it has no warning: a non-variant record (ALT
+    `.`, written under `--allow_non_variant` as its VCF line and JSON object and no default row,
+    Parser/VCF.pm:259-267) and a record of `carried`, one the reference's JSON names as a
+    feature with no allele to annotate (`carried_records`)."""
     with_rows = {i for names in perl_names.values() for n in names for i in by_name.get(n, [])}
     skipped = set(range(len(records))) - with_rows
     problems: list[str] = []
@@ -1299,7 +1342,7 @@ def reference_skipped_records(
         label = " ".join(columns[:5])
         non_variant = len(columns) > 4 and columns[4] == "."
         if i in skipped and not warned:
-            if non_variant:
+            if non_variant or i in carried:
                 skipped.discard(i)
             else:
                 problems.append(f"record {i} ({label}) has no VEP row and no reference_warning")
@@ -1371,7 +1414,16 @@ def cmd_classify(args: argparse.Namespace) -> int:
     perl, perl_names = load_tuples(Path(args.vep_default), masked)
     rust, rust_names = load_tuples(Path(args.vep_rs_output))
     by_name = record_name_index(manifest["records"])
-    skipped, problems = reference_skipped_records(manifest["records"], perl_names, by_name)
+    # A flag set runs the manifest's records, so the default run's JSON stands in for a set
+    # whose expected directory has none.
+    reference_json = corpus / "expected" / "json.jsonl.gz"
+    if args.flag_set is not None:
+        expected_dir = target.get("expected_dir", f"expected_{args.flag_set}")
+        own_json = corpus / expected_dir / "json.jsonl.gz"
+        if own_json.is_file():
+            reference_json = own_json
+    carried = carried_records(manifest["records"], reference_json)
+    skipped, problems = reference_skipped_records(manifest["records"], perl_names, by_name, carried)
     if problems:
         for p in problems:
             print(f"ERROR: [build_golden_corpus] {p}", file=sys.stderr)

@@ -99,6 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `GRCh38-input-id` corpus compares identifier input, under `--format id` and under detection, against Ensembl VEP 116.2 connected to the Ensembl database. (#N)
 - The `GRCh38-input-region` corpus compares region input, under `--format region` and under format detection, against Ensembl VEP 116.2's output. (#N)
 - `compare_vep_formats.py --masks order_only` compares `DOMAINS` and `FREQS` as multisets, counting every order-only agreement per column, since Ensembl VEP prints neither in a meaningful order. (#N)
+- The `GRCh38-vcf-edge-cases` golden corpus: `<DEL:*>`, reference-equal and repeated ALTs, `*`, the anchor chop, gVCF alleles, breakends, the incomplete deletion, chromosome spellings, POS 0, five-column, CRLF, Latin-1 and stdin twins. (#N)
+- `build_golden_corpus.py classify` keeps a zero-row record whose reference JSON object carries `most_severe_consequence` `?`, a feature with no allele to annotate, instead of refusing it. (#N)
 
 ### Changed
 
@@ -169,6 +171,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A region record is named by its line as written in `Uploaded_variation` and the JSON `id`, as Ensembl VEP names it. (#N)
 - A skipped record of the Ensembl, HGVS, SPDI or region format is numbered counting the empty lines before it, as Ensembl VEP numbers it. (#N)
 - `compare_vep_formats.py --floors` counts a column under its JSON key in the JSON format and reports a record-level column as not applicable there instead of red. (#N)
+- VCF alleles follow Ensembl VEP's overlap-allele rules: an ALT equal to the reference or a repeat takes no row and no `ALLELE_NUM`, `<DEL:*>` is numbered without a row. (#N)
+- A `<DEL>` with neither `END` nor `SVLEN`, or whose `END` is at or before `POS`, is warned `deletion looks incomplete` and dropped as in Ensembl VEP; `--dont_skip` keeps it. (#N)
+- A VCF record of five to seven columns is read with `.` for missing QUAL, FILTER and INFO, as Ensembl VEP reads it; fewer than five columns are refused. (#N)
+- A record at POS 0 keeps its coordinates in range: `A G` annotates at `21:0`, `A AT` is skipped with Ensembl VEP's insertion-coordinate warning, an empty REF the same. (#N)
 
 ### Removed
 

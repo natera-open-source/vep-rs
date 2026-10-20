@@ -263,6 +263,89 @@ def test_classify_keeps_an_unwarned_non_variant_record(tmp_path: Path, capsys):
     assert records[2]["reference_rows"] == 0
 
 
+def test_classify_keeps_a_record_the_reference_carried_without_a_row(tmp_path: Path, capsys):
+    """A record whose JSON object the reference wrote with `most_severe_consequence` `?` has no
+    allele to annotate (`C C`, `C <DEL:*>`, `A *`), so one without a warning is kept, not refused
+    or marked skipped; the object is matched by the record's first five columns, so a twin
+    input carrying sample columns names it too; a record the JSON lacks is refused, and a run
+    whose expected directory has no JSON file falls back to the ALT `.` rule."""
+    corpus = tmp_path / "c"
+    _manifest(corpus, [
+        _record("21\t100\trs1\tA\tG\t.\tPASS\t."),
+        _record("21\t200\talt_eq_ref\tC\tC\t.\tPASS\t."),
+        _record("21\t300\tlone_delstar\tC\t<DEL:*>\t.\tPASS\t."),
+        _record("21\t400\tstar_only\tA\t*\t.\tPASS\t."),
+    ])
+
+    def write_expected_json(objects: list[dict]) -> None:
+        (corpus / "expected").mkdir(exist_ok=True)
+        with gzip.open(corpus / "expected" / "json.jsonl.gz", "wt", encoding="utf-8") as fh:
+            fh.write("".join(json.dumps(o) + "\n" for o in objects))
+
+    objects = [
+        {"id": "rs1", "input": "21\t100\trs1\tA\tG\t.\tPASS\t.", "most_severe_consequence": "missense_variant"},
+        {"id": "alt_eq_ref", "input": "21\t200\talt_eq_ref\tC\tC\t.\tPASS\t.\tGT\t0/1", "most_severe_consequence": "?"},
+        {"id": "lone_delstar", "input": "21\t300\tlone_delstar\tC\t<DEL:*>\t.\tPASS\t.", "most_severe_consequence": "?"},
+    ]
+    write_expected_json(objects)
+    vep = tmp_path / "vep.txt"
+    rs = tmp_path / "rs.txt"
+    vep.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rs.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    classify = ["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)]
+    assert bgc.main(classify) == 1
+    assert capsys.readouterr().err == (
+        "ERROR: [build_golden_corpus] record 3 (21 400 star_only A *) has no VEP row and no reference_warning\n"
+    )
+    objects.append({"id": "star_only", "input": "21\t400\tstar_only\tA\t*\t.\tPASS\t.", "most_severe_consequence": "?"})
+    write_expected_json(objects)
+    assert bgc.main(classify) == 0
+    assert "reference-skipped records []" in capsys.readouterr().out
+    records = json.loads((corpus / "manifest.json").read_text())["records"]
+    assert all("reference_rows" not in r and "reference_warning" not in r for r in records)
+    (corpus / "expected" / "json.jsonl.gz").unlink()
+    assert bgc.main(classify) == 1
+
+
+def test_classify_reads_a_flag_sets_own_json_and_refuses_an_unreadable_one(tmp_path: Path, capsys):
+    """A flag set's carried records come from its own expected JSON when it compares that
+    format, else from the default run's; a JSON file that is not gzip, or holds a line that is
+    not JSON or not a JSON object, is refused with the tool's own error instead of a traceback."""
+    corpus = tmp_path / "c"
+    corpus.mkdir()
+    (corpus / "manifest.json").write_text(json.dumps({
+        "records": [_record("21\t100\trs1\tA\tG\t.\tPASS\t."), _record("21\t200\talt_eq_ref\tC\tC\t.\tPASS\t.")],
+        "flag_sets": [
+            {"name": "own", "flags": ["--pick"], "expected_dir": "expected_own", "covers": []},
+            {"name": "shared", "flags": ["--pick"], "expected_dir": "expected", "covers": []},
+        ],
+    }), encoding="utf-8")
+    (corpus / "expected").mkdir()
+    (corpus / "expected_own").mkdir()
+    carried = {"id": "alt_eq_ref", "input": "21\t200\talt_eq_ref\tC\tC\t.\tPASS\t.", "most_severe_consequence": "?"}
+    with gzip.open(corpus / "expected_own" / "json.jsonl.gz", "wt", encoding="utf-8") as fh:
+        fh.write(json.dumps(carried) + "\n")
+    vep = tmp_path / "vep.txt"
+    rs = tmp_path / "rs.txt"
+    vep.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rs.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    classify = ["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)]
+    assert bgc.main([*classify, "--flag-set", "own"]) == 0
+    assert bgc.main([*classify, "--flag-set", "shared"]) == 1
+    assert "record 1 (21 200 alt_eq_ref C C) has no VEP row" in capsys.readouterr().err
+    (corpus / "expected" / "json.jsonl.gz").write_bytes(b"not gzip")
+    with pytest.raises(SystemExit, match=r"ERROR: \[build_golden_corpus\] .*json\.jsonl\.gz is not a readable JSON output"):
+        bgc.main([*classify, "--flag-set", "shared"])
+    with gzip.open(corpus / "expected" / "json.jsonl.gz", "wt", encoding="utf-8") as fh:
+        fh.write("{not json\n")
+    with pytest.raises(SystemExit, match=r"is not a readable JSON output"):
+        bgc.main(classify)
+    with gzip.open(corpus / "expected" / "json.jsonl.gz", "wt", encoding="utf-8") as fh:
+        fh.write(json.dumps(carried) + "\n[]\n")
+    with pytest.raises(SystemExit, match=r"is not a readable JSON output \(line 2 is not a JSON object\)"):
+        bgc.main(classify)
+
+
 def test_classify_refuses_a_warned_record_that_has_rows(tmp_path: Path, capsys):
     corpus = tmp_path / "c"
     _manifest(corpus, [_record("21\t100\trs1\tA\tG\t.\tPASS\t.", reference_warning="deletion looks incomplete")])

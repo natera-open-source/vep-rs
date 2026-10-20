@@ -68,7 +68,10 @@ pub fn ambiguity_code(bases: &[u8]) -> Option<u8> {
     }
 }
 
-/// Trim shared prefix and suffix from ref and alt alleles.
+/// Trim shared prefix and suffix from ref and alt alleles, comparing the bytes as
+/// written: `trim_sequences` (ensembl-variation Utils/Sequence.pm:1006, :1019) trims
+/// with `eq` before `validate_vf` upper-cases the allele string, so `TTGA/t` is
+/// not trimmed.
 ///
 /// Returns (trimmed_ref, trimmed_alt, bases_trimmed_from_start).
 /// Converts VCF-style representation (e.g., "ACGT" -> "ACG" becomes "T" -> "-")
@@ -78,18 +81,12 @@ pub fn trim_alleles(ref_allele: &[u8], alt_allele: &[u8]) -> (Vec<u8>, Vec<u8>, 
     let prefix_len = ref_allele
         .iter()
         .zip(alt_allele.iter())
-        .take_while(|(r, a)| r.eq_ignore_ascii_case(a))
+        .take_while(|(r, a)| r == a)
         .count();
     let mut ref_a = &ref_allele[prefix_len..];
     let mut alt_a = &alt_allele[prefix_len..];
 
-    while !ref_a.is_empty()
-        && !alt_a.is_empty()
-        && ref_a
-            .last()
-            .unwrap()
-            .eq_ignore_ascii_case(alt_a.last().unwrap())
-    {
+    while !ref_a.is_empty() && !alt_a.is_empty() && ref_a.last() == alt_a.last() {
         ref_a = &ref_a[..ref_a.len() - 1];
         alt_a = &alt_a[..alt_a.len() - 1];
     }
@@ -153,6 +150,20 @@ mod tests {
         let (r, a, trim) = trim_alleles(b"ACGT", b"ATGT");
         assert_eq!(r, b"C");
         assert_eq!(a, b"T");
+        assert_eq!(trim, 1);
+    }
+
+    /// `trim_sequences` compares with `eq` (Sequence.pm:1006), so a base written in
+    /// the other case is not a shared base.
+    #[test]
+    fn trim_alleles_compares_the_written_case() {
+        let (r, a, trim) = trim_alleles(b"TTGA", b"t");
+        assert_eq!(r, b"TTGA");
+        assert_eq!(a, b"t");
+        assert_eq!(trim, 0);
+        let (r, a, trim) = trim_alleles(b"TGA", b"Tgatc");
+        assert_eq!(r, b"GA");
+        assert_eq!(a, b"gatc");
         assert_eq!(trim, 1);
     }
 
