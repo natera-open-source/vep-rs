@@ -1,10 +1,11 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! The transcript source behind HGVS `c.` and `n.` input: a stable-id and
-//! gene-name index over the run's transcript cache, standing in for the core
-//! database `fetch_by_hgvs_notation` queries (ensembl-variation release/116,
-//! VariationFeatureAdaptor.pm:1829-1849, 1993-2012).
+//! The transcript source behind HGVS `c.`, `n.` and `p.` input: a stable-id,
+//! translation-id and gene-name index over the run's transcript cache,
+//! standing in for the core database `fetch_by_hgvs_notation` queries
+//! (ensembl-variation release/116, VariationFeatureAdaptor.pm:1829-1849,
+//! 1908-1941, 1993-2012).
 //!
 //! The cache is laid out by chromosome and carries no index by identifier, so
 //! the first lookup reads the reference sequences of the run's transcript set
@@ -22,7 +23,8 @@
 //!
 //! A stable id present on several sequences (a pseudoautosomal transcript the
 //! cache stores under X and Y) resolves on the first by the cache's contig
-//! order, as the database holds the one row the X copy is projected from. A
+//! order, as the database holds the one row the X copy is projected from; a
+//! translation id resolves the same way to the transcript it translates. A
 //! gene name resolves among the reference sequences alone, as the reference
 //! gene is the one `_get_gene_transcripts` keeps (`:1997`, `is_reference`). Of
 //! several reference genes carrying one name the first by database order is
@@ -49,6 +51,12 @@ struct Entry {
     chromosome: usize,
     stable_id: Arc<str>,
     version: Option<u32>,
+    /// The stable id and version of the transcript's translation, the cache's
+    /// `protein` id with no version for a transcript whose record carries the
+    /// id without its translation; `None` for a transcript that translates
+    /// nothing.
+    translation_id: Option<Arc<str>>,
+    translation_version: Option<u32>,
     gene_stable_id: Arc<str>,
     gene_symbol: Option<Arc<str>>,
     db_id: Option<u64>,
@@ -58,10 +66,19 @@ struct Entry {
 
 impl Entry {
     fn of(transcript: &Transcript, chromosome: usize) -> Self {
+        let (translation_id, translation_version) = match &transcript.translation {
+            Some(translation) => (
+                Some(Arc::from(translation.stable_id.as_str())),
+                translation.version,
+            ),
+            None => (transcript.protein_id.clone(), None),
+        };
         Self {
             chromosome,
             stable_id: Arc::clone(&transcript.stable_id),
             version: transcript.version,
+            translation_id,
+            translation_version,
             gene_stable_id: Arc::clone(&transcript.gene_stable_id),
             gene_symbol: transcript.gene_symbol.clone(),
             db_id: transcript.db_id,
@@ -97,6 +114,9 @@ struct Index {
     entries: Vec<Entry>,
     /// The positions in `entries` of the entries carrying each stable id.
     by_stable_id: HashMap<Arc<str>, Vec<usize>>,
+    /// The positions in `entries` of the entries whose translation carries
+    /// each stable id.
+    by_translation_id: HashMap<Arc<str>, Vec<usize>>,
     /// The positions in `entries` of the entries whose gene carries each symbol.
     by_gene_symbol: HashMap<Arc<str>, Vec<usize>>,
 }
@@ -106,20 +126,45 @@ impl Index {
     /// else, when the id ends in `.<version>`, the one carrying the id before
     /// the dot with that version (TranscriptAdaptor.pm:164-181).
     fn find_stable_id(&self, stable_id: &str) -> Option<&Entry> {
-        if let Some(&at) = self.by_stable_id.get(stable_id).and_then(|all| all.first()) {
-            return Some(&self.entries[at]);
-        }
-        let (id, version) = stable_id.rsplit_once('.')?;
-        if id.is_empty() || !version.bytes().all(|b| b.is_ascii_digit()) {
-            return None;
-        }
-        let version: u32 = version.parse().ok()?;
-        self.by_stable_id
-            .get(id)?
-            .iter()
-            .map(|&at| &self.entries[at])
-            .find(|entry| entry.version == Some(version))
+        find_versioned(&self.by_stable_id, &self.entries, stable_id, |entry| {
+            entry.version
+        })
     }
+
+    /// `fetch_by_translation_stable_id` within this tier
+    /// (TranscriptAdaptor.pm:307-332): as [`Index::find_stable_id`], over the
+    /// translations' ids and versions.
+    fn find_translation_id(&self, stable_id: &str) -> Option<&Entry> {
+        find_versioned(&self.by_translation_id, &self.entries, stable_id, |entry| {
+            entry.translation_version
+        })
+    }
+}
+
+/// The entry `by_id` lists first under `stable_id`, else, when the id ends in
+/// `.<version>`, the first under the id before the dot whose `version_of` is
+/// that version: the two-step lookup `fetch_by_stable_id` and
+/// `fetch_by_translation_stable_id` share (TranscriptAdaptor.pm:164-181,
+/// 307-332).
+fn find_versioned<'a>(
+    by_id: &HashMap<Arc<str>, Vec<usize>>,
+    entries: &'a [Entry],
+    stable_id: &str,
+    version_of: impl Fn(&Entry) -> Option<u32>,
+) -> Option<&'a Entry> {
+    if let Some(&at) = by_id.get(stable_id).and_then(|all| all.first()) {
+        return Some(&entries[at]);
+    }
+    let (id, version) = stable_id.rsplit_once('.')?;
+    if id.is_empty() || !version.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let version: u32 = version.parse().ok()?;
+    by_id
+        .get(id)?
+        .iter()
+        .map(|&at| &entries[at])
+        .find(|entry| version_of(entry) == Some(version))
 }
 
 /// A [`TranscriptSource`] over the run's lazily loaded transcript indexes.
@@ -213,6 +258,7 @@ impl TranscriptLookup {
         );
         let mut entries = Vec::new();
         let mut by_stable_id: HashMap<Arc<str>, Vec<usize>> = HashMap::new();
+        let mut by_translation_id: HashMap<Arc<str>, Vec<usize>> = HashMap::new();
         let mut by_gene_symbol: HashMap<Arc<str>, Vec<usize>> = HashMap::new();
         for chromosome in tier {
             for entry in self.entries_of(chromosome)? {
@@ -221,6 +267,12 @@ impl TranscriptLookup {
                     .entry(Arc::clone(&entry.stable_id))
                     .or_default()
                     .push(at);
+                if let Some(translation) = &entry.translation_id {
+                    by_translation_id
+                        .entry(Arc::clone(translation))
+                        .or_default()
+                        .push(at);
+                }
                 if let Some(symbol) = &entry.gene_symbol {
                     by_gene_symbol
                         .entry(Arc::clone(symbol))
@@ -233,6 +285,7 @@ impl TranscriptLookup {
         Ok(Index {
             entries,
             by_stable_id,
+            by_translation_id,
             by_gene_symbol,
         })
     }
@@ -303,13 +356,19 @@ impl TranscriptLookup {
             })
     }
 
-    /// The transcript `stable_id` names within one tier
-    /// ([`Index::find_stable_id`]), materialized.
-    fn stable_id_in(&self, index: &Index, stable_id: &str) -> Result<Option<Transcript>, String> {
-        index
-            .find_stable_id(stable_id)
-            .map(|entry| self.materialize(entry))
-            .transpose()
+    /// The entry `find` locates in the reference tier, else, when the cache
+    /// has alternate sequences, in the alternate tier, materialized: the
+    /// two-tier read every identifier lookup makes.
+    fn in_either_tier(
+        &self,
+        find: impl Fn(&Index) -> Option<&Entry>,
+    ) -> Result<Option<Transcript>, String> {
+        let mut entry = find(self.reference_index()?);
+        let has_alternate_sequences = self.reference_count < self.chromosomes.len();
+        if entry.is_none() && has_alternate_sequences {
+            entry = find(self.alternate_index()?);
+        }
+        entry.map(|entry| self.materialize(entry)).transpose()
     }
 
     /// `_get_gene_transcripts` within one core group, the RefSeq transcripts
@@ -357,13 +416,11 @@ fn is_reference_sequence(chr: &str) -> bool {
 
 impl TranscriptSource for TranscriptLookup {
     fn by_stable_id(&self, stable_id: &str) -> Result<Option<Transcript>, String> {
-        if let Some(found) = self.stable_id_in(self.reference_index()?, stable_id)? {
-            return Ok(Some(found));
-        }
-        if self.reference_count == self.chromosomes.len() {
-            return Ok(None);
-        }
-        self.stable_id_in(self.alternate_index()?, stable_id)
+        self.in_either_tier(|index| index.find_stable_id(stable_id))
+    }
+
+    fn by_translation_id(&self, stable_id: &str) -> Result<Option<Transcript>, String> {
+        self.in_either_tier(|index| index.find_translation_id(stable_id))
     }
 
     fn gene_transcripts(&self, name: &str) -> Result<Vec<Vec<Transcript>>, String> {
@@ -402,6 +459,11 @@ mod tests {
         let found = lookup.by_stable_id("ENST00000291554.6").unwrap().unwrap();
         assert_eq!((found.chr.as_str(), found.version), ("21", Some(6)));
         assert!(indexes.get("21").is_some() && indexes.get("MT").is_none());
+        let translated = lookup
+            .by_translation_id("ENSP00000291554")
+            .unwrap()
+            .unwrap();
+        assert_eq!(translated.stable_id.as_ref(), "ENST00000291554");
         let gene = lookup.gene_transcripts("TFF3").unwrap();
         assert!(gene[0]
             .iter()
@@ -483,6 +545,62 @@ mod tests {
             lookup.by_stable_id("ENSTPATCH").unwrap().unwrap().chr,
             "HG1_PATCH"
         );
+    }
+
+    /// A translation id finds the transcript it translates, by the translation's
+    /// stable id as written or, after that finds nothing, by the id before a
+    /// `.<version>` with that version, as `fetch_by_translation_stable_id`
+    /// does (TranscriptAdaptor.pm:307-332); a transcript whose record carries
+    /// the protein id without its translation is found by that id and by no
+    /// version of it; a transcript's own stable id finds nothing here, and a
+    /// transcript that translates nothing is never found.
+    #[test]
+    fn translation_id_resolves_as_fetch_by_translation_stable_id_does() {
+        use vep_core::transcript::Translation;
+        let translated =
+            |stable_id: &str, protein: &str, version: Option<u32>, db_id: u64| Transcript {
+                translation: Some(Translation {
+                    stable_id: protein.to_string(),
+                    version,
+                    db_id: None,
+                    start: 1,
+                    end: 30,
+                    start_exon_index: 0,
+                    end_exon_index: 0,
+                    seq: None,
+                }),
+                ..transcript(stable_id, 1, db_id, "21", "ENSG1")
+            };
+        let lookup = lookup(
+            vec![(
+                "21",
+                vec![
+                    translated("ENST1", "ENSP1", Some(2), 10),
+                    translated("ENST2", "ENSP2", None, 11),
+                    Transcript {
+                        protein_id: Some(Arc::from("ENSP3")),
+                        ..transcript("ENST3", 1, 12, "21", "ENSG1")
+                    },
+                    transcript("ENST4", 1, 13, "21", "ENSG1"),
+                ],
+            )],
+            &["21"],
+        );
+        let found = |id: &str| {
+            lookup
+                .by_translation_id(id)
+                .unwrap()
+                .map(|t| t.stable_id.to_string())
+        };
+        assert_eq!(found("ENSP1").as_deref(), Some("ENST1"));
+        assert_eq!(found("ENSP1.2").as_deref(), Some("ENST1"));
+        assert_eq!(found("ENSP1.3"), None);
+        assert_eq!(found("ENSP2").as_deref(), Some("ENST2"));
+        assert_eq!(found("ENSP2.1"), None);
+        assert_eq!(found("ENSP3").as_deref(), Some("ENST3"));
+        assert_eq!(found("ENSP3.1"), None);
+        assert_eq!(found("ENST1"), None);
+        assert_eq!(found("ENSP4"), None);
     }
 
     /// A gene name finds the transcripts of the reference gene so named, in

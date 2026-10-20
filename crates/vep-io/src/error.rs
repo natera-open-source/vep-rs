@@ -14,10 +14,6 @@ pub enum IoError {
     #[error("VCF parse error: {0}")]
     VcfParse(String),
 
-    /// An unimplemented format.
-    #[error("format not implemented: {0}")]
-    NotImplemented(String),
-
     /// Input refused by design, with the reason as the whole message.
     #[error("{0}")]
     Unsupported(String),

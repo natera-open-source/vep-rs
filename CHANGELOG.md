@@ -82,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A notation Ensembl VEP's adaptor refuses is warned about with its text and skipped, the run going on; a span over `--max_sv_size` is skipped with Ensembl VEP's warning. (#N)
 - The `GRCh38-input-spdi` corpus compares SPDI input, under `--format spdi` and under format detection, against Ensembl VEP 116.2's database-mode output. (#N)
 - `--decompression_threads` takes `auto` (opt-in, the default unchanged), reading an indexed BGZF input's record shape; hidden `--resolved_config` prints the resolved knobs and that shape before any cache opens. (#N)
-- The `GRCh38-input-hgvs` corpus compares HGVS g., m., c. and n. input with Ensembl VEP 116.2's database-mode output in the default, tab and JSON formats. (#N)
+- The `GRCh38-input-hgvs` corpus compares HGVS g., m., c., n. and p. input with Ensembl VEP 116.2's database-mode output in the default, tab and JSON formats. (#N)
 - The `GRCh38-everything` golden corpus compares `--everything` with Ensembl VEP 116.2 on 204 chromosome 21 records; the reference's regulatory rows are masked, since vep-rs annotates no regulatory feature. (#N)
 - Golden-corpus manifests carry `masks`, and `compare_vep_formats.py --masks regulatory_feature_rows` and `build_golden_corpus.py classify` apply the same class: the reference's RegulatoryFeature and MotifFeature rows are set aside. (#N)
 - The GRCh38-native-builder corpus runs its own native variation files under `--check_existing --exclude_null_alleles --af --af_1kg --clinvar_somatic_classification` against Ensembl VEP 116.2's output. (#N)
@@ -104,6 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HGVS transcript notation (`c.`, `n.`) resolves offline from the transcript cache and `--fasta`, by stable id or gene name through Ensembl VEP's pick order, with UTR and intronic positions. (#N)
 - A run with HGVS transcript notations reads the cache's chromosome and scaffold identifiers once to find them, alternate loci and patches only for an id found on none. (#N)
 - VCF output from Ensembl, HGVS, SPDI, region or ID input writes the line Ensembl VEP builds: an indel anchored one base back, reverse-strand alleles complemented, class words as `<DEL>`. (#N)
+- HGVS protein notation (`p.`) resolves offline from the cache and `--fasta` as Ensembl VEP resolves it: substitutions and delins take the shortest nucleotide path, deletions their codons, frameshifts refused. (#N)
+- A protein notation finds its transcript by translation id, transcript id or its gene's transcripts, and the `--ambiguous_hgvs` refusal names protein notations among the inputs resolved to one variant. (#N)
 
 ### Changed
 

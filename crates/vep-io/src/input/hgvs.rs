@@ -20,10 +20,10 @@
 //! genomic types `g.` and `m.` are read by [`genomic`] against the run's
 //! reference FASTA, which stands in for the slice Ensembl VEP fetches from its
 //! database (its own parser accepts no HGVS input offline, `:104`); the
-//! transcript types `c.` and `n.` by [`transcript`] against the run's
-//! transcript cache and the FASTA, which stand in for its core database, with
-//! the parser's warning when the reference reads as a gene name (`:219-229`);
-//! a `p.` notation fails its line as unimplemented. An `r.` notation is one
+//! transcript types `c.` and `n.` by [`transcript`] and the protein type `p.`
+//! by [`protein`], each against the run's transcript cache and the FASTA,
+//! which stand in for its core database, with the parser's warning when the
+//! reference reads as a gene name (`:219-229`). An `r.` notation is one
 //! Ensembl VEP's resolver throws on (`HGVS type r not recognised`, `:1989`)
 //! and its parser then skips with that message; here it fails the line with
 //! [`IoError::Unsupported`], which stops the run.
@@ -42,6 +42,7 @@
 
 mod components;
 pub mod genomic;
+pub mod protein;
 pub mod transcript;
 
 use std::io::BufRead;
@@ -57,7 +58,8 @@ use super::{is_perl_space, InputParser, ParserContext, ReferenceSequence, Transc
 pub struct HgvsParser<R: BufRead> {
     reader: R,
     reference: Option<Arc<dyn ReferenceSequence>>,
-    /// The run's transcripts, which a `c.` or `n.` notation is resolved against.
+    /// The run's transcripts, which a `c.`, `n.` or `p.` notation is resolved
+    /// against.
     transcripts: Option<Arc<dyn TranscriptSource>>,
     /// `--lookup_ref`: the reference allele a notation writes is replaced by
     /// the genome's instead of being checked against it (`-replace_ref`,
@@ -116,20 +118,30 @@ impl<R: BufRead> HgvsParser<R> {
                     self.max_sv_size,
                 )
             }
-            Some('c' | 'n') => {
+            Some(kind @ ('c' | 'n' | 'p')) => {
                 let reference = self.reference.as_ref().ok_or_else(no_reference)?;
                 let Some(transcripts) = &self.transcripts else {
                     return Err(IoError::Unsupported(
                         "Cannot use HGVS transcript notation without a transcript cache".into(),
                     ));
                 };
-                let variant = transcript::variant(
-                    hgvs,
-                    &notation,
-                    reference.as_ref(),
-                    transcripts.as_ref(),
-                    self.lookup_ref,
-                )?;
+                let variant = if kind == 'p' {
+                    protein::variant(
+                        hgvs,
+                        &notation,
+                        reference.as_ref(),
+                        transcripts.as_ref(),
+                        self.lookup_ref,
+                    )?
+                } else {
+                    transcript::variant(
+                        hgvs,
+                        &notation,
+                        reference.as_ref(),
+                        transcripts.as_ref(),
+                        self.lookup_ref,
+                    )?
+                };
                 // Parser/HGVS.pm:219 warns before the base parser's `validate_vf`
                 // (Parser.pm:189) reads the record's span.
                 if let Some(warning) = gene_identifier_warning(hgvs) {
@@ -143,9 +155,6 @@ impl<R: BufRead> HgvsParser<R> {
                     _ => Ok(variant),
                 }
             }
-            Some('p') => Err(IoError::NotImplemented(
-                "protein HGVS is not supported".into(),
-            )),
             Some('r') => Err(IoError::Unsupported(
                 "HGVS r. notation is not supported (Ensembl VEP refuses it too: HGVS type r not recognised)"
                     .into(),
@@ -593,18 +602,17 @@ mod tests {
     }
 
     /// The types Ensembl VEP's resolver knows (VariationFeatureAdaptor.pm:1829,
-    /// 1882, 1900): a `c.` or `n.` notation is resolved through the context's
-    /// transcripts, and stops the run when the context has none; a `p.`
-    /// notation fails its line as unimplemented; a notation with no type
-    /// letter is skipped with Ensembl VEP's `HGVS type  not recognised` (two
-    /// spaces, the empty type).
+    /// 1882, 1900): a `c.`, `n.` or `p.` notation is resolved through the
+    /// context's transcripts, and stops the run when the context has none; a
+    /// notation with no type letter is skipped with Ensembl VEP's `HGVS type
+    /// not recognised` (two spaces, the empty type).
     #[test]
     fn type_letters_dispatch_as_ensembl_vep_dispatches_them() {
         let mut parser = parser(
             "ENST00000366667:c.803C>T\nENST00000366667:n.803C>T\nENSP00000366667:p.Arg97Ter\n\
              21:30282169C>A\n21:g.30282169C>A\n",
         );
-        for _ in 0..2 {
+        for _ in 0..3 {
             let err = parser.next_variant().unwrap().unwrap_err();
             assert!(matches!(err, IoError::Unsupported(_)), "{err:?}");
             assert_eq!(
@@ -612,12 +620,6 @@ mod tests {
                 "Cannot use HGVS transcript notation without a transcript cache"
             );
         }
-        let err = parser.next_variant().unwrap().unwrap_err();
-        assert!(matches!(err, IoError::NotImplemented(_)), "{err:?}");
-        assert_eq!(
-            err.to_string(),
-            "format not implemented: protein HGVS is not supported"
-        );
         let err = parser.next_variant().unwrap().unwrap_err();
         assert!(matches!(err, IoError::SkippedLine(_)), "{err:?}");
         assert_eq!(

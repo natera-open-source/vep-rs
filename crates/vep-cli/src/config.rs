@@ -232,9 +232,9 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     ),
     refused(
         "ambiguous_hgvs",
-        "--ambiguous_hgvs is not supported: it resolves an HGVSp input to every matching variant through the Ensembl database; HGVS input is genomic (g., m.) and transcript (c., n.) notation, each resolved to one variant",
-        "Config.pm:202; Parser/HGVS.pm:178-186, 224 resolves the protein notation through the database",
-        "genomic and transcript HGVS input",
+        "--ambiguous_hgvs is not supported: it resolves an HGVSp input to every matching variant through the Ensembl database; HGVS input is genomic (g., m.), transcript (c., n.) and protein (p.) notation, each resolved to one variant, a protein change with several equally short nucleotide paths skipped with Ensembl VEP's message",
+        "Config.pm:202; Parser/HGVS.pm:178-186, 224 resolves the protein notation to every variant through the database; VariationFeatureAdaptor.pm:1956 refuses an ambiguous one without it",
+        "genomic, transcript and protein HGVS input, one variant per notation",
     ),
     ErrorTableEntry {
         flag: "af_exac",

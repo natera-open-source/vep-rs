@@ -49,7 +49,9 @@
 //! the position undefined and the resolver goes on with it.
 
 use vep_core::coordinate::Strand;
-use vep_core::transcript::{ExonCoordMapper, MappedPiece, MapperPair, Transcript};
+use vep_core::transcript::{
+    ExonCoordMapper, MappedPiece, MapperPair, Transcript, TranscriptMapper,
+};
 use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
@@ -309,7 +311,9 @@ fn genomic_position(
         }
         None => (start_cdna, end_cdna),
     };
-    let pieces = mapper_of(transcript).cdna2genomic(cds_start, cds_end);
+    let pieces = mapper_of(transcript)
+        .exon_coord_mapper
+        .cdna2genomic(cds_start, cds_end);
     let Some(&MappedPiece::Coordinate { strand, .. }) = pieces.first() else {
         return Err(format!(
             "Unable to map the cDNA coordinates {start_cdna}-{end_cdna} to genomic coordinates for Transcript {}",
@@ -353,16 +357,19 @@ fn genomic_position(
     Ok((genomic_start, genomic_end, strand))
 }
 
-/// The transcript's exon mapper: the cached one, else one built from the
-/// exons as `TranscriptMapper::_load_mapper` builds it (one pair per exon in
-/// transcript order, the cDNA running on from exon to exon).
-fn mapper_of(transcript: &Transcript) -> ExonCoordMapper {
+/// The transcript's mapper: the cached one, else one built as
+/// `TranscriptMapper::new` builds it (TranscriptMapper.pm:95-124): the exon
+/// mapper from the exons as `_load_mapper` loads them (one pair per exon in
+/// transcript order, the cDNA running on from exon to exon), the start phase
+/// the first exon's, and the coding bounds the transcript's, zero when it has
+/// none, as Perl's arithmetic reads the undefined bounds.
+pub(super) fn mapper_of(transcript: &Transcript) -> TranscriptMapper {
     if let Some(mapper) = transcript
         .vefc
         .as_ref()
         .and_then(|vefc| vefc.mapper.as_ref())
     {
-        return mapper.exon_coord_mapper.clone();
+        return mapper.clone();
     }
     let mut pairs = Vec::with_capacity(transcript.exons.len());
     let mut cdna_end = 0;
@@ -377,11 +384,16 @@ fn mapper_of(transcript: &Transcript) -> ExonCoordMapper {
             ori: transcript.strand.as_i8(),
         });
     }
-    ExonCoordMapper::new(pairs)
+    TranscriptMapper {
+        start_phase: transcript.exons.first().map_or(-1, |exon| exon.phase),
+        cdna_coding_start: transcript.cdna_coding_start.unwrap_or(0),
+        cdna_coding_end: transcript.cdna_coding_end.unwrap_or(0),
+        exon_coord_mapper: ExonCoordMapper::new(pairs),
+    }
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::super::HgvsParser;
     use super::*;
     use crate::input::{InputParser, ParserContext};
@@ -391,13 +403,13 @@ mod tests {
 
     /// A chromosome `T` of 600 bases reading `ACGT` over and over, so the base
     /// at 1-based `p` is `ACGT[(p - 1) % 4]`, reached as `T` or `chrT`.
-    struct Genome;
+    pub(in super::super) struct Genome;
 
-    fn base(position: u64) -> u8 {
+    pub(in super::super) fn base(position: u64) -> u8 {
         b"ACGT"[((position - 1) % 4) as usize]
     }
 
-    fn complement(base: u8) -> u8 {
+    pub(in super::super) fn complement(base: u8) -> u8 {
         match base {
             b'A' => b'T',
             b'C' => b'G',
@@ -419,7 +431,7 @@ mod tests {
 
     /// The transcripts of a cache, found by stable id as
     /// `fetch_by_stable_id` finds them and by gene symbol.
-    struct Cache(Vec<Transcript>);
+    pub(in super::super) struct Cache(pub(in super::super) Vec<Transcript>);
 
     impl TranscriptSource for Cache {
         fn by_stable_id(&self, stable_id: &str) -> Result<Option<Transcript>, String> {
@@ -439,6 +451,31 @@ mod tests {
                 .cloned())
         }
 
+        fn by_translation_id(&self, stable_id: &str) -> Result<Option<Transcript>, String> {
+            if let Some(found) = self.0.iter().find(|t| {
+                t.translation
+                    .as_ref()
+                    .is_some_and(|p| p.stable_id == stable_id)
+            }) {
+                return Ok(Some(found.clone()));
+            }
+            let Some((id, version)) = stable_id.rsplit_once('.') else {
+                return Ok(None);
+            };
+            let Ok(version) = version.parse::<u32>() else {
+                return Ok(None);
+            };
+            Ok(self
+                .0
+                .iter()
+                .find(|t| {
+                    t.translation
+                        .as_ref()
+                        .is_some_and(|p| p.stable_id == id && p.version == Some(version))
+                })
+                .cloned())
+        }
+
         fn gene_transcripts(&self, name: &str) -> Result<Vec<Vec<Transcript>>, String> {
             let of_source = |source: &str| -> Vec<Transcript> {
                 self.0
@@ -454,7 +491,7 @@ mod tests {
     /// A transcript on chromosome `T` with the given exons in transcript order
     /// (5' to 3') and, for a coding one, the cDNA bounds of its coding
     /// sequence; the exon mapper is cached as the cache stores it.
-    fn transcript(
+    pub(in super::super) fn transcript(
         stable_id: &str,
         strand: Strand,
         exons: &[(u64, u64)],
@@ -474,7 +511,7 @@ mod tests {
             });
         }
         let translation = coding.map(|(start, end)| Translation {
-            stable_id: format!("{stable_id}P"),
+            stable_id: stable_id.replacen("ENST", "ENSP", 1),
             version: None,
             db_id: None,
             start,
@@ -558,7 +595,7 @@ mod tests {
     /// A forward coding transcript: cDNA 1-60 on 101-160, 61-120 on 201-260,
     /// 121-180 on 301-360; the coding sequence is cDNA 21-140, so `c.1` is
     /// genomic 121, `c.100` 260, `c.101` 301 and `c.*1` 321.
-    fn forward() -> Transcript {
+    pub(in super::super) fn forward() -> Transcript {
         transcript(
             "ENST00000000001",
             Strand::Forward,
@@ -570,7 +607,7 @@ mod tests {
     /// A reverse coding transcript: cDNA 1-60 on 501-560 read downward, 61-120
     /// on 401-460; the coding sequence is cDNA 11-100, so `c.1` is genomic 550,
     /// `c.50` 501, `c.51` 460 and `c.*1` 420.
-    fn reverse() -> Transcript {
+    pub(in super::super) fn reverse() -> Transcript {
         transcript(
             "ENST00000000002",
             Strand::Reverse,
@@ -580,7 +617,7 @@ mod tests {
     }
 
     /// A forward non-coding transcript: cDNA 1-40 on 11-50, 41-80 on 61-100.
-    fn non_coding() -> Transcript {
+    pub(in super::super) fn non_coding() -> Transcript {
         transcript(
             "ENST00000000003",
             Strand::Forward,
@@ -589,11 +626,14 @@ mod tests {
         )
     }
 
-    fn context(transcripts: Vec<Transcript>) -> ParserContext {
+    pub(in super::super) fn context(transcripts: Vec<Transcript>) -> ParserContext {
         context_bounded(transcripts, Some(10_000_000))
     }
 
-    fn context_bounded(transcripts: Vec<Transcript>, max_sv_size: Option<u64>) -> ParserContext {
+    pub(in super::super) fn context_bounded(
+        transcripts: Vec<Transcript>,
+        max_sv_size: Option<u64>,
+    ) -> ParserContext {
         ParserContext {
             fasta: Some(Arc::new(Genome)),
             transcripts: Some(Arc::new(Cache(transcripts))),
@@ -602,7 +642,7 @@ mod tests {
         }
     }
 
-    fn read_with(
+    pub(in super::super) fn read_with(
         transcripts: Vec<Transcript>,
         lookup_ref: bool,
         data: &str,

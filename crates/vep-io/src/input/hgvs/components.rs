@@ -1,12 +1,16 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! What the genomic and the transcript branches of Ensembl VEP's
+//! What the genomic, the transcript and the protein branches of Ensembl VEP's
 //! `fetch_by_hgvs_notation` share once a notation's span and strand are known:
 //! the written alleles `get_hgvs_alleles` reads from the description
 //! (ensembl-variation release/116, Utils/Sequence.pm:698-778) and the variant
 //! `_hgvs_from_components` builds from them against the genome
-//! (VariationFeatureAdaptor.pm:2054-2142).
+//! (VariationFeatureAdaptor.pm:2054-2142). The protein branch reads no written
+//! alleles: it hands over the codon bases its paths produced ([`from_alleles`]),
+//! and the rules below then read its description as they read any other, so
+//! its `del` leaves the reference allele as handed over (the type test at
+//! `:2065` names `g`, `c`, `n` and `m` alone) and its `delins` is trimmed.
 //!
 //! The genome bases over the span are read on the variant's strand, as
 //! `$slice->subseq($start, $end, $strand)` reads them, so a transcript
@@ -64,9 +68,10 @@ pub(super) struct Placement {
 }
 
 /// The variant `_hgvs_from_components` builds for `hgvs` at `placement`,
-/// reading the genome bases from `reference`, its written reference allele
-/// replaced by the genome's under `lookup_ref`; named by the notation, with
-/// the notation as its line, minimised and upper-cased.
+/// reading the genome bases from `reference` and the written alleles from the
+/// description, its written reference allele replaced by the genome's under
+/// `lookup_ref`; named by the notation, with the notation as its line,
+/// minimised and upper-cased.
 pub(super) fn variant(
     hgvs: &str,
     notation: &Notation,
@@ -74,7 +79,102 @@ pub(super) fn variant(
     placement: Placement,
     lookup_ref: bool,
 ) -> Result<InputVariant, IoError> {
-    let refuse = |message: String| unable(hgvs, Some(&message));
+    let genome = genome_bases(reference, notation, &placement);
+    let variant = genome.and_then(|genome| {
+        let (reference_allele, alt_allele) =
+            written_alleles(&notation.description, &notation.cleaned)?;
+        build(
+            hgvs,
+            notation,
+            placement,
+            genome,
+            reference_allele,
+            alt_allele,
+            lookup_ref,
+        )
+    });
+    variant.map_err(|message| unable(hgvs, Some(&message)))
+}
+
+/// The variant `_hgvs_from_components` builds for `hgvs` at `placement` from
+/// alleles a branch has already read, the protein branch's codon bases: the
+/// genome bases come from `reference`, and the rest is [`variant`]'s; a
+/// refusal is the resolver's message alone, for the branch to collect.
+pub(super) fn from_alleles(
+    hgvs: &str,
+    notation: &Notation,
+    reference: &dyn ReferenceSequence,
+    placement: Placement,
+    reference_allele: Vec<u8>,
+    alt_allele: Vec<u8>,
+    lookup_ref: bool,
+) -> Result<InputVariant, String> {
+    let genome = genome_bases(reference, notation, &placement)?;
+    build(
+        hgvs,
+        notation,
+        placement,
+        genome,
+        Some(reference_allele),
+        Some(alt_allele),
+        lookup_ref,
+    )
+}
+
+/// The genome bases over the placement's span, read on its strand for the
+/// notation's reference ([`genome_on_strand`]).
+fn genome_bases(
+    reference: &dyn ReferenceSequence,
+    notation: &Notation,
+    placement: &Placement,
+) -> Result<Vec<u8>, String> {
+    genome_on_strand(
+        reference,
+        &notation.reference,
+        &placement.chr,
+        placement.start,
+        placement.end,
+        placement.strand,
+    )
+}
+
+/// The genome bases of `chr` from `start` to `end`, the two in either order,
+/// read on `strand` as `$slice->subseq($start, $end, $strand)` reads them; a
+/// span the reference has no bases for is refused, naming `reference_name`.
+pub(super) fn genome_on_strand(
+    reference: &dyn ReferenceSequence,
+    reference_name: &str,
+    chr: &str,
+    start: i128,
+    end: i128,
+    strand: Strand,
+) -> Result<Vec<u8>, String> {
+    let (low, high) = (start.min(end), start.max(end));
+    let no_bases = || format!("The reference FASTA has no bases at {reference_name}:{low}-{high}");
+    let genome = match u64::try_from(low) {
+        Ok(low) if low >= 1 => reference
+            .sequence(chr, low, high as u64)
+            .ok_or_else(no_bases)?,
+        _ => return Err(no_bases()),
+    };
+    Ok(match strand {
+        Strand::Forward => genome,
+        Strand::Reverse => reverse_complement(&genome),
+    })
+}
+
+/// `_hgvs_from_components` from the point its alleles are known: the
+/// description's shape read in its order, the reference allele checked or
+/// replaced, and the record built.
+fn build(
+    hgvs: &str,
+    notation: &Notation,
+    placement: Placement,
+    genome: Vec<u8>,
+    mut reference_allele: Written,
+    mut alt_allele: Written,
+    lookup_ref: bool,
+) -> Result<InputVariant, String> {
     let Placement {
         chr,
         mut start,
@@ -82,25 +182,6 @@ pub(super) fn variant(
         strand,
     } = placement;
     let description = notation.description.as_str();
-    let (low, high) = (start.min(end), start.max(end));
-    let no_bases = || {
-        refuse(format!(
-            "The reference FASTA has no bases at {}:{low}-{high}",
-            notation.reference
-        ))
-    };
-    let genome = match u64::try_from(low) {
-        Ok(low) if low >= 1 => reference
-            .sequence(&chr, low, high as u64)
-            .ok_or_else(no_bases)?,
-        _ => return Err(no_bases()),
-    };
-    let genome = match strand {
-        Strand::Forward => genome,
-        Strand::Reverse => reverse_complement(&genome),
-    };
-    let (mut reference_allele, mut alt_allele) =
-        written_alleles(description, &notation.cleaned).map_err(refuse)?;
     let text = |allele: &Written| {
         String::from_utf8_lossy(allele.as_deref().unwrap_or_default()).into_owned()
     };
@@ -127,9 +208,7 @@ pub(super) fn variant(
         alt_allele = Some(genome.clone());
     } else if lower.contains("ins") && lower.contains("del") {
         let (Some(reference_bases), Some(alt_bases)) = (&reference_allele, &alt_allele) else {
-            return Err(refuse(
-                "Missing reference or alternate sequence".to_string(),
-            ));
+            return Err("Missing reference or alternate sequence".to_string());
         };
         let (trimmed_reference, trimmed_alt) =
             trim(reference_bases, alt_bases, &mut start, &mut end, strand);
@@ -137,10 +216,10 @@ pub(super) fn variant(
         alt_allele = Some(trimmed_alt);
     } else if lower.contains("ins") {
         if alt_allele.is_none() {
-            return Err(refuse(format!(
+            return Err(format!(
                 "The insertion in HGVS notation {} names no bases",
                 notation.cleaned
-            )));
+            ));
         }
         if end > start {
             std::mem::swap(&mut start, &mut end);
@@ -152,33 +231,33 @@ pub(super) fn variant(
         if lookup_ref {
             reference_allele = Some(genome.clone());
         } else if *written != genome {
-            return Err(refuse(format!(
+            return Err(format!(
                 "{} does not match reference allele given by HGVS notation {} ({})",
                 extracted(start, end),
                 notation.cleaned,
                 text(&reference_allele)
-            )));
+            ));
         }
     }
     if reference_allele.is_some() && reference_allele == alt_allele {
-        return Err(refuse(format!(
+        return Err(format!(
             "{} matches alt allele given by HGVS notation {} ({})",
             extracted(start, end),
             notation.cleaned,
             text(&alt_allele)
-        )));
+        ));
     }
     if start > end + 1 {
-        return Err(refuse(format!(
+        return Err(format!(
             "Start ({start}) must be less than or equal to end+1 ({})",
             end + 1
-        )));
+        ));
     }
     let (Ok(start), Ok(end)) = (u64::try_from(start), u64::try_from(end)) else {
-        return Err(refuse(format!(
+        return Err(format!(
             "Could not parse the HGVS notation {}",
             notation.cleaned
-        )));
+        ));
     };
     let mut variant = InputVariant::new(
         chr,

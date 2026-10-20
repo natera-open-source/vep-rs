@@ -6,14 +6,14 @@
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "reference.fa.gz",
- "input": "56 hand-built records on chromosome 21 and MT as a VCF (variants.vcf), each named by the HGVS notation it is the twin of, and, record for record in the same order, those notations (variants.hgvs.txt), each a g., m., c. or n. shape Ensembl VEP resolves through its database. The genomic notations: on KRTAP24-1 a stop-lost SNV written five ways (the plain notation, a lower-case alternate, the NC_000021.9 accession, the chr21 spelling and a (p.=) suffix), a missense and a synonymous SNV, an in-frame three-base deletion, a one-base frameshift deletion, a one-base frameshift insertion, a twenty-base deletion, a three-base delins and a three-base inversion of the same codon, a delins trimmed to the SNV and a one-for-two delins; on KRTAP25-1 a one-base duplication written as dup and as an insertion with its positions reversed; the stop-retained deletion on KRTAP26-1; the stop-lost deletion on KRTAP23-1, twice (its notation lists the deleted bases rightly and then wrongly); the five-base duplication and insertion on KRTAP13-4; the MT-ATP6 missense and the MT-TL1 tRNA SNV; an intergenic SNV. The transcript notations: on the forward-strand CRYAA MANE Select transcript a coding substitution written by stable id, by versioned id and with a gene qualifier, a start-lost substitution, a 5' UTR and a 3' UTR substitution, an intronic substitution past the first donor and one before the second acceptor, an in-frame deletion, a duplication, an insertion, a deletion-insertion, an inversion and a deletion spanning the first intron; the same shapes on the reverse-strand TFF3 MANE Select transcript; on two lncRNA transcripts of either strand a substitution, an intronic substitution and a deletion, and a 3' UTR position written on a non-coding transcript",
+ "input": "76 hand-built records on chromosome 21 and MT as a VCF (variants.vcf), each named by the HGVS notation it is the twin of, and, record for record in the same order, those notations (variants.hgvs.txt), each a g., m., c., n. or p. shape Ensembl VEP resolves through its database. The genomic notations: on KRTAP24-1 a stop-lost SNV written five ways (the plain notation, a lower-case alternate, the NC_000021.9 accession, the chr21 spelling and a (p.=) suffix), a missense and a synonymous SNV, an in-frame three-base deletion, a one-base frameshift deletion, a one-base frameshift insertion, a twenty-base deletion, a three-base delins and a three-base inversion of the same codon, a delins trimmed to the SNV and a one-for-two delins; on KRTAP25-1 a one-base duplication written as dup and as an insertion with its positions reversed; the stop-retained deletion on KRTAP26-1; the stop-lost deletion on KRTAP23-1, twice (its notation lists the deleted bases rightly and then wrongly); the five-base duplication and insertion on KRTAP13-4; the MT-ATP6 missense and the MT-TL1 tRNA SNV; an intergenic SNV. The transcript notations: on the forward-strand CRYAA MANE Select transcript a coding substitution written by stable id, by versioned id and with a gene qualifier, a start-lost substitution, a 5' UTR and a 3' UTR substitution, an intronic substitution past the first donor and one before the second acceptor, an in-frame deletion, a duplication, an insertion, a deletion-insertion, an inversion and a deletion spanning the first intron; the same shapes on the reverse-strand TFF3 MANE Select transcript; on two lncRNA transcripts of either strand a substitution, an intronic substitution and a deletion, and a 3' UTR position written on a non-coding transcript. The protein notations: on the CRYAA translation a missense substitution written by translation id, by versioned id, by an id with a version the release does not carry and with one-letter codes, and by the transcript id with p.; a two-base substitution to tryptophan; a substitution of the first and third codon base, which carries the unchanged middle base; a synonymous change; a stop gained written as Ter and as *; a stop lost; a delins without and with the written residue; a deletion of one residue and of a range; on the reverse-strand TFF3 translation a missense substitution, a stop gained, a synonymous change, a deletion of two residues and a substitution of the residue whose codon spans the first intron; and a substitution on a TFF3 translation whose coding sequence opens in phase 2",
  "sha256": {
-  "default.txt": "11bafa284e697adc4c0e2b51bf7b22e3b2e66f41a146bcc80e1cfbe70f974f10",
-  "tab.txt": "00f300b42c2e93c320734be026d0c4acd6e943297debbd9abaa309d101fa673c",
-  "vcf.vcf": "1fd7e9a85c98506d4f89a20658456161f806b29acff889671b3746a4ba3ab100",
-  "json.jsonl": "452af46d5096c2eb8c8d0133ee070eb6ad0298b7d8615c82ca8ce1a481da3255"
+  "default.txt": "a40ef834567863027501fdc6fb6656bf41805bbd91d944e763c3dfe19174f010",
+  "tab.txt": "7c03b4f1e4a75c898abaa4d1bdecc0beff447576df3cd0ca5585403fd4c2db99",
+  "vcf.vcf": "6b42e6f597140935df67687ea08456fdfdd1b688b601ab419684ed8a7f93e77e",
+  "json.jsonl": "93f5663ba8c9a1d2a0696a84a1b6d1b897adbfeb407014924c8ad26a6049fc41"
  },
- "variants_vcf_sha256": "2511d3fcebbf89ac0d39f3d24dd0cf96d737fe74417915cad53a0cfebe9c7763",
+ "variants_vcf_sha256": "bb79917108d0a35d506710bebf6facb09f4e5367e17ffd39ef7b34733c328e43",
  "flag_sets": {
   "hgvs": {
    "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
@@ -30,10 +30,10 @@
    "input": "variants.hgvs.txt",
    "expected_dir": "expected_hgvs",
    "sha256": {
-    "default.txt": "8fbc7ca0920204dc188a56822323cc19e46dee43464906687249284dd280a6e4",
-    "tab.txt": "4d4ba816d77d7e72f02e1e5636f54a74426d0ce53a7bce624dbf0301309f80ae",
-    "vcf.vcf": "85ea5da897e2b873683b704ab09f6a9eb1daa50a1d63713a91d52c5aec3f9757",
-    "json.jsonl": "0a93ea2cab5840ee64d14270d94ac4286c2370e3e9362335ccd55785107d634e"
+    "default.txt": "4100446cc5598340a2263acfd27f1eb2190595e6047228494262451ddbe66715",
+    "tab.txt": "d3e5b2085cc5f980704c41492ab1e7839e675bc96d0ee17808689bfc03f669d2",
+    "vcf.vcf": "77753a343670af23fdfc462ea27984879f3ac0eec696455a1ef708cee0ea7f6b",
+    "json.jsonl": "0a1e03c6f2a2b62c54e11f33eab293b9a252b86208f91f4749d8d22ac51608fd"
    },
    "database_snapshot": "Ensembl release 116 (db_version 116): the release databases are fixed snapshots, so the run reads the same transcripts and sequence whenever it is repeated"
   },
@@ -52,15 +52,15 @@
    "input": "variants.hgvs.txt",
    "expected_dir": "expected_hgvs",
    "sha256": {
-    "default.txt": "8fbc7ca0920204dc188a56822323cc19e46dee43464906687249284dd280a6e4",
-    "tab.txt": "4d4ba816d77d7e72f02e1e5636f54a74426d0ce53a7bce624dbf0301309f80ae",
-    "vcf.vcf": "85ea5da897e2b873683b704ab09f6a9eb1daa50a1d63713a91d52c5aec3f9757",
-    "json.jsonl": "0a93ea2cab5840ee64d14270d94ac4286c2370e3e9362335ccd55785107d634e"
+    "default.txt": "4100446cc5598340a2263acfd27f1eb2190595e6047228494262451ddbe66715",
+    "tab.txt": "d3e5b2085cc5f980704c41492ab1e7839e675bc96d0ee17808689bfc03f669d2",
+    "vcf.vcf": "77753a343670af23fdfc462ea27984879f3ac0eec696455a1ef708cee0ea7f6b",
+    "json.jsonl": "0a1e03c6f2a2b62c54e11f33eab293b9a252b86208f91f4749d8d22ac51608fd"
    },
    "database_snapshot": "Ensembl release 116 (db_version 116): the release databases are fixed snapshots, so the run reads the same transcripts and sequence whenever it is repeated",
    "expected_outputs": "the hgvs set's files (expected_hgvs): Ensembl VEP detects the format from the first data line, so its output for the input without --format is the output of the hgvs set"
   }
  },
- "variants_hgvs_txt_sha256": "6f56464137716764a6af86190a3f5850103a52aa96fca1b2936c4663bcf93024",
+ "variants_hgvs_txt_sha256": "3dc1b3bb44daa7b33d0a9e2a98cd6202a2a4c2496ad9526e630af0cffd573844",
  "generator": "variants.vcf and manifest.json by scripts/golden/build_golden_corpus.py select over Ensembl VEP's default output for the VCF, variants.hgvs.txt its ID column; expected/ by scripts/concordance/generate_reference_output.sh --corpus; expected_hgvs/ by one container run per format of the same image in database mode (--database --db_version 116, no cache, no FASTA) on variants.hgvs.txt, the four outputs gzipped and their sha256 recorded under flag_sets; json_cache by scripts/golden/prune_json_cache.py over the release-116 GRCh38 cache (--drop sorted_exons --drop protein_features --drop protein_function_predictions); reference.fa.gz is GRCh38 chromosome 21 with every base outside 2,000 bases of a record masked to N, and MT whole, bgzip-compressed with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form"
 }

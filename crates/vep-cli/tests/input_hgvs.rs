@@ -1,10 +1,10 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! How the `vep` binary reads HGVS genomic and transcript notation: the format
-//! needs the reference FASTA, each notation annotates as its VCF twin does and
-//! is named by itself, a notation Ensembl VEP cannot resolve is skipped with
-//! its warning, a gene name as the reference is warned about, and
+//! How the `vep` binary reads HGVS genomic, transcript and protein notation:
+//! the format needs the reference FASTA, each notation annotates as its VCF
+//! twin does and is named by itself, a notation Ensembl VEP cannot resolve is
+//! skipped with its warning, a gene name as the reference is warned about, and
 //! `--max_sv_size` bounds the span a genomic notation may describe.
 
 use std::collections::BTreeMap;
@@ -162,8 +162,8 @@ fn hgvs_records_annotate_as_their_vcf_twins_and_are_named_by_the_notation() {
         .lines()
         .map(str::to_string)
         .collect();
-    assert_eq!(notations.len(), 56);
-    assert_eq!(twins.len(), 56);
+    assert_eq!(notations.len(), 76);
+    assert_eq!(twins.len(), 76);
     for (label, extra) in [("explicit", &["--format", "hgvs"][..]), ("guess", &[][..])] {
         let hgvs_rows = annotate(
             dir.path(),
