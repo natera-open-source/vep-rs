@@ -4,7 +4,7 @@
 //! Variant types: input variants and co-located known variants.
 
 use std::borrow::Cow;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use crate::consequence::{Consequence, ConsequenceList, TranscriptConsequence};
 use crate::coordinate::{normalize_chromosome, Strand};
@@ -461,9 +461,23 @@ pub struct InputVariant {
     /// The individual carries no alternate allele of the record
     /// (`Parser/VCF.pm:643`): `ZYG` ends in `REF`, and the copy is the reference
     /// alone, the record's reference row under `--process_ref_homs` or a feature
-    /// with no allele to annotate otherwise.
+    /// with no allele to annotate otherwise. Also the record read under
+    /// `--individual_zyg` for one named sample carrying no alternate allele, whose
+    /// allele string Ensembl VEP sets to the reference twice (`:727-730`), so the
+    /// row is the reference row and prints the reference's SPDI as such a copy does.
     #[serde(default)]
     pub hom_ref: bool,
+    /// The named samples' zygosities of the record under `--individual_zyg`
+    /// (`Parser/VCF.pm:683-743`): one entry per sample whose genotype is called,
+    /// each name once, in the order the flag names them (the header's under
+    /// `all`), which every format prints as the `ZYG` list (Ensembl VEP lists
+    /// them in hash order, `OutputFactory.pm:983`). `None` for a record read
+    /// without the flag or for a structural record, which is annotated before the
+    /// per-sample step (`Parser/VCF.pm:244`); empty when no named sample's
+    /// genotype is called, so the record prints no `ZYG`. One buffer shared by
+    /// every allele of the record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_zygosities: Option<Arc<ZygosityList>>,
     /// The record's reference-allele row under `--process_ref_homs`: the allele is
     /// the reference itself, numbered 0 and listed before the alternates of every
     /// feature (`OutputFactory.pm:509-516`, `VariationFeatureOverlap.pm:469-474`,
@@ -541,6 +555,7 @@ impl Default for InputVariant {
             genotype: Vec::new(),
             copy_ordinal: 0,
             hom_ref: false,
+            sample_zygosities: None,
             reference_allele_row: false,
         }
     }
@@ -631,6 +646,7 @@ impl InputVariant {
             genotype: Vec::new(),
             copy_ordinal: 0,
             hom_ref: false,
+            sample_zygosities: None,
             reference_allele_row: false,
         }
     }
@@ -681,22 +697,12 @@ impl InputVariant {
             && self.uploaded_allele_string == other.uploaded_allele_string
     }
 
-    /// The `ZYG` value of an individual's copy (`OutputFactory.pm:974-976`): `HET`
-    /// when the genotype holds more than one distinct allele, else `HOM` (a
-    /// genotype with no called allele included), with `REF` appended when the
-    /// individual carries no alternate allele; `None` for an allele that is no
+    /// The `ZYG` value of an individual's copy (`OutputFactory.pm:974-976`):
+    /// the [`Zygosity`] of its genotype; `None` for an allele that is no
     /// individual's copy.
     pub fn zygosity(&self) -> Option<String> {
         self.individual.as_ref()?;
-        let heterozygous = match self.genotype.split_first() {
-            Some((first, rest)) => rest.iter().any(|allele| allele != first),
-            None => false,
-        };
-        let mut zyg = String::from(if heterozygous { "HET" } else { "HOM" });
-        if self.hom_ref {
-            zyg.push_str("REF");
-        }
-        Some(zyg)
+        Some(Zygosity::of(&self.genotype, self.hom_ref).to_string())
     }
 
     /// The record's reference-allele row (`--process_ref_homs`): the allele is
@@ -760,6 +766,7 @@ impl InputVariant {
         row.copy_ordinal = self.copy_ordinal;
         row.genotype.clone_from(&self.genotype);
         row.hom_ref = self.hom_ref;
+        row.sample_zygosities.clone_from(&self.sample_zygosities);
         row.reference_allele_row = true;
         row
     }
@@ -1295,6 +1302,129 @@ pub fn ambiguity_code(allele_string: &str) -> Option<u8> {
         "G" => Some(b'G'),
         "-" => Some(b'-'),
         _ => None,
+    }
+}
+
+/// The `ZYG` value of one genotype (`OutputFactory.pm:974-976` and `:984-985` at
+/// release/116.2): `HET` when the called alleles hold more than one distinct
+/// value, else `HOM` (a genotype with no called allele included), with `REF`
+/// appended when the individual carries no alternate allele of the record.
+/// Serialised as the printed label, so a serialised [`InputVariant`] names the
+/// zygosity as every output format does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Zygosity {
+    Het,
+    Hom,
+    HetRef,
+    HomRef,
+}
+
+impl Zygosity {
+    /// The value for `genotype`, the called alleles as strings, and whether the
+    /// individual carries no alternate allele.
+    pub fn of<A: AsRef<str>>(genotype: &[A], hom_ref: bool) -> Self {
+        let heterozygous = match genotype.split_first() {
+            Some((first, rest)) => rest.iter().any(|allele| allele.as_ref() != first.as_ref()),
+            None => false,
+        };
+        match (heterozygous, hom_ref) {
+            (true, false) => Zygosity::Het,
+            (false, false) => Zygosity::Hom,
+            (true, true) => Zygosity::HetRef,
+            (false, true) => Zygosity::HomRef,
+        }
+    }
+
+    /// The value as the output prints it.
+    pub fn label(self) -> &'static str {
+        match self {
+            Zygosity::Het => "HET",
+            Zygosity::Hom => "HOM",
+            Zygosity::HetRef => "HETREF",
+            Zygosity::HomRef => "HOMREF",
+        }
+    }
+}
+
+impl std::fmt::Display for Zygosity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+/// One named sample's zygosity of a record under `--individual_zyg`
+/// (`Parser/VCF.pm:723-737` stores the genotype and the reference-homozygous mark
+/// per sample; `OutputFactory.pm:981-987` prints them), one entry of the `ZYG`
+/// list, written `sample:ZYG`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SampleZygosity {
+    /// The sample's name, as the `#CHROM` header spells it.
+    pub sample: Arc<str>,
+    pub zygosity: Zygosity,
+}
+
+impl std::fmt::Display for SampleZygosity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.sample, self.zygosity)
+    }
+}
+
+/// The `ZYG` list of a record under `--individual_zyg`, shared by every row of the
+/// record: its entries, and the list as each text format joins it, rendered once
+/// per separator since a many-sample record writes the same list on every row.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct ZygosityList {
+    pub entries: Vec<SampleZygosity>,
+    #[serde(skip)]
+    comma_joined: OnceLock<String>,
+    #[serde(skip)]
+    ampersand_joined: OnceLock<String>,
+}
+
+impl ZygosityList {
+    pub fn new(entries: Vec<SampleZygosity>) -> Self {
+        Self {
+            entries,
+            comma_joined: OnceLock::new(),
+            ampersand_joined: OnceLock::new(),
+        }
+    }
+
+    /// The entries joined by `separator`: `,` as the default and tab formats
+    /// join a list, `&` as the VCF's CSQ does, each rendered once.
+    pub fn joined(&self, separator: &str) -> Cow<'_, str> {
+        let render = || {
+            let mut out = String::new();
+            for (index, entry) in self.entries.iter().enumerate() {
+                if index > 0 {
+                    out.push_str(separator);
+                }
+                out.push_str(&entry.sample);
+                out.push(':');
+                out.push_str(entry.zygosity.label());
+            }
+            out
+        };
+        match separator {
+            "," => Cow::Borrowed(self.comma_joined.get_or_init(render)),
+            "&" => Cow::Borrowed(self.ampersand_joined.get_or_init(render)),
+            _ => Cow::Owned(render()),
+        }
+    }
+}
+
+impl PartialEq for ZygosityList {
+    fn eq(&self, other: &Self) -> bool {
+        self.entries == other.entries
+    }
+}
+
+impl Eq for ZygosityList {}
+
+impl Clone for ZygosityList {
+    fn clone(&self) -> Self {
+        Self::new(self.entries.clone())
     }
 }
 

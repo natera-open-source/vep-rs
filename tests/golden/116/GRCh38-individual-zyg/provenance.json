@@ -1,0 +1,104 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "2f1b3f1b3ea309adab395804b1715e65",
+  "arch": "arm64",
+  "flags_passed": [
+   "--allow_non_variant"
+  ]
+ },
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allow_non_variant [--tab|--vcf|--json]",
+ "perl_environment": "PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0 on every container run, so the ZYG list of --individual_zyg, a hash order, is the same on every run",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "128 records of the 1000 Genomes high-coverage chromosome 21 phased panel (GRCh38; FORMAT and the first eight sample columns kept, the sample columns renamed S1 to S8 in column order) sampled by consequence combination and by the genotype classes those samples show (seed 2), and 14 hand-built records at chromosome 21 sites of the same panel whose genotypes and extra alleles are synthetic (the IDs beginning hb_), among them one record whose S1 is reference-homozygous and every other sample missing. The sample names S1 to S8 are labels of the corpus, not of any individual.",
+ "generator": "build_golden_corpus.py select --keep-samples 8 --genotype-exemplars 8 --k 1 --seed 2 --multi-allelic-per-suite 0 --require-genotype-class one_hom_ref_rest_missing over the two inputs; json_cache: prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions from the GRCh38 release-116 JSON cache; expected outputs: one Ensembl VEP 116.2 container run per format per set.",
+ "sha256": {
+  "default.txt": "7f0a3b15bd85c00b7214b5cfeb2840364e88fd89d1c54f5b13bd00e67d2c5358",
+  "tab.txt": "cdfc4884b539fc9a16511613019123fedb29606cb2a3ecb5709d882cd0d4e23e",
+  "vcf.vcf": "352365c61873acf697fe93271a3a83ef1add6af0f157c4437104ba3b161e633f",
+  "json.jsonl": "3e2cbcbb21911c59ec9b0f350138d0662c01e5da815d89ee26dc30a5932227bb"
+ },
+ "variants_vcf_sha256": "8026ea1894b2654cd999e30c76b91c6b61b95dbe79e45b0667f8084de2f0b352",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 1932
+  },
+  "shards": 30,
+  "spans_by_chromosome": {
+   "21": 142
+  },
+  "chr_synonyms": "the chromosome 21 lines of homo_sapiens/116_GRCh38/chr_synonyms.txt"
+ },
+ "flag_sets": {
+  "individual-zyg": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --individual_zyg all [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_individual-zyg",
+   "sha256": {
+    "default.txt": "001d16f7af30c83ffa33a209d71a43082a0dd56b7185ff428823ad367364ab28",
+    "tab.txt": "3e4e1adf20e41d3694affe29b5c36bd7289c2a528f1cf7910af1803c6d598077",
+    "vcf.vcf": "3b7658e1cea38035300db836d66c2128a900bac3bb0a49374102b33ebf4e0a51",
+    "json.jsonl": "aab30b1bee99697eae12c93449b2eab7edcc4ac3ecb80e8000ed409e63940cdd"
+   }
+  },
+  "individual-zyg-one": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --individual_zyg S1 [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_individual-zyg-one",
+   "sha256": {
+    "default.txt": "255e0bc540a0022e0046ae3e664fb0e83c81e183f70548aad752cd9a93790e83",
+    "tab.txt": "2847b7020715ceb8cc11dd90da8046990b96889267b6cd24b711ac2ac981a80a",
+    "vcf.vcf": "94c31de0edac05a4c80644a6423af3b6c10830d708f927f1f73df021a0cb9376",
+    "json.jsonl": "0f701a215ed6c0dd3f59dd4db4b5cc18847df1e7efebc9d8355990b7f74b7096"
+   }
+  },
+  "individual-zyg-one-fields": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --individual_zyg S1 --process_ref_homs --variant_class --allele_number --show_ref_allele --uploaded_allele [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_individual-zyg-one-fields",
+   "sha256": {
+    "default.txt": "df8c73606e6c2acc2f1c64ded64f1368fb6f60f7abd7db9dc4ef298f4d7fb824",
+    "tab.txt": "acf93e5edb902a8991eb359959af9ad7a2d3bf7ea17088d8a7a8381789380f12",
+    "vcf.vcf": "79215d278a1a739757fcdbfb5642c71130ea66ad5a513b3ca088ef815d496897",
+    "json.jsonl": "e8ed4421d44f32d1af8382b523dd502ffbcb63a1618080341386ce0ebe2b8821"
+   }
+  },
+  "individual-zyg-one-minimal": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --individual_zyg S1 --minimal --allele_number --show_ref_allele --uploaded_allele --variant_class [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_individual-zyg-one-minimal",
+   "sha256": {
+    "default.txt": "d5e6ca8e7f22009934a5f4c1f7b9147c239e71709c7df55ca3e909ce7e9cbaff",
+    "tab.txt": "411260ff97a6cf00dd2d1547f5305980ec5c8fe86ba7d5ffcefe843cc69f03aa",
+    "vcf.vcf": "65800a68267d43e0ee2d0a94083dbffdbab4a4baacce59d9fe4541197e64ca7c",
+    "json.jsonl": "d39522168ad97324fedf6f13408b784733c2fbda825f219b1f7ca7ba0174821a"
+   }
+  }
+ }
+}

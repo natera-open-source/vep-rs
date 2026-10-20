@@ -1514,6 +1514,16 @@ def test_classify_applies_the_runs_own_masks(tmp_path: Path):
     assert classify(reordered) == {"fields": {"unexplained_residual": 1}, "vep_only": {"unexplained_residual": 1}}
 
 
+def test_order_only_compares_the_zyg_list_as_a_multiset():
+    """Under `order_only` the `ZYG` list of `--individual_zyg` agrees in any order of its
+    `sample:ZYG` items (Ensembl VEP prints it in hash order), while an item that differs,
+    or the same list without the mask, is a field divergence."""
+    assert bgc.fields_agree("ZYG", "S7:HOMREF,S4:HET,S1:HOM", "S1:HOM,S4:HET,S7:HOMREF", True)
+    assert not bgc.fields_agree("ZYG", "S7:HOMREF,S4:HET,S1:HOM", "S1:HOM,S4:HETREF,S7:HOMREF", True)
+    assert not bgc.fields_agree("ZYG", "S7:HOMREF,S4:HET,S1:HOM", "S1:HOM,S4:HET,S7:HOMREF", False)
+    assert "ZYG" in bgc.ORDER_ONLY_COLUMNS
+
+
 def test_classify_writes_a_flag_sets_divergences_into_its_entry(tmp_path: Path, capsys):
     """`classify --flag-set` documents that set's run: its divergence keys land in the entry, the
     manifest's own stay as they were, and the default run's `--flag` option is refused."""

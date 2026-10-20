@@ -37,6 +37,7 @@ use crate::config::{
 };
 use crate::filter_set::FilterSet;
 use crate::frequency_filter::{check_frequency_filter, FrequencyFilter};
+use crate::individuals::{IndividualMode, IndividualRequest};
 use crate::input_shape::InputShape;
 use crate::nearest::NearestType;
 use crate::output_compress::OutputCompression;
@@ -872,6 +873,7 @@ impl Runner {
             // (Constants.pm:75-77); the removing variants add no column.
             include_pick: c.flag_pick || c.flag_pick_allele || c.flag_pick_allele_gene,
             individual: c.individual.is_some(),
+            individual_zyg: c.individual_zyg.is_some(),
             process_ref_homs: c.process_ref_homs,
             coding_only: c.coding_only,
             variant_class: c.variant_class,
@@ -1371,17 +1373,22 @@ impl Runner {
             fasta: reference_fasta.as_deref(),
             parser_names_records,
         };
-        let individual_request = self
-            .config
-            .individual
-            .as_deref()
-            .map(crate::individuals::IndividualRequest::from_list);
+        // `--individual` decides the reading when both flags are given under
+        // `--safe` (Parser/VCF.pm:360 tests it first).
+        let individuals = match (&self.config.individual, &self.config.individual_zyg) {
+            (Some(names), _) => Some((IndividualRequest::from_list(names), IndividualMode::Copies)),
+            (None, Some(names)) => Some((
+                IndividualRequest::from_list(names),
+                IndividualMode::Zygosities,
+            )),
+            (None, None) => None,
+        };
         let reader_cfg = pipeline::ReaderConfig {
             batch_size,
             capture_raw_input,
             delimiter: &delimiter,
             allow_non_variant: self.config.allow_non_variant,
-            individual: individual_request.as_ref(),
+            individuals: individuals.as_ref().map(|(request, mode)| (request, *mode)),
             process_ref_homs: self.config.process_ref_homs,
             dont_skip: self.config.dont_skip,
             max_sv_size: self.config.max_sv_size,

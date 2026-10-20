@@ -1,8 +1,8 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! The per-individual reading of a VCF record (`--individual`) and the
-//! reference-allele row of `--process_ref_homs`.
+//! The per-individual readings of a VCF record (`--individual` and
+//! `--individual_zyg`) and the reference-allele row of `--process_ref_homs`.
 //!
 //! Ensembl VEP builds one variation feature per record, then copies it once per
 //! named individual with that individual's genotype (`Parser/VCF.pm:355-376` and
@@ -17,6 +17,12 @@
 //! individual carries, each marked with the individual's name and genotype, laid
 //! out one copy after another in the individuals' order.
 //!
+//! Under `--individual_zyg` the record stays one feature and every named
+//! individual's genotype is read onto it (`create_individuals_zyg_VariationFeature`,
+//! `:683-743`): the feature's `ZYG` lists each individual's zygosity, and when
+//! the list names one individual carrying no alternate allele the feature is the
+//! reference allele alone (`:727-730`, `OutputFactory.pm:506-508`).
+//!
 //! `--process_ref_homs` adds the reference allele's row to every feature of every
 //! sequence record (`OutputFactory.pm:509-516`), first among the feature's
 //! alleles and numbered 0 (`VariationFeatureOverlap.pm:469-474`,
@@ -27,7 +33,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use vep_core::sv_routing::perl_split;
-use vep_core::variant::{keeps_uploaded_spelling, InputVariant};
+use vep_core::variant::{
+    keeps_uploaded_spelling, InputVariant, SampleZygosity, Zygosity, ZygosityList,
+};
 use vep_core::variation::perl_numeric;
 
 use crate::vcf_parser::{SampleColumns, VcfColumns};
@@ -91,9 +99,21 @@ impl IndividualRequest {
     }
 }
 
-/// How a record's lines are split per individual: the individuals to read, as
+/// What a run reads the named individuals' genotypes for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndividualMode {
+    /// `--individual`: one copy of the record per individual
+    /// (`Parser/VCF.pm:595-665`).
+    Copies,
+    /// `--individual_zyg`: the record once, every individual's zygosity in its
+    /// `ZYG` list (`:683-743`).
+    Zygosities,
+}
+
+/// How a record's lines are read per individual: the individuals to read, as
 /// [`IndividualRequest::resolve`] resolved them against the input's header, with
-/// their sample column indices, and whether the records carry genotypes at all.
+/// their sample column indices, what their genotypes are read for, and whether
+/// the records carry genotypes at all.
 #[derive(Debug, Clone)]
 pub struct IndividualSplit {
     /// The individuals in their output order, each with its 0-based sample
@@ -102,19 +122,36 @@ pub struct IndividualSplit {
     /// Whether the header's ninth column is `FORMAT`; without it no record yields a
     /// genotype and no copy is written (BaseVCF4.pm:98, :614-618).
     genotyped: bool,
+    /// Whether a name is listed twice, so a `ZYG` list has to drop the repeat
+    /// (Ensembl VEP keys the entries by name, `Parser/VCF.pm:737`); `all` never
+    /// repeats one.
+    repeats_a_name: bool,
+    mode: IndividualMode,
 }
 
 impl IndividualSplit {
     /// The split for `request` over a header's sample `columns`; `Err` is Ensembl
     /// VEP's message for a list naming an unknown sample.
-    pub fn new(request: &IndividualRequest, columns: &SampleColumns) -> Result<Self, String> {
+    pub fn new(
+        request: &IndividualRequest,
+        columns: &SampleColumns,
+        mode: IndividualMode,
+    ) -> Result<Self, String> {
+        let individuals = request.resolve(columns)?;
+        let mut names: Vec<&str> = individuals.iter().map(|(name, _)| &**name).collect();
+        names.sort_unstable();
+        let repeats_a_name = names.windows(2).any(|pair| pair[0] == pair[1]);
         Ok(Self {
-            individuals: request.resolve(columns)?,
+            individuals,
             genotyped: columns.genotyped,
+            repeats_a_name,
+            mode,
         })
     }
 
-    /// The number of copies a record yields at most, one per individual listed.
+    /// The number of individuals listed, a repeated name counted each time: the
+    /// copies a record yields at most under `--individual`, and Ensembl VEP's
+    /// `$n_individuals` under `--individual_zyg` (`Parser/VCF.pm:710`).
     pub fn len(&self) -> usize {
         self.individuals.len()
     }
@@ -122,6 +159,16 @@ impl IndividualSplit {
     /// Whether no individual is listed.
     pub fn is_empty(&self) -> bool {
         self.individuals.is_empty()
+    }
+
+    /// The features a line yields at most, which Ensembl VEP's buffer counts
+    /// (InputBuffer.pm:212): one copy per individual listed under `--individual`,
+    /// the one record under `--individual_zyg`.
+    pub fn features_per_line(&self) -> usize {
+        match self.mode {
+            IndividualMode::Copies => self.len().max(1),
+            IndividualMode::Zygosities => 1,
+        }
     }
 }
 
@@ -134,26 +181,42 @@ pub struct RecordReading<'a> {
 }
 
 impl RecordReading<'_> {
-    /// The alleles the record writes: its individuals' copies, or the record
-    /// itself with the reference row when `--process_ref_homs` asks for one.
+    /// The alleles the record writes: its individuals' copies, the record with its
+    /// individuals' zygosities, or the record itself with the reference row when
+    /// `--process_ref_homs` asks for one. `minimal` is the run's `--minimal`, which
+    /// decides whether a reading prints the record's uploaded string as
+    /// `UPLOADED_ALLELE` ([`keeps_uploaded_spelling`]).
     pub fn finish_record(
         &self,
         mut record: Vec<InputVariant>,
         alleles: &RecordAlleles<'_>,
         columns: &VcfColumns<'_>,
+        minimal: bool,
     ) -> Vec<InputVariant> {
-        match self.individuals {
-            Some(split) => {
-                split_by_individual(record, alleles, columns, split, self.process_ref_homs)
+        let Some(split) = self.individuals else {
+            if self.process_ref_homs {
+                add_reference_allele_row(&mut record);
             }
-            None => {
-                if self.process_ref_homs {
-                    add_reference_allele_row(&mut record);
-                }
-                record
-            }
+            return record;
+        };
+        let run = RunFlags {
+            process_ref_homs: self.process_ref_homs,
+            minimal,
+        };
+        match split.mode {
+            IndividualMode::Copies => split_by_individual(record, alleles, columns, split, run),
+            IndividualMode::Zygosities => zygosity_record(record, alleles, columns, split, run),
         }
     }
+}
+
+/// The run's flags a per-individual reading reads beyond the split.
+#[derive(Debug, Clone, Copy)]
+struct RunFlags {
+    process_ref_homs: bool,
+    /// `--minimal`, which decides whether a reading prints the record's uploaded
+    /// string as `UPLOADED_ALLELE` ([`inherits_raw_string`]).
+    minimal: bool,
 }
 
 /// The alleles of one record as the per-individual reading needs them: every
@@ -239,6 +302,94 @@ pub fn called_alleles(gt: &str, allele_count: usize) -> Option<Vec<Option<usize>
     Some(bits)
 }
 
+/// One individual's genotype read against the record's alleles.
+struct CalledGenotype<'a> {
+    /// Each called bit as the chopped allele it names, an undefined bit the empty
+    /// string (`Parser/VCF.pm:627`, `:716`): what `ZYG` counts.
+    alleles: Vec<&'a str>,
+    /// The record's alleles the individual carries beyond the reference, `grep
+    /// {$_ ne $ref && $_ !~ /\*/}` over the mapped bits (`:635`, `:720`), each
+    /// distinct string once, as indices into the record's alleles in the record's
+    /// order.
+    non_ref: Vec<usize>,
+    /// A bit past the record's alleles: an undefined allele, which Ensembl VEP's
+    /// `grep` keeps (it is neither the reference nor a `*`) though it writes no
+    /// row, so the individual is not reference-homozygous.
+    empty_allele: bool,
+}
+
+impl<'a> CalledGenotype<'a> {
+    fn read(called: &[Option<usize>], alleles: &'a RecordAlleles<'_>) -> Self {
+        let genotype = called
+            .iter()
+            .map(|bit| bit.map_or("", |index| alleles.chopped[index].as_str()))
+            .collect();
+        let reference = &alleles.chopped[0];
+        let mut non_ref: Vec<usize> = Vec::new();
+        for index in 1..alleles.chopped.len() {
+            let allele = &alleles.chopped[index];
+            if !called.contains(&Some(index)) || allele == reference || allele.contains('*') {
+                continue;
+            }
+            if !non_ref.iter().any(|&seen| alleles.chopped[seen] == *allele) {
+                non_ref.push(index);
+            }
+        }
+        Self {
+            alleles: genotype,
+            non_ref,
+            empty_allele: called.contains(&None),
+        }
+    }
+
+    /// Whether the individual carries no alternate allele of the record
+    /// (`Parser/VCF.pm:641`, `:723`).
+    fn hom_ref(&self) -> bool {
+        self.non_ref.is_empty() && !self.empty_allele
+    }
+}
+
+/// The genotype each listed individual calls on the record, in the split's order,
+/// each with the individual's position in the list and its name: an individual
+/// whose genotype is missing has none ([`called_alleles`]), and a header without
+/// `FORMAT` or a record whose FORMAT has no GT key calls none ([`genotype_index`]).
+fn called_genotypes<'a>(
+    split: &'a IndividualSplit,
+    columns: &VcfColumns<'_>,
+    alleles: &'a RecordAlleles<'_>,
+) -> Vec<(usize, &'a Arc<str>, CalledGenotype<'a>)> {
+    if !split.genotyped {
+        return Vec::new();
+    }
+    let Some(gt_index) = genotype_index(columns) else {
+        return Vec::new();
+    };
+    let samples: Vec<&str> = columns.samples().collect();
+    let mut genotypes = Vec::new();
+    for (ordinal, (name, column)) in split.individuals.iter().enumerate() {
+        let Some(gt) = genotype_field(&samples, gt_index, *column) else {
+            continue;
+        };
+        let Some(called) = called_alleles(gt, alleles.written.len()) else {
+            continue;
+        };
+        genotypes.push((ordinal, name, CalledGenotype::read(&called, alleles)));
+    }
+    genotypes
+}
+
+/// Whether every per-individual reading of the record prints the record's raw
+/// string as `UPLOADED_ALLELE` (OutputFactory.pm:1360): Ensembl VEP's
+/// `original_allele_string`, set for a record whose alleles differ in length and,
+/// under `--minimal`, for every record with an alternate allele (`minimise_alleles`
+/// passes a string without one through untouched, Parser.pm:974-976), which every
+/// copy inherits; the copy's own string otherwise.
+fn inherits_raw_string(base: &InputVariant, minimal: bool) -> bool {
+    base.uploaded_allele_string
+        .as_deref()
+        .is_some_and(|raw| keeps_uploaded_spelling(raw, minimal && raw.contains('/')))
+}
+
 /// One individual's copy of a record (`Parser/VCF.pm:627-662`), `None` for an
 /// empty `record`: the alleles of `record` the individual carries, in the
 /// record's order, marked with the individual's name and genotype, led by the
@@ -253,46 +404,25 @@ fn individual_copy(
     alleles: &RecordAlleles<'_>,
     name: &Arc<str>,
     ordinal: u32,
-    called: &[Option<usize>],
-    process_ref_homs: bool,
+    genotype: &CalledGenotype<'_>,
+    run: RunFlags,
 ) -> Option<Vec<InputVariant>> {
     let base = record.first()?;
-    let genotype: Vec<String> = called
-        .iter()
-        .map(|bit| bit.map_or_else(String::new, |index| alleles.chopped[index].clone()))
-        .collect();
-    // `grep {$_ ne $ref && $_ !~ /\*/}` over the mapped alleles, each distinct
-    // string once (`:635`), here in the record's allele order; an undefined bit
-    // is an empty allele, not the reference, which writes no row.
-    let reference = &alleles.chopped[0];
-    let mut non_ref: Vec<usize> = Vec::new();
-    for index in 1..alleles.chopped.len() {
-        let allele = &alleles.chopped[index];
-        if !called.contains(&Some(index)) || allele == reference || allele.contains('*') {
-            continue;
-        }
-        if !non_ref.iter().any(|&seen| alleles.chopped[seen] == *allele) {
-            non_ref.push(index);
-        }
-    }
-    let empty_allele = called.contains(&None);
-    // `UPLOADED_ALLELE` (OutputFactory.pm:1360) is Ensembl VEP's
-    // `original_allele_string`, the raw string of a record whose alleles differ
-    // in length, which every copy inherits, else the copy's own string.
-    let inherits_raw_string = base
-        .uploaded_allele_string
-        .as_deref()
-        .is_some_and(|raw| keeps_uploaded_spelling(raw, false));
+    let inherits_raw_string = inherits_raw_string(base, run.minimal);
     let mark = |variant: &mut InputVariant, copy_string: &str, hom_ref: bool| {
         variant.individual = Some(Arc::clone(name));
         variant.copy_ordinal = ordinal;
-        variant.genotype.clone_from(&genotype);
+        variant.genotype = genotype
+            .alleles
+            .iter()
+            .map(|allele| allele.to_string())
+            .collect();
         variant.hom_ref = hom_ref;
         if !inherits_raw_string {
             variant.uploaded_allele_string = Some(copy_string.into());
         }
     };
-    if non_ref.is_empty() && !empty_allele {
+    if genotype.hom_ref() {
         let mut copy = feature_without_allele(base);
         // The copy is the record's working reference (`:604`, `:642`, `$ref` of
         // the post-processed feature): the minimised one of a bi-allelic indel
@@ -305,28 +435,29 @@ fn individual_copy(
         // divergence `docs/intended-divergences.md` lists under the trimmable
         // indel.
         let working_reference = String::from_utf8_lossy(&base.ref_allele).to_ascii_uppercase();
-        let copy_string = if process_ref_homs {
+        let copy_string = if run.process_ref_homs {
             format!("{working_reference}/{working_reference}")
         } else {
             working_reference
         };
         mark(&mut copy, &copy_string, true);
         copy.record_allele_string_multi = Some(copy_string.into());
-        return Some(if process_ref_homs {
+        return Some(if run.process_ref_homs {
             vec![copy.reference_allele_row()]
         } else {
             vec![copy]
         });
     }
-    let mut copy_string = reference.to_ascii_uppercase();
-    for &index in &non_ref {
+    let mut copy_string = alleles.chopped[0].to_ascii_uppercase();
+    for &index in &genotype.non_ref {
         copy_string.push('/');
         copy_string.push_str(&alleles.chopped[index].to_ascii_uppercase());
     }
-    if empty_allele {
+    if genotype.empty_allele {
         copy_string.push('/');
     }
-    let mut copy: Vec<InputVariant> = non_ref
+    let mut copy: Vec<InputVariant> = genotype
+        .non_ref
         .iter()
         .enumerate()
         .filter_map(|(number, &index)| {
@@ -366,7 +497,7 @@ fn individual_copy(
         }
         mark(variant, &copy_string, false);
     }
-    if process_ref_homs {
+    if run.process_ref_homs {
         add_reference_allele_row(&mut copy);
     }
     Some(copy)
@@ -381,7 +512,6 @@ fn feature_without_allele(base: &InputVariant) -> InputVariant {
     copy.allele_index = 0;
     copy.allele_num = None;
     copy.no_allele = true;
-    copy.minimised = false;
     copy.original_allele_string = None;
     copy.transcript_consequences.clear();
     copy.most_severe_consequence = None;
@@ -393,40 +523,80 @@ fn feature_without_allele(base: &InputVariant) -> InputVariant {
 /// whose genotype is missing has no copy, and a record every individual misses
 /// yields nothing, as Ensembl VEP reads the next record in its place (`:371-374`);
 /// a header without `FORMAT` yields no genotype and so no copy.
-pub fn split_by_individual(
+fn split_by_individual(
     record: Vec<InputVariant>,
     alleles: &RecordAlleles<'_>,
     columns: &VcfColumns<'_>,
     split: &IndividualSplit,
-    process_ref_homs: bool,
+    run: RunFlags,
 ) -> Vec<InputVariant> {
-    if !split.genotyped {
-        return Vec::new();
-    }
-    let Some(gt_index) = genotype_index(columns) else {
-        return Vec::new();
-    };
-    let samples: Vec<&str> = columns.samples().collect();
     let mut out = Vec::new();
-    for (ordinal, (name, column)) in split.individuals.iter().enumerate() {
-        let Some(gt) = genotype_field(&samples, gt_index, *column) else {
-            continue;
-        };
-        let Some(called) = called_alleles(gt, alleles.written.len()) else {
-            continue;
-        };
-        if let Some(copy) = individual_copy(
-            &record,
-            alleles,
-            name,
-            ordinal as u32,
-            &called,
-            process_ref_homs,
-        ) {
+    for (ordinal, name, genotype) in called_genotypes(split, columns, alleles) {
+        if let Some(copy) = individual_copy(&record, alleles, name, ordinal as u32, &genotype, run)
+        {
             out.extend(copy);
         }
     }
     out
+}
+
+/// The record once, with every named individual's genotype read onto it: the
+/// `--individual_zyg` reading of `Parser/VCF.pm:683-743`. One zygosity per
+/// individual whose genotype is called, each name once (`:737` keys them by
+/// name) in the split's order; an individual whose genotype is missing has none
+/// (`:715`), and a header without `FORMAT` or a record whose FORMAT has no GT
+/// yields none, so the record prints no `ZYG`. When the list names one
+/// individual and that individual carries no alternate allele, the record is the
+/// reference allele's row alone, its allele string `REF/REF` (`:727-730`;
+/// `OutputFactory.pm:506-508` writes the reference allele of every feature);
+/// otherwise it is the record as read, with the reference row under
+/// `--process_ref_homs` (`:509-516`).
+fn zygosity_record(
+    mut record: Vec<InputVariant>,
+    alleles: &RecordAlleles<'_>,
+    columns: &VcfColumns<'_>,
+    split: &IndividualSplit,
+    run: RunFlags,
+) -> Vec<InputVariant> {
+    let mut zygosities: Vec<SampleZygosity> = Vec::new();
+    let mut unique_hom_ref = false;
+    for (_, name, genotype) in called_genotypes(split, columns, alleles) {
+        let hom_ref = genotype.hom_ref();
+        unique_hom_ref |= hom_ref && split.len() == 1;
+        if split.repeats_a_name && zygosities.iter().any(|z| z.sample == *name) {
+            continue;
+        }
+        zygosities.push(SampleZygosity {
+            sample: Arc::clone(name),
+            zygosity: Zygosity::of(&genotype.alleles, hom_ref),
+        });
+    }
+    let zygosities = Arc::new(ZygosityList::new(zygosities));
+    let Some(base) = record.first() else {
+        return record;
+    };
+    if unique_hom_ref {
+        // The record's working reference twice (`$ref` of the post-processed
+        // feature, `:691-692`, `:728`), as `individual_copy` reads a
+        // reference-homozygous individual's string.
+        let working_reference = String::from_utf8_lossy(&base.ref_allele).to_ascii_uppercase();
+        let allele_string = format!("{working_reference}/{working_reference}");
+        let mut feature = feature_without_allele(base);
+        feature.hom_ref = true;
+        if !inherits_raw_string(base, run.minimal) {
+            feature.uploaded_allele_string = Some(allele_string.as_str().into());
+        }
+        feature.record_allele_string_multi = Some(allele_string.into());
+        feature.sample_zygosities = Some(zygosities);
+        return vec![feature.reference_allele_row()];
+    }
+    for variant in &mut record {
+        variant.sample_zygosities = Some(Arc::clone(&zygosities));
+    }
+    if run.process_ref_homs {
+        add_reference_allele_row(&mut record);
+    }
+    record
 }
 
 /// `--process_ref_homs` on a record, or on an individual's copy of one: the
@@ -515,10 +685,11 @@ mod tests {
                 .map(|(name, column)| (name.to_string(), *column))
                 .collect()
         };
-        let all = IndividualSplit::new(&IndividualRequest::All, &columns).unwrap();
+        let all = IndividualSplit::new(&IndividualRequest::All, &columns, IndividualMode::Copies)
+            .unwrap();
         assert_eq!(names(&all), [("S3".to_string(), 1), ("S1".to_string(), 2)]);
         let twice = IndividualRequest::Named(vec!["S1".into(), "S1".into(), "S3".into()]);
-        let split = IndividualSplit::new(&twice, &columns).unwrap();
+        let split = IndividualSplit::new(&twice, &columns, IndividualMode::Copies).unwrap();
         assert_eq!(
             names(&split),
             [

@@ -63,9 +63,9 @@ Subcommands:
             `<DEL:*>`, equal to the reference or a repeat). A run whose `masks` list
             `regulatory_feature_rows` has its VEP rows of `Feature_type` RegulatoryFeature
             and MotifFeature left out first, the rows the golden test sets aside for a run
-            under `--regulatory`; one whose `masks` list `order_only` has its `DOMAINS` and
-            `FREQS` values compared as multisets of their items under `--field`, as the
-            golden test compares them. `covers` and `flag_sets` are kept; with `--flag-set
+            under `--regulatory`; one whose `masks` list `order_only` has its `DOMAINS`,
+            `FREQS` and `ZYG` values compared as multisets of their items under `--field`,
+            as the golden test compares them. `covers` and `flag_sets` are kept; with `--flag-set
             <name>` the divergence keys are written into that flag set instead of the
             manifest's top level, so each flag set documents its own run, under its own
             `masks` when its entry carries the key and the manifest's otherwise.
@@ -149,10 +149,11 @@ REGULATORY_FEATURE_ROWS = "regulatory_feature_rows"
 REGULATORY_FEATURE_TYPES = frozenset({"RegulatoryFeature", "MotifFeature"})
 # The `masks` class under which the set-valued columns agree as a multiset of their items
 # in any order (Ensembl VEP prints DOMAINS in the cache's protein_features order,
-# BaseTranscriptVariation.pm:634-643, and FREQS in hash order, OutputFactory.pm:1152-1153),
-# and those columns; the default format joins the items with `,` (Utils.pm:185-198).
+# BaseTranscriptVariation.pm:634-643, FREQS in hash order, OutputFactory.pm:1152-1153, and
+# the ZYG list of --individual_zyg in hash order, OutputFactory.pm:983), and those columns;
+# the default format joins the items with `,` (Utils.pm:185-198).
 ORDER_ONLY = "order_only"
-ORDER_ONLY_COLUMNS = ("DOMAINS", "FREQS")
+ORDER_ONLY_COLUMNS = ("DOMAINS", "FREQS", "ZYG")
 # Every class a `masks` list, the manifest's or a flag set's, may name.
 MASK_CLASSES = (REGULATORY_FEATURE_ROWS, ORDER_ONLY)
 CLASSIFY_KEYS = ("divergences", "vep_rs_only_tuples", "divergence_summary", "vep_rs_only_summary",

@@ -71,7 +71,7 @@ The rules the formatters follow are VEP's own, cited to their Perl sources in `c
 - **`--minimal`**, which trims every bi-allelic record from both ends and splits a multi-allelic record whose alleles trim: [How structural variants are written](output/structural-variants.md#multi-allelic-records). A split allele's `cDNA_position`, `CDS_position` and `Protein_position` follow the format. The default and tab outputs print the record span's values, in the columns the allele's own span admits, as Ensembl VEP recomputes them after its rejoin (`OutputFactory.pm` lines 294-299). The VCF and JSON outputs print the allele's own, as their factories recompute them before it (`OutputFactory/VCF.pm` lines 305-308, `OutputFactory/JSON.pm` lines 217-220). Codons, Amino_acids and the terms are the trimmed allele's in every format.
 - **Records Ensembl VEP skips**, which vep-rs annotates: [How structural variants are written](output/structural-variants.md#skipped-records).
 - **Breakends**, points, spans, mates and the rows on each side: [How structural variants are written](output/structural-variants.md#breakends).
-- **Per-sample copies and the reference row**, `--individual` and `--process_ref_homs`: [below](#per-sample-copies-and-the-reference-row).
+- **Per-sample copies and the reference row**, `--individual`, `--individual_zyg` and `--process_ref_homs`: [below](#per-sample-copies-and-the-reference-row).
 
 ## Per-sample copies and the reference row
 
@@ -90,6 +90,14 @@ The sample columns are read as ensembl-io reads them. A genotype bit is a Perl a
 A header repeating a sample name has one sample of that name, reading its last column. A list may name a sample twice and gets two copies. A header whose ninth column is not `FORMAT` names its samples from that column and yields no genotype, so no copy.
 
 A genotype naming the `.` of a non-variant record is annotated as an allele by Ensembl VEP ([Defect J](divergences/defect-j.md)) and as none here. Under `--individual`, `--buffer_size` bounds the copies a batch holds, as Ensembl VEP's buffer counts them.
+
+Under `--individual_zyg all|<list>` each record is written once, as without the flag, and every row and object carries one `ZYG` list: a `sample:ZYG` entry per named sample whose genotype is called, with the zygosity read as under `--individual`. A sample with a missing genotype has no entry, a record no named sample has a genotype for carries no `ZYG`, and there is no `IND`.
+
+The default and tab formats join the entries with `,`, the VCF's `CSQ` with `&`, and the JSON `zyg` is an array. The entries come in the order the samples are named, the header's column order under `all` and the list's order under a list, a name listed twice having one entry; Ensembl VEP prints them in Perl's hash order ([the ZYG list order](divergences/individual-zyg-order.md)).
+
+A run naming one sample, by a list of one name or by `all` over a single-sample VCF, reads a record that sample carries no alternate allele of (`*` counting as none) as the reference twice. Ensembl VEP then annotates the reference allele alone, so the record is its reference row, as under `--process_ref_homs`, with the one entry. The trimmable-indel reading above applies to the list too ([a trimmable indel per individual](divergences/individual-trimmable-indel.md)).
+
+A structural variant carries no `ZYG`. `--individual_zyg` implies `--allow_non_variant` and cannot be combined with `--individual`. A record is read whole under the flag, its sample columns included, and a batch holds `--buffer_size` records, so the memory a batch takes grows with the sample count; a smaller `--buffer_size` bounds it on a many-sample VCF.
 
 Under `--process_ref_homs`, every feature of every sequence record gains the reference allele's row first, `ALLELE_NUM` 0, its `Allele` the reference. The row carries the consequences the predicates give an allele equal to the reference: `synonymous_variant` in a coding sequence, `stop_retained_variant` at a stop codon, the single reference peptide in `Amino_acids` and the reference codon twice in `Codons`.
 

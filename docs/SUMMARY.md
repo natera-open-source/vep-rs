@@ -66,6 +66,7 @@
   - [Records `--dont_skip` cannot keep](divergences/dont-skip-cannot-keep.md)
   - [Identifier input resolved from the cache's variation files](divergences/id-input.md)
   - [An individual carrying two alternate alleles](divergences/individual-allele-order.md)
+  - [The ZYG list order under `--individual_zyg`](divergences/individual-zyg-order.md)
   - [An individual's copy of an indel the anchor chop leaves trimmable](divergences/individual-trimmable-indel.md)
   - [A JSON summary row with no consequence](divergences/json-summary-without-term.md)
   - [Two `--minimal` alleles that trim to the same allele string](divergences/minimal-same-trimmed-allele.md)

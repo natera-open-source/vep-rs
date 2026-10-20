@@ -96,9 +96,28 @@ pub struct Args {
     /// carries its line without consequences and the JSON output its object without them. Every output
     /// repeats the record once per individual, one VCF line and one JSON object each. A VCF without a
     /// #CHROM line, or whose header names no sample, writes nothing under `all`. Implies
-    /// --allow_non_variant; cannot be combined with --minimal
+    /// --allow_non_variant; cannot be combined with --minimal or --individual_zyg
     #[arg(help_heading = "Input", long, value_name = "all|LIST")]
     pub individual: Option<String>,
+
+    /// Annotate a VCF record once, with every named sample's zygosity in one ZYG list, `all` for every
+    /// sample column or a comma-separated list of sample names from the #CHROM header line; an unknown
+    /// name exits with Ensembl VEP's error naming both lists. Each row carries ZYG as `sample:HET`,
+    /// `sample:HOM`, `sample:HETREF` or `sample:HOMREF` entries (HET when the genotype holds more than
+    /// one distinct allele, REF appended when the sample carries no alternate allele, `*` counting as
+    /// none), one per sample whose genotype is called, in the order the run names them (the header's
+    /// column order under `all`) where Ensembl VEP prints its hash order; a sample whose genotype is
+    /// `./.` has no entry, and a record no named sample has a genotype for carries no ZYG. When the
+    /// run names one sample (a list of one name, or `all` over a single-sample VCF) and that sample
+    /// carries no alternate allele, the record annotates its reference allele alone, as
+    /// --process_ref_homs annotates it, with the allele string REF/REF. A structural variant carries
+    /// no ZYG. Implies --allow_non_variant; cannot be combined with --individual
+    #[arg(
+        help_heading = "Input",
+        long = "individual_zyg",
+        value_name = "all|LIST"
+    )]
+    pub individual_zyg: Option<String>,
 
     /// Add the reference allele's row to every feature of every record, numbered 0 under --allele_number
     /// and listed before the alternate alleles' rows, with the consequence terms an allele equal to the

@@ -711,8 +711,12 @@ pub struct Config {
     pub allow_non_variant: bool,
     /// `--individual` as given, split on commas (`Config.pm:328`): `all` or the
     /// sample names; `None` without the flag. Switches `allow_non_variant` on
-    /// (`:413-417`) and refuses `--minimal` (`:626`).
+    /// (`:413-417`) and refuses `--minimal` and `--individual_zyg` (`:626`).
     pub individual: Option<Vec<String>>,
+    /// `--individual_zyg` as given, split on commas (`Config.pm:329`): `all` or
+    /// the sample names; `None` without the flag. Switches `allow_non_variant` on
+    /// (`:420-424`).
+    pub individual_zyg: Option<Vec<String>>,
     /// `--process_ref_homs` (`Config.pm:143`): every sequence record gains the
     /// reference allele's row, and a reference-homozygous individual annotates it.
     pub process_ref_homs: bool,
@@ -1090,6 +1094,9 @@ impl Config {
             individual: state
                 .is_given("individual")
                 .then(|| state.list("individual")),
+            individual_zyg: state
+                .is_given("individual_zyg")
+                .then(|| state.list("individual_zyg")),
             process_ref_homs: args.process_ref_homs,
             chr: state.is_given("chr").then(|| state.list("chr")),
             check_ref: args.check_ref,
@@ -2830,5 +2837,49 @@ mod tests {
         let safe = config(&["vep", "--safe", "--individual", "all", "--minimal"]);
         assert!(safe.minimal && safe.individual.is_some());
         assert_eq!(FlagState::implied_by("individual"), ["allow_non_variant"]);
+    }
+
+    /// `--individual_zyg` is a comma-separated list kept as given (Config.pm:329),
+    /// sets `allow_non_variant` through its option set (:420-424) and is refused
+    /// beside `--individual` (:626, the message of :964 naming the pair in the
+    /// table's order), in any order and under `--safe` not at all (:961); it is
+    /// compatible with `--minimal`, which the table lists against `--individual`
+    /// alone.
+    #[test]
+    fn individual_zyg_refuses_individual() {
+        let c = config(&["vep", "--individual_zyg", "all"]);
+        assert_eq!(
+            c.individual_zyg.as_deref(),
+            Some(["all".to_string()].as_slice())
+        );
+        assert!(c.allow_non_variant && c.individual.is_none());
+        let c = config(&["vep", "--individual_zyg", "S1,S3", "--minimal"]);
+        assert_eq!(
+            c.individual_zyg.as_deref(),
+            Some(["S1".to_string(), "S3".to_string()].as_slice())
+        );
+        assert!(c.minimal);
+        assert!(config(&["vep"]).individual_zyg.is_none());
+        assert_eq!(
+            refusal(&["vep", "--individual", "all", "--individual_zyg", "all"]),
+            "ERROR: [cli] Can't use --individual and --individual_zyg together"
+        );
+        assert_eq!(
+            refusal(&["vep", "--individual_zyg", "S1", "--individual", "S1"]),
+            "ERROR: [cli] Can't use --individual and --individual_zyg together"
+        );
+        let safe = config(&[
+            "vep",
+            "--safe",
+            "--individual",
+            "all",
+            "--individual_zyg",
+            "all",
+        ]);
+        assert!(safe.individual.is_some() && safe.individual_zyg.is_some());
+        assert_eq!(
+            FlagState::implied_by("individual_zyg"),
+            ["allow_non_variant"]
+        );
     }
 }

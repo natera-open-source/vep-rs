@@ -54,6 +54,9 @@ pub const DEFAULT_OUTPUT_COLS: [&str; 13] = [
 pub struct FieldOptions {
     /// `--individual`: the `IND` and `ZYG` columns (Constants.pm:69).
     pub individual: bool,
+    /// `--individual_zyg`: the `ZYG` column alone (Constants.pm:70), the list of
+    /// every named sample's zygosity.
+    pub individual_zyg: bool,
     /// `--process_ref_homs`: every feature writes its reference allele's row, so a
     /// `--minimal` split record's `REF_ALLELE` is its first allele's trimmed
     /// reference whatever that allele equals.
@@ -211,6 +214,7 @@ const fn vf_group(flag: &'static str, fields: &'static [&'static str]) -> FieldG
 /// group is unconditional and comes first among the groups that can fire here.
 const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
     vf_group("individual", &["IND", "ZYG"]),
+    vf_group("individual_zyg", &["ZYG"]),
     group("allele_number", &["ALLELE_NUM"]),
     group("show_ref_allele", &["REF_ALLELE"]),
     group("uploaded_allele", &["UPLOADED_ALLELE"]),
@@ -298,6 +302,7 @@ impl FieldOptions {
         match group {
             "user" => true,
             "individual" => self.individual,
+            "individual_zyg" => self.individual_zyg,
             "allele_number" => self.allele_number,
             "show_ref_allele" => self.show_ref_allele,
             "uploaded_allele" => self.uploaded_allele,
@@ -1107,7 +1112,13 @@ fn row_field_value(
             .as_deref()
             .unwrap_or_default()
             .to_string(),
-        "ZYG" => variant.zygosity().unwrap_or_default(),
+        // The `--individual_zyg` list, every named sample's `sample:ZYG`
+        // (OutputFactory.pm:981-987), joined as the format joins a list; else the
+        // copy's own zygosity under `--individual` (:974-976).
+        "ZYG" => match &variant.sample_zygosities {
+            Some(samples) => samples.joined(list_sep).into_owned(),
+            None => variant.zygosity().unwrap_or_default(),
+        },
         // A structural row carries neither `REF_ALLELE` nor `UPLOADED_ALLELE`
         // (OutputFactory.pm `BaseStructuralVariationOverlapAllele_to_output_hash`).
         "REF_ALLELE" if variant.is_structural => String::new(),
@@ -1756,7 +1767,8 @@ fn timestamp() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vep_core::variant::MatchedAllele;
+    use std::sync::Arc;
+    use vep_core::variant::{MatchedAllele, SampleZygosity, Zygosity, ZygosityList};
     use vep_core::variation::ClinVarDetail;
 
     #[test]
@@ -3212,6 +3224,79 @@ mod tests {
         assert_eq!(field_value("ZYG", &reference, None, &opts, ","), "HETREF");
         let rows = record_rows(&[&reference, &het]);
         assert!(rows.is_empty(), "no feature, no intergenic verdict, no row");
+    }
+
+    /// `--individual_zyg` adds `ZYG` alone (Constants.pm:70, the second
+    /// `@FLAG_FIELDS` entry, so after `IND` and `ZYG` when both flags are on and
+    /// the name listed once), set from the variant alone so a summary row keeps
+    /// it. Its value is the record's list of `sample:ZYG` entries
+    /// (OutputFactory.pm:981-987), joined as the format joins a list, `,` in the
+    /// default and tab formats and `&` in the VCF; an empty list prints nothing; a
+    /// variant without the list prints the copy's own zygosity or nothing; the
+    /// reference row of a record read for one reference-homozygous sample carries
+    /// the list.
+    #[test]
+    fn zyg_lists_every_sample_under_individual_zyg() {
+        let opts = FieldOptions {
+            individual_zyg: true,
+            allele_number: true,
+            ..Default::default()
+        };
+        assert_eq!(flag_fields(&opts)[..2], ["ZYG", "ALLELE_NUM"]);
+        assert_eq!(vf_level_flag_fields(&opts), ["ZYG"]);
+        assert!(!field_is_produced("IND", &opts));
+        let both = FieldOptions {
+            individual: true,
+            individual_zyg: true,
+            ..Default::default()
+        };
+        assert_eq!(flag_fields(&both)[..2], ["IND", "ZYG"]);
+        assert_eq!(
+            flag_fields(&both).iter().filter(|f| **f == "ZYG").count(),
+            1
+        );
+
+        let entry = |sample: &str, zygosity: Zygosity| SampleZygosity {
+            sample: sample.into(),
+            zygosity,
+        };
+        let list = |entries: Vec<SampleZygosity>| Some(Arc::new(ZygosityList::new(entries)));
+        let mut record = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        record.sample_zygosities = list(vec![
+            entry("S1", Zygosity::Het),
+            entry("S2", Zygosity::HomRef),
+        ]);
+        assert_eq!(
+            field_value("ZYG", &record, None, &opts, ","),
+            "S1:HET,S2:HOMREF"
+        );
+        assert_eq!(
+            field_value("ZYG", &record, None, &opts, "&"),
+            "S1:HET&S2:HOMREF"
+        );
+        assert_eq!(field_value("IND", &record, None, &opts, ","), "");
+        let mut summary = record.clone();
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(
+            field_value("ZYG", &summary, None, &opts, ","),
+            "S1:HET,S2:HOMREF"
+        );
+        let mut none_called = record.clone();
+        none_called.sample_zygosities = list(Vec::new());
+        assert_eq!(field_value("ZYG", &none_called, None, &opts, ","), "");
+        let plain = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert_eq!(field_value("ZYG", &plain, None, &opts, ","), "");
+
+        let mut hom_ref = record.clone();
+        hom_ref.sample_zygosities = list(vec![entry("S2", Zygosity::HomRef)]);
+        hom_ref.hom_ref = true;
+        let reference = hom_ref.reference_allele_row();
+        assert_eq!(field_value("Allele", &reference, None, &opts, ","), "A");
+        assert_eq!(field_value("ALLELE_NUM", &reference, None, &opts, ","), "0");
+        assert_eq!(
+            field_value("ZYG", &reference, None, &opts, ","),
+            "S2:HOMREF"
+        );
     }
 
     /// `VARIANT_CLASS`, `MINIMISED`, `AMBIGUITY` and `CHECK_REF` are set from the

@@ -3,6 +3,7 @@
 
 //! The per-sample modes through the `vep` binary: `--individual all|list` writes
 //! each record once per individual in every output format, with `IND` and `ZYG`;
+//! `--individual_zyg all|list` writes each record once with the `ZYG` list;
 //! `--process_ref_homs` adds the reference allele's row to every feature; an
 //! unknown sample name is Ensembl VEP's error; a VCF without a `#CHROM` line
 //! writes nothing under `all`; `--phased` changes nothing.
@@ -661,6 +662,144 @@ fn most_severe_writes_a_row_for_a_copy_with_no_consequence() {
             assert_eq!(object["most_severe_consequence"], "missense_variant");
         }
     }
+}
+
+/// `--individual_zyg all` (Parser/VCF.pm:683-743, OutputFactory.pm:981-987): every
+/// record is written once, as without the flag, and each of its rows carries the
+/// `ZYG` list of every named sample whose genotype is called, `sample:ZYG`
+/// entries joined by `,` in the default format (Utils.pm:185-198) and by `&` in the
+/// VCF's CSQ (OutputFactory/VCF.pm:391), the JSON `zyg` an array; there is no
+/// `IND`. A record every sample misses carries no `ZYG`; a non-variant record is
+/// kept (`--allow_non_variant` implied, Config.pm:420-424), written as its VCF line
+/// without CSQ and its JSON object with the list. With one sample named, a record
+/// that sample is reference-homozygous for annotates the reference allele alone
+/// (Parser/VCF.pm:727-730, OutputFactory.pm:506-508), as `--process_ref_homs`
+/// annotates it; the two per-sample flags together are the refusal of Config.pm:626.
+#[test]
+fn individual_zyg_writes_one_record_with_a_zygosity_list_in_every_format() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write_input(dir.path(), "in.vcf", &format!("{HEADER}{RECORDS}"));
+
+    let (text, stderr, ok) = run(dir.path(), &input, &["--individual_zyg", "all"]);
+    assert!(ok, "{stderr}");
+    let rows = body(&text);
+    let zyg_of = |id: &str| -> Vec<Option<&str>> {
+        rows.iter()
+            .filter(|l| column(l, 0) == id)
+            .map(|l| extra_value(l, "ZYG"))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    };
+    assert_eq!(zyg_of("ins4"), [Some("S1:HET,S2:HOM,S3:HOMREF")]);
+    assert_eq!(zyg_of("del2"), [Some("S1:HOM,S2:HET,S3:HOM,S4:HOMREF")]);
+    assert_eq!(zyg_of("multi"), [Some("S1:HET,S2:HET,S3:HOM")]);
+    assert_eq!(
+        zyg_of("snv"),
+        [Some("S1:HOMREF,S2:HOMREF,S3:HOMREF,S4:HOMREF")],
+        "the record keeps its alternate allele's rows"
+    );
+    assert_eq!(zyg_of("allmiss"), [None]);
+    assert!(rows.iter().all(|l| extra_value(l, "IND").is_none()));
+    assert!(!rows.iter().any(|l| column(l, 0) == "nonvar"));
+    let multi_alleles: BTreeSet<&str> = rows
+        .iter()
+        .filter(|l| column(l, 0) == "multi")
+        .map(|l| column(l, 2))
+        .collect();
+    assert_eq!(multi_alleles, BTreeSet::from(["TCCTAA", "G"]));
+    assert!(text.contains("## ZYG : Zygosity of individual genotype at this locus"));
+    assert!(!text.contains("## IND"));
+
+    let (text, _, ok) = run(dir.path(), &input, &["--individual_zyg", "all", "--vcf"]);
+    assert!(ok);
+    let lines = body(&text);
+    assert_eq!(lines.len(), 6, "one line per record");
+    let line_of = |id: &str| *lines.iter().find(|l| column(l, 2) == id).unwrap();
+    assert!(column(line_of("ins4"), 7).contains("|S1:HET&S2:HOM&S3:HOMREF|"));
+    assert!(line_of("ins4").ends_with("\tGT\t0/1\t1/1\t0/0\t./."));
+    assert!(column(line_of("snv"), 7).contains("|S1:HOMREF&S2:HOMREF&S3:HOMREF&S4:HOMREF|"));
+    assert!(column(line_of("allmiss"), 7).contains("|||"));
+    assert_eq!(column(line_of("nonvar"), 7), ".");
+
+    let (text, _, ok) = run(dir.path(), &input, &["--individual_zyg", "all", "--json"]);
+    assert!(ok);
+    let objects: Vec<serde_json::Value> = text
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let object_of = |id: &str| objects.iter().find(|o| o["id"] == id).unwrap();
+    assert_eq!(
+        object_of("ins4")["zyg"],
+        serde_json::json!(["S1:HET", "S2:HOM", "S3:HOMREF"])
+    );
+    assert_eq!(
+        object_of("nonvar")["zyg"],
+        serde_json::json!(["S1:HOMREF", "S3:HOMREF", "S4:HOMREF"])
+    );
+    assert_eq!(object_of("nonvar")["most_severe_consequence"], "?");
+    assert!(object_of("allmiss").get("zyg").is_none());
+    assert!(objects.iter().all(|o| o.get("ind").is_none()));
+    assert!(object_of("ins4")["transcript_consequences"][0]
+        .get("zyg")
+        .is_none());
+
+    let (text, stderr, ok) = run(
+        dir.path(),
+        &input,
+        &["--individual_zyg", "S4", "--allele_number"],
+    );
+    assert!(ok, "{stderr}");
+    let rows = body(&text);
+    let alleles_of = |id: &str| -> BTreeSet<(&str, &str, Option<&str>)> {
+        rows.iter()
+            .filter(|l| column(l, 0) == id)
+            .map(|l| {
+                (
+                    column(l, 2),
+                    extra_value(l, "ALLELE_NUM").unwrap(),
+                    extra_value(l, "ZYG"),
+                )
+            })
+            .collect()
+    };
+    // S4 is `0/0` on `snv`, a haploid `0` on `nonvar`, `0/0` on `del2`: the
+    // reference allele's row alone, numbered 0.
+    assert_eq!(
+        alleles_of("snv"),
+        BTreeSet::from([("A", "0", Some("S4:HOMREF"))])
+    );
+    assert_eq!(
+        alleles_of("nonvar"),
+        BTreeSet::from([("A", "0", Some("S4:HOMREF"))])
+    );
+    assert_eq!(
+        alleles_of("del2"),
+        BTreeSet::from([("TA", "0", Some("S4:HOMREF"))])
+    );
+    // S4 is missing on `ins4` and `multi`: the records as read, no `ZYG`.
+    assert_eq!(alleles_of("ins4"), BTreeSet::from([("TATT", "1", None)]));
+    assert_eq!(
+        alleles_of("multi"),
+        BTreeSet::from([("TCCTAA", "1", None), ("G", "2", None)])
+    );
+
+    let (_, stderr, ok) = run(
+        dir.path(),
+        &input,
+        &["--individual", "all", "--individual_zyg", "all"],
+    );
+    assert!(!ok);
+    assert_eq!(
+        stderr.trim(),
+        "ERROR: [cli] Can't use --individual and --individual_zyg together"
+    );
+    let (_, stderr, ok) = run(dir.path(), &input, &["--individual_zyg", "S9"]);
+    assert!(!ok);
+    assert_eq!(
+        stderr.trim(),
+        "ERROR: [input] Sample IDs given (S9) do not match samples from VCF (S1,S2,S3,S4)"
+    );
 }
 
 /// `affects_cds` asks an overlap's alternate alleles alone

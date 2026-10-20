@@ -215,7 +215,9 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
     }
 
     Ok(match alleles {
-        Some(alleles) => parse.reading.finish_record(variants, &alleles, &columns),
+        Some(alleles) => parse
+            .reading
+            .finish_record(variants, &alleles, &columns, parse.minimal),
         None => variants,
     })
 }
@@ -248,7 +250,7 @@ pub fn non_variant_record(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<Ve
     };
     Ok(parse
         .reading
-        .finish_record(vec![variant], &alleles, &columns))
+        .finish_record(vec![variant], &alleles, &columns, parse.minimal))
 }
 
 /// [`RecordAlleles`] of a sequence record: the reference and every written ALT,
@@ -1027,7 +1029,7 @@ fn vcf_to_vep_alleles(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::individuals::{IndividualRequest, IndividualSplit};
+    use crate::individuals::{IndividualMode, IndividualRequest, IndividualSplit};
     use vep_core::sv_record::parse_ci_field;
     use vep_core::sv_routing::{classify_symbolic_alt, sv_so_term_and_class, sv_type_abbreviation};
 
@@ -5281,7 +5283,8 @@ mod tests {
     #[test]
     fn individual_all_emits_one_variant_set_per_individual() {
         let samples = genotyped_samples(&["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"]);
-        let split = IndividualSplit::new(&IndividualRequest::All, &samples).unwrap();
+        let split = IndividualSplit::new(&IndividualRequest::All, &samples, IndividualMode::Copies)
+            .unwrap();
         let reading = RecordReading {
             individuals: Some(&split),
             process_ref_homs: false,
@@ -5360,14 +5363,20 @@ mod tests {
             IndividualRequest::Named(names.iter().map(|s| s.to_string()).collect())
         };
         assert_eq!(
-            IndividualSplit::new(&named(&["S9"]), &samples).err(),
+            IndividualSplit::new(&named(&["S9"]), &samples, IndividualMode::Copies).err(),
             Some("Sample IDs given (S9) do not match samples from VCF (S1,S2,S3)".to_string())
         );
         assert_eq!(
-            IndividualSplit::new(&named(&["S1", "S9"]), &SampleColumns::default()).err(),
+            IndividualSplit::new(
+                &named(&["S1", "S9"]),
+                &SampleColumns::default(),
+                IndividualMode::Copies
+            )
+            .err(),
             Some("Sample IDs given (S1,S9) do not match samples from VCF ()".to_string())
         );
-        let split = IndividualSplit::new(&named(&["S3", "S1"]), &samples).unwrap();
+        let split =
+            IndividualSplit::new(&named(&["S3", "S1"]), &samples, IndividualMode::Copies).unwrap();
         let reading = RecordReading {
             individuals: Some(&split),
             process_ref_homs: false,
@@ -5379,7 +5388,12 @@ mod tests {
             .map(|v| v.individual.as_deref().unwrap())
             .collect();
         assert_eq!(order, ["S3", "S1"]);
-        let all = IndividualSplit::new(&IndividualRequest::All, &SampleColumns::default()).unwrap();
+        let all = IndividualSplit::new(
+            &IndividualRequest::All,
+            &SampleColumns::default(),
+            IndividualMode::Copies,
+        )
+        .unwrap();
         let reading = RecordReading {
             individuals: Some(&all),
             process_ref_homs: false,
@@ -5397,7 +5411,8 @@ mod tests {
     #[test]
     fn process_ref_homs_keeps_hom_ref_individuals_as_homref_rows() {
         let samples = genotyped_samples(&["S1", "S2"]);
-        let split = IndividualSplit::new(&IndividualRequest::All, &samples).unwrap();
+        let split = IndividualSplit::new(&IndividualRequest::All, &samples, IndividualMode::Copies)
+            .unwrap();
         let reading = RecordReading {
             individuals: Some(&split),
             process_ref_homs: true,
@@ -5478,7 +5493,8 @@ mod tests {
     #[test]
     fn individual_copies_of_non_variant_and_repeated_alt_records() {
         let samples = genotyped_samples(&["S1", "S2", "S3"]);
-        let split = IndividualSplit::new(&IndividualRequest::All, &samples).unwrap();
+        let split = IndividualSplit::new(&IndividualRequest::All, &samples, IndividualMode::Copies)
+            .unwrap();
         let reading = RecordReading {
             individuals: Some(&split),
             process_ref_homs: false,
@@ -5525,7 +5541,8 @@ mod tests {
     #[test]
     fn whole_record_copy_keeps_the_minimised_string() {
         let samples = genotyped_samples(&["S1", "S2"]);
-        let split = IndividualSplit::new(&IndividualRequest::All, &samples).unwrap();
+        let split = IndividualSplit::new(&IndividualRequest::All, &samples, IndividualMode::Copies)
+            .unwrap();
         let reading = RecordReading {
             individuals: Some(&split),
             process_ref_homs: true,
@@ -5545,5 +5562,263 @@ mod tests {
             assert_eq!(row.ref_allele, b"CT");
             assert_eq!((row.start, row.end), (100, 101));
         }
+    }
+
+    /// `(sample, ZYG)` of each entry of the record's zygosity list.
+    fn zygosities(variant: &InputVariant) -> Vec<(String, String)> {
+        variant
+            .sample_zygosities
+            .as_deref()
+            .expect("a record read under --individual_zyg carries the list")
+            .entries
+            .iter()
+            .map(|z| (z.sample.to_string(), z.zygosity.to_string()))
+            .collect()
+    }
+
+    fn zyg(entries: &[(&str, &str)]) -> Vec<(String, String)> {
+        entries
+            .iter()
+            .map(|(s, z)| (s.to_string(), z.to_string()))
+            .collect()
+    }
+
+    /// `--individual_zyg all` (`Parser/VCF.pm:683-743`) on the record of
+    /// [`individual_all_emits_one_variant_set_per_individual`]: the record stays
+    /// its two alleles, no copy and no `IND`, and every allele carries one `ZYG`
+    /// entry per sample whose genotype is called, read as `OutputFactory.pm:981-987`
+    /// prints `genotype_ind` and `hom_ref_samples` (`:723-725`, `:737`): `0/1` is
+    /// `HET` (A and G), `1/1` `HOM`, `1/2` `HET`, `./1` the one bit G so `HOM`,
+    /// `./.` no entry (`:715`), a haploid `1` `HOM`, `0/3` (the `*` beside the
+    /// reference) `HETREF` and `0/0` `HOMREF`, in header order. A named list is read
+    /// in its order with a repeated name once (`:737` keys the entries by name); a
+    /// record every sample misses keeps its alleles with an empty list, where
+    /// `--individual` writes nothing; `--process_ref_homs` adds the reference row,
+    /// which carries the list; a header without `FORMAT` reads no genotype; a
+    /// structural record carries no list (`:244`).
+    #[test]
+    fn individual_zyg_keeps_one_variant_with_a_zyg_entry_per_sample() {
+        let samples = genotyped_samples(&["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"]);
+        let split = IndividualSplit::new(
+            &IndividualRequest::All,
+            &samples,
+            IndividualMode::Zygosities,
+        )
+        .unwrap();
+        let reading = RecordReading {
+            individuals: Some(&split),
+            process_ref_homs: false,
+        };
+        let line = "21\t100\tx\tA\tG,T,*\t.\t.\t.\tGT\t0/1\t1/1\t1/2\t./1\t./.\t1\t0/3\t0/0";
+        let variants = parse_vcf_record(line, reading).unwrap();
+        let plain = parse_vcf_record(line, RecordReading::default()).unwrap();
+        assert_eq!(variants.len(), 2);
+        let alleles: Vec<&[u8]> = variants.iter().map(|v| v.alt_allele()).collect();
+        assert_eq!(alleles, [b"G".as_slice(), b"T"]);
+        assert!(variants
+            .iter()
+            .all(|v| v.individual.is_none() && v.genotype.is_empty() && !v.hom_ref));
+        assert!(variants[0].same_record(&variants[1]));
+        let expected = zyg(&[
+            ("S1", "HET"),
+            ("S2", "HOM"),
+            ("S3", "HET"),
+            ("S4", "HOM"),
+            ("S6", "HOM"),
+            ("S7", "HETREF"),
+            ("S8", "HOMREF"),
+        ]);
+        assert_eq!(zygosities(&variants[0]), expected);
+        assert_eq!(zygosities(&variants[1]), expected);
+        assert_eq!(
+            variants[0].record_allele_string(),
+            plain[0].record_allele_string()
+        );
+        assert_eq!(variants[0].allele_num, plain[0].allele_num);
+        assert!(plain.iter().all(|v| v.sample_zygosities.is_none()));
+
+        let named = IndividualRequest::Named(vec!["S3".into(), "S1".into(), "S3".into()]);
+        let named_split =
+            IndividualSplit::new(&named, &samples, IndividualMode::Zygosities).unwrap();
+        let listed = parse_vcf_record(
+            line,
+            RecordReading {
+                individuals: Some(&named_split),
+                process_ref_homs: true,
+            },
+        )
+        .unwrap();
+        assert_eq!(listed.len(), 3);
+        assert!(listed[0].reference_allele_row && !listed[1].reference_allele_row);
+        for variant in &listed {
+            assert_eq!(zygosities(variant), zyg(&[("S3", "HET"), ("S1", "HET")]));
+        }
+
+        let missing = parse_vcf_record(
+            "21\t100\tx\tA\tG\t.\t.\t.\tGT\t./.\t./.\t.\t./.\t./.\t./.\t./.\t./.",
+            reading,
+        )
+        .unwrap();
+        assert_eq!(missing.len(), 1);
+        assert_eq!(zygosities(&missing[0]), []);
+        let no_format = IndividualSplit::new(
+            &IndividualRequest::All,
+            &SampleColumns {
+                names: samples.names.clone(),
+                genotyped: false,
+            },
+            IndividualMode::Zygosities,
+        )
+        .unwrap();
+        let ungenotyped = parse_vcf_record(
+            line,
+            RecordReading {
+                individuals: Some(&no_format),
+                process_ref_homs: false,
+            },
+        )
+        .unwrap();
+        assert_eq!(ungenotyped.len(), 2);
+        assert_eq!(zygosities(&ungenotyped[0]), []);
+        let structural = parse_vcf_record(
+            "21\t100\tsv\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=200\tGT\t0/1\t0/0\t0/0\t0/0\t0/0\t0/0\t0/0\t0/0",
+            reading,
+        )
+        .unwrap();
+        assert_eq!(structural.len(), 1);
+        assert!(structural[0].sample_zygosities.is_none());
+    }
+
+    /// `Parser/VCF.pm:727-730`: when `--individual_zyg` names one sample
+    /// (`$n_individuals`, the list's length, is 1) and that sample carries no
+    /// alternate allele (`:720`, the `*` excluded as under `--individual`), the
+    /// record's allele string becomes `REF/REF` and `unique_ind` routes the output
+    /// through the reference allele's row alone (`OutputFactory.pm:506-508`), with
+    /// the sample's `ZYG`; a list of one name repeated twice is two individuals, so
+    /// the record keeps its alleles; a carrier or a missing genotype leaves the
+    /// record as read; a non-variant record (`A .`) with a `0/0` sample is the
+    /// reference row too. Under `--minimal` the row keeps the record's `minimised`
+    /// mark and its uploaded string, which `minimise_alleles` left as Ensembl VEP's
+    /// `original_allele_string` (Parser.pm:987-1011). The reference is the record's
+    /// working one, `CT` for `CTA GA`, as a reference-homozygous copy's is under
+    /// `--individual`: Ensembl VEP compares the chopped bits `CTA` and `GA` with the
+    /// minimised `CT` (`:691-692`, `:720`) and reads that sample as `HOM` with the
+    /// record's alleles kept, the divergence `docs/intended-divergences.md` lists
+    /// under the trimmable indel, pinned here on the vep-rs side.
+    #[test]
+    fn individual_zyg_single_hom_ref_sample_annotates_the_reference_allele() {
+        let samples = genotyped_samples(&["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"]);
+        let one = |name: &str| {
+            IndividualSplit::new(
+                &IndividualRequest::Named(vec![name.into()]),
+                &samples,
+                IndividualMode::Zygosities,
+            )
+            .unwrap()
+        };
+        let line = "21\t100\tx\tA\tG,T,*\t.\t.\t.\tGT\t0/1\t1/1\t1/2\t./1\t./.\t1\t0/3\t0/0";
+        let read = |split: &IndividualSplit| {
+            parse_vcf_record(
+                line,
+                RecordReading {
+                    individuals: Some(split),
+                    process_ref_homs: false,
+                },
+            )
+            .unwrap()
+        };
+        let hom_ref = read(&one("S8"));
+        assert_eq!(hom_ref.len(), 1);
+        let row = &hom_ref[0];
+        assert!(row.reference_allele_row && row.hom_ref && !row.no_allele);
+        assert!(row.individual.is_none());
+        assert_eq!(row.alt_allele(), b"A");
+        assert_eq!(row.allele_num, Some(0));
+        assert_eq!(row.record_allele_string(), "A/A");
+        assert_eq!(row.uploaded_allele_string.as_deref(), Some("A/A"));
+        assert_eq!(zygosities(row), zyg(&[("S8", "HOMREF")]));
+        let star = read(&one("S7"));
+        assert_eq!(star.len(), 1);
+        assert!(star[0].reference_allele_row);
+        assert_eq!(zygosities(&star[0]), zyg(&[("S7", "HETREF")]));
+        let carrier = read(&one("S1"));
+        assert_eq!(carrier.len(), 2);
+        assert!(carrier.iter().all(|v| !v.reference_allele_row));
+        assert_eq!(zygosities(&carrier[0]), zyg(&[("S1", "HET")]));
+        let missing = read(&one("S5"));
+        assert_eq!(missing.len(), 2);
+        assert_eq!(zygosities(&missing[0]), []);
+        let twice = IndividualSplit::new(
+            &IndividualRequest::Named(vec!["S8".into(), "S8".into()]),
+            &samples,
+            IndividualMode::Zygosities,
+        )
+        .unwrap();
+        let repeated = read(&twice);
+        assert_eq!(repeated.len(), 2);
+        assert!(repeated.iter().all(|v| !v.reference_allele_row));
+        assert_eq!(zygosities(&repeated[0]), zyg(&[("S8", "HOMREF")]));
+        // `all` over a single-sample header names one individual too.
+        let single = IndividualSplit::new(
+            &IndividualRequest::All,
+            &genotyped_samples(&["S1"]),
+            IndividualMode::Zygosities,
+        )
+        .unwrap();
+        let reading = RecordReading {
+            individuals: Some(&single),
+            process_ref_homs: false,
+        };
+        let all_of_one = parse_vcf_record("21\t100\tx\tA\tG\t.\t.\t.\tGT\t0|0", reading).unwrap();
+        assert_eq!(all_of_one.len(), 1);
+        assert!(all_of_one[0].reference_allele_row);
+        assert_eq!(zygosities(&all_of_one[0]), zyg(&[("S1", "HOMREF")]));
+        let non_variant =
+            non_variant_record_read("21\t100\tx\tA\t.\t.\t.\t.\tGT\t0/0", reading).unwrap();
+        assert_eq!(non_variant.len(), 1);
+        assert!(non_variant[0].reference_allele_row && !non_variant[0].no_allele);
+        assert_eq!(non_variant[0].record_allele_string(), "A/A");
+        assert_eq!(zygosities(&non_variant[0]), zyg(&[("S1", "HOMREF")]));
+        let minimised = parse_vcf_record("21\t100\tx\tCTA\tGA\t.\t.\t.\tGT\t0/0", reading).unwrap();
+        assert_eq!(minimised.len(), 1);
+        assert_eq!(minimised[0].record_allele_string(), "CT/CT");
+        assert_eq!(minimised[0].alt_allele(), b"CT");
+        assert_eq!((minimised[0].start, minimised[0].end), (100, 101));
+        // The row keeps the record's mark (`minimise_alleles` ran on the indel),
+        // which only `--minimal` prints.
+        assert!(minimised[0].minimised && !all_of_one[0].minimised);
+        assert_eq!(all_of_one[0].uploaded_allele(false).as_deref(), Some("A/A"));
+        let under_minimal = parse_vcf_line_with(
+            "21\t100\tx\tG\tA\t.\t.\t.\tGT\t0|0",
+            &VcfParse {
+                minimal: true,
+                reading,
+                ..VcfParse::default_run(false)
+            },
+        )
+        .unwrap();
+        assert_eq!(under_minimal.len(), 1);
+        assert!(under_minimal[0].reference_allele_row && under_minimal[0].minimised);
+        assert_eq!(under_minimal[0].record_allele_string(), "G/G");
+        assert_eq!(
+            under_minimal[0].uploaded_allele(true).as_deref(),
+            Some("G/A")
+        );
+        // A non-variant record has no alternate allele for `minimise_alleles` to
+        // keep a string of (Parser.pm:974-976), so its row prints the reference twice.
+        let non_variant_minimal = non_variant_record(
+            "21\t100\tx\tC\t.\t.\t.\t.\tGT\t0/0",
+            &VcfParse {
+                minimal: true,
+                reading,
+                ..VcfParse::default_run(false)
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            non_variant_minimal[0].uploaded_allele(true).as_deref(),
+            Some("C/C")
+        );
+        assert!(!non_variant_minimal[0].minimised);
     }
 }

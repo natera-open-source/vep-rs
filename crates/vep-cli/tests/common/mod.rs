@@ -37,8 +37,8 @@
 //! start sites ([`nearest_as_coordinates`]). `masks` lists the mask classes
 //! applied to every run of the corpus before the comparison: under
 //! [`REGULATORY_FEATURE_ROWS`] the reference loses its regulatory rows
-//! ([`apply_masks`]), and under [`ORDER_ONLY`] the `DOMAINS` and `FREQS` items
-//! of both sides compare as a multiset ([`list_columns_as_multisets`]).
+//! ([`apply_masks`]), and under [`ORDER_ONLY`] the `DOMAINS`, `FREQS` and `ZYG`
+//! items of both sides compare as a multiset ([`list_columns_as_multisets`]).
 //!
 //! A corpus is run once per [`Run`]: the manifest's own run (its `flags`,
 //! `variants.vcf`, every format, `expected/`) and once per `flag_sets` entry,
@@ -76,6 +76,7 @@
 
 #![allow(dead_code)]
 
+use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fs;
 use std::io::{Read, Write};
@@ -213,9 +214,11 @@ pub const REGULATORY_FEATURE_ROWS: &str = "regulatory_feature_rows";
 /// which the core API fills by analysis in Perl hash order with the database's
 /// rows inside each analysis, while vep-cache-builder writes them by feature
 /// identifier, so `DOMAINS` agrees as a set and not in order; `FREQS` lists the
-/// frequencies that filtered a record in hash order (`OutputFactory.pm:1152-1153`).
-/// Under the class the items of both columns in the default, tab and VCF
-/// formats and the objects of the JSON `domains` array compare as a multiset
+/// frequencies that filtered a record in hash order (`OutputFactory.pm:1152-1153`),
+/// as does the `ZYG` list of `--individual_zyg` (`OutputFactory.pm:983`), which
+/// vep-rs prints in the order the run names the samples. Under the class the
+/// items of the three columns in the default, tab and VCF formats and the JSON
+/// `domains` and `zyg` arrays compare as a multiset
 /// ([`list_columns_as_multisets`]); every other field compares exactly.
 pub const ORDER_ONLY: &str = "order_only";
 
@@ -308,31 +311,37 @@ pub fn apply_masks(masks: &[String], format: &str, expected: &mut Vec<Entry>) {
 }
 
 /// The columns [`ORDER_ONLY`] compares as multisets in the text formats; the
-/// JSON format carries `DOMAINS` alone as a consequence's `domains` array.
-const ORDER_ONLY_COLUMNS: [&str; 2] = ["DOMAINS", "FREQS"];
+/// JSON format carries `DOMAINS` as a consequence's `domains` array and `ZYG` as
+/// the record's `zyg` array.
+const ORDER_ONLY_COLUMNS: [&str; 3] = ["DOMAINS", "FREQS", "ZYG"];
 
 /// Rewrites every [`ORDER_ONLY_COLUMNS`] value of one side into its items in
 /// sorted order: the default and tab formats' `,`-joined items
-/// (`Utils.pm:185-198`), the VCF's `&`-joined items (`OutputFactory/VCF.pm:391`)
-/// and the JSON `domains` array's objects by their compact text. Applied to
-/// both sides under [`ORDER_ONLY`], it makes two lists of the same items in
-/// any order compare equal while lists differing in an item, or in how often
-/// one occurs, still differ. The default format's raw `Extra` text is
-/// rewritten with each field; an absent or `-` value stays as written.
+/// (`Utils.pm:185-198`), the VCF's `&`-joined items (`OutputFactory/VCF.pm:391`),
+/// the JSON `domains` array's objects by their compact text and the JSON `zyg`
+/// array's strings. Applied to both sides under [`ORDER_ONLY`], it makes two
+/// lists of the same items in any order compare equal while lists differing in
+/// an item, or in how often one occurs, still differ. The default format's raw
+/// `Extra` text is rewritten with each field; an absent or `-` value stays as
+/// written.
 pub fn list_columns_as_multisets(entries: &mut [Entry], format: &str) {
     if format == "json" {
         for entry in entries {
-            let Some(value) = entry.fields.get("domains").cloned() else {
-                continue;
-            };
-            let Ok(serde_json::Value::Array(objects)) =
-                serde_json::from_str::<serde_json::Value>(&format!("[{value}]"))
-            else {
-                continue;
-            };
-            let mut items: Vec<String> = objects.iter().map(json_scalar).collect();
-            items.sort_unstable();
-            entry.fields.insert("domains".to_string(), items.join(","));
+            // `domains` is an array of objects, each kept as its compact text by
+            // `json_scalar`, so a JSON parse splits them where `,` would not;
+            // `zyg` is an array of strings, joined by `,`.
+            if let Some(value) = entry.fields.get("domains").cloned() {
+                if let Ok(serde_json::Value::Array(objects)) =
+                    serde_json::from_str::<serde_json::Value>(&format!("[{value}]"))
+                {
+                    let sorted = sorted_items(objects.iter().map(json_scalar), ",");
+                    entry.fields.insert("domains".to_string(), sorted);
+                }
+            }
+            if let Some(value) = entry.fields.get("zyg").cloned() {
+                let sorted = sorted_items(value.split(','), ",");
+                entry.fields.insert("zyg".to_string(), sorted);
+            }
         }
         return;
     }
@@ -345,15 +354,20 @@ pub fn list_columns_as_multisets(entries: &mut [Entry], format: &str) {
             if value.is_empty() || value == "-" {
                 continue;
             }
-            let mut items: Vec<&str> = value.split(separator).collect();
-            items.sort_unstable();
-            let sorted = items.join(separator);
+            let sorted = sorted_items(value.split(separator), separator);
             if let Some(extra) = entry.fields.get_mut("Extra") {
                 *extra = extra.replace(&format!("{column}={value}"), &format!("{column}={sorted}"));
             }
             entry.fields.insert(column.to_string(), sorted);
         }
     }
+}
+
+/// `items` in sorted order, joined by `separator`.
+fn sorted_items<T: Borrow<str> + Ord>(items: impl Iterator<Item = T>, separator: &str) -> String {
+    let mut items: Vec<T> = items.collect();
+    items.sort_unstable();
+    items.join(separator)
 }
 
 /// Applies a run's mask classes to the parsed entries of one format before
@@ -611,7 +625,7 @@ impl Run<'_> {
         masks_name(&self.masks, REGULATORY_FEATURE_ROWS)
     }
 
-    /// Whether the run compares `DOMAINS` and `FREQS` as multisets ([`ORDER_ONLY`]).
+    /// Whether the run compares `DOMAINS`, `FREQS` and `ZYG` as multisets ([`ORDER_ONLY`]).
     pub fn order_only(&self) -> bool {
         masks_name(&self.masks, ORDER_ONLY)
     }

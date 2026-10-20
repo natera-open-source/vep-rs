@@ -64,7 +64,7 @@ use tracing::debug;
 use crate::config::{PipelineMode, WriterStrategy};
 use crate::frequency_filter::FrequencyFilter;
 use crate::individuals::{
-    add_reference_allele_row, IndividualRequest, IndividualSplit, RecordReading,
+    add_reference_allele_row, IndividualMode, IndividualRequest, IndividualSplit, RecordReading,
 };
 use crate::pick::{self, FilterConfig};
 use crate::render::render_record;
@@ -158,9 +158,9 @@ pub(crate) struct LineBatch {
     seq: u64,
     text: Vec<u8>,
     items: Vec<Item>,
-    /// The per-individual split of the batch's records under `--individual`,
-    /// resolved against the input's `#CHROM` header once the reader met it
-    /// ([`read_vcf_lines`]); `None` for a run without the flag.
+    /// The per-individual split of the batch's records under `--individual` or
+    /// `--individual_zyg`, resolved against the input's `#CHROM` header once the
+    /// reader met it ([`read_vcf_lines`]); `None` for a run without either flag.
     individuals: Option<Arc<IndividualSplit>>,
 }
 
@@ -472,10 +472,11 @@ pub(crate) struct ReaderConfig<'a> {
     /// column scan ([`rejoin_with_tabs`]).
     pub delimiter: &'a Delimiter,
     pub allow_non_variant: bool,
-    /// `--individual`: the individuals to read each record for, resolved against
-    /// the `#CHROM` header's sample names when the reader meets it; a line is then
-    /// kept whole, FORMAT and sample columns included.
-    pub individual: Option<&'a IndividualRequest>,
+    /// `--individual` or `--individual_zyg`: the individuals to read each record
+    /// for, resolved against the `#CHROM` header's sample names when the reader
+    /// meets it, and what their genotypes are read for; a line is then kept whole,
+    /// FORMAT and sample columns included.
+    pub individuals: Option<(&'a IndividualRequest, IndividualMode)>,
     /// `--process_ref_homs`: a reference-homozygous individual annotates the
     /// reference allele, and every record gains its reference row.
     pub process_ref_homs: bool,
@@ -1146,14 +1147,15 @@ fn read_vcf_lines(
     let mut empty_lines = 0u64;
     // The line re-joined with tabs when the delimiter is another pattern.
     let mut rejoined: Vec<u8> = Vec::new();
-    // The `#CHROM` header's sample names, read for `--individual`; a VCF without
-    // the line names no sample (ensembl-io BaseVCF4.pm:785-793 reads the names
-    // from it), so `--individual all` reads nothing and a named list is refused.
+    // The `#CHROM` header's sample names, read for `--individual` and
+    // `--individual_zyg`; a VCF without the line names no sample (ensembl-io
+    // BaseVCF4.pm:785-793 reads the names from it), so `all` reads nothing and a
+    // named list is refused.
     let mut samples = SampleColumns::default();
     let mut individuals: Option<Arc<IndividualSplit>> = None;
-    // A record's FORMAT and sample columns are read under `--individual`; the
-    // parser columns alone otherwise.
-    let keep_whole_line = cfg.capture_raw_input || cfg.individual.is_some();
+    // A record's FORMAT and sample columns are read under either flag; the parser
+    // columns alone otherwise.
+    let keep_whole_line = cfg.capture_raw_input || cfg.individuals.is_some();
 
     loop {
         let mut send_batch = false;
@@ -1166,7 +1168,7 @@ fn read_vcf_lines(
                         vcf_header_written = true;
                     }
                 }
-                if cfg.individual.is_some() && line.starts_with(b"#CHROM") {
+                if cfg.individuals.is_some() && line.starts_with(b"#CHROM") {
                     samples = sample_columns(&String::from_utf8_lossy(trim_line(line)));
                 }
                 return Ok(());
@@ -1196,8 +1198,8 @@ fn read_vcf_lines(
             // The individuals are settled at the first record, when the header
             // has been read whole (Parser/VCF.pm:609-617 reads the sample names
             // and dies on an unknown one as it reads the first record).
-            if let (Some(request), None) = (cfg.individual, &individuals) {
-                let split = IndividualSplit::new(request, &samples)
+            if let (Some((request, mode)), None) = (cfg.individuals, &individuals) {
+                let split = IndividualSplit::new(request, &samples, mode)
                     .map_err(|message| crate::config::CliError::new("input", message))?;
                 let split = Arc::new(split);
                 batch.individuals = Some(Arc::clone(&split));
@@ -1237,7 +1239,9 @@ fn read_vcf_lines(
             // time), so a line counts once per individual named under
             // `--individual`, an upper bound on the copies it yields, and
             // `--buffer_size` bounds the copies a batch holds.
-            records_in_batch += individuals.as_ref().map_or(1, |split| split.len().max(1));
+            records_in_batch += individuals
+                .as_ref()
+                .map_or(1, |split| split.features_per_line());
             send_batch = records_in_batch >= cfg.batch_size;
             Ok(())
         })?;
@@ -3726,7 +3730,7 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: true,
-            individual: Some(&request),
+            individuals: Some((&request, IndividualMode::Copies)),
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3771,7 +3775,7 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
-            individual: None,
+            individuals: None,
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3837,7 +3841,7 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
-            individual: None,
+            individuals: None,
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -3927,7 +3931,7 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Whitespace,
             allow_non_variant: false,
-            individual: None,
+            individuals: None,
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -4087,7 +4091,7 @@ mod tests {
             capture_raw_input: true,
             delimiter: &Delimiter::Tab,
             allow_non_variant: true,
-            individual: None,
+            individuals: None,
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -4144,7 +4148,7 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
-            individual: None,
+            individuals: None,
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -4455,7 +4459,7 @@ mod tests {
             capture_raw_input: true,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
-            individual: None,
+            individuals: None,
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -4535,7 +4539,7 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
-            individual: None,
+            individuals: None,
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -4595,7 +4599,7 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
-            individual: None,
+            individuals: None,
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -4672,7 +4676,7 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
-            individual: None,
+            individuals: None,
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -4755,7 +4759,7 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
-            individual: None,
+            individuals: None,
             process_ref_homs: false,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -4836,7 +4840,7 @@ mod tests {
             capture_raw_input: false,
             delimiter: &Delimiter::Tab,
             allow_non_variant: false,
-            individual: None,
+            individuals: None,
             process_ref_homs: true,
             dont_skip: false,
             max_sv_size: Some(10_000_000),
@@ -4926,7 +4930,7 @@ mod tests {
                 capture_raw_input: false,
                 delimiter: &Delimiter::Tab,
                 allow_non_variant: false,
-                individual: None,
+                individuals: None,
                 process_ref_homs: false,
                 dont_skip: false,
                 max_sv_size: Some(5),

@@ -109,18 +109,36 @@ impl JsonOutputFormatter {
             }
             let key = json_key(name);
             // The structural variants stay a list (`[sort keys ...]`,
-            // OutputFactory.pm:962-964), each name numberified (JSON.pm:288).
-            let value = if *name == "SV" {
-                if first.overlapping_svs.is_empty() {
-                    continue;
+            // OutputFactory.pm:962-964), each name numberified (JSON.pm:288), and
+            // so does the `--individual_zyg` list of `sample:ZYG` entries
+            // (OutputFactory.pm:981-987); the `:` in each entry keeps it a string
+            // under numberify.
+            let value = match (*name, &first.sample_zygosities) {
+                ("SV", _) => {
+                    if first.overlapping_svs.is_empty() {
+                        continue;
+                    }
+                    numberified_list(&first.overlapping_svs)
                 }
-                numberified_list(&first.overlapping_svs)
-            } else {
-                let value = fields::field_value(name, first, None, &self.options, ",");
-                if value.is_empty() {
-                    continue;
+                ("ZYG", Some(samples)) => {
+                    if samples.entries.is_empty() {
+                        continue;
+                    }
+                    Value::Array(
+                        samples
+                            .entries
+                            .iter()
+                            .map(|sample| Value::String(sample.to_string()))
+                            .collect(),
+                    )
                 }
-                numberify(&key, value)
+                _ => {
+                    let value = fields::field_value(name, first, None, &self.options, ",");
+                    if value.is_empty() {
+                        continue;
+                    }
+                    numberify(&key, value)
+                }
             };
             root.insert(key, value);
         }
@@ -898,6 +916,68 @@ mod tests {
         assert!(parsed.get("transcript_consequences").is_none());
         let plain = fmt(FieldOptions::default()).format_variant_value(&make_annotated_variant());
         assert!(plain.get("ind").is_none() && plain.get("zyg").is_none());
+    }
+
+    /// Under `--individual_zyg` the record's `zyg` is the array of `sample:ZYG`
+    /// strings (`OutputFactory.pm:981-987` stores a list, which JSON.pm:261-262
+    /// writes as is), at the top level and on no consequence entry, with no `ind`;
+    /// a record no named sample has a genotype for carries no `zyg`, as Ensembl
+    /// VEP sets no key; a record with no allele keeps its object with the list.
+    #[test]
+    fn individual_zyg_writes_zyg_as_an_array_at_the_top_level() {
+        use std::sync::Arc;
+        use vep_core::variant::{SampleZygosity, Zygosity, ZygosityList};
+        let entry = |sample: &str, zygosity: Zygosity| SampleZygosity {
+            sample: sample.into(),
+            zygosity,
+        };
+        let list = |entries: Vec<SampleZygosity>| Some(Arc::new(ZygosityList::new(entries)));
+        let mut v = make_annotated_variant();
+        v.sample_zygosities = list(vec![
+            entry("S1", Zygosity::Het),
+            entry("S3", Zygosity::HomRef),
+        ]);
+        let options = FieldOptions {
+            individual_zyg: true,
+            ..Default::default()
+        };
+        let parsed = fmt(options.clone()).format_variant_value(&v);
+        assert_eq!(parsed["zyg"], json!(["S1:HET", "S3:HOMREF"]));
+        assert!(parsed.get("ind").is_none());
+        assert!(parsed["transcript_consequences"][0].get("zyg").is_none());
+        v.sample_zygosities = list(Vec::new());
+        let parsed = fmt(options.clone()).format_variant_value(&v);
+        assert!(parsed.get("zyg").is_none());
+        let mut no_allele =
+            InputVariant::without_allele("21".into(), 25000100, "A", std::iter::empty());
+        no_allele.sample_zygosities = list(vec![entry("S1", Zygosity::HomRef)]);
+        let parsed = fmt(options).format_variant_value(&no_allele);
+        assert_eq!(parsed["zyg"], json!(["S1:HOMREF"]));
+        assert_eq!(parsed["most_severe_consequence"], "?");
+    }
+
+    /// A serialised `Zygosity` is its printed label and reads back, so a plugin
+    /// handed the serialised record sees the `ZYG` value the output prints.
+    #[test]
+    fn zygosity_serialises_as_its_printed_label() {
+        use vep_core::variant::Zygosity;
+        for zygosity in [
+            Zygosity::Het,
+            Zygosity::Hom,
+            Zygosity::HetRef,
+            Zygosity::HomRef,
+        ] {
+            let serialised = serde_json::to_string(&zygosity).unwrap();
+            assert_eq!(serialised, format!("\"{}\"", zygosity.label()));
+            assert_eq!(
+                serde_json::from_str::<Zygosity>(&serialised).unwrap(),
+                zygosity
+            );
+        }
+        assert_eq!(
+            serde_json::to_string(&Zygosity::HomRef).unwrap(),
+            "\"HOMREF\""
+        );
     }
 
     /// An unannotated record keeps VEP's input-only shape plus the identity key.

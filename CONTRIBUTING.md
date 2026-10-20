@@ -79,15 +79,17 @@ column descriptions alone (`flag-set`, `flag-set --perl-mode`). `masks` lists th
 mask classes applied to every run of the corpus before the comparison:
 `regulatory_feature_rows` sets aside the reference's `RegulatoryFeature` and
 `MotifFeature` rows for a corpus run under `--regulatory` or `--everything`, which
-vep-rs accepts and annotates nothing for, and `order_only` compares the `DOMAINS`
-and `FREQS` items of both sides as multisets, for a native cache that lists a
-transcript's protein features in another order than the Ensembl cache
-(`scripts/concordance/compare_vep_formats.py --masks` applies the same classes). A
+vep-rs accepts and annotates nothing for, and `order_only` compares the `DOMAINS`,
+`FREQS` and `ZYG` items of both sides as multisets, for a native cache that lists a
+transcript's protein features in another order than the Ensembl cache and for the
+sample order of `--individual_zyg`, which Ensembl VEP prints in hash order
+(`scripts/concordance/compare_vep_formats.py --masks` applies the same classes, its
+`order_only` comparing only `DOMAINS` and `FREQS`). A
 flag set may carry its own `masks` for its run alone, kept when `flag-set` rewrites
 the set's entry. The list is written into the manifest by hand (no `select` option
 writes it), `select` keeps it when it regenerates the corpus, every subcommand
 refuses a class other than those two, and `classify` applies the regulatory class
-to the reference and compares `DOMAINS` and `FREQS` as multisets under `order_only`.
+to the reference and compares the three columns as multisets under `order_only`.
 `cargo test -p vep-cli --test golden --test format_parity` annotates each corpus
 once per run and compares every column of every format (the Parquet round trip
 needs the `duckdb` CLI; without it that one test skips). A failure lists every mismatch
