@@ -366,7 +366,7 @@ fn cached_to_colocated(
 /// `buf` must hold at least 20 bytes (`u64::MAX` is 20 digits). Byte-identical
 /// to `u64`'s `Display`, but avoids the `core::fmt` machinery on a path that
 /// runs once per (variant x transcript consequence).
-fn format_u64(mut value: u64, buf: &mut [u8; 20]) -> &[u8] {
+pub(crate) fn format_u64(mut value: u64, buf: &mut [u8; 20]) -> &[u8] {
     if value == 0 {
         buf[0] = b'0';
         return &buf[..1];
@@ -380,23 +380,26 @@ fn format_u64(mut value: u64, buf: &mut [u8; 20]) -> &[u8] {
     &buf[i..]
 }
 
-/// Write the `Extra` column of one default-format row: `KEY=VALUE` pairs joined
-/// by `;`, keys in VEP's order (IMPACT, DISTANCE, STRAND, FLAGS, then the active
-/// flag fields, then plugin keys alphabetically), values escaping only `;` as
-/// `%3B`, lists joined by `,`, and a lone `-` when no field applies. `tc` is
-/// `None` for an intergenic row, which carries IMPACT and no STRAND, and for a
-/// summary row, which carries the variant-level keys alone.
+/// Appends the `Extra` column of one default-format row: `KEY=VALUE` pairs
+/// joined by `;`, keys in VEP's order (IMPACT, DISTANCE, STRAND, FLAGS, then the
+/// active flag fields, then plugin keys alphabetically), values escaping only
+/// `;` as `%3B`, lists joined by `,`, and a lone `-` when no field applies. `tc`
+/// is `None` for an intergenic row, which carries IMPACT and no STRAND, and for
+/// a summary row, which carries the variant-level keys alone.
 ///
 /// This is the hot path for the default `-o vep` format: it runs once per
 /// (variant x transcript consequence). For a sequence variant with no optional
-/// field group active, no plugin data and a vocabulary that prints DISTANCE as the
-/// SO terms do, it writes the four fixed keys directly without allocating.
+/// field group active, no plugin data and a vocabulary that prints DISTANCE as
+/// the SO terms do, it writes the four fixed keys directly; every other row
+/// writes each value through [`vep_io::output::fields::write_field_value`], and
+/// a row without plugin data that is not structural carries the plan's flag
+/// fields alone, so its key list is not rebuilt.
 pub fn write_extra_fields(
     variant: &InputVariant,
     tc: Option<&vep_core::consequence::TranscriptConsequence>,
     plan: &vep_io::output::fields::ExtraFieldsPlan,
-    writer: &mut dyn std::io::Write,
-) -> std::io::Result<()> {
+    out: &mut Vec<u8>,
+) {
     let has_plugin_data =
         !variant.plugin_data.is_empty() || tc.is_some_and(|t| !t.plugin_data.is_empty());
     let summary_row = tc.is_none() && variant.summary_terms.is_some();
@@ -406,60 +409,85 @@ pub fn write_extra_fields(
         && !summary_row
         && plan.options.user_group_is_plain()
     {
-        return write_user_group(tc, writer);
+        return write_user_group(tc, out);
     }
 
     let options = &plan.options;
     let mut first = true;
-    for key in vep_io::output::fields::extra_keys_with(&plan.flag_fields, variant, tc, options) {
-        let value = vep_io::output::fields::field_value(key, variant, tc, options, ",");
-        if value.is_empty() && !vep_io::output::fields::empty_value_is_written(key, variant) {
-            continue;
+    if has_plugin_data || variant.is_structural {
+        for key in vep_io::output::fields::extra_keys_with(&plan.flag_fields, variant, tc, options)
+        {
+            write_extra_pair(out, key, variant, tc, options, &mut first);
         }
-        if !first {
-            writer.write_all(b";")?;
-        }
-        first = false;
-        writer.write_all(key.as_bytes())?;
-        writer.write_all(b"=")?;
-        if value.contains(';') {
-            writer.write_all(value.replace(';', "%3B").as_bytes())?;
-        } else {
-            writer.write_all(value.as_bytes())?;
+    } else {
+        for key in &plan.flag_fields {
+            write_extra_pair(out, key, variant, tc, options, &mut first);
         }
     }
     if first {
-        writer.write_all(b"-")?;
+        out.push(b'-');
     }
-    Ok(())
+}
+
+/// Appends `;KEY=VALUE` (`KEY=VALUE` for the first pair, clearing `first`) with
+/// `;` in the value escaped as `%3B`, or nothing when the row has no value and
+/// the empty value is not one the format writes
+/// ([`vep_io::output::fields::empty_value_is_written`]).
+fn write_extra_pair(
+    out: &mut Vec<u8>,
+    key: &str,
+    variant: &InputVariant,
+    tc: Option<&vep_core::consequence::TranscriptConsequence>,
+    options: &vep_io::output::fields::FieldOptions,
+    first: &mut bool,
+) {
+    let pair_start = out.len();
+    if !*first {
+        out.push(b';');
+    }
+    out.extend_from_slice(key.as_bytes());
+    out.push(b'=');
+    let value_start = out.len();
+    vep_io::output::fields::write_field_value(out, key, variant, tc, options, ",");
+    if out.len() == value_start && !vep_io::output::fields::empty_value_is_written(key, variant) {
+        out.truncate(pair_start);
+        return;
+    }
+    *first = false;
+    if out[value_start..].contains(&b';') {
+        let value = out.split_off(value_start);
+        for &b in &value {
+            if b == b';' {
+                out.extend_from_slice(b"%3B");
+            } else {
+                out.push(b);
+            }
+        }
+    }
 }
 
 /// The four unconditional keys, written as bytes. IMPACT is always present;
 /// DISTANCE only on an up/downstream row; STRAND and FLAGS only against a
 /// transcript, FLAGS only when the transcript carries a `cds_` attribute.
-fn write_user_group(
-    tc: Option<&vep_core::consequence::TranscriptConsequence>,
-    writer: &mut dyn std::io::Write,
-) -> std::io::Result<()> {
+fn write_user_group(tc: Option<&vep_core::consequence::TranscriptConsequence>, out: &mut Vec<u8>) {
     let Some(tc) = tc else {
-        return writer.write_all(b"IMPACT=MODIFIER");
+        return out.extend_from_slice(b"IMPACT=MODIFIER");
     };
-    writer.write_all(b"IMPACT=")?;
-    writer.write_all(tc.impact.as_str().as_bytes())?;
+    out.extend_from_slice(b"IMPACT=");
+    out.extend_from_slice(tc.impact.as_str().as_bytes());
     if let Some(dist) = tc.distance {
         let mut buf = [0u8; 20];
-        writer.write_all(b";DISTANCE=")?;
-        writer.write_all(format_u64(dist, &mut buf))?;
+        out.extend_from_slice(b";DISTANCE=");
+        out.extend_from_slice(format_u64(dist, &mut buf));
     }
-    writer.write_all(b";STRAND=")?;
-    writer.write_all(if tc.strand < 0 { b"-1" } else { b"1" })?;
+    out.extend_from_slice(b";STRAND=");
+    out.extend_from_slice(if tc.strand < 0 { b"-1" } else { b"1" });
     let mut wrote_flags = false;
     for flag in tc.flags.iter().filter(|f| f.starts_with("cds_")) {
-        writer.write_all(if wrote_flags { b"," } else { b";FLAGS=" })?;
-        writer.write_all(flag.as_bytes())?;
+        out.extend_from_slice(if wrote_flags { b"," } else { b";FLAGS=" });
+        out.extend_from_slice(flag.as_bytes());
         wrote_flags = true;
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -1250,7 +1278,7 @@ mod tests {
     ) -> String {
         let mut buf: Vec<u8> = Vec::new();
         let plan = ExtraFieldsPlan::new(options.clone());
-        write_extra_fields(variant, tc, &plan, &mut buf).expect("write_extra_fields");
+        write_extra_fields(variant, tc, &plan, &mut buf);
         String::from_utf8(buf).expect("Extra field is valid UTF-8")
     }
 

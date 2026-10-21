@@ -45,8 +45,9 @@ gains its mate's consequences, `variation_matcher` attaches the co-located known
 chromosome that overlaps nothing becomes `intergenic_variant`. Built-in
 plugins see the whole batch in one `run_batch` call and dynamic-library plugins run per
 consequence; `pick::apply_to_batch` applies the pick flags and summaries to each record's
-alleles together; `render_record` hands each record's alleles to the chosen `vep-io` formatter,
-or to `render_default_record` for VEP's default text format. Without plugins or a known-variant
+alleles together; `render_record` hands each record's alleles to the chosen `vep-io` formatter
+(the tab format's byte path, `render_tab_record`, included), or to
+`render_default_record` for VEP's default text format. Without plugins or a known-variant
 source the coordinator streams: it warms the chromosomes a batch names and hands the batch to the
 pool as independent tasks that each annotate, filter, render and free their own records (and
 parse them first, for a VCF input; the other formats are parsed on the reader thread),
@@ -71,7 +72,7 @@ has drained.
 | `src/input_shape.rs`        | `InputShape`: whether the input is an indexed BGZF file and, from four index-resolved windows of blocks, how many bytes its records inflate to and how many it holds, the signals `--decompression_threads auto` and `--resolved_config` read |
 | `src/pipeline.rs`           | The three-stage pipeline: reader thread, coordinator (streaming by default, batched on request or when plugins or a known-variant source are in play) and writer thread over bounded channels, the resolution of each input chromosome name to the cache's through the synonym table, the chromosome prewarmer, the fused annotate-render pass and the output sink behind `--writer_strategy` |
 | `src/warnings.rs`           | The warning `Sink`: every `warn!` event and skipped-variant report, written once per text to the warnings file (`--warning_file`, default `<output_file>_warnings.txt`) and echoed on standard error unless `--quiet`; the `--skipped_variants_file` written when the run ends |
-| `src/render.rs`             | `render_record` and `render_default_record`: one input record's rows, through the chosen `vep-io` formatter or as VEP's default text format, appended to a render task's output bytes                                        |
+| `src/render.rs`             | `render_record` and `render_default_record`: one input record's rows, through the chosen `vep-io` formatter (the tab byte path included) or as VEP's default text format, appended to a render task's output bytes                                        |
 | `src/output_compress.rs`    | `OutputCompression`: `--compress_output` gzip or bgzip encoding of the output in process, in place of the `gzip -c` or `bgzip -c` pipe Ensembl VEP opens; `CompressedOutput::finish` writes the stream's trailer once every line is written |
 | `src/annotator.rs`          | The embedding entry point: `Annotator` over `AnnotationResources` and a scoped pool, the `RawRow` simple-allele input, the per-row `AnnotationError`, and the shared loaders for FASTA, plugins and transcripts            |
 | `src/json_cache.rs`         | Deserializes the JSON cache: enumerates `transcripts/<chr>/<start>-<end>.json` shards and loads one chromosome's transcripts                                                                                                 |

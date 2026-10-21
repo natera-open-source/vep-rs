@@ -27,9 +27,11 @@ crate, and the two variants return as one record slice.
 `OutputFormatter::format_record` receives that slice: `fields::record_rows`
 orders the rows transcript-major (by transcript id) and allele-minor (ALT order),
 then adds one intergenic row per allele that overlapped nothing, and
-`fields::field_value` answers every column name from the row, reading plugin data
-for a name the table lacks. The tab formatter prints each column with `-` for an
-absent value; the VCF formatter folds every row into a `|`-joined CSQ entry (the
+`fields::write_field_value` answers every column name from the row as bytes
+(`fields::field_value` collects them into a `String`), reading plugin data for a
+name the table lacks. The tab formatter prints each column with `-` for an
+absent value, as lines through `format_record` or as bytes through
+`tab::render_tab_record`; the VCF formatter folds every row into a `|`-joined CSQ entry (the
 INFO key VEP uses for its annotations), joins the entries with `,` and appends
 `CSQ=...` to the record's own INFO column, a VCF input's line kept as the bytes
 it was read from and any other input's line built as Ensembl VEP's
@@ -48,8 +50,8 @@ the ones the binary runs; the identifier parser yields the mappings its caller
 resolved from the cache's variation files (`vep-cli`'s `variation_name_index`),
 one record per mapping. VEP's default text format has no
 formatter struct here: `vep-cli` renders its rows from this crate's field table
-(`record_rows_into`, `extra_keys_with`, `field_value`) and takes its header from
-`default_format_header`.
+(`record_rows_into`, `extra_keys_with`, `write_field_value`, `write_terms`,
+`write_versioned_id`) and takes its header from `default_format_header`.
 
 ## Modules
 
@@ -64,9 +66,9 @@ formatter struct here: `vep-cli` renders its rows from this crate's field table
 | `input::hgvs`        | `HgvsParser`: HGVS notation resolved against the context's reference sequence as Ensembl VEP resolves it through its database; `input::hgvs::genomic` reads the `g.` and `m.` shapes (substitution, `del`, `dup`, `delins`, `ins`, `inv`, `=`) with the genome's bases, the reference check and `--lookup_ref`; `input::hgvs::transcript` reads `c.` and `n.` on the transcript the context's `TranscriptSource` finds by stable id or, through Ensembl VEP's pick order, by gene name, placing the position through the transcript's exon mapper and keeping its strand; `input::hgvs::protein` reads `p.` on the transcript found by translation id, by transcript id or by gene name (every transcript of the gene tried in turn), turning the residue change into the one shortest nucleotide path to it (a substitution or `delins`) or into the deletion of its codons; `r.` fails with `Unsupported`, and a notation Ensembl VEP's resolver refuses or `validate_vf` skips is a `SkippedLine` carrying its text. |
 | `input::id`          | `IdParser`: one variant identifier per line, whitespace removed, the list read whole; `names` for the caller to resolve and `supply_mappings` to hand back one `NameMapping` list per name; a name without a mapping is a `No variant found` warning and a run of empty lines `skip_empty_lines`'s, both through `take_warnings`, the empty lines numbered as Ensembl VEP counts the list's lines. |
 | `output`             | The `OutputFormatter` trait: `write_header`, `format_variant`, `format_record` (every allele split from one input record together), `format_record_bytes` (the same lines as bytes, for a format that writes input bytes back) and `finish`. |
-| `output::fields`     | The field table every text format shares: the thirteen default columns, the flag-to-field order, header descriptions, `record_rows` ordering, `field_value`, the `Extra` column keys, the default and tab headers and the VCF `##VEP=` meta line. |
+| `output::fields`     | The field table every text format shares: the thirteen default columns, the flag-to-field order, header descriptions, `record_rows` ordering, `write_field_value` and its `String` collector `field_value`, the `Extra` column keys, the default and tab headers and the VCF `##VEP=` meta line. |
 | `output::frequency`  | The allele frequency fields of a row (`AF`, the 1000 Genomes and gnomAD population columns, `MAX_AF` and `MAX_AF_POPS`), filled from a record's co-located variants as Ensembl VEP fills them.                                      |
-| `output::tab`        | `TabOutputFormatter`: the default columns, then the active flag fields, then plugin fields, each as its own column, `-` where a value is absent.                                                                                        |
+| `output::tab`        | `TabOutputFormatter` and `render_tab_record`: the default columns, then the active flag fields, then plugin fields, each as its own column, `-` where a value is absent.                                                                                        |
 | `output::vcf_output` | `VcfOutputFormatter`: the input line, or the line `to_vcf_record` builds for a non-VCF input, with one CSQ entry per row, VEP's escaping, an earlier CSQ entry replaced, and the header block built from the input's own header lines. |
 | `output::json`       | `JsonOutputFormatter`: one JSON Lines object per record, keys lowercased and renamed as VEP renames them, numeric-looking values emitted as numbers except for identifier keys.                                                         |
 | `output::parquet`    | `ParquetOutputFormatter`: the tab-separated intermediate the command-line runner hands to `duckdb`; a `-` becomes an empty cell except in `ref`, `alt` and the allele columns `fields::dash_is_a_value` names, where a dash is a real allele. |
@@ -99,6 +101,9 @@ Output:
 | `fields::flag_fields`, `fields::field_description`      | The active optional fields in VEP's order; VEP's description of a field for the header blocks.                                                      |
 | `fields::record_rows`, `fields::record_rows_into`       | The rows one input record produces, in VEP's order; the `_into` form reuses a caller-owned vector.                                                   |
 | `fields::field_value(field, variant, tc, options, sep)` | The value of one named field for one row, `sep` joining list values (`,` in text formats, `&` inside a CSQ entry).                                  |
+| `fields::write_field_value(out, field, variant, tc, options, sep)` | The same value appended to an output vector, nothing when the field is absent on the row; `field_value` collects it. |
+| `fields::write_terms(out, terms, vocabulary)`, `fields::write_versioned_id(out, id, version, flag)` | Consequence terms `,`-joined in the configured vocabulary; a stable id with `.<version>` appended when the flag asks for it. |
+| `tab::render_tab_record(out, record, &formatter, rows)` | One record's tab lines appended as bytes, each column through `write_field_value`; `format_record` returns the same lines. |
 | `fields::extra_keys`, `fields::extra_keys_with`         | The `Extra` keys of a row: active flag fields first, then overlap and plugin keys alphabetically.                                                    |
 | `fields::default_format_header`, `fields::tab_header`   | The `##` header lines and the `#`-prefixed column line of the default and tab formats.                                                               |
 | `fields::tab_columns`, `fields::vcf_vep_meta_line`      | The tab format's column list; the `##VEP=` meta line with version, time, cache directory and source versions.                                       |
