@@ -9,15 +9,15 @@
 
 FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS duckdb
 ARG TARGETARCH
-# A DuckDB bump changes all four: the sha256s are of the two release zips and
-# of LICENSE at the release tag.
-ARG DUCKDB_VERSION=1.5.5
-ARG DUCKDB_SHA256_AMD64=08c0ca117111fcede14239d0093792352befdc174218c344d232c13279643d05
-ARG DUCKDB_SHA256_ARM64=02163197027a42149147364d31fa67cac82108517a4be43304a1cc226eaef07a
-ARG DUCKDB_LICENSE_SHA256=7e17fd31249fa875cb3b1c5e05c6c3e99b75509f6a2804ca176c217834de1dcb
+# A DuckDB bump changes all four: the sha256s are of the two release tarballs
+# and of LICENSE at the release tag.
+ARG DUCKDB_VERSION=2.0.0
+ARG DUCKDB_SHA256_AMD64=c6507206baf7793c6013dbd82368469a45f20dc0e17a6f92f204602f652ed2bc
+ARG DUCKDB_SHA256_ARM64=859e1875d2a9515fbb4bf8871061437a14af82320da68c753f094c4b776348fe
+ARG DUCKDB_LICENSE_SHA256=075c33400ffcb0c586dd106a029d3e733e9da3693f8fcb9cebfc651c8a2f14e3
 # hadolint ignore=DL3008
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /tmp/duckdb
@@ -26,10 +26,10 @@ RUN case "$TARGETARCH" in \
       arm64) sha="$DUCKDB_SHA256_ARM64" ;; \
       *) echo "ERROR: [docker] no DuckDB CLI for $TARGETARCH" >&2; exit 1 ;; \
     esac \
- && curl -fsSLo duckdb.zip "https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-${TARGETARCH}.zip" \
+ && curl -fsSLo duckdb.tar.gz "https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb-cli-linux-${TARGETARCH}.tar.gz" \
  && curl -fsSLo LICENSE "https://raw.githubusercontent.com/duckdb/duckdb/v${DUCKDB_VERSION}/LICENSE" \
- && printf '%s  duckdb.zip\n%s  LICENSE\n' "$sha" "$DUCKDB_LICENSE_SHA256" | sha256sum --check --strict - \
- && unzip -q duckdb.zip duckdb
+ && printf '%s  duckdb.tar.gz\n%s  LICENSE\n' "$sha" "$DUCKDB_LICENSE_SHA256" | sha256sum --check --strict - \
+ && tar -xzf duckdb.tar.gz duckdb
 
 FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
 ARG VERSION

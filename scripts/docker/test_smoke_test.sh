@@ -59,7 +59,7 @@ esac
 STUB
 cat >"$STUBS/duckdb" <<'STUB'
 #!/usr/bin/env bash
-[[ "$1" == --version ]] && { echo v1.5.5; exit "${STUB_DUCKDB_RC:-0}"; }
+[[ "$1" == --version ]] && { echo v2.0.0; exit "${STUB_DUCKDB_RC:-0}"; }
 [[ "${STUB_PQ_RC:-0}" -eq 0 ]] || { echo "IO Error: No files found" >&2; exit 1; }
 echo "${STUB_PQ_ROWS:-5}"
 STUB

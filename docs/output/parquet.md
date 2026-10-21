@@ -6,7 +6,7 @@ The output is a directory, so `-o STDOUT` is refused (`ERROR: [output] --output_
 
 ## Requirements
 
-The `duckdb` CLI, 1.2 or newer, must be on `PATH`. Install it with `brew install duckdb` on macOS, or from the CLI archive at <https://duckdb.org/docs/installation/> (on Linux the `duckdb_cli-linux-*.zip` release asset). vep-rs checks for it after the FASTA, the plugins and the variation cache are loaded and before the first variant is read. It fails there when `duckdb` is missing or too old, so no annotation is spent on a run it cannot finalize.
+The `duckdb` CLI, 1.2 or newer, must be on `PATH`. Install it with `brew install duckdb` on macOS, or from the CLI archive at <https://duckdb.org/docs/installation/> (on Linux the `duckdb-cli-linux-*.tar.gz` release asset; 1.x releases shipped `duckdb_cli-linux-*.zip`). vep-rs checks for it after the FASTA, the plugins and the variation cache are loaded and before the first variant is read. It fails there when `duckdb` is missing or too old, so no annotation is spent on a run it cannot finalize.
 
 ## Directory layout
 
