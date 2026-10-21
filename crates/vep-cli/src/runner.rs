@@ -2010,13 +2010,39 @@ fn parquet_row_group_rows(requested: u64) -> u64 {
 /// Key columns that lead the flat schema and key the nested shape's groups.
 const PARQUET_KEY_COLUMNS: [&str; 5] = ["chrom", "pos", "end", "ref", "alt"];
 
-/// Columns stored as integers rather than text; everything else stays VARCHAR.
-fn parquet_column_sql(name: &str) -> String {
+/// The integer type of a numeric column of the intermediate; `None` for a
+/// column stored as text.
+fn parquet_integer_type(name: &str) -> Option<&'static str> {
     match name {
-        "pos" | "end" => format!("TRY_CAST({0} AS BIGINT) AS {0}", sql_ident(name)),
-        "DISTANCE" => format!("TRY_CAST({0} AS INTEGER) AS {0}", sql_ident(name)),
-        "STRAND" => format!("TRY_CAST({0} AS TINYINT) AS {0}", sql_ident(name)),
-        _ => sql_ident(name),
+        "pos" | "end" => Some("BIGINT"),
+        "DISTANCE" => Some("INTEGER"),
+        "STRAND" => Some("TINYINT"),
+        _ => None,
+    }
+}
+
+/// One intermediate column as the Parquet schema stores it: a numeric column
+/// cast to its integer type, with an empty cell and a token that is not a
+/// number both NULL; a text column as read.
+///
+/// The cast takes `NULLIF(column, '')`, never the bare column. DuckDB 2.0.0
+/// and later push a top-level cast of a plain `read_csv` column into the
+/// reader, whose conversion is strict even for `TRY_CAST`, so a malformed
+/// token would abort the COPY instead of reading as NULL; a cast of an
+/// expression stays in the query.
+fn parquet_value_sql(name: &str) -> String {
+    let ident = sql_ident(name);
+    match parquet_integer_type(name) {
+        Some(ty) => format!("TRY_CAST(NULLIF({ident}, '') AS {ty})"),
+        None => ident,
+    }
+}
+
+/// [`parquet_value_sql`] under the column's own name.
+fn parquet_column_sql(name: &str) -> String {
+    match parquet_integer_type(name) {
+        Some(_) => format!("{} AS {}", parquet_value_sql(name), sql_ident(name)),
+        None => sql_ident(name),
     }
 }
 
@@ -2038,9 +2064,10 @@ const PARQUET_PER_VARIANT_COLUMNS: [&str; 6] = [
 ///
 /// Schema: the five key columns then exactly the `--tab` columns
 /// (`ParquetOutputFormatter`); `pos`/`end` are BIGINT, `DISTANCE` INTEGER,
-/// `STRAND` TINYINT, everything else VARCHAR with `-` stored as NULL. The nested
-/// shape groups rows by (chrom, pos, ref, alt) and stores the per-consequence
-/// columns as LIST, in the row order of the flat shape.
+/// `STRAND` TINYINT (a cell that is not a number is NULL), everything else
+/// VARCHAR with `-` stored as NULL. The nested shape groups rows by
+/// (chrom, pos, ref, alt) and stores the per-consequence columns as LIST, in
+/// the row order of the flat shape.
 ///
 /// Writer options favour the reader: Parquet v2 pages, ZSTD level 9, row groups
 /// of `row_group_size` rows (rounded up to whole DuckDB vectors) sorted by
@@ -2067,9 +2094,10 @@ fn finalize_parquet_output(
         .copied()
         .collect();
 
-    // `all_varchar` keeps every value textual until the explicit casts below:
-    // DuckDB's type sniffing otherwise reads `cDNA_position` as BIGINT from early
-    // rows and fails on the first `204-205`. The intermediate carries no quoting.
+    // `all_varchar` reads every cell as text: DuckDB's type sniffing would
+    // otherwise type `cDNA_position` as BIGINT from early rows and fail on the
+    // first `204-205`. The numeric columns take their types from the casts of
+    // the SELECT (`parquet_value_sql`). The intermediate carries no quoting.
     let source = format!(
         "read_csv('{}', delim='\\t', header=true, all_varchar=true, quote='', escape='')",
         escape_sql_string(tsv_path)
@@ -2086,20 +2114,14 @@ fn finalize_parquet_output(
         _ => {
             // Groups are keyed by the variant key and the per-variant columns,
             // so two input records at one site stay two rows.
-            let mut cols: Vec<String> = vec![
-                "chrom".to_string(),
-                "TRY_CAST(pos AS BIGINT) AS pos".to_string(),
-                "TRY_CAST(\"end\" AS BIGINT) AS \"end\"".to_string(),
-                "ref".to_string(),
-                "alt".to_string(),
-            ];
-            let mut group_by: Vec<String> = vec![
-                "chrom".to_string(),
-                "TRY_CAST(pos AS BIGINT)".to_string(),
-                "TRY_CAST(\"end\" AS BIGINT)".to_string(),
-                "ref".to_string(),
-                "alt".to_string(),
-            ];
+            let mut cols: Vec<String> = PARQUET_KEY_COLUMNS
+                .iter()
+                .map(|c| parquet_column_sql(c))
+                .collect();
+            let mut group_by: Vec<String> = PARQUET_KEY_COLUMNS
+                .iter()
+                .map(|c| parquet_value_sql(c))
+                .collect();
             for c in &tab_columns {
                 if PARQUET_PER_VARIANT_COLUMNS.contains(c) {
                     cols.push(sql_ident(c));
@@ -2107,13 +2129,9 @@ fn finalize_parquet_output(
                 } else {
                     // `list` keeps the flat row order because the source is
                     // ordered before grouping.
-                    let inner = match *c {
-                        "DISTANCE" => format!("TRY_CAST({} AS INTEGER)", sql_ident(c)),
-                        "STRAND" => format!("TRY_CAST({} AS TINYINT)", sql_ident(c)),
-                        _ => sql_ident(c),
-                    };
                     cols.push(format!(
-                        "list({inner} ORDER BY row_order) AS {}",
+                        "list({} ORDER BY row_order) AS {}",
+                        parquet_value_sql(c),
                         sql_ident(c)
                     ));
                 }
@@ -3083,6 +3101,102 @@ mod tests {
         assert_eq!(parquet_row_group_rows(5_000), 6_144);
         assert_eq!(parquet_row_group_rows(1), 2_048);
         assert_eq!(parquet_row_group_rows(0), 2_048);
+    }
+
+    /// The writer's contract for its four numeric columns: a token that is not
+    /// a number is stored as NULL and the COPY completes, in both shapes. The
+    /// intermediate never writes such a token, so the fixture carries one in
+    /// each column (`pos`, `end`, `DISTANCE`, `STRAND`) beside a well-formed
+    /// row, and the read-back is checked through the installed DuckDB CLI.
+    #[test]
+    fn parquet_writer_stores_a_malformed_numeric_token_as_null() {
+        let duckdb_installed = std::process::Command::new("duckdb")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !duckdb_installed {
+            eprintln!("skipping: duckdb CLI not installed");
+            return;
+        }
+        let header = [
+            "chrom",
+            "pos",
+            "end",
+            "ref",
+            "alt",
+            "Uploaded_variation",
+            "Location",
+            "Allele",
+            "Feature",
+            "DISTANCE",
+            "STRAND",
+            "cDNA_position",
+        ];
+        let rows = [
+            "21\t100\t100\tA\tG\trs1\t21:100\tG\tENST1\t5\t1\t12",
+            "21\tx\t-\tA\tG\trs2\t21:x\tG\tENST2\tn/a\tplus\t204-205",
+        ];
+        let dir = tempfile::tempdir().unwrap();
+        let intermediate = dir.path().join("out.tsv.tmp");
+        std::fs::write(
+            &intermediate,
+            format!("{}\n{}\n", header.join("\t"), rows.join("\n")),
+        )
+        .unwrap();
+        let read_back = |sql: &str| {
+            let out = std::process::Command::new("duckdb")
+                .args(["-csv", "-noheader", "-nullvalue", "NULL", "-c", sql])
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "duckdb failed:\n{}\nsql: {sql}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8(out.stdout).unwrap().trim().to_string()
+        };
+        for (shape, expected_schema, expected_values) in [
+            (
+                "flat",
+                "DISTANCE,INTEGER\nSTRAND,TINYINT\nend,BIGINT\npos,BIGINT",
+                "rs1,100,100,5,1\nrs2,NULL,NULL,NULL,NULL",
+            ),
+            (
+                "nested",
+                "DISTANCE,INTEGER[]\nSTRAND,TINYINT[]\nend,BIGINT\npos,BIGINT",
+                "rs1,100,100,[5],[1]\nrs2,NULL,NULL,[NULL],[NULL]",
+            ),
+        ] {
+            let out_dir = dir.path().join(format!("{shape}.parquet"));
+            finalize_parquet_output(
+                intermediate.to_str().unwrap(),
+                out_dir.to_str().unwrap(),
+                shape,
+                header.to_vec(),
+                &[("vep_rs_version".to_string(), "test".to_string())],
+                2_048,
+            )
+            .unwrap();
+            let glob = format!("{}/**/*.parquet", out_dir.display());
+            assert_eq!(
+                read_back(&format!(
+                    "SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM \
+                     read_parquet('{glob}')) WHERE column_name IN ('pos', 'end', 'DISTANCE', 'STRAND') \
+                     ORDER BY column_name"
+                )),
+                expected_schema,
+                "{shape} schema"
+            );
+            assert_eq!(
+                read_back(&format!(
+                    "SELECT Uploaded_variation, pos, \"end\", DISTANCE, STRAND \
+                     FROM read_parquet('{glob}') ORDER BY Uploaded_variation"
+                )),
+                expected_values,
+                "{shape} values"
+            );
+        }
     }
 
     /// A BGZF block header is the gzip magic with FEXTRA set and a `BC` subfield
