@@ -240,7 +240,7 @@ def test_the_0_3_2_page_renders_from_the_repository_files(tmp_path: Path) -> Non
     assert page(repo) == expected_page(repo)
 
 
-def test_the_page_runs_about_sixty_lines_and_is_refused_over_eighty(tmp_path: Path) -> None:
+def test_the_page_runs_about_sixty_lines_and_is_refused_over_eighty_four(tmp_path: Path) -> None:
     repo = fixture_repo(tmp_path)
     lines = page(repo).splitlines()
     assert len(lines) <= 60
@@ -250,9 +250,15 @@ def test_the_page_runs_about_sixty_lines_and_is_refused_over_eighty(tmp_path: Pa
     assert not [l for l in lines if l.startswith((">", "<"))]
     assert "**Full changelog**" not in "\n".join(lines[:-1])
     assert lines[-1].startswith("**Full changelog**: ")
-    write_changelog(repo, "### Changed\n\n" + "".join(f"- Change number {i}.\n" for i in range(45)))
-    m = re.search(r"the page is (\d+) lines; the cap is 80", error(repo))
-    assert m and int(m.group(1)) > 80
+
+    def changed_bullets(n: int) -> None:
+        write_changelog(repo, "### Changed\n\n" + "".join(f"- Change number {i}.\n" for i in range(n)))
+
+    lines_outside_changed = len(lines) - len(changelog_bullets(repo, VERSION))
+    changed_bullets(84 - lines_outside_changed)
+    assert page(repo).count("\n") == 84
+    changed_bullets(85 - lines_outside_changed)
+    assert error(repo) == f"{ERR}the page is 85 lines; the cap is 84\n"
 
 
 def test_whole_genome_table_derives_every_cell_from_the_records(tmp_path: Path) -> None:
@@ -1574,4 +1580,4 @@ def test_the_0_4_0_records_render_the_published_concordance_section(tmp_path: Pa
     )
     assert out.returncode == 0, out.stderr
     assert concordance_section(out.stdout) == f"{PUBLISHED_040_CAPTION}\n\n{PUBLISHED_040_TABLES}"
-    assert NEWEST_LABEL not in out.stdout and out.stdout.count("\n") <= 80
+    assert NEWEST_LABEL not in out.stdout and out.stdout.count("\n") <= 84

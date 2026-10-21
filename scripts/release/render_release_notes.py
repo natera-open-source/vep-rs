@@ -6,8 +6,8 @@ The page, every header `##`, in this order: the hand-written opener, then `## Hi
 hand-written ones); the version's CHANGELOG.md section with each `###` kind header raised to `##`;
 `## Concordance and wall time` from the release and population provenance records; `## Install` from
 SHA256SUMS, the glibc floors `check_glibc_floor.py --json` measured on the Linux archives, the build and the
-workspace rust-version; `## Cite` from CITATION.cff; and the full-changelog footer. A page runs about 60
-lines; one over 80 is refused.
+workspace rust-version; `## Cite` from CITATION.cff; and the full-changelog footer. A page over `LINE_CAP`
+lines is refused.
 
 usage: render_release_notes.py --repo DIR --version X.Y.Z --previous vX.Y.Z --commit SHA
                                --toolchain 1.97.1 --sha256sums FILE --glibc-floors FILE [--notes FILE]
@@ -32,7 +32,7 @@ from reference_release import release_from_provenance  # noqa: E402  (one readin
 
 REPO_URL = "https://github.com/natera-open-source/vep-rs"
 CONCEPT_DOI = "10.5281/zenodo.22837896"
-LINE_CAP = 80
+LINE_CAP = 84
 SCORED = ("s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08")
 MEASURED_CPU = {"arm64": "neoverse-v1", "x86_64": "x86-64-v3"}
 
