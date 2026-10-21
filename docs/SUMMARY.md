@@ -71,6 +71,7 @@
   - [A JSON summary row with no consequence](divergences/json-summary-without-term.md)
   - [Two `--minimal` alleles that trim to the same allele string](divergences/minimal-same-trimmed-allele.md)
   - [A repeated alternate allele the looked-up reference equals](divergences/minimal-lookup-ref-repeated-allele.md)
+  - [A coding transcript's cDNA under `--use_transcript_ref`](divergences/use-transcript-ref-cache-cdna.md)
   - [Reproducing the examples](divergences/reproducing.md)
 - [Divergence classes against 116.2](concordance-provenance/116.2-divergence-classes.md)
 

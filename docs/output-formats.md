@@ -72,6 +72,7 @@ The rules the formatters follow are VEP's own, cited to their Perl sources in `c
 - **Records Ensembl VEP skips**, which vep-rs annotates: [How structural variants are written](output/structural-variants.md#skipped-records).
 - **Breakends**, points, spans, mates and the rows on each side: [How structural variants are written](output/structural-variants.md#breakends).
 - **Per-sample copies and the reference row**, `--individual`, `--individual_zyg` and `--process_ref_homs`: [below](#per-sample-copies-and-the-reference-row).
+- **The transcript's reference allele**, `--use_transcript_ref` with `GIVEN_REF` and `USED_REF`: [below](#the-transcripts-reference-allele).
 
 ## Per-sample copies and the reference row
 
@@ -108,6 +109,20 @@ Under `--minimal`, a multi-allelic record that splits writes one reference row p
 The `REF_ALLELE` of every row of a split record under `--process_ref_homs` is the first allele's trimmed reference, `-` when that allele equals the reference, or the record's own reference where `--coding_only` drops that equal allele's feature. One VCF shape differs under `--lookup_ref`: [a repeated alternate allele the looked-up reference equals](divergences/minimal-lookup-ref-repeated-allele.md).
 
 The reference row has no `HGVSc` or `HGVSp`; under `--hgvsg` it prints the alternate allele's `HGVSg` on a bi-allelic record, as Ensembl VEP does. Under `--spdi` it carries no `SPDI`, except on a reference-homozygous individual's copy, whose allele string is the reference twice in Ensembl VEP, so the row prints the reference described against itself (`21:99:A:A`; an insertion's empty reference prints as `21:30284295::-`).
+
+## The transcript's reference allele
+
+Under `--use_transcript_ref`, each row is read against the reference allele Ensembl VEP takes from the transcript rather than from the input. Every format carries `GIVEN_REF`, the input's reference allele, and `USED_REF`, the row's. The JSON keys are `given_ref` and `used_ref`, and a `-` under them is kept, not omitted. The row's reference allele is the transcript's spliced cDNA over the variant where the variant lies wholly inside the exons, and `-` for an insertion. Elsewhere, in an intron, across an exon boundary or beyond the transcript, it is the input's allele: Ensembl VEP reads no genomic sequence for it.
+
+The alleles are compared against that reference: an alternate allele equal to the transcript's sequence takes the terms an allele equal to the reference takes, and loses the intron and splice terms a multi-base allele earns only where it differs. Under `--process_ref_homs` the reference row's `Allele` is the transcript's allele, while `REF_ALLELE`, `UPLOADED_ALLELE` and `Uploaded_variation` keep the input's.
+
+The HGVS notations shift a deletion towards the transcript's 3' end along the bases the transcript names, so a deletion whose input misspells the deleted bases shifts as the transcript reads it.
+
+`USED_REF` follows a deletion's 3' shift only where Ensembl VEP rotates the reference allele along with it, through its codon and protein paths: a row whose shifted span has both protein coordinates, under `--shift_3prime 1` or `--hgvs` (`TranscriptVariationAllele.pm` lines 674, 813-820 and 1771-1786). There the deleted bases are rotated by the shift towards the transcript's 3' end, so a deletion given as `CA` and shifted one base prints `USED_REF=AC`. A non-coding row, a UTR row and a deletion whose shifted span leaves the coding sequence keep the bases as the input wrote them.
+
+Under `--process_ref_homs` the codon path rotates nothing, because the reference row reads the codon before any alternate allele hands it a shift (`codon` rotates only on the call that memoises it, lines 802-804); `--hgvs` still rotates.
+
+The flag needs `--fasta`, which supplies a non-coding transcript's cDNA; a coding transcript's comes from the cache. `--use_given_ref` given beside it switches the flag off. The edited sequences of a BAM-edited cache, which switch the flag on in Ensembl VEP, are not read: `--bam` is refused.
 
 ## Engine identity
 

@@ -970,10 +970,11 @@ fn chr_filters_on_the_input_spelling() {
     }
 }
 
-/// `--check_ref` and `--lookup_ref` each need a FASTA (Runner.pm:760-761) and
-/// cannot be combined (Config.pm:627), and a region input, whose records name
-/// no reference allele, refuses `--check_ref` (Parser/Region.pm:118); each
-/// refusal is one `ERROR:` line and exit 1 before anything is written.
+/// `--check_ref`, `--lookup_ref` and `--use_transcript_ref` each need a FASTA
+/// (Runner.pm:760-762), the first two cannot be combined (Config.pm:627), and
+/// a region input, whose records name no reference allele, refuses
+/// `--check_ref` (Parser/Region.pm:118); each refusal is one `ERROR:` line and
+/// exit 1 before anything is written.
 #[test]
 fn reference_checks_need_a_fasta_and_exclude_each_other() {
     let dir = tempfile::tempdir().unwrap();
@@ -986,6 +987,10 @@ fn reference_checks_need_a_fasta_and_exclude_each_other() {
         (
             vec!["--lookup_ref"],
             "ERROR: [fasta] Cannot look up reference sequences (--lookup_ref) without a FASTA file (see --fasta)",
+        ),
+        (
+            vec!["--use_transcript_ref"],
+            "ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref",
         ),
         (
             vec!["--check_ref", "--lookup_ref", "--fasta", fasta.as_str()],

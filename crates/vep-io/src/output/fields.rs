@@ -123,6 +123,10 @@ pub struct FieldOptions {
     /// `--shift_length`: the SHIFT_LENGTH field is listed; its value is written
     /// only under `shift_3prime` (OutputFactory.pm:1695).
     pub shift_length: bool,
+    /// `--use_transcript_ref`: the `GIVEN_REF` and `USED_REF` columns
+    /// (Constants.pm:99), and the reference row's Allele is the allele the row
+    /// was analysed against.
+    pub use_transcript_ref: bool,
     /// `--shift_3prime 1`: insertions and deletions were annotated at their most
     /// 3' position on each transcript, so SHIFT_LENGTH has a value and
     /// `shift_genomic` has a shift to print.
@@ -243,6 +247,7 @@ const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
         &["SWISSPROT", "TREMBL", "UNIPARC", "UNIPROT_ISOFORM"],
     ),
     group("xref_refseq", &["RefSeq"]),
+    group("use_transcript_ref", &["GIVEN_REF", "USED_REF"]),
     group("gene_phenotype", &["GENE_PHENO"]),
     vf_group("nearest", &["NEAREST"]),
     vf_group("ambiguity", &["AMBIGUITY"]),
@@ -347,6 +352,7 @@ impl FieldOptions {
             "overlaps" => self.overlaps,
             "nearest" => self.nearest,
             "shift_length" => self.shift_length,
+            "use_transcript_ref" => self.use_transcript_ref,
             "var_synonyms" => self.var_synonyms,
             "regulatory" => self.regulatory,
             _ => false,
@@ -725,6 +731,8 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     ("SOMATIC", "Somatic status of existing variant"),
     ("IND", "Individual name"),
     ("ZYG", "Zygosity of individual genotype at this locus"),
+    ("GIVEN_REF", "Reference allele from input"),
+    ("USED_REF", "Reference allele as used to get consequences"),
     ("VARIANT_CLASS", "SO variant class"),
     (
         "PHENO",
@@ -787,12 +795,18 @@ fn genomic_shift(
 
 /// The row's `Allele`: the allele as the record gives it, or, under
 /// `--shift_3prime 1 --shift_genomic 1`, rotated along the row's shift
-/// (OutputFactory.pm:1347-1352).
+/// (OutputFactory.pm:1347-1352). A reference row's is the reference allele's
+/// sequence (:1347): [`TranscriptConsequence::used_ref`] when the row has one.
 fn row_allele(
     variant: &InputVariant,
     tc: Option<&TranscriptConsequence>,
     options: &FieldOptions,
 ) -> String {
+    if variant.reference_allele_row {
+        if let Some(used_ref) = tc.and_then(|x| x.used_ref.as_deref()) {
+            return used_ref.to_string();
+        }
+    }
     match genomic_shift(variant, tc, options) {
         Some((shift, strand)) => variant.display_allele_shifted(shift, strand),
         None => variant.display_allele(),
@@ -1294,6 +1308,19 @@ fn row_field_value(
             tc.map(|x| x.shift_length.to_string()).unwrap_or_default()
         }
         "SHIFT_LENGTH" => String::new(),
+        // Both are the reference allele's object's (OutputFactory.pm:1774-1779),
+        // so a row without a transcript carries neither.
+        "USED_REF" => tc
+            .and_then(|x| x.used_ref.as_deref())
+            .unwrap_or_default()
+            .to_string(),
+        "GIVEN_REF" => {
+            if tc.is_some_and(|x| x.used_ref.is_some()) {
+                String::from_utf8_lossy(&variant.ref_allele).to_string()
+            } else {
+                String::new()
+            }
+        }
         "CLIN_SIG"
         | "SOMATIC"
         | "PHENO"
@@ -1532,6 +1559,14 @@ fn sv_overlap(variant: &InputVariant, tc: Option<&TranscriptConsequence>) -> Opt
 /// other empty value stands for an absent key.
 pub fn empty_value_is_written(field: &str, variant: &InputVariant) -> bool {
     field == "NEAREST" && variant.nearest.as_ref().is_some_and(Vec::is_empty)
+}
+
+/// Whether a `-` value is a value of the field rather than an absent key, for
+/// the writers that drop a `-`: the JSON writer keeps it on `Allele`,
+/// `USED_REF` and `GIVEN_REF`, where it is an empty allele
+/// (`OutputFactory/JSON.pm:327`), and the Parquet writer follows the JSON one.
+pub fn dash_is_a_value(field: &str) -> bool {
+    matches!(field, "Allele" | "USED_REF" | "GIVEN_REF")
 }
 
 /// The keys of a row's `Extra` column in VEP's order: the active flag fields
@@ -3224,6 +3259,115 @@ mod tests {
         assert_eq!(field_value("ZYG", &reference, None, &opts, ","), "HETREF");
         let rows = record_rows(&[&reference, &het]);
         assert!(rows.is_empty(), "no feature, no intergenic verdict, no row");
+    }
+
+    /// `--use_transcript_ref` adds `GIVEN_REF` and `USED_REF` after `RefSeq`
+    /// (Constants.pm:99) with their descriptions (`:252-253`); both are the
+    /// reference allele's object's on a transcript row (OutputFactory.pm:1774-1779),
+    /// `USED_REF` the allele the row was analysed against and `GIVEN_REF` the
+    /// input's, so a row without a transcript carries neither, and a
+    /// reference row's Allele is the allele it was analysed against (`:1347`).
+    /// The JSON writer keeps a `-` on both (`OutputFactory/JSON.pm:327`).
+    #[test]
+    fn given_ref_and_used_ref_columns_follow_the_flag() {
+        let opts = FieldOptions {
+            use_transcript_ref: true,
+            xref_refseq: true,
+            gene_phenotype: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            flag_fields(&opts)[4..],
+            ["RefSeq", "GIVEN_REF", "USED_REF", "GENE_PHENO"]
+        );
+        assert!(vf_level_flag_fields(&opts).is_empty());
+        assert_eq!(
+            field_description("GIVEN_REF"),
+            Some("Reference allele from input")
+        );
+        assert_eq!(
+            field_description("USED_REF"),
+            Some("Reference allele as used to get consequences")
+        );
+        assert!(!flag_fields(&FieldOptions::default()).contains(&"USED_REF"));
+        assert!(!field_is_produced("GIVEN_REF", &FieldOptions::default()));
+
+        let given_a = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"C".to_vec());
+        let read_against_g = TranscriptConsequence {
+            used_ref: Some("G".into()),
+            ..Default::default()
+        };
+        let no_flag = TranscriptConsequence::default();
+        assert_eq!(
+            field_value("GIVEN_REF", &given_a, Some(&read_against_g), &opts, ","),
+            "A"
+        );
+        assert_eq!(
+            field_value("USED_REF", &given_a, Some(&read_against_g), &opts, ","),
+            "G"
+        );
+        assert_eq!(
+            field_value("Allele", &given_a, Some(&read_against_g), &opts, ","),
+            "C"
+        );
+        assert_eq!(
+            field_value("GIVEN_REF", &given_a, Some(&no_flag), &opts, ","),
+            ""
+        );
+        assert_eq!(
+            field_value("USED_REF", &given_a, Some(&no_flag), &opts, ","),
+            ""
+        );
+        assert_eq!(field_value("GIVEN_REF", &given_a, None, &opts, ","), "");
+        let mut summary = given_a.clone();
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(field_value("USED_REF", &summary, None, &opts, ","), "");
+
+        let insertion = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"TT".to_vec());
+        let read_against_dash = TranscriptConsequence {
+            used_ref: Some("-".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value(
+                "GIVEN_REF",
+                &insertion,
+                Some(&read_against_dash),
+                &opts,
+                ","
+            ),
+            "-"
+        );
+        assert_eq!(
+            field_value("USED_REF", &insertion, Some(&read_against_dash), &opts, ","),
+            "-"
+        );
+        assert!(
+            dash_is_a_value("USED_REF")
+                && dash_is_a_value("GIVEN_REF")
+                && dash_is_a_value("Allele")
+        );
+        assert!(!dash_is_a_value("REF_ALLELE"));
+
+        let reference_row = given_a.reference_allele_row();
+        assert_eq!(
+            field_value("Allele", &reference_row, Some(&read_against_g), &opts, ","),
+            "G"
+        );
+        assert_eq!(
+            field_value("Allele", &reference_row, Some(&no_flag), &opts, ","),
+            "A"
+        );
+        assert_eq!(
+            field_value(
+                "GIVEN_REF",
+                &reference_row,
+                Some(&read_against_g),
+                &opts,
+                ","
+            ),
+            "A"
+        );
     }
 
     /// `--individual_zyg` adds `ZYG` alone (Constants.pm:70, the second

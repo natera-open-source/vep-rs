@@ -1086,6 +1086,26 @@ impl InputVariant {
         }
     }
 
+    /// The variant read against `reference` in place of its reference allele,
+    /// as `--use_transcript_ref` reads each row against the transcript's
+    /// (`_raw_allele_hashes`, VariationFeatureOverlap.pm:418-425: the input's
+    /// reference allele leaves the allele list and the feature's takes the
+    /// reference allele's object). A reference row is that allele, so its
+    /// alternate allele follows.
+    pub fn against_reference_allele(&self, reference: &[u8]) -> InputVariant {
+        let mut reread = self.clone();
+        reread.ref_allele = reference.to_vec();
+        if reread.reference_allele_row {
+            reread.alt_alleles = vec![reference.to_vec()];
+        }
+        reread.allele_string = std::iter::once(&reread.ref_allele)
+            .chain(&reread.alt_alleles)
+            .map(|a| String::from_utf8_lossy(a).into_owned())
+            .collect::<Vec<_>>()
+            .join("/");
+        reread
+    }
+
     /// The variant with its alleles on the forward strand: an Ensembl-format
     /// record gives them on the strand its column names, and Ensembl VEP reads
     /// each against a feature as `feature_seq`, reverse-complemented when the
@@ -1530,6 +1550,37 @@ mod strand_tests {
         reverse.strand = Strand::Reverse;
         assert_eq!(reverse.display_allele_shifted(10, 1), "ATG");
         assert_eq!(reverse.display_allele_shifted(10, -1), "GAT");
+    }
+
+    /// `_raw_allele_hashes` under `-use_feature_ref` replaces only the reference
+    /// allele's object (VariationFeatureOverlap.pm:418-425): the alternates, the
+    /// strand, the class and the record-level fields stay the input's, the
+    /// allele string reads the new reference, and a reference row, being the
+    /// reference allele itself, becomes the new one.
+    #[test]
+    fn against_reference_allele_swaps_the_reference_and_keeps_the_rest() {
+        let mut given = InputVariant::new("21".into(), 100, 101, b"AC".to_vec(), b"-".to_vec());
+        given.strand = Strand::Reverse;
+        given.id = Some("rs1".into());
+        given.alt_alleles.push(b"GT".to_vec());
+        let reread = given.against_reference_allele(b"AT");
+        assert_eq!(reread.ref_allele, b"AT");
+        assert_eq!(reread.alt_alleles, given.alt_alleles);
+        assert_eq!(reread.allele_string, "AT/-/GT");
+        assert_eq!(
+            (
+                reread.strand,
+                reread.variant_class,
+                reread.id.as_deref(),
+                reread.start,
+                reread.end
+            ),
+            (Strand::Reverse, given.variant_class, Some("rs1"), 100, 101)
+        );
+        let reference_row = given.reference_allele_row().against_reference_allele(b"AT");
+        assert_eq!(reference_row.alt_alleles, vec![b"AT".to_vec()]);
+        assert_eq!(reference_row.allele_string, "AT/AT");
+        assert!(reference_row.reference_allele_row);
     }
 }
 

@@ -39,7 +39,7 @@ Five key columns, then exactly the default `--tab` columns in `--tab` order:
 | `DISTANCE`                                    | INTEGER |                                           |
 | `STRAND`                                      | TINYINT |                                           |
 
-In the allele columns (`ref`, `alt`, `Allele`) a `-` is a real allele, a deletion's ALT or an insertion's REF, and is kept.
+In the allele columns (`ref`, `alt`, `Allele`, and `GIVEN_REF` and `USED_REF` under `--use_transcript_ref`) a `-` is a real allele, a deletion's ALT or an insertion's REF, and is kept.
 
 ## Row shape (`--parquet_shape`)
 

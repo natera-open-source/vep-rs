@@ -230,6 +230,57 @@
    "vep_rs_only_tuples": [],
    "divergence_summary": {},
    "vep_rs_only_summary": {}
+  },
+  {
+   "name": "use-transcript-ref",
+   "flags": [
+    "--use_transcript_ref",
+    "--allow_non_variant"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_use-transcript-ref",
+   "covers": [
+    "use_transcript_ref",
+    "given-ref-used-ref-columns"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "use-transcript-ref-refhoms",
+   "flags": [
+    "--use_transcript_ref",
+    "--allow_non_variant",
+    "--process_ref_homs",
+    "--allele_number",
+    "--show_ref_allele"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_use-transcript-ref-refhoms",
+   "covers": [
+    "use_transcript_ref",
+    "given-ref-used-ref-columns"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
   }
  ],
  "suites": {
@@ -369,6 +420,62 @@
    "expect": {
     "exit": 1,
     "stderr_contains": "ERROR: [fasta] Cannot look up reference sequences (--lookup_ref) without a FASTA file (see --fasta)"
+   }
+  },
+  {
+   "name": "use-transcript-ref-default",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--json_cache",
+    "{cache}",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "--use_transcript_ref",
+    "--allow_non_variant",
+    "--fasta",
+    "{corpus}/reference.fa.gz",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "use_transcript_ref_default.txt",
+    "warnings_file": "use_transcript_ref_warnings.txt"
+   }
+  },
+  {
+   "name": "use-transcript-ref-without-fasta",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--json_cache",
+    "{cache}",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "--use_transcript_ref",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref"
    }
   },
   {

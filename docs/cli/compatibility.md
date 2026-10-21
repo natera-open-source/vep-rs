@@ -66,7 +66,7 @@ Every flag below parses and changes nothing. The first table is the error table'
 | `--solr` | Ensembl VEP declares it and writes no Solr output | Config.pm:215, read by no module |
 | `--tmpdir` | no module of Ensembl VEP reads it, and vep-rs writes its Parquet intermediate beside the output file | Config.pm:259 (tmpdir=s), default /tmp at :304, read by no module |
 | `--offline` | vep-rs always runs offline and never contacts a database | Config.pm:245; the option set at :464-469 switches on `--cache` and off `--database` |
-| `--use_given_ref` | vep-rs always uses the reference allele the input gives | Config.pm:255; the option set at :588-592 switches off use\_transcript\_ref, which CacheDir.pm:412-416 enables for a BAM-edited cache |
+| `--use_given_ref` | the default it names, the input's reference allele, stands without it, and given beside `--use_transcript_ref` it keeps that default | Config.pm:255; the option set at :588-592 switches off use\_transcript\_ref, which CacheDir.pm:412-416 enables for a BAM-edited cache |
 | `--no_check_variants_order` | vep-rs never checks the input order: every record is annotated where it stands, and an input whose chromosomes interleave keeps more transcript indexes in memory | Config.pm:83; InputBuffer.pm:189-258 aborts after 100 records more than 100 bp behind their predecessor |
 
 The flags below are declared with the description their group page shows, which says what, if anything, each changes; the second column is what Ensembl VEP does with the flag.

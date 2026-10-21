@@ -572,6 +572,12 @@ pub struct TranscriptConsequence {
     /// moved, every other row included.
     #[serde(default)]
     pub shift_length: u64,
+    /// The reference allele the row was analysed against under
+    /// `--use_transcript_ref`, relative to the variant's strand: the transcript's
+    /// where the variant maps inside its exons, the input's elsewhere (`USED_REF`,
+    /// OutputFactory.pm:1774-1779); `None` without the flag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub used_ref: Option<Arc<str>>,
     /// SIFT prediction and score.
     pub sift: Option<String>,
     /// PolyPhen prediction and score.
@@ -754,6 +760,7 @@ impl Default for TranscriptConsequence {
             hgvsp: None,
             hgvs_offset: None,
             shift_length: 0,
+            used_ref: None,
             sift: None,
             polyphen: None,
             domains: Vec::new(),
@@ -823,6 +830,7 @@ impl TranscriptConsequence {
             hgvsp: None,
             hgvs_offset: None,
             shift_length: 0,
+            used_ref: None,
             sift: None,
             polyphen: None,
             domains: Vec::new(),

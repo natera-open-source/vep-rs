@@ -306,7 +306,7 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     ),
     noop(
         "use_given_ref",
-        "vep-rs always uses the reference allele the input gives",
+        "the default it names, the input's reference allele, stands without it, and given beside --use_transcript_ref it keeps that default",
         "Config.pm:255; the option set at :588-592 switches off use_transcript_ref, which CacheDir.pm:412-416 enables for a BAM-edited cache",
     ),
     noop(
@@ -727,6 +727,10 @@ pub struct Config {
     pub check_ref: bool,
     /// `--lookup_ref`: the reference allele is read from the FASTA.
     pub lookup_ref: bool,
+    /// `--use_transcript_ref` (`Config.pm:254`): each row's reference allele is
+    /// the transcript's, and `GIVEN_REF` and `USED_REF` are written; off again
+    /// under `--use_given_ref` (`:588-590`).
+    pub use_transcript_ref: bool,
 }
 
 /// The output format as the writers name it: `OutputFactory.pm:229-231` lower-cases
@@ -1101,6 +1105,7 @@ impl Config {
             chr: state.is_given("chr").then(|| state.list("chr")),
             check_ref: args.check_ref,
             lookup_ref: args.lookup_ref,
+            use_transcript_ref: on("use_transcript_ref"),
         }
     }
 }

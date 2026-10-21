@@ -1098,6 +1098,18 @@ pub struct Args {
     #[arg(help_heading = "Transcript Sets", long = "flag_gencode_primary")]
     pub flag_gencode_primary: bool,
 
+    /// Read each row's reference allele from the transcript instead of the input, and add
+    /// GIVEN_REF (the input's reference allele) and USED_REF (the row's) to the output. The
+    /// row's allele is the transcript's spliced cDNA over the variant where the variant lies
+    /// wholly inside the exons, `-` for an insertion, and the input's allele elsewhere; an
+    /// alternate allele equal to the transcript's sequence takes the terms an allele equal to
+    /// the reference takes, and the reference row of --process_ref_homs is the transcript's
+    /// allele. Needs --fasta, which supplies a non-coding transcript's cDNA; --use_given_ref
+    /// switches it off. Not read: the edited transcript sequences of a BAM-edited (RefSeq)
+    /// cache, which Ensembl VEP reads with this flag switched on by the cache itself
+    #[arg(help_heading = "Transcript Sets", long = "use_transcript_ref")]
+    pub use_transcript_ref: bool,
+
     #[arg(help_heading = "Transcript Sets", long = "use_given_ref")]
     pub use_given_ref: bool,
 

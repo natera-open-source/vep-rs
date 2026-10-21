@@ -517,11 +517,12 @@ pub(crate) struct FastaChecks {
 /// FASTA is opened or found absent, every run being an offline run here.
 /// `--everything` without a FASTA drops the HGVS flags it switched on with an
 /// `INFO:` line (:745-754); an explicit `--hgvs` or `--hgvsg` without one is
-/// refused with Ensembl VEP's text (:759), then `--check_ref` (:760) and
-/// `--lookup_ref` (:761); `--shift_3prime 1` without one is refused as well,
-/// since the shift reads the reference; `--shift_hgvs 0` reports that it set
-/// `shift_3prime` to 0 (:792-795). The caller prints the notices unless
-/// `--quiet`, as `status_msg` does (BaseVEP.pm:782).
+/// refused with Ensembl VEP's text (:759), then `--check_ref` (:760),
+/// `--lookup_ref` (:761) and `--use_transcript_ref` (:762), which reads a
+/// non-coding transcript's cDNA from the FASTA; `--shift_3prime 1` without one
+/// is refused as well, since the shift reads the reference; `--shift_hgvs 0`
+/// reports that it set `shift_3prime` to 0 (:792-795). The caller prints the
+/// notices unless `--quiet`, as `status_msg` does (BaseVEP.pm:782).
 pub(crate) fn fasta_setup_checks(
     config: &Config,
     fasta_found: bool,
@@ -550,6 +551,12 @@ pub(crate) fn fasta_setup_checks(
             return Err(CliError::new(
                 "fasta",
                 "Cannot look up reference sequences (--lookup_ref) without a FASTA file (see --fasta)",
+            ));
+        }
+        if config.use_transcript_ref {
+            return Err(CliError::new(
+                "fasta",
+                "Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref",
             ));
         }
         if config.shift_3prime {
@@ -876,6 +883,7 @@ impl Runner {
             individual_zyg: c.individual_zyg.is_some(),
             process_ref_homs: c.process_ref_homs,
             coding_only: c.coding_only,
+            use_transcript_ref: c.use_transcript_ref,
             variant_class: c.variant_class,
             minimal: c.minimal,
             clinvar_somatic_classification: c.clinvar_somatic_classification,
@@ -1102,6 +1110,8 @@ impl Runner {
             hgvsg: hgvsg_options(&self.config, &self.cache.synonyms),
             spdi: spdi_options(&self.config, &self.cache.synonyms),
             domains: self.config.domains,
+            use_transcript_ref: self.config.use_transcript_ref,
+            process_ref_homs: self.config.process_ref_homs,
         });
 
         let LoadedPlugins { builtin, dylib } = self.load_plugins(plugin_fasta)?;
@@ -2502,6 +2512,11 @@ pub(crate) fn annotate_variant(
     let (variant_start, variant_end) = structural_variant_bounds(variant);
     let has_predictions = prediction_config.sift.is_some() || prediction_config.polyphen.is_some();
 
+    // The rows are held apart from the variant while the search runs and
+    // attached once it is over, so a copy of the variant taken while a row is
+    // computed (`against_reference_allele` under --use_transcript_ref) carries
+    // no finished row.
+    let mut rows = std::mem::take(&mut variant.transcript_consequences);
     // For structural variants, use sv_end to query the full SV span so all
     // overlapping transcripts are found (not just those at the 1bp anchor).
     transcripts.for_each_overlapping(variant_start, variant_end, |transcript| {
@@ -2521,14 +2536,13 @@ pub(crate) fn annotate_variant(
             }
             // Reserved at the first row rather than before the search, so a
             // variant overlapping nothing never allocates.
-            if variant.transcript_consequences.capacity() == 0 {
-                variant
-                    .transcript_consequences
-                    .reserve_exact(TRANSCRIPT_ROWS_CAPACITY);
+            if rows.capacity() == 0 {
+                rows.reserve_exact(TRANSCRIPT_ROWS_CAPACITY);
             }
-            variant.transcript_consequences.push(tc);
+            rows.push(tc);
         }
     });
+    variant.transcript_consequences = rows;
 
     // `<*>` without INFO/SVTYPE is a sequence allele at POS (Perl's structural ALT regex
     // `[<\[\]][^\*]+[>\]\[]` excludes it) whose length is unknown, so a frameshift the
@@ -3298,6 +3312,42 @@ mod tests {
             fasta_setup_checks(&config_from(&["--hgvs", "--shift_3prime", "1"]), true).unwrap();
         assert!(satisfied.hgvs);
         assert!(satisfied.notices.is_empty());
+    }
+
+    /// `post_setup_checks` (Runner.pm:762): `--use_transcript_ref` without a FASTA
+    /// is refused with Ensembl VEP's text, after the `--check_ref` and
+    /// `--lookup_ref` refusals of the same block (:760-761); `--use_given_ref`
+    /// beside it switches the flag off (Config.pm:588-590), so the pair passes,
+    /// as does the flag with a FASTA.
+    #[test]
+    fn use_transcript_ref_without_fasta_offline_exits_with_vep_message() {
+        for flags in [
+            &["--use_transcript_ref"][..],
+            &["--use_transcript_ref", "--offline"][..],
+            &["--use_transcript_ref", "--hgvs", "--everything"][..],
+        ] {
+            let error = fasta_setup_checks(&config_from(flags), false)
+                .expect_err("--use_transcript_ref without a FASTA passed the checks");
+            assert_eq!(
+                error.to_string(),
+                "ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref"
+            );
+        }
+        let error = fasta_setup_checks(
+            &config_from(&["--use_transcript_ref", "--check_ref"]),
+            false,
+        )
+        .expect_err("--check_ref without a FASTA passed the checks");
+        assert!(error.to_string().contains("(--check_ref)"), "{error}");
+        let config = config_from(&["--use_transcript_ref", "--use_given_ref"]);
+        assert!(!config.use_transcript_ref);
+        assert!(fasta_setup_checks(&config, false).is_ok());
+        let config = config_from(&["--use_transcript_ref"]);
+        assert!(config.use_transcript_ref);
+        assert!(fasta_setup_checks(&config, true)
+            .unwrap()
+            .notices
+            .is_empty());
     }
 
     /// `post_setup_checks` (Runner.pm:745-754): the `--hgvs` that `--everything`

@@ -69,7 +69,7 @@ formatter struct here: `vep-cli` renders its rows from this crate's field table
 | `output::tab`        | `TabOutputFormatter`: the default columns, then the active flag fields, then plugin fields, each as its own column, `-` where a value is absent.                                                                                        |
 | `output::vcf_output` | `VcfOutputFormatter`: the input line, or the line `to_vcf_record` builds for a non-VCF input, with one CSQ entry per row, VEP's escaping, an earlier CSQ entry replaced, and the header block built from the input's own header lines. |
 | `output::json`       | `JsonOutputFormatter`: one JSON Lines object per record, keys lowercased and renamed as VEP renames them, numeric-looking values emitted as numbers except for identifier keys.                                                         |
-| `output::parquet`    | `ParquetOutputFormatter`: the tab-separated intermediate the command-line runner hands to `duckdb`; a `-` becomes an empty cell except in `Allele`, `ref` and `alt`, where a dash is a real allele.                                     |
+| `output::parquet`    | `ParquetOutputFormatter`: the tab-separated intermediate the command-line runner hands to `duckdb`; a `-` becomes an empty cell except in `ref`, `alt` and the allele columns `fields::dash_is_a_value` names, where a dash is a real allele. |
 
 The field groups that `--symbol`, `--hgvs`, `--af` and the other boolean flags
 switch on are listed once, in VEP's order, in `output::fields`; a group's fields

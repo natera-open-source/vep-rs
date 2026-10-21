@@ -5,6 +5,15 @@
 //!
 //! Perl citations name modules of ensembl-variation release/115
 //! (`Bio/EnsEMBL/Variation/...`); the `VEP::...` modules are in ensembl-vep release/115.
+//!
+//! Under `--use_transcript_ref` every row reads the reference allele
+//! [`transcript_reference_allele`] gives. Not ported: the edited transcript
+//! sequences of a BAM-edited cache, which switch the flag on by themselves
+//! (`VEP::CacheDir`, the `bam` entry of the cache's info file) and supply the
+//! cDNA the reference allele is cut from (`VEP::AnnotationType::Transcript`,
+//! `apply_edits`); the `--bam` flag that builds such a cache is refused, and
+//! the `invalid_alleles` warning of an edited RefSeq transcript is not
+//! written.
 
 use std::borrow::Cow;
 use std::collections::BTreeSet;
@@ -84,6 +93,15 @@ pub struct EffectsConfig {
     /// consequence, as `--domains` does; off, `TranscriptConsequence.domains`
     /// stays empty.
     pub domains: bool,
+    /// `--use_transcript_ref`: each row is analysed against the reference allele
+    /// [`transcript_reference_allele`] reads from the transcript, and carries it
+    /// as `TranscriptConsequence.used_ref`; a non-coding transcript's cDNA is
+    /// read from `reference_fasta`.
+    pub use_transcript_ref: bool,
+    /// `--process_ref_homs`: the record's reference row is written, and its
+    /// codon is read before any alternate allele's, which keeps the codon path
+    /// from rotating `used_ref` with a 3' shift (see `used_ref_rotation`).
+    pub process_ref_homs: bool,
 }
 
 impl Default for EffectsConfig {
@@ -101,6 +119,8 @@ impl Default for EffectsConfig {
             hgvsg: None,
             spdi: None,
             domains: false,
+            use_transcript_ref: false,
+            process_ref_homs: false,
         }
     }
 }
@@ -205,6 +225,40 @@ pub fn calculate_consequences(
         vep_core::coordinate::Strand::Reverse => Cow::Owned(variant.on_forward_strand()),
     };
     let placed = placed.as_ref();
+    // Under `--use_transcript_ref` the reference allele's object is built from
+    // the transcript's sequence (`-use_feature_ref`, AnnotationType/Transcript.pm:161;
+    // VariationFeatureOverlap.pm:418-425), so every predicate that compares the
+    // alleles reads that allele, the reference row is that allele, and the HGVS
+    // shift moves the deleted bases it names (`_genomic_shift` reads the
+    // reference allele's object, TranscriptVariationAllele.pm:439-449). `USED_REF`
+    // prints it relative to the variant (`variation_feature_seq`,
+    // OutputFactory.pm:1776), so an allele read on the reverse strand is given
+    // back on it.
+    let used_ref = if config.use_transcript_ref
+        && !placed.is_structural
+        && !placed.variant_class.is_structural()
+    {
+        Some(
+            transcript_reference_allele(placed, transcript, config.reference_fasta.as_deref())
+                .unwrap_or_else(|| placed.ref_allele.clone()),
+        )
+    } else {
+        None
+    };
+    let on_input_strand = |reference: &[u8]| match variant.strand {
+        vep_core::coordinate::Strand::Reverse if vep_core::codon::seq_is_dna(reference) => {
+            vep_core::codon::reverse_complement(reference)
+        }
+        _ => reference.to_vec(),
+    };
+    let (placed, input): (Cow<InputVariant>, Cow<InputVariant>) = match &used_ref {
+        Some(reference) if *reference != placed.ref_allele => (
+            Cow::Owned(placed.against_reference_allele(reference)),
+            Cow::Owned(variant.against_reference_allele(&on_input_strand(reference))),
+        ),
+        _ => (Cow::Borrowed(placed), Cow::Borrowed(variant)),
+    };
+    let (placed, input) = (placed.as_ref(), input.as_ref());
     let shifted = consequence_shift(placed, transcript, config);
     let shifted_allele = shifted.and_then(|span| {
         crate::hgvs::shifted_variant(
@@ -216,10 +270,11 @@ pub fn calculate_consequences(
         )
     });
     let analysed = shifted_allele.as_ref().unwrap_or(placed);
-    let mut tc = calculate_terms(analysed, variant, transcript, config)?;
+    let mut tc = calculate_terms(analysed, input, transcript, config)?;
     let mut fields = crate::display::display_fields(analysed, transcript);
+    let translation_span = fields.translation_span;
     if config.domains {
-        tc.domains = domains_overlapping_protein_position(transcript, fields.translation_span);
+        tc.domains = domains_overlapping_protein_position(transcript, translation_span);
     }
     fields.record_span_positions(variant, transcript);
     fields.write_to(&mut tc);
@@ -231,7 +286,197 @@ pub fn calculate_consequences(
         append_translation_version(&mut tc, transcript);
     }
     tc.mirna = mirna_structure_terms(analysed, transcript);
+    // `hgvs_protein` takes the shifted bases on the forward strand and gives
+    // them back on the input's (`create_shift_hash`, TranscriptVariationAllele.pm:373);
+    // `shift_feature_seqs` rotates the allele as the input wrote it (:1334-1343).
+    tc.used_ref = used_ref.map(|mut reference| {
+        let as_given = match used_ref_rotation(&tc, translation_span, config.process_ref_homs) {
+            Some(rotation @ UsedRefRotation::Protein(_)) => {
+                rotate_along_transcript(&mut reference, rotation, transcript.strand);
+                on_input_strand(&reference)
+            }
+            Some(rotation @ UsedRefRotation::Codon(_)) => {
+                let mut as_given = on_input_strand(&reference);
+                rotate_along_transcript(&mut as_given, rotation, transcript.strand);
+                as_given
+            }
+            None => on_input_strand(&reference),
+        };
+        Arc::from(String::from_utf8_lossy(&as_given).as_ref())
+    });
     Some(tc)
+}
+
+/// The path that rotates a shifted deletion's `USED_REF`, with the shift in
+/// bases. Ensembl VEP rotates the reference allele's sequence along with a
+/// shifted alternate allele only through the codon and protein paths, so only
+/// where the shifted span has both translation coordinates: `Protein` when
+/// `hgvs_protein` writes the deleted bases `perform_shift` moved to into the
+/// reference allele (TranscriptVariationAllele.pm:1771-1786) after the
+/// translation test at the shifted offset (:1730-1737), which a protein
+/// notation attests; otherwise `Codon` under `--shift_3prime 1`, where
+/// `display_codon_allele_string` hands the alternate allele's shift to the
+/// reference allele (:674) and `codon` rotates its sequence
+/// (`shift_feature_seqs`, :1330-1345) once `translation_start` and
+/// `translation_end` are defined (:813-820). A non-coding row, a row in a UTR
+/// and a deletion whose shifted span leaves the coding sequence keep the bases
+/// as the input wrote them. `codon` rotates only on the call that memoises the
+/// reference allele's codon (:802-804), and under `--process_ref_homs` the
+/// reference row reads that codon, with no shift, before any alternate
+/// allele's row hands it one, so the codon path then rotates nothing
+/// (`reference_row_first`); the protein path writes the sequence outright.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UsedRefRotation {
+    Codon(u64),
+    Protein(u64),
+}
+
+fn used_ref_rotation(
+    tc: &TranscriptConsequence,
+    translation_span: Option<(i64, i64)>,
+    reference_row_first: bool,
+) -> Option<UsedRefRotation> {
+    let protein_shift = match (&tc.hgvsp, tc.hgvs_offset) {
+        (Some(_), Some(offset)) if offset != 0 => Some(offset.unsigned_abs()),
+        _ => None,
+    };
+    if let Some(shift) = protein_shift {
+        return Some(UsedRefRotation::Protein(shift));
+    }
+    if tc.shift_length > 0 && translation_span.is_some() && !reference_row_first {
+        return Some(UsedRefRotation::Codon(tc.shift_length));
+    }
+    None
+}
+
+/// Rotates `allele` as the path moves it. `perform_shift`
+/// (TranscriptVariationAllele.pm:291-350) moves the deleted bases one place per
+/// step towards the transcript's 3' end, the base that falls off the end coming
+/// back at the start, so a `Protein` rotation wraps on either strand;
+/// `shift_feature_seqs` (:1330-1345) moves the bases `shift` places on a
+/// forward-strand transcript and `length - shift` places on a reverse-strand
+/// one (:1338-1339), so a `Codon` rotation on the reverse strand moves nothing
+/// when the shift exceeds the allele's length.
+fn rotate_along_transcript(
+    allele: &mut [u8],
+    rotation: UsedRefRotation,
+    strand: vep_core::coordinate::Strand,
+) {
+    let length = allele.len() as u64;
+    if length < 2 {
+        return;
+    }
+    let shift = match rotation {
+        UsedRefRotation::Protein(shift) => shift,
+        UsedRefRotation::Codon(shift) => {
+            if strand == vep_core::coordinate::Strand::Reverse && shift > length {
+                return;
+            }
+            shift
+        }
+    };
+    let steps = (shift % length) as usize;
+    match strand {
+        vep_core::coordinate::Strand::Forward => allele.rotate_left(steps),
+        vep_core::coordinate::Strand::Reverse => allele.rotate_right(steps),
+    }
+}
+
+/// The reference allele a row reads under `--use_transcript_ref`
+/// (`TranscriptVariation::_get_ref_allele`, TranscriptVariation.pm:441-468 at
+/// release/116, reached with `-no_ref_check` from AnnotationType/Transcript.pm:159):
+/// `-` for an insertion; the transcript's spliced cDNA over the variant's cDNA
+/// span when the span maps onto one stretch of it (at most two mapped pieces,
+/// the first and last both exonic), on the forward strand, an empty stretch
+/// read as `-` (VariationFeatureOverlap.pm:425); and `None` for any other
+/// span, because the genomic slice branch is skipped under `-no_ref_check`
+/// (`:368`) and `_raw_allele_hashes` then keeps the input's reference allele
+/// (`:418-424`). A coding transcript's cDNA is the cache's
+/// ([`Transcript::spliced_seq`]); any other transcript's is read from `fasta`
+/// over the exons the span covers, as Ensembl's `Transcript::spliced_seq`
+/// reads every exon, and is `None` without one. `variant` is the allele on the
+/// forward strand.
+pub fn transcript_reference_allele(
+    variant: &InputVariant,
+    transcript: &Transcript,
+    fasta: Option<&vep_fasta::IndexedFasta>,
+) -> Option<Vec<u8>> {
+    use crate::display::Segment;
+    if variant.start > variant.end {
+        return Some(b"-".to_vec());
+    }
+    if variant.end < transcript.start || variant.start > transcript.end {
+        return None;
+    }
+    let mapper = transcript.vefc.as_ref()?.mapper.as_ref()?;
+    let segments = crate::display::genomic2cdna(
+        mapper,
+        variant.start as i64,
+        variant.end as i64,
+        transcript.strand.as_i8(),
+    );
+    if segments.len() > 2 {
+        return None;
+    }
+    let (Some(Segment::Coord { start, .. }), Some(Segment::Coord { end, .. })) =
+        (segments.first(), segments.last())
+    else {
+        return None;
+    };
+    let (cdna_start, cdna_end) = (u64::try_from(*start).ok()?, u64::try_from(*end).ok()?);
+    let mut reference = match transcript.spliced_seq() {
+        // Perl's `substr` reads to the end of a shorter sequence.
+        Some(cdna) => {
+            let from = (cdna_start.saturating_sub(1) as usize).min(cdna.len());
+            let to = (cdna_end as usize).clamp(from, cdna.len());
+            let bases = cdna.as_bytes()[from..to].to_vec();
+            match transcript.strand {
+                vep_core::coordinate::Strand::Reverse => {
+                    vep_core::codon::reverse_complement(&bases)
+                }
+                vep_core::coordinate::Strand::Forward => bases,
+            }
+        }
+        None => cdna_bases_from_fasta(
+            fasta?,
+            &transcript.chr,
+            &mapper.exon_coord_mapper,
+            cdna_start,
+            cdna_end,
+        )?,
+    };
+    if reference.is_empty() {
+        reference = b"-".to_vec();
+    }
+    Some(reference)
+}
+
+/// The bases of the cDNA span `cdna_start..=cdna_end` read from the FASTA on
+/// `chr` over the exon pieces `mapper` projects it to, on the forward strand;
+/// `None` when a piece cannot be read.
+fn cdna_bases_from_fasta(
+    fasta: &vep_fasta::IndexedFasta,
+    chr: &str,
+    mapper: &vep_core::transcript::ExonCoordMapper,
+    cdna_start: u64,
+    cdna_end: u64,
+) -> Option<Vec<u8>> {
+    use vep_core::transcript::MappedPiece;
+    let mut pieces: Vec<(u64, u64)> = mapper
+        .cdna2genomic(cdna_start as i64, cdna_end as i64)
+        .into_iter()
+        .filter_map(|piece| match piece {
+            MappedPiece::Coordinate { start, end, .. } => Some((start as u64, end as u64)),
+            MappedPiece::Gap { .. } => None,
+        })
+        .collect();
+    // Genomic order is forward-strand order whichever strand the transcript is on.
+    pieces.sort_unstable();
+    let mut bases = Vec::with_capacity((cdna_end - cdna_start + 1) as usize);
+    for (genomic_start, genomic_end) in pieces {
+        bases.extend(fasta.sequence(chr, genomic_start, genomic_end)?);
+    }
+    Some(bases)
 }
 
 /// The `miRNA` column's terms (OutputFactory.pm:1624-1664 at release/116.2).
@@ -769,14 +1014,16 @@ fn calculate_terms(
 
     // Ensembl VEP reads the intron and splice-site predicates over the regions
     // where the allele differs from the reference (BaseTranscriptVariationAllele.pm:117-218
-    // over `_get_differing_regions`, VariationFeatureOverlapAllele.pm:405-460): a
-    // reference allele of two or more bases differs nowhere, so its row carries
-    // no intron or splice term, while a one-base or empty reference allele keeps
-    // the one region its span is. A reference row left with no term takes the
-    // default consequence on its transcript (BaseVariationFeatureOverlapAllele.pm:285):
-    // an insertion's empty reference allele in a coding exon at a codon boundary
-    // earns no coding term, since its reference peptide is empty.
-    if variant.reference_allele_row {
+    // over `_get_differing_regions`, VariationFeatureOverlapAllele.pm:405-460): an
+    // allele of two or more bases equal to the reference allele, the reference
+    // row's or an alternate allele equal to the transcript's sequence under
+    // `--use_transcript_ref`, differs nowhere, so its row carries no intron or
+    // splice term, while a one-base or empty allele keeps the one region its
+    // span is. Such a row left with no term takes the default consequence on
+    // its transcript (BaseVariationFeatureOverlapAllele.pm:285): an insertion's
+    // empty reference allele in a coding exon at a codon boundary earns no
+    // coding term, since its reference peptide is empty.
+    if variant.reference_allele_row || variant.alt_allele() == variant.ref_allele.as_slice() {
         if variant.ref_allele.len() > 1 {
             consequences.retain(|c| !INTRON_EFFECT_TERMS.contains(c));
         }
@@ -6131,5 +6378,673 @@ mod tests {
         assert!(tc.consequences.contains(&Consequence::InframeInsertion));
         assert_eq!(tc.amino_acids.as_deref(), Some("-/I"));
         assert_eq!(tc.codons.as_deref(), Some("-/ATT"));
+    }
+
+    /// The compact transcript with its UTRs cached, so its cDNA is the cache's:
+    /// 50 `C`, the coding sequence (`ATGGCTGGAAAATTCGAT`, then `GCT`), 1,701 `T`.
+    fn compact_transcript_with_cached_cdna() -> Transcript {
+        let mut tx = crate::concordance_tests::make_compact_test_transcript();
+        let vefc = tx.vefc.as_mut().unwrap();
+        vefc.five_prime_utr = Some("C".repeat(50));
+        vefc.three_prime_utr = Some("T".repeat(1701));
+        assert_eq!(tx.spliced_seq().map(|s| &s[49..56]), Some("CATGGCT"));
+        tx
+    }
+
+    /// Under `--use_transcript_ref` the reference allele is cut from the
+    /// transcript's spliced cDNA when the variant maps onto one stretch of it
+    /// (TranscriptVariation.pm:441-468 at release/116): a coding transcript's
+    /// from the cache, any other transcript's from the FASTA. A variant in an
+    /// intron or across an exon boundary keeps the input's allele, because
+    /// Ensembl VEP builds every TranscriptVariation with `-no_ref_check`
+    /// (AnnotationType/Transcript.pm:159), which skips the genomic branch
+    /// (VariationFeatureOverlap.pm:368) and leaves the input's allele as the
+    /// reference (`:418-424`). The row's terms follow the allele it is read
+    /// against, as Ensembl VEP's codons do (`_get_alternate_cds` writes the
+    /// alternate allele over the transcript's own bases), and `USED_REF` is
+    /// given on the input's strand (`variation_feature_seq`).
+    #[test]
+    fn used_ref_comes_from_spliced_cdna_inside_exons_and_the_input_elsewhere() {
+        use crate::concordance_tests::{hgvsc_fasta_fixture, make_compact_test_transcript};
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[]);
+        let fasta = Arc::new(fasta);
+        // Exon 1 is 100-399, CDS 1 is genomic 150; the FASTA is `T` throughout.
+        let mismatch = InputVariant::new("1".into(), 152, 152, b"A".to_vec(), b"C".to_vec());
+        let no_cdna = make_compact_test_transcript();
+        assert_eq!(no_cdna.spliced_seq(), None);
+        assert_eq!(
+            transcript_reference_allele(&mismatch, &no_cdna, Some(&fasta)),
+            Some(b"T".to_vec())
+        );
+        assert_eq!(transcript_reference_allele(&mismatch, &no_cdna, None), None);
+
+        let tx = compact_transcript_with_cached_cdna();
+        assert_eq!(
+            transcript_reference_allele(&mismatch, &tx, None),
+            Some(b"G".to_vec())
+        );
+        let intronic = InputVariant::new("1".into(), 1000, 1000, b"A".to_vec(), b"C".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&intronic, &tx, Some(&fasta)),
+            None
+        );
+        let into_intron = InputVariant::new("1".into(), 398, 402, b"AAAAA".to_vec(), b"-".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&into_intron, &tx, Some(&fasta)),
+            None
+        );
+        let over_intron = InputVariant::new("1".into(), 398, 2101, vec![b'A'; 1704], b"-".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&over_intron, &tx, Some(&fasta)),
+            None
+        );
+        let upstream = InputVariant::new("1".into(), 50, 50, b"A".to_vec(), b"C".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&upstream, &tx, Some(&fasta)),
+            None
+        );
+
+        let on = EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            use_transcript_ref: true,
+            ..Default::default()
+        };
+        let off = EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            ..Default::default()
+        };
+        let tc = calculate_consequences(&mismatch, &tx, &on).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("G"));
+        assert_eq!(
+            calculate_consequences(&mismatch, &tx, &off)
+                .unwrap()
+                .used_ref,
+            None
+        );
+        let tc = calculate_consequences(&intronic, &tx, &on).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("A"));
+        assert!(tc.consequences.contains(&Consequence::IntronVariant));
+
+        // Given `GA` over the transcript's `GC` at 396-397, the last coding bases
+        // before the exon's splice region, the alternate `GC` differs from the
+        // input at 397 (a splice-region base) and from the transcript nowhere,
+        // so the row keeps its coding term and loses the splice-region one.
+        let mnv = InputVariant::new("1".into(), 396, 397, b"GA".to_vec(), b"GC".to_vec());
+        let tc = calculate_consequences(&mnv, &tx, &on).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("GC"));
+        assert_eq!(tc.consequences.as_slice(), [Consequence::SynonymousVariant]);
+        let off_terms = calculate_consequences(&mnv, &tx, &off)
+            .unwrap()
+            .consequences;
+        assert!(
+            off_terms.contains(&Consequence::SpliceRegionVariant),
+            "{off_terms:?}"
+        );
+
+        // The reference row is the transcript's allele.
+        let reference_row = mismatch.reference_allele_row();
+        assert_eq!(reference_row.alt_allele(), b"A");
+        let reread = reference_row.against_reference_allele(b"G");
+        assert_eq!(
+            (reread.ref_allele.as_slice(), reread.alt_allele()),
+            (&b"G"[..], &b"G"[..])
+        );
+        assert_eq!(reread.allele_string, "G/G");
+        let tc = calculate_consequences(&reference_row, &tx, &on).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("G"));
+        assert!(
+            tc.consequences.contains(&Consequence::StartRetainedVariant),
+            "{:?}",
+            tc.consequences
+        );
+
+        // An allele given on the reverse strand is read on the forward strand
+        // and its reference given back on the reverse strand.
+        let mut reverse = InputVariant::new("1".into(), 152, 152, b"T".to_vec(), b"G".to_vec());
+        reverse.strand = vep_core::coordinate::Strand::Reverse;
+        let tc = calculate_consequences(&reverse, &tx, &on).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("C"));
+    }
+
+    /// An insertion's reference allele is `-` (TranscriptVariation.pm:451) and a
+    /// stretch of `N` in the transcript's sequence is kept as the reference
+    /// allele, since the cDNA branch returns it without the `N` test of the
+    /// genomic branch (VariationFeatureOverlap.pm:392, skipped under
+    /// `-no_ref_check`). A reverse-strand transcript's cDNA is read back onto
+    /// the forward strand (`:465`).
+    #[test]
+    fn used_ref_is_dash_for_an_insertion_and_keeps_an_all_n_exon_reference() {
+        use crate::concordance_tests::{hgvsc_fasta_fixture, make_compact_test_transcript};
+        use crate::test_helpers::{make_single_exon_transcript, SINGLE_EXON_UTR5};
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[(152, b'N'), (153, b'N'), (154, b'N')]);
+        let fasta = Arc::new(fasta);
+        let tx = make_compact_test_transcript();
+        let insertion = InputVariant::new("1".into(), 153, 152, b"-".to_vec(), b"GGG".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&insertion, &tx, Some(&fasta)),
+            Some(b"-".to_vec())
+        );
+        let in_ns = InputVariant::new("1".into(), 152, 154, b"TTT".to_vec(), b"-".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&in_ns, &tx, Some(&fasta)),
+            Some(b"NNN".to_vec())
+        );
+        let config = EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            use_transcript_ref: true,
+            ..Default::default()
+        };
+        let tc = calculate_consequences(&insertion, &tx, &config).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("-"));
+        let tc = calculate_consequences(&in_ns, &tx, &config).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("NNN"));
+
+        let mut reverse =
+            make_single_exon_transcript(vep_core::coordinate::Strand::Reverse, "ATGGCTTAA", "GGGG");
+        reverse.vefc.as_mut().unwrap().five_prime_utr = Some("C".repeat(SINGLE_EXON_UTR5 as usize));
+        assert!(reverse.spliced_seq().is_some());
+        // The transcript's first base, a `C` of its 5' UTR, sits at the span's end.
+        let first = InputVariant::new(
+            "21".into(),
+            reverse.end,
+            reverse.end,
+            b"A".to_vec(),
+            b"T".to_vec(),
+        );
+        assert_eq!(
+            transcript_reference_allele(&first, &reverse, None),
+            Some(b"G".to_vec())
+        );
+        // The last base of the 3' UTR, a `G`, sits at the span's start.
+        let last = InputVariant::new(
+            "21".into(),
+            reverse.start,
+            reverse.start,
+            b"A".to_vec(),
+            b"T".to_vec(),
+        );
+        assert_eq!(
+            transcript_reference_allele(&last, &reverse, None),
+            Some(b"C".to_vec())
+        );
+        // The start codon, cDNA 31-33, read back onto the forward strand.
+        let start_codon_end = reverse.end - SINGLE_EXON_UTR5;
+        let codon = InputVariant::new(
+            "21".into(),
+            start_codon_end - 2,
+            start_codon_end,
+            b"AAA".to_vec(),
+            b"-".to_vec(),
+        );
+        assert_eq!(
+            transcript_reference_allele(&codon, &reverse, None),
+            Some(b"CAT".to_vec())
+        );
+    }
+
+    /// A non-coding transcript has no cached cDNA, so its reference allele is
+    /// read from the FASTA over the exon piece the span maps to, as Ensembl's
+    /// `Transcript::spliced_seq` reads every exon from the genome: on a
+    /// reverse-strand transcript the bases come back on the forward strand (the
+    /// strand the variant is analysed on), and a span reaching into an intron
+    /// maps to a gap, so the input's allele stands.
+    #[test]
+    fn used_ref_of_a_non_coding_reverse_transcript_is_read_from_the_fasta() {
+        use crate::concordance_tests::{hgvsc_fasta_fixture, make_compact_test_transcript};
+        use vep_core::transcript::{Exon, ExonCoordMapper, MapperPair, TranscriptMapper};
+        // Two exons at 1201-1300 (cDNA 1-100, cDNA 1 at genomic 1300) and 1001-1100
+        // (cDNA 101-200); the FASTA is `T` but for 1300 `A`, 1299 `C`, 1100 `G`.
+        let mut tx = make_compact_test_transcript();
+        tx.strand = vep_core::coordinate::Strand::Reverse;
+        tx.biotype = "lncRNA".into();
+        tx.start = 1001;
+        tx.end = 1300;
+        tx.translation = None;
+        tx.protein_id = None;
+        tx.cdna_coding_start = None;
+        tx.cdna_coding_end = None;
+        tx.coding_region_start = None;
+        tx.coding_region_end = None;
+        tx.translation_start = None;
+        tx.translation_end = None;
+        let exon = |start, end, rank| Exon {
+            stable_id: None,
+            start,
+            end,
+            rank,
+            phase: -1,
+            end_phase: -1,
+        };
+        tx.exons = vec![exon(1201, 1300, 1), exon(1001, 1100, 2)];
+        tx.introns = Vec::new();
+        let vefc = tx.vefc.as_mut().unwrap();
+        vefc.translateable_seq = None;
+        vefc.introns = Vec::new();
+        vefc.sorted_exons = tx.exons.clone();
+        let pair = |from_start, from_end, to_start, to_end| MapperPair {
+            from_start,
+            from_end,
+            to_start,
+            to_end,
+            ori: -1,
+        };
+        vefc.mapper = Some(TranscriptMapper {
+            start_phase: -1,
+            cdna_coding_start: 0,
+            cdna_coding_end: 0,
+            exon_coord_mapper: ExonCoordMapper::new(vec![
+                pair(1, 100, 1201, 1300),
+                pair(101, 200, 1001, 1100),
+            ]),
+        });
+        assert_eq!(tx.spliced_seq(), None);
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[(1300, b'A'), (1299, b'C'), (1100, b'G')]);
+
+        let first_base = InputVariant::new("1".into(), 1300, 1300, b"G".to_vec(), b"T".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&first_base, &tx, Some(&fasta)),
+            Some(b"A".to_vec())
+        );
+        let three = InputVariant::new("1".into(), 1298, 1300, b"GGG".to_vec(), b"-".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&three, &tx, Some(&fasta)),
+            Some(b"TCA".to_vec())
+        );
+        let second_exon = InputVariant::new("1".into(), 1100, 1100, b"A".to_vec(), b"C".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&second_exon, &tx, Some(&fasta)),
+            Some(b"G".to_vec())
+        );
+        let into_intron = InputVariant::new("1".into(), 1100, 1101, b"AA".to_vec(), b"-".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&into_intron, &tx, Some(&fasta)),
+            None
+        );
+        let intronic = InputVariant::new("1".into(), 1150, 1150, b"A".to_vec(), b"C".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&intronic, &tx, Some(&fasta)),
+            None
+        );
+        assert_eq!(transcript_reference_allele(&first_base, &tx, None), None);
+
+        let config = EffectsConfig {
+            reference_fasta: Some(Arc::new(fasta)),
+            use_transcript_ref: true,
+            ..Default::default()
+        };
+        let tc = calculate_consequences(&three, &tx, &config).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("TCA"));
+        assert!(tc
+            .consequences
+            .contains(&Consequence::NonCodingTranscriptExonVariant));
+    }
+
+    /// `USED_REF` of a deletion follows its 3' shift where Ensembl VEP rotates
+    /// the reference allele's sequence along with the alternate allele's, through
+    /// the codon path under `--shift_3prime 1` (TranscriptVariationAllele.pm:674,
+    /// 813-820, 1330-1346) and the protein-notation path under `--hgvs`
+    /// (:1730-1737, 1771-1786), so only on a row whose shifted span has both
+    /// protein coordinates: a coding deletion of `TA` moved one base prints
+    /// `AT`, measured on Ensembl VEP 116.2 (`CA` deleted at chromosome 21
+    /// 34716447 and moved one base on ENST00000349499 prints `USED_REF=AC` under
+    /// either flag, `CA` under neither), while a deletion in the 3' UTR and a
+    /// run without either flag print the bases as the input wrote them. Under
+    /// `--process_ref_homs` the codon path rotates nothing (the reference row
+    /// memoises the codon first, :802-804) and the protein path still does.
+    #[test]
+    fn used_ref_of_a_shifted_coding_deletion_is_rotated_by_the_shift() {
+        use crate::concordance_tests::hgvsc_fasta_fixture;
+        // The FASTA is `T` throughout but for an `A` at 163 and 4500 and a `G` at
+        // 165 and 4502, so deleting `TA` at 162-163 (CDS 13-14) and at 4499-4500
+        // (the 3' UTR, cDNA 1000-1001) each move one base, onto `AT`.
+        let (_dir, fasta) =
+            hgvsc_fasta_fixture(&[(163, b'A'), (165, b'G'), (4500, b'A'), (4502, b'G')]);
+        let fasta = Arc::new(fasta);
+        let tx = crate::concordance_tests::make_compact_test_transcript();
+        let coding = InputVariant::new("1".into(), 162, 163, b"TA".to_vec(), b"-".to_vec());
+        let utr = InputVariant::new("1".into(), 4499, 4500, b"TA".to_vec(), b"-".to_vec());
+        let config = |shift_3prime: bool, hgvs: bool| EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            enable_indel_3prime_shift: shift_3prime,
+            compute_hgvs: hgvs,
+            use_transcript_ref: true,
+            ..Default::default()
+        };
+        let tc = calculate_consequences(&coding, &tx, &config(true, false)).unwrap();
+        assert_eq!(tc.shift_length, 1);
+        assert!(tc.protein_position.is_some());
+        assert_eq!(tc.used_ref.as_deref(), Some("AT"));
+        let tc = calculate_consequences(&utr, &tx, &config(true, false)).unwrap();
+        assert_eq!(tc.shift_length, 1);
+        assert!(tc.consequences.contains(&Consequence::ThreePrimeUtrVariant));
+        assert_eq!(tc.used_ref.as_deref(), Some("TA"));
+
+        let tc = calculate_consequences(&coding, &tx, &config(false, true)).unwrap();
+        assert_eq!(tc.shift_length, 0);
+        assert_eq!(tc.hgvs_offset, Some(1));
+        assert!(tc.hgvsp.is_some());
+        assert_eq!(tc.used_ref.as_deref(), Some("AT"));
+        let tc = calculate_consequences(&utr, &tx, &config(false, true)).unwrap();
+        assert_eq!(tc.hgvs_offset, Some(1));
+        assert_eq!(tc.used_ref.as_deref(), Some("TA"));
+
+        let tc = calculate_consequences(&coding, &tx, &config(false, false)).unwrap();
+        assert_eq!(tc.shift_length, 0);
+        assert_eq!(tc.used_ref.as_deref(), Some("TA"));
+
+        // Under `--process_ref_homs` the reference row reads the codon before any
+        // alternate allele hands it a shift, so only the protein path rotates.
+        let with_reference_row = |shift_3prime: bool, hgvs: bool| EffectsConfig {
+            process_ref_homs: true,
+            ..config(shift_3prime, hgvs)
+        };
+        let tc = calculate_consequences(&coding, &tx, &with_reference_row(true, false)).unwrap();
+        assert_eq!(tc.shift_length, 1);
+        assert_eq!(tc.used_ref.as_deref(), Some("TA"));
+        let tc = calculate_consequences(&coding, &tx, &with_reference_row(false, true)).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("AT"));
+        let tc = calculate_consequences(&coding, &tx, &with_reference_row(true, true)).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("AT"));
+    }
+
+    /// Both paths move the bases towards the transcript's 3' end, so on the
+    /// reverse strand a shift of one moves the last base to the front. The
+    /// protein path wraps a shift longer than the allele on either strand; the
+    /// codon path wraps it on the forward strand and moves nothing on the
+    /// reverse strand, where `shift_feature_seqs` moves `length - shift` places:
+    /// Ensembl VEP 116.2 prints `USED_REF=GA` for `GA` deleted at chromosome 21
+    /// 30348449 and moved three bases on ENST00000334160 under `--shift_3prime 1`
+    /// alone, and `AG` once `--hgvs` is added.
+    #[test]
+    fn used_ref_rotation_follows_the_transcript_strand_and_the_path() {
+        use vep_core::coordinate::Strand;
+        let rotated = |allele: &[u8], rotation, strand| {
+            let mut allele = allele.to_vec();
+            rotate_along_transcript(&mut allele, rotation, strand);
+            allele
+        };
+        for rotation in [UsedRefRotation::Codon, UsedRefRotation::Protein] {
+            assert_eq!(rotated(b"CA", rotation(1), Strand::Forward), b"AC");
+            assert_eq!(rotated(b"AC", rotation(1), Strand::Reverse), b"CA");
+            assert_eq!(rotated(b"GCA", rotation(2), Strand::Reverse), b"CAG");
+            assert_eq!(rotated(b"GATT", rotation(6), Strand::Forward), b"TTGA");
+            assert_eq!(rotated(b"GA", rotation(2), Strand::Reverse), b"GA");
+            assert_eq!(rotated(b"A", rotation(3), Strand::Forward), b"A");
+            assert_eq!(rotated(b"-", rotation(3), Strand::Reverse), b"-");
+        }
+        assert_eq!(
+            rotated(b"GA", UsedRefRotation::Protein(3), Strand::Reverse),
+            b"AG"
+        );
+        assert_eq!(
+            rotated(b"GA", UsedRefRotation::Codon(3), Strand::Reverse),
+            b"GA"
+        );
+        assert_eq!(
+            rotated(b"CAC", UsedRefRotation::Protein(4), Strand::Reverse),
+            b"CCA"
+        );
+        assert_eq!(
+            rotated(b"CAC", UsedRefRotation::Codon(4), Strand::Reverse),
+            b"CAC"
+        );
+
+        let mut tc = TranscriptConsequence {
+            shift_length: 3,
+            ..Default::default()
+        };
+        assert_eq!(
+            used_ref_rotation(&tc, Some((2, 3)), false),
+            Some(UsedRefRotation::Codon(3))
+        );
+        assert_eq!(used_ref_rotation(&tc, Some((2, 3)), true), None);
+        assert_eq!(used_ref_rotation(&tc, None, false), None);
+        tc.hgvs_offset = Some(-3);
+        assert_eq!(
+            used_ref_rotation(&tc, Some((2, 3)), false),
+            Some(UsedRefRotation::Codon(3))
+        );
+        tc.hgvsp = Some("ENSP00000000001.1:p.Leu2fs".into());
+        assert_eq!(
+            used_ref_rotation(&tc, Some((2, 3)), false),
+            Some(UsedRefRotation::Protein(3))
+        );
+        assert_eq!(
+            used_ref_rotation(&tc, Some((2, 3)), true),
+            Some(UsedRefRotation::Protein(3))
+        );
+        tc.shift_length = 0;
+        assert_eq!(
+            used_ref_rotation(&tc, None, false),
+            Some(UsedRefRotation::Protein(3))
+        );
+        tc.hgvs_offset = None;
+        assert_eq!(used_ref_rotation(&tc, Some((2, 3)), false), None);
+    }
+
+    /// A single-exon reverse-strand coding transcript on chromosome 1 at
+    /// 1001-1046: the 3' UTR `GGGG` at 1001-1004, the coding sequence
+    /// `ATGCTCTCTTAA` at 1005-1016 (its start codon at 1014-1016) and the 5' UTR
+    /// at 1017-1046, with the FASTA spelling the same bases on the forward
+    /// strand (`CCCC TTAAGAGAGCAT`, then `T`).
+    fn reverse_coding_transcript_on_chr1(
+    ) -> (tempfile::TempDir, vep_fasta::IndexedFasta, Transcript) {
+        use crate::concordance_tests::hgvsc_fasta_fixture;
+        use crate::test_helpers::make_single_exon_transcript;
+        let mut tx = make_single_exon_transcript(
+            vep_core::coordinate::Strand::Reverse,
+            "ATGCTCTCTTAA",
+            "GGGG",
+        );
+        let delta = tx.start - 1001;
+        tx.chr = "1".into();
+        tx.start -= delta;
+        tx.end -= delta;
+        for exon in &mut tx.exons {
+            exon.start -= delta;
+            exon.end -= delta;
+        }
+        for coord in [
+            &mut tx.coding_region_start,
+            &mut tx.coding_region_end,
+            &mut tx.translation_start,
+            &mut tx.translation_end,
+        ] {
+            *coord = coord.map(|c| c - delta);
+        }
+        let vefc = tx.vefc.as_mut().unwrap();
+        for exon in &mut vefc.sorted_exons {
+            exon.start -= delta;
+            exon.end -= delta;
+        }
+        let mapper = &mut vefc.mapper.as_mut().unwrap().exon_coord_mapper;
+        for pair in &mut mapper.pairs {
+            pair.to_start -= delta;
+            pair.to_end -= delta;
+        }
+        mapper.rebuild_genomic_index();
+        assert_eq!((tx.start, tx.end), (1001, 1046));
+        assert_eq!(
+            (tx.coding_region_start, tx.coding_region_end),
+            (Some(1005), Some(1016))
+        );
+        let mut edits: Vec<(usize, u8)> = (1001..=1004).map(|p| (p, b'C')).collect();
+        edits.extend(
+            b"TTAAGAGAGCAT"
+                .iter()
+                .enumerate()
+                .map(|(i, &base)| (1005 + i, base)),
+        );
+        let (dir, fasta) = hgvsc_fasta_fixture(&edits);
+        (dir, fasta, tx)
+    }
+
+    /// On a reverse-strand transcript the 3' shift runs towards lower
+    /// coordinates and the rotation the other way: `AGA` shifted one base
+    /// prints `AAG`. A shift longer than the deletion rotates only through the
+    /// protein path: `GA` moved three bases prints `GA` under `--shift_3prime 1`
+    /// alone and `AG` under `--hgvs`.
+    #[test]
+    fn used_ref_of_a_reverse_strand_deletion_rotates_the_other_way() {
+        let (_dir, fasta, tx) = reverse_coding_transcript_on_chr1();
+        assert_eq!(tx.spliced_seq(), None);
+        let fasta = Arc::new(fasta);
+        let config = |shift_3prime: bool, hgvs: bool| EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            enable_indel_3prime_shift: shift_3prime,
+            compute_hgvs: hgvs,
+            use_transcript_ref: true,
+            ..Default::default()
+        };
+        // `AGA` at 1008-1010 moves one base, onto `AAG` at 1007-1009.
+        let one = InputVariant::new("1".into(), 1008, 1010, b"AGA".to_vec(), b"-".to_vec());
+        let tc = calculate_consequences(&one, &tx, &config(true, false)).unwrap();
+        assert_eq!(tc.shift_length, 1);
+        assert!(tc.protein_position.is_some());
+        assert_eq!(tc.used_ref.as_deref(), Some("AAG"));
+        let tc = calculate_consequences(&one, &tx, &config(false, true)).unwrap();
+        assert_eq!(tc.hgvs_offset, Some(-1));
+        assert!(tc.hgvsp.is_some());
+        assert_eq!(tc.used_ref.as_deref(), Some("AAG"));
+        let tc = calculate_consequences(&one, &tx, &config(false, false)).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("AGA"));
+
+        // `GA` at 1011-1012 moves three bases, onto `AG` at 1008-1009.
+        let three = InputVariant::new("1".into(), 1011, 1012, b"GA".to_vec(), b"-".to_vec());
+        let tc = calculate_consequences(&three, &tx, &config(true, false)).unwrap();
+        assert_eq!(tc.shift_length, 3);
+        assert!(tc.protein_position.is_some());
+        assert_eq!(tc.used_ref.as_deref(), Some("GA"));
+        let tc = calculate_consequences(&three, &tx, &config(false, true)).unwrap();
+        assert_eq!(tc.hgvs_offset, Some(-3));
+        assert!(tc.hgvsp.is_some());
+        assert_eq!(tc.used_ref.as_deref(), Some("AG"));
+        let tc = calculate_consequences(&three, &tx, &config(true, true)).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("AG"));
+        let misspelt = InputVariant::new("1".into(), 1011, 1012, b"TA".to_vec(), b"-".to_vec());
+        let tc = calculate_consequences(&misspelt, &tx, &config(true, false)).unwrap();
+        assert_eq!(tc.shift_length, 3);
+        assert_eq!(tc.used_ref.as_deref(), Some("GA"));
+
+        // Given on the reverse strand, `AGA` is `TCT`: the codon path rotates the
+        // allele as written, the protein path hands back the forward-strand
+        // rotation.
+        let mut given_on_reverse = one.clone();
+        given_on_reverse.strand = vep_core::coordinate::Strand::Reverse;
+        given_on_reverse.ref_allele = b"TCT".to_vec();
+        given_on_reverse.allele_string = "TCT/-".into();
+        let tc = calculate_consequences(&given_on_reverse, &tx, &config(true, false)).unwrap();
+        assert_eq!(tc.shift_length, 1);
+        assert_eq!(tc.used_ref.as_deref(), Some("TTC"));
+        let tc = calculate_consequences(&given_on_reverse, &tx, &config(false, true)).unwrap();
+        assert_eq!(tc.hgvs_offset, Some(-1));
+        assert_eq!(tc.used_ref.as_deref(), Some("CTT"));
+        let tc = calculate_consequences(&given_on_reverse, &tx, &config(false, false)).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("TCT"));
+    }
+
+    /// The HGVS shift of a deletion moves the bases the reference allele's
+    /// object names (`_genomic_shift`, TranscriptVariationAllele.pm:439-449), so
+    /// under `--use_transcript_ref` a deletion whose input spells the deleted
+    /// bases wrongly shifts along the transcript's bases: Ensembl VEP 116.2
+    /// writes `c.2027_2028del` with `HGVS_OFFSET=2` for `21 34716445 TGC T` on
+    /// ENST00000349499, whose sequence there is `ACAC`, where the input's `GC`
+    /// shifts nowhere without the flag.
+    #[test]
+    fn hgvs_shifts_the_bases_the_transcript_reference_names() {
+        use crate::concordance_tests::{hgvsc_fasta_fixture, make_compact_test_transcript};
+        // CDS 11-16 (genomic 160-165) read `ACACAC` from the FASTA, the transcript's
+        // cDNA here, since the compact transcript caches no UTR.
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[
+            (160, b'A'),
+            (161, b'C'),
+            (162, b'A'),
+            (163, b'C'),
+            (164, b'A'),
+            (165, b'C'),
+        ]);
+        let fasta = Arc::new(fasta);
+        let tx = make_compact_test_transcript();
+        let misspelt = InputVariant::new("1".into(), 160, 161, b"GC".to_vec(), b"-".to_vec());
+        let on = EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            compute_hgvs: true,
+            use_transcript_ref: true,
+            ..Default::default()
+        };
+        let tc = calculate_consequences(&misspelt, &tx, &on).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("AC"));
+        assert_eq!(tc.hgvsc.as_deref(), Some("ENST00000000001.1:c.15_16del"));
+        assert_eq!(tc.hgvs_offset, Some(4));
+        let off = EffectsConfig {
+            use_transcript_ref: false,
+            ..on
+        };
+        let tc = calculate_consequences(&misspelt, &tx, &off).unwrap();
+        assert_eq!(tc.used_ref, None);
+        assert_eq!(tc.hgvsc.as_deref(), Some("ENST00000000001.1:c.11_12del"));
+        assert_eq!(tc.hgvs_offset, None);
+    }
+
+    /// `hgvs_protein` returns nothing only for the reference allele and a
+    /// non-ACGT allele (TranscriptVariationAllele.pm:1684, 1687 at release/116),
+    /// so an alternate allele equal to the transcript's reference, which the
+    /// flag reads as a synonymous change, is named `p.<Aa><pos>=`, while the
+    /// reference row stays without a protein notation.
+    #[test]
+    fn hgvsp_names_an_alternate_equal_to_the_transcript_reference() {
+        use crate::concordance_tests::hgvsc_fasta_fixture;
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[]);
+        let tx = compact_transcript_with_cached_cdna();
+        let on = EffectsConfig {
+            reference_fasta: Some(Arc::new(fasta)),
+            compute_hgvs: true,
+            use_transcript_ref: true,
+            ..Default::default()
+        };
+        // Codon 83 of the coding sequence (genomic 396-398) reads `GCT`.
+        assert_eq!(tx.spliced_seq().map(|s| &s[296..299]), Some("GCT"));
+        let mnv = InputVariant::new("1".into(), 396, 397, b"GA".to_vec(), b"GC".to_vec());
+        let tc = calculate_consequences(&mnv, &tx, &on).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("GC"));
+        assert_eq!(tc.consequences.as_slice(), [Consequence::SynonymousVariant]);
+        assert_eq!(tc.hgvsp.as_deref(), Some("ENSP00000000001.1:p.Ala83="));
+        let tc = calculate_consequences(&mnv.reference_allele_row(), &tx, &on).unwrap();
+        assert_eq!(tc.used_ref.as_deref(), Some("GC"));
+        assert_eq!(tc.hgvsp, None);
+        // Without the flag the codons are the transcript's as well, so the
+        // notation is the same while the input's `GA` keeps the splice-region term.
+        let off = EffectsConfig {
+            use_transcript_ref: false,
+            ..on
+        };
+        let tc = calculate_consequences(&mnv, &tx, &off).unwrap();
+        assert_eq!(tc.hgvsp.as_deref(), Some("ENSP00000000001.1:p.Ala83="));
+        assert!(tc.consequences.contains(&Consequence::SpliceRegionVariant));
+    }
+
+    /// The module documentation names what the `--use_transcript_ref` port
+    /// leaves out: the edited transcript sequences of a BAM-edited cache, which
+    /// switch the flag on by themselves, and the warning of an edited RefSeq
+    /// transcript.
+    #[test]
+    fn documented_subset_names_the_bam_edited_cache_auto_enable() {
+        let module_docs: String = include_str!("consequences.rs")
+            .lines()
+            .take_while(|l| l.starts_with("//") || l.trim().is_empty())
+            .filter(|l| l.starts_with("//!"))
+            .map(|l| l.trim_start_matches("//!").trim())
+            .collect::<Vec<_>>()
+            .join(" ");
+        for phrase in [
+            "BAM-edited cache",
+            "switch the flag on by themselves",
+            "`VEP::CacheDir`",
+            "`apply_edits`",
+            "`--bam`",
+            "`invalid_alleles`",
+        ] {
+            assert!(module_docs.contains(phrase), "{phrase}: {module_docs}");
+        }
     }
 }

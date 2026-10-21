@@ -273,6 +273,8 @@ impl Annotator {
         effects.hgvsg = hgvsg_options(config, &cache.synonyms);
         effects.spdi = spdi_options(config, &cache.synonyms);
         effects.domains = config.domains;
+        effects.use_transcript_ref = config.use_transcript_ref;
+        effects.process_ref_homs = config.process_ref_homs;
         let effects_config = Arc::new(effects);
         let LoadedPlugins { builtin, dylib } = load_plugins(
             &config.plugin,
@@ -600,6 +602,8 @@ fn new_effects_config(
         hgvsg: None,
         spdi: None,
         domains: false,
+        use_transcript_ref: false,
+        process_ref_homs: false,
     }
 }
 

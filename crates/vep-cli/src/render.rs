@@ -102,7 +102,9 @@ pub(crate) fn render_default_record<'a>(
     let columns: SmallVec<[AlleleColumns; 4]> =
         record.iter().map(|v| AlleleColumns::new(v)).collect();
     // Under --shift_3prime 1 --shift_genomic 1 the Location and Allele of a row
-    // follow its own shift, so they are rendered per row rather than per allele.
+    // follow its own shift, and under --use_transcript_ref a reference row's
+    // Allele is its transcript's, so those are rendered per row rather than per
+    // allele.
     let shifted_rows = plan.options.shift_3prime && plan.options.shift_genomic;
     for &(variant, tc) in rows.iter() {
         let allele = record
@@ -111,14 +113,17 @@ pub(crate) fn render_default_record<'a>(
             .expect("row allele belongs to its record");
         let cols = &columns[allele];
         let existing_str = cols.existing.as_deref().unwrap_or("-");
-        let (location, allele_text): (Cow<str>, Cow<str>) = if shifted_rows {
-            (
-                field_value("Location", variant, tc, &plan.options, ",").into(),
-                field_value("Allele", variant, tc, &plan.options, ",").into(),
-            )
+        let location: Cow<str> = if shifted_rows {
+            field_value("Location", variant, tc, &plan.options, ",").into()
         } else {
-            (cols.location.as_str().into(), cols.allele.as_str().into())
+            cols.location.as_str().into()
         };
+        let allele_text: Cow<str> =
+            if shifted_rows || (plan.options.use_transcript_ref && variant.reference_allele_row) {
+                field_value("Allele", variant, tc, &plan.options, ",").into()
+            } else {
+                cols.allele.as_str().into()
+            };
 
         out.extend_from_slice(cols.uploaded.as_bytes());
         out.push(b'\t');

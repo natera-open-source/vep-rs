@@ -211,6 +211,8 @@ fn main() -> Result<()> {
         hgvsg: None,
         spdi: None,
         domains: false,
+        use_transcript_ref: false,
+        process_ref_homs: false,
     });
 
     let raw_transcripts = json_cache::load_all_transcripts(&args.json_cache)?;

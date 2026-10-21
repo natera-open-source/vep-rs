@@ -60,6 +60,34 @@
     "vcf.vcf": "bb33fd0ea32e676d18d4468b8a6ae6fdf6eddb9d5c11a22365a666769bf50148",
     "json.jsonl": "660544f18f11eac436a11981bc32bb054090726cfe2ee4ba5ecf216d2d1372cc"
    }
+  },
+  "use-transcript-ref": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa.gz --no_stats --quiet --force_overwrite --use_transcript_ref --allow_non_variant [--tab|--vcf|--json]",
+   "formats_compared": [
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_use-transcript-ref",
+   "sha256": {
+    "tab.txt": "1aa0887be5f06dc8d0b9d4af7aa4dd4c77f909128a19d559b7dc67e87c329994",
+    "vcf.vcf": "74a5ef9ce2095bcaa1eb9b3d5356fca3044a06d693295b47c840590e9bc0a29b",
+    "json.jsonl": "5fc4f6edfdef1e52548058415c6d19535f0a0b78b260f397d87ba9e0fe3a61c9"
+   }
+  },
+  "use-transcript-ref-refhoms": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa.gz --no_stats --quiet --force_overwrite --use_transcript_ref --allow_non_variant --process_ref_homs --allele_number --show_ref_allele [--tab|--vcf|--json]",
+   "formats_compared": [
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_use-transcript-ref-refhoms",
+   "sha256": {
+    "tab.txt": "96c13b736705e20bd91c2fb8b96dec7a19e11eaf7db7f32608a5935f4d22baee",
+    "vcf.vcf": "fbfa09360539a6b4e047827868fb02718db24261a88bb882d9e5adcfbb4363a5",
+    "json.jsonl": "9063116dfd6811fb60d60128ee36c20790f5fd376ef8c6f03bd52525c93f9979"
+   }
   }
  },
  "pruned_cache": {
@@ -78,7 +106,13 @@
     "lookup_ref_default.txt": "41a991e7c974965eb0380ee330d611ac2da44be8296c1f0db697ac521dd1388a"
    }
   },
-  "skipped-variants-file": "expected/skipped.txt: the default run's --skipped_variants_file"
+  "skipped-variants-file": "expected/skipped.txt: the default run's --skipped_variants_file",
+  "use-transcript-ref-default": {
+   "description": "expected/use_transcript_ref_default.txt.gz and expected/use_transcript_ref_warnings.txt: the use-transcript-ref flag set's default-format output and warnings file, compared by the manifest run of that name",
+   "sha256": {
+    "use_transcript_ref_default.txt": "6054f43a81cbaadeb002fb6c6a2930124b48f5dc897002b8916184cd82a798c6"
+   }
+  }
  },
  "expected_warnings": "expected/default.txt_warnings.txt and expected_<set>/default.txt_warnings.txt: the warnings file of each run"
 }

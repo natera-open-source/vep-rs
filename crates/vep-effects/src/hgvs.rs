@@ -908,8 +908,8 @@ fn rotate_sequence_for_transcript_3prime(
 /// `hgvs_protein` (`coding::perl_hgvs_protein`) behind the `ENSP...:p.` prefix.
 ///
 /// Returns `None` when the transcript has no coding model or protein id, the
-/// alternate allele carries a character outside `ACGT-` or equals the
-/// reference, or Perl would return `undef` for the span. An insertion or
+/// alternate allele carries a character outside `ACGT-`, the row is the
+/// reference allele's, or Perl would return `undef` for the span. An insertion or
 /// deletion is first shifted to its most 3' position on the transcript strand
 /// (Perl's `_return_3prime(1)`, applied for HGVS whatever `--shift_3prime`
 /// says) when a reference FASTA is available; the shifted alleles are the
@@ -961,7 +961,10 @@ fn hgvsp_at(
     {
         return None;
     }
-    if alt_allele == variant.ref_allele.as_slice() {
+    // `hgvs_protein` returns nothing for the reference allele's object
+    // (TranscriptVariationAllele.pm:1687); an alternate allele equal to the
+    // allele the row is read against takes the synonymous notation.
+    if variant.reference_allele_row {
         return None;
     }
 

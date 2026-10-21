@@ -23,8 +23,9 @@
 //!    plugin fields ([`super::fields::tab_columns`]).
 //!
 //! A value the tab format prints as `-` is an empty cell here, which the reader
-//! loads as NULL; `Allele`, `ref` and `alt` keep a literal `-`, since a dash is a
-//! real allele there (a deletion's ALT, an insertion's REF).
+//! loads as NULL; `ref`, `alt` and the allele columns of
+//! [`super::fields::dash_is_a_value`] keep a literal `-`, since a dash is a real
+//! allele there (a deletion's ALT, an insertion's REF).
 //!
 //! ## Why a subprocess and not an embedded DuckDB
 //!
@@ -98,7 +99,7 @@ impl OutputFormatter for ParquetOutputFormatter {
             for col in &self.tab_columns {
                 row.push('\t');
                 let v = fields::field_value(col, variant, tc, &self.options, ",");
-                if v.is_empty() || (v == "-" && col != "Allele") {
+                if v.is_empty() || (v == "-" && !fields::dash_is_a_value(col)) {
                     continue;
                 }
                 row.push_str(&tsv_escape(&v));
@@ -179,6 +180,37 @@ mod tests {
         assert_eq!(cells[20], "1"); // STRAND
         assert_eq!(cells[21], ""); // FLAGS absent
         assert_eq!(cells.len(), 22);
+    }
+
+    /// Under `--use_transcript_ref` the two reference-allele columns keep a `-`
+    /// as the JSON writer does, since an insertion's reference is `-`.
+    #[test]
+    fn reference_allele_columns_keep_their_dash() {
+        let options = FieldOptions {
+            use_transcript_ref: true,
+            ..Default::default()
+        };
+        let f = ParquetOutputFormatter::new(options, vec![]);
+        let header = f.header_columns();
+        let given = header.iter().position(|c| *c == "GIVEN_REF").unwrap();
+        let used = header.iter().position(|c| *c == "USED_REF").unwrap();
+        let mut v = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"TT".to_vec());
+        v.transcript_consequences = vec![TranscriptConsequence {
+            transcript_id: "ENST1".into(),
+            gene_id: "ENSG1".into(),
+            consequences: smallvec![Consequence::FrameshiftVariant],
+            impact: Impact::HIGH,
+            strand: 1,
+            used_ref: Some("-".into()),
+            ..Default::default()
+        }];
+        let rows = f.format_record(&[&v]).unwrap();
+        let cells: Vec<&str> = rows[0].split('\t').collect();
+        assert_eq!((cells[given], cells[used]), ("-", "-"));
+        v.transcript_consequences[0].used_ref = None;
+        let rows = f.format_record(&[&v]).unwrap();
+        let cells: Vec<&str> = rows[0].split('\t').collect();
+        assert_eq!((cells[given], cells[used]), ("", ""));
     }
 
     #[test]

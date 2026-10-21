@@ -270,7 +270,7 @@ impl JsonOutputFormatter {
         }
         for name in names {
             let value = fields::field_value(name, variant, tc, &self.options, ",");
-            if value.is_empty() || (value == "-" && name != "Allele") {
+            if value.is_empty() || (value == "-" && !fields::dash_is_a_value(name)) {
                 continue;
             }
             match name {
