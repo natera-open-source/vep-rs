@@ -424,17 +424,31 @@ where
         .iter()
         .map(|token| token.to_string_lossy().into_owned())
         .collect();
+    let asks_usage = |a: &OsString| {
+        matches!(
+            a.to_string_lossy().as_ref(),
+            "--help" | "-h" | "--version" | "-V"
+        )
+    };
+    // Getopt::Long runs with `pass_through` (Config.pm:62), which leaves a bare
+    // `--` and every token after it in `@ARGV`, and vep refuses whatever is left
+    // (vep:30) unless `--help` was read ahead of the `--` (:29); `--version`, this
+    // engine's own flag, wins the same way.
+    if let Some(separator) = options.iter().position(|a| a == "--") {
+        let usage_first = options[..separator].iter().any(asks_usage);
+        if !usage_first {
+            return Err(ParseFailure::Refused(CliError::cli(format!(
+                "Unexpected extra command-line parameter(s): {}",
+                command_line[separator..].join(", ")
+            ))));
+        }
+    }
     // The usage wins over an unexpected parameter (vep:29 before vep:30): an
     // undeclared flag of the error table is dropped from a command line that asks
     // for the help or the version, and refused otherwise. A flag outside the
     // table is clap's, which reads the line in order and refuses the flag unless
     // the help or the version comes first.
-    let asks_help_or_version = options.iter().any(|a| {
-        matches!(
-            a.to_string_lossy().as_ref(),
-            "--help" | "-h" | "--version" | "-V"
-        )
-    });
+    let asks_help_or_version = options.iter().any(asks_usage);
     for entry in ERROR_TABLE.iter().filter(|e| !e.declared) {
         let Treatment::Refused { component, message } = entry.treatment else {
             continue;

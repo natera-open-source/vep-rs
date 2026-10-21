@@ -453,7 +453,7 @@ def test_floor_failure(texts):
     assert met["verdict"] == "green"
     assert met["columns"]["IMPACT"] == {
         "expected_populated": ROWS, "actual_populated": ROWS, "differing": 0, "pairs_accepted": 0,
-        "nearest_accepted": 0, "order_only": 0, "floor": ROWS, "floor_met": True,
+        "nearest_accepted": 0, "order_only": 0, "individual_allele_order": 0, "floor": ROWS, "floor_met": True,
     }
     assert met["floors_not_applicable"] == []
     empty = cvf.compare_entries(expected, actual, no_documented(), floors={"HGVSc": 1})
@@ -1328,6 +1328,276 @@ def test_self_parity_holds_zyg_to_the_rows_only_for_objects_with_a_consequence()
     assert report["record_checks"]["problems"] == []
 
 
+INDIVIDUAL = HERE.parent.parent / "tests" / "golden" / "116" / "GRCh38-individual"
+# The hand-built hb_multi record (G, ALT A,T) and its sample S2, genotype 1/2: the copy's allele
+# string is G/A/T and each of its four transcripts has one A row and one T row, in that order.
+TWO_ALLELE_ROWS = 8
+
+
+def test_individual_allele_order_class_accepts_a_copys_alleles_in_any_order(tmp_path):
+    """Under ``--individual`` Ensembl VEP lists the alternate alleles of an individual's copy in
+    hash order (Parser/VCF.pm:639), so a candidate listing hb_multi S2's T before its A agrees
+    under the class in every format: each transcript's two rows in the other order, the JSON
+    record's ``allele_string``, and under ``--allele_number --uploaded_allele`` the rows'
+    ``ALLELE_NUM`` (one permutation of the alternates' numbers over every row of the copy) and
+    ``UPLOADED_ALLELE``; each agreement is counted as ``individual_allele_order`` and the
+    reordered entries under ``counts``. The same rows without ``IND`` stay red, as do a changed
+    allele, a numbering that is not a permutation, a renumbering of one transcript alone, a
+    reference allele numbered other than 0 and a reference row moved after the alternates;
+    ``order_only`` alone accepts none of it."""
+
+    def swapped_pairs(items: list) -> list:
+        return [x for i in range(0, len(items), 2) for x in (items[i + 1], items[i])]
+
+    def s2_rows(rows: list[str]) -> list[int]:
+        return [i for i, r in enumerate(rows) if r.startswith("hb_multi\t") and "IND=S2;" in r]
+
+    def with_class() -> cvf.Documented:
+        return cvf.Documented.from_manifest(None, {cvf.INDIVIDUAL_ALLELE_ORDER})
+
+    expected_dir = INDIVIDUAL / "expected_individual-all"
+    inputs = cvf.input_records(INDIVIDUAL / "variants.vcf")
+    default = cvf.read_text(expected_dir / "default.txt.gz")
+    rows = data_lines(default)
+    targets = s2_rows(rows)
+    assert len(targets) == TWO_ALLELE_ROWS
+    assert [rows[i].split("\t")[2] for i in targets] == ["A", "T"] * 4
+    swapped = list(rows)
+    for first, second in zip(targets[0::2], targets[1::2]):
+        swapped[first], swapped[second] = rows[second], rows[first]
+    expected = cvf.parse_default(default)
+    actual = cvf.parse_default(rebuild(default, swapped))
+    plain = cvf.compare_entries(expected, actual, no_documented())
+    assert plain["verdict"] == "red"
+    assert plain["reasons"] == [f"order differs at shared position {targets[0]}"]
+    assert plain["order"]["expected"] == "21:34716340|A|ENST00000349499|Transcript#2"
+    assert plain["order"]["actual"] == "21:34716340|T|ENST00000349499|Transcript"
+    order_only = cvf.compare_entries(expected, actual, no_documented(), order_only=cvf.order_only_fields("default"))
+    assert order_only["verdict"] == "red"
+    documented = with_class()
+    accepted = cvf.compare_entries(expected, actual, documented)
+    assert accepted["verdict"] == "green"
+    assert accepted["order"] is None
+    assert accepted["counts"]["individual_entries_reordered"] == TWO_ALLELE_ROWS
+    assert documented.applied == {cvf.INDIVIDUAL_ALLELE_ORDER: TWO_ALLELE_ROWS}
+    assert all(col["individual_allele_order"] == 0 for col in accepted["columns"].values())
+
+    # The same eight rows without IND are a record of no individual: the order stays red.
+    expected_eight = cvf.parse_default(rebuild(default, [rows[i].replace("IND=S2;", "") for i in targets]))
+    actual_eight = cvf.parse_default(rebuild(default, [swapped[i].replace("IND=S2;", "") for i in targets]))
+    documented = with_class()
+    scoped = cvf.compare_entries(expected_eight, actual_eight, documented)
+    assert scoped["verdict"] == "red"
+    assert scoped["reasons"] == ["order differs at shared position 0"]
+    assert scoped["counts"]["individual_entries_reordered"] == 0
+    assert documented.applied == {}
+
+    # Through compare_files the class is reported applied, and unused on a candidate in the
+    # reference's order.
+    reference_path = tmp_path / "reference.txt"
+    reference_path.write_text(default, encoding="utf-8")
+    candidate_path = tmp_path / "candidate.txt"
+    candidate_path.write_text(rebuild(default, swapped), encoding="utf-8")
+    report = cvf.compare_files("default", reference_path, candidate_path, None, no_documented(), {cvf.INDIVIDUAL_ALLELE_ORDER}, {}, {}, 4)
+    assert report["verdict"] == "green"
+    assert report["masks"] == {
+        "requested": [cvf.INDIVIDUAL_ALLELE_ORDER], "applied": {cvf.INDIVIDUAL_ALLELE_ORDER: TWO_ALLELE_ROWS}, "unused": [], "available": {},
+    }
+    same = cvf.compare_files("default", reference_path, reference_path, None, no_documented(), {cvf.INDIVIDUAL_ALLELE_ORDER}, {}, {}, 4)
+    assert same["verdict"] == "green"
+    assert same["masks"]["applied"] == {} and same["masks"]["unused"] == [cvf.INDIVIDUAL_ALLELE_ORDER]
+
+    # The JSON record object's allele_string (JSON.pm:241) and its consequence entries.
+    json_text = cvf.read_text(expected_dir / "json.jsonl.gz")
+    objects = []
+    for line in cvf.text_lines(json_text):
+        if not line:
+            continue
+        obj = json.loads(line)
+        if obj.get("id") == "hb_multi" and obj.get("ind") == "S2":
+            assert obj["allele_string"] == "G/A/T"
+            obj["allele_string"] = "G/T/A"
+            assert [tc["variant_allele"] for tc in obj["transcript_consequences"]] == ["A", "T"] * 4
+            obj["transcript_consequences"] = swapped_pairs(obj["transcript_consequences"])
+        objects.append(json.dumps(obj))
+    json_expected = cvf.parse_json(json_text, inputs)
+    json_actual = cvf.parse_json("\n".join(objects) + "\n", inputs)
+    plain = cvf.compare_entries(json_expected, json_actual, no_documented())
+    assert plain["verdict"] == "red"
+    assert plain["columns"]["allele_string"]["differing"] == 1
+    documented = with_class()
+    json_report = cvf.compare_entries(json_expected, json_actual, documented)
+    assert json_report["verdict"] == "green"
+    assert json_report["columns"]["allele_string"]["individual_allele_order"] == 1
+    assert json_report["columns"]["allele_string"]["individual_allele_order_examples"] == ["obj434|record: expected 'G/A/T', got 'G/T/A'"]
+    assert json_report["counts"]["individual_entries_reordered"] == TWO_ALLELE_ROWS
+    assert documented.applied == {cvf.INDIVIDUAL_ALLELE_ORDER: TWO_ALLELE_ROWS + 1}
+    changed = [o.replace('"allele_string": "G/T/A"', '"allele_string": "G/T/C"') for o in objects]
+    changed_report = cvf.compare_entries(json_expected, cvf.parse_json("\n".join(changed) + "\n", inputs), with_class())
+    assert changed_report["verdict"] == "red"
+    assert changed_report["reasons"] == ["field allele_string: 1 differing entries"]
+
+    # The VCF format's CSQ entries of the copy's line, each transcript's pair in the other order.
+    vcf = cvf.read_text(expected_dir / "vcf.vcf.gz")
+    flipped = []
+    for row in data_lines(vcf):
+        cols = row.split("\t")
+        if cols[2] == "hb_multi" and "|S2|" in cols[7]:
+            prefix, marker, csq = cols[7].partition("CSQ=")
+            chunks = csq.split(",")
+            assert [chunk.split("|")[0] for chunk in chunks] == ["A", "T"] * 4
+            cols[7] = prefix + marker + ",".join(swapped_pairs(chunks))
+        flipped.append("\t".join(cols))
+    vcf_expected = cvf.parse_vcf(vcf, inputs)
+    vcf_actual = cvf.parse_vcf(rebuild(vcf, flipped), inputs)
+    assert cvf.compare_entries(vcf_expected, vcf_actual, no_documented())["verdict"] == "red"
+    documented = with_class()
+    vcf_report = cvf.compare_entries(vcf_expected, vcf_actual, documented)
+    assert vcf_report["verdict"] == "green"
+    assert vcf_report["counts"]["individual_entries_reordered"] == TWO_ALLELE_ROWS
+    assert documented.applied == {cvf.INDIVIDUAL_ALLELE_ORDER: TWO_ALLELE_ROWS}
+
+    # --process_ref_homs --allele_number --uploaded_allele: the copy's rows are G, A and T per
+    # transcript, numbered 0, 1 and 2 in the allele string's order (OutputFactory.pm:1354),
+    # UPLOADED_ALLELE the string itself (OutputFactory.pm:1360); the other order numbers T 1
+    # and A 2 and prints G/T/A on every row of the copy, the G row included.
+    fields_default = cvf.read_text(INDIVIDUAL / "expected_individual-refhoms-fields" / "default.txt.gz")
+    rows = data_lines(fields_default)
+    targets = s2_rows(rows)
+    assert [rows[i].split("\t")[2] for i in targets] == ["G", "A", "T"] * 4
+    renumbered = list(rows)
+    for i in targets:
+        row = rows[i].replace("UPLOADED_ALLELE=G/A/T;", "UPLOADED_ALLELE=G/T/A;")
+        if "\tA\t" in row:
+            row = row.replace("ALLELE_NUM=1;", "ALLELE_NUM=2;")
+        else:
+            row = row.replace("ALLELE_NUM=2;", "ALLELE_NUM=1;")
+        renumbered[i] = row
+    for g in targets[0::3]:
+        renumbered[g + 1], renumbered[g + 2] = renumbered[g + 2], renumbered[g + 1]
+    fields_expected = cvf.parse_default(fields_default)
+    fields_actual = cvf.parse_default(rebuild(fields_default, renumbered))
+    plain = cvf.compare_entries(fields_expected, fields_actual, no_documented())
+    assert plain["verdict"] == "red"
+    assert plain["columns"]["ALLELE_NUM"]["differing"] == TWO_ALLELE_ROWS
+    assert plain["columns"]["UPLOADED_ALLELE"]["differing"] == len(targets)
+    documented = with_class()
+    fields_report = cvf.compare_entries(fields_expected, fields_actual, documented)
+    assert fields_report["verdict"] == "green"
+    assert fields_report["columns"]["ALLELE_NUM"]["individual_allele_order"] == TWO_ALLELE_ROWS
+    assert fields_report["columns"]["UPLOADED_ALLELE"]["individual_allele_order"] == len(targets)
+    assert fields_report["columns"]["Extra"]["individual_allele_order"] == len(targets)
+    assert fields_report["counts"]["individual_entries_reordered"] == TWO_ALLELE_ROWS
+    # The eight reordered rows, their eight ALLELE_NUM values, and UPLOADED_ALLELE with the
+    # Extra text carrying it on all twelve rows of the copy.
+    assert documented.applied == {cvf.INDIVIDUAL_ALLELE_ORDER: 2 * TWO_ALLELE_ROWS + 2 * len(targets)}
+    assert fields_report["columns"]["ALLELE_NUM"]["individual_allele_order_examples"][:2] == [
+        "21:34716340|A|ENST00000349499|Transcript#2: expected '1', got '2'",
+        "21:34716340|T|ENST00000349499|Transcript: expected '2', got '1'",
+    ]
+    # Numbering both alternate alleles 1 is not a permutation of the copy's numbers.
+    doubled = [r.replace("ALLELE_NUM=2;", "ALLELE_NUM=1;") if i in targets else r for i, r in enumerate(renumbered)]
+    doubled_report = cvf.compare_entries(fields_expected, cvf.parse_default(rebuild(fields_default, doubled)), with_class())
+    assert doubled_report["verdict"] == "red"
+    assert doubled_report["reasons"] == ["field ALLELE_NUM: 4 differing entries", "field Extra: 4 differing entries"]
+    assert doubled_report["columns"]["ALLELE_NUM"]["individual_allele_order"] == 0
+    # A renumbering of one transcript alone is no permutation applied to the copy: each allele
+    # carries one number across the copy's rows, its index in the copy's one allele string
+    # (OutputFactory.pm:1354).
+    partial = list(rows)
+    partial[targets[1]] = rows[targets[1]].replace("ALLELE_NUM=1;", "ALLELE_NUM=2;")
+    partial[targets[2]] = rows[targets[2]].replace("ALLELE_NUM=2;", "ALLELE_NUM=1;")
+    partial_report = cvf.compare_entries(fields_expected, cvf.parse_default(rebuild(fields_default, partial)), with_class())
+    assert partial_report["verdict"] == "red"
+    assert partial_report["columns"]["ALLELE_NUM"]["differing"] == 2
+    assert partial_report["columns"]["ALLELE_NUM"]["individual_allele_order"] == 0
+    # The reference allele keeps 0 and its row keeps its place (Parser/VCF.pm:639 writes the
+    # reference first): G numbered 1 with A numbered 0, or the G row after the alternates, is red.
+    shifted_zero = list(rows)
+    for g in targets[0::3]:
+        shifted_zero[g] = rows[g].replace("ALLELE_NUM=0;", "ALLELE_NUM=1;")
+        shifted_zero[g + 1] = rows[g + 1].replace("ALLELE_NUM=1;", "ALLELE_NUM=0;")
+    zero_report = cvf.compare_entries(fields_expected, cvf.parse_default(rebuild(fields_default, shifted_zero)), with_class())
+    assert zero_report["verdict"] == "red"
+    assert zero_report["columns"]["ALLELE_NUM"]["differing"] == TWO_ALLELE_ROWS
+    assert zero_report["columns"]["ALLELE_NUM"]["individual_allele_order"] == 0
+    reference_last = list(rows)
+    for g in targets[0::3]:
+        reference_last[g], reference_last[g + 1], reference_last[g + 2] = rows[g + 1], rows[g + 2], rows[g]
+    last_report = cvf.compare_entries(fields_expected, cvf.parse_default(rebuild(fields_default, reference_last)), with_class())
+    assert last_report["verdict"] == "red"
+    assert last_report["reasons"] == [f"order differs at shared position {targets[0]}"]
+
+    # A JSON consequence entry names the reference allele as ref_allele: without allele_num the
+    # reference row is still known by it, so moved after the alternates it reads red while the
+    # alternates' own order stays free.
+    def without_numbers(obj: dict) -> dict:
+        for tc in obj.get("transcript_consequences", []):
+            tc.pop("allele_num", None)
+        return obj
+
+    def reordered(obj: dict, order: tuple[int, int, int]) -> str:
+        tcs = obj["transcript_consequences"]
+        return json.dumps({**obj, "transcript_consequences": [tcs[i + j] for i in range(0, len(tcs), 3) for j in order]})
+
+    fields_json = cvf.read_text(INDIVIDUAL / "expected_individual-refhoms-fields" / "json.jsonl.gz")
+    plain_objects, reference_last_objects, alternates_objects = [], [], []
+    for line in cvf.text_lines(fields_json):
+        if not line:
+            continue
+        obj = without_numbers(json.loads(line))
+        text = json.dumps(obj)
+        plain_objects.append(text)
+        if obj.get("id") == "hb_multi" and obj.get("ind") == "S2":
+            tcs = obj["transcript_consequences"]
+            assert [tc["variant_allele"] for tc in tcs] == ["G", "A", "T"] * 4
+            assert all(tc["ref_allele"] == "G" for tc in tcs)
+            reference_last_objects.append(reordered(obj, (1, 2, 0)))
+            alternates_objects.append(reordered(obj, (0, 2, 1)))
+        else:
+            reference_last_objects.append(text)
+            alternates_objects.append(text)
+    json_fields_expected = cvf.parse_json("\n".join(plain_objects) + "\n", inputs)
+    reference_last_json = cvf.compare_entries(
+        json_fields_expected, cvf.parse_json("\n".join(reference_last_objects) + "\n", inputs), with_class()
+    )
+    assert reference_last_json["verdict"] == "red"
+    assert reference_last_json["reasons"][0].startswith("order differs at shared position")
+    alternates_json = cvf.compare_entries(
+        json_fields_expected, cvf.parse_json("\n".join(alternates_objects) + "\n", inputs), with_class()
+    )
+    assert alternates_json["verdict"] == "green"
+    assert alternates_json["counts"]["individual_entries_reordered"] == TWO_ALLELE_ROWS
+    # A number missing on one side is no permutation: the row's own value must be its allele's
+    # number in the copy.
+    one_missing = []
+    for line in cvf.text_lines(fields_json):
+        if not line:
+            continue
+        obj = json.loads(line)
+        if obj.get("id") == "hb_multi" and obj.get("ind") == "S2":
+            assert obj["transcript_consequences"][0].pop("allele_num") == 0
+        one_missing.append(json.dumps(obj))
+    one_missing_report = cvf.compare_entries(
+        cvf.parse_json(fields_json, inputs), cvf.parse_json("\n".join(one_missing) + "\n", inputs), with_class()
+    )
+    assert one_missing_report["verdict"] == "red"
+    assert one_missing_report["reasons"] == ["field allele_num: 1 differing entries"]
+    assert one_missing_report["columns"]["allele_num"]["individual_allele_order"] == 0
+    # An insertion's reference row prints REF_ALLELE=-, its own allele: without a number it is
+    # still the reference row, and moved after the alternates it reads red.
+    indel_targets = [i for i, r in enumerate(rows) if r.startswith("hb_multi_indel\t") and "IND=S4;" in r]
+    assert [rows[i].split("\t")[2] for i in indel_targets][:3] == ["-", "A", "AA"]
+    unnumbered = [re.sub(r"ALLELE_NUM=\d+;", "", r) if i in indel_targets else r for i, r in enumerate(rows)]
+    indel_last = list(unnumbered)
+    for g in indel_targets[0::3]:
+        indel_last[g], indel_last[g + 1], indel_last[g + 2] = unnumbered[g + 1], unnumbered[g + 2], unnumbered[g]
+    indel_expected = cvf.parse_default(rebuild(fields_default, unnumbered))
+    indel_report = cvf.compare_entries(indel_expected, cvf.parse_default(rebuild(fields_default, indel_last)), with_class())
+    assert indel_report["verdict"] == "red"
+    assert indel_report["reasons"] == [f"order differs at shared position {indel_targets[0]}"]
+
+
 def test_json_floors_count_under_the_json_keys(tmp_path):
     """A floor names the default-format column in every format: in JSON it is counted under
     the column's JSON key (DOMAINS under domains, ENSP under protein_id, SIFT and PolyPhen
@@ -1354,7 +1624,8 @@ def test_json_floors_count_under_the_json_keys(tmp_path):
     assert report["floors_not_applicable"] == ["Existing_variation", "Feature_type"]
     assert report["columns"]["Existing_variation"] == {
         "expected_populated": 0, "actual_populated": 0, "differing": 0, "pairs_accepted": 0,
-        "nearest_accepted": 0, "order_only": 0, "floor": 1, "floor_met": None, "floor_note": cvf.FLOOR_NOT_APPLICABLE,
+        "nearest_accepted": 0, "order_only": 0, "individual_allele_order": 0, "floor": 1, "floor_met": None,
+        "floor_note": cvf.FLOOR_NOT_APPLICABLE,
     }
     assert report["columns"]["Feature_type"]["floor_met"] is None
     assert report["columns"]["Feature_type"]["floor_note"] == cvf.FLOOR_NOT_APPLICABLE

@@ -241,6 +241,17 @@ pub struct InputVariant {
     /// allele and for every record the split left alone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rejoin_key_prefix: Option<Arc<str>>,
+    /// The first allele's feature of this `--minimal` split record writes no row
+    /// before the rejoin: every row it had was filtered on the feature's own span,
+    /// or it has no alternate allele and no reference row. Ensembl VEP caches
+    /// `ref_allele_string` on the first row it builds (OutputFactory.pm:1357,
+    /// called at :2289 before the rejoin restores the record's string;
+    /// VariationFeature.pm:1533-1539), so with no such row every row of the
+    /// record prints the record's own reference as `REF_ALLELE`. Set by the row
+    /// filters; `false` for every other record. Not part of the variant's JSON
+    /// form.
+    #[serde(skip)]
+    pub split_first_feature_rowless: bool,
     /// Raw input line (for passthrough in some output formats), one buffer shared by
     /// every allele of the record.
     pub raw_input: Option<Arc<str>>,
@@ -485,6 +496,16 @@ pub struct InputVariant {
     /// it (`TranscriptVariationAllele.pm:1400`).
     #[serde(default)]
     pub reference_allele_row: bool,
+    /// The alternate allele whose 3' shift places a reference row under
+    /// `--shift_3prime 1`: the record's last alternate. `reset_shifted_positions`
+    /// (OutputFactory.pm:306-323) leaves the transcript variation the record's
+    /// alleles share at the coordinates `clear_shifting_variables`
+    /// (TranscriptVariationAllele.pm:502-528) sets for the last allele with a
+    /// shift, and the reference row prints those coordinates and reads its codon
+    /// at them. `None` for every other allele. Not part of the variant's JSON
+    /// form.
+    #[serde(skip)]
+    pub reference_row_shift_allele: Option<Arc<str>>,
 }
 
 /// An empty placeholder: no allocation, every field at its zero value. Lets a
@@ -519,6 +540,7 @@ impl Default for InputVariant {
             original_start: None,
             original_end: None,
             rejoin_key_prefix: None,
+            split_first_feature_rowless: false,
             raw_input: None,
             raw_input_bytes: None,
             existing_variation: Vec::new(),
@@ -557,6 +579,7 @@ impl Default for InputVariant {
             hom_ref: false,
             sample_zygosities: None,
             reference_allele_row: false,
+            reference_row_shift_allele: None,
         }
     }
 }
@@ -610,6 +633,7 @@ impl InputVariant {
             original_start: None,
             original_end: None,
             rejoin_key_prefix: None,
+            split_first_feature_rowless: false,
             raw_input: None,
             raw_input_bytes: None,
             existing_variation: Vec::new(),
@@ -648,6 +672,7 @@ impl InputVariant {
             hom_ref: false,
             sample_zygosities: None,
             reference_allele_row: false,
+            reference_row_shift_allele: None,
         }
     }
 
@@ -768,6 +793,8 @@ impl InputVariant {
         row.hom_ref = self.hom_ref;
         row.sample_zygosities.clone_from(&self.sample_zygosities);
         row.reference_allele_row = true;
+        row.reference_row_shift_allele = (!self.no_allele)
+            .then(|| Arc::from(String::from_utf8_lossy(self.alt_allele()).as_ref()));
         row
     }
 
@@ -1207,8 +1234,10 @@ fn complement_dna_allele(allele: &[u8]) -> Vec<u8> {
     }
 }
 
-/// Appends `n` in decimal; the buffer holds the 20 digits of `u64::MAX`.
-fn push_decimal(out: &mut Vec<u8>, mut n: u64) {
+/// Appends `n` in decimal, byte for byte as `u64`'s `Display` writes it, without
+/// the formatting machinery on a path that runs once per row; the buffer holds
+/// the 20 digits of `u64::MAX`.
+pub fn push_decimal(out: &mut Vec<u8>, mut n: u64) {
     let mut digits = [0u8; 20];
     let mut start = digits.len();
     loop {
@@ -2197,9 +2226,18 @@ mod tests {
         }
     }
 
+    /// Zero, every value to 1000, each power of ten with its neighbours and the
+    /// 20-digit `u64::MAX` write as `Display` does.
     #[test]
     fn push_decimal_writes_every_digit() {
-        for n in [0u64, 7, 10, 99, 100, 25000100, u64::MAX] {
+        let mut cases: Vec<u64> = (0..=1000).collect();
+        let mut power_of_ten: u64 = 1;
+        for _ in 0..19 {
+            power_of_ten = power_of_ten.saturating_mul(10);
+            cases.extend_from_slice(&[power_of_ten - 1, power_of_ten, power_of_ten + 1]);
+        }
+        cases.extend_from_slice(&[25000100, 12_345_678_901_234_567_890, u64::MAX - 1, u64::MAX]);
+        for n in cases {
             let mut out = b"x".to_vec();
             push_decimal(&mut out, n);
             assert_eq!(out, format!("x{n}").into_bytes());
@@ -2352,6 +2390,29 @@ mod tests {
         assert_eq!(row.record_allele_string(), "AAA/AGG/AAG");
         assert_eq!(row.uploaded_allele(true).as_deref(), Some("AAA/AGG/AAG"));
         assert_eq!(row.class_so_term(), "substitution");
+    }
+
+    /// The reference row names the alternate whose 3' shift places it under
+    /// `--shift_3prime 1`, the allele it is built from, so the shift reads the
+    /// row at that allele's shifted span; the row of a feature with no alternate
+    /// allele names none and is read where it stands.
+    #[test]
+    fn reference_row_names_the_alternate_it_shifts_with() {
+        let insertion = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"GAA".to_vec());
+        let row = insertion.reference_allele_row();
+        assert_eq!(row.reference_row_shift_allele.as_deref(), Some("GAA"));
+        assert_eq!(
+            (row.ref_allele.as_slice(), row.alt_allele()),
+            (b"-".as_slice(), b"-".as_slice())
+        );
+        let without_allele = InputVariant::without_allele("21".into(), 100, "A", ["*"]);
+        assert!(without_allele.no_allele);
+        assert_eq!(
+            without_allele
+                .reference_allele_row()
+                .reference_row_shift_allele,
+            None
+        );
     }
 
     #[test]

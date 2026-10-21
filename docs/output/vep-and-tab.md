@@ -101,11 +101,13 @@ Inside a value `;` is escaped as `%3B` and, unless `--no_escape`, the `=` of an 
 
 `SHIFT_LENGTH` (`--shift_length`) is the number of bases `--shift_3prime 1` moved the allele before its terms and positions were computed. It is written on every transcript row of a sequence variant, `0` included, and on no intergenic or structural-variant row; without `--shift_3prime 1` the column is listed and left empty. Under `--shift_3prime 1 --shift_genomic 1` the `Location` column prints the moved position (a transcript row along its transcript's strand, an intergenic row towards higher coordinates) and `Allele` the inserted bases rotated along the move; `Uploaded_variation` keeps the input's name.
 
+The reference row of `--process_ref_homs` is read at the span the record's last alternate allele shifts to: its positions, codons and coding terms are that span's, and its `SHIFT_LENGTH` is `0`. Ensembl VEP leaves the coordinates the record's alleles share at the last allele's shift (`OutputFactory.pm` lines 306-323), while the reference allele carries no shift of its own.
+
 #### Allele on a coding row after a shift
 
-Under `--shift_3prime 1` without `--shift_genomic 1`, Ensembl VEP prints `Allele` from the allele sequence its codon computation rotated (`TranscriptVariationAllele.pm` line 820 calls the rotation of lines 1330-1347, and `OutputFactory.pm` line 1347 prints the rotated sequence). A coding row of a shifted insertion therefore prints the inserted bases rotated by the shift along the transcript's strand, while the record's non-coding rows, whose codon is never computed, keep the written bases.
+Under `--shift_3prime 1` without `--shift_genomic 1`, a coding row of a shifted insertion prints the inserted bases rotated along the shift. Ensembl VEP prints the allele sequence its codon computation rotated: `TranscriptVariationAllele.pm` line 820 calls the rotation of lines 1330-1347, and `OutputFactory.pm` line 1347 prints the rotated sequence. On a forward-strand transcript the rotation runs one place per base of the shift. On a reverse-strand transcript it runs the allele's length less the shift, so a shift of the allele's length or more leaves the allele as written.
 
-For `21 26021981 26021980 -/AAG 1` on APP, Ensembl VEP prints `GAA` on the 52 coding rows and `AAG` on the 5 non-coding rows. vep-rs prints the written allele, `AAG`, on every row, and rotates the bases for `Codons`, `Amino_acids` and the HGVS notations alone. The [index of differences](../intended-divergences.md#differences-outside-the-classes) lists it.
+The record's non-coding rows, whose codon is never computed, keep the written bases. For `21 26021981 26021980 -/AAG 1` on APP, both engines print `GAA` on the coding rows and `AAG` on the non-coding rows.
 
 ### Example
 
@@ -222,7 +224,7 @@ Under `--spdi` every row of a sequence variant carries its allele in SPDI notati
 
 The chromosome is named as the cache names it on every row overlapping a transcript, and on an intergenic row as the reference FASTA names it. Ensembl VEP needs a FASTA for those rows and stops without one; vep-rs then prints the cache's name.
 
-Ensembl VEP keeps the record's notations by allele and looks them up by the row's `Allele`. So under `--shift_3prime 1 --shift_genomic 1` a row whose inserted bases the shift rotated carries no `SPDI`, unless the rotation lands on another allele of the record, in which case the row carries that allele's notation. For `21 13620283 G GTCA,GCAT` the `TCA` allele moved 10 bases prints `CAT` as its Allele and `21:13620283::CAT` as its `SPDI`. A structural variant and an allele outside `ACGTN` carry none. The JSON key is `spdi`.
+Ensembl VEP keeps the record's notations by allele and looks them up by the row's `Allele`. So under `--shift_3prime 1` a row whose inserted bases the shift rotated (every row under `--shift_genomic 1`, a coding row without it) carries no `SPDI`, unless the rotation lands on another allele of the record, in which case the row carries that allele's notation. For `21 13620283 G GTCA,GCAT` the `TCA` allele moved 10 bases prints `CAT` as its Allele and `21:13620283::CAT` as its `SPDI`. A structural variant and an allele outside `ACGTN` carry none. The JSON key is `spdi`.
 
 ### GA4GH_VRS
 

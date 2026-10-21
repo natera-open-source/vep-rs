@@ -1002,7 +1002,6 @@ impl Runner {
             individual: c.individual.is_some(),
             individual_zyg: c.individual_zyg.is_some(),
             process_ref_homs: c.process_ref_homs,
-            coding_only: c.coding_only,
             use_transcript_ref: c.use_transcript_ref,
             variant_class: c.variant_class,
             minimal: c.minimal,
@@ -1054,7 +1053,7 @@ impl Runner {
             no_escape: c.no_escape,
             terms: c.terms,
             total_length: c.total_length,
-            positions_of_own_span: matches!(c.output_format.as_str(), "vcf" | "json"),
+            positions_of_own_span: rejoins_on_own_span(c),
             clin_sig_allele: if c.clin_sig_allele {
                 ClinSigAllele::PerAllele
             } else {
@@ -1327,6 +1326,7 @@ impl Runner {
             row_filters: RowFilters {
                 coding_only: self.config.coding_only,
                 no_intergenic: self.config.no_intergenic,
+                cds_of_own_span: rejoins_on_own_span(&self.config),
             },
             pick: self.config.pick,
             pick_allele: self.config.pick_allele,
@@ -2326,6 +2326,14 @@ impl AnnotationResources {
 /// consequence as JSON.
 pub(crate) fn needs_exon_intron_numbers(config: &Config) -> bool {
     config.numbers || !config.plugin.is_empty()
+}
+
+/// Whether the output format's factory clears the cached positions of a
+/// `--minimal` split before it rejoins the alleles, so a row reads its own
+/// span: the VCF and JSON factories do, the default and tab factories rejoin
+/// first ([`FieldOptions::positions_of_own_span`], [`RowFilters::cds_of_own_span`]).
+fn rejoins_on_own_span(config: &Config) -> bool {
+    matches!(config.output_format.as_str(), "vcf" | "json")
 }
 
 /// Output formats that read `InputVariant::raw_input`.

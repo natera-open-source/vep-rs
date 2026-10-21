@@ -185,9 +185,11 @@ mod tests {
     }
 
     /// The consequence document a plugin receives carries these keys and no
-    /// other: every field of `TranscriptConsequence` except `id_rank`, with
-    /// `plugin_data`, `loftee_ctx`, `cds_length` and `source_cache` present only
-    /// when populated.
+    /// other: every field of `TranscriptConsequence` except `id_rank` and
+    /// `record_span_in_cds`, with `cdna_total`, `cds_total`, `protein_total`,
+    /// `plugin_data`, `loftee_ctx`, `cds_length`, `source_cache`,
+    /// `own_span_positions`, `used_ref` and `shifted_allele` present only when
+    /// populated.
     #[test]
     fn consequence_json_carries_every_documented_key_and_nothing_else() {
         const ALWAYS: [&str; 46] = [
@@ -249,6 +251,7 @@ mod tests {
 
         let mut tc = TranscriptConsequence {
             id_rank: 7,
+            record_span_in_cds: true,
             ..TranscriptConsequence::default()
         };
         assert_eq!(sorted_keys(&tc), expected);
@@ -262,10 +265,31 @@ mod tests {
         ));
         tc.cds_length = Some(300);
         tc.source_cache = Some(vep_core::consequence::SourceCache::Ensembl);
-        expected.push("plugin_data".to_string());
-        expected.push("loftee_ctx".to_string());
-        expected.push("cds_length".to_string());
-        expected.push("source_cache".to_string());
+        tc.cdna_total = Some(2500);
+        tc.cds_total = Some(300);
+        tc.protein_total = Some(99);
+        tc.own_span_positions = Some(Box::new(vep_core::consequence::OwnSpanPositions {
+            cdna: Some("439".to_string()),
+            cds: Some("87".to_string()),
+            protein: Some("29".to_string()),
+        }));
+        tc.used_ref = Some(std::sync::Arc::from("A"));
+        tc.shifted_allele = Some(std::sync::Arc::from("GAA"));
+        expected.extend(
+            [
+                "plugin_data",
+                "loftee_ctx",
+                "cds_length",
+                "source_cache",
+                "cdna_total",
+                "cds_total",
+                "protein_total",
+                "own_span_positions",
+                "used_ref",
+                "shifted_allele",
+            ]
+            .map(str::to_string),
+        );
         expected.sort();
         assert_eq!(sorted_keys(&tc), expected);
     }

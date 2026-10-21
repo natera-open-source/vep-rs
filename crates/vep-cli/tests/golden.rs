@@ -688,7 +688,7 @@ fn regulatory_feature_rows_mask_drops_the_reference_rows() {
     assert_eq!(entries.len(), 4);
 }
 
-/// Under `order_only` the `DOMAINS` and `FREQS` items of both sides compare as
+/// Under `order_only` the items of the columns [`ORDER_ONLY`] names compare as
 /// a multiset: the same items in another order agree in the default format (the
 /// field and the raw `Extra` text), in the VCF's `&`-joined form and in the JSON
 /// `domains` array, while a changed item, or one listed a different number of

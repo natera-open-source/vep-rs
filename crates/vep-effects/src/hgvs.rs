@@ -593,6 +593,12 @@ pub struct HgvsOptions {
     /// stable id without its version appended (TranscriptVariationAllele.pm
     /// 1759-1760); HGVSc keeps its version.
     pub remove_hgvsp_version: bool,
+    /// `--shift_3prime 1`: the consequences were computed on the shifted allele,
+    /// and `hgvs_transcript` clears the predicate cache once the shift moved it
+    /// (TranscriptVariationAllele.pm 1469), so `hgvs_protein` reads `stop_lost`,
+    /// `start_lost` and the frameshift guards on the shifted allele too; off, it
+    /// reads them on the allele as the input placed it.
+    pub shift_3prime: bool,
 }
 
 impl Default for HgvsOptions {
@@ -601,6 +607,7 @@ impl Default for HgvsOptions {
             shift_hgvs: true,
             hgvsp_use_prediction: false,
             remove_hgvsp_version: false,
+            shift_3prime: false,
         }
     }
 }
@@ -983,6 +990,7 @@ fn hgvsp_at(
         shifted_variant.as_ref().map(|v| (v, v.start, v.end)),
         transcript,
         reference_fasta,
+        options.shift_3prime,
     )?;
     Some(if options.hgvsp_use_prediction {
         format!("{ref_name}:p.({notation})")
@@ -1000,6 +1008,7 @@ mod tests {
         shift_hgvs: true,
         hgvsp_use_prediction: false,
         remove_hgvsp_version: false,
+        shift_3prime: false,
     };
     const UNSHIFTED: HgvsOptions = HgvsOptions {
         shift_hgvs: false,

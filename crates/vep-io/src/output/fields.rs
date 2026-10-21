@@ -20,7 +20,9 @@ use vep_core::consequence::{Consequence, OwnSpanPositions, TranscriptConsequence
 use vep_core::spdi::VrsAllele;
 use vep_core::sv_routing::{perl_split, perl_true};
 use vep_core::terms::Vocabulary;
-use vep_core::variant::{colocated_in_output_order, ColocatedVariant, InputVariant, VariantClass};
+use vep_core::variant::{
+    colocated_in_output_order, push_decimal, ColocatedVariant, InputVariant, VariantClass,
+};
 use vep_core::variation::reverse_comp;
 
 use super::frequency::{self, FrequencyGroups};
@@ -61,9 +63,6 @@ pub struct FieldOptions {
     /// `--minimal` split record's `REF_ALLELE` is its first allele's trimmed
     /// reference whatever that allele equals.
     pub process_ref_homs: bool,
-    /// `--coding_only`: a feature with no alternate allele in a coding sequence
-    /// writes no row, its reference row included.
-    pub coding_only: bool,
     pub allele_number: bool,
     pub show_ref_allele: bool,
     pub uploaded_allele: bool,
@@ -793,10 +792,12 @@ fn genomic_shift(
     (shift > 0).then_some((shift, strand))
 }
 
-/// Appends the row's `Allele`: the allele as the record gives it, or, under
+/// Appends the row's `Allele`: the allele as the record gives it; under
 /// `--shift_3prime 1 --shift_genomic 1`, rotated along the row's shift
-/// (OutputFactory.pm:1347-1352). A reference row's is the reference allele's
-/// sequence (:1347): [`TranscriptConsequence::used_ref`] when the row has one.
+/// (OutputFactory.pm:1349-1352); under `--shift_3prime 1` alone, the sequence
+/// the row's codon computation rotated ([`TranscriptConsequence::shifted_allele`],
+/// :1347). A reference row's is the reference allele's sequence (:1347):
+/// [`TranscriptConsequence::used_ref`] when the row has one.
 fn write_row_allele(
     out: &mut Vec<u8>,
     variant: &InputVariant,
@@ -809,11 +810,12 @@ fn write_row_allele(
             return;
         }
     }
-    match genomic_shift(variant, tc, options) {
-        Some((shift, strand)) => {
-            out.extend_from_slice(variant.display_allele_shifted(shift, strand).as_bytes())
-        }
-        None => variant.write_display_allele(out),
+    if let Some((shift, strand)) = genomic_shift(variant, tc, options) {
+        out.extend_from_slice(variant.display_allele_shifted(shift, strand).as_bytes());
+    } else if let Some(allele) = tc.and_then(|x| x.shifted_allele.as_deref()) {
+        out.extend_from_slice(allele.as_bytes());
+    } else {
+        variant.write_display_allele(out);
     }
 }
 
@@ -1033,21 +1035,6 @@ fn write_identifier(out: &mut Vec<u8>, value: Option<&str>) {
     }
 }
 
-/// Appends `n` in decimal; the buffer holds the 20 digits of `u64::MAX`.
-fn push_decimal(out: &mut Vec<u8>, mut n: u64) {
-    let mut digits = [0u8; 20];
-    let mut start = digits.len();
-    loop {
-        start -= 1;
-        digits[start] = b'0' + (n % 10) as u8;
-        n /= 10;
-        if n == 0 {
-            break;
-        }
-    }
-    out.extend_from_slice(&digits[start..]);
-}
-
 /// Appends `n` in decimal with a leading `-` when negative.
 fn push_signed(out: &mut Vec<u8>, n: i64) {
     if n < 0 {
@@ -1261,14 +1248,15 @@ fn write_row_field_value(
         // (OutputFactory.pm `BaseStructuralVariationOverlapAllele_to_output_hash`).
         "REF_ALLELE" if variant.is_structural => {}
         // Every row of a `--minimal` split prints the record feature's reference:
-        // the first feature's, when its reference row was built, which under
-        // `--coding_only` a feature with no alternate never is.
+        // the record's own when the first feature wrote no row before the rejoin
+        // (`split_first_feature_rowless`), else the first feature's.
         "REF_ALLELE" => match variant.record_allele_string_multi.as_deref() {
+            Some(record) if variant.split_first_feature_rowless => {
+                out.extend_from_slice(record.split('/').next().unwrap_or_default().as_bytes())
+            }
             Some(record) if variant.original_start.is_some() => {
-                let reference = vep_core::minimal::rejoined_reference(
-                    record,
-                    options.process_ref_homs && !options.coding_only,
-                );
+                let reference =
+                    vep_core::minimal::rejoined_reference(record, options.process_ref_homs);
                 out.extend_from_slice(reference.as_bytes());
             }
             _ => out.extend_from_slice(String::from_utf8_lossy(&variant.ref_allele).as_bytes()),
@@ -2226,7 +2214,6 @@ pub(crate) mod fixtures {
             individual: true,
             individual_zyg: true,
             process_ref_homs: true,
-            coding_only: false,
             allele_number: true,
             show_ref_allele: true,
             uploaded_allele: true,
@@ -2300,10 +2287,12 @@ mod tests {
     // each value as a `String` the way the formats read them; the live
     // `write_field_value` appends the same bytes and `field_value` collects them.
 
-    /// The row's `Allele`: the allele as the record gives it, or, under
+    /// The row's `Allele`: the allele as the record gives it; under
     /// `--shift_3prime 1 --shift_genomic 1`, rotated along the row's shift
-    /// (OutputFactory.pm:1347-1352). A reference row's is the reference allele's
-    /// sequence (:1347): [`TranscriptConsequence::used_ref`] when the row has one.
+    /// (OutputFactory.pm:1349-1352); under `--shift_3prime 1` alone, the sequence
+    /// the row's codon computation rotated ([`TranscriptConsequence::shifted_allele`],
+    /// :1347). A reference row's is the reference allele's sequence (:1347):
+    /// [`TranscriptConsequence::used_ref`] when the row has one.
     fn string_row_allele(
         variant: &InputVariant,
         tc: Option<&TranscriptConsequence>,
@@ -2314,9 +2303,12 @@ mod tests {
                 return used_ref.to_string();
             }
         }
-        match genomic_shift(variant, tc, options) {
-            Some((shift, strand)) => variant.display_allele_shifted(shift, strand),
-            None => variant.display_allele(),
+        if let Some((shift, strand)) = genomic_shift(variant, tc, options) {
+            variant.display_allele_shifted(shift, strand)
+        } else if let Some(allele) = tc.and_then(|x| x.shifted_allele.as_deref()) {
+            allele.to_string()
+        } else {
+            variant.display_allele()
         }
     }
 
@@ -2502,14 +2494,14 @@ mod tests {
             // (OutputFactory.pm `BaseStructuralVariationOverlapAllele_to_output_hash`).
             "REF_ALLELE" if variant.is_structural => String::new(),
             // Every row of a `--minimal` split prints the record feature's reference:
-            // the first feature's, when its reference row was built, which under
-            // `--coding_only` a feature with no alternate never is.
+            // the record's own when the first feature wrote no row before the rejoin
+            // (`split_first_feature_rowless`), else the first feature's.
             "REF_ALLELE" => match variant.record_allele_string_multi.as_deref() {
+                Some(record) if variant.split_first_feature_rowless => {
+                    record.split('/').next().unwrap_or_default().to_string()
+                }
                 Some(record) if variant.original_start.is_some() => {
-                    vep_core::minimal::rejoined_reference(
-                        record,
-                        options.process_ref_homs && !options.coding_only,
-                    )
+                    vep_core::minimal::rejoined_reference(record, options.process_ref_homs)
                 }
                 _ => String::from_utf8_lossy(&variant.ref_allele).to_string(),
             },
@@ -4506,6 +4498,66 @@ mod tests {
         assert_eq!(field_value("UPLOADED_ALLELE", &sv, None, &both, ","), "");
         assert_eq!(field_value("REF_ALLELE", &sv, None, &both, ","), "");
         assert_eq!(field_value("REF_ALLELE", &plain, None, &both, ","), "A");
+    }
+
+    /// Every row of a `--minimal` split prints the reference cached on the record's
+    /// feature (OutputFactory.pm:1357 at :2289, VariationFeature.pm:1533-1539):
+    /// the first allele's trimmed reference once its feature wrote a row, the
+    /// record's own when it wrote none, whether the row filters found that
+    /// (`split_first_feature_rowless`) or the allele equals the reference once
+    /// trimmed, in which case `--process_ref_homs` builds the reference row that
+    /// caches `-`. The byte writer and the string table agree on each.
+    #[test]
+    fn ref_allele_of_a_split_row_is_the_reference_its_first_feature_cached() {
+        let options = FieldOptions {
+            show_ref_allele: true,
+            ..Default::default()
+        };
+        let reference_rows = FieldOptions {
+            process_ref_homs: true,
+            ..options.clone()
+        };
+        let mut deletion = InputVariant::new(
+            "21".into(),
+            10_542_394,
+            10_542_397,
+            b"TACG".to_vec(),
+            b"-".to_vec(),
+        );
+        deletion.allele_index = 1;
+        deletion.original_start = Some(10_542_393);
+        deletion.original_end = Some(10_542_397);
+        deletion.record_allele_string_multi = Some(Arc::from("GTACG/CTACG/G"));
+        for (rowless, expected) in [(false, "G"), (true, "GTACG")] {
+            deletion.split_first_feature_rowless = rowless;
+            for options in [&options, &reference_rows] {
+                assert_eq!(
+                    field_value("REF_ALLELE", &deletion, Some(&missense_tc()), options, ","),
+                    expected,
+                    "rowless {rowless}"
+                );
+                assert_writer_matches(&deletion, Some(&missense_tc()), options, ",");
+            }
+        }
+        let mut equal = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        equal.allele_index = 1;
+        equal.original_start = Some(100);
+        equal.original_end = Some(100);
+        equal.record_allele_string_multi = Some(Arc::from("A/A/G"));
+        assert_eq!(
+            field_value("REF_ALLELE", &equal, Some(&missense_tc()), &options, ","),
+            "A"
+        );
+        assert_eq!(
+            field_value(
+                "REF_ALLELE",
+                &equal,
+                Some(&missense_tc()),
+                &reference_rows,
+                ","
+            ),
+            "-"
+        );
     }
 
     /// `REF_ALLELE`, like `ALLELE_NUM` and `UPLOADED_ALLELE`, is set per overlap

@@ -134,8 +134,8 @@ A declared flag carries its list as a value enumeration, so a value outside it i
 
 ### Lists (`Config.pm:327-346`)
 
-- Comma-separated values: `--individual`, `--individual_zyg`, `--cell_type`, `--pick_order`, `--fields`, `--chr`, `--distance`, `--dont_export`.
-- Repeatable, each occurrence appending: `--plugin`, `--custom`, `--phyloP`, `--phastCons`, `--transcript_filter`.
+- Comma-separated values: `--individual`, `--individual_zyg`, `--pick_order`, `--fields`, `--chr`, `--distance`. `--cell_type`, comma-separated in Ensembl VEP, is an option this version lacks, refused on the command line and in a configuration file (exit 2). `--dont_export`, comma-separated in Ensembl VEP's list, is an option neither its `vep` script (`Config.pm:73-276`) nor this version declares: unknown on the command line (exit 2) and dropped from a configuration file, as in Ensembl VEP.
+- Repeatable, each occurrence appending: `--plugin`, `--custom`, `--transcript_filter`. `--phyloP` and `--phastCons`, repeatable in Ensembl VEP, are options this version lacks, refused on the command line and in a configuration file (exit 2).
 - Input formats Ensembl VEP exempts from its sorted-input check (`Config.pm:640-645`): `id`, `hgvs`, `spdi`, `region`. vep-rs performs no such check in any format: every record is annotated in input order, and an input whose chromosomes interleave keeps more transcript indexes in memory.
 
 ### Rules of vep-rs's own

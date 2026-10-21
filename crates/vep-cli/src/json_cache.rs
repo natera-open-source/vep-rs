@@ -1156,11 +1156,13 @@ pub fn load_transcripts_for_chr(chr: &str, shards: &[PathBuf]) -> anyhow::Result
 }
 
 /// Sets every transcript's `id_rank` to its stable id's position in the byte
-/// order of the slice's ids; transcripts sharing an id share the rank.
+/// order of the slice's ids, counted from 1; transcripts sharing an id share the
+/// rank. Rank 0 stays the mark of a transcript no loader ranked, which the
+/// writers order by its id instead.
 fn assign_id_ranks(transcripts: &mut [Transcript]) {
     let mut by_id: Vec<usize> = (0..transcripts.len()).collect();
     by_id.sort_by(|&a, &b| transcripts[a].stable_id.cmp(&transcripts[b].stable_id));
-    let mut rank = 0u32;
+    let mut rank = 1u32;
     let mut previous: Option<Arc<str>> = None;
     for i in by_id {
         let id = &transcripts[i].stable_id;
@@ -1362,8 +1364,9 @@ mod tests {
     }
 
     /// `id_rank` orders a chromosome's transcripts as their stable ids order as
-    /// bytes, whatever order the shards listed them in, and two transcripts
-    /// with one id (distinct dbIDs) share a rank.
+    /// bytes, whatever order the shards listed them in, counted from 1 so that
+    /// no ranked transcript carries the unranked 0, and two transcripts with one
+    /// id (distinct dbIDs) share a rank.
     #[test]
     fn loaded_transcripts_rank_by_stable_id_with_ties_shared() {
         let dir = tempfile::Builder::new()
@@ -1407,13 +1410,14 @@ mod tests {
         assert_eq!(
             ranked,
             vec![
-                ("ENST00000010", 0),
-                ("ENST0000002", 1),
-                ("ENST00000200", 2),
-                ("ENST00000200", 2),
-                ("ENST00000300", 3),
+                ("ENST00000010", 1),
+                ("ENST0000002", 2),
+                ("ENST00000200", 3),
+                ("ENST00000200", 3),
+                ("ENST00000300", 4),
             ]
         );
+        assert!(txs.iter().all(|t| t.id_rank != 0));
         for a in &txs {
             for b in &txs {
                 assert_eq!(

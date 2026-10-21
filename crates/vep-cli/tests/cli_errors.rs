@@ -48,6 +48,46 @@ fn ambiguous_hgvs_is_refused() {
     );
 }
 
+/// A bare `--` is an extra command-line parameter: Getopt::Long runs with
+/// `pass_through` (Config.pm:62), which leaves it and every later token in
+/// `@ARGV`, and vep dies on what is left (vep:30, `ERROR: Unexpected extra
+/// command-line parameter(s): --`, the tokens joined by `, `), unless `--help`
+/// was read ahead of the `--` (vep:29); a `--help` behind it is one more extra
+/// parameter. An empty value, `--pick_order ''`, is not an extra parameter but
+/// clap's refusal of an empty criterion, exit 2.
+#[test]
+fn a_bare_double_dash_is_an_extra_parameter() {
+    let run = |argv: &[&str]| {
+        let output = common::isolated_vep_anywhere()
+            .args(argv)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        (
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+        )
+    };
+    let refused = |argv: &[&str], extra: &str| {
+        let (code, stderr) = run(argv);
+        assert_eq!(code, Some(1), "{argv:?}: {stderr}");
+        assert_eq!(
+            stderr,
+            format!("ERROR: [cli] Unexpected extra command-line parameter(s): {extra}\n"),
+            "{argv:?}"
+        );
+    };
+    refused(&["-i", "in.vcf", "--"], "--");
+    refused(&["-i", "in.vcf", "--", "--hgvs", "x"], "--, --hgvs, x");
+    refused(&["--", "-i", "in.vcf"], "--, -i, in.vcf");
+    refused(&["--", "--help"], "--, --help");
+    let (code, stderr) = run(&["--help", "--"]);
+    assert_eq!(code, Some(0), "{stderr}");
+    let (code, stderr) = refusal(&["--pick_order", ""]);
+    assert_eq!(code, Some(2), "{stderr}");
+    assert!(stderr.starts_with("error:"), "{stderr}");
+}
+
 /// `--convert` is refused with Ensembl VEP's deprecation text (Config.pm:977-985:
 /// `ERROR: --convert has been deprecated`), the `ERROR: ` prefix the contract's.
 #[test]

@@ -42,7 +42,19 @@ Masks, floors and field pairs (comparison mode):
   items agree as a multiset in any order, since Ensembl VEP prints the protein features in
   the order of the cache's array and the frequencies and the per-sample zygosities in hash
   order; every such agreement is counted per column as ``order_only`` in the report, never
-  passed as equal.
+  passed as equal. The class ``individual_allele_order`` is built in as well: Ensembl VEP
+  lists the two alternate alleles of an individual's copy of a record in hash order
+  (``Parser/VCF.pm:639``), so an entry carrying ``IND`` (``ind`` on a JSON record object)
+  agrees when the copy's alternate rows come in any order within each feature (a reference
+  row its number or its reference allele identifies keeping its place), when its
+  ``allele_string`` and ``UPLOADED_ALLELE`` name
+  the same reference allele and the same alternate alleles in any order, and when its
+  ``ALLELE_NUM`` values differ by one permutation of the alternates' numbers applied to every
+  row of the copy, the reference allele keeping 0; every such agreement is counted per column
+  as ``individual_allele_order``, the reordered entries under ``counts``, and an entry
+  without ``IND`` is compared like any other. A consistent renumbering whose allele strings
+  do not move is accepted too, since ``UPLOADED_ALLELE`` prints the record's own string
+  wherever an original allele string is kept.
 * ``--floors COL=MIN,...``: the populated (present and not ``-``) count of column ``COL``
   must reach ``MIN`` on both sides. ``COL`` is the default-format name in every format; in
   the JSON format the count is taken under the column's JSON key (lower-cased and renamed
@@ -182,6 +194,25 @@ JSON_ARRAY = "json"
 # consequence entry, and the record entry's ``zyg`` array, whose strings ``json_scalar``
 # joins with ``,``; FREQS has no JSON key.
 ORDER_ONLY_JSON_FIELDS = {"domains": JSON_ARRAY, "zyg": ","}
+# The built-in class under which an individual's alleles agree as a set. Under --individual,
+# Parser/VCF.pm:635-639 at release/116.2 collects the alternate alleles an individual's
+# genotype names in a hash and writes the copy's allele string as the reference allele
+# followed by the hash's keys, so a copy carrying two alternate alleles lists them in hash
+# order, and that order runs through the copy's rows within each feature, its ALLELE_NUM
+# values (the allele's index in the string, BaseVariationFeatureOverlapAllele.pm:217-218 at
+# release/116) and the JSON record's allele_string (JSON.pm:241). UPLOADED_ALLELE follows it
+# only on a record with no original allele string (OutputFactory.pm:1360 prefers that
+# string, which minimise_alleles sets on an indel record and under --minimal, Parser.pm:852,
+# 881, 978-982).
+INDIVIDUAL_ALLELE_ORDER = "individual_allele_order"
+# The record-level token of an individual's copy: IND on a default, tab or CSQ entry
+# (OutputFactory.pm:971), ind on a JSON record object.
+INDIVIDUAL_FIELDS = ("IND", "ind")
+# The fields carrying the copy's allele string, and the allele's index in it.
+ALLELE_STRING_FIELDS = ("allele_string", "UPLOADED_ALLELE", "uploaded_allele")
+ALLELE_NUMBER_FIELDS = ("ALLELE_NUM", "allele_num")
+# The fields carrying the reference allele of a --show_ref_allele row.
+REFERENCE_ALLELE_FIELDS = ("REF_ALLELE", "ref_allele")
 # The note of a floor the JSON format cannot count.
 FLOOR_NOT_APPLICABLE = (
     "a column the JSON format has no row count for (a record-level column is carried once "
@@ -667,9 +698,11 @@ T = TypeVar("T")
 class Documented:
     """The keys a corpus manifest documents as divergent, restricted to the classes applied:
     consequence sets per key, keys only the candidate emits, field values per key, and the
-    records the reference skipped. Keys are addressable by Location or by record ordinal."""
+    records the reference skipped. Keys are addressable by Location or by record ordinal.
+    ``masks`` is the set of classes requested, the built-in ones included."""
 
     def __init__(self) -> None:
+        self.masks: set[str] = set()
         self.by_location: dict[tuple[str, str, str], list[str]] = defaultdict(list)
         self.by_record: dict[tuple[int, str, str], list[str]] = defaultdict(list)
         self.extra_by_location: set[tuple[str, str, str]] = set()
@@ -683,6 +716,7 @@ class Documented:
     @classmethod
     def from_manifest(cls, manifest: dict | None, masks: set[str]) -> Documented:
         d = cls()
+        d.masks = set(masks)
         if not manifest:
             return d
         for _, item in d._applied_items(manifest, "divergences", masks):
@@ -991,7 +1025,12 @@ def compare_entries(
     ``documented.applied`` under the class; ``floor_fields`` maps every floor's column to the
     fields ``populated_under`` counts it by in a format whose keys differ from the column
     names, ``None`` for a column the format has no row count for; a format without the map
-    counts the column itself over every entry."""
+    counts the column itself over every entry. ``INDIVIDUAL_ALLELE_ORDER`` in
+    ``documented.masks`` compares an individual's alleles as a set: the alternate rows of one
+    copy may come in any order within a feature, its allele strings agree on the reference
+    allele and the set of alternate alleles, and its ``ALLELE_NUM`` values differ by one
+    permutation of the alternates' numbers applied to every row of the copy; each agreement
+    is counted under the class, the reordered entries under ``counts``."""
     floors = floors or {}
     field_pairs = field_pairs or {}
     order_only = order_only or {}
@@ -1007,8 +1046,117 @@ def compare_entries(
     nearest_accepted: Counter[str] = Counter()
     order_only_accepted: Counter[str] = Counter()
     order_only_examples: dict[str, list[str]] = defaultdict(list)
+    allele_order = INDIVIDUAL_ALLELE_ORDER in documented.masks
+    allele_order_accepted: Counter[str] = Counter()
+    allele_order_examples: dict[str, list[str]] = defaultdict(list)
     stale: list[str] = []
     compared = skipped_documented = annotated_without_reference = 0
+
+    def carries_individual(e: Entry) -> bool:
+        """Whether the entry itself carries one of ``INDIVIDUAL_FIELDS`` with a value."""
+        return any(dash(e.fields.get(f, "")) != "-" for f in INDIVIDUAL_FIELDS)
+
+    individual_records = {
+        e.key.split("|", 1)[0] for e in expected if e.key.endswith("|record") and carries_individual(e)
+    }
+
+    def is_individual(e: Entry) -> bool:
+        """An entry of an individual's copy of a record: it carries IND itself (a default, tab
+        or CSQ entry) or its record object carries ind (a JSON consequence entry)."""
+        return carries_individual(e) or e.key.split("|", 1)[0] in individual_records
+
+    def copy_of(e: Entry) -> tuple[str, ...]:
+        """The copy an entry belongs to: its record label, name and individual."""
+        individual = tuple(e.fields.get(f, "") for f in INDIVIDUAL_FIELDS)
+        return (e.key.split("|", 1)[0], e.fields.get("Uploaded_variation", ""), *individual)
+
+    def copy_feature(e: Entry) -> tuple[str, ...]:
+        """The copy and feature an entry belongs to: ``copy_of`` with its feature and its kind."""
+        return (*copy_of(e), e.feature, e.key.rsplit("|", 1)[-1].partition("#")[0])
+
+    def allele_number(e: Entry) -> str | None:
+        """The entry's allele number, under either field name, or ``None``."""
+        return next((e.fields[name] for name in ALLELE_NUMBER_FIELDS if name in e.fields), None)
+
+    def allele_numbers(entries: list[Entry]) -> dict[tuple[str, ...], dict[str, set[str]]]:
+        """Per copy, the allele numbers each of its alleles carries across the copy's rows."""
+        numbers: dict[tuple[str, ...], dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        for e in entries:
+            if not is_individual(e):
+                continue
+            number = allele_number(e)
+            if number is not None:
+                numbers[copy_of(e)][e.allele].add(number)
+        return numbers
+
+    expected_numbers = allele_numbers(expected) if allele_order else {}
+    actual_numbers = allele_numbers(actual) if allele_order else {}
+
+    def renumbered_alternates(e: Entry, a: Entry, expected_value: str, actual_value: str) -> bool:
+        """Whether the row's allele numbers, ``expected_value`` and ``actual_value``, differ by
+        one permutation of the alternates' numbers applied to every row of the copy: each
+        allele carries one number on each side, the row's own among them, the two sides number
+        the same alleles with the same numbers, and the allele numbered 0, the reference, is
+        the same allele on both (Parser/VCF.pm:639 keeps the reference first)."""
+        expected_map = expected_numbers.get(copy_of(e), {})
+        actual_map = actual_numbers.get(copy_of(a), {})
+        if not expected_map or expected_map.keys() != actual_map.keys():
+            return False
+        if any(len(numbers) != 1 for numbers in (*expected_map.values(), *actual_map.values())):
+            return False
+        expected_number_of = {allele: next(iter(numbers)) for allele, numbers in expected_map.items()}
+        actual_number_of = {allele: next(iter(numbers)) for allele, numbers in actual_map.items()}
+        if expected_number_of.get(e.allele) != expected_value or actual_number_of.get(a.allele) != actual_value:
+            return False
+        if sorted(expected_number_of.values()) != sorted(actual_number_of.values()):
+            return False
+        expected_reference = [allele for allele, number in expected_number_of.items() if number == "0"]
+        actual_reference = [allele for allele, number in actual_number_of.items() if number == "0"]
+        return expected_reference == actual_reference
+
+    def reference_row(e: Entry) -> bool:
+        """Whether the entry is identifiably the copy's reference-allele row: numbered 0, or
+        its allele is the reference allele it prints (``-`` for an insertion's); a row
+        carrying neither field is not."""
+        number = allele_number(e)
+        if number is not None:
+            return number == "0"
+        reference = next((dash(e.fields[name]) for name in REFERENCE_ALLELE_FIELDS if name in e.fields), None)
+        return reference is not None and reference == e.allele
+
+    def same_alleles(expected_value: str, actual_value: str) -> bool:
+        """The same reference allele followed by the same alternate alleles in any order."""
+        if expected_value in ("", "-", ABSENT) or actual_value in ("", "-", ABSENT):
+            return expected_value == actual_value
+        ref, _, alts = expected_value.partition("/")
+        actual_ref, _, actual_alts = actual_value.partition("/")
+        return ref == actual_ref and same_items(alts, actual_alts, "/")
+
+    def allele_order_accepts(e: Entry, a: Entry, name: str, ev: str, av: str) -> bool:
+        """Whether a field of an individual's entry differs in the order of the copy's
+        alleles alone; in the Extra text every differing pair must."""
+        if not (allele_order and is_individual(e)):
+            return False
+
+        def reordered_only(key: str, expected_value: str, actual_value: str) -> bool:
+            if key in ALLELE_STRING_FIELDS:
+                return same_alleles(expected_value, actual_value)
+            if key in ALLELE_NUMBER_FIELDS:
+                return renumbered_alternates(e, a, expected_value, actual_value)
+            return key in order_only and same_items(expected_value, actual_value, order_only[key])
+
+        if name == "Extra":
+            return extra_accepted(ev, av, reordered_only)
+        return name in ALLELE_STRING_FIELDS + ALLELE_NUMBER_FIELDS and reordered_only(name, ev, av)
+
+    def order_key(e: Entry) -> str:
+        """The key the order comparison reads: an individual's consequence entry by its copy
+        and feature (``copy_feature``) and whether it is the reference row, without its
+        allele and duplicate counter, since the copy's alternate rows come in the order of
+        its alleles while the reference row keeps its place."""
+        if not allele_order or e.key.endswith("|record") or not is_individual(e):
+            return e.key
+        return "|".join([*copy_feature(e), "reference" if reference_row(e) else "alternate"])
 
     for e in expected:
         a = actual_by_key.get(e.key)
@@ -1072,6 +1220,12 @@ def compare_entries(
                 if len(order_only_examples[name]) < examples:
                     order_only_examples[name].append(f"{e.key}: expected {ev!r}, got {av!r}")
                 continue
+            if allele_order_accepts(e, a, name, ev, av):
+                allele_order_accepted[name] += 1
+                documented.applied[INDIVIDUAL_ALLELE_ORDER] += 1
+                if len(allele_order_examples[name]) < examples:
+                    allele_order_examples[name].append(f"{e.key}: expected {ev!r}, got {av!r}")
+                continue
             mismatch_totals[name] += 1
             group = mismatches[name][e.consequence]
             if len(group) < examples:
@@ -1086,16 +1240,24 @@ def compare_entries(
             continue
         unexpected.append(a)
 
-    shared_expected = [e.key for e in expected if e.key in actual_by_key and documented.divergent(e) is None]
-    shared_actual = [a.key for a in actual if a.key in expected_by_key and documented.divergent(a) is None]
+    shared_expected = [e for e in expected if e.key in actual_by_key and documented.divergent(e) is None]
+    shared_actual = [a for a in actual if a.key in expected_by_key and documented.divergent(a) is None]
     order = None
-    if check_order and shared_expected != shared_actual:
-        first = next((i for i, (x, y) in enumerate(zip(shared_expected, shared_actual)) if x != y), 0)
-        order = {
-            "first_divergence": first,
-            "expected": shared_expected[first] if first < len(shared_expected) else None,
-            "actual": shared_actual[first] if first < len(shared_actual) else None,
-        }
+    reordered = 0
+    if check_order:
+        expected_order = [order_key(e) for e in shared_expected]
+        actual_order = [order_key(a) for a in shared_actual]
+        if expected_order != actual_order:
+            first = next((i for i, (x, y) in enumerate(zip(expected_order, actual_order)) if x != y), 0)
+            order = {
+                "first_divergence": first,
+                "expected": shared_expected[first].key if first < len(shared_expected) else None,
+                "actual": shared_actual[first].key if first < len(shared_actual) else None,
+            }
+        else:
+            reordered = sum(1 for e, a in zip(shared_expected, shared_actual) if e.key != a.key)
+            if reordered:
+                documented.applied[INDIVIDUAL_ALLELE_ORDER] += reordered
 
     expected_populated = populated_counts(expected)
     actual_populated = populated_counts(actual)
@@ -1126,6 +1288,7 @@ def compare_entries(
             "pairs_accepted": pairs_accepted.get(name, 0),
             "nearest_accepted": nearest_accepted.get(name, 0),
             "order_only": order_only_accepted.get(name, 0),
+            "individual_allele_order": allele_order_accepted.get(name, 0),
             "floor": floor,
             "floor_met": floor_met,
             **floor_detail,
@@ -1134,6 +1297,8 @@ def compare_entries(
             col["examples"] = dict(mismatches[name])
         if name in order_only_examples:
             col["order_only_examples"] = order_only_examples[name]
+        if name in allele_order_examples:
+            col["individual_allele_order_examples"] = allele_order_examples[name]
         columns[name] = col
 
     reasons: list[str] = []
@@ -1173,6 +1338,7 @@ def compare_entries(
             "compared": compared,
             "documented_divergences_skipped": skipped_documented,
             "record_entries_on_reference_skipped_records": annotated_without_reference,
+            "individual_entries_reordered": reordered,
         },
         "one_sided": {"expected_only": len(missing), "actual_only": len(unexpected)},
         "missing": grouped(missing),
@@ -1229,6 +1395,7 @@ def compare_files(
     nearest_sites: NearestSites | None = None,
 ) -> dict:
     """The comparison-mode report for one format."""
+    documented.masks |= masks
     expected_format = "tab" if fmt == "parquet" else fmt
     expected = parse_format(expected_format, expected_path, inputs)
     actual = parse_format(fmt, actual_path, inputs)
@@ -1957,8 +2124,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--masks",
         help="comma-separated intended-divergence classes applied: the manifest's, and the built-in "
-        "regulatory_feature_rows (the one class --warnings mode takes) and order_only (DOMAINS, "
-        "FREQS and ZYG compared as multisets)",
+        "regulatory_feature_rows (the one class --warnings mode takes), order_only (DOMAINS, "
+        "FREQS and ZYG compared as multisets) and individual_allele_order (an individual's "
+        "alleles compared as a set)",
     )
     ap.add_argument(
         "--floors",

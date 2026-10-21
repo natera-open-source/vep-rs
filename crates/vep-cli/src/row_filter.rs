@@ -14,17 +14,34 @@
 //! non-coding transcript ones. A record left with no row is written as the
 //! writers write an unannotated record.
 //!
+//! A `--minimal` split record passes the filters twice: once per split feature
+//! over its own span, as the rejoin builds each feature's rows before it merges
+//! them (`:2289`, `:2303`), and again as the rejoined record. The second pass
+//! decides the rows and reads the CDS coordinates cached on each transcript
+//! overlap, which the default and tab factories clear after the rejoin
+//! (`:297-302`), so they are mapped again over the record's restored span, and
+//! which the VCF and JSON factories clear before it (`OutputFactory/VCF.pm:305-308`,
+//! `OutputFactory/JSON.pm:217-220`), so the first pass's own-span coordinates
+//! stand. The first pass decides whether the first feature wrote a row and so
+//! cached the `REF_ALLELE` every row of the record prints (`:1357`,
+//! VariationFeature.pm:1533-1539).
+//!
 //! Perl citations name modules of ensembl-vep release/116.2 (`Bio/EnsEMBL/VEP/...`)
 //! and of ensembl-variation release/116 (`Bio/EnsEMBL/Variation/...`).
 
 use vep_core::consequence::{Consequence, FeatureType, TranscriptConsequence};
 use vep_core::variant::InputVariant;
 
-/// The two row filters, each a command-line flag.
+/// The two row filters, each a command-line flag, and the span a row of a
+/// `--minimal` split answers `affects_cds` over, which follows the output format.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RowFilters {
     pub coding_only: bool,
     pub no_intergenic: bool,
+    /// A row of a `--minimal` split is judged over the allele's own span, as
+    /// the VCF and JSON factories judge it, rather than over the record's, as
+    /// the default and tab factories do.
+    pub cds_of_own_span: bool,
 }
 
 impl RowFilters {
@@ -36,7 +53,9 @@ impl RowFilters {
 
 /// Applies the row filters to the alleles of one input record, in Ensembl VEP's
 /// order: `--no_intergenic` (`OutputFactory.pm:482`), then `--coding_only`
-/// (`:490-502`).
+/// (`:490-502`). A `--minimal` split record also learns whether its first
+/// feature wrote a row before the rejoin
+/// ([`InputVariant::split_first_feature_rowless`]).
 pub fn apply_to_record(record: &mut [InputVariant], filters: RowFilters) {
     if !filters.any_active() {
         return;
@@ -58,7 +77,15 @@ pub fn apply_to_record(record: &mut [InputVariant], filters: RowFilters) {
             })
         })
         .collect();
+    let split = record.iter().any(|v| v.original_start.is_some());
+    let first_feature_rowless = split
+        && !record
+            .iter()
+            .zip(&feature_has_alternate)
+            .filter(|(v, _)| v.original_start.is_some() && v.rejoin_key_prefix.is_none())
+            .any(|(v, has_alternate)| writes_a_row(v, *has_alternate, filters, true));
     for (variant, has_alternate) in record.iter_mut().zip(feature_has_alternate) {
+        variant.split_first_feature_rowless = first_feature_rowless;
         if filters.no_intergenic && variant.transcript_consequences.is_empty() {
             variant.most_severe_consequence = None;
         }
@@ -69,12 +96,46 @@ pub fn apply_to_record(record: &mut [InputVariant], filters: RowFilters) {
             let (start, end) = crate::runner::structural_variant_bounds(variant);
             variant
                 .transcript_consequences
-                .retain(|tc| affects_cds(start, end, tc));
+                .retain(|tc| affects_cds(start, end, tc, filters.cds_of_own_span));
             // An allele left with no row loses its verdict, as the intergenic
             // overlap cannot answer `affects_cds` and goes too (`:493-500`).
             settle_verdict(variant);
         }
     }
+}
+
+/// Whether the allele keeps a row under `filters`, `own_span` naming the span a
+/// split row answers `affects_cds` over: an intergenic allele writes none under
+/// either filter (`--no_intergenic`, `:482`; `--coding_only` drops the one
+/// overlap that cannot answer `affects_cds`, `:494-495`); under `--coding_only` a
+/// reference row of a feature with no alternate writes none and any other allele
+/// needs a transcript row that `affects_cds`. The first pass over a split
+/// feature (`OutputFactory.pm:2289`) is this with `own_span` set.
+fn writes_a_row(
+    variant: &InputVariant,
+    has_alternate: bool,
+    filters: RowFilters,
+    own_span: bool,
+) -> bool {
+    if variant.no_allele {
+        return false;
+    }
+    if variant.transcript_consequences.is_empty() {
+        return !filters.no_intergenic
+            && !filters.coding_only
+            && variant.most_severe_consequence.is_some();
+    }
+    if !filters.coding_only {
+        return true;
+    }
+    if variant.reference_allele_row && !has_alternate {
+        return false;
+    }
+    let (start, end) = crate::runner::structural_variant_bounds(variant);
+    variant
+        .transcript_consequences
+        .iter()
+        .any(|tc| affects_cds(start, end, tc, own_span))
 }
 
 /// Sets the allele's `most_severe_consequence` from the transcript rows it has
@@ -115,7 +176,7 @@ const CODING_TERMS: [Consequence; 13] = [
 /// Whether the row of the allele spanning `variant_start..=variant_end` against
 /// `tc` affects the transcript's CDS: `affects_cds`
 /// (`BaseTranscriptVariation.pm:662-665`), which is `within_cds`
-/// (`Utils/VariationEffect.pm:636-666`) of the alternate allele. Only a
+/// (`Utils/VariationEffect.pm:636-668`) of the alternate allele. Only a
 /// transcript answers it; a regulatory or motif row does not.
 ///
 /// `within_cds` holds when the allele has a CDS coordinate (`:645-651`) or lies
@@ -127,12 +188,30 @@ const CODING_TERMS: [Consequence; 13] = [
 /// the whole of a translated transcript (`complete_overlap_feature`, `:169-178`)
 /// maps onto every CDS exon, so it has CDS coordinates while its columns print
 /// none and its terms are the whole-feature ones.
-pub fn affects_cds(variant_start: u64, variant_end: u64, tc: &TranscriptConsequence) -> bool {
+///
+/// A row of a `--minimal` split has two spans. Over the record's, the CDS
+/// coordinate is [`TranscriptConsequence::record_span_in_cds`], which
+/// `cds_coords` maps after the rejoin (`BaseTranscriptVariation.pm:505-526`);
+/// over its own (`own_span`), it is the own-span CDS_position
+/// ([`TranscriptConsequence::own_span_positions`]). The frameshift-intron test
+/// reads the intron effects cached on the allele's own span either way
+/// (`:656-665`), so the coding term stands for it on both.
+pub fn affects_cds(
+    variant_start: u64,
+    variant_end: u64,
+    tc: &TranscriptConsequence,
+    own_span: bool,
+) -> bool {
     if tc.feature_type != FeatureType::Transcript {
         return false;
     }
+    let has_cds_coordinate = match &tc.own_span_positions {
+        Some(own) if own_span => own.cds.is_some(),
+        Some(_) => tc.record_span_in_cds,
+        None => tc.cds_position.is_some(),
+    };
     let has_coding_term = tc.consequences.iter().any(|c| CODING_TERMS.contains(c));
-    if tc.cds_position.is_some() || has_coding_term {
+    if has_cds_coordinate || has_coding_term {
         return true;
     }
     let translated = tc.cds_length.is_some();
@@ -147,7 +226,7 @@ pub fn affects_cds(variant_start: u64, variant_end: u64, tc: &TranscriptConseque
 mod tests {
     use super::*;
     use smallvec::smallvec;
-    use vep_core::consequence::{ConsequenceList, Impact};
+    use vep_core::consequence::{ConsequenceList, Impact, OwnSpanPositions};
     use vep_io::output::fields::{self, FieldOptions};
     use vep_io::output::json::JsonOutputFormatter;
     use vep_io::output::vcf_output::VcfOutputFormatter;
@@ -203,10 +282,12 @@ mod tests {
     const CODING: RowFilters = RowFilters {
         coding_only: true,
         no_intergenic: false,
+        cds_of_own_span: false,
     };
     const NO_INTERGENIC: RowFilters = RowFilters {
         coding_only: false,
         no_intergenic: true,
+        cds_of_own_span: false,
     };
 
     /// `--coding_only` keeps the rows with a CDS coordinate and drops the
@@ -508,6 +589,139 @@ mod tests {
         )];
         apply_to_record(&mut record, CODING);
         assert_eq!(kept(&record), [(0, "ENST1".to_string())]);
+    }
+
+    /// A row of a `--minimal` split answers `affects_cds` over the record's span
+    /// for the default and tab factories and over its own for the VCF and JSON
+    /// ones: of a record whose first allele is an intronic SNV two bases before a
+    /// coding exon and whose second is a deletion reaching the CDS, as Ensembl
+    /// VEP 116.2 writes `21 10542393 GTACG CTACG,G` under `--minimal
+    /// --coding_only`, both rows stay in the default output and the deletion's
+    /// alone in the VCF. The SNV's feature, judged on its own span, wrote no row
+    /// before the rejoin, so every row of the record is marked for the record's
+    /// own `REF_ALLELE`; with the deletion first, that feature wrote one and no
+    /// row is marked.
+    #[test]
+    fn coding_only_judges_a_split_row_over_the_span_the_format_rejoins_on() {
+        let split =
+            |alt: &[u8], index: usize, mut row: TranscriptConsequence, own_cds: Option<&str>| {
+                row.own_span_positions = Some(Box::new(OwnSpanPositions {
+                    cdna: None,
+                    cds: own_cds.map(str::to_string),
+                    protein: None,
+                }));
+                row.record_span_in_cds = true;
+                let mut v = allele(alt, index, vec![row]);
+                v.original_start = Some(2999);
+                v.original_end = Some(3003);
+                if index > 0 {
+                    v.rejoin_key_prefix = Some(format!("{}_", String::from_utf8_lossy(alt)).into());
+                }
+                v
+            };
+        let snv = || {
+            split(
+                b"C",
+                0,
+                tc(
+                    "ENST1",
+                    smallvec![Consequence::SpliceAcceptorVariant],
+                    None,
+                    Some(900),
+                ),
+                None,
+            )
+        };
+        let deletion = |index: usize| {
+            split(
+                b"-",
+                index,
+                tc(
+                    "ENST1",
+                    smallvec![
+                        Consequence::SpliceAcceptorVariant,
+                        Consequence::CodingSequenceVariant
+                    ],
+                    Some("?-68"),
+                    Some(900),
+                ),
+                Some("?-68"),
+            )
+        };
+        let sorted = |record: &[InputVariant]| {
+            let mut rows = kept(record);
+            rows.sort();
+            rows
+        };
+
+        let mut record = vec![snv(), deletion(1)];
+        apply_to_record(&mut record, CODING);
+        assert_eq!(
+            sorted(&record),
+            [(0, "ENST1".to_string()), (1, "ENST1".to_string())]
+        );
+        assert!(record.iter().all(|v| v.split_first_feature_rowless));
+
+        let mut record = vec![snv(), deletion(1)];
+        apply_to_record(
+            &mut record,
+            RowFilters {
+                cds_of_own_span: true,
+                ..CODING
+            },
+        );
+        assert_eq!(sorted(&record), [(1, "ENST1".to_string())]);
+        assert!(record.iter().all(|v| v.split_first_feature_rowless));
+
+        let mut deletion_first = deletion(0);
+        deletion_first.rejoin_key_prefix = None;
+        let mut second = snv();
+        second.allele_index = 1;
+        second.rejoin_key_prefix = Some("G/C_".into());
+        let mut record = vec![deletion_first, second];
+        apply_to_record(&mut record, CODING);
+        assert_eq!(
+            sorted(&record),
+            [(0, "ENST1".to_string()), (1, "ENST1".to_string())]
+        );
+        assert!(record.iter().all(|v| !v.split_first_feature_rowless));
+    }
+
+    /// A `--minimal` split whose first feature overlaps no transcript wrote no
+    /// row before the rejoin under either filter: `--coding_only` drops the
+    /// intergenic overlap, which cannot answer `affects_cds`
+    /// (`OutputFactory.pm:494-495`), as `--no_intergenic` drops it (`:482`), so
+    /// the rows of the record's other allele print the record's own `REF_ALLELE`.
+    #[test]
+    fn a_split_whose_first_feature_is_intergenic_cached_no_reference() {
+        let record = || {
+            let mut intergenic = allele(b"C", 0, vec![]);
+            intergenic.original_start = Some(2999);
+            intergenic.original_end = Some(9003);
+            let mut deletion = allele(
+                b"-",
+                1,
+                vec![tc(
+                    "ENST1",
+                    smallvec![Consequence::CodingSequenceVariant],
+                    Some("?-68"),
+                    Some(900),
+                )],
+            );
+            deletion.original_start = Some(2999);
+            deletion.original_end = Some(9003);
+            deletion.rejoin_key_prefix = Some("TACG/-_".into());
+            vec![intergenic, deletion]
+        };
+        for filters in [CODING, NO_INTERGENIC] {
+            let mut record = record();
+            apply_to_record(&mut record, filters);
+            assert_eq!(kept(&record), [(1, "ENST1".to_string())], "{filters:?}");
+            assert!(
+                record.iter().all(|v| v.split_first_feature_rowless),
+                "{filters:?}"
+            );
+        }
     }
 
     /// With neither flag the record is untouched.

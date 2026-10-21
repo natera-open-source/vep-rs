@@ -116,9 +116,9 @@ pub struct Transcript {
     #[serde(skip)]
     pub derived: TranscriptDerived,
     /// Position of `stable_id` in the byte order of the chromosome's transcript
-    /// ids, assigned by the loader once the chromosome is complete: two
-    /// transcripts of one chromosome compare by rank as their ids compare, and
-    /// equal ids share a rank. Never serialized; 0 until assigned.
+    /// ids, counted from 1 and assigned by the loader once the chromosome is
+    /// complete: two transcripts of one chromosome compare by rank as their ids
+    /// compare, and equal ids share a rank. Never serialized; 0 until assigned.
     #[serde(skip)]
     pub id_rank: u32,
 }

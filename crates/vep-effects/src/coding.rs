@@ -3047,22 +3047,27 @@ pub fn perl_codon_peptides(
 /// Perl `TranscriptVariationAllele::hgvs_protein` (TranscriptVariationAllele.pm
 /// 1657), the text after `p.`.
 ///
-/// `variant` is the allele as annotated; `shifted`, when the caller moved an
-/// insertion or deletion to its most 3' position (Perl's `_return_3prime(1)`),
-/// is the shifted allele with its span. Perl reads the peptides, the translation
-/// coordinates and the alternate CDS from the shifted allele, but the `coding`
-/// pre-consequence predicate (1731) and the cached predicates `stop_lost`,
-/// `start_lost`, `partial_codon` and `stop_retained` were filled while the
-/// consequences were computed on the unshifted allele (`hgvs_transcript` clears
-/// that cache only under `--shift_3prime`, 1469), so those verdicts are taken
-/// from `variant` here whatever the shift. `frameshift` (VariationEffect.pm
-/// 1541) is not cached: its guards read the cache (`partial_codon`,
-/// `stop_retained`, and a reference peptide starting with the stop,
-/// VariationEffect.pm 1554, so a frameshift that begins in the stop codon is
-/// typed by its peptides), but its length arithmetic runs on the CDS span the
-/// transcript variation carries at that point, which is the shifted span, so an
-/// indel that shifts fully into the CDS is a frameshift there even where the
-/// annotated allele straddles an exon boundary.
+/// `variant` is the allele as the input placed it; `shifted`, when the caller
+/// moved an insertion or deletion to its most 3' position (Perl's
+/// `_return_3prime(1)`), is the shifted allele with its span. Perl reads the
+/// peptides, the translation coordinates and the alternate CDS from the shifted
+/// allele. The `coding` pre-consequence predicate (1731) and the cached
+/// predicates `stop_lost`, `start_lost`, `partial_codon` and `stop_retained`
+/// were filled while the consequences were computed: on the unshifted allele
+/// without `--shift_3prime 1`, so those verdicts are taken from `variant` here
+/// whatever the shift; on the shifted allele under the flag
+/// (`predicates_on_shifted`), where `hgvs_transcript` also clears the cache once
+/// the shift moved the allele (1469), so every verdict is the shifted allele's,
+/// and a deletion shifted onto the stop codon whose alternate peptide is the
+/// partial-codon `X` reads both peptides as `X` (`_get_hgvs_protein_type`,
+/// 2060-2061) and prints `Ter<pos>=`. `frameshift` (VariationEffect.pm 1541) is
+/// not cached: its guards read the cache (`partial_codon`, `stop_retained`, and
+/// a reference peptide starting with the stop, VariationEffect.pm 1554, so a
+/// frameshift that begins in the stop codon is typed by its peptides), but its
+/// length arithmetic runs on the CDS span the transcript variation carries at
+/// that point, which is the shifted span, so an indel that shifts fully into the
+/// CDS is a frameshift there even where the annotated allele straddles an exon
+/// boundary.
 ///
 /// `None` where Perl returns `undef`: the annotated allele does not overlap the
 /// coding sequence, the (shifted) span has no translation start or end, or its
@@ -3080,8 +3085,21 @@ pub fn perl_hgvs_protein(
     shifted: Option<(&InputVariant, u64, u64)>,
     transcript: &Transcript,
     fasta: Option<&vep_fasta::IndexedFasta>,
+    predicates_on_shifted: bool,
 ) -> Option<String> {
-    let mut ev = PerlCodingEval::new(variant, transcript, variant.start, variant.end, fasta)?;
+    let (predicate_variant, predicate_start, predicate_end) = match shifted {
+        Some((shifted_variant, start, end)) if predicates_on_shifted => {
+            (shifted_variant, start, end)
+        }
+        _ => (variant, variant.start, variant.end),
+    };
+    let mut ev = PerlCodingEval::new(
+        predicate_variant,
+        transcript,
+        predicate_start,
+        predicate_end,
+        fasta,
+    )?;
     if !ev.coding_pred(transcript) {
         return None;
     }
@@ -3090,7 +3108,9 @@ pub fn perl_hgvs_protein(
     let stop_lost = ev.stop_lost();
     let start_lost = ev.start_lost() && !ev.start_retained_variant();
     if let Some((shifted_variant, span_start, span_end)) = shifted {
-        ev = PerlCodingEval::new(shifted_variant, transcript, span_start, span_end, fasta)?;
+        if !predicates_on_shifted {
+            ev = PerlCodingEval::new(shifted_variant, transcript, span_start, span_end, fasta)?;
+        }
     }
     let preds = HgvsPredicates {
         frameshift: !frameshift_guard && ev.frameshift_by_length(),
@@ -3122,10 +3142,11 @@ pub fn perl_hgvs_protein(
 }
 
 /// The three predicate verdicts `hgvs_protein` reads: `stop_lost` and
-/// `start_lost` from Perl's `_predicate_cache` (the allele as annotated, not its
-/// shifted form), `frameshift` recomputed on the shifted span behind the cached
-/// `partial_codon`, `stop_retained` and leading-stop guards. `start_lost`
-/// already carries the start co-emission gate of this engine.
+/// `start_lost` from Perl's `_predicate_cache` (the allele as the input placed
+/// it, or the shifted allele under `--shift_3prime 1`), `frameshift`
+/// recomputed on the shifted span behind the cached `partial_codon`,
+/// `stop_retained` and leading-stop guards. `start_lost` already carries the
+/// start co-emission gate of this engine.
 struct HgvsPredicates {
     frameshift: bool,
     stop_lost: bool,
@@ -4984,5 +5005,45 @@ mod tests {
         );
         assert_eq!(terms("TA", false), Some(vec![Consequence::MissenseVariant]));
         assert_eq!(terms("TAA", false), Some(vec![Consequence::StopGained]));
+    }
+
+    /// A reference row over a stop codon is `stop_retained_variant`: the
+    /// reference allele's codon is the stop read from the translateable
+    /// sequence (TranscriptVariationAllele.pm:868, 877), so `stop_lost` is
+    /// false (Utils/VariationEffect.pm:1259, both peptides `*`) and
+    /// `stop_retained` is `ref_eq_alt_sequence` (`:1315`), which holds whatever
+    /// bases the record wrote. Ensembl VEP 116.2 writes the row of
+    /// `21 30282168 30282169 CA/CG` on the reverse-strand ENST00000340345 under
+    /// `--process_ref_homs` as `stop_retained_variant` with `*` and the `CG`
+    /// allele's as `stop_lost` with `*/S`; the transcript here ends its coding
+    /// sequence in the same `TGA`, read on the reverse strand over the two
+    /// genomic bases `CA` that spell its `TG`, so the `CG` allele is `*/R`.
+    #[test]
+    fn a_reference_row_over_the_stop_codon_is_stop_retained() {
+        let mut cds = String::from("ATG");
+        cds.push_str(&"GCT".repeat(20));
+        cds.push_str("TGA");
+        let tx = make_single_exon_transcript(Strand::Reverse, &cds, "GGCGCAGCA");
+        let (start, end) = (40_000_011, 40_000_012);
+        let terms = |reference: &str, alt: &str, reference_row: bool| {
+            let mut v = InputVariant::new(
+                "21".into(),
+                start,
+                end,
+                reference.as_bytes().to_vec(),
+                alt.as_bytes().to_vec(),
+            );
+            v.reference_allele_row = reference_row;
+            perl_coding_terms(&v, &tx, start, end, None)
+        };
+        assert_eq!(
+            terms("CA", "CA", true),
+            Some(vec![Consequence::StopRetainedVariant])
+        );
+        assert_eq!(
+            terms("CG", "CG", true),
+            Some(vec![Consequence::StopRetainedVariant])
+        );
+        assert_eq!(terms("CA", "CG", false), Some(vec![Consequence::StopLost]));
     }
 }

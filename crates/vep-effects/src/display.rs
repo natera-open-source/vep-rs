@@ -779,6 +779,9 @@ pub struct DisplayFields {
     /// another span's in the three position columns; `None` while the columns
     /// are the span's own.
     pub own_span_positions: Option<Box<OwnSpanPositions>>,
+    /// [`TranscriptConsequence::record_span_in_cds`]: the `coding` predicate
+    /// of the record's span once [`Self::record_span_positions`] has mapped it.
+    pub record_span_in_cds: bool,
     /// The span's `exon` predicate (`_bvfo_preds`,
     /// BaseVariationFeatureOverlapAllele.pm:511-516), which admits
     /// `cDNA_position`.
@@ -801,6 +804,7 @@ impl DisplayFields {
         tc.amino_acids = self.amino_acids;
         tc.codons = self.codons;
         tc.own_span_positions = self.own_span_positions;
+        tc.record_span_in_cds = self.record_span_in_cds;
     }
 
     /// An allele of a `--minimal` split prints the positions of the record's
@@ -814,14 +818,17 @@ impl DisplayFields {
     /// 394), as its codons and consequences were; the allele's own positions
     /// move to `own_span_positions` for the VCF and JSON formats, which clear the
     /// cached positions before the rejoin (OutputFactory/VCF.pm:305-308,
-    /// OutputFactory/JSON.pm:217-220). Any other allele keeps the positions of
-    /// its own span.
+    /// OutputFactory/JSON.pm:217-220). The record span's `coding` predicate is
+    /// kept as [`Self::record_span_in_cds`], the `within_cds` the `--coding_only`
+    /// filter asks of the rejoined row (`Utils/VariationEffect.pm:642-652`). Any
+    /// other allele keeps the positions of its own span.
     pub fn record_span_positions(&mut self, variant: &InputVariant, transcript: &Transcript) {
         let (Some(start), Some(end)) = (variant.original_start, variant.original_end) else {
             return;
         };
         let (record, _) =
             span_positions(variant.is_structural, transcript, start as i64, end as i64);
+        self.record_span_in_cds = record.coding;
         let own = OwnSpanPositions {
             cdna: self.cdna_position.take(),
             cds: self.cds_position.take(),

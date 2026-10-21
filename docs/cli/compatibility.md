@@ -101,7 +101,7 @@ A flag is read from four sources, the first that names it winning, as Ensembl VE
 3. `<dir>/vep.ini`, where `<dir>` is `--dir` (the command line's, else the `--config` file's) and `~/.vep` by default;
 4. the environment variable `VEP_<FLAG>` (`VEP_DIR_PLUGINS` sets `--dir_plugins`).
 
-A repeatable flag (`--plugin`, `--custom`, `--phyloP`, `--phastCons`, `--transcript_filter`) collects every source's values, the command line's first. No source behind the command line can set `--config`, `--help`, `--version`.
+A repeatable flag (`--plugin`, `--custom`, `--transcript_filter`) collects every source's values, the command line's first. `--phyloP` and `--phastCons`, repeatable in Ensembl VEP, are options this version lacks, refused on the command line and in a configuration file (exit 2). No source behind the command line can set `--config`, `--help`, `--version`.
 
 ### The `--config` file and `vep.ini` (`Config.pm:1068-1110`)
 

@@ -9,6 +9,7 @@
 
 use std::any::TypeId;
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::PathBuf;
@@ -16,7 +17,8 @@ use std::path::PathBuf;
 use clap::{Arg, ArgAction, Command};
 use vep_cli::args::Args;
 use vep_cli::argv::{
-    unresolved_perl_spellings, COMMAND_LINE_ONLY, DEFAULT_DIR, ENV_PREFIX, INI_FILE,
+    perl_options, prepass, unresolved_perl_spellings, COMMAND_LINE_ONLY, DEFAULT_DIR, ENV_PREFIX,
+    INI_FILE,
 };
 use vep_cli::config::{Treatment, COMPONENTS, ENVIRONMENT, ERROR_TABLE};
 use vep_cli::option_rules::{
@@ -275,6 +277,69 @@ fn flags_in_code(flags: &[&str]) -> String {
         .join(", ")
 }
 
+/// `flags`, a list of Ensembl VEP's option set (`Config.pm:327-346`), split into
+/// those the command line declares, which take their values as the list says,
+/// and those it does not, which are refused as options this version lacks.
+fn declared_and_refused(
+    command: &Command,
+    flags: &[&'static str],
+) -> (Vec<&'static str>, Vec<&'static str>) {
+    let declared: Vec<&str> = command.get_arguments().filter_map(Arg::get_long).collect();
+    flags
+        .iter()
+        .copied()
+        .partition(|flag| declared.contains(flag))
+}
+
+/// The refused flags of a list named with what the parser does with them,
+/// `shape` being the list's property in Ensembl VEP (`repeatable`,
+/// `comma-separated`), or nothing when every flag of the list is declared. A
+/// flag `@VEP_PARAMS` declares is refused on the command line and in a
+/// configuration file; one it does not declare (`dont_export`, an option of the
+/// `haplo` script) is unknown on the command line and dropped from a
+/// configuration file, as Ensembl VEP's `is_valid_param` drops it
+/// (`Config.pm:1046-1047`).
+fn refused_in_list(refused: &[&str], shape: &str) -> String {
+    let perl = perl_options();
+    let (lacked, undeclared): (Vec<&str>, Vec<&str>) = refused
+        .iter()
+        .copied()
+        .partition(|flag| perl.iter().any(|option| option.canonical == *flag));
+    let mut out = String::new();
+    if let Some((names, verb)) = named_options(&lacked) {
+        write!(
+            out,
+            " {names}, {shape} in Ensembl VEP, {verb} this version lacks, refused on the command \
+             line and in a configuration file (exit 2)."
+        )
+        .unwrap();
+    }
+    if let Some((names, verb)) = named_options(&undeclared) {
+        write!(
+            out,
+            " {names}, {shape} in Ensembl VEP's list, {verb} neither its `vep` script \
+             (`Config.pm:73-276`) nor this version declares: unknown on the command line (exit \
+             2) and dropped from a configuration file, as in Ensembl VEP."
+        )
+        .unwrap();
+    }
+    out
+}
+
+/// `flags` in code as prose (`` `--a` and `--b` ``) with the verb that agrees
+/// with their number, or nothing for no flag.
+fn named_options(flags: &[&str]) -> Option<(String, &'static str)> {
+    let (last, rest) = flags.split_last()?;
+    Some(if rest.is_empty() {
+        (flag_in_code(last), "is an option")
+    } else {
+        (
+            format!("{} and {}", flags_in_code(rest), flag_in_code(last)),
+            "are options",
+        )
+    })
+}
+
 /// `--long`, then `-s`, then the visible aliases, each in code.
 fn flag_names(arg: &Arg) -> String {
     let mut names = Vec::new();
@@ -456,7 +521,7 @@ fn render_group(group: &Group, sections: &[FlagSection]) -> String {
 
 /// The landing page: what the command line is, the group pages, how a flag is
 /// read, and Ensembl VEP's option rules applied as data.
-fn render_landing() -> String {
+fn render_landing(command: &Command) -> String {
     let mut out = String::new();
     out.push_str("# CLI reference\n\n");
     out.push_str(
@@ -619,16 +684,20 @@ fn render_landing() -> String {
     }
     out.push('\n');
     out.push_str("### Lists (`Config.pm:327-346`)\n\n");
+    let (split, refused) = declared_and_refused(command, LIST_FLAGS);
     writeln!(
         out,
-        "- Comma-separated values: {}.",
-        flags_in_code(LIST_FLAGS)
+        "- Comma-separated values: {}.{}",
+        flags_in_code(&split),
+        refused_in_list(&refused, "comma-separated")
     )
     .unwrap();
+    let (collected, refused) = declared_and_refused(command, ALLOW_MULTIPLE);
     writeln!(
         out,
-        "- Repeatable, each occurrence appending: {}.",
-        flags_in_code(ALLOW_MULTIPLE)
+        "- Repeatable, each occurrence appending: {}.{}",
+        flags_in_code(&collected),
+        refused_in_list(&refused, "repeatable")
     )
     .unwrap();
     writeln!(
@@ -803,11 +872,13 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          `--dir_plugins`).\n"
     )
     .unwrap();
+    let (collected, refused) = declared_and_refused(command, ALLOW_MULTIPLE);
     writeln!(
         out,
-        "A repeatable flag ({}) collects every source's values, the command line's first. No \
+        "A repeatable flag ({}) collects every source's values, the command line's first.{} No \
          source behind the command line can set {}.\n",
-        flags_in_code(ALLOW_MULTIPLE),
+        flags_in_code(&collected),
+        refused_in_list(&refused, "repeatable"),
         flags_in_code(COMMAND_LINE_ONLY)
     )
     .unwrap();
@@ -986,7 +1057,7 @@ fn compatibility_flags(command: &Command) -> &'static [(&'static str, &'static s
 /// pages. A `--help` heading no group carries is a stale `GROUPS`.
 fn render(command: &Command) -> Vec<(&'static str, String)> {
     let sections = flag_sections(command);
-    let mut pages = vec![(LANDING, render_landing())];
+    let mut pages = vec![(LANDING, render_landing(command))];
     for group in GROUPS {
         let text = if group.file == COMPATIBILITY {
             render_compatibility(group, command, &sections)
@@ -1051,6 +1122,119 @@ fn help_of_table_backed_flags_is_the_tables() {
             Some(&entry.help()),
             "--{}",
             entry.flag
+        );
+    }
+}
+
+/// The repeatable and comma-separated flags the pages list as collected or
+/// split are the ones the command line declares; a flag of either list this
+/// version lacks (`--phyloP`, `--phastCons`, `--cell_type`, `--dont_export`)
+/// is refused as an unknown argument and is named as refused instead, on the
+/// landing page's lists and in the compatibility page's configuration-sources
+/// sentence alike. A configuration file's line naming one of them reaches the
+/// parser as the flag, to be refused, except `dont_export`, which `@VEP_PARAMS`
+/// does not declare and the file reader drops.
+#[test]
+fn repeatable_flags_list_the_declared_ones_and_name_the_refused() {
+    let mut command = Args::command_with_error_table();
+    command.build();
+    let (collected, refused) = declared_and_refused(&command, ALLOW_MULTIPLE);
+    assert_eq!(collected, ["plugin", "custom", "transcript_filter"]);
+    assert_eq!(refused, ["phyloP", "phastCons"]);
+    let (split, refused_lists) = declared_and_refused(&command, LIST_FLAGS);
+    assert_eq!(
+        split,
+        [
+            "individual",
+            "individual_zyg",
+            "pick_order",
+            "fields",
+            "chr",
+            "distance"
+        ]
+    );
+    assert_eq!(refused_lists, ["cell_type", "dont_export"]);
+    let unknown_argument = |argv: &[&str]| {
+        let error = command.clone().try_get_matches_from(argv).unwrap_err();
+        assert_eq!(
+            error.kind(),
+            clap::error::ErrorKind::UnknownArgument,
+            "{argv:?}"
+        );
+    };
+    for flag in refused.iter().chain(&refused_lists) {
+        unknown_argument(&["vep", &format!("--{flag}"), "100"]);
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config.txt");
+    fs::write(
+        &config,
+        "cell_type a,b\ndont_export a\nphyloP 100\nphastCons 100\n",
+    )
+    .unwrap();
+    let home = (OsString::from("HOME"), dir.path().as_os_str().to_owned());
+    let from_file = prepass(
+        vec!["vep".into(), "--config".into(), config.into_os_string()],
+        [home],
+    )
+    .unwrap();
+    let from_file: Vec<&str> = from_file.iter().map(|t| t.to_str().unwrap()).collect();
+    for token in ["--cell_type=a,b", "--phyloP=100", "--phastCons=100"] {
+        assert!(from_file.contains(&token), "{from_file:?}");
+        unknown_argument(&["vep", token]);
+    }
+    assert!(
+        !from_file.iter().any(|t| t.contains("dont_export")),
+        "{from_file:?}"
+    );
+    let refused_sentence = " `--phyloP` and `--phastCons`, repeatable in Ensembl VEP, are options \
+                            this version lacks, refused on the command line and in a configuration \
+                            file (exit 2).";
+    assert_eq!(refused_in_list(&refused, "repeatable"), refused_sentence);
+    assert_eq!(refused_in_list(&[], "repeatable"), "");
+    assert_eq!(
+        refused_in_list(&["phyloP"], "repeatable"),
+        " `--phyloP`, repeatable in Ensembl VEP, is an option this version lacks, refused on the \
+         command line and in a configuration file (exit 2)."
+    );
+    let undeclared_sentence = " `--dont_export`, comma-separated in Ensembl VEP's list, is an \
+                               option neither its `vep` script (`Config.pm:73-276`) nor this \
+                               version declares: unknown on the command line (exit 2) and dropped \
+                               from a configuration file, as in Ensembl VEP.";
+    assert_eq!(
+        refused_in_list(&["dont_export"], "comma-separated"),
+        undeclared_sentence
+    );
+    let pages: BTreeMap<&str, String> = render(&command).into_iter().collect();
+    let lists_line = format!(
+        "- Comma-separated values: `--individual`, `--individual_zyg`, `--pick_order`, \
+         `--fields`, `--chr`, `--distance`. `--cell_type`, comma-separated in Ensembl VEP, is an \
+         option this version lacks, refused on the command line and in a configuration file \
+         (exit 2).{undeclared_sentence}\n"
+    );
+    assert!(pages[LANDING].contains(&lists_line), "{}", pages[LANDING]);
+    let landing_line = format!(
+        "- Repeatable, each occurrence appending: `--plugin`, `--custom`, `--transcript_filter`.{refused_sentence}\n"
+    );
+    assert!(pages[LANDING].contains(&landing_line), "{}", pages[LANDING]);
+    let sources_sentence = format!(
+        "A repeatable flag (`--plugin`, `--custom`, `--transcript_filter`) collects every \
+         source's values, the command line's first.{refused_sentence} No source behind the command \
+         line can set "
+    );
+    assert!(
+        pages[COMPATIBILITY].contains(&sources_sentence),
+        "{}",
+        pages[COMPATIBILITY]
+    );
+    for page in pages.values() {
+        assert!(
+            !page.contains("`--plugin`, `--custom`, `--phyloP`"),
+            "{page}"
+        );
+        assert!(
+            !page.contains("`--individual_zyg`, `--cell_type`"),
+            "{page}"
         );
     }
 }

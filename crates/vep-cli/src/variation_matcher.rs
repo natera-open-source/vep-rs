@@ -16,7 +16,9 @@ use std::borrow::Cow;
 
 use vep_core::coordinate::Strand;
 use vep_core::sv_routing::perl_true;
-use vep_core::variant::{colocated_in_output_order, ColocatedVariant, InputVariant, MatchedAllele};
+use vep_core::variant::{
+    colocated_in_output_order, push_decimal, ColocatedVariant, InputVariant, MatchedAllele,
+};
 use vep_core::variation::{reverse_comp, CachedVariation};
 
 use crate::variation_source::{ReadFailure, VariationSource};
@@ -361,25 +363,6 @@ fn cached_to_colocated(
     }
 }
 
-/// Render `value` as decimal ASCII into `buf`, returning the populated slice.
-///
-/// `buf` must hold at least 20 bytes (`u64::MAX` is 20 digits). Byte-identical
-/// to `u64`'s `Display`, but avoids the `core::fmt` machinery on a path that
-/// runs once per (variant x transcript consequence).
-pub(crate) fn format_u64(mut value: u64, buf: &mut [u8; 20]) -> &[u8] {
-    if value == 0 {
-        buf[0] = b'0';
-        return &buf[..1];
-    }
-    let mut i = buf.len();
-    while value > 0 {
-        i -= 1;
-        buf[i] = b'0' + (value % 10) as u8;
-        value /= 10;
-    }
-    &buf[i..]
-}
-
 /// Appends the `Extra` column of one default-format row: `KEY=VALUE` pairs
 /// joined by `;`, keys in VEP's order (IMPACT, DISTANCE, STRAND, FLAGS, then the
 /// active flag fields, then plugin keys alphabetically), values escaping only
@@ -476,9 +459,8 @@ fn write_user_group(tc: Option<&vep_core::consequence::TranscriptConsequence>, o
     out.extend_from_slice(b"IMPACT=");
     out.extend_from_slice(tc.impact.as_str().as_bytes());
     if let Some(dist) = tc.distance {
-        let mut buf = [0u8; 20];
         out.extend_from_slice(b";DISTANCE=");
-        out.extend_from_slice(format_u64(dist, &mut buf));
+        push_decimal(out, dist);
     }
     out.extend_from_slice(b";STRAND=");
     out.extend_from_slice(if tc.strand < 0 { b"-1" } else { b"1" });
@@ -1280,27 +1262,6 @@ mod tests {
         let plan = ExtraFieldsPlan::new(options.clone());
         write_extra_fields(variant, tc, &plan, &mut buf);
         String::from_utf8(buf).expect("Extra field is valid UTF-8")
-    }
-
-    #[test]
-    fn test_format_u64_matches_display() {
-        // format_u64 replaces `u64`'s Display on the per-consequence writer
-        // path, so it must agree byte-for-byte over the interesting range:
-        // zero, every single digit, every power-of-ten boundary (+/- 1), and
-        // u64::MAX (the 20-digit case that sizes the buffer).
-        let mut cases: Vec<u64> = (0..=1000).collect();
-        let mut p: u64 = 1;
-        for _ in 0..19 {
-            p = p.saturating_mul(10);
-            cases.extend_from_slice(&[p - 1, p, p + 1]);
-        }
-        cases.extend_from_slice(&[u64::MAX - 1, u64::MAX, 2500, 12_345_678_901_234_567_890]);
-
-        for v in cases {
-            let mut buf = [0u8; 20];
-            let got = std::str::from_utf8(format_u64(v, &mut buf)).unwrap();
-            assert_eq!(got, v.to_string(), "format_u64 mismatch for {v}");
-        }
     }
 
     #[test]

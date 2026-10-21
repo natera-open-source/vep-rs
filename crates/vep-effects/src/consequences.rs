@@ -3,8 +3,8 @@
 
 //! Consequence calculator: assigns SO consequence terms to variant-transcript overlaps.
 //!
-//! Perl citations name modules of ensembl-variation release/115
-//! (`Bio/EnsEMBL/Variation/...`); the `VEP::...` modules are in ensembl-vep release/115.
+//! Perl citations name modules of ensembl-variation release/116
+//! (`Bio/EnsEMBL/Variation/...`); the `VEP::...` modules are in ensembl-vep release/116.2.
 //!
 //! Under `--use_transcript_ref` every row reads the reference allele
 //! [`transcript_reference_allele`] gives. Not ported: the edited transcript
@@ -46,7 +46,9 @@ pub struct EffectsConfig {
     /// Off by default because it changes consequence semantics.
     pub enable_indel_3prime_shift: bool,
     /// The flags that shape the HGVSc and HGVSp notations: `--shift_hgvs`,
-    /// `--hgvsp_use_prediction` and `--remove_hgvsp_version`.
+    /// `--hgvsp_use_prediction`, `--remove_hgvsp_version` and, for the
+    /// predicates `hgvs_protein` reads, `--shift_3prime`, which an embedder
+    /// sets as it sets `enable_indel_3prime_shift`.
     pub hgvs: crate::hgvs::HgvsOptions,
     /// Attach [`LofteeContext`](vep_core::consequence::LofteeContext) to each
     /// transcript consequence at construction time.
@@ -259,15 +261,23 @@ pub fn calculate_consequences(
         _ => (Cow::Borrowed(placed), Cow::Borrowed(variant)),
     };
     let (placed, input) = (placed.as_ref(), input.as_ref());
-    let shifted = consequence_shift(placed, transcript, config);
+    let shifted = consequence_shift(placed, variant.strand, transcript, config);
     let shifted_allele = shifted.and_then(|span| {
-        crate::hgvs::shifted_variant(
-            placed,
-            variant.strand,
-            transcript,
-            span,
-            config.reference_fasta.as_deref(),
-        )
+        if placed.reference_allele_row {
+            Some(shifted_reference_row(
+                placed,
+                span,
+                config.reference_fasta.as_deref(),
+            ))
+        } else {
+            crate::hgvs::shifted_variant(
+                placed,
+                variant.strand,
+                transcript,
+                span,
+                config.reference_fasta.as_deref(),
+            )
+        }
     });
     let analysed = shifted_allele.as_ref().unwrap_or(placed);
     let mut tc = calculate_terms(analysed, input, transcript, config)?;
@@ -281,7 +291,18 @@ pub fn calculate_consequences(
     if config.compute_exon_intron_numbers {
         (tc.exon, tc.intron) = crate::display::exon_intron_numbers(analysed, placed, transcript);
     }
-    tc.shift_length = shifted.map_or(0, |(start, _)| start.abs_diff(placed.start));
+    // A reference row prints `SHIFT_LENGTH` 0 whatever span it was read at: the
+    // reference allele's object carries no shift of its own (OutputFactory.pm:1690).
+    tc.shift_length = match shifted {
+        Some((start, _)) if !placed.reference_allele_row => start.abs_diff(placed.start),
+        _ => 0,
+    };
+    tc.shifted_allele = shifted_display_allele(
+        variant,
+        transcript.strand,
+        translation_span,
+        tc.shift_length,
+    );
     if config.protein_version {
         append_translation_version(&mut tc, transcript);
     }
@@ -380,6 +401,45 @@ fn rotate_along_transcript(
         vep_core::coordinate::Strand::Forward => allele.rotate_left(steps),
         vep_core::coordinate::Strand::Reverse => allele.rotate_right(steps),
     }
+}
+
+/// [`TranscriptConsequence::shifted_allele`]: the inserted bases as the record
+/// wrote them, rotated as `shift_feature_seqs` rotates them when `codon` runs
+/// on a shifted allele (TranscriptVariationAllele.pm:820, 1330-1347), which it
+/// does on a row whose shifted span has both translation coordinates: one
+/// place per base of the shift along a forward-strand transcript, the allele's
+/// length less the shift along a reverse-strand one (:1338-1339), where a shift
+/// of the allele's length or more leaves it as written. `None` wherever the
+/// `Allele` is the allele as given: a row nothing moved, a row with no
+/// translation coordinate, a reference row, any allele but an insertion of DNA,
+/// and a rotation by a multiple of the allele's length.
+fn shifted_display_allele(
+    variant: &InputVariant,
+    transcript_strand: vep_core::coordinate::Strand,
+    translation_span: Option<(i64, i64)>,
+    shift: u64,
+) -> Option<Arc<str>> {
+    if shift == 0
+        || translation_span.is_none()
+        || variant.reference_allele_row
+        || variant.variant_class != vep_core::variant::VariantClass::Insertion
+    {
+        return None;
+    }
+    let mut written = variant.alt_allele().to_ascii_uppercase();
+    if written == b"-" || !vep_core::codon::seq_is_dna(&written) {
+        return None;
+    }
+    let length = written.len() as u64;
+    let steps = match transcript_strand {
+        vep_core::coordinate::Strand::Forward => shift,
+        vep_core::coordinate::Strand::Reverse => length.checked_sub(shift)?,
+    } % length;
+    if steps == 0 {
+        return None;
+    }
+    written.rotate_left(steps as usize);
+    Some(Arc::from(String::from_utf8_lossy(&written).as_ref()))
 }
 
 /// The reference allele a row reads under `--use_transcript_ref`
@@ -620,23 +680,75 @@ fn cdna_span(variant: &InputVariant, transcript: &Transcript) -> Option<(i64, i6
 /// The span an insertion or deletion is annotated at under `--shift_3prime 1`:
 /// `TranscriptVariation::new` shifts every allele unless `-no_shift`
 /// (TranscriptVariation.pm:132-135), and `_return_3prime` moves nothing for a
-/// structural or symbolic allele (TranscriptVariationAllele.pm:123, 129). `None`
-/// when the run does not shift, no FASTA is loaded, or the allele stays put.
+/// structural or symbolic allele (TranscriptVariationAllele.pm:123, 129). The
+/// reference allele is never shifted itself (:116), but the reference row of
+/// `--process_ref_homs` is read at the span the record's last alternate allele
+/// shifts to ([`InputVariant::reference_row_shift_allele`]), the coordinates
+/// `reset_shifted_positions` leaves on the transcript variation the alleles
+/// share (OutputFactory.pm:306-323, TranscriptVariationAllele.pm:502-528). That
+/// alternate is kept as the record wrote it, on `input_strand`, while `variant`
+/// is read on the forward strand, so an alternate given on the reverse strand
+/// is complemented before it is shifted. `None` when the run does not shift, no
+/// FASTA is loaded, or the allele stays put.
 fn consequence_shift(
     variant: &InputVariant,
+    input_strand: vep_core::coordinate::Strand,
     transcript: &Transcript,
     config: &EffectsConfig,
 ) -> Option<(u64, u64)> {
-    // The reference allele is never shifted (TranscriptVariationAllele.pm:116).
     if !config.enable_indel_3prime_shift
         || variant.is_structural
         || variant.variant_class.is_structural()
-        || variant.reference_allele_row
     {
         return None;
     }
     let fasta = config.reference_fasta.as_deref()?;
+    if variant.reference_allele_row {
+        let alternate = variant.reference_row_shift_allele.as_deref()?.as_bytes();
+        let alternate = match input_strand {
+            vep_core::coordinate::Strand::Reverse if vep_core::codon::seq_is_dna(alternate) => {
+                vep_core::codon::reverse_complement(alternate)
+            }
+            _ => alternate.to_vec(),
+        };
+        let mut shifting = InputVariant::new(
+            variant.chr.clone(),
+            variant.start,
+            variant.end,
+            variant.ref_allele.clone(),
+            alternate,
+        );
+        shifting.strand = variant.strand;
+        shifting.original_start = variant.original_start;
+        shifting
+            .record_allele_string_multi
+            .clone_from(&variant.record_allele_string_multi);
+        return shift_indel_3prime_coords(&shifting, transcript, fasta);
+    }
     shift_indel_3prime_coords(variant, transcript, fasta)
+}
+
+/// The reference row of `--process_ref_homs` at `span`, the shifted span of the
+/// record's alternate allele: the row's alleles are the reference bases there,
+/// which the transcript's translateable sequence spells for its codon
+/// (TranscriptVariationAllele.pm:868, 877); an insertion's reference row keeps
+/// its empty allele. Without a FASTA the bases as given stand.
+fn shifted_reference_row(
+    placed: &InputVariant,
+    span: (u64, u64),
+    fasta: Option<&vep_fasta::IndexedFasta>,
+) -> InputVariant {
+    let (start, end) = span;
+    let mut row = placed.clone();
+    (row.start, row.end) = (start, end);
+    if placed.variant_class != vep_core::variant::VariantClass::Insertion && start <= end {
+        if let Some(bases) = fasta.and_then(|f| f.sequence(&placed.chr, start, end)) {
+            let bases = bases.to_ascii_uppercase();
+            row.ref_allele.clone_from(&bases);
+            row.alt_alleles = vec![bases];
+        }
+    }
+    row
 }
 
 /// `--protein_version` (OutputFactory.pm `BaseTranscriptVariationAllele_to_output_hash`):
@@ -3500,8 +3612,14 @@ pub fn shift_indel_3prime_coords(
 /// multi-allelic record is an `insertion` only when every allele inserts
 /// (`-/A/AA`) and a `deletion` only when every allele deletes, and one that
 /// mixes classes (`TT/-/T`) shifts none of its alleles. A record with one
-/// allele takes that allele's class.
+/// allele takes that allele's class, as does an allele of a `--minimal` split,
+/// which is a feature of its own, with its own allele string, until the rejoin
+/// (InputBuffer.pm:638-718) and is annotated before it (OutputFactory.pm:2289,
+/// 2303).
 fn record_class_shifts(variant: &InputVariant) -> bool {
+    if variant.original_start.is_some() {
+        return true;
+    }
     let Some(record) = variant.record_allele_string_multi.as_deref() else {
         return true;
     };
@@ -6007,6 +6125,60 @@ mod tests {
         assert_eq!(tc.cds_position.as_deref(), Some("11"));
     }
 
+    /// The reference row of `--process_ref_homs` is read at the span the record's
+    /// alternate shifts to and counts no shift of its own (OutputFactory.pm:306-323,
+    /// 1690): the `T` deletion at 160 moves two bases to CDS 13 and its reference
+    /// row reads CDS 13 as a `synonymous_variant`; an inserted `T` before `TTA`
+    /// moves two bases to CDS 13-14, as does the reference row of the same
+    /// insertion written on the reverse strand as `-/A`, whose alternate is
+    /// complemented before the shift. Without the flag the reference row keeps the
+    /// record's span.
+    #[test]
+    fn a_reference_row_reads_the_alternates_shifted_span_with_shift_length_0() {
+        use crate::concordance_tests::{hgvsc_fasta_fixture, make_compact_test_transcript};
+        let tx = make_compact_test_transcript();
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[(163, b'A')]);
+        let fasta = Arc::new(fasta);
+        let shifted = EffectsConfig {
+            reference_fasta: Some(fasta.clone()),
+            enable_indel_3prime_shift: true,
+            ..Default::default()
+        };
+        let deletion = InputVariant::new("1".into(), 160, 160, b"T".to_vec(), b"-".to_vec());
+        let row = deletion.reference_allele_row();
+        assert_eq!(row.reference_row_shift_allele.as_deref(), Some("-"));
+        let tc = calculate_consequences(&row, &tx, &shifted).unwrap();
+        assert_eq!(tc.shift_length, 0);
+        assert_eq!(tc.cds_position.as_deref(), Some("13"));
+        assert_eq!(tc.consequences.as_slice(), [Consequence::SynonymousVariant]);
+
+        let forward = InputVariant::new("1".into(), 161, 160, b"-".to_vec(), b"T".to_vec());
+        let mut reverse = InputVariant::new("1".into(), 161, 160, b"-".to_vec(), b"A".to_vec());
+        reverse.strand = vep_core::coordinate::Strand::Reverse;
+        for insertion in [&forward, &reverse] {
+            let tc = calculate_consequences(insertion, &tx, &shifted).unwrap();
+            assert_eq!(tc.shift_length, 2, "{insertion:?}");
+            assert_eq!(tc.cds_position.as_deref(), Some("13-14"), "{insertion:?}");
+            let tc =
+                calculate_consequences(&insertion.reference_allele_row(), &tx, &shifted).unwrap();
+            assert_eq!(tc.shift_length, 0, "{insertion:?}");
+            assert_eq!(tc.cds_position.as_deref(), Some("13-14"), "{insertion:?}");
+            assert_eq!(
+                tc.consequences.as_slice(),
+                [Consequence::SynonymousVariant],
+                "{insertion:?}"
+            );
+        }
+
+        let unshifted = EffectsConfig {
+            reference_fasta: Some(fasta),
+            ..Default::default()
+        };
+        let tc = calculate_consequences(&row, &tx, &unshifted).unwrap();
+        assert_eq!(tc.shift_length, 0);
+        assert_eq!(tc.cds_position.as_deref(), Some("11"));
+    }
+
     /// The transcript window is read on the input span: a deletion at the last
     /// base of the downstream window whose shift carries it past the window keeps
     /// its row, `downstream_gene_variant` at the input's distance, while one
@@ -6745,6 +6917,55 @@ mod tests {
         assert_eq!(tc.used_ref.as_deref(), Some("AT"));
         let tc = calculate_consequences(&coding, &tx, &with_reference_row(true, true)).unwrap();
         assert_eq!(tc.used_ref.as_deref(), Some("AT"));
+    }
+
+    /// The `Allele` a coding row prints for a shifted insertion is the written
+    /// allele rotated as `shift_feature_seqs` rotates it: one place per base
+    /// along a forward-strand transcript, the length less the shift along a
+    /// reverse-strand one, so `AAG` moved one base on the reverse-strand APP
+    /// prints `GAA` as Ensembl VEP 116.2 does, an allele given on the reverse
+    /// strand rotates as written (`CTT` to `TCT`), and a shift of the allele's
+    /// length or more on the reverse strand leaves it. A row with no translation
+    /// coordinate, an unmoved row, a reference row and a deletion keep the
+    /// allele as given.
+    #[test]
+    fn a_shifted_coding_insertion_prints_the_rotated_allele() {
+        use vep_core::coordinate::Strand;
+        let insertion = |alt: &str, strand: Strand| {
+            let mut v = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), alt.into());
+            v.strand = strand;
+            v
+        };
+        let rotated = |v: &InputVariant, strand, span, shift| {
+            shifted_display_allele(v, strand, span, shift).map(|a| a.to_string())
+        };
+        let span = Some((242, 242));
+        let forward_given = insertion("AAG", Strand::Forward);
+        assert_eq!(
+            rotated(&forward_given, Strand::Reverse, span, 1).as_deref(),
+            Some("GAA")
+        );
+        assert_eq!(
+            rotated(&forward_given, Strand::Forward, span, 1).as_deref(),
+            Some("AGA")
+        );
+        assert_eq!(
+            rotated(&forward_given, Strand::Forward, span, 4).as_deref(),
+            Some("AGA")
+        );
+        assert_eq!(rotated(&forward_given, Strand::Reverse, span, 3), None);
+        assert_eq!(rotated(&forward_given, Strand::Reverse, span, 4), None);
+        assert_eq!(
+            rotated(&insertion("CTT", Strand::Reverse), Strand::Reverse, span, 1).as_deref(),
+            Some("TCT")
+        );
+        assert_eq!(rotated(&forward_given, Strand::Reverse, None, 1), None);
+        assert_eq!(rotated(&forward_given, Strand::Reverse, span, 0), None);
+        let mut reference_row = insertion("-", Strand::Forward);
+        reference_row.reference_allele_row = true;
+        assert_eq!(rotated(&reference_row, Strand::Reverse, span, 1), None);
+        let deletion = InputVariant::new("21".into(), 101, 103, b"TCT".to_vec(), b"-".to_vec());
+        assert_eq!(rotated(&deletion, Strand::Reverse, span, 1), None);
     }
 
     /// Both paths move the bases towards the transcript's 3' end, so on the

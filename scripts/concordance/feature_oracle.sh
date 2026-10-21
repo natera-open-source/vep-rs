@@ -39,7 +39,8 @@
 #   reference_release  the Ensembl VEP release the image carries, recorded per report
 #   masks              compare_vep_formats.py --masks, applied from the manifest.json
 #                      beside the input, or -; the comparator's built-in classes
-#                      (regulatory_feature_rows, order_only) need no manifest
+#                      (regulatory_feature_rows, order_only, individual_allele_order) need
+#                      no manifest
 #   floors             compare_vep_formats.py --floors (COL=MIN,...), or -; a floor on a
 #                      column the json format has no row count for (a record-level column,
 #                      Feature_type, Extra) is not applicable there: the report.json entry
@@ -363,7 +364,7 @@ done
 COLUMNS="case tier input cache fasta flags formats perl_image perl_mode reference_release masks floors field_pairs"
 OUTPUT_FORMATS="default tab vcf json parquet"
 # The comparator's own divergence classes, applied without a manifest.
-BUILTIN_MASKS="regulatory_feature_rows order_only"
+BUILTIN_MASKS="regulatory_feature_rows order_only individual_allele_order"
 # Flags the runner sets from the table's own columns and its options, with the aliases
 # Ensembl VEP's Config.pm and the candidate accept for them; a flags cell naming one would
 # give an engine the flag twice, or move the input, the server or the assembly behind the
@@ -698,7 +699,10 @@ perl_cmd() {
 	local fmt="$1" out_dir="$2" fasta="$3"
 	local in_name
 	in_name=$(basename "$C_INPUT_PATH")
-	CMD=(docker run --rm --user "$(id -u):$(id -g)"
+	# Parser/VCF.pm:639 at release/116.2 orders an individual's alternate alleles, and
+	# OutputFactory.pm:983 the ZYG list of --individual_zyg, by Perl hash order; the committed
+	# --individual and --individual_zyg references are runs under this seed.
+	CMD=(docker run --rm --user "$(id -u):$(id -g)" -e PERL_HASH_SEED=0 -e PERL_PERTURB_KEYS=0
 		-v "${C_INPUT_PATH}:/work/input/${in_name}:ro"
 		-v "${out_dir}:/work/out")
 	if [[ "$C_PERL_MODE" == "offline" ]]; then

@@ -572,6 +572,14 @@ pub struct TranscriptConsequence {
     /// moved, every other row included.
     #[serde(default)]
     pub shift_length: u64,
+    /// The `Allele` the row prints under `--shift_3prime 1` when it is not the
+    /// allele as the record wrote it: the inserted bases rotated along the
+    /// shift on a row whose shifted span has both translation coordinates,
+    /// since `codon` rotates the allele's sequence there (`shift_feature_seqs`,
+    /// TranscriptVariationAllele.pm:820, 1330-1347) and the row prints that
+    /// sequence (OutputFactory.pm:1347); `None` for every other row.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shifted_allele: Option<Arc<str>>,
     /// The reference allele the row was analysed against under
     /// `--use_transcript_ref`, relative to the variant's strand: the transcript's
     /// where the variant maps inside its exons, the input's elsewhere (`USED_REF`,
@@ -678,6 +686,16 @@ pub struct TranscriptConsequence {
     /// loaded transcript.
     #[serde(skip)]
     pub id_rank: u32,
+    /// Whether the record's span, for an allele of a `--minimal` split
+    /// ([`InputVariant::original_start`](crate::variant::InputVariant::original_start)
+    /// to `original_end`), has a CDS coordinate on the transcript: the
+    /// `within_cds` the `--coding_only` filter asks of a rejoined row in the
+    /// default and tab formats, whose factories clear the coordinates cached on
+    /// the allele's own span after the rejoin and map the record's span in their
+    /// place (OutputFactory.pm:297-323 and 490-502; BaseTranscriptVariation.pm:505-526
+    /// and 662-665). `false` for every other row. Never serialized.
+    #[serde(skip)]
+    pub record_span_in_cds: bool,
 }
 
 /// Type of genomic feature that a consequence is annotated against.
@@ -760,6 +778,7 @@ impl Default for TranscriptConsequence {
             hgvsp: None,
             hgvs_offset: None,
             shift_length: 0,
+            shifted_allele: None,
             used_ref: None,
             sift: None,
             polyphen: None,
@@ -789,6 +808,7 @@ impl Default for TranscriptConsequence {
             feature_end: 0,
             loftee_ctx: None,
             id_rank: 0,
+            record_span_in_cds: false,
         }
     }
 }
@@ -830,6 +850,7 @@ impl TranscriptConsequence {
             hgvsp: None,
             hgvs_offset: None,
             shift_length: 0,
+            shifted_allele: None,
             used_ref: None,
             sift: None,
             polyphen: None,
@@ -859,6 +880,7 @@ impl TranscriptConsequence {
             feature_end: transcript.end,
             loftee_ctx: None,
             id_rank: transcript.id_rank,
+            record_span_in_cds: false,
         }
     }
 

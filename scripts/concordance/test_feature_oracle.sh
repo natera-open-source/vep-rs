@@ -202,7 +202,9 @@ pc=$(cmd_after 'DRY-RUN c-four perl tab' "$TMP/d1.out")
 [[ "$pc" == *"-v $CORPUS/variants.vcf:/work/input/variants.vcf:ro"* && "$pc" == *"-i /work/input/variants.vcf"* ]] && ok "a repository-relative input resolves and is mounted read-only under /work/input" || bad "input mount: $pc"
 [[ "$pc" == *"-v $DATA/caches/perl/vep-cache:/work/cache:ro"* ]] && ok "the Ensembl cache root is mounted read-only at /work/cache" || bad "cache mount: $pc"
 [[ "$pc" == *"--user $(id -u):$(id -g) "* ]] && ok "the container runs as the invoking user" || bad "no --user: $pc"
+[[ "$pc" == *" -e PERL_HASH_SEED=0 -e PERL_PERTURB_KEYS=0 "* ]] && ok "the container runs Perl under PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0, the seed of the committed references" || bad "no Perl hash seed: $pc"
 dc=$(cmd_after 'DRY-RUN c-db perl default' "$TMP/d1.out")
+[[ "$dc" == *" -e PERL_HASH_SEED=0 -e PERL_PERTURB_KEYS=0 "* ]] && ok "a database-mode run carries the same Perl hash seed" || bad "no Perl hash seed in database mode: $dc"
 [[ "$dc" == *"--database --db_version 116 "* ]] && ok "database mode passes --database --db_version 116" || bad "database mode: $dc"
 [[ "$dc" != *"--offline"* && "$dc" != *"--cache "* && "$dc" != *"--dir_cache"* && "$dc" != *"--cache_version"* ]] && ok "database mode passes no --offline, --cache, --dir_cache or --cache_version" || bad "database mode carries a cache flag: $dc"
 [[ "$dc" != *":/work/cache:ro"* ]] && ok "database mode mounts no cache" || bad "database mode mounts the cache: $dc"
@@ -369,18 +371,18 @@ expect_error "a header without the tier column is an error" "header lacks the co
     echo "$HEADER"
     row c-masks fixture "$DATA/caches/vep-rs/grch38/transcripts" "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 some_class - -
 } >"$T3"
-expect_error "masks without a manifest.json beside the input is an error" "masks names 'some_class', which applies from a manifest.json beside the input, and none is there (the built-in classes are regulatory_feature_rows order_only)" "$T3"
+expect_error "masks without a manifest.json beside the input is an error" "masks names 'some_class', which applies from a manifest.json beside the input, and none is there (the built-in classes are regulatory_feature_rows order_only individual_allele_order)" "$T3"
 mkdir -p "$DATA/nomanifest"
 cp "$CORPUS/variants.vcf" "$DATA/nomanifest/variants.vcf"
 {
     echo "$HEADER"
-    row c-builtin fixture nomanifest/variants.vcf "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 order_only,regulatory_feature_rows - -
+    row c-builtin fixture nomanifest/variants.vcf "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 order_only,regulatory_feature_rows,individual_allele_order - -
     row c-mixed fixture nomanifest/variants.vcf "$CORPUS_CACHE" - - default "$IMAGE" offline 116.2 order_only,some_class - -
 } >"$T3"
 dry "$T3" "$TMP/d-builtin.out" --only c-builtin
 rc=$?
 bc=$(cmd_second 'DRY-RUN c-builtin stub default' "$TMP/d-builtin.out")
-[[ "$rc" -eq 0 && "$bc" == *'--masks order_only\,regulatory_feature_rows' && "$bc" != *"--manifest"* ]] && ok "the comparator's built-in classes need no manifest beside the input" || bad "built-in masks: rc=$rc $bc"
+[[ "$rc" -eq 0 && "$bc" == *'--masks order_only\,regulatory_feature_rows\,individual_allele_order' && "$bc" != *"--manifest"* ]] && ok "the comparator's built-in classes need no manifest beside the input" || bad "built-in masks: rc=$rc $bc"
 expect_error "a manifest class beside a built-in one still needs the manifest" "masks names 'some_class', which applies from a manifest.json" "$T3" --only c-mixed
 {
     echo "$HEADER"

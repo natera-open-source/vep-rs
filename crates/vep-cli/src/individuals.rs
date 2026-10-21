@@ -604,6 +604,8 @@ fn zygosity_record(
 /// allele (an allele-less or non-variant record, or a copy whose alleles all
 /// write no row, `VariationFeatureOverlap.pm:479-491`), since the VCF line of a
 /// record holding such a feature carries no CSQ; a structural record gains none.
+/// The row follows the shift of the record's last alternate allele
+/// ([`InputVariant::reference_row_shift_allele`]).
 pub fn add_reference_allele_row(record: &mut Vec<InputVariant>) {
     let Some(first) = record.first() else {
         return;
@@ -611,7 +613,12 @@ pub fn add_reference_allele_row(record: &mut Vec<InputVariant>) {
     if first.is_structural || first.reference_allele_row {
         return;
     }
-    let row = first.reference_allele_row();
+    let mut row = first.reference_allele_row();
+    if let Some(last) = record.last().filter(|v| !v.no_allele) {
+        row.reference_row_shift_allele = Some(Arc::from(
+            String::from_utf8_lossy(last.alt_allele()).as_ref(),
+        ));
+    }
     if first.no_allele {
         record.clear();
     }

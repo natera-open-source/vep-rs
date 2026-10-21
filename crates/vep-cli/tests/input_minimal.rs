@@ -6,10 +6,9 @@
 //! multi-allelic record whose alleles trim is split and rejoined as Ensembl VEP
 //! 116.2 rejoins it (the record's Location, the trimmed Allele, the written
 //! position as ALLELE_NUM, the rows in the rejoin's key order) and the three
-//! position columns follow the output format. Every expected value is Ensembl
-//! VEP 116.2's output on the record under the same flags, except the
-//! `--coding_only` rows of a split record, whose documented difference the last
-//! test pins.
+//! position columns and the `--coding_only` rows follow the output format.
+//! Every expected value is Ensembl VEP 116.2's output on the record under the
+//! same flags.
 
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
@@ -243,68 +242,137 @@ fn a_split_record_rejoins_as_ensembl_vep_rejoins_it() {
     );
 }
 
-/// Three records at the acceptor site of exon 6 of ENST00000427445 whose
-/// alleles fall on both sides of the CDS boundary: an SNV at 10542393 and a
-/// deletion of `TACG` over 10542394-10542397, or two SNVs. Under `--minimal
-/// --coding_only` vep-rs judges each split row on its allele's own span, so the
-/// deletion's seven rows survive and the SNVs' none, and `REF_ALLELE` is the
-/// first allele's trimmed reference. Ensembl VEP 116.2's default output writes
-/// fourteen rows per record over the record's restored span (`OutputFactory.pm`
-/// lines 297-323, 490-502) with the record's `GTACG` as `REF_ALLELE` on
-/// `straddle_a` and `straddle_b`; the difference is documented at
-/// `docs/divergences/minimal-coding-only-record-span.md`, and this test pins the
-/// rows vep-rs writes while it stands.
+/// Three records at the acceptor site of ENST00000427445's exon 6, each splitting
+/// under `--minimal` into alleles on both sides of the CDS boundary: an SNV at
+/// 10542393, two intronic bases before the exon (`splice_acceptor_variant`), and
+/// a deletion of `TACG` over 10542394-10542397, which reaches the CDS
+/// (`splice_acceptor_variant,coding_sequence_variant`).
+const STRADDLE_A: &str = "21\t10542393\tstraddle_a\tGTACG\tCTACG,G\t.\t.\t.\n";
+const STRADDLE_B: &str = "21\t10542393\tstraddle_b\tGTACG\tCTACG,TTACG\t.\t.\t.\n";
+const STRADDLE_C: &str = "21\t10542393\tstraddle_c\tGTACG\tG,CTACG\t.\t.\t.\n";
+
+/// `(Uploaded_variation, Allele, Consequence, ALLELE_NUM, REF_ALLELE)` of every
+/// row on `transcript`.
+fn straddle_rows(lines: &[String], transcript: &str) -> Vec<[String; 5]> {
+    lines
+        .iter()
+        .filter(|line| line.contains(transcript))
+        .map(|line| {
+            let c: Vec<&str> = line.split('\t').collect();
+            let extra = |key: &str| {
+                c[13]
+                    .split(';')
+                    .find_map(|kv| kv.strip_prefix(key))
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            [
+                c[0].to_string(),
+                c[2].to_string(),
+                c[6].to_string(),
+                extra("ALLELE_NUM="),
+                extra("REF_ALLELE="),
+            ]
+        })
+        .collect()
+}
+
+/// `--coding_only` judges a split record's rows over the span the format rejoins
+/// on. The default and tab factories clear the cached CDS coordinates after the
+/// rejoin (OutputFactory.pm:297-302), so `affects_cds` maps the record's restored
+/// span, and Ensembl VEP 116.2 keeps every row of the seven coding transcripts for
+/// both alleles of `straddle_a` and `straddle_b` (14 rows each), the intronic SNV's
+/// `splice_acceptor_variant` rows included. The VCF and JSON factories clear them
+/// before the rejoin (OutputFactory/VCF.pm:305-308, OutputFactory/JSON.pm:217-220),
+/// so each allele is judged on its own span: `straddle_a` keeps the deletion's
+/// seven entries alone and `straddle_b` writes no CSQ. `REF_ALLELE` is cached on
+/// the first row the first feature builds before the rejoin (OutputFactory.pm:1357
+/// at :2289): the record's own `GTACG` where that feature's SNV kept no row
+/// (`straddle_a`, `straddle_b`), the first allele's trimmed `TACG` where the
+/// deletion came first (`straddle_c`).
 #[test]
-fn coding_only_judges_a_split_records_rows_on_their_own_spans() {
+fn coding_only_judges_a_split_record_over_the_span_the_format_rejoins_on() {
     let dir = tempfile::tempdir().unwrap();
-    let records = "21\t10542393\tstraddle_a\tGTACG\tCTACG,G\t.\t.\t.\n\
-                   21\t10542393\tstraddle_b\tGTACG\tCTACG,TTACG\t.\t.\t.\n\
-                   21\t10542393\tstraddle_c\tGTACG\tG,CTACG\t.\t.\t.\n";
+    let flags = [
+        "--minimal",
+        "--coding_only",
+        "--show_ref_allele",
+        "--uploaded_allele",
+        "--variant_class",
+    ];
     vep(
         dir.path(),
-        records,
+        &format!("{STRADDLE_A}{STRADDLE_B}{STRADDLE_C}"),
         &[],
-        &["--minimal", "--coding_only", "--show_ref_allele"],
+        &flags,
     );
     let lines = data_lines(dir.path());
     let count = |name: &str| lines.iter().filter(|l| l.starts_with(name)).count();
     assert_eq!(
         (
-            count("straddle_a\t"),
-            count("straddle_b\t"),
-            count("straddle_c\t")
+            count("straddle_a"),
+            count("straddle_b"),
+            count("straddle_c")
         ),
-        (7, 0, 7)
+        (14, 14, 14)
     );
-    let on_transcript: Vec<(String, String, String, String, String)> =
-        rows_on(&lines, "ENST00000427445")
+    let intronic = ["ENST00000612746", "ENST00000612957"];
+    assert!(
+        lines
             .iter()
-            .map(|r| {
-                let extra = |key: &str| {
-                    r[6].split(';')
-                        .find_map(|kv| kv.strip_prefix(key))
-                        .unwrap()
-                        .to_string()
-                };
-                (
-                    r[0].clone(),
-                    r[1].clone(),
-                    r[5].clone(),
-                    extra("ALLELE_NUM="),
-                    extra("REF_ALLELE="),
-                )
-            })
-            .collect();
-    let location = "21:10542393-10542397";
-    let consequence = "splice_acceptor_variant,coding_sequence_variant";
+            .all(|l| intronic.iter().all(|t| !l.contains(t))),
+        "{lines:?}"
+    );
     assert_eq!(
-        on_transcript
-            .iter()
-            .map(|(l, a, c, n, r)| (l.as_str(), a.as_str(), c.as_str(), n.as_str(), r.as_str()))
-            .collect::<Vec<_>>(),
+        straddle_rows(&lines, "ENST00000427445"),
         [
-            (location, "-", consequence, "2", "G"),
-            (location, "-", consequence, "1", "TACG"),
+            ["straddle_a", "C", "splice_acceptor_variant", "1", "GTACG"],
+            [
+                "straddle_a",
+                "-",
+                "splice_acceptor_variant,coding_sequence_variant",
+                "2",
+                "GTACG",
+            ],
+            ["straddle_b", "C", "splice_acceptor_variant", "1", "GTACG"],
+            ["straddle_b", "T", "splice_acceptor_variant", "2", "GTACG"],
+            [
+                "straddle_c",
+                "-",
+                "splice_acceptor_variant,coding_sequence_variant",
+                "1",
+                "TACG",
+            ],
+            ["straddle_c", "C", "splice_acceptor_variant", "2", "TACG"],
         ]
     );
+    for line in &lines {
+        assert!(line.contains("\t21:10542393-10542397\t"), "{line}");
+    }
+
+    vep(
+        dir.path(),
+        &format!("{STRADDLE_A}{STRADDLE_B}"),
+        &["--vcf"],
+        &flags,
+    );
+    let vcf = data_lines(dir.path());
+    assert_eq!(vcf.len(), 2);
+    let info = |line: &String| line.split('\t').nth(7).unwrap().to_string();
+    let csq: Vec<String> = info(&vcf[0])
+        .trim_start_matches("CSQ=")
+        .split(',')
+        .map(|entry| {
+            let f: Vec<&str> = entry.split('|').collect();
+            // Allele, Consequence, ALLELE_NUM, REF_ALLELE.
+            format!("{}|{}|{}|{}", f[0], f[1], f[18], f[19])
+        })
+        .collect();
+    assert_eq!(csq.len(), 7, "{csq:?}");
+    assert!(
+        csq.iter().all(|e| e == "-|splice_acceptor_variant&coding_sequence_variant|2|GTACG"
+            || e == "-|splice_acceptor_variant&coding_sequence_variant&NMD_transcript_variant|2|GTACG"),
+        "{csq:?}"
+    );
+    assert_eq!(info(&vcf[1]), ".");
 }

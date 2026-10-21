@@ -563,7 +563,8 @@ pub(crate) fn load_plugins(
 }
 
 /// The effects configuration of an embedding caller, without HGVSg; `hgvs`
-/// carries the shift and the two HGVSp forms.
+/// carries the HGVS shift, the two HGVSp forms and the `--shift_3prime` the
+/// HGVSp predicates read, which agrees with `shift_3prime` here.
 pub fn build_effects_config(
     distance: (u64, u64),
     reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
@@ -615,13 +616,14 @@ fn new_effects_config(
     }
 }
 
-/// The HGVSc and HGVSp options of a configuration: the shift under `--shift_hgvs`
-/// and the two HGVSp forms.
+/// The HGVSc and HGVSp options of a configuration: the shift under `--shift_hgvs`,
+/// the two HGVSp forms and whether `--shift_3prime 1` moved the consequences.
 pub(crate) fn hgvs_options(config: &Config) -> vep_effects::hgvs::HgvsOptions {
     vep_effects::hgvs::HgvsOptions {
         shift_hgvs: config.shift_hgvs,
         hgvsp_use_prediction: config.hgvsp_use_prediction,
         remove_hgvsp_version: config.remove_hgvsp_version,
+        shift_3prime: config.shift_3prime,
     }
 }
 
@@ -1911,6 +1913,7 @@ mod tests {
             Some(false)
         );
         assert!(!hgvs_options(&unshifted).shift_hgvs);
+        assert!(hgvs_options(&config(&["--shift_3prime", "1"])).shift_3prime);
 
         let forms = config(&["--hgvsp_use_prediction", "--remove_hgvsp_version"]);
         assert_eq!(
@@ -1919,6 +1922,7 @@ mod tests {
                 shift_hgvs: true,
                 hgvsp_use_prediction: true,
                 remove_hgvsp_version: true,
+                shift_3prime: false,
             }
         );
     }
@@ -1931,6 +1935,7 @@ mod tests {
             shift_hgvs: false,
             hgvsp_use_prediction: true,
             remove_hgvsp_version: true,
+            shift_3prime: false,
         };
         let effects =
             build_effects_config((5_000, 5_000), None, false, options, true, false, false);

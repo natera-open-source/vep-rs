@@ -137,9 +137,10 @@ The two JSON documents are the serde serialization of `TranscriptConsequence`
 (`crates/vep-core/src/variant.rs`), and those two structs with their serde
 attributes are the authoritative schema. No field is renamed, so a JSON key is
 the Rust field name. A field marked `#[serde(skip)]` (`id_rank`,
-`raw_input_bytes`) never appears, a field marked `skip_serializing_if` is left
-out when it is `None`, empty or zero, and every other absent optional value is
-`null`.
+`record_span_in_cds`, `raw_input_bytes`, `split_first_feature_rowless`,
+`reference_row_shift_allele`) never appears, a field marked
+`skip_serializing_if` is left out when it is `None`, empty or zero, and every
+other absent optional value is `null`.
 
 **The consequence document.** Every field a plugin will find:
 
@@ -165,6 +166,8 @@ out when it is `None`, empty or zero, and every other absent optional value is
 | `hgvsc`, `hgvsp`                                   | HGVS coding and protein notations, as the output prints them before escaping; `--hgvsp_use_prediction` and `--remove_hgvsp_version` shape `hgvsp` here too |  |
 | `hgvs_offset`                                      | The signed number of bases the HGVS notations were shifted along the transcript; `null` when nothing shifted |                                   |
 | `shift_length`                                     | The bases `--shift_3prime 1` moved the allele along the transcript; `0` otherwise            | `0`                                                |
+| `shifted_allele`                                   | Under `--shift_3prime 1`, the inserted bases rotated along the shift, the `Allele` a coding row prints; present only on such a row | `"GAA"`                                            |
+| `used_ref`                                         | Under `--use_transcript_ref`, the reference allele the row was analysed against, on the variant's strand: the transcript's inside its exons, the input's elsewhere; present only on a sequence variant's row under the flag | `"A"`                             |
 | `sift`, `polyphen`                                 | Prediction and score                                                                         | `"deleterious(0.01)"`                              |
 | `domains`                                          | Array of `[source, id]` pairs                                                                | `[["Pfam", "PF00080"]]`                            |
 | `feature_type`                                     | The feature kind                                                                             | `"Transcript"`, `"RegulatoryFeature"`, `"MotifFeature"` |

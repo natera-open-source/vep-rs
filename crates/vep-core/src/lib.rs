@@ -32,9 +32,3 @@ pub const VEP_VERSION: u32 = 116;
 
 /// VEP sub-version number.
 pub const VEP_SUB_VERSION: u32 = 2;
-
-/// Default buffer size (number of variants per batch).
-pub const DEFAULT_BUFFER_SIZE: usize = 5000;
-
-/// Default cache region size in base pairs (1 Mb).
-pub const DEFAULT_CACHE_REGION_SIZE: u64 = 1_000_000;

@@ -9,9 +9,9 @@ use std::ops::Range;
 use smallvec::SmallVec;
 
 use crate::pipeline::WriteContext;
-use crate::variation_matcher::{self, format_u64};
+use crate::variation_matcher;
 use vep_core::consequence::Consequence;
-use vep_core::variant::InputVariant;
+use vep_core::variant::{push_decimal, InputVariant};
 use vep_io::output::fields::{
     record_rows_into, write_field_value, write_terms, write_versioned_id, ExtraFieldsPlan, Row,
 };
@@ -51,12 +51,14 @@ pub(crate) fn render_record<'a>(
     Ok(())
 }
 
-/// Where an allele's first row left the columns that depend on the allele alone,
-/// as byte ranges of the output: `Uploaded_variation \t Location \t Allele` and
-/// `Existing_variation`. The allele's later rows copy them from there.
+/// Where an allele's rows left the columns that depend on the allele alone, as
+/// byte ranges of the output: `Uploaded_variation \t Location \t Allele` from
+/// the first row that wrote them as the allele's own (`None` until one has),
+/// and `Existing_variation` from the allele's first row. The allele's later
+/// rows copy them from there.
 #[derive(Clone)]
 struct AlleleSpans {
-    prefix: Range<usize>,
+    prefix: Option<Range<usize>>,
     existing: Range<usize>,
 }
 
@@ -76,9 +78,11 @@ pub(crate) fn render_default_record<'a>(
     record_rows_into(record, rows);
     let mut spans: SmallVec<[Option<AlleleSpans>; 4]> = SmallVec::from_elem(None, record.len());
     // Under --shift_3prime 1 --shift_genomic 1 the Location and Allele of a row
-    // follow its own shift, and under --use_transcript_ref a reference row's
-    // Allele is its transcript's, so those rows write the columns themselves
-    // rather than copying the allele's first row.
+    // follow its own shift, under --shift_3prime 1 alone a coding row's Allele
+    // is the sequence its codon computation rotated, and under
+    // --use_transcript_ref a reference row's Allele is its transcript's, so
+    // those rows write the columns themselves rather than copying the allele's
+    // first row.
     let shifted_rows = plan.options.shift_3prime && plan.options.shift_genomic;
     for &(variant, tc) in rows.iter() {
         let allele = record
@@ -101,12 +105,20 @@ pub(crate) fn render_default_record<'a>(
             out.push(b'\n');
             continue;
         }
-        let own_prefix =
-            shifted_rows || (plan.options.use_transcript_ref && variant.reference_allele_row);
+        let own_prefix = shifted_rows
+            || (plan.options.use_transcript_ref && variant.reference_allele_row)
+            || tc.is_some_and(|x| x.shifted_allele.is_some());
         let prefix_start = out.len();
-        match &spans[allele] {
-            Some(written) if !own_prefix => out.extend_from_within(written.prefix.clone()),
-            _ => {
+        let written_prefix = if own_prefix {
+            None
+        } else {
+            spans[allele]
+                .as_ref()
+                .and_then(|written| written.prefix.clone())
+        };
+        match written_prefix {
+            Some(range) => out.extend_from_within(range),
+            None => {
                 variant.write_uploaded_variation(out);
                 out.push(b'\t');
                 if own_prefix {
@@ -120,7 +132,7 @@ pub(crate) fn render_default_record<'a>(
                 }
             }
         }
-        let prefix = prefix_start..out.len();
+        let prefix = (!own_prefix).then_some(prefix_start..out.len());
         match tc {
             None => {
                 // Intergenic: no feature columns, the most severe consequence, and
@@ -155,9 +167,8 @@ pub(crate) fn render_default_record<'a>(
                     out.extend_from_slice(position.unwrap_or("-").as_bytes());
                     if plan.options.total_length {
                         if let Some(total) = total {
-                            let mut buf = [0u8; 20];
                             out.push(b'/');
-                            out.extend_from_slice(format_u64(u64::from(total), &mut buf));
+                            push_decimal(out, u64::from(total));
                         }
                     }
                 }
@@ -172,8 +183,13 @@ pub(crate) fn render_default_record<'a>(
             }
         }
         let existing_start = out.len();
-        match &spans[allele] {
-            Some(written) => out.extend_from_within(written.existing.clone()),
+        match spans[allele].as_mut() {
+            Some(written) => {
+                out.extend_from_within(written.existing.clone());
+                if written.prefix.is_none() {
+                    written.prefix = prefix;
+                }
+            }
             None => {
                 write_existing_variation(out, variant);
                 spans[allele] = Some(AlleleSpans {
@@ -283,6 +299,7 @@ mod tests {
             };
             let allele_text: Cow<str> = if shifted_rows
                 || (plan.options.use_transcript_ref && variant.reference_allele_row)
+                || tc.is_some_and(|x| x.shifted_allele.is_some())
             {
                 field_value("Allele", variant, tc, &plan.options, ",").into()
             } else {
@@ -625,7 +642,6 @@ mod tests {
             individual: true,
             individual_zyg: true,
             process_ref_homs: true,
-            coding_only: false,
             allele_number: true,
             show_ref_allele: true,
             uploaded_allele: true,
@@ -858,6 +874,51 @@ mod tests {
         let (strings, bytes) = render_both(&record, every_group());
         assert_eq!(bytes, strings);
         assert!(strings.contains(";SHIFT_LENGTH=2"));
+    }
+
+    /// Under `--shift_3prime 1` alone a coding row of a shifted insertion prints
+    /// the allele its codon computation rotated while the allele's other rows
+    /// keep the written allele, whichever row comes first, so the prefix an
+    /// allele's rows share is taken from a row that wrote the written allele;
+    /// both renderers agree.
+    #[test]
+    fn rotated_coding_rows_write_their_own_allele() {
+        let mut record = record();
+        record.truncate(1);
+        record[0] = InputVariant::new("21".into(), 10_501, 10_500, b"-".to_vec(), b"AAG".to_vec());
+        record[0].id = Some("rs1".to_string());
+        record[0].variant_class = VariantClass::Insertion;
+        let mut coding = consequence(
+            "ENST00000300",
+            "ENSG00000100",
+            3,
+            &[Consequence::InframeInsertion],
+            Impact::MODERATE,
+        );
+        coding.shift_length = 1;
+        coding.shifted_allele = Some(Arc::from("GAA"));
+        let mut non_coding = consequence(
+            "ENST00000010",
+            "ENSG00000100",
+            1,
+            &[Consequence::NonCodingTranscriptExonVariant],
+            Impact::MODIFIER,
+        );
+        non_coding.shift_length = 1;
+        let options = FieldOptions {
+            shift_3prime: true,
+            ..Default::default()
+        };
+        for rows in [
+            vec![coding.clone(), non_coding.clone()],
+            vec![non_coding.clone(), coding.clone()],
+        ] {
+            record[0].transcript_consequences = rows;
+            let (strings, bytes) = render_both(&record, options.clone());
+            assert_eq!(bytes, strings);
+            assert!(strings.contains("rs1\t21:10500-10501\tGAA\tENSG00000100\tENST00000300\t"));
+            assert!(strings.contains("rs1\t21:10500-10501\tAAG\tENSG00000100\tENST00000010\t"));
+        }
     }
 
     /// Under `--use_transcript_ref` the reference allele's row of

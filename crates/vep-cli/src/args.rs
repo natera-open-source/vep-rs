@@ -395,7 +395,8 @@ pub struct Args {
     pub shift_genomic: Option<String>,
 
     /// Add the SHIFT_LENGTH column: under --shift_3prime 1, the bases each insertion
-    /// or deletion moved along the transcript, 0 on every other transcript row
+    /// or deletion moved along the transcript, 0 on every other transcript row of a
+    /// sequence variant and none on a structural record's rows
     #[arg(help_heading = "Cache / Offline", long = "shift_length")]
     pub shift_length: bool,
 

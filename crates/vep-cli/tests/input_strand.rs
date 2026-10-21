@@ -201,8 +201,11 @@ fn reverse_strand_records_take_ensembl_veps_hgvs() {
 /// twin inserts `TTC` (`A/AS`), and the ENST00000291691 insertion, moved further
 /// than its length, keeps `CTG` on the transcript and so alters the protein
 /// (`Q/PE`, `protein_altering_variant`) instead of duplicating a leucine. The
-/// columns from `Consequence` on are compared; Ensembl VEP's `Allele` column
-/// prints the turned allele on these rows, which vep-rs leaves as written.
+/// columns from `Consequence` on are compared, then `Allele`: a row whose codon
+/// was read prints the turned allele (OutputFactory.pm:1347), `TCT` and `GAA`
+/// for the APP insertions, where the non-coding ENST00000474136 row keeps the
+/// written `CTT` and `AAG`, and the ENST00000291691 rows keep theirs, the shift
+/// of four exceeding the allele's three bases on the reverse strand.
 #[test]
 fn shifted_codons_turn_the_allele_as_the_record_wrote_it() {
     let dir = tempfile::tempdir().unwrap();
@@ -236,6 +239,29 @@ fn shifted_codons_turn_the_allele_as_the_record_wrote_it() {
             "cv2041960_fwd\tinframe_insertion\t875-876\t725-726\t242\tA/AS\tgcc/gcTTCc\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000346798.8:c.725_726insTTC;HGVSp=ENSP00000284981.4:p.Ala242_Asp243insSer;HGVS_OFFSET=-1;SHIFT_LENGTH=1",
             "ins_cag_fwd\tprotein_altering_variant\t1877-1878\t745-746\t249\tQ/PE\tcag/cCTGag\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000291691.12:c.743_745dup;HGVSp=ENSP00000291691.8:p.Gln249delinsProGlu;HGVS_OFFSET=-4;SHIFT_LENGTH=4",
             "ins_ctg_rev\tprotein_altering_variant\t1877-1878\t745-746\t249\tQ/PE\tcag/cCTGag\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000291691.12:c.743_745dup;HGVSp=ENSP00000291691.8:p.Gln249delinsProGlu;HGVS_OFFSET=-4;SHIFT_LENGTH=4",
+        ]
+    );
+    let allele = |row: &str| {
+        let c: Vec<&str> = row.split('\t').collect();
+        format!("{} {} {}", c[0], c[4], c[2])
+    };
+    let alleles: Vec<String> = rows_on(
+        &rows,
+        &["ENST00000346798", "ENST00000474136", "ENST00000291691"],
+    )
+    .into_iter()
+    .filter(|row| row.contains("ins"))
+    .map(allele)
+    .collect();
+    assert_eq!(
+        alleles,
+        [
+            "cv2041960 ENST00000346798 TCT",
+            "cv2041960 ENST00000474136 CTT",
+            "cv2041960_fwd ENST00000346798 GAA",
+            "cv2041960_fwd ENST00000474136 AAG",
+            "ins_cag_fwd ENST00000291691 CAG",
+            "ins_ctg_rev ENST00000291691 CTG",
         ]
     );
 }

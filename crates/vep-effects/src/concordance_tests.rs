@@ -2502,7 +2502,8 @@ fn concordance_hgvsp_h19_intronic_deletion_shifted_into_the_cds_has_no_hgvsp() {
             &annotated,
             Some((&shifted, 25_002_000, 25_002_001)),
             &tx,
-            None
+            None,
+            false
         ),
         None
     );
@@ -2537,7 +2538,8 @@ fn concordance_hgvsp_h20_straddling_deletion_is_a_frameshift_on_its_shifted_span
             &annotated,
             Some((&shifted, 25_002_000, 25_002_007)),
             &tx,
-            None
+            None,
+            false
         )
         .as_deref(),
         Some("Ala84GlyfsTer?")
