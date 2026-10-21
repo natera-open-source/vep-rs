@@ -72,6 +72,9 @@
   - [Two `--minimal` alleles that trim to the same allele string](divergences/minimal-same-trimmed-allele.md)
   - [A repeated alternate allele the looked-up reference equals](divergences/minimal-lookup-ref-repeated-allele.md)
   - [A coding transcript's cDNA under `--use_transcript_ref`](divergences/use-transcript-ref-cache-cdna.md)
+  - [An individual's copy of a `--minimal` record under `--safe`](divergences/safe-individual-minimal.md)
+  - [A `--minimal` split record under `--coding_only`](divergences/minimal-coding-only-record-span.md)
+  - [A symbolic record with two or more ALTs under `--minimal`](divergences/minimal-symbolic-alleles.md)
   - [Reproducing the examples](divergences/reproducing.md)
 - [Divergence classes against 116.2](concordance-provenance/116.2-divergence-classes.md)
 

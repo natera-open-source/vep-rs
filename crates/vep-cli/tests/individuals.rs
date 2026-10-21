@@ -260,6 +260,44 @@ fn individual_list_unknown_sample_dies_with_vep_text() {
     );
 }
 
+/// Ensembl VEP reads the `--individual` list with Perl's `split` (Config.pm:760),
+/// which drops a trailing empty field, so `S1,` names S1 alone and the names
+/// compared with the header's (Parser/VCF.pm:612-617) are `S1`: the run writes
+/// the rows of `--individual S1`, every one of them S1's.
+#[test]
+fn a_trailing_comma_in_the_individual_list_names_no_sample() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write_input(dir.path(), "in.vcf", &format!("{HEADER}{RECORDS}"));
+    let (text, stderr, ok) = run(dir.path(), &input, &["--individual", "S1,"]);
+    assert!(ok, "{stderr}");
+    let rows = body(&text);
+    assert!(!rows.is_empty());
+    assert!(rows.iter().all(|l| extra_value(l, "IND") == Some("S1")));
+    let (one, _, ok) = run(dir.path(), &input, &["--individual", "S1"]);
+    assert!(ok);
+    assert_eq!(rows, body(&one));
+}
+
+/// `--individual_zyg` is read by the same `split` (Config.pm:760; the names are
+/// compared at Parser/VCF.pm:700-705), so `S1,` lists S1 alone and every `ZYG`
+/// value is S1's, the rows those of `--individual_zyg S1`.
+#[test]
+fn a_trailing_comma_in_the_individual_zyg_list_names_no_sample() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write_input(dir.path(), "in.vcf", &format!("{HEADER}{RECORDS}"));
+    let (text, stderr, ok) = run(dir.path(), &input, &["--individual_zyg", "S1,"]);
+    assert!(ok, "{stderr}");
+    let rows = body(&text);
+    let zygosities: BTreeSet<&str> = rows.iter().filter_map(|l| extra_value(l, "ZYG")).collect();
+    assert!(!zygosities.is_empty());
+    assert!(zygosities
+        .iter()
+        .all(|z| z.starts_with("S1:") && !z.contains(',')));
+    let (one, _, ok) = run(dir.path(), &input, &["--individual_zyg", "S1"]);
+    assert!(ok);
+    assert_eq!(rows, body(&one));
+}
+
 /// `--process_ref_homs` without `--individual` (OutputFactory.pm:509-516): every
 /// feature of every record gains the reference allele's row first, numbered 0
 /// under `--allele_number`, with the terms the predicates give an allele equal to
@@ -948,6 +986,205 @@ fn minimal_split_writes_the_reference_row_of_every_feature() {
     assert_eq!(rows_of(&text, "star_split"), star);
     assert_eq!(rows_of(&text, "delstar_split"), star);
     assert_eq!(body(&text).len(), 70);
+}
+
+/// `--safe` skips the incompatibility check (Config.pm:961), so `--individual`
+/// runs with `--minimal` (`:626`). Ensembl VEP then minimises the record before
+/// it copies it per individual (Parser/VCF.pm:362-364, Parser.pm:852): a
+/// multi-allelic record passes `minimise_alleles` untouched (`:978-984`), and
+/// its copies are split in the buffer only when the copy itself names two
+/// alternate alleles (InputBuffer.pm:648, `.+/.+/.+`). A copy carrying one
+/// alternate allele of a multi-allelic record, or two bits naming one allele,
+/// keeps the record's chopped alleles with no `MINIMISED` and the record's
+/// string as `UPLOADED_ALLELE`: Ensembl VEP 116.2 writes `CGCAA` as a
+/// `substitution` over `AGCAA` for the `0/1` carrier of `AGCAA CGCAA,A`, `A` as
+/// an `indel` for its `2/2` carrier, and `CGG` as a `substitution` over `CCG`
+/// for every carrier of `CCG CGG,CGG`, `1/2` read as `HOM`. The `1/2` carrier of
+/// two alleles that trim is split in both engines, in Ensembl VEP in Perl's
+/// hash order, which `REF_ALLELE`, `VARIANT_CLASS` and `UPLOADED_ALLELE` then
+/// follow; the per-individual copies of a bi-allelic indel minimised past the
+/// anchor chop keep the trimmable-indel reading (`docs/intended-divergences.md`
+/// lists both). The list form reads a sample as `all` reads it.
+#[test]
+fn safe_individual_minimal_keeps_a_bi_allelic_copy_of_a_multi_allelic_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-vcf-minimal/json_cache");
+    let records = "\
+##fileformat=VCFv4.2
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3
+21\t10542414\tbi_trim\tAAAG\tAG\t.\t.\t.\tGT\t0/1\t1/1\t0/0
+21\t10542419\tmulti_trim\tAGCAA\tCGCAA,A\t.\t.\t.\tGT\t1/2\t0/1\t2/2
+21\t10542424\tmulti_dup\tCCG\tCGG,CGG\t.\t.\t.\tGT\t1/2\t0/2\t1/1
+";
+    let input = write_input(dir.path(), "in.vcf", records);
+    let flags = [
+        "--safe",
+        "--individual",
+        "all",
+        "--minimal",
+        "--allele_number",
+        "--show_ref_allele",
+        "--uploaded_allele",
+        "--variant_class",
+    ];
+    // Allele, Consequence, ALLELE_NUM, ZYG, REF_ALLELE, `UPLOADED_ALLELE|VARIANT_CLASS`,
+    // MINIMISED (`-` when absent) and `Codons|Amino_acids` of a copy's row on
+    // ENST00000427445.
+    let rows_of = |text: &str, id: &str, individual: &str| -> Vec<[String; 8]> {
+        body(text)
+            .iter()
+            .filter(|l| {
+                column(l, 0) == id
+                    && column(l, 4) == "ENST00000427445"
+                    && extra_value(l, "IND") == Some(individual)
+            })
+            .map(|l| {
+                let extra = |key: &str| extra_value(l, key).unwrap_or("-");
+                [
+                    column(l, 2).to_string(),
+                    column(l, 6).to_string(),
+                    extra("ALLELE_NUM").to_string(),
+                    extra("ZYG").to_string(),
+                    extra("REF_ALLELE").to_string(),
+                    format!("{}|{}", extra("UPLOADED_ALLELE"), extra("VARIANT_CLASS")),
+                    extra("MINIMISED").to_string(),
+                    format!("{}|{}", column(l, 11), column(l, 10)),
+                ]
+            })
+            .collect()
+    };
+    let row = |cells: [&str; 8]| -> [String; 8] { cells.map(str::to_string) };
+    let (text, stderr, ok) = run_with_cache(dir.path(), &input, &cache, &flags);
+    assert!(ok, "{stderr}");
+    // Ensembl VEP 116.2's rows, column for column, codons and peptides included.
+    let het_carrier = row([
+        "CGCAA",
+        "synonymous_variant",
+        "1",
+        "HET",
+        "AGCAA",
+        "AGCAA/CGCAA/A|substitution",
+        "-",
+        "ggAGCAAcc/ggCGCAAcc|GAT",
+    ]);
+    assert_eq!(rows_of(&text, "multi_trim", "S2"), [het_carrier]);
+    let hom_carrier = row([
+        "A",
+        "frameshift_variant",
+        "1",
+        "HOM",
+        "AGCAA",
+        "AGCAA/CGCAA/A|indel",
+        "-",
+        "ggAGCAAcc/ggAcc|GAT/GX",
+    ]);
+    assert_eq!(rows_of(&text, "multi_trim", "S3"), [hom_carrier]);
+    let repeated = |zygosity: &str| {
+        row([
+            "CGG",
+            "synonymous_variant",
+            "1",
+            zygosity,
+            "CCG",
+            "CCG/CGG/CGG|substitution",
+            "-",
+            "aCCGag/aCGGag|TE",
+        ])
+    };
+    assert_eq!(rows_of(&text, "multi_dup", "S1"), [repeated("HOM")]);
+    assert_eq!(rows_of(&text, "multi_dup", "S2"), [repeated("HET")]);
+    assert_eq!(rows_of(&text, "multi_dup", "S3"), [repeated("HOM")]);
+    // The split copy lists its alleles in the record's ALT order; Ensembl VEP's
+    // hash order under a fixed seed lists the deletion first, with `REF_ALLELE`
+    // `GCAA`, `VARIANT_CLASS` `deletion` and `UPLOADED_ALLELE` `AGCAA/A/CGCAA`.
+    assert_eq!(
+        rows_of(&text, "multi_trim", "S1"),
+        [
+            row([
+                "C",
+                "synonymous_variant",
+                "1",
+                "HET",
+                "A",
+                "AGCAA/CGCAA/A|SNV",
+                "1",
+                "ggA/ggC|G",
+            ]),
+            row([
+                "-",
+                "frameshift_variant",
+                "2",
+                "HET",
+                "A",
+                "AGCAA/CGCAA/A|SNV",
+                "1",
+                "GCAAcc/cc|AT/X",
+            ]),
+        ]
+    );
+    // The bi-allelic indel is `AA/-` to every carrier and reads `0/0` as
+    // reference-homozygous; Ensembl VEP writes `AA/AAG/G` split into two rows of
+    // allele `G` for `0/1`, `AA/G` for `1/1` and `AA/AAG` as `HOM` for `0/0`.
+    let minimised_deletion = |zygosity: &str| {
+        row([
+            "-",
+            "frameshift_variant",
+            "1",
+            zygosity,
+            "AA",
+            "AAAG/AG|deletion",
+            "1",
+            "aAA/a|K/X",
+        ])
+    };
+    assert_eq!(rows_of(&text, "bi_trim", "S1"), [minimised_deletion("HET")]);
+    assert_eq!(rows_of(&text, "bi_trim", "S2"), [minimised_deletion("HOM")]);
+    assert!(rows_of(&text, "bi_trim", "S3").is_empty());
+    assert_eq!(
+        body(&text).len(),
+        81,
+        "nine transcripts, nine rows each copy"
+    );
+
+    let (json, stderr, ok) = run_with_cache(
+        dir.path(),
+        &input,
+        &cache,
+        &[&flags[..], &["--json"]].concat(),
+    );
+    assert!(ok, "{stderr}");
+    let objects: Vec<serde_json::Value> = json
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let object = |id: &str, individual: &str| {
+        objects
+            .iter()
+            .find(|o| o["id"] == id && o["ind"] == individual)
+            .unwrap()
+    };
+    let unsplit = object("multi_trim", "S2");
+    assert_eq!(unsplit["allele_string"], "AGCAA/CGCAA");
+    assert_eq!(unsplit["variant_class"], "substitution");
+    assert!(unsplit.get("minimised").is_none());
+    assert_eq!(object("multi_dup", "S1")["allele_string"], "CCG/CGG");
+    assert_eq!(object("multi_trim", "S1")["minimised"], 1);
+    assert_eq!(object("multi_trim", "S1")["allele_string"], "AGCAA/CGCAA/A");
+
+    let list: Vec<&str> = flags
+        .iter()
+        .map(|&flag| if flag == "all" { "S1" } else { flag })
+        .collect();
+    let (listed, stderr, ok) = run_with_cache(dir.path(), &input, &cache, &list);
+    assert!(ok, "{stderr}");
+    let s1_rows: Vec<&str> = body(&text)
+        .into_iter()
+        .filter(|l| extra_value(l, "IND") == Some("S1"))
+        .collect();
+    let listed_rows = body(&listed);
+    assert_eq!(listed_rows, s1_rows);
+    assert_eq!(listed_rows.len(), 36);
 }
 
 /// The reference row keeps the record's class through the allele rewriters:

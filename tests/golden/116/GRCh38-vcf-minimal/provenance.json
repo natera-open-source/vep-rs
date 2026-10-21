@@ -6,7 +6,7 @@
  "divergences_classified_against": {
   "engine": "vep-rs",
   "source": "the tree this corpus is committed with",
-  "binary_md5": "70c8734b2867de5a6d36f8d757b65515",
+  "binary_md5": "706310b4dfa56485f866c0bb36e60048",
   "arch": "aarch64",
   "flags_passed": [
    "--minimal",
@@ -18,8 +18,8 @@
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --minimal --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
- "input": "23 hand-built VCF records at coding sites of chromosome 21 of the release-116 cache (a forward-strand and a reverse-strand coding exon) and one intergenic site, by locus and shape: an SNV, substitutions trimmed on both sides, on the left and on the right, a padded insertion and deletion, multi-allelic records that split under --minimal (an SNV beside an insertion, two substitutions, a repeated ALT, a repeated ALT beside an insertion, four ALTs of three shapes, a reverse-strand pair, an intergenic pair), records that do not (two SNVs, an insertion beside a `*`, an SNV beside a `*`, an insertion beside `<DEL:*>`), an ALT equal to the reference first and second, lower-case and mixed-case substitutions and an ID-less record",
- "generator": "json_cache: the GRCh38-identifiers corpus's pruned cache; expected outputs: one Ensembl VEP 116.2 container run per format on the committed records, and one per format for the flag set minimal-refhoms (the reference allele's row of every split feature, from the vep command recorded under flag_sets.minimal-refhoms); manifest: classify on the manifest run and the flag set against the committed tree's binary",
+ "input": "23 hand-built VCF records at coding sites of chromosome 21 of the release-116 cache (a forward-strand and a reverse-strand coding exon) and one intergenic site, by locus and shape: an SNV, substitutions trimmed on both sides, on the left and on the right, a padded insertion and deletion, multi-allelic records that split under --minimal (an SNV beside an insertion, two substitutions, a repeated ALT, a repeated ALT beside an insertion, three ALTs of two shapes, a reverse-strand pair, an intergenic pair), records that do not (two SNVs, an insertion beside a `*`, an SNV beside a `*`, an insertion beside `<DEL:*>`), an ALT equal to the reference first and second, lower-case and mixed-case substitutions, a reverse-strand substitution and an ID-less record",
+ "generator": "json_cache: the GRCh38-identifiers corpus's pruned cache; expected outputs: one Ensembl VEP 116.2 container run per format on the committed records, and one per format for each flag set, from the vep command recorded under its flag_sets entry: minimal-refhoms (the reference allele's row of every split feature) and minimal-pick (one row per record, the split features ranked in the order of their rejoin keys); manifest: classify on the manifest run and each flag set against the committed tree's binary",
  "pruned_cache_transcripts": {
   "21": 726
  },
@@ -45,6 +45,22 @@
     "tab.txt": "356834a1ea2184ed653abd22742d9e591154b65281ea0b212744aa9e468459e1",
     "vcf.vcf": "e88da3b0932ff7c97d58c91cd6cfaae189205e8bcc8915d844cb37dc77731e26",
     "json.jsonl": "7de0ac3a41c7dfc0cc0de359e770ef401243c94c3d19190326dde50ddf4019d8"
+   }
+  },
+  "minimal-pick": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --minimal --pick --allele_number --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_minimal-pick",
+   "sha256": {
+    "default.txt": "902e392d6fe09db62a3ce4d773fd3071c72a2965ae0384b0bf12e0df1af02e48",
+    "tab.txt": "4ef0306eb862ba9a98b9ebc1921cffc0af7beff15f493891bbb5ce5e71c2a2ea",
+    "vcf.vcf": "65dd1b6b17a224455992a48887e6fdfd05326c6c1ea6772cea519e3df615d014",
+    "json.jsonl": "e26f01bb5db09d6eec820de19bda72c505ea5e8a58114fa70f115af12139f62b"
    }
   }
  }

@@ -42,6 +42,9 @@ const HELP_TEMPLATE: &str =
     args_override_self = true,
     infer_long_args = true
 )]
+// The field doc comments are the command's help text, which clap prints as
+// written: a `<value>` placeholder or `[PATH]` is literal there, not rustdoc markup.
+#[allow(rustdoc::invalid_html_tags, rustdoc::broken_intra_doc_links)]
 pub struct Args {
     /// Configuration file, one flag per line as `<name> <value>` without the dashes (`format vcf`, `offline 1`); a flag the command line also gives keeps the command line's value
     #[arg(help_heading = "Input", long, value_name = "FILE")]
@@ -63,7 +66,7 @@ pub struct Args {
 
     /// Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record.
     /// An identifier list (one variant name per line) is resolved in one pass over the cache's variation files, every name held in memory and every file read once: a name maps to each variation feature of that name in the cache (rsIDs and the other names the cache carries; structural variant names, synonyms and subsnp identifiers are not among them), a name the cache lacks is warned about and skipped, and a cache without variation files refuses the format.
-    /// CAid input resolves through Ensembl's database and is refused; a region, SPDI or HGVS input needs --fasta, which fills or checks the reference allele of an SPDI record.
+    /// CAid input is looked up in the Ensembl variation database, which vep-rs does not reach, and is refused; a region, SPDI or HGVS input needs --fasta, which fills a region record's reference allele and fills or checks an SPDI record's.
     /// HGVS input is resolved against the FASTA and the transcript cache as Ensembl VEP resolves it through its database: a genomic notation (g., m.) reads its bases from the genome, a transcript notation (c., n.) finds its transcript by stable id, else by gene name through Ensembl VEP's pick order with its warning, places the position through the transcript's exons and keeps the transcript's strand, the reference allele is checked, a deletion, duplication or inversion takes its bases from the genome, and a notation Ensembl VEP cannot resolve is skipped with its warning; a protein notation (p.) finds its transcript by translation id, by transcript id or, every transcript of the gene tried in turn, by gene name, and resolves a substitution or delins to the one shortest nucleotide path to the new residue (several equally short paths are skipped with Ensembl VEP's message, as --ambiguous_hgvs is not accepted) and a deletion to its codons, frameshifts refused as Ensembl VEP refuses them; a run with transcript or protein notations reads the cache's assembled chromosomes and scaffolds once to find them, its alternate loci and patches only for an id found on none; an r. notation is refused
     #[arg(
         help_heading = "Input",
@@ -466,7 +469,9 @@ pub struct Args {
     /// line without consequences, no JSON object (docs/output-formats.md and
     /// docs/intended-divergences.md describe the divergence). A region, SPDI or
     /// HGVS transcript record whose span exceeds the limit is skipped with Ensembl
-    /// VEP's warning, as every oversize record is in Ensembl VEP 116. An HGVS
+    /// VEP's warning, as every oversize record is in Ensembl VEP 116; the skip is
+    /// made as the line is parsed, so it holds under --dont_skip too, where Ensembl
+    /// VEP keeps the feature (--dont_skip names the records it cannot keep). An HGVS
     /// genomic notation's end minus its start must be smaller than this value, 0
     /// reading as 5000 and -1 as -1 itself, so under -1 a notation written in
     /// genome order is skipped, as Ensembl VEP 116 skips it
@@ -997,13 +1002,12 @@ pub struct Args {
     /// `dbID`, `cdna_coding_start`, `cdna_coding_end`, `_gene_stable_id`,
     /// `_gene_version`, `_gene_symbol`, `_gene_symbol_source`, `_gene_hgnc_id`,
     /// `_ccds`, `_refseq`, `_protein`, `_swissprot`, `_trembl`, `_uniparc`,
-    /// `_gene_phenotype`; the object keys `translation` (coding transcripts),
-    /// `slice`, `attributes`, `_gene`, `_trans_exon_array`,
+    /// `_uniprot_isoform`, `_gene_phenotype`; the object keys `translation`
+    /// (coding transcripts), `slice`, `attributes`, `_gene`, `_trans_exon_array`,
     /// `_variation_effect_feature_cache` and `_vep_lazy_loaded`, which are defined
     /// and read meaningfully by `exists` and `nex` alone; and `description`,
-    /// `coding_region_start`, `coding_region_end` and `_uniprot_isoform`, which
-    /// are undefined (the cache leaves the first three undefined and the
-    /// converted cache does not carry the isoform list).
+    /// `coding_region_start` and `coding_region_end`, which the cache leaves
+    /// undefined.
     /// `_source_cache` is absent, as it is from every cache but a merged one. The
     /// operators are `is` (`eq`, `=`), `ne` (`!=`), `>`, `<`, `>=`, `<=`, `exists`
     /// (`defined`, the default), `nex`, `match` (`matches`, `regex`, `re`), `nre`,
@@ -1018,6 +1022,15 @@ pub struct Args {
         value_name = "FILTER"
     )]
     pub transcript_filter: Vec<String>,
+
+    /// Drop RefSeq's predicted transcript models, the `XM_` and `XR_` accessions,
+    /// by adding the filter `not stable_id match ^X._` after the --transcript_filter
+    /// values, as Ensembl VEP's option set does. An Ensembl cache carries no
+    /// predicted model, so the flag changes nothing there; on a RefSeq or merged
+    /// cache the dropped models are covered by unit tests alone, not by a
+    /// comparison with Ensembl VEP's output.
+    #[arg(help_heading = "Filtering / Picking", long = "exclude_predicted")]
+    pub exclude_predicted: bool,
 
     /// Add allele number from input VCF
     #[arg(help_heading = "Filtering / Picking", long = "allele_number")]
@@ -1136,7 +1149,12 @@ pub struct Args {
 
     /// Keep and annotate a record that fails a validation check (an unknown chromosome, an invalid
     /// allele string, a reference allele --check_ref rejects, a chromosome --chr leaves out) instead of
-    /// skipping it; the skip warning is still written. A line that cannot be parsed is skipped either way
+    /// skipping it; the skip warning is still written, except for a chromosome --chr leaves out, which
+    /// is dropped without a warning and kept without one. Two records are skipped under the flag too,
+    /// each with its warning, where Ensembl VEP keeps the feature: a record whose start is past its end
+    /// plus one (Ensembl VEP's run then ends on the first transcript the record reaches), and a region,
+    /// SPDI or HGVS transcript record whose span exceeds --max_sv_size, refused as its line is parsed.
+    /// A line that cannot be parsed is skipped either way
     #[arg(help_heading = "Miscellaneous", long = "dont_skip")]
     pub dont_skip: bool,
 

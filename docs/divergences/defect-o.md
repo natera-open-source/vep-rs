@@ -85,6 +85,8 @@ The second record on ENST00000390690: Ensembl VEP's `inframe_insertion` row, the
 
 With a FASTA vep-rs writes Ensembl VEP's row for the `RN=0` allele of the first and fourth records, byte for byte, and beside it a row for the real allele of the first record, its literal reading. For the second and third records it writes Ensembl VEP's `inframe_insertion` row alone, the trailing `RN=0` allele dropped by `split` in both engines. Without a FASTA both engines write the symbolic gain over the run for both alleles of every record, so nothing differs.
 
+With `--variant_class` added, the `-` rows of the first and fourth records (`rn_0_1` and `rn_0_1_ruc3`, on both transcripts) differ in one cell: Ensembl VEP writes `VARIANT_CLASS=deletion` for its single-allele `AGCAGCAGC/-`, vep-rs `VARIANT_CLASS=sequence_alteration` for `AGCAGCAGC/-/AGCAGCAGCAGC` and `AGCAGCAGC/-/AGCAGCAGC`. `SO_variation_class` (ensembl-variation `Utils/Sequence.pm` lines 377-379) names a reference of bases whose every alternate is `-` a `deletion`; a string mixing `-` with a sequence allele keeps the default `sequence_alteration` (line 345), so the kept allele changes the record's class.
+
 The first record on ENST00000390690, the real allele: the second of vep-rs's two rows, with no Ensembl VEP row.
 
 | Column | Ensembl VEP | vep-rs |

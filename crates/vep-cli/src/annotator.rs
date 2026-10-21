@@ -56,6 +56,13 @@ pub struct AnnotationResources {
     /// its consequences are computed, as in the `vep` binary; `None` filters
     /// nothing.
     pub transcript_filter: Option<Arc<FilterSet>>,
+    /// The chromosome synonyms every input chromosome is resolved through
+    /// before the cache lookups, as the `vep` binary resolves them: Ensembl VEP
+    /// fetches a record's regions, and a breakend mate's, by the name
+    /// `get_source_chr_name` gives (`AnnotationSource.pm:243-245` and
+    /// `:251-254`, through `:179`; `BaseVEP.pm:689-738`). An empty table still
+    /// resolves a `chr` prefix.
+    pub synonyms: Arc<ChromosomeSynonyms>,
 }
 
 /// Build a scoped rayon thread pool sized for one annotator.
@@ -309,6 +316,7 @@ impl Annotator {
                 },
                 nearest: config.nearest,
                 transcript_filter,
+                synonyms: Arc::clone(&cache.synonyms),
             },
             pool,
         )
@@ -700,6 +708,13 @@ pub fn annotate_batch(
 ) -> AnnotationStats {
     let batch_len = batch.len();
     let annotation_phase_start = Instant::now();
+    for variant in batch.iter_mut() {
+        crate::pipeline::name_source_chromosomes(
+            variant,
+            &resources.synonyms,
+            &resources.transcripts,
+        );
+    }
     if let Some(source) = &resources.variation_source {
         if let Err(error) = source.prefetch(batch.iter().map(|v| (v.chr.as_str(), v.start, v.end)))
         {
@@ -846,6 +861,7 @@ mod tests {
             prediction_config: PredictionConfig::default(),
             nearest,
             transcript_filter: None,
+            synonyms: Arc::new(ChromosomeSynonyms::new()),
         };
         Annotator::new(resources, pool)
     }
@@ -1196,6 +1212,7 @@ mod tests {
             prediction_config: PredictionConfig::default(),
             nearest: None,
             transcript_filter: None,
+            synonyms: Arc::new(ChromosomeSynonyms::new()),
         };
         Annotator::new(resources, build_thread_pool(threads).unwrap()).unwrap()
     }
@@ -1470,6 +1487,111 @@ mod tests {
             .err()
             .expect("an empty cache root is refused");
         assert!(err.to_string().starts_with("ERROR: [cache] "), "{err}");
+    }
+
+    /// The library path resolves an input chromosome through the cache's
+    /// synonyms as the binary does: Ensembl VEP fetches a record's regions
+    /// through `get_source_chr_name` (`AnnotationSource.pm:243-245`, then
+    /// `:179`; `BaseVEP.pm:689-738`), so on the GRCh38-synonyms corpus, whose
+    /// `chr_synonyms.txt` lists `NC_000021.9` and `CM000683.2` for `21`, a row
+    /// on either name gets the rows the `21` row gets and keeps its own name
+    /// for the output.
+    #[test]
+    fn from_config_resolves_input_chromosomes_through_the_synonyms() {
+        let cache = format!(
+            "{}/../../tests/golden/116/GRCh38-synonyms/json_cache",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let annotator = Annotator::from_config(
+            &Config::from_argv(["vep", "--fork", "1", "--json_cache", &cache]).unwrap(),
+        )
+        .unwrap();
+        let row = |chrom: &str| RawRow {
+            chrom: chrom.to_string(),
+            pos: 9_548_815,
+            ref_allele: "T".to_string(),
+            alt_allele: "C".to_string(),
+        };
+        let names = ["21", "NC_000021.9", "CM000683.2", "chr21"];
+        let annotated: Vec<InputVariant> = annotator
+            .try_annotate_rows(&names.map(row))
+            .into_iter()
+            .map(|result| result.unwrap())
+            .collect();
+        let rows = |variant: &InputVariant| -> Vec<(String, Vec<Consequence>)> {
+            variant
+                .transcript_consequences
+                .iter()
+                .map(|tc| (tc.transcript_id.to_string(), tc.consequences.to_vec()))
+                .collect()
+        };
+        let expected = rows(&annotated[0]);
+        assert!(expected.len() > 1, "{expected:?}");
+        for (name, variant) in names.iter().zip(&annotated) {
+            assert_eq!(rows(variant), expected, "{name}");
+            assert_eq!(variant.chr, "21", "{name}");
+            assert_eq!(variant.original_chr, *name);
+        }
+    }
+
+    /// The library path resolves a paired breakend's mate chromosome through the
+    /// cache's synonyms as it does the record's: Ensembl VEP fetches each
+    /// breakend's region through `get_source_chr_name` (`AnnotationSource.pm:251-254`,
+    /// then `:179`; `BaseVEP.pm:689-738`), so a record written `chr21` with a
+    /// `]chr21:...]` mate gets the rows the bare `21` spelling gets, under the
+    /// cache's name for both. On the GRCh38-synonyms corpus, whose `chr_synonyms.txt`
+    /// lists `chr21` for `21`, Ensembl VEP 116.2 prints 60 rows for this record
+    /// under either spelling, 30 transcripts for each of its two breakend
+    /// alleles, as the `vep` binary does over the corpus's `json_cache`.
+    #[test]
+    fn from_config_resolves_a_breakend_mate_through_the_synonyms() {
+        let cache = format!(
+            "{}/../../tests/golden/116/GRCh38-synonyms/json_cache",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let annotator = Annotator::from_config(
+            &Config::from_argv(["vep", "--fork", "1", "--json_cache", &cache]).unwrap(),
+        )
+        .unwrap();
+        let annotated = |chrom: &str| -> Vec<InputVariant> {
+            let line = format!(
+                "{chrom}\t31659665\tbnd\tA\t]{chrom}:31659730]A\t.\tPASS\tSVTYPE=BND;MATEID=mate"
+            );
+            let mut batch = parse_vcf_line(&line, false).unwrap();
+            let _ = annotator.annotate_batch(&mut batch);
+            batch
+        };
+        let rows = |variant: &InputVariant| -> Vec<(String, Vec<Consequence>)> {
+            variant
+                .transcript_consequences
+                .iter()
+                .map(|tc| (tc.transcript_id.to_string(), tc.consequences.to_vec()))
+                .collect()
+        };
+        let bare = annotated("21");
+        let prefixed = annotated("chr21");
+        assert_eq!(bare.len(), 2, "the record's own breakend and its mate");
+        assert_eq!(prefixed.len(), 2);
+        let total = |batch: &[InputVariant]| -> usize {
+            batch.iter().map(|variant| rows(variant).len()).sum()
+        };
+        assert_eq!(total(&bare), 60);
+        assert_eq!(total(&prefixed), total(&bare));
+        for (bare_variant, prefixed_variant) in bare.iter().zip(&prefixed) {
+            let bare_rows = rows(bare_variant);
+            assert_eq!(
+                rows(prefixed_variant),
+                bare_rows,
+                "{}",
+                prefixed_variant.display_allele()
+            );
+            assert!(!bare_rows.is_empty(), "{}", bare_variant.display_allele());
+            assert_eq!(prefixed_variant.chr, "21");
+            assert_eq!(prefixed_variant.original_chr, "chr21");
+            assert_eq!(prefixed_variant.mate_chr, bare_variant.mate_chr);
+        }
+        let paired = prefixed.iter().find(|v| !v.is_single_breakend).unwrap();
+        assert_eq!(paired.mate_chr.as_deref(), Some("21"));
     }
 
     /// `from_config` carries the co-location flags into the library path: on the

@@ -216,12 +216,18 @@ impl Row {
     }
 }
 
-/// The record's rows in Ensembl VEP's order: transcript-major in stable-id
-/// order, allele-minor (`VariationFeature.pm:666` of ensembl-variation sorts
-/// the transcript keys, and each transcript lists its reference allele's row
-/// under `--process_ref_homs` and then its alternate alleles in allele-string
-/// order), then the intergenic row of every allele that overlaps no transcript.
-/// An allele whose chromosome has no transcripts has no row.
+/// The record's rows in Ensembl VEP's order: feature-major in the string order
+/// of the keys the record's transcript variations are stored under
+/// (`VariationFeature.pm:666` of ensembl-variation sorts them), allele-minor
+/// (each feature lists its reference allele's row under `--process_ref_homs`
+/// and then its alternate allele), then the intergenic row of every allele that
+/// overlaps no transcript. A feature's key is its transcript's stable id; the
+/// rejoin of a `--minimal` split stores every allele after the first under
+/// `<its allele string>_<stable id>` (`OutputFactory.pm:2316`), so such an
+/// allele's feature sorts by its allele string against the first allele's bare
+/// stable id, before it when the string starts with a `-`, a digit or a letter
+/// below the id's first. An allele whose chromosome has no transcripts has no
+/// row.
 fn record_rows(record: &[InputVariant]) -> Vec<Row> {
     let mut transcript_rows: Vec<(usize, usize)> = Vec::new();
     for (allele, variant) in record.iter().enumerate() {
@@ -229,12 +235,24 @@ fn record_rows(record: &[InputVariant]) -> Vec<Row> {
             transcript_rows.push((allele, tc));
         }
     }
-    transcript_rows.sort_by_key(|&(allele, tc)| {
-        (
-            &record[allele].transcript_consequences[tc].transcript_id,
-            !record[allele].reference_allele_row,
-            allele,
-        )
+    let feature_key = |&(allele, tc): &(usize, usize)| {
+        let variant = &record[allele];
+        variant
+            .rejoin_key_prefix
+            .as_deref()
+            .unwrap_or("")
+            .bytes()
+            .chain(variant.transcript_consequences[tc].transcript_id.bytes())
+    };
+    transcript_rows.sort_by(|a, b| {
+        feature_key(a)
+            .cmp(feature_key(b))
+            .then_with(|| {
+                record[b.0]
+                    .reference_allele_row
+                    .cmp(&record[a.0].reference_allele_row)
+            })
+            .then_with(|| a.0.cmp(&b.0))
     });
     let mut rows: Vec<Row> = transcript_rows
         .into_iter()
@@ -984,6 +1002,75 @@ mod tests {
         let mut record = vec![allele(b"G", 0, vec![later, earlier])];
         apply_to_record(&mut record, &config(|c| c.pick = true));
         assert_eq!(kept(&record), vec![(0, "ENST00000300000".to_string())]);
+    }
+
+    /// The alleles of a `--minimal` split sort by the keys the rejoin stores
+    /// their transcript variations under (`OutputFactory.pm:2316`: the allele
+    /// string before the stable id for every allele after the first;
+    /// `VariationFeature.pm:666` sorts the keys as strings): on `AAA AGA,AGA`,
+    /// two `A/G` features tied on every criterion, `A/G_ENST...` sorts before
+    /// the bare `ENST...`, so `--pick` keeps the second allele, the ALLELE_NUM 2
+    /// row Ensembl VEP 116.2 writes for the minimal corpus's
+    /// `multi_dup_trimmable`; on `A T,T,AG` the second `A/T` outranks the
+    /// `-/G` insertion's frameshift row on rank and precedes the first allele's
+    /// equal row (`multi_dup_plus_ins`, ALLELE_NUM 2). A prefix sorting after the
+    /// id (`G/A_`) leaves the first allele's row in front, and each feature's
+    /// reference row of `--process_ref_homs` stays ahead of its alternate.
+    #[test]
+    fn minimal_split_alleles_sort_by_the_rejoin_key() {
+        let same = || {
+            tc(
+                "ENST00000618007",
+                "G1",
+                smallvec![Consequence::MissenseVariant],
+            )
+        };
+        let mut repeated = allele(b"G", 1, vec![same()]);
+        repeated.rejoin_key_prefix = Some("A/G_".into());
+        let mut record = vec![allele(b"G", 0, vec![same()]), repeated];
+        let rows: Vec<usize> = record_rows(&record).iter().map(|r| r.allele()).collect();
+        assert_eq!(rows, [1, 0]);
+        apply_to_record(&mut record, &config(|c| c.pick = true));
+        assert_eq!(kept(&record), vec![(1, "ENST00000618007".to_string())]);
+
+        let stop = || tc("ENST00000618007", "G1", smallvec![Consequence::StopGained]);
+        let mut second = allele(b"T", 1, vec![stop()]);
+        second.rejoin_key_prefix = Some("A/T_".into());
+        let mut insertion = allele(
+            b"G",
+            2,
+            vec![tc(
+                "ENST00000618007",
+                "G1",
+                smallvec![Consequence::FrameshiftVariant],
+            )],
+        );
+        insertion.rejoin_key_prefix = Some("-/G_".into());
+        let mut record = vec![allele(b"T", 0, vec![stop()]), second, insertion];
+        let rows: Vec<usize> = record_rows(&record).iter().map(|r| r.allele()).collect();
+        assert_eq!(rows, [2, 1, 0]);
+        apply_to_record(&mut record, &config(|c| c.pick = true));
+        assert_eq!(kept(&record), vec![(1, "ENST00000618007".to_string())]);
+
+        let mut later = allele(b"A", 1, vec![same()]);
+        later.rejoin_key_prefix = Some("G/A_".into());
+        let mut record = vec![allele(b"G", 0, vec![same()]), later];
+        apply_to_record(&mut record, &config(|c| c.pick = true));
+        assert_eq!(kept(&record), vec![(0, "ENST00000618007".to_string())]);
+
+        let mut repeated = allele(b"G", 1, vec![same()]);
+        repeated.rejoin_key_prefix = Some("A/G_".into());
+        let mut repeated_reference = repeated.reference_allele_row();
+        repeated_reference.transcript_consequences = vec![same()];
+        let first = allele(b"G", 0, vec![same()]);
+        let mut first_reference = first.reference_allele_row();
+        first_reference.transcript_consequences = vec![same()];
+        let record = vec![first_reference, first, repeated_reference, repeated];
+        let rows: Vec<(usize, bool)> = record_rows(&record)
+            .iter()
+            .map(|r| (r.allele(), record[r.allele()].reference_allele_row))
+            .collect();
+        assert_eq!(rows, [(2, true), (3, false), (0, true), (1, false)]);
     }
 
     /// `--most_severe` collapses the record to one row carrying the lowest-rank

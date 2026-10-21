@@ -309,13 +309,18 @@ impl TranscriptSet {
 /// whether the input touches 1 chromosome or 25; a chr21-only input would parse
 /// the whole cache to answer chr21 queries.
 ///
-/// **Why the eager key set matters.** Two Perl-parity predicates ask whether a
-/// chromosome is *present* in the cache rather than what it contains: the
-/// `intergenic_variant` fallback (Perl silently drops variants on chromosomes it
-/// never loaded) and the inter-chromosomal BND mate-annotation gate. Answering
-/// [`contains_key`](Self::contains_key) from the directory listing keeps those
-/// predicates byte-identical to the eager loader, at zero parse cost. A naive
-/// lazy map that reported "absent until first queried" would change output.
+/// **Why the eager key set matters.** [`contains_key`](Self::contains_key) asks
+/// whether a chromosome is *present* in the cache rather than what it contains,
+/// and three readers act on the answer: the chromosome-synonym resolution of
+/// `pipeline::name_source_chromosomes`, for which it is the set of valid names
+/// (`BaseVEP.pm:689-738`); `validate::SkipRules`, which skips a record on a
+/// chromosome the cache lacks with Ensembl VEP's warning (Parser.pm:542-546)
+/// unless `--dont_skip` keeps it; and the `intergenic_variant` fallback of
+/// `annotator::annotate_batch` and `runner::apply_record_rules`, which names a
+/// record with no consequence intergenic only on a chromosome the cache covers.
+/// Answering from the directory listing keeps every reading that of the eager
+/// loader, at zero parse cost; a lazy map that reported "absent until first
+/// queried" would skip records.
 ///
 /// Thread-safe under rayon `par_iter_mut`: the outer map is immutable after
 /// construction and each chromosome's slot is a [`OnceLock`], so concurrent
@@ -507,14 +512,17 @@ impl LazyTranscriptIndexes {
     ///    job needing the pool it occupies: a deadlock.
     /// 2. A parse failure has nowhere to go from inside the per-variant closure.
     ///    Pre-warming gives it an error channel, so a truncated shard is a hard
-    ///    failure instead of silently annotating every variant on that chromosome
-    ///    as `intergenic_variant` (the `contains_key` fallback answers from the
-    ///    directory listing, so an unparseable chromosome still reads as present).
-    ///    That matters operationally: a cache copied onto local scratch storage can
-    ///    be truncated, so an unparseable shard is a realistic failure mode.
+    ///    failure. Without one the shard's chromosome still reads as present
+    ///    ([`Self::contains_key`] answers from the directory listing, so the skip
+    ///    rule of `validate::SkipRules` passes its records) while [`Self::get`]
+    ///    stays `None`, and the `intergenic_variant` fallback names every variant
+    ///    on it intergenic. That matters operationally: a cache copied onto local
+    ///    scratch storage can be truncated, so an unparseable shard is a realistic
+    ///    failure mode.
     ///
-    /// Idempotent, and safe to call for a chromosome the cache does not cover
-    /// (a no-op: absence is a legitimate state the parity predicates rely on).
+    /// Idempotent, and safe to call for a chromosome the cache does not cover (a
+    /// no-op: [`Self::contains_key`] is false there, so `validate::SkipRules`
+    /// skips the record with Ensembl VEP's warning, Parser.pm:542-546).
     /// Safe to call from two threads at once: the input reader warms each
     /// chromosome as it first sees it while `annotate_batch` warms the batch it
     /// is about to annotate, and the later caller blocks on the per-chromosome
@@ -822,11 +830,13 @@ mod tests {
 
     /// The chromosome key set must be complete before any chromosome is parsed.
     ///
-    /// Two Perl-parity predicates ask only "is this chromosome in the cache?"
-    /// (the `intergenic_variant` fallback in runner.rs/annotator.rs, and the
-    /// inter-chromosomal BND mate gate). If `contains_key` were answered from
-    /// materialized slots instead of the directory listing, every one of them
-    /// would silently change behavior on the first variant of a run.
+    /// Three readers ask only "is this chromosome in the cache?": the
+    /// chromosome-synonym resolution (`pipeline::name_source_chromosomes`), the
+    /// skip of a record on a chromosome the cache lacks (`validate::SkipRules`)
+    /// and the `intergenic_variant` fallback in runner.rs/annotator.rs. If
+    /// `contains_key` were answered from materialized slots instead of the
+    /// directory listing, each would silently change behavior on the first
+    /// variant of a run.
     #[test]
     fn lazy_key_set_is_complete_before_any_get() {
         let dir = tmp_cache("keyset", &[("21", 3), ("1", 2)]);
@@ -845,13 +855,12 @@ mod tests {
     ///
     /// A shard-less chromosome directory must produce no key. If enumeration created
     /// a key with an empty shard list, `prewarm` would materialize an empty index and
-    /// `contains_key` would flip to true, which flips the `intergenic_variant` fallback
-    /// (`runner.rs`) from "drop the row, as Perl does" to "emit
-    /// `intergenic_variant`", and flips the inter-chromosomal BND mate gate. Both
-    /// are silent output changes that a concordance comparison against a complete
-    /// cache cannot catch, because a complete cache has no empty chromosome
-    /// directories. An interrupted copy of a cache directory is the realistic way
-    /// to produce one.
+    /// `contains_key` would flip to true, which turns the skip of a record on that
+    /// chromosome (`validate::SkipRules`, Ensembl VEP's warning) into an
+    /// `intergenic_variant` row from the fallback in `runner.rs`. That is a silent
+    /// output change that a concordance comparison against a complete cache cannot
+    /// catch, because a complete cache has no empty chromosome directories. An
+    /// interrupted copy of a cache directory is the realistic way to produce one.
     #[test]
     fn lazy_shardless_chromosome_directory_reads_as_absent() {
         let dir = tmp_cache("shardless", &[("21", 3)]);

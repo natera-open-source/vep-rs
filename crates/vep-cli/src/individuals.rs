@@ -282,7 +282,7 @@ fn allele_index(bit: &str, allele_count: usize) -> Option<usize> {
 /// written alleles, or `None` for a missing genotype (`BaseVCF4.pm:944-951`,
 /// `Parser/VCF.pm:626-627`): the field is split on `|` when it has one, else on
 /// `/`, a trailing empty bit being no bit; `.` bits are dropped; each bit is read
-/// as a Perl array index ([`allele_index`]) and the alleles are joined again, so an
+/// as a Perl array index (`allele_index`) and the alleles are joined again, so an
 /// undefined bit is an empty allele (`None` in the list) and a trailing undefined
 /// bit vanishes with the second split; a genotype that reads as the empty string
 /// is missing.

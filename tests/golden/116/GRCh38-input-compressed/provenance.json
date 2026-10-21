@@ -33,7 +33,7 @@
   "variants.vcf.bgz": "f8e0ddefcad2e65bfc3be8e171a64d05ddcbf1c3a926c027f1d45c575927ca9c",
   "variants.plain.vcf.gz": "e961cb46b192af87fa342b44612f25bee4ea067e8e9240d7f43673e6af757808",
   "variants.crlf.vcf": "2cb1632e9ca6b06a18e2ad227929d232d276c635a67a2cd49bec58ba91c3f847",
-  "variants.latin1.vcf.gz": "c648b717e6ea765e48fcb5c04fb82a916e76dfbd8b50850bf20c86b137a39531",
+  "variants.latin1.vcf.gz": "01d999dd08d44e4c46100ab215839a4d61b1ccd50f89c39ecc5763e04c5623ae",
   "variants.vcf.gz.tbi": "9f033a6cdc0fc9d194af612e7a202f10bef643a9132cfa3f3d31430b8c76df1b"
  },
  "pruned_cache": {

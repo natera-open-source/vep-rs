@@ -970,6 +970,59 @@ fn chr_filters_on_the_input_spelling() {
     }
 }
 
+/// Three shapes under `--dont_skip`, which returns a record whatever
+/// `validate_vf` answered for it (Parser.pm:189). A record whose chromosome
+/// `--chr` leaves out fails the list's test, which writes no warning
+/// (Parser.pm:470-472), so the flag keeps it without one and no later check
+/// runs on it. Two records are dropped under the flag too, each with
+/// `validate_vf`'s warning: a record whose start is past its end plus one
+/// (Parser.pm:483-488), which names a span no annotation can read, where
+/// Ensembl VEP keeps the feature and its run ends on the first transcript the
+/// record reaches; and a region record whose span exceeds `--max_sv_size`
+/// (Parser.pm:491-500), refused as its line is parsed, where Ensembl VEP keeps
+/// the feature under `vep_skip` (:498) and writes it.
+#[test]
+fn dont_skip_keeps_a_chr_mismatch_silently_and_drops_two_shapes_warned() {
+    let dir = tempfile::tempdir().unwrap();
+    let region = dir.path().join("dont_skip_shapes.region");
+    std::fs::write(
+        &region,
+        "chr21:10538885-10538885/C\n21:10538890-10538885/C\n21:10538885-10538900/C\n21:10538885-10538885/C\n",
+    )
+    .unwrap();
+    let fasta = fasta_arg();
+    let (output, written, warnings) = run_input(
+        dir.path(),
+        "dont_skip_shapes",
+        &region,
+        &[
+            "--format",
+            "region",
+            "--chr",
+            "21",
+            "--max_sv_size",
+            "5",
+            "--dont_skip",
+            "--fasta",
+            fasta.as_str(),
+        ],
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert_eq!(
+        warning_lines(&warnings),
+        [
+            "WARNING: line 2 skipped (21:10538890-10538885/C): start > end+1 : (START=10538890, END=10538885)",
+            "WARNING: line 3 skipped (21:10538885-10538900/C): variant size (15) is bigger than --max_sv_size (5)",
+        ]
+    );
+    assert_eq!(
+        record_names(&written),
+        ["chr21:10538885-10538885/C", "21:10538885-10538885/C"]
+            .into_iter()
+            .collect()
+    );
+}
+
 /// `--check_ref`, `--lookup_ref` and `--use_transcript_ref` each need a FASTA
 /// (Runner.pm:760-762), the first two cannot be combined (Config.pm:627), and
 /// a region input, whose records name no reference allele, refuses

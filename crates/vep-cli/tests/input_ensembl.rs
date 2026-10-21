@@ -378,9 +378,12 @@ fn lower_case_alleles_annotate_as_upper_case() {
 }
 
 /// Empty and whitespace-only lines are skipped and warned about in the words
-/// of Ensembl VEP's `skip_empty_lines` (Parser.pm:284), numbered by the record
-/// that follows the run; Ensembl VEP's own Ensembl-format parser dies on such a
-/// line (Parser/VEP_input.pm:136). A `#` line is read past without a warning.
+/// of Ensembl VEP's `skip_empty_lines` (Parser.pm:284), whose line is
+/// `$ln - $skipped + 1` (`:287`): `line_number` advances once per empty line
+/// read past (`:273-277`), so the number is the first empty line's place in a
+/// count that takes the empty lines as records, here 2 after one record.
+/// Ensembl VEP's own Ensembl-format parser dies on such a line
+/// (Parser/VEP_input.pm:136). A `#` line is read past without a warning.
 #[test]
 fn empty_lines_are_skipped_with_a_warning() {
     let dir = tempfile::tempdir().unwrap();
@@ -467,5 +470,137 @@ fn unsupported_class_word_is_warned_and_annotated() {
         vcf[0].starts_with("21\t30213500\tfoo_word\tN\t<FOO>\t.\t.\tEND=30214300;CSQ="),
         "{}",
         vcf[0]
+    );
+}
+
+/// A `*` or `<DEL:*>` allele of an Ensembl-format line takes its number and
+/// writes no row (VariationFeatureOverlap.pm:483-484), as Ensembl VEP 116.2
+/// writes them: `C/A/*` is the one row `A` with ALLELE_NUM 1, `C/*/A` the row
+/// `A` with ALLELE_NUM 2, `C/A/<DEL:*>` the row `A`, and `C/*`, `C/<DEL:*>` or
+/// an intergenic `A/*` write no row in the default and tab formats, a VCF line
+/// without CSQ (the allele in angle brackets, `<*>`) and a JSON object with
+/// `most_severe_consequence` `?`. Under `--minimal --process_ref_homs` the
+/// feature of the `*` allele of a splitting record writes its reference row and
+/// nothing else, in the rejoin's order: `C/CA/*` is `C`, `-`, `A` and `C/*/CA`
+/// is `-`, `A`, `C`.
+#[test]
+fn star_alleles_write_no_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "stars.txt",
+        "21\t30282169\t30282169\tC/*\t1\tstar_only\n\
+         21\t30282169\t30282169\tC/A/*\t1\tsnv_then_star\n\
+         21\t30282169\t30282169\tC/*/A\t1\tstar_then_snv\n\
+         21\t30282169\t30282169\tC/<DEL:*>\t1\tdelstar_only\n\
+         21\t30282169\t30282169\tC/A/<DEL:*>\t1\tsnv_then_delstar\n\
+         21\t11000000\t11000000\tA/*\t1\tintergenic_star\n\
+         21\t11000000\t11000000\tA/G/*\t1\tintergenic_snv_then_star\n",
+    );
+    let flags = [
+        "--format",
+        "ensembl",
+        "--allele_number",
+        "--uploaded_allele",
+    ];
+    let stop_lost = "21:30282169\tA\tENSG00000188694\tENST00000340345\tTranscript\tstop_lost\t\
+                     782\t764\t255\t*/L\ttGa/tTa\t-\t";
+    let expected = [
+        format!("snv_then_star\t{stop_lost}ALLELE_NUM=1;UPLOADED_ALLELE=C/A/*;IMPACT=HIGH;STRAND=-1"),
+        format!("star_then_snv\t{stop_lost}ALLELE_NUM=2;UPLOADED_ALLELE=C/*/A;IMPACT=HIGH;STRAND=-1"),
+        format!(
+            "snv_then_delstar\t{stop_lost}ALLELE_NUM=1;UPLOADED_ALLELE=C/A/<DEL:*>;IMPACT=HIGH;STRAND=-1"
+        ),
+        "intergenic_snv_then_star\t21:11000000\tG\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\t\
+         ALLELE_NUM=1;UPLOADED_ALLELE=A/G/*;IMPACT=MODIFIER"
+            .to_string(),
+    ];
+    assert_eq!(annotate(dir.path(), &input, &flags), expected);
+    let tab = annotate(dir.path(), &input, &[&flags[..], &["--tab"]].concat());
+    assert_eq!(tab.len(), 4);
+    assert!(
+        tab.iter()
+            .all(|row| !row.contains("\t*\t") && !row.contains("\t<DEL:*>\t")),
+        "{tab:?}"
+    );
+
+    let vcf = annotate(dir.path(), &input, &[&flags[..], &["--vcf"]].concat());
+    assert_eq!(vcf.len(), 7);
+    assert_eq!(vcf[0], "21\t30282169\tstar_only\tC\t<*>\t.\t.\t.");
+    assert_eq!(vcf[3], "21\t30282169\tdelstar_only\tC\t<<DEL:*>>\t.\t.\t.");
+    assert_eq!(vcf[5], "21\t11000000\tintergenic_star\tA\t<*>\t.\t.\t.");
+    assert!(
+        vcf[2].contains("CSQ=A|stop_lost|") && vcf[2].contains("|2|C/*/A|"),
+        "{}",
+        vcf[2]
+    );
+    assert!(
+        !vcf.iter()
+            .any(|line| line.contains("CSQ=*|") || line.contains(",*|")),
+        "{vcf:?}"
+    );
+
+    let json = annotate(dir.path(), &input, &[&flags[..], &["--json"]].concat());
+    assert_eq!(json.len(), 7);
+    for (object, allele_string) in [
+        (&json[0], "C/*"),
+        (&json[3], "C/<DEL:*>"),
+        (&json[5], "A/*"),
+    ] {
+        assert!(
+            object.contains(r#""most_severe_consequence":"?""#),
+            "{object}"
+        );
+        assert!(
+            object.contains(&format!(r#""allele_string":"{allele_string}""#)),
+            "{object}"
+        );
+        assert!(!object.contains("_consequences"), "{object}");
+    }
+    assert!(
+        json[2].contains(r#""allele_num":2"#) && !json[2].contains(r#""variant_allele":"*""#),
+        "{}",
+        json[2]
+    );
+
+    let splitting = write(
+        dir.path(),
+        "split.txt",
+        "21\t30282169\t30282169\tC/CA/*\t1\tsplit_star\n21\t30282169\t30282169\tC/*/CA\t1\tstar_split\n",
+    );
+    let rows = annotate(
+        dir.path(),
+        &splitting,
+        &[&flags[..], &["--minimal", "--process_ref_homs"]].concat(),
+    );
+    let alleles: Vec<(String, String, String)> = rows
+        .iter()
+        .map(|row| {
+            let fields: Vec<&str> = row.split('\t').collect();
+            let allele_num = fields[13].split(';').next().unwrap();
+            (
+                fields[0].to_string(),
+                fields[2].to_string(),
+                allele_num.to_string(),
+            )
+        })
+        .collect();
+    let row = |name: &str, allele: &str, number: &str| {
+        (
+            name.to_string(),
+            allele.to_string(),
+            format!("ALLELE_NUM={number}"),
+        )
+    };
+    assert_eq!(
+        alleles,
+        [
+            row("split_star", "C", "0"),
+            row("split_star", "-", "0"),
+            row("split_star", "A", "1"),
+            row("star_split", "-", "0"),
+            row("star_split", "A", "2"),
+            row("star_split", "C", "0"),
+        ]
     );
 }

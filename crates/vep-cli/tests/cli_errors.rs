@@ -247,10 +247,12 @@ fn format_invalid_value_lists_valid_values() {
 }
 
 /// A first data line of the CAid shape (`^CA\d+$`, ensembl-variation
-/// Utils/VEP.pm:412-415) detects the `caid` format, which resolves through the
-/// ClinGen allele registry; Ensembl VEP refuses it offline (Parser/CAID.pm:103)
-/// and vep-rs refuses it by name. `--format caid` is not a value the flag
-/// takes, as `%VALID{format}` (Config.pm:597) lacks it.
+/// Utils/VEP.pm:412-415) detects the `caid` format, whose records Ensembl VEP
+/// looks up in its variation database (Parser/CAID.pm:53); its parser refuses
+/// the format offline with `ERROR: Cannot use CAid format in offline mode`
+/// (Parser/CAID.pm:103), the text vep-rs refuses it with under the `input`
+/// component. `--format caid` is not a value the flag takes, as
+/// `%VALID{format}` (Config.pm:597) lacks it.
 #[test]
 fn format_caid_is_refused() {
     let dir = tempfile::tempdir().unwrap();
@@ -259,7 +261,7 @@ fn format_caid_is_refused() {
     assert_input_refused(
         &input,
         &dir.path().join("out.txt"),
-        "CAid input (CA...) resolves through the ClinGen allele registry, a remote service; vep-rs does not resolve it",
+        "Cannot use CAid format in offline mode",
     );
     let (code, stderr) = refusal(&["--format", "caid"]);
     assert_eq!(code, Some(2), "{stderr}");

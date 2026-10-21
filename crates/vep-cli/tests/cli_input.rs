@@ -5,7 +5,8 @@
 //! is called and however it is given, `--input_data` stands in for the file, the
 //! format comes from the first data line unless `--format` names it, `STDIN` is
 //! matched in any case and needs `--format`, and a file that does not exist is
-//! refused with Ensembl VEP's text.
+//! refused with Ensembl VEP's text; and how the output's command-line header
+//! names the run's flags, whichever source gave them.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -321,6 +322,101 @@ fn input_data_string_is_annotated() {
             "ERROR: [input] File \"/nonexistent/input.vcf\" does not exist",
         );
     }
+}
+
+/// The command-line header is `full_command` over the resolved flags
+/// (Config.pm:730-749): a flag of the `--config` file and one of a `VEP_*`
+/// variable print beside the command line's own, each under its long name,
+/// sorted, and a value of exactly `1` prints as the flag alone (:745). Ensembl
+/// VEP 116.2 prints `--chr 21,22 --config [PATH]/flags.ini ... --fork ...
+/// --symbol` for this config file with `VEP_FORK=1` in the environment.
+#[test]
+fn config_file_and_environment_flags_print_in_the_command_line_header() {
+    let dir = tempfile::tempdir().unwrap();
+    let reference = reference_rows(dir.path());
+    let plain = dir.path().join("plain.vcf");
+    let config = write(dir.path(), "flags.ini", b"symbol 1\nchr 21,22\n");
+    let out = output_path(dir.path());
+    let output = common::isolated_vep_anywhere()
+        .args(["-i", plain.to_str().unwrap()])
+        .args(args(&out, &["--config", config.to_str().unwrap()]))
+        .env("VEP_FORK", "1")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let header = std::fs::read_to_string(&out).unwrap();
+    let command_line = header
+        .lines()
+        .find(|l| l.starts_with("## VEP command-line:"))
+        .unwrap();
+    assert_eq!(
+        command_line,
+        format!(
+            "## VEP command-line: vep --assembly GRCh38 --chr 21,22 --config [PATH]/flags.ini \
+             --force_overwrite --fork --input_file [PATH]/plain.vcf --json_cache [PATH]/json_cache \
+             --no_stats --output_file [PATH]/{} --quiet --symbol",
+            out.file_name().unwrap().to_str().unwrap()
+        )
+    );
+    // The file's flags acted: the rows carry the symbols it asked for, which
+    // the plain run's rows lack.
+    let rows = rows(&out);
+    assert_eq!(rows.len(), reference.len());
+    assert!(reference.iter().all(|r| !r.contains("SYMBOL=")));
+    let symbol_rows = rows.iter().filter(|r| r.contains("SYMBOL=")).count();
+    assert!(symbol_rows > 1, "{symbol_rows} rows carry a symbol");
+}
+
+/// A command line holding an argument that is not UTF-8 completes. The header is
+/// rendered from the parsed tokens, so a program name of such bytes, which no
+/// option reads, leaves the run and its header untouched; a non-UTF-8 value of
+/// an option is clap's usage error, exit 2, before any output is written.
+#[cfg(unix)]
+#[test]
+fn non_utf8_argument_does_not_abort_the_run() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+    use std::os::unix::process::CommandExt;
+
+    let dir = tempfile::tempdir().unwrap();
+    let reference = reference_rows(dir.path());
+    let plain = dir.path().join("plain.vcf");
+    let out = output_path(dir.path());
+    let output = common::isolated_vep_anywhere()
+        .arg0(OsString::from_vec(b"v\xE9p".to_vec()))
+        .args(["-i", plain.to_str().unwrap()])
+        .args(args(&out, &[]))
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(rows(&out), reference);
+    let header = std::fs::read_to_string(&out).unwrap();
+    assert!(
+        header
+            .lines()
+            .any(|l| l.starts_with("## VEP command-line: vep --assembly GRCh38 ")),
+        "{header}"
+    );
+
+    let mut non_utf8_out = dir.path().as_os_str().to_owned().into_vec();
+    non_utf8_out.extend_from_slice(b"/out-\xE9.txt");
+    let non_utf8_out = OsString::from_vec(non_utf8_out);
+    // `args` renders its output path as text, which would replace the byte, so
+    // the path goes in as its bytes in place of the `-o <path>` pair `args` opens with.
+    let shared_args = args(&out, &[]);
+    let output = common::isolated_vep_anywhere()
+        .args(["-i", plain.to_str().unwrap(), "-o"])
+        .arg(&non_utf8_out)
+        .args(&shared_args[2..])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(2), "{err}");
+    assert!(err.contains("invalid UTF-8"), "{err}");
+    assert!(!Path::new(&non_utf8_out).exists());
 }
 
 /// `--format guess`, the default, reads the first data line as Ensembl VEP's

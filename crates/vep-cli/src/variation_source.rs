@@ -236,7 +236,7 @@ impl VariationSource {
     }
 
     /// Every variation file with its chromosome, for a pass over the whole
-    /// cache: the chromosomes in karyotype order ([`karyotype_rank`]) and, on
+    /// cache: the chromosomes in karyotype order (`karyotype_rank`) and, on
     /// the region layout, a chromosome's files by their start.
     pub fn files(&self) -> Vec<(&str, &Path)> {
         let mut chromosomes: Vec<&str> = self.chromosomes.keys().map(String::as_str).collect();

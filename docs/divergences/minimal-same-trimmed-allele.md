@@ -18,6 +18,6 @@ Ensembl VEP writes the rows of the first and third alleles alone, the second all
 | vep-rs | `T` | `missense_variant` | 3 |
 | vep-rs | `C` | `missense_variant` | 1 |
 
-Every row of both engines prints the record's Location, `21:10542414-10542415`, and `UPLOADED_ALLELE=AA/CA/TA/AT`. A repeated alternate allele after the first in a record that splits is one key too: `GAA GGT,GGA,GGA` trims to `AA/GT`, `A/G` and `A/G`, and Ensembl VEP writes the rows of alleles 1 and 3 where vep-rs writes all three. A record none of whose alleles trims is not split, and both engines read a repeated allele as one allele under its first number.
+Every row of both engines prints the record's Location, `21:10542414-10542415`, and `UPLOADED_ALLELE=AA/CA/TA/AT`. A repeated alternate allele after the first in a record that splits is one key too: `GAA GGT,GGA,GGA` trims to `AA/GT`, `A/G` and `A/G`, and Ensembl VEP writes the rows of alleles 1 and 3 where vep-rs writes all three. Under `--pick` each engine ranks the rows it keeps, so on `AAA AGA,AGA,AGA` Ensembl VEP picks the row with `ALLELE_NUM=3` and vep-rs the row with `ALLELE_NUM=2`. A record none of whose alleles trims is not split, and both engines read a repeated allele as one allele under its first number.
 
 To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--minimal --allele_number --uploaded_allele`; vep-rs with the same flags over the same cache.

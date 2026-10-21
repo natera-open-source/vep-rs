@@ -31,7 +31,7 @@
   "variants.vcf": "4217ac9103b922aff3e8a903bb43639e8ccbf9d4b9b43adefc6f52f3ae63fe90",
   "variants.short.vcf": "26cf9b579d2a0bba475ac340b99405f42407787a86c6bfe857e18e2ce9df7a9e",
   "variants.crlf.vcf": "e175e56f8466acd2a1379961f7434da252cf3e290940e9fe6d68c82b22b333bf",
-  "variants.latin1.vcf": "84ddfef0b0765378bb8c34e00ed422ddb19fe38bcd11d7eda4b4a46dae0704a3"
+  "variants.latin1.vcf": "6f014920a78b1446c1ab0aa619a2dd64b71a03239733fd32c65ee42dac2dbbc6"
  },
  "pruned_cache": {
   "transcripts_per_chromosome": {

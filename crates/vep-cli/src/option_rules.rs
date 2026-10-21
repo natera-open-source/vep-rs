@@ -14,6 +14,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use clap::{ArgAction, ArgMatches, Command};
+use vep_core::sv_routing::perl_split;
 
 /// Flags whose single value is a comma-separated list (`Config.pm:327-336`).
 pub const LIST_FLAGS: &[&str] = &[
@@ -423,6 +424,14 @@ fn truthy(value: &str) -> bool {
     !(value.is_empty() || value == "0")
 }
 
+/// A comma-separated flag value as Perl's `split(',', ...)` reads it, the reading
+/// of every `LIST_FLAGS` value (`Config.pm:760`) and of a scalar the value check
+/// of `check_config` meets (`:946`): a trailing empty field is no field and a
+/// middle one is kept, so `21,` is one name and `21,,22` three.
+pub fn split_list_flag(value: &str) -> Vec<String> {
+    perl_split(value, &[',']).map(str::to_string).collect()
+}
+
 impl FlagState {
     /// The state of a parsed command line: every argument with a long name that
     /// was given or defaulted, keyed by that name; a repeatable flag is a list,
@@ -471,7 +480,7 @@ impl FlagState {
         }
         for flag in LIST_FLAGS {
             if let Some(FlagValue::Scalar(s)) = state.values.get(*flag) {
-                let list = s.split(',').map(str::to_string).collect();
+                let list = split_list_flag(s);
                 state.values.insert(flag.to_string(), FlagValue::List(list));
             }
         }
@@ -603,7 +612,7 @@ impl FlagState {
             }
             let values: Vec<String> = match self.values.get(*flag) {
                 Some(FlagValue::List(l)) => l.clone(),
-                Some(FlagValue::Scalar(s)) => s.split(',').map(str::to_string).collect(),
+                Some(FlagValue::Scalar(s)) => split_list_flag(s),
                 None => Vec::new(),
             };
             for value in values {
@@ -1093,6 +1102,38 @@ our %DEPRECATED = (
         assert_eq!(state.list("pick_order"), ["canonical", "rank"]);
         assert_eq!(state.list("distance"), ["1000", "500"]);
         assert!(state.is_active("pick_order"));
+    }
+
+    /// `Config.pm:760` turns a `@LIST_FLAGS` value into a list with Perl's
+    /// `split`, which drops trailing empty fields and keeps a middle one: `--chr
+    /// 21,` names one chromosome, `--chr 21,,22` three with the middle one empty,
+    /// and `--individual S1,` or `--individual_zyg S1,` one sample. The value
+    /// check of `check_config` splits a scalar the same way (`:946`), so a
+    /// trailing comma passes it and an empty middle field is refused by name.
+    #[test]
+    fn list_flags_split_as_perl_does() {
+        assert_eq!(parse(&["vep", "--chr", "21,"]).list("chr"), ["21"]);
+        assert_eq!(
+            parse(&["vep", "--chr", "21,,22"]).list("chr"),
+            ["21", "", "22"]
+        );
+        assert!(parse(&["vep", "--chr", ","]).list("chr").is_empty());
+        assert_eq!(
+            parse(&["vep", "--individual", "S1,"]).list("individual"),
+            ["S1"]
+        );
+        assert_eq!(
+            parse(&["vep", "--individual_zyg", "S1,"]).list("individual_zyg"),
+            ["S1"]
+        );
+        let mut state = FlagState::default();
+        state.set("terms", "SO,");
+        assert!(state.check(false).is_ok());
+        state.set("terms", "SO,,NCBI");
+        assert_eq!(
+            state.check(false).unwrap_err(),
+            "\"\" is not a valid value for --terms\nValid values: SO, display, NCBI"
+        );
     }
 
     /// `%INCOMPATIBLE` is the Perl table, pair for pair and in its order.

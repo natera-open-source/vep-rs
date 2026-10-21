@@ -94,7 +94,7 @@ fn existing_variation_names(colocated: &[ColocatedVariant], allele: &str) -> Vec
 /// file order, that Ensembl VEP keeps on the input record
 /// (`VariationTabix.pm:232-241`): a record whose `failed` value exceeds the
 /// threshold is skipped, a name already kept is not matched again, and
-/// [`compare_existing`] decides the rest. The record's whole allele string is
+/// `compare_existing` decides the rest. The record's whole allele string is
 /// matched, as Ensembl VEP matches the variation feature of a multi-allelic
 /// record before splitting its rows by allele.
 pub fn find_colocated_variants(

@@ -74,8 +74,8 @@ use crate::runner::{
 };
 use crate::transcript_index::LazyTranscriptIndexes;
 use crate::validate::{
-    invalid_vcf_coordinate, keep_overlap_allele, looks_like_number, AllelePatch, RecordLine,
-    ReferenceChecks, SkipRules,
+    invalid_vcf_coordinate, keep_overlap_allele, looks_like_number, rowless_allele, AllelePatch,
+    RecordLine, ReferenceChecks, SkipRules,
 };
 use crate::variation_matcher;
 use crate::variation_source::{ReadFailure, VariationSource};
@@ -1474,11 +1474,12 @@ fn read_parsed(
                 }
                 // The overlap-allele rule (VariationFeatureOverlap.pm:459-491) runs on
                 // every record of these formats, whose parsers keep an allele equal to
-                // the reference: a bi-allelic record's one allele is its last; a
-                // multi-allelic record's dropped alleles are held until the record
-                // closes. A record the split handles keeps a repeated ALT
+                // the reference, a `*` or a `<DEL:*>`: a bi-allelic record's one allele
+                // is its last; a multi-allelic record's dropped alleles are held until
+                // the record closes. A record the split handles keeps a repeated ALT
                 // (InputBuffer.pm:658), so the overlap rule gives way to the split's own
-                // test.
+                // test; a `*` or `<DEL:*>` of such a record is passed over below, after
+                // its feature's reference row.
                 let bi_allelic = variant.record_allele_string_multi.is_none();
                 let splits = cfg.minimal && record_splits(&variant);
                 if !splits && !keep_overlap_allele(&mut variant, bi_allelic) {
@@ -1500,7 +1501,9 @@ fn read_parsed(
                         cfg.transcripts.prewarm(&variant.chr)?;
                         batch.variants.push(split_reference_row(&variant, own));
                     }
-                    if outcome == MinimalSplit::NoAllele {
+                    // The feature of a `*` or `<DEL:*>` allele builds its reference
+                    // row and nothing else (VariationFeatureOverlap.pm:469-474, :484).
+                    if outcome == MinimalSplit::NoAllele || rowless_allele(&variant) {
                         held_none.get_or_insert(variant);
                         continue;
                     }
@@ -4457,7 +4460,7 @@ mod tests {
     #[test]
     fn read_vcf_keeps_header_and_data_bytes_that_are_not_utf8() {
         let input: &[u8] = b"##fileformat=VCFv4.2\n##source=Caf\xe9\n\
-            #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\xe9bastien\n\
+            #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\xe9q1\n\
             21\t100\trs\xe9\tA\tG\t.\tPASS\t.\tGT\t0/1\n";
         let transcripts = LazyTranscriptIndexes::empty();
         let fmt = VcfOutputFormatter::new(
@@ -4504,7 +4507,7 @@ mod tests {
         assert_eq!(headers[1], b"##source=Caf\xe9");
         assert_eq!(
             *headers.last().unwrap(),
-            &b"#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\xe9bastien"[..]
+            &b"#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\xe9q1"[..]
         );
         assert!(headers.iter().any(|h| h.starts_with(b"##INFO=<ID=CSQ,")));
         let Some(Item::Data { span, .. }) = batch.items.last() else {

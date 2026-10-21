@@ -157,7 +157,7 @@ everything	Config.pm	documented_subset	landed:documented_subset	crates/vep-cli/s
 exac-columns	OutputFactory.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::af_exac_is_refused_as_removed_upstream		
 examples_and_validator	Parser.pm::validate_vf	implemented	open			
 exclude_null_alleles	Config.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::null_allele_record_matches_on_span_unless_excluded	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh38-colocated-alt	
-exclude_predicted	Config.pm	implemented	open			
+exclude_predicted	Config.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/filter_set.rs::exclude_predicted_filter_drops_the_refseq_predicted_models;crates/vep-cli/src/config.rs::transcript_filter_follows_the_state_the_exclude_predicted_set_appends_to	tests/golden/116/GRCh38-release116	
 existing-variation-matching	AnnotationType/Variation.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::existing_variation_sorted_non_somatic_then_prefix_rank;crates/vep-cli/src/variation_matcher.rs::reverse_strand_record_matches_complemented_alleles;crates/vep-cli/src/variation_matcher.rs::structural_variants_are_not_colocated;crates/vep-cli/src/variation_matcher.rs::rsid_not_matching_this_allele_is_omitted_from_its_row	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 exit-codes	vep	implemented	open			
 exit-codes-and-error-text	vep	implemented	landed:implemented	crates/vep-cli/tests/cli_exit_codes.rs::success_is_0;crates/vep-cli/tests/cli_exit_codes.rs::run_error_is_1;crates/vep-cli/tests/cli_exit_codes.rs::usage_error_is_2;crates/vep-cli/tests/cli_exit_codes.rs::refused_flag_is_1	tests/golden/116/GRCh38-run-control	

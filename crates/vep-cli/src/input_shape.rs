@@ -6,11 +6,11 @@
 //! `auto` decompression thread count and `--resolved_config`.
 //!
 //! A BGZF file is recognised by its first block header, never by its name, with
-//! the reader's own detection ([`crate::runner::bgzf_block_size`]). The windows
+//! the reader's own detection (`runner::bgzf_block_size`). The windows
 //! open at the blocks nearest one, three, five and seven eighths of the file,
 //! each resolved to a block start through the `.tbi` or `.csi` index's virtual
 //! offsets, and each reads consecutive blocks until it holds
-//! [`WINDOW_MIN_LINES`] complete data lines or [`WINDOW_MAX_BLOCKS`] blocks, so
+//! `WINDOW_MIN_LINES` complete data lines or `WINDOW_MAX_BLOCKS` blocks, so
 //! a file whose records fill a block with a handful of lines is still measured
 //! over tens of them.
 

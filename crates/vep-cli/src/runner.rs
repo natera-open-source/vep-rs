@@ -6,7 +6,7 @@
 //! Reads VCF variants, loads transcripts from a converted JSON cache,
 //! computes consequence annotations using the vep-effects engine,
 //! and writes annotated output. The stages run as the three-thread pipeline
-//! in [`crate::pipeline`]; this module owns the setup and `annotate_batch`.
+//! in the `pipeline` module; this module owns the setup and `annotate_batch`.
 //!
 //! Annotation of each batch is parallelised across the resolved `--fork` count
 //! (default: every logical CPU up to 32; `--fork 1` runs serially) using rayon's `par_iter_mut`.
@@ -634,14 +634,119 @@ pub(crate) fn prediction_checks(
     })
 }
 
+/// The options Ensembl VEP leaves out of the header line (`Config.pm:732`,
+/// `@skip_opts`): the database connection, the stats and warnings files and the
+/// input string.
+const HEADER_SKIPPED_OPTIONS: [&str; 7] = [
+    "web_output",
+    "host",
+    "port",
+    "stats_file",
+    "user",
+    "warning_file",
+    "input_data",
+];
+
+/// Ensembl VEP's `%DEFAULTS` (`Config.pm:283-323`), each value as Perl
+/// stringifies it (`distance` is `UPSTREAM_DISTANCE . ',' . DOWNSTREAM_DISTANCE`,
+/// both 5000, `VariationEffect.pm:60-63`). `pick_order`, an array reference
+/// there, is left out, as `eq` against one never holds; `dir`,
+/// `$ENV{HOME}.'/.vep'` (`:294`), is read by [`perl_default`].
+const PERL_DEFAULTS: &[(&str, &str)] = &[
+    ("database", "1"),
+    ("host", "ensembldb.ensembl.org"),
+    ("user", "anonymous"),
+    ("port", "3306"),
+    ("species", "homo_sapiens"),
+    ("no_slice_cache", "0"),
+    ("chunk_size", "50000"),
+    ("cache_region_size", "1000000"),
+    ("distance", "5000,5000"),
+    ("buffer_size", "5000"),
+    ("input_file", "STDIN"),
+    ("delimiter", "\t"),
+    ("output_file", "variant_effect_output.txt"),
+    ("tmpdir", "/tmp"),
+    ("format", "guess"),
+    ("output_format", "vep"),
+    ("terms", "SO"),
+    ("failed", "0"),
+    ("core_type", "core"),
+    ("polyphen_analysis", "humvar"),
+    ("terminal_width", "48"),
+    ("vcf_info_field", "CSQ"),
+    (
+        "ucsc_data_root",
+        "http://hgdownload.cse.ucsc.edu/goldenpath/",
+    ),
+    ("max_sv_size", "10000000"),
+    ("clin_sig_allele", "1"),
+    ("freq_freq", "0.01"),
+    ("freq_filter", "exclude"),
+    ("freq_pop", "1KG_ALL"),
+    ("freq_gt_lt", "gt"),
+];
+
+/// The value Ensembl VEP's hash holds for a flag given without one: Getopt::Long
+/// stores a bare `--offline` as `offline => 1`.
+const BARE_FLAG_VALUE: &str = "1";
+
+/// The value Getopt::Long stores for an option `@VEP_PARAMS` types `=i`
+/// (`buffer_size`, `fork`, `max_sv_size` among them): the integer its text reads
+/// as, `0+$arg` once the underscores are dropped, so `01`, `+1` and `0_1` are all
+/// `1`. A `=f` or `=s` value, and a text that is not an integer, stays as written.
+fn perl_stored_value(option: &str, value: &str) -> String {
+    let typed_integer = crate::argv::VEP_PARAMS.iter().any(|spec| {
+        spec.strip_suffix("=i")
+            .is_some_and(|names| names.split('|').any(|name| name == option))
+    });
+    if !typed_integer {
+        return value.to_string();
+    }
+    match value.replace('_', "").parse::<i128>() {
+        Ok(number) => number.to_string(),
+        Err(_) => value.to_string(),
+    }
+}
+
+/// The `%DEFAULTS` value of an option ([`PERL_DEFAULTS`]); `dir` is
+/// `$ENV{HOME}.'/.vep'` with `HOME` read here, `/.vep` without one, as Perl's
+/// undefined `$ENV{HOME}` concatenates; `None` for an option the table lacks.
+fn perl_default(flag: &str) -> Option<String> {
+    if flag == "dir" {
+        let home = std::env::var("HOME").unwrap_or_default();
+        return Some(format!("{home}/.vep"));
+    }
+    PERL_DEFAULTS
+        .iter()
+        .find(|(name, _)| *name == flag)
+        .map(|(_, value)| value.to_string())
+}
+
 /// Renders the invocation as VEP prints it in `## VEP command-line:`
-/// (Config.pm `full_command`): `vep` then every option sorted by name, a value
-/// after its flag, and each path collapsed to `[PATH]/<basename>`. Each option
-/// prints under the key Ensembl VEP stores it as (Config.pm:734 walks the
-/// resolved keys), so a short, an alias, a prefix or another case of a name
-/// prints as the long name: Getopt::Long's reading of `@VEP_PARAMS` first, so
-/// `full_cache_dir` keeps Ensembl VEP's own key, then the parser's names for a
-/// flag only vep-rs has; `--input_data` is left out under every spelling (:732).
+/// (`Config.pm:730-749`, `full_command`): `vep` then every option sorted by
+/// name, a value after its flag, and each path collapsed to `[PATH]/<basename>`.
+/// `args` is the command line after the program name as [`Config::command_line`]
+/// holds it, the flags of the `--config` file, `vep.ini` and the environment
+/// among them: Ensembl VEP reads those sources into its hash (`:701-708`)
+/// before it walks the keys (`:734`), so they print there too. Each option
+/// prints under the key Ensembl VEP stores it as, so a short, an alias, a prefix
+/// or another case of a name prints as the long name: Getopt::Long's reading of
+/// `@VEP_PARAMS` first, so `full_cache_dir` keeps Ensembl VEP's own key, then
+/// the parser's names for a flag only vep-rs has. A flag outside
+/// `@ALLOW_MULTIPLE` given more than once prints its last value, the one
+/// Getopt::Long keeps (vep:33 for `--output_file`); a repeatable flag prints
+/// once per value, in order (`:740`). A value of exactly `1` prints as the flag
+/// alone (`:745`, `$value eq 1`), so `--fork 1` prints `--fork`; the value is
+/// the one Getopt::Long stores ([`perl_stored_value`]), the integer an `=i`
+/// option's text reads as, so `--buffer_size 01` prints `--buffer_size`. The
+/// [`HEADER_SKIPPED_OPTIONS`] are left out under every spelling, as is an
+/// option whose value equals its `%DEFAULTS` entry (`:737`, `$default eq
+/// $value`, a bare flag's value being `1`): the table is Ensembl VEP's
+/// ([`PERL_DEFAULTS`]), so where this parser's own default differs the given
+/// value prints (`--distance 5000` against `5000,5000`). `--database 0`, which
+/// the `vep` script's own default puts in Ensembl VEP's line (vep:35), is
+/// absent, `--database` being refused here.
 fn vep_command_line(args: impl Iterator<Item = String>) -> String {
     let mut command = crate::args::Args::command_with_error_table();
     command.build();
@@ -660,6 +765,11 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
             i += 1;
             continue;
         }
+        // `--` ends the options for Getopt::Long and clap alike; nothing after
+        // it is a flag of the hash.
+        if name == "--" {
+            break;
+        }
         let written = name.trim_start_matches('-');
         let resolved = crate::argv::resolve(written, &perl)
             .or_else(|| crate::argv::resolve(written, &declared));
@@ -675,17 +785,26 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
             }
             None => None,
         };
-        if long != "input_data" {
-            options.push((long, value.map(|v| collapse_paths(&v))));
-        }
         i += 1;
+        if HEADER_SKIPPED_OPTIONS.contains(&long.as_str()) {
+            continue;
+        }
+        if !crate::option_rules::ALLOW_MULTIPLE.contains(&long.as_str()) {
+            options.retain(|(flag, _)| *flag != long);
+        }
+        let value = value.map(|v| perl_stored_value(&long, &v));
+        let hash_value = value.as_deref().unwrap_or(BARE_FLAG_VALUE);
+        if perl_default(&long).as_deref() == Some(hash_value) {
+            continue;
+        }
+        options.push((long, value.map(|v| collapse_paths(&v))));
     }
     options.sort_by(|a, b| a.0.cmp(&b.0));
     let mut out = String::from("vep");
     for (flag, value) in options {
         out.push_str(" --");
         out.push_str(&flag);
-        if let Some(v) = value {
+        if let Some(v) = value.filter(|v| v != BARE_FLAG_VALUE) {
             out.push(' ');
             out.push_str(&v);
         }
@@ -694,11 +813,12 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
 }
 
 /// Whether the token after a flag is its value: anything not opening with `-`,
-/// and a negative number (`--max_sv_size -1`), which no flag name resembles.
+/// a lone `-`, which names no flag, and a negative number (`--max_sv_size -1`),
+/// which no flag name resembles.
 fn is_option_value(token: &str) -> bool {
     match token.strip_prefix('-') {
         None => true,
-        Some(rest) => rest.starts_with(|c: char| c.is_ascii_digit()),
+        Some(rest) => rest.is_empty() || rest.starts_with(|c: char| c.is_ascii_digit()),
     }
 }
 
@@ -837,7 +957,7 @@ impl Runner {
     /// input or the output is opened.
     pub fn new(config: Config) -> anyhow::Result<Self> {
         let cache = crate::cache_resolve::resolve(&config)?;
-        let command_line = vep_command_line(std::env::args().skip(1));
+        let command_line = vep_command_line(config.command_line.iter().cloned());
         Ok(Self {
             config,
             cache,
@@ -1284,7 +1404,8 @@ impl Runner {
                 parquet_formatter = Some(ParquetOutputFormatter::new(options, plugin_fields));
             }
             _ => {
-                // The default VEP text format is written by `write_record`.
+                // The default format has no formatter: `render::render_default_record`
+                // writes its rows from `extra_plan`.
             }
         }
 
@@ -1571,8 +1692,9 @@ impl Runner {
     /// refused before any line is read. The format is `--format`'s, or detected
     /// from the first data line, which standard input cannot give (Parser.pm:377).
     /// An identifier list is resolved through the cache's variation files
-    /// ([`Runner::open_id_input`]); CAid input, which Ensembl VEP resolves
-    /// through its database alone, is refused as it refuses it offline. A
+    /// ([`Runner::open_id_input`]); CAid input, which Ensembl VEP looks up in
+    /// its variation database (Parser/CAID.pm:53), a database vep-rs does not
+    /// reach, is refused with its parser's offline text (Parser/CAID.pm:103). A
     /// region input needs the run's FASTA (Parser/Region.pm:115) and refuses
     /// `--check_ref` (:118), as its records name no reference allele; an SPDI
     /// input needs the FASTA too, as Ensembl VEP checks its reference allele
@@ -1731,11 +1853,7 @@ impl Runner {
                     last_line,
                 )
             }
-            InputFormat::Caid => {
-                return Err(input_error(
-                    "CAid input (CA...) resolves through the ClinGen allele registry, a remote service; vep-rs does not resolve it",
-                ))
-            }
+            InputFormat::Caid => return Err(input_error("Cannot use CAid format in offline mode")),
         };
         Ok(OpenedInput {
             source,
@@ -3058,6 +3176,8 @@ mod tests {
         }
     }
 
+    /// `--species homo_sapiens` equals `%DEFAULTS{species}` (Config.pm:290) and is
+    /// left out (:737); the other options print sorted, each path masked.
     #[test]
     fn command_line_prints_like_vep() {
         let args = [
@@ -3074,7 +3194,7 @@ mod tests {
         assert_eq!(
             vep_command_line(args.iter().map(|s| s.to_string())),
             "vep --force_overwrite --input_file [PATH]/sample.vcf --json_cache [PATH]/grch37 \
-             --offline --output_file out.txt --species homo_sapiens"
+             --offline --output_file out.txt"
         );
     }
 
@@ -3114,6 +3234,24 @@ mod tests {
         );
     }
 
+    /// Getopt::Long stops reading options at `--`, so nothing after the
+    /// separator reaches the hash `full_command` walks; the header names no
+    /// empty flag for the separator and no option after it, and a lone `-`
+    /// after a flag is that flag's value, not an empty flag name.
+    #[test]
+    fn command_line_stops_at_the_separator() {
+        let args = ["--offline", "--", "--force_overwrite", "extra"];
+        assert_eq!(
+            vep_command_line(args.iter().map(|s| s.to_string())),
+            "vep --offline"
+        );
+        let lone_dash = ["-i", "-", "--offline"];
+        assert_eq!(
+            vep_command_line(lone_dash.iter().map(|s| s.to_string())),
+            "vep --input_file - --offline"
+        );
+    }
+
     /// Config.pm `full_command` prints every flag with its value, so Ensembl VEP
     /// 116.2's header reads `--max_sv_size -1` for the unlimited span; the negative
     /// number stays with its flag, while a flag followed by another flag stays bare
@@ -3131,6 +3269,75 @@ mod tests {
             "vep --max_sv_size -1 --offline"
         );
     }
+
+    /// `full_command` renders the hash's values (Config.pm:737-745): a flag
+    /// outside `@ALLOW_MULTIPLE` given twice prints its last value, a repeatable
+    /// flag prints once per value in order, a value of exactly `1` prints as the
+    /// flag alone (`$value eq 1`), a value equal to its `%DEFAULTS` entry is left
+    /// out (`--species homo_sapiens` given last, `--distance 5000,5000`, `--terms
+    /// SO`, `--failed 0`), and the `@skip_opts` names (:732) print under no
+    /// spelling. An `=i` option holds the integer Getopt::Long read, so
+    /// `--buffer_size 01` prints bare and `--max_sv_size +10000000` is its
+    /// default, while the `=f` `--freq_freq 0.010` stays as written against
+    /// `0.01`. Ensembl VEP 116.2 prints `--buffer_size`, `--fork`, `--plugin
+    /// Other --plugin Dummy` and `--shift_3prime`, and no `--species`, for
+    /// `--fork 1 --plugin Other --buffer_size 01 --species homo_sapiens
+    /// --max_sv_size 10000000` beside a config file's `plugin Dummy`,
+    /// `shift_3prime 1` and `species homo_sapiens`.
+    #[test]
+    fn command_line_renders_values_as_the_perl_loop_does() {
+        let args = [
+            "-o",
+            "first.txt",
+            "-o",
+            "last.txt",
+            "--fork",
+            "1",
+            "--plugin",
+            "Other",
+            "--plugin=Dummy",
+            "--shift_3prime=1",
+            "--stats_file",
+            "stats.html",
+            "--warning_file=warnings.txt",
+            "--buffer_size",
+            "01",
+            "--max_sv_size",
+            "+10000000",
+            "--freq_freq",
+            "0.010",
+            "--offline",
+            "--species",
+            "mouse",
+            "--species",
+            "homo_sapiens",
+            "--distance=5000,5000",
+            "--terms",
+            "SO",
+            "--failed",
+            "0",
+        ];
+        assert_eq!(
+            vep_command_line(args.iter().map(|s| s.to_string())),
+            "vep --buffer_size --fork --freq_freq 0.010 --offline --output_file last.txt \
+             --plugin Other --plugin Dummy --shift_3prime"
+        );
+    }
+
+    /// Getopt::Long stores an `=i` value as the integer it reads (`0+$arg` with
+    /// the underscores dropped) and a `=f` or `=s` value as written; a text that
+    /// is no integer, which Getopt::Long refuses, is left as written.
+    #[test]
+    fn perl_stored_value_numifies_integer_options_alone() {
+        assert_eq!(perl_stored_value("buffer_size", "01"), "1");
+        assert_eq!(perl_stored_value("fork", "+4"), "4");
+        assert_eq!(perl_stored_value("max_sv_size", "-1"), "-1");
+        assert_eq!(perl_stored_value("max_sv_size", "1_000"), "1000");
+        assert_eq!(perl_stored_value("buffer_size", "abc"), "abc");
+        assert_eq!(perl_stored_value("freq_freq", "0.010"), "0.010");
+        assert_eq!(perl_stored_value("distance", "05000"), "05000");
+        assert_eq!(perl_stored_value("json_cache", "01"), "01");
+    }
     use std::sync::Arc;
     use vep_core::variant::VariantClass;
 
@@ -3142,10 +3349,12 @@ mod tests {
         Config::from_argv(argv).unwrap()
     }
 
-    /// The capture gate must be derived from the output format, not guessed.
-    /// `vcf` is the only format whose writer reads `raw_input`; because that
-    /// writer silently falls back to a reconstructed record when the field is
-    /// absent, a wrong gate here degrades output quietly instead of erroring.
+    /// The capture is gated on the output format: the VCF and JSON writers read
+    /// `raw_input` (the VCF line written as read, the JSON `input` key), the
+    /// default, tab and Parquet writers do not. A gate that misses a format
+    /// changes its output without an error: the VCF writer builds the line from
+    /// the record when none is held (`OutputFactory/VCF.pm:336-337`), and the
+    /// JSON object has no `input` key.
     #[test]
     fn raw_input_is_captured_for_the_formats_that_re_emit_the_line() {
         for fmt in ["vcf", "json"] {

@@ -72,8 +72,7 @@ pub trait FilterData {
 /// hold an object in the cache and `_vep_lazy_loaded` is `1` on every transcript
 /// the filter sees, so each is defined and only `exists` and `nex` read it
 /// meaningfully. `description`, `coding_region_start` and `coding_region_end`
-/// are undefined, as the cache stores them, and `_uniprot_isoform` because the
-/// converted cache does not carry it. `_source_cache` is absent,
+/// are undefined, as the cache stores them. `_source_cache` is absent,
 /// as it is from every cache but a merged one (`Transcript.pm:278`), so `_s`
 /// names `_swissprot` alone. `display_xref`, `external_db`,
 /// `external_display_name`, `external_name` and `external_status` are left
@@ -144,6 +143,7 @@ impl FilterData for Transcript {
             "_swissprot" => self.swissprot.as_deref().map(Cow::Borrowed),
             "_trembl" => self.trembl.as_deref().map(Cow::Borrowed),
             "_uniparc" => self.uniparc.as_deref().map(Cow::Borrowed),
+            "_uniprot_isoform" => self.uniprot_isoform.as_deref().map(Cow::Borrowed),
             "_gene_phenotype" => self.gene_phenotype.map(|n| Cow::Owned(n.to_string())),
             "dbID" => self.db_id.map(|n| Cow::Owned(n.to_string())),
             "cdna_coding_start" => self.cdna_coding_start.map(|n| Cow::Owned(n.to_string())),
@@ -964,13 +964,11 @@ mod tests {
         assert!(!passes("SIFT > 0", &[("SIFT", "-")]));
     }
 
-    /// The transcript keys resolve to the cache's values: `is_canonical` is
-    /// defined on the canonical transcript alone, a missing symbol is
-    /// undefined, the strand is `1` or `-1`, the object keys are defined and
-    /// `translation` only on a coding transcript.
-    #[test]
-    fn transcript_keys_read_the_transcript() {
-        let mut tx = Transcript {
+    /// A canonical coding transcript of a gene with a symbol, the UniProt
+    /// fields as the cache stores them: `-` for TrEMBL, UniParc and the
+    /// isoform undefined.
+    fn canonical_transcript() -> Transcript {
+        Transcript {
             stable_id: "ENST00000380152".into(),
             version: Some(8),
             db_id: Some(4_201_747),
@@ -1025,7 +1023,16 @@ mod tests {
             vefc: Some(vep_core::transcript::TranscriptVEFC::default()),
             derived: Default::default(),
             id_rank: 0,
-        };
+        }
+    }
+
+    /// The transcript keys resolve to the cache's values: `is_canonical` is
+    /// defined on the canonical transcript alone, a missing symbol is
+    /// undefined, the strand is `1` or `-1`, the object keys are defined and
+    /// `translation` only on a coding transcript.
+    #[test]
+    fn transcript_keys_read_the_transcript() {
+        let mut tx = canonical_transcript();
         let filter = |s: &str| FilterSet::transcript_filter(&[s]).unwrap();
         // `gene_version` resolves to `_gene_version` through the `_` prefix
         // (`FilterSet.pm:562-564`), the gene's version as the loader reads it.
@@ -1073,6 +1080,33 @@ mod tests {
         assert!(filter("translation nex and variation_effect_feature_cache nex").evaluate(&tx));
     }
 
+    /// `uniprot_isoform` resolves to the cache's `_uniprot_isoform`
+    /// (`FilterSet.pm:562-564`), the UniProt isoform ids of the translation
+    /// joined by `,` (`AnnotationSource/Database/Transcript.pm:679-683`, `-`
+    /// for a translation without one): a value with several ids passes a unit
+    /// any id passes (487-498 split the input at a `,` after a digit), and the
+    /// `-` sentinel is a defined value.
+    #[test]
+    fn uniprot_isoform_reads_the_transcripts_isoform_ids() {
+        let mut tx = canonical_transcript();
+        tx.uniprot_isoform = Some("P51587-2,P51587-3".to_string());
+        let filter = |s: &str| FilterSet::transcript_filter(&[s]).unwrap();
+        assert!(filter("uniprot_isoform exists").evaluate(&tx));
+        assert!(filter("uniprot_isoform is P51587-3").evaluate(&tx));
+        assert!(filter("uniprot_isoform is P51587-2").evaluate(&tx));
+        assert!(filter("uniprot_isoform match P51587").evaluate(&tx));
+        assert!(filter("uniprot_isoform in P51587-3,Q00001-1").evaluate(&tx));
+        assert!(!filter("uniprot_isoform is P51587-4").evaluate(&tx));
+        assert!(!filter("uniprot_isoform nex").evaluate(&tx));
+        assert!(filter("_uniprot_isoform is P51587-3 and _uniprot_i exists").evaluate(&tx));
+        tx.uniprot_isoform = Some("-".to_string());
+        assert!(filter("uniprot_isoform exists and uniprot_isoform is -").evaluate(&tx));
+        assert!(!filter("uniprot_isoform is P51587-2").evaluate(&tx));
+        tx.uniprot_isoform = None;
+        assert!(filter("uniprot_isoform nex").evaluate(&tx));
+        assert!(!filter("uniprot_isoform is -").evaluate(&tx));
+    }
+
     /// Two filter strings are two units under the root, joined by `and`
     /// (`parse_filters`, 217-221); no filter string at all passes everything.
     #[test]
@@ -1088,5 +1122,30 @@ mod tests {
         assert!(FilterSet::new(&none, &keys(&data))
             .unwrap()
             .evaluate(&hash(&data)));
+    }
+
+    /// The filter `--exclude_predicted` appends (`Config.pm:566-571`), compiled
+    /// as the binary compiles it: the tokenizer drops the `^` (`parse_filters`,
+    /// 223), so `/X._/i` drops the RefSeq predicted models `XM_011545924.3` and
+    /// `XR_001755219.2` and keeps `ENST00000427445`; a filter before it still
+    /// applies, the two being joined by `and`.
+    #[test]
+    fn exclude_predicted_filter_drops_the_refseq_predicted_models() {
+        let predicted = "not stable_id match ^X._";
+        let with_id = |id: &str| {
+            let mut tx = canonical_transcript();
+            tx.stable_id = id.into();
+            tx
+        };
+        let alone = FilterSet::transcript_filter(&[predicted]).unwrap();
+        assert!(!alone.evaluate(&with_id("XM_011545924.3")));
+        assert!(!alone.evaluate(&with_id("XR_001755219.2")));
+        assert!(alone.evaluate(&with_id("ENST00000427445")));
+        let both = FilterSet::transcript_filter(&["biotype is protein_coding", predicted]).unwrap();
+        assert!(both.evaluate(&with_id("ENST00000427445")));
+        assert!(!both.evaluate(&with_id("XM_011545924.3")));
+        let mut non_coding = with_id("ENST00000427445");
+        non_coding.biotype = "lncRNA".into();
+        assert!(!both.evaluate(&non_coding));
     }
 }

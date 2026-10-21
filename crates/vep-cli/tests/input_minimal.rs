@@ -7,7 +7,9 @@
 //! 116.2 rejoins it (the record's Location, the trimmed Allele, the written
 //! position as ALLELE_NUM, the rows in the rejoin's key order) and the three
 //! position columns follow the output format. Every expected value is Ensembl
-//! VEP 116.2's output on the record under the same flags.
+//! VEP 116.2's output on the record under the same flags, except the
+//! `--coding_only` rows of a split record, whose documented difference the last
+//! test pins.
 
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
@@ -238,5 +240,71 @@ fn a_split_record_rejoins_as_ensembl_vep_rejoins_it() {
     assert_eq!(
         csq,
         ["G|439|87|29|2", "-|438-440|86-88|29-30|3", "G|438|86|29|1"]
+    );
+}
+
+/// Three records at the acceptor site of exon 6 of ENST00000427445 whose
+/// alleles fall on both sides of the CDS boundary: an SNV at 10542393 and a
+/// deletion of `TACG` over 10542394-10542397, or two SNVs. Under `--minimal
+/// --coding_only` vep-rs judges each split row on its allele's own span, so the
+/// deletion's seven rows survive and the SNVs' none, and `REF_ALLELE` is the
+/// first allele's trimmed reference. Ensembl VEP 116.2's default output writes
+/// fourteen rows per record over the record's restored span (`OutputFactory.pm`
+/// lines 297-323, 490-502) with the record's `GTACG` as `REF_ALLELE` on
+/// `straddle_a` and `straddle_b`; the difference is documented at
+/// `docs/divergences/minimal-coding-only-record-span.md`, and this test pins the
+/// rows vep-rs writes while it stands.
+#[test]
+fn coding_only_judges_a_split_records_rows_on_their_own_spans() {
+    let dir = tempfile::tempdir().unwrap();
+    let records = "21\t10542393\tstraddle_a\tGTACG\tCTACG,G\t.\t.\t.\n\
+                   21\t10542393\tstraddle_b\tGTACG\tCTACG,TTACG\t.\t.\t.\n\
+                   21\t10542393\tstraddle_c\tGTACG\tG,CTACG\t.\t.\t.\n";
+    vep(
+        dir.path(),
+        records,
+        &[],
+        &["--minimal", "--coding_only", "--show_ref_allele"],
+    );
+    let lines = data_lines(dir.path());
+    let count = |name: &str| lines.iter().filter(|l| l.starts_with(name)).count();
+    assert_eq!(
+        (
+            count("straddle_a\t"),
+            count("straddle_b\t"),
+            count("straddle_c\t")
+        ),
+        (7, 0, 7)
+    );
+    let on_transcript: Vec<(String, String, String, String, String)> =
+        rows_on(&lines, "ENST00000427445")
+            .iter()
+            .map(|r| {
+                let extra = |key: &str| {
+                    r[6].split(';')
+                        .find_map(|kv| kv.strip_prefix(key))
+                        .unwrap()
+                        .to_string()
+                };
+                (
+                    r[0].clone(),
+                    r[1].clone(),
+                    r[5].clone(),
+                    extra("ALLELE_NUM="),
+                    extra("REF_ALLELE="),
+                )
+            })
+            .collect();
+    let location = "21:10542393-10542397";
+    let consequence = "splice_acceptor_variant,coding_sequence_variant";
+    assert_eq!(
+        on_transcript
+            .iter()
+            .map(|(l, a, c, n, r)| (l.as_str(), a.as_str(), c.as_str(), n.as_str(), r.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (location, "-", consequence, "2", "G"),
+            (location, "-", consequence, "1", "TACG"),
+        ]
     );
 }

@@ -10,7 +10,7 @@
 ##contig=<ID=21>
 ##contig=<ID=chr21>
 ##contig=<ID=chrM>
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	Sébastien
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	Séq1
 21	30289183	alt_eq_ref	C	C	.	.	.	GT	0/1
 21	30289183	second_alt_eq_ref	C	G,C	.	.	.	GT	0/1
 21	30289183	dup_alt	C	G,G,T	.	.	.	GT	0/1

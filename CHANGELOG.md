@@ -225,6 +225,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An HGVS protein notation whose reference contains `ENST` but names a translation (another species' id) resolves through the translation lookup, as Ensembl VEP's first lookup does. (#N)
 - A refused Ensembl-format line or identifier mapping is skipped with the reason alone; the warning opened with `VCF parse error:`. (#N)
 - `--process_ref_homs` reads a reference row's codon from the transcript, as Ensembl VEP does, so a multi-base reference row whose bases mismatch the genome is `synonymous_variant`, not `missense_variant`. (#N)
+- CAid input is refused with Ensembl VEP's own text, `Cannot use CAid format in offline mode`, under the `input` component. (#N)
+- The `## VEP command-line:` header names `--config`, `vep.ini` and `VEP_*` flags, leaves default values out and prints an `=i` value as Getopt::Long stores it; a non-UTF-8 argument runs. (#N)
+- `--pick` on a `--minimal` split ranks the alleles in Ensembl VEP's rejoin key order, so a repeated trimmable alternate allele keeps the row Ensembl VEP keeps. (#N)
+- `--transcript_filter` reads `uniprot_isoform`, the cache's UniProt isoform ids, matching any id of a list as Ensembl VEP does. (#N)
+- The library `Annotator` resolves input chromosomes and breakend mates through the cache's synonyms, so a `chr21` row annotates as the `vep` binary annotates it. (#N)
+- A trailing comma in a list flag (`--chr 21,`, `--distance 5000,`, `--pick_order canonical,`, `--individual S1,`) names no empty item, as Ensembl VEP's `split` reads it. (#N)
+- A `*` or `<DEL:*>` allele of an Ensembl-format line writes no row and keeps its allele number; a line with no other allele is the feature with none. (#N)
+- Under `--safe --individual --minimal`, an individual's copy carrying one alternate allele of a multi-allelic record keeps the record's chopped alleles, as Ensembl VEP writes it. (#N)
+- `--exclude_predicted` is accepted and appends Ensembl VEP's `not stable_id match ^X._` transcript filter after the `--transcript_filter` values; it was refused as an unexpected argument. (#N)
 
 ### Security
 

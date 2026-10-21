@@ -20,7 +20,7 @@ use vep_io::input::Delimiter;
 use crate::args::Args;
 use crate::input_shape::InputShape;
 use crate::nearest::NearestType;
-use crate::option_rules::{FlagState, OWN_RULES};
+use crate::option_rules::{split_list_flag, FlagState, OWN_RULES};
 
 /// A refusal under the error contract: printed as one line on standard error,
 /// `ERROR: [<component>] <message>`, and the run exits 1. `<message>` is Ensembl
@@ -334,7 +334,7 @@ pub const COMPONENTS: &[(&str, &str)] = &[
     ),
     (
         "input",
-        "the input: a file that does not exist, standard input without --format, a first data line of no known format, BCF input, CAid input (which Ensembl VEP resolves through its database), an identifier list against a cache without variation files, or a region or SPDI input without --fasta",
+        "the input: a file that does not exist, standard input without --format, a first data line of no known format, BCF input, CAid input (looked up in the Ensembl variation database, which vep-rs does not reach), an identifier list against a cache without variation files, a region, SPDI or HGVS input without --fasta, or a region input with --check_ref",
     ),
     (
         "output",
@@ -350,7 +350,7 @@ pub const COMPONENTS: &[(&str, &str)] = &[
     ),
     (
         "fasta",
-        "the reference FASTA: the file or directory named cannot be read as an indexed FASTA, or a flag that reads it (`--hgvs`, `--hgvsg`, `--shift_3prime 1`) was given and none was named or found in the cache directory",
+        "the reference FASTA: the file or directory named cannot be read as an indexed FASTA, or a flag that reads it (`--hgvs`, `--hgvsg`, `--check_ref`, `--lookup_ref`, `--use_transcript_ref`, `--shift_3prime 1`) was given and none was named or found in the cache directory",
     ),
     (
         "filter",
@@ -404,6 +404,8 @@ pub fn warning_file_for(args: &Args) -> String {
 pub struct ParsedArgs {
     pub args: Args,
     pub state: FlagState,
+    /// The tokens after the program name, as given ([`Config::command_line`]).
+    pub command_line: Vec<String>,
 }
 
 /// Parses a command line (the binary name first). A flag the error table refuses
@@ -418,6 +420,10 @@ where
     let mut argv = argv.into_iter().map(Into::into);
     let program = argv.next();
     let mut options: Vec<OsString> = argv.collect();
+    let command_line: Vec<String> = options
+        .iter()
+        .map(|token| token.to_string_lossy().into_owned())
+        .collect();
     // The usage wins over an unexpected parameter (vep:29 before vep:30): an
     // undeclared flag of the error table is dropped from a command line that asks
     // for the help or the version, and refused otherwise. A flag outside the
@@ -448,13 +454,57 @@ where
     let usage = |error: clap::Error| ParseFailure::Usage(Box::new(error));
     let mut command = Args::command_with_error_table();
     command.build();
+    drop_trailing_empty_list_fields(&mut options, &command);
     let matches = command
         .clone()
         .try_get_matches_from(program.into_iter().chain(options))
         .map_err(usage)?;
     let args = Args::from_arg_matches(&matches).map_err(usage)?;
     let state = FlagState::from_matches(&command, &matches);
-    Ok(ParsedArgs { args, state })
+    Ok(ParsedArgs {
+        args,
+        state,
+        command_line,
+    })
+}
+
+/// Rewrites the value of every option clap splits on a `value_delimiter`
+/// (`--pick_order`) as Perl's `split(',', ...)` reads it (`Config.pm:761`): a
+/// trailing empty field is no field, so `canonical,` is the one criterion where
+/// clap's value parser would refuse the empty piece. A middle empty field stays,
+/// as Perl keeps it and `%VALID` refuses it (`:946`). The value is the token
+/// after the flag or the part after `=`; a token that is not UTF-8, and
+/// everything after a `--` separator, is left as it is.
+fn drop_trailing_empty_list_fields(options: &mut [OsString], command: &clap::Command) {
+    let delimited: Vec<String> = command
+        .get_arguments()
+        .filter(|arg| arg.get_value_delimiter().is_some())
+        .filter_map(|arg| arg.get_long().map(|long| format!("--{long}")))
+        .collect();
+    let is_delimited = |flag: &str| delimited.iter().any(|name| name == flag);
+    let rejoined = |value: &str| split_list_flag(value).join(",");
+    let mut tokens = options.iter_mut();
+    while let Some(token) = tokens.next() {
+        let Some(text) = token.to_str() else {
+            continue;
+        };
+        // Clap stops reading options at `--`, as Getopt::Long does.
+        if text == "--" {
+            break;
+        }
+        if is_delimited(text) {
+            let Some(value) = tokens.next() else {
+                break;
+            };
+            if let Some(value_text) = value.to_str() {
+                *value = OsString::from(rejoined(value_text));
+            }
+        } else if let Some((flag, inline_value)) = text.split_once('=') {
+            if is_delimited(flag) {
+                *token = OsString::from(format!("{flag}={}", rejoined(inline_value)));
+            }
+        }
+    }
 }
 
 /// Fully resolved configuration for a VEP run.
@@ -472,7 +522,7 @@ pub struct Config {
     pub output_file: String,
     pub output_format: String,
     /// Only consulted when `output_format == "parquet"`.
-    /// `"nested"` = one row per variant, CSQ subfields as LIST<T>.
+    /// `"nested"` = one row per variant, CSQ subfields as `LIST<T>`.
     /// `"flat"` = one row per (variant × consequence) tuple.
     pub parquet_shape: String,
     /// Keep the Parquet intermediate TSV after DuckDB finalize (debug aid).
@@ -566,6 +616,12 @@ pub struct Config {
     pub output_buffer_size: usize,
     /// Print the resolved runtime knobs and the input's shape, then exit.
     pub resolved_config: bool,
+    /// The tokens the parser read after the program name, as given: the command
+    /// line's own, and the flags of the `--config` file, `vep.ini` and the
+    /// `VEP_*` variables that [`crate::argv::prepass`] laid out around them. A
+    /// token that is not UTF-8 is held with each invalid sequence replaced. The
+    /// `## VEP command-line:` header line is rendered from this list.
+    pub command_line: Vec<String>,
 
     /// `--everything` was given: the HGVS flags it switched on are dropped, not
     /// refused, when no FASTA is found (Runner.pm:745-754).
@@ -668,8 +724,9 @@ pub struct Config {
     pub flag_pick_allele: bool,
     pub flag_pick_allele_gene: bool,
     pub pick_order: Option<Vec<String>>,
-    /// The `--transcript_filter` strings, in command-line order; empty when
-    /// none was passed.
+    /// The `--transcript_filter` strings in command-line order, then the one
+    /// `--exclude_predicted` appends (`Config.pm:566-571`); empty when neither
+    /// flag was passed.
     pub transcript_filter: Vec<String>,
     pub allele_number: bool,
     pub show_ref_allele: bool,
@@ -720,7 +777,7 @@ pub struct Config {
     /// `--process_ref_homs` (`Config.pm:143`): every sequence record gains the
     /// reference allele's row, and a reference-homozygous individual annotates it.
     pub process_ref_homs: bool,
-    /// `--chr` as given, split on commas (`Config.pm:760-762`); `None` without the
+    /// `--chr` as given, split on commas (`Config.pm:759-761`); `None` without the
     /// flag. The names it admits are read by `validate::ChromosomeList`.
     pub chr: Option<Vec<String>>,
     /// `--check_ref`: the reference allele is checked against the FASTA.
@@ -741,16 +798,6 @@ pub fn canonical_output_format(value: &str) -> String {
         "ensembl" => "vep".to_string(),
         lower => lower.to_string(),
     }
-}
-
-/// A `@LIST_FLAGS` value split as `Config.pm:757-762` splits it, with Perl's
-/// `split`: an inner empty field stays, trailing empty fields are dropped.
-fn split_list_flag(value: &str) -> Vec<String> {
-    let mut parts: Vec<String> = value.split(',').map(str::to_string).collect();
-    while parts.last().is_some_and(String::is_empty) {
-        parts.pop();
-    }
-    parts
 }
 
 /// The user-visible notice for `--regulatory`, which vep-rs accepts for Perl VEP
@@ -833,7 +880,11 @@ impl Config {
     /// Ensembl VEP's option sets and option rules on the flag state
     /// (`Config.pm:766-769`), then vep-rs's own rules, then the configuration.
     pub fn from_parsed(parsed: ParsedArgs) -> Result<Self, CliError> {
-        let ParsedArgs { args, mut state } = parsed;
+        let ParsedArgs {
+            args,
+            mut state,
+            command_line,
+        } = parsed;
         for entry in ERROR_TABLE.iter().filter(|e| e.declared) {
             let Treatment::Refused { component, message } = entry.treatment else {
                 continue;
@@ -879,6 +930,7 @@ impl Config {
             .collect();
         let mut config = Config::resolve(args, &state, distance, delimiter);
         config.notices = notices;
+        config.command_line = command_line;
         Ok(config)
     }
 
@@ -946,7 +998,7 @@ impl Config {
         };
 
         // `shift_hgvs` is a setting only as 0 or 1 (BaseRunner.pm:498), and 0 sets
-        // `shift_3prime` to 0 whatever the command line said (Runner.pm:792-795).
+        // `shift_3prime` to 0 whatever the command line passes (Runner.pm:792-795).
         let shift_hgvs = args.shift_hgvs.as_deref() != Some("0");
         let shift_3prime = shift_hgvs && args.shift_3prime.as_deref() == Some("1");
 
@@ -1001,6 +1053,7 @@ impl Config {
             writer_strategy: args.writer_strategy.parse().unwrap_or_default(),
             output_buffer_size: resolve_output_buffer_size(args.output_buffer_size),
             resolved_config: args.resolved_config,
+            command_line: Vec::new(),
             everything: on("everything"),
             symbol: on("symbol") || vcf_output,
             biotype: on("biotype") || vcf_output,
@@ -1069,7 +1122,7 @@ impl Config {
             flag_pick_allele: args.flag_pick_allele,
             flag_pick_allele_gene: args.flag_pick_allele_gene,
             pick_order: args.pick_order,
-            transcript_filter: args.transcript_filter,
+            transcript_filter: state.list("transcript_filter"),
             allele_number: on("allele_number"),
             show_ref_allele: args.show_ref_allele,
             uploaded_allele: args.uploaded_allele,
@@ -1123,7 +1176,7 @@ pub const DECOMPRESSION_THREADS_AUTO_CAP: usize = 10;
 const FORK_AUTO_CAP: usize = 32;
 
 /// Resolve the --fork value. `0` means "auto": use the number of available
-/// logical CPUs, capped at [`FORK_AUTO_CAP`]. Any non-zero value is returned
+/// logical CPUs, capped at `FORK_AUTO_CAP`. Any non-zero value is returned
 /// as-is so users can still pin the worker count explicitly.
 ///
 /// Public so an embedding consumer of this crate can apply the same
@@ -1219,7 +1272,7 @@ pub fn reported_parallelism() -> Option<usize> {
 }
 
 /// The host's logical CPUs as the decompression rules read them:
-/// [`UNREPORTED_HOST_CPUS`] when the host does not report a count.
+/// `UNREPORTED_HOST_CPUS` when the host does not report a count.
 pub fn host_parallelism() -> usize {
     reported_parallelism().unwrap_or(UNREPORTED_HOST_CPUS)
 }
@@ -1374,20 +1427,25 @@ pub fn resolve_output_buffer_size(raw: u64) -> usize {
 }
 
 /// The `--distance` value as (upstream, downstream) bp: one integer for both, or
-/// the pair `up,down`. Ensembl VEP reads the pair with `$d ||= $u` (`BaseRunner.pm`
-/// 506), which fires on the false string `0` alone, so the downstream part `0` is
-/// the upstream value while `00` or `+0` is a downstream distance of 0. Ensembl VEP
+/// the pair `up,down`. The value is a `@LIST_FLAGS` entry, split with Perl's
+/// `split` (`Config.pm:761`, [`split_list_flag`]), so `5000,` is the one integer
+/// `5000`. Ensembl VEP reads the pair with `$d ||= $u` (`BaseRunner.pm` 506),
+/// which fires on the false string `0` alone, so the downstream part `0` is the
+/// upstream value while `00` or `+0` is a downstream distance of 0. Ensembl VEP
 /// numifies a non-numeric part to 0 under an `Argument "x" isn't numeric` warning
 /// and drops the up- or downstream rows that part governs (both for a single
-/// value); here it is a refusal naming the value, as is a part padded with
-/// whitespace, which Perl numifies but `||=` reads as set.
+/// value), and reads no part after the second; here each is a refusal naming the
+/// value, as is a part padded with whitespace, which Perl numifies but `||=`
+/// reads as set.
 fn parse_distance(s: &str) -> Result<(u64, u64), String> {
     let refused = || format!("--distance expects one or two integers (up[,down]); got {s:?}");
     let integer = |part: &str| part.parse::<u64>().map_err(|_| refused());
-    let (up, down) = match s.split_once(',') {
-        None => (s, s),
-        Some((up, "0")) => (up, up),
-        Some((up, down)) => (up, down),
+    let parts = split_list_flag(s);
+    let (up, down) = match parts.as_slice() {
+        [up] => (up.as_str(), up.as_str()),
+        [up, down] if down == "0" => (up.as_str(), up.as_str()),
+        [up, down] => (up.as_str(), down.as_str()),
+        _ => return Err(refused()),
     };
     Ok((integer(up)?, integer(down)?))
 }
@@ -2304,6 +2362,47 @@ mod tests {
         );
     }
 
+    /// `--pick_order` is a `@LIST_FLAGS` entry read with Perl's `split`
+    /// (`Config.pm:331`, `:761`), so a trailing comma names no criterion, with
+    /// the value attached by `=` or given as the next token; a middle empty
+    /// field is a value `%VALID` lacks (`:946`) and stays refused.
+    #[test]
+    fn pick_order_drops_a_trailing_empty_field_as_perl_does() {
+        let canonical = Some(&["canonical".to_string()][..]);
+        assert_eq!(
+            config(&["vep", "--pick_order", "canonical,"])
+                .pick_order
+                .as_deref(),
+            canonical
+        );
+        assert_eq!(
+            config(&["vep", "--pick_order=canonical,"])
+                .pick_order
+                .as_deref(),
+            canonical
+        );
+        assert!(matches!(
+            Config::from_argv(["vep", "--pick_order", "canonical,,rank"]).unwrap_err(),
+            ParseFailure::Usage(_)
+        ));
+    }
+
+    /// The list-field rewrite stops at `--`, where clap and Getopt::Long stop
+    /// reading options: a list value before the separator loses its trailing
+    /// empty field and every token after it stays as written.
+    #[test]
+    fn list_field_rewrite_stops_at_the_separator() {
+        let mut command = Args::command_with_error_table();
+        command.build();
+        let tokens = |line: &[&str]| line.iter().map(OsString::from).collect::<Vec<_>>();
+        let mut options = tokens(&["--pick_order", "canonical,", "--", "--pick_order", "rank,"]);
+        drop_trailing_empty_list_fields(&mut options, &command);
+        assert_eq!(
+            options,
+            tokens(&["--pick_order", "canonical", "--", "--pick_order", "rank,"])
+        );
+    }
+
     /// `%INCOMPATIBLE` pairs `gencode_primary` with `gencode_basic` and `refseq`
     /// (Config.pm:621-622), so the two GENCODE sets cannot be combined; either
     /// alone, and `--flag_gencode_primary` beside `--gencode_basic`, resolve.
@@ -2459,6 +2558,31 @@ mod tests {
         assert!(config(&["vep"]).custom.is_empty());
     }
 
+    /// `transcript_filter` is read from the state after the option sets, which
+    /// the `exclude_predicted` set appends to (Config.pm:566-571): the flag is
+    /// in `@ALLOW_MULTIPLE` (Config.pm:340-346), so the set's filter is pushed
+    /// after the command line's (Config.pm:870-871) wherever the flag stands.
+    #[test]
+    fn transcript_filter_follows_the_state_the_exclude_predicted_set_appends_to() {
+        let predicted = "not stable_id match ^X._";
+        assert_eq!(
+            config(&["vep", "--exclude_predicted"]).transcript_filter,
+            [predicted]
+        );
+        let biotype = "biotype is protein_coding";
+        for argv in [
+            ["vep", "--transcript_filter", biotype, "--exclude_predicted"],
+            ["vep", "--exclude_predicted", "--transcript_filter", biotype],
+        ] {
+            assert_eq!(config(&argv).transcript_filter, [biotype, predicted]);
+        }
+        assert_eq!(
+            config(&["vep", "--transcript_filter", biotype]).transcript_filter,
+            [biotype]
+        );
+        assert!(config(&["vep"]).transcript_filter.is_empty());
+    }
+
     /// Parquet cannot stream to STDOUT: the output rule refuses the pair.
     #[test]
     fn parquet_to_stdout_is_refused() {
@@ -2509,14 +2633,17 @@ mod tests {
         }
     }
 
-    /// Ensembl VEP splits `--distance` on `,` (`Config.pm` 334) and reads the pair with
-    /// `($u, $d) = @$distances; $d ||= $u` (`BaseRunner.pm` 505-506): one value serves
-    /// both directions, `5000,2000` is asymmetric, the downstream part `0` is the
-    /// upstream value (`2000,0` is `2000,2000`), an upstream 0 stands (`0,2000`), and
-    /// `00` or `+0` is a true string in Perl, kept and numified to a downstream 0.
+    /// Ensembl VEP splits `--distance` on `,` with Perl's `split` (`Config.pm` 334,
+    /// 761), which drops a trailing empty field, and reads the pair with `($u, $d) =
+    /// @$distances; $d ||= $u` (`BaseRunner.pm` 505-506): one value serves both
+    /// directions, `5000,` is that one value, `5000,2000` is asymmetric, the
+    /// downstream part `0` is the upstream value (`2000,0` is `2000,2000`), an
+    /// upstream 0 stands (`0,2000`), and `00` or `+0` is a true string in Perl, kept
+    /// and numified to a downstream 0.
     #[test]
     fn distance_pair_with_zero_downstream_uses_upstream() {
         assert_eq!(parse_distance("5000"), Ok((5000, 5000)));
+        assert_eq!(parse_distance("5000,"), Ok((5000, 5000)));
         assert_eq!(parse_distance("5000,2000"), Ok((5000, 2000)));
         assert_eq!(parse_distance("2000,0"), Ok((2000, 2000)));
         assert_eq!(parse_distance("2000,00"), Ok((2000, 0)));
@@ -2530,19 +2657,29 @@ mod tests {
         );
     }
 
-    /// A part that is not an integer, an empty part, or a third part is refused
-    /// with the contract line `ERROR: [config] <message>` naming the value as
-    /// written. Ensembl VEP numifies a non-numeric part to 0 under an `Argument "x"
-    /// isn't numeric` warning, dropping the up- or downstream rows that part governs,
-    /// reads `5000,` as `5000` (Perl's `split` drops a trailing empty field), ignores
-    /// a third part, and reads ` 0 ` as a set downstream value (numified to 0) where a
-    /// trimmed `0` would read as the upstream value, so a padded part is refused as
-    /// well. A negative value in its own token (`--distance -1`) never reaches here:
-    /// clap reads `-1` as an unknown flag and exits 2; `--distance=-1` is refused here.
+    /// A part that is not an integer, an empty part other than a trailing one, or a
+    /// third part is refused with the contract line `ERROR: [config] <message>`
+    /// naming the value as written. Ensembl VEP numifies a non-numeric part to 0
+    /// under an `Argument "x" isn't numeric` warning, dropping the up- or downstream
+    /// rows that part governs, ignores a third part, and reads ` 0 ` as a set
+    /// downstream value (numified to 0) where a trimmed `0` would read as the
+    /// upstream value, so a padded part is refused as well. A negative value in its
+    /// own token (`--distance -1`) never reaches here: clap reads `-1` as an unknown
+    /// flag and exits 2; `--distance=-1` is refused here.
     #[test]
     fn distance_non_numeric_is_an_error() {
         for value in [
-            "x", "5000,x", "x,5000", "", "5000,", ",5000", "1.5", "1,2,3", " 2000", "2000, 0",
+            "x",
+            "5000,x",
+            "x,5000",
+            "",
+            ",",
+            ",5000",
+            "5000,,2000",
+            "1.5",
+            "1,2,3",
+            " 2000",
+            "2000, 0",
         ] {
             assert_eq!(
                 refusal(&["vep", "--distance", value]),
@@ -2654,7 +2791,7 @@ mod tests {
         }
     }
 
-    /// `--shift_hgvs 0` sets `shift_3prime` to 0 whatever the command line said
+    /// `--shift_hgvs 0` sets `shift_3prime` to 0 whatever the command line passes
     /// (Runner.pm:792-795); `--shift_hgvs 1` leaves it alone, and a bare run
     /// shifts the HGVS notations and nothing else (BaseRunner.pm:498 reads no
     /// setting from an absent flag).

@@ -39,14 +39,17 @@ use crate::individuals::{add_reference_allele_row, RecordAlleles, RecordReading}
 /// What a run parses every VCF data line with.
 #[derive(Clone, Copy)]
 pub struct VcfParse<'a> {
-    /// Whether each produced variant keeps a copy of the source line in
-    /// `InputVariant::raw_input`. Only the VCF output formatter reads that field
-    /// (it re-emits the original record with a CSQ INFO field appended); every other
-    /// output format ignores it, and the formatter has a complete fallback that
-    /// rebuilds a minimal record from the variant's own coordinates and alleles.
-    /// Capturing unconditionally would allocate one line-length `String` per
-    /// variant only to drop it, so callers pass `true` only when the output format
-    /// needs it; see `RAW_INPUT_OUTPUT_FORMATS` in `runner.rs`.
+    /// Whether each produced variant keeps the source line in
+    /// `InputVariant::raw_input`, one buffer shared by the record's alleles. The
+    /// VCF writer writes a VCF input's line with the INFO field appended
+    /// (OutputFactory/VCF.pm:315) and, when no line is held or the input is not
+    /// a VCF, the line Ensembl VEP builds from the record (:336-337,
+    /// `vep_io::output::vcf_output::to_vcf_record`); the JSON writer prints the
+    /// line as the `input` key (OutputFactory/JSON.pm:230, 247); the default,
+    /// tab and Parquet writers read nothing from it. The Ensembl, HGVS, region,
+    /// SPDI and identifier parsers of `vep_io::input` set the field on every
+    /// record; this parser alone gates it, on the output format, through
+    /// `runner::needs_raw_input_capture`.
     pub capture_raw_input: bool,
     /// The run's `--max_sv_size` (`None` for `-1`), which decides whether a
     /// `<CNV:TR>` record's alternate allele is expanded to an explicit sequence or
@@ -56,7 +59,7 @@ pub struct VcfParse<'a> {
     /// `--minimal`: every bi-allelic sequence record is trimmed and marked
     /// (`vep_core::minimal`), and a multi-allelic record one of whose alleles trims
     /// keeps every ALT, a repeated one and one equal to the reference included, for
-    /// the split [`split_minimal_record`] applies once the record is validated.
+    /// the split `split_minimal_record` applies once the record is validated.
     pub minimal: bool,
     /// The run's reference FASTA, which a `<CNV:TR>` record's expansion reads the
     /// run's reference bases from (`Parser/VCF.pm:516-518`); without one the record
@@ -459,9 +462,14 @@ fn sequence_variants(
     variants
 }
 
-/// Whether `split_variants` splits a validated record (InputBuffer.pm:665-666,
-/// :700): a sequence record with a working string one of whose alleles trims
-/// against its reference, the reference as it stands after `validate_vf`.
+/// Whether `split_variants` splits a validated record (InputBuffer.pm:648,
+/// :665-666, :704): a sequence record whose working string names two or more
+/// alleles beyond the reference (`.+/.+/.+`, an empty trailing allele counting
+/// as none) and one of whose alleles trims against its reference, the reference
+/// as it stands after `validate_vf`. An individual's copy carrying one alternate
+/// allele of a multi-allelic record is bi-allelic and is neither split nor
+/// minimised: `minimise_alleles` runs on the record before the copy is made
+/// (Parser/VCF.pm:362-364), so the copy keeps the record's chopped alleles.
 pub(crate) fn record_splits(variant: &InputVariant) -> bool {
     if variant.is_structural || variant.no_allele {
         return false;
@@ -470,9 +478,10 @@ pub(crate) fn record_splits(variant: &InputVariant) -> bool {
         .record_allele_string_multi
         .as_deref()
         .is_some_and(|working| {
-            let mut parts = working.split('/');
+            let mut parts = working.split('/').filter(|part| !part.is_empty());
             let reference = parts.next().unwrap_or("");
-            split_changes_record(reference, parts)
+            let alts: Vec<&str> = parts.collect();
+            alts.len() >= 2 && split_changes_record(reference, alts)
         })
 }
 
@@ -5823,5 +5832,63 @@ mod tests {
             Some("C/C")
         );
         assert!(!non_variant_minimal[0].minimised);
+    }
+
+    /// `split_variants` reads only a feature whose allele string names two
+    /// alternate alleles (InputBuffer.pm:648, `.+/.+/.+`), and `minimise_alleles`
+    /// runs on the record before its per-individual copies are made
+    /// (Parser/VCF.pm:362-364), so under `--minimal` a copy of a multi-allelic
+    /// record carrying one alternate allele, or two bits naming one allele, is
+    /// neither split nor minimised and keeps the record's chopped alleles; a copy
+    /// naming two alleles that trim is split, in the record's ALT order, and a copy
+    /// carrying the empty allele of a bit past the record's alleles (`3/1`) is not.
+    #[test]
+    fn a_bi_allelic_copy_of_a_multi_allelic_record_is_not_split_under_minimal() {
+        let samples = genotyped_samples(&["S1", "S2", "S3", "S4", "S5"]);
+        let split = IndividualSplit::new(&IndividualRequest::All, &samples, IndividualMode::Copies)
+            .unwrap();
+        let parse = VcfParse {
+            minimal: true,
+            reading: RecordReading {
+                individuals: Some(&split),
+                process_ref_homs: false,
+            },
+            ..VcfParse::default_run(false)
+        };
+        let line = "21\t100\tx\tAGCAA\tCGCAA,A\t.\t.\t.\tGT\t1/2\t0/1\t2/2\t3/1\t0/0";
+        let copies = parse_vcf_line_with(line, &parse).unwrap();
+        let of = |name: &str| -> Vec<&InputVariant> {
+            copies
+                .iter()
+                .filter(|v| v.individual.as_deref() == Some(name))
+                .collect()
+        };
+        assert_eq!(of("S1").len(), 2);
+        assert!(of("S1").iter().all(|v| record_splits(v)));
+        for (name, allele, working) in [
+            ("S2", "CGCAA", "AGCAA/CGCAA"),
+            ("S3", "A", "AGCAA/A"),
+            ("S4", "CGCAA", "AGCAA/CGCAA/"),
+        ] {
+            let copy = of(name);
+            assert_eq!(copy.len(), 1, "{name}");
+            assert!(!record_splits(copy[0]), "{name}");
+            assert_eq!(copy[0].record_allele_string(), working, "{name}");
+            let kept = split_minimal_record(vec![copy[0].clone()]);
+            assert_eq!(kept.len(), 1, "{name}");
+            assert_eq!(kept[0].display_allele(), allele, "{name}");
+            assert_eq!(kept[0].ref_allele, b"AGCAA", "{name}");
+            assert_eq!((kept[0].start, kept[0].end), (100, 104), "{name}");
+            assert!(!kept[0].minimised, "{name}");
+            assert_eq!(kept[0].allele_num, Some(1), "{name}");
+        }
+        assert!(of("S5")[0].hom_ref);
+        let split = split_minimal_record(of("S1").into_iter().cloned().collect());
+        assert_eq!(split.len(), 2);
+        assert_eq!(split[0].display_allele(), "C");
+        assert_eq!((split[0].start, split[0].end), (100, 100));
+        assert_eq!(split[1].display_allele(), "-");
+        assert_eq!((split[1].start, split[1].end), (101, 104));
+        assert!(split.iter().all(|v| v.minimised));
     }
 }

@@ -118,7 +118,7 @@ fn reference_rows(dir: &Path, extra: &[&str]) -> Vec<String> {
 }
 
 /// A header line that is not UTF-8 (`##source=Caf\xe9` in Latin-1) and a sample
-/// name that is not (`S\xe9bastien`) reach the VCF output as the bytes they were
+/// name that is not (`S\xe9q1`) reach the VCF output as the bytes they were
 /// read from, in their header positions, as Ensembl VEP writes the bytes it read
 /// (Parser.pm:235-242 opens the input with no decoding layer); the records of
 /// the file annotate as the plain file's do under every output format.
@@ -127,9 +127,7 @@ fn latin1_header_and_sample_name_pass_through() {
     let dir = tempfile::tempdir().unwrap();
     let mut bytes = Vec::new();
     bytes.extend_from_slice(b"##fileformat=VCFv4.2\n##source=Caf\xe9\n");
-    bytes.extend_from_slice(
-        b"#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\xe9bastien\n",
-    );
+    bytes.extend_from_slice(b"#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\xe9q1\n");
     for record in RECORDS.lines() {
         bytes.extend_from_slice(record.as_bytes());
         bytes.extend_from_slice(b"\tGT\t0/1\n");
@@ -148,7 +146,7 @@ fn latin1_header_and_sample_name_pass_through() {
     assert_eq!(headers[1], b"##source=Caf\xe9");
     assert_eq!(
         *headers.last().unwrap(),
-        b"#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\xe9bastien"
+        b"#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\xe9q1"
     );
     assert_eq!(rows(&out).len(), 5);
 

@@ -238,13 +238,23 @@ impl AllelePatch {
     }
 }
 
-/// The overlap-allele rule on a record whose alleles may equal its reference: every
-/// record of the parser-fed formats, whose parsers keep such an allele, and a VCF
-/// record once `--lookup_ref` replaced its reference. Ensembl VEP builds the overlap
-/// alleles at annotation time (VariationFeatureOverlap.pm:459-491), so an ALT equal
-/// to the reference writes no row and takes no number (`:481`), and the alleles
-/// after it are numbered without it (`:483`); the one ALT of a bi-allelic record, or
-/// the last allele left of a record, then makes it the feature with no allele to
+/// Whether an alternate allele is one Ensembl VEP numbers and writes no row for:
+/// a `*` (the VCF marker for a base an upstream deletion covers) or a `<DEL:*>`
+/// (VariationFeatureOverlap.pm:483-484). The VCF parser leaves such an allele out
+/// of a record's alleles; the parsers of the other formats keep it.
+pub(crate) fn rowless_allele(variant: &InputVariant) -> bool {
+    matches!(variant.alt_allele(), b"*" | b"<DEL:*>")
+}
+
+/// The overlap-allele rule on a record whose alleles may equal its reference or be
+/// a `*` or `<DEL:*>`: every record of the parser-fed formats, whose parsers keep
+/// such an allele, and a VCF record once `--lookup_ref` replaced its reference.
+/// Ensembl VEP builds the overlap alleles at annotation time
+/// (VariationFeatureOverlap.pm:459-491), so an ALT equal to the reference writes no
+/// row and takes no number (`:481`), and the alleles after it are numbered without
+/// it (`:483`); a `*` or `<DEL:*>` takes its number and writes no row (`:484`), so
+/// the alleles after it keep theirs. The one ALT of a bi-allelic record, or the
+/// last allele left of a record, then makes it the feature with no allele to
 /// annotate, written as a non-variant line is. The reference row of
 /// `--process_ref_homs` stands whatever the alternates equal: Ensembl VEP builds the
 /// reference overlap allele, numbered 0, before it tests any alternate (`:469-474`),
@@ -255,6 +265,7 @@ pub(crate) fn keep_overlap_allele(variant: &mut InputVariant, last: bool) -> boo
     if variant.is_structural || variant.no_allele || variant.reference_allele_row {
         return true;
     }
+    let rowless = rowless_allele(variant);
     let equal_to_reference = match variant.record_allele_string_multi.as_deref() {
         None => variant.alt_allele() == variant.ref_allele.as_slice(),
         Some(multi) => {
@@ -271,7 +282,7 @@ pub(crate) fn keep_overlap_allele(variant: &mut InputVariant, last: bool) -> boo
             }
         }
     };
-    if !equal_to_reference {
+    if !equal_to_reference && !rowless {
         return true;
     }
     if last {
@@ -1091,6 +1102,40 @@ mod tests {
         assert!(judge(&rules, &mut kept_alt, dir.path()).0);
         assert!(keep_overlap_allele(&mut kept_alt, true));
         assert!(!kept_alt.no_allele);
+    }
+
+    /// A `*` or `<DEL:*>` allele of a parser-fed record takes its number and writes
+    /// no row (VariationFeatureOverlap.pm:483-484): Ensembl VEP 116.2 writes the
+    /// Ensembl-format line `21 30282169 30282169 C/*/A` as the one row `A` with
+    /// ALLELE_NUM 2, `C/A/*` as `A` with ALLELE_NUM 1, and `C/*`, `C/<DEL:*>` as
+    /// the feature with no allele (no default row, JSON `?`).
+    #[test]
+    fn star_and_delstar_alleles_write_no_row() {
+        let mut star = variant("21", 30282169, 30282169, "C", "*");
+        star.record_allele_string_multi = Some("C/*/A".into());
+        assert!(rowless_allele(&star));
+        assert!(!keep_overlap_allele(&mut star, false));
+        let mut after_star = variant("21", 30282169, 30282169, "C", "A");
+        after_star.allele_index = 1;
+        after_star.record_allele_string_multi = Some("C/*/A".into());
+        assert!(!rowless_allele(&after_star));
+        assert!(keep_overlap_allele(&mut after_star, true));
+        assert!(!after_star.no_allele);
+        assert_eq!(after_star.allele_num, None);
+        let mut trailing_star = variant("21", 30282169, 30282169, "C", "*");
+        trailing_star.allele_index = 1;
+        trailing_star.record_allele_string_multi = Some("C/A/*".into());
+        assert!(!keep_overlap_allele(&mut trailing_star, false));
+        for alt in ["*", "<DEL:*>"] {
+            let mut alone = variant("21", 30282169, 30282169, "C", alt);
+            assert!(rowless_allele(&alone));
+            assert!(keep_overlap_allele(&mut alone, true));
+            assert!(alone.no_allele, "{alt}");
+            assert_eq!(alone.alt_alleles, [b"*".to_vec()]);
+        }
+        let mut ordinary = variant("21", 30282169, 30282169, "C", "A");
+        assert!(keep_overlap_allele(&mut ordinary, true));
+        assert!(!ordinary.no_allele);
     }
 
     /// The reference row of `--process_ref_homs` stands under `--lookup_ref`
