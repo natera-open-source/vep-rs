@@ -251,6 +251,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cleared from the dependency tree: RUSTSEC-2026-0346, RUSTSEC-2026-0347, RUSTSEC-2026-0348 and RUSTSEC-2026-0349 (rustls 0.23.46) and the RUSTSEC-2026-0253 unsoundness notice (lru 0.18.5 via mysql 28.0.4), none reachable from the `vep` binary. (#N)
 - Cleared from the dependency tree: RUSTSEC-2026-0382 (rustls-webpki 0.103.16, an optional `reqwest` TLS backend no binary compiles), not reachable from the `vep` binary. (#N)
 
+### Fixed
+
+- The container image distrusts the two compromised eMudhra CA roots until Debian trixie ships the fixed ca-certificates, so cache downloads cannot be intercepted through a forged certificate. (#70)
+
 ## [0.4.0] - 2026-10-16
 
 ### Added

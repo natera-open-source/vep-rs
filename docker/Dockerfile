@@ -48,6 +48,18 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates libssl3t64 libstdc++6 tabix zlib1g \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 1000 --user-group vep
+# eMudhra (October 2026): its intermediates were issued from near-zero-entropy
+# keys, so anyone on-path can forge a certificate for any domain, and OpenSSL
+# clients never consult revocation. Distrust the two roots those chains hang
+# from until trixie ships ca-certificates 20250419+deb13u1 (Debian bug #1151413,
+# https://emudhra.we-have-a-problem.com/). Drop this once it lands: #69.
+RUN sed -i \
+      -e 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt|!&|' \
+      -e 's|^mozilla/Comodo_AAA_Services_root.crt|!&|' \
+      /etc/ca-certificates.conf \
+ && update-ca-certificates
+# Gate: the store must never (re)activate those roots, workaround or not.
+RUN ! grep -qE '^(mozilla/emSign_ECC_Root_CA_-_G3|mozilla/Comodo_AAA_Services_root)\.crt$' /etc/ca-certificates.conf
 COPY --from=duckdb /tmp/duckdb/duckdb /usr/local/bin/duckdb
 COPY --from=duckdb /tmp/duckdb/LICENSE /usr/share/doc/duckdb/LICENSE
 COPY LICENSE NOTICE /usr/share/doc/vep-rs/
