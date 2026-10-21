@@ -38,10 +38,11 @@ Masks, floors and field pairs (comparison mode):
   ``most_severe_consequence`` of each JSON record that lost a row from the rows that remain,
   and in ``--warnings`` mode requires the candidate's notice about the exclusion and leaves
   it out of the comparison. The class ``order_only`` is built in too: the set-valued columns
-  ``DOMAINS`` and ``FREQS`` (and the ``Extra`` text carrying them) agree when their items
-  agree as a multiset in any order, since Ensembl VEP prints the protein features in the
-  order of the cache's array and the frequencies in hash order; every such agreement is
-  counted per column as ``order_only`` in the report, never passed as equal.
+  ``DOMAINS``, ``FREQS`` and ``ZYG`` (and the ``Extra`` text carrying them) agree when their
+  items agree as a multiset in any order, since Ensembl VEP prints the protein features in
+  the order of the cache's array and the frequencies and the per-sample zygosities in hash
+  order; every such agreement is counted per column as ``order_only`` in the report, never
+  passed as equal.
 * ``--floors COL=MIN,...``: the populated (present and not ``-``) count of column ``COL``
   must reach ``MIN`` on both sides. ``COL`` is the default-format name in every format; in
   the JSON format the count is taken under the column's JSON key (lower-cased and renamed
@@ -144,8 +145,9 @@ JSON_IDENTITY_KEY = "vep_rs_version"
 # Columns the default format prints on every row of a record while the JSON format
 # carries them once per record, in colocated_variants or at the top level, or not at all:
 # the JSON factory's add_colocated_variant_info returns its hash unchanged (JSON.pm:493-495),
-# so FREQS (OutputFactory.pm:1149-1163) has no JSON key, and JSON.pm:419-426 copies the AF
-# keys alone out of the per-allele hash that carries MAX_AF and MAX_AF_POPS.
+# so FREQS (OutputFactory.pm:1149-1163) has no JSON key, JSON.pm:419-426 copies the AF
+# keys alone out of the per-allele hash that carries MAX_AF and MAX_AF_POPS, and ZYG
+# (OutputFactory.pm:974-988) is a top-level key of the record object.
 RECORD_LEVEL_COLUMNS = {
     "Uploaded_variation",
     "Location",
@@ -162,17 +164,24 @@ RECORD_LEVEL_COLUMNS = {
     "MAX_AF",
     "MAX_AF_POPS",
     "CLINVAR_SOMATIC_CLASSIFICATION",
+    "ZYG",
 }
 RECORD_LEVEL_COLUMN_RE = re.compile(r"(^|_)AF$")
 # The built-in class under which a set-valued column agrees when its items agree as a
 # multiset: Ensembl VEP prints DOMAINS in the order of the cache's protein_features array
-# (ensembl-variation BaseTranscriptVariation.pm:634-643 at release/116, the database's row
-# order when the cache was built) and FREQS in hash order (OutputFactory.pm:1152-1153), so
-# neither order carries meaning.
+# (ensembl-variation BaseTranscriptVariation.pm:634-643 at release/116 copies it from the
+# core API's Translation.pm:772-819, which buckets a translation's features by analysis and
+# flattens the buckets in Perl hash order, the database's rows inside each), FREQS in hash
+# order (OutputFactory.pm:1152-1153) and the ZYG list of --individual_zyg in the hash order
+# of its samples (OutputFactory.pm:983-987), so none of the orders carries meaning.
 ORDER_ONLY = "order_only"
-ORDER_ONLY_COLUMNS = ("DOMAINS", "FREQS")
+ORDER_ONLY_COLUMNS = ("DOMAINS", "FREQS", "ZYG")
 # The marker ``order_only_fields`` gives a JSON array field in place of a list separator.
 JSON_ARRAY = "json"
+# The JSON field of each order-only column with its separator: the ``domains`` array of a
+# consequence entry, and the record entry's ``zyg`` array, whose strings ``json_scalar``
+# joins with ``,``; FREQS has no JSON key.
+ORDER_ONLY_JSON_FIELDS = {"domains": JSON_ARRAY, "zyg": ","}
 # The note of a floor the JSON format cannot count.
 FLOOR_NOT_APPLICABLE = (
     "a column the JSON format has no row count for (a record-level column is carried once "
@@ -916,16 +925,12 @@ def same_items(expected: str, actual: str, separator: str) -> bool:
 def order_only_fields(fmt: str) -> dict[str, str]:
     """The fields the ``order_only`` class compares as multisets in ``fmt``, each with its
     list separator: ``,`` in the default and tab formats (``convert_arrayref``,
-    Utils.pm:185-198), ``&`` in VCF (VCF.pm:391), and in JSON the array under the column's
-    JSON key (FREQS has none)."""
+    Utils.pm:185-198), ``&`` in VCF (VCF.pm:391), and in JSON the arrays of
+    ``ORDER_ONLY_JSON_FIELDS``."""
     if fmt == "vcf":
         return dict.fromkeys(ORDER_ONLY_COLUMNS, "&")
     if fmt == "json":
-        return {
-            JSON_RENAME.get(c.lower(), c.lower()): JSON_ARRAY
-            for c in ORDER_ONLY_COLUMNS
-            if c not in RECORD_LEVEL_COLUMNS
-        }
+        return dict(ORDER_ONLY_JSON_FIELDS)
     return dict.fromkeys(ORDER_ONLY_COLUMNS, ",")
 
 
@@ -1683,24 +1688,37 @@ class SelfParity:
     def _record_checks(self) -> dict:
         """Record-level values the JSON format carries once: ``most_severe_consequence``
         against the rank order of the object's own terms (``JSON.pm:387-388``),
-        ``colocated_variants`` ids against the rows' ``Existing_variation``, and the VCF
-        ``ID`` column against the record's name."""
+        ``colocated_variants`` ids against the rows' ``Existing_variation``, the ``zyg``
+        value against the rows' ``ZYG`` (the list of ``--individual_zyg`` as a multiset, since
+        its order carries no meaning; the one zygosity of ``--individual`` as itself), and the
+        VCF ``ID`` column against the record's name."""
         problems: list[str] = []
         existing_by_name: dict[tuple[str, str], set[str]] = defaultdict(set)
+        zyg_by_name: dict[tuple[str, str], set[str]] = defaultdict(set)
         for row in self.default:
             name, location, _ = self.parts[row.key]
             existing_by_name[(name, location)].add(row.fields.get("Existing_variation", "-"))
+            zyg = row.fields.get("ZYG", "-")
+            if zyg != "-":
+                zyg_by_name[(name, location)].add(",".join(sorted(zyg.split(","))))
         for (name, location), objects in sorted(self.objects_by_name.items()):
             want_ids: set[str] = set()
             for value in existing_by_name.get((name, location), set()):
                 want_ids.add(",".join(sorted(default_list(value) or [])))
             got_ids: set[str] = set()
+            got_zyg: set[str] = set()
             for obj in objects:
                 terms = set()
                 for list_name, _ in JSON_CONSEQUENCE_LISTS:
                     for item in obj.get(list_name) or []:
                         if isinstance(item, dict):
                             terms.update(json_list(item.get("consequence_terms")) or [])
+                # An object with no consequence has no row to hold its zyg to: the
+                # reference-homozygous copy of --individual (OutputFactory.pm:511 takes the
+                # alternate alleles alone without --process_ref_homs) and a record carried
+                # with no allele to annotate.
+                if "zyg" in obj and terms:
+                    got_zyg.add(",".join(sorted(json_scalar(obj["zyg"]).split(","))))
                 want = most_severe(terms)
                 got = obj.get("most_severe_consequence")
                 if got is None and not terms and "id" not in obj:
@@ -1719,6 +1737,9 @@ class SelfParity:
                     f"{name}|{location}: Existing_variation {sorted(want_ids)} "
                     f"against colocated_variants ids {sorted(got_ids)}"
                 )
+            want_zyg = zyg_by_name.get((name, location), set())
+            if (name, location) in existing_by_name and want_zyg != got_zyg:
+                problems.append(f"{name}|{location}: ZYG {sorted(want_zyg)} against the objects' zyg {sorted(got_zyg)}")
         for e in self.vcf_records:
             label = e.key.split("|", 1)[0]
             obj = self.records.get(label)
@@ -1743,7 +1764,7 @@ class SelfParity:
             )
         records = self._record_checks()
         reasons = [r for pair in pairs.values() for r in pair["reasons"]] + records["problems"]
-        keyed_or_record_checked = {"Uploaded_variation", "Location", "Existing_variation"}
+        keyed_or_record_checked = {"Uploaded_variation", "Location", "Existing_variation", "ZYG"}
         not_compared = {
             "default_record_level": sorted(
                 c for c in self.default_columns
@@ -1936,8 +1957,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--masks",
         help="comma-separated intended-divergence classes applied: the manifest's, and the built-in "
-        "regulatory_feature_rows (the one class --warnings mode takes) and order_only (DOMAINS and "
-        "FREQS compared as multisets)",
+        "regulatory_feature_rows (the one class --warnings mode takes) and order_only (DOMAINS, "
+        "FREQS and ZYG compared as multisets)",
     )
     ap.add_argument(
         "--floors",

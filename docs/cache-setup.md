@@ -129,7 +129,7 @@ An input may name a chromosome as the cache does (`21`), with a `chr` prefix (`c
 
 A name that resolves to nothing skips the record with Ensembl VEP's warning (`Chromosome NC_000022.11 not found in annotation sources or synonyms`).
 
-The output keeps the input's spelling in `Location`, in the JSON `seq_region_name` and in a VCF input's `CHROM` column, which is written as read. A bare `M` the cache knows as `MT` but not as `M` or `chrM` prints `MT` in `Location` and `seq_region_name`, as Ensembl VEP renames it; [A bare `M` under a cache whose synonyms name `chrM`](divergences/bare-m-chromosome.md) describes the one case where the two engines then differ.
+The output keeps the input's spelling in `Location`, in the JSON `seq_region_name` and in a VCF input's `CHROM` column, which is written as read. A bare `M` the cache knows as `MT` but not as `M` or `chrM` prints `MT` in `Location` and `seq_region_name`, as Ensembl VEP renames it; [A bare `M` under a cache whose synonyms name `chrM`](divergences/bare-m-chromosome.md) describes the cases where the two engines then differ.
 
 The synonyms come from the cache's `chr_synonyms.txt`, the file the Ensembl VEP cache ships and the converter copies; the native builder writes it from the core `seq_region_synonym` table with `--core-dumps`. `--synonyms <file>` replaces the cache's file rather than adding to it. The file holds, per line, whitespace-separated names of one chromosome, the first the reference name and every other a synonym of it, in both directions. A file that cannot be read is `ERROR: [config] Could not read synonyms file <file>: <reason>` for a `--synonyms` file and `ERROR: [cache] ...` for the cache's own.
 

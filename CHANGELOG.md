@@ -98,7 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An identifier the cache lacks is warned about as Ensembl VEP warns (`No variant found with ID`) and the list goes on; a mapping failing coordinate checks is skipped. (#N)
 - The `GRCh38-input-id` corpus compares identifier input, under `--format id` and under detection, against Ensembl VEP 116.2 connected to the Ensembl database. (#N)
 - The `GRCh38-input-region` corpus compares region input, under `--format region` and under format detection, against Ensembl VEP 116.2's output. (#N)
-- `compare_vep_formats.py --masks order_only` compares `DOMAINS` and `FREQS` as multisets, counting every order-only agreement per column, since Ensembl VEP prints neither in a meaningful order. (#N)
+- `compare_vep_formats.py --masks order_only` compares `DOMAINS`, `FREQS` and `ZYG` as multisets, counting every order-only agreement per column, since Ensembl VEP prints none in a meaningful order. (#N)
 - The `GRCh38-vcf-edge-cases` golden corpus: `<DEL:*>`, reference-equal and repeated ALTs, `*`, the anchor chop, gVCF alleles, breakends, the incomplete deletion, chromosome spellings, POS 0, five-column, CRLF, Latin-1 and stdin twins. (#N)
 - `build_golden_corpus.py classify` keeps a zero-row record whose reference JSON object carries `most_severe_consequence` `?`, a feature with no allele to annotate, instead of refusing it. (#N)
 - HGVS transcript notation (`c.`, `n.`) resolves offline from the transcript cache and `--fasta`, by stable id or gene name through Ensembl VEP's pick order, with UTR and intronic positions. (#N)
@@ -234,6 +234,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `*` or `<DEL:*>` allele of an Ensembl-format line writes no row and keeps its allele number; a line with no other allele is the feature with none. (#N)
 - Under `--safe --individual --minimal`, an individual's copy carrying one alternate allele of a multi-allelic record keeps the record's chopped alleles, as Ensembl VEP writes it. (#N)
 - `--exclude_predicted` is accepted and appends Ensembl VEP's `not stable_id match ^X._` transcript filter after the `--transcript_filter` values; it was refused as an unexpected argument. (#N)
+- The structural-variant comparator sets aside the literal rows a run with a FASTA writes for the real allele behind a leading `RN=0`, beside the symbolic rows. (#N)
+- `build_golden_corpus.py classify` numbers a flag set run over its own input by that file's records and keeps a record `--coding_only` or `--no_intergenic` left rowless on both sides. (#N)
+- The container image's documentation label points at the installation page's container section. (#N)
 
 ### Security
 

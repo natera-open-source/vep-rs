@@ -2628,9 +2628,8 @@ class BndSynonymMateRowsTests(unittest.TestCase):
     for `21`) loses its mate rows in the reference alone (StructuralVariationOverlap.pm
     116:86-102, 144-160; Utils/VariationEffect.pm 116:111-124); a mate named by an accession
     on another chromosome passes the overlap test (InputBuffer.pm 116.2:348-357) and fails the
-    slice test (AnnotationType/Transcript.pm 116.2:134); vep-rs writes no mate row for it
-    either, so on real output nothing is set aside, and a vep-rs row under such a mate off the
-    own chromosome, which only a constructed input produces, is set aside."""
+    slice test (AnnotationType/Transcript.pm 116.2:134), while vep-rs resolves it through the
+    synonym table and writes the mate rows, which are set aside."""
 
     LOC = "21:26037668"
     SYN = "N[NC_000022.11:26037668["
@@ -3957,6 +3956,69 @@ class RnZeroAlleleDroppedTests(unittest.TestCase):
                 self.assertEqual(C.cnv_tr_rn_zero_dropped_direction(record), "loss")
                 perl_open, rust_open, masks = ADJUSTED(perl, self.rust(), [record])
                 self.assertEqual((perl_open, rust_open, masks.rn_zero_rust), (set(), set(), {loss}))
+
+    def test_a_vep_rs_run_with_a_fasta_writes_the_dropped_allele_literally(self) -> None:
+        """`21 30425587 x N <CNV:TR>,<CNV:TR> . . SVTYPE=CNV;END=30425596;SVLEN=9;RN=0,1;RUS=AGC;RUC=4`
+        with a FASTA on both sides: vep-rs writes Ensembl VEP 116.2's two `-` rows for the
+        `RN=0` allele and, for the dropped real allele, `21:30425588-30425596 AGCAGCAGCAGC
+        ENST00000390690 protein_altering_variant` and `AGCAGCAGCAGC ENST00000334068
+        upstream_gene_variant`, the whole allele over the run (the multi-allelic string is not
+        trimmed). The two literal rows are the dropped allele's, set aside; a literal row under
+        another allele, or at another location, is not."""
+        record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=0,1;RUS=AGC;RUC=4")
+        perl = {T(self.RUN, "-", "ENST00000334068", "upstream_gene_variant"), T(self.RUN, "-", "ENST00000390690", "inframe_deletion")}
+        literal = {T(self.RUN, "AGCAGCAGCAGC", "ENST00000334068", "upstream_gene_variant"),
+                   T(self.RUN, "AGCAGCAGCAGC", "ENST00000390690", "protein_altering_variant")}
+        rust = perl | literal
+        self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(perl, rust, [record]), literal)
+        perl_open, rust_open, masks = ADJUSTED(perl, rust, [record])
+        self.assertEqual((perl_open, rust_open, masks.rn_zero_rust), (set(), set(), literal))
+        other = T(self.RUN, "AGCAGCAGCAGCAGC", "ENST00000390690", "protein_altering_variant")
+        elsewhere = T("21:30425596-30425597", "AGCAGCAGCAGC", "ENST00000390690", "inframe_insertion")
+        self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(perl, rust | {other, elsewhere}, [record]), literal)
+        # The unchanged real allele behind a leading `RN=0` (`RUC=3`) gets no row from a run
+        # with a FASTA; a row under the run's own sequence would be the allele's literal.
+        unchanged = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=0,1;RUS=AGC;RUC=3")
+        self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(perl, perl, [unchanged]), set())
+        run_itself = T(self.RUN, "AGCAGCAGC", "ENST00000390690", "protein_altering_variant")
+        self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(perl, perl | {run_itself}, [unchanged]), {run_itself})
+
+    def test_the_dropped_allele_is_expanded_as_the_parser_expands_it(self) -> None:
+        """The literal is the real allele's repeat sequences, each unit repeated by its count:
+        RB over the unit length (`RB=12` is four `AGC`), a count truncated as Perl's `x`
+        truncates it (`RUC=4.9` is four), two repeat sequences joined in order (`RN=0,2`),
+        `.` read as `N`, the string upper-cased, and a loss (`RUC=2`, `AGCAGC`: with a FASTA
+        vep-rs writes `21:30425588-30425596 AGCAGC ENST00000390690 inframe_deletion` beside
+        the `-` rows, Ensembl VEP 116.2 the `-` rows alone). Behind a trailing `RN=0` the
+        dropped allele is the `RN=0` one and only its symbolic `feature_truncation` row is set
+        aside, and a record outside the class sets nothing aside."""
+        perl = {T(self.RUN, "-", "ENST00000334068", "upstream_gene_variant"), T(self.RUN, "-", "ENST00000390690", "inframe_deletion")}
+        cases = (
+            ("RN=0,1;RUS=AGC;RB=12", "AGCAGCAGCAGC"),
+            ("RN=0,1;RUS=AGC;RUC=4.9", "AGCAGCAGCAGC"),
+            ("RN=0,2;RUS=AGC,AG;RUC=3,2", "AGCAGCAGCAGAG"),
+            ("RN=0,1;RUS=.;RUC=12", "NNNNNNNNNNNN"),
+            ("RN=0,1;RUS=agc;RUC=4", "AGCAGCAGCAGC"),
+            ("RN=0,1;RUS=AGC;RUC=2", "AGCAGC"),
+        )
+        for info, literal in cases:
+            with self.subTest(info=info):
+                record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + info)
+                row = T(self.RUN, literal, "ENST00000390690", "protein_altering_variant")
+                decoy = T(self.RUN, literal + "AGC", "ENST00000390690", "protein_altering_variant")
+                self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(perl, perl | {row, decoy}, [record]), {row})
+        gain_rows = {T("21:30425596-30425597", "AGC", "ENST00000334068", "upstream_gene_variant"),
+                     T("21:30425596-30425597", "AGC", "ENST00000390690", "inframe_insertion")}
+        loss = T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_truncation,inframe_deletion")
+        row = T(self.RUN, "AGCAGCAGCAGC", "ENST00000390690", "protein_altering_variant")
+        for info in ("RN=1,0;RUS=AGC;RUC=4", "RN=2,0;RUS=AGC,AGC;RUC=2,2"):
+            with self.subTest(info=info):
+                record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + info)
+                self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(gain_rows, gain_rows | {loss, row}, [record]), {loss})
+        for info in ("RN=1,1;RUS=AGC,AGC;RUC=4,2", "RN=0,0;RUS=AGC;RUC=4", "RN=.,1;RUS=AGC;RUC=4"):
+            with self.subTest(info=info):
+                record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + info)
+                self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(perl, perl | {row}, [record]), set())
 
     def test_shapes_outside_the_class_are_not_judged(self) -> None:
         """A real allele that is a loss (`RN=0,1;RUS=AGC;RUC=2`) shares the direction term with

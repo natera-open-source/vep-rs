@@ -21,7 +21,7 @@ A bracket breakend names its mate inside the brackets of its allele, and Ensembl
 
 **The classes it produces.**
 - Class 23: the own-end rows of a bracket breakend whose mate is on another chromosome, lost when a mate-chromosome transcript names its slice first (the synthetic breakend set: 202 vep-rs tuples on 53 records in GRCh37, 1,012 on 71 in GRCh38). Set aside: vep-rs's rows, in the structural-variant comparator under the cache authority, the transcript cache that says which chromosome a transcript is on; counted and not set aside by the SNP/indel comparator.
-- Class 24: the mate rows of a bracket breakend whose mate's chromosome is spelled with a prefix the mate-allele test does not resolve, `Chr21` (none on the measured sets). Set aside the same way.
+- Class 24: the mate rows of a bracket breakend whose mate's chromosome is spelled in a way the later tests do not resolve, `Chr21` or an accession naming another chromosome (none on the measured sets). Set aside the same way.
 
 A third shape of the same test, with no class number, is counted under the name `fasta_named_slice_intergenic` and never set aside. Under `--check_ref` or `--lookup_ref` with a FASTA whose sequence names differ from the cache's (`chr1` against `1`), every record's slice is named after the FASTA (`Parser.pm` line 749) and every transcript fails the slice test at line 141. So Ensembl VEP writes `intergenic_variant` where vep-rs writes transcript rows. The condition is the run's configuration, not a property of any record, and it reaches every record of the run; both comparators count it, and a run that shows the count is re-run with matching sequence names rather than scored. It is 0 on every measured set.
 
@@ -186,7 +186,7 @@ The gnomAD-SV files, the 1000 Genomes files and the other synthetic files show n
 
 ### 24.1 What a reader needs to know first
 
-A VCF may name a chromosome by any of the names its reference assembly report lists: `21`, `chr21`, `NC_000021.9`, `CM000683.2`. Ensembl VEP's cache carries a synonym table for them (`--synonyms` adds to it), and its chromosome-aware overlap resolves a mate's name through that table before matching it to a transcript's chromosome (`InputBuffer.pm` lines 348-357). Two later tests compare names again. The slice test of `AnnotationType/Transcript.pm` lines 125-143 strips a leading `chr` from a breakend's name, case-insensitively, and compares the rest as written. `_close_to_feature` (`StructuralVariationOverlap.pm` lines 144-160) accepts a synonym table key verbatim or a case-folded equality of the whole name. The mate rows are written only when every test passes.
+A VCF may name a chromosome by any of the names its reference assembly report lists: `21`, `chr21`, `NC_000021.9`, `CM000683.2`. Ensembl VEP's cache carries a synonym table for them (`--synonyms` names a file that replaces it, `CacheDir.pm` line 254), and its chromosome-aware overlap resolves a mate's name through that table before matching it to a transcript's chromosome (`InputBuffer.pm` lines 348-357). Two later tests compare names again. The slice test of `AnnotationType/Transcript.pm` lines 125-143 strips a leading `chr` from a breakend's name, case-insensitively, and compares the rest as written. `_close_to_feature` (`StructuralVariationOverlap.pm` lines 144-160) accepts a synonym table key verbatim or a case-folded equality of the whole name. The mate rows are written only when every test passes.
 
 ### 24.2 The record
 
@@ -244,13 +244,13 @@ Ensembl VEP writes the two own-end rows and nothing under the mate allele; vep-r
 
 The chromosome 21 transcripts reach the record through its own coordinates and pass the slice test on the record's slice, `21`. For each of them the mate allele is added to the row only if `_close_to_feature` passes for the breakend (`StructuralVariationOverlap.pm` lines 90-102). Its name test, `_compare_seq_region_names` (`Utils/VariationEffect.pm` lines 111-124), finds `Chr21` neither among the synonym table's keys, which hold `chr21`, nor equal to `21` once both are lower-cased. The own-end rows are written; the mate allele is never added. With the mate written `chr21` or `21` the same test passes and the mate rows are written.
 
-A mate written with a RefSeq accession takes the other route. On another chromosome, `N[NC_000002.12:321682[`, the overlap resolves the accession (`InputBuffer.pm` line 356) and hands the record to the chromosome 2 transcripts. The breakend's `seq_region_name` is the accession as the allele wrote it (`StructuralVariationFeature.pm` lines 1300-1304). The slice test then compares it, `chr` stripped, with the transcript's `2` (`AnnotationType/Transcript.pm` lines 130-136), finds no match and drops the pair at line 143. Ensembl VEP writes no mate row. vep-rs does not resolve the accession and writes no mate row either, so the two outputs agree and nothing is set aside.
+A mate written with a RefSeq accession takes the other route. On another chromosome, `N[NC_000002.12:321682[`, the overlap resolves the accession (`InputBuffer.pm` line 356) and hands the record to the chromosome 2 transcripts. The breakend's `seq_region_name` is the accession as the allele wrote it (`StructuralVariationFeature.pm` lines 1300-1304). The slice test then compares it, `chr` stripped, with the transcript's `2` (`AnnotationType/Transcript.pm` lines 130-136), finds no match and drops the pair at line 143. Ensembl VEP writes no mate row. vep-rs resolves the accession through the synonym table, as it resolves the record's own chromosome, and writes the mate rows it writes for `2`; the comparator sets them aside ([24.7](#247-how-the-comparator-treats-this-class)).
 
-On the record's own chromosome, `N[NC_000021.9:30425700[`, the transcripts reach the record through its own coordinates, the accession is a key of the synonym table, and Ensembl VEP writes the mate rows. vep-rs writes none, a vep-rs under-annotation that stays charged to vep-rs in both figures.
+On the record's own chromosome, `N[NC_000021.9:30425700[`, the transcripts reach the record through its own coordinates, the accession is a key of the synonym table, and Ensembl VEP writes the mate rows. vep-rs resolves the accession the same way and writes the same mate rows, so the two outputs agree.
 
 ### 24.5 Why vep-rs's row is the correct one
 
-The mate's chromosome is a fact of the allele, and `Chr21` names the chromosome the cache holds as `21` and lists as `chr21`. The transcripts within 5,000 bases of the mate position on that chromosome are the mate rows under Ensembl VEP's own admission rule, and Ensembl VEP writes them itself when the allele spells the chromosome `chr21` or `21` ([24.6](#246-try-it-yourself)). A prefix that differs from a listed synonym by its case cannot be a reason to withhold them.
+The mate's chromosome is a fact of the allele, and `Chr21` names the chromosome the cache holds as `21` and lists as `chr21`. The transcripts within 5,000 bases of the mate position on that chromosome are the mate rows under Ensembl VEP's own admission rule, and Ensembl VEP writes them itself when the allele spells the chromosome `chr21` or `21` ([24.6](#246-try-it-yourself)). A prefix that differs from a listed synonym by its case cannot be a reason to withhold them, and an accession the synonym table lists names its chromosome as surely: Ensembl VEP's own overlap resolves it before the slice test refuses the pair on spelling.
 
 ### 24.6 Try it yourself
 
@@ -260,11 +260,11 @@ Annotate the record with each spelling of the mate's chromosome, with Ensembl VE
 | --- | --- | --- |
 | `N[21:30425700[` or `N[chr21:30425700[` | 4 (14): own end and mate | 4 (14) |
 | `N[Chr21:30425700[` | 2 (7): own end only | 4 (14) |
-| `N[NC_000021.9:30425700[` (GRCh37 `NC_000021.8`) | 4 (14) | 2 (7): own end only, a vep-rs under-annotation charged to vep-rs |
+| `N[NC_000021.9:30425700[` (GRCh37 `NC_000021.8`) | 4 (14) | 4 (14) |
 | `N[2:321682[` or `N[chr2:321682[` (GRCh37 `Y:15437971`, `chrY:15437971`) | 13 (15) | 13 (15); the mate rows differ by class 11 |
-| `N[NC_000002.12:321682[` (GRCh37 `NC_000024.9:15437971`) | 2 (7): own end only | 2 (7): own end only, so the outputs agree and nothing is set aside |
+| `N[NC_000002.12:321682[` (GRCh37 `NC_000024.9:15437971`) | 2 (7): own end only | 13 (15), as for `2` (`Y` on GRCh37), the chromosome the accession resolves to; the mate rows are set aside |
 
-Only the capitalised prefix produces the class: Ensembl VEP writes the own-end rows alone where vep-rs also writes the mate rows.
+The capitalised prefix and an accession naming another chromosome produce the class: Ensembl VEP writes the own-end rows alone where vep-rs also writes the mate rows.
 
 ### 24.7 How the comparator treats this class
 

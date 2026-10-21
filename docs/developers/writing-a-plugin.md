@@ -134,8 +134,11 @@ is never passed to a plugin.
 
 The two JSON documents are the serde serialization of `TranscriptConsequence`
 (`crates/vep-core/src/consequence.rs`) and `InputVariant`
-(`crates/vep-core/src/variant.rs`). The Rust field names are the JSON keys, and
-those two structs are the authoritative schema. Absent optional values are
+(`crates/vep-core/src/variant.rs`), and those two structs with their serde
+attributes are the authoritative schema. No field is renamed, so a JSON key is
+the Rust field name. A field marked `#[serde(skip)]` (`id_rank`,
+`raw_input_bytes`) never appears, a field marked `skip_serializing_if` is left
+out when it is `None`, empty or zero, and every other absent optional value is
 `null`.
 
 **The consequence document.** Every field a plugin will find:

@@ -3,8 +3,8 @@
 ## Building and Testing
 
 ```bash
-# Run the full test suite (1,484 tests: 1,483 run, 1 #[ignore]d; the per-crate
-# counts are in manuscript/data/code_metrics.csv)
+# Run the full test suite (the per-crate test counts are in
+# manuscript/data/code_metrics.csv)
 cargo test --workspace
 
 # Build a release binary (target/release/vep)
@@ -83,8 +83,8 @@ vep-rs accepts and annotates nothing for, and `order_only` compares the `DOMAINS
 `FREQS` and `ZYG` items of both sides as multisets, for a native cache that lists a
 transcript's protein features in another order than the Ensembl cache and for the
 sample order of `--individual_zyg`, which Ensembl VEP prints in hash order
-(`scripts/concordance/compare_vep_formats.py --masks` applies the same classes, its
-`order_only` comparing only `DOMAINS` and `FREQS`). A
+(`scripts/concordance/compare_vep_formats.py --masks` applies the same two classes, its
+`order_only` over the same three columns). A
 flag set may carry its own `masks` for its run alone, kept when `flag-set` rewrites
 the set's entry. The list is written into the manifest by hand (no `select` option
 writes it), `select` keeps it when it regenerates the corpus, every subcommand
@@ -135,7 +135,10 @@ selected with `--keep-samples N`, which keeps `FORMAT` and the first N sample
 columns and adds records until every genotype class those samples show in the
 source has exemplars (`check` refuses a corpus missing one); a class the corpus
 must carry whether or not the source shows it is named with
-`--require-genotype-class`, which `select` and `check` both enforce. Each corpus
+`--require-genotype-class`, which `select` and `check` both enforce.
+`--include sid=name` carries the record of suite `sid` that `name` names, by its
+ID or by Ensembl VEP's auto-name, whatever the sampling chooses, and
+`--keep-records` keeps every record of the manifest being regenerated. Each corpus
 must stay under 15 MB on disk (`each_corpus_fits_its_size_budget`), every flag
 set's expected directory included; prefer narrower exemplars (`--max-span`) and,
 with `select --cache <json cache>`, the exemplars whose transcripts add the fewest

@@ -99,7 +99,13 @@ Inside a value `;` is escaped as `%3B` and, unless `--no_escape`, the `=` of an 
 
 `HGVS_OFFSET` is the number of bases the HGVS notations moved an insertion or deletion 3' along the transcript, negative on the reverse strand, present only when something moved. Under `--shift_hgvs 0` nothing moves and the key never appears.
 
-`SHIFT_LENGTH` (`--shift_length`) is the number of bases `--shift_3prime 1` moved the allele before its terms and positions were computed. It is written on every transcript row, `0` included, and on no intergenic row; without `--shift_3prime 1` the column is listed and left empty. Under `--shift_3prime 1 --shift_genomic 1` the `Location` column prints the moved position (a transcript row along its transcript's strand, an intergenic row towards higher coordinates) and `Allele` the inserted bases rotated along the move; `Uploaded_variation` keeps the input's name.
+`SHIFT_LENGTH` (`--shift_length`) is the number of bases `--shift_3prime 1` moved the allele before its terms and positions were computed. It is written on every transcript row of a sequence variant, `0` included, and on no intergenic or structural-variant row; without `--shift_3prime 1` the column is listed and left empty. Under `--shift_3prime 1 --shift_genomic 1` the `Location` column prints the moved position (a transcript row along its transcript's strand, an intergenic row towards higher coordinates) and `Allele` the inserted bases rotated along the move; `Uploaded_variation` keeps the input's name.
+
+#### Allele on a coding row after a shift
+
+Under `--shift_3prime 1` without `--shift_genomic 1`, Ensembl VEP prints `Allele` from the allele sequence its codon computation rotated (`TranscriptVariationAllele.pm` line 820 calls the rotation of lines 1330-1347, and `OutputFactory.pm` line 1347 prints the rotated sequence). A coding row of a shifted insertion therefore prints the inserted bases rotated by the shift along the transcript's strand, while the record's non-coding rows, whose codon is never computed, keep the written bases.
+
+For `21 26021981 26021980 -/AAG 1` on APP, Ensembl VEP prints `GAA` on the 52 coding rows and `AAG` on the 5 non-coding rows. vep-rs prints the written allele, `AAG`, on every row, and rotates the bases for `Codons`, `Amino_acids` and the HGVS notations alone. The [index of differences](../intended-divergences.md#differences-outside-the-classes) lists it.
 
 ### Example
 

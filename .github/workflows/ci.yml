@@ -80,13 +80,13 @@ jobs:
             fi
           }
           check scripts/concordance/test_compare_vep_outputs.py 211
-          check scripts/validation/test_compare_sv_concordance.py 246
+          check scripts/validation/test_compare_sv_concordance.py 248
           check scripts/concordance/test_reference_release.py 17
           check scripts/validation/test_breakend_mate_context.py 24
-          check scripts/concordance/test_compare_vep_formats.py 47
+          check scripts/concordance/test_compare_vep_formats.py 49
           check scripts/concordance/test_compare_vep_fields.py 6
           check scripts/concordance/test_compare_plugin_outputs.py 3
-          check scripts/golden/test_golden_scripts.py 138
+          check scripts/golden/test_golden_scripts.py 140
           check scripts/release/test_render_release_notes.py 99
           check scripts/release/test_check_glibc_floor.py 8
           check scripts/parity/test_check_parity_matrix.py 60

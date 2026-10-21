@@ -58,9 +58,15 @@ Subcommands:
             for it is classed `reference_skipped_record`; any other key only vep-rs emits is
             `unexplained_residual`. A zero-row record without the warning, or a warned record
             with rows, is an error, unless the record carries no row by its nature: a
-            non-variant record (ALT `.`), or one the run's expected JSON names as a feature
+            non-variant record (ALT `.`), one the run's expected JSON names as a feature
             with no allele to annotate (`most_severe_consequence` `?`: every ALT a `*` or
-            `<DEL:*>`, equal to the reference or a repeat). A run whose `masks` list
+            `<DEL:*>`, equal to the reference or a repeat) or, under a row filter of the run
+            (`--coding_only`, `--no_intergenic`), one vep-rs writes no row for either. The
+            records are the run's input's, numbered as the golden tests number them: the
+            manifest's for `variants.vcf`, and for a flag set over another `input` that
+            file's lines, a line the manifest records (a twin of `variants.vcf`) keeping
+            its entry and a file in another format or delimiter, `variants.vcf` re-encoded
+            record for record, taking the manifest's records in order. A run whose `masks` list
             `regulatory_feature_rows` has its VEP rows of `Feature_type` RegulatoryFeature
             and MotifFeature left out first, the rows the golden test sets aside for a run
             under `--regulatory`; one whose `masks` list `order_only` has its `DOMAINS`,
@@ -167,7 +173,8 @@ FIXED_COLUMNS = ("#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO")
 
 
 def opener(path: Path):
-    return gzip.open if str(path).endswith(".gz") else open
+    """`gzip.open` for a `.gz` or `.bgz` (BGZF is gzip), else `open`."""
+    return gzip.open if str(path).endswith((".gz", ".bgz")) else open
 
 
 def normalize_consequence_set(raw: str) -> str:
@@ -1337,23 +1344,32 @@ def record_name_index(records: list[dict]) -> dict[str, list[int]]:
 
 REFERENCE_SKIPPED = "reference_skipped_record"
 UNEXPLAINED = "unexplained_residual"
+# The flags that drop a record's rows by what they overlap (OutputFactory.pm:482-500 and
+# :540-558), so a record of a run under one may have no row on either side.
+ROW_FILTERS = frozenset({"--coding_only", "--no_intergenic"})
+# A VCF REF column: bases or `.`, never the `/`-joined allele string or the class word of an
+# Ensembl-format line, so a line of five or more columns with one is a VCF record.
+VCF_REF = re.compile(r"[ACGTNacgtn.]+")
+
+
+def first_five_columns(line: str) -> str:
+    """A VCF line's CHROM, POS, ID, REF and ALT, the columns a twin of the line (another
+    encoding, sample columns added or dropped) shares with it."""
+    return "\t".join(line.split("\t")[:5])
 
 
 def carried_records(records: list[dict], json_path: Path) -> set[int]:
-    """Ordinals of the records the reference carried with no allele to annotate: the JSON
-    output at `json_path`, when the file exists, has an object for the record whose
+    """Ordinals of the records the reference carried with no row: the JSON output at
+    `json_path`, when the file exists, has an object for the record whose
     `most_severe_consequence` is `?`, the object VEP writes for a feature with no overlap
     allele (every ALT a `*` or `<DEL:*>`, equal to the reference or a repeat of an earlier
-    one; VariationFeatureOverlap.pm:459-491). A record is the object whose `input` opens
-    with its first five columns, so a twin input carrying sample columns names it too. A
-    file that is not gzip, or holds a line that is not a JSON object, is refused with its
-    path."""
+    one; VariationFeatureOverlap.pm:459-491) and for a record a row filter (`--coding_only`,
+    `--no_intergenic`) left no consequence of (JSON.pm:387-388). A record is the object whose
+    `input` opens with its first five columns, so a twin input carrying sample columns names
+    it too. A file that is not gzip, or holds a line that is not a JSON object, is refused
+    with its path."""
     if not json_path.is_file():
         return set()
-
-    def first_five_columns(line: str) -> str:
-        return "\t".join(line.split("\t")[:5])
-
     by_head: dict[str, list[int]] = defaultdict(list)
     for i, rec in enumerate(records):
         by_head[first_five_columns(rec["vcf"])].append(i)
@@ -1375,6 +1391,52 @@ def carried_records(records: list[dict], json_path: Path) -> set[int]:
     return carried
 
 
+def run_records(corpus: Path, manifest: dict, target: dict) -> list[dict]:
+    """The records of a run, numbered as the golden harness numbers them (every line of the
+    run's input that is not a header, in order): the manifest's `records` for a run over
+    `variants.vcf`; for a flag set over another `input`, that file's lines. A line sharing
+    its first five columns with a manifest record is that record (a twin of `variants.vcf`
+    in another encoding keeps its `reference_warning` and takes `reference_rows`). A file
+    holding a VCF record (`vcf_record`: five tab-separated columns or more, a POS of digits,
+    a REF of bases) is a VCF whose other lines are records of their own, which carry no
+    `reference_warning`, so a record the reference skipped in such an input is refused as
+    unexplained. A file holding none is `variants.vcf` re-encoded in another format or
+    delimiter (`--format hgvs`, an Ensembl-format line, a space-delimited VCF line), record
+    for record, and each line is the manifest record at its ordinal; such a file whose
+    record count is not the manifest's is refused with its path, as is a line of a VCF input
+    that is neither a twin nor a VCF record, and a file that cannot be read."""
+    input_name = target.get("input") or DEFAULT_INPUT
+    if input_name == DEFAULT_INPUT:
+        return manifest["records"]
+    by_head = {first_five_columns(rec["vcf"]): rec for rec in manifest["records"]}
+    path = corpus / input_name
+    try:
+        with opener(path)(path, "rt", encoding="utf-8", errors="replace") as handle:
+            lines = [line.rstrip("\n") for line in handle if not line.startswith("#")]
+    except (OSError, EOFError, zlib.error) as exc:
+        raise failure(f"{path} is not a readable text file ({exc})") from None
+
+    def vcf_record(line: str) -> bool:
+        columns = line.split("\t")
+        return len(columns) >= 5 and columns[1].isdecimal() and VCF_REF.fullmatch(columns[3]) is not None
+
+    if any(vcf_record(line) for line in lines):
+        records: list[dict] = []
+        for i, line in enumerate(lines):
+            manifest_record = by_head.get(first_five_columns(line))
+            if manifest_record is not None:
+                records.append(manifest_record)
+            elif vcf_record(line):
+                records.append({"vcf": line})
+            else:
+                raise failure(f"{path} record {i} ({line[:40]!r}) is no VCF record in a VCF input")
+        return records
+    if len(lines) != len(manifest["records"]):
+        raise failure(f"{path} holds no VCF record and its {len(lines)} records are not the manifest's "
+                      f"{len(manifest['records'])} re-encoded")
+    return manifest["records"]
+
+
 def reference_skipped_records(
     records: list[dict],
     perl_names: dict[tuple[str, str, str, str], set[str]],
@@ -1387,7 +1449,8 @@ def reference_skipped_records(
     no row by its nature is kept, not skipped, when it has no warning: a non-variant record (ALT
     `.`, written under `--allow_non_variant` as its VCF line and JSON object and no default row,
     Parser/VCF.pm:259-267) and a record of `carried`, one the reference's JSON names as a
-    feature with no allele to annotate (`carried_records`)."""
+    feature with no allele to annotate (`carried_records`) or one a row filter of the run
+    left without a row on either side (`cmd_classify`)."""
     with_rows = {i for names in perl_names.values() for n in names for i in by_name.get(n, [])}
     skipped = set(range(len(records))) - with_rows
     problems: list[str] = []
@@ -1469,22 +1532,32 @@ def cmd_classify(args: argparse.Namespace) -> int:
     masked = masked_feature_types(masks)
     perl, perl_names = load_tuples(Path(args.vep_default), masked)
     rust, rust_names = load_tuples(Path(args.vep_rs_output))
-    by_name = record_name_index(manifest["records"])
-    # A flag set runs the manifest's records, so the default run's JSON stands in for a set
-    # whose expected directory has none.
+    records = run_records(corpus, manifest, target)
+    by_name = record_name_index(records)
+    # The default run's JSON stands in for a flag set whose expected directory has none:
+    # `carried_records` names a record by its first five columns, which a twin input shares.
     reference_json = corpus / "expected" / "json.jsonl.gz"
     if args.flag_set is not None:
         expected_dir = target.get("expected_dir", f"expected_{args.flag_set}")
         own_json = corpus / expected_dir / "json.jsonl.gz"
         if own_json.is_file():
             reference_json = own_json
-    carried = carried_records(manifest["records"], reference_json)
-    skipped, problems = reference_skipped_records(manifest["records"], perl_names, by_name, carried)
+    rowless = carried_records(records, reference_json)
+    if args.flag_set is not None:
+        flags = target.get("flags") or []
+    else:
+        flags = run_options(args).get("flags") or manifest.get("flags") or []
+    if ROW_FILTERS.intersection(flags):
+        # A row filter leaves a record with no coding (or no intergenic) row rowless on both
+        # sides; the vep-rs side is read here, the reference side by the skip rule.
+        with_rust_rows = {i for names in rust_names.values() for n in names for i in by_name.get(n, [])}
+        rowless |= set(range(len(records))) - with_rust_rows
+    skipped, problems = reference_skipped_records(records, perl_names, by_name, rowless)
     if problems:
         for p in problems:
             print(f"ERROR: [build_golden_corpus] {p}", file=sys.stderr)
         return 1
-    for i, rec in enumerate(manifest["records"]):
+    for i, rec in enumerate(records):
         rec.pop("reference_rows", None)
         if i in skipped:
             # The two markers are the record's last two keys, in this order.

@@ -36,7 +36,7 @@ ARG VERSION
 LABEL org.opencontainers.image.title="vep-rs" \
       org.opencontainers.image.description="Ensembl Variant Effect Predictor in Rust: vep, vep-cache-builder, vep-cache-converter, bgzip, tabix and the duckdb CLI for Parquet output" \
       org.opencontainers.image.source="https://github.com/natera-open-source/vep-rs" \
-      org.opencontainers.image.documentation="https://github.com/natera-open-source/vep-rs#container-image" \
+      org.opencontainers.image.documentation="https://natera-open-source.github.io/vep-rs/getting-started/installation.html#container-image" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="${VERSION}"
 # ca-certificates: vep-cache-builder downloads from Ensembl over HTTPS.

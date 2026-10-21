@@ -798,9 +798,9 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
             "A bracket breakend whose mate's chromosome is spelled with a prefix the "
             "mate-allele test does not resolve, Chr21 for 21, loses its mate rows in the "
             "reference and keeps them in vep-rs; a mate named by an accession on another "
-            "chromosome loses them on both engines, so nothing is set aside, and one on the "
-            "record's own chromosome keeps them in the reference alone, a vep-rs "
-            "under-annotation charged to vep-rs."
+            "chromosome loses them in the reference alone too, vep-rs resolving the accession "
+            "through the synonym table, and one on the record's own chromosome keeps them in "
+            "both engines."
         ),
         excludes=False,
         excludes_with_cache=True,
@@ -984,10 +984,12 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
             "allele: the empty expansion is an empty part of the allele string, which is "
             "not read as multi-allelic, so the first allele alone is kept when the empty "
             "part leads and the trailing empty part is dropped by the split; vep-rs writes "
-            "both alleles, and its rows of the dropped allele, told by their direction term "
-            "when the real allele is a gain, or when it is unchanged beside a leading empty "
-            "part (vep-rs reads an unchanged allele as a gain), are set aside by the "
-            "structural-variant comparator."
+            "both alleles when the empty part leads, and the structural-variant comparator "
+            "sets aside its rows of the "
+            "dropped allele: the symbolic rows told by their direction term when the real "
+            "allele is a gain, or unchanged beside a leading empty part (vep-rs reads every "
+            "symbolic <CNV:TR> allele as a gain), and the literal rows a run with a FASTA "
+            "writes for the real allele behind a leading empty part."
         ),
         excludes=False,
         excludes_with_cache=True,

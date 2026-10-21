@@ -2,8 +2,9 @@
 
 SpliceAI adds deep-learning splice-site predictions to a transcript consequence.
 It is an annotation-store plugin: it reads bgzipped, tabix-indexed VCFs and
-matches by position, allele and gene symbol. This page covers its parameters and
-the one data file that is supported from open data.
+matches by position, allele and gene symbol. This page covers its parameters,
+the one data file that is supported from open data, and how a reverse-strand
+indel is matched.
 
 The supported SpliceAI data is the openly published GRCh38 SNV score file from
 the Ensembl MANE release. GRCh37 scores and the indel files for both assemblies
@@ -38,3 +39,21 @@ comes from the Ensembl MANE release at
 [ftp.ensembl.org](https://ftp.ensembl.org/pub/data_files/homo_sapiens/GRCh38/variation_plugins/).
 Remote tabix works against it, so a chr21 subset can be sliced without the full
 download.
+
+## Reverse-strand indels
+
+An Ensembl-format or region record given on strand -1 is matched to the score
+file on its forward-strand alleles, as every tabix-backed plugin matches it. A
+reverse-strand indel therefore scores the row its forward-strand twin scores.
+Ensembl VEP 116.2's SpliceAI plugin complements such an indel twice: it reads
+the forward-strand alleles `to_VCF_record` writes (`VariationFeature.pm` line
+2376), then reverse-complements them again (`SpliceAI.pm` lines 259-271 of the
+`VEP_plugins` release/116 branch). The alleles it compares are the
+reverse-strand ones, and no row of the file matches.
+
+For `21 26021981 26021980 -/CTT -1` against a file holding the forward-strand
+insertion `G GAAG` at 26021980, Ensembl VEP 116.2 writes no SpliceAI field on
+any of the record's 57 rows, and vep-rs scores that row on every transcript row.
+A reverse-strand SNV is complemented once in both engines and matches alike. The
+[index of differences](../intended-divergences.md#differences-outside-the-classes)
+lists it.

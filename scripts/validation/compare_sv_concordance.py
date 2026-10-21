@@ -1308,8 +1308,9 @@ _CNV_TR_SYMBOLIC_CODING_TERMS = frozenset({
 })
 # Without a FASTA the reference never expands a <CNV:TR>: every record is a symbolic
 # `tandem_repeat` over the run, a copy-number gain to `copy_number_gain`, so a loss reads
-# `feature_elongation` with the region terms where vep-rs reads the deletion of the run's
-# tail (Parser/VCF.pm:516-527, Utils/VariationEffect.pm:246-256).
+# `feature_elongation` with the region terms (Parser/VCF.pm:516-527,
+# Utils/VariationEffect.pm:246-256); vep-rs reads every symbolic `<CNV:TR>` allele as a
+# gain too.
 _CNV_TR_UNEXPANDED_TERMS = frozenset({
     "feature_elongation", "feature_truncation", "coding_sequence_variant",
     "inframe_deletion", "frameshift_variant", "inframe_insertion", "stop_lost",
@@ -2293,11 +2294,12 @@ def cnv_tr_rn_zero_dropped_direction(v: VcfVariant) -> str | None:
     The real allele's bases are its RN repeat sequences' units times their counts, read
     from the start of RUS and RUC (or RB), the empty allele having consumed none. None when
     the record is not that shape, or when the dropped allele's rows cannot be told apart: a
-    real allele that is a loss shares its direction term with the `RN=0` allele's rows; an
-    unchanged real allele is read as a gain by vep-rs (crates/vep-effects/src/sv/mod.rs takes
-    the deletion path only below the run's length) and is the dropped allele when the empty
-    part leads, while with the empty part trailing the reference writes nothing for the
-    record (`cnv_tr_expansion_is_empty`)."""
+    real allele that is a loss shares its direction term with the `RN=0` allele's rows (vep-rs
+    reads every symbolic `<CNV:TR>` allele as a gain, so the shared term is
+    `feature_elongation` and the `feature_truncation` of a trailing `RN=0` names no row of a
+    current run); an unchanged real allele is read as a gain by vep-rs and is the dropped
+    allele when the empty part leads, while with the empty part trailing the reference writes
+    nothing for the record (`cnv_tr_expansion_is_empty`)."""
     if perl_split(v.alt.upper(), ",") != ["<CNV:TR>", "<CNV:TR>"]:
         return None
     rus, ruc, rb, rn = (_info_written(v.info, key) for key in ("RUS", "RUC", "RB", "RN"))
@@ -2328,28 +2330,66 @@ def cnv_tr_rn_zero_dropped_direction(v: VcfVariant) -> str | None:
 def filter_cnv_tr_rn_zero_allele_dropped(
     perl_tuples: set[AnnotTuple], rust_tuples: set[AnnotTuple], input_variants: list[VcfVariant]
 ) -> set[AnnotTuple]:
-    """vep-rs's `tandem_repeat` tuples of the allele the reference dropped from a two-ALT
-    `<CNV:TR>` record of which one allele has `RN=0` (`cnv_tr_rn_zero_dropped_direction`),
-    the tuples carrying the dropped allele's direction term at the run, when the reference
-    expanded the record: a row at or beside the run under an allele other than
-    `tandem_repeat`, which only a run with a FASTA writes
-    (`CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET`). Without a FASTA both alleles are symbolic rows
-    on both sides and nothing is set aside."""
+    """vep-rs's tuples of the allele the reference dropped from a two-ALT `<CNV:TR>` record
+    of which one allele has `RN=0`, when the reference expanded the record: a row at or
+    beside the run under an allele other than `tandem_repeat`, which only a run with a FASTA
+    writes (`CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET`). A vep-rs run without a FASTA writes the
+    dropped allele as the `tandem_repeat` tuples carrying its direction term at the run
+    (`cnv_tr_rn_zero_dropped_direction`). A run with one writes the real allele dropped
+    behind a leading `RN=0`, a gain, a loss or the run itself, as its literal reading over
+    the run: the allele's repeat sequences, each unit repeated by its count (`$seq x $num`,
+    Parser/VCF.pm:414, 419) with `.` read as `N` (`:413`), joined and upper-cased
+    (Parser.pm:554), untrimmed because vep-rs reads the record's allele string as
+    multi-allelic; behind a trailing `RN=0` both engines lose the empty allele to `split`
+    and such a run writes what the reference writes. When the reference ran without a
+    FASTA, both alleles are symbolic rows on both sides and nothing is set aside."""
+
+    def dropped_literal(v: VcfVariant) -> str | None:
+        """The real allele behind a leading `RN=0` as the parser expands it; None for a
+        record of another shape, a trailing `RN=0` included."""
+        if perl_split(v.alt.upper(), ",") != ["<CNV:TR>", "<CNV:TR>"]:
+            return None
+        rus, ruc, rb, rn = (_info_written(v.info, key) for key in ("RUS", "RUC", "RB", "RN"))
+        if not perl_true(rus) or not (perl_true(ruc) or perl_true(rb)) or not perl_true(rn):
+            return None
+        counts_rn = perl_split(rn, ",")
+        if len(counts_rn) != 2 or "." in counts_rn:
+            return None
+        empty, sequences = (int(perl_numeric_value(count)) for count in counts_rn)
+        if empty > 0 or sequences <= 0:
+            return None
+        units = ["N" if unit == "." else unit for unit in rus.split(",")[:sequences]]
+        by_ruc = perl_true(ruc)
+        counts = (ruc if by_ruc else rb).split(",")[:sequences]
+        if len(units) < sequences or len(counts) < sequences or ("" in units and not by_ruc):
+            return None
+        repeats: list[str] = []
+        for unit, count in zip(units, counts):
+            # `_repeat_bases` is the unit's length times its copies; a unit of no bases adds none.
+            if unit:
+                repeats.append(unit * (_repeat_bases(len(unit), count, by_ruc) // len(unit)))
+        return "".join(repeats).upper()
+
     excluded: set[AnnotTuple] = set()
+    rust_only = rust_tuples - perl_tuples
     expanded = [s for t in perl_tuples if t[1] != _CNV_TR_RUST_ALLELE and (s := _location_span(t[0])) is not None]
     for v in input_variants:
         dropped = cnv_tr_rn_zero_dropped_direction(v)
-        if dropped is None:
+        literal = dropped_literal(v)
+        if dropped is None and literal is None:
             continue
         chrom, start, end = record_location(v)
         if not _reference_row_beside(expanded, chrom, start, end):
             continue
         location = _span_location(chrom, start, end)
-        term = _CNV_TR_DIRECTION_TERM[dropped]
-        excluded.update(
-            t for t in rust_tuples - perl_tuples
-            if t[0] == location and t[1] == _CNV_TR_RUST_ALLELE and term in t[4].split(",")
-        )
+        term = _CNV_TR_DIRECTION_TERM.get(dropped)
+        for t in rust_only:
+            if t[0] != location:
+                continue
+            symbolic_row = term is not None and t[1] == _CNV_TR_RUST_ALLELE and term in t[4].split(",")
+            literal_row = literal is not None and t[1] == literal
+            if symbolic_row or literal_row:
+                excluded.add(t)
     return excluded
 
 
@@ -2446,11 +2486,10 @@ def filter_bnd_synonym_mate_rows(
     takes the other route: on another chromosome the overlap test resolves it
     (InputBuffer.pm 116.2:348-357, `get_source_chr_name`) and the slice test then compares
     the raw name, `chr` stripped, with the cache's (AnnotationType/Transcript.pm 116.2:134),
-    so the reference writes no mate row. vep-rs does not resolve the accession and writes
-    no mate row either, so on real output nothing is set aside; a vep-rs row under such a
-    mate off the record's own chromosome, which only a constructed input produces, is set
-    aside by the predicate below. On the record's own chromosome the reference keeps the
-    mate rows and vep-rs lacks them, a vep-rs under-annotation that stays charged.
+    so the reference writes no mate row. vep-rs resolves the accession through the synonym
+    table, as it resolves the record's own chromosome, and writes the mate rows, which the
+    predicate below sets aside. An accession on the record's own chromosome keeps the mate
+    rows in both engines.
 
     THE PREDICATE, on a Location with a bracket allele whose mate name, read as the
     reference reads it (`reference_mate_chromosome`: `chr` as written stripped, any other

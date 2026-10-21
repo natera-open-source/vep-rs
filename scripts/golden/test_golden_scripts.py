@@ -346,6 +346,167 @@ def test_classify_reads_a_flag_sets_own_json_and_refuses_an_unreadable_one(tmp_p
         bgc.main(classify)
 
 
+def test_classify_keeps_a_record_a_row_filter_left_rowless_on_both_sides(tmp_path: Path, capsys):
+    """Under `--coding_only` or `--no_intergenic` a record with no coding (or no intergenic)
+    row has no row on either side, so a flag set or a default run under one keeps such a
+    record without a warning, not refused and not marked skipped, with no JSON to carry it; the
+    same record under no row filter, or with vep-rs rows and no reference row, is refused."""
+    corpus = tmp_path / "c"
+    corpus.mkdir()
+    records = [_record("21\t100\trs1\tA\tG\t.\tPASS\t."), _record("21\t150\trs9\tC\tT\t.\tPASS\t.")]
+    (corpus / "manifest.json").write_text(json.dumps({
+        "records": records,
+        "flag_sets": [
+            {"name": "coding-only", "flags": ["--coding_only"], "expected_dir": "expected_coding-only", "covers": []},
+            {"name": "no-intergenic", "flags": ["--no_intergenic"], "expected_dir": "expected_no-intergenic", "covers": []},
+            {"name": "pick", "flags": ["--pick"], "expected_dir": "expected_pick", "covers": []},
+        ],
+    }), encoding="utf-8")
+    vep = tmp_path / "vep.txt"
+    rs = tmp_path / "rs.txt"
+    vep.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rs.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    classify = ["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)]
+    for flag_set in ("coding-only", "no-intergenic"):
+        assert bgc.main([*classify, "--flag-set", flag_set]) == 0
+        assert "reference-skipped records []" in capsys.readouterr().out
+    assert bgc.main([*classify, "--flag=--coding_only"]) == 0
+    capsys.readouterr()
+    m = json.loads((corpus / "manifest.json").read_text())
+    assert all("reference_rows" not in r and "reference_warning" not in r for r in m["records"])
+    assert m["flags"] == ["--coding_only"] and m["divergences"] == [] and m["vep_rs_only_tuples"] == []
+    assert all(s["divergences"] == [] for s in m["flag_sets"] if s["name"] != "pick")
+    refused = "ERROR: [build_golden_corpus] record 1 (21 150 rs9 C T) has no VEP row and no reference_warning\n"
+    assert bgc.main([*classify, "--flag-set", "pick"]) == 1
+    assert capsys.readouterr().err == refused
+    rs.write_text(
+        _row("rs1", "21:100", "G", "ENST1", "missense_variant") + _row("rs9", "21:150", "T", "ENST2", "missense_variant"),
+        encoding="utf-8",
+    )
+    assert bgc.main([*classify, "--flag-set", "coding-only"]) == 1
+    assert capsys.readouterr().err == refused
+
+
+def test_classify_numbers_a_flag_sets_own_input_records(tmp_path: Path, capsys):
+    """A flag set over another `input` runs that file's records, numbered as the golden tests
+    number them (every non-header line, in order), so its divergences and skipped records
+    resolve by those ordinals; a line the manifest records, a twin of `variants.vcf` in
+    another encoding (CRLF line ends, gzip), keeps its entry, so its `reference_warning` holds
+    and `reference_rows` lands in the manifest; a line that is no VCF record (a space-delimited
+    or an Ensembl-format re-encoding of `variants.vcf`) is the manifest record at its ordinal,
+    and refused when the file's record count is not the manifest's; a line of a VCF input that
+    is neither a twin nor a VCF record is refused with its ordinal; a record the reference
+    skipped in an input the manifest does not record is refused; an unreadable input is
+    refused with its path."""
+    corpus = tmp_path / "c"
+    corpus.mkdir()
+    records = [
+        _record("21\t100\trs1\tA\tG\t.\tPASS\t."),
+        _record("21\t500\tsv1\tN\t<CPX>\t.\tPASS\tSVTYPE=CPX;END=900", reference_warning="CPX is not a supported structural variant type"),
+    ]
+    (corpus / "manifest.json").write_text(json.dumps({
+        "records": records,
+        "flag_sets": [
+            {"name": "structural", "flags": ["--coding_only"], "input": "structural.vcf", "expected_dir": "expected_structural", "covers": []},
+            {"name": "crlf", "flags": [], "input": "variants.crlf.vcf", "expected_dir": "expected_crlf", "covers": []},
+            {"name": "missing", "flags": [], "input": "absent.vcf", "expected_dir": "expected_missing", "covers": []},
+            {"name": "space", "flags": ["--delimiter", " "], "input": "variants.space.vcf", "expected_dir": "expected_space", "covers": []},
+            {"name": "ensembl", "flags": ["--format", "ensembl"], "input": "variants.ensembl.txt", "expected_dir": "expected_ensembl", "covers": []},
+            {"name": "gz", "flags": [], "input": "variants.vcf.gz", "expected_dir": "expected_gz", "covers": []},
+            {"name": "short", "flags": ["--format", "ensembl"], "input": "one.ensembl.txt", "expected_dir": "expected_short", "covers": []},
+        ],
+    }), encoding="utf-8")
+    (corpus / "structural.vcf").write_text(
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "21\t1000\tsv_a\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=1900\n"
+        "21\t3000\tsv_b\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=3900\n"
+        "21\t5000\tsv_c\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=5900\n",
+        encoding="utf-8",
+    )
+    vep = tmp_path / "vep.txt"
+    rs = tmp_path / "rs.txt"
+    vep.write_text(_row("sv_b", "21:3001-3900", "deletion", "ENST2", "coding_sequence_variant,feature_truncation"), encoding="utf-8")
+    rs.write_text(
+        _row("sv_b", "21:3001-3900", "deletion", "ENST2", "coding_sequence_variant,feature_truncation")
+        + _row("sv_b", "21:3001-3900", "deletion", "ENST3", "feature_truncation"),
+        encoding="utf-8",
+    )
+    classify = ["classify", "--corpus", str(corpus), "--vep-default", str(vep), "--vep-rs-output", str(rs)]
+    assert bgc.main([*classify, "--flag-set", "structural"]) == 0
+    assert "reference-skipped records []" in capsys.readouterr().out
+    m = json.loads((corpus / "manifest.json").read_text())
+    structural = m["flag_sets"][0]
+    assert structural["divergences"] == []
+    assert [(t["feature"], t["record_indices"], t["expected_divergence"]) for t in structural["vep_rs_only_tuples"]] == [
+        ("ENST3", [1], "unexplained_residual"),
+    ]
+    assert all("reference_rows" not in r for r in m["records"])
+    # The twin input carries the manifest's records: the skipped one keeps its warning.
+    (corpus / "variants.crlf.vcf").write_bytes(
+        b"#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\r\n"
+        b"21\t100\trs1\tA\tG\t.\tPASS\t.\r\n21\t500\tsv1\tN\t<CPX>\t.\tPASS\tSVTYPE=CPX;END=900\r\n"
+    )
+    vep.write_text(_row("rs1", "21:100", "G", "ENST1", "missense_variant"), encoding="utf-8")
+    rs.write_text(
+        _row("rs1", "21:100", "G", "ENST1", "missense_variant") + _row("sv1", "21:501-900", "CPX", "ENST2", "feature_truncation"),
+        encoding="utf-8",
+    )
+    assert bgc.main([*classify, "--flag-set", "crlf"]) == 0
+    assert "reference-skipped records [1]" in capsys.readouterr().out
+    m = json.loads((corpus / "manifest.json").read_text())
+    assert m["records"][1]["reference_rows"] == 0
+    assert m["flag_sets"][1]["vep_rs_only_summary"] == {"reference_skipped_record": 1}
+    # A space-delimited or Ensembl-format re-encoding of variants.vcf holds no VCF record and
+    # takes the manifest's records in order; the gzipped copy is a twin read through gzip.
+    (corpus / "variants.space.vcf").write_text(
+        "#CHROM POS ID REF ALT QUAL FILTER INFO\n21 100 rs1 A G . PASS .\n21 500 sv1 N <CPX> . PASS SVTYPE=CPX;END=900\n",
+        encoding="utf-8",
+    )
+    (corpus / "variants.ensembl.txt").write_text("21\t100\t100\tA/G\t1\trs1\n21\t500\t900\tCPX\t1\tsv1\n", encoding="utf-8")
+    with gzip.open(corpus / "variants.vcf.gz", "wt", encoding="utf-8") as fh:
+        fh.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t100\trs1\tA\tG\t.\tPASS\t.\n21\t500\tsv1\tN\t<CPX>\t.\tPASS\tSVTYPE=CPX;END=900\n")
+    for name in ("space", "ensembl", "gz"):
+        assert bgc.main([*classify, "--flag-set", name]) == 0
+        assert "reference-skipped records [1]" in capsys.readouterr().out
+    m = json.loads((corpus / "manifest.json").read_text())
+    assert all(s["vep_rs_only_summary"] == {"reference_skipped_record": 1} for s in m["flag_sets"] if s["name"] in ("space", "ensembl", "gz"))
+    (corpus / "one.ensembl.txt").write_text("21\t100\t100\tA/G\t1\trs1\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"one\.ensembl\.txt holds no VCF record and its 1 records are not the manifest's 2"):
+        bgc.main([*classify, "--flag-set", "short"])
+    # A standalone VCF of short records (five or seven columns) numbers its own records.
+    (corpus / "own.short.vcf").write_text(
+        "#CHROM\tPOS\tID\tREF\tALT\n21\t7000\tsnv_a\tC\tT\n21\t8000\tsnv_b\tG\tA\t.\tPASS\n",
+        encoding="utf-8",
+    )
+    m = json.loads((corpus / "manifest.json").read_text())
+    m["flag_sets"].append({"name": "own-short", "flags": [], "input": "own.short.vcf", "expected_dir": "expected_own-short", "covers": []})
+    (corpus / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+    vep.write_text(_row("snv_a", "21:7000", "T", "ENST7", "missense_variant") + _row("snv_b", "21:8000", "A", "ENST8", "synonymous_variant"), encoding="utf-8")
+    rs.write_text(_row("snv_a", "21:7000", "T", "ENST7", "missense_variant") + _row("snv_b", "21:8000", "A", "ENST8", "missense_variant"), encoding="utf-8")
+    assert bgc.main([*classify, "--flag-set", "own-short"]) == 0
+    m = json.loads((corpus / "manifest.json").read_text())
+    own_short = next(s for s in m["flag_sets"] if s["name"] == "own-short")
+    assert [(d["feature"], d["record_indices"], d["expected_divergence"]) for d in own_short["divergences"]] == [
+        ("ENST8", [1], "unexplained_residual"),
+    ]
+    assert "reference_rows" not in m["records"][0]
+    # A line of a VCF input that is neither a twin nor a VCF record is refused with its ordinal.
+    (corpus / "own.short.vcf").write_text("21\t7000\tsnv_a\tC\tT\n21\t.\tsnv_x\tG\tA\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"own\.short\.vcf record 1 \(.*\) is no VCF record in a VCF input"):
+        bgc.main([*classify, "--flag-set", "own-short"])
+    # A skipped record of an input the manifest does not record has no warning to carry.
+    vep.write_text(_row("sv_b", "21:3001-3900", "deletion", "ENST2", "coding_sequence_variant,feature_truncation"), encoding="utf-8")
+    rs.write_text(
+        _row("sv_b", "21:3001-3900", "deletion", "ENST2", "coding_sequence_variant,feature_truncation")
+        + _row("sv_c", "21:5001-5900", "deletion", "ENST4", "feature_truncation"),
+        encoding="utf-8",
+    )
+    assert bgc.main([*classify, "--flag-set", "structural"]) == 1
+    assert capsys.readouterr().err == "ERROR: [build_golden_corpus] record 2 (21 5000 sv_c N <DEL>) has no VEP row and no reference_warning\n"
+    with pytest.raises(SystemExit, match=r"absent\.vcf is not a readable text file"):
+        bgc.main([*classify, "--flag-set", "missing"])
+
+
 def test_classify_refuses_a_warned_record_that_has_rows(tmp_path: Path, capsys):
     corpus = tmp_path / "c"
     _manifest(corpus, [_record("21\t100\trs1\tA\tG\t.\tPASS\t.", reference_warning="deletion looks incomplete")])

@@ -789,7 +789,11 @@
    "expected_dir": "expected_coding-only",
    "covers": [
     "coding_only"
-   ]
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
   },
   {
    "name": "no-intergenic",
@@ -808,7 +812,11 @@
    "expected_dir": "expected_no-intergenic",
    "covers": [
     "no_intergenic"
-   ]
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
   },
   {
    "name": "coding-only-pick",
@@ -829,7 +837,11 @@
    "covers": [
     "coding_only",
     "pick"
-   ]
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
   },
   {
    "name": "coding-only-structural",
@@ -848,7 +860,11 @@
    "expected_dir": "expected_coding-only-structural",
    "covers": [
     "coding_only"
-   ]
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
   }
  ],
  "divergences": [],

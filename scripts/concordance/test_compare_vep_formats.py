@@ -1128,7 +1128,7 @@ def test_order_only_class_accepts_domains_in_any_order_in_every_format():
     json_report = cvf.compare_entries(json_expected, json_actual, no_documented(), order_only=cvf.order_only_fields("json"))
     assert json_report["verdict"] == "green"
     assert json_report["columns"]["domains"]["order_only"] == REORDERABLE_DOMAINS_OBJECTS
-    assert cvf.order_only_fields("json") == {"domains": cvf.JSON_ARRAY}
+    assert cvf.order_only_fields("json") == {"domains": cvf.JSON_ARRAY, "zyg": ","}
 
     # Another column's order, or a repeated item, is not an order-only agreement.
     rows = data_lines(default)
@@ -1184,6 +1184,148 @@ def test_order_only_class_covers_freqs_and_is_reported_through_compare_files(tmp
     assert cvf.same_items("-", "-", ",") and not cvf.same_items("-", "a", ",")
     assert cvf.same_items('{"db":"x","name":"1"},{"db":"y","name":"2"}', '{"db":"y","name":"2"},{"db":"x","name":"1"}', cvf.JSON_ARRAY)
     assert not cvf.same_items("a,b", "b,a", cvf.JSON_ARRAY)
+
+
+INDIVIDUAL_ZYG = HERE.parent.parent / "tests" / "golden" / "116" / "GRCh38-individual-zyg"
+# Rows of the individual-zyg reference whose ZYG list names two or more samples, so reversing
+# the list changes the text: 1,530 of the 1,534 rows carrying ZYG in the default format, and
+# 103 of the 104 record objects carrying zyg in the JSON format.
+REORDERABLE_ZYG_ROWS = 1530
+REORDERABLE_ZYG_OBJECTS = 103
+
+
+def test_order_only_class_covers_the_zyg_list_in_every_format():
+    """``--individual_zyg`` prints one ``sample:ZYG`` entry per named sample in hash order
+    (OutputFactory.pm:983-987), so a candidate naming the samples in another order agrees as
+    a multiset under the class in every format: the default and tab ``ZYG`` column with the
+    ``Extra`` text carrying it, the ``&``-joined CSQ field, and the record object's ``zyg``
+    array, which the JSON format carries once at the top level, so ``ZYG`` is a record-level
+    column that self-parity sets aside against the consequence entries and that has no JSON
+    floor; a changed zygosity or a sample fewer stays red."""
+    expected_dir = INDIVIDUAL_ZYG / "expected_individual-zyg"
+    inputs = cvf.input_records(INDIVIDUAL_ZYG / "variants.vcf")
+    default = cvf.read_text(expected_dir / "default.txt.gz")
+    expected = cvf.parse_default(default)
+    actual = cvf.parse_default(reversed_lists(default, "ZYG"))
+    plain = cvf.compare_entries(expected, actual, no_documented())
+    assert plain["verdict"] == "red"
+    assert plain["columns"]["ZYG"]["differing"] == REORDERABLE_ZYG_ROWS
+    assert plain["columns"]["Extra"]["differing"] == REORDERABLE_ZYG_ROWS
+    documented = no_documented()
+    accepted = cvf.compare_entries(expected, actual, documented, order_only=cvf.order_only_fields("default"))
+    assert accepted["verdict"] == "green"
+    assert accepted["columns"]["ZYG"]["differing"] == 0
+    assert accepted["columns"]["ZYG"]["order_only"] == REORDERABLE_ZYG_ROWS
+    assert accepted["columns"]["Extra"]["order_only"] == REORDERABLE_ZYG_ROWS
+    assert documented.applied == {cvf.ORDER_ONLY: 2 * REORDERABLE_ZYG_ROWS}
+    example = accepted["columns"]["ZYG"]["order_only_examples"][0]
+    assert example.startswith("21:9614117-9614200|-|ENST00000842019|Transcript: expected 'S7:HOMREF,S4:HOMREF,")
+    assert "got 'S1:HOMREF,S5:HOMREF,S6:HOMREF,S8:HOMREF,S3:HOMREF,S2:HOMREF,S4:HOMREF,S7:HOMREF'" in example
+
+    # The tab format's ZYG column, the same rule.
+    tab = cvf.read_text(expected_dir / "tab.txt.gz")
+    zyg_column = cvf.header_columns(tab).index("ZYG")
+    tab_rows = []
+    for row in data_lines(tab):
+        cells = row.split("\t")
+        cells[zyg_column] = ",".join(reversed(cells[zyg_column].split(",")))
+        tab_rows.append("\t".join(cells))
+    tab_report = cvf.compare_entries(
+        cvf.parse_tab(tab), cvf.parse_tab(rebuild(tab, tab_rows)), no_documented(),
+        order_only=cvf.order_only_fields("tab"),
+    )
+    assert tab_report["verdict"] == "green"
+    assert tab_report["columns"]["ZYG"]["order_only"] == REORDERABLE_ZYG_ROWS
+
+    # The VCF format joins the items with & (VCF.pm:391); the sample columns follow INFO.
+    vcf = cvf.read_text(expected_dir / "vcf.vcf.gz")
+    csq_header = next(line for line in cvf.text_lines(vcf) if line.startswith("##INFO=<ID=CSQ"))
+    zyg_field = cvf.csq_format_fields(csq_header).index("ZYG")
+    flipped = []
+    for row in data_lines(vcf):
+        cols = row.split("\t")
+        info = []
+        for kv in cols[7].split(";"):
+            if kv.startswith("CSQ="):
+                chunks = []
+                for chunk in kv[4:].split(","):
+                    vals = chunk.split("|")
+                    vals[zyg_field] = "&".join(reversed(vals[zyg_field].split("&")))
+                    chunks.append("|".join(vals))
+                kv = "CSQ=" + ",".join(chunks)
+            info.append(kv)
+        cols[7] = ";".join(info)
+        flipped.append("\t".join(cols))
+    vcf_expected = cvf.parse_vcf(vcf, inputs)
+    vcf_actual = cvf.parse_vcf(rebuild(vcf, flipped), inputs)
+    assert cvf.compare_entries(vcf_expected, vcf_actual, no_documented())["columns"]["ZYG"]["differing"] == REORDERABLE_ZYG_ROWS
+    vcf_report = cvf.compare_entries(vcf_expected, vcf_actual, no_documented(), order_only=cvf.order_only_fields("vcf"))
+    assert vcf_report["verdict"] == "green"
+    assert vcf_report["columns"]["ZYG"]["order_only"] == REORDERABLE_ZYG_ROWS
+
+    # The JSON format's zyg array, once per record object, its strings compared as a multiset.
+    json_text = cvf.read_text(expected_dir / "json.jsonl.gz")
+    objects = []
+    for line in cvf.text_lines(json_text):
+        if not line:
+            continue
+        obj = json.loads(line)
+        if "zyg" in obj:
+            obj["zyg"] = list(reversed(obj["zyg"]))
+        objects.append(json.dumps(obj))
+    json_expected = cvf.parse_json(json_text, inputs)
+    json_actual = cvf.parse_json("\n".join(objects) + "\n", inputs)
+    assert cvf.compare_entries(json_expected, json_actual, no_documented())["columns"]["zyg"]["differing"] == REORDERABLE_ZYG_OBJECTS
+    json_report = cvf.compare_entries(json_expected, json_actual, no_documented(), order_only=cvf.order_only_fields("json"))
+    assert json_report["verdict"] == "green"
+    assert json_report["columns"]["zyg"]["order_only"] == REORDERABLE_ZYG_OBJECTS
+
+    # A changed zygosity, or a sample fewer, is not an order-only agreement.
+    full_list = "ZYG=S7:HOMREF,S4:HOMREF,S2:HOMREF,S3:HOMREF,S8:HOMREF,S6:HOMREF,S5:HOMREF,S1:HOMREF"
+    rows = data_lines(default)
+    target = next(i for i, r in enumerate(rows) if full_list in r)
+    rows[target] = rows[target].replace(full_list, full_list.replace("S1:HOMREF", "S1:HET"), 1)
+    changed = cvf.compare_entries(expected, cvf.parse_default(rebuild(default, rows)), no_documented(), order_only=cvf.order_only_fields("default"))
+    assert changed["verdict"] == "red"
+    assert changed["columns"]["ZYG"]["differing"] == 1
+    assert changed["columns"]["ZYG"]["order_only"] == 0
+    rows = data_lines(default)
+    rows[target] = rows[target].replace(full_list, full_list.replace(",S1:HOMREF", ""), 1)
+    fewer = cvf.compare_entries(expected, cvf.parse_default(rebuild(default, rows)), no_documented(), order_only=cvf.order_only_fields("default"))
+    assert fewer["verdict"] == "red"
+    assert fewer["columns"]["ZYG"]["differing"] == 1
+
+    # ZYG is a record-level column: no JSON floor, and the self-parity of one engine's formats
+    # checks it once per record, the rows' list against the object's zyg array as multisets,
+    # instead of against the JSON consequence entries, which carry no zyg key.
+    assert "ZYG" in cvf.RECORD_LEVEL_COLUMNS
+    assert cvf.json_floor_fields("ZYG") is None
+    report = cvf.SelfParity(default, tab, vcf, json_text, inputs=inputs).run()
+    assert report["verdict"] == "green", report["reasons"]
+    assert "ZYG" not in report["not_compared"]["default_record_level"]
+    assert "ZYG" in report["pairs"]["vcf"]["columns_compared"]
+    assert "ZYG" in report["pairs"]["tab"]["columns_compared"]
+    reordered = cvf.SelfParity(default, tab, vcf, "\n".join(objects) + "\n", inputs=inputs).run()
+    assert reordered["verdict"] == "green", reordered["reasons"]
+    changed = "\n".join(objects).replace('"S1:HOMREF"', '"S1:HET"', 1) + "\n"
+    report = cvf.SelfParity(default, tab, vcf, changed, inputs=inputs).run()
+    assert report["verdict"] == "red"
+    assert len(report["record_checks"]["problems"]) == 1
+    assert report["record_checks"]["problems"][0].endswith("against the objects' zyg ['S1:HET,S2:HOMREF,S3:HOMREF,S4:HOMREF,S5:HOMREF,S6:HOMREF,S7:HOMREF,S8:HOMREF']")
+
+
+def test_self_parity_holds_zyg_to_the_rows_only_for_objects_with_a_consequence():
+    """Under ``--individual`` a reference-homozygous individual's object carries its ``zyg``
+    and no consequence, and the default format writes no row for it (OutputFactory.pm:511),
+    so the record check holds only the objects that carry a consequence to the rows."""
+    individual = HERE.parent.parent / "tests" / "golden" / "116" / "GRCh38-individual"
+    expected_dir = individual / "expected_individual-all"
+    report = cvf.SelfParity(
+        cvf.read_text(expected_dir / "default.txt.gz"), cvf.read_text(expected_dir / "tab.txt.gz"),
+        cvf.read_text(expected_dir / "vcf.vcf.gz"), cvf.read_text(expected_dir / "json.jsonl.gz"),
+        inputs=cvf.input_records(individual / "variants.vcf"),
+    ).run()
+    assert report["record_checks"]["problems"] == []
 
 
 def test_json_floors_count_under_the_json_keys(tmp_path):
