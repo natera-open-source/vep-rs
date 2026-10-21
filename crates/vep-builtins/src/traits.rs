@@ -76,6 +76,8 @@ impl PrefetchData {
 ///
 /// [`prefetch`]: BuiltinPlugin::prefetch
 /// [`annotate`]: BuiltinPlugin::annotate
+/// [`run_batch`]: BuiltinPlugin::run_batch
+/// [`run`]: BuiltinPlugin::run
 pub trait BuiltinPlugin: Send + Sync {
     /// Plugin name matching the `--plugin` CLI argument (e.g., "CADD").
     fn name(&self) -> &str;

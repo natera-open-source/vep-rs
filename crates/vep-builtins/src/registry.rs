@@ -173,7 +173,7 @@ impl BuiltinRegistry {
         Ok(())
     }
 
-    /// Like [`run_batch`] but returns structured per-plugin timing data.
+    /// Like [`Self::run_batch`] but returns structured per-plugin timing data.
     ///
     /// Used by benchmarking tools to measure plugin overhead. The pipeline
     /// behavior is identical to `run_batch`.

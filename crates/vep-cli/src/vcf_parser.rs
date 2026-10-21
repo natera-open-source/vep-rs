@@ -3466,7 +3466,9 @@ mod tests {
         assert_eq!(variants.len(), 2);
 
         let paired = &variants[1];
-        assert_eq!(paired.mate_chr.as_deref(), Some("X")); // Normalized from chrX
+        // The mate is carried as written; `pipeline::name_source_chromosomes`
+        // resolves it against the cache.
+        assert_eq!(paired.mate_chr.as_deref(), Some("chrX"));
         assert_eq!(paired.mate_pos, Some(50000000));
         // The allele string spells the mate chromosome as the input did.
         assert_eq!(paired.alt_allele(), b"N[chrX:50000000[");
@@ -5231,7 +5233,7 @@ mod tests {
         assert_eq!(paired.chr, "21");
         assert_eq!(paired.variant_class, VariantClass::Translocation);
         assert!(!paired.is_single_breakend);
-        assert_eq!(paired.mate_chr.as_deref(), Some("2"));
+        assert_eq!(paired.mate_chr.as_deref(), Some("chr2"));
         assert_eq!(paired.mate_pos, Some(89831875));
         let sb = &variants[0];
         assert_eq!(sb.chr, "21");
@@ -5248,8 +5250,9 @@ mod tests {
         // CHR2 with END2 names the mate -> 2 variants
         assert_eq!(variants.len(), 2);
         let paired = &variants[1];
-        // CHR2/END2 present: mate_chr = normalize("chr2") = "2", mate_pos = 89831875
-        assert_eq!(paired.mate_chr.as_deref(), Some("2"));
+        // The mate is carried as written; `pipeline::name_source_chromosomes`
+        // resolves it against the cache.
+        assert_eq!(paired.mate_chr.as_deref(), Some("chr2"));
         assert_eq!(paired.mate_pos, Some(89831875));
         let single = &variants[0];
         assert!(single.is_single_breakend);

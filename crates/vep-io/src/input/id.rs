@@ -22,7 +22,7 @@
 //! past itself, through [`InputParser::take_warnings`], since Ensembl VEP numbers
 //! them by a line count that takes in every line of the list (Parser.pm:275,
 //! Parser/ID.pm:148), a name the cache lacks included. The checks `validate_vf`
-//! makes on each feature (Parser.pm:188) are the reader's, as for every format;
+//! makes on each feature (Parser.pm:189) are the reader's, as for every format;
 //! the parser gives the reader the line a skip warning quotes and the record's
 //! number in that same count ([`IdParser::attempted_line`],
 //! [`InputParser::record_line_number`]).

@@ -8,7 +8,7 @@
 //! Uses allele matching to ensure the correct alt allele is matched.
 //!
 //! This is a variant-level plugin that writes directly to `variant.plugin_data`
-//! via [`run_batch`], similar to CADD.
+//! via [`crate::BuiltinPlugin::run_batch`], similar to CADD.
 
 use indexmap::IndexMap;
 use tracing::debug;

@@ -172,10 +172,10 @@ pub struct LofteePlugin {
     /// Target assembly, injected before `init()`. Selects the END_TRUNC cutoff
     /// and, for a `gerp=` path with an ambiguous extension, the reader.
     assembly: Option<vep_core::assembly::Assembly>,
-    /// Path to `human_ancestor.fa` (ANC_ALLELE). `None` (or "false") disables
-    /// the ancestral-allele filter. Must be a plain (uncompressed) indexed FASTA
-    /// (`.fa` + `.fai`); `scripts/data/setup_plugin_data.sh` documents decompressing
-    /// the upstream `.gz` and re-indexing with `samtools faidx`.
+    /// Path to the ancestral-allele FASTA (ANC_ALLELE). `None` (or "false")
+    /// disables the ancestral-allele filter. An indexed FASTA, plain (`.fa` +
+    /// `.fai`) or BGZF (`.fa.gz` + `.fai` + `.gzi`, the form the upstream bundle
+    /// ships), opened by `vep_fasta::IndexedFasta::from_path` as `--fasta` is.
     human_ancestor_fa: Option<String>,
     /// PhyloCSF SQLite DB path, parsed for argument parity with the Perl plugin and never read.
     conservation_file: Option<String>,
@@ -457,7 +457,8 @@ impl BuiltinPlugin for LofteePlugin {
             let fasta = vep_fasta::IndexedFasta::from_path(path).map_err(|e| {
                 PluginError::Init(format!(
                     "LoFTEE: failed to open human_ancestor_fa '{path}': {e}. \
-                     Expected a plain (uncompressed) indexed FASTA with a sibling .fai."
+                     Expected an indexed FASTA: a plain .fa with its .fai, or a bgzipped \
+                     .fa.gz with its .fai and .gzi."
                 ))
             })?;
             self.ancestor_fasta = Some(fasta);
@@ -1129,6 +1130,37 @@ mod tests {
         let mut p = LofteePlugin::new();
         let err = p.init(&["human_ancestor_fa=/nonexistent/human_ancestor.fa".to_string()]);
         assert!(err.is_err());
+    }
+
+    /// `human_ancestor_fa` opens a BGZF FASTA through its `.fai` and `.gzi`, the
+    /// form the upstream bundle ships; without the `.gzi` the open fails and the
+    /// error names both accepted forms.
+    #[test]
+    fn init_opens_a_bgzf_ancestor_fasta() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/golden/116/GRCh37-hgvs");
+        let bgzf = root.join("reference.fa.gz");
+        let mut p = LofteePlugin::new();
+        p.init(&[format!("human_ancestor_fa={}", bgzf.display())])
+            .unwrap();
+        assert!(p.ancestor_fasta.is_some());
+
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["reference.fa.gz", "reference.fa.gz.fai"] {
+            std::fs::copy(root.join(name), dir.path().join(name)).unwrap();
+        }
+        let mut without_gzi = LofteePlugin::new();
+        let err = without_gzi
+            .init(&[format!(
+                "human_ancestor_fa={}",
+                dir.path().join("reference.fa.gz").display()
+            )])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("a plain .fa with its .fai, or a bgzipped .fa.gz with its .fai and .gzi"),
+            "{err}"
+        );
     }
 
     #[test]

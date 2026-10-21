@@ -2163,6 +2163,12 @@ struct PerlCodingEval<'a> {
     /// Whether the alleles were given on the strand opposite the transcript's
     /// and so read reverse-complemented (`feature_seq`).
     opposite_strand: bool,
+    /// The reference row of `--process_ref_homs`: Ensembl VEP's reference allele
+    /// object itself, whose `is_reference` reads its codon from the translateable
+    /// sequence and its peptide with the sequence edits applied
+    /// (TranscriptVariationAllele.pm:742-770, 868, 877), so both alleles of the
+    /// evaluation take the reference's reading whatever the written bases.
+    reference_row: bool,
     cds_start_nf: bool,
     cds_end_nf: bool,
     cdna_coding_start: i64,
@@ -2262,7 +2268,7 @@ impl<'a> PerlCodingEval<'a> {
         let vf_nt_len = cds_end - cds_start + 1;
         // Perl builds `_get_alternate_cds` for both alleles but reads the reference
         // codon from the translateable sequence itself.
-        let codon: Option<Vec<u8>> = if is_ref {
+        let codon: Option<Vec<u8>> = if is_ref || self.reference_row {
             perl_substr(self.cds, codon_cds_start - 1, codon_len).map(<[u8]>::to_vec)
         } else {
             let alt_cds = self.alternate_cds()?;
@@ -2302,7 +2308,7 @@ impl<'a> PerlCodingEval<'a> {
         let whole_len = codon.len() / 3 * 3;
         let mut pep = perl_translate(&codon[..whole_len], self.table);
         // SeqEdits apply to the reference peptide only, before the partial-codon `X`.
-        if is_ref {
+        if is_ref || self.reference_row {
             if let (Some(a), Some(b)) = (self.span.tl_start, self.span.tl_end) {
                 if !edit_reference_peptide(
                     &mut pep,
@@ -3716,6 +3722,7 @@ impl<'a> PerlCodingEval<'a> {
             span,
             strand,
             opposite_strand,
+            reference_row: variant.reference_allele_row,
             cds_start_nf: transcript.flags.iter().any(|f| f == "cds_start_NF"),
             cds_end_nf: transcript.flags.iter().any(|f| f == "cds_end_NF"),
             cdna_coding_start: mapper.cdna_coding_start as i64,
@@ -4943,5 +4950,39 @@ mod tests {
             perl_coding_terms(&coding, &tx, coding.start, coding.end, None),
             Some(expected)
         );
+    }
+
+    /// The reference row of `--process_ref_homs` is Ensembl VEP's reference
+    /// allele object, whose codon and peptide come from the translateable
+    /// sequence whatever bases the record wrote (TranscriptVariationAllele.pm:868,
+    /// 877): over codon 2 (`GCT`, Ala) a two- or three-base reference row written
+    /// `TA` or `TAA` is `synonymous_variant`; the same bases as an alternate
+    /// allele are spliced into the sequence and read `missense_variant` and
+    /// `stop_gained`.
+    #[test]
+    fn a_reference_row_reads_its_codon_from_the_transcript() {
+        let tx = make_test_transcript();
+        let terms = |bases: &str, reference_row: bool| {
+            let end = 25_000_053 + bases.len() as u64 - 1;
+            let mut v = InputVariant::new(
+                "21".into(),
+                25_000_053,
+                end,
+                bases.as_bytes().to_vec(),
+                bases.as_bytes().to_vec(),
+            );
+            v.reference_allele_row = reference_row;
+            perl_coding_terms(&v, &tx, v.start, v.end, None)
+        };
+        assert_eq!(
+            terms("TA", true),
+            Some(vec![Consequence::SynonymousVariant])
+        );
+        assert_eq!(
+            terms("TAA", true),
+            Some(vec![Consequence::SynonymousVariant])
+        );
+        assert_eq!(terms("TA", false), Some(vec![Consequence::MissenseVariant]));
+        assert_eq!(terms("TAA", false), Some(vec![Consequence::StopGained]));
     }
 }

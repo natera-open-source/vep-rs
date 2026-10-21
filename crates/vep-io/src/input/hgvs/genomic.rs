@@ -38,7 +38,7 @@
 //! A reference allele equal to the alternate is refused (`:2104-2106`), as is
 //! a start more than one past the end (`Bio::EnsEMBL::Feature::new`). The
 //! record then goes through the minimisation and upper-casing every parsed
-//! record goes through ([`minimise_alleles`], Parser.pm:554) and is returned
+//! record goes through (`minimise_alleles`, Parser.pm:554) and is returned
 //! as built: the checks `validate_vf` makes on it afterwards (Parser.pm:483,
 //! 556-592) are the reader's, as they are for every parsed record, and
 //! `--dont_skip` keeps what the reader keeps (Parser.pm:189-191). Three

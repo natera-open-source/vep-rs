@@ -498,7 +498,7 @@ stage_from_upstream() {
 				echo "      gerp_conservation_scores.homo_sapiens.GRCh38.bw, human_ancestor.fa.gz (+ .fai/.gzi)"
 				upstream_note "GRCh38 (grch38 branch) ships GERP as a bigWig. Pass it as gerp_bigwig=."
 			fi
-			upstream_note "Stage both forms: the Perl plugin reads human_ancestor.fa.gz with its .fai and .gzi, vep-rs the plain human_ancestor.fa, so keep the upstream .gz trio and decompress a copy, re-indexed with samtools faidx."
+			upstream_note "Both engines read human_ancestor.fa.gz with its .fai and .gzi as shipped, and vep-rs reads a plain human_ancestor.fa with its .fai as well; this layout stages both, so keep the upstream .gz trio and decompress a copy, re-indexed with samtools faidx, which the concordance harness hands to vep-rs."
 			;;
 		esac
 		echo ""

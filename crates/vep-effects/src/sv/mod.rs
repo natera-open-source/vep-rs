@@ -881,6 +881,35 @@ mod tests {
         );
     }
 
+    /// `--distance 18446744073709551615` reaches every class: the window past the
+    /// transcript's end saturates instead of overflowing, so a record far past the
+    /// transcript is within the window.
+    #[test]
+    fn a_distance_of_u64_max_saturates_the_window_in_every_class() {
+        let tx = crate::test_helpers::make_test_transcript();
+        let far = 4_000_000_000;
+        for class in [
+            VariantClass::StructuralDeletion,
+            VariantClass::StructuralInsertion,
+            VariantClass::Duplication,
+            VariantClass::Inversion,
+            VariantClass::CopyNumberVariation,
+        ] {
+            let mut v = make_sv(class, Some(far + 10));
+            v.start = far;
+            v.end = far + 10;
+            let result = calculate_sv_consequences(&v, &tx, u64::MAX, u64::MAX);
+            assert!(result.is_some(), "{class:?} far past the transcript");
+        }
+        let mut point = make_sv(VariantClass::Translocation, None);
+        point.start = far;
+        point.end = far;
+        point.is_single_breakend = true;
+        assert!(calculate_sv_consequences(&point, &tx, u64::MAX, u64::MAX).is_some());
+        let paired = make_paired_bnd(far, far, far + 1_000);
+        assert!(calculate_sv_consequences(&paired, &tx, u64::MAX, u64::MAX).is_some());
+    }
+
     #[test]
     fn test_dispatch_cnv() {
         let v = make_sv(VariantClass::CopyNumberVariation, Some(25_200_000));

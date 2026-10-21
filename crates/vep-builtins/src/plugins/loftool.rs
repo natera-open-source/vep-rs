@@ -14,8 +14,8 @@
 //!
 //! Output field: `LoFtool_percentile`
 //!
-//! Per-transcript plugin: returns annotation from [`run`] via the default
-//! [`run_batch`] dispatcher.
+//! Per-transcript plugin: returns annotation from [`crate::BuiltinPlugin::run`] via
+//! the default [`crate::BuiltinPlugin::run_batch`] dispatcher.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};

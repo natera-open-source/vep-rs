@@ -3,7 +3,7 @@
 
 //! Binary annotation store with mmap-backed lookups.
 //!
-//! [`BinaryAnnotator`] provides an alternative to [`TabixAnnotator`] for
+//! [`BinaryAnnotator`] provides an alternative to [`crate::TabixAnnotator`] for
 //! querying annotation data files. Plugin data files are preprocessed once
 //! into a sorted binary format (`.vpd` data + `.vpdi` index). At runtime,
 //! the data file is memory-mapped and records are accessed via binary search

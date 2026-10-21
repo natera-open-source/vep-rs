@@ -374,6 +374,24 @@ mod tests {
         assert!(error.contains("at least 4 columns"), "{error}");
     }
 
+    /// A refusal is the reason alone, no format named: an empty allele is skipped
+    /// with the text `Invalid allele string: 'A/' (an allele is empty)` whether
+    /// the line is an Ensembl-format one or an identifier's mapping
+    /// (`sequence_variants` serves both).
+    #[test]
+    fn a_refusal_names_the_field_and_no_format() {
+        let error = parser("21\t25585733\t25585733\tA/\t1\n")
+            .next_variant()
+            .unwrap()
+            .unwrap_err()
+            .to_string();
+        assert_eq!(error, "Invalid allele string: 'A/' (an allele is empty)");
+        let error = sequence_variants("21".into(), 100, 100, "/G", None)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(error, "Invalid allele string: '/G' (an allele is empty)");
+    }
+
     /// Parser/VEP_input.pm:136-148: an allele string without a `/` is a
     /// structural variant class word read through `get_SO_term`, over the line's
     /// start and end; its class term is the Allele and `VARIANT_CLASS`, stands

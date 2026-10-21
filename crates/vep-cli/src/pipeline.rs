@@ -517,8 +517,8 @@ pub(crate) fn cache_chr_name(
 
 /// Names a variant's chromosome, and a breakend mate's, as the cache names
 /// them: the record from the input's own spelling, which `original_chr` keeps
-/// for the output; the mate from the name the record parser gave it (a `chr`
-/// prefix already removed, `M` already `MT`). Ensembl VEP resolves every
+/// for the output; the mate from its written name, which gets no rename of its
+/// own, so a `chrM` mate reaches `MT` only through a synonym. Ensembl VEP resolves every
 /// source lookup through `get_source_chr_name` (`BaseVEP.pm:689-738`), a
 /// breakend mate's name as its region is fetched (`AnnotationSource.pm:251-254`,
 /// then `:179`; the parser's own call on `CHR2`, `Parser/VCF.pm:492`, maps
@@ -526,7 +526,10 @@ pub(crate) fn cache_chr_name(
 /// valid names as one list entry), and `_have_chr` (`Parser.pm:770-800`) skips
 /// a record whose name reaches no cache chromosome. A record whose `M` reaches
 /// the cache only through the rename of `Parser.pm:794-796` prints `MT`, as
-/// Ensembl VEP renames the record itself ([`renames_m_to_mt`]).
+/// Ensembl VEP renames the record itself ([`renames_m_to_mt`]). A mate's rows
+/// are written under its resolved name; Ensembl VEP writes them only on a
+/// spelling match (`AnnotationType/Transcript.pm:133-134`), the divergence
+/// `docs/divergences/defect-p.md` records.
 pub(crate) fn name_source_chromosomes(
     variant: &mut InputVariant,
     synonyms: &ChromosomeSynonyms,
@@ -4297,7 +4300,13 @@ mod tests {
     /// `21`, `chr21` becomes `21` by the `chr` rule (`:721-730`), `chrM` becomes
     /// `MT` only through a synonym and otherwise stays unresolved, as Ensembl VEP
     /// leaves it (`Parser.pm:788-796` strips `chr` to `M` and accepts a bare `M`
-    /// alone), and the input's spelling stays in `original_chr`.
+    /// alone), and the input's spelling stays in `original_chr`. A breakend mate
+    /// is resolved from its written name by the same rules, as Ensembl VEP
+    /// fetches its region (`AnnotationSource.pm:251-254`): a `chrM` mate reaches
+    /// `MT` through the synonym table and stays `chrM` without one. Ensembl VEP
+    /// then writes the mate's rows only on a spelling match
+    /// (`AnnotationType/Transcript.pm:133-134`); vep-rs writes them under the
+    /// resolved name (`docs/divergences/defect-p.md`).
     #[test]
     fn name_source_chromosomes_resolves_synonyms_against_the_cache() {
         let transcripts = LazyTranscriptIndexes::from_loaded(
@@ -4327,6 +4336,9 @@ mod tests {
         assert_eq!(named("chrM", None, &table).0, "MT");
         assert_eq!(named("chrM", None, &none).0, "chrM");
         assert_eq!(named("NC_000021.9", None, &none).0, "NC_000021.9");
+        assert_eq!(named("21", Some("chr21"), &none).2, Some("21".into()));
+        assert_eq!(named("21", Some("chrM"), &table).2, Some("MT".into()));
+        assert_eq!(named("21", Some("chrM"), &none).2, Some("chrM".into()));
     }
 
     /// `_have_chr` renames an input `M` to `MT` only when nothing else reaches the

@@ -56,8 +56,8 @@ pub fn find_binary_store_path(tabix_path: &Path) -> Option<std::path::PathBuf> {
 
 /// Open the best available annotation store for a given tabix file path.
 ///
-/// If a pre-converted `.vpd` file exists, opens a [`BinaryAnnotator`].
-/// Otherwise, falls back to [`TabixAnnotator`].
+/// If a pre-converted `.vpd` file exists, opens a [`crate::BinaryAnnotator`].
+/// Otherwise, falls back to [`crate::TabixAnnotator`].
 ///
 /// This function is used by plugins in their `init()` to transparently
 /// select the fastest available backend.

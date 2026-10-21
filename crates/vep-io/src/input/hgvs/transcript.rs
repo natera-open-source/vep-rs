@@ -6,7 +6,7 @@
 //! transcript the notation names is found, the description's positions are
 //! placed on the genome through the transcript's exon mapper
 //! (`_parse_hgvs_transcript_position`, `:1608-1751`), and the variant is built
-//! from the components as the genomic branch builds it ([`components`]), on
+//! from the components as the genomic branch builds it (`components`), on
 //! the transcript's strand (`:1696`, `:2132`), which the record keeps.
 //!
 //! The transcript is `fetch_by_stable_id` on the notation's reference, its

@@ -203,6 +203,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `vep_io::input::vcf::VcfParser` and its module; the `vep` binary's line parser is the one VCF reader. (#N)
 - The transcript `description` key, which Ensembl VEP's cache dumper deletes: the loader ignores it and `--transcript_filter` reads it as undefined on every cache, 0.4.0 native caches included. (#N)
 - `--transcript_index_impl` and the `coitrees` and sorted-array transcript indexes: UCSC binning is the one overlap index, and the flag is refused as an unknown argument. (#N)
+- `vep_core::DEFAULT_DISTANCE`, which nothing read; the `--distance` default of 5000 is the flag's own. (#N)
 
 ### Fixed
 
@@ -216,6 +217,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A reverse-strand Ensembl-format or region record is matched to CADD, dbNSFP, LoFTEE and every tabix-backed plugin file on its forward-strand alleles, as Ensembl VEP matches it. (#N)
 - HGVSp and shifted codons of a moved insertion turn the allele as the record wrote it, unturned on a reverse-strand transcript when the shift exceeds its length. (#N)
 - `feature_oracle.sh` decompresses each `.gz` FASTA into its own directory, so two cases whose FASTAs share a file name run in one table. (#N)
+- A breakend mate's chromosome resolves from its written name against the cache, as in Ensembl VEP; a `chrM` mate without a synonym stays unresolved rather than reading as `MT`. (#N)
+- `--distance` up to `18446744073709551615` annotates structural variants without overflowing; a debug build panicked and a release build wrapped the window past a transcript's end. (#N)
+- `SHIFT_LENGTH` is written on sequence variants' transcript rows alone under `--shift_3prime 1 --shift_length`; a structural record's rows carry none, as in Ensembl VEP. (#N)
+- An HGVS protein notation whose reference contains `ENST` but names a translation (another species' id) resolves through the translation lookup, as Ensembl VEP's first lookup does. (#N)
+- A refused Ensembl-format line or identifier mapping is skipped with the reason alone; the warning opened with `VCF parse error:`. (#N)
+- `--process_ref_homs` reads a reference row's codon from the transcript, as Ensembl VEP does, so a multi-base reference row whose bases mismatch the genome is `synonymous_variant`, not `missense_variant`. (#N)
 
 ### Security
 

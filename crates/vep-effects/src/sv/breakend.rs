@@ -40,12 +40,10 @@ pub fn calculate(
 ) -> Option<TranscriptConsequence> {
     let bp = variant.start;
     let is_native_single_breakend = variant.is_single_breakend && variant.mate_id.is_none();
+    let max_extend = upstream_distance.max(downstream_distance);
 
-    if bp
-        < transcript
-            .start
-            .saturating_sub(upstream_distance.max(downstream_distance))
-        || bp > transcript.end + upstream_distance.max(downstream_distance)
+    if bp < transcript.start.saturating_sub(max_extend)
+        || bp > transcript.end.saturating_add(max_extend)
     {
         return None;
     }
@@ -77,12 +75,12 @@ pub fn calculate(
     // when the mate is also within the extended region; otherwise only the
     // single-breakend form gets those consequences.
     let is_paired_bnd = !variant.is_single_breakend && variant.mate_chr.is_some();
-    let max_extend = upstream_distance.max(downstream_distance);
     let mate_near_transcript = variant
         .mate_pos
         .filter(|_| same_chr_mate)
         .map(|mp| {
-            mp >= transcript.start.saturating_sub(max_extend) && mp <= transcript.end + max_extend
+            mp >= transcript.start.saturating_sub(max_extend)
+                && mp <= transcript.end.saturating_add(max_extend)
         })
         .unwrap_or(false);
 

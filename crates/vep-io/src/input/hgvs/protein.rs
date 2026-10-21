@@ -8,7 +8,7 @@
 //! fewest steps (`_parse_hgvs_protein_position`, `:2232-2319`), or a deletion
 //! of its codons (`_parse_hgvs_protein_position_del`, `:2323-2354`), and the
 //! variant is built from that change as the other branches build theirs
-//! ([`components::from_alleles`]), on the transcript's strand.
+//! (`components::from_alleles`), on the transcript's strand.
 //!
 //! A description of a frameshift (letters, digits, letters and `fs`, `:1903`)
 //! is refused before anything is looked up. The transcript is
@@ -115,11 +115,13 @@ pub(super) fn variant(
 /// transcript of the gene so named, in database order (`:1933`). A reference
 /// naming a transcript (`ENST`, or `NM`, whose external-name lookup in Ensembl
 /// VEP's RefSeq database finds the RefSeq transcript itself, `:1915-1916`)
-/// goes straight to the transcript lookup (`:1922-1925`), skipping the
-/// translation lookup Ensembl VEP makes first (`:1909`), since no translation
-/// carries such an id and a miss there would read the cache's alternate tier
-/// for nothing; an `ENST` reference no transcript carries is one empty list,
-/// and an `NM` one goes on to the gene lookup, which follows a missed
+/// goes to the transcript lookup first (`:1922-1925`), ahead of the
+/// translation lookup Ensembl VEP makes first (`:1909`), since a translation
+/// rarely carries such an id and a miss there would read the cache's
+/// alternate tier for nothing; a reference the transcript lookup misses goes
+/// on to the translation lookup (a translation id whose species code begins
+/// with `T` contains `ENST`), then an `ENST` reference is one empty list, and
+/// an `NM` one goes on to the gene lookup, which follows a missed
 /// external-name lookup (`:1929-1933`), so a gene symbol containing `NM` is
 /// read as a gene name. Any other reference goes to the translation lookup
 /// (`:1909`; `XP` and `NP` are translation ids, and an `XM` reference is a
@@ -139,14 +141,15 @@ fn resolve(
         if let Some(transcript) = transcripts.by_stable_id(reference).map_err(cache_error)? {
             return Ok(vec![vec![transcript]]);
         }
-        if reference.contains("ENST") {
-            return Ok(vec![Vec::new()]);
-        }
-    } else if let Some(transcript) = transcripts
+    }
+    if let Some(transcript) = transcripts
         .by_translation_id(reference)
         .map_err(cache_error)?
     {
         return Ok(vec![vec![transcript]]);
+    }
+    if reference.contains("ENST") {
+        return Ok(vec![Vec::new()]);
     }
     transcripts.gene_transcripts(reference).map_err(cache_error)
 }
@@ -936,7 +939,11 @@ mod tests {
     /// the resolver's message. A gene symbol containing `NM` (`DNMT3A`) is
     /// read as a gene name once the transcript lookup misses it, as the gene
     /// lookup follows the external-name one (`:1929-1933`); one containing
-    /// `ENST` is not (`:1922-1925`).
+    /// `XM` is a gene name too, since the external-name test (`:1915`) names
+    /// `NP`, `XP` and `NM` alone; one containing `ENST` is not (`:1922-1925`),
+    /// unless a translation carries it, which the translation lookup finds
+    /// (`:1909`): `ENSTGUP00000000001`, a translation id whose species code
+    /// begins with `T`.
     #[test]
     fn gene_name_tries_every_transcript_in_order() {
         let gene_named = |symbol: &str| {
@@ -944,8 +951,22 @@ mod tests {
             named.gene_symbol = Some(symbol.into());
             vec![named]
         };
+        for symbol in ["DNMT3A", "XMGENE"] {
+            let notation = format!("{symbol}:p.Thr1Ala");
+            assert_eq!(
+                read_with(gene_named(symbol), false, &notation)
+                    .remove(0)
+                    .unwrap()
+                    .start,
+                121,
+                "{notation}"
+            );
+        }
+        let mut other_species = forward();
+        other_species.stable_id = "ENSTGUT00000000001".into();
+        other_species.translation.as_mut().unwrap().stable_id = "ENSTGUP00000000001".into();
         assert_eq!(
-            read_with(gene_named("DNMT3A"), false, "DNMT3A:p.Thr1Ala")
+            read_with(vec![other_species], false, "ENSTGUP00000000001:p.Thr1Ala")
                 .remove(0)
                 .unwrap()
                 .start,
@@ -1088,12 +1109,41 @@ mod tests {
         );
     }
 
+    /// A first exon of phase 2 opens mid-codon, so `pep2genomic` reads residue
+    /// `n` from cDNA `3n - 2 - 2` (TranscriptMapper.pm:372-388, the coding
+    /// start less the start phase): on a transcript coding from cDNA 1 with
+    /// that phase, residue 2 is cDNA 2-4, genomic 102-104 (`CGT`, Arg), where a
+    /// phase of 0 would read cDNA 4-6 (`TAC`, Tyr). The cached mapper and one
+    /// built from the exons place it alike.
+    #[test]
+    fn a_positive_start_phase_moves_the_codon_frame() {
+        let mut cached = forward();
+        cached.cdna_coding_start = Some(1);
+        let mapper = cached.vefc.as_mut().unwrap().mapper.as_mut().unwrap();
+        mapper.cdna_coding_start = 1;
+        mapper.start_phase = 2;
+        let mut uncached = cached.clone();
+        uncached.vefc = None;
+        uncached.exons[0].phase = 2;
+        for transcript in [cached, uncached] {
+            let v = read_with(vec![transcript], false, "ENSP00000000001:p.Arg2Gly")
+                .remove(0)
+                .unwrap();
+            assert_eq!(
+                (v.start, v.end, v.strand, v.allele_string.as_str()),
+                (102, 102, Strand::Forward, "C/G")
+            );
+        }
+    }
+
     /// The lookups a reference makes, in order: a reference naming a transcript
-    /// (`ENST`, `NM`) goes to the transcript lookup alone, since no translation
-    /// carries such an id and a missed translation lookup would read the
-    /// cache's alternate tier for nothing; a translation id goes to the
-    /// translation lookup alone; a gene name goes to the translation lookup,
-    /// then the gene lookup (`:1909-1933`).
+    /// (`ENST`, `NM`) goes to the transcript lookup first, since a translation
+    /// rarely carries such an id and a missed translation lookup would read the
+    /// cache's alternate tier for nothing, then, on a miss, to the translation
+    /// lookup, after which an `ENST` reference stops and an `NM` one goes on to
+    /// the gene lookup; a translation id goes to the translation lookup alone;
+    /// a gene name, `XM` included, goes to the translation lookup, then the
+    /// gene lookup (`:1909-1933`).
     #[test]
     fn transcript_references_skip_the_translation_lookup() {
         struct Recording {
@@ -1114,7 +1164,7 @@ mod tests {
                 self.cache.gene_transcripts(name)
             }
         }
-        let lookups_of = |hgvs: &str| -> Vec<&'static str> {
+        let lookups_of = |hgvs: &str| -> (Vec<&'static str>, bool) {
             let source = Arc::new(Recording {
                 cache: Cache(vec![forward()]),
                 lookups: Mutex::new(Vec::new()),
@@ -1126,13 +1176,34 @@ mod tests {
             };
             let mut parser =
                 HgvsParser::new(Cursor::new(hgvs.as_bytes().to_vec()), &context, false);
-            parser.next_variant().unwrap().unwrap();
+            let resolved = parser.next_variant().unwrap().is_ok();
             let lookups = source.lookups.lock().unwrap().clone();
-            lookups
+            (lookups, resolved)
         };
-        assert_eq!(lookups_of("ENST00000000001:p.Thr1Ala"), ["stable_id"]);
-        assert_eq!(lookups_of("ENSP00000000001:p.Thr1Ala"), ["translation_id"]);
-        assert_eq!(lookups_of("GENE1:p.Thr1Ala"), ["translation_id", "gene"]);
+        assert_eq!(
+            lookups_of("ENST00000000001:p.Thr1Ala"),
+            (vec!["stable_id"], true)
+        );
+        assert_eq!(
+            lookups_of("ENST00000000099:p.Thr1Ala"),
+            (vec!["stable_id", "translation_id"], false)
+        );
+        assert_eq!(
+            lookups_of("NM_000001.4:p.Thr1Ala"),
+            (vec!["stable_id", "translation_id", "gene"], false)
+        );
+        assert_eq!(
+            lookups_of("ENSP00000000001:p.Thr1Ala"),
+            (vec!["translation_id"], true)
+        );
+        assert_eq!(
+            lookups_of("GENE1:p.Thr1Ala"),
+            (vec!["translation_id", "gene"], true)
+        );
+        assert_eq!(
+            lookups_of("XM_000001.1:p.Thr1Ala"),
+            (vec!["translation_id", "gene"], false)
+        );
     }
 
     /// The refusals of `_parse_hgvs_protein_position`, each with Ensembl VEP's

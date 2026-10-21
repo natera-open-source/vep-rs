@@ -3,7 +3,7 @@ name = "vep-io"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Input parsers (Ensembl, HGVS, Region) with format detection, and output formatters (VEP, VCF, JSON, Tab, Parquet)"
+description = "Input parsers (Ensembl, HGVS, SPDI, region, identifier) with format detection, and output formatters (VEP, VCF, JSON, Tab, Parquet)"
 
 [dependencies]
 vep-core = { workspace = true }

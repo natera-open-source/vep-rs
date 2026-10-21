@@ -74,7 +74,7 @@ pub fn calculate(
     let tx_end = transcript.end;
 
     if sv_end < tx_start.saturating_sub(upstream_distance.max(downstream_distance))
-        || sv_start > tx_end + upstream_distance.max(downstream_distance)
+        || sv_start > tx_end.saturating_add(upstream_distance.max(downstream_distance))
     {
         return None;
     }

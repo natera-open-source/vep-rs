@@ -421,7 +421,7 @@ impl ExonCoordMapper {
     }
 
     /// Rebuild the genomic index from the current `pairs`. Call after any path
-    /// that constructs/deserializes `pairs` without going through [`new`].
+    /// that constructs/deserializes `pairs` without going through [`Self::new`].
     pub fn rebuild_genomic_index(&mut self) {
         self.by_genomic_start = Self::build_genomic_index(&self.pairs);
     }

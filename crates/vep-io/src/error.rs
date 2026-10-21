@@ -10,8 +10,10 @@ pub enum IoError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
-    /// A VCF parsing error.
-    #[error("VCF parse error: {0}")]
+    /// A record a parser cannot read, or a value a writer cannot serialise, the
+    /// reason as the whole message: it names the field refused, and a refused
+    /// line is skipped with it under every input format.
+    #[error("{0}")]
     VcfParse(String),
 
     /// Input refused by design, with the reason as the whole message.

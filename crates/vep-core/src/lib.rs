@@ -33,9 +33,6 @@ pub const VEP_VERSION: u32 = 116;
 /// VEP sub-version number.
 pub const VEP_SUB_VERSION: u32 = 2;
 
-/// Default upstream/downstream distance in base pairs.
-pub const DEFAULT_DISTANCE: u64 = 5000;
-
 /// Default buffer size (number of variants per batch).
 pub const DEFAULT_BUFFER_SIZE: usize = 5000;
 

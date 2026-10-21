@@ -3,8 +3,8 @@
 
 //! Built-in plugin implementations.
 //!
-//! Each module implements a specific VEP plugin using the [`BuiltinPlugin`] trait.
-//! Tabix-based plugins use the shared [`TabixAnnotator`] engine for batched I/O.
+//! Each module implements a specific VEP plugin using the [`crate::BuiltinPlugin`] trait.
+//! Tabix-based plugins use the shared [`crate::TabixAnnotator`] engine for batched I/O.
 
 pub mod alpha_missense;
 pub mod cadd;

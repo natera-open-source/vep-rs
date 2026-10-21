@@ -12,7 +12,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use crate::coordinate::{normalize_chromosome, MAX_COORD};
+use crate::coordinate::MAX_COORD;
 use crate::sv_routing::{
     joined, per_alt_classes, perl_split, perl_true, sv_so_term_and_class, sv_type_abbreviation,
     sv_type_string, variant_alts,
@@ -192,7 +192,12 @@ pub fn structural_variants(
                         variant.allele_num = Some(number);
                         variant.alt_alleles = vec![mate.text.as_bytes().to_vec()];
                         variant.allele_string = format!("{ref_allele}/{}", mate.text);
-                        variant.mate_chr = Some(normalize_chromosome(&mate.chromosome));
+                        // The mate keeps its written name for the cache lookup to resolve:
+                        // Ensembl VEP fetches a mate's region through `get_source_chr_name`
+                        // (AnnotationSource.pm:251-254, BaseVEP.pm:689-738: the name, its
+                        // synonyms, the `chr` rule), which has no `M` to `MT` rename
+                        // (Parser.pm:794-796 renames the record's own name alone).
+                        variant.mate_chr = Some(mate.chromosome.clone());
                         variant.mate_pos = Some(mate.position);
                         variant.is_single_breakend = false;
                         variant.allele_index = mate.allele_index.unwrap_or(allele_idx);
@@ -551,6 +556,38 @@ mod tests {
         );
         let dot = breakend_record("N", &written_alts(".N"), "SVTYPE=BND");
         assert!(!dot.reference_prefixed);
+    }
+
+    /// A mate's chromosome is carried as written, `chr` prefix and `M` included, for
+    /// the cache lookup to resolve (`get_source_chr_name`, AnnotationSource.pm:251-254);
+    /// the record's own name is normalised on construction.
+    #[test]
+    fn a_breakend_mate_keeps_its_written_chromosome_name() {
+        let bracket = structural_variants(
+            "chr21",
+            30425600,
+            "N",
+            &written_alts("N[chrM:100["),
+            "SVTYPE=BND",
+            None,
+        )
+        .unwrap();
+        assert_eq!(bracket.len(), 2);
+        assert_eq!(bracket[0].chr, "21");
+        assert!(bracket[0].mate_chr.is_none());
+        assert_eq!(bracket[1].mate_chr.as_deref(), Some("chrM"));
+        assert_eq!(bracket[1].mate_pos, Some(100));
+        let chr2 = structural_variants(
+            "21",
+            30425600,
+            "N",
+            &written_alts("<BND>"),
+            "SVTYPE=BND;CHR2=chrX;END2=50000000",
+            None,
+        )
+        .unwrap();
+        assert_eq!(chr2[1].mate_chr.as_deref(), Some("chrX"));
+        assert_eq!(chr2[1].alt_allele(), b"N[chrX:50000000[");
     }
 
     /// `_expand_tandem_repeat_allele_string` reads its counts as Perl numifies them and

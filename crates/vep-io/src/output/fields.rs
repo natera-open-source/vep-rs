@@ -838,7 +838,7 @@ fn row_spdi<'a>(
         .map(|sibling| (sibling.spdi.as_str(), sibling.ga4gh_vrs.as_ref()))
 }
 
-/// The GA4GH VRS allele the row prints ([`row_spdi`]), for the JSON format to
+/// The GA4GH VRS allele the row prints (`row_spdi`), for the JSON format to
 /// nest as an object.
 pub fn row_ga4gh_vrs<'a>(
     variant: &'a InputVariant,
@@ -1302,9 +1302,12 @@ fn row_field_value(
         "HGVS_OFFSET" => tc
             .and_then(|x| x.hgvs_offset.map(|o| o.to_string()))
             .unwrap_or_default(),
-        // Set on every transcript row, 0 included, when both flags are on
-        // (OutputFactory.pm:1690-1695); an intergenic row carries none.
-        "SHIFT_LENGTH" if options.shift_3prime => {
+        // Set on every sequence variant's transcript row, 0 included, when both
+        // flags are on (`TranscriptVariationAllele_to_output_hash`,
+        // OutputFactory.pm:1690-1696); an intergenic row carries none, and a
+        // structural record's rows none (`TranscriptStructuralVariationAllele_to_output_hash`,
+        // :2118-2125, sets no such key).
+        "SHIFT_LENGTH" if options.shift_3prime && !variant.is_structural => {
             tc.map(|x| x.shift_length.to_string()).unwrap_or_default()
         }
         "SHIFT_LENGTH" => String::new(),
@@ -2185,8 +2188,10 @@ mod tests {
     }
 
     /// `--shift_length` lists SHIFT_LENGTH among the flag fields, and under
-    /// `--shift_3prime 1` every transcript row carries its value, 0 included
-    /// (OutputFactory.pm:1690-1695); an intergenic row carries none.
+    /// `--shift_3prime 1` every transcript row of a sequence variant carries its
+    /// value, 0 included (OutputFactory.pm:1690-1696); an intergenic row carries
+    /// none, and so does a structural record's transcript row, whose output hash
+    /// (:2118-2125) never sets the key.
     #[test]
     fn shift_length_prints_zero_on_unshifted_transcript_rows() {
         let options = FieldOptions {
@@ -2210,6 +2215,13 @@ mod tests {
             "7"
         );
         assert_eq!(field_value("SHIFT_LENGTH", &snv, None, &options, ","), "");
+        let mut deletion =
+            InputVariant::new("21".into(), 1_000, 2_000, b"N".to_vec(), b"<DEL>".to_vec());
+        deletion.is_structural = true;
+        assert_eq!(
+            field_value("SHIFT_LENGTH", &deletion, Some(&unmoved), &options, ","),
+            ""
+        );
     }
 
     /// Without `--shift_3prime 1` the SHIFT_LENGTH column is listed under
