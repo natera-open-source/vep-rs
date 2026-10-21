@@ -2,7 +2,7 @@
 name = "vep-fields-compare"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.89"
 license = "Apache-2.0"
 description = "Per-column field agreement between two VEP default-format outputs, byte-identical to scripts/concordance/compare_vep_fields.py"
 publish = false

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/natera-open-source/vep-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/natera-open-source/vep-rs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](#installation)
+[![MSRV](https://img.shields.io/badge/MSRV-1.89-orange.svg)](#installation)
 
 Documentation: https://natera-open-source.github.io/vep-rs/
 
@@ -138,7 +138,7 @@ Every value above is recorded in these files:
 
 ## Installation
 
-Pre-built binaries for Linux x86_64, Linux aarch64 and macOS aarch64 are on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page; each Linux architecture has a measured archive and a generic one, and both run on glibc 2.17 or later. Building from source needs Rust 1.88+ ([rustup](https://rustup.rs/)):
+Pre-built binaries for Linux x86_64, Linux aarch64 and macOS aarch64 are on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page; each Linux architecture has a measured archive and a generic one, and both run on glibc 2.17 or later. Building from source needs Rust 1.89+ ([rustup](https://rustup.rs/)):
 
 ```bash
 git clone https://github.com/natera-open-source/vep-rs.git

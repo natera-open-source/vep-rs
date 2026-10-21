@@ -230,8 +230,9 @@ it writes with the same transcripts of the Ensembl VEP 116 GRCh38 cache. The int
 the `all_vars.gz` lines and `info.json` it writes, and reads the records back through `vep`'s
 variation source. On Linux the binary links OpenSSL (`reqwest` and `mysql` both use
 `native-tls`), so the build needs the OpenSSL development package; macOS links
-Security.framework. The workspace `rust-version` in `Cargo.toml` is set by this crate's
-`mysql` dependency chain. `scripts/validation/validate_builder_cache.sh` builds the
+Security.framework. The workspace `rust-version` in `Cargo.toml` is set by the `noodles`
+crates; this crate's `mysql` dependency chain is the next tier down.
+`scripts/validation/validate_builder_cache.sh` builds the
 binary, builds a one-region cache and compares it with captured fixtures
 (`--fixture-mode`) or a Perl-derived JSON cache (`--baseline-cache`). The
 [contributing guide](../../CONTRIBUTING.md) has the repository's standard build, test,

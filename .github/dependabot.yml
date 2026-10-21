@@ -11,10 +11,12 @@ updates:
           - minor
           - patch
     ignore:
-      # noodles 0.110 and later declare rust-version 1.89, above the
-      # workspace's declared rust-version.
+      # noodles 0.117 and noodles-bgzf 0.52 and later declare rust-version
+      # 1.91, above the workspace's declared rust-version.
       - dependency-name: noodles
-        versions: [">= 0.110"]
+        versions: [">= 0.117"]
+      - dependency-name: noodles-bgzf
+        versions: [">= 0.52"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

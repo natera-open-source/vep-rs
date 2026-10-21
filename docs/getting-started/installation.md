@@ -8,7 +8,7 @@ Binaries for Linux x86_64, Linux aarch64 and macOS aarch64 are on the [Releases]
 
 ## Build from source
 
-Building needs Rust 1.88+ ([rustup](https://rustup.rs/)):
+Building needs Rust 1.89+ ([rustup](https://rustup.rs/)):
 
 ```bash
 git clone https://github.com/natera-open-source/vep-rs.git

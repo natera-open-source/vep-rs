@@ -155,6 +155,10 @@ def population_record(repo: Path = ROOT) -> dict:
     return json.loads(next((repo / "docs" / "concordance-provenance").glob(f"*-population-v{VERSION}.json")).read_text())
 
 
+def declared_msrv(repo: Path) -> str:
+    return re.search(r'^rust-version = "([^"]+)"', (repo / "Cargo.toml").read_text(), re.MULTILINE).group(1)
+
+
 def expected_whole_genome_rows(repo: Path = ROOT) -> list[str]:
     pop = release_record(repo)["population_concordance"]
     cells = population_record(repo)["wall_time"]["vep_rs"]["per_cell"]
@@ -196,7 +200,7 @@ def changelog_bullets(repo: Path, version: str) -> list[str]:
 
 
 def expected_page(repo: Path) -> str:
-    msrv = re.search(r'^rust-version = "([^"]+)"', (repo / "Cargo.toml").read_text(), re.MULTILINE).group(1)
+    msrv = declared_msrv(repo)
     install = [f"- [`{n}`]({DOWNLOAD}/{n}): {PLATFORMS[n]}; sha256 `{DIGESTS[n]}`" for n in PLATFORMS]
     install += [
         f"- Each archive unpacks to `vep-{VERSION}-<target>/` holding `vep`, `vep-cache-builder` and `vep-cache-converter`; "
@@ -605,7 +609,8 @@ def test_install_lists_every_archive_in_target_order_with_its_digest(tmp_path: P
     assert len(install) == 7 and all(l.startswith("- ") for l in install)
     assert [l.split("`")[1] for l in install[:3]] == list(PLATFORMS)
     assert [l.rsplit("`", 2)[1] for l in install[:3]] == [DIGESTS[n] for n in PLATFORMS]
-    assert install[3].startswith("- Each archive unpacks to `vep-0.3.2-<target>/`") and "Rust 1.88 or later" in install[3]
+    msrv = declared_msrv(repo)
+    assert install[3].startswith("- Each archive unpacks to `vep-0.3.2-<target>/`") and f"Rust {msrv} or later" in install[3]
     assert [l.split(": ", 1)[1].rsplit("; sha256", 1)[0] for l in install[:3]] == [PLATFORMS[n] for n in PLATFORMS]
     assert install[4] == (
         "- Container image: `docker pull ghcr.io/natera-open-source/vep-rs:0.3.2` (linux/amd64: the x86_64 binaries "

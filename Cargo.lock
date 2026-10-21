@@ -141,10 +141,11 @@ dependencies = [
 
 [[package]]
 name = "bit-vec"
-version = "0.9.1"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b71798fca2c1fe1086445a7258a4bc81e6e49dcd24c8d0dd9a1e57395b603f51"
+checksum = "5727b15fa97d4f4fee0a3b7c3d550ed0269f54329207b86388de918604e31269"
 dependencies = [
+ "borsh",
  "serde",
 ]
 
@@ -161,6 +162,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "borsh"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "553c5d846a6ba5150c65e3b1b8ec073bcf1abc20f9b7220de384a4443ea4e20a"
+dependencies = [
+ "borsh-derive",
+ "bytes",
+ "cfg_aliases",
+]
+
+[[package]]
+name = "borsh-derive"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12cdfe656708a01f89b451a7d36466e6fe6c414de0aa18fc54f864f6f9ca9f56"
+dependencies = [
+ "once_cell",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
 ]
 
 [[package]]
@@ -237,6 +262,12 @@ name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+
+[[package]]
+name = "cfg_aliases"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
 name = "chacha20"
@@ -1353,9 +1384,9 @@ dependencies = [
 
 [[package]]
 name = "noodles"
-version = "0.109.0"
+version = "0.115.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4876a9caa25647b9ddc09883263b61fd6500ec7a4394f31daa5428026d5eb415"
+checksum = "5ef86cb036ab589c660e76bc6d7741454fe8ff71ba3348f71812936f5c1a43f6"
 dependencies = [
  "noodles-bgzf",
  "noodles-core",
@@ -1367,30 +1398,31 @@ dependencies = [
 
 [[package]]
 name = "noodles-bgzf"
-version = "0.46.0"
+version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37290f565045fd2775b549e62dffca7e1afadc70d8d5a3a2ef19609eb3d8193b"
+checksum = "280d401d0358893ad706fb6094a18e7f9e8f3002630f4960889cb702b6e2714e"
 dependencies = [
  "bytes",
  "crossbeam-channel",
- "flate2",
  "libdeflater",
+ "rayon",
+ "zlib-rs",
 ]
 
 [[package]]
 name = "noodles-core"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53e1e8a419dbba0e4000b0e60830b124138c7f2277ad556463506f1a81d32d17"
+checksum = "c8dbac7c5f9a7de9fe45590f198a09697df631cd13d2060b4742cc48144555b0"
 dependencies = [
  "bstr",
 ]
 
 [[package]]
 name = "noodles-csi"
-version = "0.55.0"
+version = "0.60.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9c846d8128bd80b18d891b13cb9e0bc1d364429d6ab3ec3c83939f3d32ba105"
+checksum = "32789eeba9c4001d50de853a4c6a8f0551d586a91d6919c0008dd462231feacb"
 dependencies = [
  "bit-vec",
  "bstr",
@@ -1401,9 +1433,9 @@ dependencies = [
 
 [[package]]
 name = "noodles-fasta"
-version = "0.60.0"
+version = "0.66.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5c8ccd951d43ba0a1c4dcc1f86fdc2ee86c1742de2988956bcdf1bc58905769"
+checksum = "da0263cded3c76c5ddc6d36b805e68e512e6f474a56b9855c7ef37cb69a3fb65"
 dependencies = [
  "bstr",
  "memchr",
@@ -1413,9 +1445,9 @@ dependencies = [
 
 [[package]]
 name = "noodles-tabix"
-version = "0.61.0"
+version = "0.66.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2443d0852c9618cd4aa8d11bc7c1884285e46aa4466cf5c1e49f3d9756ca7ced"
+checksum = "52c0b2afdd167cb7943f8e655ac9f37d4403b93b978fe8d192faece39d844cbc"
 dependencies = [
  "bstr",
  "indexmap",
@@ -1426,9 +1458,9 @@ dependencies = [
 
 [[package]]
 name = "noodles-vcf"
-version = "0.87.0"
+version = "0.92.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12b339e85269ab7689661c690f9108dceb606bf3d230e1768799ae107d505e76"
+checksum = "59ba2606faec4bee364b0143191d7dbfd9357d61a1ad65651a58b42df540b9cb"
 dependencies = [
  "indexmap",
  "memchr",

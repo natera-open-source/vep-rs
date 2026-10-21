@@ -315,6 +315,27 @@ fn another_member_follows(reader: &mut Box<dyn BufRead + Send>) -> io::Result<bo
     Ok(magic == GZIP_MAGIC[..2])
 }
 
+/// The dependency's BGZF block reader over `reader`: with `threads` above one
+/// the multithreaded reader with that many inflate workers, its end of input
+/// checked ([`CheckedBgzfReader`]); else the single-threaded one.
+fn bgzf_block_reader<R: Read + Send + 'static>(
+    reader: R,
+    threads: usize,
+) -> Box<dyn BufRead + Send> {
+    match std::num::NonZeroUsize::new(threads) {
+        // The multithreaded reader builds its inflate workers when it is built,
+        // so they carry the Linux thread name of the thread that opens the input,
+        // and starts its frame reader at the first read, so that one carries the
+        // name of whichever thread reads first.
+        Some(workers) if workers.get() > 1 => Box::new(CheckedBgzfReader {
+            inner: Some(bgzf::io::MultithreadedReader::with_worker_count(
+                workers, reader,
+            )),
+        }),
+        _ => Box::new(bgzf::io::Reader::new(reader)),
+    }
+}
+
 /// The input's text: `reader` itself when it does not open with the gzip magic,
 /// else its decompressed stream, through the BGZF block reader when the first
 /// member carries the BGZF subfield (`MultithreadedReader` with `threads` workers
@@ -344,16 +365,7 @@ fn decompressed<R: BufRead + Send + 'static>(
         let buffered = BufReader::with_capacity(INPUT_BUFFER_BYTES, gunzip);
         return Ok((Box::new(buffered), false));
     }
-    let block_reader: Box<dyn BufRead + Send> = match std::num::NonZeroUsize::new(threads) {
-        // The block reader starts its worker threads at its first read, not
-        // when it is built, so they carry the Linux thread name of whichever
-        // thread reads first.
-        Some(n) if n.get() > 1 => Box::new(CheckedBgzfReader {
-            inner: Some(bgzf::io::MultithreadedReader::with_worker_count(n, reader)),
-        }),
-        _ => Box::new(bgzf::io::Reader::new(reader)),
-    };
-    Ok((block_reader, true))
+    Ok((bgzf_block_reader(reader, threads), true))
 }
 
 /// The shape of the run's input: `--input_data` and standard input have none,
@@ -3255,6 +3267,35 @@ mod tests {
                 "{threads} threads: {error}"
             );
             assert_eq!(text, b"first block\n", "{threads} threads");
+        }
+    }
+
+    /// A BGZF block whose trailer declares more uncompressed bytes than a block
+    /// can hold (ISIZE above 65536, SAM specification section 4.1) is an invalid
+    /// data error from the single-threaded block reader and the multithreaded
+    /// one alike, before any of its bytes are delivered. The readers are built
+    /// through [`bgzf_block_reader`] rather than `decompressed`, so no check
+    /// placed ahead of them can satisfy the test: it pins the dependency's own
+    /// check, the one the workspace manifest's `noodles-bgzf` floor was chosen for.
+    #[test]
+    fn bgzf_block_declaring_more_than_a_block_holds_is_a_read_error() {
+        let mut writer = bgzf::io::Writer::new(Vec::new());
+        writer.write_all(b"21\t100\t.\tA\tG\t.\tPASS\t.\n").unwrap();
+        let mut bytes = writer.finish().unwrap();
+        // ISIZE is the last field of the block's eight-byte trailer; 65537 is
+        // the first value past the limit.
+        let block_size = bgzf_block_size(&bytes).unwrap();
+        bytes[block_size - 4..block_size].copy_from_slice(&65_537u32.to_le_bytes());
+        for threads in [1, 4] {
+            let mut reader = bgzf_block_reader(Cursor::new(bytes.clone()), threads);
+            let mut text = Vec::new();
+            let error = reader.read_to_end(&mut text).unwrap_err();
+            assert_eq!(
+                error.kind(),
+                io::ErrorKind::InvalidData,
+                "{threads} threads: {error}"
+            );
+            assert!(text.is_empty(), "{threads} threads: {text:?}");
         }
     }
 
