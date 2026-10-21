@@ -38,7 +38,7 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release
 
 ## Container image
 
-Each published release from 0.2.0 on is also an image on the GitHub Container Registry; from 0.5.0 it is a multi-platform image. The `X.Y.Z`, `X.Y` and `latest` tags carry the generic Linux binaries (`x86-64-v2` on linux/amd64, generic aarch64 on linux/arm64), so `docker run` works on any 64-bit Arm host and almost every 64-bit x86 host, Apple silicon and Graviton2 included, with no `--platform` flag. The `X.Y.Z-x86-64-v3` and `X.Y.Z-neoverse-v1` tags carry the measured binaries for hosts that meet their CPU floors. Every image holds the release's own `vep`, `vep-cache-builder` and `vep-cache-converter`, and the `duckdb` CLI that Parquet output needs.
+Each published release from 0.2.0 on is also an image on the GitHub Container Registry; from 0.5.0 it is a multi-platform image. The `X.Y.Z`, `X.Y` and `latest` tags carry the generic Linux binaries (`x86-64-v2` on linux/amd64, generic aarch64 on linux/arm64), so `docker run` works on any 64-bit Arm host and almost every 64-bit x86 host, Apple silicon and Graviton2 included, with no `--platform` flag. The `X.Y.Z-x86-64-v3` and `X.Y.Z-neoverse-v1` tags carry the measured binaries for hosts that meet their CPU floors. Every image holds the release's own `vep`, `vep-cache-builder` and `vep-cache-converter`, and the `duckdb` CLI that Parquet output needs. Images from 0.5.0 add `bgzip` and `tabix` from Debian's `tabix` package, so `--compress_output bgzip` VCF output can be indexed in the container.
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" \

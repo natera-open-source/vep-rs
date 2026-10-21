@@ -34,16 +34,18 @@ RUN case "$TARGETARCH" in \
 FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
 ARG VERSION
 LABEL org.opencontainers.image.title="vep-rs" \
-      org.opencontainers.image.description="Ensembl Variant Effect Predictor in Rust: vep, vep-cache-builder, vep-cache-converter and the duckdb CLI for Parquet output" \
+      org.opencontainers.image.description="Ensembl Variant Effect Predictor in Rust: vep, vep-cache-builder, vep-cache-converter, bgzip, tabix and the duckdb CLI for Parquet output" \
       org.opencontainers.image.source="https://github.com/natera-open-source/vep-rs" \
       org.opencontainers.image.documentation="https://github.com/natera-open-source/vep-rs#container-image" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="${VERSION}"
 # ca-certificates: vep-cache-builder downloads from Ensembl over HTTPS.
 # libssl3t64: vep-cache-builder links OpenSSL 3. libstdc++6: duckdb.
+# tabix: the bgzip and tabix binaries, for indexing --compress_output bgzip
+# VCF output.
 # hadolint ignore=DL3008
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates libssl3t64 libstdc++6 zlib1g \
+ && apt-get install -y --no-install-recommends ca-certificates libssl3t64 libstdc++6 tabix zlib1g \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 1000 --user-group vep
 COPY --from=duckdb /tmp/duckdb/duckdb /usr/local/bin/duckdb

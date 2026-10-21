@@ -63,6 +63,14 @@ cat >"$STUBS/duckdb" <<'STUB'
 [[ "${STUB_PQ_RC:-0}" -eq 0 ]] || { echo "IO Error: No files found" >&2; exit 1; }
 echo "${STUB_PQ_ROWS:-5}"
 STUB
+cat >"$STUBS/bgzip" <<'STUB'
+#!/usr/bin/env bash
+[[ "$1" == --version ]] && { echo "bgzip (htslib) 1.21"; exit "${STUB_BGZIP_RC:-0}"; }
+STUB
+cat >"$STUBS/tabix" <<'STUB'
+#!/usr/bin/env bash
+[[ "$1" == --version ]] && { echo "tabix (htslib) 1.21"; exit "${STUB_TABIX_RC:-0}"; }
+STUB
 cat >"$STUBS/vep-cache-builder" <<'STUB'
 #!/usr/bin/env bash
 exit "${STUB_BUILDER_RC:-0}"
@@ -95,12 +103,14 @@ bash -n "$SMOKE" && ok "smoke_test.sh parses" || bad "smoke_test.sh has a syntax
 out=$(smoke 2>&1)
 rc=$?
 n=$(printf '%s\n' "$out" | grep -c '^  ok ') || n=0
-[[ "$rc" -eq 0 && "$n" -eq 10 ]] && ok "a healthy image passes all 10 checks" || bad "healthy run: rc=$rc, $n ok lines: $out"
+[[ "$rc" -eq 0 && "$n" -eq 12 ]] && ok "a healthy image passes all 12 checks" || bad "healthy run: rc=$rc, $n ok lines: $out"
 
 expect_fail "a wrong vep version fails" "vep --version printed 'vep 1.0.0'" STUB_VERSION=1.0.0
 expect_fail "a broken vep-cache-builder fails" "vep-cache-builder --help exited non-zero" STUB_BUILDER_RC=1
 expect_fail "a broken vep-cache-converter fails" "vep-cache-converter --help exited non-zero" STUB_CONVERTER_RC=1
 expect_fail "a broken duckdb fails" "duckdb --version exited non-zero" STUB_DUCKDB_RC=1
+expect_fail "a broken bgzip fails" "bgzip --version exited non-zero" STUB_BGZIP_RC=1
+expect_fail "a broken tabix fails" "tabix --version exited non-zero" STUB_TABIX_RC=1
 expect_fail "a missing CA bundle fails" "no CA bundle" CA_BUNDLE="$TMP/absent.crt"
 expect_fail "running as root fails" "runs as root" STUB_UID=0
 expect_fail "a dropped VCF record fails" "--vcf wrote 2 records for 3" STUB_VCF_RECORDS=2

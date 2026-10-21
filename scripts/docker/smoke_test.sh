@@ -29,8 +29,10 @@ for bin in vep-cache-builder vep-cache-converter; do
     pass "$bin starts"
 done
 
-duckdb --version >/dev/null || fail "duckdb --version exited non-zero"
-pass "duckdb starts"
+for bin in duckdb bgzip tabix; do
+    "$bin" --version >/dev/null || fail "$bin --version exited non-zero"
+    pass "$bin starts"
+done
 
 [[ -s "$CA_BUNDLE" ]] || fail "no CA bundle at $CA_BUNDLE"
 pass "CA bundle present"
