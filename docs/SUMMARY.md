@@ -9,6 +9,7 @@
 - [Examples](examples.md)
 - [Cache setup](cache-setup.md)
 - [Coming from Ensembl VEP](getting-started/coming-from-ensembl-vep.md)
+- [What vep-rs does not do](getting-started/what-vep-rs-does-not-do.md)
 
 # Reference
 

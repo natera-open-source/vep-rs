@@ -23,7 +23,7 @@ target/release/vep \
   -i tests/golden/116/GRCh37/variants.vcf -o output.txt
 ```
 
-[Installation](getting-started/installation.md) covers the CPU floor, the container tags and building for your own machine. The [Quick start](getting-started/quick-start.md) continues with a transcript cache and your own VCF.
+[Installation](getting-started/installation.md) covers the CPU floor, the container tags and building for your own machine. The [Quick start](getting-started/quick-start.md) continues with a transcript cache and your own VCF. [What vep-rs does not do](getting-started/what-vep-rs-does-not-do.md) lists the Ensembl VEP features vep-rs does not have, what a run does when asked for one, and which of them the next release, 0.6.0, adds.
 
 | [Getting started](getting-started/installation.md) | [Reference](cli-reference.md) |
 | --- | --- |
