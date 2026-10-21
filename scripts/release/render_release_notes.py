@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Render the GitHub release body for a vep-rs version from the repository's own files.
 
-The page, every header `##`, in this order: the hand-written opener, then `## Highlights` and
-`## Upgrade notes` when `.github/release-notes/vX.Y.Z.md` carries them (its lines are the only
-hand-written ones); the version's CHANGELOG.md section with each `###` kind header raised to `##`;
-`## Concordance and wall time` from the release and population provenance records; `## Install` from
-SHA256SUMS, the glibc floors `check_glibc_floor.py --json` measured on the Linux archives, the build and the
-workspace rust-version; `## Cite` from CITATION.cff; and the full-changelog footer. A page over `LINE_CAP`
-lines is refused.
+The page, every header `##`, in this order: the hand-written opener, then `## Highlights` when
+`.github/release-notes/vX.Y.Z.md` carries it (its lines are the only hand-written ones); the notes, in one
+of two shapes: a notes file with `## What changed, by area` renders that section (one bullet per area, its
+changes nested under it as `  - ` bullets, each breaking one beginning `Breaking:` and first in its area)
+and its optional `## Security and robustness`, `## Dependencies and tooling` and `## Removed` sections as
+written, while a notes file without it renders its optional `## Upgrade notes` and then the version's
+CHANGELOG.md section with each `###` kind header raised to `##`; `## Concordance and wall time` from the
+release and population provenance records; `## Install` from SHA256SUMS, the glibc floors
+`check_glibc_floor.py --json` measured on the Linux archives, the build and the workspace rust-version;
+`## Cite` from CITATION.cff; and the full-changelog footer. A page over `LINE_CAP` lines is refused.
 
 usage: render_release_notes.py --repo DIR --version X.Y.Z --previous vX.Y.Z --commit SHA
                                --toolchain 1.97.1 --sha256sums FILE --glibc-floors FILE [--notes FILE]
@@ -23,7 +26,9 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Iterator
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal, InvalidOperation
+from itertools import pairwise
 from pathlib import Path
 from typing import NamedTuple
 
@@ -32,7 +37,8 @@ from reference_release import release_from_provenance  # noqa: E402  (one readin
 
 REPO_URL = "https://github.com/natera-open-source/vep-rs"
 CONCEPT_DOI = "10.5281/zenodo.22837896"
-LINE_CAP = 84
+LINE_CAP = 400
+AREA_NAME_CAP = 60
 SCORED = ("s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08")
 MEASURED_CPU = {"arm64": "neoverse-v1", "x86_64": "x86-64-v3"}
 
@@ -93,8 +99,22 @@ ARCH_LABELS = {"arm64": "ARM", "x86_64": "x86"}
 SV_SETS = (("clinvar_sv_", "ClinVar SV"), ("gnomad_sv_", "gnomAD SV"), ("1kg_sv_", "1000 Genomes SV"))
 SYNTHETIC = re.compile(r"^\d{2}_")
 SYNTHETIC_FILES = 13
-LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+\.)\s")
+LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+\.)(?:\s|$)")
 BULLET = re.compile(r"[-*] ")
+NEST = "  "
+BREAKING = re.compile(r"(?:\*\*Breaking:\*\*|Breaking:)(?!\*)")
+BREAKING_LIKE = re.compile(r"[*_`~\[]*breaking(?:[ -]changes?)?[*_`~\]]*\s*:[*_`~]*", re.IGNORECASE)
+DASH = re.compile(r"-(?: |$)")
+AREAS = "What changed, by area"
+COMPANIONS = ("Security and robustness", "Dependencies and tooling", "Removed")
+HAND_SECTIONS = {
+    "Highlights": "highlights",
+    "Upgrade notes": "upgrade",
+    AREAS: "areas",
+    COMPANIONS[0]: "security",
+    COMPANIONS[1]: "dependencies",
+    COMPANIONS[2]: "removed",
+}
 SENTENCE_END = re.compile(r"[.!?][\"'`)\]]*(?=\s|$)")
 GENERATION = re.compile(r"^[a-z]+(\d+)")
 NEWEST_CLASS = "the newest available class per architecture"
@@ -148,15 +168,24 @@ def changelog_section(text: str, name: str) -> tuple[str, str | None]:
     return body, m.group(1)
 
 
-def unwrap_bullets(text: str) -> str:
-    """Join each list item's wrapped continuation lines (indented, not list items themselves, outside a
-    fenced block) into its line, so the page carries one physical line per bullet in the changelog's words."""
-    out: list[str] = []
+def fenced_lines(text: str) -> Iterator[tuple[str, bool]]:
+    """Each line of `text` with whether it lies in a fenced code block, the fence lines themselves counted
+    as fenced: a list-looking line inside a fence is code, never a bullet."""
     fenced = False
     for line in text.split("\n"):
         if line.lstrip().startswith(("```", "~~~")):
             fenced = not fenced
-        elif (
+            yield line, True
+        else:
+            yield line, fenced
+
+
+def unwrap_bullets(text: str) -> str:
+    """Join each list item's wrapped continuation lines (indented, not list items themselves, outside a
+    fenced block) into its line, so the page carries one physical line per bullet in the changelog's words."""
+    out: list[str] = []
+    for line, fenced in fenced_lines(text):
+        if (
             not fenced
             and out
             and line.startswith("  ")
@@ -191,22 +220,46 @@ def kind_blocks(section: str) -> list[str]:
     return blocks
 
 
+def changelog_entries(section: str) -> int:
+    """How many changes a CHANGELOG section lists: its bullets outside fenced blocks less the area groups, a
+    group being a bullet at the margin whose next bullet is nested under it."""
+    bullets = [line for line, fenced in fenced_lines(unwrap_bullets(section)) if not fenced and LIST_ITEM.match(line)]
+    groups = sum(1 for bullet, nxt in pairwise(bullets) if BULLET.match(bullet) and nxt.startswith(NEST))
+    return len(bullets) - groups
+
+
 def hand_written(path: Path) -> dict[str, str]:
-    """The maintainer's lines: the opener paragraph, then the optional `## Highlights` and
-    `## Upgrade notes` sections, each bullet on one line; any other section is an error."""
-    out = {"opener": "", "highlights": "", "upgrade": ""}
+    """The maintainer's lines: the opener paragraph, then the optional sections of HAND_SECTIONS, each
+    bullet on one line; any other section, one written twice, or one with nothing under its header is an
+    error (an empty section would otherwise vanish from the page, and an empty area section would flip the
+    page to the shape without it)."""
+    out = {"opener": "", **{key: "" for key in HAND_SECTIONS.values()}}
     if not path.exists():
         return out
     text = re.sub(r"^# .*\n", "", path.read_text(), count=1)
     parts = re.split(r"^## ", text, flags=re.MULTILINE)
     out["opener"] = parts[0].strip()
+    seen: set[str] = set()
     for part in parts[1:]:
         title, _, body = part.partition("\n")
-        key = {"Highlights": "highlights", "Upgrade notes": "upgrade"}.get(title.strip())
+        title = title.strip()
+        key = HAND_SECTIONS.get(title)
         if key is None:
-            fail(f"unknown section '## {title.strip()}' in {path}")
-        out[key] = unwrap_bullets(body.strip("\n")).strip()
+            fail(f"unknown section '## {title}' in {path}")
+        if key in seen:
+            fail(f"'## {title}' appears twice in {path}")
+        seen.add(key)
+        out[key] = strip_blank_lines(unwrap_bullets(body))
+        if not out[key]:
+            fail(f"'## {title}' in {path} has nothing under its header")
     return out
+
+
+def strip_blank_lines(text: str) -> str:
+    """`text` without its leading and trailing blank lines and trailing spaces, the first line's indentation
+    kept: a section opening with a nested bullet stays one, to be refused by name rather than read as a
+    bullet at the margin."""
+    return re.sub(r"\A(?:[ \t]*\n)+", "", text.rstrip())
 
 
 def bullets_only(name: str, body: str, notes: Path) -> list[str]:
@@ -216,10 +269,85 @@ def bullets_only(name: str, body: str, notes: Path) -> list[str]:
     return lines
 
 
+def nested_bullets(name: str, body: str, notes: Path) -> list[tuple[str, list[str]]]:
+    """A section's bullets as (text, nested texts): a bullet at the margin, then the `  - ` bullets under
+    it. Refused: a line that is not a `-` bullet (a `*` marker beside a `-` one renders as two lists), a
+    bullet with no text, a nested bullet with none at the margin above it, a bullet indented other than
+    two spaces, and a third level."""
+    items: list[tuple[str, list[str]]] = []
+    for line in body.splitlines():
+        if not line.strip():
+            continue
+        text = line.lstrip(" ")
+        indent = len(line) - len(text)
+        if not DASH.match(text):
+            fail(f"'## {name}' in {notes} is bullets only, each a '-' bullet")
+        entry = text[1:].strip()
+        if not entry:
+            fail(f"'## {name}' in {notes} has a bullet with no text")
+        if indent == 0:
+            items.append((entry, []))
+        elif indent == len(NEST):
+            if not items:
+                fail(f"'## {name}' in {notes} opens with a nested bullet; a nested bullet sits under one at the margin")
+            items[-1][1].append(entry)
+        elif indent >= 2 * len(NEST):
+            fail(f"'## {name}' in {notes} nests a bullet three levels deep; two is the most")
+        else:
+            fail(f"'## {name}' in {notes} indents a bullet by {indent}; a nested bullet is indented two spaces")
+    return items
+
+
+def breaking_first(entries: list[str], where: str, notes: Path) -> None:
+    """Every entry beginning `Breaking:` (bold or plain) comes before the first that does not; a mark in
+    another dress (`BREAKING:`, `**Breaking**:`, `Breaking :`, `Breaking change:`, `[Breaking]:`) is
+    refused rather than read as plain, so the order rule cannot be slipped by a misspelling."""
+    plain_seen = False
+    for entry in entries:
+        if BREAKING.match(entry):
+            if plain_seen:
+                fail(f"{where} in {notes} lists a Breaking: bullet after one that is not")
+        elif near_miss := BREAKING_LIKE.match(entry):
+            fail(f"{where} in {notes} marks a breaking change as '{near_miss.group()}'; the mark is Breaking:")
+        else:
+            plain_seen = True
+
+
+def check_by_area(hand: dict[str, str], notes: Path) -> None:
+    """The page by area: `## What changed, by area` is one bullet per area, the area's name at most
+    AREA_NAME_CAP characters and carrying no breaking mark in any dress (the mark goes on a change under it),
+    with at least one change nested under it and its breaking changes first;
+    `## Security and robustness`, `## Dependencies and tooling` and `## Removed` are bullets, nested at
+    most one level, breaking ones first in every list; `## Upgrade notes` has no place on it, since each
+    breaking change is marked where it sits, and the three companion sections have none without it, since
+    the page then carries the CHANGELOG kinds."""
+    if hand["areas"]:
+        if hand["upgrade"]:
+            fail(f"'## Upgrade notes' and '## {AREAS}' in {notes} are two shapes of one page")
+        for name, changes in nested_bullets(AREAS, hand["areas"], notes):
+            if len(name) > AREA_NAME_CAP:
+                fail(f"the area '{name}' in {notes} is {len(name)} characters; at most {AREA_NAME_CAP}")
+            if BREAKING_LIKE.match(name):
+                fail(f"the area '{name}' in {notes} carries a breaking mark; the mark goes on a change under it")
+            if not changes:
+                fail(f"the area '{name}' in {notes} has no bullets")
+            breaking_first(changes, f"the area '{name}'", notes)
+    for title in COMPANIONS:
+        body = hand[HAND_SECTIONS[title]]
+        if not body:
+            continue
+        if not hand["areas"]:
+            fail(f"'## {title}' in {notes} needs '## {AREAS}'; without it the page lists the CHANGELOG kinds")
+        items = nested_bullets(title, body, notes)
+        breaking_first([text for text, _ in items], f"'## {title}'", notes)
+        for text, nested in items:
+            breaking_first(nested, f"'## {title}' under '{text}'", notes)
+
+
 def check_hand_written(hand: dict[str, str], section: str, notes: Path) -> None:
     """The opener is one paragraph of at most two sentences and 50 words; Highlights, when present, is two
-    to four bullets over a CHANGELOG section of at least three; Upgrade notes, when present, is one to five
-    bullets with every `**Breaking:**` bullet before the first that is not."""
+    to four bullets over a CHANGELOG section of at least three changes; Upgrade notes, when present, is
+    bullets with every `Breaking:` bullet before the first that is not; then the page by area's rules."""
     opener = hand["opener"]
     if not opener:
         fail("the release-notes file needs an opener paragraph")
@@ -235,17 +363,13 @@ def check_hand_written(hand: dict[str, str], section: str, notes: Path) -> None:
         lines = bullets_only("Highlights", hand["highlights"], notes)
         if not 2 <= len(lines) <= 4:
             fail(f"'## Highlights' in {notes} has {len(lines)} bullets; two to four")
-        changes = sum(1 for line in unwrap_bullets(section).splitlines() if BULLET.match(line))
+        changes = changelog_entries(section)
         if changes < 3:
             fail(f"'## Highlights' needs at least three CHANGELOG bullets; the section has {changes}")
     if hand["upgrade"]:
         lines = bullets_only("Upgrade notes", hand["upgrade"], notes)
-        if not 1 <= len(lines) <= 5:
-            fail(f"'## Upgrade notes' in {notes} has {len(lines)} bullets; one to five")
-        breaking = [line[2:].startswith("**Breaking:**") for line in lines]
-        first_plain = breaking.index(False) if False in breaking else len(breaking)
-        if any(breaking[first_plain:]):
-            fail(f"'## Upgrade notes' in {notes} lists a **Breaking:** bullet after one that is not")
+        breaking_first([line[2:].strip() for line in lines], "'## Upgrade notes'", notes)
+    check_by_area(hand, notes)
 
 
 def read_doi(cff: Path, version: str) -> str | None:
@@ -928,9 +1052,15 @@ def main() -> None:
     blocks = [hand["opener"]]
     if hand["highlights"]:
         blocks += ["## Highlights", hand["highlights"]]
-    if hand["upgrade"]:
-        blocks += ["## Upgrade notes", hand["upgrade"]]
-    blocks += kind_blocks(section)
+    if hand["areas"]:
+        for title in (AREAS, *COMPANIONS):
+            text = hand[HAND_SECTIONS[title]]
+            if text:
+                blocks += [f"## {title}", text]
+    else:
+        if hand["upgrade"]:
+            blocks += ["## Upgrade notes", hand["upgrade"]]
+        blocks += kind_blocks(section)
     blocks += measurements_blocks(repo, v)
     release = load_release_record(repo, v)[0]
     blocks += [

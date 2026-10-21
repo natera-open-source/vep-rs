@@ -3,7 +3,8 @@ population records, the CHANGELOG section, CITATION.cff, Cargo.toml and the publ
 copied into a scratch repository that each test may edit; release and population records of the
 six-dataset shape that the tests build under the same version, on the instance classes and clone count a
 test names; and the repository's own 0.4.0 inputs, whose rendering is the published 0.4.0 page. The scratch
-release-notes file keeps the repository file's Upgrade notes under an opener within the renderer's budget."""
+release-notes file keeps the repository file's Upgrade notes under an opener within the renderer's budget; the
+tests of the page by area write their own notes file over the same scratch repository."""
 
 from __future__ import annotations
 
@@ -240,7 +241,7 @@ def test_the_0_3_2_page_renders_from_the_repository_files(tmp_path: Path) -> Non
     assert page(repo) == expected_page(repo)
 
 
-def test_the_page_runs_about_sixty_lines_and_is_refused_over_eighty_four(tmp_path: Path) -> None:
+def test_the_page_runs_about_sixty_lines_and_is_refused_over_four_hundred(tmp_path: Path) -> None:
     repo = fixture_repo(tmp_path)
     lines = page(repo).splitlines()
     assert len(lines) <= 60
@@ -255,10 +256,10 @@ def test_the_page_runs_about_sixty_lines_and_is_refused_over_eighty_four(tmp_pat
         write_changelog(repo, "### Changed\n\n" + "".join(f"- Change number {i}.\n" for i in range(n)))
 
     lines_outside_changed = len(lines) - len(changelog_bullets(repo, VERSION))
-    changed_bullets(84 - lines_outside_changed)
-    assert page(repo).count("\n") == 84
-    changed_bullets(85 - lines_outside_changed)
-    assert error(repo) == f"{ERR}the page is 85 lines; the cap is 84\n"
+    changed_bullets(400 - lines_outside_changed)
+    assert page(repo).count("\n") == 400
+    changed_bullets(401 - lines_outside_changed)
+    assert error(repo) == f"{ERR}the page is 401 lines; the cap is 400\n"
 
 
 def test_whole_genome_table_derives_every_cell_from_the_records(tmp_path: Path) -> None:
@@ -421,7 +422,7 @@ def test_highlights_is_two_to_four_bullets_over_at_least_three_changes(tmp_path:
     assert "## Highlights\n\n- One.\n- Two.\n\n## Fixed\n" in page(repo)
 
 
-def test_upgrade_notes_are_one_to_five_bullets_with_breaking_ones_first(tmp_path: Path) -> None:
+def test_upgrade_notes_are_bullets_with_breaking_ones_first(tmp_path: Path) -> None:
     repo = fixture_repo(tmp_path)
     write_notes(repo, "A release with nothing to upgrade.")
     body = page(repo)
@@ -431,10 +432,141 @@ def test_upgrade_notes_are_one_to_five_bullets_with_breaking_ones_first(tmp_path
     assert "A release.\n\n## Upgrade notes\n\n- **Breaking:** `--old` is gone; pass `--new`.\n* A cache converted for 0.3.0 is valid.\n\n## Changed\n" in page(repo)
     write_notes(repo, "A release.", "Upgrade notes\n\nNothing breaks.\n- A note.")
     assert "'## Upgrade notes' in" in error(repo) and "is bullets only" in error(repo)
-    write_notes(repo, "A release.", "Upgrade notes\n\n" + "".join(f"- Note {i}.\n" for i in range(6)))
-    assert "has 6 bullets; one to five" in error(repo)
+    # No count bounds the section: six bullets render, as would sixty.
+    six_bullets = "".join(f"- Note {i}.\n" for i in range(6))
+    write_notes(repo, "A release.", f"Upgrade notes\n\n{six_bullets}")
+    assert f"## Upgrade notes\n\n{six_bullets}\n## Changed\n" in page(repo)
     write_notes(repo, "A release.", "Upgrade notes\n\n- A note.\n- **Breaking:** `--old` is gone.")
-    assert "lists a **Breaking:** bullet after one that is not" in error(repo)
+    assert "'## Upgrade notes' in" in error(repo) and "lists a Breaking: bullet after one that is not" in error(repo)
+    write_notes(repo, "A release.", "Upgrade notes\n\n- A note.\n- Breaking: `--old` is gone.")
+    assert "lists a Breaking: bullet after one that is not" in error(repo)
+    write_notes(repo, "A release.", "Upgrade notes\n\n- `Breaking:` `--old` is gone.")
+    assert error(repo) == f"{ERR}'## Upgrade notes' in {notes(repo)} marks a breaking change as '`Breaking:`'; the mark is Breaking:\n"
+    # The mark is read after the bullet's own spacing, as a change under an area is.
+    write_notes(repo, "A release.", "Upgrade notes\n\n- A note.\n-  **Breaking:** `--old` is gone.")
+    assert error(repo) == f"{ERR}'## Upgrade notes' in {notes(repo)} lists a Breaking: bullet after one that is not\n"
+
+
+AREAS = """\
+- Input and formats
+  - Breaking: standard input needs `--format`; a run without it exits 1 with Ensembl VEP's message.
+  - Plain gzip and `.bgz` inputs are read.
+  - `--format guess` detects the format from the first data line.
+- Output
+  - Breaking: `<output>_warnings.txt` is written beside the output; `--warning_file STDERR` keeps the old stream.
+  - **Breaking:** `AF` prints four decimals.
+  - `MAX_AF_POPS` lists every tied population.
+- Caches
+  - Converted caches carry the transcript attributes and the variation files.
+  - Breaking the input into batches of 5000 records stays the default."""
+SECURITY = """\
+- Malformed inputs
+  - A FASTA index whose line length is zero is refused with `ERROR: [fasta]`.
+  - A structural-variant allele of an unknown type is skipped with a warning.
+- Every input line is bounded in length."""
+DEPENDENCIES = "- `rustls` 0.23.46 clears four advisories, none reachable from `vep`.\n- The container image carries the `duckdb` CLI 2.0.0."
+REMOVED = "- `--transcript_index_impl` and the index implementations it selected.\n- The unused second VCF parser."
+ONE_AREA = "What changed, by area\n\n- Output\n  - A change."
+
+
+def test_a_page_by_area_renders_its_sections_as_written_in_place_of_the_kind_lists(tmp_path: Path) -> None:
+    """A notes file with `## What changed, by area` renders that section and its three companions byte for
+    byte, nested bullets and inline `Breaking:` marks included, where the flat page carries Upgrade notes and
+    the CHANGELOG kinds; the rest of the page is the flat page's."""
+    repo = fixture_repo(tmp_path)
+    write_notes(
+        repo, "A release.", "Highlights\n\n- One.\n- Two.", f"What changed, by area\n\n{AREAS}",
+        f"Security and robustness\n\n{SECURITY}", f"Dependencies and tooling\n\n{DEPENDENCIES}", f"Removed\n\n{REMOVED}",
+    )
+    body = page(repo)
+    assert body.startswith(
+        f"A release.\n\n## Highlights\n\n- One.\n- Two.\n\n## What changed, by area\n\n{AREAS}\n\n"
+        f"## Security and robustness\n\n{SECURITY}\n\n## Dependencies and tooling\n\n{DEPENDENCIES}\n\n"
+        f"## Removed\n\n{REMOVED}\n\n## Concordance and wall time\n\n"
+    )
+    assert [l for l in body.splitlines() if l.startswith("#")] == [
+        "## Highlights", "## What changed, by area", "## Security and robustness", "## Dependencies and tooling",
+        "## Removed", "## Concordance and wall time", "## Install", "## Cite",
+    ]
+    assert "## Changed" not in body and "## Upgrade notes" not in body and "###" not in body
+    flat = page(fixture_repo(tmp_path / "flat"))
+    assert body.split("## Concordance and wall time", 1)[1] == flat.split("## Concordance and wall time", 1)[1]
+    # The sections render in the page's order whatever the file's, the companions are each optional, an area
+    # name may run to AREA_NAME_CAP characters, and a change wrapped over two lines is one line on the page.
+    name = "A" * 60
+    write_notes(repo, "A release.", f"Removed\n\n{REMOVED}", f"What changed, by area\n\n- {name}\n  - A change wrapped\n    over two lines.\n  - Another.")
+    assert (
+        f"A release.\n\n## What changed, by area\n\n- {name}\n  - A change wrapped over two lines.\n  - Another.\n\n"
+        f"## Removed\n\n{REMOVED}\n\n## Concordance and wall time\n\n"
+    ) in page(repo)
+
+
+@pytest.mark.parametrize(
+    ("sections", "expected"),
+    [
+        (("What changed, by area\n\n- Output\n  - A change.\n    - A detail.",), "'## What changed, by area' in {notes} nests a bullet three levels deep; two is the most"),
+        (("What changed, by area\n\n- Output\n- Caches\n  - A change.",), "the area 'Output' in {notes} has no bullets"),
+        (("What changed, by area\n\n- Output\n  - A change.\n  - Breaking: a late one.",), "the area 'Output' in {notes} lists a Breaking: bullet after one that is not"),
+        (("What changed, by area\n\n- Output\n  - A change.\n  - **Breaking:** a late one.",), "the area 'Output' in {notes} lists a Breaking: bullet after one that is not"),
+        ((f"What changed, by area\n\n- {'A' * 61}\n  - A change.",), f"the area '{'A' * 61}' in {{notes}} is 61 characters; at most 60"),
+        (("What changed, by area\n\n  - A change with no area.",), "'## What changed, by area' in {notes} opens with a nested bullet; a nested bullet sits under one at the margin"),
+        (("What changed, by area\n\n- Output\n - A change.",), "'## What changed, by area' in {notes} indents a bullet by 1; a nested bullet is indented two spaces"),
+        (("What changed, by area\n\nProse first.\n- Output\n  - A change.",), "'## What changed, by area' in {notes} is bullets only, each a '-' bullet"),
+        (("What changed, by area\n\n* Output\n  - A change.",), "'## What changed, by area' in {notes} is bullets only, each a '-' bullet"),
+        (("What changed, by area\n\n- Output\n  * A change.",), "'## What changed, by area' in {notes} is bullets only, each a '-' bullet"),
+        (("What changed, by area\n",), "'## What changed, by area' in {notes} has nothing under its header"),
+        (("What changed, by area\n\n- \n  - A change.",), "'## What changed, by area' in {notes} has a bullet with no text"),
+        (("What changed, by area\n\n- Output\n  - \n  - A change.",), "'## What changed, by area' in {notes} has a bullet with no text"),
+        (("What changed, by area\n\n- Output\n  -\n  - A change.",), "'## What changed, by area' in {notes} has a bullet with no text"),
+        (("What changed, by area\n\n- Output\n  - A change.\n  - ",), "'## What changed, by area' in {notes} has a bullet with no text"),
+        (("What changed, by area\n\n- Output\n  - A change.\n  - BREAKING: a late one.",), "the area 'Output' in {notes} marks a breaking change as 'BREAKING:'; the mark is Breaking:"),
+        (("What changed, by area\n\n- Output\n  - **Breaking**: a first one.",), "the area 'Output' in {notes} marks a breaking change as '**Breaking**:'; the mark is Breaking:"),
+        (("What changed, by area\n\n- Output\n  - Breaking : a first one.",), "the area 'Output' in {notes} marks a breaking change as 'Breaking :'; the mark is Breaking:"),
+        (("What changed, by area\n\n- Output\n  - A change.\n  - Breaking change: a late one.",), "the area 'Output' in {notes} marks a breaking change as 'Breaking change:'; the mark is Breaking:"),
+        (("What changed, by area\n\n- Output\n  - A change.\n  - [Breaking]: a late one.",), "the area 'Output' in {notes} marks a breaking change as '[Breaking]:'; the mark is Breaking:"),
+        (("What changed, by area\n\n- Output\n  - A change.\n  - ~~Breaking:~~ a late one.",), "the area 'Output' in {notes} marks a breaking change as '~~Breaking:~~'; the mark is Breaking:"),
+        (("What changed, by area\n\n- Breaking: `AF` prints four decimals.\n  - A change.",), "the area 'Breaking: `AF` prints four decimals.' in {notes} carries a breaking mark; the mark goes on a change under it"),
+        (("What changed, by area\n\n- BREAKING: output\n  - A change.",), "the area 'BREAKING: output' in {notes} carries a breaking mark; the mark goes on a change under it"),
+        (("What changed, by area\n\n- Output\n  - **Breaking: an unclosed bold mark.",), "the area 'Output' in {notes} marks a breaking change as '**Breaking:'; the mark is Breaking:"),
+        (("What changed, by area\n\n- Output\n  - Breaking:** an odd close.",), "the area 'Output' in {notes} marks a breaking change as 'Breaking:**'; the mark is Breaking:"),
+        (("Removed\n\n- `--gone`.",), "'## Removed' in {notes} needs '## What changed, by area'; without it the page lists the CHANGELOG kinds"),
+        (("Dependencies and tooling\n\n- A bump.", "Upgrade notes\n\n- A note."), "'## Dependencies and tooling' in {notes} needs '## What changed, by area'; without it the page lists the CHANGELOG kinds"),
+        (("Highlights\n", "Upgrade notes\n\n- A note."), "'## Highlights' in {notes} has nothing under its header"),
+        ((ONE_AREA, "Removed\n"), "'## Removed' in {notes} has nothing under its header"),
+        ((ONE_AREA, "Upgrade notes\n\n- **Breaking:** a note."), "'## Upgrade notes' and '## What changed, by area' in {notes} are two shapes of one page"),
+        ((ONE_AREA, "Removed\n\n- A.\n  - B.\n    - C."), "'## Removed' in {notes} nests a bullet three levels deep; two is the most"),
+        ((ONE_AREA, "Security and robustness\n\n- A note.\n- Breaking: a late one."), "'## Security and robustness' in {notes} lists a Breaking: bullet after one that is not"),
+        ((ONE_AREA, "Removed\n\n- A group.\n  - A plain one.\n  - Breaking: a late one."), "'## Removed' under 'A group.' in {notes} lists a Breaking: bullet after one that is not"),
+        ((ONE_AREA, "Dependencies and tooling\n\nProse.\n- A bump."), "'## Dependencies and tooling' in {notes} is bullets only, each a '-' bullet"),
+        ((ONE_AREA, "Removed\n\n- `--gone`.\n- breaking: a late one."), "'## Removed' in {notes} marks a breaking change as 'breaking:'; the mark is Breaking:"),
+        ((ONE_AREA, ONE_AREA), "'## What changed, by area' appears twice in {notes}"),
+    ],
+)
+def test_a_page_by_area_is_refused_for_each_fault_by_its_line(tmp_path: Path, sections: tuple[str, ...], expected: str) -> None:
+    repo = fixture_repo(tmp_path)
+    write_notes(repo, "A release.", *sections)
+    assert error(repo) == f"{ERR}{expected.format(notes=notes(repo))}\n"
+
+
+def test_a_nested_changelog_keeps_every_bullet_on_the_flat_page_and_counts_its_changes(tmp_path: Path) -> None:
+    """A CHANGELOG kind whose bullets are grouped by area (`- <Area>` with `  - ` entries) renders every line
+    on the flat page, each entry's wrapped lines joined; the Highlights rule counts the entries, not the groups."""
+    repo = fixture_repo(tmp_path)
+    write_notes(repo, "A release.", "Highlights\n\n- One.\n- Two.")
+    write_changelog(
+        repo,
+        "### Changed\n\n- Input and formats\n  - `--format guess` detects the format\n    from the first data line. (#N)\n"
+        "  - Plain gzip is read. (#N)\n  - `.bgz` is read. (#N)\n\n### Removed\n\n- `--gone`. (#N)",
+    )
+    assert (
+        "## Changed\n\n- Input and formats\n  - `--format guess` detects the format from the first data line. (#N)\n"
+        "  - Plain gzip is read. (#N)\n  - `.bgz` is read. (#N)\n\n## Removed\n\n- `--gone`. (#N)\n\n## Concordance"
+    ) in page(repo)
+    write_changelog(repo, "### Changed\n\n- Input and formats\n  - Plain gzip is read. (#N)\n- Output\n  - `AF` prints four decimals. (#N)")
+    assert "needs at least three CHANGELOG bullets; the section has 2" in error(repo)
+    # A list-looking line inside a fenced block under a bullet is code, not a change.
+    write_changelog(repo, "### Changed\n\n- One:\n  ```\n  - a\n  - b\n  ```")
+    assert error(repo) == f"{ERR}'## Highlights' needs at least three CHANGELOG bullets; the section has 1\n"
 
 
 def test_kind_headers_rise_to_level_two_in_file_order_and_an_empty_kind_is_absent(tmp_path: Path) -> None:
@@ -657,10 +789,12 @@ def test_dry_run_renders_the_unreleased_section_with_a_given_date(tmp_path: Path
     assert "vep-rs, version 0.3.2. 2031. doi:" in body
 
 
-def test_the_notes_file_is_an_opener_plus_highlights_and_upgrade_notes_only(tmp_path: Path) -> None:
+def test_the_notes_file_carries_only_the_known_sections(tmp_path: Path) -> None:
     repo = fixture_repo(tmp_path)
     write_notes(repo, "A release.", "Known issues\n\n- An issue.")
     assert "unknown section '## Known issues'" in error(repo)
+    write_notes(repo, "A release.", "Highlights\n\n- One.\n- Two.", "Highlights\n\n- Three.\n- Four.")
+    assert error(repo) == f"{ERR}'## Highlights' appears twice in {notes(repo)}\n"
 
 
 def test_missing_records_or_changelog_section_fail(tmp_path: Path) -> None:
@@ -1580,4 +1714,8 @@ def test_the_0_4_0_records_render_the_published_concordance_section(tmp_path: Pa
     )
     assert out.returncode == 0, out.stderr
     assert concordance_section(out.stdout) == f"{PUBLISHED_040_CAPTION}\n\n{PUBLISHED_040_TABLES}"
-    assert NEWEST_LABEL not in out.stdout and out.stdout.count("\n") <= 84
+    assert NEWEST_LABEL not in out.stdout
+    # A flat notes file, Highlights and Upgrade notes without an area section, keeps the published page's shape.
+    assert [l for l in out.stdout.splitlines() if l.startswith("#")] == [
+        "## Highlights", "## Upgrade notes", "## Added", "## Changed", "## Fixed", "## Concordance and wall time", "## Install", "## Cite",
+    ]

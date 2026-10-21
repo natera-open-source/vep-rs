@@ -201,6 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The default and tab renderers write rows as bytes: an allele's columns once per record, Extra values without intermediate strings, feature rows ordered by id rank. (#N)
 - The documentation gains "What vep-rs does not do", listing the Ensembl VEP features vep-rs lacks, what a run does with their flags, and which the next release adds. (#N)
 - The container image and the CI test job install the DuckDB 2.0.0 CLI from its `duckdb-cli-linux-*.tar.gz` archive (1.x shipped a zip), both verified by sha256. (#N)
+- The release page groups its notes by area with nested bullets, marks breaking changes inline and may run to 400 lines; `CHANGELOG.md` nests the area groups under each kind. (#N)
 
 ### Removed
 

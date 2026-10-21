@@ -7,7 +7,7 @@
 <!-- What was run and what it showed. Code: tests, clippy, fmt, and the concordance smoke whenever annotation output can change (state "byte-identical" or the F1). Docs or data: the source the text or figures were checked against (the script, the record). -->
 
 ## Upgrade impact
-<!-- "None", or the breaking change or changed default and what a user must do; this line becomes the release page's Upgrade notes bullet. -->
+<!-- "None", or the breaking change or changed default and what a user must do; on the release page this becomes the leading Breaking: entry of its area. -->
 
 - [ ] Every commit is signed off (`git commit -s`); the DCO check fails without it.
 - [ ] `CHANGELOG.md` has an entry under Unreleased in the release-notes grammar (one line, the subject first, at most 30 words, a trailing `(#N)` added once the PR number exists), or the change is not user-visible.

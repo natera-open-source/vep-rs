@@ -162,14 +162,17 @@ landed row without its tests, or a named test or corpus that does not resolve fa
 
 ## Changelog entries
 
-`CHANGELOG.md` follows Keep a Changelog, and the release page copies the version's section word for
-word, so each entry is written for the page: one bullet per user-visible change, on one physical line;
-the subject first (the flag, format, input or behaviour, identifiers in backticks), then what it now
-does; one sentence, a second only for a consequence the user must act on; the measured effect inline
-where the change claims speed or memory; no type prefix, bold lead-in or author handle; a trailing
-`(#N)` naming the pull request; at most 30 words. The pull request number is written only after the
-pull request exists, never predicted. Refactors, CI and dependency bumps appear only when behaviour
-changes.
+`CHANGELOG.md` follows Keep a Changelog, and the release page either copies the version's section word
+for word or restates its entries grouped by area, so each entry is written for the page: one bullet per
+user-visible change, on one physical line; the subject first (the flag, format, input or behaviour,
+identifiers in backticks), then what it now does; one sentence, a second only for a consequence the user
+must act on; the measured effect inline where the change claims speed or memory; no type prefix, bold
+lead-in or author handle; a trailing `(#N)` naming the pull request; at most 30 words. The pull request
+number is written only after the pull request exists, never predicted. Refactors, CI and dependency
+bumps appear only when behaviour changes. Under a kind heading, entries may be grouped by area: a bullet
+`- <Area name>` at the margin (the area alone, at most 60 characters) with its entries nested under it
+as `-` bullets indented two spaces, each in the grammar above with its own `(#N)`; two levels at most,
+and every area has at least one entry.
 
 ## Sign your commits
 
