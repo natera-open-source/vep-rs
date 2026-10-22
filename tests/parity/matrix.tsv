@@ -14,7 +14,7 @@ af_1kg	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/frequen
 af_gnomad	Config.pm	implemented	landed:implemented	crates/vep-cli/src/args.rs::af_gnomad_parses_as_its_own_flag;crates/vep-cli/src/args.rs::af_gnomad_and_af_gnomade_together_is_an_error;crates/vep-cli/tests/cache_errors.rs::af_gnomad_without_gnomade_column_is_ensembl_error	tests/golden/116/GRCh38-colocated-alt	
 af_gnomade	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/frequency.rs::gnomade_columns_named_as_ensembl_vep	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
 af_gnomadg	Config.pm	implemented	landed:implemented	crates/vep-io/src/output/frequency.rs::gnomadg_columns_include_ami	tests/golden/116/GRCh38-colocated;tests/golden/116/GRCh37-colocated	
-all_refseq	AnnotationType/Transcript.pm	implemented	open			
+all_refseq	AnnotationType/Transcript.pm	implemented	open			crates/vep-cli/tests/interim_flags.rs::all_refseq_is_refused_as_an_unknown_argument
 allele_number	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::minimal_implies_allele_number	tests/golden/116/GRCh37-output-flags	
 allele_string	Database/Variation.pm	documented_subset	landed:documented_subset	crates/vep-cache-builder/src/variation.rs::indel_records_minimised_to_ensembl_coordinates;crates/vep-cache-builder/src/variation.rs::indel_records_keep_the_exported_alleles_unless_the_export_anchored_them;crates/vep-cache-builder/tests/variation_cache_from_dumps.rs::variation_files_carry_ensembl_form_and_read_back_through_the_runtime_source;crates/vep-cli/tests/documented_subsets.rs::allele_string_exclusion_is_documented	tests/golden/116/GRCh38-native-builder	
 allow_non_variant	Parser/VCF.pm	documented_subset	landed:documented_subset	crates/vep-cli/tests/input_validation.rs::allow_non_variant_every_format;crates/vep-cli/tests/input_validation.rs::allow_non_variant_strips_stale_csq;crates/vep-cli/tests/integration_test.rs::test_allow_non_variant_passthrough_vcf;crates/vep-cli/tests/pipeline_parity.rs::allow_non_variant_lines_stay_in_input_order_at_every_buffer_size_in_both_modes;crates/vep-cli/tests/input_validation.rs::non_variant_record_is_judged_by_the_frequency_filter;crates/vep-cli/src/vcf_parser.rs::non_variant_is_the_first_alt_alone;crates/vep-cli/tests/individuals.rs::individual_carrying_the_allele_after_a_leading_dot_is_annotated	tests/golden/116/GRCh38-vcf-check-ref	
@@ -55,7 +55,7 @@ attributes-cds-start-end-nf	OutputFactory.pm	documented_subset	landed:documented
 attributes-rseq-refseq-compare	OutputFactory.pm	documented_subset	open			
 AVADA	AVADA.pm	error	open			
 AVI	AVI.pm	error	open			
-bam	Config.pm	error	open			
+bam	Config.pm	error	open			crates/vep-cli/tests/interim_flags.rs::bam_is_refused_as_an_unknown_argument
 bam-edit-status-rna-edit	AnnotationType/Transcript.pm	documented_subset	open			
 bam-refseq-model-correction	AnnotationType/Transcript.pm	documented_subset	open			
 BayesDel	BayesDel.pm	implemented	open			
@@ -118,7 +118,7 @@ convert	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::convert
 convert-cache-pl	convert_cache.pl	accepted_noop	open			
 crlf-blank-lines-whitespace	Parser.pm	implemented	landed:implemented	crates/vep-cli/src/pipeline.rs::line_scanner_matches_bufread_lines;crates/vep-cli/src/pipeline.rs::trim_line_matches_str_trim_start;crates/vep-cli/src/pipeline.rs::read_vcf_numbers_trims_and_cuts_lines;crates/vep-cli/src/pipeline.rs::last_line_without_newline_keeps_its_cr;crates/vep-cli/src/pipeline.rs::blank_lines_counted;crates/vep-cli/tests/input_io.rs::crlf_input_annotates_as_lf_input;crates/vep-cli/tests/input_io.rs::blank_lines_are_skipped_and_warned;crates/vep-cli/tests/input_io.rs::leading_blanks_stay_in_the_chromosome_column	tests/golden/116/GRCh38-input-compressed	
 CSN	CSN.pm	error	open			
-custom	Config.pm	documented_subset	open			
+custom	Config.pm	documented_subset	open			crates/vep-cli/tests/interim_flags.rs::custom_is_accepted_and_changes_no_output
 custom-argument-grammar	AnnotationSourceAdaptor.pm	documented_subset	open			
 custom-output-fields	OutputFactory.pm	documented_subset	open			
 custom_multi_allelic	Config.pm	implemented	open			
@@ -298,7 +298,7 @@ max_sv_size	Config.pm	documented_subset	landed:documented_subset	crates/vep-cli/
 MaxEntScan	MaxEntScan.pm	implemented	open			
 MechPredict	MechPredict.pm	error	open			
 memory_footprint_statement	-	documented_subset	open			
-merged	CacheDir.pm	documented_subset	open			
+merged	CacheDir.pm	documented_subset	open			crates/vep-cli/tests/interim_flags.rs::merged_selects_the_merged_species_directory
 minimal	Config.pm	implemented	landed:implemented	crates/vep-cli/src/vcf_parser.rs::minimal_two_sided_trims_mnp;crates/vep-cli/src/vcf_parser.rs::minimal_per_alt_trim_multi_allelic;crates/vep-cli/src/vcf_parser.rs::minimal_sets_minimised_and_original;crates/vep-cli/src/pipeline.rs::minimal_splits_after_the_looked_up_reference;crates/vep-cli/tests/input_minimal.rs::minimal_implies_allele_number;crates/vep-cli/tests/input_minimal.rs::a_split_record_rejoins_as_ensembl_vep_rejoins_it	tests/golden/116/GRCh38-vcf-minimal	
 minor-allele-columns	BaseCacheVariation.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/src/json_cache.rs::minor_allele_columns_change_no_output		
 mirna	OutputFactory.pm	implemented	landed:implemented	crates/vep-effects/src/consequences.rs::mirna_stem_and_loop_from_structure;crates/vep-io/src/output/fields.rs::mirna_column_joins_the_terms;crates/vep-io/src/output/json.rs::mirna_and_mane_are_arrays	tests/golden/116/GRCh38-attributes	
@@ -327,7 +327,7 @@ no_fasta	CacheDir.pm	implemented	landed:implemented	crates/vep-cli/src/cache_res
 no_headers	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/integration_test.rs::no_headers_writes_no_hash_line_in_default_tab_and_vcf	tests/golden/116/GRCh38-writers	
 no_intergenic	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/row_filter.rs::no_intergenic_suppresses_the_intergenic_row_in_every_format;crates/vep-cli/tests/documented_subsets.rs::no_intergenic_minimal_exclusion_is_documented	tests/golden/116/GRCh38-pick-summary	
 no_progress	Config.pm	implemented	open			
-no_stats	BaseRunner.pm	implemented	open			
+no_stats	BaseRunner.pm	implemented	open			crates/vep-cli/tests/interim_flags.rs::statistics_flags_are_accepted_and_write_no_summary
 non-variant-records	VCF.pm	implemented	landed:implemented	crates/vep-cli/tests/input_validation.rs::non_variant_json_object_per_record;crates/vep-cli/tests/input_validation.rs::non_variant_first_alt_fixtures_every_format	tests/golden/116/GRCh38-vcf-check-ref	
 NonSynonymousFilter	NonSynonymousFilter.pm	error	open			
 numbers	Config.pm	implemented	landed:implemented	crates/vep-effects/src/display.rs::exon_and_intron_numbers_follow_vep	tests/golden/116/GRCh37-output-flags	
@@ -392,14 +392,14 @@ quiet	BaseVEP.pm::status_msg	implemented	landed:implemented	crates/vep-cli/tests
 quiet-and-q	BaseVEP.pm	documented_subset	open			
 RankFilter	RankFilter.pm	error	open			
 ReferenceQuality	ReferenceQuality.pm	error	open			
-refseq	CacheDir.pm	documented_subset	open			
+refseq	CacheDir.pm	documented_subset	open			crates/vep-cli/tests/interim_flags.rs::refseq_selects_the_refseq_species_directory
 refseq-match-bam-edit-source-columns	OutputFactory.pm	implemented	open			
 refseq-merged-cache-selection	CacheDir.pm	documented_subset	open			
 refseq-xrefs	Database/Transcript.pm	implemented	open			
 RefSeqHGVS	RefSeqHGVS.pm	error	open			
 region-input-format	Region.pm	implemented	landed:implemented	crates/vep-io/src/input/region.rs::ref_is_n_per_base_of_the_span;crates/vep-io/src/input/region.rs::colon_allele_separator;crates/vep-io/src/input/region.rs::insertion_start_end_plus_one;crates/vep-io/src/input/region.rs::sv_word_dup_del;crates/vep-io/src/input/region.rs::strand_tokens_one_plus_one_minus_one;crates/vep-io/src/input/region.rs::lines_outside_the_expression_are_refused;crates/vep-io/src/input/region.rs::oversize_span_refused_before_the_reference_is_built;crates/vep-io/src/input/region.rs::minimised_span_follows_trim_sequences;crates/vep-cli/src/pipeline.rs::refused_by_validate_vf_names_the_checks_behind_the_chr_list;crates/vep-cli/tests/input_region.rs::region_records_annotate_as_their_vcf_twins;crates/vep-cli/tests/input_region.rs::reverse_strand_region_reads_the_reverse_complement;crates/vep-cli/tests/input_region.rs::structural_words_annotate_as_their_class;crates/vep-cli/tests/input_region.rs::uploaded_allele_is_the_looked_up_string_except_for_an_unminimised_indel;crates/vep-cli/tests/input_region.rs::chr_list_silences_the_size_check_alone;crates/vep-cli/tests/cli_input.rs::region_input_without_fasta_is_refused;crates/vep-cli/tests/input_validation.rs::region_input_reads_its_reference_from_the_fasta;crates/vep-cli/tests/input_region.rs::minimal_keeps_the_placeholder_as_the_uploaded_allele;crates/vep-cli/tests/input_region.rs::dash_inside_an_allele_is_removed_at_the_lookup_ref_rejoin	tests/golden/116/GRCh38-input-region	
 registry	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::database_flags_are_refused		
-regulatory	CacheDir.pm	implemented	open			
+regulatory	CacheDir.pm	implemented	open			crates/vep-cli/tests/interim_flags.rs::regulatory_warns_and_writes_only_empty_motif_columns
 regulatory-cache-data-path	Regulation.pm	implemented	open			
 regulatory-feature-biotype	OutputFactory.pm	implemented	open			
 regulatory-feature-cell-types	Database/RegFeat.pm	documented_subset	open			
@@ -473,9 +473,9 @@ stats-text-format	Stats.pm	implemented	open
 stats-ts-tv-allele-changes	Stats.pm	excluded	open			
 stats-variants-filtered-out	Stats.pm	implemented	open			
 stats-variants-processed	Stats.pm	documented_subset	open			
-stats_file	BaseRunner.pm	implemented	open			
-stats_html	Runner.pm	implemented	open			
-stats_text	BaseRunner.pm	implemented	open			
+stats_file	BaseRunner.pm	implemented	open			crates/vep-cli/tests/interim_flags.rs::statistics_flags_are_accepted_and_write_no_summary
+stats_html	Runner.pm	implemented	open			crates/vep-cli/tests/interim_flags.rs::stats_html_is_refused_as_an_unknown_argument
+stats_text	BaseRunner.pm	implemented	open			crates/vep-cli/tests/interim_flags.rs::statistics_flags_are_accepted_and_write_no_summary
 status-messages	BaseVEP.pm	implemented	open			
 stdin-input	Parser.pm	documented_subset	landed:documented_subset	crates/vep-cli/tests/cli_input.rs::stdin_literal_is_case_insensitive;crates/vep-cli/tests/cli_input.rs::stdin_without_format_is_fatal;crates/vep-cli/tests/cli_input.rs::gzip_on_stdin_is_read;crates/vep-cli/tests/documented_subsets.rs::compressed_input_exclusion_is_documented	tests/golden/116/GRCh38-input-compressed	
 stdin-when-input-file-absent	Config.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_input.rs::stdin_without_format_is_fatal;crates/vep-cli/tests/cli_input.rs::undetectable_input_is_refused	tests/golden/116/GRCh38-run-control	
