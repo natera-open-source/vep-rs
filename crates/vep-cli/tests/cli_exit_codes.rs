@@ -74,6 +74,91 @@ fn run_error_is_1() {
     assert!(!out.exists(), "no output is written for a failed run");
 }
 
+/// An output file that cannot be created ends the run under the `output`
+/// component with Ensembl VEP's text (BaseRunner.pm:226, `Could not write to
+/// output file <file>`), before any variant is annotated; an empty output
+/// name is such a file, named by the empty string.
+#[test]
+fn unwritable_output_is_1() {
+    let dir = tempfile::tempdir().unwrap();
+    for out in [
+        dir.path().join("no_such_dir").join("out.txt"),
+        PathBuf::new(),
+    ] {
+        let output = vep()
+            .args(corpus_args(&out))
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        let err = stderr(&output);
+        assert_eq!(output.status.code(), Some(1), "{err}");
+        let lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+        assert_eq!(
+            lines,
+            [format!(
+                "ERROR: [output] Could not write to output file {}",
+                out.display()
+            )],
+            "{err}"
+        );
+        assert!(output.stdout.is_empty());
+    }
+}
+
+fn duckdb_available() -> bool {
+    Command::new("duckdb")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// A Parquet run writes its rows to `<output>.tsv.tmp` beside the output file
+/// first, so an output location that cannot be written fails the same way as
+/// a plain output, naming that file, and a run whose output name is empty is
+/// refused before any intermediate is written in the working directory; the
+/// check needs the DuckDB CLI the format converts with.
+#[test]
+fn unwritable_parquet_output_is_1() {
+    if !duckdb_available() {
+        eprintln!("skipping: duckdb CLI not installed");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("no_such_dir").join("out.parquet");
+    let mut args = corpus_args(&out);
+    args.extend(["--output_format".to_string(), "parquet".to_string()]);
+    let output = vep().args(args).output().unwrap();
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(1), "{err}");
+    let lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(
+        lines,
+        [format!(
+            "ERROR: [output] Could not write to output file {}.tsv.tmp",
+            out.display()
+        )],
+        "{err}"
+    );
+    assert!(output.stdout.is_empty());
+
+    let mut args = corpus_args(Path::new(""));
+    args.extend(["--output_format".to_string(), "parquet".to_string()]);
+    let output = vep().args(args).current_dir(dir.path()).output().unwrap();
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(1), "{err}");
+    let lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(
+        lines,
+        ["ERROR: [output] Could not write to output file "],
+        "{err}"
+    );
+    assert!(
+        !dir.path().join(".tsv.tmp").exists(),
+        "no intermediate is written for a refused output"
+    );
+}
+
 /// A `--check_existing` run and the paths its assertions name: the output
 /// file, the cache's `info.json` and its one region file.
 struct VariationCacheRun {

@@ -563,10 +563,13 @@ pub struct Config {
     pub offline: bool,
     pub dir: String,
     /// The cache root the Ensembl VEP layout is resolved under: `--dir_cache`,
-    /// else a directory given to `--cache`, else `--dir`.
+    /// else a directory given to `--cache`, else `--dir`; an empty or `0`
+    /// `--dir_cache` counts as absent (AnnotationSourceAdaptor.pm:127's `||`).
     pub dir_cache: String,
     /// The plugins directory: `--dir_plugins`, else `<dir>/Plugins`
-    /// (Runner.pm:907), a leading `~` expanded.
+    /// (Runner.pm:907), an empty or `0` value counting as absent, and a leading
+    /// `~` expanded; any other pattern `glob` would expand (`:908`) is one
+    /// literal path.
     pub dir_plugins: String,
     /// `--safe`: a plugin that cannot be loaded or a missing plugins directory is
     /// an error rather than a warning (Runner.pm:912-916, 929-953).
@@ -985,17 +988,27 @@ impl Config {
             .filter(|value| *value != CACHE_FLAG_ALONE)
             .map(expand_tilde)
             .filter(|value| std::path::Path::new(value).is_dir());
+        // `dir_cache || dir` (AnnotationSourceAdaptor.pm:127) and
+        // `dir_plugins || dir.'/Plugins'` (Runner.pm:907) fall through an empty
+        // string and `0`, Perl's false values, to their defaults.
         let dir_cache = args
             .dir_cache
+            .filter(|d| crate::argv::truthy(d))
             .map(|d| expand_tilde(&d))
             .or(cache_dir_value)
             .unwrap_or_else(|| dir.clone());
         let dir_plugins = args
             .dir_plugins
+            .filter(|d| crate::argv::truthy(d))
             .map(|d| expand_tilde(&d))
             .unwrap_or_else(|| format!("{dir}/Plugins"));
 
-        let cache_version = args.cache_version.unwrap_or(vep_core::VEP_VERSION);
+        // `cache_version || db_version || software_version` (CacheDir.pm:323):
+        // a `0` is Perl-false and falls through to the release.
+        let cache_version = args
+            .cache_version
+            .filter(|version| *version != 0)
+            .unwrap_or(vep_core::VEP_VERSION);
 
         let fields = args.fields.as_deref().map(split_list_flag);
 
@@ -1463,19 +1476,10 @@ fn parse_distance(s: &str) -> Result<(u64, u64), String> {
     Ok((integer(up)?, integer(down)?))
 }
 
-/// Expand a leading `~` to the user's home directory.
+/// Expand a leading `~` to the user's home directory
+/// ([`crate::argv::expand_tilde_text`] with `HOME`, empty when it is unset).
 fn expand_tilde(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~/") {
-        if let Ok(home) = std::env::var("HOME") {
-            return format!("{}/{}", home, rest);
-        }
-    }
-    if path == "~" {
-        if let Ok(home) = std::env::var("HOME") {
-            return home;
-        }
-    }
-    path.to_string()
+    crate::argv::expand_tilde_text(path, &std::env::var("HOME").unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -2719,6 +2723,38 @@ mod tests {
         );
     }
 
+    /// `root_dir => dir_cache || dir` (AnnotationSourceAdaptor.pm:127): an empty
+    /// or `0` `--dir_cache` is Perl-false and the root is `--dir`, or the
+    /// directory `--cache` names (Config.pm:717's `||=` assigns over it too).
+    #[test]
+    fn test_dir_cache_empty_or_zero_falls_back_to_dir() {
+        for value in ["", "0"] {
+            assert_eq!(
+                config(&["vep", "--dir", "/data/vep", "--dir_cache", value]).dir_cache,
+                "/data/vep",
+                "{value:?}"
+            );
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+        assert_eq!(
+            config(&["vep", "--cache", path, "--dir_cache", ""]).dir_cache,
+            path
+        );
+    }
+
+    /// The default `--dir` is `$ENV{HOME}.'/.vep'` (Config.pm:294): `/.vep`
+    /// when `HOME` is unset, the home directory's `.vep` otherwise.
+    #[test]
+    fn test_dir_default_without_home_is_root_vep() {
+        let expand = crate::argv::expand_tilde_text;
+        assert_eq!(expand("~/.vep", ""), "/.vep");
+        assert_eq!(expand("~/.vep", "/home/u"), "/home/u/.vep");
+        assert_eq!(expand("~", ""), "/");
+        assert_eq!(expand("~", "/home/u"), "/home/u");
+        assert_eq!(expand("~x/.vep", ""), "~x/.vep");
+    }
+
     #[test]
     fn test_dir_cache_explicit() {
         assert_eq!(
@@ -2905,7 +2941,8 @@ mod tests {
     }
 
     /// The plugins directory is `--dir_plugins`, else `<dir>/Plugins`
-    /// (Runner.pm:907), a leading `~` expanded as `glob` expands it (`:908`).
+    /// (Runner.pm:907, whose `||` passes an empty string and `0` over as
+    /// Perl-false), a leading `~` expanded as `glob` expands it (`:908`).
     #[test]
     fn dir_plugins_defaults_to_dir_slash_plugins() {
         let home = std::env::var("HOME").unwrap();
@@ -2918,6 +2955,13 @@ mod tests {
             config(&["vep", "--dir", "/data/vep", "--dir_plugins", "/p"]).dir_plugins,
             "/p"
         );
+        for value in ["", "0"] {
+            assert_eq!(
+                config(&["vep", "--dir", "/data/vep", "--dir_plugins", value]).dir_plugins,
+                "/data/vep/Plugins",
+                "{value:?}"
+            );
+        }
         assert_eq!(
             config(&["vep", "--dir_plugins", "~/plugins"]).dir_plugins,
             format!("{home}/plugins")

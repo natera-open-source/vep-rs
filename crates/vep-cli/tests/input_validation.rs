@@ -12,7 +12,7 @@
 mod common;
 
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 use common::{corpora, Corpus};
@@ -68,6 +68,49 @@ fn run_vcf(dir: &Path, name: &str, records: &str, extra: &[&str]) -> (Output, St
 fn run_input(dir: &Path, name: &str, input: &Path, extra: &[&str]) -> (Output, String, String) {
     let out = dir.join(format!("{name}.out"));
     let output = vep(input, &out, extra).arg("--quiet").output().unwrap();
+    let written = std::fs::read_to_string(&out).unwrap_or_default();
+    let warnings =
+        std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap_or_default();
+    (output, written, warnings)
+}
+
+/// A GRCh38 cache under `dir` holding no transcripts:
+/// `transcripts/<name>/1-1000000.json`, an empty shard, for each name in
+/// `with_shard`, and a bare `transcripts/<name>` directory for each in
+/// `without_shard`.
+fn cache_with_chromosomes(dir: &Path, with_shard: &[&str], without_shard: &[&str]) -> PathBuf {
+    let cache = dir.join("json_cache");
+    let transcripts = cache.join("transcripts");
+    for name in with_shard {
+        let chromosome = transcripts.join(name);
+        std::fs::create_dir_all(&chromosome).unwrap();
+        std::fs::write(chromosome.join("1-1000000.json"), b"[]").unwrap();
+    }
+    for name in without_shard {
+        std::fs::create_dir_all(transcripts.join(name)).unwrap();
+    }
+    std::fs::write(cache.join("info.json"), r#"{"assembly":"GRCh38"}"#).unwrap();
+    cache
+}
+
+/// Runs `records` (data lines, tab-separated) as a VCF quietly against `cache`
+/// rather than the identifiers corpus, with `extra`, and returns the process
+/// output, the written output and the warnings file.
+fn run_vcf_against_cache(
+    dir: &Path,
+    cache: &Path,
+    records: &str,
+    extra: &[&str],
+) -> (Output, String, String) {
+    let input = dir.join("in.vcf");
+    std::fs::write(&input, format!("{VCF_HEADER}{records}")).unwrap();
+    let out = dir.join("out.txt");
+    let mut cmd = common::isolated_vep_anywhere();
+    cmd.arg("-i").arg(&input).arg("-o").arg(&out);
+    cmd.arg("--json_cache").arg(cache);
+    cmd.args(["--offline", "--force_overwrite", "--no_stats", "--quiet"]);
+    cmd.args(extra);
+    let output = cmd.stdin(Stdio::null()).output().unwrap();
     let written = std::fs::read_to_string(&out).unwrap_or_default();
     let warnings =
         std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap_or_default();
@@ -188,6 +231,33 @@ fn unknown_chromosome_is_warned_and_skipped_in_every_format() {
             }
         }
     }
+}
+
+/// The chromosomes a cache holds are its subdirectories not starting with a dot
+/// (CacheDir.pm:431), transcripts or none: a record on a chromosome whose
+/// directory holds no transcript shard is written as `intergenic_variant`, as
+/// Ensembl VEP writes a record on a chromosome whose directory it finds empty,
+/// and one on a dot-prefixed directory is skipped as a chromosome the cache
+/// lacks (Parser.pm:542-546).
+#[test]
+fn empty_chromosome_directory_annotates_intergenic_and_a_dot_directory_is_absent() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = cache_with_chromosomes(dir.path(), &["21", ".hidden"], &["GL000008.2"]);
+    let records = "21\t500\ton_21\tA\tG\t.\t.\t.\nGL000008.2\t500\ton_empty_dir\tA\tG\t.\t.\t.\n.hidden\t500\ton_dot_dir\tA\tG\t.\t.\t.\n";
+    let (output, written, warnings) =
+        run_vcf_against_cache(dir.path(), &cache, records, &["--assembly", "GRCh38"]);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    for id in ["on_21", "on_empty_dir"] {
+        let record_rows = rows_of(&written, id);
+        assert_eq!(record_rows.len(), 1, "{id}:\n{written}");
+        let columns: Vec<&str> = record_rows[0].split('\t').collect();
+        assert_eq!(columns[5], "intergenic_variant", "{id}: {}", record_rows[0]);
+    }
+    assert!(rows_of(&written, "on_dot_dir").is_empty(), "{written}");
+    assert_eq!(
+        warning_lines(&warnings),
+        ["WARNING: line 3 skipped (.hidden 500 on_dot_dir A G . . .): Chromosome .hidden not found in annotation sources or synonyms; chromosome .hidden does not overlap any features"]
+    );
 }
 
 /// `--dont_skip` keeps a record `validate_vf` refuses and annotates it as it
@@ -1047,6 +1117,53 @@ fn dont_skip_keeps_a_chr_mismatch_silently_and_drops_two_shapes_warned() {
         ["chr21:10538885-10538885/C", "21:10538885-10538885/C"]
             .into_iter()
             .collect()
+    );
+}
+
+/// With a FASTA and a GRCh38 cache, `--check_ref` on a chromosome `Y` record
+/// inside the first pseudoautosomal region compares the given allele with the
+/// `X` base at the same coordinate, as Ensembl VEP's reference reader serves a
+/// `Y` read there (Variation/Utils/FastaSequence.pm:548-594, armed by
+/// BaseVEP.pm:525): the allele matching `X` passes where `Y` carries `N`, and
+/// the allele matching neither fails with Parser.pm:626-630's warning.
+#[test]
+fn check_ref_reads_a_y_pseudoautosomal_record_from_x() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = cache_with_chromosomes(dir.path(), &["X"], &["Y"]);
+    // `X` is `C` throughout and `Y` is `N` throughout, long enough to hold
+    // `Y:10001`, which lies in the first region and so reads `X:10001`.
+    let length = 10_010;
+    let bases_per_line = 60;
+    let mut fasta = Vec::new();
+    let mut fai = String::new();
+    for (name, base) in [("X", b'C'), ("Y", b'N')] {
+        fasta.extend_from_slice(format!(">{name}\n").as_bytes());
+        fai.push_str(&format!(
+            "{name}\t{length}\t{}\t{bases_per_line}\t{}\n",
+            fasta.len(),
+            bases_per_line + 1
+        ));
+        for line in vec![base; length].chunks(bases_per_line) {
+            fasta.extend_from_slice(line);
+            fasta.push(b'\n');
+        }
+    }
+    let fa = dir.path().join("xy.fa");
+    std::fs::write(&fa, &fasta).unwrap();
+    std::fs::write(dir.path().join("xy.fa.fai"), fai).unwrap();
+    let records = "Y\t10001\tfrom_x\tC\tG\t.\t.\t.\nY\t10002\tnot_x\tA\tG\t.\t.\t.\n";
+    let (output, written, warnings) = run_vcf_against_cache(
+        dir.path(),
+        &cache,
+        records,
+        &["--check_ref", "--fasta", fa.to_str().unwrap()],
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert_eq!(rows_of(&written, "from_x").len(), 1, "{written}");
+    assert!(rows_of(&written, "not_x").is_empty(), "{written}");
+    assert_eq!(
+        warning_lines(&warnings),
+        ["WARNING: line 2 skipped (Y 10002 not_x A G . . .): Specified reference allele A does not match Ensembl reference allele"]
     );
 }
 

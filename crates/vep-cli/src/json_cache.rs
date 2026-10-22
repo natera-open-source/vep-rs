@@ -972,14 +972,12 @@ fn compute_coding_region(mapper: &JsonMapper) -> (Option<u64>, Option<u64>) {
 /// contract, naming the cache's serialiser: a Sereal cache converts to no
 /// shard at all, and a copy that landed no shard reads the same.
 ///
-/// A chromosome directory holding no `.json` shards yields no key. The
-/// distinction is load-bearing rather than cosmetic: `contains_key` gates the
-/// `intergenic_variant` fallback and the inter-chromosomal BND mate check, so a
-/// key with an empty shard list would materialize an empty index and flip both
-/// predicates from "chromosome absent" (drop the row, as Perl does) to
-/// "chromosome present but has no transcripts" (emit `intergenic_variant`). A
-/// partially-copied cache is the realistic way to end up with an empty
-/// chromosome directory.
+/// The key set is Ensembl VEP's `valid_chromosomes`: every subdirectory whose
+/// name does not start with a dot (`CacheDir.pm:431`, `grep {!/^\./ && -d}`).
+/// A chromosome directory holding no `.json` shard is a key with an empty shard
+/// list, so a record on it is annotated `intergenic_variant` rather than
+/// skipped as a chromosome the cache lacks; a dot-prefixed directory is no
+/// chromosome, whatever it holds.
 pub fn enumerate_transcript_shards(
     json_cache_dir: &str,
 ) -> anyhow::Result<HashMap<String, Vec<PathBuf>>> {
@@ -1003,6 +1001,9 @@ pub fn enumerate_transcript_shards(
             continue;
         }
         let chr = chr_entry.file_name().to_string_lossy().to_string();
+        if chr.starts_with('.') {
+            continue;
+        }
 
         let mut shards: Vec<PathBuf> = Vec::new();
         for file_entry in std::fs::read_dir(chr_entry.path())? {
@@ -1017,15 +1018,10 @@ pub fn enumerate_transcript_shards(
         // returned them in, so two caches with the same content index their
         // transcripts identically.
         shards.sort_by_key(|p| shard_start(p));
-
-        // Insert only when the directory actually holds shards, so a shard-less
-        // chromosome directory reads as absent (see the note above).
-        if !shards.is_empty() {
-            by_chr.insert(chr, shards);
-        }
+        by_chr.insert(chr, shards);
     }
 
-    if by_chr.is_empty() {
+    if by_chr.values().all(Vec::is_empty) {
         return Err(CliError::new(
             "cache",
             format!(
@@ -2009,6 +2005,49 @@ mod tests {
             assert_eq!(&*txs[0].stable_id, id);
             assert_eq!(txs[0].chr, chr);
         }
+    }
+
+    /// The key set is Ensembl VEP's `valid_chromosomes`, every subdirectory
+    /// not starting with a dot (CacheDir.pm:431): a chromosome directory with
+    /// no shard is a chromosome of the cache holding no transcript, and a
+    /// dot-prefixed directory is none, shard or not.
+    #[test]
+    fn empty_chromosome_directory_is_a_key_and_a_dot_directory_none() {
+        let dir = cache_with_shards("vep_jc_valid_", &[("21", "[]")]);
+        let transcripts = dir.path().join("transcripts");
+        std::fs::create_dir(transcripts.join("GL000008.2")).unwrap();
+        std::fs::create_dir(transcripts.join(".hidden")).unwrap();
+        std::fs::write(transcripts.join(".hidden").join("1-1000000.json"), "[]").unwrap();
+        let root = dir.path().to_str().unwrap();
+        let shards = enumerate_transcript_shards(root).unwrap();
+        let mut chromosomes: Vec<&String> = shards.keys().collect();
+        chromosomes.sort();
+        assert_eq!(chromosomes, ["21", "GL000008.2"]);
+        assert!(shards["GL000008.2"].is_empty());
+        let indexes = LazyTranscriptIndexes::new(root, 5_000, 5_000).unwrap();
+        indexes.prewarm("GL000008.2").unwrap();
+        assert!(indexes.contains_key("GL000008.2"));
+        assert!(indexes.get("GL000008.2").unwrap().is_empty());
+        assert!(!indexes.contains_key(".hidden"));
+    }
+
+    /// The whole-cache refusal counts shards, not chromosome directories: a
+    /// cache whose only shard sits in a dot-prefixed directory holds none.
+    #[test]
+    fn cache_with_shards_only_in_a_dot_directory_is_refused() {
+        let dir = tempfile::Builder::new()
+            .prefix("vep_jc_dotonly_")
+            .tempdir()
+            .unwrap();
+        let transcripts = dir.path().join("transcripts");
+        std::fs::create_dir_all(transcripts.join("21")).unwrap();
+        std::fs::create_dir_all(transcripts.join(".hidden")).unwrap();
+        std::fs::write(transcripts.join(".hidden").join("1-1000000.json"), "[]").unwrap();
+        let err = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap_err();
+        assert!(
+            CliError::from_run(&err).starts_with("ERROR: [cache] no transcript shards under"),
+            "{err}"
+        );
     }
 
     /// `is_canonical` is the dumped flag (Database/Transcript.pm sets it to 1

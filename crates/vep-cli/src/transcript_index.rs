@@ -851,47 +851,44 @@ mod tests {
         assert!(lazy.get("99").is_none());
     }
 
-    /// A chromosome directory holding no shards must read as absent.
-    ///
-    /// A shard-less chromosome directory must produce no key. If enumeration created
-    /// a key with an empty shard list, `prewarm` would materialize an empty index and
-    /// `contains_key` would flip to true, which turns the skip of a record on that
-    /// chromosome (`validate::SkipRules`, Ensembl VEP's warning) into an
-    /// `intergenic_variant` row from the fallback in `runner.rs`. That is a silent
-    /// output change that a concordance comparison against a complete cache cannot
-    /// catch, because a complete cache has no empty chromosome directories. An
-    /// interrupted copy of a cache directory is the realistic way to produce one.
+    /// A chromosome directory holding no shard is a chromosome of the cache with
+    /// no transcripts, as Ensembl VEP's `valid_chromosomes` lists every
+    /// non-dot subdirectory (CacheDir.pm:431): `contains_key` is true, `prewarm`
+    /// materializes an empty index and `get` hits it, so a record on it is
+    /// annotated `intergenic_variant` rather than skipped. A dot-prefixed
+    /// directory is no chromosome. The eager loader agrees with the lazy one, so
+    /// both paths answer the parity predicates the same way.
     #[test]
-    fn lazy_shardless_chromosome_directory_reads_as_absent() {
+    fn lazy_shardless_chromosome_directory_is_present_with_no_transcripts() {
         let dir = tmp_cache("shardless", &[("21", 3)]);
-        // chr1 exists as a directory but holds no .json shards.
-        std::fs::create_dir_all(dir.path().join("transcripts").join("1")).unwrap();
-        // A non-.json file must not count either.
-        std::fs::write(
-            dir.path().join("transcripts").join("1").join("README.txt"),
-            "not a shard",
-        )
-        .unwrap();
+        let transcripts = dir.path().join("transcripts");
+        std::fs::create_dir_all(transcripts.join("1")).unwrap();
+        // A file that is not a shard adds no shard.
+        std::fs::write(transcripts.join("1").join("README.txt"), "not a shard").unwrap();
+        std::fs::create_dir_all(transcripts.join(".hidden")).unwrap();
+        std::fs::write(transcripts.join(".hidden").join("1-1000000.json"), "[]").unwrap();
 
         let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
 
         assert!(lazy.contains_key("21"), "populated chromosome is present");
         assert!(
-            !lazy.contains_key("1"),
-            "a chromosome directory with zero shards must read as ABSENT, not as \
-             present-with-no-transcripts"
+            lazy.contains_key("1"),
+            "a shard-less chromosome directory is present"
         );
-        assert_eq!(lazy.len(), 1, "only the populated chromosome is keyed");
+        assert!(
+            !lazy.contains_key(".hidden"),
+            "a dot directory is no chromosome"
+        );
+        assert_eq!(lazy.len(), 2);
 
-        // Pre-warming it stays a no-op (absence is legitimate), and `get` misses.
-        lazy.prewarm("1").expect("prewarm of an absent chromosome");
-        assert!(lazy.get("1").is_none());
+        lazy.prewarm("1")
+            .expect("prewarm of a shard-less chromosome");
+        assert!(lazy.get("1").expect("an empty index").is_empty());
 
-        // The eager loader agrees, so both paths answer the parity predicates the
-        // same way.
         let eager = crate::json_cache::load_all_transcripts(dir.path().to_str().unwrap()).unwrap();
-        assert!(!eager.contains_key("1"), "eager loader must agree");
-        assert!(eager.contains_key("21"));
+        assert!(eager["1"].is_empty(), "eager loader must agree");
+        assert!(!eager.contains_key(".hidden"));
+        assert_eq!(eager["21"].len(), 3);
     }
 
     /// A chromosome advertised in `slots` with no shard list and no materialized

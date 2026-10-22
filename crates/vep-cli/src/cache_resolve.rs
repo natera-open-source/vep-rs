@@ -399,6 +399,49 @@ mod tests {
         );
     }
 
+    /// `root_dir => dir_cache || dir` (`AnnotationSourceAdaptor.pm:127`): an
+    /// empty or `0` `--dir_cache` is Perl-false, so the root is `--dir`, and a
+    /// directory given to `--cache` is assigned over it (`Config.pm:717`, `||=`).
+    #[test]
+    fn empty_dir_cache_falls_back_to_dir() {
+        let root = make_root(&["116_GRCh38"]);
+        let root_s = root.path().to_str().unwrap();
+        let leaf = joined(root.path(), "homo_sapiens/116_GRCh38");
+        for value in ["", "0"] {
+            assert_eq!(
+                resolve_flags(&["--dir", root_s, "--dir_cache", value])
+                    .unwrap()
+                    .dir,
+                leaf,
+                "{value:?}"
+            );
+            assert_eq!(
+                resolve_flags(&["--cache", root_s, "--dir_cache", value])
+                    .unwrap()
+                    .dir,
+                leaf,
+                "{value:?}"
+            );
+        }
+    }
+
+    /// `cache_version || db_version || software_version` (`CacheDir.pm:323`):
+    /// `--cache_version 0` is Perl-false and resolves the release's directory,
+    /// as no flag would.
+    #[test]
+    fn cache_version_zero_resolves_the_release() {
+        let root = make_root(&["115_GRCh38", "116_GRCh38"]);
+        let root_s = root.path().to_str().unwrap();
+        let leaf = joined(root.path(), "homo_sapiens/116_GRCh38");
+        assert_eq!(
+            resolve_flags(&["--dir_cache", root_s, "--cache_version", "0"])
+                .unwrap()
+                .dir,
+            leaf
+        );
+        assert_eq!(resolve_flags(&["--dir_cache", root_s]).unwrap().dir, leaf);
+    }
+
     /// A root without the species directory is `Cache directory <dir> not found`
     /// (`CacheDir.pm:318`); a species directory without the version is
     /// `No cache found for <species>, version <v>` (`:336`).

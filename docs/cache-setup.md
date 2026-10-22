@@ -116,9 +116,15 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 
 The `.gzi` is checked against the file's block layout when it is opened, so a file recompressed without being indexed again is refused rather than read. A directory given to `--fasta` is read as Ensembl VEP's Bio::DB::Fasta reads one: every indexed `.fa` in it (and the `.fa.gz` vep-rs adds, which Bio::DB::Fasta does not read), their sequences together. Two files naming the same sequence are refused (Ensembl VEP with Bio::DB::HTS installed takes a file only). Under `VEP_FASTA_STORAGE=memory` a bgzipped FASTA is inflated whole into memory.
 
+On GRCh37 and GRCh38 a read of the sequence named `Y` inside a pseudoautosomal region is served from `X` at the region's offset, as Ensembl VEP serves it: Ensembl's primary-assembly FASTA carries `N` there. The redirect follows the name the FASTA gives the sequence, so a file naming the chromosome `chrY` is read as written, as Ensembl VEP reads it.
+
 `--fasta_dir <dir>` chooses, as Ensembl VEP does, the `.fa` or `.fa.gz` of the directory whose name carries the species and the assembly (case-insensitively), a file named `toplevel` before any other and a compressed file before a plain one. The choice stands in for `--fasta` and for the cache directory's FASTA. A directory holding no such file leaves those in force and warns `WARNING: No compatible FASTA files found in <dir>`, written to the run's warnings file and echoed on standard error unless `--quiet`. A directory that cannot be opened is passed over without a message, as Ensembl VEP passes it over.
 
 `--hgvs` or `--hgvsg` with no FASTA in reach exits 1 with `ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)`, Ensembl VEP's offline refusal. `--everything` without a FASTA instead prints `INFO: Disabling --hgvs; using --offline and no FASTA file found` on standard error (withheld under `--quiet`) and drops the HGVS notations it switched on, as Ensembl VEP does. An explicit `--hgvsg` beside it is still refused. `--use_transcript_ref` without a FASTA exits 1 with `ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref`, since a non-coding transcript's cDNA is read from the FASTA.
+
+### A `Y` read on a FASTA without `X`
+
+With the pseudoautosomal redirect in force and no `X` in the FASTA, a `Y` read's bases inside the region are `N`, as Ensembl VEP reads them (ensembl-variation `Utils/FastaSequence.pm` lines 597-601). The bases outside the region come from `Y`, so the read has the length asked for. Ensembl VEP returns the region's `N`s alone for a read that straddles the region's edge, two bases for a four-base request, and warns `FASTA does not contain sequence for X` on every redirected read; vep-rs warns nothing.
 
 ## Chromosome names
 

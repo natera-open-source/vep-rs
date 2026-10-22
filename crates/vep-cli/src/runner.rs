@@ -501,6 +501,11 @@ pub(crate) fn open_fasta(
     // A FASTA named by accession is read under the cache's chromosome names
     // (Variation/Utils/FastaSequence.pm:380-389).
     opened.add_synonyms(&cache.synonyms);
+    // The run's assembly arms the pseudoautosomal redirect of `Y` reads to `X`
+    // (BaseVEP.pm:525, Variation/Utils/FastaSequence.pm:254).
+    if let Some(assembly) = cache.assembly.as_deref() {
+        opened.set_assembly(assembly);
+    }
     Ok(Some(Arc::new(opened)))
 }
 
@@ -1274,19 +1279,22 @@ impl Runner {
                 None
             };
 
+        // BaseRunner.pm:226, with Ensembl VEP's text; the Parquet intermediate
+        // sits beside the output file and fails the same way. An empty output
+        // name is refused before the intermediate is created: its `.tsv.tmp`
+        // alone would be a file in the working directory.
+        let unwritable =
+            |path: &str| CliError::new("output", format!("Could not write to output file {path}"));
+        if parquet_intermediate_path.is_some() && self.config.output_file.is_empty() {
+            return Err(unwritable("").into());
+        }
         let output: Box<dyn Write + Send> = if self.config.output_file == "STDOUT" {
             Box::new(io::stdout())
-        } else if let Some(ref intermediate) = parquet_intermediate_path {
-            Box::new(File::create(intermediate).with_context(|| {
-                format!(
-                    "Failed to create Parquet intermediate TSV '{}'",
-                    intermediate
-                )
-            })?)
         } else {
-            Box::new(File::create(&self.config.output_file).with_context(|| {
-                format!("Failed to create output file '{}'", self.config.output_file)
-            })?)
+            let path = parquet_intermediate_path
+                .as_deref()
+                .unwrap_or(&self.config.output_file);
+            Box::new(File::create(path).map_err(|_| unwritable(path))?)
         };
         // The option rules refuse the flag with Parquet, so a compressed writer is
         // never the DuckDB intermediate.

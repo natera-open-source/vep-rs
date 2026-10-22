@@ -913,6 +913,18 @@
    }
   },
   {
+   "name": "unwritable-output",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}/no_such_dir/out.txt"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [output] Could not write to output file "
+   }
+  },
+  {
    "name": "fork-1",
    "argv": [
     "{golden}",
@@ -1176,6 +1188,25 @@
    }
   },
   {
+   "name": "plugins-dir-empty",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--dir",
+    "/nonexistent",
+    "--dir_plugins",
+    "",
+    "--plugin",
+    "NoSuchPlugin"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "warnings_file": "plugins_dir_empty_warnings.txt"
+   }
+  },
+  {
    "name": "plugin-loftool-column",
    "argv": [
     "{golden}",
@@ -1229,6 +1260,37 @@
     "--offline",
     "--cache",
     "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "--quiet",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "dir-cache-empty-falls-back",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--cache",
+    "--dir",
+    "{cache_root}",
+    "--dir_cache",
+    "",
     "--cache_version",
     "116",
     "--species",
@@ -1339,6 +1401,20 @@
    "expect": {
     "exit": 1,
     "stderr_contains": "ERROR: [cache] No cache found for homo_sapiens, version 115"
+   }
+  },
+  {
+   "name": "cache-version-zero",
+   "argv": [
+    "{golden}",
+    "--cache_version",
+    "0",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
    }
   },
   {

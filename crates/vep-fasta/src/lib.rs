@@ -23,6 +23,9 @@
 //! - All queries are 1-based genomic coordinates, matching VEP conventions.
 //! - A small contig-alias map tolerates `chr`-prefixed references, and
 //!   [`IndexedFasta::add_synonyms`] extends it with a chromosome synonym table.
+//! - [`IndexedFasta::set_assembly`] arms the pseudoautosomal redirect of a human
+//!   assembly: a read on the record named `Y` inside one of its regions is
+//!   served from `X`, as Ensembl VEP's reference reader serves it.
 
 use std::{
     borrow::Cow,
@@ -118,6 +121,57 @@ impl FaiRecord {
     fn byte_offset(&self, pos: u64) -> u64 {
         let pos0 = pos - 1;
         self.offset + pos0 / self.line_bases * self.line_width + pos0 % self.line_bases
+    }
+}
+
+/// A pseudoautosomal region of chromosome `Y`, read from `X`: one entry of
+/// Ensembl VEP's `%PARS` (`Variation/Utils/FastaSequence.pm:78-103`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Par {
+    /// The region's first base on `Y`.
+    pub start: u64,
+    /// The region's last base on `Y`.
+    pub end: u64,
+    /// Added to a `Y` coordinate to reach the base on `X`.
+    pub adj: u64,
+}
+
+/// The regions of GRCh37 (`FastaSequence.pm:79-90`).
+const GRCH37_PARS: [Par; 2] = [
+    Par {
+        start: 10_001,
+        end: 2_649_520,
+        adj: 50_000,
+    },
+    Par {
+        start: 59_034_050,
+        end: 59_363_566,
+        adj: 95_896_994,
+    },
+];
+
+/// The regions of GRCh38 (`FastaSequence.pm:91-102`).
+const GRCH38_PARS: [Par; 2] = [
+    Par {
+        start: 10_001,
+        end: 2_781_479,
+        adj: 0,
+    },
+    Par {
+        start: 56_887_903,
+        end: 57_217_415,
+        adj: 98_813_480,
+    },
+];
+
+/// The pseudoautosomal regions of `assembly`, keyed by the exact name as
+/// `%PARS` is (`FastaSequence.pm:254`): `GRCh37` and `GRCh38` have a table,
+/// any other name none.
+pub fn pars_for_assembly(assembly: &str) -> &'static [Par] {
+    match assembly {
+        "GRCh37" => &GRCH37_PARS,
+        "GRCh38" => &GRCH38_PARS,
+        _ => &[],
     }
 }
 
@@ -553,6 +607,9 @@ pub struct IndexedFasta {
     records: HashMap<String, FaiRecord>,
     // Lowercased alias -> canonical contig name in `records`.
     aliases: HashMap<String, String>,
+    /// The pseudoautosomal regions a read on the record `Y` is redirected
+    /// through; empty until [`Self::set_assembly`] names an assembly with a table.
+    pars: &'static [Par],
 }
 
 impl IndexedFasta {
@@ -639,7 +696,20 @@ impl IndexedFasta {
             sources,
             records,
             aliases,
+            pars: &[],
         })
+    }
+
+    /// Arms the pseudoautosomal redirect of `assembly` ([`pars_for_assembly`]),
+    /// as Ensembl VEP arms its reader with the run's assembly (`BaseVEP.pm:525`,
+    /// `FastaSequence.pm:254-256`): a read on the record named `Y` inside a
+    /// region of the table is served from `X` at the region's offset, the bases
+    /// before and after the region from `Y` (`:548-594`), and the region of an
+    /// `X` the FASTA lacks reads as `N` (`:597-601`), those bases before and
+    /// after it still from `Y`. The record's name is the FASTA's own, so a file
+    /// naming the chromosome `chrY` is read as written.
+    pub fn set_assembly(&mut self, assembly: &str) {
+        self.pars = pars_for_assembly(assembly);
     }
 
     /// The bytes of `rec`'s file from `offset`, as [`FastaStorage::bytes`] reads them.
@@ -651,7 +721,18 @@ impl IndexedFasta {
     ///
     /// Returns `None` if the contig does not exist or `pos` is out of bounds.
     pub fn base(&self, chr: &str, pos: u64) -> Option<u8> {
-        let rec = self.record_for(chr)?;
+        let (name, rec) = self.record(chr)?;
+        let Some(par) = self.par_of(name, pos, pos) else {
+            return self.record_base(rec, pos);
+        };
+        match self.records.get("X") {
+            Some(x) => self.record_base(x, pos + par.adj),
+            None => Some(b'N'),
+        }
+    }
+
+    /// The upper-cased base at the 1-based `pos` of `rec`; `None` past its end.
+    fn record_base(&self, rec: &FaiRecord, pos: u64) -> Option<u8> {
         if pos == 0 || pos > rec.len {
             return None;
         }
@@ -668,12 +749,44 @@ impl IndexedFasta {
     ///
     /// Resolves the FAI record once for the contig and reads the bytes from the
     /// first base to the last in one span, dropping the line terminators inside
-    /// it; a span whose base count disagrees with the index is `None`.
+    /// it; a span whose base count disagrees with the index is `None`. A span on
+    /// `Y` overlapping a pseudoautosomal region of the armed assembly
+    /// ([`Self::set_assembly`]) is read as Ensembl VEP reads it
+    /// (`FastaSequence.pm:548-594`): the bases before the region from `Y`, the
+    /// region's from `X` at the region's offset, the bases after it from `Y`.
     pub fn sequence(&self, chr: &str, start: u64, end: u64) -> Option<Vec<u8>> {
         if start == 0 || end < start {
             return None;
         }
-        let rec = self.record_for(chr)?;
+        let (name, rec) = self.record(chr)?;
+        let Some(par) = self.par_of(name, start, end) else {
+            return self.record_sequence(rec, start, end);
+        };
+        // Not `with_capacity(end - start + 1)`: `end` is checked against the
+        // record only when the piece after the region is read, so here the span
+        // is whatever the caller asked for, up to `vep_core::coordinate::MAX_COORD`.
+        let mut seq = Vec::new();
+        if start < par.start {
+            seq.extend(self.record_sequence(rec, start, par.start - 1)?);
+        }
+        let x_start = start.max(par.start) + par.adj;
+        let x_end = end.min(par.end) + par.adj;
+        match self.records.get("X") {
+            Some(x) => seq.extend(self.record_sequence(x, x_start, x_end)?),
+            None => {
+                let region_len = usize::try_from(x_end - x_start + 1).ok()?;
+                seq.extend(std::iter::repeat_n(b'N', region_len));
+            }
+        }
+        if end > par.end {
+            seq.extend(self.record_sequence(rec, par.end + 1, end)?);
+        }
+        Some(seq)
+    }
+
+    /// The upper-cased bases `start..=end` (1-based) of `rec`, `None` when the
+    /// span leaves the record or its base count disagrees with the index.
+    fn record_sequence(&self, rec: &FaiRecord, start: u64, end: u64) -> Option<Vec<u8>> {
         if end > rec.len {
             return None;
         }
@@ -690,8 +803,16 @@ impl IndexedFasta {
         (seq.len() == len).then_some(seq)
     }
 
-    fn record_for(&self, chr: &str) -> Option<&FaiRecord> {
-        self.record(chr).map(|(_, record)| record)
+    /// The pseudoautosomal region a read of `start..=end` on the record named
+    /// `name` overlaps: the table's first such region (`FastaSequence.pm:551`),
+    /// on the record `Y` alone (`:549`).
+    fn par_of(&self, name: &str, start: u64, end: u64) -> Option<&'static Par> {
+        if name != "Y" {
+            return None;
+        }
+        self.pars
+            .iter()
+            .find(|par| par.start <= end && start <= par.end)
     }
 
     /// The name the FASTA gives the record `chr` reaches: `chr` itself when a
@@ -1693,5 +1814,136 @@ mod tests {
         assert_eq!(idx.record_name("NC_000021.9"), Some("NC_000021.9"));
         assert_eq!(idx.record_name("chrX"), Some("X"));
         assert_eq!(idx.record_name("CM000683.2"), None);
+    }
+
+    /// The tables are Ensembl VEP's `%PARS` (`FastaSequence.pm:78-103`), keyed
+    /// by the exact assembly name (`:254`): each region's `X` span is its `Y`
+    /// span moved by its adjustment, and any other name has no table.
+    #[test]
+    fn par_tables_are_ensembl_veps() {
+        for (assembly, x_spans) in [
+            ("GRCh37", [(60_001, 2_699_520), (154_931_044, 155_260_560)]),
+            ("GRCh38", [(10_001, 2_781_479), (155_701_383, 156_030_895)]),
+        ] {
+            let read_from_x: Vec<(u64, u64)> = pars_for_assembly(assembly)
+                .iter()
+                .map(|par| (par.start + par.adj, par.end + par.adj))
+                .collect();
+            assert_eq!(read_from_x, x_spans, "{assembly}");
+        }
+        for other in ["grch38", "hg38", "GRCh38.p14", "GRCm39", ""] {
+            assert!(pars_for_assembly(other).is_empty(), "{other}");
+        }
+    }
+
+    /// A `Y` read inside a pseudoautosomal region of the armed assembly is
+    /// served from `X` at the region's offset, a read straddling the region's
+    /// start takes the bases before it from `Y` (`FastaSequence.pm:548-594`),
+    /// a read outside the regions and every read of an unarmed handle come from
+    /// `Y` as written (`N` on Ensembl's primary assembly), the record `chrY`
+    /// reaches is `Y`, a FASTA naming the chromosome `chrY` is read as written,
+    /// and a span past the record's end is `None` as far as an input coordinate
+    /// reaches, with nothing allocated for it. With no `X` in the FASTA the
+    /// region reads as `N` (`:597-601`).
+    #[test]
+    fn y_par_reads_from_x_under_the_armed_assembly() {
+        let dir = tempdir().unwrap();
+        let x = bases(7, 10_100);
+        let mut y = bases(11, 10_000);
+        y.extend(std::iter::repeat_n(b'N', 100));
+        let (fasta, fai) = fasta_and_fai(&[("X", &x), ("Y", &y)]);
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(&fa, &fasta).unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), fai).unwrap();
+        let upper = |seq: &[u8]| seq.to_ascii_uppercase();
+
+        let mut idx = IndexedFasta::from_path(&fa).unwrap();
+        assert_eq!(idx.sequence("Y", 10_001, 10_010), Some(vec![b'N'; 10]));
+        idx.set_assembly("GRCh38");
+        assert_eq!(
+            idx.sequence("Y", 10_001, 10_010),
+            Some(upper(&x[10_000..10_010]))
+        );
+        assert_eq!(
+            idx.sequence("chrY", 10_001, 10_010),
+            Some(upper(&x[10_000..10_010]))
+        );
+        assert_eq!(idx.base("Y", 10_001), Some(x[10_000].to_ascii_uppercase()));
+        assert_eq!(idx.base("Y", 10_100), Some(x[10_099].to_ascii_uppercase()));
+        assert_eq!(
+            idx.sequence("Y", 9_991, 10_000),
+            Some(upper(&y[9_990..10_000]))
+        );
+        assert_eq!(idx.base("Y", 10_000), Some(y[9_999].to_ascii_uppercase()));
+        let mut straddling = upper(&y[9_995..10_000]);
+        straddling.extend(upper(&x[10_000..10_005]));
+        assert_eq!(idx.sequence("Y", 9_996, 10_005), Some(straddling));
+        assert_eq!(
+            idx.sequence("X", 10_001, 10_010),
+            Some(upper(&x[10_000..10_010]))
+        );
+        assert_eq!(idx.sequence("Y", 10_001, 10_101), None);
+        assert_eq!(
+            idx.sequence("Y", 10_001, vep_core::coordinate::MAX_COORD),
+            None
+        );
+
+        idx.set_assembly("GRCm39");
+        assert_eq!(idx.sequence("Y", 10_001, 10_010), Some(vec![b'N'; 10]));
+
+        let (fasta, fai) = fasta_and_fai(&[("chrX", &x), ("chrY", &y)]);
+        let ucsc_fa = dir.path().join("ucsc.fa");
+        std::fs::write(&ucsc_fa, &fasta).unwrap();
+        std::fs::write(dir.path().join("ucsc.fa.fai"), fai).unwrap();
+        let mut ucsc = IndexedFasta::from_path(&ucsc_fa).unwrap();
+        ucsc.set_assembly("GRCh38");
+        assert_eq!(ucsc.sequence("Y", 10_001, 10_010), Some(vec![b'N'; 10]));
+
+        let mut bases_throughout = bases(13, 10_000);
+        bases_throughout.extend(std::iter::repeat_n(b'A', 100));
+        let (fasta, fai) = fasta_and_fai(&[("Y", &bases_throughout)]);
+        let y_only_fa = dir.path().join("y.fa");
+        std::fs::write(&y_only_fa, &fasta).unwrap();
+        std::fs::write(dir.path().join("y.fa.fai"), fai).unwrap();
+        let mut y_only = IndexedFasta::from_path(&y_only_fa).unwrap();
+        y_only.set_assembly("GRCh38");
+        let mut expected = upper(&bases_throughout[9_998..10_000]);
+        expected.extend(*b"NN");
+        assert_eq!(y_only.sequence("Y", 9_999, 10_002), Some(expected));
+        assert_eq!(y_only.base("Y", 10_001), Some(b'N'));
+        assert_eq!(
+            y_only.base("Y", 10_000),
+            Some(bases_throughout[9_999].to_ascii_uppercase())
+        );
+    }
+
+    /// A region whose adjustment is not zero reads `X` at the moved
+    /// coordinate: on GRCh37 the first region starts at `Y:10001` and is read
+    /// from `X:60001` (`FastaSequence.pm:79-84`), so a `Y` read inside it, a
+    /// single base, and a read straddling the region's start all take their
+    /// `X` bases from 50,000 bases on.
+    #[test]
+    fn grch37_par_reads_x_at_the_adjusted_coordinate() {
+        let dir = tempdir().unwrap();
+        let x = bases(17, 60_020);
+        let mut y = bases(19, 10_000);
+        y.extend(std::iter::repeat_n(b'N', 20));
+        let (fasta, fai) = fasta_and_fai(&[("X", &x), ("Y", &y)]);
+        let fa = dir.path().join("ref37.fa");
+        std::fs::write(&fa, &fasta).unwrap();
+        std::fs::write(dir.path().join("ref37.fa.fai"), fai).unwrap();
+        let upper = |seq: &[u8]| seq.to_ascii_uppercase();
+
+        let mut idx = IndexedFasta::from_path(&fa).unwrap();
+        idx.set_assembly("GRCh37");
+        assert_eq!(
+            idx.sequence("Y", 10_001, 10_010),
+            Some(upper(&x[60_000..60_010]))
+        );
+        assert_eq!(idx.base("Y", 10_005), Some(x[60_004].to_ascii_uppercase()));
+        let mut straddling = upper(&y[9_995..10_000]);
+        straddling.extend(upper(&x[60_000..60_005]));
+        assert_eq!(idx.sequence("Y", 9_996, 10_005), Some(straddling));
+        assert_eq!(idx.sequence("Y", 10_001, 10_021), None);
     }
 }

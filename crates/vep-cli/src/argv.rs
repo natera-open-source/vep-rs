@@ -522,7 +522,7 @@ pub fn unresolved_perl_spellings(command: &Command) -> Vec<UnresolvedSpelling> {
 }
 
 /// Perl's truth of a configuration value: anything but the empty string and `0`.
-fn truthy(value: &str) -> bool {
+pub(crate) fn truthy(value: &str) -> bool {
     !(value.is_empty() || value == "0")
 }
 
@@ -859,17 +859,28 @@ fn tokens_of(settings: &Settings, declared: &[Declared]) -> (Vec<OsString>, Vec<
     (scalars, lists)
 }
 
-/// A path with a leading `~` expanded to the home directory, which Ensembl VEP
-/// leaves to the shell; with no `HOME`, `~/.vep` is `/.vep`, as `$ENV{HOME}.'/.vep'`
-/// is (`Config.pm:294`), and `~` alone is `/`. A path that is not UTF-8 is taken
-/// as written.
+/// A path with a leading `~` expanded to `home`, the home directory, which
+/// Ensembl VEP leaves to the shell; with no `HOME` (`home` empty), `~/.vep` is
+/// `/.vep`, as `$ENV{HOME}.'/.vep'` is (`Config.pm:294`), and `~` alone is `/`.
+pub(crate) fn expand_tilde_text(path: &str, home: &str) -> String {
+    if path == "~" {
+        return if home.is_empty() {
+            "/".to_string()
+        } else {
+            home.to_string()
+        };
+    }
+    match path.strip_prefix("~/") {
+        Some(rest) => format!("{home}/{rest}"),
+        None => path.to_string(),
+    }
+}
+
+/// [`expand_tilde_text`] over an argument; a path that is not UTF-8 is taken as
+/// written.
 fn expand_tilde(path: &OsStr, home: &str) -> PathBuf {
     match path.to_str() {
-        Some("~") => PathBuf::from(if home.is_empty() { "/" } else { home }),
-        Some(text) => match text.strip_prefix("~/") {
-            Some(rest) => PathBuf::from(format!("{home}/{rest}")),
-            None => PathBuf::from(text),
-        },
+        Some(text) => PathBuf::from(expand_tilde_text(text, home)),
         None => PathBuf::from(path),
     }
 }
