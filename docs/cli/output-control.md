@@ -137,6 +137,28 @@ ENST00000290239.6:c.-49_77+1248del
 p.Ter124IleextTer14
 ```
 
+Unlike Ensembl VEP 116, the HGVSp of an insertion shifted 3' is read from the forward-strand allele turned by the whole shift, so it names the protein the insertion makes and a strand -1 line gets the HGVSp of its strand 1 twin. Ensembl VEP turns the allele as the line writes it, by the shift on a forward-strand transcript and by the allele's length less the shift on a reverse-strand one (`shift_feature_seqs`, `TranscriptVariationAllele.pm` lines 1330-1348), then reverse-complements it onto the transcript (`_get_alternate_cds`, lines 2414-2418). Its HGVSp names another protein in two cases, while HGVSc, `Amino_acids`, `Codons` and `HGVS_OFFSET` agree:
+
+- a strand -1 Ensembl-format or region line whose insertion shifts, on either transcript strand: the allele is turned before it is reverse-complemented, so it turns the wrong way. `21 26021981 26021980 -/CTT -1` and its strand 1 twin `-/AAG` insert one Ser into APP (ENST00000346798, `c.725_726insTTC`).
+- an insertion on a reverse-strand transcript that shifts further than its length, written on either strand: the length less the shift is negative and the allele is not turned. `21 46302557 46302556 -/CAG 1` adds a fifth Leu to Leu245-Leu248 of ENST00000291691 (`c.743_745dup`).
+
+| Line | Ensembl VEP 116.2 | vep-rs |
+| --- | --- | --- |
+| `21 26021981 26021980 -/CTT -1` | `ENSP00000284981.4:p.Ala242_Asp243insLeu` | `ENSP00000284981.4:p.Ala242_Asp243insSer` |
+| `21 26021981 26021980 -/AAG 1` | `ENSP00000284981.4:p.Ala242_Asp243insSer` | `ENSP00000284981.4:p.Ala242_Asp243insSer` |
+| `21 46302557 46302556 -/CAG 1` | `ENSP00000291691.8:p.Gln249delinsProGlu` | `ENSP00000291691.8:p.Leu248dup` |
+
+The lines are Ensembl-format input, tab-separated; with them in `ins.txt`, vep-rs gives its column with:
+
+```
+vep -i ins.txt -o out.txt --format ensembl --hgvs --offline \
+  --json_cache /path/to/json_cache/homo_sapiens/116_GRCh38 \
+  --fasta /path/to/Homo_sapiens.GRCh38.dna.primary_assembly.fa \
+  --assembly GRCh38 --force --no_stats
+```
+
+Ensembl VEP 116.2 gives its column with `--cache --dir_cache /path/to/vep_cache` in place of `--json_cache` ([Reproducing the examples](../divergences/reproducing.md#the-commands)). A left-aligned VCF insertion already sits at its 3' end on a reverse-strand transcript, so VCF input meets the second case only when it is not left-aligned.
+
 ### `--hgvsg` {#opt_hgvsg}
 
 **`--hgvsg`**, boolean, default off. Ensembl VEP: accepted, no effect.

@@ -3,8 +3,10 @@
 
 //! Variant types: input variants and co-located known variants.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
+use crate::codon::reverse_complement;
 use crate::consequence::{Consequence, TranscriptConsequence};
 use crate::coordinate::{normalize_chromosome, Strand};
 use crate::sv_routing::{perl_true, sv_so_term_and_class, sv_type_abbreviation};
@@ -552,6 +554,57 @@ impl InputVariant {
             .first()
             .map(|a| a.as_slice())
             .unwrap_or(b"-")
+    }
+
+    /// Whether the record writes its alleles as sequence on strand -1.
+    ///
+    /// Ensembl-format and region lines may. Ensembl VEP keeps such alleles as written
+    /// in the record (Allele column, `allele_string`, `strand`) and reverse-complements
+    /// them wherever it reads them on the forward strand or a transcript's:
+    /// `VariationFeatureOverlapAllele::feature_seq` (VariationFeatureOverlapAllele.pm:253,
+    /// sequence alleles only), the plugins' allele matching
+    /// (`get_matched_variant_alleles`, Utils/Sequence.pm:1182) and the VCF writer
+    /// (`to_VCF_record`, VariationFeature.pm:2376).
+    pub fn has_reverse_strand_alleles(&self) -> bool {
+        self.strand == Strand::Reverse && !self.is_structural && !self.variant_class.is_structural()
+    }
+
+    /// The reference and this record's alternate allele on the forward strand
+    /// ([`Self::has_reverse_strand_alleles`]).
+    pub fn forward_strand_alleles(&self) -> (Cow<'_, [u8]>, Cow<'_, [u8]>) {
+        if self.has_reverse_strand_alleles() {
+            (
+                Cow::Owned(reverse_complement(&self.ref_allele)),
+                Cow::Owned(reverse_complement(self.alt_allele())),
+            )
+        } else {
+            (
+                Cow::Borrowed(&self.ref_allele),
+                Cow::Borrowed(self.alt_allele()),
+            )
+        }
+    }
+
+    /// This record with its alleles on the forward strand, the orientation the
+    /// consequence engine reads them in; `None` unless
+    /// [`Self::has_reverse_strand_alleles`].
+    pub fn to_forward_strand(&self) -> Option<InputVariant> {
+        if !self.has_reverse_strand_alleles() {
+            return None;
+        }
+        let mut forward = self.clone();
+        forward.strand = Strand::Forward;
+        forward.ref_allele = reverse_complement(&self.ref_allele);
+        for alt in &mut forward.alt_alleles {
+            *alt = reverse_complement(alt);
+        }
+        forward.allele_string = self
+            .allele_string
+            .split('/')
+            .map(|a| String::from_utf8_lossy(&reverse_complement(a.as_bytes())).into_owned())
+            .collect::<Vec<_>>()
+            .join("/");
+        Some(forward)
     }
 
     /// Allele string for the specific alt allele in display format.

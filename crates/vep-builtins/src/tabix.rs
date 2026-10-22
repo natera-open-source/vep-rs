@@ -721,8 +721,9 @@ pub mod allele_match {
         };
 
         let (norm_ref, norm_alt, _offset) = normalize_alleles(file_ref, file_alt);
-        let var_ref = String::from_utf8_lossy(&variant.ref_allele);
-        let var_alt = String::from_utf8_lossy(variant.alt_allele());
+        let (var_ref, var_alt) = variant.forward_strand_alleles();
+        let var_ref = String::from_utf8_lossy(&var_ref);
+        let var_alt = String::from_utf8_lossy(&var_alt);
 
         norm_ref.eq_ignore_ascii_case(&var_ref) && norm_alt.eq_ignore_ascii_case(&var_alt)
     }
@@ -744,8 +745,9 @@ pub mod allele_match {
         };
 
         let (norm_ref, norm_alt, offset) = normalize_alleles(file_ref, file_alt);
-        let var_ref = String::from_utf8_lossy(&variant.ref_allele);
-        let var_alt = String::from_utf8_lossy(variant.alt_allele());
+        let (var_ref, var_alt) = variant.forward_strand_alleles();
+        let var_ref = String::from_utf8_lossy(&var_ref);
+        let var_alt = String::from_utf8_lossy(&var_alt);
 
         if !(norm_ref.eq_ignore_ascii_case(&var_ref) && norm_alt.eq_ignore_ascii_case(&var_alt)) {
             return false;

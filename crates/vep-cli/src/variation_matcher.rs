@@ -47,7 +47,13 @@ pub fn find_colocated_variants(
 /// not appear in the cached variant's frequency strings. In that case the first
 /// non-reference allele frequency available is used.
 fn cached_to_colocated(cv: &CachedVariation, variant: &InputVariant) -> ColocatedVariant {
-    let alt_allele = variant.display_allele();
+    // A strand -1 record's allele is matched to the cached variant's (forward-strand)
+    // alleles reverse-complemented (`compare_existing`, AnnotationType/Variation.pm:168).
+    let alt_allele = if variant.has_reverse_strand_alleles() {
+        String::from_utf8_lossy(&variant.forward_strand_alleles().1).into_owned()
+    } else {
+        variant.display_allele()
+    };
 
     let mut frequencies = HashMap::new();
     for (pop, freq_str) in &cv.frequencies {

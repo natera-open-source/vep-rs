@@ -12,6 +12,7 @@
 
 use std::io::Write;
 
+use vep_core::codon::reverse_complement;
 use vep_core::consequence::TranscriptConsequence;
 use vep_core::variant::InputVariant;
 
@@ -189,7 +190,12 @@ fn format_csq_entry(
     fields
         .iter()
         .map(|field| {
-            let v = value_for_field(field, variant, tc, options);
+            let mut v = value_for_field(field, variant, tc, options);
+            // OutputFactory/VCF.pm `output_hash_to_vcf_info_chunk` puts the allele of
+            // a strand -1 record on the forward strand, as its line's ALT.
+            if field == "Allele" && variant.has_reverse_strand_alleles() {
+                v = String::from_utf8_lossy(&reverse_complement(v.as_bytes())).into_owned();
+            }
             if v == "-" && field != "Allele" {
                 String::new()
             } else {
@@ -201,16 +207,17 @@ fn format_csq_entry(
 }
 
 /// The record's VCF line: the raw input line when captured, else a minimal
-/// record rebuilt from the first allele's coordinates and every ALT.
+/// record rebuilt from the first allele's coordinates and every ALT, on the
+/// forward strand (`to_VCF_record`, VariationFeature.pm:2376).
 fn record_line(record: &[&InputVariant]) -> String {
     let first = record[0];
     if let Some(line) = &first.raw_input {
         return line.to_string();
     }
-    let ref_str = String::from_utf8_lossy(&first.ref_allele);
+    let ref_str = String::from_utf8_lossy(&first.forward_strand_alleles().0).into_owned();
     let alts = record
         .iter()
-        .map(|v| String::from_utf8_lossy(v.alt_allele()).to_string())
+        .map(|v| String::from_utf8_lossy(&v.forward_strand_alleles().1).into_owned())
         .collect::<Vec<_>>()
         .join(",");
     let id = first.id.as_deref().unwrap_or(".");

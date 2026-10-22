@@ -16,7 +16,7 @@ vep-rs takes the same input files and flag names as Ensembl VEP and writes the s
 
 **Consequence terms and input formats.** The six regulatory-feature consequence terms are never assigned, because no regulatory-feature cache is loaded. `--format` takes `vcf`, `ensembl`, `hgvs`, `region` and `guess`. HGVS input is genomic (`:g.`) only, and the `id`, `spdi` and `caid` formats are not read.
 
-**Where the outputs differ.** Each case where the two engines' outputs are known to differ is traced to the mechanism in Ensembl VEP's source and reproducible from the record; the [Intended divergences](../intended-divergences.md) pages list them all.
+**Where the outputs differ.** Each case where the two engines' outputs are known to differ is traced to the mechanism in Ensembl VEP's source and reproducible from the record. The [Intended divergences](../intended-divergences.md) pages list those in the consequence terms; the HGVSp of a shifted insertion is under [`--hgvs`](../cli/output-control.md#opt_hgvs).
 
 ## The commands to swap in
 

@@ -487,4 +487,43 @@ mod tests {
             .init(&[format!("snv={}", g37.display())])
             .expect("no --assembly means no mismatch to detect");
     }
+
+    /// A strand -1 record's alleles are matched reverse-complemented
+    /// (`get_matched_variant_alleles`): `T/C -1` scores the file's `A G` row, not its
+    /// `T C` row, as Ensembl VEP 116.2 with CADD.pm does on these two rows.
+    #[test]
+    fn reverse_strand_record_matches_its_forward_alleles() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+        let dir = tempfile::tempdir().unwrap();
+        let lines = [
+            "## CADD GRCh38-v1.7 (c) University of Washington",
+            "#Chrom\tPos\tRef\tAlt\tRawScore\tPHRED",
+            "21\t43774726\tA\tG\t2.5\t25.0",
+            "21\t43774726\tT\tC\t8.0\t88.0",
+        ];
+        let path = write_tabix_fixture(dir.path(), "cadd.tsv.gz", &lines, IndexSpec::standard());
+        let mut plugin = CaddPlugin::new();
+        plugin.init(&[format!("snv={}", path.display())]).unwrap();
+
+        let mut variant = InputVariant::new(
+            "21".into(),
+            43774726,
+            43774726,
+            b"T".to_vec(),
+            b"C".to_vec(),
+        );
+        variant.strand = vep_core::coordinate::Strand::Reverse;
+        let mut variants = vec![variant];
+        plugin.run_batch(&mut variants).unwrap();
+        assert_eq!(
+            (
+                variants[0]
+                    .plugin_data
+                    .get("CADD_PHRED")
+                    .map(String::as_str),
+                variants[0].plugin_data.get("CADD_RAW").map(String::as_str)
+            ),
+            (Some("25.0"), Some("2.5"))
+        );
+    }
 }

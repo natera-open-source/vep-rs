@@ -65,8 +65,10 @@ impl DbNsfpPlugin {
             None => return false,
         };
 
-        let var_ref = String::from_utf8_lossy(&variant.ref_allele);
-        let var_alt = String::from_utf8_lossy(variant.alt_allele());
+        // dbNSFP.pm reverse-complements the allele of a strand -1 record.
+        let (var_ref, var_alt) = variant.forward_strand_alleles();
+        let var_ref = String::from_utf8_lossy(&var_ref);
+        let var_alt = String::from_utf8_lossy(&var_alt);
 
         file_ref.eq_ignore_ascii_case(&var_ref) && file_alt.eq_ignore_ascii_case(&var_alt)
     }

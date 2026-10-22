@@ -284,9 +284,11 @@ impl LofteePlugin {
         if variant.variant_class != VariantClass::Snv {
             return Some(false);
         }
+        // `feature_seq`: the forward-strand allele on the transcript strand.
+        let (fwd_ref, fwd_alt) = variant.forward_strand_alleles();
         let (mut r, mut a) = (
-            variant.ref_allele.first().copied()?.to_ascii_uppercase(),
-            variant.alt_allele().first().copied()?.to_ascii_uppercase(),
+            fwd_ref.first().copied()?.to_ascii_uppercase(),
+            fwd_alt.first().copied()?.to_ascii_uppercase(),
         );
         if ctx.strand == -1 {
             r = complement(r);
@@ -659,10 +661,9 @@ impl LofteePlugin {
     /// (from `human_ancestor.fa`). SNP-only, mirroring LoFTEE's
     /// `check_for_ancestral_allele` (which ignores indels and multi-base alleles).
     ///
-    /// LoFTEE compares the *variant_feature_seq* (the alt on the transcript
-    /// strand) to the ancestral base; the ancestral FASTA is forward-strand
-    /// genomic, so the comparison uses the forward-strand alt allele. `variant`
-    /// alleles are stored forward-strand, so no strand flip is needed here.
+    /// LoFTEE compares `variation_feature_seq` (the alt as the input record writes
+    /// it, unflipped on a strand -1 record; LoF.pm `check_for_ancestral_allele`) to
+    /// the forward-strand ancestral base, so the record's own alt is compared as is.
     fn is_ancestral_allele(&self, variant: &InputVariant) -> bool {
         if variant.variant_class != VariantClass::Snv {
             return false;
