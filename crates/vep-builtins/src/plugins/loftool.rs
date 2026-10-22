@@ -18,12 +18,13 @@
 //! the default [`crate::BuiltinPlugin::run_batch`] dispatcher.
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use tracing::debug;
 
+use crate::tabix::BoundedLines;
 use crate::traits::{BuiltinPlugin, PluginError};
 use vep_core::consequence::TranscriptConsequence;
 use vep_core::variant::InputVariant;
@@ -48,20 +49,16 @@ impl LoFtoolPlugin {
         }
     }
 
-    /// Load scores from a two-column TSV file (Gene\tScore).
+    /// Load scores from a two-column TSV file (Gene\tScore), read with the
+    /// length of a line capped ([`BoundedLines`]).
     fn load_scores(path: &str) -> Result<HashMap<String, f64>, PluginError> {
         let file = std::fs::File::open(path)
             .map_err(|e| PluginError::Init(format!("LoFtool: failed to open {path}: {e}")))?;
         let reader = BufReader::new(file);
         let mut scores = HashMap::new();
 
-        for (line_num, line_result) in reader.lines().enumerate() {
-            let line = line_result.map_err(|e| {
-                PluginError::Init(format!(
-                    "LoFtool: failed to read line {}: {e}",
-                    line_num + 1
-                ))
-            })?;
+        for line_result in BoundedLines::new(reader, Path::new(path)) {
+            let line = line_result?;
 
             if line.starts_with('#') || line.starts_with("Gene") || line.is_empty() {
                 continue;
@@ -171,6 +168,38 @@ mod tests {
         let mut plugin = LoFtoolPlugin::new();
         let result = plugin.init(&[]);
         assert!(result.is_err());
+    }
+
+    /// A scores file whose third line is one byte over the cap is refused as
+    /// the plugin opens, naming the file and the line, and the scores read
+    /// before it are not kept.
+    #[test]
+    fn scores_line_past_the_cap_is_refused() {
+        let cap = crate::tabix::MAX_LINE_BYTES;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("LoFtool_scores.txt");
+        let mut text = b"Gene\tLoFtool_percentile\nSOD1\t0.85\n".to_vec();
+        text.extend(std::iter::repeat_n(b'x', cap + 1));
+        text.push(b'\n');
+        std::fs::write(&path, text).unwrap();
+        let mut plugin = LoFtoolPlugin::new();
+        let error = plugin.init(&[path.display().to_string()]).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "plugin initialization failed: {}: line 3 is longer than the {cap}-byte limit \
+                 for one line",
+                path.display()
+            )
+        );
+        let consequence = TranscriptConsequence {
+            gene_symbol: Some("SOD1".into()),
+            ..Default::default()
+        };
+        assert!(plugin
+            .run(&consequence, &test_variant())
+            .unwrap()
+            .is_empty());
     }
 
     #[test]

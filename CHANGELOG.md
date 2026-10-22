@@ -320,6 +320,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A BGZF input followed by zero padding or a text trailer is read whole, as `gzip -dc` reads it, instead of failing with `invalid frame size`. (#N)
 - Under `--individual`, the identical skip warning of a record's sample copies is written once, as Ensembl VEP's seen set keys the whole text. (#N)
 - The line a skip warning quotes is cut by bytes, at the last character boundary at or before byte 46, as Ensembl VEP's `substr` cuts it. (#N)
+- Plugin catalogues, cache-builder and converter inputs, variation files and FASTA indexes refuse a line past their line cap instead of reading it whole. (#N)
+- A transcript's reference allele read from the FASTA is no longer sized from a mapper's cDNA ends, which a malformed cache can set any distance apart. (#N)
+- The cache loader refuses a transcript whose mapper's coding end precedes its coding start. (#N)
+- A tabix data line or converter input whose zero-based start has no one-based form is skipped or refused instead of overflowing the shift. (#N)
 
 ### Security
 

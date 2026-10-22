@@ -16,7 +16,7 @@
 //! The pass costs a read of the whole variation data, about the size of the
 //! files, whatever the number of names; the chromosomes are read in parallel.
 
-use std::io::{BufRead, BufReader};
+use std::io::BufReader;
 use std::path::Path;
 
 use anyhow::Context;
@@ -26,7 +26,7 @@ use vep_core::cache_info::VariationColumns;
 use vep_core::cache_manifest::ManifestError;
 use vep_io::input::id::NameMapping;
 
-use crate::variation_source::{parse_record, VariationSource};
+use crate::variation_source::{parse_record, read_variation_line, VariationSource};
 
 /// The mappings of every name in `names`, one list per name in the names'
 /// order, from the variation files of `source`: a name's mappings come in
@@ -85,7 +85,8 @@ pub fn resolve_names(
 
 /// The records of one variation file whose lower-cased name is in `wanted`,
 /// each with that key, in file order; `chr` is the file's chromosome. The file
-/// is read through `source`, which checks it against the cache's manifest.
+/// is read through `source`, which checks it against the cache's manifest, with
+/// the length of a line capped ([`read_variation_line`]).
 fn scan_file(
     source: &VariationSource,
     chr: &str,
@@ -100,9 +101,11 @@ fn scan_file(
     let mut line = Vec::new();
     let mut key = Vec::new();
     let mut found = Vec::new();
+    let mut line_number = 0;
     loop {
         line.clear();
-        if reader.read_until(b'\n', &mut line)? == 0 {
+        line_number += 1;
+        if read_variation_line(&mut reader, &mut line, line_number)? == 0 {
             break;
         }
         while line.last().is_some_and(|&b| b == b'\n' || b == b'\r') {
@@ -280,6 +283,39 @@ mod tests {
                 mapping("21", 500, 501, 1, "AC/A"),
                 mapping("21", 2500000, 2500000, 1, "A/T"),
             ]]
+        );
+    }
+
+    /// A variation file whose second line is one byte over the cap fails the
+    /// resolution naming the file and the line, with no mapping resolved from
+    /// the file; the same file with the line at the cap resolves both names.
+    #[test]
+    fn line_past_the_cap_fails_the_resolution() {
+        let cap = vep_io::input::MAX_LINE_BYTES;
+        let tmp = tempfile::tempdir().unwrap();
+        let first = "21\trs1\t.\t.\t100\t.\tA/G\t.\t.\t.\t.\t.\t.\t.\t.\t.";
+        let mut second = String::from("21\trs2\t.\t.\t200\t.\tA/G\t.\t.\t");
+        second.push_str(&"x".repeat(cap + 1 - second.len()));
+        write_gz(tmp.path(), "21", "all_vars.gz", &[first, &second]);
+        let source = open_source(tmp.path(), COLS, Some("tabix"));
+        let error = resolve_names(&source, &["rs1", "rs2"]).unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            format!(
+                "reading {}: line 2 is longer than the {cap}-byte limit for one line",
+                tmp.path().join("variations/21/all_vars.gz").display()
+            )
+        );
+
+        second.pop();
+        write_gz(tmp.path(), "21", "all_vars.gz", &[first, &second]);
+        let source = open_source(tmp.path(), COLS, Some("tabix"));
+        assert_eq!(
+            resolve_names(&source, &["rs1", "rs2"]).unwrap(),
+            vec![
+                vec![mapping("21", 100, 100, 1, "A/G")],
+                vec![mapping("21", 200, 200, 1, "A/G")],
+            ]
         );
     }
 

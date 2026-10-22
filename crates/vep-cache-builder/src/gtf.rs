@@ -18,6 +18,14 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 
+use crate::core_dumps::BoundedLines;
+
+/// The longest GTF line read, 16 MiB. A transcript line's widest column is its
+/// attributes, a few kilobytes even with every tag listed, so the cap refuses
+/// a file with no line end in it long before the line buffer grows to its
+/// size.
+const MAX_LINE_BYTES: usize = 16 << 20;
+
 /// GTF tags VEP's cache dumper stores as transcript attributes, with the
 /// attribute code each becomes.
 pub const KEPT_TAGS: [(&str, &str); 5] = [
@@ -37,7 +45,9 @@ pub struct GtfTags {
     pub tags: HashMap<String, Vec<String>>,
 }
 
-/// Reads the `transcript` lines of a (possibly gzipped) Ensembl GTF.
+/// Reads the `transcript` lines of a (possibly gzipped) Ensembl GTF, with the
+/// length of a line capped: a line longer than `MAX_LINE_BYTES` fails the
+/// parse, naming the file and the line.
 pub fn parse_gtf_tags(path: &Path) -> Result<GtfTags> {
     let file =
         std::fs::File::open(path).with_context(|| format!("Cannot open {}", path.display()))?;
@@ -47,8 +57,8 @@ pub fn parse_gtf_tags(path: &Path) -> Result<GtfTags> {
         Box::new(BufReader::new(file))
     };
     let mut out = GtfTags::default();
-    for line in reader.lines() {
-        let line = line.context("Failed to read GTF line")?;
+    for line in BoundedLines::new(reader, MAX_LINE_BYTES, path.display().to_string()) {
+        let line = String::from_utf8(line?).context("Failed to read GTF line")?;
         if let Some(rest) = line.strip_prefix("#!") {
             if let Some((k, v)) = rest.split_once(' ') {
                 out.header.insert(k.to_string(), v.trim().to_string());
@@ -143,5 +153,28 @@ mod tests {
             vec!["gencode_basic", "gencode_primary"]
         );
         assert!(gtf.kept_attribute_codes("ENST00000000000").is_empty());
+    }
+
+    /// A line one byte over the cap (a transcript line whose tag value pads it
+    /// to that length) fails the parse, naming the file and the line, 2.
+    #[test]
+    fn line_past_the_cap_fails_the_parse() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.gtf");
+        let mut transcript_line =
+            b"1\thavana\ttranscript\t11869\t14409\t.\t+\t.\ttranscript_id \"ENST00000456328\"; tag \""
+                .to_vec();
+        transcript_line.resize(MAX_LINE_BYTES + 1, b'x');
+        let mut text = b"#!genome-build GRCh38.p14\n".to_vec();
+        text.extend(transcript_line);
+        text.push(b'\n');
+        std::fs::write(&path, text).unwrap();
+        let err = parse_gtf_tags(&path).unwrap_err();
+        assert!(
+            format!("{err:#}").ends_with(&format!(
+                "t.gtf line 2 is longer than the {MAX_LINE_BYTES}-byte limit for one line"
+            )),
+            "{err:#}"
+        );
     }
 }

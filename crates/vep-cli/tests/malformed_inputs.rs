@@ -4,10 +4,12 @@
 //! Malformed inputs the `vep` binary reads through or refuses with one error
 //! line, never by crashing: a symbolic ALT closed by a bracket and a multi-byte
 //! character, a BGZF block declaring more inflated bytes than a block can hold,
-//! a FASTA index naming more bases than its file holds, and a structural
-//! record whose SVLEN overflows the coordinate range. Each shape is a file
-//! under `tests/fixtures/malformed/`; every run reads the GRCh37 HGVS corpus
-//! cache, whose transcripts sit on chromosome 21.
+//! a FASTA index naming more bases than its file holds, with a field at the
+//! `u64` maximum or with a line past the line cap, a plugin's scores file with
+//! a line past the line cap, and a structural record whose SVLEN overflows the
+//! coordinate range. Each shape is a file under `tests/fixtures/malformed/` or
+//! is written by its test; every run reads the GRCh37 HGVS corpus cache, whose
+//! transcripts sit on chromosome 21.
 
 mod common;
 
@@ -182,6 +184,116 @@ fn a_fasta_index_naming_bases_beyond_the_file_is_refused_in_both_encodings() {
         &format!(
             "ERROR: [fasta] FASTA index names 3999999999951870104 bases beyond the end of {}",
             reference.display()
+        ),
+    );
+    assert!(rows.is_empty(), "{rows:?}");
+}
+
+/// A LoFtool scores file whose third line is one byte over the line cap: the
+/// plugin cannot open, so the run warns `Failed to instantiate plugin LoFtool`
+/// with the file and the line, drops the plugin and annotates the record
+/// without its column, as Ensembl VEP drops a plugin whose constructor dies
+/// (Runner.pm:946-954); under `--safe` the same line is the `plugin` refusal,
+/// exit 1, and no row is written.
+#[test]
+fn a_plugin_catalogue_line_past_the_cap_drops_the_plugin_or_refuses_under_safe() {
+    let cap = vep_builtins::tabix::MAX_LINE_BYTES;
+    let dir = tempfile::tempdir().unwrap();
+    let vcf = fixture("symbolic_alt_unterminated.vcf");
+    let scores = dir.path().join("LoFtool_scores.txt");
+    let mut text = b"Gene\tLoFtool_percentile\nSOD1\t0.85\n".to_vec();
+    text.extend(std::iter::repeat_n(b'x', cap + 1));
+    text.push(b'\n');
+    std::fs::write(&scores, text).unwrap();
+    let plugins_dir = dir.path().join("plugins");
+    std::fs::create_dir(&plugins_dir).unwrap();
+    let plugin = format!("LoFtool,{}", scores.display());
+    let reason = format!(
+        "Failed to instantiate plugin LoFtool: {}: line 3 is longer than the {cap}-byte limit \
+         for one line",
+        scores.display()
+    );
+
+    let (output, rows, warnings) = run(
+        dir.path(),
+        "dropped",
+        &vcf,
+        &[
+            "--dir_plugins",
+            plugins_dir.to_str().unwrap(),
+            "--plugin",
+            &plugin,
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(warnings.contains(&reason), "{warnings}");
+    assert!(!rows.is_empty(), "{warnings}");
+    // A loaded plugin describes its column in the header; a dropped one does not.
+    let header = std::fs::read_to_string(dir.path().join("dropped.out")).unwrap();
+    assert!(!header.contains("## LoFtool_percentile"), "{header}");
+
+    let (output, rows, _) = run(
+        dir.path(),
+        "safe",
+        &vcf,
+        &[
+            "--dir_plugins",
+            plugins_dir.to_str().unwrap(),
+            "--plugin",
+            &plugin,
+            "--safe",
+        ],
+    );
+    assert_refused(&output, &format!("ERROR: [plugin] {reason}"));
+    assert!(rows.is_empty(), "{rows:?}");
+}
+
+/// A `.fai` whose offset field is `u64::MAX`, and one whose first line is one
+/// byte over the line cap, beside the 126-byte FASTA of two 60-base lines: the
+/// first is refused as the file opens, naming the 120 bases the file cannot
+/// hold from that offset, the second as an invalid index line naming the line
+/// and the cap; each run exits 1 with that one line and writes no row.
+#[test]
+fn a_fasta_index_with_an_offset_at_the_u64_maximum_or_a_line_past_the_cap_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let vcf = fixture("symbolic_alt_unterminated.vcf");
+    let fasta = dir.path().join("ref.fa");
+    std::fs::copy(fixture("index_overstates_contig.fa"), &fasta).unwrap();
+    let fai = dir.path().join("ref.fa.fai");
+
+    std::fs::write(&fai, format!("21\t120\t{}\t60\t61\n", u64::MAX)).unwrap();
+    let (output, rows, _) = run(
+        dir.path(),
+        "offset",
+        &vcf,
+        &["--fasta", fasta.to_str().unwrap()],
+    );
+    assert_refused(
+        &output,
+        &format!(
+            "ERROR: [fasta] FASTA index names 120 bases beyond the end of {}",
+            fasta.display()
+        ),
+    );
+    assert!(rows.is_empty(), "{rows:?}");
+
+    let cap = vep_fasta::MAX_LINE_BYTES;
+    let mut long_line = b"21\t120\t4\t60\t61\t".to_vec();
+    long_line.resize(cap + 1, b'x');
+    long_line.push(b'\n');
+    std::fs::write(&fai, long_line).unwrap();
+    let (output, rows, _) = run(
+        dir.path(),
+        "line",
+        &vcf,
+        &["--fasta", fasta.to_str().unwrap()],
+    );
+    assert_refused(
+        &output,
+        &format!(
+            "ERROR: [fasta] invalid FASTA index line in {}: line 1: longer than the {cap}-byte \
+             limit for one line",
+            fai.display()
         ),
     );
     assert!(rows.is_empty(), "{rows:?}");

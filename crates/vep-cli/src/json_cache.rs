@@ -1165,11 +1165,15 @@ pub fn load_transcripts_for_chr(
 }
 
 /// Refuses a coding transcript whose mapper places the coding sequence where
-/// the transcript's own span cannot hold it. A cache without UTR strings has
-/// each one padded with `N` to the mapper's `cdna_coding_start - 1` and to the
-/// cDNA length less `cdna_coding_end`, so each padding is bounded here by the
-/// transcript's genomic span plus the bases its RNA edits insert, the most
-/// bases its cDNA can hold, before any record is annotated against it.
+/// the transcript's own span cannot hold it, or whose coding end precedes its
+/// coding start. A cache without UTR strings has each one padded with `N` to
+/// the mapper's `cdna_coding_start - 1` and to the cDNA length less
+/// `cdna_coding_end`, so each padding is bounded here by the transcript's
+/// genomic span plus the bases its RNA edits insert, the most bases its cDNA
+/// can hold, before any record is annotated against it; the coding span's
+/// length, `cdna_coding_end - cdna_coding_start + 1`, is sized from the pair
+/// wherever the spliced sequence is assembled, so an inverted pair is refused
+/// here rather than read as a transcript with no coding model.
 fn check_mapper_bounds(transcript: &Transcript) -> Result<(), String> {
     let Some(vefc) = transcript.vefc.as_ref() else {
         return Ok(());
@@ -1221,6 +1225,12 @@ fn check_mapper_bounds(transcript: &Transcript) -> Result<(), String> {
             "transcript {}: the mapper's coding start {} and end {} on a cDNA of {cdna_len} \
              bases leave a UTR longer than the transcript's {span}-base span",
             transcript.stable_id, mapper.cdna_coding_start, mapper.cdna_coding_end
+        ));
+    }
+    if mapper.cdna_coding_end < mapper.cdna_coding_start {
+        return Err(format!(
+            "transcript {}: the mapper's coding end {} precedes its coding start {}",
+            transcript.stable_id, mapper.cdna_coding_end, mapper.cdna_coding_start
         ));
     }
     Ok(())
@@ -1703,6 +1713,18 @@ mod tests {
             r#""translateable_seq":"","#,
         );
         assert_eq!(load(&[cdna_far_past_span, non_coding]).unwrap(), 1);
+
+        // A coding end before the coding start is refused on a coding
+        // transcript, where the coding span's length is sized from the pair,
+        // and loads on a transcript without a coding sequence.
+        let inverted = (r#""cdna_coding_end":30,"#, r#""cdna_coding_end":0,"#);
+        let inverted_pair = load(&[inverted]).unwrap_err();
+        assert_eq!(
+            CliError::from_run(&inverted_pair),
+            "ERROR: [cache] transcript ENST1: the mapper's coding end 0 precedes its coding \
+             start 1"
+        );
+        assert_eq!(load(&[inverted, non_coding]).unwrap(), 1);
     }
 
     /// The numeric helpers accept a JSON number, a float, a string holding a

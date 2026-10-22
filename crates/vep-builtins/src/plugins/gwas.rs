@@ -20,9 +20,11 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::io::{BufRead, BufReader};
+use std::path::Path;
 
 use indexmap::IndexMap;
 
+use crate::tabix::BoundedLines;
 use crate::traits::{BuiltinPlugin, PluginError};
 use vep_core::consequence::TranscriptConsequence;
 use vep_core::variant::InputVariant;
@@ -269,16 +271,17 @@ impl GwasPlugin {
         }
     }
 
+    /// The catalog's records by chromosome and position, read with the
+    /// length of a line capped ([`BoundedLines`]).
     fn load_records(path: &str) -> Result<HashMap<(String, u64), Vec<GwasRecord>>, PluginError> {
         let reader = Self::open_maybe_gzipped(path)?;
-        let mut lines = reader.lines();
+        let mut lines = BoundedLines::new(reader, Path::new(path));
 
         let mut line_number = 0usize;
         let mut header_line = None;
         for line in lines.by_ref() {
             line_number += 1;
-            let line =
-                line.map_err(|e| PluginError::Init(format!("GWAS: failed to read header: {e}")))?;
+            let line = line?;
             if line.starts_with('#') || line.trim().is_empty() {
                 continue;
             }
@@ -333,8 +336,7 @@ impl GwasPlugin {
         let mut rows_without_a_chromosome = 0u64;
         for line in lines {
             line_number += 1;
-            let line =
-                line.map_err(|e| PluginError::Init(format!("GWAS: failed to read row: {e}")))?;
+            let line = line?;
             if line.trim().is_empty() || line.starts_with('#') {
                 continue;
             }
@@ -709,6 +711,29 @@ mod tests {
         let records = GwasPlugin::load_records(path.to_str().unwrap()).unwrap();
         assert_eq!(records.len(), 1);
         assert!(records.contains_key(&("21".to_string(), 33000100)));
+    }
+
+    /// A catalog whose second row is one byte over the cap is refused as the
+    /// plugin opens, naming the file and the line (3, after the header and the
+    /// first row); the load yields no records.
+    #[test]
+    fn catalog_line_past_the_cap_is_refused() {
+        let cap = crate::tabix::MAX_LINE_BYTES;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("gwas_catalog.tsv");
+        let mut text = format!("{CATALOG}\n").into_bytes();
+        text.extend(std::iter::repeat_n(b'x', cap + 1));
+        text.push(b'\n');
+        std::fs::write(&path, text).unwrap();
+        let error = GwasPlugin::load_records(path.to_str().unwrap()).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "plugin initialization failed: {}: line 3 is longer than the {cap}-byte limit \
+                 for one line",
+                path.display()
+            )
+        );
     }
 
     /// Gzip is detected by magic bytes, so a compressed catalog saved without a

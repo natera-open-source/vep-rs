@@ -513,7 +513,9 @@ pub fn transcript_reference_allele(
 
 /// The bases of the cDNA span `cdna_start..=cdna_end` read from the FASTA on
 /// `chr` over the exon pieces `mapper` projects it to, on the forward strand;
-/// `None` when a piece cannot be read.
+/// `None` when a piece cannot be read. The buffer grows with the bases the
+/// FASTA returns, which its records bound, never with the span's cDNA ends,
+/// which a mapper from a malformed cache can set any distance apart.
 fn cdna_bases_from_fasta(
     fasta: &vep_fasta::IndexedFasta,
     chr: &str,
@@ -532,7 +534,7 @@ fn cdna_bases_from_fasta(
         .collect();
     // Genomic order is forward-strand order whichever strand the transcript is on.
     pieces.sort_unstable();
-    let mut bases = Vec::with_capacity((cdna_end - cdna_start + 1) as usize);
+    let mut bases = Vec::new();
     for (genomic_start, genomic_end) in pieces {
         bases.extend(fasta.sequence(chr, genomic_start, genomic_end)?);
     }
@@ -6676,6 +6678,55 @@ mod tests {
         reverse.strand = vep_core::coordinate::Strand::Reverse;
         let tc = calculate_consequences(&reverse, &tx, &on).unwrap();
         assert_eq!(tc.used_ref.as_deref(), Some("C"));
+    }
+
+    /// The bases read from the FASTA for a cDNA span are sized by what the
+    /// FASTA returns, never by the span's cDNA ends: a mapper from a malformed
+    /// cache can number two abutting exon pieces with a jump of nearly 2^63
+    /// between them, so a variant across the junction has a cDNA span no
+    /// buffer could hold, while its eleven bases read from the FASTA as they
+    /// are.
+    #[test]
+    fn used_ref_from_the_fasta_is_not_sized_by_a_jumping_cdna_numbering() {
+        use crate::concordance_tests::{hgvsc_fasta_fixture, make_compact_test_transcript};
+        use vep_core::transcript::{ExonCoordMapper, MapperPair};
+        let (_dir, fasta) = hgvsc_fasta_fixture(&[]);
+        let mut tx = make_compact_test_transcript();
+        assert_eq!(tx.spliced_seq(), None);
+        let mapper = tx.vefc.as_mut().unwrap().mapper.as_mut().unwrap();
+        let mut pairs = mapper.exon_coord_mapper.pairs.clone();
+        // The compact transcript's exon 1 is genomic 100..=399, cDNA 1..=300;
+        // it is split in two abutting pieces, and the second piece and the
+        // later exons take the jumped numbering.
+        let jump = i64::MAX as u64 - 10_000;
+        for pair in &mut pairs[1..] {
+            pair.from_start += jump - 151;
+            pair.from_end += jump - 151;
+        }
+        let first = pairs.remove(0);
+        let split_first = [
+            MapperPair {
+                from_start: 1,
+                from_end: 150,
+                to_start: 100,
+                to_end: 249,
+                ..first.clone()
+            },
+            MapperPair {
+                from_start: jump,
+                from_end: jump + 149,
+                to_start: 250,
+                to_end: 399,
+                ..first
+            },
+        ];
+        let pairs: Vec<MapperPair> = split_first.into_iter().chain(pairs).collect();
+        mapper.exon_coord_mapper = ExonCoordMapper::new(pairs);
+        let across = InputVariant::new("1".into(), 245, 255, vec![b'A'; 11], b"-".to_vec());
+        assert_eq!(
+            transcript_reference_allele(&across, &tx, Some(&fasta)),
+            Some(vec![b'T'; 11])
+        );
     }
 
     /// An insertion's reference allele is `-` (TranscriptVariation.pm:451) and a

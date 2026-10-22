@@ -18,12 +18,13 @@
 //! the default [`crate::BuiltinPlugin::run_batch`] dispatcher.
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use tracing::debug;
 
+use crate::tabix::BoundedLines;
 use crate::traits::{BuiltinPlugin, PluginError};
 use vep_core::consequence::TranscriptConsequence;
 use vep_core::variant::InputVariant;
@@ -65,17 +66,18 @@ impl PliPlugin {
     }
 
     /// Load pLI scores from a TSV file, auto-detecting gene and pLI columns
-    /// from the header line.
+    /// from the header line; the file is read with the length of a line
+    /// capped ([`BoundedLines`]).
     fn load_scores(path: &str) -> Result<HashMap<String, f64>, PluginError> {
         let file = std::fs::File::open(path)
             .map_err(|e| PluginError::Init(format!("pLI: failed to open {path}: {e}")))?;
         let reader = BufReader::new(file);
-        let mut lines = reader.lines();
+        let mut lines = BoundedLines::new(reader, Path::new(path));
 
-        let header_line = lines
-            .next()
-            .ok_or_else(|| PluginError::Init("pLI: scores file is empty".into()))?
-            .map_err(|e| PluginError::Init(format!("pLI: failed to read header: {e}")))?;
+        let header_line = match lines.next() {
+            Some(line) => line?,
+            None => return Err(PluginError::Init("pLI: scores file is empty".into())),
+        };
 
         let header_line = header_line.trim_start_matches('#');
         let headers: Vec<&str> = header_line.split('\t').collect();
@@ -98,10 +100,8 @@ impl PliPlugin {
 
         let mut scores = HashMap::new();
 
-        for (line_num, line_result) in lines.enumerate() {
-            let line = line_result.map_err(|e| {
-                PluginError::Init(format!("pLI: failed to read line {}: {e}", line_num + 2))
-            })?;
+        for line_result in lines {
+            let line = line_result?;
 
             if line.is_empty() || line.starts_with('#') {
                 continue;
@@ -215,6 +215,71 @@ mod tests {
         let mut plugin = PliPlugin::new();
         let result = plugin.init(&[]);
         assert!(result.is_err());
+    }
+
+    /// An empty scores file is refused as the plugin opens, before a header
+    /// is looked for.
+    #[test]
+    fn empty_scores_file_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pLI_values.txt");
+        std::fs::write(&path, b"").unwrap();
+        let mut plugin = PliPlugin::new();
+        let error = plugin.init(&[path.display().to_string()]).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "plugin initialization failed: pLI: scores file is empty"
+        );
+    }
+
+    /// A scores file with CRLF line ends loads as one with LF line ends: the
+    /// line end is stripped whole, so the last header cell is `pLI`, not
+    /// `pLI\r`, and the score of the last column reads.
+    #[test]
+    fn crlf_scores_file_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pLI_values.txt");
+        std::fs::write(&path, b"gene\tpLI\r\nSOD1\t0.95\r\n").unwrap();
+        let mut plugin = PliPlugin::new();
+        plugin.init(&[path.display().to_string()]).unwrap();
+        let consequence = TranscriptConsequence {
+            gene_symbol: Some("SOD1".into()),
+            ..Default::default()
+        };
+        let result = plugin.run(&consequence, &test_variant()).unwrap();
+        assert_eq!(result.get("pLI_gene_value").unwrap(), "0.95");
+    }
+
+    /// A scores file whose third line is one byte over the cap is refused as
+    /// the plugin opens, naming the file and the line, and the scores read
+    /// before it are not kept.
+    #[test]
+    fn scores_line_past_the_cap_is_refused() {
+        let cap = crate::tabix::MAX_LINE_BYTES;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pLI_values.txt");
+        let mut text = b"gene\tpLI\nSOD1\t0.95\n".to_vec();
+        text.extend(std::iter::repeat_n(b'x', cap + 1));
+        text.push(b'\n');
+        std::fs::write(&path, text).unwrap();
+        let mut plugin = PliPlugin::new();
+        let error = plugin.init(&[path.display().to_string()]).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "plugin initialization failed: {}: line 3 is longer than the {cap}-byte limit \
+                 for one line",
+                path.display()
+            )
+        );
+        let consequence = TranscriptConsequence {
+            gene_symbol: Some("SOD1".into()),
+            ..Default::default()
+        };
+        assert!(plugin
+            .run(&consequence, &test_variant())
+            .unwrap()
+            .is_empty());
     }
 
     #[test]

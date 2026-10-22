@@ -10,7 +10,17 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 
-/// Parse a protein FASTA file (optionally gzipped) into a map of ENST -> sequence.
+use crate::core_dumps::BoundedLines;
+
+/// The longest protein FASTA line read, 16 MiB. Ensembl wraps sequences at 60
+/// residues, and the longest human protein written on one line runs to some
+/// 35,000, so the cap refuses a file with no line end in it long before the
+/// line buffer grows to its size.
+const MAX_LINE_BYTES: usize = 16 << 20;
+
+/// Parse a protein FASTA file (optionally gzipped) into a map of ENST -> sequence,
+/// with the length of a line capped: a line longer than `MAX_LINE_BYTES` fails
+/// the parse, naming the file and the line.
 ///
 /// Ensembl protein FASTA headers look like:
 /// ```text
@@ -34,8 +44,8 @@ pub fn parse_protein_fasta(path: &Path) -> Result<HashMap<String, String>> {
     let mut current_transcript: Option<String> = None;
     let mut current_seq = String::new();
 
-    for line in reader.lines() {
-        let line = line.context("Failed to read FASTA line")?;
+    for line in BoundedLines::new(reader, MAX_LINE_BYTES, path.display().to_string()) {
+        let line = String::from_utf8(line?).context("Failed to read FASTA line")?;
         let line = line.trim();
 
         if line.starts_with('>') {
@@ -102,5 +112,27 @@ mod tests {
     fn test_extract_transcript_id_missing() {
         let header = ">ENSP00000123456 pep gene:ENSG00000123";
         assert_eq!(extract_transcript_id(header), None);
+    }
+
+    /// A sequence line one byte over the cap fails the parse, naming the file
+    /// and the line, 2; a file within the cap parses.
+    #[test]
+    fn line_past_the_cap_fails_the_parse() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pep.fa");
+        let header = ">ENSP00000123456.2 pep transcript:ENST00000456.3\n";
+        std::fs::write(&path, format!("{header}MKV\n")).unwrap();
+        assert_eq!(parse_protein_fasta(&path).unwrap()["ENST00000456"], "MKV");
+        let mut text = header.as_bytes().to_vec();
+        text.extend(std::iter::repeat_n(b'M', MAX_LINE_BYTES + 1));
+        text.push(b'\n');
+        std::fs::write(&path, text).unwrap();
+        let err = parse_protein_fasta(&path).unwrap_err();
+        assert!(
+            format!("{err:#}").ends_with(&format!(
+                "pep.fa line 2 is longer than the {MAX_LINE_BYTES}-byte limit for one line"
+            )),
+            "{err:#}"
+        );
     }
 }

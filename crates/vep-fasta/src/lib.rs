@@ -116,6 +116,11 @@ fn io_error(action: &'static str, path: &Path) -> impl FnOnce(std::io::Error) ->
     }
 }
 
+/// The longest `.fai` line read, 64 MiB. A record is a sequence name and four
+/// numbers, well under a kilobyte, so the cap refuses a file with no line end
+/// in it long before the line buffer grows to its size.
+pub const MAX_LINE_BYTES: usize = 64 << 20;
+
 #[derive(Debug, Clone)]
 struct FaiRecord {
     /// Which of the handle's files holds the sequence.
@@ -127,10 +132,16 @@ struct FaiRecord {
 }
 
 impl FaiRecord {
-    /// The byte offset of the 1-based position `pos` in the uncompressed file.
-    fn byte_offset(&self, pos: u64) -> u64 {
-        let pos0 = pos - 1;
-        self.offset + pos0 / self.line_bases * self.line_width + pos0 % self.line_bases
+    /// The byte offset of the 1-based position `pos` in the uncompressed file,
+    /// `None` when the index's fields put it past `u64::MAX`; a record the
+    /// open-time check ([`Self::bases_beyond`]) admits has every offset of its
+    /// `len` positions inside the file.
+    fn byte_offset(&self, pos: u64) -> Option<u64> {
+        let pos0 = pos.checked_sub(1)?;
+        let line_bytes = (pos0 / self.line_bases).checked_mul(self.line_width)?;
+        self.offset
+            .checked_add(line_bytes)?
+            .checked_add(pos0 % self.line_bases)
     }
 
     /// How many of the record's `len` bases have a byte offset at or past the
@@ -823,7 +834,7 @@ impl IndexedFasta {
         if pos == 0 || pos > rec.len {
             return None;
         }
-        let b = self.bytes(rec, rec.byte_offset(pos), 1)?[0];
+        let b = self.bytes(rec, rec.byte_offset(pos)?, 1)?[0];
         if b == b'\n' || b == b'\r' {
             return None;
         }
@@ -877,9 +888,10 @@ impl IndexedFasta {
         if end > rec.len {
             return None;
         }
-        let first = rec.byte_offset(start);
-        let last = rec.byte_offset(end);
-        let raw = self.bytes(rec, first, usize::try_from(last - first + 1).ok()?)?;
+        let first = rec.byte_offset(start)?;
+        let last = rec.byte_offset(end)?;
+        let raw_len = usize::try_from(last.checked_sub(first)? + 1).ok()?;
+        let raw = self.bytes(rec, first, raw_len)?;
         let len = usize::try_from(end - start + 1).ok()?;
         let mut seq = Vec::with_capacity(len);
         seq.extend(
@@ -1065,19 +1077,43 @@ pub fn fasta_dir_match(
 }
 
 /// The records of the `.fai` at `path`, in file order, each naming `source` as
-/// the file it indexes.
+/// the file it indexes. The file is read with the length of a line capped at
+/// [`MAX_LINE_BYTES`]: a line still open past the cap is an invalid index line.
 fn load_fai(path: &Path, source: usize) -> Result<Vec<(String, FaiRecord)>, FastaError> {
     let file = File::open(path).map_err(io_error("failed to read FASTA index", path))?;
-    let reader = BufReader::new(file);
+    let mut reader = BufReader::new(file);
     let invalid = |line_no: usize, reason: String| FastaError::InvalidFaiLine {
         path: path.display().to_string(),
         reason: format!("line {}: {reason}", line_no + 1),
     };
 
     let mut records = Vec::new();
+    let mut raw = Vec::new();
+    // The cap plus the line end: a line of exactly the cap is read whole.
+    let limit = MAX_LINE_BYTES as u64 + 1;
 
-    for (line_no, line) in reader.lines().enumerate() {
-        let line = line.map_err(io_error("failed to read FASTA index", path))?;
+    for line_no in 0.. {
+        raw.clear();
+        let read = (&mut reader)
+            .take(limit)
+            .read_until(b'\n', &mut raw)
+            .map_err(io_error("failed to read FASTA index", path))?;
+        if read == 0 {
+            break;
+        }
+        if read as u64 == limit && raw.last() != Some(&b'\n') {
+            return Err(invalid(
+                line_no,
+                format!("longer than the {MAX_LINE_BYTES}-byte limit for one line"),
+            ));
+        }
+        let line =
+            std::str::from_utf8(&raw).map_err(|_| invalid(line_no, "not UTF-8".to_string()))?;
+        // The line end `BufRead::lines` strips: `\n`, or `\r\n`.
+        let line = match line.strip_suffix('\n') {
+            Some(rest) => rest.strip_suffix('\r').unwrap_or(rest),
+            None => line,
+        };
         if line.trim().is_empty() {
             continue;
         }
@@ -1936,6 +1972,167 @@ mod tests {
         let opened = IndexedFasta::from_path_mmap(&plain).unwrap();
         assert_eq!(opened.sequence("1", 1, 6), Some(b"ACGTAC".to_vec()));
         assert_eq!(opened.base("1", 7), None);
+    }
+
+    /// A `.fai` whose `len`, `offset`, `line_bases` or `line_width` is
+    /// `u64::MAX` opens without a panic: a record the file cannot hold from its
+    /// offset is refused naming the bases it lacks, and a one-line record whose
+    /// width or bases-per-line field is the maximum reads its six bases, since
+    /// no line end lies inside it. `byte_offset` itself is `None`, not a
+    /// wrapped offset, where the fields put a position past `u64::MAX`.
+    #[test]
+    fn fai_fields_at_the_u64_maximum_are_refused_or_read_without_a_panic() {
+        let dir = tempdir().unwrap();
+        let plain = dir.path().join("ref.fa");
+        std::fs::write(&plain, b">1\nACGTAC\nACGTAC\n").unwrap();
+        let max = u64::MAX;
+        let refused = |index: String, beyond: u64| {
+            std::fs::write(dir.path().join("ref.fa.fai"), index).unwrap();
+            let error = IndexedFasta::from_path_mmap(&plain).unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "FASTA index names {beyond} bases beyond the end of {}",
+                    plain.display()
+                )
+            );
+        };
+        refused(format!("1\t{max}\t3\t6\t7\n"), max - 12);
+        refused(format!("1\t12\t{max}\t6\t7\n"), 12);
+        // Two lines of six bases under a width the file does not have: the
+        // index holds the first line's bases alone.
+        refused(format!("1\t12\t3\t6\t{max}\n"), 6);
+        for index in [
+            format!("1\t6\t3\t6\t{max}\n"),
+            format!("1\t6\t3\t{max}\t{max}\n"),
+        ] {
+            std::fs::write(dir.path().join("ref.fa.fai"), &index).unwrap();
+            let opened = IndexedFasta::from_path_mmap(&plain).unwrap();
+            assert_eq!(
+                opened.sequence("1", 1, 6),
+                Some(b"ACGTAC".to_vec()),
+                "{index:?}"
+            );
+            assert_eq!(opened.base("1", 6), Some(b'C'), "{index:?}");
+            assert_eq!(opened.base("1", 7), None, "{index:?}");
+        }
+
+        let record = |offset: u64, line_bases: u64, line_width: u64| FaiRecord {
+            source: 0,
+            len: max,
+            offset,
+            line_bases,
+            line_width,
+        };
+        assert_eq!(record(3, 6, 7).byte_offset(7), Some(10));
+        assert_eq!(record(max, 6, 7).byte_offset(1), Some(max));
+        assert_eq!(record(max, 6, 7).byte_offset(2), None);
+        assert_eq!(record(3, 1, max).byte_offset(3), None);
+        assert_eq!(record(3, 6, 7).byte_offset(0), None);
+    }
+
+    /// A `.fai` line one byte over the cap is refused as an invalid index line
+    /// naming the line, whether it is the first line or follows a record; a
+    /// line of exactly the cap is read whole, its padding a sixth field the
+    /// parser ignores.
+    #[test]
+    fn fai_line_past_the_cap_is_refused() {
+        let dir = tempdir().unwrap();
+        let plain = dir.path().join("ref.fa");
+        std::fs::write(&plain, b">1\nACGTAC\n").unwrap();
+        let fai = dir.path().join("ref.fa.fai");
+        let refusal = |line: u64| {
+            format!(
+                "invalid FASTA index line in {}: line {line}: longer than the \
+                 {MAX_LINE_BYTES}-byte limit for one line",
+                fai.display()
+            )
+        };
+        let mut long = b"1\t6\t3\t6\t7\t".to_vec();
+        long.resize(MAX_LINE_BYTES + 1, b'x');
+        long.push(b'\n');
+        std::fs::write(&fai, &long).unwrap();
+        let error = IndexedFasta::from_path_mmap(&plain).unwrap_err();
+        assert!(
+            matches!(error, FastaError::InvalidFaiLine { .. }),
+            "{error:?}"
+        );
+        assert_eq!(error.to_string(), refusal(1));
+
+        let mut second = b"1\t6\t3\t6\t7\n".to_vec();
+        second.extend(&long);
+        std::fs::write(&fai, &second).unwrap();
+        assert_eq!(
+            IndexedFasta::from_path_mmap(&plain)
+                .unwrap_err()
+                .to_string(),
+            refusal(2)
+        );
+
+        let mut at_the_cap = b"1\t6\t3\t6\t7\t".to_vec();
+        at_the_cap.resize(MAX_LINE_BYTES, b'x');
+        at_the_cap.push(b'\n');
+        std::fs::write(&fai, &at_the_cap).unwrap();
+        let opened = IndexedFasta::from_path_mmap(&plain).unwrap();
+        assert_eq!(opened.sequence("1", 1, 6), Some(b"ACGTAC".to_vec()));
+    }
+
+    /// A `.fai` line whose name field holds a byte that is not UTF-8 is refused
+    /// as an invalid index line naming the line, whether it is the first line
+    /// or follows a record.
+    #[test]
+    fn fai_line_that_is_not_utf8_is_refused() {
+        let dir = tempdir().unwrap();
+        let plain = dir.path().join("ref.fa");
+        std::fs::write(&plain, b">1\nACGTAC\n").unwrap();
+        let fai = dir.path().join("ref.fa.fai");
+        for (index, line) in [
+            (&b"\xff\t6\t3\t6\t7\n"[..], 1),
+            (&b"1\t6\t3\t6\t7\n\xff\t6\t3\t6\t7\n"[..], 2),
+        ] {
+            std::fs::write(&fai, index).unwrap();
+            let error = IndexedFasta::from_path_mmap(&plain).unwrap_err();
+            assert!(
+                matches!(error, FastaError::InvalidFaiLine { .. }),
+                "{index:?}: {error:?}"
+            );
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "invalid FASTA index line in {}: line {line}: not UTF-8",
+                    fai.display()
+                ),
+                "{index:?}"
+            );
+        }
+    }
+
+    /// A `.fai` line ending in `\r\n` is read without its line end, as
+    /// `BufRead::lines` reads it; a last line ending in a bare `\r` with no line
+    /// feed after it keeps the `\r` in its `line_width` field and is refused.
+    #[test]
+    fn fai_crlf_line_end_is_stripped_and_a_bare_carriage_return_is_refused() {
+        let dir = tempdir().unwrap();
+        let plain = dir.path().join("ref.fa");
+        std::fs::write(&plain, b">1\nACGTAC\n").unwrap();
+        let fai = dir.path().join("ref.fa.fai");
+        std::fs::write(&fai, b"1\t6\t3\t6\t7\r\n").unwrap();
+        let opened = IndexedFasta::from_path_mmap(&plain).unwrap();
+        assert_eq!(opened.sequence("1", 1, 6), Some(b"ACGTAC".to_vec()));
+
+        std::fs::write(&fai, b"1\t6\t3\t6\t7\r").unwrap();
+        let error = IndexedFasta::from_path_mmap(&plain).unwrap_err();
+        assert!(
+            matches!(error, FastaError::InvalidFaiLine { .. }),
+            "{error:?}"
+        );
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "invalid FASTA index line in {}: line 1: bad line_width",
+                fai.display()
+            )
+        );
     }
 
     /// The encoding is read from the bytes, not the name, and a gzip member is

@@ -1,6 +1,6 @@
 # Intended divergences from Ensembl VEP
 
-This page indexes every disagreement between vep-rs and Ensembl VEP that the adjusted concordance figure sets aside, and the forty differences outside the classes, which it does not. Each defect has a page of its own, which shows why its disagreement is set aside.
+This page indexes every disagreement between vep-rs and Ensembl VEP that the adjusted concordance figure sets aside, and the forty-one differences outside the classes, which it does not. Each defect has a page of its own, which shows why its disagreement is set aside.
 
 ## The defects
 
@@ -27,12 +27,13 @@ The defects in page order, each with the classes it produces and its page:
 
 ## Differences outside the classes
 
-Forty differences lie outside every class, each in a field's text, in which records or rows are written, or in which inputs resolve, and nothing is set aside for them. A disagreement from one is charged to vep-rs in both figures, and each has a page or a section of the page its subject belongs to:
+Forty-one differences lie outside every class, each in a field's text, in which records or rows are written, or in which inputs resolve, and nothing is set aside for them. A disagreement from one is charged to vep-rs in both figures, and each has a page or a section of the page its subject belongs to:
 
 | Difference | In one sentence | Set aside | Page |
 | --- | --- | --- | --- |
 | [JSON escaping](divergences/json-escaping.md) | Ensembl VEP's JSON written through `--output_format json` percent-encodes the `=` of a synonymous HGVSp notation as `%3D`; vep-rs's JSON is unescaped under `--json` and `--output_format json` alike | nothing: the comparators score consequence sets and never see the field | [Unescaped JSON under `--output_format json`](divergences/json-escaping.md) |
 | [Non-UTF-8 input](divergences/non-utf8-input.md) | Ensembl VEP writes an input byte that is not UTF-8 as read; vep-rs carries it in its VCF output and prints U+FFFD for it in the default, tab and JSON outputs | nothing: the columns the comparators key rows by are ASCII | [Input bytes that are not UTF-8](divergences/non-utf8-input.md) |
+| [Control bytes in values](divergences/control-bytes-in-output.md) | Ensembl VEP writes an ASCII control byte in a field as read, a line end splitting the row; vep-rs writes it percent-encoded in the default and tab outputs and in a VCF `CSQ` value, where both engines write whitespace as `_` | nothing: the columns the comparators key rows by are ASCII | [Control bytes in output values](divergences/control-bytes-in-output.md) |
 | [A bare `M`](divergences/bare-m-chromosome.md) | Under an Ensembl cache's synonyms a record on `M` overlaps nothing in Ensembl VEP and is written as `intergenic_variant`; vep-rs annotates it against the mitochondrial transcripts | nothing: a record on `M` is charged to vep-rs in both figures (a breakend mate written `M`, or `chrM` under a cache that links it to `MT`, is class 24) | [A bare `M` under a cache whose synonyms name `chrM`](divergences/bare-m-chromosome.md) |
 | [A chromosome the cache lacks](cache-setup.md#chromosome-names) | Ensembl VEP admits a record whose name, `chr` stripped or `chr` added, is a synonym of a cache chromosome, then looks the name itself up, reaches no chromosome and writes `intergenic_variant`; vep-rs tests those spellings against the cache's chromosomes alone and skips the record with the not-found warning | nothing: no measured dataset spells a chromosome that way | [Chromosome names](cache-setup.md#chromosome-names) |
 | [Chromosome name resolution](cache-setup.md#chromosome-names) | Ensembl VEP validates a name against the cache's chromosomes widened by their synonyms and then resolves the unwidened name; vep-rs resolves each name once, through the cache's chromosomes, their synonyms, the `chr` rule and a bare `M` as `MT`, so the printed name agrees on every input, and only a bare `M` or a name reached through a synonym's `chr` variant gets rows from one engine that the other does not write | nothing: no measured dataset uses such a name | [Chromosome names](cache-setup.md#chromosome-names) |
@@ -82,7 +83,7 @@ Seventeen of the nineteen classes are the output of fourteen defects in Ensembl 
 
 ## How the pages are organised
 
-The pages are organised by defect. There is one page for each of the fifteen defects that produce a class (A to C and E to P; D is retired) and one for the `<CNV:TR>` representation difference. Each defect page opens with the defect in one sentence, why it is a defect, what vep-rs does instead, where it is in Ensembl VEP's source and what correcting it would change. The classes it produces follow. Each of the forty [differences outside the classes](#differences-outside-the-classes) has a page of its own, or a section of the page its subject belongs to: the difference in one sentence, then what each engine does and where in Ensembl VEP's source its behaviour is.
+The pages are organised by defect. There is one page for each of the fifteen defects that produce a class (A to C and E to P; D is retired) and one for the `<CNV:TR>` representation difference. Each defect page opens with the defect in one sentence, why it is a defect, what vep-rs does instead, where it is in Ensembl VEP's source and what correcting it would change. The classes it produces follow. Each of the forty-one [differences outside the classes](#differences-outside-the-classes) has a page of its own, or a section of the page its subject belongs to: the difference in one sentence, then what each engine does and where in Ensembl VEP's source its behaviour is.
 
 Each class is a walkthrough of one record, from a public dataset or hand-written and printed in full on the page. It opens with an **In short** paragraph that states the class in a few sentences. It then gives the background a reader needs, the record, both engines' rows and why Ensembl VEP writes what it writes. It closes with why vep-rs's row is the correct one, what a reader can reproduce, and how the comparator scripts recognise the class. The engines, inputs, caches and commands every walkthrough uses are on [Reproducing these examples](divergences/reproducing.md).
 

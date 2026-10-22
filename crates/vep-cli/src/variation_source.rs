@@ -45,6 +45,7 @@ use vep_builtins::PluginError;
 use vep_core::cache_info::{CacheInfo, VariationColumns};
 use vep_core::cache_manifest::{CacheManifest, HashingReader};
 use vep_core::variation::{perl_number_string, perl_numeric, CachedVariation, ClinVarDetail};
+use vep_io::input::{read_until_bounded, LineTooLong, MAX_LINE_BYTES};
 
 /// The populations whose values `--old_maf` rewrites
 /// (`BaseCacheVariation.pm:132` at release/116.2).
@@ -512,14 +513,29 @@ impl VariationSource {
     }
 
     /// Every record of one region file, in file order, the file checked
-    /// against the manifest once it is read.
+    /// against the manifest once it is read and the length of a line capped
+    /// ([`read_variation_line`]).
     fn parse_region(&self, chr: &str, path: &Path) -> anyhow::Result<Vec<CachedVariation>> {
         let whole = self.open_whole(path)?;
         let mut reader = BufReader::new(flate2::read::MultiGzDecoder::new(whole));
         let mut records = Vec::new();
-        for line in reader.by_ref().lines() {
-            let line = line.with_context(|| format!("reading {}", path.display()))?;
-            let fields: Vec<&str> = line.split(' ').collect();
+        let mut line = Vec::new();
+        let mut line_number = 0;
+        loop {
+            line.clear();
+            line_number += 1;
+            let read = read_variation_line(&mut reader, &mut line, line_number)
+                .with_context(|| format!("reading {}", path.display()))?;
+            if read == 0 {
+                break;
+            }
+            let text = std::str::from_utf8(&line).map_err(|_| {
+                anyhow::anyhow!(
+                    "reading {}: line {line_number} is not UTF-8",
+                    path.display()
+                )
+            })?;
+            let fields: Vec<&str> = text.trim_end_matches(['\n', '\r']).split(' ').collect();
             if let Some(record) = parse_record(&self.columns, &fields, self.old_maf) {
                 records.push(record);
             }
@@ -572,6 +588,27 @@ impl VariationSource {
             .map(|(path, _)| path.clone())
             .collect()
     }
+}
+
+/// One line of a variation file appended to `line` through its `\n`, or to the
+/// end of the file, with its length capped at [`MAX_LINE_BYTES`]
+/// ([`read_until_bounded`]): the bytes appended, 0 at the end of the file. A
+/// line still open past the cap is refused naming `line_number`, the line's
+/// place in the file; the caller names the file.
+pub(crate) fn read_variation_line<R: BufRead>(
+    reader: &mut R,
+    line: &mut Vec<u8>,
+    line_number: u64,
+) -> anyhow::Result<usize> {
+    read_until_bounded(reader, b'\n', line, line_number).map_err(|error| {
+        match LineTooLong::from_io_error(&error) {
+            Some(too_long) => anyhow::anyhow!(
+                "line {} is longer than the {MAX_LINE_BYTES}-byte limit for one line",
+                too_long.line
+            ),
+            None => error.into(),
+        }
+    })
 }
 
 /// The engine's error under `context`, reduced to its text: the engine names a
@@ -1265,6 +1302,70 @@ mod tests {
                     .unwrap()
             ),
             ["rs4"]
+        );
+    }
+
+    /// A region file whose second line is one byte over the cap is refused
+    /// naming the file and the line, and a lookup on the region yields no
+    /// record; the same file with the line at the cap reads both records.
+    #[test]
+    fn region_line_past_the_cap_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cols = GRCH38_COLS.strip_prefix("chr,").unwrap();
+        let first = "rs1   999999  A/G";
+        let mut second = String::from("rs2   1000000  A/G   ");
+        second.push_str(&"x".repeat(MAX_LINE_BYTES + 1 - second.len()));
+        write_region(tmp.path(), "21", 1, 1_000_000, &[first, &second]);
+        let source = open_unchecked(tmp.path(), &info(cols, None), false)
+            .unwrap()
+            .unwrap();
+        let error = source
+            .records_overlapping("21", 999_999, 1_000_000)
+            .unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            format!(
+                "reading {}: line 2 is longer than the {MAX_LINE_BYTES}-byte limit for one line",
+                tmp.path().join("variations/21/1-1000000_var.gz").display()
+            )
+        );
+
+        second.pop();
+        write_region(tmp.path(), "21", 1, 1_000_000, &[first, &second]);
+        let source = open_unchecked(tmp.path(), &info(cols, None), false)
+            .unwrap()
+            .unwrap();
+        let records = source
+            .records_overlapping("21", 999_999, 1_000_000)
+            .unwrap();
+        assert_eq!(names(&records), ["rs1", "rs2"]);
+    }
+
+    /// A region file whose second line holds a byte that is not UTF-8 is
+    /// refused naming the file and the line, and a lookup on the region yields
+    /// no record.
+    #[test]
+    fn region_line_that_is_not_utf8_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cols = GRCH38_COLS.strip_prefix("chr,").unwrap();
+        let dir = tmp.path().join("variations").join("21");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("1-1000000_var.gz");
+        let mut encoder = flate2::write::GzEncoder::new(
+            fs::File::create(&path).unwrap(),
+            flate2::Compression::default(),
+        );
+        encoder
+            .write_all(b"rs1   500  A/G\nrs2 \xff 500 A/G\n")
+            .unwrap();
+        encoder.finish().unwrap();
+        let source = open_unchecked(tmp.path(), &info(cols, None), false)
+            .unwrap()
+            .unwrap();
+        let error = source.records_overlapping("21", 500, 500).unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            format!("reading {}: line 2 is not UTF-8", path.display())
         );
     }
 

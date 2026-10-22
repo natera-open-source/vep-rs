@@ -186,3 +186,51 @@ fn af_gnomad_without_gnomade_column_is_ensembl_error() {
     let declared_only = run(dir.path(), &without, &["--af_gnomad"]);
     assert_refused_without_gnomade(&declared_only);
 }
+
+/// A region file whose second line is one byte over the line cap ends the run
+/// under the `cache` component as the variant's region is read, naming the
+/// file and the line; nothing is written past the header. The same file with
+/// the line at the cap annotates the variant with both records.
+#[test]
+fn a_variation_line_past_the_cap_ends_the_run_under_cache() {
+    let cap = vep_io::input::MAX_LINE_BYTES;
+    let dir = tempfile::tempdir().unwrap();
+    let cache = variation_cache(dir.path(), "long_line", &["AF"]);
+    let region_file = cache.join("variations").join("21").join("1-1000000_var.gz");
+    let write_region = |second_line_len: usize| {
+        let mut second = String::from("rs2 0 0 500 500 A/G 1 G:0.5 ");
+        second.push_str(&"x".repeat(second_line_len - second.len()));
+        let mut encoder = flate2::write::GzEncoder::new(
+            std::fs::File::create(&region_file).unwrap(),
+            flate2::Compression::default(),
+        );
+        writeln!(encoder, "rs1 0 0 500 500 A/G 1 G:0.5\n{second}").unwrap();
+        encoder.finish().unwrap();
+    };
+
+    write_region(cap + 1);
+    let output = run(dir.path(), &cache, &["--check_existing"]);
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(1), "{err}");
+    let error_lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(
+        error_lines,
+        [format!(
+            "ERROR: [cache] reading {}: line 2 is longer than the {cap}-byte limit for one line",
+            region_file.display()
+        )],
+        "{err}"
+    );
+    let written = std::fs::read_to_string(dir.path().join("out.txt")).unwrap_or_default();
+    assert!(
+        written.lines().all(|l| l.starts_with('#')),
+        "no row past the header:\n{written}"
+    );
+
+    write_region(cap);
+    let output = run(dir.path(), &cache, &["--check_existing"]);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    let written = std::fs::read_to_string(dir.path().join("out.txt")).unwrap();
+    let row = written.lines().find(|l| !l.starts_with('#')).unwrap();
+    assert!(row.contains("rs1") && row.contains("rs2"), "{row}");
+}

@@ -21,7 +21,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -29,6 +29,7 @@ use std::time::Instant;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use tracing::{info, warn};
+use vep_builtins::PluginError;
 use vep_core::cache_manifest::CacheManifest;
 use vep_core::coordinate::is_cache_path_component;
 
@@ -243,7 +244,10 @@ fn convert_plugin_data(
     Ok(())
 }
 
-/// Read all records from a tabix file, grouped by chromosome and sorted by position.
+/// Read all records from a tabix file, grouped by chromosome and sorted by
+/// position. The file is read with the length of a line capped
+/// ([`vep_builtins::tabix::BoundedLines`]): a line past the cap fails the
+/// conversion, naming the file and the line.
 fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRecords> {
     use noodles::bgzf;
 
@@ -257,8 +261,12 @@ fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRe
     let mut records_by_chr: BTreeMap<String, Vec<vep_builtins::tabix::TabixRecord>> =
         BTreeMap::new();
 
-    for line_result in buf_reader.lines() {
-        let line = line_result.context("failed to read line from bgzf")?;
+    for line_result in vep_builtins::tabix::BoundedLines::new(buf_reader, path) {
+        // The reader's errors name a plugin; the file is the conversion's input.
+        let line = line_result.map_err(|error| match error {
+            PluginError::Init(message) | PluginError::Run(message) => anyhow::anyhow!(message),
+            PluginError::Io(error) => anyhow::Error::from(error),
+        })?;
         let line = line.trim();
         if line.is_empty() {
             continue;
@@ -281,7 +289,9 @@ fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRe
             .parse()
             .with_context(|| format!("invalid start position: {}", columns[cfg.start_col]))?;
         let start = if cfg.zero_based {
-            start_raw + 1
+            start_raw
+                .checked_add(1)
+                .with_context(|| format!("invalid start position: {start_raw}"))?
         } else {
             start_raw
         };
@@ -1057,5 +1067,62 @@ mod tests {
                 "{text}: {error} should name {reason}"
             );
         }
+    }
+
+    /// A plugin data file whose second data line is one byte over the cap
+    /// fails the conversion, naming the file and the line, 3; the records read
+    /// before it are not kept.
+    #[test]
+    fn data_line_past_the_cap_fails_the_conversion() {
+        use std::io::Write;
+        let cap = vep_builtins::tabix::MAX_LINE_BYTES;
+        let tmp = Scratch::new();
+        let path = tmp.path().join("scores.tsv.gz");
+        let mut body = b"#chrom\tpos\tscore\n21\t100\t0.5\n".to_vec();
+        let mut long_line = b"21\t200\t".to_vec();
+        long_line.resize(cap + 1, b'x');
+        body.extend(long_line);
+        body.push(b'\n');
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&path).unwrap());
+        writer.write_all(&body).unwrap();
+        writer.try_finish().unwrap();
+        let cfg = TabixConvertConfig {
+            chr_col: 0,
+            start_col: 1,
+            end_col: None,
+            zero_based: false,
+        };
+        let error = read_tabix_records(&path, &cfg).unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            format!(
+                "{}: line 3 is longer than the {cap}-byte limit for one line",
+                path.display()
+            )
+        );
+    }
+
+    /// A zero-based start position at the integer maximum has no one-based
+    /// form: the record is refused naming the position instead of wrapping.
+    #[test]
+    fn zero_based_start_at_the_maximum_fails_the_conversion() {
+        use std::io::Write;
+        let tmp = Scratch::new();
+        let path = tmp.path().join("scores.tsv.gz");
+        let body = format!("#chrom\tpos\tscore\n21\t{}\t0.5\n", u64::MAX);
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&path).unwrap());
+        writer.write_all(body.as_bytes()).unwrap();
+        writer.try_finish().unwrap();
+        let cfg = TabixConvertConfig {
+            chr_col: 0,
+            start_col: 1,
+            end_col: None,
+            zero_based: true,
+        };
+        let error = read_tabix_records(&path, &cfg).unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            format!("invalid start position: {}", u64::MAX)
+        );
     }
 }

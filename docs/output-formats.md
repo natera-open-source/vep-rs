@@ -33,7 +33,7 @@ A value read from an input file can carry a control byte: an identifier or a chr
 
 The default and tab formats write every byte from `0x00` to `0x1F`, and `0x7F`, as its percent-encoding: `%09` for a tab, `%0A` for a line end, `%00` for a NUL. The `%3B` the Extra column writes for a `;` in a value is the same rule. Inside a VCF `CSQ` value the whitespace rule comes first, so a tab is `_`, and every other control byte is percent-encoded the same way. The JSON output escapes them as JSON does.
 
-The columns a VCF line copies from the input, the ID among them, stay the input's bytes, as every format's header lines do; the line built for a record of another input format has each column encoded like any value. Ensembl VEP writes the bytes as read.
+The columns a VCF line copies from the input, the ID among them, stay the input's bytes, as every format's header lines do; the line built for a record of another input format has each column encoded like any value. Ensembl VEP writes the bytes as read ([the divergence page](divergences/control-bytes-in-output.md)).
 
 ## Parity with Ensembl VEP
 

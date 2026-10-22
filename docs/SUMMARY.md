@@ -58,6 +58,7 @@
   - [Defect O: a `<CNV:TR>` allele with `RN=0` drops a real allele of the record](divergences/defect-o.md)
   - [Unescaped JSON under `--output_format json`](divergences/json-escaping.md)
   - [Input bytes that are not UTF-8](divergences/non-utf8-input.md)
+  - [Control bytes in output values](divergences/control-bytes-in-output.md)
   - [A bare `M` under a cache whose synonyms name `chrM`](divergences/bare-m-chromosome.md)
   - [Empty lines in a VCF input](divergences/empty-vcf-lines.md)
   - [A BGZF block whose trailer overstates its size](divergences/malformed-bgzf-block.md)

@@ -77,6 +77,16 @@ fn output(dir: &Path) -> String {
     fs::read_to_string(dir.join("out.txt")).unwrap()
 }
 
+/// The output without the header line that names the run's wall-clock time,
+/// so two runs compare whole whatever second each fell in.
+fn output_without_timestamp(dir: &Path) -> String {
+    output(dir)
+        .lines()
+        .filter(|line| !line.starts_with("## Output produced at "))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// The output without its `##` header lines, which name the run's paths.
 fn rows(dir: &Path) -> String {
     output(dir)
@@ -163,13 +173,13 @@ fn intact_cache_annotates_and_a_manifestless_cache_warns_once() {
     let input = golden("GRCh38-colocated").join("variants.vcf");
     let with = run(dir.path(), &input, &cache, "GRCh38", &COLOCATED_FLAGS);
     assert_clean(&with, dir.path());
-    let expected = output(dir.path());
+    let expected = output_without_timestamp(dir.path());
     assert!(expected.lines().any(|l| !l.starts_with('#')), "{expected}");
 
     fs::remove_file(cache.join(MANIFEST_FILE)).unwrap();
     let without = run(dir.path(), &input, &cache, "GRCh38", &COLOCATED_FLAGS);
     assert_eq!(without.status.code(), Some(0), "{}", stderr(&without));
-    assert_eq!(output(dir.path()), expected);
+    assert_eq!(output_without_timestamp(dir.path()), expected);
     let warning_lines: Vec<String> = warnings(dir.path())
         .lines()
         .filter(|line| line.contains("checksum manifest"))

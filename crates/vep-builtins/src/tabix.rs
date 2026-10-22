@@ -23,11 +23,12 @@ use tracing::debug;
 
 use crate::PluginError;
 
-/// The longest data line read from a tabix-indexed file, 64 MiB. A line of a
-/// population VCF with every INFO key runs to a few hundred kilobytes, so the
-/// cap sits far above any record; a file with no line end in it is refused at
-/// the cap instead of being read whole into one line buffer.
-const MAX_LINE_BYTES: usize = 64 << 20;
+/// The longest line read from a tabix-indexed file or a plugin's catalogue,
+/// 64 MiB. A line of a population VCF with every INFO key runs to a few
+/// hundred kilobytes, so the cap sits far above any record; a file with no
+/// line end in it is refused at the cap instead of being read whole into one
+/// line buffer.
+pub const MAX_LINE_BYTES: usize = 64 << 20;
 
 /// The longest index (`.tbi` or `.csi`) read, 256 MiB decompressed. A
 /// whole-genome index decompresses to a few megabytes; the cap bounds what an
@@ -62,18 +63,21 @@ fn read_line_bounded<R: BufRead>(
     Ok(read)
 }
 
-/// The lines of a file's head as text, each without its trailing `\n`, read
-/// with the length of a line capped ([`read_line_bounded`]); a line that is
-/// not UTF-8 is an error, as `BufRead::lines` makes it. Every error is
-/// [`PluginError::Init`]: the head is read while a plugin opens its file.
-struct HeadLines<R> {
+/// The lines of a text file, each without its line end (`\n` or `\r\n`), read
+/// one at a time with the length of a line capped at [`MAX_LINE_BYTES`]; a
+/// line that is not UTF-8 is an error, as `BufRead::lines` makes it. Every
+/// error is [`PluginError::Init`]: a plugin reads such a file while it opens,
+/// whether the file's head alone or a whole catalogue.
+pub struct BoundedLines<R> {
     reader: R,
     path: PathBuf,
     line_number: u64,
 }
 
-impl<R: BufRead> HeadLines<R> {
-    fn new(reader: R, path: &Path) -> Self {
+impl<R: BufRead> BoundedLines<R> {
+    /// The lines of `reader`; `path` is not opened, it names the file in
+    /// every error.
+    pub fn new(reader: R, path: &Path) -> Self {
         Self {
             reader,
             path: path.to_path_buf(),
@@ -82,7 +86,7 @@ impl<R: BufRead> HeadLines<R> {
     }
 }
 
-impl<R: BufRead> Iterator for HeadLines<R> {
+impl<R: BufRead> Iterator for BoundedLines<R> {
     type Item = Result<String, PluginError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -98,12 +102,16 @@ impl<R: BufRead> Iterator for HeadLines<R> {
         ) {
             Ok(0) => None,
             Ok(_) => {
+                // The line end `BufRead::lines` strips: `\n`, or `\r\n`.
                 if line.last() == Some(&b'\n') {
                     line.pop();
+                    if line.last() == Some(&b'\r') {
+                        line.pop();
+                    }
                 }
                 Some(String::from_utf8(line).map_err(|e| {
                     PluginError::Init(format!(
-                        "failed to read header from {}: {e}",
+                        "failed to read {} line {number}: {e}",
                         self.path.display()
                     ))
                 }))
@@ -673,15 +681,16 @@ impl TabixAnnotator {
     }
 
     /// The 1-based start of a line, read from its start column alone; `None`
-    /// for a line `parse_line` would reject on that column.
+    /// for a line `parse_line` would reject on that column, among them a
+    /// zero-based start with no one-based form.
     fn line_start(&self, line: &str) -> Option<u64> {
         let field = line.split('\t').nth(self.config.start_col)?;
         let start: u64 = field.trim_end_matches('\r').parse().ok()?;
-        Some(if self.config.zero_based {
-            start + 1
+        if self.config.zero_based {
+            start.checked_add(1)
         } else {
-            start
-        })
+            Some(start)
+        }
     }
 
     /// Parse a tab-separated line into a TabixRecord.
@@ -713,7 +722,7 @@ impl TabixAnnotator {
                 .ref_col
                 .and_then(|ref_col| columns.get(ref_col))
                 .map_or(1, |allele| allele.len().max(1)) as u64;
-            start + ref_len - 1
+            start.saturating_add(ref_len - 1)
         };
         // An end column that is the start column names a single base, as
         // `tabix -b N -e N` does, so it takes the start's zero-based shift too.
@@ -1107,7 +1116,7 @@ pub fn detect_assembly_marker(
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
     let reader = bgzf::io::Reader::new(BufReader::new(file));
 
-    for line_result in HeadLines::new(reader, path) {
+    for line_result in BoundedLines::new(reader, path) {
         let line = line_result?;
         if !line.starts_with('#') {
             break;
@@ -1142,7 +1151,7 @@ pub fn first_data_row_field(path: &Path, col: usize) -> Result<Option<String>, P
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
     let reader = bgzf::io::Reader::new(BufReader::new(file));
 
-    for line_result in HeadLines::new(reader, path) {
+    for line_result in BoundedLines::new(reader, path) {
         let line = line_result?;
         let line = line.trim_end_matches(['\r', '\n']);
         if line.is_empty() || line.starts_with('#') {
@@ -1180,7 +1189,7 @@ pub fn parse_header(path: &Path, start_col: usize) -> Result<Option<Vec<String>>
     let reader = bgzf::io::Reader::new(BufReader::new(file));
 
     let mut last_header_line = None;
-    for line_result in HeadLines::new(reader, path) {
+    for line_result in BoundedLines::new(reader, path) {
         let line = line_result?;
         let line = line.trim_end_matches(['\r', '\n']);
         if line.is_empty() {
@@ -1614,6 +1623,48 @@ mod tests {
         }
     }
 
+    /// A row whose start column is the `u64` maximum. Zero-based, it has no
+    /// one-based start, so a query over the file prints the rows before it and
+    /// never a row at position 0, the start's sum modulo 2^64; one-based, with
+    /// a four-base REF and an end column naming no end, its end saturates at
+    /// the maximum.
+    #[test]
+    fn start_at_the_u64_maximum_is_skipped_zero_based_and_its_end_saturates_one_based() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+
+        let dir = tempfile::tempdir().unwrap();
+        let max_row = format!("21\t{}\tACGT\tDP=3", u64::MAX);
+        let lines_in = [
+            "#chrom\tpos\tref\tinfo",
+            "21\t99\tA\tDP=1",
+            "21\t100\tACGT\tDP=2",
+            max_row.as_str(),
+        ];
+        let data = write_tabix_fixture(dir.path(), "max.tsv.gz", &lines_in, IndexSpec::standard());
+
+        let zero_based = TabixAnnotator::open(TabixConfig {
+            zero_based: true,
+            ..config(data.clone(), None)
+        })
+        .unwrap();
+        let before_it = ["21\t99\tA\tDP=1", "21\t100\tACGT\tDP=2"];
+        assert_eq!(lines(&zero_based.query("21", 0, 1000).unwrap()), before_it);
+        assert_eq!(
+            lines(&zero_based.query_windows("21", &[(0, 1000)]).unwrap()),
+            before_it
+        );
+        assert_eq!(zero_based.line_start(&max_row), None);
+        assert!(zero_based.parse_line(&max_row).is_none());
+
+        let one_based = TabixAnnotator::open(TabixConfig {
+            ref_col: Some(2),
+            ..config(data, Some(3))
+        })
+        .unwrap();
+        let record = one_based.parse_line(&max_row).unwrap();
+        assert_eq!((record.start, record.end), (u64::MAX, u64::MAX));
+    }
+
     /// A `.csi` written without the tabix header (the shape an index of a BCF
     /// has) names no chromosome, so every query through it would return
     /// nothing; opening the file is refused instead.
@@ -1977,6 +2028,42 @@ mod tests {
                 "plugin initialization failed: {}: line 1 is longer than the \
                  {MAX_LINE_BYTES}-byte limit for one line",
                 data.display()
+            )
+        );
+    }
+
+    /// A line of exactly the cap is read whole, whether a line end or the end
+    /// of the input closes it, and the line after it follows; one byte more is
+    /// refused by its line number.
+    #[test]
+    fn bounded_lines_admit_a_line_of_exactly_the_cap() {
+        let path = Path::new("catalogue.tsv");
+        let mut text: Vec<u8> = std::iter::repeat_n(b'x', MAX_LINE_BYTES).collect();
+        text.extend(b"\ny\n");
+        let lines: Vec<String> = BoundedLines::new(&text[..], path)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].len(), MAX_LINE_BYTES);
+        assert_eq!(lines[1], "y");
+
+        let lines: Vec<String> = BoundedLines::new(&text[..MAX_LINE_BYTES], path)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].len(), MAX_LINE_BYTES);
+
+        let mut text: Vec<u8> = std::iter::repeat_n(b'x', MAX_LINE_BYTES + 1).collect();
+        text.push(b'\n');
+        let error = BoundedLines::new(&text[..], path)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "plugin initialization failed: catalogue.tsv: line 1 is longer than the \
+                 {MAX_LINE_BYTES}-byte limit for one line"
             )
         );
     }
