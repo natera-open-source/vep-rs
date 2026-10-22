@@ -151,6 +151,11 @@
    "combinations": [],
    "reference_rows": 0,
    "reference_warning": "Specified reference allele G does not match Ensembl reference allele"
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30601300\tnonvar_first_alt\tTC\t.,TA\t.\t.\t.",
+   "combinations": []
   }
  ],
  "flag_sets": [

@@ -931,9 +931,8 @@ impl Config {
         // when one of those two formats is named.
         let delimiter_is_read = matches!(state.scalar("format"), Some("ensembl" | "vcf"));
         let delimiter = match args.delimiter.as_deref() {
-            Some(value) if delimiter_is_read => {
-                Delimiter::from_flag(value).map_err(|message| CliError::new("config", message))?
-            }
+            Some(value) if delimiter_is_read => crate::delimiter::from_flag(value)
+                .map_err(|message| CliError::new("config", message))?,
             _ => Delimiter::Tab,
         };
         // After every refusal: Ensembl VEP's `Runner.pm:117-120` runs once

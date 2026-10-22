@@ -4,9 +4,9 @@
 //! How the `vep` binary reads the bytes of its input: a line that is not UTF-8
 //! never ends the run and a header line reaches the VCF output as read, CRLF
 //! line ends read as LF, empty lines are skipped with a warning in the words of
-//! Ensembl VEP's `skip_empty_lines`, a chromosome keeps the input's spelling,
-//! and a pinned decompression worker count above the host's CPUs still reads
-//! the file.
+//! Ensembl VEP's `skip_empty_lines`, a data line's leading blanks stay in its
+//! chromosome column, a chromosome keeps the input's spelling, and a pinned
+//! decompression worker count above the host's CPUs still reads the file.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -246,6 +246,50 @@ fn blank_lines_are_skipped_and_warned() {
             "WARNING: Skipped 2 empty lines from line 2",
             "WARNING: Skipped 1 empty line from line 5",
             "WARNING: Skipped 3 empty lines from line 6",
+        ]
+    );
+}
+
+/// A data line's leading blanks are part of its first column: ensembl-io splits
+/// the line as read (ColumnBasedParser.pm:249-250), so `  21` is the record's
+/// chromosome, which no annotation source holds, and the record is skipped with
+/// the warning of Parser.pm:542-546, its quoted line's white-space runs each one
+/// space (BaseVEP.pm:849, whose `\s` takes a vertical tab too, while the
+/// chromosome in the message keeps it). The other records annotate as the plain
+/// file's do.
+#[test]
+fn leading_blanks_stay_in_the_chromosome_column() {
+    let dir = tempfile::tempdir().unwrap();
+    let reference = reference_rows(dir.path(), &[]);
+    let records: Vec<&str> = RECORDS.lines().collect();
+    let text = format!(
+        "{VCF_HEADER}{}\n  {}\n{}\n\x0B{}\n{}\n",
+        records[0], records[1], records[2], records[3], records[4]
+    );
+    let path = write(dir.path(), "leading-blanks.vcf", text.as_bytes());
+    let out = output_path(dir.path());
+    let warnings = dir.path().join("leading-blanks_warnings.txt");
+    let output = vep(
+        dir.path(),
+        &path,
+        &out,
+        &["--warning_file", warnings.to_str().unwrap()],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let expected: Vec<&String> = reference
+        .iter()
+        .filter(|row| {
+            !row.starts_with("stop_del2_lost_rev\t") && !row.starts_with("penult_ins3_stop_fwd\t")
+        })
+        .collect();
+    assert!(expected.len() < reference.len());
+    assert_eq!(rows(&out).iter().collect::<Vec<_>>(), expected);
+    let warned = std::fs::read_to_string(&warnings).unwrap();
+    assert_eq!(
+        warned.lines().collect::<Vec<_>>(),
+        [
+            "WARNING: line 2 skipped ( 21 30348409 stop_del2_lost_rev CTA C . . .): Chromosome   21 not found in annotation sources or synonyms; chromosome   21 does not overlap any features",
+            "WARNING: line 4 skipped ( 21 34716478 penult_ins3_stop_fwd A AATA . . .): Chromosome \x0B21 not found in annotation sources or synonyms; chromosome \x0B21 does not overlap any features",
         ]
     );
 }

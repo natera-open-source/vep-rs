@@ -4,9 +4,11 @@
 //! How the `vep` binary reads Ensembl VEP's default input format and the
 //! `--delimiter` flag: an Ensembl-format record annotates as its VCF twin
 //! does, a bi-allelic indel written un-minimised is minimised first, the strand
-//! column takes Ensembl VEP's tokens, a class word is a structural variant, and
-//! a space-delimited Ensembl or VCF file reads under `--delimiter` with an
-//! explicit `--format`, or under the delimiter detection chooses for `guess`.
+//! column takes Ensembl VEP's tokens, a class word is a structural variant, a
+//! space-delimited Ensembl or VCF file reads under `--delimiter` with an
+//! explicit `--format`, or under the delimiter detection chooses for `guess`,
+//! and a `--delimiter` value with a regular-expression character splits as
+//! Perl's `split` splits on the pattern.
 
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
@@ -217,7 +219,7 @@ fn delimiter_space_separated_ensembl_and_vcf() {
         (&ensembl_runs, &[][..]),
         (&vcf_space, &[][..]),
         (&ensembl_space, &["--delimiter", ","][..]),
-        (&ensembl_space, &["--delimiter", "|"][..]),
+        (&ensembl_space, &["--delimiter", "["][..]),
     ] {
         assert_eq!(
             annotate(dir.path(), input, flags),
@@ -272,23 +274,118 @@ fn space_delimited_vcf_line_is_re_emitted_as_ensembl_vep_joins_it() {
     );
 }
 
-/// A `--delimiter` value with a regular-expression character, which Ensembl
-/// VEP would hand to `split` as a pattern, is refused with the error contract
-/// before the input is opened under `--format ensembl` or `--format vcf`, the
-/// formats whose parsers split on it; so is an empty value. Under `--format
-/// hgvs` the flag is not read (Ensembl VEP's HGVS and region parsers never
-/// split a line), so the same value runs.
+/// A `--delimiter` value with a regular-expression character is the pattern
+/// Ensembl VEP hands to Perl's `split` (ensembl-io ColumnBasedParser.pm:250):
+/// `[ ,]` reads an Ensembl-format file whose columns a space or a comma
+/// separates, and the two records annotate as Ensembl VEP 116.2 annotates them
+/// under the same flag, the rows below its output on the same file; they are
+/// the records' VCF twins' rows too. The JSON `input` joins the fields with the
+/// pattern's text, as `join($self->{delimiter}, ...)` does
+/// (OutputFactory/JSON.pm:247). A space-delimited VCF reads under the pattern
+/// `[ ]` as under the space.
+#[test]
+fn delimiter_regular_expression_splits_as_perl_split() {
+    let dir = tempfile::tempdir().unwrap();
+    let mixed = write(
+        dir.path(),
+        "mixed.txt",
+        "21,30282169 30282169,C/A 1,snv_fwd\n21 30289184,30289183 -/G,1 stop_ins1_lost_rev\n",
+    );
+    let flags = ["--format", "ensembl", "--delimiter", "[ ,]"];
+    let rows = annotate(dir.path(), &mixed, &flags);
+    assert_eq!(
+        rows,
+        [
+            "snv_fwd\t21:30282169\tA\tENSG00000188694\tENST00000340345\tTranscript\tstop_lost\t782\t764\t255\t*/L\ttGa/tTa\t-\tIMPACT=HIGH;STRAND=-1",
+            "stop_ins1_lost_rev\t21:30289183-30289184\tG\tENSG00000232263\tENST00000416044\tTranscript\tstop_lost\t331-332\t307-308\t103\t*/SX\ttga/tCga\t-\tIMPACT=HIGH;STRAND=-1",
+        ]
+    );
+    let reference = vcf_rows(dir.path(), &[]);
+    let twins: Vec<String> = reference
+        .iter()
+        .filter(|row| row.starts_with("snv_fwd\t") || row.starts_with("stop_ins1_lost_rev\t"))
+        .cloned()
+        .collect();
+    assert_eq!(rows, twins);
+    let json = annotate(dir.path(), &mixed, &[&flags[..], &["--json"]].concat());
+    assert!(
+        json[0].contains(r#""input":"21[ ,]30282169[ ,]30282169[ ,]C/A[ ,]1[ ,]snv_fwd""#),
+        "{}",
+        json[0]
+    );
+
+    let vcf_space = write(
+        dir.path(),
+        "space.vcf",
+        &format!("{VCF_HEADER}{}", VCF_RECORDS.replace('\t', " ")),
+    );
+    assert_eq!(
+        annotate(
+            dir.path(),
+            &vcf_space,
+            &["--format", "vcf", "--delimiter", "[ ]"]
+        ),
+        reference
+    );
+}
+
+/// `--delimiter \t` names the tab the parsers split on by default, and a JSON
+/// `input` then joins the fields with a tab in both column formats, where
+/// Ensembl VEP writes the two characters of the value.
+#[test]
+fn delimiter_backslash_t_joins_the_json_input_with_a_tab() {
+    let dir = tempfile::tempdir().unwrap();
+    let ensembl = write(dir.path(), "records.txt", ENSEMBL_RECORDS);
+    let json = annotate(
+        dir.path(),
+        &ensembl,
+        &["--format", "ensembl", "--delimiter", "\\t", "--json"],
+    );
+    assert!(
+        json[0].contains(r#""input":"21\t30282169\t30282169\tC/A\t1\tsnv_fwd""#),
+        "{}",
+        json[0]
+    );
+    let vcf = write(
+        dir.path(),
+        "records.vcf",
+        &format!("{VCF_HEADER}{VCF_RECORDS}"),
+    );
+    let json = annotate(
+        dir.path(),
+        &vcf,
+        &["--format", "vcf", "--delimiter", "\\t", "--json"],
+    );
+    assert!(
+        json[0].contains(r#""input":"21\t30282169\tsnv_fwd\tC\tA\t.\t.\t.""#),
+        "{}",
+        json[0]
+    );
+}
+
+/// A `--delimiter` value the regular-expression syntax refuses, or one that
+/// matches the empty string, is refused with the error contract naming the
+/// value, before the input is opened, under `--format ensembl` or `--format
+/// vcf`, the formats whose parsers split on it; so is an empty value. Under
+/// `--format hgvs` the flag is not read (Ensembl VEP's HGVS and region parsers
+/// never split a line), so the same value runs.
 #[test]
 fn delimiter_regular_expression_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let ensembl = write(dir.path(), "records.txt", ENSEMBL_RECORDS);
-    for value in ["|", ".", "[ ,]", ""] {
+    for (format, value) in [
+        ("ensembl", "["),
+        ("vcf", "["),
+        ("ensembl", "(?=,)"),
+        ("vcf", "x*"),
+        ("ensembl", ""),
+    ] {
         let out = output_path(dir.path());
         let output = vep(
             dir.path(),
             &ensembl,
             &out,
-            &["--format", "ensembl", "--delimiter", value],
+            &["--format", format, "--delimiter", value],
         );
         assert_eq!(output.status.code(), Some(1), "{value:?}");
         let text = stderr(&output);
@@ -296,6 +393,9 @@ fn delimiter_regular_expression_is_refused() {
             text.contains("ERROR: [config] --delimiter"),
             "{value:?}: {text}"
         );
+        if !value.is_empty() {
+            assert!(text.contains(&format!("{value:?}")), "{value:?}: {text}");
+        }
         assert!(!out.exists(), "{value:?}: nothing is written");
     }
     let hgvs = write(dir.path(), "records.hgvs", "21:g.30282169C>A\n");
@@ -308,7 +408,7 @@ fn delimiter_regular_expression_is_refused() {
             "--format",
             "hgvs",
             "--delimiter",
-            "|",
+            "[",
             "--fasta",
             fasta.to_str().unwrap(),
         ],

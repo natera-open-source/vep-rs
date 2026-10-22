@@ -75,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `prune_json_cache.py --drop-except <file>` keeps every `--drop` key on the transcripts the file names, so a corpus carries matrices and protein features for its own transcripts only. (#N)
 - `--check_frequency`, `--freq_pop`, `--freq_freq`, `--freq_gt_lt`, `--freq_filter` and `--filter_common` filter the input by co-located variant frequency as Ensembl VEP does, with `FREQS`. (#N)
 - The `GRCh38-freqfilter` and `GRCh38-freqfilter-include` corpora compare both engines under the exclude, include and `--filter_common` forms in every output format. (#N)
-- `--delimiter` splits an Ensembl-format or VCF input's columns (a tab, a space, a run of spaces, `\s+` or literal text); under `--format guess` the detected one applies. (#N)
+- `--delimiter` splits an Ensembl-format or VCF input's columns (a tab, a space, a run of spaces, `\s+`, literal text or a regular expression); under `--format guess` the detected one applies. (#N)
 - The `GRCh38-input-ensembl` corpus compares Ensembl-format input, tab- and space-delimited, and a space-delimited VCF against Ensembl VEP 116.2's output. (#N)
 - `--format spdi` reads SPDI notation (`sequence:position:deletion:insertion`) as Ensembl VEP does, the reference allele checked against or read from `--fasta`, which the format needs. (#N)
 - An SPDI record is named by its notation and prints under the chromosome name the cache uses, resolved through the synonyms. (#N)
@@ -255,6 +255,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The container image distrusts the two compromised eMudhra CA roots until Debian trixie ships the fixed ca-certificates, so cache downloads cannot be intercepted through a forged certificate. (#70)
 - The Parquet writer keeps its numeric casts out of DuckDB's CSV reader, so a malformed numeric token is NULL under DuckDB 2.0.0 as it was under 1.x. (#N)
 - The lone `.` ALT page states that vep-rs writes no warning for it, and the empty-lines page that Ensembl VEP's Ensembl-format parser dies on an empty line. (#N)
+- `--allow_non_variant` reads a VCF record whose first ALT is `.` as a non-variant, dropped without the flag and carried bare with it, as Ensembl VEP does. (#N)
+- Under `--individual`, a copy whose genotype names an ALT after a leading `.` is annotated as that allele, as Ensembl VEP annotates it. (#N)
+- `--synonyms` reads a line opening with whitespace as Ensembl VEP does: the reference is empty and the line's names are not linked to each other. (#N)
+- A VCF data line's leading blanks stay in its chromosome column, so the record is skipped as Ensembl VEP skips it, with its `Chromosome ... not found` warning. (#N)
+- `--delimiter` takes a regular expression and splits as Perl's `split` splits on it, capture groups included; a pattern that can match the empty string is refused. (#N)
 
 ### Security
 

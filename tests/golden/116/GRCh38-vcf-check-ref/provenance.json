@@ -6,14 +6,14 @@
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --check_ref --allow_non_variant [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside 2,000 bases of each record masked to N; reference.fa.gz beside this file, compressed as BGZF blocks of 65,280 bytes, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form",
- "input": "variants.vcf: 18 hand-placed chromosome 21 records named by their design: a substitution, a deletion, a multi-nucleotide substitution and a multi-allelic record whose reference allele matches the reference sequence, and one of each whose reference allele does not; an insertion whose anchor base does not match (an insertion has no reference allele to check); a record with the reference allele N; lower-case alleles with and without an ID; a chromosome the cache lacks (Z); a chr-prefixed chromosome name; an invalid allele string; two non-variant records (ALT .), one carrying an earlier CSQ value, and one whose reference allele does not match",
+ "input": "variants.vcf: 19 hand-placed chromosome 21 records named by their design: a substitution, a deletion, a multi-nucleotide substitution and a multi-allelic record whose reference allele matches the reference sequence, and one of each whose reference allele does not; an insertion whose anchor base does not match (an insertion has no reference allele to check); a record with the reference allele N; lower-case alleles with and without an ID; a chromosome the cache lacks (Z); a chr-prefixed chromosome name; an invalid allele string; three non-variant records, two with ALT . (one carrying an earlier CSQ value) and one whose first ALT is . before a second allele (.,TA), and one record with ALT . whose reference allele does not match",
  "sha256": {
-  "default.txt": "085e75ea2007697e8e1f22407caf44d0c48367d7e6dbf08017b7ccac664bc38b",
-  "tab.txt": "256d548cfe69668942f0b402a53ae9401ca232c7de492331de5d0700f418ffa8",
-  "vcf.vcf": "eceedda798561715e650beac90a976e9a385249dabb845c85dbcbde268b1b91c",
-  "json.jsonl": "d5f67e2722ab4840b1b546af12489357480576c249d59a796decff3155d2f33e"
+  "default.txt": "36e34ff5d40e8c94aca9af8ea9d6bd786b8b370dc0333738c2b92bafd2aecdf2",
+  "tab.txt": "68c800e92952e9648ece39952167f54495747aa42883af700e1bd6f3ebbb9cd2",
+  "vcf.vcf": "f93fe644a896dd9e8cc99f5fcc604874c155c6f534a85a909e45bbbddc46c73e",
+  "json.jsonl": "6ea6114a1e81cd7829f8642b89253a15999af4359fb9f5ce6fe129874746f5c3"
  },
- "variants_vcf_sha256": "ed4252bafc3cc44b2e74d52a2cd744a53ffe7f53bc81cd8e3f93d15900d65d1c",
+ "variants_vcf_sha256": "f3bb11b0119d0c539f0e0d6ae9e3e6382911fbb3c0d5e608c70e50e0eff1eb40",
  "flag_sets": {
   "dont-skip": {
    "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --check_ref --allow_non_variant --dont_skip [--tab|--vcf|--json]",
@@ -25,10 +25,10 @@
    ],
    "expected_dir": "expected_dont-skip",
    "sha256": {
-    "default.txt": "171607bc6afa403bb95b9003886db2beccfabb9617a0bf8906dfd43265d61983",
-    "tab.txt": "336acd609ef570c2845ce5d994c6d8377f2c58efb10b863b19859c4dcaa5c6fd",
-    "vcf.vcf": "57931bbf09ade6f06d2a86e9b5db2ef96aad67611655acc7360cd6c6d5d93795",
-    "json.jsonl": "5846615088128123056c720ee5538f18f55702314b25bf8e5b79ecf70cab232a"
+    "default.txt": "349bae02533965d34b10ef4f4fbbd50456ecedcf3f2ff1659ab94183afa54f5c",
+    "tab.txt": "2fef0049e3649542ab689a15722be9392fa4a770ec9bf24c61e961ba3cc9210d",
+    "vcf.vcf": "b082cf647b5ff7340597f2097b78f620674bd8d16d238f2c45de7017498b15ae",
+    "json.jsonl": "847810ff5bef933872a1a437e6d2a2bb26c277945ee4670c2205c2ed823f163f"
    }
   },
   "chr-list": {
@@ -41,10 +41,10 @@
    ],
    "expected_dir": "expected_chr-list",
    "sha256": {
-    "default.txt": "935f9b26311cbac10c74dbcbae86d5061912503cef700cbd9c7b7386b296c2e8",
-    "tab.txt": "f5b7ff1b3a3276a7afc72d44bb75a2fb4ab277f1e84e2b4513b7640e5f789da4",
-    "vcf.vcf": "9fc390a729ddb02d793cd09114779e1ddb6f16e05bc9dbec43313e0734bc28c8",
-    "json.jsonl": "1bc973772bee08df3f27597020c7206505d788e4d1f67116c826fb2d6f7a8368"
+    "default.txt": "0702ed5d1860c68d63e324b0b0739d85e89e934e9ba7f61585b398be171d784c",
+    "tab.txt": "d03c309be8f7021caf98b53e208abd8138d1db83be62fea2480a9df6c819d877",
+    "vcf.vcf": "927ae2a2db6e10e0f3af9a2f79b028a15214a96f9e1ffca7ddf842c5d8fd269e",
+    "json.jsonl": "50bfbbda5331f63a58003752358502ebc7ba658d5658c7bc755504368ed6ae6f"
    }
   },
   "lookup-ref": {
@@ -56,9 +56,9 @@
    ],
    "expected_dir": "expected_lookup-ref",
    "sha256": {
-    "tab.txt": "63869082b693ddbce889b3a49084b77bee251879c1c1ce727012e9d6ce8c6cd8",
-    "vcf.vcf": "bb33fd0ea32e676d18d4468b8a6ae6fdf6eddb9d5c11a22365a666769bf50148",
-    "json.jsonl": "660544f18f11eac436a11981bc32bb054090726cfe2ee4ba5ecf216d2d1372cc"
+    "tab.txt": "3832fc7b65dfc736d55b1858c7854d30dc0feee8eca37c9e236573a3ca06b696",
+    "vcf.vcf": "0743fb32b70c36026ef73c9d5a7df08b6221aa5073f7c8a040c563f7ac1c8134",
+    "json.jsonl": "5679d14805f876aa0e51b642dc6261920cecd77d9bfcfb2e6fb56bbd799ea61e"
    }
   },
   "use-transcript-ref": {
@@ -70,9 +70,9 @@
    ],
    "expected_dir": "expected_use-transcript-ref",
    "sha256": {
-    "tab.txt": "1aa0887be5f06dc8d0b9d4af7aa4dd4c77f909128a19d559b7dc67e87c329994",
-    "vcf.vcf": "74a5ef9ce2095bcaa1eb9b3d5356fca3044a06d693295b47c840590e9bc0a29b",
-    "json.jsonl": "5fc4f6edfdef1e52548058415c6d19535f0a0b78b260f397d87ba9e0fe3a61c9"
+    "tab.txt": "513a8ff8d07e1021940b385db2d949e6afbcd20dd6551bea80c81adfafb53a12",
+    "vcf.vcf": "06d9f46fb9fcf9efa1a2834b8d23346f52d87781760de39a6dfd3eb8813c7bfc",
+    "json.jsonl": "6e3cf35e6e6a974200a12265d0d51cac7f2dd408460844fa9ff897d104e42b70"
    }
   },
   "use-transcript-ref-refhoms": {
@@ -84,9 +84,9 @@
    ],
    "expected_dir": "expected_use-transcript-ref-refhoms",
    "sha256": {
-    "tab.txt": "96c13b736705e20bd91c2fb8b96dec7a19e11eaf7db7f32608a5935f4d22baee",
-    "vcf.vcf": "fbfa09360539a6b4e047827868fb02718db24261a88bb882d9e5adcfbb4363a5",
-    "json.jsonl": "9063116dfd6811fb60d60128ee36c20790f5fd376ef8c6f03bd52525c93f9979"
+    "tab.txt": "531b47223f4cc955bb801ced05e8a2522d73b8d4e494c08c89856ad1014b1a75",
+    "vcf.vcf": "bf5c2e5f4470fa6f5f31dc0301c13383cf5074f4a3297cc81ae6da0d21bee877",
+    "json.jsonl": "45a5271cdbe7d8b3e18b442c3b87a879bf5f080f5089f8753b658695aca0cb1d"
    }
   }
  },
@@ -103,14 +103,14 @@
   "lookup-ref-default": {
    "description": "expected/lookup_ref_default.txt.gz and expected/lookup_ref_warnings.txt: the lookup-ref flag set's default-format output and warnings file, compared by the manifest run of that name",
    "sha256": {
-    "lookup_ref_default.txt": "41a991e7c974965eb0380ee330d611ac2da44be8296c1f0db697ac521dd1388a"
+    "lookup_ref_default.txt": "db99d2bb924b60f97951de6eb56f9090b6016523bd19b7f307fbdec6e212cb65"
    }
   },
   "skipped-variants-file": "expected/skipped.txt: the default run's --skipped_variants_file",
   "use-transcript-ref-default": {
    "description": "expected/use_transcript_ref_default.txt.gz and expected/use_transcript_ref_warnings.txt: the use-transcript-ref flag set's default-format output and warnings file, compared by the manifest run of that name",
    "sha256": {
-    "use_transcript_ref_default.txt": "6054f43a81cbaadeb002fb6c6a2930124b48f5dc897002b8916184cd82a798c6"
+    "use_transcript_ref_default.txt": "5337628fcad2f3f61a34d961e79764a25ff56251aef0e4fabdde9626852e2678"
    }
   }
  },

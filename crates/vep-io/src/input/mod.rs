@@ -145,10 +145,11 @@ impl ParserContext {
 /// The pattern a column-based input is split on, as `--delimiter` names it
 /// (Config.pm:82, a tab by default at :302) or as format detection chooses it
 /// from the first data line (Parser.pm:387-415). Ensembl VEP hands the value to
-/// Perl's `split` as a regular expression; the three patterns its detection
-/// chooses and `\s+` are read as that, and any other value as literal text, so
-/// a value with a regular-expression character in it is refused rather than
-/// split differently ([`Delimiter::from_flag`]).
+/// Perl's `split` as a regular expression (ensembl-io ColumnBasedParser.pm:250);
+/// the three patterns its detection chooses, `\s+` and text with no
+/// regular-expression character are split here directly, and any other value
+/// as the regular expression it is, by a splitter the caller compiles
+/// ([`Delimiter::from_flag`]).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Delimiter {
     /// A tab: the default, and `detect_format`'s choice for a line with one.
@@ -164,9 +165,64 @@ pub enum Delimiter {
     /// A run of whitespace (`\s+`): as [`Delimiter::SpaceRun`] with tabs and the
     /// other blank characters as separators too.
     WhitespaceRun,
-    /// Any other text, matched as written.
+    /// Text with no regular-expression character, matched as written.
     Literal(String),
+    /// Any other text, the regular expression Perl's `split` reads it as.
+    Pattern(PatternDelimiter),
 }
+
+/// How a regular-expression delimiter splits a line, as Perl's `split` splits
+/// on a pattern: the fields are the text between matches, a leading empty field
+/// kept when a match opens the line and trailing empty fields dropped; a match
+/// never ends at the field's start, so an empty match there is passed over for
+/// the next match one character on; each capture group of a match is a field
+/// of its own, an unmatched group an empty one. A splitter of a `str` ends its
+/// fields on character boundaries.
+pub trait PatternSplit: Send + Sync {
+    /// Whether the pattern matches anywhere in `line`.
+    fn is_match(&self, line: &[u8]) -> bool;
+    /// The fields of a line of text.
+    fn split_str<'a>(&self, line: &'a str) -> Vec<&'a str>;
+    /// The fields of a line of bytes, which need not be UTF-8.
+    fn split_bytes<'a>(&self, line: &'a [u8]) -> Vec<&'a [u8]>;
+}
+
+/// A regular-expression delimiter: the `--delimiter` text and the splitter
+/// compiled from it. Two are equal when their texts are.
+#[derive(Clone)]
+pub struct PatternDelimiter {
+    text: String,
+    split: Arc<dyn PatternSplit>,
+}
+
+impl PatternDelimiter {
+    /// The delimiter of `text`, split by `split`.
+    pub fn new(text: &str, split: Arc<dyn PatternSplit>) -> Self {
+        Self {
+            text: text.to_string(),
+            split,
+        }
+    }
+
+    /// The `--delimiter` text the splitter was compiled from.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+}
+
+impl std::fmt::Debug for PatternDelimiter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("PatternDelimiter").field(&self.text).finish()
+    }
+}
+
+impl PartialEq for PatternDelimiter {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text
+    }
+}
+
+impl Eq for PatternDelimiter {}
 
 /// The characters Perl's `\s` and `split ' '` separate on: ASCII whitespace
 /// plus the vertical tab, which `char::is_ascii_whitespace` leaves out.
@@ -184,20 +240,22 @@ fn is_regex_metacharacter(c: char) -> bool {
 
 impl Delimiter {
     /// The delimiter a `--delimiter` value names: a tab character or the text
-    /// `\t`, a space, a space and a plus, `\s+`, or literal text. Any other
-    /// value with a regular-expression character, and an empty value, is an
-    /// error naming what is accepted.
-    pub fn from_flag(value: &str) -> Result<Self, String> {
+    /// `\t`, a space, a space and a plus, `\s+`, text with no
+    /// regular-expression character, or any other text as the regular
+    /// expression `compile` makes of it, whose error is this one's. An empty
+    /// value is an error.
+    pub fn from_flag(
+        value: &str,
+        compile: impl FnOnce(&str) -> Result<Arc<dyn PatternSplit>, String>,
+    ) -> Result<Self, String> {
         match value {
             "\t" | "\\t" => Ok(Delimiter::Tab),
             " +" => Ok(Delimiter::SpaceRun),
             " " => Ok(Delimiter::Whitespace),
             "\\s+" => Ok(Delimiter::WhitespaceRun),
             "" => Err("--delimiter needs at least one character".to_string()),
-            literal if literal.chars().any(is_regex_metacharacter) => Err(format!(
-                "--delimiter {literal:?} is read as a regular expression by Ensembl VEP; \
-                 a tab (\\t), a space, a run of spaces ( +), whitespace (\\s+) or literal \
-                 text with no regular-expression character is accepted"
+            pattern if pattern.chars().any(is_regex_metacharacter) => Ok(Delimiter::Pattern(
+                PatternDelimiter::new(pattern, compile(pattern)?),
             )),
             literal => Ok(Delimiter::Literal(literal.to_string())),
         }
@@ -213,6 +271,7 @@ impl Delimiter {
             Delimiter::SpaceRun | Delimiter::Whitespace => line.contains(' '),
             Delimiter::WhitespaceRun => line.contains(is_perl_space),
             Delimiter::Literal(text) => line.contains(text.as_str()),
+            Delimiter::Pattern(pattern) => pattern.split.is_match(line.as_bytes()),
         };
         if present {
             self.clone()
@@ -229,19 +288,26 @@ impl Delimiter {
     /// field kept, trailing empty fields dropped, and under
     /// [`Delimiter::Whitespace`] the leading whitespace ignored.
     pub fn split<'a>(&self, line: &'a str) -> Vec<&'a str> {
-        self.split_bytes(line.as_bytes())
-            .into_iter()
-            .map(|field| {
-                // A separator is an ASCII byte or a whole UTF-8 literal, so a
-                // field ends on character bounds.
-                std::str::from_utf8(field).expect("a field of a str is a str")
-            })
-            .collect()
+        let mut fields: Vec<&str> = match self {
+            Delimiter::Pattern(pattern) => pattern.split.split_str(line),
+            _ => self
+                .split_bytes(line.as_bytes())
+                .into_iter()
+                .map(|field| {
+                    // A separator is an ASCII byte or a whole UTF-8 literal, so a
+                    // field ends on character bounds.
+                    std::str::from_utf8(field).expect("a field of a str is a str")
+                })
+                .collect(),
+        };
+        drop_trailing_empty_fields(&mut fields);
+        fields
     }
 
     /// [`Self::split`] on the bytes of a line, for a line that may not be
     /// UTF-8: the fields are byte slices of `line`, and a byte outside ASCII
-    /// is a separator only inside a literal delimiter, matched byte for byte.
+    /// is a separator only inside a literal delimiter, matched byte for byte,
+    /// or where a regular expression matches it.
     pub fn split_bytes<'a>(&self, line: &'a [u8]) -> Vec<&'a [u8]> {
         let mut fields: Vec<&[u8]> = match self {
             Delimiter::Tab => line.split(|b| *b == b'\t').collect(),
@@ -252,21 +318,23 @@ impl Delimiter {
                 .filter(|field| !field.is_empty())
                 .collect(),
             Delimiter::Literal(text) => split_on_literal(line, text.as_bytes()),
+            Delimiter::Pattern(pattern) => pattern.split.split_bytes(line),
         };
-        while fields.last().is_some_and(|field| field.is_empty()) {
-            fields.pop();
-        }
+        drop_trailing_empty_fields(&mut fields);
         fields
     }
 
     /// The text the fields of an input line are joined with where Ensembl VEP
-    /// re-emits the line (`OutputFactory/JSON.pm:172, 247`): the delimiter
-    /// itself, a single space for either space pattern.
+    /// re-emits the line (`OutputFactory/JSON.pm:172, 247`): the delimiter's
+    /// text, or a single space for a delimiter with a `+` in it (`" +"`, `\s+`,
+    /// a regular expression with one), which `:172` substitutes before the join.
     pub fn join_text(&self) -> &str {
         match self {
             Delimiter::Tab => "\t",
             Delimiter::SpaceRun | Delimiter::Whitespace | Delimiter::WhitespaceRun => " ",
             Delimiter::Literal(text) => text,
+            Delimiter::Pattern(pattern) if pattern.text().contains('+') => " ",
+            Delimiter::Pattern(pattern) => pattern.text(),
         }
     }
 }
@@ -304,6 +372,13 @@ fn split_on_literal<'a>(line: &'a [u8], text: &[u8]) -> Vec<&'a [u8]> {
     }
     fields.push(rest);
     fields
+}
+
+/// Removes the empty fields at the end of a line, which Perl's `split` drops.
+fn drop_trailing_empty_fields<T: AsRef<[u8]>>(fields: &mut Vec<T>) {
+    while fields.last().is_some_and(|field| field.as_ref().is_empty()) {
+        fields.pop();
+    }
 }
 
 /// Ensembl VEP's `post_process_vfs` on a parsed sequence variant (Parser.pm:
@@ -366,30 +441,80 @@ pub fn minimise_alleles(variant: &mut InputVariant) -> bool {
 mod tests {
     use super::*;
 
+    /// A stand-in for a compiled pattern: `,` and `;` separate, every field
+    /// kept, as the plumbing around a [`PatternDelimiter`] needs no more.
+    struct CommaOrSemicolon;
+
+    impl PatternSplit for CommaOrSemicolon {
+        fn is_match(&self, line: &[u8]) -> bool {
+            line.iter().any(|b| matches!(b, b',' | b';'))
+        }
+
+        fn split_str<'a>(&self, line: &'a str) -> Vec<&'a str> {
+            line.split([',', ';']).collect()
+        }
+
+        fn split_bytes<'a>(&self, line: &'a [u8]) -> Vec<&'a [u8]> {
+            line.split(|b| matches!(b, b',' | b';')).collect()
+        }
+    }
+
+    fn compiled(text: &str) -> Result<Arc<dyn PatternSplit>, String> {
+        if text == "[" {
+            return Err(format!("unclosed {text}"));
+        }
+        Ok(Arc::new(CommaOrSemicolon))
+    }
+
+    fn pattern(text: &str) -> Delimiter {
+        Delimiter::Pattern(PatternDelimiter::new(text, Arc::new(CommaOrSemicolon)))
+    }
+
     /// The three patterns format detection chooses, `\s+`, a literal, an empty
-    /// value and a regular expression, read as `--delimiter` reads them.
+    /// value and a regular expression, read as `--delimiter` reads them: text
+    /// with a regular-expression character is handed to the compiler, whose
+    /// error is the flag's.
     #[test]
     fn delimiter_flag_values() {
-        assert_eq!(Delimiter::from_flag("\t"), Ok(Delimiter::Tab));
-        assert_eq!(Delimiter::from_flag("\\t"), Ok(Delimiter::Tab));
-        assert_eq!(Delimiter::from_flag(" "), Ok(Delimiter::Whitespace));
-        assert_eq!(Delimiter::from_flag(" +"), Ok(Delimiter::SpaceRun));
-        assert_eq!(Delimiter::from_flag("\\s+"), Ok(Delimiter::WhitespaceRun));
-        assert_eq!(
-            Delimiter::from_flag(","),
-            Ok(Delimiter::Literal(",".to_string()))
-        );
-        assert_eq!(
-            Delimiter::from_flag("::"),
-            Ok(Delimiter::Literal("::".to_string()))
-        );
-        assert!(Delimiter::from_flag("")
-            .unwrap_err()
-            .contains("at least one"));
+        let from_flag = |value: &str| Delimiter::from_flag(value, compiled);
+        assert_eq!(from_flag("\t"), Ok(Delimiter::Tab));
+        assert_eq!(from_flag("\\t"), Ok(Delimiter::Tab));
+        assert_eq!(from_flag(" "), Ok(Delimiter::Whitespace));
+        assert_eq!(from_flag(" +"), Ok(Delimiter::SpaceRun));
+        assert_eq!(from_flag("\\s+"), Ok(Delimiter::WhitespaceRun));
+        assert_eq!(from_flag(","), Ok(Delimiter::Literal(",".to_string())));
+        assert_eq!(from_flag("::"), Ok(Delimiter::Literal("::".to_string())));
+        assert!(from_flag("").unwrap_err().contains("at least one"));
         for regex in ["|", ".", "\\s", "[ ,]", "a+"] {
-            let error = Delimiter::from_flag(regex).unwrap_err();
-            assert!(error.contains("regular expression"), "{regex:?}: {error}");
+            assert_eq!(from_flag(regex), Ok(pattern(regex)), "{regex:?}");
         }
+        assert_eq!(from_flag("["), Err("unclosed [".to_string()));
+    }
+
+    /// A pattern delimiter splits a line of text or of bytes by its splitter,
+    /// trailing empty fields dropped; it is present in a line the pattern
+    /// matches and chosen over the space patterns there; its join text is the
+    /// `--delimiter` text when that has no `+`; and two pattern delimiters are
+    /// equal when their texts are, whatever splitter each carries.
+    #[test]
+    fn pattern_delimiter_splits_by_its_splitter() {
+        let delimiter = pattern("[,;]");
+        assert_eq!(delimiter.split("a,b;c,,"), ["a", "b", "c"]);
+        assert_eq!(
+            delimiter.split_bytes(b",caf\xe9;b,,"),
+            [&b""[..], b"caf\xe9", b"b"]
+        );
+        assert_eq!(delimiter.chosen_for("a,b"), delimiter);
+        assert_eq!(delimiter.chosen_for("a  b"), Delimiter::SpaceRun);
+        assert_eq!(delimiter.chosen_for("a b"), Delimiter::Whitespace);
+        assert_eq!(delimiter.chosen_for("ab"), delimiter);
+        assert_eq!(delimiter.join_text(), "[,;]");
+        assert_eq!(
+            format!("{delimiter:?}"),
+            r#"Pattern(PatternDelimiter("[,;]"))"#
+        );
+        assert_ne!(delimiter, pattern("[;,]"));
+        assert_ne!(delimiter, Delimiter::Literal("[,;]".to_string()));
     }
 
     /// Perl's `split` on each pattern: a leading empty field is kept under a tab,
@@ -444,6 +569,10 @@ mod tests {
         }
     }
 
+    /// `OutputFactory/JSON.pm:172` joins with a single space under any
+    /// delimiter with a `+` in it, so a regular expression with one (`,+`, or
+    /// `\+` for a literal plus) joins as the space runs do, and one without
+    /// joins with its text.
     #[test]
     fn delimiter_join_text_is_one_space_for_either_space_pattern() {
         assert_eq!(Delimiter::Tab.join_text(), "\t");
@@ -451,6 +580,9 @@ mod tests {
         assert_eq!(Delimiter::Whitespace.join_text(), " ");
         assert_eq!(Delimiter::WhitespaceRun.join_text(), " ");
         assert_eq!(Delimiter::Literal(";".to_string()).join_text(), ";");
+        assert_eq!(pattern("[,;]").join_text(), "[,;]");
+        assert_eq!(pattern(",+").join_text(), " ");
+        assert_eq!(pattern("\\+").join_text(), " ");
     }
 
     fn variant(start: u64, end: u64, alleles: &str) -> InputVariant {

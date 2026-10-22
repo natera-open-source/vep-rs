@@ -76,7 +76,7 @@ pub struct Args {
     )]
     pub format: String,
 
-    /// Delimiter between the columns of an Ensembl-format or VCF input, a tab unless given: \t for a tab (a JSON `input` then joins its fields with a tab, where Ensembl VEP writes the two characters), a space to split on whitespace, a space and a plus (` +`) to split on runs of spaces, `\s+`, or literal text; a VCF record read under another delimiter is re-joined with tabs. With --format guess the delimiter is detected from the first data line instead, as Ensembl VEP detects it, and this flag is not read
+    /// Delimiter between the columns of an Ensembl-format or VCF input, a tab unless given: \t for a tab (a JSON `input` then joins its fields with a tab, where Ensembl VEP writes the two characters), a space to split on whitespace, a space and a plus (` +`) to split on runs of spaces, `\s+`, text with no regular-expression character to split on that text, or any other text as the regular expression Ensembl VEP hands to Perl's split, read byte by byte as Perl reads it (a value its syntax refuses, one that can match the empty string, or one that could match part of a UTF-8 character is an error); a VCF record read under another delimiter is re-joined with tabs. With --format guess the delimiter is detected from the first data line instead, as Ensembl VEP detects it, and this flag is not read
     #[arg(help_heading = "Input", long, value_name = "TEXT")]
     pub delimiter: Option<String>,
 
@@ -1161,9 +1161,10 @@ pub struct Args {
     #[arg(help_heading = "Miscellaneous", long = "dont_skip")]
     pub dont_skip: bool,
 
-    /// Keep a VCF record whose ALT is `.` (a reference-only call): the VCF output carries its line with
+    /// Keep a VCF record whose first ALT is `.` (a reference-only call): the VCF output carries its line with
     /// any earlier CSQ removed unless --keep_csq, the JSON output writes its object with no consequence,
-    /// and the default and tab outputs write no row for it
+    /// and the default and tab outputs write no row for it; under --individual a copy whose genotype names
+    /// a later ALT of the record is annotated as that allele
     #[arg(help_heading = "Miscellaneous", long = "allow_non_variant")]
     pub allow_non_variant: bool,
 

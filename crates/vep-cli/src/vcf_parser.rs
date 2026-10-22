@@ -225,7 +225,7 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
     })
 }
 
-/// The record of a VCF line whose ALT is `.` under `--allow_non_variant`
+/// The record of a VCF line whose first ALT is `.` under `--allow_non_variant`
 /// (Parser/VCF.pm:259-267, 342): the reference bases from POS with the reference
 /// allele as its whole allele string and no allele to annotate, so no format
 /// writes a row for it, the VCF output carries its line and the JSON output its
@@ -233,23 +233,37 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
 /// Perl-true INFO/SVTYPE is kept as the record's type, the mark of the line
 /// Ensembl VEP routes to its structural path (`:237-245`). Under `--individual`
 /// the record is copied per individual like any other (`:355-376`): a `0/0`
-/// genotype is a reference-homozygous copy.
+/// genotype is a reference-homozygous copy, and the alleles a genotype indexes
+/// are the reference and every ALT as written, none chopped (`:300-336` never
+/// chops an allele list whose first allele is `.`); a copy whose genotype names
+/// an ALT beyond `.` carries that allele (`:627-639` builds the copy's allele
+/// string from the alleles named, and nothing reads the record's non-variant
+/// mark on it), so such a record is read as a sequence record for its copies.
 pub fn non_variant_record(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<Vec<InputVariant>> {
     let columns = vcf_columns(line)?;
     let [chr, pos_text, id, reference, alt_field, _, _, info] = columns.fixed;
+    let svtype = info_value(info, "SVTYPE").filter(|v| perl_true(v));
+    if parse.reading.reads_copies() {
+        let mut alts = written_alts(alt_field);
+        variant_alts(&mut alts, svtype);
+        if alts.iter().any(|(_, alt)| *alt != "." && *alt != "*") {
+            return parse_vcf_line_with(line, parse);
+        }
+    }
     let pos = parse_pos(pos_text).with_context(|| format!("Invalid POS: '{pos_text}'"))?;
     let mut variant =
         InputVariant::without_allele(chr.to_string(), pos, reference, std::iter::empty());
     variant.uploaded_allele_string = Some(variant.allele_string.as_str().into());
     variant.id = first_vcf_id(id).map(str::to_string);
     variant.input_line_name = Some(input_line_name(chr, pos, reference, alt_field).into());
-    variant.sv_type = info_value(info, "SVTYPE")
-        .filter(|v| perl_true(v))
-        .map(str::to_string);
+    variant.sv_type = svtype.map(str::to_string);
     variant.raw_input = parse.capture_raw_input.then(|| line.into());
+    let written: Vec<&str> = std::iter::once(reference)
+        .chain(perl_split(alt_field, &[',']))
+        .collect();
     let alleles = RecordAlleles {
-        written: vec![reference, "."],
-        chopped: vec![reference.to_string(), ".".to_string()],
+        chopped: written.iter().map(|allele| allele.to_string()).collect(),
+        written,
     };
     Ok(parse
         .reading
@@ -813,14 +827,24 @@ pub fn sample_columns(header_line: &str) -> SampleColumns {
     }
 }
 
+/// Whether a VCF data line is a non-variant record: its first comma-separated
+/// ALT is `.` (Parser/VCF.pm:259 tests `$alts->[0]` of the list ensembl-io
+/// BaseVCF4.pm:489 splits on commas), so `.,T` is one and `T,.` is not, and
+/// the list is not in a structural shape, which Ensembl VEP tests first
+/// (`:237-245`), so `.,<DEL>` is a structural record. A lone `.` under a true
+/// INFO/SVTYPE stays a non-variant here ([`non_variant_record`]).
 pub(crate) fn vcf_line_is_non_variant(line: &str) -> bool {
-    // ALT='.' is the canonical VCF representation of a non-variant record.
     let mut fields = line.split('\t');
-    let _chrom = fields.next();
-    let _pos = fields.next();
-    let _id = fields.next();
-    let _ref = fields.next();
-    matches!(fields.next(), Some("."))
+    let reference = fields.nth(3).unwrap_or("");
+    let alt_field = fields.next().unwrap_or("");
+    if perl_split(alt_field, &[',']).next() != Some(".") {
+        return false;
+    }
+    let info = fields.nth(2).unwrap_or("");
+    let svtype = info_value(info, "SVTYPE").filter(|v| perl_true(v));
+    let mut alts = written_alts(alt_field);
+    variant_alts(&mut alts, svtype);
+    alts.len() == 1 || !routes_to_structural(reference, &alts, svtype)
 }
 
 /// A sequence record after the anchor chop of Parser/VCF.pm:294-335, upper-cased as
@@ -5536,6 +5560,77 @@ mod tests {
         assert_eq!(repeated[1].zygosity().as_deref(), Some("HOM"));
         assert_eq!(repeated[1].genotype, ["G", "G"]);
         assert!(repeated[2].no_allele);
+    }
+
+    /// `Parser/VCF.pm:259` tests the first comma-separated ALT alone (ensembl-io
+    /// `BaseVCF4.pm:489` splits the field on commas, Perl's `split` dropping a
+    /// trailing empty field), so `.,TA` and `.,` are non-variant records where
+    /// `TA,.` is a record with the alleles `TA` and `.`; an empty or missing ALT
+    /// is no non-variant. The structural test of `:237-245` comes first, so
+    /// `.,<DEL>` and `.,TA` under a true `SVTYPE` are structural records, while
+    /// a lone `.` under one keeps its non-variant reading here. The record keeps
+    /// the reference as its whole allele string over the reference's span
+    /// (`:342`, `:254`), and a genotype indexes the reference and every written
+    /// ALT: `0/2` on `.,TA` names `TA`, whose copy carries that allele (`:627-639`
+    /// build the copy's allele string from the alleles named), while `0/0` is a
+    /// reference-homozygous copy with none; past the list (`2/0` on `.,`) a
+    /// genotype names nothing, an undefined allele Ensembl VEP keeps as not the
+    /// reference (`:635`).
+    #[test]
+    fn non_variant_is_the_first_alt_alone() {
+        assert!(vcf_line_is_non_variant("21\t100\tx\tTG\t.\t.\t.\t."));
+        assert!(vcf_line_is_non_variant("21\t100\tx\tTG\t.,TA\t.\t.\t."));
+        assert!(vcf_line_is_non_variant("21\t100\tx\tTG\t.,\t.\t.\t."));
+        assert!(vcf_line_is_non_variant(
+            "21\t100\tx\tTG\t.\t.\t.\tSVTYPE=DEL;END=200"
+        ));
+        assert!(!vcf_line_is_non_variant(
+            "21\t100\tx\tTG\t.,<DEL>\t.\t.\tEND=200"
+        ));
+        assert!(!vcf_line_is_non_variant(
+            "21\t100\tx\tTG\t.,TA\t.\t.\tSVTYPE=DEL;END=200"
+        ));
+        assert!(!vcf_line_is_non_variant("21\t100\tx\tTG\tTA,.\t.\t.\t."));
+        assert!(!vcf_line_is_non_variant("21\t100\tx\tTG\t,.\t.\t.\t."));
+        assert!(!vcf_line_is_non_variant("21\t100\tx\tTG\t\t.\t.\t."));
+        assert!(!vcf_line_is_non_variant("21\t100\tx\tTG"));
+        let reading = RecordReading {
+            individuals: None,
+            process_ref_homs: false,
+        };
+        let record = non_variant_record_read("21\t100\tx\tTG\t.,TA\t.\t.\t.", reading).unwrap();
+        assert_eq!(record.len(), 1);
+        assert!(record[0].no_allele);
+        assert_eq!(record[0].record_allele_string(), "TG");
+        assert_eq!((record[0].start, record[0].end), (100, 101));
+
+        let samples = genotyped_samples(&["S1", "S2"]);
+        let split = IndividualSplit::new(&IndividualRequest::All, &samples, IndividualMode::Copies)
+            .unwrap();
+        let per_individual = RecordReading {
+            individuals: Some(&split),
+            process_ref_homs: false,
+        };
+        let copies = non_variant_record_read(
+            "21\t100\tx\tTG\t.,TA\t.\t.\t.\tGT\t0/0\t0/2",
+            per_individual,
+        )
+        .unwrap();
+        let names: Vec<&str> = copies
+            .iter()
+            .map(|v| v.individual.as_deref().unwrap())
+            .collect();
+        assert_eq!(names, ["S1", "S2"]);
+        assert!(copies[0].hom_ref && copies[0].no_allele && copies[0].genotype == ["TG", "TG"]);
+        assert!(!copies[1].hom_ref && !copies[1].no_allele);
+        assert_eq!(copies[1].alt_allele(), b"TA");
+        assert_eq!(copies[1].genotype, ["TG", "TA"]);
+        assert_eq!((copies[1].start, copies[1].end), (100, 101));
+        let past_the_list =
+            non_variant_record_read("21\t100\tx\tTG\t.,\t.\t.\t.\tGT\t0/0\t2/0", per_individual)
+                .unwrap();
+        assert_eq!(past_the_list.len(), 2);
+        assert!(!past_the_list[1].hom_ref && past_the_list[1].genotype == ["", "TG"]);
     }
 
     /// A copy of every allele of a bi-allelic record keeps the record's string as

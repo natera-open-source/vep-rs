@@ -1,4 +1,4 @@
-[VEP skipped the following variants from /corpus/variants.vcf]
+[VEP skipped the following variants from /work/input.vcf]
 Line 2    	21 30289183 snv_bad A T . . .           	Specified reference allele A does not match Ensembl reference allele
 Line 5    	21 30430756 n_ref N C . . .             	Specified reference allele N does not match Ensembl reference allele
 Line 7    	21 34716478 del_bad AGG A . . .         	Specified reference allele GG does not match Ensembl reference allele

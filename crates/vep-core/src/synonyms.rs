@@ -28,15 +28,15 @@ impl ChromosomeSynonyms {
         Self::default()
     }
 
-    /// Reads a synonyms file: each line split on whitespace, its first token
-    /// the reference name and every later token a synonym of it, recorded both
-    /// ways (`BaseVEP.pm:646-656`). Blank lines carry no name; a line with one
-    /// token names nothing. A line with leading whitespace keeps its first name
-    /// as the reference, where Perl's `split(/\s+/)` yields an empty reference
-    /// and links the line's names to nothing; no Ensembl dump writes such a line
-    /// (`Pipeline/DumpVEP/CreateDumpJobs.pm:205` writes `a\tb`), so the two read
-    /// every cache file alike. The error is the file's own, for the caller to
-    /// word as Ensembl VEP does (`Could not read synonyms file <file>: <reason>`).
+    /// Reads a synonyms file as `chromosome_synonyms` reads it
+    /// (`BaseVEP.pm:646-656`): each line is split on runs of whitespace, its
+    /// first field is the reference name and every later field a synonym of it,
+    /// recorded both ways. Perl's `split(/\s+/)` keeps a leading empty field, so
+    /// a line opening with whitespace names the empty string as its reference
+    /// and links the line's names to it, not to each other. A blank line carries
+    /// no name and a line with one name names nothing. The error is the file's
+    /// own, for the caller to word as Ensembl VEP does (`Could not read synonyms
+    /// file <file>: <reason>`).
     pub fn load_from_file(path: &Path) -> std::io::Result<Self> {
         Ok(Self::parse(&std::fs::read_to_string(path)?))
     }
@@ -45,11 +45,8 @@ impl ChromosomeSynonyms {
     pub fn parse(text: &str) -> Self {
         let mut table = Self::new();
         for line in text.lines() {
-            let mut tokens = line.split_whitespace();
-            let Some(reference) = tokens.next() else {
-                continue;
-            };
-            for synonym in tokens {
+            let (reference, rest) = line.split_once(is_perl_space).unwrap_or((line, ""));
+            for synonym in rest.split(is_perl_space).filter(|name| !name.is_empty()) {
                 table.add_synonym(reference, synonym);
             }
         }
@@ -150,6 +147,13 @@ impl ChromosomeSynonyms {
     }
 }
 
+/// The characters Perl's `\s` matches in a file read as bytes: ASCII
+/// whitespace plus the vertical tab, which `char::is_ascii_whitespace`
+/// leaves out.
+fn is_perl_space(c: char) -> bool {
+    c.is_ascii_whitespace() || c == '\u{0B}'
+}
+
 /// `chr` without a leading `chr` in any case (`BaseVEP.pm:722-724`), or `None`
 /// when it has none.
 fn strip_chr_prefix(chr: &str) -> Option<&str> {
@@ -191,6 +195,28 @@ mod tests {
         let mut names: Vec<&str> = table.names().collect();
         names.sort_unstable();
         assert_eq!(names, ["#", "21", "CM000683.2", "NC_000021.9", "chr21"]);
+    }
+
+    /// `BaseVEP.pm:648-650`: `split(/\s+/, "  21\tNC_000021.9")` is `('', '21',
+    /// 'NC_000021.9')`, so the reference is the empty string and both names are
+    /// its synonyms, never each other's: `NC_000021.9` resolves to no cache name
+    /// and `Parser.pm:542-546` skips its record. Trailing whitespace and a
+    /// whitespace-only line yield no field, as Perl's `split` drops trailing
+    /// empty fields; a tab or a vertical tab separates as a space does.
+    #[test]
+    fn leading_whitespace_makes_the_reference_empty() {
+        let table = ChromosomeSynonyms::parse("  21\tNC_000021.9\n   \n21 chr21 \t\n\x0BX\tchrX\n");
+        assert_eq!(table.synonyms_of("21"), ["", "chr21"]);
+        assert_eq!(table.synonyms_of("NC_000021.9"), [""]);
+        assert_eq!(table.synonyms_of(""), ["21", "NC_000021.9", "X", "chrX"]);
+        assert_eq!(table.synonyms_of("chr21"), ["21"]);
+        assert_eq!(table.synonyms_of("X"), [""]);
+        assert_eq!(
+            table.source_chr_name("NC_000021.9", ensembl_cache),
+            "NC_000021.9"
+        );
+        assert_eq!(table.source_chr_name("chr21", ensembl_cache), "21");
+        assert!(ChromosomeSynonyms::parse("   \n\t\n").is_empty());
     }
 
     /// `BaseVEP.pm:706-731`: `NC_000021.9` is not a cache chromosome, its synonym

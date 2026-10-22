@@ -181,6 +181,13 @@ pub struct RecordReading<'a> {
 }
 
 impl RecordReading<'_> {
+    /// Whether the record is read as one copy per individual (`--individual`),
+    /// each copy's alleles the ones its genotype names.
+    pub fn reads_copies(&self) -> bool {
+        self.individuals
+            .is_some_and(|split| split.mode == IndividualMode::Copies)
+    }
+
     /// The alleles the record writes: its individuals' copies, the record with its
     /// individuals' zygosities, or the record itself with the reference row when
     /// `--process_ref_homs` asks for one. `minimal` is the run's `--minimal`, which

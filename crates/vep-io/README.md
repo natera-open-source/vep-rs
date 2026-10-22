@@ -89,7 +89,7 @@ Input:
 | `detect::detect_format(reader)`                | The format of the first data line and the bytes read to find it, for the caller to replay.                                                   |
 | `EnsemblParser::new(reader, &context)`, `SpdiParser::new(reader, &context)`, `RegionParser::new(reader, &context)`, `HgvsParser::new(reader, &context, lookup_ref)` | Line parsers over any `BufRead`; blank lines are skipped, and so are `#` lines except by the SPDI parser, which reads them as Ensembl VEP's does. |
 | `IdParser::read(reader)`, `IdParser::names`, `IdParser::supply_mappings`, `IdParser::attempted_line` | The identifier list read whole, its names, the resolved mappings handed back before the first `next_variant`, and the line of the name whose mapping was last built, for a skip warning to quote. |
-| `Delimiter::from_flag`, `ParserContext`         | The `--delimiter` value as a pattern (a tab, a space, a run of spaces, `\s+` or literal text; a regular expression is refused); what the parsers share.         |
+| `Delimiter::from_flag`, `ParserContext`         | The `--delimiter` value as a pattern (a tab, a space, a run of spaces, `\s+`, literal text, or a regular expression split by the caller's compiled splitter); what the parsers share.         |
 
 Output:
 

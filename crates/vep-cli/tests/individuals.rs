@@ -224,6 +224,95 @@ fn individual_all_writes_one_copy_per_individual_in_every_format() {
     assert_eq!(objects[3]["allele_string"], "T/TCCTAA/G");
 }
 
+/// A non-variant record whose ALT list holds a real allele after the leading
+/// `.` (`.,TA`, a non-variant to `Parser/VCF.pm:259`) is copied per individual
+/// from the alleles each genotype names (`:627-639`): the `0/2` individual
+/// carries `TA`, which Ensembl VEP 116.2 annotates on the three transcripts
+/// of the check-ref corpus cache at 21:30601300 as a `3_prime_UTR_variant`, an
+/// `upstream_gene_variant` and an `intron_variant,non_coding_transcript_variant`
+/// (its tab output on this input, the rows below), while the `0/0` individual
+/// writes no row. Its VCF output is the record's own line for the `0/0` copy
+/// and the line with the `TA` consequences for the `0/2` copy; its JSON output
+/// one object per copy, `TC` with `HOMREF` and `?`, then `TC/TA` with `HET`
+/// and `3_prime_UTR_variant` (its outputs on this input).
+#[test]
+fn individual_carrying_the_allele_after_a_leading_dot_is_annotated() {
+    let dir = tempfile::tempdir().unwrap();
+    let record = "21\t30601300\tnonvar_first_alt\tTC\t.,TA\t.\t.\t.\tGT\t0/0\t0/2";
+    let input = write_input(
+        dir.path(),
+        "first-alt-dot.vcf",
+        &format!(
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\n{record}\n"
+        ),
+    );
+    let cache = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-vcf-check-ref/json_cache");
+    let flags = ["--individual", "all", "--allow_non_variant"];
+    let (vcf, stderr, ok) = run_with_cache(
+        dir.path(),
+        &input,
+        &cache,
+        &[&flags[..], &["--vcf"]].concat(),
+    );
+    assert!(ok, "{stderr}");
+    let lines = body(&vcf);
+    assert_eq!(lines.len(), 2, "{vcf}");
+    assert_eq!(lines[0], record);
+    assert!(
+        lines[1].starts_with("21\t30601300\tnonvar_first_alt\tTC\t.,TA\t.\t.\tCSQ=TA|3_prime_UTR_variant|MODIFIER|KRTAP22-1|ENSG00000186924|Transcript|ENST00000334680|protein_coding|1/1||||214-215||||||S2|HET|"),
+        "{}",
+        lines[1]
+    );
+    let (json, stderr, ok) = run_with_cache(
+        dir.path(),
+        &input,
+        &cache,
+        &[&flags[..], &["--json"]].concat(),
+    );
+    assert!(ok, "{stderr}");
+    let objects: Vec<serde_json::Value> = body(&json)
+        .iter()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(objects.len(), 2, "{json}");
+    for (object, allele_string, zyg, most_severe) in [
+        (&objects[0], "TC", "HOMREF", "?"),
+        (&objects[1], "TC/TA", "HET", "3_prime_UTR_variant"),
+    ] {
+        assert_eq!(object["allele_string"], allele_string);
+        assert_eq!(object["zyg"], zyg);
+        assert_eq!(object["most_severe_consequence"], most_severe);
+        assert_eq!(object["start"], 30601300);
+        assert_eq!(object["end"], 30601301);
+    }
+    assert_eq!(objects[0]["ind"], "S1");
+    assert_eq!(objects[1]["ind"], "S2");
+    let (text, stderr, ok) = run_with_cache(
+        dir.path(),
+        &input,
+        &cache,
+        &[&flags[..], &["--tab"]].concat(),
+    );
+    assert!(ok, "{stderr}");
+    let rows: Vec<String> = body(&text)
+        .iter()
+        .map(|row| {
+            let mut columns: Vec<&str> = row.split('\t').collect();
+            columns.truncate(15);
+            columns.join("\t")
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            "nonvar_first_alt\t21:30601300-30601301\tTA\tENSG00000186924\tENST00000334680\tTranscript\t3_prime_UTR_variant\t214-215\t-\t-\t-\t-\t-\tS2\tHET",
+            "nonvar_first_alt\t21:30601300-30601301\tTA\tENSG00000186930\tENST00000334897\tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\tS2\tHET",
+            "nonvar_first_alt\t21:30601300-30601301\tTA\tENSG00000308278\tENST00000832954\tTranscript\tintron_variant,non_coding_transcript_variant\t-\t-\t-\t-\t-\t-\tS2\tHET",
+        ]
+    );
+}
+
 /// An unknown sample in the list is the `die` of `Parser/VCF.pm:612-617`, both
 /// lists named, as the error contract's one line; a VCF without a `#CHROM` line
 /// names no sample (ensembl-io BaseVCF4.pm:785-793), so `all` reads nothing and a

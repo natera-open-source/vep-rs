@@ -998,8 +998,9 @@ fn is_ascii_space(b: u8) -> bool {
     matches!(b, b'\t' | b'\n' | 0x0B | 0x0C | b'\r' | b' ')
 }
 
-/// `str::trim_start` of a line. A line whose first non-blank byte is ASCII is
-/// trimmed as bytes; one opening with a non-ASCII byte is trimmed as a `str`
+/// `str::trim_start` of a line, the view the empty-line test reads, so a line
+/// of blanks alone counts as empty. A line whose first non-blank byte is ASCII
+/// is trimmed as bytes; one opening with a non-ASCII byte is trimmed as a `str`
 /// when it is UTF-8, so Unicode blanks are handled as `str::trim_start` handles
 /// them, and as bytes otherwise. The end of the line is kept as read, since
 /// Ensembl VEP's `chomp` removes the newline alone (ensembl-io
@@ -1177,8 +1178,11 @@ fn read_vcf_lines(
                 return Ok(());
             }
 
-            let line = trim_line(line);
-            if line.is_empty() {
+            // A line of blanks alone is an empty line; a record keeps its leading
+            // blanks, which ensembl-io's `split` leaves in its first column
+            // (ColumnBasedParser.pm:249-250), so `  21` is a chromosome name the
+            // cache lacks and the record is skipped with Parser.pm:542-546's warning.
+            if trim_line(line).is_empty() {
                 empty_lines += 1;
                 return Ok(());
             }
@@ -3763,18 +3767,24 @@ mod tests {
     }
 
     /// Reader-side line handling: line numbers count the data records as Ensembl
-    /// VEP counts them (header and blank lines not counted, Parser/VCF.pm:228),
-    /// header lines are dropped for a non-VCF output, data lines are trimmed and
-    /// cut to the parser's columns when raw input is not captured.
+    /// VEP counts them (header, empty and blank-only lines not counted,
+    /// Parser/VCF.pm:228), header lines are dropped for a non-VCF output, a data
+    /// line keeps its leading blanks in its first column as ensembl-io's `split`
+    /// keeps them (ColumnBasedParser.pm:249-250) and is cut to the parser's
+    /// columns when raw input is not captured.
     #[test]
     fn read_vcf_numbers_trims_and_cuts_lines() {
-        let input =
-            "##fileformat=VCFv4.2\r\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\n\
-                     21\t100\t.\tA\tG\t.\tPASS\tDP=1\tGT\t0/1\r\n\
-                     \n\
-                       21\t200\t.\tC\tT\t.\tPASS\t.\tGT\t1/1  \n\
-                     21\t250\t.\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=300\tGT\t0/1\n\
-                     21\t300\t.\tG\tA\t.\tPASS\t.\tGT\t0/0";
+        let input = [
+            "##fileformat=VCFv4.2\r",
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1",
+            "21\t100\t.\tA\tG\t.\tPASS\tDP=1\tGT\t0/1\r",
+            "",
+            "  21\t200\t.\tC\tT\t.\tPASS\t.\tGT\t1/1  ",
+            "\t  ",
+            "21\t250\t.\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=300\tGT\t0/1",
+            "21\t300\t.\tG\tA\t.\tPASS\t.\tGT\t0/0",
+        ]
+        .join("\n");
         let transcripts = LazyTranscriptIndexes::empty();
         let cfg = ReaderConfig {
             batch_size: 2,
@@ -3795,7 +3805,7 @@ mod tests {
             checks: &crate::validate::NO_CHECKS,
         };
         for fill in [7, 64, 8192] {
-            let batches = line_batches(input, &cfg, fill);
+            let batches = line_batches(&input, &cfg, fill);
             assert_eq!(batches.len(), 2, "fill {fill}");
             let lines: Vec<(u64, &str)> = batches
                 .iter()
@@ -3812,7 +3822,7 @@ mod tests {
                 lines,
                 vec![
                     (1, "21\t100\t.\tA\tG\t.\tPASS\t."),
-                    (2, "21\t200\t.\tC\tT\t.\tPASS\t."),
+                    (2, "  21\t200\t.\tC\tT\t.\tPASS\t."),
                     (3, "21\t250\t.\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=300"),
                     (4, "21\t300\t.\tG\tA\t.\tPASS\t."),
                 ],

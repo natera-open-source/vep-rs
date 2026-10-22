@@ -307,7 +307,7 @@ pub(crate) fn quotable_prefix(line: &[u8]) -> &[u8] {
         if chars > QUOTED_LINE_CHARS {
             return &line[..at];
         }
-        if byte.is_ascii_whitespace() {
+        if byte.is_ascii_whitespace() || byte == 0x0B {
             if !in_space {
                 chars += 1;
             }
@@ -321,13 +321,14 @@ pub(crate) fn quotable_prefix(line: &[u8]) -> &[u8] {
 }
 
 /// The input line as a skipped-variant warning quotes it: every run of
-/// whitespace one space, and a line over [`QUOTED_LINE_CHARS`] characters cut to
-/// the first `QUOTED_LINE_CHARS - 4` followed by `...`.
+/// whitespace (Perl's `\s`, the vertical tab included) one space, and a line
+/// over [`QUOTED_LINE_CHARS`] characters cut to the first `QUOTED_LINE_CHARS - 4`
+/// followed by `...`.
 pub(crate) fn quoted_line(line: &str) -> String {
     let mut collapsed = String::with_capacity(line.len());
     let mut in_space = false;
     for c in line.chars() {
-        if c.is_ascii_whitespace() {
+        if c.is_ascii_whitespace() || c == '\u{0B}' {
             if !in_space {
                 collapsed.push(' ');
             }

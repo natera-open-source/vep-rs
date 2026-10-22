@@ -38,6 +38,7 @@ pub mod annotator;
 pub mod argv;
 pub mod cache_resolve;
 pub mod config;
+pub(crate) mod delimiter;
 pub mod dylib_plugins;
 pub mod filter_set;
 pub mod frequency_filter;

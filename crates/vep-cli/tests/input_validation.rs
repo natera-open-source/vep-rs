@@ -479,22 +479,38 @@ fn skipped_lines_reach_stderr_and_warning_file() {
     assert_eq!(warning_lines(&warnings), expected);
 }
 
-/// `--allow_non_variant` keeps a record whose ALT is `.` in every output format
-/// (Parser/VCF.pm:259-267): the default and tab outputs write no row for it, the
-/// VCF output carries its line without a CSQ value, and the JSON output writes
-/// one object per record (`OutputFactory/JSON.pm:224-291`) with the reference as
-/// its allele string and `most_severe_consequence` `?`. Without the flag the
-/// record is dropped with no warning.
+/// `--allow_non_variant` keeps a record whose first ALT is `.` in every output
+/// format (Parser/VCF.pm:259-267 tests `$alts->[0]`, so `.,TA` is a non-variant
+/// record too): the default and tab outputs write no row for it, the VCF output
+/// carries its line without a CSQ value, and the JSON output writes one object
+/// per record (`OutputFactory/JSON.pm:224-291`) with the reference as its allele
+/// string and `most_severe_consequence` `?`. Without the flag the record is
+/// dropped with no warning. A `.,<DEL>` list is tested for its structural shape
+/// first (`:237-245`), so the record is a structural variant in both modes,
+/// its rows the `chromosome_breakpoint` rows at POS + 1 Ensembl VEP writes for
+/// the list (its tab output on `TC .,<DEL>` with `END`).
 #[test]
 fn allow_non_variant_every_format() {
     let dir = tempfile::tempdir().unwrap();
     let non_variant = "21\t10538900\tref_only\tA\t.\t.\t.\tDP=4";
+    let first_alt_dot = "21\t10538920\tfirst_alt_dot\tTG\t.,TA\t.\t.\t.";
+    let dot_del = "21\t10538930\tdot_del\tTC\t.,<DEL>\t.\t.\tEND=10539030";
     // A non-variant line whose POS is no number is dropped before any check
     // without the flag, as every non-variant line is (Parser/VCF.pm:259-266),
     // and under the flag fails the coordinate check as any record does
     // (Parser.pm:476-480).
     let bad_pos = "21\tabc\tref_bad_pos\tA\t.\t.\t.\t.";
-    let records = format!("{SNV_OK}\n{non_variant}\n{bad_pos}\n");
+    let records = format!("{SNV_OK}\n{non_variant}\n{bad_pos}\n{first_alt_dot}\n{dot_del}\n");
+    let breakpoint_rows = |written: &str| -> Vec<String> {
+        let rows = rows_of(written, "dot_del");
+        assert!(!rows.is_empty(), "{written}");
+        for row in &rows {
+            let mut columns = row.split('\t');
+            assert_eq!(columns.next(), Some("21:10538931"), "{row}");
+            assert_eq!(columns.next(), Some("chromosome_breakpoint"), "{row}");
+        }
+        rows
+    };
     for (format, flag) in [
         ("default", None),
         ("tab", Some("--tab")),
@@ -512,6 +528,9 @@ fn allow_non_variant_every_format() {
         );
         assert!(warnings.is_empty(), "{format}: {warnings}");
         assert!(!written.contains("ref_only"), "{format}: {written}");
+        assert!(!written.contains("first_alt_dot"), "{format}: {written}");
+        let structural_without_flag =
+            matches!(format, "default" | "tab").then(|| breakpoint_rows(&written));
 
         extra.push("--allow_non_variant");
         let (output, written, warnings) =
@@ -528,21 +547,29 @@ fn allow_non_variant_every_format() {
             "{format}"
         );
         assert!(!written.contains("ref_bad_pos"), "{format}: {written}");
-        let kept: Vec<&str> = rows(&written)
-            .into_iter()
-            .filter(|l| l.contains("ref_only"))
-            .collect();
-        match format {
-            "default" | "tab" => assert!(kept.is_empty(), "{format}: {kept:?}"),
-            "vcf" => assert_eq!(kept, [non_variant]),
-            _ => {
-                assert_eq!(kept.len(), 1);
-                let object: serde_json::Value = serde_json::from_str(kept[0]).unwrap();
-                assert_eq!(object["allele_string"], "A");
-                assert_eq!(object["most_severe_consequence"], "?");
+        for (name, line, reference) in [
+            ("ref_only", non_variant, "A"),
+            ("first_alt_dot", first_alt_dot, "TG"),
+        ] {
+            let kept: Vec<&str> = rows(&written)
+                .into_iter()
+                .filter(|l| l.contains(name))
+                .collect();
+            match format {
+                "default" | "tab" => assert!(kept.is_empty(), "{format}: {kept:?}"),
+                "vcf" => assert_eq!(kept, [line]),
+                _ => {
+                    assert_eq!(kept.len(), 1, "{name}");
+                    let object: serde_json::Value = serde_json::from_str(kept[0]).unwrap();
+                    assert_eq!(object["allele_string"], reference);
+                    assert_eq!(object["most_severe_consequence"], "?");
+                }
             }
         }
         assert!(written.contains("snv_ok"), "{format}: {written}");
+        if let Some(without_flag) = structural_without_flag {
+            assert_eq!(breakpoint_rows(&written), without_flag, "{format}");
+        }
     }
 }
 
