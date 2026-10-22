@@ -44,6 +44,12 @@ Ensembl VEP ships `filter_vep`, which filters an annotated output by field expre
 
 Planned for the next release, 0.6.0.
 
+## Progress and debug output
+
+`--no_progress` and `--debug` are refused as unknown arguments (`error: unexpected argument '--no_progress' found`, exit 2). Ensembl VEP's `--no_progress` suppresses its progress bars and `--debug` prints plugin-loading detail; neither changes an annotation.
+
+Planned for the next release, 0.6.0.
+
 ## Ensembl database mode
 
 `--database`, `--host`, `--port`, `--user`, `--password`, `--registry`, `--db_version`, `--genomes` and `--is_multispecies` are each refused with an error naming the flag; the error for `--database` begins `ERROR: [cli] --database is not supported: vep-rs reads a local cache only and never connects to an Ensembl database`. `--lrg` and `--ambiguous_hgvs`, which need the database, are refused with them. Database mode is refused for good and is not planned: vep-rs reads a local cache only.

@@ -952,7 +952,7 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          spelling (`-stats_html` and `--stats_h` are refused as `--stats_html`, exit 2), never \
          read as a cluster of shorts.\n\
          - A prefix that names one flag of this version resolves to it even where Ensembl VEP's \
-         larger set leaves it ambiguous (`--sy` is `--symbol`). A prefix of several flags that \
+         larger set leaves it ambiguous (`--bi` is `--biotype`). A prefix of several flags that \
          Getopt::Long resolves no better (`--fo`), or a name no option has, is an argument \
          syntax error (exit 2).\n\
          - A single-letter short is clap's and is matched by case: `-v` is `--verbose`, `-V` \
@@ -999,7 +999,10 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          to standard error, where `<message>` is Ensembl VEP's text where it has one, without \
          its own `ERROR: ` prefix. The components are listed below.\n\
          - `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown \
-         flag, a prefix of several flags, a missing value, a value outside an enumeration.\n\n",
+         flag, a prefix of several flags, a missing value, a value outside an enumeration.\n\
+         - A compressed input cut inside a gzip member is a `run` failure, exit 1 with nothing \
+         past the header written, where Ensembl VEP writes the records before the cut and \
+         exits 0 ([the divergence page](../divergences/compressed-input.md)).\n\n",
     );
     let rows: Vec<Vec<String>> = COMPONENTS
         .iter()

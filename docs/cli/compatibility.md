@@ -140,7 +140,7 @@ Environment variables vep-rs reads outside this mechanism, which Ensembl VEP has
 - A value follows its option or is attached with `=`, and the token after an option that requires a value is that value whatever it looks like (`--input_file -cache` names the file `-cache`).
 - A prefix is resolved against this version's flags first. Where a flag vep-rs adds makes it ambiguous, it is resolved as Getopt::Long resolves it against Ensembl VEP's `VEP_PARAMS` list (`Config.pm:73-276`): `--js` is `--json` though `--json_cache` also starts with it, `--pa` `--password`, `--ve` `--verbose`.
 - An Ensembl VEP option this version lacks is refused by its full name in every spelling (`-stats_html` and `--stats_h` are refused as `--stats_html`, exit 2), never read as a cluster of shorts.
-- A prefix that names one flag of this version resolves to it even where Ensembl VEP's larger set leaves it ambiguous (`--sy` is `--symbol`). A prefix of several flags that Getopt::Long resolves no better (`--fo`), or a name no option has, is an argument syntax error (exit 2).
+- A prefix that names one flag of this version resolves to it even where Ensembl VEP's larger set leaves it ambiguous (`--bi` is `--biotype`). A prefix of several flags that Getopt::Long resolves no better (`--fo`), or a name no option has, is an argument syntax error (exit 2).
 - A single-letter short is clap's and is matched by case: `-v` is `--verbose`, `-V` the version, `-qv` the cluster `-q -v`, and `-ofile.txt` the value `file.txt` of `-o`, a spelling Getopt::Long refuses.
 
 Of the spellings Getopt::Long resolves to an option this version declares, these resolve differently here:
@@ -152,6 +152,7 @@ Of the spellings Getopt::Long resolves to an option this version declares, these
 - `0`: the run completed; also `--help`, `--version` and an empty command line.
 - `1`: a refusal or a failed run. One line `ERROR: [<component>] <message>` is written to standard error, where `<message>` is Ensembl VEP's text where it has one, without its own `ERROR: ` prefix. The components are listed below.
 - `2`: an argument syntax error, in clap's words with its `error:` prefix: an unknown flag, a prefix of several flags, a missing value, a value outside an enumeration.
+- A compressed input cut inside a gzip member is a `run` failure, exit 1 with nothing past the header written, where Ensembl VEP writes the records before the cut and exits 0 ([the divergence page](../divergences/compressed-input.md)).
 
 | Component | Meaning |
 | --- | --- |

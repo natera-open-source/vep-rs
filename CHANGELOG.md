@@ -117,6 +117,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `GRCh38-vcf-check-ref` corpus gains two `--use_transcript_ref` flag sets, plain and with `--process_ref_homs`, compared with Ensembl VEP 116.2 in tab, VCF and JSON. (#N)
 - Container image carries `bgzip` and `tabix` from Debian's `tabix` package, so `--compress_output bgzip` VCF output can be indexed in the container. (#N)
 - An empty `CSQ` entry in an input INFO (`CSQ=;DP=4`) is removed alone and `DP=4` kept, where Ensembl VEP's substitution takes the following field; a divergence page states it. (#N)
+- `--flag_pick`, `--flag_pick_allele` and `--flag_pick_allele_gene` mark once over a `--minimal` split record, where Ensembl VEP's first pass marks each split feature; a divergence page states it. (#N)
+- Under `--minimal --no_intergenic` vep-rs keeps the transcript row of a multi-allelic record's genic allele, where Ensembl VEP drops the whole record; an intended divergence page states it. (#N)
+- `HGVSg` is each row's own allele's notation on a record whose ALT list repeats an allele or names the reference, where Ensembl VEP prints another entry's; documented as intended. (#N)
+- An empty entry under the `--vcf_info_field` name (`ANN=;CSQ=...`) is removed alone, where Ensembl VEP's substitution takes the next field; the empty-`CSQ` divergence page states it. (#N)
+- An intended divergence page states where `--transcript_filter` differs from Ensembl VEP: an abbreviated field on the first transcript, an ambiguous prefix, the regex dialect and `is_child`. (#N)
+- A record whose alleles shift by different lengths under `--shift_3prime 1` is annotated per allele, where Ensembl VEP shares one allele's predicates; an intended divergence page states it. (#N)
+- Under `--lookup_ref` a contig the FASTA lacks skips the record, where Ensembl VEP annotates a one-base record at position 1 against a placeholder `N`; the cache page states it. (#N)
+- The `--skipped_variants_file` header names standard input `STDIN` in any spelling and under `--input_data`, and the record column is 40 characters; a divergence page states both against Ensembl VEP's. (#N)
+- Compressed standard input is decompressed and a stream cut inside a gzip member is exit 1, where Ensembl VEP reads standard input raw and annotates the prefix. (#N)
+- `--nearest` lists every protein-coding transcript of a shared start site in stable-id order, where Ensembl VEP prints the one its tree search returns; a divergence page states it. (#N)
+- A version-less `NC_` accession and a span past the chromosome end in SPDI input are skipped, where Ensembl VEP's database resolves both; a divergence page states it. (#N)
 
 ### Changed
 
@@ -248,7 +259,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The container image's documentation label points at the installation page's container section. (#N)
 - `--coding_only` judges a `--minimal` split record's rows over the record's span in the default and tab outputs and prints the record's own `REF_ALLELE` where its first feature wrote none. (#N)
 - Under `--shift_3prime 1` a coding row of a shifted insertion prints the inserted bases rotated along the shift as its `Allele`, as Ensembl VEP does. (#N)
-- Under `--process_ref_homs --shift_3prime 1` the reference row's positions, codons and coding terms are read at the alternate allele's shifted span, as Ensembl VEP reads them. (#N)
+- Under `--process_ref_homs --shift_3prime 1` the reference row's positions, codons and coding terms are Ensembl VEP's; its non-coding terms are the shifted span's, an intended divergence. (#N)
 - Under `--shift_3prime 1` the HGVSp of a deletion shifted onto the stop codon reads its predicates on the shifted allele, `p.Ter687=` where an extension was printed. (#N)
 - A `--minimal` split allele shifts its HGVS notations as a bi-allelic record does; the record's mixed allele classes do not stop the shift. (#N)
 - A bare `--` on the command line, and every token after it, is refused as an unexpected parameter with Ensembl VEP's text unless `--help` precedes it. (#N)
@@ -269,6 +280,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The JSON `frequencies` of a co-located variant are keyed by the record's own alleles, so a `--minimal` split allele's trimmed spelling finds none, as Ensembl VEP writes. (#N)
 - `CLIN_SIG` on a `--minimal` split row reads the ClinVar reference against the reference `REF_ALLELE` prints, not the allele's own trimmed one, as Ensembl VEP compares them. (#N)
 - Input files no longer drive unbounded allocations: line lengths, index sizes, cache sequence lengths and plugin-data counts are checked, and control bytes are escaped in tab and VCF output. (#N)
+- Defect N's page states that Ensembl VEP's anchor chop also numifies a sequence indel's non-numeric POS (`12abc` annotated at 21:13, `abc` refused as `'abd'`), where vep-rs refuses every form. (#N)
+- A directory given as `--synonyms` or as the cache's `chr_synonyms.txt` is refused, where Ensembl VEP opens it and reads an empty table; the cache page states it. (#N)
+- The divergence index gains the one-column `--fields` list whose row is `0`, at which Ensembl VEP's output loop ends and vep-rs writes every row. (#N)
+- The compatibility page's prefix example is `--bi` is `--biotype`; `--sy`, which it named, is ambiguous between `--symbol` and `--synonyms` in both engines (exit 2). (#N)
+- `--no_progress` and `--debug` are listed among the flags vep-rs refuses as unknown arguments (exit 2) on the page of what vep-rs does not do. (#N)
 
 ### Security
 

@@ -1,6 +1,6 @@
 # The HGVSp, amino acids and positions of a `--minimal` split allele
 
-A difference in the `HGVSp`, `Amino_acids`, `CDS_position` and `Protein_position` of an allele that `--minimal` splits off a multi-allelic record when its HGVS notations shift. The row's terms and positions differ under `--shift_3prime 1` as well, and so does the `HGVSc` of a row `--coding_only` restores; nothing is set aside, since no measured dataset runs the flags.
+A difference in the `HGVSp`, `Amino_acids`, `CDS_position` and `Protein_position` of an allele that `--minimal` splits off a multi-allelic record when its HGVS notations shift. The row's terms and positions differ under `--shift_3prime 1` as well, as does the `HGVSc` of a row `--coding_only` restores, and so do the `PICK` marks of the flagging variants; nothing is set aside, since no measured dataset runs the flags.
 
 Under `--minimal`, Ensembl VEP splits a multi-allelic record whose alleles trim into one feature per allele (`InputBuffer.pm` lines 638-718) and merges them back at output (`OutputFactory.pm` lines 2272-2354). The rejoin builds each feature's rows first (lines 2289 and 2303). That first pass shifts a deletion's or insertion's HGVS notations as it does a bi-allelic record's, keeping the HGVSc and its offset (`TranscriptVariationAllele.pm` lines 1558 and 1838) and the peptides read at the shifted position (lines 1774-1778); the HGVSp itself is not kept. Both engines print that HGVSc and offset for an allele whose first pass built its row.
 
@@ -28,4 +28,33 @@ Under `--shift_3prime 1` the second pass also rebuilds the deletion allele's ter
 
 A row `--coding_only` restores has its HGVSc rebuilt as well. The `--coding_only` test runs over the record's span after the rejoin ([`--minimal` under `--coding_only`](../output-formats.md#parity-with-ensembl-vep)), so a row whose feature wrote nothing before the rejoin has no cached HGVSc. The second pass computes it over the restored span (`TranscriptVariationAllele.pm` line 1558 caches the first pass's; `OutputFactory.pm` lines 2291-2293 restore the record). The `G` allele of `21 34716318 CAGATT GAGATT,C` is an intronic substitution three bases before the exon's first base. Under `--minimal --coding_only --hgvs` Ensembl VEP prints the whole record as a deletion-insertion, `c.1900-3_1902delinsG` on ENST00000349499 and the same form in each other coding transcript's numbering; vep-rs prints the allele's own `c.1900-3C>G`, which both engines print without `--coding_only`.
 
-To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--minimal --hgvs`, and `--tab`, `--vcf` or `--json` for the other formats. `--shift_3prime 1` gives the shifted rows and `--coding_only` the restored row; vep-rs takes the same flags over the same cache and FASTA.
+## PICK marks under the flagging variants
+
+The first pass marks rows too. Each of its calls (`OutputFactory.pm` lines 2289 and 2303) hands one split feature's alleles to `filter_VariationFeatureOverlapAlleles` (line 514). A split feature holds one alternate allele, so the flagging branches (lines 609-626) set `PICK` on one row of it: one row per feature under `--flag_pick` and `--flag_pick_allele`, one per gene of the feature under `--flag_pick_allele_gene`. The merge copies the marked rows under new keys (line 2316) and clears the consequence caches alone (line 2342), so the marks stay.
+
+The output pass then filters the rejoined record once more (line 301), grouping its rows by allele string under the per-allele flags (lines 618 and 625). It marks a row of each group, a row the first pass had marked on every record below.
+
+So Ensembl VEP marks one row per split feature. Under `--flag_pick` a record `--minimal` splits carries one mark per split allele, where a record it does not split carries one. Under `--flag_pick_allele` and `--flag_pick_allele_gene` the marks are doubled only where two alternate alleles trim to the same allele string: such a record carries two marks per allele string, or two per allele string and gene, in place of one. vep-rs runs the pick family once over the rejoined record, grouping the rows by the Allele column, so it marks one row per record under `--flag_pick` and one per allele string, or per allele string and gene, under the other two.
+
+The records below are two insertions after one base that both trim to `T`, an SNV beside an insertion that both trim to `A`, and two insertions that trim to the distinct strings `T` and `A`:
+
+```
+21	43100486	min_gt_tg	G	GT,TG	.	.	.
+21	17604928	min_a_ga	G	A,GA	.	.	.
+21	43100486	min_gt_ag	G	GT,AG	.	.	.
+```
+
+Under `--minimal --allele_number`, which numbers each row's original allele, the two engines mark these rows; every other row of each run agrees, 76 rows for the records at 43100486 and 72 for the record at 17604928:
+
+| Record and flag | Engine | Rows marked `PICK=1` (Allele, Feature, ALLELE_NUM) |
+| --- | --- | --- |
+| `min_gt_tg`, `--flag_pick_allele` | Ensembl VEP | `T` ENST00000291552 at 1 and at 2 |
+| `min_gt_tg`, `--flag_pick_allele` | vep-rs | `T` ENST00000291552 at 2 |
+| `min_a_ga`, `--flag_pick_allele_gene` | Ensembl VEP | `A` ENST00000348354 and ENST00001128578, each at 1 and at 2 |
+| `min_a_ga`, `--flag_pick_allele_gene` | vep-rs | `A` ENST00000348354 and ENST00001128578, each at 2 |
+| `min_gt_ag`, `--flag_pick` | Ensembl VEP | `A` ENST00000291552 at 2 and `T` ENST00000291552 at 1 |
+| `min_gt_ag`, `--flag_pick` | vep-rs | `A` ENST00000291552 at 2 |
+
+`min_gt_ag` under `--flag_pick_allele` and `21 17604928 G A,GC` under `--flag_pick_allele_gene`, whose alleles trim to distinct strings, mark the same rows in both engines: each allele group is one split feature, so the two passes mark one row. Without `--minimal` both engines mark the `GT` and `TG` rows of ENST00000291552 for `min_gt_tg` under `--flag_pick_allele`.
+
+To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--minimal --hgvs`, and `--tab`, `--vcf` or `--json` for the other formats. `--shift_3prime 1` gives the shifted rows and `--coding_only` the restored row; the PICK marks take `--minimal --allele_number` with one of the three flagging variants and need no FASTA. vep-rs takes the same flags over the same cache and FASTA.
