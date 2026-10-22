@@ -840,6 +840,11 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          - A value from a file or the environment that the parser refuses (`fork many`, an \
          empty `format`) is an argument syntax error (exit 2). Ensembl VEP's `is_valid_param` \
          drops the line (`Config.pm:1046-1047`).\n\
+         - `--buffer_size 0` annotates every record, where Ensembl VEP's buffer admits a \
+         record only while it holds fewer than the value (`InputBuffer.pm:191, 212`), so \
+         there a zero writes the header alone. A value with a minus sign or an underscore \
+         (`-1`, `1_0`) is an argument syntax error (exit 2); Getopt::Long reads both as \
+         integers, `-1` admitting no record and `1_0` read as 10.\n\
          - A `--config` path that is a directory, or cannot be read for any reason, is the \
          `config` error; Ensembl VEP's `open` succeeds on a directory and reads nothing from \
          it. A `vep.ini` that is a directory is read as nothing here too. A byte outside UTF-8 \

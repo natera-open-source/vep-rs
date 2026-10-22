@@ -572,9 +572,11 @@ impl CoreDumps {
 }
 
 /// Puts `cds_start_NF` before `cds_end_NF` when a transcript carries both,
-/// the other attributes staying where the dump lists them: FLAGS prints the
-/// two in list order, and the Ensembl cache lists them start first on every
-/// transcript carrying both, where the dump's row order has some reversed.
+/// the other attributes staying where the dump lists them. FLAGS prints the
+/// two in list order (OutputFactory.pm:1477); the Ensembl cache holds the order
+/// its database query returned (Dumper/Core.pm:203-207), start first on most
+/// transcripts and end first on a few, and the dumps do not carry that query
+/// order, so one fixed order is written.
 fn order_cds_flags(attributes: &mut [Attribute]) {
     let position = |code: &str| attributes.iter().position(|a| a.code == code);
     if let (Some(start), Some(end)) = (position("cds_start_NF"), position("cds_end_NF")) {
@@ -1167,8 +1169,9 @@ mod tests {
     }
 
     /// A transcript whose dump rows list `cds_end_NF` before `cds_start_NF`
-    /// carries them start first, as the Ensembl cache does; the attributes
-    /// around them keep their places.
+    /// carries them start first, the builder's fixed order where the Ensembl
+    /// cache's varies by transcript; the attributes around them keep their
+    /// places.
     #[test]
     fn cds_start_nf_precedes_cds_end_nf() {
         let dir = tempfile::tempdir().unwrap();

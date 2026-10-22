@@ -116,6 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--use_transcript_ref` reads each row's reference allele from the transcript, as Ensembl VEP does, and adds the `GIVEN_REF` and `USED_REF` columns; without `--fasta` the run exits. (#N)
 - The `GRCh38-vcf-check-ref` corpus gains two `--use_transcript_ref` flag sets, plain and with `--process_ref_homs`, compared with Ensembl VEP 116.2 in tab, VCF and JSON. (#N)
 - Container image carries `bgzip` and `tabix` from Debian's `tabix` package, so `--compress_output bgzip` VCF output can be indexed in the container. (#N)
+- An empty `CSQ` entry in an input INFO (`CSQ=;DP=4`) is removed alone and `DP=4` kept, where Ensembl VEP's substitution takes the following field; a divergence page states it. (#N)
 
 ### Changed
 
@@ -173,7 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ensembl-format input reads its strand as Ensembl VEP does: `-` and `-1` are reverse, any other token or an absent column forward, so four-column lines are accepted. (#N)
 - An Ensembl-format allele column without a `/` (`DUP`, `DEL`, `INS`, `INV`) is a structural variant over the line's span; an unknown word is warned about and annotated as written. (#N)
 - Ensembl-format alleles are upper-cased and a bi-allelic indel written un-minimised (`AC/A`) is trimmed to Ensembl VEP's representation before annotation. (#N)
-- Empty lines in an Ensembl-format input are skipped with the `skip_empty_lines` warning; a skipped Ensembl-format record's warning quotes its line. (#N)
+- Empty lines in an Ensembl-format input are skipped with the `skip_empty_lines` warning, where Ensembl VEP's parser dies on one; a skipped Ensembl-format record's warning quotes its line. (#N)
 - `--format spdi` without `--fasta` is refused with `Cannot use SPDI format in offline mode without a FASTA file`, where every SPDI input was refused before. (#N)
 - HGVS genomic input (`g.`, `m.`) resolves against `--fasta` as Ensembl VEP's database does: `del`, `dup`, `inv` take genome bases, `delins` is trimmed, `ins` swaps positions. (#N)
 - An HGVS notation whose reference allele the genome contradicts, a repeat, an unknown shape or a variant `validate_vf` refuses is skipped with Ensembl VEP's warning. (#N)
@@ -203,6 +204,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The container image and the CI test job install the DuckDB 2.0.0 CLI from its `duckdb-cli-linux-*.tar.gz` archive (1.x shipped a zip), both verified by sha256. (#N)
 - The release page groups its notes by area with nested bullets, marks breaking changes inline and may run to 400 lines; `CHANGELOG.md` nests the area groups under each kind. (#N)
 - The minimum supported Rust version is 1.89; the noodles crates move to 0.115, whose BGZF reader rejects a block that declares more than 65536 bytes. (#N)
+- A `--dir_plugins` value holding a glob pattern or a `~user` prefix is read as one literal path, where Ensembl VEP expands it with `glob`. (#N)
+- `--buffer_size 0` annotates every record, where Ensembl VEP writes the header alone; a negative or underscored value is an argument syntax error (exit 2). (#N)
+- A native cache lists `cds_start_NF` before `cds_end_NF` on every transcript carrying both, where the Ensembl cache's order puts `cds_end_NF` first on seven GRCh38 transcripts. (#N)
 
 ### Removed
 
@@ -250,6 +254,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A bare `--` on the command line, and every token after it, is refused as an unexpected parameter with Ensembl VEP's text unless `--help` precedes it. (#N)
 - The container image distrusts the two compromised eMudhra CA roots until Debian trixie ships the fixed ca-certificates, so cache downloads cannot be intercepted through a forged certificate. (#70)
 - The Parquet writer keeps its numeric casts out of DuckDB's CSV reader, so a malformed numeric token is NULL under DuckDB 2.0.0 as it was under 1.x. (#N)
+- The lone `.` ALT page states that vep-rs writes no warning for it, and the empty-lines page that Ensembl VEP's Ensembl-format parser dies on an empty line. (#N)
 
 ### Security
 

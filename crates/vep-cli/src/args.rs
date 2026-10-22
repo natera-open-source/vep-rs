@@ -1077,7 +1077,9 @@ pub struct Args {
 
     /// Directory the plugin libraries are looked up in; default <--dir>/Plugins. A
     /// directory that does not exist is warned about when --plugin names a plugin
-    /// (an error under --safe)
+    /// (an error under --safe). A value holding a glob pattern (`*`, `?`, `[...]`,
+    /// `{a,b}`) or a `~user` prefix is read as one literal path; Ensembl VEP expands
+    /// it with `glob`
     #[arg(help_heading = "Plugins", long = "dir_plugins", value_name = "DIR")]
     pub dir_plugins: Option<String>,
 

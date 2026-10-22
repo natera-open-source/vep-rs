@@ -22,7 +22,7 @@ A gVCF variant site (`A G,<NON_REF>`) is its real alleles: `<NON_REF>` beside an
 
 ### Records that name no allele
 
-A trailing empty ALT field (`G,`, `<DEL>,`) names no allele, as Ensembl VEP's `split` drops it. A record whose ALT column is `.` is skipped at warning level whatever INFO/SVTYPE says. A record whose every ALT is `*` (`N *`, `*,*`) names no allele whatever INFO/SVTYPE says. It gets no row in the default and tab outputs, its VCF line is carried without CSQ, and its JSON object holds the record's `id`, coordinates, `allele_string` (`N/*`) and `"most_severe_consequence":"?"`, as Ensembl VEP writes the record without `SVTYPE`.
+A trailing empty ALT field (`G,`, `<DEL>,`) names no allele, as Ensembl VEP's `split` drops it. A record whose ALT column is `.` is dropped with no warning whatever INFO/SVTYPE says, and kept as a non-variant record under `--allow_non_variant`. A record whose every ALT is `*` (`N *`, `*,*`) names no allele whatever INFO/SVTYPE says. It gets no row in the default and tab outputs, its VCF line is carried without CSQ, and its JSON object holds the record's `id`, coordinates, `allele_string` (`N/*`) and `"most_severe_consequence":"?"`, as Ensembl VEP writes the record without `SVTYPE`.
 
 ## Spans
 

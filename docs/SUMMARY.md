@@ -59,6 +59,7 @@
   - [Input bytes that are not UTF-8](divergences/non-utf8-input.md)
   - [A bare `M` under a cache whose synonyms name `chrM`](divergences/bare-m-chromosome.md)
   - [Empty lines in a VCF input](divergences/empty-vcf-lines.md)
+  - [An empty `CSQ` entry in an input VCF's INFO](divergences/empty-csq-entry.md)
   - [`--filter_common` and `--freq_pop 1KG_ALL` read the 1000 Genomes `AF` column](divergences/filter-common-1kg-all.md)
   - [HGVS transcript and protein notation resolved from the cache](divergences/hgvs-transcript-input.md)
   - [`--regulatory`, and `--everything` through it, write no regulatory rows](divergences/regulatory-rows.md)
