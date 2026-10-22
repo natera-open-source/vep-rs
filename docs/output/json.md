@@ -112,7 +112,7 @@ An allele gets an `intergenic_consequences` entry only when it overlaps no trans
 | `strand`                  | integer | The record's strand                                                                             |
 | `allele_string`           | string  | The record's working allele string; see Field Details                                            |
 | `assembly_name`           | string  | The assembly, as `--assembly` names it                                                           |
-| `input`                   | string  | The record's own input line                                                                      |
+| `input`                   | string  | The record's own input line as Ensembl VEP stores it: trailing empty columns dropped and, for a structural record, QUAL, FILTER and INFO filled with `.` where absent, empty or `0` |
 | `variant_class`           | string  | Under `--variant_class`                                                                          |
 | `transcript_consequences` | array   | One object per (allele, transcript); absent when no allele overlaps a transcript                 |
 | `intergenic_consequences` | array   | One object per allele that overlaps no transcript                                                |

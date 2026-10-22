@@ -26,7 +26,10 @@
 //! reference reads as a gene name (`:219-229`). An `r.` notation is one
 //! Ensembl VEP's resolver throws on (`HGVS type r not recognised`, `:1989`)
 //! and its parser then skips with that message; here it fails the line with
-//! [`IoError::Unsupported`], which stops the run.
+//! [`IoError::Unsupported`], which stops the run. A transcript cache a `c.`,
+//! `n.` or `p.` lookup cannot read fails the line with
+//! [`IoError::CacheUnreadable`] carrying the cache's refusal, which stops the
+//! run under the `cache` component.
 //!
 //! A notation Ensembl VEP cannot resolve is warned about as `Unable to parse
 //! HGVS notation '<notation>'` followed by the exception its resolver threw
@@ -179,6 +182,15 @@ pub(super) fn unable(hgvs: &str, message: Option<&str>) -> IoError {
         Some(message) => format!("Unable to parse HGVS notation '{hgvs}': {message}"),
         None => format!("Unable to parse HGVS notation '{hgvs}'"),
     })
+}
+
+/// The failure of a `c.`, `n.` or `p.` lookup whose transcript cache cannot be
+/// read: the cache's refusal `message` after the parser's text, as
+/// [`IoError::CacheUnreadable`].
+pub(super) fn cache_unreadable(message: String) -> IoError {
+    IoError::CacheUnreadable(format!(
+        "Cannot read the transcript cache for HGVS input: {message}"
+    ))
 }
 
 /// The warning Ensembl VEP's parser writes once a transcript or protein

@@ -51,7 +51,8 @@ pub struct Args {
     pub config: Option<String>,
 
     /// Input file path, or "STDIN" (in any case) for standard input, which needs --format.
-    /// A gzip or BGZF file is decompressed whatever its name; BCF is refused
+    /// A gzip or BGZF file is decompressed whatever its name; BCF is refused.
+    /// A VCF whose `##fileformat` line names a major version other than 4, or a value with no `<digits>.<digits>` version, is refused with Ensembl VEP's message before any output is written; the minor version is not checked, and a file without the line or with an empty value is read
     #[arg(
         help_heading = "Input",
         short = 'i',
@@ -67,6 +68,7 @@ pub struct Args {
     /// Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record.
     /// An identifier list (one variant name per line) is resolved in one pass over the cache's variation files, every name held in memory and every file read once: a name maps to each variation feature of that name in the cache (rsIDs and the other names the cache carries; structural variant names, synonyms and subsnp identifiers are not among them), a name the cache lacks is warned about and skipped, and a cache without variation files refuses the format.
     /// CAid input is looked up in the Ensembl variation database, which vep-rs does not reach, and is refused; a region, SPDI or HGVS input needs --fasta, which fills a region record's reference allele and fills or checks an SPDI record's.
+    /// An SPDI span past the end of its sequence, an insertion after a position the sequence lacks or a deletion running past its last base, is skipped with `Span <start>-<end> lies past the end of sequence <name> (<length> bases)`, where Ensembl VEP reads `N` for the missing bases and annotates the record at a position the chromosome lacks.
     /// HGVS input is resolved against the FASTA and the transcript cache as Ensembl VEP resolves it through its database: a genomic notation (g., m.) reads its bases from the genome, a transcript notation (c., n.) finds its transcript by stable id, else by gene name through Ensembl VEP's pick order with its warning, places the position through the transcript's exons and keeps the transcript's strand, the reference allele is checked, a deletion, duplication or inversion takes its bases from the genome, and a notation Ensembl VEP cannot resolve is skipped with its warning; a protein notation (p.) finds its transcript by translation id, by transcript id or, every transcript of the gene tried in turn, by gene name, and resolves a substitution or delins to the one shortest nucleotide path to the new residue (several equally short paths are skipped with Ensembl VEP's message, as --ambiguous_hgvs is not accepted) and a deletion to its codons, frameshifts refused as Ensembl VEP refuses them; a run with transcript or protein notations reads the cache's assembled chromosomes and scaffolds once to find them, its alternate loci and patches only for an id found on none; an r. notation is refused
     #[arg(
         help_heading = "Input",

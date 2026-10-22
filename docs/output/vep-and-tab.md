@@ -148,6 +148,8 @@ The column takes the first `;`-element of a VCF record's ID; an Ensembl-format I
 
 A record with no ID is named from its own input line, as Ensembl VEP 116 names it: `CHROM_POS_REF/ALT1/ALT2`, with POS and every allele exactly as the VCF line spells them, case included. `21_10795228_C/G/T` is one such name. `21_30425650_a/g` names the lowercase `21 30425650 . a g`. `21_47612512_C/CTG` names the insertion `21 47612512 . C CTG`, whose variant starts at 47612513. `21_33867341_C/<CN2>` names the symbolic record `21 33867341 . C <CN2>`, whose variant starts at 33867342.
 
+A VCF record whose ID column is `0` or empty, the values Perl reads as false, takes Ensembl VEP's generated name when its alleles are lower case: `chr_start_alleles` from the alleles as the anchor chop left them, built before the upper-casing. So `21_30319404_ca/-` names `21 30319403 0 tca t`, while `21_30319403_tca/t` names `21 30319403 . tca t`. An `--individual` copy is named from its own alleles the same way, [in the record's order](../divergences/individual-allele-order.md).
+
 An Ensembl-format line is named `chr_start_alleles`, start the lower of its two coordinates. An Ensembl-format line whose alleles are written in lower case is the exception: it is named at the start and from the alleles its record carries after Ensembl VEP's own minimisation, the name Ensembl VEP builds before it upper-cases them. `21_30348410_ta/-` names `21 30348409 30348411 cta/c`. An HGVS or SPDI input is named by its notation as written, whitespace removed (`21:g.30282169C>A`, `NC_000021.9:10538884:A:C`), and a region input by its line as written (`21:25585733-25585733:1/G`), in both engines.
 
 ### Positions

@@ -346,7 +346,7 @@ pub const COMPONENTS: &[(&str, &str)] = &[
     ),
     (
         "cache",
-        "the cache: nothing resolves at the configured path, its layout or metadata is unusable, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read",
+        "the cache: nothing resolves at the configured path, its layout or metadata is unusable, a transcript an HGVS input names cannot be read from it, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read",
     ),
     (
         "fasta",

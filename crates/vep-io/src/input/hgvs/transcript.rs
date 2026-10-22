@@ -59,7 +59,7 @@ use crate::input::{ReferenceSequence, TranscriptSource};
 
 use super::components::{self, Placement};
 use super::genomic::leading_digits;
-use super::{unable, Notation};
+use super::{cache_unreadable, unable, Notation};
 
 /// The variant a transcript notation describes, read against `reference` on
 /// the first transcript `transcripts` resolves its reference to that yields
@@ -127,17 +127,15 @@ fn resolve(
     reference: &str,
     transcripts: &dyn TranscriptSource,
 ) -> Result<Vec<Option<Transcript>>, IoError> {
-    let cache_error = |message: String| {
-        IoError::Unsupported(format!(
-            "Cannot read the transcript cache for HGVS input: {message}"
-        ))
-    };
-    if let Some(transcript) = transcripts.by_stable_id(reference).map_err(cache_error)? {
+    if let Some(transcript) = transcripts
+        .by_stable_id(reference)
+        .map_err(cache_unreadable)?
+    {
         return Ok(vec![Some(transcript)]);
     }
     let groups = transcripts
         .gene_transcripts(reference)
-        .map_err(cache_error)?;
+        .map_err(cache_unreadable)?;
     Ok(groups.into_iter().map(pick_likely_transcript).collect())
 }
 

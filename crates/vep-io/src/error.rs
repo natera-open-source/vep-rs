@@ -20,6 +20,12 @@ pub enum IoError {
     #[error("{0}")]
     Unsupported(String),
 
+    /// A transcript cache an input names a record in but a lookup cannot read,
+    /// the cache's own refusal as the whole message; the run stops and prints
+    /// it under the `cache` component, since the input itself is sound.
+    #[error("{0}")]
+    CacheUnreadable(String),
+
     /// A line Ensembl VEP's parser warns about and reads past, the warning's
     /// text as the whole message.
     #[error("{0}")]

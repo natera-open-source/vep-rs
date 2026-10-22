@@ -8,7 +8,7 @@ This page describes how a structural variant is recognised, spanned, typed and w
 
 A record is a structural variant when two conditions hold, as Ensembl VEP routes it. First, REF and its ALTs together are not a run of `ACGT`. Second, either INFO/SVTYPE is set to a value Perl reads as true (not empty, not `0`), or an ALT is written in a structural form: an angle or bracket token without `*`, or a dot-bounded breakend. So `N G` with `SVTYPE=DEL;END=...` is a deletion over END, `<*>` with `SVTYPE=DEL` is a deletion, and `N G` alone is a sequence variant.
 
-Lowercase alleles of a sequence record are upper-cased once the anchor is trimmed (`a g` prints Allele `G`, JSON `allele_string` `A/G`), as Ensembl VEP's `validate_vf` does.
+Lowercase alleles of a sequence record are upper-cased once the anchor is trimmed (`a g` prints Allele `G`, JSON `allele_string` `A/G`), as Ensembl VEP's `validate_vf` does. The exception is a record the `--chr` list or the chromosome test refuses and `--dont_skip` keeps, which both engines annotate as written.
 
 ### The type of a symbolic allele
 
@@ -26,7 +26,7 @@ A trailing empty ALT field (`G,`, `<DEL>,`) names no allele, as Ensembl VEP's `s
 
 ## Spans
 
-A symbolic record starts at POS+1. It ends at POS+|SVLEN| when INFO carries SVLEN, else at INFO/END, else at its start. A tandem repeat or tandem duplication reads the largest SVLEN. SVLEN is read as Perl numifies it: `300abc` is 300, and `abc`, `.` or an empty value is 0. A repeated INFO key reads its last value.
+A symbolic record starts at POS+1. It ends at POS+|SVLEN| when INFO carries SVLEN, else at INFO/END, else at its start. A tandem repeat or tandem duplication ends at POS plus the largest signed SVLEN, a trailing empty value being no value, so `SVLEN=-300,` ends it before its start and the record is skipped. SVLEN is read as Perl numifies it: `300abc` is 300, and `abc`, `.` or an empty value is 0. A repeated INFO key reads its last value.
 
 `SVLEN=0`, a non-numeric SVLEN or an END at POS leaves the pair `POS+1..POS`, printed `chr:POS-POS+1`, for every class. Such a record gets the positional terms of a sequence insertion, with `feature_elongation` for a duplication or an insertion. An END more than one base before POS (`END=0` included), or one that is not a coordinate, skips the record at warning level, as Ensembl VEP 116 skips it.
 
@@ -45,6 +45,8 @@ The rows of a split record are rejoined as Ensembl VEP rejoins them (`OutputFact
 A record with more than one ALT and a symbolic allele among them has one class for the whole record, read from its ALTs joined by `/` as Ensembl VEP 116 reads them. Identical symbolic ALTs collapse to their type: `<INS>,<INS>` is an `insertion`, `<DEL>,<DEL>` a `deletion`. A DEL beside a DUP in either order, `<DEL>,<DUP:TANDEM>` included, is a `copy_number_variation`, and so is `<CN0>,<CN2>`. A sequence ALT beside a symbolic one (`G,<INV>` with `SVTYPE=DEL`) takes the type INFO/SVTYPE names.
 
 Every ALT then gets its own row for each transcript, labelled with the class term as its Allele. So the rows of one transcript repeat per ALT and differ only in `ALLELE_NUM`, which numbers the parts of Ensembl VEP's allele string from 1. A breakpoint record's reference base is part 1, so a bare `<BND>` prints 2; a record with parsed breakends prints 0 for its own breakend and numbers its mates from 1. A list VEP has no type for (`<INS>,<DEL>`, `<INV>,<DUP>`) keeps one row per ALT under each ALT's own class and the unsupported-type treatment of the [next section](#skipped-records).
+
+A `*` or `.` beside another ALT under a true INFO/SVTYPE is a part like any other: it writes its own row of the record's class, numbered at its written place, as Ensembl VEP writes it. So `C G,*` and `C G,.` with `SVTYPE=DEL` each write two deletion rows per transcript, `ALLELE_NUM` 1 and 2.
 
 ## Skipped records
 

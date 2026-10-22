@@ -6,7 +6,7 @@ Ensembl VEP routes the line to its structural path, reads the `.` as a type and 
 
 **Why this is a defect.** `.` is the VCF's missing value, not an allele, and the rows describe an allele the record never states. Ensembl VEP's own sequence path agrees: without `SVTYPE` it writes nothing for the record.
 
-**What vep-rs does instead.** vep-rs writes no row for the record in either case and no warning: a record whose ALT column is `.` names no allele and is passed over, as Ensembl VEP's own sequence path passes it over. A `.` after another ALT takes no row and no allele number, and the other ALTs are annotated as written, so `C G,.` writes the `G` row alone.
+**What vep-rs does instead.** vep-rs writes no row for the record in either case and no warning: a record whose ALT column is `.` names no allele and is passed over, as Ensembl VEP's own sequence path passes it over. On the sequence path a `.` after another ALT takes no row and no allele number, and the other ALTs are annotated as written, so `C G,.` without a true INFO/SVTYPE writes the `G` row alone. Under a true INFO/SVTYPE the `.` part writes a row of the record's class, as Ensembl VEP's does.
 
 **Where it is in Ensembl VEP's source** (`ensembl-io` and `ensembl-vep`):
 - `ensembl-io`, `BaseVCF4.pm`, `get_alternatives`, lines 486-490: returns `['.']` for the missing value.
@@ -19,7 +19,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 17. The missing ALT value annotated as an allele
 
-**In short.** A record whose ALT column is `.` has no alternate allele. With `SVTYPE` in INFO, Ensembl VEP annotates the record from INFO alone, a `chromosome_breakpoint` for `SVTYPE=BND` or a deletion over `END` for `SVTYPE=DEL`; without `SVTYPE` it writes nothing. vep-rs writes no row and no warning in either case. A `.` listed after another ALT gets a row of its own from Ensembl VEP and none from vep-rs, which annotates the other ALTs as written.
+**In short.** A record whose ALT column is `.` has no alternate allele. With `SVTYPE` in INFO, Ensembl VEP annotates the record from INFO alone, a `chromosome_breakpoint` for `SVTYPE=BND` or a deletion over `END` for `SVTYPE=DEL`; without `SVTYPE` it writes nothing. vep-rs writes no row and no warning in either case. On the sequence path a `.` listed after another ALT gets a row of its own from Ensembl VEP and none from vep-rs, which annotates the other ALTs as written.
 
 ### 17.1 What a reader needs to know first
 
@@ -96,7 +96,7 @@ For `C G,.` both engines write the `G` row; Ensembl VEP adds the Allele `.` row 
 
 ### 17.5 Why vep-rs's output is the correct one
 
-`.` is the VCF's missing value, not an allele, and Ensembl VEP's own sequence path writes nothing for it when it stands alone. vep-rs passes the lone `.` over in every case, with no row and no warning, and gives a `.` after another ALT no row, since no allele is stated for it to annotate.
+`.` is the VCF's missing value, not an allele, and Ensembl VEP's own sequence path writes nothing for it when it stands alone. vep-rs passes the lone `.` over in every case, with no row and no warning, and on the sequence path gives a `.` after another ALT no row, since no allele is stated for it to annotate.
 
 ### 17.6 Try it yourself
 

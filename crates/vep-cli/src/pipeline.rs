@@ -1650,6 +1650,9 @@ fn read_parsed(
             Some(Err(vep_io::IoError::Unsupported(message))) => {
                 return Err(crate::config::CliError::new("input", message).into());
             }
+            Some(Err(vep_io::IoError::CacheUnreadable(message))) => {
+                return Err(crate::config::CliError::new("cache", message).into());
+            }
             // A failure of the reader itself ends the run, as it ends a VCF read: the
             // parser returns it again for every line it is asked for. A line past
             // the length cap is the input's refusal, not a read failure.

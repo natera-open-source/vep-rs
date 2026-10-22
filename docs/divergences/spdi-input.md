@@ -37,6 +37,6 @@ Ensembl VEP fetches the whole-sequence slice before it reads the shape (line 253
 | `past_end_ins` | `21:46709984-46709985` | `A` | `intergenic_variant` |
 | `past_end_del` | `21:46709984` | `-` | `intergenic_variant` |
 
-vep-rs reads a reference base at the position before it reads the shape and refuses a span the FASTA does not hold. So `NC_000021.9:46709984::A`, an insertion after a base the chromosome lacks, and `NC_000021.9:46709983:1:`, a deletion of the base after the last, are each skipped with a warning and write no row. An insertion after the last base, `NC_000021.9:46709983::A`, is annotated by both engines as `21:46709983-46709984 A intergenic_variant`.
+vep-rs reads the sequence's length before it reads the shape and refuses a span the FASTA does not hold, skipping the record with `Span <start>-<end> lies past the end of sequence <name> (<length> bases)`. So `NC_000021.9:46709984::A`, an insertion after a base the chromosome lacks, and `NC_000021.9:46709983:1:`, a deletion of the base after the last, are each skipped with that warning and write no row. An insertion after the last base, `NC_000021.9:46709983::A`, is annotated by both engines as `21:46709983-46709984 A intergenic_variant`.
 
 To reproduce: vep-rs with `--format spdi --fasta` over the GRCh38 cache and the records above; Ensembl VEP 116.2 reads the format with a database connection alone, and reads the two VCF records with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--fasta`.

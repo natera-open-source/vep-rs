@@ -4,8 +4,10 @@
 //! How the `vep` binary reads HGVS genomic, transcript and protein notation:
 //! the format needs the reference FASTA, each notation annotates as its VCF
 //! twin does and is named by itself, a notation Ensembl VEP cannot resolve is
-//! skipped with its warning, a gene name as the reference is warned about, and
-//! `--max_sv_size` bounds the span a genomic notation may describe.
+//! skipped with its warning, a gene name as the reference is warned about, a
+//! transcript cache a notation's lookup cannot read stops the run under the
+//! `cache` component, and `--max_sv_size` bounds the span a genomic notation
+//! may describe.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -276,6 +278,62 @@ fn transcript_notations_resolve_through_the_cache_and_warn_about_gene_names() {
     ] {
         assert!(warnings.contains(text), "{warnings}");
     }
+}
+
+/// Copies the directory tree at `from` to `to`.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), &target).unwrap();
+        }
+    }
+}
+
+/// A transcript cache a `c.` notation's lookup cannot read stops the run under
+/// the `cache` component, the component of a cache whose content is unusable,
+/// with the loader's refusal after the parser's text; the notation itself is
+/// sound, so the `input` component does not apply. The corpus cache is copied
+/// without its checksum manifest, so the lookup reaches the shard holding the
+/// named transcript and finds its gzip stream cut, and nothing past the header
+/// reaches the output. The line ends in the inflater's own words for the cut,
+/// which are its to choose.
+#[test]
+fn an_unreadable_transcript_cache_stops_the_run_under_the_cache_component() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = dir.path().join("cache");
+    copy_tree(&corpus().join("json_cache"), &cache);
+    std::fs::remove_file(cache.join("CHECKSUMS.sha256")).unwrap();
+    let shard = cache.join("transcripts/21/42000001-43000000.json.gz");
+    let bytes = std::fs::read(&shard).unwrap();
+    std::fs::write(&shard, &bytes[..bytes.len() / 2]).unwrap();
+    let input = write(dir.path(), "tff3.hgvs", "ENST00000518498:c.5C>T\n");
+    let output = common::isolated_vep(dir.path())
+        .arg("-i")
+        .arg(&input)
+        .args(["-o", "STDOUT", "--format", "hgvs", "--json_cache"])
+        .arg(&cache)
+        .args(["--assembly", "GRCh38", "--no_stats", "--quiet", "--fasta"])
+        .arg(corpus().join("reference.fa.gz"))
+        .arg("--warning_file")
+        .arg(dir.path().join("warnings.txt"))
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let err = stderr(&output);
+    assert_eq!(output.status.code(), Some(1), "{err}");
+    let prefix = format!(
+        "ERROR: [cache] Cannot read the transcript cache for HGVS input: Failed to inflate {}: ",
+        shard.display()
+    );
+    assert!(err.starts_with(&prefix), "{err}");
+    assert_eq!(err.lines().count(), 1, "{err}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.lines().all(|line| line.starts_with('#')), "{stdout}");
 }
 
 /// A notation Ensembl VEP cannot resolve is skipped and warned about with the

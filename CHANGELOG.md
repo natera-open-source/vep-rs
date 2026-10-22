@@ -324,6 +324,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A transcript's reference allele read from the FASTA is no longer sized from a mapper's cDNA ends, which a malformed cache can set any distance apart. (#N)
 - The cache loader refuses a transcript whose mapper's coding end precedes its coding start. (#N)
 - A tabix data line or converter input whose zero-based start has no one-based form is skipped or refused instead of overflowing the shift. (#N)
+- An HGVS `c.`, `n.` or `p.` input naming a transcript the cache cannot read is refused under the `cache` component, not `input`. (#N)
 
 ### Security
 

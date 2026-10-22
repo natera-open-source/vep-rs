@@ -68,7 +68,7 @@ use crate::input::{ReferenceSequence, TranscriptSource};
 
 use super::components::{self, genome_on_strand, Placement};
 use super::transcript::mapper_of;
-use super::{unable, Notation};
+use super::{cache_unreadable, unable, Notation};
 
 /// The variant a protein notation describes, read against `reference` on the
 /// transcript `transcripts` resolves its reference to, or on the first
@@ -132,26 +132,26 @@ fn resolve(
     reference: &str,
     transcripts: &dyn TranscriptSource,
 ) -> Result<Vec<Vec<Transcript>>, IoError> {
-    let cache_error = |message: String| {
-        IoError::Unsupported(format!(
-            "Cannot read the transcript cache for HGVS input: {message}"
-        ))
-    };
     if reference.contains("ENST") || reference.contains("NM") {
-        if let Some(transcript) = transcripts.by_stable_id(reference).map_err(cache_error)? {
+        if let Some(transcript) = transcripts
+            .by_stable_id(reference)
+            .map_err(cache_unreadable)?
+        {
             return Ok(vec![vec![transcript]]);
         }
     }
     if let Some(transcript) = transcripts
         .by_translation_id(reference)
-        .map_err(cache_error)?
+        .map_err(cache_unreadable)?
     {
         return Ok(vec![vec![transcript]]);
     }
     if reference.contains("ENST") {
         return Ok(vec![Vec::new()]);
     }
-    transcripts.gene_transcripts(reference).map_err(cache_error)
+    transcripts
+        .gene_transcripts(reference)
+        .map_err(cache_unreadable)
 }
 
 /// The variant the first of `transcripts` to yield one gives (`:1946-1985`);
@@ -1204,6 +1204,57 @@ mod tests {
             lookups_of("XM_000001.1:p.Thr1Ala"),
             (vec!["translation_id", "gene"], false)
         );
+    }
+
+    /// A cache a lookup cannot read fails the notation with
+    /// [`IoError::CacheUnreadable`] carrying the cache's refusal after the
+    /// parser's text, whichever lookup meets it: the transcript lookup of an
+    /// `ENST` reference, the translation lookup of an `ENSP` one, the gene
+    /// lookup of a gene name.
+    #[test]
+    fn an_unreadable_cache_fails_the_notation_with_its_refusal() {
+        struct Failing(&'static str);
+        impl Failing {
+            fn refusal<T>(&self, lookup: &str, hit: T) -> Result<T, String> {
+                if self.0 == lookup {
+                    Err("shard 21/1-1000000.json.gz is cut".into())
+                } else {
+                    Ok(hit)
+                }
+            }
+        }
+        impl TranscriptSource for Failing {
+            fn by_stable_id(&self, _: &str) -> Result<Option<Transcript>, String> {
+                self.refusal("stable_id", None)
+            }
+            fn by_translation_id(&self, _: &str) -> Result<Option<Transcript>, String> {
+                self.refusal("translation_id", None)
+            }
+            fn gene_transcripts(&self, _: &str) -> Result<Vec<Vec<Transcript>>, String> {
+                self.refusal("gene", vec![Vec::new()])
+            }
+        }
+        for (lookup, hgvs) in [
+            ("stable_id", "ENST00000000001:p.Thr1Ala"),
+            ("translation_id", "ENSP00000000001:p.Thr1Ala"),
+            ("gene", "GENE1:p.Thr1Ala"),
+        ] {
+            let context = ParserContext {
+                fasta: Some(Arc::new(Genome)),
+                transcripts: Some(Arc::new(Failing(lookup)) as Arc<dyn TranscriptSource>),
+                ..ParserContext::default()
+            };
+            let mut parser =
+                HgvsParser::new(Cursor::new(hgvs.as_bytes().to_vec()), &context, false);
+            let Some(Err(IoError::CacheUnreadable(message))) = parser.next_variant() else {
+                panic!("{hgvs}: the notation must fail with the cache's refusal");
+            };
+            assert_eq!(
+                message,
+                "Cannot read the transcript cache for HGVS input: shard 21/1-1000000.json.gz is cut",
+                "{hgvs}"
+            );
+        }
     }
 
     /// The refusals of `_parse_hgvs_protein_position`, each with Ensembl VEP's

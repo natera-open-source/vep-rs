@@ -483,7 +483,7 @@ mod tests {
     /// coding start lies a UTR longer than the span away) fails every lookup
     /// through its tier with the refusal's message alone, no `ERROR: [cache]`
     /// line inside it, so the HGVS parser's wrapping of that message prints
-    /// under the one `input` component.
+    /// under the one `cache` component.
     #[test]
     fn a_cache_refusal_fails_the_lookup_with_its_message_alone() {
         use vep_io::input::hgvs::HgvsParser;
@@ -539,12 +539,12 @@ mod tests {
             ..Default::default()
         };
         let mut parser = HgvsParser::new(std::io::Cursor::new("ENST1:c.1A>G\n"), &context, false);
-        let Some(Err(vep_io::IoError::Unsupported(message))) = parser.next_variant() else {
+        let Some(Err(vep_io::IoError::CacheUnreadable(message))) = parser.next_variant() else {
             panic!("the notation must fail with the cache's refusal");
         };
         assert_eq!(
-            CliError::new("input", message).to_string(),
-            format!("ERROR: [input] Cannot read the transcript cache for HGVS input: {refusal}")
+            CliError::new("cache", message).to_string(),
+            format!("ERROR: [cache] Cannot read the transcript cache for HGVS input: {refusal}")
         );
     }
 
