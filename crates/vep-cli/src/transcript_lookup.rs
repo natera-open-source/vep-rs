@@ -497,6 +497,9 @@ mod tests {
             fn record_name(&self, _chr: &str) -> Option<String> {
                 None
             }
+            fn sequence_length(&self, _chr: &str) -> Option<u64> {
+                None
+            }
         }
 
         let dir = tempfile::Builder::new()

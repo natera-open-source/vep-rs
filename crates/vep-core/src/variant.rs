@@ -379,6 +379,16 @@ pub struct InputVariant {
     /// one. One buffer shared by every allele of the record.
     #[serde(default)]
     pub record_allele_string_multi: Option<Arc<str>>,
+    /// The record's working allele string in the case the input wrote it, when a
+    /// base is lower case: the chopped and minimised alleles as they stand when
+    /// Parser.pm:462 names a record whose ID Perl reads as false, before
+    /// `validate_vf` upper-cases them (Parser.pm:554), and the alleles a record
+    /// `--dont_skip` keeps after a refusal ahead of that line is annotated with.
+    /// Read while it is the case variant of [`Self::record_allele_string`], so a
+    /// copy whose string was rebuilt reads its own; `None` for an upper-case
+    /// record. One buffer shared by every allele of the record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub written_case_allele_string: Option<Arc<str>>,
     /// The name VEP builds from the input line for a record its ID column cannot
     /// name (OutputFactory.pm `VariationFeature_to_output_hash`, the `_line`
     /// branches): `CHROM_POS_REF/ALT1/ALT2` from a VCF line's own columns, POS
@@ -565,6 +575,7 @@ impl Default for InputVariant {
             input_record: 0,
             uploaded_allele_string: None,
             record_allele_string_multi: None,
+            written_case_allele_string: None,
             input_line_name: None,
             record_so_term: None,
             intergenic_shift: None,
@@ -653,6 +664,7 @@ impl InputVariant {
             oversize_sv: false,
             no_allele: false,
             record_allele_string_multi: None,
+            written_case_allele_string: None,
             annotation_chr: None,
             annotation_start: None,
             annotation_end: None,
@@ -783,6 +795,8 @@ impl InputVariant {
         row.uploaded_allele_string
             .clone_from(&self.uploaded_allele_string);
         row.record_allele_string_multi = Some(record_allele_string.into());
+        row.written_case_allele_string
+            .clone_from(&self.written_case_allele_string);
         row.input_line_name.clone_from(&self.input_line_name);
         row.record_so_term.clone_from(&self.record_so_term);
         row.input_record = self.input_record;
@@ -936,19 +950,20 @@ impl InputVariant {
     /// VEP's `variation_name` after `validate_vf`, the `id` of its JSON output
     /// (OutputFactory/JSON.pm:236): [`Self::id`] when Perl reads it as true, so a
     /// `.` stays `.`; else `chr_start_alleles` built from
-    /// [`Self::record_allele_string`], the name Parser.pm:462 `||=` gives a record
-    /// whose ID is absent, empty or `0`.
+    /// [`Self::record_allele_string`] in the case the input wrote it
+    /// ([`Self::written_case_allele_string`]), the name Parser.pm:462 `||=` gives
+    /// a record whose ID is absent, empty or `0`.
     pub fn variation_name(&self) -> String {
         if let Some(id) = self.id.as_deref().filter(|id| perl_true(id)) {
             return id.to_string();
         }
         let start = self.original_start.unwrap_or(self.start);
-        format!(
-            "{}_{}_{}",
-            self.name_chr(),
-            start,
-            self.record_allele_string()
-        )
+        let record_alleles = self.record_allele_string();
+        let alleles = match self.written_case_allele_string.as_deref() {
+            Some(written) if written.eq_ignore_ascii_case(&record_alleles) => written.to_string(),
+            _ => record_alleles,
+        };
+        format!("{}_{}_{}", self.name_chr(), start, alleles)
     }
 
     /// The specific alternate allele for this variant record.

@@ -442,27 +442,37 @@ fn individual_copy(
         // divergence `docs/intended-divergences.md` lists under the trimmable
         // indel.
         let working_reference = String::from_utf8_lossy(&base.ref_allele).to_ascii_uppercase();
-        let copy_string = if run.process_ref_homs {
-            format!("{working_reference}/{working_reference}")
+        let written_reference = &alleles.chopped[0];
+        let (copy_string, written_string) = if run.process_ref_homs {
+            (
+                format!("{working_reference}/{working_reference}"),
+                format!("{written_reference}/{written_reference}"),
+            )
         } else {
-            working_reference
+            (working_reference, written_reference.to_string())
         };
         mark(&mut copy, &copy_string, true);
         copy.record_allele_string_multi = Some(copy_string.into());
+        copy.written_case_allele_string = written_case(&written_string);
         return Some(if run.process_ref_homs {
             vec![copy.reference_allele_row()]
         } else {
             vec![copy]
         });
     }
-    let mut copy_string = alleles.chopped[0].to_ascii_uppercase();
+    // The copy's string as written beside its working, upper-cased form: Ensembl
+    // VEP names a copy with a Perl-false ID from its own string before the
+    // upper-casing (Parser.pm:462-467, then :554), so `0 c t,g` with `0/1` is
+    // `21_<pos>_c/t`.
+    let mut written_string = alleles.chopped[0].to_string();
     for &index in &genotype.non_ref {
-        copy_string.push('/');
-        copy_string.push_str(&alleles.chopped[index].to_ascii_uppercase());
+        written_string.push('/');
+        written_string.push_str(&alleles.chopped[index]);
     }
     if genotype.empty_allele {
-        copy_string.push('/');
+        written_string.push('/');
     }
+    let copy_string = written_string.to_ascii_uppercase();
     let mut copy: Vec<InputVariant> = genotype
         .non_ref
         .iter()
@@ -501,6 +511,7 @@ fn individual_copy(
     for variant in &mut copy {
         if subset {
             variant.record_allele_string_multi = Some(copy_string.as_str().into());
+            variant.written_case_allele_string = written_case(&written_string);
         }
         mark(variant, &copy_string, false);
     }
@@ -508,6 +519,16 @@ fn individual_copy(
         add_reference_allele_row(&mut copy);
     }
     Some(copy)
+}
+
+/// `string` as the copy's written-case allele string when a base of it is lower
+/// case ([`InputVariant::written_case_allele_string`]); `None` for an upper-case
+/// string.
+fn written_case(string: &str) -> Option<Arc<str>> {
+    string
+        .bytes()
+        .any(|b| b.is_ascii_lowercase())
+        .then(|| string.into())
 }
 
 /// A feature over `base`'s span with no allele to annotate, carrying the
@@ -588,12 +609,15 @@ fn zygosity_record(
         // reference-homozygous individual's string.
         let working_reference = String::from_utf8_lossy(&base.ref_allele).to_ascii_uppercase();
         let allele_string = format!("{working_reference}/{working_reference}");
+        let written_reference = &alleles.chopped[0];
         let mut feature = feature_without_allele(base);
         feature.hom_ref = true;
         if !inherits_raw_string(base, run.minimal) {
             feature.uploaded_allele_string = Some(allele_string.as_str().into());
         }
         feature.record_allele_string_multi = Some(allele_string.into());
+        feature.written_case_allele_string =
+            written_case(&format!("{written_reference}/{written_reference}"));
         feature.sample_zygosities = Some(zygosities);
         return vec![feature.reference_allele_row()];
     }

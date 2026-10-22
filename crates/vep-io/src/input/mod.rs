@@ -138,6 +138,11 @@ pub trait ReferenceSequence: Send + Sync {
     /// chromosome by an accession is printed under this name, as Ensembl VEP
     /// prints a slice's `seq_region_name`.
     fn record_name(&self, chr: &str) -> Option<String>;
+
+    /// The number of bases of the sequence `chr` reaches ([`Self::record_name`]),
+    /// the last position [`Self::sequence`] can read; `None` when no sequence is
+    /// reached.
+    fn sequence_length(&self, chr: &str) -> Option<u64>;
 }
 
 /// The transcripts an HGVS `c.`, `n.` or `p.` notation is resolved against:

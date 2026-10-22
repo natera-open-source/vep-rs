@@ -9,7 +9,8 @@
   "--mask_header_cache_path"
  ],
  "covers": [
-  "tandem-repeats-cnv-tr"
+  "tandem-repeats-cnv-tr",
+  "fileformat-version-check"
  ],
  "reference_warnings": [
   "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta",

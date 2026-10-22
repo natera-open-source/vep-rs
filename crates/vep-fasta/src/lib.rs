@@ -909,6 +909,12 @@ impl IndexedFasta {
         self.record(chr).map(|(name, _)| name)
     }
 
+    /// The number of bases of the record `chr` reaches ([`Self::record_name`]),
+    /// as its `.fai` line states it; `None` when no record is reached.
+    pub fn sequence_length(&self, chr: &str) -> Option<u64> {
+        self.record(chr).map(|(_, record)| record.len)
+    }
+
     /// The record `chr` reaches ([`Self::record_name`]) with the name the FASTA
     /// gives it.
     fn record(&self, chr: &str) -> Option<(&str, &FaiRecord)> {

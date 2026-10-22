@@ -6,3 +6,4 @@ WARNING: line 12 skipped (21 30592776 multi_bad A C,G . . .): Specified referenc
 WARNING: line 13 skipped (Z 1000 unknown_chr A G . . .): Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features
 WARNING: line 15 skipped (21 30165901 invalid_alleles X Y . . .): Invalid allele string X/Y or possible parsing error
 WARNING: line 18 skipped (21 30755140 nonvar_bad G . . . .): Specified reference allele G does not match Ensembl reference allele
+WARNING: line 21 skipped (Z 1000 . a g . . .): Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features

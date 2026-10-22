@@ -34,9 +34,10 @@
 //! (`:177-184`); the warning carries Ensembl VEP's own text for the shape. A
 //! line with no word character counts as empty (`Parser.pm:273`); a `#` line is
 //! a record, as ensembl-io's list parser has no comment lines. The reference
-//! bases come from the run's FASTA, so the format needs one; a span the FASTA
-//! does not hold, past the end of its sequence, is refused as a sequence it
-//! lacks, where Ensembl VEP's slice pads it with `N`.
+//! bases come from the run's FASTA, so the format needs one; a span past the
+//! end of its sequence is refused with a warning naming the span and the
+//! sequence's length, where Ensembl VEP's slice reads `N` for every base past
+//! the end (Utils/FastaSequence.pm:619-629) and the record is annotated.
 
 use std::collections::HashSet;
 use std::io::BufRead;
@@ -107,17 +108,27 @@ impl<R: BufRead> SpdiParser<R> {
     /// `throw` text kept as written.
     fn variant(&self, spdi: &str) -> Result<InputVariant, String> {
         let notation = split_notation(spdi)?;
-        let sequence_id = strip_version(notation.sequence_id);
+        let raw_sequence_id = notation.sequence_id;
+        let sequence_id = strip_version(raw_sequence_id);
         let chr = self.chromosome_name(&sequence_id);
         let position = notation.position;
         let start = position + 1;
         // The slice is fetched before the shape is read (`:2533-2537`), so a
-        // sequence the reference lacks fails every shape with the same text.
-        // The base read is the one before the variant (the first for position
-        // 0), which an insertion after the sequence's last base still has
-        // where `start` lies past the end.
-        let probed_base = position.max(1);
-        self.reference(&chr, notation.sequence_id, probed_base, probed_base)?;
+        // sequence the reference lacks fails every shape with the same text
+        // (`:2536`, naming the sequence as written).
+        let not_valid = || format!("Sequence name {raw_sequence_id} not valid");
+        let fasta = self.fasta.as_ref().ok_or_else(not_valid)?;
+        let sequence_length = fasta.sequence_length(&chr).ok_or_else(not_valid)?;
+        // Ensembl VEP has no refusal here: its slice reads `N` for every base past
+        // the end (Utils/FastaSequence.pm:619-629) and annotates the record.
+        let past_end = |from: u64, to: u64| {
+            format!(
+                "Span {}-{} lies past the end of sequence {raw_sequence_id} \
+                 ({sequence_length} bases)",
+                from.min(to),
+                from.max(to)
+            )
+        };
 
         let deleted = notation.deleted;
         let inserted = notation.inserted;
@@ -126,7 +137,17 @@ impl<R: BufRead> SpdiParser<R> {
         let deleted_is_letters = is_bases(deleted);
         let deleted_is_length = is_digits(deleted);
         let inserted_is_letters = is_bases(inserted);
-        let reference = |end: u64| self.reference(&chr, notation.sequence_id, start, end);
+        // The reference bases from `start` to `end`, as `get_reference_allele`
+        // reads them (`:2614-2627`).
+        let reference = |end: u64| {
+            fasta.sequence(&chr, start, end).ok_or_else(|| {
+                if end > sequence_length {
+                    past_end(start, end)
+                } else {
+                    not_valid()
+                }
+            })
+        };
         let unsupported =
             || format!("Could not parse the SPDI notation {spdi}. SPDI notation not supported.");
 
@@ -134,7 +155,12 @@ impl<R: BufRead> SpdiParser<R> {
             return Err(unsupported());
         }
         let (end, ref_allele, alt_allele) = if no_deletion && inserted_is_letters {
-            // An insertion ends at the position, before its start (`:2545-2549`).
+            // An insertion ends at the position, before its start (`:2545-2549`),
+            // and reads no base: one after the last base is within the sequence,
+            // one further on is past its end.
+            if position > sequence_length {
+                return Err(past_end(position, start));
+            }
             let alt_allele = inserted.to_ascii_uppercase().into_bytes();
             (position, b"-".to_vec(), alt_allele)
         } else if (deleted_is_letters || deleted_is_length) && (no_insertion || inserted_is_letters)
@@ -212,21 +238,6 @@ impl<R: BufRead> SpdiParser<R> {
             .map(|name| self.synonyms.source_chr_name(name, holds))
             .find(|name| holds(name))
             .unwrap_or(resolved)
-    }
-
-    /// The reference bases of `chr` from `start` to `end`, as `get_reference_allele`
-    /// reads them (`:2614-2627`), or its refusal of a sequence the reference lacks
-    /// (`:2620-2622`, naming the sequence as written).
-    fn reference(
-        &self,
-        chr: &str,
-        raw_sequence_id: &str,
-        start: u64,
-        end: u64,
-    ) -> Result<Vec<u8>, String> {
-        let not_valid = || format!("Sequence name {raw_sequence_id} not valid");
-        let fasta = self.fasta.as_ref().ok_or_else(not_valid)?;
-        fasta.sequence(chr, start, end).ok_or_else(not_valid)
     }
 }
 
@@ -374,10 +385,15 @@ mod tests {
         fn record_name(&self, chr: &str) -> Option<String> {
             self.0.contains_key(chr).then(|| chr.to_string())
         }
+
+        fn sequence_length(&self, chr: &str) -> Option<u64> {
+            self.0.get(chr).map(|bases| bases.len() as u64)
+        }
     }
 
-    /// Chromosome 21 as `TGCATACGTTAGGCATGACC...`, the cache holding `21` and
-    /// `MT`, and the synonym lines of a release-116 cache for chromosome 21.
+    /// Chromosome 21 as `TGCATACGTTAGGCATGACC...`, 38 bases, the cache holding
+    /// `21` and `MT`, and the synonym lines of a release-116 cache for
+    /// chromosome 21.
     fn context() -> ParserContext {
         let mut reference = HashMap::new();
         reference.insert("21", "TGCATACGTTAGGCATGACCTTAGCCGATTACAGGTTC");
@@ -726,6 +742,40 @@ mod tests {
             "Unable to parse SPDI notation '21:3:GGGGGGG:': Reference allele extracted"
         ));
         assert_eq!(one("21:3:30:").allele_string.len(), 32);
+    }
+
+    /// A span past the end of a sequence the reference holds is refused naming
+    /// the span and the sequence's length, where a sequence the reference lacks
+    /// keeps `Sequence name <name> not valid` (`:2536`): on the 38-base `21`,
+    /// `21:38::A` inserts after the last base and is read (Ensembl VEP 116.2
+    /// annotates `NC_000021.9:46709983::A` at `21:46709983-46709984` on the
+    /// 46,709,983-base chromosome), `21:39::A` falls between bases 39 and 40,
+    /// `21:38:1:` deletes base 39, `21:35:5:` runs to base 40 and `21:37:NN:A`
+    /// names bases 38 and 39. The name as written is kept in the text.
+    #[test]
+    fn span_past_the_end_is_refused_naming_the_length() {
+        let v = one("21:38::A");
+        assert_eq!((v.start, v.end), (39, 38));
+        assert_eq!(v.allele_string, "-/A");
+        let past_end = |spdi: &str, span: &str| {
+            format!(
+                "Unable to parse SPDI notation '{spdi}': Span {span} lies past the end of \
+                 sequence 21 (38 bases)"
+            )
+        };
+        assert_eq!(refused("21:39::A"), past_end("21:39::A", "39-40"));
+        assert_eq!(refused("21:38:1:"), past_end("21:38:1:", "39-39"));
+        assert_eq!(refused("21:35:5:"), past_end("21:35:5:", "36-40"));
+        assert_eq!(refused("21:37:NN:A"), past_end("21:37:NN:A", "38-39"));
+        assert_eq!(
+            refused("NC_000021.9:40:1:"),
+            "Unable to parse SPDI notation 'NC_000021.9:40:1:': Span 41-41 lies past the end \
+             of sequence NC_000021.9 (38 bases)"
+        );
+        assert_eq!(
+            refused("NC_000021:40:1:"),
+            "Unable to parse SPDI notation 'NC_000021:40:1:': Sequence name NC_000021 not valid"
+        );
     }
 
     /// Without a reference every record fails as a sequence the reference lacks:

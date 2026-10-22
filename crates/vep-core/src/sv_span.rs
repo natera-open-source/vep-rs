@@ -15,6 +15,7 @@
 use std::fmt;
 
 use crate::coordinate::{parse_coordinate, MAX_COORD};
+use crate::sv_routing::perl_split;
 use crate::variant::VariantClass;
 
 /// Perl's numeric reading of an INFO value, as `abs($svlen)` and `max(@svlen)` apply
@@ -73,10 +74,17 @@ pub(crate) fn perl_numeric_f64(text: &str) -> f64 {
     rest[..end].parse::<f64>().unwrap_or(0.0)
 }
 
-/// Every comma-separated SVLEN value as Perl reads it (`split(',', $svlen)` then the
-/// numeric reading of each); a key written with an empty value is one value, 0.
+/// Every comma-separated SVLEN value as Perl reads the list (BaseVCF4.pm:304 and
+/// Parser/VCF.pm:505 `split(',', $svlen)`, a trailing empty field no field, then the
+/// numeric reading of each), so `-300,` is the one value -300; a list with no field
+/// (`SVLEN=`, `SVLEN=,`) is the one value 0, what `abs` and `max` make of it.
 pub fn svlen_values(svlen: &str) -> Vec<i64> {
-    svlen.split(',').map(perl_numeric_value).collect()
+    let values: Vec<i64> = perl_split(svlen, &[',']).map(perl_numeric_value).collect();
+    if values.is_empty() {
+        vec![0]
+    } else {
+        values
+    }
 }
 
 /// How a record's class reads its span.
@@ -115,7 +123,11 @@ pub fn structural_start(pos: u64, class: VariantClass) -> u64 {
 /// Why Ensembl VEP skips a record on its span.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpanError {
-    /// INFO/END is not a coordinate (`validate_vf`: "Invalid start or end coordinate").
+    /// INFO/END, the text as written, is no coordinate vep-rs can hold. An END that
+    /// is no number to Perl either fails `validate_vf`'s coordinate test
+    /// (Parser.pm:475-477, `Invalid start '<POS + 1>' or end '<text>' coordinate`,
+    /// the text kept by BaseVCF4.pm:307-308); one Perl numifies (a fraction, a value
+    /// past [`MAX_COORD`]) is refused here alone.
     EndNotACoordinate(String),
     /// The end lies more than one base before the start (`validate_vf`: `start > end+1`),
     /// the end as Ensembl VEP computes it, below zero for a tandem class whose
@@ -388,6 +400,48 @@ mod tests {
                 start: 11,
                 end: -10
             })
+        );
+    }
+
+    /// Perl's `split` drops a trailing empty field (Parser/VCF.pm:505
+    /// `uniq(split(/,/, $info->{SVLEN}))`), so `SVLEN=-300,` is the one value -300 and
+    /// a tandem class ends at `$start + max(@svlen) - 1` (`:511`), before its start:
+    /// Ensembl VEP 116.2 skips `21 30165850 x N <CNV:TR> . . SVTYPE=CNV;SVLEN=-300,`
+    /// with `start > end+1 : (START=30165851, END=30165550)`, and `<DUP:TANDEM>` the
+    /// same. The first value of every other class is the same with or without the
+    /// comma (`SVLEN=300,` ends a `<DUP>` at POS + 300), and a list of no value
+    /// (`SVLEN=,`) reads as 0, the insertion pair.
+    #[test]
+    fn a_trailing_empty_svlen_field_is_no_value() {
+        assert_eq!(svlen_values("-300,"), vec![-300]);
+        assert_eq!(svlen_values("-300,,"), vec![-300]);
+        assert_eq!(svlen_values(","), vec![0]);
+        let pos = 30425650;
+        assert_eq!(
+            structural_end(pos, Some("-300,"), None, SpanClass::Tandem),
+            Err(SpanError::StartPastEnd {
+                start: 30425651,
+                end: 30425350
+            })
+        );
+        assert_eq!(
+            structural_end(30165850, Some("-300,"), None, SpanClass::Tandem),
+            Err(SpanError::StartPastEnd {
+                start: 30165851,
+                end: 30165550
+            })
+        );
+        assert_eq!(
+            structural_end(pos, Some("300,"), None, SpanClass::Tandem),
+            Ok(pos + 300)
+        );
+        assert_eq!(
+            structural_end(pos, Some("-300,"), None, SpanClass::Other),
+            Ok(pos + 300)
+        );
+        assert_eq!(
+            structural_end(pos, Some(","), None, SpanClass::Tandem),
+            Ok(pos)
         );
     }
 

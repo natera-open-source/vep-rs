@@ -44,7 +44,7 @@
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
-use std::io::{self, BufRead, BufWriter, IoSlice, Write};
+use std::io::{self, BufRead, BufWriter, Cursor, IoSlice, Read, Write};
 use std::ops::Range;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -93,7 +93,7 @@ use vep_core::sv_routing::{
 };
 use vep_core::sv_span::{structural_end, SpanClass, SpanError};
 use vep_core::synonyms::ChromosomeSynonyms;
-use vep_core::variant::InputVariant;
+use vep_core::variant::{classify_variant, InputVariant};
 use vep_core::vcf_info::{info_value, info_value_written};
 use vep_io::input::detect::InputFormat;
 use vep_io::input::{
@@ -1146,6 +1146,106 @@ fn warn_empty_lines(skipped: u64, from_line: u64) {
     crate::warnings::global().warn(&empty_lines_warning(skipped, from_line));
 }
 
+/// The first `<digits>.<digits>` of `value`, Perl's `/(\d+)\.(\d+)/`: the leftmost
+/// run of digits a `.` and a digit follow, with the digits after the `.`.
+fn first_version(value: &[u8]) -> Option<(&[u8], &[u8])> {
+    let digits_end = |from: usize| {
+        value[from..]
+            .iter()
+            .position(|b| !b.is_ascii_digit())
+            .map_or(value.len(), |n| from + n)
+    };
+    let mut i = 0;
+    while i < value.len() {
+        if !value[i].is_ascii_digit() {
+            i += 1;
+            continue;
+        }
+        let major_end = digits_end(i);
+        if value.get(major_end) == Some(&b'.')
+            && value.get(major_end + 1).is_some_and(u8::is_ascii_digit)
+        {
+            let minor_start = major_end + 1;
+            let minor_end = digits_end(minor_start);
+            return Some((&value[i..major_end], &value[minor_start..minor_end]));
+        }
+        i = major_end;
+    }
+    None
+}
+
+/// Why Ensembl VEP ends a run on a VCF header line, in its words, or `None`
+/// for a line it reads on. Its ensembl-io parser reads every `##key=value`
+/// header line (BaseVCF4.pm:93-94: `##`, blanks, a word, `=`, a non-empty value)
+/// and tests the `fileformat` key's value (`:116-130`): the first
+/// `<digits>.<digits>` in it is the version, and a major number other than the
+/// parser's own 4, compared as numbers, ends the run (`:125`), as does a value
+/// with no such pair (`:129`); the minor number is not read (`:126`), so `VCFv4.5`
+/// passes, and a line with no value, another key or `FILEFORMAT` carries no
+/// version. The check runs on every such line of the file, and in Ensembl VEP
+/// before the output opens.
+fn fileformat_refusal(line: &[u8]) -> Option<String> {
+    let rest = line.strip_prefix(b"##")?;
+    let key_start = rest
+        .iter()
+        .position(|&b| !is_ascii_space(b))
+        .unwrap_or(rest.len());
+    let value = rest[key_start..].strip_prefix(b"fileformat=")?;
+    if value.is_empty() {
+        return None;
+    }
+    let Some((major, minor)) = first_version(value) else {
+        return Some(
+            "The script can't read the VCF file format version of 'fileformat'".to_string(),
+        );
+    };
+    let significant = major.iter().position(|&b| b != b'0').unwrap_or(major.len());
+    if &major[significant..] == b"4" {
+        return None;
+    }
+    Some(format!(
+        "The VCF file format version {}.{} is not compatible with the parser version (VCF v4.2)",
+        String::from_utf8_lossy(major),
+        String::from_utf8_lossy(minor)
+    ))
+}
+
+/// The VCF's leading `#` lines read ahead of the output's opening and handed
+/// back in front of the rest of the input, so a [`fileformat_refusal`] among them
+/// ends the run with no output file written, as Ensembl VEP's ends in
+/// `Runner::init` (BaseRunner.pm:406) before `get_output_file_handle`. A header
+/// line past [`MAX_LINE_BYTES`] is left to the reader stage, which reports it.
+pub(crate) fn refuse_vcf_header_early(
+    mut reader: Box<dyn BufRead + Send>,
+) -> anyhow::Result<Box<dyn BufRead + Send>> {
+    let mut header: Vec<u8> = Vec::new();
+    let mut lines = 0u64;
+    loop {
+        let next = reader.fill_buf().context("Failed to read input line")?;
+        if next.first() != Some(&b'#') {
+            break;
+        }
+        let start = header.len();
+        lines += 1;
+        if let Err(error) = read_until_bounded(&mut reader, b'\n', &mut header, lines) {
+            if LineTooLong::from_io_error(&error).is_some() {
+                break;
+            }
+            return Err(anyhow::Error::from(error).context("Failed to read input line"));
+        }
+        // A `\r` is part of a `\r\n` line end alone: a final line without a line
+        // end keeps it, as the reader stage and Ensembl VEP's own read do.
+        let line = match header[start..].strip_suffix(b"\n") {
+            Some(line) => strip_cr(line),
+            None => &header[start..],
+        };
+        if let Some(refusal) = fileformat_refusal(line) {
+            return Err(crate::config::CliError::new("input", refusal).into());
+        }
+    }
+    Ok(Box::new(Cursor::new(header).chain(reader)))
+}
+
 fn read_vcf(
     reader: Box<dyn BufRead + Send>,
     cfg: &ReaderConfig<'_>,
@@ -1194,6 +1294,9 @@ fn read_vcf_lines(
         let mut send_batch = false;
         let more = scanner.with_next_line(|line| {
             if line.first() == Some(&b'#') {
+                if let Some(refusal) = fileformat_refusal(line) {
+                    return Err(crate::config::CliError::new("input", refusal).into());
+                }
                 if vcf_out && !cfg.no_headers && !vcf_header_written {
                     input_headers.push(line.to_vec());
                     if line.starts_with(b"#CHROM") {
@@ -1620,7 +1723,8 @@ struct RefusedRecord {
 /// `get_SO_term` abbreviates it (Parser.pm:725); `deletion looks incomplete` when
 /// the type string reads `/del/i` and the span is empty or unbounded
 /// (Parser/VCF.pm:555-558); the refused span as `validate_vf` reports it
-/// (Parser.pm:484-486), which runs on the refused type's feature too
+/// (Parser.pm:475-477 for an END that is no number, :484-486 for one before the
+/// start), which runs on the refused type's feature too
 /// (Parser/VCF.pm:199). For a refused type the span tested is Perl's own: `POS + 1`
 /// to the end BaseVCF4.pm:297-317 reads from SVLEN or END, so `SVLEN=0`, an END at
 /// or before POS and an END that is no number each make a deletion incomplete, and
@@ -1632,10 +1736,15 @@ fn refused_record(error: &anyhow::Error, line: &str) -> RefusedRecord {
         parsed: Vec::new(),
         validated: descriptions,
     };
-    // A POS that is no number to Perl fails `validate_vf`'s coordinate test in
-    // Ensembl VEP (Parser.pm:475-480), whatever else the line carries; a number
-    // vep-rs cannot hold as a coordinate (negative, fractional, past its bound)
-    // keeps the parser's own refusal, since Ensembl VEP writes no skip for it.
+    // A POS that is no number to Perl reaches `validate_vf`'s coordinate test as
+    // text (Parser/VCF.pm:250 reads the column raw), which refuses it
+    // (Parser.pm:475-477), unless the record is an anchor-chopped indel: the chop
+    // runs Perl's `++` on the raw text first (Parser/VCF.pm:310, :334), so `abc`
+    // is refused as the string increment `abd` and `12abc`, numified to 13, is
+    // annotated at 13. vep-rs refuses every such POS before the chop, with the
+    // text as written. A number vep-rs cannot hold as a coordinate (negative,
+    // fractional, past its bound) keeps the parser's own refusal, since Ensembl
+    // VEP writes no skip for it.
     if let (Some(pos_text), Some(ref_allele)) = (column(1), column(3)) {
         if !looks_like_number(pos_text) {
             return validated(vec![invalid_vcf_coordinate(pos_text, ref_allele)]);
@@ -1678,8 +1787,8 @@ fn refused_record(error: &anyhow::Error, line: &str) -> RefusedRecord {
                 parsed.push(incomplete);
             }
             let mut validated = Vec::new();
-            if let Some((_, Err(refused_span))) = span {
-                validated.push(refused_span.to_string());
+            if let Some((pos, Err(refused_span))) = span {
+                validated.push(refused_span_description(pos, &refused_span));
             }
             RefusedRecord { parsed, validated }
         }
@@ -1698,11 +1807,31 @@ fn refused_record(error: &anyhow::Error, line: &str) -> RefusedRecord {
             {
                 parsed.push(incomplete);
             }
+            let description = match parse_pos(pos_text) {
+                Some(pos) => refused_span_description(pos, span),
+                None => message,
+            };
             RefusedRecord {
                 parsed,
-                validated: vec![message],
+                validated: vec![description],
             }
         }
+    }
+}
+
+/// The description `validate_vf` writes for a structural record's refused span:
+/// for an END that is no number to Perl, the coordinate test's text
+/// (Parser.pm:475-477) over Perl's start, `POS + 1` (BaseVCF4.pm:260-264), and
+/// the END text as written (BaseVCF4.pm:307-308 keeps it); every other refusal
+/// as [`SpanError`] renders it, an END Perl numifies and vep-rs cannot hold
+/// (a fraction, a value past its bound) included.
+fn refused_span_description(pos: u64, span: &SpanError) -> String {
+    match span {
+        SpanError::EndNotACoordinate(text) if !looks_like_number(text) => format!(
+            "Invalid start '{}' or end '{text}' coordinate",
+            pos.saturating_add(1)
+        ),
+        _ => span.to_string(),
     }
 }
 
@@ -1951,7 +2080,15 @@ impl LineParse<'_> {
             }
         }
         if let Some(join) = self.json_input_join {
-            let input: Arc<str> = text.replace('\t', join).into();
+            // The fields of the line as the parser stored it (its trailing empty
+            // columns gone, a structural record's QUAL, FILTER and INFO filled),
+            // joined again.
+            let stored = alleles.iter().find_map(|allele| allele.raw_input.clone());
+            let input: Arc<str> = stored
+                .as_deref()
+                .unwrap_or(&text)
+                .replace('\t', join)
+                .into();
             for allele in &mut alleles {
                 allele.raw_input = Some(Arc::clone(&input));
             }
@@ -2091,6 +2228,9 @@ fn place_parsed_line(
                         .is_some_and(record_splits);
                 let mut record: Vec<InputVariant> = copy.iter_mut().map(std::mem::take).collect();
                 if patch.replaced_reference() && !splits {
+                    if let Some(written) = written_allele_of_hom_ref_copy(&record) {
+                        record.push(written);
+                    }
                     // An allele the looked-up reference made equal to it writes no row;
                     // a record left with none is the feature with no allele.
                     let count = record.len();
@@ -2136,6 +2276,37 @@ fn place_parsed_line(
         }
     }
     Ok(())
+}
+
+/// The written reference allele's row of a reference-homozygous individual's
+/// copy once `--lookup_ref` replaced the copy's reference. Ensembl VEP builds
+/// the copy's string as the written reference twice (Parser/VCF.pm:642-646) and
+/// `--lookup_ref` joins the looked-up reference to every allele after the first
+/// (Parser.pm:582, :645), so the written allele stays in the string as an
+/// alternate (`T/C` for a `C/C` copy over a `T`), kept and numbered 1 by the
+/// overlap-allele rule when it differs from the looked-up reference
+/// (VariationFeatureOverlap.pm:481-489). `record` is the copy after the lookup,
+/// the reference row alone, whose working string holds the written allele after
+/// the looked-up reference; the row carries the copy's individual, genotype and
+/// `hom_ref` mark, so it prints `ZYG=HOMREF` beside the reference row. `None`
+/// for any other record; the overlap rule then drops an allele equal to the
+/// looked-up reference.
+fn written_allele_of_hom_ref_copy(record: &[InputVariant]) -> Option<InputVariant> {
+    let [row] = record else {
+        return None;
+    };
+    if !(row.reference_allele_row && row.hom_ref && row.individual.is_some()) {
+        return None;
+    }
+    let (_, written) = row.record_allele_string_multi.as_deref()?.split_once('/')?;
+    let mut allele = row.clone();
+    allele.reference_allele_row = false;
+    allele.reference_row_shift_allele = None;
+    allele.allele_num = None;
+    allele.alt_alleles = vec![written.as_bytes().to_vec()];
+    allele.allele_string = format!("{}/{written}", String::from_utf8_lossy(&row.ref_allele));
+    allele.variant_class = classify_variant(&row.ref_allele, written.as_bytes());
+    Some(allele)
 }
 
 /// Units per fused task: `--render_task_records` when set, else about
@@ -4323,10 +4494,88 @@ mod tests {
         assert_eq!(numbers, [1, 3]);
     }
 
+    /// The header read ahead of the output's opening hands every leading `#`
+    /// line back unchanged, stops at the first data line, refuses a `##fileformat`
+    /// line as `read_vcf_lines` would, and reports a read error of the header
+    /// rather than reading a cut-off header as a complete header-only file; a
+    /// header line past the length cap alone is left to the reader stage.
+    #[test]
+    fn header_preflight_hands_the_header_back_and_reports_a_read_error() {
+        let text = b"##fileformat=VCFv4.2\r\n##source=x\n#CHROM\tPOS\n21\t5\tx\tA\tG\n";
+        let mut reader = refuse_vcf_header_early(Box::new(Cursor::new(text.to_vec()))).unwrap();
+        let mut replayed = Vec::new();
+        reader.read_to_end(&mut replayed).unwrap();
+        assert_eq!(replayed, text);
+        let data_first = b"21\t5\tx\tA\tG\n##fileformat=VCFv3.3\n";
+        let mut reader =
+            refuse_vcf_header_early(Box::new(Cursor::new(data_first.to_vec()))).unwrap();
+        replayed.clear();
+        reader.read_to_end(&mut replayed).unwrap();
+        assert_eq!(replayed, data_first);
+        let refused = refuse_vcf_header_early(Box::new(Cursor::new(
+            b"##fileformat=VCFv3.3\n#CHROM\n".to_vec(),
+        )))
+        .err()
+        .unwrap();
+        assert_eq!(
+            refused.to_string(),
+            "ERROR: [input] The VCF file format version 3.3 is not compatible with the parser version (VCF v4.2)"
+        );
+        // Ensembl VEP 116.2 accepts `##fileformat=\r\n` (an empty value) and refuses a
+        // final `##fileformat=\r` with no line end, whose value is the `\r`.
+        assert!(refuse_vcf_header_early(Box::new(Cursor::new(
+            b"##fileformat=\r\n#CHROM\n".to_vec()
+        )))
+        .is_ok());
+        let bare_cr = refuse_vcf_header_early(Box::new(Cursor::new(b"##fileformat=\r".to_vec())))
+            .err()
+            .unwrap();
+        assert_eq!(
+            bare_cr.to_string(),
+            "ERROR: [input] The script can't read the VCF file format version of 'fileformat'"
+        );
+
+        struct CutOff(Cursor<Vec<u8>>);
+        impl Read for CutOff {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                match self.0.read(buf)? {
+                    0 => Err(io::Error::other("failed to fill whole buffer")),
+                    n => Ok(n),
+                }
+            }
+        }
+        impl BufRead for CutOff {
+            fn fill_buf(&mut self) -> io::Result<&[u8]> {
+                if self.0.position() as usize == self.0.get_ref().len() {
+                    return Err(io::Error::other("failed to fill whole buffer"));
+                }
+                self.0.fill_buf()
+            }
+            fn consume(&mut self, amt: usize) {
+                self.0.consume(amt);
+            }
+        }
+        let cut = CutOff(Cursor::new(
+            b"##fileformat=VCFv4.2\n##contig=<ID=2".to_vec(),
+        ));
+        let error = refuse_vcf_header_early(Box::new(cut)).err().unwrap();
+        assert!(
+            error.to_string().starts_with("Failed to read input line"),
+            "{error}"
+        );
+    }
+
     /// A refused structural record's skips come in Ensembl VEP's order: the type
     /// `get_SO_term` refuses (Parser.pm:725), `deletion looks incomplete` for a
     /// type string reading `/del/i` over an empty or unbounded span
-    /// (Parser/VCF.pm:555-558), then the span `validate_vf` refuses (Parser.pm:484-486).
+    /// (Parser/VCF.pm:555-558), then the span `validate_vf` refuses (Parser.pm:484-486),
+    /// or, for an END that is no number to Perl, its coordinate test's text over
+    /// Perl's start, `POS + 1`, and the END as written (Parser.pm:475-477;
+    /// Ensembl VEP 116.2 writes `Invalid start '101' or end 'abc' coordinate` for
+    /// `21 100 . N <DEL> . . END=abc`, `... end '' coordinate` for `END=`, and
+    /// `Invalid start '301' or end 'abc' coordinate` after the type and the
+    /// incomplete-deletion lines for `21 300 . N N . . SVTYPE=XDEL;END=abc`). An END
+    /// Perl numifies (`5e2`) is refused as vep-rs's own `Invalid END`.
     #[test]
     fn refused_record_descriptions_follow_perl_order() {
         let span = |start, end| {
@@ -4355,12 +4604,32 @@ mod tests {
                 refused_span
             ]
         );
-        let end_not_a_number = anyhow::Error::from(StructuralRecordError::Span(
-            SpanError::EndNotACoordinate("x".to_string()),
-        ));
+        let end_text = |text: &str| {
+            anyhow::Error::from(StructuralRecordError::Span(SpanError::EndNotACoordinate(
+                text.to_string(),
+            )))
+        };
         assert_eq!(
-            refused_record_descriptions(&end_not_a_number, "21\t100\t.\tN\t<DEL>\t.\t.\tEND=x"),
-            ["deletion looks incomplete", "Invalid END: 'x'"]
+            refused_record_descriptions(&end_text("abc"), "21\t100\t.\tN\t<DEL>\t.\t.\tEND=abc"),
+            [
+                "deletion looks incomplete",
+                "Invalid start '101' or end 'abc' coordinate"
+            ]
+        );
+        assert_eq!(
+            refused_record_descriptions(&end_text(""), "21\t100\t.\tN\t<DEL>\t.\t.\tEND="),
+            [
+                "deletion looks incomplete",
+                "Invalid start '101' or end '' coordinate"
+            ]
+        );
+        assert_eq!(
+            refused_record_descriptions(&end_text(""), "21\t200\t.\tN\tN[21:1000[\t.\t.\tEND="),
+            ["Invalid start '201' or end '' coordinate"]
+        );
+        assert_eq!(
+            refused_record_descriptions(&end_text("5e2"), "21\t400\t.\tN\t<DEL>\t.\t.\tEND=5e2"),
+            ["deletion looks incomplete", "Invalid END: '5e2'"]
         );
         let refused_type = "XDEL is not a supported structural variant type";
         // POS in every spelling the parser reads (`parse_pos`): `100.0` is 100.
@@ -4397,12 +4666,12 @@ mod tests {
         assert_eq!(
             refused_record_descriptions(
                 &unsupported("XDEL"),
-                "21\t100\t.\tN\tN\t.\t.\tSVTYPE=XDEL;END=x"
+                "21\t300\t.\tN\tN\t.\t.\tSVTYPE=XDEL;END=abc"
             ),
             [
                 refused_type,
                 "deletion looks incomplete",
-                "Invalid END: 'x'"
+                "Invalid start '301' or end 'abc' coordinate"
             ]
         );
         let refused_foo = "FOO is not a supported structural variant type";

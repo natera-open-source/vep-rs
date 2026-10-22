@@ -22,6 +22,8 @@
 21	30289183	lone_delstar	C	<DEL:*>	.	.	.	GT	0/1
 21	30289183	snv_beside_delstar	C	G,<DEL:*>	.	.	.	GT	0/1
 21	30289183	snv_beside_star	C	G,*	.	.	.	GT	0/1
+21	30289183	snv_star_svtype	C	G,*	.	.	SVTYPE=DEL;END=30289190	GT	0/1
+21	30289183	star_snv_svtype	C	*,G	.	.	SVTYPE=DEL;END=30289190	GT	0/1
 21	30289183	star_only	C	*	.	.	.	GT	0/1
 21	30289183	ins_second_eq_ref	C	CG,C	.	.	.	GT	0/1
 21	30396602	del_alt_eq_ref	TTGA	T,TTGA	.	.	.	GT	0/1
@@ -46,6 +48,10 @@
 21	30165850	del_end_eq_pos	N	<DEL>	.	.	END=30165850	GT	0/1
 21	30165850	del_svlen_only	N	<DEL>	.	.	SVLEN=-100	GT	0/1
 21	30165850	delstar_svtype	N	<DEL:*>	.	.	SVTYPE=DEL;END=30165950	GT	0/1
+21	30165850	tr_neg_trailing	N	<CNV:TR>	.	.	SVTYPE=CNV;SVLEN=-300,	GT	0/1
+21	30165850	dup_short	N	<DUP>	.	.	.	GT	0/1
+21	30289183	trailing_tabs	C	G,G,T	.	.	.	GT	0/1
+21	30165850	sv_qual0	N	<DEL>	0	PASS	SVTYPE=DEL;END=30165950	GT	0/1
 21	30289183	name_21	C	CG	.	.	.	GT	0/1
 chr21	30289183	name_chr21	C	CG	.	.	.	GT	0/1
 chrM	100	name_chrm	G	A	.	.	.	GT	0/1

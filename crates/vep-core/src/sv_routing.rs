@@ -95,21 +95,21 @@ pub fn joined(alts: &[(usize, &str)], sep: &str) -> String {
 /// takes the record's class (one StructuralVariationFeature carries the record,
 /// Parser/VCF.pm:560-574); under a type the table lacks, each symbolic ALT keeps its own
 /// class under the `vep_skip` mark, INFO/SVTYPE naming the class of a mixed record whose
-/// joined ALTs open with a sequence allele (`:472-475`). `valid_alts` excludes `*` and `.`.
+/// joined ALTs open with a sequence allele (`:472-475`).
 pub fn per_alt_classes<'a>(
-    valid_alts: &[(usize, &'a str)],
+    alts: &[(usize, &'a str)],
     record_class: Option<VariantClass>,
     svtype: Option<&str>,
 ) -> Vec<(usize, &'a str, VariantClass)> {
     if let Some(class) = record_class {
-        return valid_alts.iter().map(|&(i, alt)| (i, alt, class)).collect();
+        return alts.iter().map(|&(i, alt)| (i, alt, class)).collect();
     }
-    let symbolic: Vec<(usize, &str)> = valid_alts
+    let symbolic: Vec<(usize, &str)> = alts
         .iter()
         .copied()
         .filter(|(_, alt)| is_symbolic_alt(alt))
         .collect();
-    let mixed = !symbolic.is_empty() && symbolic.len() < valid_alts.len();
+    let mixed = !symbolic.is_empty() && symbolic.len() < alts.len();
     symbolic
         .into_iter()
         .map(|(i, alt)| {

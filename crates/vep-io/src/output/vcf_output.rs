@@ -1452,6 +1452,10 @@ mod tests {
         fn record_name(&self, chr: &str) -> Option<String> {
             (chr == self.chr).then(|| chr.to_string())
         }
+
+        fn sequence_length(&self, chr: &str) -> Option<u64> {
+            (chr == self.chr).then(|| self.start + self.bases.len() as u64 - 1)
+        }
     }
 
     /// A record of a non-VCF input: `alleles` is the record's allele string.

@@ -72,7 +72,8 @@
 //!
 //! The VCF and JSON formats carry no `Location`, so their entries are keyed by
 //! the corpus record ordinal, found by matching each output record to its
-//! input line (the VCF's first five columns, the JSON object's `input`).
+//! input line by the first five columns (of the VCF line, of the JSON object's
+//! `input`).
 
 #![allow(dead_code)]
 
@@ -1216,7 +1217,7 @@ impl InputIndex {
 
 /// A VCF data line's identity: CHROM, POS, ID, REF and ALT, which VEP and
 /// vep-rs both write back unchanged.
-fn vcf_line_key(line: &str) -> String {
+pub fn vcf_line_key(line: &str) -> String {
     line.split('\t').take(5).collect::<Vec<_>>().join("\t")
 }
 
@@ -1337,9 +1338,13 @@ fn json_scalar(v: &serde_json::Value) -> String {
 /// scalars, keyed by the corpus record the `input` line names, the vep-rs
 /// identity key set aside for [`compare_json_identity`]) and one entry per
 /// `transcript_consequences` / `intergenic_consequences` element. An object
-/// whose `input` matches no record is keyed by its output ordinal.
+/// names its record by the first five columns of its `input`, as a VCF line
+/// does: Ensembl VEP stores a structural record's line with QUAL, FILTER and
+/// INFO filled (Parser/VCF.pm:464-466), so the whole `input` may differ from
+/// the line as written. An object whose `input` matches no record is keyed by
+/// its output ordinal.
 pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
-    let mut index = InputIndex::new(inputs, str::to_string);
+    let mut index = InputIndex::new(inputs, vcf_line_key);
     let mut entries = Vec::new();
     for (n, line) in text.lines().enumerate() {
         if line.trim().is_empty() {
@@ -1347,7 +1352,7 @@ pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
         }
         let obj: serde_json::Value = serde_json::from_str(line).unwrap();
         let input = obj.get("input").and_then(|v| v.as_str()).unwrap_or("");
-        let record = index.record(input);
+        let record = index.record(&vcf_line_key(input));
         let rec_label = record
             .map(|r| format!("rec{r}"))
             .unwrap_or(format!("obj{n}"));

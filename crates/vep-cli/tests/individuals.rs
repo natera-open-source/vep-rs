@@ -313,6 +313,84 @@ fn individual_carrying_the_allele_after_a_leading_dot_is_annotated() {
     );
 }
 
+/// An individual's copy of a record with a Perl-false ID (`0`) and lower-case
+/// alleles is named from the copy's own allele string as written, before
+/// `validate_vf` upper-cases it (Parser/VCF.pm:627-650 builds the copy's string
+/// from the alleles its genotype names, Parser.pm:462-467 names it, `:554`
+/// upper-cases): Ensembl VEP 116.2's JSON `id` values on `21 30337048 0 c t,g`
+/// with genotypes `0/0 0/1 1/2 2/2` are `21_30337048_c`, `21_30337048_c/t`, a
+/// `c`, `g`, `t` name and `21_30337048_c/g`, and on `21 30319403 0 tca t,tcg`
+/// with `0/1 0/0 2/2 1/2` `21_30319404_ca/-`, `21_30319404_ca`,
+/// `21_30319404_ca/cg` and a `ca`, `-`, `cg` name, each with the upper-cased
+/// `allele_string`; under `--process_ref_homs` the `0/0` copies are
+/// `21_30337048_c/c` and `21_30319404_ca/ca`. The two-allele copies' names
+/// list the alleles in Ensembl VEP's hash order, which its two runs spelled
+/// `c/g/t` and `ca/cg/-` then `ca/-/cg`; vep-rs lists them in the record's order.
+/// Under `--individual_zyg S1` the record S1 is reference-homozygous for is the
+/// written reference twice, `21_30337048_c/c`, and the other keeps the record's
+/// own string, `21_30319404_ca/-/cg` (Ensembl VEP 116.2's ids on this input).
+#[test]
+fn an_individuals_copy_with_a_perl_false_id_is_named_from_its_alleles_as_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write_input(
+        dir.path(),
+        "lower-false-id.vcf",
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3\tS4\n\
+         21\t30337048\t0\tc\tt,g\t.\t.\t.\tGT\t0/0\t0/1\t1/2\t2/2\n\
+         21\t30319403\t0\ttca\tt,tcg\t.\t.\t.\tGT\t0/1\t0/0\t2/2\t1/2\n",
+    );
+    let cache = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-vcf-check-ref/json_cache");
+    let names = |flags: &[&str]| -> BTreeSet<(String, String)> {
+        let (json, stderr, ok) = run_with_cache(dir.path(), &input, &cache, flags);
+        assert!(ok, "{stderr}");
+        body(&json)
+            .iter()
+            .map(|line| {
+                let object: serde_json::Value = serde_json::from_str(line).unwrap();
+                (
+                    object["id"].as_str().unwrap().to_string(),
+                    object["allele_string"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect()
+    };
+    let pair = |id: &str, alleles: &str| (id.to_string(), alleles.to_string());
+    assert_eq!(
+        names(&["--individual", "all", "--json"]),
+        BTreeSet::from([
+            pair("21_30337048_c", "C"),
+            pair("21_30337048_c/t", "C/T"),
+            pair("21_30337048_c/t/g", "C/T/G"),
+            pair("21_30337048_c/g", "C/G"),
+            pair("21_30319404_ca/-", "CA/-"),
+            pair("21_30319404_ca", "CA"),
+            pair("21_30319404_ca/cg", "CA/CG"),
+            pair("21_30319404_ca/-/cg", "CA/-/CG"),
+        ])
+    );
+    assert_eq!(
+        names(&["--individual", "all", "--process_ref_homs", "--json"]),
+        BTreeSet::from([
+            pair("21_30337048_c/c", "C/C"),
+            pair("21_30337048_c/t", "C/T"),
+            pair("21_30337048_c/t/g", "C/T/G"),
+            pair("21_30337048_c/g", "C/G"),
+            pair("21_30319404_ca/-", "CA/-"),
+            pair("21_30319404_ca/ca", "CA/CA"),
+            pair("21_30319404_ca/cg", "CA/CG"),
+            pair("21_30319404_ca/-/cg", "CA/-/CG"),
+        ])
+    );
+    assert_eq!(
+        names(&["--individual_zyg", "S1", "--json"]),
+        BTreeSet::from([
+            pair("21_30337048_c/c", "C/C"),
+            pair("21_30319404_ca/-/cg", "CA/-/CG"),
+        ])
+    );
+}
+
 /// An unknown sample in the list is the `die` of `Parser/VCF.pm:612-617`, both
 /// lists named, as the error contract's one line; a VCF without a `#CHROM` line
 /// names no sample (ensembl-io BaseVCF4.pm:785-793), so `all` reads nothing and a
@@ -588,6 +666,123 @@ fn reference_row_prints_the_alternate_hgvsg_on_a_bi_allelic_record_alone() {
     };
     assert_eq!(reference_hgvsg("1066015"), ["21:g.34775850A>C"]);
     assert_eq!(reference_hgvsg("3653535"), ["21:g.36259299_36259300insT"]);
+}
+
+/// The rows Ensembl VEP 116.2 writes for `21 14375818 craftWrong C A` with the
+/// genotypes `0|0` (S1) and `0|1` (S2) under `--individual all --process_ref_homs
+/// --lookup_ref --allele_number --show_ref_allele --uploaded_allele` over a
+/// reference reading `T` at the site, in its order.
+const LOOKUP_REF_HOM_REF_COPY_ROWS: &str = "\
+craftWrong	21:14375818	T	ENSG00000155304	ENST00000285667	Transcript	splice_region_variant,synonymous_variant	609	582	194	G	ggA/ggA	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	C	ENSG00000155304	ENST00000285667	Transcript	splice_region_variant,synonymous_variant	609	582	194	G	ggA/ggG	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00000478035	Transcript	downstream_gene_variant	-	-	-	-	-	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=MODIFIER;DISTANCE=2524;STRAND=-1
+craftWrong	21:14375818	C	ENSG00000155304	ENST00000478035	Transcript	downstream_gene_variant	-	-	-	-	-	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=MODIFIER;DISTANCE=2524;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00000903931	Transcript	intron_variant	-	-	-	-	-	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=MODIFIER;STRAND=-1
+craftWrong	21:14375818	C	ENSG00000155304	ENST00000903931	Transcript	intron_variant	-	-	-	-	-	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=MODIFIER;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00000903932	Transcript	splice_region_variant,synonymous_variant	488	450	150	G	ggA/ggA	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	C	ENSG00000155304	ENST00000903932	Transcript	splice_region_variant,synonymous_variant	488	450	150	G	ggA/ggG	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00001064233	Transcript	splice_region_variant,synonymous_variant,NMD_transcript_variant	390	368	123	D	gAc/gAc	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	C	ENSG00000155304	ENST00001064233	Transcript	missense_variant,splice_region_variant,NMD_transcript_variant	390	368	123	D/G	gAc/gGc	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=MODERATE;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00001131802	Transcript	splice_region_variant,synonymous_variant	620	582	194	G	ggA/ggA	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	C	ENSG00000155304	ENST00001131802	Transcript	splice_region_variant,synonymous_variant	620	582	194	G	ggA/ggG	-	IND=S1;ZYG=HOMREF;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/C;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00000285667	Transcript	splice_region_variant,synonymous_variant	609	582	194	G	ggA/ggA	-	IND=S2;ZYG=HET;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	A	ENSG00000155304	ENST00000285667	Transcript	splice_region_variant,synonymous_variant	609	582	194	G	ggA/ggT	-	IND=S2;ZYG=HET;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00000478035	Transcript	downstream_gene_variant	-	-	-	-	-	-	IND=S2;ZYG=HET;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=MODIFIER;DISTANCE=2524;STRAND=-1
+craftWrong	21:14375818	A	ENSG00000155304	ENST00000478035	Transcript	downstream_gene_variant	-	-	-	-	-	-	IND=S2;ZYG=HET;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=MODIFIER;DISTANCE=2524;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00000903931	Transcript	intron_variant	-	-	-	-	-	-	IND=S2;ZYG=HET;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=MODIFIER;STRAND=-1
+craftWrong	21:14375818	A	ENSG00000155304	ENST00000903931	Transcript	intron_variant	-	-	-	-	-	-	IND=S2;ZYG=HET;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=MODIFIER;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00000903932	Transcript	splice_region_variant,synonymous_variant	488	450	150	G	ggA/ggA	-	IND=S2;ZYG=HET;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	A	ENSG00000155304	ENST00000903932	Transcript	splice_region_variant,synonymous_variant	488	450	150	G	ggA/ggT	-	IND=S2;ZYG=HET;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00001064233	Transcript	splice_region_variant,synonymous_variant,NMD_transcript_variant	390	368	123	D	gAc/gAc	-	IND=S2;ZYG=HET;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	A	ENSG00000155304	ENST00001064233	Transcript	missense_variant,splice_region_variant,NMD_transcript_variant	390	368	123	D/V	gAc/gTc	-	IND=S2;ZYG=HET;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=MODERATE;STRAND=-1
+craftWrong	21:14375818	T	ENSG00000155304	ENST00001131802	Transcript	splice_region_variant,synonymous_variant	620	582	194	G	ggA/ggA	-	IND=S2;ZYG=HET;ALLELE_NUM=0;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=LOW;STRAND=-1
+craftWrong	21:14375818	A	ENSG00000155304	ENST00001131802	Transcript	splice_region_variant,synonymous_variant	620	582	194	G	ggA/ggT	-	IND=S2;ZYG=HET;ALLELE_NUM=1;REF_ALLELE=T;UPLOADED_ALLELE=T/A;IMPACT=LOW;STRAND=-1
+";
+
+/// A reference-homozygous individual's copy whose written REF the reference
+/// sequence contradicts, under `--individual all --process_ref_homs --lookup_ref`:
+/// Ensembl VEP builds the copy's string as the written reference twice
+/// (Parser/VCF.pm:642-646), `--lookup_ref` joins the looked-up reference to the
+/// alleles after the first (Parser.pm:582, :645), `T/C` for the `C/C` copy over a
+/// `T`, and the overlap-allele rule numbers the written `C` 1 beside the
+/// reference `T` numbered 0 (VariationFeatureOverlap.pm:469-489), both rows
+/// `ZYG=HOMREF` (OutputFactory.pm:976). The rows are Ensembl VEP 116.2's for the
+/// record over the identifiers corpus reference, which reads `T` at 21:14375818:
+/// a `T` and a `C` row per transcript for S1, a `T` and an `A` row for S2, 24 in
+/// all, and the S1 VCF line carries both alleles' CSQ entries; without
+/// `--process_ref_homs` the S1 copy is the non-variant `T` and writes no row, so
+/// the record is S2's six `A` rows.
+#[test]
+fn lookup_ref_keeps_a_hom_ref_copys_written_reference_as_an_alternate_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let header = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3\tS4\tS5\tS6\tS7\tS8\n";
+    let record =
+        "21\t14375818\tcraftWrong\tC\tA\t.\t.\t.\tGT\t0|0\t0|1\t./.\t./.\t./.\t./.\t./.\t./.\n";
+    let input = write_input(dir.path(), "in.vcf", &format!("{header}{record}"));
+    let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116");
+    let run_lookup = |name: &str, extra: &[&str]| -> String {
+        let out = dir.path().join(name);
+        let output = common::isolated_vep(dir.path())
+            .arg("-i")
+            .arg(&input)
+            .arg("-o")
+            .arg(&out)
+            .arg("--json_cache")
+            .arg(golden.join("GRCh38-individual/json_cache"))
+            .arg("--fasta")
+            .arg(golden.join("GRCh38-identifiers/reference.fa.gz"))
+            .args([
+                "--assembly",
+                "GRCh38",
+                "--force_overwrite",
+                "--no_stats",
+                "--quiet",
+                "--individual",
+                "all",
+                "--lookup_ref",
+            ])
+            .args(extra)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        std::fs::read_to_string(&out).unwrap()
+    };
+    let text = run_lookup(
+        "fields.txt",
+        &[
+            "--process_ref_homs",
+            "--allele_number",
+            "--show_ref_allele",
+            "--uploaded_allele",
+        ],
+    );
+    assert_eq!(
+        body(&text),
+        LOOKUP_REF_HOM_REF_COPY_ROWS.lines().collect::<Vec<_>>()
+    );
+
+    let text = run_lookup("out.vcf", &["--process_ref_homs", "--vcf"]);
+    let lines = body(&text);
+    assert_eq!(lines.len(), 2, "{text}");
+    let csq_alleles: Vec<&str> = column(lines[0], 7)
+        .strip_prefix("CSQ=")
+        .unwrap()
+        .split(',')
+        .map(|entry| entry.split('|').next().unwrap())
+        .collect();
+    assert_eq!(csq_alleles, ["T", "C"].repeat(6));
+
+    let text = run_lookup("plain.txt", &[]);
+    let rows = body(&text);
+    assert_eq!(rows.len(), 6, "{text}");
+    assert!(rows
+        .iter()
+        .all(|row| column(row, 2) == "A" && extra_value(row, "IND") == Some("S2")));
 }
 
 /// `UPLOADED_ALLELE` on an individual's copy (OutputFactory.pm:1360) is the

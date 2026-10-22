@@ -1,5 +1,7 @@
-WARNING: line 25 skipped (21 30289183 gvcf_block C <NON_REF> . . END=302...): NON_REF is not a supported structural variant type
-WARNING: line 32 skipped (21 30165850 del_no_end_no_svlen N <DEL> . . SV...): deletion looks incomplete
-WARNING: line 33 skipped (21 30165850 del_end_eq_pos N <DEL> . . END=301...): deletion looks incomplete
-WARNING: line 39 skipped (GL000999.1 100 unknown_contig A G . . .): Chromosome GL000999.1 not found in annotation sources or synonyms; chromosome GL000999.1 does not overlap any features
-WARNING: line 41 skipped (21 0 pos0_ins A AT . . .): Alleles look like an insertion (-/T) but coordinates are not start = end + 1 (START=1, END=1) for variant (pos0_ins) 
+WARNING: line 27 skipped (21 30289183 gvcf_block C <NON_REF> . . END=302...): NON_REF is not a supported structural variant type
+WARNING: line 34 skipped (21 30165850 del_no_end_no_svlen N <DEL> . . SV...): deletion looks incomplete
+WARNING: line 35 skipped (21 30165850 del_end_eq_pos N <DEL> . . END=301...): deletion looks incomplete
+WARNING: could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta
+WARNING: line 38 skipped (21 30165850 tr_neg_trailing N <CNV:TR> . . SVT...): start > end+1 : (START=30165851, END=30165550)
+WARNING: line 45 skipped (GL000999.1 100 unknown_contig A G . . .): Chromosome GL000999.1 not found in annotation sources or synonyms; chromosome GL000999.1 does not overlap any features
+WARNING: line 47 skipped (21 0 pos0_ins A AT . . .): Alleles look like an insertion (-/T) but coordinates are not start = end + 1 (START=1, END=1) for variant (pos0_ins) 

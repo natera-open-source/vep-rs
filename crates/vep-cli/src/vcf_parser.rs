@@ -136,22 +136,29 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
     let written = written_alts(alt_field);
     let mut alts = written.clone();
     variant_alts(&mut alts, svtype);
-    // `*` and `.` are written as no allele here; both stay in the record's allele
-    // string, which Ensembl VEP builds from every ALT (Parser/VCF.pm:469). Ensembl VEP
-    // writes no row for `*` (neither the indel nor the SV path fires) and reads a `.`
-    // beside another ALT as an allele of its own. `<*>` is not filtered: Perl treats
-    // it as a non-SV allele at POS unless INFO/SVTYPE routes the record. `<CPX>` is
-    // not filtered: absent from `%SO_TERMS`, it is parsed with the `vep_skip` mark
-    // (`sv_so_term_and_class`). `<DEL:*>` is routed first: under a true INFO/SVTYPE
-    // it is a structural allele of the record's class, and on the sequence path an
-    // allele Ensembl VEP numbers and writes no row for (`perl_allele_numbers`).
+    // `*` and `.` name no allele of their own here, where the record's shape is
+    // decided; both stay in the record's allele string, which Ensembl VEP builds from
+    // every ALT (Parser/VCF.pm:469). On the sequence path Ensembl VEP numbers a `*`
+    // and writes no row for it (VariationFeatureOverlap.pm:483-484,
+    // `perl_allele_numbers`) and reads a `.` that is not the first ALT as an allele of
+    // its own (a list opening with `.` is a non-variant record, `:259`); on the
+    // structural path it writes a row per `/`-part of the string, `*` and `.` included
+    // (StructuralVariationOverlap.pm:64-77, `structural_variants`). `<*>` is not
+    // filtered: Perl treats it as a non-SV allele at POS unless INFO/SVTYPE routes the
+    // record. `<CPX>` is not filtered: absent from `%SO_TERMS`, it is parsed with the
+    // `vep_skip` mark (`sv_so_term_and_class`). `<DEL:*>` is routed first: under a true
+    // INFO/SVTYPE it is a structural allele of the record's class, and on the sequence
+    // path an allele Ensembl VEP numbers and writes no row for (`perl_allele_numbers`).
     let valid_alts: Vec<(usize, &str)> = alts
         .iter()
         .copied()
         .filter(|(_, alt)| *alt != "*" && *alt != ".")
         .collect();
 
-    let raw_input: Option<Arc<str>> = parse.capture_raw_input.then(|| Arc::from(line));
+    let structural = routes_to_structural(ref_allele, &alts, svtype);
+    let raw_input: Option<Arc<str>> = parse
+        .capture_raw_input
+        .then(|| stored_line(&columns, line, structural));
     let record_id = first_vcf_id(id).map(str::to_string);
     let explicit_id = record_id.as_deref().filter(|id| id_names_record(id));
     let line_name: Arc<str> = input_line_name(&chr, pos, ref_allele, alt_field).into();
@@ -169,7 +176,7 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
             with_allele_less_fallback(&chr, chopped, Vec::new(), parse.minimal),
             Some(alleles),
         )
-    } else if !routes_to_structural(ref_allele, &alts, svtype) {
+    } else if !structural {
         let chopped = chop_record(ref_allele, &alts, pos);
         let variants = sequence_variants(&chr, &chopped, ref_allele, &alts, parse);
         let alleles = record_alleles(ref_allele, &written, &alts, &chopped);
@@ -231,7 +238,8 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
 /// writes a row for it, the VCF output carries its line and the JSON output its
 /// object with `most_severe_consequence` `?`, as Ensembl VEP writes them. A
 /// Perl-true INFO/SVTYPE is kept as the record's type, the mark of the line
-/// Ensembl VEP routes to its structural path (`:237-245`). Under `--individual`
+/// Ensembl VEP routes to its structural path (`:237-245`), whose stored line is
+/// filled as that path fills it ([`stored_line`]). Under `--individual`
 /// the record is copied per individual like any other (`:355-376`): a `0/0`
 /// genotype is a reference-homozygous copy, and the alleles a genotype indexes
 /// are the reference and every ALT as written, none chopped (`:300-336` never
@@ -243,12 +251,10 @@ pub fn non_variant_record(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<Ve
     let columns = vcf_columns(line)?;
     let [chr, pos_text, id, reference, alt_field, _, _, info] = columns.fixed;
     let svtype = info_value(info, "SVTYPE").filter(|v| perl_true(v));
-    if parse.reading.reads_copies() {
-        let mut alts = written_alts(alt_field);
-        variant_alts(&mut alts, svtype);
-        if alts.iter().any(|(_, alt)| *alt != "." && *alt != "*") {
-            return parse_vcf_line_with(line, parse);
-        }
+    let mut alts = written_alts(alt_field);
+    variant_alts(&mut alts, svtype);
+    if parse.reading.reads_copies() && alts.iter().any(|(_, alt)| *alt != "." && *alt != "*") {
+        return parse_vcf_line_with(line, parse);
     }
     let pos = parse_pos(pos_text).with_context(|| format!("Invalid POS: '{pos_text}'"))?;
     let mut variant =
@@ -257,7 +263,13 @@ pub fn non_variant_record(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<Ve
     variant.id = first_vcf_id(id).map(str::to_string);
     variant.input_line_name = Some(input_line_name(chr, pos, reference, alt_field).into());
     variant.sv_type = svtype.map(str::to_string);
-    variant.raw_input = parse.capture_raw_input.then(|| line.into());
+    variant.raw_input = parse.capture_raw_input.then(|| {
+        stored_line(
+            &columns,
+            line,
+            routes_to_structural(reference, &alts, svtype),
+        )
+    });
     let written: Vec<&str> = std::iter::once(reference)
         .chain(perl_split(alt_field, &[',']))
         .collect();
@@ -324,6 +336,7 @@ fn with_allele_less_fallback(
     let mut record = allele_less_record(chr.to_string(), chopped);
     record.minimised = minimised;
     if let Some((reference, alt, start, end, true)) = trimmed {
+        record.written_case_allele_string = written_case_pair(&reference, &alt);
         let reference = reference.to_ascii_uppercase();
         let alt = alt.to_ascii_uppercase();
         record.allele_string = format!(
@@ -371,6 +384,7 @@ fn sequence_variants(
         && !bi_allelic
         && split_changes_record(trimmed_ref, trimmed_alts.iter().map(String::as_str));
     let numbers = perl_allele_numbers(trimmed_ref, trimmed_alts);
+    let written_case_record = chopped.written_case_string();
     let mut variants = Vec::with_capacity(alts.len());
     for (k, (((allele_idx, alt), vep_alt), number)) in
         alts.iter().zip(trimmed_alts).zip(&numbers).enumerate()
@@ -424,6 +438,7 @@ fn sequence_variants(
         // (Parser.pm:978-984): without `--minimal` a multi-allelic record keeps its
         // anchor-chopped alleles, and every position, codon and distance is
         // computed on that representation.
+        let mut written_case = written_case_record.clone();
         if bi_allelic
             && variant.ref_allele != b"-"
             && variant.alt_alleles[0] != b"-"
@@ -440,6 +455,7 @@ fn sequence_variants(
                 variant.end,
             );
             if changed {
+                written_case = written_case_pair(&min_ref, &min_alt);
                 let min_ref = min_ref.to_ascii_uppercase();
                 let min_alt = min_alt.to_ascii_uppercase();
                 variant.original_allele_string = Some(variant.allele_string.clone());
@@ -459,6 +475,7 @@ fn sequence_variants(
                 variant.minimised = true;
             }
         }
+        variant.written_case_allele_string = written_case;
         // `minimise_alleles` marks every bi-allelic record it handles (Parser.pm:1011),
         // trimmed or not.
         if bi_allelic && parse.minimal {
@@ -745,12 +762,40 @@ fn input_line_name(chr: &str, pos: u64, ref_allele: &str, alt_field: &str) -> St
     }
 }
 
+/// The line Ensembl VEP stores for the record (`_line`, Parser/VCF.pm:349, :541,
+/// :573), which its VCF output re-emits (OutputFactory/VCF.pm:315-355) and its JSON
+/// output prints as `input` (OutputFactory/JSON.pm:230, :247): the fields Perl's
+/// `split` read, joined by tabs, so a trailing empty column is gone. For a record
+/// Ensembl VEP routes to its structural path (`structural`, `:237-245`), QUAL, FILTER
+/// and INFO are filled with `.` where absent, empty or `0` (`$record->[5] ||= '.'`
+/// and the next two columns, `:464-466`, on the array `_line` holds), so a
+/// five-column `N <DUP>` is stored with eight columns and a QUAL of `0` as `.`; the
+/// sequence path (`:349`) fills nothing.
+fn stored_line(columns: &VcfColumns<'_>, line: &str, structural: bool) -> Arc<str> {
+    if !structural {
+        return Arc::from(line.trim_end_matches('\t'));
+    }
+    let mut stored: Vec<&str> = columns.fixed.to_vec();
+    for column in &mut stored[5..] {
+        if !perl_true(column) {
+            *column = ".";
+        }
+    }
+    stored.extend(columns.format);
+    if !columns.samples.is_empty() {
+        stored.push(columns.samples);
+    }
+    stored.join("\t").into()
+}
+
 /// The columns of a VCF data line as Ensembl VEP's parser holds them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VcfColumns<'a> {
     /// CHROM through INFO. A line that stops after ALT, QUAL or FILTER reads `.` for
     /// the columns it lacks: Ensembl VEP accepts a record of five columns
-    /// (Parser/VCF.pm:464-466 fills QUAL, FILTER and INFO; `t/Parser_VCF.t:265-282`).
+    /// (Parser/VCF.pm:464-466 fills QUAL, FILTER and INFO; `t/Parser_VCF.t:265-282`),
+    /// and a trailing empty column is no column to Perl's `split` (ensembl-io
+    /// ColumnBasedParser.pm:250), so `C G\t\t\t` stops after ALT.
     pub fixed: [&'a str; 8],
     /// The FORMAT column, when the line carries one.
     pub format: Option<&'a str>,
@@ -771,13 +816,14 @@ impl<'a> VcfColumns<'a> {
     }
 }
 
-/// Splits a VCF data line into its columns. FORMAT and the samples are not split
-/// until asked for, since a multisample line can carry thousands of them. A line
-/// with fewer than five columns names no ALT and is refused here, where Ensembl
-/// VEP reads the missing ALT as an empty string and carries the record as a
-/// feature with no allele to annotate.
+/// Splits a VCF data line into its columns as Perl's `split` does, its trailing
+/// empty columns dropped. FORMAT and the samples are not split until asked for,
+/// since a multisample line can carry thousands of them. A line with fewer than
+/// five columns names no ALT and is refused here, where Ensembl VEP reads the
+/// missing ALT as an empty string and carries the record as a feature with no
+/// allele to annotate.
 pub fn vcf_columns(line: &str) -> anyhow::Result<VcfColumns<'_>> {
-    let mut parts = line.splitn(10, '\t');
+    let mut parts = line.trim_end_matches('\t').splitn(10, '\t');
     let mut fixed = ["."; 8];
     let mut present = 0;
     for field in fixed.iter_mut() {
@@ -870,9 +916,27 @@ struct Chopped {
     working: Option<Arc<str>>,
     /// The chopped reference and ALTs in their written case, which `trim_sequences`
     /// compares with `eq` (Sequence.pm:1006, :1019) before `validate_vf` upper-cases
-    /// the string, so `TTGA t` is never minimised to `TGA/-`.
+    /// the string, so `TTGA t` is never minimised to `TGA/-`, and which Parser.pm:462
+    /// names an ID-less record by ([`Chopped::written_case_string`]).
     written_case_reference: String,
     written_case_alts: Vec<String>,
+}
+
+/// `reference/alt` in the case the input wrote it, when a base is lower case
+/// ([`InputVariant::written_case_allele_string`]); `None` for an upper-case pair.
+fn written_case_pair(reference: &[u8], alt: &[u8]) -> Option<Arc<str>> {
+    reference
+        .iter()
+        .chain(alt)
+        .any(u8::is_ascii_lowercase)
+        .then(|| {
+            format!(
+                "{}/{}",
+                String::from_utf8_lossy(reference),
+                String::from_utf8_lossy(alt)
+            )
+            .into()
+        })
 }
 
 fn chop_record(ref_allele: &str, alts: &[(usize, &str)], pos: u64) -> Chopped {
@@ -934,6 +998,18 @@ impl Chopped {
             written_case_alts: alts,
         }
     }
+
+    /// The working string in the case the input wrote it, when a base is lower
+    /// case ([`InputVariant::written_case_allele_string`]); `None` for an
+    /// upper-case record.
+    fn written_case_string(&self) -> Option<Arc<str>> {
+        let alts = self.written_case_alts.iter().map(String::as_str);
+        self.written_case_reference
+            .bytes()
+            .chain(alts.clone().flat_map(str::bytes))
+            .any(|b| b.is_ascii_lowercase())
+            .then(|| allele_string(&self.written_case_reference, alts))
+    }
 }
 
 /// The record of a line none of whose ALTs writes a row, over its chopped (or
@@ -958,6 +1034,7 @@ fn allele_less_record(chr: String, chopped: Chopped) -> InputVariant {
         .as_deref()
         .map_or_else(|| chopped.uploaded.to_ascii_uppercase(), str::to_string);
     variant.no_allele = true;
+    variant.written_case_allele_string = chopped.written_case_string();
     variant.uploaded_allele_string = Some(chopped.uploaded);
     variant.record_allele_string_multi = chopped.working;
     variant
@@ -1309,10 +1386,11 @@ mod tests {
     /// `21 25587759 test G C` as the feature `G/C` at 25587759): 116.2 annotates
     /// `21 30289183 x C G`, `... G 50` and `... G 50 PASS` as it annotates the
     /// eight-column line, writes `21 30289183 x C G . . CSQ=...` and
-    /// `... G 50 PASS CSQ=...` in its VCF output, keeps the short line as the JSON
-    /// `input`, and drops a five-column `N <DEL>` as `deletion looks incomplete`.
-    /// A line with fewer than five columns names no ALT and is refused here (Ensembl VEP
-    /// carries it as a feature with no allele, the missing ALT read as an empty string).
+    /// `... G 50 PASS CSQ=...` in its VCF output, keeps the short line of a sequence
+    /// record as the JSON `input` (`stored_line`), and drops a five-column `N <DEL>`
+    /// as `deletion looks incomplete`. A line with fewer than five columns names no
+    /// ALT and is refused here (Ensembl VEP carries it as a feature with no allele,
+    /// the missing ALT read as an empty string).
     #[test]
     fn five_to_seven_column_records_parse() {
         let full = parse_vcf_line("21\t30289183\tx\tC\tG\t50\tPASS\t.", true).unwrap();
@@ -1364,6 +1442,102 @@ mod tests {
                 "{too_short:?}"
             );
         }
+    }
+
+    /// The stored line is the one Ensembl VEP 116.2 echoes. Trailing empty columns are
+    /// no columns (ensembl-io ColumnBasedParser.pm:250): `21 30289183 x C G,G,T` with
+    /// three trailing tabs is a five-column record whose VCF line prints `. . CSQ=...`
+    /// and whose JSON `input` ends at the ALT. The structural path fills QUAL, FILTER
+    /// and INFO (Parser/VCF.pm:464-466, `||=`) on the array `_line` holds: the JSON
+    /// `input` of `21 30165850 x N <DUP>` is `21 30165850 x N <DUP> . . .`, a
+    /// structural QUAL of `0` prints `.` in the VCF line and the `input`
+    /// (`N <DEL> 0 PASS SVTYPE=DEL;END=30165950` prints `. PASS`), an empty or `0`
+    /// FILTER prints `.`, and `0.0`, Perl-true, stays; the sequence path fills nothing,
+    /// so `C G 0 PASS .` keeps its `0` and `C G` with an INFO/SVTYPE, a run of `ACGT`
+    /// and so a sequence record (`:237-245`), keeps an empty FILTER. A record Ensembl
+    /// VEP routes to its structural path by its INFO/SVTYPE alone (`N G`, `N *`) is
+    /// filled whether or not it names an allele here.
+    #[test]
+    fn the_stored_line_folds_trailing_columns_and_fills_a_structural_record() {
+        let trailing = "21\t30289183\ttrailing_tabs\tC\tG,G,T\t\t\t";
+        let columns = vcf_columns(trailing).unwrap();
+        assert_eq!(
+            columns.fixed,
+            [
+                "21",
+                "30289183",
+                "trailing_tabs",
+                "C",
+                "G,G,T",
+                ".",
+                ".",
+                "."
+            ]
+        );
+        assert_eq!(columns.format, None);
+        let stored = |line: &str| {
+            let variants = parse_vcf_line(line, true).unwrap();
+            assert!(!variants.is_empty(), "{line}");
+            variants[0].raw_input.as_deref().unwrap().to_string()
+        };
+        assert_eq!(stored(trailing), "21\t30289183\ttrailing_tabs\tC\tG,G,T");
+        assert_eq!(
+            stored("21\t30289183\tx\tC\tG\t50\t"),
+            "21\t30289183\tx\tC\tG\t50"
+        );
+        for (line, expected) in [
+            (
+                "21\t30165850\tdup_short\tN\t<DUP>",
+                "21\t30165850\tdup_short\tN\t<DUP>\t.\t.\t.",
+            ),
+            (
+                "21\t30165850\tsv_qual0\tN\t<DEL>\t0\tPASS\tSVTYPE=DEL;END=30165950",
+                "21\t30165850\tsv_qual0\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=30165950",
+            ),
+            (
+                "21\t30165850\tx\tN\t<DUP>\t50\t\tSVTYPE=DUP;END=30165950",
+                "21\t30165850\tx\tN\t<DUP>\t50\t.\tSVTYPE=DUP;END=30165950",
+            ),
+            (
+                "21\t30165850\tx\tN\t<DUP>\t50\t0",
+                "21\t30165850\tx\tN\t<DUP>\t50\t.\t.",
+            ),
+            (
+                "21\t30165850\tx\tN\t<DUP>\t0.0\t.\t.",
+                "21\t30165850\tx\tN\t<DUP>\t0.0\t.\t.",
+            ),
+            (
+                "21\t30165850\tx\tN\t<DUP>\t0\tPASS\tSVTYPE=DUP;END=30165950\tGT\t0/1\t1/1",
+                "21\t30165850\tx\tN\t<DUP>\t.\tPASS\tSVTYPE=DUP;END=30165950\tGT\t0/1\t1/1",
+            ),
+            (
+                "21\t30289183\tseq_qual0\tC\tG\t0\tPASS\t.",
+                "21\t30289183\tseq_qual0\tC\tG\t0\tPASS\t.",
+            ),
+            (
+                "21\t30289183\tx\tN\tG\t0\t\tSVTYPE=DEL;END=30289190",
+                "21\t30289183\tx\tN\tG\t.\t.\tSVTYPE=DEL;END=30289190",
+            ),
+            (
+                "21\t30289183\tx\tC\tG\t0\t\tSVTYPE=DEL;END=30289190",
+                "21\t30289183\tx\tC\tG\t0\t\tSVTYPE=DEL;END=30289190",
+            ),
+            (
+                "21\t100\t.\tN\t*\t0\tPASS\tSVTYPE=DEL;END=400",
+                "21\t100\t.\tN\t*\t.\tPASS\tSVTYPE=DEL;END=400",
+            ),
+        ] {
+            assert_eq!(stored(line), expected, "{line}");
+        }
+        let non_variant =
+            non_variant_record("21\t30289183\tx\tTG\t.\t\t\t", &VcfParse::default_run(true))
+                .unwrap();
+        assert_eq!(
+            non_variant[0].raw_input.as_deref(),
+            Some("21\t30289183\tx\tTG\t.")
+        );
+        let uncaptured = parse_vcf_line("21\t30165850\tx\tN\t<DUP>", false).unwrap();
+        assert!(uncaptured[0].raw_input.is_none());
     }
 
     /// The parser keeps FORMAT and the sample columns for the per-sample modes and
@@ -2793,8 +2967,11 @@ mod tests {
     /// record whose class is the breakpoint's gives every ALT the breakpoint's class and
     /// point: Ensembl VEP 116.2 writes `21:30425651 chromosome_breakpoint` for each part of
     /// `<BND>,<DEL>` with `SVTYPE=BND;END=30425949`, the END unread, with the allele string
-    /// `N/<BND>/<DEL>`. A `*` allele stays in the string (`*/<DEL>`) and names no variant;
-    /// a `.` ALT names none whatever SVTYPE says.
+    /// `N/<BND>/<DEL>`. A `*` allele is a part of the string (`*/<DEL>`) and a variant of
+    /// the record's class, numbered at its written place (StructuralVariationOverlap.pm:64-77
+    /// makes one allele per part): 116.2 writes two `deletion` rows per transcript for
+    /// `N *,<DEL>` with `SVTYPE=DEL;END=30425949`. A lone `.` ALT names none whatever
+    /// SVTYPE says.
     #[test]
     fn a_breakpoint_record_puts_every_alt_at_the_point_and_keeps_star_in_its_string() {
         let v = parse_vcf_line(
@@ -2814,9 +2991,14 @@ mod tests {
             true,
         )
         .unwrap();
-        assert_eq!(star.len(), 1);
-        assert_eq!(star[0].record_allele_string(), "*/<DEL>");
-        assert_eq!(star[0].allele_index, 1);
+        assert_eq!(star.len(), 2);
+        for (variant, (index, alt)) in star.iter().zip([(0, b"*".as_slice()), (1, b"<DEL>")]) {
+            assert_eq!(variant.record_allele_string(), "*/<DEL>");
+            assert_eq!((variant.allele_index, variant.alt_allele()), (index, alt));
+            assert_eq!(variant.variant_class, VariantClass::StructuralDeletion);
+            assert_eq!((variant.start, variant.end), (30425651, 30425949));
+            assert_eq!(variant.display_allele(), "deletion");
+        }
         for info in ["SVTYPE=BND", "SVTYPE=DEL;END=30425949", "."] {
             let err = parse_vcf_line(&format!("21\t30425650\tx\tN\t.\t.\t.\t{info}"), true)
                 .unwrap_err()
@@ -5143,12 +5325,15 @@ mod tests {
     /// A line whose every ALT is `*` names no allele: Ensembl VEP 116.2 writes
     /// `21 30425650 x N * . . .` and `N *,*` with no row, the VCF line without CSQ and a
     /// JSON object (`"allele_string":"N/*"`, start and end 30425650,
-    /// `"most_severe_consequence":"?"`), with or without a true SVTYPE. The anchor chop
-    /// counts the REF alone in its first-base vote when every ALT carries a `*`
+    /// `"most_severe_consequence":"?"`). With `SVTYPE=DEL;END=400` Ensembl VEP routes
+    /// the record to its structural path (Parser/VCF.pm:237-245) and annotates a
+    /// deletion from INFO alone, which vep-rs does not: the record is read allele-less
+    /// whatever INFO says (`docs/divergences/defect-m.md`). The anchor chop counts the
+    /// REF alone in its first-base vote when every ALT carries a `*`
     /// (Parser/VCF.pm:306), so `21 30396602 x TTGA *,*` is the feature `TGA/*/*` at
     /// 30396603-30396605 and `TTGA *` stays `TTGA/*` at 30396602-30396605. The one
-    /// variant carries the record and is never annotated; a `*` beside an allele stays
-    /// filtered.
+    /// variant carries the record and is never annotated; a `*` beside an allele on
+    /// the sequence path stays filtered.
     #[test]
     fn a_star_only_record_is_carried_as_the_allele_less_feature() {
         for (line, allele_string, span) in [
@@ -5178,6 +5363,39 @@ mod tests {
         assert_eq!(beside.len(), 1);
         assert!(!beside[0].no_allele);
         assert_eq!(beside[0].alt_allele(), b"G");
+    }
+
+    /// A `*` beside a real allele under a true INFO/SVTYPE is routed with it to the
+    /// structural path (`CG*` is no run of `ACGT`, Parser/VCF.pm:237-245), where the
+    /// record's allele string `G/*` (`:469`) gives one allele per part with no `*`
+    /// filter (StructuralVariationOverlap.pm:64-77): Ensembl VEP 116.2 writes two
+    /// `deletion` rows per transcript for `21 30289183 x C G,* . . SVTYPE=DEL;END=30289190`,
+    /// `ALLELE_NUM=1` and `ALLELE_NUM=2`, at 21:30289184-30289190, and the same two for
+    /// `C *,G`; the JSON `allele_string` is `G/*` and `*/G`. A `.` beside a real allele
+    /// is routed the same way (`CG.` is no run of `ACGT`) and is a part like any other:
+    /// two `deletion` rows for `C G,.`, `C .,G` and `TC .,<DEL>` under the same INFO.
+    #[test]
+    fn a_star_beside_an_alt_under_svtype_is_a_structural_allele() {
+        for (alts, allele_string) in [
+            ("G,*", "G/*"),
+            ("*,G", "*/G"),
+            ("G,.", "G/."),
+            (".,G", "./G"),
+        ] {
+            let line = format!("21\t30289183\tx\tC\t{alts}\t.\t.\tSVTYPE=DEL;END=30289190");
+            let variants = parse_vcf_line(&line, true).unwrap();
+            assert_eq!(variants.len(), 2, "{alts}");
+            for (index, variant) in variants.iter().enumerate() {
+                assert!(variant.is_structural && !variant.no_allele, "{alts}");
+                assert_eq!(variant.allele_index, index, "{alts}");
+                assert_eq!(variant.display_allele(), "deletion", "{alts}");
+                assert_eq!((variant.start, variant.end), (30289184, 30289190), "{alts}");
+                assert_eq!(variant.record_allele_string(), allele_string, "{alts}");
+                assert_eq!(variant.raw_input.as_deref(), Some(line.as_str()), "{alts}");
+            }
+            let written: Vec<&[u8]> = variants.iter().map(|v| v.alt_allele()).collect();
+            assert_eq!(written.join(&b","[..]), alts.as_bytes(), "{alts}");
+        }
     }
 
     #[test]

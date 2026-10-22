@@ -172,6 +172,10 @@ impl ReferenceSequence for FastaReference {
     fn record_name(&self, chr: &str) -> Option<String> {
         self.0.record_name(chr).map(str::to_string)
     }
+
+    fn sequence_length(&self, chr: &str) -> Option<u64> {
+        self.0.sequence_length(chr)
+    }
 }
 
 /// Refuses a named input file that is not there with Ensembl VEP's text
@@ -2117,7 +2121,9 @@ impl Runner {
             })
         };
         let source = match format {
-            InputFormat::Vcf => PendingInput::Ready(pipeline::InputSource::Vcf(reader)),
+            InputFormat::Vcf => PendingInput::Ready(pipeline::InputSource::Vcf(
+                pipeline::refuse_vcf_header_early(reader)?,
+            )),
             InputFormat::Ensembl => {
                 let (reader, last_line) = pipeline::LineCapture::new(reader);
                 parser_source(

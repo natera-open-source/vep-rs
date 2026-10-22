@@ -156,6 +156,20 @@
    "suite": "GRCh38-vcf-check-ref",
    "vcf": "21\t30601300\tnonvar_first_alt\tTC\t.,TA\t.\t.\t.",
    "combinations": []
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "21\t30319403\t0\ttca\tt\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-check-ref",
+   "vcf": "Z\t1000\t.\ta\tg\t.\t.\t.",
+   "combinations": [],
+   "reference_rows": 0,
+   "reference_warning": "Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features"
   }
  ],
  "flag_sets": [
@@ -292,7 +306,7 @@
   "GRCh38-vcf-check-ref": {
    "reference": "default.txt",
    "input": "variants.vcf",
-   "rows": 51,
+   "rows": 52,
    "combinations": 11
   }
  },
@@ -326,8 +340,8 @@
    "exemplar_records": 1
   },
   "stop_lost": {
-   "observed_rows": 4,
-   "exemplar_records": 3
+   "observed_rows": 5,
+   "exemplar_records": 4
   },
   "stop_retained_variant": {
    "observed_rows": 2,

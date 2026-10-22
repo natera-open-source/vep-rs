@@ -135,17 +135,15 @@ impl<R: BufRead> RegionParser<R> {
             };
             let mut variant =
                 InputVariant::new(chr, start, end, reference.into_bytes(), allele.into_bytes());
-            // `post_process_vfs` (Parser.pm:862-881) runs `minimise_alleles` on a
-            // record whose alleles differ in length and carry no `-`, and that
-            // keeps the string as parsed in `original_allele_string` (:1008)
-            // whether or not a base is trimmed, so `UPLOADED_ALLELE`
-            // (OutputFactory.pm:1360) prints the placeholder for such a record
-            // and the looked-up allele string for every other.
-            if variant.ref_allele.len() != variant.alt_allele().len()
-                && !variant.allele_string.contains('-')
-            {
-                variant.uploaded_allele_string = Some(variant.allele_string.as_str().into());
-            }
+            // `post_process_vfs` runs `minimise_alleles` before the lookup replaces
+            // the placeholder, on every bi-allelic record under `--minimal`
+            // (Parser.pm:852) and otherwise on a record whose alleles differ in
+            // length and carry no `-` (:862-881), and that keeps the string as
+            // parsed in `original_allele_string` (:1008) whether or not a base is
+            // trimmed, which `UPLOADED_ALLELE` prints (OutputFactory.pm:1360); the
+            // placeholder is kept for every record and `uploaded_allele` makes
+            // that choice under the run's `--minimal` setting.
+            variant.uploaded_allele_string = Some(variant.allele_string.as_str().into());
             minimise_alleles(&mut variant);
             variant
         } else {
@@ -322,7 +320,8 @@ mod tests {
     /// of the span, the placeholder the run's reference lookup replaces, so
     /// `21:100-100/G` is `N/G` at 100 and `21:100-102/A` is `NNN/A` over 100 to
     /// 102; the record is forward without a strand token and named by its line,
-    /// which its re-emitted input is too.
+    /// which its re-emitted input is too, and the placeholder is kept as the
+    /// string uploaded.
     #[test]
     fn ref_is_n_per_base_of_the_span() {
         let v = one("21:100-100/G");
@@ -335,7 +334,7 @@ mod tests {
         assert_eq!(v.uploaded_variation(), "21:100-100/G");
         assert_eq!(v.variation_name(), "21:100-100/G");
         assert_eq!(v.raw_input.as_deref(), Some("21:100-100/G"));
-        assert_eq!(v.uploaded_allele_string, None);
+        assert_eq!(v.uploaded_allele_string.as_deref(), Some("N/G"));
         let v = one("21:100-102/A");
         assert_eq!((v.start, v.end), (100, 102));
         assert_eq!(v.allele_string, "NNN/A");
@@ -462,8 +461,11 @@ mod tests {
     /// `NN/N`, trimmed to `N/-` at 101; `21:100-102/A` shares no base with its
     /// `NNN` and stays, its placeholder kept all the same (Ensembl VEP 116.2
     /// prints `UPLOADED_ALLELE=NN/GTA` for `21:10552677-10552678/GTA`). A
-    /// record of one length on each side, or with a `-`, keeps none and prints
-    /// the looked-up string.
+    /// record of one length on each side, or with a `-`, is not minimised and
+    /// keeps its placeholder too, for `--minimal`, which minimises every
+    /// bi-allelic record (:852) and prints it (Ensembl VEP 116.2 prints
+    /// `UPLOADED_ALLELE=N/A` for `21:14221107-14221107/A` under `--minimal` and
+    /// the looked-up `C/A` without it).
     #[test]
     fn shared_bases_are_minimised() {
         let v = one("21:100-101/N");
@@ -478,8 +480,24 @@ mod tests {
         assert_eq!(v.allele_string, "NNN/A");
         assert_eq!(v.uploaded_allele_string.as_deref(), Some("NNN/A"));
         assert_eq!(v.uploaded_allele(false).as_deref(), Some("NNN/A"));
-        for region in ["21:100-101/GG", "21:100-102/-", "21:101-100/GTA"] {
-            assert_eq!(one(region).uploaded_allele_string, None, "{region}");
+        for (region, placeholder) in [
+            ("21:100-101/GG", "NN/GG"),
+            ("21:100-102/-", "NNN/-"),
+            ("21:101-100/GTA", "-/GTA"),
+        ] {
+            let v = one(region);
+            assert!(!v.minimised, "{region}");
+            assert_eq!(v.allele_string, placeholder, "{region}");
+            assert_eq!(
+                v.uploaded_allele_string.as_deref(),
+                Some(placeholder),
+                "{region}"
+            );
+            assert_eq!(
+                v.uploaded_allele(true).as_deref(),
+                Some(placeholder),
+                "{region}"
+            );
         }
     }
 

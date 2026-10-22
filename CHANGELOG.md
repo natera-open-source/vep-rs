@@ -297,6 +297,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--transcript_filter` admits an `is_child` value outside the Sequence Ontology and matches it as a regular expression first, as Ensembl VEP does; it was refused. (#N)
 - `--spdi` expands a parenthesised tandem allele such as `(AC)3` before testing its characters, as Ensembl VEP does, so the row carries its notation. (#N)
 - A symbolic ALT with no Sequence Ontology term prints Ensembl VEP's type string in `Allele` and `VARIANT_CLASS`: `<CPX>` as written, `CPX` under `SVTYPE=CPX`. (#N)
+- A VCF whose `##fileformat` major version is not 4, or names no `<digits>.<digits>` version, is refused with Ensembl VEP's message before any output is written. (#N)
+- A VCF record with a `0` or empty ID and lower-case alleles, and each `--individual` copy, is named from its alleles as written, as Ensembl VEP does. (#N)
+- A record `--dont_skip` keeps after the `--chr` list or the chromosome test refused it is annotated with its alleles as written, as Ensembl VEP leaves them. (#N)
+- A VCF line's trailing empty columns are dropped, and a structural record echoes QUAL, FILTER and INFO as `.` where absent, empty or `0`, as Ensembl VEP stores them. (#N)
+- A tandem repeat or duplication whose SVLEN list ends in a comma reads it as Ensembl VEP does, so an all-negative `SVLEN=-300,` is refused as `start > end+1`. (#N)
+- A `*` or `.` beside another ALT under a true INFO/SVTYPE writes its own row of the record's class, numbered at its written place, as Ensembl VEP writes it. (#N)
+- Region input keeps the `N` placeholder as `UPLOADED_ALLELE` under `--minimal`, as Ensembl VEP prints it for every bi-allelic record. (#N)
+- `--lookup_ref` removes the `-` from every allele before the rejoin and drops a trailing empty allele, so a region allele `A-` annotates as `A`. (#N)
+- A reference-homozygous `--individual` copy under `--lookup_ref --process_ref_homs` keeps its written reference as allele 1 beside the looked-up reference row, as Ensembl VEP does. (#N)
+- A structural record whose INFO/END is not a number is skipped with Ensembl VEP's `Invalid start '<POS+1>' or end '<text>' coordinate` line after `deletion looks incomplete`. (#N)
+- SPDI input past the end of its sequence is skipped naming the span and the sequence's length, where Ensembl VEP annotates over `N` padding. (#N)
 
 ### Security
 

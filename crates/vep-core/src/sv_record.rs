@@ -76,15 +76,7 @@ pub fn structural_variants(
     let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
     let mut alts = written.to_vec();
     variant_alts(&mut alts, svtype);
-    // `*` and `.` are written as no allele here; both stay in the record's allele
-    // string, which Ensembl VEP builds from every ALT (Parser/VCF.pm:469). Ensembl VEP
-    // writes no row for `*` and reads a `.` beside another ALT as an allele of its own.
-    let valid_alts: Vec<(usize, &str)> = alts
-        .iter()
-        .copied()
-        .filter(|(_, alt)| *alt != "*" && *alt != ".")
-        .collect();
-    let mut variants = Vec::with_capacity(valid_alts.len());
+    let mut variants = Vec::with_capacity(alts.len());
     // One structural variant record has one class and one SO term, read from the
     // joined ALTs with INFO/SVTYPE standing in for a string outside the VCF 4.4 forms
     // (Parser.pm `get_SO_term`, Parser/VCF.pm:472-475), so `N.` with `SVTYPE=DEL`
@@ -116,7 +108,14 @@ pub fn structural_variants(
             record.alts.as_str().into()
         }
     });
-    let classes = per_alt_classes(&valid_alts, record_class, svtype);
+    // Every ALT is an allele of the record, `*` and `.` included: Ensembl VEP builds
+    // the record's allele string from every ALT (Parser/VCF.pm:469) and
+    // StructuralVariationOverlap.pm:64-77 makes one allele per `/`-part of it with no
+    // filter (VariationFeatureOverlap.pm:483-484 filters `*` on the sequence path
+    // alone), so `G/*` and `G/.` under a true INFO/SVTYPE each write two rows. A
+    // record whose only ALT is `.` never reaches here (`vcf_parser.rs` reads it as a
+    // non-variant record first).
+    let classes = per_alt_classes(&alts, record_class, svtype);
     let svlen_text = info_value_written(info_field, "SVLEN");
     let end_text = info_value_written(info_field, "END");
     let ci_pos = parse_ci_field(info_value(info_field, "CIPOS"));
@@ -770,6 +769,56 @@ mod tests {
         assert_eq!(variants[0].record_so_term.as_deref(), Some("deletion"));
         assert!(!variants[0].vep_skip);
         assert_eq!(variants[0].uploaded_allele_string.as_deref(), Some("<DEL>"));
+    }
+
+    /// A `*` beside another ALT under a true INFO/SVTYPE is an allele of the structural
+    /// record (StructuralVariationOverlap.pm:64-77 numbers every `/`-part of `G/*`):
+    /// Ensembl VEP 116.2 writes two `deletion` rows per transcript for
+    /// `21 30289183 x C G,* . . SVTYPE=DEL;END=30289190`, `ALLELE_NUM=1` and
+    /// `ALLELE_NUM=2`, both at 21:30289184-30289190 with `frameshift_variant,stop_lost,
+    /// feature_truncation` and the JSON `"allele_string":"G/*"`; `C *,G` the same, and
+    /// so are `C G,.` and `C .,G` (two `deletion` rows, `ALLELE_NUM=1` and `2`, JSON
+    /// `"allele_string":"G/."`), the `.` a `/`-part like any other.
+    #[test]
+    fn a_star_beside_an_alt_is_an_allele_of_the_structural_record() {
+        let record = |alts: &str| {
+            structural_variants(
+                "21",
+                30289183,
+                "C",
+                &written_alts(alts),
+                "SVTYPE=DEL;END=30289190",
+                Some("x"),
+            )
+            .unwrap()
+        };
+        for (alts, part_index, part_text) in [
+            ("G,*", 1, "*"),
+            ("*,G", 0, "*"),
+            ("G,.", 1, "."),
+            (".,G", 0, "."),
+        ] {
+            let variants = record(alts);
+            assert_eq!(variants.len(), 2, "{alts}");
+            let part = &variants[part_index];
+            assert_eq!(part.alt_allele(), part_text.as_bytes(), "{alts}");
+            assert_eq!(part.allele_index, part_index, "{alts}");
+            assert_eq!(part.display_allele(), "deletion", "{alts}");
+            for variant in &variants {
+                assert!(variant.is_structural && !variant.vep_skip, "{alts}");
+                assert_eq!((variant.start, variant.end), (30289184, 30289190), "{alts}");
+                assert_eq!(
+                    variant.record_so_term.as_deref(),
+                    Some("deletion"),
+                    "{alts}"
+                );
+                assert_eq!(
+                    variant.uploaded_allele_string.as_deref(),
+                    Some(alts.replace(',', "/").as_str()),
+                    "{alts}"
+                );
+            }
+        }
     }
 
     /// Ensembl VEP 116.2 writes `21 30425650 x N N[21:30425700[,<NON_REF> . . .` as the

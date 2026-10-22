@@ -22,7 +22,7 @@ use std::collections::HashSet;
 
 use vep_core::codon::reverse_complement;
 use vep_core::coordinate::{Strand, MAX_COORD};
-use vep_core::sv_routing::{perl_true, sv_type_abbreviation, sv_type_string};
+use vep_core::sv_routing::{perl_split, perl_true, sv_type_abbreviation, sv_type_string};
 use vep_core::sv_span::deletion_looks_incomplete;
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{classify_variant, InputVariant};
@@ -211,6 +211,9 @@ pub(crate) struct AllelePatch {
     /// change the alleles it is built from.
     name: Option<String>,
     upper_cased: bool,
+    /// The record was refused before the upper-casing and kept by `--dont_skip`,
+    /// so its alleles stand as written.
+    written_case: bool,
     /// The reference allele after `--lookup_ref`, when it replaced the record's.
     reference: Option<Vec<u8>>,
     check_ref_failed: bool,
@@ -224,6 +227,9 @@ impl AllelePatch {
         }
         if self.upper_cased {
             upper_case_alleles(variant);
+        }
+        if self.written_case {
+            restore_written_case(variant);
         }
         if let Some(reference) = &self.reference {
             replace_reference(variant, reference);
@@ -323,6 +329,7 @@ impl SkipRules<'_> {
         let mut patch = AllelePatch {
             name: None,
             upper_cased: false,
+            written_case: false,
             reference: None,
             check_ref_failed: false,
         };
@@ -366,7 +373,7 @@ impl SkipRules<'_> {
             .as_deref()
             .unwrap_or(first.original_chr.as_str());
         if !self.checks.admits(input_name) {
-            return (self.dont_skip, patch);
+            return self.keep_as_written(first, patch);
         }
         // A start past the end plus one names a span no annotation can read, so
         // the record is dropped under `--dont_skip` too, where Ensembl VEP's run
@@ -393,7 +400,7 @@ impl SkipRules<'_> {
             skip(&format!(
                 "Chromosome {chr} not found in annotation sources or synonyms; chromosome {chr} does not overlap any features"
             ));
-            return (self.dont_skip, patch);
+            return self.keep_as_written(first, patch);
         }
         if first.is_structural {
             // `validate_svf` (Parser.pm:821-826) drops a deletion marked incomplete
@@ -418,11 +425,6 @@ impl SkipRules<'_> {
         let checks_change_alleles =
             (self.checks.lookup_ref && !self.checks.check_ref) || lower_case;
         if named_by_alleles && checks_change_alleles {
-            if let Some(multi) = &first.record_allele_string_multi {
-                if multi.as_ref() != as_written && multi.eq_ignore_ascii_case(as_written) {
-                    first.record_allele_string_multi = Some(as_written.into());
-                }
-            }
             let name = first.variation_name();
             first.id = Some(name.clone());
             patch.name = Some(name);
@@ -450,8 +452,9 @@ impl SkipRules<'_> {
             ));
             return (self.dont_skip, patch);
         }
-        // The reference allele with its `-` removed (Parser.pm:579-581), so an
-        // insertion's is empty.
+        // Parser.pm:578-580 removes the `-` from every allele: the reference's
+        // here, so an insertion's is empty, and the alternates' at the `--lookup_ref`
+        // rejoin (`replace_reference`), the one place their stripped form prints.
         let reference: Cow<[u8]> = if first.ref_allele.contains(&b'-') {
             Cow::Owned(
                 first
@@ -535,6 +538,22 @@ impl SkipRules<'_> {
         }
         (true, patch)
     }
+
+    /// The verdict on a record the `--chr` list (Parser.pm:470-472) or the
+    /// chromosome test (`:542-546`) refused: dropped, or kept by `--dont_skip`
+    /// with its alleles as written, since both tests return before the
+    /// upper-casing of `:554` and nothing after `validate_vf` changes the case.
+    fn keep_as_written(
+        &self,
+        first: &mut InputVariant,
+        mut patch: AllelePatch,
+    ) -> (bool, AllelePatch) {
+        if self.dont_skip {
+            restore_written_case(first);
+            patch.written_case = true;
+        }
+        (self.dont_skip, patch)
+    }
 }
 
 /// The allele string Ensembl VEP tests after the anchor chop and the minimisation
@@ -563,6 +582,46 @@ fn upper_case_alleles(variant: &mut InputVariant) {
     reclassify(variant);
 }
 
+/// The alleles in the case the input wrote them, read from the record's
+/// written-case string: the reference, the allele whose upper-cased form the
+/// variant carries (the reference again on a reference row), the allele's own
+/// string and the record's working string. A record whose string has no
+/// lower-case base, or whose working string was rebuilt since the parse, is
+/// left as it stands. The class reads the alleles' lengths alone and is
+/// unchanged.
+fn restore_written_case(variant: &mut InputVariant) {
+    let working = variant.record_allele_string();
+    let Some(written) = variant
+        .written_case_allele_string
+        .clone()
+        .filter(|written| written.eq_ignore_ascii_case(&working))
+    else {
+        return;
+    };
+    let mut parts = written.split('/');
+    let reference = parts.next().unwrap_or("").to_string();
+    if variant.no_allele {
+        variant.allele_string = written.to_string();
+    } else {
+        let alt = if variant.reference_allele_row {
+            Some(reference.clone())
+        } else {
+            let carried = String::from_utf8_lossy(variant.alt_allele());
+            parts
+                .find(|part| part.eq_ignore_ascii_case(&carried))
+                .map(str::to_string)
+        };
+        if let (Some(alt), Some(carried)) = (alt, variant.alt_alleles.first_mut()) {
+            variant.allele_string = format!("{reference}/{alt}");
+            *carried = alt.into_bytes();
+        }
+    }
+    variant.ref_allele = reference.into_bytes();
+    if variant.record_allele_string_multi.is_some() {
+        variant.record_allele_string_multi = Some(written);
+    }
+}
+
 /// The class of the rewritten alleles. The reference row keeps the record's
 /// class: its allele equals the reference, which `classify_variant` would read
 /// as a substitution, while Ensembl VEP's reference overlap allele shares the
@@ -576,9 +635,11 @@ fn reclassify(variant: &mut InputVariant) {
 }
 
 /// `--lookup_ref`'s replacement (Parser.pm:645): the reference allele of the
-/// record is the reference sequence, `-` for an empty one, and every allele
-/// string the record prints follows; a record with no allele (a non-variant
-/// line's) is the reference alone.
+/// record is the reference sequence, `-` for an empty one, joined to the
+/// alternate alleles as `validate_vf` holds them, each with its `-` removed
+/// (`:578-580`) and `-` again when nothing is left, so `A-` becomes `A`; every
+/// allele string the record prints follows; a record with no allele (a
+/// non-variant line's) is the reference alone.
 fn replace_reference(variant: &mut InputVariant, reference: &[u8]) {
     let reference: Vec<u8> = if reference.is_empty() {
         b"-".to_vec()
@@ -590,6 +651,10 @@ fn replace_reference(variant: &mut InputVariant, reference: &[u8]) {
     // builds it from the replaced string).
     if variant.reference_allele_row {
         variant.alt_alleles = vec![reference.clone()];
+    } else {
+        for alt in &mut variant.alt_alleles {
+            *alt = without_dashes(alt);
+        }
     }
     variant.allele_string = if variant.no_allele {
         reference_text.clone()
@@ -600,11 +665,31 @@ fn replace_reference(variant: &mut InputVariant, reference: &[u8]) {
         )
     };
     if let Some(multi) = &variant.record_allele_string_multi {
-        let alts = multi.split_once('/').map_or("", |(_, alts)| alts);
-        variant.record_allele_string_multi = Some(format!("{reference_text}/{alts}").into());
+        // The parts after the reference as Perl's `split` reads them (Parser.pm:575),
+        // a trailing empty part dropped: a one-part string (a reference-homozygous
+        // copy's) or one ending in `/` (a copy whose genotype names no allele)
+        // rejoins as the reference alone.
+        let mut parts = vec![reference_text];
+        parts.extend(
+            perl_split(multi, &['/'])
+                .skip(1)
+                .map(|alt| String::from_utf8_lossy(&without_dashes(alt.as_bytes())).into_owned()),
+        );
+        variant.record_allele_string_multi = Some(parts.join("/").into());
     }
     variant.ref_allele = reference;
     reclassify(variant);
+}
+
+/// `allele` with its `-` removed (Parser.pm:578-580), `-` when nothing is left
+/// (`map {$_ || '-'}`, `:645`).
+fn without_dashes(allele: &[u8]) -> Vec<u8> {
+    let stripped: Vec<u8> = allele.iter().copied().filter(|&b| b != b'-').collect();
+    if stripped.is_empty() {
+        b"-".to_vec()
+    } else {
+        stripped
+    }
 }
 
 /// Parser/VCF.pm:555: a VCF record whose type reads as a deletion (`/del/i` on the
@@ -926,10 +1011,13 @@ mod tests {
             "an upper-case record keeps building its name at output"
         );
         // A parser's working copy of the multi-allelic string arrives upper-cased
-        // with the string as written beside it: the lower-case base reaches the
-        // sibling it belongs to, and the name reads the alleles as written.
+        // with the chopped string in its written case beside it: the lower-case
+        // base reaches the sibling it belongs to, and the name reads the alleles
+        // as written (Ensembl VEP 116.2 names `21 30319403 0 tca t,tcg`
+        // `21_30319404_ca/-/cg`).
         let mut first = variant("21", 5, 5, "A", "G");
         first.record_allele_string_multi = Some("A/G/T".into());
+        first.written_case_allele_string = Some("A/G/t".into());
         first.uploaded_allele_string = Some("A/G/t".into());
         first.id = None;
         let (kept, warnings, patch) = judge(&rules, &mut first, dir.path());
@@ -938,12 +1026,91 @@ mod tests {
         assert_eq!(first.record_allele_string_multi.as_deref(), Some("A/G/T"));
         let mut sibling = variant("21", 5, 5, "A", "t");
         sibling.record_allele_string_multi = Some("A/G/T".into());
+        sibling.written_case_allele_string = Some("A/G/t".into());
         sibling.uploaded_allele_string = Some("A/G/t".into());
         sibling.id = None;
         patch.apply(&mut sibling);
         assert_eq!(sibling.allele_string, "A/T");
         assert_eq!(sibling.alt_alleles, [b"T".to_vec()]);
         assert_eq!(sibling.variation_name(), "21_5_A/G/t");
+        // The bi-allelic record of the VCF parser arrives the same way, its one
+        // pair chopped and upper-cased with the written case beside it: Ensembl
+        // VEP 116.2 names `21 30319403 0 tca t` `21_30319404_ca/-` and prints
+        // that name in every format, its alleles `CA/-`.
+        let mut deletion = variant("21", 30319404, 30319405, "CA", "-");
+        deletion.written_case_allele_string = Some("ca/-".into());
+        deletion.uploaded_allele_string = Some("tca/t".into());
+        deletion.id = Some("0".to_string());
+        let (kept, warnings, _) = judge(&rules, &mut deletion, dir.path());
+        assert!(kept && warnings.is_empty(), "{warnings:?}");
+        assert_eq!(deletion.id.as_deref(), Some("21_30319404_ca/-"));
+        assert_eq!(deletion.variation_name(), "21_30319404_ca/-");
+        assert_eq!(deletion.uploaded_variation(), "21_30319404_ca/-");
+        assert_eq!(deletion.allele_string, "CA/-");
+        assert_eq!(deletion.ref_allele, b"CA");
+    }
+
+    /// The `--chr` list (Parser.pm:470-472) and the chromosome test (`:542-546`)
+    /// return before the upper-casing of `:554`, so a record `--dont_skip` keeps
+    /// after either refused it is annotated with its alleles as written, on the
+    /// first allele and through the patch on its siblings, the shared string
+    /// included: Ensembl VEP 116.2 prints Allele `g` and JSON `allele_string`
+    /// `a/g` for `Z 1000 . a g` under `--dont_skip`, and Allele `t` with
+    /// `allele_string` `c/t` for `21 30337048 . c t` under `--chr 22 --dont_skip`.
+    /// A record written in upper case has nothing to restore, and a check after
+    /// `:554` that refuses a kept record leaves it upper-cased.
+    #[test]
+    fn dont_skip_keeps_the_written_case_before_the_upper_casing() {
+        let _guard = sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let unlisted = rules(&transcripts, &NO_CHECKS, true);
+        let mut first = variant("Z", 1000, 1000, "A", "G");
+        first.written_case_allele_string = Some("a/g".into());
+        first.uploaded_allele_string = Some("a/g".into());
+        first.id = None;
+        let (kept, warnings, _) = judge(&unlisted, &mut first, dir.path());
+        assert!(kept && warnings.len() == 1, "{warnings:?}");
+        assert_eq!(first.allele_string, "a/g");
+        assert_eq!(first.ref_allele, b"a");
+        assert_eq!(first.alt_alleles, [b"g".to_vec()]);
+        assert_eq!(first.variation_name(), "Z_1000_a/g");
+
+        let admitted = ChromosomeList::new(&["22".to_string()]);
+        let checks = ReferenceChecks {
+            chr: Some(&admitted),
+            ..NO_CHECKS
+        };
+        let listed = rules(&transcripts, &checks, true);
+        let mut first = variant("21", 5, 5, "C", "T");
+        first.record_allele_string_multi = Some("C/T/G".into());
+        first.written_case_allele_string = Some("c/t/G".into());
+        first.uploaded_allele_string = Some("c/t/G".into());
+        let (kept, warnings, patch) = judge(&listed, &mut first, dir.path());
+        assert!(kept && warnings.is_empty(), "{warnings:?}");
+        assert_eq!(first.allele_string, "c/t");
+        assert_eq!(first.record_allele_string_multi.as_deref(), Some("c/t/G"));
+        let mut sibling = variant("21", 5, 5, "C", "G");
+        sibling.allele_index = 1;
+        sibling.record_allele_string_multi = Some("C/T/G".into());
+        sibling.written_case_allele_string = Some("c/t/G".into());
+        sibling.uploaded_allele_string = Some("c/t/G".into());
+        patch.apply(&mut sibling);
+        assert_eq!(sibling.allele_string, "c/G");
+        assert_eq!(sibling.ref_allele, b"c");
+        assert_eq!(sibling.alt_alleles, [b"G".to_vec()]);
+        assert_eq!(sibling.record_allele_string_multi.as_deref(), Some("c/t/G"));
+
+        let mut upper = variant("21", 5, 5, "C", "T");
+        assert!(judge(&listed, &mut upper, dir.path()).0);
+        assert_eq!(upper.allele_string, "C/T");
+        // `x/y` fails the allele-string test (`:556-560`), after `:554` upper-cased it.
+        let mut invalid = variant("21", 5, 5, "X", "Y");
+        invalid.written_case_allele_string = Some("x/y".into());
+        invalid.uploaded_allele_string = Some("x/y".into());
+        let (kept, warnings, _) = judge(&unlisted, &mut invalid, dir.path());
+        assert!(kept && warnings.len() == 1, "{warnings:?}");
+        assert_eq!(invalid.allele_string, "X/Y");
     }
 
     /// A parser that names its records itself (Parser/Region.pm:198,
@@ -1176,6 +1343,26 @@ mod tests {
         assert!(keep_overlap_allele(&mut row, false));
         assert_eq!(row.allele_num, Some(0));
         assert_eq!(row.record_allele_string_multi.as_deref(), Some("A/A/G"));
+        // A reference-homozygous copy without `--process_ref_homs` is a feature
+        // with no allele carrying the written reference alone; the join of
+        // Parser.pm:645 over that one part is the looked-up reference alone
+        // (Ensembl VEP 116.2 prints the JSON `allele_string` `T` for a `0|0` copy
+        // of `C A` over a `T`), and a trailing empty part, a copy whose genotype
+        // names no allele, is no part to Perl's `split` (`:575`).
+        for working in ["T", "T/"] {
+            let mut hom_ref = variant("21", 1, 1, "T", "*");
+            hom_ref.no_allele = true;
+            hom_ref.hom_ref = true;
+            hom_ref.allele_string = "T".to_string();
+            hom_ref.record_allele_string_multi = Some(working.into());
+            assert!(judge(&rules, &mut hom_ref, dir.path()).0, "{working}");
+            assert_eq!(
+                hom_ref.record_allele_string_multi.as_deref(),
+                Some("A"),
+                "{working}"
+            );
+            assert_eq!(hom_ref.allele_string, "A", "{working}");
+        }
     }
 
     /// `lookup_ref` (Parser.pm:635-646): the reference allele is replaced by the

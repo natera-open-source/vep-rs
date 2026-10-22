@@ -19,3 +19,5 @@ chr21	30635459	prefixed	T	C	.	.	.
 21	30643020	nonvar_csq	TTG	.	.	.	CSQ=old|stuff;DP=4
 21	30755140	nonvar_bad	G	.	.	.	.
 21	30601300	nonvar_first_alt	TC	.,TA	.	.	.
+21	30319403	0	tca	t	.	.	.
+Z	1000	.	a	g	.	.	.

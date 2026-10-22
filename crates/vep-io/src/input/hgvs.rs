@@ -448,6 +448,11 @@ mod tests {
             }
             self.aliases.get(chr).map(|name| name.to_string())
         }
+
+        fn sequence_length(&self, chr: &str) -> Option<u64> {
+            let (offset, bases) = self.sequences.get(self.record_name(chr)?.as_str())?;
+            Some(offset + bases.len() as u64 - 1)
+        }
     }
 
     /// The fake reference under Ensembl VEP's default `--max_sv_size`

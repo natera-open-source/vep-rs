@@ -732,6 +732,88 @@ fn non_variant_json_object_per_record() {
     assert_eq!(objects[1]["end"], 10538910);
 }
 
+/// A record is a non-variant one by its first comma-separated ALT alone
+/// (Parser/VCF.pm:259 `$alts->[0] eq '.'` over the list ensembl-io
+/// BaseVCF4.pm:489 splits, whose limit-less `split` drops a trailing empty
+/// field, so `.,` is the list `.`). Ensembl VEP 116.2 on `21 10538940 dot_first
+/// TG .,A` and `21 10538950 dot_trailing C .,`: without `--allow_non_variant` no
+/// row, line or object in any format and no warning; with it no default or tab
+/// row, the VCF line carried as written without CSQ, and a JSON object with the
+/// reference as its allele string (`TG`, `C`), `most_severe_consequence` `?`,
+/// `start` 10538940 and `end` 10538941 for the two-base reference, and no
+/// consequence array. The `A` beside the leading `.` is annotated by neither
+/// engine.
+#[test]
+fn non_variant_first_alt_fixtures_every_format() {
+    let dir = tempfile::tempdir().unwrap();
+    let dot_first = "21\t10538940\tdot_first\tTG\t.,A\t.\t.\t.";
+    let dot_trailing = "21\t10538950\tdot_trailing\tC\t.,\t.\t.\t.";
+    let records = format!("{SNV_OK}\n{dot_first}\n{dot_trailing}\n");
+    for (format, flag) in [
+        ("default", None),
+        ("tab", Some("--tab")),
+        ("vcf", Some("--vcf")),
+        ("json", Some("--json")),
+    ] {
+        let mut extra: Vec<&str> = flag.into_iter().collect();
+        let (output, written, warnings) = run_vcf(
+            dir.path(),
+            &format!("dot_without_{format}"),
+            &records,
+            &extra,
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{format}: {}",
+            text(&output.stderr)
+        );
+        assert!(warnings.is_empty(), "{format}: {warnings}");
+        assert!(written.contains("snv_ok"), "{format}: {written}");
+        for name in ["dot_first", "dot_trailing"] {
+            assert!(!written.contains(name), "{format}: {written}");
+        }
+
+        extra.push("--allow_non_variant");
+        let (output, written, warnings) =
+            run_vcf(dir.path(), &format!("dot_with_{format}"), &records, &extra);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{format}: {}",
+            text(&output.stderr)
+        );
+        assert!(warnings.is_empty(), "{format}: {warnings}");
+        assert!(written.contains("snv_ok"), "{format}: {written}");
+        for (name, line, reference, end) in [
+            ("dot_first", dot_first, "TG", 10538941),
+            ("dot_trailing", dot_trailing, "C", 10538950),
+        ] {
+            let kept: Vec<&str> = rows(&written)
+                .into_iter()
+                .filter(|l| l.contains(name))
+                .collect();
+            match format {
+                "default" | "tab" => assert!(kept.is_empty(), "{format}: {kept:?}"),
+                "vcf" => assert_eq!(kept, [line], "{format}"),
+                _ => {
+                    assert_eq!(kept.len(), 1, "{name}: {written}");
+                    let object: serde_json::Value = serde_json::from_str(kept[0]).unwrap();
+                    assert_eq!(object["id"], name);
+                    assert_eq!(object["allele_string"], reference, "{name}");
+                    assert_eq!(object["most_severe_consequence"], "?", "{name}");
+                    assert_eq!(object["end"], end, "{name}");
+                    assert_eq!(object["input"], line, "{name}");
+                    assert!(
+                        object.get("transcript_consequences").is_none(),
+                        "{name}: {object}"
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// `--check_frequency` judges a non-variant record kept by `--allow_non_variant`
 /// as the allele-less feature Ensembl VEP builds from it (Parser/VCF.pm:342):
 /// under `--freq_filter include` it is dropped without frequency data and kept
@@ -811,8 +893,10 @@ fn non_variant_record_is_judged_by_the_frequency_filter() {
 /// Lower-case alleles are upper-cased before annotation (Parser.pm:554) in the
 /// VCF and Ensembl formats: the `Allele` column and the JSON `allele_string`
 /// print upper case, the rows match the upper-case record's, and the name of an
-/// ID-less record keeps the case the line was written in (Parser.pm:462 names it
-/// before the upper-casing; the VCF output re-emits the line as read).
+/// ID-less record keeps the case the line was written in (a `.` ID names the
+/// record from its line, OutputFactory.pm:904-909; an ID Perl reads as false,
+/// `0` or empty, takes Parser.pm:462's name from the alleles as the anchor chop
+/// left them, before the upper-casing; the VCF output re-emits the line as read).
 #[test]
 fn lowercase_alleles_print_uppercase() {
     let dir = tempfile::tempdir().unwrap();
@@ -833,6 +917,72 @@ fn lowercase_alleles_print_uppercase() {
     let (_, written, _) = run_vcf(dir.path(), "lower_vcf", &records, &["--vcf"]);
     assert!(
         rows(&written)[1].starts_with("21\t10538885\t.\ta\tc\t.\t.\tCSQ=C|"),
+        "{written}"
+    );
+
+    // An ID of `0` or an empty ID column is Perl-false, so Parser.pm:462 names
+    // the record `chr_start_alleles` from the chopped string as written, and
+    // Ensembl VEP 116.2 prints that name as `Uploaded_variation` (it differs from
+    // the upper-cased one, OutputFactory.pm:899-901) and as the JSON `id`:
+    // `21_30813030_c/t` for `0 c t` and for the empty ID, `21_30319404_ca/-`
+    // for `0 tca t` and `21_30319404_ca/-/cg` for `0 tca t,tcg`, the alleles
+    // themselves upper-cased.
+    let false_ids = "21\t30813030\t0\tc\tt\t.\t.\t.\n\
+                     21\t30319403\t0\ttca\tt\t.\t.\t.\n\
+                     21\t30813030\t\tc\tt\t.\t.\t.\n\
+                     21\t30319403\t0\ttca\tt,tcg\t.\t.\t.\n";
+    let (output, written, warnings) = run_vcf(dir.path(), "false_ids", false_ids, &[]);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert!(warnings.is_empty(), "{warnings}");
+    assert_eq!(
+        record_names(&written),
+        ["21_30813030_c/t", "21_30319404_ca/-", "21_30319404_ca/-/cg"]
+            .into_iter()
+            .collect()
+    );
+    let snv = rows_of(&written, "21_30813030_c/t");
+    assert!(
+        !snv.is_empty() && snv.iter().all(|row| row.starts_with("21:30813030\tT\t")),
+        "{written}"
+    );
+    let deletion = rows_of(&written, "21_30319404_ca/-");
+    assert!(
+        !deletion.is_empty()
+            && deletion
+                .iter()
+                .all(|row| row.starts_with("21:30319404-30319405\t-\t")),
+        "{written}"
+    );
+    let multi = rows_of(&written, "21_30319404_ca/-/cg");
+    let alleles: BTreeSet<&str> = multi
+        .iter()
+        .map(|row| row.split('\t').nth(1).unwrap())
+        .collect();
+    assert_eq!(alleles, ["-", "CG"].into_iter().collect(), "{written}");
+    let (_, written, _) = run_vcf(dir.path(), "false_ids_json", false_ids, &["--json"]);
+    let objects = json_objects(&written);
+    let ids: Vec<&str> = objects.iter().map(|o| o["id"].as_str().unwrap()).collect();
+    assert_eq!(
+        ids,
+        [
+            "21_30813030_c/t",
+            "21_30319404_ca/-",
+            "21_30813030_c/t",
+            "21_30319404_ca/-/cg"
+        ]
+    );
+    let strings: Vec<&str> = objects
+        .iter()
+        .map(|o| o["allele_string"].as_str().unwrap())
+        .collect();
+    assert_eq!(strings, ["C/T", "CA/-", "C/T", "CA/-/CG"]);
+    let (_, written, _) = run_vcf(dir.path(), "false_ids_vcf", false_ids, &["--vcf"]);
+    let lines = rows(&written);
+    assert!(
+        lines[0].starts_with("21\t30813030\t0\tc\tt\t.\t.\tCSQ=T|")
+            && lines[1].starts_with("21\t30319403\t0\ttca\tt\t.\t.\tCSQ=-|")
+            && lines[2].starts_with("21\t30813030\t\tc\tt\t.\t.\tCSQ=T|")
+            && lines[3].starts_with("21\t30319403\t0\ttca\tt,tcg\t.\t.\tCSQ=-|"),
         "{written}"
     );
 
@@ -885,6 +1035,87 @@ fn lowercase_alleles_print_uppercase() {
     assert_eq!(objects[1]["id"], "upper");
     assert_eq!(objects[2]["id"], "21_10538885_A/C/t");
     assert_eq!(objects[2]["allele_string"], "A/C/T");
+}
+
+/// A record the `--chr` list refuses (Parser.pm:470-472) and `--dont_skip` keeps
+/// is annotated with its alleles as written: the refusal returns before the
+/// upper-casing of Parser.pm:554 and nothing later changes the case. Ensembl VEP
+/// 116.2 under `--chr 22 --dont_skip` prints `21 30337048 . c t` with Allele `t`,
+/// JSON `allele_string` `c/t` and CSQ Allele `t`; the same record with the ID `0`
+/// under the JSON `id` `21_30337048_c/t`; and `21 30319403 0 tca t` under the
+/// line's name `21_30319403_tca/t` in the default output (the name built at
+/// output equals the one Parser.pm:462 built, both lower case, so the line's
+/// name prints, OutputFactory.pm:899-909) with the JSON `id` `21_30319404_ca/-`
+/// and `allele_string` `ca/-`. No warning is written.
+#[test]
+fn dont_skip_keeps_the_written_case_of_a_record_the_chr_list_refuses() {
+    let dir = tempfile::tempdir().unwrap();
+    let records = "21\t30337048\t.\tc\tt\t.\t.\t.\n\
+                   21\t30337048\t0\tc\tt\t.\t.\t.\n\
+                   21\t30319403\t0\ttca\tt\t.\t.\t.\n";
+    let flags = ["--chr", "22", "--dont_skip"];
+    let (output, written, warnings) = run_vcf(dir.path(), "chr_written", records, &flags);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert!(warnings.is_empty(), "{warnings}");
+    let snv = rows_of(&written, "21_30337048_c/t");
+    assert!(
+        snv.len() >= 2 && snv.iter().all(|row| row.starts_with("21:30337048\tt\t")),
+        "{written}"
+    );
+    let deletion = rows_of(&written, "21_30319403_tca/t");
+    assert!(
+        !deletion.is_empty()
+            && deletion
+                .iter()
+                .all(|row| row.starts_with("21:30319404-30319405\t-\t")),
+        "{written}"
+    );
+    assert_eq!(
+        record_names(&written),
+        ["21_30337048_c/t", "21_30319403_tca/t"]
+            .into_iter()
+            .collect()
+    );
+
+    let (_, written, _) = run_vcf(
+        dir.path(),
+        "chr_written_json",
+        records,
+        &["--chr", "22", "--dont_skip", "--json"],
+    );
+    let objects = json_objects(&written);
+    let ids: Vec<&str> = objects.iter().map(|o| o["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, [".", "21_30337048_c/t", "21_30319404_ca/-"]);
+    let strings: Vec<&str> = objects
+        .iter()
+        .map(|o| o["allele_string"].as_str().unwrap())
+        .collect();
+    assert_eq!(strings, ["c/t", "c/t", "ca/-"]);
+    let alleles: Vec<&str> = objects
+        .iter()
+        .map(|o| {
+            let rows = ["transcript_consequences", "intergenic_consequences"]
+                .into_iter()
+                .find_map(|key| o[key].as_array())
+                .expect("a consequence array");
+            rows[0]["variant_allele"].as_str().unwrap()
+        })
+        .collect();
+    assert_eq!(alleles, ["t", "t", "-"]);
+
+    let (_, written, _) = run_vcf(
+        dir.path(),
+        "chr_written_vcf",
+        records,
+        &["--chr", "22", "--dont_skip", "--vcf"],
+    );
+    let lines = rows(&written);
+    assert!(
+        lines[0].starts_with("21\t30337048\t.\tc\tt\t.\t.\tCSQ=t|")
+            && lines[1].starts_with("21\t30337048\t0\tc\tt\t.\t.\tCSQ=t|")
+            && lines[2].starts_with("21\t30319403\t0\ttca\tt\t.\t.\tCSQ=-|"),
+        "{written}"
+    );
 }
 
 /// `--chr` admits the records whose chromosome, as the input spells it, is in the

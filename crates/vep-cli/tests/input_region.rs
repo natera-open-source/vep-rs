@@ -229,6 +229,74 @@ fn uploaded_allele_is_the_looked_up_string_except_for_an_unminimised_indel() {
     );
 }
 
+/// Under `--minimal` Ensembl VEP minimises every bi-allelic record before the
+/// reference lookup (Parser.pm:852), keeping the parser's `N` placeholder as the
+/// string uploaded whether or not a base is trimmed (:1008), so `UPLOADED_ALLELE`
+/// prints the placeholder for every sequence record (OutputFactory.pm:1360):
+/// Ensembl VEP 116.2 prints `N/A` for `21:14221107-14221107/A`, `N/-` for
+/// `21:10521700-10521700/-`, `NN/CA` for the reverse-strand
+/// `21:10542415-10542416:-1/CA`, `NNNNNNNNNNNNNNNNNNNNNNNN/-` for
+/// `21:13630972-13630995/-`, and the `NN/GTA` and `-/TCA` it prints without the
+/// flag, with `MINIMISED=1` on every row.
+#[test]
+fn minimal_keeps_the_placeholder_as_the_uploaded_allele() {
+    let dir = tempfile::tempdir().unwrap();
+    let region = write(
+        dir.path(),
+        "minimal.region.txt",
+        "21:10552677-10552678/GTA\n21:13620284-13620283/TCA\n21:13630972-13630995/-\n21:14221107-14221107/A\n21:10521700-10521700/-\n21:10542415-10542416:-1/CA\n",
+    );
+    let rows = annotate(
+        dir.path(),
+        &region,
+        &["--format", "region", "--uploaded_allele", "--minimal"],
+    );
+    assert_eq!(
+        uploaded_alleles(&rows),
+        [
+            ("21:10552677-10552678/GTA", "NN/GTA"),
+            ("21:13620284-13620283/TCA", "-/TCA"),
+            ("21:13630972-13630995/-", "NNNNNNNNNNNNNNNNNNNNNNNN/-"),
+            ("21:14221107-14221107/A", "N/A"),
+            ("21:10521700-10521700/-", "N/-"),
+            ("21:10542415-10542416:-1/CA", "NN/CA"),
+        ]
+        .map(|(name, allele)| (name.to_string(), allele.to_string()))
+    );
+    assert!(
+        rows.iter().all(|row| row.ends_with(";MINIMISED=1")),
+        "{rows:?}"
+    );
+}
+
+/// The region expression admits a `-` among an allele's bases, and
+/// `validate_vf` removes it from every allele (Parser.pm:578-580) before the
+/// `--lookup_ref` rejoin the format runs (`:645`), so `21:14221107-14221107/A-`
+/// annotates as `21:14221107-14221107/A` does, row for row: Ensembl VEP 116.2
+/// prints 17 rows with Allele `A`, `UPLOADED_ALLELE=C/A` and
+/// `VARIANT_CLASS=SNV`, the ENST00000400577 row a `synonymous_variant` at
+/// cDNA 300, CDS 270, protein 90, `R`, `cgC/cgA`.
+#[test]
+fn dash_inside_an_allele_is_removed_at_the_lookup_ref_rejoin() {
+    let dir = tempfile::tempdir().unwrap();
+    let dashed = write(dir.path(), "dashed.region.txt", "21:14221107-14221107/A-\n");
+    let plain = write(dir.path(), "plain.region.txt", "21:14221107-14221107/A\n");
+    let flags = ["--format", "region", "--uploaded_allele"];
+    let rows = annotate(dir.path(), &dashed, &flags);
+    assert_eq!(rows.len(), 17, "{rows:?}");
+    assert!(
+        rows.contains(
+            &"21:14221107-14221107/A-\t21:14221107\tA\tENSG00000185272\tENST00000400577\tTranscript\tsynonymous_variant\t300\t270\t90\tR\tcgC/cgA\t-\tUPLOADED_ALLELE=C/A;IMPACT=LOW;STRAND=1;VARIANT_CLASS=SNV".to_string()
+        ),
+        "{rows:?}"
+    );
+    let renamed: Vec<String> = annotate(dir.path(), &plain, &flags)
+        .iter()
+        .map(|row| row.replacen("21:14221107-14221107/A\t", "21:14221107-14221107/A-\t", 1))
+        .collect();
+    assert_eq!(rows, renamed);
+}
+
 /// A region on the reverse strand (`:-1`) reads its reference allele as the
 /// reverse complement of the FASTA's bases (`sub_Slice` on the record's strand,
 /// Parser.pm:751) and its allele is read against a forward-strand transcript as

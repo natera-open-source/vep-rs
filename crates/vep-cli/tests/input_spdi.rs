@@ -275,6 +275,50 @@ fn insertion_before_the_first_base_prints_0_1() {
     );
 }
 
+/// A span past the end of the sequence is skipped with a warning naming the
+/// span and the sequence's length, where Ensembl VEP's adaptor builds a slice
+/// past the end with no bounds test (VariationFeatureAdaptor.pm:2533,
+/// 2545-2549, 2563-2564), reads `N` for every base past it
+/// (Utils/FastaSequence.pm:619-629) and annotates the record: Ensembl VEP 116.2
+/// prints `21:46709984-46709985 A intergenic_variant` and `21:46709984 -
+/// intergenic_variant` for the VCF twins of `NC_000021.9:46709984::A` and
+/// `NC_000021.9:46709983:1:` on the 46,709,983-base chromosome 21. The
+/// insertion after the last base, `NC_000021.9:46709983::A`, reads no base past
+/// the end and is annotated as Ensembl VEP annotates it; a name no sequence
+/// carries, the version-less `NC_000021` among them, keeps `Sequence name
+/// <name> not valid` (VariationFeatureAdaptor.pm:2536).
+#[test]
+fn span_past_the_sequence_end_is_warned_and_skipped() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "end.spdi.txt",
+        "NC_000021.9:46709983::A\nNC_000021.9:46709984::A\nNC_000021.9:46709983:1:\nNC_000021.9:46709980:10:\nNC_000021:10538884:A:C\nNC_000099.1:100:A:C\n",
+    );
+    let out = output_path(dir.path());
+    let output = vep(dir.path(), &input, &out, &["--format", "spdi"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let rows = rows(&out);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert!(
+        rows[0].starts_with(
+            "NC_000021.9:46709983::A\t21:46709983-46709984\tA\t-\t-\t-\tintergenic_variant\t"
+        ),
+        "{}",
+        rows[0]
+    );
+    assert_eq!(
+        warnings(&out).lines().collect::<Vec<_>>(),
+        [
+            "WARNING: line 2 skipped (NC_000021.9:46709984::A): Unable to parse SPDI notation 'NC_000021.9:46709984::A': Span 46709984-46709985 lies past the end of sequence NC_000021.9 (46709983 bases)",
+            "WARNING: line 3 skipped (NC_000021.9:46709983:1:): Unable to parse SPDI notation 'NC_000021.9:46709983:1:': Span 46709984-46709984 lies past the end of sequence NC_000021.9 (46709983 bases)",
+            "WARNING: line 4 skipped (NC_000021.9:46709980:10:): Unable to parse SPDI notation 'NC_000021.9:46709980:10:': Span 46709981-46709990 lies past the end of sequence NC_000021.9 (46709983 bases)",
+            "WARNING: line 5 skipped (NC_000021:10538884:A:C): Unable to parse SPDI notation 'NC_000021:10538884:A:C': Sequence name NC_000021 not valid",
+            "WARNING: line 6 skipped (NC_000099.1:100:A:C): Unable to parse SPDI notation 'NC_000099.1:100:A:C': Sequence name NC_000099.1 not valid",
+        ]
+    );
+}
+
 /// A record whose span exceeds `--max_sv_size` is skipped with the text
 /// Ensembl VEP's `validate_vf` skips it with (Parser.pm:491-499), the span being
 /// end minus start: under a limit of 1000 a deletion of 1002 bases (span 1001)

@@ -427,6 +427,10 @@ pub(super) mod tests {
         fn record_name(&self, chr: &str) -> Option<String> {
             matches!(chr, "T" | "chrT").then(|| "T".to_string())
         }
+
+        fn sequence_length(&self, chr: &str) -> Option<u64> {
+            self.record_name(chr).map(|_| 600)
+        }
     }
 
     /// The transcripts of a cache, found by stable id as

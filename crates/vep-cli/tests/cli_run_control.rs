@@ -408,6 +408,116 @@ fn no_cache_is_fatal_before_first_variant() {
     );
 }
 
+/// A one-record VCF under the `##fileformat` lines `headers`, before its `#CHROM`
+/// line, written to `dir` as `name`.
+fn vcf_with_fileformat(dir: &Path, name: &str, headers: &[&str]) -> PathBuf {
+    let path = dir.join(name);
+    let mut text = headers.iter().map(|h| format!("{h}\n")).collect::<String>();
+    text.push_str(
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t30282169\tstop_ins4_twostops_rev\tC\tCTATT\t.\t.\t.\n",
+    );
+    std::fs::write(&path, text).unwrap();
+    path
+}
+
+/// Ensembl VEP's ensembl-io parser reads the `##fileformat` value of every such
+/// header line (BaseVCF4.pm:93-94, :116-130) and ends the run on a version whose
+/// major number is not its own 4: `confess "The VCF file format version
+/// $f_version is not compatible with the parser version (VCF v4.2)"` (`:125`),
+/// `$f_version` the first `<digits>.<digits>` of the value as written, so
+/// `VCFv003.3` reports `003.3`; and on a value with no such pair: `die "The
+/// script can't read the VCF file format version of 'fileformat'"` (`:129`). The
+/// key follows `##` and any blanks (`:93`), and a second `##fileformat` line is
+/// read like the first. Ensembl VEP 116.2 exits 25 on each of these inputs with
+/// that text and, dying in `Runner::init` (BaseRunner.pm:406) before its output
+/// opens, writes no output file and leaves an existing one as it was; vep-rs
+/// refuses them under the error contract with the output file untouched.
+#[test]
+fn vcf_fileformat_major_version_other_than_4_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let incompatible = |version: &str| {
+        format!(
+            "ERROR: [input] The VCF file format version {version} is not compatible with the parser version (VCF v4.2)"
+        )
+    };
+    let unreadable =
+        "ERROR: [input] The script can't read the VCF file format version of 'fileformat'"
+            .to_string();
+    let cases: [(&[&str], String); 7] = [
+        (&["##fileformat=VCFv3.3"], incompatible("3.3")),
+        (&["##fileformat=VCFv5.0"], incompatible("5.0")),
+        (&["##fileformat=VCFv003.3"], incompatible("003.3")),
+        (&["## fileformat=VCFv3.3"], incompatible("3.3")),
+        (
+            &["##fileformat=VCFv4.2", "##fileformat=VCFv3.3"],
+            incompatible("3.3"),
+        ),
+        (&["##fileformat=VCFv4"], unreadable.clone()),
+        (&["##fileformat=VCF"], unreadable),
+    ];
+    for (i, (headers, expected)) in cases.iter().enumerate() {
+        let input = vcf_with_fileformat(dir.path(), &format!("in{i}.vcf"), headers);
+        let out = dir.path().join(format!("out{i}.txt"));
+        let output = run_with(&corpus_args_with_input(&input), &["--quiet"], &out);
+        assert_eq!(output.status.code(), Some(1), "{headers:?}");
+        assert_eq!(text(&output.stderr).trim_end(), *expected, "{headers:?}");
+        assert!(output.stdout.is_empty(), "{headers:?}");
+        assert!(!out.exists(), "{headers:?}: an output file was written");
+    }
+    // An existing output file survives the refusal under the corpus arguments'
+    // `--force_overwrite`.
+    let input = vcf_with_fileformat(dir.path(), "kept.vcf", &["##fileformat=VCFv3.3"]);
+    let out = dir.path().join("kept.txt");
+    std::fs::write(&out, "an earlier result\n").unwrap();
+    let output = run_with(&corpus_args_with_input(&input), &["--quiet"], &out);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        std::fs::read_to_string(&out).unwrap(),
+        "an earlier result\n"
+    );
+}
+
+/// The minor version is not read (BaseVCF4.pm:126 is commented out), the major
+/// number is compared as a number, only the first `<digits>.<digits>` of the
+/// value counts, `read_metadata` matches a `##key=value` line with a non-empty
+/// value and the key `fileformat` as spelled (`:93`, `:116`), and a file without
+/// the line is not checked: `VCFv4.5`, `VCFv4.5.1`, `VCFv04.2`, a bare `4.2`, an
+/// empty value, `##FILEFORMAT=VCFv3.3` and no `##fileformat` line each annotate
+/// to the rows a `VCFv4.2` header gives, with no warning, as Ensembl VEP 116.2
+/// annotates them (exit 0, the same row on each).
+#[test]
+fn vcf_fileformat_4x_and_a_missing_line_annotate_as_vcfv42() {
+    let dir = tempfile::tempdir().unwrap();
+    let run = |name: &str, headers: &[&str]| -> (Vec<String>, String) {
+        let input = vcf_with_fileformat(dir.path(), &format!("{name}.vcf"), headers);
+        let out = dir.path().join(format!("{name}.txt"));
+        let output = run_with(&corpus_args_with_input(&input), &[], &out);
+        assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        let rows = data_lines(&std::fs::read_to_string(&out).unwrap())
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        (rows, text(&output.stderr))
+    };
+    let (expected, _) = run("v42", &["##fileformat=VCFv4.2"]);
+    assert!(!expected.is_empty());
+    let accepted: [&[&str]; 7] = [
+        &["##fileformat=VCFv4.5"],
+        &["##fileformat=VCFv4.5.1"],
+        &["##fileformat=VCFv04.2"],
+        &["##fileformat=4.2"],
+        &["##fileformat="],
+        &["##FILEFORMAT=VCFv3.3"],
+        &[],
+    ];
+    for (i, headers) in accepted.iter().enumerate() {
+        let (rows, stderr) = run(&format!("accepted{i}"), headers);
+        assert_eq!(rows, expected, "{headers:?}");
+        assert!(!stderr.contains("WARNING"), "{headers:?}: {stderr}");
+    }
+}
+
 /// `--show_cache_info` prints the cache's source versions as `<key>\t<value>`
 /// lines sorted by key and exits 0 (vep:39-43 prints them in hash order), with
 /// the cache resolved by the same flags as a run; a named input file that does
@@ -989,6 +1099,52 @@ fn deletion_looks_incomplete_follows_the_type_and_precedes_the_span() {
         "WARNING: line 5 skipped (21 30165940 inv N <INV> . . END=30165800): start > end+1 : (START=30165941, END=30165800)",
     ];
     assert_eq!(warning_lines(&text(&output.stderr)), expected);
+}
+
+/// A structural record whose INFO/END is no number to Perl is skipped with two
+/// lines: `deletion looks incomplete` (Parser/VCF.pm:555-558: `abc` numifies to 0,
+/// below the start) and then `validate_vf`'s coordinate test over the start Perl
+/// reads, `POS + 1`, and the END text as written (Parser.pm:475-477, the text kept
+/// by BaseVCF4.pm:307-308). Both lines are Ensembl VEP 116.2's for the record,
+/// which writes no row for it and reaches no cache.
+#[test]
+fn end_that_is_no_number_is_refused_with_the_coordinate_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("in.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t100\t.\tN\t<DEL>\t.\t.\tEND=abc\n",
+    )
+    .unwrap();
+    let out = dir.path().join("out.txt");
+    let cache = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-vcf-edge-cases/json_cache");
+    let output = vep()
+        .arg("-i")
+        .arg(&input)
+        .arg("-o")
+        .arg(&out)
+        .arg("--json_cache")
+        .arg(cache)
+        .args(["--assembly", "GRCh38", "--force_overwrite", "--no_stats"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let expected = [
+        "WARNING: line 1 skipped (21 100 . N <DEL> . . END=abc): deletion looks incomplete",
+        "WARNING: line 1 skipped (21 100 . N <DEL> . . END=abc): Invalid start '101' or end 'abc' coordinate",
+    ];
+    assert_eq!(warning_lines(&text(&output.stderr)), expected);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("out.txt_warnings.txt"))
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert!(data_lines(&std::fs::read_to_string(&out).unwrap()).is_empty());
 }
 
 /// `--skipped_variants_file` lists every skipped record in Ensembl VEP's layout
