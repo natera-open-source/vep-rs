@@ -261,7 +261,7 @@ pub struct Args {
     )]
     pub skipped_variants_file: Option<String>,
 
-    /// The columns of the --tab output and the subfields of the VCF CSQ entry, comma-separated, in this order and replacing the whole default list; any field name a flag or a plugin produces is valid, and a name nothing produces prints `-` (tab) or an empty subfield (VCF) under a `?` description. The default and JSON formats ignore it; --output_format parquet refuses it
+    /// The columns of the --tab output and the subfields of the VCF CSQ entry, comma-separated, in this order and replacing the whole default list; any field name a flag or a plugin produces is valid, and a name nothing produces prints `-` (tab) or an empty subfield (VCF) under Ensembl VEP's description of the name, or `?` where it has none. The default and JSON formats ignore it; --output_format parquet refuses it
     #[arg(help_heading = "Output", long)]
     pub fields: Option<String>,
 

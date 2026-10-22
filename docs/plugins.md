@@ -69,7 +69,7 @@ and requires a paid commercial agreement for any other use, so vep-rs neither
 distributes the data nor validates against it. A user who holds a dbNSFP license
 can point the plugin at their own tabix-indexed file and receive user-selected
 columns prefixed `dbNSFP_`. Native SIFT and PolyPhen decoding needs no dbNSFP
-file (see [Cache setup](cache-setup.md#sift-and-polyphen-predictions)).
+file (see [SIFT and PolyPhen predictions](cache-predictions.md)).
 
 The parameters are the file path followed by the column names to extract:
 

@@ -248,6 +248,6 @@ lint and format commands.
 - [vep-core](../vep-core/README.md): `codon::reverse_complement` for minus-strand CDS; `prediction.rs` decodes the matrices this crate embeds; `transcript.rs` holds the runtime `Transcript` the cache fills.
 - [vep-cli](../vep-cli/README.md): `crates/vep-cli/src/json_cache.rs` loads the shards named by `--json_cache` and accepts both this crate's bare-array shard and the map shape a Perl-converted cache carries.
 - [vep-cache-converter](../vep-cache-converter/README.md): the other route to a cache, validating a Perl-converted JSON cache and copying it into the runtime layout.
-- [docs/cache-setup.md](../../docs/cache-setup.md): what each input decides, the GRCh37 command, predictions and variation data.
+- [docs/cache-setup.md](../../docs/cache-setup.md): what each input decides, the GRCh37 command and variation data; [docs/cache-predictions.md](../../docs/cache-predictions.md): the SIFT and PolyPhen predictions.
 - [docs/cli-reference.md](../../docs/cli-reference.md): the `vep` flags that read what this crate writes: `--json_cache`, `--sift`, `--polyphen`, `--check_existing`, `--af`, `--af_1kg`, `--af_gnomade`, `--af_gnomadg` and `--max_af`.
 - [Root README](../../README.md#crates): the index of every crate.

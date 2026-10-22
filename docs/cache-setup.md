@@ -1,6 +1,6 @@
 # Cache setup
 
-The JSON transcript cache vep-rs annotates from is built with `vep-cache-builder` or converted from an existing Ensembl VEP cache. The page then covers how a run names the cache, the reference FASTA, chromosome names, `info.json` and the SIFT and PolyPhen matrices. The Cache checksum manifest page covers integrity checks.
+The JSON transcript cache vep-rs annotates from is built with `vep-cache-builder` or converted from an existing Ensembl VEP cache. The page then covers how a run names the cache, the reference FASTA, chromosome names and `info.json`. [Cache checksum manifest](cache-checksums.md) covers integrity checks, and [SIFT and PolyPhen predictions](cache-predictions.md) covers the prediction matrices.
 
 The cache is a directory holding `info.json` and `transcripts/`: the release directory itself, not its parent, for example `$HOME/.vep/homo_sapiens/116_GRCh38`. A run names it with `--json_cache`, or with Ensembl VEP's own cache flags when the directory sits in Ensembl VEP's layout ([Naming the cache](#naming-the-cache)). For example:
 
@@ -24,7 +24,7 @@ The GFF3 alone gives each transcript its exons, CDS and ENSP identifier, its bio
 - `--gtf`, the Ensembl GTF of the same release, supplies the `cds_start_NF` and `cds_end_NF` transcript attributes (the `FLAGS` output field) when no core dumps are read; the GFF3 does not carry them. Its header also supplies the `assembly` and `genebuild` source versions the output headers print.
 - `--genome-fasta`, the primary-assembly genome (decompressed, with a `samtools faidx` index beside it), supplies the CDS sequence behind every codon-level consequence: `missense_variant`, `synonymous_variant`, `stop_gained`, HGVSp and the rest. Without it, coding variants fall back to `coding_sequence_variant`.
 
-`--include-predictions` embeds the SIFT and PolyPhen matrices ([SIFT and PolyPhen predictions](#sift-and-polyphen-predictions)).
+`--include-predictions` embeds the SIFT and PolyPhen matrices ([SIFT and PolyPhen predictions](cache-predictions.md)).
 
 A failed build prints one `ERROR: [cache-builder] <message>` line and exits 1, writing nothing outside the output directory. GFF3 lines the builder does not take as written:
 
@@ -176,28 +176,3 @@ A reference FASTA whose records are named by accession is read under the cache's
 - `source_versions`: on a native cache the core `meta` table's `assembly`, `gencode` and `genebuild`, or the GTF header's. The dbSNP, ClinVar, COSMIC and gnomAD versions an Ensembl cache's `info.txt` lists come from the variation database, which the builder does not read, so a native cache's headers print none.
 - `variation_cols` and `var_type tabix`, only when the cache holds variation files; `variation_cols` names their columns.
 - `contig_order`: the cache's chromosome directories as autosomes by number, then X, Y and MT, then every other contig by name.
-
-## SIFT and PolyPhen predictions
-
-`--sift` and `--polyphen` take `p` (prediction), `s` (score) or `b` (both), reading matrices embedded in the cache. `vep-cache-builder --include-predictions` fetches per-transcript prediction matrix blobs from Ensembl's public MySQL server and stores them base64-encoded and gzip-compressed beside each transcript. The server is `ensembldb.ensembl.org`, anonymous read-only; port 3306 serves the GRCh38 databases and `--mysql-port 3337` the GRCh37 ones. The database is `homo_sapiens_variation_<release>_<assembly>`, the tables `translation_md5`, `protein_function_predictions` and `attrib`, keyed on the MD5 of the full peptide.
-
-At runtime the decoder in `crates/vep-core/src/prediction.rs` looks up `(protein_position, alt_amino_acid)` and prints the prediction as Ensembl VEP does: `deleterious(0.01)`, `probably_damaging(0.998)`. The score is `prob/1000`, so `0.01` rather than `0.010`; under `s` the bare score is printed, under `p` the bare prediction.
-
-A prediction is looked up for every single-residue substitution inside the coding sequence, the shape Ensembl VEP predicts on: a `missense_variant`, a `start_lost` whose codon still translates (`M/T`), a same-length substitution of several bases within one codon. It is never looked up for a synonymous change (whose peptide allele string is the one residue, `C`, not `C/C`), a stop gain or loss, an unknown alternate residue, an insertion or a deletion.
-
-PolyPhen reads the HumVar matrix, as Ensembl VEP does by default; `--humdiv` reads the HumDiv matrix instead, and a cache without that matrix prints an empty column, with no error in either engine.
-
-The tools are checked against the cache's metadata before any record is read, as in Ensembl VEP. A cache whose `info.json` (or Ensembl VEP's `info.txt`) names no `source_versions` entry for the tool stops a run that asks for it, with Ensembl VEP's text: `ERROR: [cache] SIFT not available` or `ERROR: [cache] PolyPhen not available`. Under `--everything` or `--safe` the run instead drops the tool with `INFO: disabling SIFT` on standard error (withheld under `--quiet`) and writes no column for it.
-
-A natively built cache names no tool version; its `sift` and `polyphen` markers, written only when the build embedded a matrix of that tool, count as availability instead. A native cache built without `--include-predictions` is therefore the one case the flags refuse that Ensembl VEP's own caches never present.
-
-```bash
-vep-cache-builder --release 116 --assembly GRCh38 --output-dir /path/to/cache \
-  --gff3 ... --gtf ... --include-predictions \
-  --genome-fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa
-# GRCh37: --assembly GRCh37 --mysql-port 3337
-
-vep -i input.vcf --sift b --polyphen b --json_cache /path/to/cache --offline
-```
-
-A converted cache carries the SIFT, PolyPhen HumVar and PolyPhen HumDiv matrices the Storable holds for each translated transcript. They are base64-encoded under the same `predictions_data` key and in the same binary layout the native builder writes, so `--sift` and `--polyphen` read either kind of cache alike. `info.json` keeps the `sift` and `polyphen` markers only when the conversion wrote a matrix of that tool. The `dbNSFP` plugin is a separate, unsupported route to third-party SIFT and PolyPhen scores ([Plugins](plugins.md)).

@@ -151,7 +151,7 @@ heading-split-level = 3
 "/intended-divergences.html#122-the-record" = "divergences/cnv-tr.html#122-the-record"
 "/intended-divergences.html#123-what-each-engine-writes" = "divergences/cnv-tr.html#123-what-each-engine-writes"
 "/intended-divergences.html#124-why-ensembl-vep-writes-that" = "divergences/cnv-tr.html#124-why-ensembl-vep-writes-that"
-"/intended-divergences.html#125-why-vep-rs-keeps-the-symbolic-reading-and-why-ensembl-veps-reading-is-not-a-defect" = "divergences/cnv-tr.html#125-why-vep-rs-keeps-the-symbolic-reading-and-why-ensembl-veps-reading-is-not-a-defect"
+"/intended-divergences.html#125-why-vep-rs-keeps-the-symbolic-reading-and-why-ensembl-veps-reading-is-not-a-defect" = "divergences/cnv-tr.html#125-why-the-symbolic-reading-stands-and-why-ensembl-veps-reading-is-not-a-defect"
 "/intended-divergences.html#126-try-it-yourself" = "divergences/cnv-tr.html#126-try-it-yourself"
 "/intended-divergences.html#127-how-the-comparator-treats-this-class" = "divergences/cnv-tr.html#127-how-the-comparator-treats-this-class"
 "/intended-divergences.html#131-what-a-reader-needs-to-know-first" = "divergences/defect-f.html#131-what-a-reader-needs-to-know-first"
@@ -231,8 +231,9 @@ heading-split-level = 3
 "/index.html#authors" = "https://github.com/natera-open-source/vep-rs#authors"
 "/index.html#disclaimer" = "https://github.com/natera-open-source/vep-rs#disclaimer"
 
-# Cache setup: a retired heading id.
+# Cache setup: a retired heading id, and the section moved to its own page.
 "/cache-setup.html#cache-setup-building-or-converting-the-json-transcript-cache" = "cache-setup.html"
+"/cache-setup.html#sift-and-polyphen-predictions" = "cache-predictions.html"
 
 # README sections shown on the Benchmarks, Getting started and Project pages.
 "/index.html#current-release-v040" = "benchmarks/current-release.html#current-release-v040"

@@ -80,7 +80,7 @@ cargo doc --no-deps -p vep-core
 - Depends on vep-core: [vep-io](../vep-io/README.md) (readers build `InputVariant`, writers print it), [vep-effects](../vep-effects/README.md) (fills `transcript_consequences` against `Transcript`), [vep-cli](../vep-cli/README.md) (loads the cache into `Transcript`, `CachedVariation` and `CacheInfo`, drives the pipeline), [vep-builtins](../vep-builtins/README.md) and [vep-plugin](../vep-plugin/README.md) (read and extend the rows), [vep-fasta](../vep-fasta/README.md), [vep-cache-builder](../vep-cache-builder/README.md) and [vep-cache-converter](../vep-cache-converter/README.md).
 - vep-core depends on no other workspace crate.
 - [docs/developers/writing-a-plugin.md](../../docs/developers/writing-a-plugin.md): the plugin interface, whose JSON documents are the serde form of `InputVariant` and `TranscriptConsequence`.
-- [docs/cache-setup.md](../../docs/cache-setup.md#sift-and-polyphen-predictions): where the prediction matrices come from and how the decoder prints them.
+- [docs/cache-predictions.md](../../docs/cache-predictions.md): where the prediction matrices come from and how the decoder prints them.
 - [docs/intended-divergences.md](../../docs/intended-divergences.md): the records Perl VEP drops before annotation, which `sv_routing` and `sv_record` carry under the `vep_skip` mark, and the symbolic `<CNV:TR>` reading of a record without a reference sequence.
 - [docs/output-formats.md](../../docs/output-formats.md): the columns the output helpers of `InputVariant` and `Consequence` print.
 - [Root README](../../README.md): what vep-rs is, the plugin matrix and the documentation index.
