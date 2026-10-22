@@ -71,7 +71,7 @@ use crate::runner::{
     annotate_batch, annotate_one, apply_record_rules, check_variation_reads, mark_oversize_sv,
     prewarm_batch, AnnotationResources, PipelineStats,
 };
-use crate::transcript_index::LazyTranscriptIndexes;
+use crate::transcript_index::{LazyTranscriptIndexes, ShardUnreadable};
 use crate::validate::{
     invalid_vcf_coordinate, keep_overlap_allele, looks_like_number, rowless_allele, AllelePatch,
     RecordLine, ReferenceChecks, SkipRules,
@@ -898,8 +898,8 @@ pub(crate) fn run(
         };
         let read = join_stage("reader", reader);
         let written = join_stage("writer", writer);
-        read?;
-        let count = coordinated?;
+        read.map_err(refuse_unreadable_shard)?;
+        let count = coordinated.map_err(refuse_unreadable_shard)?;
         written?;
         // The coordinators and the writer check per batch; a warning raised on
         // another thread after their last checks (the reader's trailing
@@ -918,6 +918,18 @@ fn join_stage(
     match handle.join() {
         Ok(result) => result,
         Err(_) => bail!("pipeline {name} stage panicked"),
+    }
+}
+
+/// A stage's error as the run reports it. The reader (a parsed format's
+/// records) and the coordinator (a VCF batch) materialize each chromosome they
+/// reach; a transcript shard the cache cannot read fails that load with
+/// [`ShardUnreadable`], the cache's own refusal, printed under the `cache`
+/// component. Any other error stays as it is.
+fn refuse_unreadable_shard(error: anyhow::Error) -> anyhow::Error {
+    match error.downcast::<ShardUnreadable>() {
+        Ok(shard) => crate::config::CliError::new("cache", shard.to_string()).into(),
+        Err(error) => error,
     }
 }
 
@@ -3172,6 +3184,36 @@ mod tests {
                 "ERROR: [input] line 1 is longer than the {MAX_LINE_BYTES}-byte limit for one \
                  line of input"
             )
+        );
+    }
+
+    /// A stage that met a transcript shard the cache cannot read ends the run
+    /// under the `cache` component with the shard's refusal, whichever stage
+    /// loaded it; a stage's other errors keep the `run` component.
+    #[test]
+    fn a_shard_the_cache_cannot_read_is_refused_under_the_cache_component() {
+        let dir = tempfile::tempdir().unwrap();
+        let shard = dir
+            .path()
+            .join("transcripts")
+            .join("21")
+            .join("0-1000.json");
+        std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
+        std::fs::write(&shard, "not json").unwrap();
+        let transcripts = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 0, 0).unwrap();
+        let error = refuse_unreadable_shard(transcripts.prewarm("21").unwrap_err());
+        let line = crate::config::CliError::from_run(&error);
+        let prefix = format!(
+            "ERROR: [cache] Cannot read the transcript cache for chr21: Failed to parse {}: ",
+            shard.display()
+        );
+        assert!(line.starts_with(&prefix), "{line}");
+        assert_eq!(line.lines().count(), 1, "{line}");
+
+        let other = refuse_unreadable_shard(anyhow::anyhow!("inner").context("outer"));
+        assert_eq!(
+            crate::config::CliError::from_run(&other),
+            "ERROR: [run] outer: inner"
         );
     }
 

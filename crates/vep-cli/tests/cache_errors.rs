@@ -14,6 +14,26 @@ fn vep() -> Command {
     cmd
 }
 
+fn golden(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116")
+        .join(name)
+}
+
+/// Copies the directory tree at `from` to `to`.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), &target).unwrap();
+        }
+    }
+}
+
 fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
@@ -233,4 +253,64 @@ fn a_variation_line_past_the_cap_ends_the_run_under_cache() {
     let written = std::fs::read_to_string(dir.path().join("out.txt")).unwrap();
     let row = written.lines().find(|l| !l.starts_with('#')).unwrap();
     assert!(row.contains("rs1") && row.contains("rs2"), "{row}");
+}
+
+/// A transcript shard the cache cannot read ends a VCF run under the `cache`
+/// component, the component of a cache whose content is unusable, with the
+/// chromosome and the loader's refusal of the shard: the record is sound, so
+/// neither `input` nor the run's own component applies. The corpus cache is
+/// copied without its checksum manifest, so the record's chromosome load
+/// reaches the shard with its gzip stream cut; every shard of the chromosome
+/// is read for any record on it, so the record's position need not fall in the
+/// cut one. Each pipeline mode loads the chromosome in its own coordinator and
+/// both refuse alike; nothing past the header reaches the output. The line
+/// ends in the inflater's own words for the cut, which are its to choose.
+#[test]
+fn a_transcript_shard_the_cache_cannot_read_ends_a_vcf_run_under_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = dir.path().join("cache");
+    copy_tree(&golden("GRCh38-input-hgvs").join("json_cache"), &cache);
+    std::fs::remove_file(cache.join("CHECKSUMS.sha256")).unwrap();
+    let shard = cache.join("transcripts/21/42000001-43000000.json.gz");
+    let bytes = std::fs::read(&shard).unwrap();
+    std::fs::write(&shard, &bytes[..bytes.len() / 2]).unwrap();
+    let input = dir.path().join("in.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t30282169\t.\tC\tA\t.\t.\t.\n",
+    )
+    .unwrap();
+    for mode in ["streaming", "batched"] {
+        let output = vep()
+            .arg("-i")
+            .arg(&input)
+            .args(["-o", "STDOUT", "--offline", "--json_cache"])
+            .arg(&cache)
+            .args([
+                "--assembly",
+                "GRCh38",
+                "--no_stats",
+                "--quiet",
+                "--pipeline_mode",
+                mode,
+            ])
+            .arg("--warning_file")
+            .arg(dir.path().join("warnings.txt"))
+            .output()
+            .unwrap();
+        let err = stderr(&output);
+        assert_eq!(output.status.code(), Some(1), "{mode}: {err}");
+        let prefix = format!(
+            "ERROR: [cache] Cannot read the transcript cache for chr21: Failed to inflate {}: ",
+            shard.display()
+        );
+        assert!(err.starts_with(&prefix), "{mode}: {err}");
+        assert_eq!(err.lines().count(), 1, "{mode}: {err}");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.lines().all(|line| line.starts_with('#')),
+            "{mode}: {stdout}"
+        );
+    }
 }

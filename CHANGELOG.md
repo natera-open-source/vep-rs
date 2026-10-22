@@ -329,6 +329,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An Ensembl-format record `--dont_skip` keeps after the `--chr` list or the chromosome test refused it prints its alleles as written, as Ensembl VEP does. (#N)
 - A `--plugin` library that does not open is dropped with Ensembl VEP's `Failed to compile plugin` warning, the plugin component's error under `--safe`; it ended the run. (#N)
 - Plugin-loading warnings follow the `--plugin` arguments' order, as Ensembl VEP's one loop writes them; built-in failures came first. (#N)
+- A transcript shard the cache cannot read is refused under the `cache` component on every input path, not as a run failure. (#N)
 
 ### Security
 

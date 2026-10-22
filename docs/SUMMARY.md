@@ -70,6 +70,7 @@
   - [An empty REF column at POS 0](divergences/empty-ref-pos-0.md)
   - [Records `--dont_skip` cannot keep](divergences/dont-skip-cannot-keep.md)
   - [Identifier input resolved from the cache's variation files](divergences/id-input.md)
+  - [A transcript shard the cache cannot read](divergences/damaged-cache-shard.md)
   - [An individual carrying two alternate alleles](divergences/individual-allele-order.md)
   - [The ZYG list order under `--individual_zyg`](divergences/individual-zyg-order.md)
   - [An individual's copy of an indel the anchor chop leaves trimmable](divergences/individual-trimmable-indel.md)

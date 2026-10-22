@@ -294,46 +294,81 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-/// A transcript cache a `c.` notation's lookup cannot read stops the run under
-/// the `cache` component, the component of a cache whose content is unusable,
-/// with the loader's refusal after the parser's text; the notation itself is
-/// sound, so the `input` component does not apply. The corpus cache is copied
-/// without its checksum manifest, so the lookup reaches the shard holding the
-/// named transcript and finds its gzip stream cut, and nothing past the header
-/// reaches the output. The line ends in the inflater's own words for the cut,
-/// which are its to choose.
-#[test]
-fn an_unreadable_transcript_cache_stops_the_run_under_the_cache_component() {
-    let dir = tempfile::tempdir().unwrap();
-    let cache = dir.path().join("cache");
+/// The cache and the cut shard: the corpus cache copied to `dir/cache` with
+/// the chr21 shard holding ENST00000518498 cut to half its bytes, so its gzip
+/// stream ends early, and without its checksum manifest, which is checked
+/// before a shard is inflated and would refuse the cut shard first.
+fn cache_with_a_cut_shard(dir: &Path) -> (PathBuf, PathBuf) {
+    let cache = dir.join("cache");
     copy_tree(&corpus().join("json_cache"), &cache);
     std::fs::remove_file(cache.join("CHECKSUMS.sha256")).unwrap();
     let shard = cache.join("transcripts/21/42000001-43000000.json.gz");
     let bytes = std::fs::read(&shard).unwrap();
     std::fs::write(&shard, &bytes[..bytes.len() / 2]).unwrap();
-    let input = write(dir.path(), "tff3.hgvs", "ENST00000518498:c.5C>T\n");
-    let output = common::isolated_vep(dir.path())
+    (cache, shard)
+}
+
+/// Runs `input` in the HGVS format against `cache` and asserts the run ended
+/// with exit 1, one line of standard error opening with `prefix` and nothing
+/// past the header on standard output. The line ends in the inflater's own
+/// words for the cut, which are its to choose.
+fn assert_run_refused(dir: &Path, input: &Path, cache: &Path, prefix: &str) {
+    let output = common::isolated_vep(dir)
         .arg("-i")
-        .arg(&input)
+        .arg(input)
         .args(["-o", "STDOUT", "--format", "hgvs", "--json_cache"])
-        .arg(&cache)
+        .arg(cache)
         .args(["--assembly", "GRCh38", "--no_stats", "--quiet", "--fasta"])
         .arg(corpus().join("reference.fa.gz"))
         .arg("--warning_file")
-        .arg(dir.path().join("warnings.txt"))
+        .arg(dir.join("warnings.txt"))
         .stdin(Stdio::null())
         .output()
         .unwrap();
     let err = stderr(&output);
     assert_eq!(output.status.code(), Some(1), "{err}");
+    assert!(err.starts_with(prefix), "{err}");
+    assert_eq!(err.lines().count(), 1, "{err}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.lines().all(|line| line.starts_with('#')), "{stdout}");
+}
+
+/// A transcript cache a `c.` notation's lookup cannot read stops the run under
+/// the `cache` component, the component of a cache whose content is unusable,
+/// with the loader's refusal after the parser's text; the notation itself is
+/// sound, so the `input` component does not apply. The lookup reaches the
+/// shard holding the named transcript and finds its gzip stream cut.
+#[test]
+fn an_unreadable_transcript_cache_stops_the_run_under_the_cache_component() {
+    let dir = tempfile::tempdir().unwrap();
+    let (cache, shard) = cache_with_a_cut_shard(dir.path());
+    let input = write(dir.path(), "tff3.hgvs", "ENST00000518498:c.5C>T\n");
     let prefix = format!(
         "ERROR: [cache] Cannot read the transcript cache for HGVS input: Failed to inflate {}: ",
         shard.display()
     );
-    assert!(err.starts_with(&prefix), "{err}");
-    assert_eq!(err.lines().count(), 1, "{err}");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.lines().all(|line| line.starts_with('#')), "{stdout}");
+    assert_run_refused(dir.path(), &input, &cache, &prefix);
+}
+
+/// A genomic notation on the chromosome of the cut shard, read before the `c.`
+/// notation, resolves without the cache and has its chromosome loaded as the
+/// reader hands it on; the load meets the same cut shard, and the run ends
+/// under the same `cache` component, with the chromosome in place of the
+/// parser's text since no lookup made the refusal.
+#[test]
+fn a_genomic_notation_before_the_transcript_notation_meets_the_same_cache_refusal() {
+    let dir = tempfile::tempdir().unwrap();
+    let (cache, shard) = cache_with_a_cut_shard(dir.path());
+    let input = write(
+        dir.path(),
+        "mixed.hgvs",
+        "21:g.30282169C>A\nENST00000518498:c.5C>T\n",
+    );
+    let prefix = format!(
+        "ERROR: [cache] Cannot read the transcript cache for chr21: Failed to inflate {}: ",
+        shard.display()
+    );
+    assert_run_refused(dir.path(), &input, &cache, &prefix);
 }
 
 /// A notation Ensembl VEP cannot resolve is skipped and warned about with the

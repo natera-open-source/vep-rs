@@ -1,6 +1,6 @@
 # Intended divergences from Ensembl VEP
 
-This page indexes every disagreement between vep-rs and Ensembl VEP that the adjusted concordance figure sets aside, and the forty-one differences outside the classes, which it does not. Each defect has a page of its own, which shows why its disagreement is set aside.
+This page indexes every disagreement between vep-rs and Ensembl VEP that the adjusted concordance figure sets aside, and the forty-two differences outside the classes, which it does not. Each defect has a page of its own, which shows why its disagreement is set aside.
 
 ## The defects
 
@@ -27,7 +27,7 @@ The defects in page order, each with the classes it produces and its page:
 
 ## Differences outside the classes
 
-Forty-one differences lie outside every class, each in a field's text, in which records or rows are written, or in which inputs resolve, and nothing is set aside for them. A disagreement from one is charged to vep-rs in both figures, and each has a page or a section of the page its subject belongs to:
+Forty-two differences lie outside every class, each in a field's text, in which records or rows are written, or in which inputs resolve, and nothing is set aside for them. A disagreement from one is charged to vep-rs in both figures, and each has a page or a section of the page its subject belongs to:
 
 | Difference | In one sentence | Set aside | Page |
 | --- | --- | --- | --- |
@@ -72,6 +72,7 @@ Forty-one differences lie outside every class, each in a field's text, in which 
 | [A coding transcript's cDNA under `--use_transcript_ref`](divergences/use-transcript-ref-cache-cdna.md) | Under `--use_transcript_ref`, Ensembl VEP reads every transcript's cDNA from the FASTA, so at a coding exon where the FASTA's bases differ from the cache's (a region masked to `N`, another build of the assembly) Ensembl VEP's `USED_REF` is the FASTA's bases and its terms follow them; vep-rs reads a coding transcript's cDNA from the cache, and its `USED_REF` and terms are the cache's | nothing: no measured dataset runs the flag | [A coding transcript's cDNA under `--use_transcript_ref`](divergences/use-transcript-ref-cache-cdna.md) |
 | [SpliceAI on a reverse-strand indel](plugins/spliceai.md#reverse-strand-indels) | Ensembl VEP 116.2's SpliceAI plugin complements a reverse-strand indel's alleles twice and matches no row of its score file; vep-rs complements them once and scores the row the forward-strand record scores | nothing: no measured run loads the plugin | [Reverse-strand indels](plugins/spliceai.md#reverse-strand-indels) |
 | [A `Y` read on a FASTA without `X`](cache-setup.md#a-y-read-on-a-fasta-without-x) | With the pseudoautosomal redirect in force and no `X` in the FASTA, Ensembl VEP returns the region's `N`s alone for a `Y` read that straddles a region's edge and warns on every redirected read; vep-rs returns the flanking `Y` bases with the `N`s and warns nothing | nothing: no measured run reads a FASTA without `X` | [A `Y` read on a FASTA without `X`](cache-setup.md#a-y-read-on-a-fasta-without-x) |
+| [A transcript shard the cache cannot read](divergences/damaged-cache-shard.md) | Ensembl VEP reads a transcript region file cut after its header as a region with no transcript and writes a variant whose transcripts that file alone held as `intergenic_variant`, exit 0; vep-rs ends the run as the chromosome's shards load, `ERROR: [cache] Cannot read the transcript cache for chr<n>: ...`, exit 1 | nothing: no measured run reads a damaged cache | [A transcript shard the cache cannot read](divergences/damaged-cache-shard.md) |
 
 ## Concordance figures and classes
 
@@ -83,7 +84,7 @@ Seventeen of the nineteen classes are the output of fourteen defects in Ensembl 
 
 ## How the pages are organised
 
-The pages are organised by defect. There is one page for each of the fifteen defects that produce a class (A to C and E to P; D is retired) and one for the `<CNV:TR>` representation difference. Each defect page opens with the defect in one sentence, why it is a defect, what vep-rs does instead, where it is in Ensembl VEP's source and what correcting it would change. The classes it produces follow. Each of the forty-one [differences outside the classes](#differences-outside-the-classes) has a page of its own, or a section of the page its subject belongs to: the difference in one sentence, then what each engine does and where in Ensembl VEP's source its behaviour is.
+The pages are organised by defect. There is one page for each of the fifteen defects that produce a class (A to C and E to P; D is retired) and one for the `<CNV:TR>` representation difference. Each defect page opens with the defect in one sentence, why it is a defect, what vep-rs does instead, where it is in Ensembl VEP's source and what correcting it would change. The classes it produces follow. Each of the forty-two [differences outside the classes](#differences-outside-the-classes) has a page of its own, or a section of the page its subject belongs to: the difference in one sentence, then what each engine does and where in Ensembl VEP's source its behaviour is.
 
 Each class is a walkthrough of one record, from a public dataset or hand-written and printed in full on the page. It opens with an **In short** paragraph that states the class in a few sentences. It then gives the background a reader needs, the record, both engines' rows and why Ensembl VEP writes what it writes. It closes with why vep-rs's row is the correct one, what a reader can reproduce, and how the comparator scripts recognise the class. The engines, inputs, caches and commands every walkthrough uses are on [Reproducing these examples](divergences/reproducing.md).
 

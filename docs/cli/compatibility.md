@@ -160,7 +160,7 @@ Of the spellings Getopt::Long resolves to an option this version declares, these
 | `input` | the input: a file that does not exist, standard input without `--format`, a first data line of no known format, BCF input, CAid input (looked up in the Ensembl variation database, which vep-rs does not reach), an identifier list against a cache without variation files, a region, SPDI or HGVS input without `--fasta`, or a region input with `--check_ref` |
 | `output` | the output file or format, the warnings file or the skipped-variants file |
 | `plugin` | under `--safe`, a plugin that cannot be loaded or a plugins directory that does not exist |
-| `cache` | the cache: nothing resolves at the configured path, its layout or metadata is unusable, a transcript an HGVS input names cannot be read from it, its assembly disagrees with `--assembly` or with its own directory name, or a variation file cannot be opened or read |
+| `cache` | the cache: nothing resolves at the configured path, its layout or metadata is unusable, a transcript shard cannot be read (a transcript an HGVS input names included), its assembly disagrees with `--assembly` or with its own directory name, or a variation file cannot be opened or read |
 | `fasta` | the reference FASTA: the file or directory named cannot be read as an indexed FASTA, or a flag that reads it (`--hgvs`, `--hgvsg`, `--check_ref`, `--lookup_ref`, `--use_transcript_ref`, `--shift_3prime 1`) was given and none was named or found in the cache directory |
 | `filter` | a `--transcript_filter` Ensembl VEP would refuse, or whose regular expression is outside the supported dialect |
 | `check_svs` | the `--check_svs` file: it is not a file, has no `.csi` or `.tbi` index beside it, or cannot be read |

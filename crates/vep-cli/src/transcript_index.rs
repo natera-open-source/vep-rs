@@ -12,16 +12,18 @@
 //! searches.
 
 use std::collections::HashMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use anyhow::Context;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
 use vep_core::cache_manifest::CacheManifest;
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
+
+use crate::config::CliError;
 
 /// One chromosome's transcripts: the overlap index and the transcription start
 /// sites Ensembl VEP's `--nearest` searches.
@@ -299,6 +301,47 @@ impl TranscriptSet {
     }
 }
 
+/// A transcript shard of `chromosome` the cache cannot read: its bytes could
+/// not be read, inflated or parsed. The cache's own refusal, which the run
+/// prints under the `cache` component: the record whose chromosome reached the
+/// shard is sound, and the cache resolved, so neither `input` nor `run`
+/// describes it.
+#[derive(Debug)]
+pub struct ShardUnreadable {
+    chromosome: String,
+    cause: anyhow::Error,
+}
+
+impl ShardUnreadable {
+    /// `cause`, the loader's failure on a shard of `chromosome`, as this error;
+    /// a refusal the loader already made under the error contract (a checksum
+    /// mismatch, a transcript the cache cannot hold) keeps its own line.
+    fn from_load(chromosome: &str, cause: anyhow::Error) -> anyhow::Error {
+        if cause.is::<CliError>() {
+            return cause;
+        }
+        Self {
+            chromosome: chromosome.to_string(),
+            cause,
+        }
+        .into()
+    }
+}
+
+impl fmt::Display for ShardUnreadable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Cannot read the transcript cache for chr{}: {:#}",
+            self.chromosome, self.cause
+        )
+    }
+}
+
+// The cause is part of the display, so `source` stays `None`: anyhow's
+// alternate form would otherwise print it twice.
+impl std::error::Error for ShardUnreadable {}
+
 /// Per-chromosome transcript indexes, materialized on first query.
 ///
 /// The cache directory is enumerated eagerly (a `read_dir` walk, no parsing), so
@@ -537,7 +580,8 @@ impl LazyTranscriptIndexes {
         self.slots.values().all(|slot| slot.get().is_some())
     }
 
-    /// Materialize `chr`'s index, propagating a parse failure.
+    /// Materialize `chr`'s index; a shard that cannot be read fails it with
+    /// [`ShardUnreadable`].
     ///
     /// This is the only entry point that may parse. `annotate_batch` calls it for
     /// every chromosome a batch touches, serially, before fanning out to rayon,
@@ -596,7 +640,7 @@ impl LazyTranscriptIndexes {
             return Ok(());
         }
         let mut txs = crate::json_cache::load_transcripts_for_chr(chr, shards, &self.manifest)
-            .with_context(|| format!("chr{chr} transcript load failed"))?;
+            .map_err(|cause| ShardUnreadable::from_load(chr, cause))?;
         txs.retain(|tx| self.transcript_set.accepts(tx));
         tracing::info!("  chr{}: {} transcripts", chr, txs.len());
         let built = TranscriptIndex::new(txs, self.upstream_distance, self.downstream_distance);
@@ -1077,19 +1121,19 @@ mod tests {
     /// answers from the directory listing and still reports the chromosome as
     /// present. That is a realistic failure: a cache staged onto local scratch
     /// storage can be truncated, so an unparseable shard is an expected mode, not a
-    /// hypothetical.
+    /// hypothetical. The failure is a [`ShardUnreadable`] naming the chromosome
+    /// before the loader's own words for the shard; the run prints it under the
+    /// `cache` component.
     #[test]
     fn lazy_malformed_shard_fails_loudly_at_prewarm() {
         let dir = tmp_cache("malformed", &[("21", 3), ("1", 2)]);
         // Truncate chr21's only shard into invalid JSON, leaving chr1 intact.
-        std::fs::write(
-            dir.path()
-                .join("transcripts")
-                .join("21")
-                .join("0-1000.json"),
-            "not json",
-        )
-        .unwrap();
+        let shard = dir
+            .path()
+            .join("transcripts")
+            .join("21")
+            .join("0-1000.json");
+        std::fs::write(&shard, "not json").unwrap();
 
         let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
 
@@ -1099,15 +1143,57 @@ mod tests {
         let err = lazy
             .prewarm("21")
             .expect_err("a truncated shard must abort the run, not annotate as intergenic");
-        let msg = format!("{err:#}");
         assert!(
-            msg.contains("chr21"),
-            "error must name the chromosome, got: {msg}"
+            err.is::<ShardUnreadable>(),
+            "the failure is the shard's, typed: {err:#}"
         );
+        let msg = format!("{err:#}");
+        let prefix = format!(
+            "Cannot read the transcript cache for chr21: Failed to parse {}: ",
+            shard.display()
+        );
+        assert!(msg.starts_with(&prefix), "got: {msg}");
+        assert_eq!(msg.lines().count(), 1, "one line: {msg}");
+        assert!(
+            !err.is::<CliError>(),
+            "the index leaves the component to the run"
+        );
+        assert!(lazy.get("21").is_none(), "nothing is materialized");
 
         // An intact chromosome in the same cache still works.
         lazy.prewarm("1").expect("chr1 is intact");
         assert!(lazy.get("1").is_some());
+    }
+
+    /// A refusal the loader makes under the error contract, here the cache
+    /// manifest's checksum mismatch for the shard, passes through the pre-warm
+    /// as the `cache` refusal it is, not wrapped as a shard the cache cannot
+    /// read: its line is its own.
+    #[test]
+    fn prewarm_passes_the_loaders_own_refusal_through() {
+        let dir = tmp_cache("mismatch", &[("21", 3)]);
+        std::fs::write(
+            dir.path().join(vep_core::cache_manifest::MANIFEST_FILE),
+            format!("{}  transcripts/21/0-1000.json\n", "0".repeat(64)),
+        )
+        .unwrap();
+
+        let lazy = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
+        let err = lazy
+            .prewarm("21")
+            .expect_err("a shard whose checksum differs from the manifest's is refused");
+        assert!(!err.is::<ShardUnreadable>(), "{err:#}");
+        let refusal = err
+            .downcast_ref::<CliError>()
+            .expect("the manifest's refusal, under the error contract");
+        assert_eq!(refusal.component, "cache");
+        assert!(
+            refusal
+                .message
+                .starts_with("checksum mismatch for transcripts/21/0-1000.json in "),
+            "{}",
+            refusal.message
+        );
     }
 
     /// Lazy materialization must not make results depend on which chromosomes
