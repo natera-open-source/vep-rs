@@ -60,7 +60,8 @@ heading-split-level = 3
 "/intended-divergences.html#defect-b-start_lost-and-start_retained_variant-are-both-written-for-one-allele" = "divergences/defect-b.html#defect-b-start_lost-and-start_retained_variant-are-both-written-for-one-allele"
 "/intended-divergences.html#3-start_lost-and-start_retained_variant-emitted-together" = "divergences/defect-b.html#3-start_lost-and-start_retained_variant-emitted-together"
 "/intended-divergences.html#4-class-3-on-the-structural-variant-sets" = "divergences/defect-b.html#4-class-3-on-the-structural-variant-sets"
-"/intended-divergences.html#defect-c-restated-for-release-116-a-record-marked-skipped-is-dropped-before-annotation" = "divergences/defect-c.html#defect-c-restated-for-release-116-a-record-marked-skipped-is-dropped-before-annotation"
+"/intended-divergences.html#defect-c-restated-for-release-116-a-record-marked-skipped-is-dropped-before-annotation" = "divergences/defect-c.html#defect-c-a-record-marked-skipped-is-dropped-before-annotation"
+"/divergences/defect-c.html#defect-c-restated-for-release-116-a-record-marked-skipped-is-dropped-before-annotation" = "defect-c.html#defect-c-a-record-marked-skipped-is-dropped-before-annotation"
 "/intended-divergences.html#5-a-record-ensembl-vep-drops-before-annotation" = "divergences/defect-c.html#5-a-record-ensembl-vep-drops-before-annotation"
 "/intended-divergences.html#defect-p-the-tests-after-the-chromosome-aware-overlap-compare-chromosome-names-the-overlap-did-not-resolve" = "divergences/defect-p.html#defect-p-the-tests-after-the-chromosome-aware-overlap-compare-chromosome-names-the-overlap-did-not-resolve"
 "/intended-divergences.html#23-a-bracket-breakends-own-end-rows-lost-to-the-first-transcript-that-reaches-it" = "divergences/defect-p.html#23-a-bracket-breakends-own-end-rows-lost-to-the-first-transcript-that-reaches-it"
@@ -231,7 +232,7 @@ heading-split-level = 3
 "/index.html#authors" = "https://github.com/natera-open-source/vep-rs#authors"
 "/index.html#disclaimer" = "https://github.com/natera-open-source/vep-rs#disclaimer"
 
-# Cache setup: a retired heading id, and the section moved to its own page.
+# Cache setup: the page itself, and the SIFT and PolyPhen page.
 "/cache-setup.html#cache-setup-building-or-converting-the-json-transcript-cache" = "cache-setup.html"
 "/cache-setup.html#sift-and-polyphen-predictions" = "cache-predictions.html"
 

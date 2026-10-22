@@ -38,7 +38,7 @@ Or convert an existing Ensembl VEP cache with `scripts/data/storable_to_json.pl`
 
 ## 3. Annotate
 
-Run the same VEP command you run today, with `--json_cache` naming the cache directory. That is the directory holding `info.json` and `transcripts/`, so `116_GRCh38` itself, not its parent:
+Run the same VEP command you run, with `--json_cache` naming the cache directory. That is the directory holding `info.json` and `transcripts/`, so `116_GRCh38` itself, not its parent:
 
 ```bash
 target/release/vep \

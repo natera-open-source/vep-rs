@@ -239,7 +239,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The documentation site opens on a landing page and holds six sections of short pages, with every old page anchor redirecting to its new page. (#65)
   - The README is shortened to what vep-rs is, why, installation, quick start and a map of the site; its generated release sections are unchanged. (#65)
   - `build_golden_corpus.py flag-set` keeps a set's hand-written `masks` and `reference_warnings` when it rewrites the entry and validates both as the golden tests do. (#N)
-  - The documentation gains "What vep-rs does not do", listing the Ensembl VEP features vep-rs lacks, what a run does with their flags, and which the next release adds. (#N)
+  - The documentation gains "What vep-rs does not do", listing the Ensembl VEP features vep-rs lacks and what a run does with their flags. (#N)
 - Dependencies and tooling
   - The container image and the CI test job install the DuckDB 2.0.0 CLI from its `duckdb-cli-linux-*.tar.gz` archive (1.x shipped a zip), both verified by sha256. (#N)
   - The release page groups its notes by area with nested bullets, marks breaking changes inline and may run to 400 lines; `CHANGELOG.md` nests the area groups under each kind. (#N)

@@ -232,12 +232,13 @@ sub extract_seq_string {
     # with a {seq} or {primary_seq}{seq} field. Returns undef when no string
     # can be recovered.
     #
-    # Perl VEP's _variation_effect_feature_cache->{three_prime_utr} stores a
-    # Bio::EnsEMBL::Slice ref blessed object whose ->seq() reads from the
-    # cache's primary_seq region. Without this extraction, JSON encoding emits
-    # null and vep-rs falls back to the clamped-peptide path, which emits
-    # `stop_lost` where Perl emits a 3'UTR term. Extracting the seq string keeps
-    # vep-rs offline+cache-only mode self-contained (no FASTA dependency).
+    # Ensembl VEP's _variation_effect_feature_cache->{three_prime_utr} stores a
+    # Bio::Seq (BaseTranscriptVariation.pm:1111 caches the transcript's
+    # three_prime_utr()), a blessed hash whose ->seq() reads its primary_seq.
+    # Without this extraction, JSON encoding emits null and vep-rs falls back to
+    # the clamped-peptide path, which emits `stop_lost` where Perl emits a 3'UTR
+    # term. Extracting the seq string keeps vep-rs offline+cache-only mode
+    # self-contained (no FASTA dependency).
     my ($val) = @_;
     return undef unless defined $val;
     return $val unless ref $val;
@@ -269,7 +270,7 @@ sub extract_vefc {
 
     my %out;
     $out{codon_table} = $vefc->{codon_table} if defined $vefc->{codon_table};
-    # five/three_prime_utr are blessed Bio::EnsEMBL::Slice objects in Storable;
+    # five/three_prime_utr are blessed Bio::Seq objects in Storable;
     # extract the underlying sequence string so vep-rs can use cache-only mode
     # without --fasta. See extract_seq_string above for rationale.
     if (defined $vefc->{five_prime_utr}) {

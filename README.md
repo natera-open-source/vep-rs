@@ -164,7 +164,7 @@ target/release/vep \
 
 ### 2. Annotate your own data
 
-Real data needs a JSON transcript cache, built natively with `vep-cache-builder` or converted from a Perl VEP cache. Then run the same VEP command you run today, with `--json_cache` naming the cache directory. The [Quick start](docs/getting-started/quick-start.md) page gives the cache-builder command, the annotation command and the plugin and HGVS options. [Cache setup](docs/cache-setup.md) explains each input of the cache build.
+Real data needs a JSON transcript cache, built natively with `vep-cache-builder` or converted from a Perl VEP cache. Then run the same VEP command you run, with `--json_cache` naming the cache directory. The [Quick start](docs/getting-started/quick-start.md) page gives the cache-builder command, the annotation command and the plugin and HGVS options. [Cache setup](docs/cache-setup.md) explains each input of the cache build.
 
 ## Documentation
 

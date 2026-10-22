@@ -241,8 +241,8 @@ class IntendedDivergenceDirectionTests(unittest.TestCase):
         ex_rust, _ = C.filter_intended_divergences(perl, rust)
         self.assertEqual(len(ex_rust), 0)
 
-    # Spans that straddle Perl's --max_sv_size default. The existing GIANT/SMALL
-    # cases sit 20 Mb above and 10 Mb below it, so neither exercises the boundary.
+    # Spans that straddle Perl's --max_sv_size default. The GIANT span is twice
+    # the default and the SMALL span is 1 kb, so neither exercises the boundary.
     # The end coordinate is start + span: a span of 10,000,000 from start 1000 ends
     # at 10,001,000, NOT 11,000,000.
     AT_THRESHOLD = "21:1000-10001000"  # span exactly 10,000,000
@@ -284,8 +284,8 @@ class IntendedDivergenceDirectionTests(unittest.TestCase):
     def test_full_location_key_separates_records_sharing_a_start(self):
         """Two records at one start with different ends are distinct variants.
 
-        Keying on the start alone merged their transcript sets, so a transcript
-        named on one could suppress a divergence on the other.
+        A key on the start alone merges their transcript sets, so a transcript
+        named on one can suppress a divergence on the other.
         """
         csq = "feature_truncation"
         a = "21:1000000-21000000"  # giant, in scope
@@ -358,10 +358,9 @@ class CrossChromosomeMaskTests(unittest.TestCase):
 
     Given a chr21 structural variant whose `INFO/CHR2` reads `chr21` while `CHROM` reads
     `21`, Ensembl VEP r115.2 annotates it against chromosome 22 transcripts at numerically
-    similar coordinates. On `gnomAD-SV_v3_DEL_chr21_55f8f183` it names 122 transcripts of
-    which 120 resolve to chr22. Unlike every other mask here the criterion is objectively
-    checkable rather than mechanistic, and the authority is the vep-rs JSON cache both
-    engines were run against.
+    similar coordinates, so nearly every transcript it names resolves to chr22. Unlike
+    every other mask here the criterion is objectively checkable rather than mechanistic,
+    and the authority is the vep-rs JSON cache both engines were run against.
     """
 
     TX_BY_CHR = {"21": {"ENST_CHR21_A", "ENST_CHR21_B"}, "22": {"ENST_CHR22_X"}}
@@ -432,9 +431,8 @@ class CrossChromosomeMaskTests(unittest.TestCase):
     def test_a_non_vep_rs_scored_engine_is_counted_not_raised(self) -> None:
         """A non-vep-rs engine builds its own transcript set from its own annotation
         release, so it legitimately names transcripts this cache does not hold for the
-        chromosome. Raising there scored NOTHING at all, which is what kept this filter
-        off the fastVEP arm and left that arm's adjusted F1 on a different exclusion set.
-        The tuple is counted and stays in raw AND adjusted; only the Perl side is masked.
+        chromosome. Raising there would leave the engine unscored, so the tuple is
+        counted and stays in raw AND adjusted; only the Perl side is masked.
         """
         loc = "21:5000-6000"
         rust = {T(loc, "deletion", "ENST_NEWER_RELEASE", "feature_truncation")}
@@ -654,8 +652,7 @@ class CrossFileAggregationTests(unittest.TestCase):
 
         Two different input VCFs of one assembly can emit a byte-identical tuple.
         A set union keeps one, while `total_input` sums both, so an aggregate row
-        built from both mixes two aggregations, and on the real corpus the
-        collapse moves raw F1 at the third decimal on GRCh38.
+        built from both mixes two aggregations.
         """
         shared = T("21:33036920", "A.", "ENST00000609934", "intron_variant")
         file_a = {shared, T("21:1", "A", "E1", "intron_variant")}
@@ -1079,8 +1076,8 @@ class FastvepSymbolicAlleleTests(unittest.TestCase):
         self._assert_maps("<DUP:TANDEM>", "tandem_duplication")
 
     def test_maps_dup_subtype_other_than_tandem_to_duplication(self):
-        """`<DUP:ISP>` (in the corpus, 50 records) has no SO term of its own: Perl's
-        `get_SO_term` strips the `:ISP` and lands on DUP."""
+        """`<DUP:ISP>`, one of the synthetic corpus's categories, has no SO term of its
+        own: Perl's `get_SO_term` strips the `:ISP` and lands on DUP."""
         self._assert_maps("<DUP:ISP>", "duplication")
 
     def test_maps_inv(self):
@@ -1135,8 +1132,8 @@ class FastvepSymbolicAlleleTests(unittest.TestCase):
         self._assert_maps("<INS:ME:HERV>", "HERV_insertion")
 
     def test_unknown_mobile_element_subtype_is_the_generic_class(self):
-        """`<INS:ME:LINE>` (in the corpus, 200 records) is NOT `LINE1`: Perl's
-        `@mobile_elements` grep is exact, so the subtype stays `ME`."""
+        """`<INS:ME:LINE>`, one of the synthetic corpus's categories, is NOT `LINE1`:
+        Perl's `@mobile_elements` grep is exact, so the subtype stays `ME`."""
         self._assert_maps("<INS:ME:LINE>", "mobile_element_insertion")
         self._assert_maps("<INS:ME:UNKNOWN>", "mobile_element_insertion")
 

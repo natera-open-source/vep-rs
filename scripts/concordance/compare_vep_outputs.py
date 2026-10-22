@@ -1977,8 +1977,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=PER_CLASS_MIN_TUPLES,
         help=f"Pool mode: minimum pooled VEP tuples for a term to be eligible for the "
-        f"reported floor (default {PER_CLASS_MIN_TUPLES}, pre-committed). Terms below "
-        f"it are still written to the CSV with their counts.",
+        f"reported floor (default {PER_CLASS_MIN_TUPLES}, fixed independently of the "
+        f"data). Terms below it are still written to the CSV with their counts.",
     )
     parser.add_argument(
         "--per-term",
@@ -2527,9 +2527,9 @@ def pool_per_class_counts(rows: Iterable[PerClassCounts]) -> list[PerClassCounts
 
     Pooling is a micro-average over the union of the measured tuples, the same
     construction as a tuple-weighted micro-F1. It is the published grain for the
-    floor, pre-committed before the values existed: a minimum over up to 41x6
-    per-(term, dataset) cells is a worst-case outlier from a tiny denominator rather
-    than a property of the engine.
+    floor, fixed independently of the data: a minimum over per-(term, dataset) cells
+    is a worst-case outlier from a tiny denominator rather than a property of the
+    engine.
     """
     totals: dict[str, list[int]] = {}
     for row in rows:
@@ -3132,7 +3132,7 @@ def run_pool_consequence_class(args: argparse.Namespace) -> int:
         if floor.f1 is None:
             print(
                 f"{engine}: no term clears {args.min_tuples} pooled VEP tuples, so no "
-                f"floor can be reported under the pre-committed rule"
+                f"floor can be reported under the fixed threshold"
             )
             continue
         print(

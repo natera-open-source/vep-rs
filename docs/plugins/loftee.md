@@ -8,7 +8,7 @@ two upstream data bundles and what the port leaves out.
 LoFTEE targets parity with the upstream LoFTEE `grch38` branch defaults, with
 the splice-prediction layer off. On GRCh37 the matching Perl run is the
 `master` branch with `run_splice_predictions:0`, because `master` turns that
-layer on by default. Built-in names are matched exactly as written: Perl VEP
+layer on by default. Built-in names are matched exactly as written: Ensembl VEP
 loads LoFTEE as `--plugin LoF,...` and vep-rs as `--plugin LoFTEE,...`.
 
 ## Parameters and data {#loftee}
@@ -61,8 +61,7 @@ gerp_tabix=$LOFTEE/GERP_scores.final.sorted.txt.gz
 
 **Data files.** Both LoFTEE bundles are published under
 <https://personal.broadinstitute.org/konradk/loftee_data/>, one directory per
-assembly. The `broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz` address
-of older LoFTEE guides is gone; the files below are what each assembly needs.
+assembly; the files below are what each assembly needs.
 
 | Assembly | Directory | Files                                                                                                | Parameters                           |
 | -------- | --------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------ |

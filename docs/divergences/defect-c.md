@@ -1,4 +1,4 @@
-# Defect C, restated for release 116: a record marked skipped is dropped before annotation
+# Defect C: a record marked skipped is dropped before annotation
 
 **The difference in one sentence.** Ensembl VEP 116 drops a structural record it marks skipped, by setting its `vep_skip` flag, before the record reaches the annotation pass, so the record has no row in any output format, while vep-rs annotates it, an incomplete deletion excepted.
 

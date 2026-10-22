@@ -1,6 +1,6 @@
 # Coming from Ensembl VEP
 
-This page is for a reader who runs Ensembl VEP today and wants to know what changes when the same command line runs on vep-rs.
+This page is for a reader who runs Ensembl VEP and wants to know what changes when the same command line runs on vep-rs.
 
 ## What stays the same
 
@@ -32,7 +32,7 @@ vep-cache-builder \
   --output-dir $HOME/.vep/json_cache/homo_sapiens/116_GRCh38
 ```
 
-**2. Your Ensembl VEP command.** As it runs today, for example:
+**2. Your Ensembl VEP command.** As it runs, for example:
 
 ```bash
 vep --cache --offline --dir_cache $HOME/.vep --assembly GRCh38 \

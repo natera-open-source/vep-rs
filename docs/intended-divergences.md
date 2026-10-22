@@ -10,7 +10,7 @@ The defects in page order, each with the classes it produces and its page:
 | --- | --- | --- | --- |
 | [A](divergences/defect-a.md) | A later differing region erases the splice-region term | 1, 2 | [Defect A](divergences/defect-a.md) |
 | [B](divergences/defect-b.md) | `start_lost` and `start_retained_variant` are both written for one allele | 3, 4 | [Defect B](divergences/defect-b.md) |
-| [C](divergences/defect-c.md) | Restated for release 116: a record marked skipped is dropped before annotation | 5 | [Defect C](divergences/defect-c.md) |
+| [C](divergences/defect-c.md) | A record marked skipped is dropped before annotation | 5 | [Defect C](divergences/defect-c.md) |
 | [P](divergences/defect-p.md) | The tests after the chromosome-aware overlap compare chromosome names the overlap did not resolve | 23, 24 | [Defect P](divergences/defect-p.md) |
 | [E](divergences/defect-e.md) | A breakend's mate-side row evaluated at the record's own coordinate | 11 | [Defect E](divergences/defect-e.md) |
 | [none](divergences/cnv-tr.md) | A representation difference, not a defect: `<CNV:TR>` | 12 | [`<CNV:TR>`](divergences/cnv-tr.md) |
@@ -236,4 +236,4 @@ Without a FASTA the record is not expanded and the run completes. vep-rs reads t
 
 ## Scoring against Ensembl VEP 116.2
 
-The comparators score against one Ensembl VEP release at a time, chosen by `--reference-release`, and `116.2` is the default. Against it they apply the classes of these pages, and every class the 116.2 registry sets aside or counts is listed with its treatment in [docs/concordance-provenance/116.2-divergence-classes.md](concordance-provenance/116.2-divergence-classes.md). Under `--reference-release 115.2`, the release the paper was measured against, they apply the paper's twelve classes instead, classes 1 to 12 as the paper's supplement and this page's previous version document them, and write exactly the reports they wrote for the paper. The five masks of the paper's classes 5 to 10 are listed as not applied in every 116.2 report, each with its reason.
+The comparators score against one Ensembl VEP release at a time, chosen by `--reference-release`, and `116.2` is the default. Against it they apply the classes of these pages, and every class the 116.2 registry sets aside or counts is listed with its treatment in [docs/concordance-provenance/116.2-divergence-classes.md](concordance-provenance/116.2-divergence-classes.md). Under `--reference-release 115.2`, the release the paper was measured against, they apply the paper's twelve classes instead, classes 1 to 12, which the five classes of the paper's supplement produce against that release, and write exactly the reports they wrote for the paper. The five masks of the paper's classes 5 to 10 are listed as not applied in every 116.2 report, each with its reason.

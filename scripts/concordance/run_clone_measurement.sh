@@ -1117,15 +1117,13 @@ measure_sv() {
 			# every cell: the Perl branch below and the fastVEP branch above both pass
 			# `$FORK` on the SV cells too, so hardcoding 1 here would make vep-rs the
 			# only engine of the three annotating serially and turn every SV ratio
-			# into a floor rather than a measurement. The 1 is not needed "to match
-			# the per-VCF SV GT": the GT is a fixed archived artifact, and vep-rs
-			# output is fork-invariant by construction -- `annotate_batch` dispatches
-			# the same `annotate_one` over the same `&mut` batch through either
-			# `par_iter_mut` or `iter_mut` and emits in input order (`runner.rs`), and
-			# the per-chromosome cache parse runs on the global rayon pool regardless
-			# (`json_cache.rs::load_transcripts_for_chr`). What --fork gates is only
-			# the per-variant consequence fan-out, which is why a serial run is slowest
-			# on the one 32,630-variant GRCh38 file.
+			# into a floor rather than a measurement. The GT is a fixed archived
+			# artifact, and vep-rs output is fork-invariant by construction:
+			# `annotate_batch` dispatches the same `annotate_one` over the same `&mut`
+			# batch through either `par_iter_mut` or `iter_mut` and emits in input
+			# order (`runner.rs`), and the per-chromosome cache parse runs on the
+			# global rayon pool regardless (`json_cache.rs::load_transcripts_for_chr`).
+			# What --fork gates is only the per-variant consequence fan-out.
 			res=$(time_run "${suite_id}_${run_kind}" "$perf_txt" -- \
 				bash -c '
 					set -uo pipefail

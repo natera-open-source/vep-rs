@@ -127,9 +127,8 @@ jobs:
       # A release or dispatch run packages a release only when it carries
       # every archive of the matrix, so no row pushes an image of a release
       # another row cannot package. A pull request packages the newest
-      # published release, and a release before the generic archives existed
-      # carries only the measured ones: such a row has nothing to build and
-      # says so.
+      # published release, which may carry only the measured archives: a row
+      # whose archive the release lacks has nothing to build and says so.
       - name: Check that the release carries the archives
         id: asset
         env:

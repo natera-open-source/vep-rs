@@ -76,9 +76,9 @@ class ReleaseFromProvenanceTests(unittest.TestCase):
 
     def test_a_perl_reference_block_resolves_by_image_then_prefix_then_cache_version(self) -> None:
         block = {"image": "ensemblorg/ensembl-vep:release_116.2", "digest": "sha256:abc",
-                 "cache_version": 116, "prefix": "population_r116.2_c116_20261020"}
+                 "cache_version": 116, "prefix": "population_r116.2_c116_fixture"}
         self.assertEqual(release_from_provenance(block), "116.2")
-        self.assertEqual(release_from_provenance({"prefix": "population_r116.2_c116_20261020", "cache_version": 115}), "116.2")
+        self.assertEqual(release_from_provenance({"prefix": "population_r116.2_c116_fixture", "cache_version": 115}), "116.2")
         self.assertEqual(release_from_provenance({"perl_reference_prefix": "population_r115.2_c115_20260930"}), "115.2")
         self.assertEqual(release_from_provenance({"cache_version": 116}), "116.2")
         with self.assertRaises(ValueError):

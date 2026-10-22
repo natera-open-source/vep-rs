@@ -161,6 +161,6 @@ Built-in plugin annotations appear in all output formats:
 | JSON    | Fields repeated in every `transcript_consequences` object | Fields in the `transcript_consequences` object |
 | Parquet | Additional columns                                        | Additional columns                             |
 
-Variant-level plugin data is repeated on every transcript consequence row of that variant, as in Perl VEP; no format writes it at the record level.
+Variant-level plugin data is repeated on every transcript consequence row of that variant, as in Ensembl VEP; no format writes it at the record level.
 
 A C-ABI dylib plugin (`--plugin <path>`, or `lib<Name>.so` / `lib<Name>.dylib` under `--dir_plugins`) runs per transcript consequence after the built-in plugins and returns a JSON object whose entries become fields of that consequence. Those fields appear in the default format's Extra column (alphabetically after the flag fields) and inside the JSON consequence objects only. The `tab`, `vcf` and Parquet column sets are fixed from the fields the built-in plugins declare before the first record is written. The FFI contract has no header symbol through which a dylib could declare its own, so a dylib field has no column there and no `##` header line.

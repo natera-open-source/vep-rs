@@ -937,10 +937,10 @@ class ExclusionBoundTests(unittest.TestCase):
     """Exclusions per side cannot exceed that side's discordant rows.
 
     Adjusted F1 subtracts these counts from the raw denominators, so an over-count
-    inflates F1 and nothing else in the pipeline would notice. A key omitting
-    `feature_type` while the scored tuple includes it, so two rows differing only by
-    feature type collapsed onto one key and the nested loop counted their cross
-    product: 4 exclusions from 2 real tuples.
+    inflates F1 and nothing else in the pipeline would notice. A key that omits
+    `feature_type` while the scored tuple includes it collapses two rows differing
+    only by feature type onto one key, and a nested loop over that key counts their
+    cross product: 4 exclusions from 2 real tuples.
     """
 
     HEADER = (

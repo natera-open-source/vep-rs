@@ -791,9 +791,9 @@ def filter_cross_chromosome_divergences(
     THE DEFECT. Given a structural variant whose `CHROM` is `21` and whose `INFO/CHR2`
     reads `chr21`, Ensembl VEP r115.2 annotates it against transcripts on chromosome 22
     at numerically similar coordinates: for a 25 kb `<DEL>` at `21:23699593-23724683`,
-    VEP names 122 transcripts of which 120 resolve to chr22 by Ensembl's own id lookup
-    and only 2 to chr21. A deletion on one chromosome cannot truncate a transcript on
-    another, so those 120 are wrong output.
+    nearly every transcript VEP names resolves to chr22 by Ensembl's own id lookup. A
+    deletion on one chromosome cannot truncate a transcript on another, so those rows
+    are wrong output.
 
     IT IS NOT ASSEMBLY-SPECIFIC. The GRCh38 gnomAD SV VCF carries `CHR2=chr21` against
     an unprefixed `CHROM` while the GRCh37 file carries `CHR2=21`, and the defect fires
@@ -1016,11 +1016,12 @@ def filter_intended_divergences(
     # which always annotates the complete set for the chromosome. Without a
     # direction test the same predicate also absorbs the opposite shape, vep-rs
     # naming FEWER transcripts than Perl, which is not a Perl defect (on the 25 kb
-    # `<DEL>` at 21:23699593-23724683 in gnomAD SV, Perl names 122 transcripts and
-    # vep-rs names 2, an under-annotation this filter must not mask); masking it
-    # would convert a vep-rs coverage gap into an excluded transcript-selection
-    # divergence and inflate adjusted F1. This arm carries the same SCOPE gate as its sibling
-    # above and keys on the full location for the same identity reason.
+    # `<DEL>` at 21:23699593-23724683 in gnomAD SV, Perl names far more
+    # transcripts than vep-rs, an under-annotation this filter must not mask);
+    # masking it would convert a vep-rs coverage gap into an excluded
+    # transcript-selection divergence and inflate adjusted F1. This arm carries the
+    # same SCOPE gate as its sibling above and keys on the full location for the
+    # same identity reason.
     excluded_perl: set[AnnotTuple] = set()
     for t in perl_only:
         loc, allele, feature, _ft, _csq = t
@@ -3436,9 +3437,8 @@ def main() -> None:
         # The tuple key carries no source filename, so a tuple emitted from two
         # different VCFs of the same assembly collapses to one member of these
         # unions, while `total_input` (a list extend) keeps summing; an aggregate
-        # row built from both mixes two incompatible aggregations, and the
-        # cross-file duplicates move raw F1 at the sixth decimal on GRCh37 and the
-        # third on GRCh38.
+        # row built from both mixes two incompatible aggregations, and every
+        # cross-file duplicate moves its raw F1.
         #
         # The unions stay as-is because every mask predicate consumes bare 5-tuples;
         # the file-scoped counts below are what BOTH aggregate rows use, so the two

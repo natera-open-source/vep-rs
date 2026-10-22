@@ -343,7 +343,7 @@ def test_the_concordance_caption_reads_the_perl_reference_block_when_a_record_ca
         "image": "ensemblorg/ensembl-vep:release_116.2",
         "digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
         "cache_version": 116,
-        "prefix": "population_r116.2_c116_20261020",
+        "prefix": "population_r116.2_c116_fixture",
     }
 
     def name_the_reference(record: dict) -> None:
@@ -365,7 +365,7 @@ def test_the_concordance_caption_reads_the_perl_reference_block_when_a_record_ca
     assert "Whole genome against Ensembl VEP 116.2," in page(repo)
 
     def prefix_only(record: dict) -> None:
-        record["population_concordance"]["perl_reference"] = {"prefix": "population_r116.2_c116_20261020", "cache_version": 116}
+        record["population_concordance"]["perl_reference"] = {"prefix": "population_r116.2_c116_fixture", "cache_version": 116}
 
     edit_record(repo, "release", prefix_only)
     assert "Whole genome against Ensembl VEP 116.2," in page(repo)
