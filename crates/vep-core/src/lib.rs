@@ -16,7 +16,6 @@ pub mod consequence;
 pub mod coordinate;
 pub mod minimal;
 pub mod prediction;
-pub mod sha256;
 pub mod so_ontology;
 pub mod spdi;
 pub mod sv_record;

@@ -68,6 +68,9 @@ libloading = "0.8"
 # Encoding
 base64 = "0.22"
 
+# Hashing
+sha2 = "0.10"
+
 # Text
 regex = "1"
 

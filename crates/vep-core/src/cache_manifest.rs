@@ -17,10 +17,13 @@ use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 
-use crate::sha256::{self, Digest, Sha256};
+use sha2::{Digest as _, Sha256};
 
 /// The manifest's file name, in the cache directory.
 pub const MANIFEST_FILE: &str = "CHECKSUMS.sha256";
+
+/// A 32-byte SHA256 digest, the value a manifest line records.
+pub type Digest = [u8; 32];
 
 /// Directory levels the writer descends below the cache directory before it
 /// treats the tree as a symbolic-link loop; a cache is three levels deep.
@@ -163,7 +166,7 @@ impl CacheManifest {
         if !self.is_present() {
             return Ok(());
         }
-        self.verify_digest(path, &Sha256::digest(bytes))
+        self.verify_digest(path, &sha256(bytes))
     }
 
     /// Checks the digest of the whole content of the file at `path` against
@@ -280,12 +283,38 @@ pub fn file_digest(path: &Path) -> io::Result<Digest> {
     HashingReader::new(File::open(path)?).digest_to_end()
 }
 
+/// The SHA256 digest of `bytes`.
+fn sha256(bytes: &[u8]) -> Digest {
+    Sha256::digest(bytes).into()
+}
+
+/// The lower-case hexadecimal spelling of a digest, as `sha256sum` prints it.
+fn to_hex(digest: &Digest) -> String {
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// The digest a 64-character hexadecimal spelling denotes, in either case;
+/// `None` for any other text.
+fn from_hex(text: &str) -> Option<Digest> {
+    let bytes = text.as_bytes();
+    if bytes.len() != 64 {
+        return None;
+    }
+    let mut digest = [0u8; 32];
+    for (byte, pair) in digest.iter_mut().zip(bytes.chunks_exact(2)) {
+        let high = (pair[0] as char).to_digit(16)?;
+        let low = (pair[1] as char).to_digit(16)?;
+        *byte = (high as u8) << 4 | low as u8;
+    }
+    Some(digest)
+}
+
 /// The manifest text for `entries`: one `sha256sum` line per path, in the
 /// map's byte order.
 pub fn render(entries: &BTreeMap<String, Digest>) -> String {
     let mut text = String::with_capacity(entries.len() * 100);
     for (relative, digest) in entries {
-        text.push_str(&sha256::to_hex(digest));
+        text.push_str(&to_hex(digest));
         text.push_str("  ");
         text.push_str(relative);
         text.push('\n');
@@ -336,7 +365,7 @@ pub fn parse(text: &str, path: &Path) -> Result<BTreeMap<String, Digest>, Manife
 /// shape.
 fn parse_line(line: &str) -> Option<(Digest, &str)> {
     let (hex, rest) = line.split_once(' ')?;
-    let digest = sha256::from_hex(hex)?;
+    let digest = from_hex(hex)?;
     let relative = rest.strip_prefix(' ').or_else(|| rest.strip_prefix('*'))?;
     Some((digest, relative))
 }
@@ -363,7 +392,7 @@ impl<R: Read> HashingReader<R> {
         loop {
             let read = self.inner.read(&mut buffer)?;
             if read == 0 {
-                return Ok(self.hasher.finalize());
+                return Ok(self.hasher.finalize().into());
             }
             self.hasher.update(&buffer[..read]);
         }
@@ -403,11 +432,32 @@ mod tests {
         let text = fs::read_to_string(dir.path().join(MANIFEST_FILE)).unwrap();
         let expected = format!(
             "{}  chr_synonyms.txt\n{}  info.json\n{}  transcripts/21/1-1000000.json\n",
-            sha256::to_hex(&Sha256::digest(b"21\tchr21\n")),
-            sha256::to_hex(&Sha256::digest(b"{}\n")),
-            sha256::to_hex(&Sha256::digest(b"[]")),
+            to_hex(&sha256(b"21\tchr21\n")),
+            to_hex(&sha256(b"{}\n")),
+            to_hex(&sha256(b"[]")),
         );
         assert_eq!(text, expected);
+    }
+
+    /// The digests FIPS 180-4's example vectors and `sha256sum` give, and
+    /// their spelling read back in either case; a 64-character text that is
+    /// not hexadecimal and a shorter one denote no digest.
+    #[test]
+    fn known_vectors_and_hex_round_trip() {
+        let empty = sha256(b"");
+        assert_eq!(
+            to_hex(&empty),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        let abc = sha256(b"abc");
+        assert_eq!(
+            to_hex(&abc),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        assert_eq!(from_hex(&to_hex(&abc)), Some(abc));
+        assert_eq!(from_hex(&to_hex(&abc).to_uppercase()), Some(abc));
+        assert_eq!(from_hex("abc"), None);
+        assert_eq!(from_hex(&"g".repeat(64)), None);
     }
 
     /// Bytes equal to the file pass, a changed byte and an unlisted file fail
@@ -578,7 +628,7 @@ mod tests {
     /// leads outside the directory names the line.
     #[test]
     fn parse_reads_sha256sum_lines() {
-        let hex = sha256::to_hex(&Sha256::digest(b"[]"));
+        let hex = to_hex(&sha256(b"[]"));
         let path = Path::new("CHECKSUMS.sha256");
         let entries = parse(
             &format!("{hex}  a.json\n{hex} *b.json\n\n{hex}  ./c/./d.json\n"),
@@ -638,13 +688,13 @@ mod tests {
         let mut reader = HashingReader::new(&data[..]);
         let mut head = vec![0u8; 1000];
         reader.read_exact(&mut head).unwrap();
-        assert_eq!(reader.digest_to_end().unwrap(), Sha256::digest(&data));
+        assert_eq!(reader.digest_to_end().unwrap(), sha256(&data));
 
         let mut whole = HashingReader::new(&data[..]);
         let mut sink = Vec::new();
         std::io::copy(&mut whole, &mut sink).unwrap();
         assert_eq!(sink, data);
-        assert_eq!(whole.digest_to_end().unwrap(), Sha256::digest(&data));
+        assert_eq!(whole.digest_to_end().unwrap(), sha256(&data));
     }
 
     /// A file hashed in chunks has the digest of its bytes.
@@ -656,6 +706,6 @@ mod tests {
             .map(|i| (i % 251) as u8)
             .collect();
         File::create(&path).unwrap().write_all(&data).unwrap();
-        assert_eq!(file_digest(&path).unwrap(), Sha256::digest(&data));
+        assert_eq!(file_digest(&path).unwrap(), sha256(&data));
     }
 }

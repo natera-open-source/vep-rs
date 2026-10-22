@@ -109,6 +109,7 @@ coding_only	OutputFactory.pm	implemented	landed:implemented	crates/vep-cli/src/r
 compress-output-gzip-vs-bgzip	BaseRunner.pm	implemented	landed:implemented	crates/vep-cli/src/output_compress.rs::bgzip_output_is_bgzf_and_gzip_output_is_plain_gzip	tests/golden/116/GRCh38-writers	
 compress_output	Config.pm	implemented	landed:implemented	crates/vep-cli/src/config.rs::compress_output_rejects_unknown_value_with_perls_message;crates/vep-cli/tests/integration_test.rs::compress_output_writes_gzip_and_bgzip_streams_of_the_plain_output;crates/vep-cli/src/config.rs::parquet_with_compress_output_is_refused	tests/golden/116/GRCh38-writers	
 condel	Config.pm	accepted_noop	landed:accepted_noop	crates/vep-cli/tests/cli_noops.rs::condel_is_accepted_without_effect		
+Condel	Condel.pm	error	open			
 config	Config.pm::read_config_from_file	documented_subset	landed:documented_subset	crates/vep-cli/src/argv.rs::config_file_options_precede_command_line;crates/vep-cli/src/argv.rs::config_unknown_key_is_dropped;crates/vep-cli/src/argv.rs::config_missing_file_is_fatal;crates/vep-cli/tests/cli_argv.rs::config_file_is_read_through_the_binary;crates/vep-cli/tests/documented_subsets.rs::config_exclusion_is_documented	tests/golden/116/GRCh38-run-control	
 config-file	Config.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/argv.rs::vep_ini_under_dir_is_read;crates/vep-cli/src/argv.rs::priority_order_command_line_config_ini_env;crates/vep-cli/tests/cli_argv.rs::vep_ini_is_read_through_the_binary;crates/vep-cli/tests/documented_subsets.rs::config_file_exclusion_is_documented	tests/golden/116/GRCh38-run-control	
 Conservation	Conservation.pm	error	open			
@@ -220,6 +221,7 @@ grch37	Config.pm	implemented	landed:implemented	crates/vep-cli/src/option_rules.
 gtf	Config.pm	error	open			
 gvcf-non-ref-alleles	VCF.pm	implemented	landed:implemented	crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_star_ref_block_not_filtered;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_non_ref_is_a_reference_block;crates/vep-cli/src/vcf_parser.rs::classify_symbolic_alt_reference_block;crates/vep-cli/src/vcf_parser.rs::a_gvcf_variant_site_is_its_real_alleles;crates/vep-cli/src/vcf_parser.rs::a_gvcf_sites_allele_keeps_its_written_position;crates/vep-core/src/sv_routing.rs::a_non_ref_block_beside_an_allele_names_no_variant;crates/vep-core/src/sv_routing.rs::routing_follows_the_reference_and_alleles_and_a_true_svtype	tests/golden/116/GRCh38-vcf-edge-cases	
 GWAS	GWAS.pm	implemented	open			
+Gwava	Gwava.pm	error	open			
 GXA	GXA.pm	error	open			
 gzip-bgzip-compressed-input	Parser.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_input.rs::plain_gzip_input_is_read;crates/vep-cli/tests/cli_input.rs::bgzf_input_without_gz_suffix_is_read;crates/vep-cli/tests/cli_input.rs::gzip_on_stdin_is_read;crates/vep-cli/tests/cli_input.rs::truncated_bgzf_input_is_a_read_error;crates/vep-cli/tests/input_io.rs::decompression_threads_above_the_host_cpus_still_reads_the_input	tests/golden/116/GRCh38-input-compressed	
 gzip-bgzip-input	Parser.pm	implemented	landed:implemented	crates/vep-cli/tests/cli_input.rs::plain_gzip_input_is_read;crates/vep-cli/tests/cli_input.rs::bgzf_input_without_gz_suffix_is_read;crates/vep-cli/tests/cli_input.rs::gzip_on_stdin_is_read;crates/vep-cli/tests/cli_input.rs::truncated_bgzf_input_is_a_read_error	tests/golden/116/GRCh38-run-control	
@@ -277,6 +279,7 @@ LD	LD.pm	error	open
 library-embedding	Runner.pm	implemented	open			
 LocalID	LocalID.pm	error	open			
 LOEUF	LOEUF.pm	implemented	open			
+LoFTEE	LoF.pm	implemented	open			
 LoFtool	LoFtool.pm	implemented	open			
 lookup_ref	Parser.pm	documented_subset	landed:documented_subset	crates/vep-cli/src/validate.rs::lookup_ref_replaces_ref;crates/vep-cli/src/validate.rs::lookup_ref_restores_dash;crates/vep-cli/tests/input_validation.rs::reference_checks_need_a_fasta_and_exclude_each_other;crates/vep-cli/tests/input_validation.rs::skip_reasons_match_ensembl_vep;crates/vep-cli/tests/input_validation.rs::region_input_reads_its_reference_from_the_fasta;crates/vep-cli/tests/documented_subsets.rs::lookup_ref_exclusion_is_documented	tests/golden/116/GRCh38-vcf-check-ref	
 LOVD	LOVD.pm	error	open			

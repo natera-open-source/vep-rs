@@ -22,7 +22,7 @@ Planned for the next release, 0.6.0.
 
 ## Plugins
 
-`--plugin <Name>,<params>`, `--dir_plugins` and `--safe` work as in Ensembl VEP. A name resolves to one of the built-in plugins listed on [Plugins](../plugins.md), else to a shared library under `--dir_plugins`; a name that resolves to neither is skipped with a warning, or refused under `--safe` (an error that begins `ERROR: [plugin] Failed to load plugin <Name>`). The rest of Ensembl VEP's plugin catalogue has no vep-rs counterpart: those plugins are Perl modules, which vep-rs cannot load, so `--plugin` with one of their names is that warning or that error.
+`--plugin <Name>,<params>`, `--dir_plugins` and `--safe` work as in Ensembl VEP. A name resolves to one of the built-in plugins listed on [Plugins](../plugins.md), else to a shared library under `--dir_plugins`; a name that resolves to neither is skipped with a warning, or refused under `--safe` (an error that begins `ERROR: [plugin] Failed to load plugin <Name>`). The rest of Ensembl VEP's plugin catalogue has no vep-rs counterpart: those plugins are Perl modules, which vep-rs cannot load, so `--plugin` with one of their names is that warning or that error. The built-in plugins ship as [Plugins](../plugins.md) documents them; their agreement with the Ensembl VEP plugin modules is measured in 0.6.0, when each plugin's parity row lands.
 
 Planned for the next release, 0.6.0.
 
