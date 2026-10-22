@@ -384,13 +384,18 @@ pub fn input_data_for(args: &Args) -> Option<&str> {
         .filter(|data| !data.is_empty() && *data != "0")
 }
 
-/// Where a command line's warnings go: `--warning_file`, else
-/// `<output_file>_warnings.txt` beside the last `-o` value as the user spelled it
-/// (BaseVEP.pm:890); readable before the configuration is resolved, so the sink
-/// can take the warnings the resolution itself raises.
+/// Where a command line's warnings go: `--warning_file` when its value is true
+/// in Perl, else `<output_file>_warnings.txt` beside the last `-o` value as the
+/// user spelled it (BaseVEP.pm:890 `$file ||= ...`, so an empty value or `0` is
+/// no file); readable before the configuration is resolved, so the sink can take
+/// the warnings the resolution itself raises.
 pub fn warning_file_for(args: &Args) -> String {
-    match &args.warning_file {
-        Some(file) => file.clone(),
+    match args
+        .warning_file
+        .as_deref()
+        .filter(|file| crate::argv::truthy(file))
+    {
+        Some(file) => file.to_string(),
         None => crate::warnings::default_warning_file(
             args.output_file
                 .last()
@@ -404,13 +409,35 @@ pub fn warning_file_for(args: &Args) -> String {
 pub struct ParsedArgs {
     pub args: Args,
     pub state: FlagState,
-    /// The tokens after the program name, as given ([`Config::command_line`]).
+    /// The tokens after the program name, as given, plus one `--<flag>=<value>`
+    /// per switch a source set to a false value ([`Config::command_line`]).
     pub command_line: Vec<String>,
 }
 
-/// Parses a command line (the binary name first). A flag the error table refuses
-/// before parsing is reported first, unless the line also asks for the help or
-/// the version, which win and drop the flag; then clap's own syntax errors; the
+impl ParsedArgs {
+    /// Records the switches a source behind the command line set to a false value
+    /// ([`crate::argv::Prepassed::defined_off`], each with that value) as present
+    /// but off, as Ensembl VEP's configuration holds them, and in the recorded
+    /// command line as `--<flag>=<value>`, so the header prints `--<flag> <value>`
+    /// as `full_command` prints a stored value other than `1` (Config.pm:745); a
+    /// flag the command line gave keeps its value.
+    pub fn with_defined_off<'a>(
+        mut self,
+        switches: impl IntoIterator<Item = (&'a str, &'a str)>,
+    ) -> Self {
+        for (flag, value) in switches {
+            if !self.state.is_given(flag) {
+                self.state.set(flag, value);
+                self.command_line.push(format!("--{flag}={value}"));
+            }
+        }
+        self
+    }
+}
+
+/// Parses a command line (the binary name first). A bare `--help` or
+/// `--version` wins over everything else on the line; then a flag the error
+/// table refuses before parsing is reported; then clap's own syntax errors; the
 /// result carries the arguments and the flag state the option rules act on.
 pub fn parse_command_line<I, T>(argv: I) -> Result<ParsedArgs, ParseFailure>
 where
@@ -424,31 +451,30 @@ where
         .iter()
         .map(|token| token.to_string_lossy().into_owned())
         .collect();
-    let asks_usage = |a: &OsString| {
-        matches!(
-            a.to_string_lossy().as_ref(),
-            "--help" | "-h" | "--version" | "-V"
-        )
-    };
     // Getopt::Long runs with `pass_through` (Config.pm:62), which leaves a bare
     // `--` and every token after it in `@ARGV`, and vep refuses whatever is left
     // (vep:30) unless `--help` was read ahead of the `--` (:29); `--version`, this
     // engine's own flag, wins the same way.
-    if let Some(separator) = options.iter().position(|a| a == "--") {
-        let usage_first = options[..separator].iter().any(asks_usage);
-        if !usage_first {
-            return Err(ParseFailure::Refused(CliError::cli(format!(
-                "Unexpected extra command-line parameter(s): {}",
-                command_line[separator..].join(", ")
-            ))));
-        }
+    let separator = options
+        .iter()
+        .position(|a| a == "--")
+        .unwrap_or(options.len());
+    // The usage wins over every other token (vep:29 before vep:30): `pass_through`
+    // leaves an unknown flag, a bare word, a refused value and a value-less option
+    // in `@ARGV`, and `help` is tested first, so clap is handed the one token,
+    // the help ahead of the version. `--help=1` is no such token: it is refused,
+    // as vep:30 refuses it.
+    let usage_token = ["--help", "-h", "--version", "-V"]
+        .into_iter()
+        .find(|usage| options[..separator].iter().any(|a| a == usage));
+    if let Some(usage) = usage_token {
+        options = vec![OsString::from(usage)];
+    } else if separator < options.len() {
+        return Err(ParseFailure::Refused(CliError::cli(format!(
+            "Unexpected extra command-line parameter(s): {}",
+            command_line[separator..].join(", ")
+        ))));
     }
-    // The usage wins over an unexpected parameter (vep:29 before vep:30): an
-    // undeclared flag of the error table is dropped from a command line that asks
-    // for the help or the version, and refused otherwise. A flag outside the
-    // table is clap's, which reads the line in order and refuses the flag unless
-    // the help or the version comes first.
-    let asks_help_or_version = options.iter().any(asks_usage);
     for entry in ERROR_TABLE.iter().filter(|e| !e.declared) {
         let Treatment::Refused { component, message } = entry.treatment else {
             continue;
@@ -459,9 +485,7 @@ where
             let a = a.to_string_lossy();
             a == long || a.starts_with(&with_value)
         };
-        if asks_help_or_version {
-            options.retain(|a| !names_it(a));
-        } else if options.iter().any(names_it) {
+        if options.iter().any(names_it) {
             return Err(ParseFailure::Refused(CliError::new(component, message)));
         }
     }
@@ -533,7 +557,13 @@ pub struct Config {
     /// (Parser.pm:387-415), and for every other format this holds the tab default.
     pub delimiter: Delimiter,
 
+    /// The last `-o` value, `STDOUT` for standard output in any spelling.
     pub output_file: String,
+    /// The last `-o` value as the user spelled it: the name BaseRunner.pm:203
+    /// tests for an existing file before it compares the value with `STDOUT`
+    /// (:213, :222), so a file named `STDOUT` in the working directory refuses the
+    /// run as any other output file would.
+    pub output_file_as_spelled: String,
     pub output_format: String,
     /// Only consulted when `output_format == "parquet"`.
     /// `"nested"` = one row per variant, CSQ subfields as `LIST<T>`.
@@ -635,9 +665,11 @@ pub struct Config {
     pub resolved_config: bool,
     /// The tokens the parser read after the program name, as given: the command
     /// line's own, and the flags of the `--config` file, `vep.ini` and the
-    /// `VEP_*` variables that [`crate::argv::prepass`] laid out around them. A
-    /// token that is not UTF-8 is held with each invalid sequence replaced. The
-    /// `## VEP command-line:` header line is rendered from this list.
+    /// `VEP_*` variables that [`crate::argv::prepass`] laid out around them, plus
+    /// a `--<flag>=<value>` for each switch a source set to a false value
+    /// ([`ParsedArgs::with_defined_off`]). A token that is not UTF-8 is held with
+    /// each invalid sequence replaced. The `## VEP command-line:` header line is
+    /// rendered from this list.
     pub command_line: Vec<String>,
 
     /// `--everything` was given: the HGVS flags it switched on are dropped, not
@@ -875,8 +907,11 @@ fn gencode_primary_assembly_warnings(state: &FlagState) -> Vec<String> {
 /// notice Ensembl VEP's runner prints as it does so (`Runner.pm:117-120` at
 /// release/116.2, a status message `--quiet` withholds); the notice is returned
 /// when the flag was switched on here, `None` otherwise, for [`Config::notices`].
+/// The runner tests the flag with `defined`, so a `0` a configuration file or the
+/// environment set it to ([`ParsedArgs::with_defined_off`]) switches
+/// `check_existing` on too, while the synonyms themselves stay off.
 fn var_synonyms_implies_check_existing(state: &mut FlagState) -> Option<&'static str> {
-    if !state.is_active("var_synonyms") || state.is_active("check_existing") {
+    if !state.is_given("var_synonyms") || state.is_active("check_existing") {
         return None;
     }
     state.set("check_existing", "1");
@@ -965,16 +1000,16 @@ impl Config {
 
         // Getopt::Long accumulates `-o` (`output_file|o=s@`) and the vep script keeps
         // the last (vep:33); `STDOUT` is matched in any case (BaseRunner.pm:213).
-        let last = args
+        let output_file_as_spelled = args
             .output_file
             .last()
             .cloned()
             .unwrap_or_else(|| "variant_effect_output.txt".to_string());
         let warning_file = warning_file_for(&args);
-        let output_file = if last.eq_ignore_ascii_case("STDOUT") {
+        let output_file = if output_file_as_spelled.eq_ignore_ascii_case("STDOUT") {
             "STDOUT".to_string()
         } else {
-            last
+            output_file_as_spelled.clone()
         };
 
         let dir = expand_tilde(&args.dir);
@@ -1034,6 +1069,7 @@ impl Config {
             format: state.scalar("format").unwrap_or("guess").to_string(),
             delimiter,
             output_file,
+            output_file_as_spelled,
             output_format,
             parquet_shape: args.parquet_shape,
             keep_intermediate: args.keep_intermediate,
@@ -1505,6 +1541,57 @@ mod tests {
             ParseFailure::Usage(e) => e.to_string(),
             ParseFailure::Refused(e) => panic!("refused, not a usage error: {e}"),
         }
+    }
+
+    /// The kind of clap's answer to a command line it does not parse into a run.
+    fn usage_kind(argv: &[&str]) -> clap::error::ErrorKind {
+        match parse_command_line(argv) {
+            Err(ParseFailure::Usage(e)) => e.kind(),
+            Err(ParseFailure::Refused(e)) => panic!("refused, not a usage error: {e}"),
+            Ok(_) => panic!("{argv:?} parsed into a run"),
+        }
+    }
+
+    /// A bare `--help` or `--version` wins over every other token of the line
+    /// (vep:29 before vep:30 under `pass_through`, Config.pm:62): a flag the
+    /// error table refuses, an unknown flag, a bare word, a refused value and an
+    /// option left without its value are all dropped, the help ahead of the
+    /// version; `--help=1` is no such token and is clap's refusal, as vep:30
+    /// refuses it; behind `--` either is an extra parameter.
+    #[test]
+    fn help_and_version_win_over_every_other_token() {
+        use clap::error::ErrorKind;
+        for argv in [
+            &["vep", "--af_exac", "--help"][..],
+            &["vep", "--help", "--af_exac"][..],
+            &["vep", "--bogus", "--help"][..],
+            &["vep", "--stats_html", "--help"][..],
+            &["vep", "extra", "--help"][..],
+            &["vep", "--fork=x", "--help"][..],
+            &["vep", "--fork", "--help"][..],
+            &["vep", "--help", "--input_file"][..],
+            &["vep", "--version", "--help"][..],
+            &["vep", "-h", "--bogus"][..],
+            &["vep", "--help", "--", "foo"][..],
+        ] {
+            assert_eq!(usage_kind(argv), ErrorKind::DisplayHelp, "{argv:?}");
+        }
+        for argv in [
+            &["vep", "--bogus", "--version"][..],
+            &["vep", "--af_exac", "-V"][..],
+            &["vep", "--fork", "--version"][..],
+        ] {
+            assert_eq!(usage_kind(argv), ErrorKind::DisplayVersion, "{argv:?}");
+        }
+        let kind = usage_kind(&["vep", "--help=1"]);
+        assert!(
+            kind != ErrorKind::DisplayHelp && kind != ErrorKind::DisplayVersion,
+            "{kind:?}"
+        );
+        assert_eq!(
+            refusal(&["vep", "--", "--help"]),
+            "ERROR: [cli] Unexpected extra command-line parameter(s): --, --help"
+        );
     }
 
     /// The auto thread count never exceeds the cap, whatever the host offers; an
@@ -2231,6 +2318,26 @@ mod tests {
         assert_eq!(var_synonyms_implies_check_existing(&mut state), None);
         let mut state = state_after_option_sets(&["vep", "--pubmed"]);
         assert_eq!(var_synonyms_implies_check_existing(&mut state), None);
+
+        // A `0` or an empty value from a configuration file or the environment:
+        // defined but false (Runner.pm:117 tests `defined`), so the implication
+        // runs and the flag itself stays off, and the recorded command line
+        // carries the value the header prints (Config.pm:745); a flag the
+        // command line gave keeps its value and its line.
+        for value in ["0", ""] {
+            let parsed = parse_command_line(["vep"])
+                .unwrap()
+                .with_defined_off([("var_synonyms", value)]);
+            assert_eq!(parsed.command_line, [format!("--var_synonyms={value}")]);
+            let defined_off = Config::from_parsed(parsed).unwrap();
+            assert!(!defined_off.var_synonyms && defined_off.check_existing);
+            assert_eq!(defined_off.notices, [NOTICE]);
+        }
+        let given = parse_command_line(["vep", "--var_synonyms"])
+            .unwrap()
+            .with_defined_off([("var_synonyms", "0")]);
+        assert!(given.state.is_active("var_synonyms"));
+        assert_eq!(given.command_line, ["--var_synonyms"]);
     }
 
     /// `--clin_sig_allele` is Ensembl VEP's `clin_sig_allele=i` (Config.pm:151),
@@ -2972,7 +3079,9 @@ mod tests {
 
     /// The warnings file is `--warning_file`, else `<output_file>_warnings.txt`
     /// with the output file as the user spelled it, `STDOUT` included
-    /// (BaseVEP.pm:890 reads the `output_file` parameter as given).
+    /// (BaseVEP.pm:890 reads the `output_file` parameter as given); a
+    /// `--warning_file` that is false in Perl, the empty string or `0`, is no
+    /// file and the default stands (`$file ||= ...`, the same line).
     #[test]
     fn warning_file_defaults_beside_the_output_as_spelled() {
         assert_eq!(
@@ -2995,6 +3104,13 @@ mod tests {
             config(&["vep", "-o", "x", "--warning_file", "w.txt"]).warning_file,
             "w.txt"
         );
+        for false_value in ["", "0"] {
+            assert_eq!(
+                config(&["vep", "-o", "x", "--warning_file", false_value]).warning_file,
+                "x_warnings.txt",
+                "{false_value:?}"
+            );
+        }
         assert_eq!(
             config(&["vep", "--skipped_variants_file", "s.txt"])
                 .skipped_variants_file

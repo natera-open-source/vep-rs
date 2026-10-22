@@ -15,8 +15,12 @@ use std::collections::BTreeMap;
 pub struct CacheInfo {
     /// Species name (e.g., "homo_sapiens").
     pub species: String,
-    /// Genome assembly (e.g., "GRCh38").
-    pub assembly: String,
+    /// Genome assembly (e.g., "GRCh38"); `None` when the key is absent, and
+    /// `Some("")` for a present but empty value, which Ensembl VEP's reader keeps
+    /// and compares (`CacheDir.pm:466, 475, 407` at release/116.2). An absent key
+    /// stays absent when the object is written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assembly: Option<String>,
     /// Cache version number (e.g., 115).
     pub cache_version: Option<u32>,
     /// SIFT predictions availability: "b" = both prediction + score, "p" = prediction only, "s" = score only.
@@ -152,7 +156,7 @@ mod tests {
     fn test_cache_info_default() {
         let info = CacheInfo::default();
         assert_eq!(info.species, "");
-        assert_eq!(info.assembly, "");
+        assert_eq!(info.assembly, None);
         assert!(info.cache_version.is_none());
         assert!(info.sift.is_none());
         assert!(info.polyphen.is_none());
@@ -173,7 +177,7 @@ mod tests {
 
         let info = CacheInfo {
             species: "homo_sapiens".to_string(),
-            assembly: "GRCh38".to_string(),
+            assembly: Some("GRCh38".to_string()),
             cache_version: Some(115),
             sift: Some("b".to_string()),
             polyphen: Some("b".to_string()),
@@ -191,7 +195,7 @@ mod tests {
             contig_order: vec!["1".to_string(), "X".to_string(), "MT".to_string()],
         };
         assert_eq!(info.species, "homo_sapiens");
-        assert_eq!(info.assembly, "GRCh38");
+        assert_eq!(info.assembly.as_deref(), Some("GRCh38"));
         assert_eq!(info.cache_version, Some(115));
         assert!(info.regulatory);
         assert_eq!(info.cell_types.len(), 2);

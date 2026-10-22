@@ -292,10 +292,12 @@ impl<R: Read + Send + 'static> BufRead for CheckedBgzfReader<R> {
 /// returns, which the run prints as itself; every read after it returns the
 /// refusal again. A stream that ends inside a block header, its bytes so far
 /// a header's, is refused the same way, as the block reader reads a short
-/// header as a clean end of stream. Bytes that open no block, and a block the
-/// stream ends inside its data, pass through unchanged to the block reader,
-/// which ends the stream on fewer than a header's worth of such bytes and
-/// reports anything else in its own words.
+/// header as a clean end of stream. Bytes after a complete block that open no
+/// gzip member end the stream, as `gzip -dc` ends it (Utils.pm:441 is how
+/// Ensembl VEP reads the file), so a file padded with zeros or followed by a
+/// text trailer is read whole; a gzip member that is not a BGZF block, and a
+/// block the stream ends inside its data, pass through unchanged to the block
+/// reader, which reports them in its own words.
 struct BgzfBlockGuard {
     inner: Box<dyn BufRead + Send>,
     source: String,
@@ -306,6 +308,8 @@ struct BgzfBlockGuard {
     offset: u64,
     /// The rest of the stream is handed through unread, not as blocks.
     passthrough: bool,
+    /// The stream ended at bytes that open no gzip member; the rest is unread.
+    ended: bool,
     /// The block in `block` was refused: its bytes stay there and no read hands
     /// them out.
     refused: bool,
@@ -320,6 +324,7 @@ impl BgzfBlockGuard {
             at: 0,
             offset: 0,
             passthrough: false,
+            ended: false,
             refused: false,
         }
     }
@@ -380,11 +385,15 @@ impl BgzfBlockGuard {
             return Ok(());
         }
         let seen = self.block.len().min(GZIP_MAGIC.len());
-        let opens_a_block = self.block[..seen] == GZIP_MAGIC[..seen]
-            && self
-                .block
-                .get(3)
-                .is_none_or(|flags| flags & GZIP_FEXTRA != 0);
+        if self.block[..seen] != GZIP_MAGIC[..seen] {
+            self.block.clear();
+            self.ended = true;
+            return Ok(());
+        }
+        let opens_a_block = self
+            .block
+            .get(3)
+            .is_none_or(|flags| flags & GZIP_FEXTRA != 0);
         if !opens_a_block {
             self.passthrough = true;
             return Ok(());
@@ -426,6 +435,9 @@ impl Read for BgzfBlockGuard {
             return Err(self.malformed());
         }
         if self.at == self.block.len() {
+            if self.ended {
+                return Ok(0);
+            }
             if self.passthrough {
                 return self.inner.read(buf);
             }
@@ -1029,7 +1041,8 @@ fn perl_default(flag: &str) -> Option<String> {
 /// ([`PERL_DEFAULTS`]), so where this parser's own default differs the given
 /// value prints (`--distance 5000` against `5000,5000`). `--database 0`, which
 /// the `vep` script's own default puts in Ensembl VEP's line (vep:35), is
-/// absent, `--database` being refused here.
+/// absent, `--database` being refused here. Trailing blanks are trimmed
+/// (`:749`), so an empty value at the end of the line leaves none.
 fn vep_command_line(args: impl Iterator<Item = String>) -> String {
     let mut command = crate::args::Args::command_with_error_table();
     command.build();
@@ -1092,6 +1105,7 @@ fn vep_command_line(args: impl Iterator<Item = String>) -> String {
             out.push_str(&v);
         }
     }
+    out.truncate(out.trim_end().len());
     out
 }
 
@@ -1488,19 +1502,19 @@ impl Runner {
         let checks = fasta_setup_checks(&self.config, fasta_found)?;
         self.print_notices(&checks.notices);
 
-        // BaseRunner.pm:203-204, with Ensembl VEP's text.
-        if self.config.output_file != "STDOUT" {
-            let path = Path::new(&self.config.output_file);
-            if path.exists() && !self.config.force_overwrite {
-                return Err(crate::config::CliError::new(
-                    "output",
-                    format!(
-                        "Output file {} already exists. Specify a different output file with --output_file or overwrite existing file with --force_overwrite",
-                        self.config.output_file
-                    ),
-                )
-                .into());
-            }
+        // BaseRunner.pm:203-204, with Ensembl VEP's text, on the name as spelled:
+        // the check comes before the `STDOUT` comparison (:213, :222), so a file
+        // named `STDOUT` refuses `-o STDOUT` and is left untouched under
+        // --force_overwrite, which writes to standard output.
+        let spelled = &self.config.output_file_as_spelled;
+        if Path::new(spelled).exists() && !self.config.force_overwrite {
+            return Err(CliError::new(
+                "output",
+                format!(
+                    "Output file {spelled} already exists. Specify a different output file with --output_file or overwrite existing file with --force_overwrite"
+                ),
+            )
+            .into());
         }
         let sink = crate::warnings::global();
         if let Some(path) = &self.config.skipped_variants_file {
@@ -2009,8 +2023,10 @@ impl Runner {
     /// input, else the named file, which must exist; a gzip stream is decompressed
     /// whatever the file is called, BGZF through the block reader (with
     /// `--decompression_threads` workers) and any other member layout through a
-    /// streaming gunzip (`get_compressed_filehandle`, Utils.pm:429-453); BCF is
-    /// refused before any line is read. The format is `--format`'s, or detected
+    /// streaming gunzip (`get_compressed_filehandle`, Utils.pm:429-453), standard
+    /// input included, where Parser.pm:235-237 hands the raw `*STDIN` glob to the
+    /// parser and :242 decompresses a regular file alone; BCF is refused before
+    /// any line is read. The format is `--format`'s, or detected
     /// from the first data line, which standard input cannot give (Parser.pm:377).
     /// An identifier list is resolved through the cache's variation files
     /// ([`Runner::open_id_input`]); CAid input, which Ensembl VEP looks up in
@@ -2296,8 +2312,10 @@ impl Runner {
 /// option the Parquet writer uses (`PARQUET_VERSION`, `WRITE_BLOOM_FILTER`,
 /// `BLOOM_FILTER_FALSE_POSITIVE_RATIO`, `DICTIONARY_SIZE_LIMIT`,
 /// `DICTIONARY_COMPRESSION_RATIO_THRESHOLD`, `WRITE_PARTITION_COLUMNS`,
-/// `KV_METADATA`).
-const MIN_DUCKDB_VERSION: (u32, u32) = (1, 2);
+/// `KV_METADATA`): `WRITE_BLOOM_FILTER` is an unrecognised option before 1.3.2,
+/// and a 1.2 CLI exits 0 after the failed statement, so an older release would
+/// report a run that wrote no Parquet as a success.
+const MIN_DUCKDB_VERSION: (u32, u32, u32) = (1, 3, 2);
 
 /// Parses `duckdb --version` output such as `v1.5.5 (Variegata) d8cdaa33fd`.
 fn parse_duckdb_version(text: &str) -> Option<(u32, u32, u32)> {
@@ -2308,6 +2326,12 @@ fn parse_duckdb_version(text: &str) -> Option<(u32, u32, u32)> {
         parts.next()??,
         parts.next().flatten().unwrap_or(0),
     ))
+}
+
+/// Whether a DuckDB release is new enough for the Parquet writer: not below
+/// [`MIN_DUCKDB_VERSION`], the patch compared too.
+fn duckdb_is_new_enough(version: (u32, u32, u32)) -> bool {
+    version >= MIN_DUCKDB_VERSION
 }
 
 /// Checks that a `duckdb` CLI new enough for the Parquet writer is on PATH.
@@ -2326,11 +2350,12 @@ fn check_duckdb() -> anyhow::Result<()> {
         })?;
     let text = String::from_utf8_lossy(&output.stdout);
     match parse_duckdb_version(&text) {
-        Some((major, minor, _)) if (major, minor) >= MIN_DUCKDB_VERSION => Ok(()),
+        Some(version) if duckdb_is_new_enough(version) => Ok(()),
         Some((major, minor, patch)) => anyhow::bail!(
-            "--output_format=parquet needs duckdb {}.{} or newer; found {}.{}.{}",
+            "--output_format=parquet needs duckdb {}.{}.{} or newer; found {}.{}.{}",
             MIN_DUCKDB_VERSION.0,
             MIN_DUCKDB_VERSION.1,
+            MIN_DUCKDB_VERSION.2,
             major,
             minor,
             patch
@@ -3489,6 +3514,29 @@ mod tests {
         assert_eq!(parquet_row_group_rows(0), 2_048);
     }
 
+    /// The DuckDB floor is 1.3.2, the first release whose Parquet COPY knows
+    /// `WRITE_BLOOM_FILTER`, and the patch counts: 1.3.1 is refused, 1.3.2 and
+    /// every later release accepted; a version line without a patch reads as
+    /// patch 0.
+    #[test]
+    fn duckdb_floor_compares_the_patch() {
+        assert_eq!(MIN_DUCKDB_VERSION, (1, 3, 2));
+        for (text, accepted) in [
+            ("v1.2.2 (Histrionicus) 7c039464e4", false),
+            ("v1.3.1 (Ossivalis) 2063dda3e6", false),
+            ("v1.3.2 (Ossivalis) 0b83e5d2f6", true),
+            ("v1.4.0 (Andium) b8a06e4a22", true),
+            ("v2.0.0 (Variegata) d8cdaa33fd", true),
+            ("v1.3", false),
+            ("v2.0", true),
+        ] {
+            let version = parse_duckdb_version(text).unwrap();
+            assert_eq!(duckdb_is_new_enough(version), accepted, "{text}");
+        }
+        assert_eq!(parse_duckdb_version("v1.3"), Some((1, 3, 0)));
+        assert_eq!(parse_duckdb_version("duckdb"), None);
+    }
+
     /// The writer's contract for its four numeric columns: a token that is not
     /// a number is stored as NULL and the COPY completes, in both shapes. The
     /// intermediate never writes such a token, so the fixture carries one in
@@ -3762,9 +3810,10 @@ mod tests {
             );
             assert_eq!(text, b"first block\n", "cut at {cut}, {threads} threads");
         }
-        // Trailing bytes that open no block, fewer than a header's worth, are the
-        // block reader's to read, and it reads them as the end of the stream:
-        // the blocks before them are delivered whole under both thread counts.
+        // Trailing bytes that open no gzip member end the stream in the guard; a
+        // gzip member header cut short is the block reader's to read, and it reads
+        // fewer than a header's worth as the end of the stream: the blocks before
+        // either are delivered whole under both thread counts.
         for (tail, threads) in [
             (&b"\n\n\n\n"[..], 1),
             (&[0u8; 15][..], 1),
@@ -3777,6 +3826,43 @@ mod tests {
             reader.read_to_end(&mut text).unwrap();
             assert_eq!(text, b"first block\n", "tail {tail:?}, {threads} threads");
         }
+    }
+
+    /// A BGZF input followed by bytes that open no gzip member, a run of zeros or
+    /// a text trailer of at least a block header's length, is read whole and ends
+    /// there, as `gzip -dc` ends it (the program Ensembl VEP reads a compressed
+    /// file through, Utils.pm:441), under one decompression thread and several;
+    /// the block reader alone would refuse the trailer as a frame. A gzip member
+    /// that is not a BGZF block still reaches the block reader, which refuses it.
+    #[test]
+    fn bgzf_reads_every_block_and_ignores_a_trailer() {
+        let mut writer = bgzf::io::Writer::new(Vec::new());
+        writer.write_all(b"first block\n").unwrap();
+        writer.flush().unwrap();
+        writer.write_all(b"second block\n").unwrap();
+        let blocks = writer.finish().unwrap();
+        for trailer in [&b""[..], b"GARBAGE TRAILER\n", &[0u8; 512], &[0u8; 18]] {
+            for threads in [1, 4] {
+                let bytes = [blocks.as_slice(), trailer].concat();
+                let (mut reader, bgzf) =
+                    decompressed(Cursor::new(bytes), threads, "in.vcf.gz").unwrap();
+                assert!(bgzf);
+                let mut text = String::new();
+                reader.read_to_string(&mut text).unwrap();
+                assert_eq!(
+                    text, "first block\nsecond block\n",
+                    "{trailer:?}, {threads} threads"
+                );
+            }
+        }
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(b"a plain member\n").unwrap();
+        let plain_member = encoder.finish().unwrap();
+        let bytes = [blocks.as_slice(), plain_member.as_slice()].concat();
+        let (mut reader, _) = decompressed(Cursor::new(bytes), 1, "in.vcf.gz").unwrap();
+        let mut text = Vec::new();
+        assert!(reader.read_to_end(&mut text).is_err());
+        assert_eq!(text, b"first block\nsecond block\n");
     }
 
     /// A stream whose read fails once, inside the second block's header, hands

@@ -90,17 +90,21 @@ pub fn resolve(config: &Config) -> Result<ResolvedCache, CliError> {
     let manifest = Arc::new(load_manifest(&dir)?);
     let info = read_info(&dir, &manifest)?;
     // CacheDir.pm:407-408 compares the configuration's assembly after `dir` set it
-    // from the directory name (:356); Ensembl VEP's text names the Storable cache's
-    // info.txt, the file a JSON cache carries as info.json.
-    if let Some(wanted) = config_assembly.or(dir_assembly.as_deref()) {
-        if !info.assembly.is_empty() && wanted != info.assembly {
+    // from the directory name (:356) with the metadata's whenever it is present, an
+    // empty value included (:466 keeps the empty field, :475 stores it); Ensembl
+    // VEP's text names the Storable cache's info.txt, the file a JSON cache carries
+    // as info.json.
+    let wanted = config_assembly.or(dir_assembly.as_deref());
+    if let (Some(wanted), Some(found)) = (wanted, info.assembly.as_deref()) {
+        if wanted != found {
             return Err(cache_error(format!(
-                "Mismatch in assembly versions from config ({wanted}) and cache info.json file ({})",
-                info.assembly
+                "Mismatch in assembly versions from config ({wanted}) and cache info.json file ({found})"
             )));
         }
     }
-    let assembly = Some(info.assembly.clone())
+    let assembly = info
+        .assembly
+        .clone()
         .filter(|a| !a.is_empty())
         .or(dir_assembly)
         .or_else(|| config_assembly.map(str::to_string));
@@ -123,8 +127,9 @@ pub fn resolve(config: &Config) -> Result<ResolvedCache, CliError> {
 /// The run's chromosome synonyms: the `--synonyms` file when given, else the
 /// cache's `chr_synonyms.txt` when it exists (`CacheDir.pm:254`), checked
 /// against the manifest, else an empty table. A file that cannot be read is
-/// Ensembl VEP's error (`BaseVEP.pm:644`), with the reason the operating system
-/// gives.
+/// refused with the reason the operating system gives, a refusal of this
+/// engine's own: Ensembl VEP's two-argument `open` (`BaseVEP.pm:644`) fails on a
+/// missing file but opens a directory and loads an empty table from it.
 fn load_synonyms(
     user_file: Option<&str>,
     cache_dir: &str,
@@ -633,6 +638,29 @@ mod tests {
         assert_eq!(resolved.assembly.as_deref(), Some("GRCh37"));
     }
 
+    /// An `info.json` whose `assembly` is present and empty is compared, not read
+    /// as absent: `CacheDir.pm:466` keeps the empty field of an `assembly<TAB>`
+    /// line, `:475` stores it, and `:407-408` refuse `--assembly GRCh38` against
+    /// it with an empty value in the text. Without `--assembly` and under a
+    /// directory the layout gives no assembly, nothing is compared and the run's
+    /// assembly is unset.
+    #[test]
+    fn empty_assembly_in_info_json_is_compared_and_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        make_leaf(
+            dir.path(),
+            Some(r#"{"species":"homo_sapiens","assembly":""}"#),
+        );
+        let path = dir.path().to_str().unwrap();
+        assert_eq!(
+            error(&["--json_cache", path, "--assembly", "GRCh38"]),
+            "ERROR: [cache] Mismatch in assembly versions from config (GRCh38) and cache info.json file ()"
+        );
+        let resolved = resolve_flags(&["--json_cache", path]).unwrap();
+        assert_eq!(resolved.info.assembly.as_deref(), Some(""));
+        assert_eq!(resolved.assembly, None);
+    }
+
     /// The assembly the directory name carries is the run's (`CacheDir.pm:356`)
     /// and is checked against `info.json` as `--assembly` would be (`:404-408`):
     /// a `116_GRCh38` directory whose `info.json` says `GRCh37` is refused with
@@ -845,8 +873,10 @@ mod tests {
     /// (`CacheDir.pm:254`); a `--synonyms` file replaces it whole, so a name only
     /// the cache's file links resolves to nothing under the user's file; a cache
     /// without the file gives an empty table; and a file that cannot be read is
-    /// Ensembl VEP's error (`BaseVEP.pm:644`) with the system's reason, under the
-    /// component of whoever named the file.
+    /// refused with the system's reason, under the component of whoever named the
+    /// file. A missing file is Ensembl VEP's refusal too (`BaseVEP.pm:644`); a
+    /// directory is refused here alone, where that two-argument `open` succeeds
+    /// and loads an empty table.
     #[test]
     fn synonyms_come_from_the_flag_else_the_cache_file() {
         let dir = tempfile::tempdir().unwrap();
@@ -933,7 +963,7 @@ mod tests {
         let resolved = resolve_flags(&["--json_cache", path]).unwrap();
         assert!(resolved.manifest.is_present());
         assert_eq!(resolved.manifest.len(), 2);
-        assert_eq!(resolved.info.assembly, "GRCh38");
+        assert_eq!(resolved.info.assembly.as_deref(), Some("GRCh38"));
 
         fs::write(dir.path().join("chr_synonyms.txt"), "21\tNC_000021.9\n\n").unwrap();
         assert_eq!(

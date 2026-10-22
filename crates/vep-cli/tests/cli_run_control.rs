@@ -169,20 +169,29 @@ fn empty_argv_prints_help_and_exits_0() {
     assert_eq!(text(&help.stdout), stdout, "--help prints the same text");
 }
 
-/// The usage and the version win over a flag refused before parsing (vep:29
-/// before vep:30): `--af_exac` beside `--help` or `--version`, in either order,
-/// exits 0 with the help or the version.
+/// The usage wins over every other token of the command line (vep:29 before
+/// vep:30, under Getopt::Long's `pass_through`, Config.pm:62): `--help` beside a
+/// flag refused before parsing (`--af_exac`), an unknown flag, an option Ensembl
+/// VEP has and this version lacks (`--stats_html`), a bare word, a refused value
+/// (`--fork x`) or an integer option left without its value (`--fork --help`,
+/// whose `--help` Getopt::Long pushes back), in either order, exits 0 with the
+/// text of `--help` alone, as Ensembl VEP 116.2 prints its usage and exits 0 on
+/// each of these lines. `--help=1` is refused on both engines (vep:30; exit 2
+/// here, in clap's words).
 #[test]
 fn help_and_version_win_over_a_flag_refused_before_parsing() {
-    for (argv, alone) in [
-        (&["--af_exac", "--help"][..], "--help"),
-        (&["--help", "--af_exac"][..], "--help"),
-        (&["--af_exac=1", "-h"][..], "-h"),
-        (&["--af_exac", "--version"][..], "--version"),
-        (&["--version", "--af_exac"][..], "--version"),
-        (&["-V", "--af_exac"][..], "-V"),
+    let expected = text(&vep().arg("--help").output().unwrap().stdout);
+    for argv in [
+        &["--af_exac", "--help"][..],
+        &["--help", "--af_exac"][..],
+        &["--bogus", "--help"][..],
+        &["--stats_html", "--help"][..],
+        &["extra", "--help"][..],
+        &["--fork", "x", "--help"][..],
+        &["--fork", "--help"][..],
+        &["--buffer_size", "--help"][..],
+        &["--help", "--input_file"][..],
     ] {
-        let expected = text(&vep().arg(alone).output().unwrap().stdout);
         let output = vep().args(argv).output().unwrap();
         assert_eq!(
             output.status.code(),
@@ -191,6 +200,39 @@ fn help_and_version_win_over_a_flag_refused_before_parsing() {
             text(&output.stderr)
         );
         assert_eq!(text(&output.stdout), expected, "{argv:?}");
+    }
+    let output = vep().arg("--help=1").output().unwrap();
+    assert_eq!(output.status.code(), Some(2), "{}", text(&output.stderr));
+    assert!(text(&output.stderr).starts_with("error:"));
+}
+
+/// This version's own usage spellings, which Ensembl VEP 116.2 refuses or lacks
+/// (`-h` is a prefix of eight of its options, left in `@ARGV` and refused at
+/// vep:30; it has no `--version`): `-h` prints the help, `--version` and `-V` the
+/// version, each exit 0 and each winning over the rest of the line as `--help`
+/// does, `--version` ahead of `--help` included, where the help is printed.
+#[test]
+fn short_help_and_version_are_this_versions_own_and_win_the_same_way() {
+    let help = text(&vep().arg("--help").output().unwrap().stdout);
+    let version = text(&vep().arg("--version").output().unwrap().stdout);
+    for (argv, expected) in [
+        (&["--af_exac=1", "-h"][..], &help),
+        (&["-h", "--bogus"][..], &help),
+        (&["--af_exac", "--version"][..], &version),
+        (&["--version", "--af_exac"][..], &version),
+        (&["-V", "--af_exac"][..], &version),
+        (&["--bogus", "--version"][..], &version),
+        (&["--fork", "--version"][..], &version),
+        (&["--version", "--help"][..], &help),
+    ] {
+        let output = vep().args(argv).output().unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{argv:?}: {}",
+            text(&output.stderr)
+        );
+        assert_eq!(&text(&output.stdout), expected, "{argv:?}");
     }
 }
 
@@ -243,6 +285,41 @@ fn stdout_literal_is_case_insensitive() {
             "{spelling}: a file was written instead"
         );
     }
+}
+
+/// The existing-file check runs on the `-o` value as spelled, before it is read
+/// as the `STDOUT` literal (BaseRunner.pm:203 before :213 and :222): with a file
+/// named `STDOUT` in the working directory, `-o STDOUT` is refused with Ensembl
+/// VEP's text, exit 1, and with `--force_overwrite` the rows go to standard
+/// output while the file keeps its bytes.
+#[test]
+fn output_file_named_stdout_is_checked_as_spelled() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("STDOUT");
+    std::fs::write(&file, "kept\n").unwrap();
+    let without_force: Vec<String> = corpus_args()
+        .into_iter()
+        .filter(|a| a != "--force_overwrite")
+        .collect();
+    let refused = vep()
+        .args(&without_force)
+        .args(["-o", "STDOUT", "--quiet"])
+        .current_dir(dir.path())
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(1), "{}", text(&refused.stderr));
+    assert_eq!(
+        text(&refused.stderr).trim_end(),
+        "ERROR: [output] Output file STDOUT already exists. Specify a different output file with --output_file or overwrite existing file with --force_overwrite"
+    );
+    assert!(refused.stdout.is_empty());
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "kept\n");
+
+    let forced = run_to(&["-o", "STDOUT", "--quiet"], dir.path());
+    assert_eq!(forced.status.code(), Some(0), "{}", text(&forced.stderr));
+    assert!(data_lines(&text(&forced.stdout)).len() > 30);
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "kept\n");
 }
 
 /// `-o` given twice keeps the last value and warns, as the `vep` script does
@@ -707,8 +784,9 @@ fn gencode_primary_assembly_warning_precedes_the_run() {
 }
 
 /// `--warning_file` names the file; the literal `stderr` in any case
-/// (BaseVEP.pm:884 `/^stderr$/i`) keeps the warnings on standard error, once
-/// each, and writes no file, `--quiet` or not.
+/// (BaseVEP.pm:885 `/^stderr$/i`) keeps the warnings on standard error and
+/// writes no file: each warning twice, as `print $fh` (:819) then `warn` (:821)
+/// write it, and once under `--quiet`, which drops the `warn` copy alone.
 #[test]
 fn warning_file_stderr_literal() {
     let dir = tempfile::tempdir().unwrap();
@@ -737,16 +815,52 @@ fn warning_file_stderr_literal() {
         }
         let output = run_control(&extra, dir.path());
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+        let copies = if quiet { 1 } else { 2 };
+        let expected_text = expected_warnings();
+        let expected: Vec<&str> = expected_text
+            .lines()
+            .flat_map(|line| std::iter::repeat_n(line, copies))
+            .collect();
         assert_eq!(
             warning_lines(&text(&output.stderr)),
-            expected_warnings().lines().collect::<Vec<_>>(),
-            "{spelling} quiet={quiet}: the warnings go to standard error once each"
+            expected,
+            "{spelling} quiet={quiet}: {copies} copies of each warning on standard error"
         );
         assert!(
             !dir.path().join(spelling).exists(),
             "{spelling}: a file was written"
         );
         assert!(!dir.path().join("out.txt_warnings.txt").exists());
+    }
+}
+
+/// A `--warning_file` whose value is false in Perl, the empty string or `0`,
+/// is no file: `$file ||= ...'_warnings.txt'` (BaseVEP.pm:890) falls back to
+/// the default beside the output, and nothing named `0` is written.
+#[test]
+fn warning_file_false_value_is_the_default_file() {
+    for value in ["", "0"] {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("out.txt");
+        let output = run_control(
+            &["-o", out.to_str().unwrap(), "--warning_file", value],
+            dir.path(),
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{value:?}: {}",
+            text(&output.stderr)
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("out.txt_warnings.txt")).unwrap(),
+            expected_warnings(),
+            "{value:?}"
+        );
+        assert!(
+            !dir.path().join("0").exists(),
+            "{value:?}: a file `0` was written"
+        );
     }
 }
 
@@ -1183,6 +1297,96 @@ fn skipped_variants_file_lists_every_skip_in_perl_layout() {
     );
 }
 
+/// Runs the run-control cache over `records` (VCF, with `columns` after INFO in
+/// the header line and the first record a sequence variant the format is
+/// detected from, so `records` starts at line 2) in `dir`, `extra` flags last,
+/// and returns the process output with the warnings file's text.
+fn run_control_over(records: &str, columns: &str, extra: &[&str], dir: &Path) -> (Output, String) {
+    let input = dir.join("records.vcf");
+    let samples = columns.matches('\t').count().saturating_sub(1);
+    let first = format!(
+        "21\t30282169\tstop_ins4_twostops_rev\tC\tCTATT\t.\t.\t.{}{}\n",
+        if samples > 0 { "\tGT" } else { "" },
+        "\t0/1".repeat(samples)
+    );
+    std::fs::write(
+        &input,
+        format!("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO{columns}\n{first}{records}"),
+    )
+    .unwrap();
+    let out = dir.join("out.txt");
+    let mut args = args_for(&run_control_dir());
+    let input_flag = args.iter().position(|a| a == "-i").unwrap();
+    args[input_flag + 1] = input.display().to_string();
+    let output = vep()
+        .args(args)
+        .args(["-o", out.to_str().unwrap()])
+        .args(extra)
+        .current_dir(dir)
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let warnings = std::fs::read_to_string(dir.join("out.txt_warnings.txt")).unwrap_or_default();
+    (output, warnings)
+}
+
+/// Under `--individual all`, each sample's copy of a refused record is validated
+/// apart (VCF.pm:199 over the copies of :595-666), so one record is two skips:
+/// the identical warning text is written once, as `_seen_warnings` keys the whole
+/// text (BaseVEP.pm:810-813), on standard error and in the warnings file alike,
+/// while `skipped_variants` records every copy (:858), so the skipped-variants
+/// file lists the line twice.
+#[test]
+fn individual_copies_of_a_refused_record_warn_once_and_are_listed_twice() {
+    let dir = tempfile::tempdir().unwrap();
+    let skipped = dir.path().join("skipped.txt");
+    let (output, warnings) = run_control_over(
+        "21\t30165901\tinvalid_alleles\tX\tY\t.\t.\t.\tGT\t0/1\t0/1\n",
+        "\tFORMAT\tS1\tS2",
+        &[
+            "--individual",
+            "all",
+            "--skipped_variants_file",
+            skipped.to_str().unwrap(),
+        ],
+        dir.path(),
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let line = "WARNING: line 2 skipped (21 30165901 invalid_alleles X Y . . . GT 0/1 0/1): Invalid allele string X/Y or possible parsing error";
+    assert_eq!(warning_lines(&text(&output.stderr)), [line]);
+    assert_eq!(warnings, format!("{line}\n"));
+    let listed = std::fs::read_to_string(&skipped).unwrap();
+    let rows: Vec<&str> = listed.lines().skip(1).collect();
+    assert_eq!(rows.len(), 2, "{listed}");
+    for row in rows {
+        assert_eq!(
+            row,
+            "Line 2    \t21 30165901 invalid_alleles X Y . . . GT\tInvalid allele string X/Y or possible parsing error"
+        );
+    }
+}
+
+/// The line a skip warning quotes is cut by bytes, as `length` and `substr`
+/// count them on the undecoded line Ensembl VEP reads (BaseVEP.pm:848-850,
+/// `$maxChar = 50`): a 62-byte record whose identifier is twenty two-byte
+/// characters is quoted through byte 46, the first seventeen of them, then
+/// `...`, the bytes Ensembl VEP 116.2 writes for this line.
+#[test]
+fn skip_warning_quotes_the_line_cut_by_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    let id = "é".repeat(20);
+    let record = format!("21\t30165901\t{id}\tX\tY\t.\t.\t.\n");
+    assert_eq!(record.len(), 63, "62 bytes and the newline");
+    let (output, warnings) = run_control_over(&record, "", &[], dir.path());
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let line = format!(
+        "WARNING: line 2 skipped (21 30165901 {}...): Invalid allele string X/Y or possible parsing error",
+        "é".repeat(17)
+    );
+    assert_eq!(warning_lines(&text(&output.stderr)), [line.as_str()]);
+    assert_eq!(warnings, format!("{line}\n"));
+}
+
 /// `--quiet` drops the standard-error copy of each warning and nothing else: the
 /// warnings file is still written in full (BaseVEP.pm:817-821).
 #[test]
@@ -1216,7 +1420,10 @@ fn quiet_and_verbose_is_an_error() {
     assert!(!out.exists());
 }
 
-/// `--safe` skips the incompatible-pair check, so `--quiet --verbose --safe` runs.
+/// `--safe` skips the incompatible-pair check (Config.pm:961), so `--quiet
+/// --verbose --safe` runs, and `--quiet` wins: `status_msg` returns on it before
+/// printing (BaseVEP.pm:782), so standard error stays empty, the status lines
+/// `--verbose` would add included, while the warnings file is still written.
 #[test]
 fn safe_skips_incompatible_check() {
     let dir = tempfile::tempdir().unwrap();
@@ -1233,6 +1440,11 @@ fn safe_skips_incompatible_check() {
     );
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert!(data_lines(&std::fs::read_to_string(&out).unwrap()).len() > 30);
+    assert_eq!(text(&output.stderr), "", "--quiet silences --verbose");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("out.txt_warnings.txt")).unwrap(),
+        expected_warnings()
+    );
 }
 
 /// The pick-summary corpus: multi-allelic records over several transcripts, the
@@ -1565,6 +1777,137 @@ fn var_synonyms_prints_the_notice_and_switches_check_existing_on() {
     assert_eq!(
         text(&refused.stderr),
         "ERROR: [cli] Can't use --json and --vcf together\n"
+    );
+}
+
+/// `var_synonyms 0` in a `--config` file or `vep.ini`, and `VEP_VAR_SYNONYMS=0`,
+/// set the flag defined but false: `Config.pm:1101` and `:1158` store the `0`,
+/// Runner.pm:117 tests the flag with `defined`, so the notice prints and
+/// `check_existing` is switched on, while OutputFactory.pm:1090 reads the `0` as
+/// false and writes no `VAR_SYNONYMS`. On `21 14967531 T C` Ensembl VEP 116.2
+/// prints the notice, the row with `rs139263261`, `CLIN_SIG=benign;PHENO=1`, no
+/// `## VAR_SYNONYMS` header line and `--var_synonyms 0` in the command-line
+/// header, where `full_command` prints a stored value other than `1` after its
+/// key (Config.pm:745); a quoted empty value, `var_synonyms ""`, is stored as the
+/// empty string (`:1092` strips the quotes) and prints `--var_synonyms` with an
+/// empty value, the trailing blank trimmed at the end of the line (`:749`).
+/// `var_synonyms 1` from the file is the flag itself, printed bare, and the bare
+/// record, with no flag from any source, prints neither the notice nor a
+/// co-located variant.
+#[test]
+fn var_synonyms_zero_from_a_source_is_defined_but_false() {
+    let colocated =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-colocated");
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("one.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t14967531\t.\tT\tC\t.\t.\t.\n",
+    )
+    .unwrap();
+    let out = dir.path().join("out.txt");
+    let run = |extra: &[&str], env: &[(&str, &str)]| {
+        let mut command = vep();
+        command
+            .args(args_for(&colocated))
+            .args(["-i", input.to_str().unwrap(), "-o", out.to_str().unwrap()])
+            .args(extra)
+            .current_dir(dir.path())
+            .stdin(Stdio::null());
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        let output = command.output().unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{extra:?} {env:?}: {}",
+            text(&output.stderr)
+        );
+        let notice = text(&output.stderr)
+            .lines()
+            .any(|l| l == VAR_SYNONYMS_NOTICE);
+        let written = std::fs::read_to_string(&out).unwrap();
+        let header = written.lines().any(|l| l.starts_with("## VAR_SYNONYMS"));
+        let command_line = written
+            .lines()
+            .find(|l| l.starts_with("## VEP command-line:"))
+            .unwrap();
+        // `var_synonyms` sorts last among these flags, so the line ends with
+        // the flag and, when it has one, its value.
+        let flag_printed = command_line
+            .find("--var_synonyms")
+            .map_or(String::new(), |at| command_line[at..].to_string());
+        assert!(
+            !command_line.ends_with(' '),
+            "no trailing blank (Config.pm:749): {command_line:?}"
+        );
+        let rows = data_lines(&written);
+        let existing: BTreeSet<String> = rows
+            .iter()
+            .map(|l| l.split('\t').nth(12).unwrap().to_string())
+            .collect();
+        let clinical = rows.iter().all(|l| l.contains("CLIN_SIG=benign;PHENO=1"));
+        (notice, header, existing, clinical, flag_printed)
+    };
+    let known = |name: &str| BTreeSet::from([name.to_string()]);
+    let defined_off = || {
+        (
+            true,
+            false,
+            known("rs139263261"),
+            true,
+            "--var_synonyms 0".to_string(),
+        )
+    };
+    let config = dir.path().join("flags.ini");
+    std::fs::write(&config, "var_synonyms 0\n").unwrap();
+    assert_eq!(
+        run(&["--config", config.to_str().unwrap()], &[]),
+        defined_off(),
+        "a 0 from the config file"
+    );
+    assert_eq!(
+        run(&[], &[("VEP_VAR_SYNONYMS", "0")]),
+        defined_off(),
+        "a 0 from the environment"
+    );
+    let ini_dir = dir.path().join("ini");
+    std::fs::create_dir(&ini_dir).unwrap();
+    std::fs::write(ini_dir.join("vep.ini"), "var_synonyms 0\n").unwrap();
+    assert_eq!(
+        run(&["--dir", ini_dir.to_str().unwrap()], &[]),
+        defined_off(),
+        "a 0 from <dir>/vep.ini"
+    );
+    std::fs::write(&config, "var_synonyms \"\"\n").unwrap();
+    assert_eq!(
+        run(&["--config", config.to_str().unwrap()], &[]),
+        (
+            true,
+            false,
+            known("rs139263261"),
+            true,
+            "--var_synonyms".to_string()
+        ),
+        "a quoted empty value from the config file: defined, printed with no value"
+    );
+    std::fs::write(&config, "var_synonyms 1\n").unwrap();
+    assert_eq!(
+        run(&["--config", config.to_str().unwrap()], &[]),
+        (
+            true,
+            true,
+            known("rs139263261"),
+            true,
+            "--var_synonyms".to_string()
+        ),
+        "a 1 from the config file is the flag"
+    );
+    assert_eq!(
+        run(&[], &[]),
+        (false, false, known("-"), false, String::new()),
+        "no flag from any source"
     );
 }
 
@@ -2563,4 +2906,57 @@ fn cache_layout_selects_the_cache_directory_and_refuses_another_value() {
             )
         );
     }
+}
+
+/// A `duckdb` CLI below 1.3.2 on PATH refuses `--output_format parquet` before
+/// anything is written: the refusal names the floor and the version found, exit
+/// 1, and no output directory, intermediate or Parquet file exists afterwards. A
+/// 1.2 release's Parquet COPY rejects `WRITE_BLOOM_FILTER` yet its CLI exits 0,
+/// so without the floor such a run would report success and write nothing. The
+/// CLI is a stub answering `--version` alone, so the test needs no DuckDB.
+#[cfg(unix)]
+#[test]
+fn parquet_output_refuses_a_duckdb_below_the_floor_before_writing() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let bin = dir.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let stub = bin.join("duckdb");
+    std::fs::write(
+        &stub,
+        "#!/bin/sh\ncase \"$1\" in --version) echo 'v1.2.2 (Histrionicus) 7c039464e4';; *) exit 0;; esac\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let out = dir.path().join("out.parquet");
+    let output = vep()
+        .args(corpus_args())
+        .args([
+            "-o",
+            out.to_str().unwrap(),
+            "--output_format",
+            "parquet",
+            "--quiet",
+        ])
+        .env("PATH", &bin)
+        .current_dir(dir.path())
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1), "{}", text(&output.stderr));
+    assert_eq!(
+        text(&output.stderr).trim_end(),
+        "ERROR: [run] --output_format=parquet needs duckdb 1.3.2 or newer; found 1.2.2"
+    );
+    assert!(!out.exists(), "an output directory was created");
+    assert!(
+        !dir.path().join("out.parquet.tsv.tmp").exists(),
+        "an intermediate was written"
+    );
+    let written: Vec<String> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name != "bin")
+        .collect();
+    assert!(written.is_empty(), "{written:?}");
 }

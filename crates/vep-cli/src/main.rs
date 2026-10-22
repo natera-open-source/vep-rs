@@ -41,15 +41,20 @@ fn run(argv: Vec<OsString>) -> i32 {
         return 0;
     }
 
-    let argv = match argv::prepass(argv, std::env::vars_os()) {
-        Ok(argv) => argv,
+    let prepassed = match argv::prepass_with_sources(argv, std::env::vars_os()) {
+        Ok(prepassed) => prepassed,
         Err(error) => {
             eprintln!("{error}");
             return 1;
         }
     };
-    let parsed = match config::parse_command_line(argv) {
-        Ok(parsed) => parsed,
+    let parsed = match config::parse_command_line(prepassed.argv) {
+        Ok(parsed) => parsed.with_defined_off(
+            prepassed
+                .defined_off
+                .iter()
+                .map(|(flag, value)| (flag.as_str(), value.as_str())),
+        ),
         Err(ParseFailure::Usage(error)) => error.exit(),
         Err(ParseFailure::Refused(error)) => {
             eprintln!("{error}");
@@ -66,11 +71,12 @@ fn run(argv: Vec<OsString>) -> i32 {
 
     // Every warning goes to the sink instead of the status layer, whatever the
     // level, so --quiet keeps it in the warnings file (BaseVEP.pm:821 drops the
-    // standard-error copy alone).
-    let status_level = if parsed.args.verbose {
-        tracing::Level::DEBUG
-    } else if parsed.args.quiet {
+    // standard-error copy alone). --quiet silences every status message
+    // (BaseVEP.pm:782), --verbose beside it included: the pair passes under --safe.
+    let status_level = if parsed.args.quiet {
         tracing::Level::ERROR
+    } else if parsed.args.verbose {
+        tracing::Level::DEBUG
     } else {
         tracing::Level::INFO
     };
@@ -87,11 +93,13 @@ fn run(argv: Vec<OsString>) -> i32 {
         .with(status)
         .with(warnings_layer)
         .init();
-    // Configured before the resolution, whose own warnings are the run's too.
+    // Configured before the resolution, whose own warnings are the run's too. A
+    // skip names no line number once --input_data is given, whatever its value
+    // (BaseVEP.pm:854 tests `defined`), while the value decides what is read.
     warnings::global().configure(
         warnings::target_for(&config::warning_file_for(&parsed.args)),
         quiet,
-        config::input_data_for(&parsed.args).is_some(),
+        parsed.args.input_data.is_some(),
     );
 
     let config = match config::Config::from_parsed(parsed) {

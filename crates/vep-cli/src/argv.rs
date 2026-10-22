@@ -289,27 +289,36 @@ pub fn resolve<'a>(name: &str, options: &'a [OptionNames]) -> Option<&'a OptionN
     prefixed.next().is_none().then_some(first)
 }
 
-/// How Ensembl VEP takes an option's value, from its `@VEP_PARAMS` spec: `=`
-/// a required value, `:` an optional one, neither a switch; `None` for a name
-/// `@VEP_PARAMS` lacks.
-fn perl_arity(name: &str) -> Option<Arity> {
+/// The value part of the `@VEP_PARAMS` spec naming an option (`=s`, `=i`, `:s`,
+/// or empty for a switch); `None` for a name `@VEP_PARAMS` lacks.
+fn perl_value_spec(name: &str) -> Option<&'static str> {
     VEP_PARAMS.iter().find_map(|spec| {
         let (names, value_type) = match spec.find(['=', ':']) {
             Some(at) => spec.split_at(at),
             None => (*spec, ""),
         };
-        if !names.split('|').any(|n| n == name) {
-            return None;
-        }
-        let arity = if value_type.is_empty() {
-            Arity::Switch
-        } else if value_type.starts_with('=') {
-            Arity::Required
-        } else {
-            Arity::Optional
-        };
-        Some(arity)
+        names.split('|').any(|n| n == name).then_some(value_type)
     })
+}
+
+/// How Ensembl VEP takes an option's value, from its `@VEP_PARAMS` spec: `=`
+/// a required value, `:` an optional one, neither a switch; `None` for a name
+/// `@VEP_PARAMS` lacks.
+fn perl_arity(name: &str) -> Option<Arity> {
+    let value_type = perl_value_spec(name)?;
+    let arity = if value_type.is_empty() {
+        Arity::Switch
+    } else if value_type.starts_with('=') {
+        Arity::Required
+    } else {
+        Arity::Optional
+    };
+    Some(arity)
+}
+
+/// Whether Ensembl VEP declares the option's value as a number (`=i`, `=f`).
+fn perl_takes_a_number(name: &str) -> bool {
+    perl_value_spec(name).is_some_and(|spec| spec.ends_with(['i', 'f']))
 }
 
 /// Ensembl VEP's options as [`VEP_PARAMS`] declares them.
@@ -549,6 +558,10 @@ fn key_storage(
 struct Settings {
     scalars: BTreeMap<String, String>,
     lists: BTreeMap<String, Vec<String>>,
+    /// The key a flag was set under where it is Ensembl VEP's own name for an
+    /// option declared here as an alias (`full_cache_dir` for `json_cache`), the
+    /// name its token is written under; absent for a flag set under its long name.
+    written: BTreeMap<String, String>,
 }
 
 impl Settings {
@@ -564,15 +577,30 @@ impl Settings {
         let Some((long, multiple)) = key_storage(declared, perl, key) else {
             return;
         };
+        let written = (key != long && perl.contains(key)).then(|| key.to_string());
         if multiple {
-            self.lists.entry(long).or_default().push(value.to_string());
+            self.lists
+                .entry(long.clone())
+                .or_default()
+                .push(value.to_string());
         } else if !self
             .scalars
             .get(&long)
             .is_some_and(|current| truthy(current))
         {
-            self.scalars.insert(long, value.to_string());
+            self.scalars.insert(long.clone(), value.to_string());
+        } else {
+            return;
         }
+        match written {
+            Some(written) => self.written.insert(long, written),
+            None => self.written.remove(&long),
+        };
+    }
+
+    /// The name a stored flag's token is written under ([`Settings::written`]).
+    fn written_name<'a>(&'a self, long: &'a str) -> &'a str {
+        self.written.get(long).map_or(long, String::as_str)
     }
 }
 
@@ -688,6 +716,12 @@ enum Token {
     /// attached by `=`, or the token after an option that requires one.
     Option {
         long: String,
+        /// The name the token is written under for clap: the long name, or
+        /// Ensembl VEP's own name for an option declared here as an alias of
+        /// another (`full_cache_dir` for `json_cache`), which is the key Ensembl
+        /// VEP stores the flag as and prints in its command-line header
+        /// (`Config.pm:734-745`).
+        written: String,
         value: Option<OsString>,
     },
     /// A token left as written: a value, a short cluster, the `--` separator, an
@@ -696,12 +730,21 @@ enum Token {
 }
 
 impl Token {
+    /// An option written under its long name.
+    fn option(long: &str, value: Option<OsString>) -> Token {
+        Token::Option {
+            long: long.to_string(),
+            written: long.to_string(),
+            value,
+        }
+    }
+
     /// The token as clap reads it; a value is attached with `=`, so a value
     /// starting with a dash stays a value, as Getopt::Long takes it.
     fn into_os_string(self) -> OsString {
         match self {
-            Token::Option { long, value } => {
-                let mut out = OsString::from(format!("--{long}"));
+            Token::Option { written, value, .. } => {
+                let mut out = OsString::from(format!("--{written}"));
                 if let Some(value) = value {
                     out.push("=");
                     out.push(value);
@@ -711,6 +754,27 @@ impl Token {
             Token::Verbatim(s) => s,
         }
     }
+}
+
+/// Ensembl VEP's own name for an option the parser declares under another: the
+/// `@VEP_PARAMS` option the written name resolves to, when it is one of the
+/// parser's names for the option but not its long name (`full_cache_dir`, an
+/// alias of `json_cache`); `None` when the long name is the key both store.
+fn perl_alias_key(name: &str, carrier: &Declared, perl: &[OptionNames]) -> Option<String> {
+    let key = &resolve(name, perl)?.canonical;
+    let is_alias = key != &carrier.names.canonical && carrier.names.names.contains(key);
+    is_alias.then(|| key.clone())
+}
+
+/// Whether a token is a bare option asking for the help or the version, in any
+/// spelling the pre-pass reads (`--help`, `-h`, `-help`, `--HELP`, `--hel`,
+/// `--version`, `-V`).
+fn asks_usage(token: &OsStr, known: &[OptionNames], perl: &[OptionNames]) -> bool {
+    let Some((name, None)) = token.to_str().and_then(option_parts) else {
+        return false;
+    };
+    resolve_spelling(name, known, perl)
+        .is_some_and(|option| option.canonical == "help" || option.canonical == "version")
 }
 
 /// The option name and attached value a token carries when it is written as
@@ -747,19 +811,23 @@ fn glued_short<'a, 'n>(body: &'n str, declared: &'a [Declared]) -> Option<(&'a D
 }
 
 /// Spells the command line's own tokens: an option that [`resolve_spelling`]
-/// reaches is written as `--<long>`, with its attached value; the token after an
-/// option that requires a value is that value, however it is spelled
-/// (`--input_file -cache` names the file `-cache`, as Getopt::Long reads it); a
-/// name that is a prefix of several options is written with two dashes, so clap
-/// refuses it; a short flag with its value attached is written as the long form;
-/// `--` ends the options. Anything else, a cluster of switches or a name no
-/// option has, is left for clap.
+/// reaches is written as `--<long>`, with its attached value, under Ensembl
+/// VEP's own name where that is an alias here ([`perl_alias_key`]); the token
+/// after an option that requires a value is that value, however it is spelled
+/// (`--input_file -cache` names the file `-cache`, as Getopt::Long reads it),
+/// except that an option Ensembl VEP declares as a number leaves a token asking
+/// for the help or the version unread, as Getopt::Long pushes back a value that
+/// is not a number (`--fork --help` asks for the help); a name that is a prefix
+/// of several options is written with two dashes, so clap refuses it; a short
+/// flag with its value attached is written as the long form; `--` ends the
+/// options. Anything else, a cluster of switches or a name no option has, is
+/// left for clap.
 fn spell(options: &[OsString], declared: &[Declared]) -> Vec<Token> {
     let known = known_options(declared);
     let perl = perl_options();
     let mut tokens = Vec::with_capacity(options.len());
     let mut after_separator = false;
-    let mut iter = options.iter();
+    let mut iter = options.iter().peekable();
     while let Some(token) = iter.next() {
         let Some(text) = token.to_str().filter(|_| !after_separator) else {
             tokens.push(Token::Verbatim(token.clone()));
@@ -775,16 +843,30 @@ fn spell(options: &[OsString], declared: &[Declared]) -> Vec<Token> {
             continue;
         };
         if let Some(option) = resolve_spelling(name, &known, &perl) {
-            let (long, arity) = match declared_by_name(declared, &option.canonical) {
+            let carrier = declared_by_name(declared, &option.canonical);
+            let (long, arity) = match carrier {
                 Some(carrier) => (carrier.names.canonical.clone(), carrier.arity),
                 None => (option.canonical.clone(), Arity::Switch),
             };
+            let written = carrier
+                .and_then(|carrier| perl_alias_key(name, carrier, &perl))
+                .unwrap_or_else(|| long.clone());
+            let usage_token_pushed_back = perl_takes_a_number(&written)
+                && iter
+                    .peek()
+                    .is_some_and(|next| asks_usage(next, &known, &perl));
             let value = match attached {
                 Some(attached) => Some(OsString::from(attached)),
-                None if arity == Arity::Required => iter.next().cloned(),
+                None if arity == Arity::Required && !usage_token_pushed_back => {
+                    iter.next().cloned()
+                }
                 None => None,
             };
-            tokens.push(Token::Option { long, value });
+            tokens.push(Token::Option {
+                long,
+                written,
+                value,
+            });
             continue;
         }
         // A name that is a prefix of several options is ambiguous to Getopt::Long
@@ -793,20 +875,16 @@ fn spell(options: &[OsString], declared: &[Declared]) -> Vec<Token> {
         let prefixes_an_option = options_prefixed_by(name, &known).next().is_some()
             || options_prefixed_by(name, &perl).next().is_some();
         if prefixes_an_option {
-            let two_dashes = Token::Option {
-                long: name.to_string(),
-                value: attached.map(OsString::from),
-            }
-            .into_os_string();
+            let two_dashes = Token::option(name, attached.map(OsString::from)).into_os_string();
             tokens.push(Token::Verbatim(two_dashes));
             continue;
         }
         if let Some(body) = text.strip_prefix('-').filter(|b| !b.starts_with('-')) {
             if let Some((option, value)) = glued_short(body, declared) {
-                tokens.push(Token::Option {
-                    long: option.names.canonical.clone(),
-                    value: Some(OsString::from(value)),
-                });
+                tokens.push(Token::option(
+                    &option.names.canonical,
+                    Some(OsString::from(value)),
+                ));
                 continue;
             }
         }
@@ -821,42 +899,78 @@ fn command_line_value(tokens: &[Token], long: &str) -> Option<OsString> {
         .iter()
         .rev()
         .find_map(|t| match t {
-            Token::Option { long: name, value } if name == long => Some(value),
+            Token::Option {
+                long: name, value, ..
+            } if name == long => Some(value),
             _ => None,
         })
         .and_then(|value| value.clone())
 }
 
+/// How a source's key takes its value: the declared option's arity, else the
+/// `@VEP_PARAMS` spec's for an Ensembl VEP option the parser lacks, else a
+/// switch's.
+fn key_arity(declared: &[Declared], key: &str) -> Arity {
+    declared_option(declared, key)
+        .map(|d| d.arity)
+        .or_else(|| perl_arity(key))
+        .unwrap_or(Arity::Switch)
+}
+
 /// The tokens a source's settings add: a switch whose value is true as the flag
 /// alone, a flag taking a value as `--<long>=<value>`, a repeatable flag once
-/// per value. A switch whose value is `0` or empty, or `cache` set to `0`, adds
-/// nothing: Ensembl VEP stores the value and reads it as false. `cache` set to
-/// the empty string adds the flag alone: `Config.pm:716` compares the stored
-/// value with `0` as strings, which only `0` fails, and `:718` sets it to `1`.
-/// A scalar of an Ensembl VEP option the parser lacks is added as its
-/// `@VEP_PARAMS` spec takes it, a switch's or a value's, for the parser to
-/// refuse.
+/// per value, each under the name it was set by ([`Settings::written_name`]).
+/// A switch whose value is `0` or empty, or `cache` set to `0`, adds nothing:
+/// Ensembl VEP stores the value and reads it as false. `cache` set to the empty
+/// string adds the flag alone: `Config.pm:716` compares the stored value with `0`
+/// as strings, which only `0` fails, and `:718` sets it to `1`. A scalar of an
+/// Ensembl VEP option the parser lacks is added as its `@VEP_PARAMS` spec takes
+/// it, a switch's or a value's, for the parser to refuse.
 fn tokens_of(settings: &Settings, declared: &[Declared]) -> (Vec<OsString>, Vec<OsString>) {
     let mut scalars = Vec::new();
     for (key, value) in &settings.scalars {
-        let arity = declared_option(declared, key)
-            .map(|d| d.arity)
-            .or_else(|| perl_arity(key))
-            .unwrap_or(Arity::Switch);
-        let token = match (arity, value.as_str()) {
+        let name = settings.written_name(key);
+        let token = match (key_arity(declared, key), value.as_str()) {
             (Arity::Switch, v) if !truthy(v) => continue,
             (Arity::Optional, "0") => continue,
-            (Arity::Switch, _) | (Arity::Optional, "") => format!("--{key}"),
-            (Arity::Optional | Arity::Required, v) => format!("--{key}={v}"),
+            (Arity::Switch, _) | (Arity::Optional, "") => format!("--{name}"),
+            (Arity::Optional | Arity::Required, v) => format!("--{name}={v}"),
         };
         scalars.push(token.into());
     }
     let lists = settings
         .lists
         .iter()
-        .flat_map(|(key, values)| values.iter().map(move |v| format!("--{key}={v}").into()))
+        .flat_map(|(key, values)| {
+            let name = settings.written_name(key);
+            values.iter().map(move |v| format!("--{name}={v}").into())
+        })
         .collect();
     (scalars, lists)
+}
+
+/// The switches Ensembl VEP reads by `defined()` rather than by truth, so a
+/// source's `0` or empty value sets them off but present: `var_synonyms`, which
+/// `Runner.pm:117` tests with `defined` before switching `check_existing` on.
+pub const DEFINED_SWITCHES: &[&str] = &["var_synonyms"];
+
+/// The [`DEFINED_SWITCHES`] a source set to a false value, each with that value
+/// (`0` or the empty string a quoted value leaves), which [`tokens_of`] adds
+/// nothing for; `Config.pm:1101` and `:1158` store the value under the key.
+fn defined_off_switches(sources: &[&Settings], declared: &[Declared]) -> Vec<(String, String)> {
+    DEFINED_SWITCHES
+        .iter()
+        .filter(|flag| key_arity(declared, flag) == Arity::Switch)
+        .filter_map(|flag| {
+            sources.iter().find_map(|source| {
+                source
+                    .scalars
+                    .get(*flag)
+                    .filter(|value| !truthy(value))
+                    .map(|value| (flag.to_string(), value.clone()))
+            })
+        })
+        .collect()
 }
 
 /// A path with a leading `~` expanded to `home`, the home directory, which
@@ -885,7 +999,8 @@ fn expand_tilde(path: &OsStr, home: &str) -> PathBuf {
     }
 }
 
-/// The command line clap parses, from the one given and the sources behind it.
+/// The command line clap parses, from the one given and the sources behind it
+/// ([`Prepassed::argv`] of [`prepass_with_sources`]).
 ///
 /// The first element is the program name. A command line asking for the help or
 /// the version (`--help`, `-h`, `--version`, `-V`, in any spelling) is returned
@@ -908,6 +1023,30 @@ pub fn prepass<I>(argv: Vec<OsString>, env: I) -> Result<Vec<OsString>, CliError
 where
     I: IntoIterator<Item = (OsString, OsString)>,
 {
+    prepass_with_sources(argv, env).map(|prepassed| prepassed.argv)
+}
+
+/// A command line read through the pre-pass.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Prepassed {
+    /// The command line clap parses ([`prepass`]).
+    pub argv: Vec<OsString>,
+    /// The [`DEFINED_SWITCHES`] a source behind the command line set to `0` or
+    /// the empty string, each with that value: off, so no token of `argv` names
+    /// them, but present in Ensembl VEP's configuration, where `Config.pm:1101`
+    /// and `:1158` store the value.
+    pub defined_off: Vec<(String, String)>,
+}
+
+/// [`prepass`] with the flags the sources set to a defined false value.
+///
+/// # Errors
+///
+/// As [`prepass`].
+pub fn prepass_with_sources<I>(argv: Vec<OsString>, env: I) -> Result<Prepassed, CliError>
+where
+    I: IntoIterator<Item = (OsString, OsString)>,
+{
     let mut command = Args::command_with_error_table();
     command.build();
     let declared = declared_options(&command);
@@ -927,7 +1066,10 @@ where
         .any(|t| matches!(t, Token::Option { long, .. } if long == "help" || long == "version"));
     let spelled: Vec<OsString> = tokens.iter().cloned().map(Token::into_os_string).collect();
     if asks_help_or_version {
-        return Ok(std::iter::once(program).chain(spelled).collect());
+        return Ok(Prepassed {
+            argv: std::iter::once(program).chain(spelled).collect(),
+            defined_off: Vec::new(),
+        });
     }
 
     let config_file = match command_line_value(&tokens, "config") {
@@ -975,6 +1117,7 @@ where
         named_by_a_higher_source.extend(source.scalars.keys().cloned());
     }
     let [config_file, ini, environment] = sources;
+    let defined_off = defined_off_switches(&[&config_file, &ini, &environment], &declared);
 
     let (config_scalars, config_lists) = tokens_of(&config_file, &declared);
     let (ini_scalars, ini_lists) = tokens_of(&ini, &declared);
@@ -985,16 +1128,16 @@ where
         .position(|t| t == "--")
         .unwrap_or(spelled.len());
     let (own, rest) = spelled.split_at(separator);
-    let mut out = vec![program];
-    out.extend(env_scalars);
-    out.extend(ini_scalars);
-    out.extend(config_scalars);
-    out.extend(own.iter().cloned());
-    out.extend(config_lists);
-    out.extend(ini_lists);
-    out.extend(env_lists);
-    out.extend(rest.iter().cloned());
-    Ok(out)
+    let mut argv = vec![program];
+    argv.extend(env_scalars);
+    argv.extend(ini_scalars);
+    argv.extend(config_scalars);
+    argv.extend(own.iter().cloned());
+    argv.extend(config_lists);
+    argv.extend(ini_lists);
+    argv.extend(env_lists);
+    argv.extend(rest.iter().cloned());
+    Ok(Prepassed { argv, defined_off })
 }
 
 #[cfg(test)]
@@ -1365,14 +1508,17 @@ mod tests {
     /// A key that is an Ensembl VEP option of its own but an alias here
     /// (`full_cache_dir`, `Config.pm:243`, the alias of `--json_cache`) names
     /// the option in a file and in the environment, as Ensembl VEP stores and
-    /// reads it; an alias both treat as one (`fa`) still names nothing.
+    /// reads it, and keeps that name on the token, the key Ensembl VEP prints in
+    /// its command-line header (`Config.pm:734-745`), from every source and in
+    /// any spelling of the command line's own; the long name stays its own; an
+    /// alias both treat as one (`fa`) still names nothing.
     #[test]
     fn source_key_that_is_an_ensembl_vep_option_names_its_alias_target() {
         let dir = tempfile::tempdir().unwrap();
         let file = write(dir.path(), "flags.ini", "full_cache_dir /x\nfa ref.fa\n");
         assert_eq!(
             run(&["--config", &file], dir.path(), &[]),
-            owned(&["vep", "--json_cache=/x", &format!("--config={file}")])
+            owned(&["vep", "--full_cache_dir=/x", &format!("--config={file}")])
         );
         assert_eq!(
             run(
@@ -1380,15 +1526,36 @@ mod tests {
                 dir.path(),
                 &[("VEP_FULL_CACHE_DIR", "/y"), ("VEP_FA", "ref.fa")]
             ),
-            owned(&["vep", "--json_cache=/y", "--input_file=x.vcf"])
+            owned(&["vep", "--full_cache_dir=/y", "--input_file=x.vcf"])
         );
+        for spelling in [
+            "--full_cache_dir",
+            "-full_cache_dir",
+            "--FULL_CACHE_DIR",
+            "--full_cache",
+        ] {
+            assert_eq!(
+                run(
+                    &[spelling, "/z"],
+                    dir.path(),
+                    &[("VEP_FULL_CACHE_DIR", "/y")]
+                ),
+                owned(&["vep", "--full_cache_dir=/z"]),
+                "{spelling}"
+            );
+        }
         assert_eq!(
             run(
-                &["--full_cache_dir", "/z"],
+                &["--json_cache", "/z"],
                 dir.path(),
                 &[("VEP_FULL_CACHE_DIR", "/y")]
             ),
             owned(&["vep", "--json_cache=/z"])
+        );
+        let file = write(dir.path(), "long.ini", "json_cache /x\n");
+        assert_eq!(
+            run(&["--config", &file], dir.path(), &[]),
+            owned(&["vep", "--json_cache=/x", &format!("--config={file}")])
         );
     }
 
@@ -1741,6 +1908,41 @@ mod tests {
             let mut want = vec!["vep"];
             want.extend(expected.iter().copied());
             assert_eq!(out, owned(&want), "{args:?}");
+        }
+    }
+
+    /// The token after an option Ensembl VEP declares as a number (`fork=i`,
+    /// `freq_freq=f`) is left unread when it asks for the help or the version, as
+    /// Getopt::Long pushes back a value that is not a number, so `--fork --help`
+    /// asks for the help and reads no source; a string option takes the token as
+    /// its value, as `=s` takes anything (`-i --help` names the file `--help`),
+    /// and a number is a number's value.
+    #[test]
+    fn a_numeric_option_leaves_a_usage_token_unread() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().to_str().unwrap();
+        let cases: [(&[&str], &[&str]); 6] = [
+            (&["--fork", "--help"], &["--fork", "--help"]),
+            (&["--fork", "x", "--help"], &["--fork=x", "--help"]),
+            (&["--freq_freq", "-V"], &["--freq_freq", "--version"]),
+            (&["--buffer_size", "-help"], &["--buffer_size", "--help"]),
+            (&["--fork", "4", "--help"], &["--fork=4", "--help"]),
+            (
+                &["--input_file", "--help"],
+                &["--symbol", "--input_file=--help"],
+            ),
+        ];
+        for (args, expected) in cases {
+            let mut argv = vec!["vep"];
+            argv.extend(args.iter().copied());
+            let out = prepass(
+                self::argv(&argv),
+                env(&[("HOME", home), ("VEP_SYMBOL", "1")]),
+            )
+            .unwrap_or_else(|e| panic!("{args:?}: {e}"));
+            let mut want = vec!["vep"];
+            want.extend(expected.iter().copied());
+            assert_eq!(strings(&out), owned(&want), "{args:?}");
         }
     }
 

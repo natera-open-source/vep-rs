@@ -10,15 +10,15 @@
 //! pipeline raises. A warning is written as `WARNING: <text>` to the warnings
 //! file (`--warning_file`, default `<output_file>_warnings.txt`, the literal
 //! `STDERR` in any case for standard error) and echoed on standard error unless
-//! `--quiet`; a text seen before, a trailing `line N` set aside, is written once.
-//! The warnings file is opened at the first warning, so a run without one leaves
-//! no file.
+//! `--quiet`, so a standard-error target carries it twice; a text seen before, a
+//! trailing `line N` set aside, is written once. The warnings file is opened at
+//! the first warning, so a run without one leaves no file.
 //!
 //! A skipped variant is reported as `line N skipped (<line>): <description>`,
-//! the line collapsed to single spaces and cut to 50 characters, `variant
-//! skipped` under `--input_data`, and recorded for the skipped-variants file,
-//! written at the end of the run as a header line and one `Line N\t<line>\t
-//! <description>` row per skip.
+//! the line collapsed to single spaces and cut to 50 bytes, `variant skipped`
+//! under `--input_data`, and recorded for the skipped-variants file, written at
+//! the end of the run as a header line and one `Line N\t<line>\t<description>`
+//! row per skip.
 
 use std::collections::HashSet;
 use std::fs::File;
@@ -32,8 +32,10 @@ use tracing_subscriber::layer::{Context, Layer};
 
 use crate::config::CliError;
 
-/// The line shown in a skipped-variant warning is cut to this many characters.
-const QUOTED_LINE_CHARS: usize = 50;
+/// The line shown in a skipped-variant warning is cut past this many bytes:
+/// `$maxChar = 50` (BaseVEP.pm:848) measured by `length` on a line Perl reads
+/// with no encoding layer, so it counts bytes.
+const QUOTED_LINE_BYTES: usize = 50;
 
 /// The width of the line column of the skipped-variants file (`%-40.40s`).
 const SKIPPED_LINE_WIDTH: usize = 40;
@@ -129,9 +131,8 @@ impl Sink {
     /// `warning_msg` (BaseVEP.pm:802-822): `WARNING: ` is prefixed unless the text
     /// already opens with `warn` in any case, a newline is appended unless present,
     /// a text seen before with the same dedup key is dropped, and the text goes to
-    /// the target and, for a file target, to standard error unless quiet. A
-    /// standard-error target is written once where Perl's `warn` repeats the
-    /// `print $fh` line.
+    /// the target and to standard error unless quiet, so a standard-error target
+    /// carries it twice, as `print $fh` (:819) then `warn` (:821) write it.
     pub fn warn(&self, text: &str) {
         let mut text = text.to_string();
         if !text
@@ -149,10 +150,11 @@ impl Sink {
         self.write(text);
     }
 
-    /// Writes one finished warning text to the target and, for a file target, to
-    /// standard error unless quiet. A file that cannot be created or written is
-    /// kept as the run's failure ([`Sink::failure`], the `ERROR: [output]` line the
-    /// run ends with); the standard-error echo follows `--quiet` all the same.
+    /// Writes one finished warning text to the target, then to standard error
+    /// unless quiet, a standard-error target included. A file that cannot be
+    /// created or written is kept as the run's failure ([`Sink::failure`], the
+    /// `ERROR: [output]` line the run ends with); the standard-error echo follows
+    /// `--quiet` all the same.
     fn write(&self, text: String) {
         let mut state = self.lock();
         match state.target.clone() {
@@ -171,20 +173,20 @@ impl Sink {
                         state.failure = Some(could_not_write());
                     }
                 }
-                if !state.quiet {
-                    eprint!("{text}");
-                }
             }
+        }
+        if !state.quiet {
+            eprint!("{text}");
         }
     }
 
     /// `skipped_variant_msg` (BaseVEP.pm:840-863): warns about a record the run
     /// drops and records it for the skipped-variants file when one is reserved.
     /// `line` is the input line, `line_number` Ensembl VEP's count of data records
-    /// read. A numbered line's dedup key carries its number (`line N skipped`
-    /// opens the text, so the trailing-number rule never strips it), so it is
-    /// written without a look at the seen set, which then holds no entry per
-    /// skipped record.
+    /// read. The warning passes through the seen set like any other (`line N
+    /// skipped` opens the text, so the trailing-number rule never strips the
+    /// number): two records are two lines, and two copies of one record, as
+    /// `--individual` makes them, are one.
     pub fn skipped_variant(&self, description: &str, line_number: Option<u64>, line: Option<&str>) {
         let line = line.map(quoted_line);
         let described = match &line {
@@ -192,10 +194,11 @@ impl Sink {
             None => description.to_string(),
         };
         let numbered = line_number.filter(|_| !self.lock().input_data);
-        match numbered {
-            Some(n) => self.write(format!("WARNING: line {n} skipped {described}\n")),
-            None => self.warn(&format!("WARNING: variant skipped {described}\n")),
-        }
+        let text = match numbered {
+            Some(n) => format!("WARNING: line {n} skipped {described}\n"),
+            None => format!("WARNING: variant skipped {described}\n"),
+        };
+        self.warn(&text);
         let mut state = self.lock();
         if state.skipped_file.is_some() {
             state.skipped.push(Skipped {
@@ -293,27 +296,28 @@ fn dedup_key(text: &str) -> String {
 }
 
 /// The shortest prefix of a raw input line that [`quoted_line`] renders as it
-/// renders the whole line: the line through its first `QUOTED_LINE_CHARS + 1`
-/// characters once whitespace runs are collapsed, cut at a character boundary.
-/// A reader that keeps part of a line keeps this much for the skip warning.
+/// renders the whole line: the line through its first `QUOTED_LINE_BYTES + 1`
+/// bytes once whitespace runs are collapsed, cut at a character boundary. A
+/// reader that keeps part of a line keeps this much for the skip warning.
 pub(crate) fn quotable_prefix(line: &[u8]) -> &[u8] {
-    let mut chars = 0usize;
+    let mut bytes = 0usize;
     let mut in_space = false;
     for (at, &byte) in line.iter().enumerate() {
-        // A continuation byte belongs to the character counted at its lead byte.
+        // A continuation byte stays with the character its lead byte opened.
         if byte & 0xC0 == 0x80 {
+            bytes += 1;
             continue;
         }
-        if chars > QUOTED_LINE_CHARS {
+        if bytes > QUOTED_LINE_BYTES {
             return &line[..at];
         }
         if byte.is_ascii_whitespace() || byte == 0x0B {
             if !in_space {
-                chars += 1;
+                bytes += 1;
             }
             in_space = true;
         } else {
-            chars += 1;
+            bytes += 1;
             in_space = false;
         }
     }
@@ -322,8 +326,9 @@ pub(crate) fn quotable_prefix(line: &[u8]) -> &[u8] {
 
 /// The input line as a skipped-variant warning quotes it: every run of
 /// whitespace (Perl's `\s`, the vertical tab included) one space, and a line
-/// over [`QUOTED_LINE_CHARS`] characters cut to the first `QUOTED_LINE_CHARS - 4`
-/// followed by `...`.
+/// over [`QUOTED_LINE_BYTES`] bytes cut at the last character boundary at or
+/// before byte `QUOTED_LINE_BYTES - 4`, then `...` (BaseVEP.pm:848-850 counts
+/// bytes and may split a character there; a whole character is kept here).
 pub(crate) fn quoted_line(line: &str) -> String {
     let mut collapsed = String::with_capacity(line.len());
     let mut in_space = false;
@@ -338,10 +343,13 @@ pub(crate) fn quoted_line(line: &str) -> String {
             in_space = false;
         }
     }
-    if collapsed.chars().count() > QUOTED_LINE_CHARS {
-        let mut cut: String = collapsed.chars().take(QUOTED_LINE_CHARS - 4).collect();
-        cut.push_str("...");
-        return cut;
+    if collapsed.len() > QUOTED_LINE_BYTES {
+        let mut end = QUOTED_LINE_BYTES - 4;
+        while !collapsed.is_char_boundary(end) {
+            end -= 1;
+        }
+        collapsed.truncate(end);
+        collapsed.push_str("...");
     }
     collapsed
 }
@@ -502,7 +510,7 @@ mod tests {
     }
 
     /// `skipped_variant_msg`: the line collapsed to single spaces and cut to 46
-    /// characters plus `...` past 50, `line N skipped` with a number, `variant
+    /// bytes plus `...` past 50, `line N skipped` with a number, `variant
     /// skipped` without one or under `--input_data`.
     #[test]
     fn skipped_variant_lines_follow_skipped_variant_msg() {
@@ -623,14 +631,17 @@ mod tests {
     }
 
     /// A skip is kept for the skipped-variants file only when one is reserved,
-    /// and a numbered skip line reaches the file without a seen-set entry, so a
-    /// run skipping many records holds no memory per skip; two records skipped
-    /// for one reason are two lines, and a `variant skipped` text repeats once.
+    /// and every skip line passes through the seen set, as `_seen_warnings` holds
+    /// one entry per skip (BaseVEP.pm:810-813): two records skipped for one
+    /// reason are two lines, their numbers apart; the identical line a second
+    /// `--individual` copy of a record raises is written once; and a `variant
+    /// skipped` text repeats once.
     #[test]
-    fn skips_are_kept_only_for_a_reserved_file_and_bypass_the_seen_set() {
+    fn skips_are_kept_only_for_a_reserved_file_and_enter_the_seen_set() {
         let dir = tempfile::tempdir().unwrap();
         let (sink, path) = file_sink(dir.path());
         sink.skipped_variant("same reason", Some(1), Some("a"));
+        sink.skipped_variant("same reason", Some(2), Some("b"));
         sink.skipped_variant("same reason", Some(2), Some("b"));
         sink.skipped_variant("same reason", None, None);
         sink.skipped_variant("same reason", None, None);
@@ -644,14 +655,57 @@ mod tests {
         );
         assert_eq!(
             sink.lock().seen.len(),
-            1,
-            "the seen set holds the unnumbered text alone"
+            3,
+            "one entry per distinct skip text"
         );
     }
 
+    /// A file target holds each distinct text once whatever `--quiet` says: the
+    /// echo `print $fh` (BaseVEP.pm:819) then `warn` (:821) give standard error is
+    /// not the file's.
+    #[test]
+    fn file_target_is_written_once_whatever_quiet_says() {
+        let dir = tempfile::tempdir().unwrap();
+        for quiet in [true, false] {
+            let path = dir.path().join(format!("quiet-{quiet}.txt"));
+            let sink = Sink::new();
+            sink.configure(Target::File(path.clone()), quiet, false);
+            sink.warn("once");
+            sink.warn("once");
+            assert_eq!(
+                std::fs::read_to_string(&path).unwrap(),
+                "WARNING: once\n",
+                "quiet={quiet}"
+            );
+        }
+    }
+
+    /// `quoted_line` counts bytes, as `length` and `substr` do on Perl's undecoded
+    /// line (BaseVEP.pm:848-850): a 60-byte line of `é`s (two bytes each) is cut at
+    /// byte 46, 23 characters, plus `...`; a line whose byte 46 falls inside a
+    /// character is cut at the boundary before it; 50 bytes pass whole.
+    #[test]
+    fn quoted_line_cuts_by_bytes_at_a_character_boundary() {
+        let accented = "é".repeat(30);
+        assert_eq!(accented.len(), 60);
+        assert_eq!(
+            quoted_line(&accented),
+            format!("{}...", "é".repeat(23)),
+            "46 bytes then the ellipsis"
+        );
+        let straddling = format!("{}é{}", "x".repeat(45), "y".repeat(10));
+        assert_eq!(
+            quoted_line(&straddling),
+            format!("{}...", "x".repeat(45)),
+            "byte 46 is the second byte of é, so the cut moves to byte 45"
+        );
+        let fifty_bytes = format!("{}é", "x".repeat(48));
+        assert_eq!(quoted_line(&fifty_bytes), fifty_bytes);
+    }
+
     /// `quotable_prefix` keeps exactly what `quoted_line` renders: a line it cuts
-    /// quotes as the whole line does, a line of at most 51 collapsed characters
-    /// is kept whole, and a multi-byte character is never split.
+    /// quotes as the whole line does, a line of at most 51 collapsed bytes is kept
+    /// whole, and a multi-byte character is never split.
     #[test]
     fn quotable_prefix_quotes_as_the_whole_line_does() {
         let line = "21\t100\t.\tA\tG\t.\tPASS\tDP=10;AF=0.5\tGT\t0/1".to_string();
@@ -662,10 +716,11 @@ mod tests {
             ("x".repeat(50), 50),
             ("x".repeat(51), 51),
             ("x".repeat(52), 51),
-            // The tab that becomes the 51st character, its run cut after it.
+            // The tab that becomes the 51st byte, its run cut after it.
             (format!("{}\t\t\t{}", "x".repeat(50), "y".repeat(10)), 51),
             (whitespace_run.clone(), whitespace_run.len()),
-            ("é".repeat(60), 102),
+            // 26 two-byte characters reach 52 bytes.
+            ("é".repeat(60), 52),
             (format!("{}é{}", "x".repeat(50), "y".repeat(10)), 52),
             // `a`, one space for the run, `b`, then 48 of the `x`s.
             (runs, 110),

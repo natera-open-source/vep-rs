@@ -599,3 +599,171 @@ fn stdin_without_format_is_fatal() {
         "ERROR: [input] Cannot detect format from STDIN - specify format with --format [format]",
     );
 }
+
+/// A BGZF file followed by bytes that open no gzip member, zero padding or a
+/// text trailer of at least a block header's length, is read whole, as `gzip -dc`
+/// reads it for Ensembl VEP (Utils.pm:441; GNU gzip ends at trailing zeros and
+/// at trailing garbage after the last member), under one decompression worker
+/// and several; the block reader alone would refuse the trailer as a frame.
+#[test]
+fn bgzf_input_with_a_trailer_is_read_whole() {
+    let dir = tempfile::tempdir().unwrap();
+    let reference = reference_rows(dir.path());
+    let bytes = bgzf(&vcf_text());
+    for (name, trailer) in [
+        ("zeros.vcf.gz", &[0u8; 512][..]),
+        ("trailer.vcf.gz", &b"GARBAGE TRAILER BYTES\n"[..]),
+    ] {
+        assert!(
+            trailer.len() >= 18,
+            "{name}: at least a block header's length"
+        );
+        let path = write(
+            dir.path(),
+            name,
+            &[bytes.clone(), trailer.to_vec()].concat(),
+        );
+        for threads in ["1", "4"] {
+            assert_eq!(
+                annotate(
+                    dir.path(),
+                    &["-i", path.to_str().unwrap()],
+                    &["--decompression_threads", threads]
+                ),
+                reference,
+                "{name} with {threads} threads"
+            );
+        }
+    }
+}
+
+/// `--input_data` given with a Perl-false value (the empty string or `0`) beside
+/// `-i` reads the file (Runner.pm:818 tests the string's truth) but is a defined
+/// parameter to `skipped_variant_msg` (BaseVEP.pm:854-855 tests `defined`), so
+/// a skipped record is reported as `variant skipped` with no line number, while
+/// the skipped-variants file still carries the record's line number (:858-862).
+#[test]
+fn input_data_false_value_drops_the_line_number_from_skip_warnings() {
+    let dir = tempfile::tempdir().unwrap();
+    let records = format!("{VCF_HEADER}{RECORDS}21\t30165901\tinvalid_alleles\tX\tY\t.\t.\t.\n");
+    let input = write(dir.path(), "with-skip.vcf", records.as_bytes());
+    let reference = annotate(dir.path(), &["-i", input.to_str().unwrap()], &[]);
+    let described = "(21 30165901 invalid_alleles X Y . . .): Invalid allele string X/Y or possible parsing error";
+    for value in ["", "0"] {
+        let out = output_path(dir.path());
+        let skipped = dir.path().join(format!("skipped-{}.txt", value.len()));
+        let output = vep(
+            &["-i", input.to_str().unwrap(), "--input_data", value],
+            &out,
+            &["--skipped_variants_file", skipped.to_str().unwrap()],
+        );
+        assert!(output.status.success(), "{value:?}: {}", stderr(&output));
+        assert_eq!(rows(&out), reference, "{value:?}: the file is read");
+        let warnings = std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
+        assert_eq!(
+            warnings,
+            format!("WARNING: variant skipped {described}\n"),
+            "{value:?}"
+        );
+        let listed = std::fs::read_to_string(&skipped).unwrap();
+        let row = listed.lines().nth(1).unwrap_or_default();
+        assert!(row.starts_with("Line 6    \t"), "{value:?}: {listed}");
+    }
+    let out = output_path(dir.path());
+    let output = vep(&["-i", input.to_str().unwrap()], &out, &[]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let warnings = std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
+    assert_eq!(
+        warnings,
+        format!("WARNING: line 6 skipped {described}\n"),
+        "without the flag the line is numbered"
+    );
+}
+
+/// `--full_cache_dir`, Ensembl VEP's own option (Config.pm:243) that this version
+/// carries as an alias of `--json_cache`, prints under its own key in the
+/// command-line header, `## VEP command-line:` and the VCF `##VEP-command-line=`
+/// alike, whether it came from the command line, a `--config` file or
+/// `VEP_FULL_CACHE_DIR`: `full_command` walks the stored keys (Config.pm:734-745)
+/// and Ensembl VEP 116.2 prints `--full_cache_dir [PATH]/json_cache` from all
+/// three sources.
+#[test]
+fn full_cache_dir_keeps_its_own_key_in_the_command_line_header() {
+    let dir = tempfile::tempdir().unwrap();
+    let plain = write(dir.path(), "plain.vcf", vcf_text().as_bytes());
+    let cache = cache().display().to_string();
+    let config = write(
+        dir.path(),
+        "flags.ini",
+        format!("full_cache_dir {cache}\n").as_bytes(),
+    );
+    let header_lines = |out: &Path| -> Vec<String> {
+        std::fs::read_to_string(out)
+            .unwrap()
+            .lines()
+            .filter(|l| {
+                l.starts_with("## VEP command-line:") || l.starts_with("##VEP-command-line=")
+            })
+            .map(str::to_string)
+            .collect()
+    };
+    for (source, flags, env) in [
+        (
+            "command line",
+            vec!["--full_cache_dir", cache.as_str()],
+            None,
+        ),
+        (
+            "config file",
+            vec!["--config", config.to_str().unwrap()],
+            None,
+        ),
+        (
+            "environment",
+            vec![],
+            Some(("VEP_FULL_CACHE_DIR", cache.as_str())),
+        ),
+    ] {
+        for format in [&[][..], &["--vcf"][..]] {
+            let out = output_path(dir.path());
+            let mut command = common::isolated_vep_anywhere();
+            command
+                .args(["-i", plain.to_str().unwrap(), "-o", out.to_str().unwrap()])
+                .args([
+                    "--assembly",
+                    "GRCh38",
+                    "--force_overwrite",
+                    "--no_stats",
+                    "--quiet",
+                ])
+                .args(&flags)
+                .args(format)
+                .stdin(Stdio::null());
+            if let Some((key, value)) = env {
+                command.env(key, value);
+            }
+            let output = command.output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source} {format:?}: {}",
+                stderr(&output)
+            );
+            let lines = header_lines(&out);
+            assert_eq!(lines.len(), 1, "{source} {format:?}: {lines:?}");
+            assert!(
+                lines[0].contains("--full_cache_dir [PATH]/json_cache"),
+                "{source} {format:?}: {}",
+                lines[0]
+            );
+            assert!(
+                !lines[0].contains("--json_cache"),
+                "{source} {format:?}: {}",
+                lines[0]
+            );
+            assert!(
+                rows(&out).len() >= 5,
+                "{source} {format:?}: the cache resolved"
+            );
+        }
+    }
+}
