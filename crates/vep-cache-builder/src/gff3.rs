@@ -25,9 +25,10 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use flate2::read::GzDecoder;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
+use vep_core::coordinate::is_cache_path_component;
 
 use crate::core_dumps::BoundedLines;
 
@@ -132,8 +133,11 @@ fn is_dumped(biotype: &str, tags: &[&str]) -> bool {
 /// Parse a GFF3 file (optionally gzipped) into a gene map.
 ///
 /// Returns `HashMap<gene_id, GeneRecord>`. Fails when the file cannot be
-/// opened or read, and on a `start` or `end` column that is not a number,
-/// naming the column and the value.
+/// opened or read, on a line longer than `MAX_LINE_BYTES`, naming the file and
+/// the line, on a `start` or `end` column that is not a number, naming the
+/// column and the value, on a start of 0 or an end before its start, naming
+/// the line, and on a seqid that cannot name a chromosome's cache directory
+/// ([`is_cache_path_component`]), naming the value and its line.
 pub fn parse_gff3(path: &Path) -> Result<HashMap<String, GeneRecord>> {
     let file =
         std::fs::File::open(path).with_context(|| format!("Cannot open {}", path.display()))?;
@@ -150,7 +154,9 @@ pub fn parse_gff3(path: &Path) -> Result<HashMap<String, GeneRecord>> {
     let mut cds_by_transcript: HashMap<String, Vec<CdsRecord>> = HashMap::new();
     let mut dropped = 0usize;
 
-    for line in BoundedLines::new(reader, MAX_LINE_BYTES, path.display().to_string()) {
+    for (line_index, line) in
+        BoundedLines::new(reader, MAX_LINE_BYTES, path.display().to_string()).enumerate()
+    {
         let line = String::from_utf8(line?).context("Failed to read GFF3 line")?;
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -163,9 +169,24 @@ pub fn parse_gff3(path: &Path) -> Result<HashMap<String, GeneRecord>> {
         }
 
         let chr = normalize_chr(fields[0]);
+        if !is_cache_path_component(chr) {
+            bail!(
+                "invalid chromosome name '{}' at line {}",
+                fields[0],
+                line_index + 1
+            );
+        }
         let feature_type = fields[2];
         let start = parse_coordinate("start", fields[3])?;
         let end = parse_coordinate("end", fields[4])?;
+        // Region binning subtracts one from a start and spans run from start to
+        // end, so a start of 0 or an end before its start has no place to go.
+        if start == 0 || end < start {
+            bail!(
+                "GFF3 coordinates {start}-{end} at line {} are not 1-based and ordered",
+                line_index + 1
+            );
+        }
         let strand: i8 = match fields[6] {
             "-" => -1,
             _ => 1,
@@ -268,10 +289,16 @@ pub fn parse_gff3(path: &Path) -> Result<HashMap<String, GeneRecord>> {
 
     for (tid, mut transcript) in transcript_map {
         if let Some(mut exons) = exons_by_transcript.remove(&tid) {
-            exons.sort_by(|a, b| match (a.rank, b.rank) {
-                (Some(ra), Some(rb)) => ra.cmp(&rb),
-                _ => a.start.cmp(&b.start),
-            });
+            // A rank compared with a start is no order at all, so the two keys
+            // never share one comparator.
+            if exons.iter().all(|e| e.rank.is_some()) {
+                exons.sort_by_key(|e| e.rank);
+            } else {
+                if exons.iter().any(|e| e.rank.is_some()) {
+                    warn!("Transcript {tid}: exons with and without a rank are ordered by start");
+                }
+                exons.sort_by_key(|e| e.start);
+            }
             transcript.exons = exons;
         }
         if let Some(mut cds) = cds_by_transcript.remove(&tid) {
@@ -475,6 +502,93 @@ mod tests {
             let err = try_parse(&lines).unwrap_err();
             assert!(format!("{err:#}").contains(message), "{err:#}");
         }
+    }
+
+    /// A start of 0 or an end before its start fails the parse, naming the line:
+    /// the region of a start is binned from `start - 1`, which a 0 has no room
+    /// for, and a span whose end precedes its start has no length.
+    #[test]
+    fn a_start_of_zero_or_an_end_before_its_start_fails_the_parse() {
+        for (lines, message) in [
+            (
+                TPTE_GENE.replace("\t10521553\t", "\t0\t"),
+                "GFF3 coordinates 0-10606140 at line 1 are not 1-based and ordered",
+            ),
+            (
+                TPTE_GENE.replace("\t10606140\t", "\t10521552\t"),
+                "GFF3 coordinates 10521553-10521552 at line 1 are not 1-based and ordered",
+            ),
+        ] {
+            let err = try_parse(&lines).unwrap_err();
+            assert_eq!(format!("{err:#}"), message);
+        }
+        let genes = parse(&TPTE_GENE.replace("\t10606140\t", "\t10521553\t"));
+        assert_eq!(genes["ENSG00000274391"].end, 10521553);
+    }
+
+    /// A seqid that would place the chromosome's directory outside the cache (a
+    /// parent-directory walk, a rooted path, a `chr` that normalises to nothing)
+    /// fails the parse, naming the seqid as written and its line, counted from
+    /// the file's first line with the header included.
+    #[test]
+    fn seqid_that_is_not_one_path_component_fails_the_parse() {
+        for (seqid, message) in [
+            (
+                "../../escaped",
+                "invalid chromosome name '../../escaped' at line 2",
+            ),
+            (
+                "/tmp/escaped",
+                "invalid chromosome name '/tmp/escaped' at line 2",
+            ),
+            ("chr", "invalid chromosome name 'chr' at line 2"),
+            ("..", "invalid chromosome name '..' at line 2"),
+        ] {
+            let lines = format!("##gff-version 3\n{}", TPTE_GENE.replacen("21", seqid, 1));
+            let err = try_parse(&lines).unwrap_err();
+            assert_eq!(format!("{err:#}"), message);
+        }
+        let genes = parse(&format!(
+            "##gff-version 3\n{}",
+            TPTE_GENE.replacen("21", "HSCHR6_MHC_COX", 1)
+        ));
+        assert_eq!(genes["ENSG00000274391"].chr, "HSCHR6_MHC_COX");
+    }
+
+    /// Exons with a rank sort by it; once any exon of the transcript lacks one,
+    /// every exon sorts by its start, as a rank compared with a start orders
+    /// nothing, and the file is parsed whole.
+    #[test]
+    fn exons_mixing_ranked_and_unranked_sort_by_start() {
+        let exon = |start: u64, rank: Option<u32>| {
+            let rank = rank.map(|r| format!(";rank={r}")).unwrap_or_default();
+            format!(
+                "21\tensembl_havana\texon\t{start}\t{}\t.\t+\t.\tParent=transcript:ENST00000622113;Name=ENSE{start}{rank}\n",
+                start + 99
+            )
+        };
+        let exon_starts = |genes: &HashMap<String, GeneRecord>| -> Vec<u64> {
+            transcript(genes, "ENST00000622113")
+                .exons
+                .iter()
+                .map(|e| e.start)
+                .collect()
+        };
+        // Sixty-four exons, every other one ranked, listed in a scrambled order.
+        let mut lines = format!("{TPTE_GENE}{TPTE_205}");
+        for i in (0..64u64).map(|i| (i * 37) % 64) {
+            let rank = (i % 2 == 0).then_some(64 - i as u32);
+            lines.push_str(&exon(10_521_600 + i * 1_000, rank));
+        }
+        let expected: Vec<u64> = (0..64).map(|i| 10_521_600 + i * 1_000).collect();
+        assert_eq!(exon_starts(&parse(&lines)), expected);
+
+        let ranked = format!(
+            "{TPTE_GENE}{TPTE_205}{}{}",
+            exon(10_540_000, Some(2)),
+            exon(10_600_000, Some(1))
+        );
+        assert_eq!(exon_starts(&parse(&ranked)), [10_600_000, 10_540_000]);
     }
 
     /// A line past the cap (the gene line with an attribute value of the cap's

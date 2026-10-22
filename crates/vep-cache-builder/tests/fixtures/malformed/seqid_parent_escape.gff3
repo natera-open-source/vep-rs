@@ -1,0 +1,4 @@
+##gff-version 3
+../../escaped	ensembl	gene	1	1000	.	+	.	ID=gene:ENSG00000000001;biotype=protein_coding;Name=GENE1
+../../escaped	ensembl	mRNA	1	1000	.	+	.	ID=transcript:ENST00000000001;Parent=gene:ENSG00000000001;biotype=protein_coding
+../../escaped	ensembl	exon	1	1000	.	+	.	Parent=transcript:ENST00000000001;Name=ENSE00000000001;rank=1

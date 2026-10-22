@@ -613,6 +613,48 @@ mod tests {
         );
     }
 
+    /// An indexed file whose one data block declares an ISIZE of 131072, over
+    /// the most a BGZF block inflates to, reads as `Unknown`: the block reader
+    /// refuses the window's block, and a window with no readable block is no
+    /// sample. Eight records fit one block, so the index names that block alone
+    /// and every window reads it; unpatched, the file reads as `Indexed`.
+    #[test]
+    fn a_block_declaring_an_isize_over_the_limit_is_an_unreadable_window() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut text =
+            String::from("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n");
+        for record in 1..=8u32 {
+            text.push_str(&format!(
+                "21\t{}\t.\tA\tG\t.\t.\t.\n",
+                10_000_000 + record * 1_000
+            ));
+        }
+        let vcf = tmp.path().join("eight.vcf");
+        std::fs::write(&vcf, text).unwrap();
+        let good = tmp.path().join("good.vcf.gz");
+        bgzip_with_index(&vcf, &good, 1_000, 0);
+        let bytes = std::fs::read(&good).unwrap();
+        let block = bgzf_block_size(&bytes).unwrap();
+        assert_eq!(block + 28, bytes.len(), "one data block and the EOF block");
+        assert!(matches!(
+            InputShape::read(good.to_str().unwrap()),
+            InputShape::Indexed { .. }
+        ));
+        let mut patched = bytes.clone();
+        patched[block - 4..block].copy_from_slice(&131_072u32.to_le_bytes());
+        let path = tmp.path().join("oversize_isize.vcf.gz");
+        std::fs::write(&path, &patched).unwrap();
+        std::fs::copy(
+            format!("{}.tbi", good.display()),
+            format!("{}.tbi", path.display()),
+        )
+        .unwrap();
+        assert_eq!(
+            InputShape::read(path.to_str().unwrap()),
+            InputShape::Unknown
+        );
+    }
+
     /// A structural-variant fixture bgzipped and indexed by htslib reads as
     /// `Indexed`, with the bytes per record of its own data lines.
     #[test]

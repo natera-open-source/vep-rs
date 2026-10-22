@@ -187,20 +187,24 @@ pub fn classify_symbolic_alt(alt: &str, svtype: Option<&str>) -> VariantClass {
     if upper.starts_with("<CNV:TR") {
         return VariantClass::TandemRepeat;
     }
-    // Perl VEP maps CN0 -> DEL ("deletion"), CN2 -> DUP ("duplication")
-    if upper.starts_with("<CN") && !upper.starts_with("<CNV") {
-        let inner = &upper[3..upper.len().saturating_sub(1)]; // strip "<CN" and ">"
-        let num_str = inner.strip_prefix('=').unwrap_or(inner);
-        if let Ok(cn) = num_str.parse::<u32>() {
-            return match cn {
-                0 => VariantClass::StructuralDeletion,
-                2 => VariantClass::Duplication,
-                _ => VariantClass::CopyNumberVariation,
-            };
-        }
-    }
-    if upper.starts_with("<CNV") || upper.starts_with("<CN") {
+    if upper.starts_with("<CNV") {
         return VariantClass::CopyNumberVariation;
+    }
+    // Parser.pm:702-706: a type with /CN=?[0-9]/i is CNV, and /^<?CN=?0>?$/ and
+    // /^<?CN=?2>?$/, case-sensitive and anchored at both ends, make it DEL or DUP:
+    // the count is the one digit between an upper-case `<CN` or `<CN=` and the
+    // closing `>`, so `<CN00>`, `<cn0>`, `<CN+0>`, a `<CN` token closed by anything
+    // but `>` and a `<CN` token with no count all keep the CNV class.
+    if upper.starts_with("<CN") {
+        let count = alt
+            .strip_prefix("<CN")
+            .and_then(|rest| rest.strip_suffix('>'))
+            .map(|inner| inner.strip_prefix('=').unwrap_or(inner));
+        return match count {
+            Some("0") => VariantClass::StructuralDeletion,
+            Some("2") => VariantClass::Duplication,
+            _ => VariantClass::CopyNumberVariation,
+        };
     }
     if upper.starts_with("<CPX") {
         return VariantClass::ComplexStructural;
@@ -433,6 +437,39 @@ mod tests {
         assert_eq!(term("<CNX>/<CN3>", None), Some("copy_number_variation"));
         assert_eq!(term("<CN0>", None), Some("deletion"));
         assert_eq!(term("<CN=2>", None), Some("duplication"));
+    }
+
+    /// A `<CN` token closed by a bracket instead of `>` is a symbolic ALT (the
+    /// bracket makes it one) under a type `%SO_TERMS` lacks, so it reaches the
+    /// per-ALT classifier: it is a copy-number variation of no stated count, and a
+    /// multi-byte character at its end is read as a character, never split. A
+    /// signed count (`<CN+0>`, `<CN-0>`, `<CN=+2>`), a count of two digits
+    /// (`<CN00>`, `<CN02>`, `<CN=02>`) and a lower-case `<cn0>` or `<cn2>` state no
+    /// count either, as Parser.pm's single-digit, case-sensitive regexes read them.
+    #[test]
+    fn an_unterminated_copy_number_token_is_a_copy_number_variation() {
+        for alt in [
+            "<CN]É", "<CNÉ>", "<CN=É", "<CN2]", "<CN", "<CN+0>", "<CN-0>", "<CN=+2>", "<CN00>",
+            "<CN02>", "<CN=02>", "<cn0>", "<cn2>",
+        ] {
+            assert_eq!(
+                classify_symbolic_alt(alt, Some("XYZ")),
+                VariantClass::CopyNumberVariation,
+                "{alt}"
+            );
+        }
+        assert_eq!(
+            per_alt_classes(&[(0, "<CN]É")], None, Some("XYZ")),
+            [(0, "<CN]É", VariantClass::CopyNumberVariation)]
+        );
+        assert_eq!(
+            classify_symbolic_alt("<CN0>", Some("XYZ")),
+            VariantClass::StructuralDeletion
+        );
+        assert_eq!(
+            classify_symbolic_alt("<CN=2>", Some("XYZ")),
+            VariantClass::Duplication
+        );
     }
 
     /// The repeated-part normalisation strips one `<` and one `>` from each part

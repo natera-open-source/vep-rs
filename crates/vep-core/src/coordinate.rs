@@ -166,9 +166,36 @@ pub fn normalize_chromosome(chr: &str) -> String {
     }
 }
 
+/// Whether `name` can name a chromosome's directory or file of a cache: one
+/// ordinary path component, so a path joined from it stays inside its parent. An
+/// empty name, `.`, `..`, an absolute path and a name holding a separator of
+/// either convention are refused.
+pub fn is_cache_path_component(name: &str) -> bool {
+    let mut components = std::path::Path::new(name).components();
+    matches!(
+        (components.next(), components.next()),
+        (Some(std::path::Component::Normal(_)), None)
+    ) && !name.contains(['/', '\\'])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A chromosome name is one ordinary path component: the parent and current
+    /// directories, an empty name, a rooted path and a name with a separator of
+    /// either convention would place a cache file outside its chromosome's directory.
+    #[test]
+    fn a_cache_path_component_is_one_ordinary_name() {
+        for name in ["21", "X", "MT", "LRG_485", "HSCHR6_MHC_COX", "chr21", "a.b"] {
+            assert!(is_cache_path_component(name), "{name:?}");
+        }
+        for name in [
+            "", ".", "..", "../21", "21/22", "/tmp", "21\\22", "..\\21", "./21",
+        ] {
+            assert!(!is_cache_path_component(name), "{name:?}");
+        }
+    }
 
     /// `MAX_COORD` is read and one past it is not; a negative number, `-0` included,
     /// and a non-integer are not coordinates.

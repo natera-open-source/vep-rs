@@ -21,7 +21,7 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 
 use vep_core::codon::reverse_complement;
-use vep_core::coordinate::Strand;
+use vep_core::coordinate::{Strand, MAX_COORD};
 use vep_core::sv_routing::{perl_true, sv_type_abbreviation, sv_type_string};
 use vep_core::sv_span::deletion_looks_incomplete;
 use vep_core::synonyms::ChromosomeSynonyms;
@@ -305,12 +305,15 @@ impl SkipRules<'_> {
     /// stands (Parser/VCF.pm:199-201): the `--chr` list, read against the input's
     /// own name and silent (`:470-472`); a start past the end plus one (`:483-488`);
     /// a span over `--max_sv_size` (`:493-500`, warned and in vep-rs still
-    /// annotated); a chromosome the cache does not carry (`:542-546`); then, for a
-    /// sequence variant, the allele string upper-cased (`:554`), an allele string
-    /// with no `ACGTN-` run (`:556-560`), an insertion whose start is not the end
-    /// plus one (`:564-572`), a reference allele whose length is not the span's
-    /// (`:585-592`), and the reference allele against the reference sequence
-    /// (`--check_ref`, `:596-633`) or replaced by it (`--lookup_ref`, `:635-646`).
+    /// annotated, unless the span reached the coordinate ceiling, where its SVLEN
+    /// or END overflowed and the span is not the record's: that record is
+    /// dropped unless `--dont_skip` keeps it); a chromosome the cache does not
+    /// carry (`:542-546`); then, for a sequence variant, the allele string
+    /// upper-cased (`:554`), an allele string with no `ACGTN-` run (`:556-560`), an
+    /// insertion whose start is not the end plus one (`:564-572`), a reference
+    /// allele whose length is not the span's (`:585-592`), and the reference allele
+    /// against the reference sequence (`--check_ref`, `:596-633`) or replaced by it
+    /// (`--lookup_ref`, `:635-646`).
     pub(crate) fn validate(
         &self,
         first: &mut InputVariant,
@@ -380,7 +383,10 @@ impl SkipRules<'_> {
                 "variant size ({}) is bigger than --max_sv_size ({max})",
                 first.end.saturating_sub(first.start)
             ));
-            return (true, patch);
+            // A span that saturated at the ceiling runs to the end of every
+            // chromosome; the rows it would write belong to no record. `--dont_skip`
+            // keeps it as it keeps every refused record.
+            return (first.end < MAX_COORD || self.dont_skip, patch);
         }
         if !self.transcripts.contains_key(&first.chr) {
             let chr = &first.original_chr;

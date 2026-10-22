@@ -31,6 +31,7 @@
 //! `.csi`, the columns listed by `info.json`'s `variation_cols`.
 
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -134,7 +135,19 @@ struct Args {
     genome_fasta: Option<String>,
 }
 
-fn main() -> Result<()> {
+/// A failed build prints one line, `ERROR: [cache-builder] <message>`, on
+/// standard error and exits 1.
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("ERROR: [cache-builder] {error:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<()> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .with_writer(std::io::stderr)

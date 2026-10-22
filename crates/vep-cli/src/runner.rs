@@ -89,6 +89,13 @@ const GZIP_FEXTRA: u8 = 0x04;
 /// the two-byte length of the extra field that follows it when FEXTRA is set.
 pub(crate) const GZIP_HEADER_BYTES: usize = 12;
 
+/// The gzip member trailer: CRC32 and ISIZE, four bytes each.
+const GZIP_TRAILER_BYTES: usize = 8;
+
+/// The most bytes a BGZF block inflates to, the largest ISIZE its trailer may
+/// declare (SAM specification section 4.1).
+const BGZF_MAX_ISIZE: u32 = 65536;
+
 /// The input as [`Runner::open_input`] leaves it: the source the reader stage
 /// consumes and whether the input is a BGZF file, whose `.tbi` index may name its
 /// contigs in file order.
@@ -272,6 +279,181 @@ impl<R: Read + Send + 'static> BufRead for CheckedBgzfReader<R> {
     }
 }
 
+/// The raw bytes of a BGZF stream, handed to the block reader one whole block
+/// at a time with the block's header and trailer read first: a block whose
+/// declared size leaves no room for its trailer, or whose ISIZE is above the
+/// format's limit, is refused here, at its byte offset and under the input's
+/// name, where the block reader's own refusal of such a block names neither.
+/// The refusal is a [`CliError`] carried inside the `io::Error` the read
+/// returns, which the run prints as itself; every read after it returns the
+/// refusal again. A stream that ends inside a block header, its bytes so far
+/// a header's, is refused the same way, as the block reader reads a short
+/// header as a clean end of stream. Bytes that open no block, and a block the
+/// stream ends inside its data, pass through unchanged to the block reader,
+/// which ends the stream on fewer than a header's worth of such bytes and
+/// reports anything else in its own words.
+struct BgzfBlockGuard {
+    inner: Box<dyn BufRead + Send>,
+    source: String,
+    /// The bytes of the block being handed out, from `at`.
+    block: Vec<u8>,
+    at: usize,
+    /// The offset in the stream of the block in `block`.
+    offset: u64,
+    /// The rest of the stream is handed through unread, not as blocks.
+    passthrough: bool,
+    /// The block in `block` was refused: its bytes stay there and no read hands
+    /// them out.
+    refused: bool,
+}
+
+impl BgzfBlockGuard {
+    fn new(inner: Box<dyn BufRead + Send>, source: &str) -> Self {
+        Self {
+            inner,
+            source: source.to_string(),
+            block: Vec::new(),
+            at: 0,
+            offset: 0,
+            passthrough: false,
+            refused: false,
+        }
+    }
+
+    fn malformed(&self) -> io::Error {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            CliError::new(
+                "input",
+                format!(
+                    "malformed BGZF block at offset {} in {}",
+                    self.offset, self.source
+                ),
+            ),
+        )
+    }
+
+    /// Marks the block in `block` refused and returns the refusal, which every
+    /// read from here on returns again.
+    fn refuse(&mut self) -> io::Error {
+        self.refused = true;
+        self.malformed()
+    }
+
+    /// Extends `block` with bytes from the stream until it holds `len` bytes or
+    /// the stream ends. A read error other than `Interrupted`, which is retried,
+    /// is returned as it is, and the rest of the stream is passed through from
+    /// then on: the bytes read so far are handed out first, so a reader that
+    /// goes on after the error sees the stream whole, unchecked.
+    fn fill_to(&mut self, len: usize) -> io::Result<()> {
+        let mut have = self.block.len();
+        self.block.resize(len, 0);
+        while have < len {
+            match self.inner.read(&mut self.block[have..]) {
+                Ok(0) => break,
+                Ok(n) => have += n,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(e) => {
+                    self.block.truncate(have);
+                    self.passthrough = true;
+                    return Err(e);
+                }
+            }
+        }
+        self.block.truncate(have);
+        Ok(())
+    }
+
+    /// Reads the next block into `block`, checked, or switches to passing the
+    /// stream through when the bytes read do not open a whole block.
+    fn next_block(&mut self) -> io::Result<()> {
+        self.offset += self.block.len() as u64;
+        self.block.clear();
+        self.at = 0;
+        self.fill_to(GZIP_HEADER_BYTES)?;
+        if self.block.is_empty() {
+            self.passthrough = true;
+            return Ok(());
+        }
+        let seen = self.block.len().min(GZIP_MAGIC.len());
+        let opens_a_block = self.block[..seen] == GZIP_MAGIC[..seen]
+            && self
+                .block
+                .get(3)
+                .is_none_or(|flags| flags & GZIP_FEXTRA != 0);
+        if !opens_a_block {
+            self.passthrough = true;
+            return Ok(());
+        }
+        // The block reader reads a header cut short as the end of the stream, so
+        // a file cut inside a block header is refused here.
+        if self.block.len() < GZIP_HEADER_BYTES {
+            return Err(self.refuse());
+        }
+        let extra_len = u16::from_le_bytes([self.block[10], self.block[11]]) as usize;
+        self.fill_to(GZIP_HEADER_BYTES + extra_len)?;
+        if self.block.len() < GZIP_HEADER_BYTES + extra_len {
+            return Err(self.refuse());
+        }
+        let Some(block_size) = bgzf_block_size(&self.block) else {
+            self.passthrough = true;
+            return Ok(());
+        };
+        if block_size < self.block.len() + GZIP_TRAILER_BYTES {
+            return Err(self.refuse());
+        }
+        self.fill_to(block_size)?;
+        if self.block.len() < block_size {
+            self.passthrough = true;
+            return Ok(());
+        }
+        let tail = &self.block[block_size - 4..];
+        let declared_isize = u32::from_le_bytes([tail[0], tail[1], tail[2], tail[3]]);
+        if declared_isize > BGZF_MAX_ISIZE {
+            return Err(self.refuse());
+        }
+        Ok(())
+    }
+}
+
+impl Read for BgzfBlockGuard {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.refused {
+            return Err(self.malformed());
+        }
+        if self.at == self.block.len() {
+            if self.passthrough {
+                return self.inner.read(buf);
+            }
+            self.next_block()?;
+        }
+        let n = (self.block.len() - self.at).min(buf.len());
+        buf[..n].copy_from_slice(&self.block[self.at..self.at + n]);
+        self.at += n;
+        Ok(n)
+    }
+}
+
+/// The [`CliError`] a reader's refusal carries inside `error`
+/// ([`BgzfBlockGuard`] returns one); `None` for an `io::Error` of any other
+/// cause.
+fn reader_refusal(error: &io::Error) -> Option<&CliError> {
+    error.get_ref()?.downcast_ref::<CliError>()
+}
+
+/// `error` as the run prints it: a reader's own refusal, a [`CliError`] inside
+/// an `io::Error` anywhere in `error`'s chain, prints as itself, not under the
+/// context of the read that met it.
+fn surface_reader_refusal(error: anyhow::Error) -> anyhow::Error {
+    let refusal = error
+        .chain()
+        .find_map(|cause| reader_refusal(cause.downcast_ref::<io::Error>()?).cloned());
+    match refusal {
+        Some(refusal) => refusal.into(),
+        None => error,
+    }
+}
+
 /// A gunzip over every gzip member of a stream, as `gzip -dc` reads one, the
 /// program Ensembl VEP decompresses its input through (Utils.pm:436-443): the
 /// stream ends at the first bytes after a complete member that are not another
@@ -343,10 +525,12 @@ fn bgzf_block_reader<R: Read + Send + 'static>(
 /// above one: block decompression is the largest single wall-time lever on
 /// compressed input), else through a gunzip over every member. The flag says
 /// which: a BGZF file may have a tabix index beside it. Both bgzf readers are
-/// `BufRead` over their decompressed block; the gunzip is buffered here.
+/// `BufRead` over their decompressed block and read the stream through the
+/// [`BgzfBlockGuard`], whose refusals name `source`; the gunzip is buffered here.
 fn decompressed<R: BufRead + Send + 'static>(
     reader: R,
     threads: usize,
+    source: &str,
 ) -> io::Result<(Box<dyn BufRead + Send>, bool)> {
     let (header, mut reader) = peek_bytes(reader, GZIP_HEADER_BYTES)?;
     if !header.starts_with(&GZIP_MAGIC) {
@@ -366,7 +550,8 @@ fn decompressed<R: BufRead + Send + 'static>(
         let buffered = BufReader::with_capacity(INPUT_BUFFER_BYTES, gunzip);
         return Ok((Box::new(buffered), false));
     }
-    Ok((bgzf_block_reader(reader, threads), true))
+    let guarded = BgzfBlockGuard::new(reader, source);
+    Ok((bgzf_block_reader(guarded, threads), true))
 }
 
 /// The shape of the run's input: `--input_data` and standard input have none,
@@ -1293,7 +1478,9 @@ impl Runner {
             delimiter,
             reads_reference,
             parser_names_records,
-        } = self.open_input(reference_fasta.as_ref(), &transcripts)?;
+        } = self
+            .open_input(reference_fasta.as_ref(), &transcripts)
+            .map_err(surface_reader_refusal)?;
         let checks = fasta_setup_checks(&self.config, fasta_found)?;
         self.print_notices(&checks.notices);
 
@@ -1692,7 +1879,8 @@ impl Runner {
         };
 
         // The writer thread flushes and closes the output before this returns.
-        let variant_count = pipeline::run(input, &reader_cfg, &coordinator, writer)?;
+        let variant_count = pipeline::run(input, &reader_cfg, &coordinator, writer)
+            .map_err(surface_reader_refusal)?;
         if let Some(handle) = compressed_output {
             handle.finish().map_err(|e| {
                 CliError::new(
@@ -1860,8 +2048,9 @@ impl Runner {
                     ));
                 }
                 let stdin = BufReader::with_capacity(INPUT_BUFFER_BYTES, io::stdin());
-                let (reader, _) = decompressed(stdin, self.decompression_worker_count())
-                    .with_context(read_failed)?;
+                let (reader, _) =
+                    decompressed(stdin, self.decompression_worker_count(), &config.input_file)
+                        .with_context(read_failed)?;
                 (reader, false)
             }
             None => {
@@ -1869,7 +2058,8 @@ impl Runner {
                     format!("Failed to open input file '{}'", config.input_file)
                 })?;
                 let file = BufReader::with_capacity(INPUT_BUFFER_BYTES, file);
-                decompressed(file, self.decompression_worker_count()).with_context(read_failed)?
+                decompressed(file, self.decompression_worker_count(), &config.input_file)
+                    .with_context(read_failed)?
             }
         };
 
@@ -3435,7 +3625,8 @@ mod tests {
         // 4.1.2) and the last byte of the second block.
         bytes.truncate(bytes.len() - 29);
         for threads in [1, 4] {
-            let (mut reader, bgzf) = decompressed(Cursor::new(bytes.clone()), threads).unwrap();
+            let (mut reader, bgzf) =
+                decompressed(Cursor::new(bytes.clone()), threads, "input").unwrap();
             assert!(bgzf, "{threads} threads");
             let mut text = Vec::new();
             let error = reader.read_to_end(&mut text).unwrap_err();
@@ -3446,6 +3637,188 @@ mod tests {
             );
             assert_eq!(text, b"first block\n", "{threads} threads");
         }
+    }
+
+    /// One BGZF block holding `text`, without the 28-byte empty end-of-file
+    /// block the writer closes with.
+    fn bgzf_block(text: &[u8]) -> Vec<u8> {
+        let mut writer = bgzf::io::Writer::new(Vec::new());
+        writer.write_all(text).unwrap();
+        let mut bytes = writer.finish().unwrap();
+        bytes.truncate(bytes.len() - 28);
+        bytes
+    }
+
+    /// A block whose trailer declares an ISIZE above 65536, the most a BGZF block
+    /// inflates to, is refused by the guard, not the block reader, under one
+    /// decompression thread and under several, at the first block and at a later
+    /// one; the refusal names the block's offset and the input, and the blocks
+    /// before it are delivered whole. A block whose declared size cannot hold its
+    /// eight-byte trailer is refused the same way, a read after either refusal
+    /// returns it again rather than the block's bytes, and a block declaring
+    /// exactly 65536 is left to the block reader.
+    #[test]
+    fn a_bgzf_block_declaring_more_than_it_can_hold_is_refused() {
+        fn with_isize(mut block: Vec<u8>, isize: u32) -> Vec<u8> {
+            let len = block.len();
+            block[len - 4..].copy_from_slice(&isize.to_le_bytes());
+            block
+        }
+        let first = bgzf_block(b"first block\n");
+        let second = bgzf_block(b"second block\n");
+        let later = [first.clone(), with_isize(second.clone(), u32::MAX)].concat();
+        let refused = |bytes: &[u8], threads: usize, expected: &str| {
+            let (mut reader, bgzf) =
+                decompressed(Cursor::new(bytes.to_vec()), threads, "in.vcf.gz").unwrap();
+            assert!(bgzf, "{threads} threads");
+            let mut text = Vec::new();
+            let error = reader.read_to_end(&mut text).unwrap_err();
+            let refusal =
+                reader_refusal(&error).unwrap_or_else(|| panic!("{threads} threads: {error}"));
+            assert_eq!(refusal.to_string(), expected, "{threads} threads");
+            text
+        };
+        for threads in [1, 4] {
+            let text = refused(
+                &with_isize(first.clone(), 131072),
+                threads,
+                "ERROR: [input] malformed BGZF block at offset 0 in in.vcf.gz",
+            );
+            assert!(text.is_empty(), "{threads} threads: {text:?}");
+            let text = refused(
+                &later,
+                threads,
+                &format!(
+                    "ERROR: [input] malformed BGZF block at offset {} in in.vcf.gz",
+                    first.len()
+                ),
+            );
+            assert_eq!(text, b"first block\n", "{threads} threads");
+        }
+        // BSIZE 24: a block of 25 bytes holds its 18-byte header and no trailer.
+        let mut short = first.clone();
+        short[16..18].copy_from_slice(&24u16.to_le_bytes());
+        refused(
+            &short,
+            1,
+            "ERROR: [input] malformed BGZF block at offset 0 in in.vcf.gz",
+        );
+        // A read after a refusal returns the refusal again, never the refused
+        // block's bytes, which the block reader would refuse in its own words.
+        for (bytes, offset) in [
+            (with_isize(first.clone(), 131072), 0),
+            (short.clone(), 0),
+            (later.clone(), first.len()),
+        ] {
+            let expected =
+                format!("ERROR: [input] malformed BGZF block at offset {offset} in in.vcf.gz");
+            let mut guard = BgzfBlockGuard::new(Box::new(Cursor::new(bytes)), "in.vcf.gz");
+            let mut raw = Vec::new();
+            let on_first_read = guard.read_to_end(&mut raw).unwrap_err();
+            let on_second_read = guard.read(&mut [0u8; 64]).unwrap_err();
+            for (read, error) in [("first", on_first_read), ("second", on_second_read)] {
+                let refusal = reader_refusal(&error)
+                    .unwrap_or_else(|| panic!("{read} read at offset {offset}: {error}"));
+                assert_eq!(refusal.to_string(), expected, "{read} read");
+            }
+            assert_eq!(raw.len(), offset, "bytes handed out before the refusal");
+        }
+        let (mut reader, _) = decompressed(
+            Cursor::new(with_isize(first.clone(), 65536)),
+            1,
+            "in.vcf.gz",
+        )
+        .unwrap();
+        let error = reader.read_to_end(&mut Vec::new()).unwrap_err();
+        assert!(reader_refusal(&error).is_none(), "{error}");
+        // The guard reads the same stream as the block reader: a well-formed
+        // input is delivered whole whatever the read size.
+        let whole = [first.clone(), second.clone()].concat();
+        for threads in [1, 4] {
+            let (mut reader, _) =
+                decompressed(Cursor::new(whole.clone()), threads, "in.vcf.gz").unwrap();
+            let mut text = Vec::new();
+            reader.read_to_end(&mut text).unwrap();
+            assert_eq!(text, b"first block\nsecond block\n", "{threads} threads");
+        }
+        // A stream cut inside the second block's header is refused at that block's
+        // offset: the block reader alone would read the short header as the end of
+        // the stream.
+        for (cut, threads) in [(1, 1), (2, 1), (4, 1), (12, 1), (17, 1), (17, 4)] {
+            let bytes = [first.clone(), second[..cut].to_vec()].concat();
+            let text = refused(
+                &bytes,
+                threads,
+                &format!(
+                    "ERROR: [input] malformed BGZF block at offset {} in in.vcf.gz",
+                    first.len()
+                ),
+            );
+            assert_eq!(text, b"first block\n", "cut at {cut}, {threads} threads");
+        }
+        // Trailing bytes that open no block, fewer than a header's worth, are the
+        // block reader's to read, and it reads them as the end of the stream:
+        // the blocks before them are delivered whole under both thread counts.
+        for (tail, threads) in [
+            (&b"\n\n\n\n"[..], 1),
+            (&[0u8; 15][..], 1),
+            (&b"\x1f\x8b\x00"[..], 4),
+            (&b"\x1f\x8b\x08\x00"[..], 1),
+        ] {
+            let bytes = [first.clone(), tail.to_vec()].concat();
+            let (mut reader, _) = decompressed(Cursor::new(bytes), threads, "in.vcf.gz").unwrap();
+            let mut text = Vec::new();
+            reader.read_to_end(&mut text).unwrap();
+            assert_eq!(text, b"first block\n", "tail {tail:?}, {threads} threads");
+        }
+    }
+
+    /// A stream whose read fails once, inside the second block's header, hands
+    /// the failure to the caller and then the rest of the stream unchecked: the
+    /// header bytes read before the failure come out first, so the block reader
+    /// that goes on after it inflates the second block whole.
+    #[test]
+    fn a_read_error_inside_a_block_header_is_returned_and_the_rest_passed_through() {
+        struct FailsOnce {
+            bytes: Cursor<Vec<u8>>,
+            fail_at: u64,
+            failed: bool,
+        }
+        impl Read for FailsOnce {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                if self.failed {
+                    return self.bytes.read(buf);
+                }
+                let left = (self.fail_at - self.bytes.position()) as usize;
+                if left == 0 {
+                    self.failed = true;
+                    return Err(io::Error::other("the disk went away"));
+                }
+                let take = buf.len().min(left);
+                self.bytes.read(&mut buf[..take])
+            }
+        }
+        let mut bytes = bgzf_block(b"first block\n");
+        let first_len = bytes.len();
+        let mut writer = bgzf::io::Writer::new(Vec::new());
+        writer.write_all(b"second block\n").unwrap();
+        bytes.extend(writer.finish().unwrap());
+        let failing = FailsOnce {
+            bytes: Cursor::new(bytes),
+            fail_at: (first_len + 7) as u64,
+            failed: false,
+        };
+        let mut guard = BgzfBlockGuard::new(Box::new(BufReader::new(failing)), "in.vcf.gz");
+        let mut raw = Vec::new();
+        let error = guard.read_to_end(&mut raw).unwrap_err();
+        assert_eq!(error.to_string(), "the disk went away");
+        assert_eq!(raw.len(), first_len, "the first block came out whole");
+        guard.read_to_end(&mut raw).unwrap();
+        let mut text = Vec::new();
+        bgzf::io::Reader::new(&raw[..])
+            .read_to_end(&mut text)
+            .unwrap();
+        assert_eq!(text, b"first block\nsecond block\n");
     }
 
     /// A BGZF block whose trailer declares more uncompressed bytes than a block
@@ -3492,7 +3865,7 @@ mod tests {
         let two_members = [member("first member\n"), member("second member\n")].concat();
         for trailer in [&b""[..], b"GARBAGE TRAILER\n", &[0u8; 512]] {
             let bytes = [two_members.as_slice(), trailer].concat();
-            let (mut reader, bgzf) = decompressed(Cursor::new(bytes), 1).unwrap();
+            let (mut reader, bgzf) = decompressed(Cursor::new(bytes), 1, "input").unwrap();
             assert!(!bgzf);
             let mut text = String::new();
             reader.read_to_string(&mut text).unwrap();
@@ -3501,7 +3874,7 @@ mod tests {
         // Twelve bytes short: the second member loses its eight-byte trailer and
         // the end of its deflate data.
         let cut = &two_members[..two_members.len() - 12];
-        let (mut reader, _) = decompressed(Cursor::new(cut.to_vec()), 1).unwrap();
+        let (mut reader, _) = decompressed(Cursor::new(cut.to_vec()), 1, "input").unwrap();
         let mut text = String::new();
         assert!(reader.read_to_string(&mut text).is_err());
         assert!(text.starts_with("first member\n"), "{text:?}");
@@ -3510,7 +3883,7 @@ mod tests {
         // buffered included.
         for capacity in 1..=two_members.len() {
             let buffered = BufReader::with_capacity(capacity, Cursor::new(two_members.clone()));
-            let (mut reader, _) = decompressed(buffered, 1).unwrap();
+            let (mut reader, _) = decompressed(buffered, 1, "input").unwrap();
             let mut text = String::new();
             reader.read_to_string(&mut text).unwrap();
             assert_eq!(text, "first member\nsecond member\n", "capacity {capacity}");

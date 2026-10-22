@@ -16,9 +16,10 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use tracing::info;
+use vep_core::coordinate::is_cache_path_component;
 
 use crate::core_dumps::{CoreDumps, TranslationFacts};
 use crate::gff3::{CdsRecord, ExonRecord, GeneRecord};
@@ -333,6 +334,11 @@ pub fn build_cache(
         }
 
         let chr_dir = transcripts_dir.join(chr);
+        // Refused at the GFF3 parse as well; the function that makes the
+        // directory does not rely on its caller to have done so.
+        if !is_cache_path_component(chr) || chr_dir.parent() != Some(transcripts_dir.as_path()) {
+            bail!("invalid chromosome name '{chr}'");
+        }
         std::fs::create_dir_all(&chr_dir)
             .with_context(|| format!("Failed to create {}", chr_dir.display()))?;
 
@@ -873,8 +879,11 @@ fn convert_predictions(preds: &crate::predictions::PeptidePredictions) -> CacheP
     }
 }
 
-/// The cached exon list in transcript order, each exon with its Ensembl phases.
+/// The cached exon list in transcript order, each exon with its Ensembl phases
+/// and its `rank`: the line's when every exon of the transcript carries one,
+/// else its position in the list, the order [`transcript_order`] fell back to.
 fn build_exons(ordered: &[&ExonRecord], phases: &[(i8, i8)]) -> Vec<CacheExon> {
+    let ranks_from_file = ordered.iter().all(|e| e.rank.is_some());
     ordered
         .iter()
         .zip(phases)
@@ -883,7 +892,10 @@ fn build_exons(ordered: &[&ExonRecord], phases: &[(i8, i8)]) -> Vec<CacheExon> {
             stable_id: exon.exon_id.clone(),
             start: exon.start,
             end: exon.end,
-            rank: exon.rank.unwrap_or((i + 1) as u32),
+            rank: match exon.rank {
+                Some(rank) if ranks_from_file => rank,
+                _ => (i + 1) as u32,
+            },
             phase,
             end_phase,
         })
@@ -1033,6 +1045,26 @@ mod tests {
                 .map(|i| (i.rank, i.start, i.end))
                 .collect::<Vec<_>>(),
             vec![(1, 31, 40), (2, 11, 20)]
+        );
+    }
+
+    /// Once any exon of a transcript lacks a `rank`, the list is in start order,
+    /// descending on the reverse strand, and every exon is numbered by its place
+    /// in it: the file's ranks on the other exons would otherwise sit among
+    /// numbers they were never ordered against.
+    #[test]
+    fn mixed_rank_exons_are_renumbered_in_transcript_order() {
+        let mut exons = [exon(41, 50, -1, 7), exon(21, 30, -1, 2), exon(1, 10, -1, 9)];
+        exons[1].rank = None;
+        let ordered = transcript_order(&exons, -1);
+        let phases = exon_phases(&ordered, &[], -1);
+        let cache_exons = build_exons(&ordered, &phases);
+        assert_eq!(
+            cache_exons
+                .iter()
+                .map(|e| (e.start, e.rank))
+                .collect::<Vec<_>>(),
+            vec![(41, 1), (21, 2), (1, 3)]
         );
     }
 

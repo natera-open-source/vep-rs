@@ -30,6 +30,7 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use tracing::{info, warn};
 use vep_core::cache_manifest::CacheManifest;
+use vep_core::coordinate::is_cache_path_component;
 
 #[derive(Parser)]
 #[command(
@@ -541,6 +542,10 @@ fn copy_variation_files(src_dir: &Path, dst_dir: &Path) -> Result<(usize, usize)
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
         if path.is_dir() {
+            if !is_cache_path_component(&name) {
+                warn!("Skipping directory with unexpected name: {}", name);
+                continue;
+            }
             let mut files: Vec<_> = fs::read_dir(&path)
                 .with_context(|| format!("Failed to read {}", path.display()))?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -633,12 +638,14 @@ fn variation_file_kind(name: &str) -> Option<VariationFileKind> {
 /// Split a flat variation file name `{chr}_all_vars.gz[.csi|.tbi]` or
 /// `{chr}_{start}-{end}_var.gz` into the chromosome and the file's name under
 /// `variations/<chr>/`. The chromosome may itself carry underscores, so each
-/// `_` is tried as the split until what follows it is a variation file name.
+/// `_` is tried as the split until what follows it is a variation file name;
+/// a chromosome that cannot name a directory of the output
+/// ([`is_cache_path_component`]) is no split.
 fn split_flat_variation_name(name: &str) -> Option<(String, String)> {
     for (underscore, _) in name.match_indices('_') {
         let chr = &name[..underscore];
         let file_name = &name[underscore + 1..];
-        if !chr.is_empty() && variation_file_kind(file_name).is_some() {
+        if is_cache_path_component(chr) && variation_file_kind(file_name).is_some() {
             return Some((chr.to_string(), file_name.to_string()));
         }
     }
@@ -729,13 +736,15 @@ fn convert_data_files(src_dir: &Path, dst_dir: &Path, label: &str) -> Result<(us
 
 /// Parse a region filename like `21_25000001-26000000` or `LRG_485_1-1000000`.
 ///
-/// Returns `(chromosome, start, end)` or `None` if the format does not match.
+/// Returns `(chromosome, start, end)`, or `None` if the format does not match
+/// or the chromosome cannot name a directory of the output
+/// ([`is_cache_path_component`]).
 fn parse_region_filename(filename: &str) -> Option<(String, u64, u64)> {
     // Split from the right on '_' to separate chr from the range part.
     // This handles chromosome names that contain underscores (e.g., "LRG_485").
     let (chr, range_str) = filename.rsplit_once('_')?;
 
-    if chr.is_empty() {
+    if !is_cache_path_component(chr) {
         return None;
     }
 
@@ -773,6 +782,77 @@ mod tests {
         assert_eq!(parse_region_filename("invalid"), None);
         assert_eq!(parse_region_filename("_1-2"), None);
         assert_eq!(parse_region_filename("chr_abc-def"), None);
+    }
+
+    /// A file name whose chromosome part is `.` or `..` names no region or
+    /// variation file: joined onto the output directory it would name the
+    /// directory itself or its parent, so the file is skipped with the warning
+    /// every unexpected name gets.
+    #[test]
+    fn a_chromosome_of_dots_names_no_file() {
+        for chr in [".", ".."] {
+            assert_eq!(parse_region_filename(&format!("{chr}_1-1000000")), None);
+            assert_eq!(
+                split_flat_variation_name(&format!("{chr}_all_vars.gz")),
+                None
+            );
+            assert_eq!(
+                split_flat_variation_name(&format!("{chr}_all_vars.gz.tbi")),
+                None
+            );
+        }
+        assert_eq!(
+            parse_region_filename("HSCHR6_MHC_COX_1-1000000"),
+            Some(("HSCHR6_MHC_COX".to_string(), 1, 1000000))
+        );
+    }
+
+    /// Region and variation files named for the parent directory are skipped and
+    /// nothing is written beside the transcripts and variations directories.
+    #[test]
+    fn files_named_for_the_parent_directory_write_nothing_outside_their_directory() {
+        let tmp = Scratch::new();
+        let src = tmp.path().join("json");
+        fs::create_dir_all(src.join("transcripts")).unwrap();
+        fs::create_dir_all(src.join("variations")).unwrap();
+        fs::write(src.join("transcripts/.._1-1000000.json"), b"[]").unwrap();
+        fs::write(src.join("transcripts/21_1-1000000.json"), b"[]").unwrap();
+        fs::write(src.join("variations/.._all_vars.gz"), b"gz").unwrap();
+        fs::write(src.join("variations/.._all_vars.gz.tbi"), b"tbi").unwrap();
+        let out = tmp.path().join("out");
+        let transcripts = out.join("transcripts");
+        assert_eq!(
+            convert_data_files(&src.join("transcripts"), &transcripts, "transcripts").unwrap(),
+            (1, 0)
+        );
+        assert_eq!(
+            copy_variation_files(&src.join("variations"), &out.join("variations")).unwrap(),
+            (0, 0)
+        );
+        assert_eq!(entries(&out), ["transcripts"]);
+        assert_eq!(entries(&transcripts), ["21"]);
+        assert!(!tmp.path().join("1-1000000.json").exists());
+    }
+
+    /// A variation directory whose name holds a separator (`21\22`, one
+    /// directory on Unix) is skipped with its files: joined onto the output
+    /// directory on a platform that reads the backslash as a separator it would
+    /// name a directory below `21`. The directory beside it is copied.
+    #[cfg(unix)]
+    #[test]
+    fn a_variation_directory_whose_name_holds_a_separator_is_skipped() {
+        let tmp = Scratch::new();
+        let src = tmp.path().join("variations");
+        for dir in ["21\\22", "21"] {
+            let chr_dir = src.join(dir);
+            fs::create_dir_all(&chr_dir).unwrap();
+            fs::write(chr_dir.join("all_vars.gz"), b"gz").unwrap();
+            fs::write(chr_dir.join("all_vars.gz.csi"), b"csi").unwrap();
+        }
+        let out = tmp.path().join("out");
+        assert_eq!(copy_variation_files(&src, &out).unwrap(), (1, 2));
+        assert_eq!(entries(&out), ["21"]);
+        assert_eq!(entries(&out.join("21")), ["all_vars.gz", "all_vars.gz.csi"]);
     }
 
     #[test]
@@ -828,6 +908,16 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    /// The names of every entry directly under `dir`, sorted.
+    fn entries(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
     }
 
     #[test]

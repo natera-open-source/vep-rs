@@ -41,7 +41,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 5. A record Ensembl VEP drops before annotation
 
-**In short.** Ensembl VEP drops every structural record it marks skipped, writing only a warning: a span over `--max_sv_size`, an ALT type with no Sequence Ontology term (`<CPX>`, `<CTX>`, `<NON_REF>`), a typeless multi-allelic list or an incomplete `<DEL>`. vep-rs drops an incomplete `<DEL>` too, with the same warning. It annotates every other such record against every transcript its span overlaps or comes within 5,000 bases of, since a record's coordinates alone decide which transcripts it reaches, and gives a `<NON_REF>` block one `intergenic_variant` row.
+**In short.** Ensembl VEP drops every structural record it marks skipped, writing only a warning: a span over `--max_sv_size`, an ALT type with no Sequence Ontology term (`<CPX>`, `<CTX>`, `<NON_REF>`), a typeless multi-allelic list or an incomplete `<DEL>`. vep-rs drops an incomplete `<DEL>` too, with the same warning, and under the size check a record whose `SVLEN` or `END` overflowed the coordinate range, whose span is the ceiling's and not its own (`--dont_skip` keeps it; `--max_sv_size -1` lifts the check in both engines). It annotates every other such record against every transcript its span overlaps or comes within 5,000 bases of, since a record's coordinates alone decide which transcripts it reaches, and gives a `<NON_REF>` block one `intergenic_variant` row.
 
 The cap is a memory guard and the missing term a gap in Ensembl VEP's vocabulary, so this is a coverage difference: with no Ensembl VEP row to compare, vep-rs's rows are set aside, 389 records on GRCh37 and 594 on GRCh38.
 

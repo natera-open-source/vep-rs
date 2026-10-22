@@ -286,6 +286,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The divergence index gains the one-column `--fields` list whose row is `0`, at which Ensembl VEP's output loop ends and vep-rs writes every row. (#N)
 - The compatibility page's prefix example is `--bi` is `--biotype`; `--sy`, which it named, is ambiguous between `--symbol` and `--synonyms` in both engines (exit 2). (#N)
 - `--no_progress` and `--debug` are listed among the flags vep-rs refuses as unknown arguments (exit 2) on the page of what vep-rs does not do. (#N)
+- Inputs that crashed the tools or escaped the output directory are refused or read: unterminated symbolic ALTs, oversized BGZF blocks, mixed exon ranks, path-escaping chromosome names, overlong FASTA indexes. (#N)
+- A structural record whose SVLEN overflows the coordinate range is dropped after its oversize warning instead of being annotated to the chromosome's end. (#N)
 
 ### Security
 

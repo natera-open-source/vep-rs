@@ -69,6 +69,11 @@ pub enum FastaError {
         reason: String,
     },
 
+    /// A block of the BGZF file declares more uncompressed bytes than a block
+    /// holds, so no reader can inflate it; `offset` is the block's byte offset.
+    #[error("malformed BGZF block at offset {offset} in {path}")]
+    MalformedBgzfBlock { path: String, offset: u64 },
+
     #[error("no indexed FASTA file in {0}: a .fa with its .fai, or a bgzipped .fa.gz with its .fai and .gzi")]
     NoIndexedFasta(String),
 
@@ -91,6 +96,11 @@ pub enum FastaError {
 
     #[error("invalid FASTA index line in {path}: {reason}")]
     InvalidFaiLine { path: String, reason: String },
+
+    /// A `.fai` record names a sequence longer than the file holds from the
+    /// record's offset, by `bases` bases.
+    #[error("FASTA index names {bases} bases beyond the end of {path}")]
+    IndexBeyondFile { path: String, bases: u64 },
 
     #[error("invalid VEP_FASTA_STORAGE={0:?}: expected 'mmap' or 'memory'")]
     InvalidStorageMode(String),
@@ -121,6 +131,23 @@ impl FaiRecord {
     fn byte_offset(&self, pos: u64) -> u64 {
         let pos0 = pos - 1;
         self.offset + pos0 / self.line_bases * self.line_width + pos0 % self.line_bases
+    }
+
+    /// How many of the record's `len` bases have a byte offset at or past the
+    /// end of a file of `file_len` uncompressed bytes. The file holds, from the
+    /// record's offset, the bases of its whole lines plus the bytes of a last
+    /// partial line (at most `line_bases` of them); counting from the file's
+    /// length rather than from `len` keeps a `len` the index overstates from
+    /// multiplying into an offset the file does not have.
+    fn bases_beyond(&self, file_len: u64) -> u64 {
+        let line_width = self.line_width.max(1);
+        let available = file_len.saturating_sub(self.offset);
+        let whole_lines = available / line_width;
+        let partial = (available % line_width).min(self.line_bases);
+        let held = whole_lines
+            .saturating_mul(self.line_bases)
+            .saturating_add(partial);
+        self.len.saturating_sub(held)
     }
 }
 
@@ -256,6 +283,10 @@ const BGZF_HEADER_LEN: usize = 18;
 /// The empty block `bgzip` writes at the end of a file.
 const BGZF_EOF_LEN: usize = 28;
 
+/// The most bytes a BGZF block inflates to, the largest ISIZE its trailer may
+/// declare (SAM specification section 4.1).
+const BGZF_MAX_ISIZE: u64 = 65536;
+
 /// How many inflated blocks a thread keeps. A transcript's exons and its
 /// variant's bases sit in a handful of blocks that queries revisit in turn.
 const BLOCKS_PER_THREAD: usize = 16;
@@ -292,67 +323,79 @@ fn bgzf_block_isize(data: &[u8], at: usize, len: usize) -> Option<u64> {
     Some(u64::from(u32::from_le_bytes(tail)))
 }
 
-/// Why `index` does not describe `data`, or `None` when it does: the file must
-/// start with a whole BGZF block, and every entry must start where the block
-/// before it ends, at the uncompressed offset that block's ISIZE brings the
-/// sequence to; the last block must end at the file's end or at its EOF block.
-/// Every block's header and ISIZE are read, one pass over the whole compressed
-/// file, so the index is the one `bgzip -r` would write for these bytes or it
-/// is refused.
-fn check_gzi(data: &[u8], index: &[(u64, u64)]) -> Option<String> {
+/// Why [`check_gzi`] refused a file: its index does not describe it, with the
+/// first disagreement as the reason, or a block at the named byte offset declares
+/// more uncompressed bytes than a BGZF block holds.
+enum BgzfRefusal {
+    IndexMismatch(String),
+    OversizedBlock(u64),
+}
+
+/// The uncompressed length of `data` when `index` describes it, else why it does
+/// not: the file must start with a whole BGZF block, and every entry must start
+/// where the block before it ends, at the uncompressed offset that block's ISIZE
+/// brings the sequence to; the last block must end at the file's end or at its
+/// EOF block. Every block's header and ISIZE are read, one pass over the whole
+/// compressed file, so the index is the one `bgzip -r` would write for these
+/// bytes or it is refused, and a block whose ISIZE is over the format's limit is
+/// refused as its own fault, wherever it sits.
+fn check_gzi(data: &[u8], index: &[(u64, u64)]) -> Result<u64, BgzfRefusal> {
     let len = data.len() as u64;
-    // The (compressed, uncompressed) end of the whole BGZF block starting at
-    // `start`, or `None` when the bytes there are not one.
-    let block_end = |start: (u64, u64)| {
-        let at = start.0 as usize;
-        let block_len = bgzf_block_len(data, at)?;
-        let block_isize = bgzf_block_isize(data, at, block_len)?;
-        Some((start.0 + block_len as u64, start.1 + block_isize))
-    };
     let not_a_block = |at: u64| {
-        if at == 0 {
+        BgzfRefusal::IndexMismatch(if at == 0 {
             "the file does not start with a BGZF block".to_string()
         } else {
             format!("byte {at} is not the start of a whole BGZF block")
+        })
+    };
+    // The (compressed, uncompressed) end of the whole BGZF block starting at
+    // `start`, refused when the bytes there are not one or its ISIZE is over the
+    // limit.
+    let block_end = |start: (u64, u64)| -> Result<(u64, u64), BgzfRefusal> {
+        let at = start.0 as usize;
+        let block_len = bgzf_block_len(data, at).ok_or_else(|| not_a_block(start.0))?;
+        let block_isize =
+            bgzf_block_isize(data, at, block_len).ok_or_else(|| not_a_block(start.0))?;
+        if block_isize > BGZF_MAX_ISIZE {
+            return Err(BgzfRefusal::OversizedBlock(start.0));
         }
+        Ok((start.0 + block_len as u64, start.1 + block_isize))
     };
     // The first block starts at (0, 0); the index leaves it implicit.
     let mut start = (0u64, 0u64);
     for &next in index {
-        let Some(end) = block_end(start) else {
-            return Some(not_a_block(start.0));
-        };
+        let end = block_end(start)?;
         if next != end {
-            return Some(format!(
+            return Err(BgzfRefusal::IndexMismatch(format!(
                 "the block at byte {} ends at byte {} with the sequence at {} bytes, the index says {} and {}",
                 start.0, end.0, end.1, next.0, next.1
-            ));
+            )));
         }
         start = next;
     }
-    let Some(end) = block_end(start) else {
-        return Some(not_a_block(start.0));
-    };
+    let end = block_end(start)?;
     if end.0 == len {
-        None
+        Ok(end.1)
     } else if end.0 + BGZF_EOF_LEN as u64 == len {
         let eof_block = bgzf_block_len(data, end.0 as usize) == Some(BGZF_EOF_LEN)
             && bgzf_block_isize(data, end.0 as usize, BGZF_EOF_LEN) == Some(0);
         if eof_block {
-            None
+            Ok(end.1)
         } else {
-            Some(format!(
+            Err(BgzfRefusal::IndexMismatch(format!(
                 "the last {BGZF_EOF_LEN} bytes, from byte {}, are not a BGZF EOF block",
                 end.0
-            ))
+            )))
         }
     } else if index.is_empty() {
-        Some("the index lists no block after the first while the file holds more".to_string())
+        Err(BgzfRefusal::IndexMismatch(
+            "the index lists no block after the first while the file holds more".to_string(),
+        ))
     } else {
-        Some(format!(
+        Err(BgzfRefusal::IndexMismatch(format!(
             "the last block ends at byte {} of a {len} byte file",
             end.0
-        ))
+        )))
     }
 }
 
@@ -362,6 +405,8 @@ struct BgzfStorage {
     data: Mmap,
     /// (compressed offset, uncompressed offset) of every block after the first.
     index: Vec<(u64, u64)>,
+    /// The length of the sequence the blocks inflate to, as the index gives it.
+    uncompressed_len: u64,
     id: u64,
     fasta_path: PathBuf,
     gzi_path: PathBuf,
@@ -383,30 +428,53 @@ thread_local! {
     static BLOCKS: RefCell<VecDeque<CachedBlock>> = const { RefCell::new(VecDeque::new()) };
 }
 
-/// The BGZF file at `fasta_path` mapped and its `.gzi` at `gzi_path` read, once
-/// [`check_gzi`] finds the index describes the file; the mismatch is the error.
-fn checked_gzi(fasta_path: &Path, gzi_path: &Path) -> Result<(Mmap, Vec<(u64, u64)>), FastaError> {
+/// A BGZF file mapped, with the `.gzi` index that describes it and the
+/// uncompressed length the index gives it.
+struct IndexedBgzf {
+    data: Mmap,
+    /// (compressed offset, uncompressed offset) of every block after the first.
+    index: Vec<(u64, u64)>,
+    uncompressed_len: u64,
+}
+
+/// The BGZF file at `fasta_path` mapped with its `.gzi` at `gzi_path`, once
+/// [`check_gzi`] finds the index describes the file; a mismatch or an oversized
+/// block is the error.
+fn checked_gzi(fasta_path: &Path, gzi_path: &Path) -> Result<IndexedBgzf, FastaError> {
     let index: Vec<(u64, u64)> = bgzf::gzi::fs::read(gzi_path)
         .map_err(io_error("failed to read BGZF index", gzi_path))?
         .as_ref()
         .to_vec();
     let data = map_file(fasta_path)?;
-    if let Some(reason) = check_gzi(&data, &index) {
-        return Err(FastaError::GziMismatch {
+    match check_gzi(&data, &index) {
+        Ok(uncompressed_len) => Ok(IndexedBgzf {
+            data,
+            index,
+            uncompressed_len,
+        }),
+        Err(BgzfRefusal::IndexMismatch(reason)) => Err(FastaError::GziMismatch {
             gzi: gzi_path.display().to_string(),
             fasta: fasta_path.display().to_string(),
             reason,
-        });
+        }),
+        Err(BgzfRefusal::OversizedBlock(offset)) => Err(FastaError::MalformedBgzfBlock {
+            path: fasta_path.display().to_string(),
+            offset,
+        }),
     }
-    Ok((data, index))
 }
 
 impl BgzfStorage {
     fn open(fasta_path: &Path, gzi_path: &Path) -> Result<Self, FastaError> {
-        let (data, index) = checked_gzi(fasta_path, gzi_path)?;
+        let IndexedBgzf {
+            data,
+            index,
+            uncompressed_len,
+        } = checked_gzi(fasta_path, gzi_path)?;
         Ok(Self {
             data,
             index,
+            uncompressed_len,
             id: NEXT_BGZF_ID.fetch_add(1, Ordering::Relaxed),
             fasta_path: fasta_path.to_path_buf(),
             gzi_path: gzi_path.to_path_buf(),
@@ -552,7 +620,7 @@ impl FastaStorage {
                 // The whole stream inflates from the blocks' own headers and
                 // never consults the index; it is checked all the same, so the
                 // storage mode does not decide which index files a run accepts.
-                let (compressed, _) = checked_gzi(fasta_path, &sibling(fasta_path, "gzi"))?;
+                let compressed = checked_gzi(fasta_path, &sibling(fasta_path, "gzi"))?.data;
                 let mut data = Vec::new();
                 bgzf::io::Reader::new(&compressed[..])
                     .read_to_end(&mut data)
@@ -565,6 +633,15 @@ impl FastaStorage {
                 Self::Memory(Arc::from(data.into_boxed_slice()))
             }
         })
+    }
+
+    /// The length of the uncompressed sequence file.
+    fn len(&self) -> u64 {
+        match self {
+            Self::Mmap(data) => data.len() as u64,
+            Self::Memory(data) => data.len() as u64,
+            Self::Bgzf(storage) => storage.uncompressed_len,
+        }
     }
 
     /// `len` uncompressed bytes from `offset`, or `None` past the end of the data.
@@ -667,11 +744,21 @@ impl IndexedFasta {
             }
             let storage = FastaStorage::open(&fasta_path, encoding, mode)?;
             let source = sources.len();
+            let file_len = storage.len();
             sources.push(FastaSource {
                 path: fasta_path,
                 storage,
             });
             for (name, record) in load_fai(&fai_path, source)? {
+                // Every read sizes its buffer from the index, so a record the
+                // file cannot hold is refused before any read is made.
+                let beyond = record.bases_beyond(file_len);
+                if beyond > 0 {
+                    return Err(FastaError::IndexBeyondFile {
+                        path: sources[source].path.display().to_string(),
+                        bases: beyond,
+                    });
+                }
                 if let Some(earlier) = records.insert(name.clone(), record) {
                     if earlier.source == source {
                         return Err(FastaError::InvalidFaiLine {
@@ -1010,6 +1097,15 @@ fn load_fai(path: &Path, source: usize) -> Result<Vec<(String, FaiRecord)>, Fast
         let line_width = number(4, "line_width")?;
         if line_bases == 0 {
             return Err(invalid(line_no, "line_bases is 0".to_string()));
+        }
+        // A line's bytes include its bases: with fewer bytes than bases per line,
+        // byte offsets run backwards across every line end and the file holds
+        // fewer bases than its whole lines count for.
+        if line_width < line_bases {
+            return Err(invalid(
+                line_no,
+                format!("line_width {line_width} is less than line_bases {line_bases}"),
+            ));
         }
 
         records.push((
@@ -1500,6 +1596,55 @@ mod tests {
         assert_eq!(in_memory.to_string(), error.to_string());
     }
 
+    /// A block whose trailer declares an ISIZE of 131072, over the most a BGZF
+    /// block inflates to, is refused at open as a malformed block at its byte
+    /// offset, in both storage modes, whether it is the first block, which the
+    /// index leaves implicit, or the last data block, whose length no index entry
+    /// confirms; the refusal names the file, not the index. A last block declaring
+    /// exactly 65536 passes this check, and the mapped storage, which reads no
+    /// block at open, opens.
+    #[test]
+    fn bgzf_block_declaring_an_isize_over_the_limit_is_refused() {
+        let dir = tempdir().unwrap();
+        let (fasta, fai) = fasta_and_fai(&[("1", &bases(9, 3_000))]);
+        let (compressed, gzi) = bgzf_and_gzi(&fasta, 1_000);
+        let gz = dir.path().join("ref.fa.gz");
+        std::fs::write(dir.path().join("ref.fa.gz.fai"), &fai).unwrap();
+        bgzf::gzi::fs::write(dir.path().join("ref.fa.gz.gzi"), &gzi).unwrap();
+        let first_block_end = gzi.as_ref()[0].0 as usize;
+        let last_block_at = gzi.as_ref().last().unwrap().0 as usize;
+        let last_block_end = compressed.len() - BGZF_EOF_LEN;
+        let with_isize = |block_end: usize, isize: u32| {
+            let mut bytes = compressed.clone();
+            bytes[block_end - 4..block_end].copy_from_slice(&isize.to_le_bytes());
+            std::fs::write(&gz, bytes).unwrap();
+        };
+        for (block_at, block_end) in [(0, first_block_end), (last_block_at, last_block_end)] {
+            with_isize(block_end, 131_072);
+            for opened in [
+                IndexedFasta::from_path_mmap(&gz),
+                IndexedFasta::from_path_in_memory(&gz),
+            ] {
+                let error = opened
+                    .err()
+                    .unwrap_or_else(|| panic!("block at {block_at}"));
+                assert!(
+                    matches!(error, FastaError::MalformedBgzfBlock { .. }),
+                    "{error:?}"
+                );
+                assert_eq!(
+                    error.to_string(),
+                    format!(
+                        "malformed BGZF block at offset {block_at} in {}",
+                        gz.display()
+                    )
+                );
+            }
+        }
+        with_isize(last_block_end, 65_536);
+        IndexedFasta::from_path_mmap(&gz).unwrap();
+    }
+
     /// A directory given as the FASTA opens every indexed `.fa` and `.fa.gz` in
     /// it and serves their sequences together: an unindexed file and a `.fasta`
     /// are passed over, the indexes a file needs follow its bytes rather than its
@@ -1666,34 +1811,125 @@ mod tests {
     }
 
     /// A `.fai` that claims more sequence than the file holds (a truncated
-    /// FASTA) reads `None` past the data and the bases before it, in every
-    /// storage, plain and compressed alike.
+    /// FASTA, or an index naming a sequence of 4e18 bases over a file of 150) is
+    /// refused when the file opens, in every storage, plain and compressed alike,
+    /// naming how many bases have no byte in the file: the 156-byte file (a
+    /// 3-byte header, two 61-byte lines and a 31-byte last line) has bytes for
+    /// 151 base positions from offset 3, the last of them its final line
+    /// terminator, so an index naming 400 bases names 249 beyond it and one
+    /// naming 4e18 names 4e18 less 151. The index of the sequence as written
+    /// opens, and a file cut one base and its terminator short of the index is
+    /// one base beyond.
     #[test]
-    fn truncated_fasta_reads_none_past_its_data() {
+    fn fai_naming_bases_beyond_the_file_is_refused() {
         let dir = tempdir().unwrap();
         let seq = bases(6, 150);
-        let (fasta, _) = fasta_and_fai(&[("1", &seq)]);
-        let fai = "1\t400\t3\t60\t61\n";
+        let (fasta, fai) = fasta_and_fai(&[("1", &seq)]);
+        assert_eq!(fasta.len(), 156);
         let plain = dir.path().join("ref.fa");
         std::fs::write(&plain, &fasta).unwrap();
-        std::fs::write(dir.path().join("ref.fa.fai"), fai).unwrap();
         let (compressed, gzi) = bgzf_and_gzi(&fasta, 64);
         let gz = dir.path().join("ref.fa.gz");
         std::fs::write(&gz, &compressed).unwrap();
-        std::fs::write(dir.path().join("ref.fa.gz.fai"), fai).unwrap();
         bgzf::gzi::fs::write(dir.path().join("ref.fa.gz.gzi"), &gzi).unwrap();
-        for fasta in [
-            IndexedFasta::from_path_mmap(&plain).unwrap(),
-            IndexedFasta::from_path_in_memory(&plain).unwrap(),
-            IndexedFasta::from_path_mmap(&gz).unwrap(),
-            IndexedFasta::from_path_in_memory(&gz).unwrap(),
+        let opens = |path: &Path| {
+            [
+                IndexedFasta::from_path_mmap(path),
+                IndexedFasta::from_path_in_memory(path),
+            ]
+        };
+        for (index, beyond) in [
+            ("1\t400\t3\t60\t61\n", 249u64),
+            (
+                "1\t4000000000000000000\t3\t60\t61\n",
+                4_000_000_000_000_000_000 - 151,
+            ),
+            // An offset past the end of the file holds none of the bases.
+            ("1\t150\t999\t60\t61\n", 150),
         ] {
-            assert_eq!(fasta.base("1", 150), Some(seq[149].to_ascii_uppercase()));
-            assert_eq!(fasta.base("1", 151), None);
-            assert_eq!(fasta.base("1", 400), None);
-            assert_eq!(fasta.sequence("1", 140, 160), None);
-            assert_eq!(fasta.sequence("1", 1, 150).map(|s| s.len()), Some(150));
+            std::fs::write(dir.path().join("ref.fa.fai"), index).unwrap();
+            std::fs::write(dir.path().join("ref.fa.gz.fai"), index).unwrap();
+            for (path, name) in [(&plain, "ref.fa"), (&gz, "ref.fa.gz")] {
+                for opened in opens(path) {
+                    let error = opened.err().unwrap_or_else(|| panic!("{index:?} {name}"));
+                    assert_eq!(
+                        error.to_string(),
+                        format!(
+                            "FASTA index names {beyond} bases beyond the end of {}",
+                            path.display()
+                        ),
+                        "{index:?} {name}"
+                    );
+                }
+            }
         }
+        // The file ends one base early: 149 of the 150 bases are there.
+        let mut cut = fasta.clone();
+        cut.truncate(cut.len() - 2);
+        std::fs::write(&plain, &cut).unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), &fai).unwrap();
+        let error = IndexedFasta::from_path_mmap(&plain).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .starts_with("FASTA index names 1 bases beyond"),
+            "{error}"
+        );
+        std::fs::write(&plain, &fasta).unwrap();
+        std::fs::write(dir.path().join("ref.fa.gz.fai"), &fai).unwrap();
+        for path in [&plain, &gz] {
+            for opened in opens(path) {
+                let opened = opened.unwrap();
+                assert_eq!(opened.base("1", 150), Some(seq[149].to_ascii_uppercase()));
+                assert_eq!(opened.base("1", 151), None);
+                assert_eq!(opened.sequence("1", 1, 150).map(|s| s.len()), Some(150));
+            }
+        }
+    }
+
+    /// A `.fai` record with fewer bytes than bases per line (`line_width` 30
+    /// under `line_bases` 60, or a `line_width` of 0) is refused as an invalid
+    /// index line: such a record's byte offsets run backwards at every line end,
+    /// so a span across one has no byte length, and its whole lines count more
+    /// bases than the file holds, so the beyond-the-file check cannot bound it.
+    /// A line of exactly as many bytes as bases, a last line with no terminator,
+    /// opens.
+    #[test]
+    fn fai_with_fewer_bytes_than_bases_per_line_is_refused() {
+        let dir = tempdir().unwrap();
+        let (fasta, _) = fasta_and_fai(&[("1", &bases(7, 150))]);
+        let plain = dir.path().join("ref.fa");
+        std::fs::write(&plain, &fasta).unwrap();
+        for (index, reason) in [
+            (
+                "1\t150\t3\t60\t30\n",
+                "line_width 30 is less than line_bases 60",
+            ),
+            (
+                "1\t150\t3\t60\t0\n",
+                "line_width 0 is less than line_bases 60",
+            ),
+        ] {
+            std::fs::write(dir.path().join("ref.fa.fai"), index).unwrap();
+            let error = IndexedFasta::from_path_mmap(&plain).unwrap_err();
+            assert!(
+                matches!(error, FastaError::InvalidFaiLine { .. }),
+                "{index:?}: {error:?}"
+            );
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "invalid FASTA index line in {}: line 1: {reason}",
+                    dir.path().join("ref.fa.fai").display()
+                ),
+                "{index:?}"
+            );
+        }
+        std::fs::write(&plain, b">1\nACGTAC").unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), "1\t6\t3\t6\t6\n").unwrap();
+        let opened = IndexedFasta::from_path_mmap(&plain).unwrap();
+        assert_eq!(opened.sequence("1", 1, 6), Some(b"ACGTAC".to_vec()));
+        assert_eq!(opened.base("1", 7), None);
     }
 
     /// The encoding is read from the bytes, not the name, and a gzip member is

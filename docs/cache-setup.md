@@ -26,6 +26,14 @@ The GFF3 alone gives each transcript its exons, CDS and ENSP identifier, its bio
 
 `--include-predictions` embeds the SIFT and PolyPhen matrices ([SIFT and PolyPhen predictions](#sift-and-polyphen-predictions)).
 
+A failed build prints one `ERROR: [cache-builder] <message>` line and exits 1, writing nothing outside the output directory. GFF3 lines the builder does not take as written:
+
+| GFF3 line | Outcome |
+| --- | --- |
+| A seqid that cannot name a directory of the cache (empty, `.`, `..`, or holding a path separator) | refused: `invalid chromosome name '<seqid>' at line <n>` |
+| A feature whose start is 0 or whose end precedes its start | refused: `GFF3 coordinates <start>-<end> at line <n> are not 1-based and ordered` |
+| A transcript whose exons mix ranked and unranked lines | its exons are ordered by start |
+
 The GRCh38 command is in the [Quick start](getting-started/quick-start.md#2-get-a-transcript-cache). For GRCh37 the same download works: the release-87 files are `Homo_sapiens.GRCh37.87.gff3.gz` and `Homo_sapiens.GRCh37.87.gtf.gz` under `pub/grch37/release-116/`. Local copies can be passed instead:
 
 ```bash
@@ -114,15 +122,24 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 
 ## Reference FASTA
 
-`--fasta` takes a plain FASTA with its `samtools faidx` `.fai`, or a `bgzip`-compressed FASTA with the `.fai` and `.gzi` `samtools faidx` writes for it. Ensembl's `dna_index/` files are of that shape. A gzip file that is not BGZF is refused with `ERROR: [fasta] <file> is gzip but not BGZF: recompress with bgzip and index with samtools faidx`, because its `.fai` offsets cannot be reached without inflating the whole file. No index is built (Ensembl VEP builds one).
+`--fasta` takes a plain FASTA with its `samtools faidx` `.fai`, or a `bgzip`-compressed FASTA with the `.fai` and `.gzi` `samtools faidx` writes for it, the shape of Ensembl's `dna_index/` files. No index is built (Ensembl VEP builds one). Three files are refused at open, each with its line below. A gzip file that is not BGZF: its `.fai` offsets need the whole file inflated. A `.gzi` that does not match the file's blocks: recompressed, not re-indexed. An `.fai` naming more bases than the file holds, plain or inflated.
 
-The `.gzi` is checked against the file's block layout when it is opened, so a file recompressed but not re-indexed is refused. A directory given to `--fasta` is read as Ensembl VEP's Bio::DB::Fasta reads one: every indexed `.fa` in it (and the `.fa.gz` vep-rs adds, which Bio::DB::Fasta does not read), their sequences together. Two files naming the same sequence are refused (Ensembl VEP with Bio::DB::HTS takes a file only). Under `VEP_FASTA_STORAGE=memory` a bgzipped FASTA is inflated whole into memory.
+| Condition | Line printed |
+| --- | --- |
+| A gzip file that is not BGZF | `ERROR: [fasta] <file> is gzip but not BGZF: recompress with bgzip and index with samtools faidx` |
+| An `.fai` naming bases past the file's end | `ERROR: [fasta] FASTA index names <n> bases beyond the end of <file>` |
+| `--hgvs` or `--hgvsg` with no FASTA in reach | `ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)` |
+| `--use_transcript_ref` without a FASTA | `ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref` |
+| `--everything` without a FASTA | `INFO: Disabling --hgvs; using --offline and no FASTA file found` |
+| `--fasta_dir` holding no compatible file | `WARNING: No compatible FASTA files found in <dir>` |
+
+A `--fasta` directory is read as Bio::DB::Fasta reads one: every indexed `.fa` in it, plus the `.fa.gz` vep-rs adds, as one set of sequences; two files naming one sequence are refused (Ensembl VEP with Bio::DB::HTS takes a file only). `VEP_FASTA_STORAGE=memory` inflates a bgzipped FASTA whole into memory.
 
 On GRCh37 and GRCh38 a read of the sequence named `Y` inside a pseudoautosomal region is served from `X` at the region's offset, as Ensembl VEP serves it: Ensembl's primary-assembly FASTA carries `N` there. The redirect follows the name the FASTA gives the sequence, so a file naming it `chrY` is read as written, as Ensembl VEP reads it.
 
-`--fasta_dir <dir>` chooses, as Ensembl VEP does, the `.fa` or `.fa.gz` of the directory whose name carries the species and the assembly (case-insensitively), a file named `toplevel` before any other and a compressed file before a plain one. The choice stands in for `--fasta` and for the cache directory's FASTA. A directory holding no such file leaves those in force and warns `WARNING: No compatible FASTA files found in <dir>`, written to the run's warnings file and echoed on standard error unless `--quiet`. A directory that cannot be opened is passed over without a message, as Ensembl VEP does.
+`--fasta_dir <dir>` chooses, as Ensembl VEP does, the `.fa` or `.fa.gz` of the directory whose name carries the species and assembly (case-insensitively), `toplevel` before any other name and a compressed file before a plain one. The choice stands in for `--fasta` and for the cache directory's FASTA. A directory holding no such file leaves those in force and warns (the table's line) in the warnings file and on standard error unless `--quiet`; one that cannot be opened is passed over silently, as Ensembl VEP does.
 
-`--hgvs` or `--hgvsg` with no FASTA in reach exits 1 with `ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)`, Ensembl VEP's offline refusal. `--everything` without a FASTA instead prints `INFO: Disabling --hgvs; using --offline and no FASTA file found` on standard error (withheld under `--quiet`) and drops the HGVS notations it switched on, as Ensembl VEP does. An explicit `--hgvsg` beside it is still refused. `--use_transcript_ref` without a FASTA exits 1 with `ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref`, since a non-coding transcript's cDNA is read from the FASTA.
+`--hgvs` or `--hgvsg` with no FASTA in reach exits 1 with Ensembl VEP's offline refusal. `--everything` without a FASTA instead prints the INFO line on standard error (withheld under `--quiet`) and drops the HGVS notations it switched on, as Ensembl VEP does; an explicit `--hgvsg` beside it is still refused. `--use_transcript_ref` without a FASTA exits 1, since a non-coding transcript's cDNA is read from the FASTA.
 
 Under `--lookup_ref` a contig the FASTA lacks skips the record at every position with the could-not-fetch warning, where Ensembl VEP's one-base placeholder slice (`BaseVEP.pm` lines 424-434) gives a one-base record at position 1 the reference `N`.
 

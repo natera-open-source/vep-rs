@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use noodles::bgzf;
 use noodles::core::{Position, Region};
 use noodles::csi::binning_index::index::header::format::CoordinateSystem;
@@ -30,6 +30,7 @@ use noodles::csi::binning_index::Indexer;
 use noodles::vcf;
 use tracing::{debug, info, warn};
 use vep_core::cache_info::FIXED_VARIATION_COLUMNS;
+use vep_core::coordinate::is_cache_path_component;
 
 use crate::core_dumps::read_table;
 
@@ -552,6 +553,9 @@ impl AllVarsWriter {
     /// Creates `<output_dir>/variations/<chr>/all_vars.gz` for the records of
     /// `chr`, with a cell per column of `columns`.
     pub fn create(output_dir: &Path, chr: &str, columns: &[String]) -> Result<Self> {
+        if !is_cache_path_component(chr) {
+            bail!("invalid chromosome name '{chr}'");
+        }
         let dir = output_dir.join("variations").join(chr);
         std::fs::create_dir_all(&dir)
             .with_context(|| format!("Failed to create {}", dir.display()))?;
@@ -1999,6 +2003,27 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let err = ClinVarAttribs::load(dir.path(), &[]).unwrap_err();
         assert!(err.to_string().contains("source.txt"), "{err}");
+    }
+
+    /// A chromosome that cannot name a directory of the cache (`..`, a name with
+    /// a separator) is refused before the variations directory is created, so a
+    /// chromosome read from a file name never writes outside `variations/`.
+    #[test]
+    fn a_chromosome_that_is_not_a_path_component_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let columns = variation_columns(false);
+        for chr in ["..", ".", "21/22", "", "21\\22"] {
+            let error = match AllVarsWriter::create(dir.path(), chr, &columns) {
+                Ok(_) => panic!("{chr:?} was accepted"),
+                Err(error) => error,
+            };
+            assert_eq!(
+                error.to_string(),
+                format!("invalid chromosome name '{chr}'"),
+                "{chr:?}"
+            );
+        }
+        assert!(!dir.path().join("variations").exists());
     }
 
     /// The file is written as the dumper prints a record (`Dumper/Variation.pm:
