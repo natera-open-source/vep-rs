@@ -3,14 +3,14 @@
 
 //! Structural insertion (`<INS>`, `<INS:ME:*>`, `<CNV:TR>`) consequence calculation.
 //!
-//! Mirrors Perl VEP's `StructuralVariationOverlapAllele` logic for insertions.
+//! Mirrors Ensembl VEP's `StructuralVariationOverlapAllele` logic for insertions.
 //!
 //! ## Coordinate model
 //!
 //! Structural insertions come in two flavours:
 //!
 //! 1. **Ranged insertions** (`<INS>` with SVLEN): The VCF parser sets
-//!    `variant.start` = POS and `variant.end` = POS + abs(SVLEN). Perl VEP
+//!    `variant.start` = POS and `variant.end` = POS + abs(SVLEN). Ensembl VEP
 //!    treats the inserted material as occupying this range for overlap
 //!    purposes, even though no genomic bases are deleted.
 //!
@@ -116,7 +116,7 @@ pub fn calculate(
         return None;
     }
 
-    // Perl VEP `coding_transcript_variant` / `non_coding_transcript_variant`:
+    // Ensembl VEP `coding_transcript_variant` / `non_coding_transcript_variant`:
     //   complete_overlap_feature and within_coding_gene (or non-coding equivalent)
     // A ranged insertion that fully contains the transcript gets the context term
     // as the sole consequence, like inversions and neutral CNVs. Exception:
@@ -144,7 +144,7 @@ pub fn calculate(
 
     let hits_exon = overlaps_any_exon(transcript, sv_start, sv_end);
 
-    // Perl VEP `within_intron` reads `_intron_effects`, which trims 2bp from each
+    // Ensembl VEP `within_intron` reads `_intron_effects`, which trims 2bp from each
     // intron end before setting the "intronic" flag, attributing the invariant
     // GT/AG dinucleotides to the splice terms. The trim is unconditional in
     // `BaseTranscriptVariationAllele.pm:143-150`: one `overlap($r_start, $r_end,
@@ -159,7 +159,7 @@ pub fn calculate(
 
     let is_protein_coding = transcript.has_cds();
 
-    // Perl VEP `feature_elongation` predicate for insertions/gains:
+    // Ensembl VEP `feature_elongation` predicate for insertions/gains:
     //   within_cdna(@_) AND complete_within_feature(@_) AND insertion(@_)
     // complete_within_feature = SV is entirely inside the transcript
     let complete_within = sv_start >= tx_start && sv_end <= tx_end;
@@ -215,7 +215,7 @@ pub fn calculate(
         }
     }
 
-    // Perl VEP `within_non_coding_gene` predicate:
+    // Ensembl VEP `within_non_coding_gene` predicate:
     //   within_transcript AND NOT translation AND NOT mature_miRNA AND NOT non_coding_exon_variant
     // so an intron-only overlap on a non-coding transcript produces both
     // intron_variant and non_coding_transcript_variant. A point ME insertion at
@@ -233,7 +233,7 @@ pub fn calculate(
 
     // A point ME insertion in the first or last 2bp of an intron (the splice
     // dinucleotides the trimmed check excludes) matches no Perl predicate, so
-    // Perl VEP produces `intergenic_variant`.
+    // Ensembl VEP produces `intergenic_variant`.
     if consequences.is_empty() {
         if is_point_me {
             consequences.push(Consequence::IntergenicVariant);
@@ -758,7 +758,7 @@ mod tests {
     #[test]
     fn test_large_insertion_fully_contains_coding_transcript() {
         // Ranged insertion spanning the entire transcript and beyond.
-        // Perl VEP: when SV fully contains a coding transcript, produce
+        // Ensembl VEP: when SV fully contains a coding transcript, produce
         // coding_transcript_variant as the sole consequence.
         let tx = make_test_transcript();
         let v = make_ins(24_999_000, 25_007_000);
@@ -780,7 +780,7 @@ mod tests {
     #[test]
     fn test_tandem_repeat_fully_contains_transcript_gives_transcript_amplification() {
         // TandemRepeat (<CNV:TR>) is a copy-number gain: when it fully contains
-        // a transcript, Perl VEP produces `transcript_amplification` (not a context
+        // a transcript, Ensembl VEP produces `transcript_amplification` (not a context
         // term like coding_transcript_variant). This matches duplication.rs behavior.
         let tx = make_test_transcript();
         let mut v = make_ins(24_999_000, 25_007_000);
@@ -806,7 +806,7 @@ mod tests {
     #[test]
     fn test_tandem_repeat_fully_contains_noncoding_transcript_gives_transcript_amplification() {
         // Non-coding transcript fully contained by TandemRepeat should also get
-        // transcript_amplification, matching Perl VEP behavior.
+        // transcript_amplification, matching Ensembl VEP behavior.
         let mut tx = make_test_transcript();
         tx.biotype = "lncRNA".into();
         tx.coding_region_start = None;
@@ -1194,7 +1194,7 @@ mod tests {
         );
     }
 
-    // Perl VEP's `_intron_effects` trims 2bp from each intron end before the
+    // Ensembl VEP's `_intron_effects` trims 2bp from each intron end before the
     // "intronic" flag check, so a point ME insertion in the first or last 2bp of
     // an intron is `intergenic_variant`.
     //
@@ -1621,11 +1621,10 @@ mod tests {
         assert_eq!(tc.feature_overlap(v.start, v.end), None);
     }
 
-    /// The single-base form stays what it was: a symbolic record with neither END nor
-    /// SVLEN is the base at POS + 1 in Perl too (`get_end` returns `get_start`), with
-    /// OverlapBP 1.
+    /// A symbolic record with neither END nor SVLEN is the single base at POS + 1 in
+    /// Perl too (`get_end` returns `get_start`): an intron variant with OverlapBP 1.
     #[test]
-    fn test_point_insertion_unchanged_beside_the_pair() {
+    fn test_point_insertion_is_one_base_with_overlap_bp_1() {
         let tx = make_test_transcript();
         let v = make_point_ins(25_000_500);
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();

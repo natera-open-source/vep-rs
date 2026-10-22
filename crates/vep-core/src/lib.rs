@@ -28,7 +28,7 @@ pub mod variant;
 pub mod variation;
 pub mod vcf_info;
 
-/// VEP version number (matches Perl VEP release).
+/// VEP version number (matches the Ensembl VEP release).
 pub const VEP_VERSION: u32 = 116;
 
 /// VEP sub-version number.

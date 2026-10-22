@@ -64,7 +64,7 @@ has drained.
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/main.rs`               | The `vep` binary: parses `Args`, sets the log level from `--verbose` and `--quiet`, prints the version banner, builds `Config`, answers `--resolved_config` before any cache opens, and runs `Runner`; mimalloc is the global allocator under the default `mimalloc` feature |
 | `src/lib.rs`                | The library root: re-exports the embedding surface (`Annotator`, `Config`, `apply_to_record`, the transcript index types, `InputVariant`, `JsonOutputFormatter`) and declares the modules                                      |
-| `src/args.rs`               | The clap definition of every flag, named as Perl VEP names them (underscores included); a flag the error table of `config.rs` governs takes its help text from that table                                                                     |
+| `src/args.rs`               | The clap definition of every flag, named as Ensembl VEP names them (underscores included); a flag the error table of `config.rs` governs takes its help text from that table                                                                  |
 | `src/argv.rs`               | The command line before clap reads it: `prepass` lays the flags of the `--config` file, `<dir>/vep.ini` and the `VEP_<FLAG>` environment variables out around the command line in Ensembl VEP's priority (`Config.pm:693-698`), and resolves Ensembl VEP's option spellings against the clap definition |
 | `src/config.rs`             | `Config::from_parsed`: the error table of refused and no-effect flags, the fields the option sets imply, the `--fork` and `--decompression_threads` automatic caps, `--distance`, tilde expansion and the cache path the output header prints                       |
 | `src/option_rules.rs`       | Ensembl VEP's option rules as data (`Config.pm:327-645`): the lists, option sets, valid values, requirements, incompatibilities and deprecations, and the flag state they are applied to and checked on |
@@ -96,7 +96,7 @@ has drained.
 
 ## Command line
 
-`vep` has no subcommands: one invocation annotates one input. The flags are Perl VEP's,
+`vep` has no subcommands: one invocation annotates one input. The flags are Ensembl VEP's,
 underscores included, so an existing VEP command line parses; a flag the help marks "accepted
 for VEP compatibility" parses and changes no annotation (the cache flags among them only name
 the cache path the output header prints). The groups below name the flags that shape a run;

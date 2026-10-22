@@ -11,7 +11,7 @@
 //! so the resolved assembly is threaded from `--assembly` down into plugin
 //! initialization.
 //!
-//! Perl VEP does the same: `REVEL.pm` (Ensembl/VEP_plugins release/115) selects
+//! Ensembl VEP does the same: `REVEL.pm` (Ensembl/VEP_plugins release/115) selects
 //! `hg19_pos` vs `grch38_pos` from `$self->{config}->{assembly}` and dies when the
 //! required column is absent.
 

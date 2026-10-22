@@ -2,7 +2,7 @@
 
 `vep-cache-builder` is the binary that builds the JSON (JavaScript Object Notation)
 transcript cache the `vep` binary reads through `--json_cache`, from an Ensembl
-release's GFF3 (General Feature Format version 3) and protein FASTA, without Perl VEP
+release's GFF3 (General Feature Format version 3) and protein FASTA, without Ensembl VEP
 (Variant Effect Predictor). No workspace crate depends on it; it uses
 `vep-fasta` for genome reads and `vep-core` for the reverse complement, and `vep-cli`
 loads what it writes. The output is `info.json`, one transcript shard per chromosome and

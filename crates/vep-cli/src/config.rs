@@ -226,7 +226,7 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     ),
     refused(
         "gp",
-        "--gp is not supported: it reads 1000 Genomes pilot coordinates from INFO/GP, which no current VCF carries",
+        "--gp is not supported: it reads a GRCh37 chr:pos from the INFO/GP field that some 1000 Genomes VCFs carry",
         "Config.pm:120; Parser/VCF.pm:271-285 takes chr:pos from INFO/GP and skips lines without it",
         "the record's own coordinates",
     ),
@@ -811,7 +811,7 @@ pub fn canonical_output_format(value: &str) -> String {
     }
 }
 
-/// The user-visible notice for `--regulatory`, which vep-rs accepts for Perl VEP
+/// The user-visible notice for `--regulatory`, which vep-rs accepts for Ensembl VEP
 /// command-line compatibility but does not implement.
 ///
 /// No regulatory-feature cache is loaded, so none of the seven regulatory terms of
@@ -1195,8 +1195,7 @@ pub const DECOMPRESSION_THREADS_AUTO_CAP: usize = 10;
 /// Auto-detect cap for `--fork=0`. One reader thread parses and hands out the
 /// batches, so the wall time stops falling past about 32 workers and rises on
 /// wider hosts, where the extra workers wait at the batch barrier and contend
-/// for the allocator: gnomAD v4.1 chromosome 2 took 1.8 times longer at 192
-/// workers than at 32 on a 192-vCPU host. User-supplied values are not capped.
+/// for the allocator. User-supplied values are not capped.
 const FORK_AUTO_CAP: usize = 32;
 
 /// Resolve the --fork value. `0` means "auto": use the number of available

@@ -811,7 +811,8 @@ mod tests {
     /// `--allow_non_variant --vcf --check_frequency --freq_pop AF --freq_filter
     /// include` writes `21 10521608 . C .` and `21 10521659 . A .`, each at a
     /// `COSMIC_MUTATION` record, and drops `21 5131442 . C .`, where no known
-    /// variant lies; `exclude` writes all three.
+    /// variant lies; `exclude` writes all three. The fixture's `COSV` id is
+    /// synthetic.
     #[test]
     fn record_without_alleles_is_dropped_under_include_only_without_data() {
         let include = filter(&[
@@ -822,7 +823,7 @@ mod tests {
             "include",
         ]);
         let exclude = filter(&["--check_frequency", "--freq_pop", "AF"]);
-        let cosmic = known("COSV107315996", "COSMIC_MUTATION", &[], &[]);
+        let cosmic = known("COSV9900001", "COSMIC_MUTATION", &[], &[]);
         let feature = |colocated: Vec<ColocatedVariant>| {
             let mut v =
                 InputVariant::without_allele("21".into(), 10521608, "C", std::iter::empty());

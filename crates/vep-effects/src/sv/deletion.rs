@@ -3,7 +3,7 @@
 
 //! Structural deletion (`<DEL>`) consequence calculation.
 //!
-//! Mirrors Perl VEP's `StructuralVariationOverlapAllele` logic for deletions.
+//! Mirrors Ensembl VEP's `StructuralVariationOverlapAllele` logic for deletions.
 //! Assigns consequence terms based on how the deletion span overlaps the
 //! transcript structure (exons, introns, CDS, UTRs).
 //!
@@ -91,7 +91,7 @@ pub fn calculate(
     let coding_start = transcript.coding_region_start;
     let coding_end = transcript.coding_region_end;
 
-    // Perl VEP `feature_truncation` predicate for deletions/losses:
+    // Ensembl VEP `feature_truncation` predicate for deletions/losses:
     //   within_cdna(@_) AND (partial_overlap_feature(@_) OR complete_within_feature(@_))
     //   AND (deletion(@_) OR copy_number_loss(@_))
     //

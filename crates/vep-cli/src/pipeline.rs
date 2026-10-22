@@ -250,8 +250,8 @@ pub(crate) enum InputBatch {
 /// batch has in all. The batched coordinator sends a batch whole; a streaming
 /// task sends its one chunk, and its error travels in place of the chunk. Chunk
 /// buffers are allocated by the render task that fills them and freed by the
-/// writer; pooling them across threads made a buffer grown on another thread
-/// leave its old space stranded in the allocator arena it came from.
+/// writer, never pooled across threads: a buffer grown on another thread leaves
+/// its old space stranded in the allocator arena it came from.
 #[derive(Debug)]
 pub(crate) struct Rendered {
     seq: u64,
@@ -1081,7 +1081,7 @@ fn rejoin_with_tabs(line: &[u8], delimiter: &Delimiter, out: &mut Vec<u8>) {
 /// whose REF and ALTs are a run of `ACGT` together, since only the structural
 /// path reads INFO. Returned as `(head, tail)`, where `tail` is `\t.` for the
 /// placeholder and empty otherwise. A line with fewer than eight columns is
-/// returned whole, so the parser reports it as before.
+/// returned whole and left to the parser's own column rules.
 fn parser_columns(line: &[u8]) -> (&[u8], &'static [u8]) {
     // The first seven tabs bound CHROM through FILTER; INFO, often the bulk of
     // the line, is scanned only when the parser will read it.
@@ -1966,9 +1966,9 @@ fn coordinate(
 /// Frees a written batch's annotations on the pool, then empties the vector.
 /// The consequences are the bulk of a batch's allocations and were made on the
 /// pool's threads; freeing them there, while no thread allocates, keeps each
-/// allocator arena reusing its own space. Freeing them from the writer thread
-/// while the pool allocated the next batches grew a run's peak memory
-/// several-fold.
+/// allocator arena reusing its own space, where freeing them from the writer
+/// thread while the pool allocates the next batches strands that space and
+/// raises the run's peak memory.
 fn drop_annotations(variants: &mut Vec<InputVariant>, pool: &ThreadPool) {
     pool.install(|| {
         variants.par_iter_mut().for_each(|variant| {
@@ -2413,8 +2413,8 @@ fn fused_task(
 /// contiguous range of `variants` because `parse_lines` lays the variants out
 /// in unit order, so the batch is split into one mutable slice per task, and
 /// the batch crosses the pool once rather than three times (annotate, render,
-/// free). Per-record output is unchanged: a record's rows never depend on its
-/// batch-mates.
+/// free). A record's rows never depend on its batch-mates, so the output is the
+/// same for any split of the batch into tasks.
 fn annotate_render_batch(
     batch: &mut ParsedBatch,
     c: &Coordinator<'_>,

@@ -3,7 +3,7 @@
 
 //! Copy number variation (`<CNV>`, `<CN0>`–`<CN9>`, `<CPX>`) consequence calculation.
 //!
-//! Perl VEP's `VCF.pm` classifies CN alleles by their structural effect:
+//! Ensembl VEP's `VCF.pm` classifies CN alleles by their structural effect:
 //!
 //! - **CN0** → deletion class: transcript_ablation if fully contained, otherwise
 //!   feature_truncation + regional consequences (like `<DEL>`).
@@ -28,7 +28,7 @@ use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 use vep_core::variant::InputVariant;
 
-/// Structural effect class inferred from the ALT allele, matching Perl VEP's
+/// Structural effect class inferred from the ALT allele, matching Ensembl VEP's
 /// `VCF.pm` classification of CN alleles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CopyNumberClass {
@@ -50,7 +50,7 @@ pub(super) fn is_copy_number_gain(variant: &InputVariant) -> bool {
 /// The copy-number reading of a variant annotated as a copy number variation.
 ///
 /// A variant that carries its record's SO term belongs to a `copy_number_variation`
-/// record, and Perl VEP's `deletion` and `duplication` predicates test that
+/// record, and Ensembl VEP's `deletion` and `duplication` predicates test that
 /// `class_SO_term` alone (VariationEffect.pm), so `<CN0>` beside `<CN2>` is neither
 /// a deletion nor a duplication. The ALT bytes decide only for a variant built
 /// without a record term: CN0 → Deletion, CN2 → Duplication, everything else → Generic.
@@ -162,7 +162,7 @@ pub fn calculate(
     let is_deletion = cn_class == CopyNumberClass::Deletion;
     let is_duplication = cn_class == CopyNumberClass::Duplication;
 
-    // Perl VEP predicates (only for CN0=deletion and CN2=duplication classes):
+    // Ensembl VEP predicates (only for CN0=deletion and CN2=duplication classes):
     // feature_truncation = within_cdna AND (partial_overlap OR complete_within) AND deletion
     // feature_elongation = within_cdna AND complete_within_feature AND duplication
     let within_cdna = overlaps_any_exon(transcript, sv_start, sv_end);
@@ -578,7 +578,7 @@ mod tests {
 
     #[test]
     fn test_cn2_full_containment_transcript_amplification() {
-        // CN2 is classified as duplication in Perl VEP, so it gets
+        // CN2 is classified as duplication in Ensembl VEP, so it gets
         // transcript_amplification when fully containing.
         let tx = make_test_transcript();
         let v = make_cnv(b"<CN2>", 24_999_000, 25_007_000);
@@ -594,7 +594,7 @@ mod tests {
 
     #[test]
     fn test_cn3_full_containment_context_term_only() {
-        // CN3 is generic copy_number_variation in Perl VEP, so it gets the context
+        // CN3 is generic copy_number_variation in Ensembl VEP, so it gets the context
         // term only when fully containing (no transcript_amplification).
         let tx = make_test_transcript();
         let v = make_cnv(b"<CN3>", 24_999_000, 25_007_000);
@@ -625,7 +625,7 @@ mod tests {
     #[test]
     fn test_generic_cnv_fully_contains_coding_transcript() {
         // Generic CNV (unknown copy number) that fully contains a coding transcript.
-        // Perl VEP: coding_transcript_variant as the sole consequence.
+        // Ensembl VEP: coding_transcript_variant as the sole consequence.
         let tx = make_test_transcript();
         let v = make_cnv(b"<CNV>", 24_999_000, 25_007_000);
         let result = calculate(&v, &tx, 5000, 5000);

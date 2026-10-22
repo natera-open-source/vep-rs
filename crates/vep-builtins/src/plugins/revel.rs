@@ -22,7 +22,7 @@
 //! `-s 1 -b 3 -e 3` for GRCh38 after re-sorting).
 //!
 //! This plugin therefore resolves the position column **by header name** for the
-//! requested assembly (`hg19_pos` / `grch38_pos`), exactly as Perl VEP's
+//! requested assembly (`hg19_pos` / `grch38_pos`), exactly as Ensembl VEP's
 //! `REVEL.pm` does, and errors when the required column is absent. Reading a
 //! fixed column instead would stamp every GRCh38 record with its hg19 position;
 //! because the engine filters records on the re-parsed position, that discards

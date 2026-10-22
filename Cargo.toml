@@ -85,11 +85,11 @@ mimalloc = "0.1"
 rustc-hash = "2"
 bstr = "1"
 indexmap = { version = "2", features = ["serde"] }
-# Inline small vectors: the per-transcript consequence-term list is typically
-# 1-8 entries; SmallVec keeps it on the stack, eliminating a heap alloc + drop
-# per (variant x transcript) consequence. `serde` is required because
-# TranscriptConsequence derives Serialize/Deserialize; `union` saves a word for
-# the Copy `Consequence` payload.
+# Inline small vectors: vep-core's `ConsequenceList` keeps a per-transcript
+# consequence-term list within its inline capacity on the stack, with no heap
+# allocation or drop per (variant x transcript) consequence. `serde` is required
+# because TranscriptConsequence derives Serialize/Deserialize; `union` saves a
+# word for the Copy `Consequence` payload.
 smallvec = { version = "1", features = ["serde", "union"] }
 
 # Error handling

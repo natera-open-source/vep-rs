@@ -61,7 +61,7 @@ pub struct EffectsConfig {
     /// Compute HGVSc / HGVSp notations for each transcript consequence.
     ///
     /// Off by default. On the default `-o vep` path HGVS is emitted only under
-    /// `--hgvs` (Perl VEP parity: Perl emits HGVS solely under that flag), so
+    /// `--hgvs` (Ensembl VEP parity: Perl emits HGVS solely under that flag), so
     /// computing it unconditionally spends significant CPU building `String`s
     /// that are then discarded. When off, `TranscriptConsequence.hgvsc`,
     /// `.hgvsp` and `.hgvs_offset` stay `None`.
@@ -1090,7 +1090,7 @@ fn calculate_terms(
         remove_consequence(&mut consequences, Consequence::SpliceRegionVariant);
     }
 
-    // Perl VEP never pairs mature_miRNA_variant with
+    // Ensembl VEP never pairs mature_miRNA_variant with
     // non_coding_transcript_exon_variant; an insertion straddling the miRNA
     // subfeature boundary gets one from each apply_position, and the miRNA term
     // takes precedence.
@@ -1150,7 +1150,7 @@ fn calculate_terms(
         return None;
     }
 
-    // Perl VEP outputs consequence terms in severity order (most severe first).
+    // Ensembl VEP outputs consequence terms in severity order (most severe first).
     consequences.sort_by_key(|c| c.rank());
 
     let impact = consequences
@@ -1353,7 +1353,7 @@ fn apply_position(
                 push_perl_utr_terms(consequences, variant, transcript);
             }
 
-            // Perl VEP gives a variant spanning an intron boundary or extending
+            // Ensembl VEP gives a variant spanning an intron boundary or extending
             // beyond the CDS (UTR, flanks) generic coding_sequence_variant instead
             // of codon analysis: one endpoint coding and the other intronic; both
             // exonic with an intervening intron; coding into UTR; coding past the
@@ -2333,7 +2333,7 @@ fn apply_position(
                 }
             }
 
-            // Perl VEP treats insertions exactly at exon/intron boundaries as
+            // Ensembl VEP treats insertions exactly at exon/intron boundaries as
             // non-essential for donor/acceptor calls (splice_region-only).
             let boundary_insertion_against_exon = insertion
                 && paired_position.is_some()
@@ -2342,7 +2342,7 @@ fn apply_position(
             let suppress_acceptor = boundary_insertion_against_exon && *dist_to_acceptor == 0;
             if boundary_insertion_against_exon && (*dist_to_donor == 0 || *dist_to_acceptor == 0) {
                 // Insertions exactly at exon/intron joins are non-essential splice
-                // events but still counted as splice_region in Perl VEP.
+                // events but still counted as splice_region in Ensembl VEP.
                 push_unique(consequences, Consequence::SpliceRegionVariant);
             }
 
@@ -2419,13 +2419,13 @@ fn add_transcript_context_consequences(
         return;
     }
 
-    // Perl VEP does not generally pair transcript-context labels with
+    // Ensembl VEP does not generally pair transcript-context labels with
     // `non_coding_transcript_exon_variant` rows, so keep those exon rows clean.
     if consequences.contains(&Consequence::NonCodingTranscriptExonVariant) {
         return;
     }
 
-    // Perl VEP also keeps `mature_miRNA_variant` rows clean (no additional
+    // Ensembl VEP also keeps `mature_miRNA_variant` rows clean (no additional
     // transcript-context labels).
     if consequences.contains(&Consequence::MatureMirnaVariant) {
         return;
@@ -2585,7 +2585,7 @@ fn paired_intron_has_essential_splice(
 ///
 /// Uses `compute_peptide_alleles` for multi-base variants (MNVs, complex indels)
 /// so that stop_gained/stop_lost detection works across codon boundaries,
-/// matching Perl VEP's peptide-level `_get_peptide_alleles` approach.
+/// matching Ensembl VEP's peptide-level `_get_peptide_alleles` approach.
 fn assign_coding_consequence(
     consequences: &mut ConsequenceList,
     ref_aa: u8,
@@ -2992,12 +2992,12 @@ fn add_splice_consequences(
     let acceptor_splice_site = dist_to_acceptor <= 1 && !suppress_acceptor;
     let donor_5th_base = dist_to_donor == 4;
 
-    // Perl VEP donor-region window: intron positions +3..+6.
+    // Ensembl VEP donor-region window: intron positions +3..+6.
     // With 0-based intronic distance from donor, that's 2..=5.
     // `splice_donor_5th_base_variant` takes precedence over donor-region.
     let donor_region = (2..=5).contains(&dist_to_donor) && !donor_5th_base;
 
-    // Perl VEP polypyrimidine tract window: `$intron_end - 16 .. $intron_end - 2`,
+    // Ensembl VEP polypyrimidine tract window: `$intron_end - 16 .. $intron_end - 2`,
     // offsets from the last intron base. With that base at distance 0, that's 2..=16.
     let polypyrimidine = (2..=16).contains(&dist_to_acceptor);
 
@@ -3018,7 +3018,7 @@ fn add_splice_consequences(
         push_unique(consequences, Consequence::SplicePolypyrimidineTractVariant);
     }
 
-    // Perl VEP precedence: splice_region is suppressed by donor/acceptor,
+    // Ensembl VEP precedence: splice_region is suppressed by donor/acceptor,
     // donor_region, and donor_5th_base classifications.
     let donor_side_splice_region = (2..=7).contains(&dist_to_donor);
     let acceptor_side_splice_region = (2..=7).contains(&dist_to_acceptor);
@@ -5655,7 +5655,7 @@ mod tests {
         let config = EffectsConfig::default();
 
         // Delete across the exon1/intron1 join, covering intron positions +0..+4.
-        // Perl VEP emits both splice_donor_variant and splice_donor_5th_base_variant.
+        // Ensembl VEP emits both splice_donor_variant and splice_donor_5th_base_variant.
         let variant = InputVariant::new(
             "21".into(),
             25_000_299,

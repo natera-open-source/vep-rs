@@ -396,9 +396,8 @@ impl Ord for Consequence {
 ///
 /// This struct is attached to a [`TranscriptConsequence`] at construction time
 /// **only when a consequence-filtering plugin is active** (see
-/// `vep_effects::EffectsConfig`'s plugin gate). For all other runs the field stays
-/// `None` and is skipped during serialization, so non-LoFTEE output is
-/// byte-identical.
+/// `vep_effects::EffectsConfig`'s plugin gate). For all other runs the field is
+/// `None` and absent from the serialization.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LofteeContext {
     /// All exons of the transcript, in rank order.
@@ -600,13 +599,13 @@ pub struct TranscriptConsequence {
     pub tsl: Option<u8>,
     /// MANE Select transcript ID, if this transcript carries the MANE_Select tag.
     /// Used by `--pick`/`--pick_allele`/`flag_pick` to prefer MANE-curated transcripts
-    /// over Ensembl-canonical (Perl VEP `pick_order` slot 0).
+    /// over Ensembl-canonical (Ensembl VEP `pick_order` slot 0).
     pub mane_select: Option<String>,
     /// MANE Plus Clinical transcript ID, if this transcript carries the
-    /// MANE_Plus_Clinical tag. Used by `--pick` (Perl VEP `pick_order` slot 1).
+    /// MANE_Plus_Clinical tag. Used by `--pick` (Ensembl VEP `pick_order` slot 1).
     pub mane_plus_clinical: Option<String>,
     /// APPRIS annotation (e.g. "principal1", "alternative2").
-    /// Used by `--pick` to prefer principal isoforms (Perl VEP `pick_order` slot 3).
+    /// Used by `--pick` to prefer principal isoforms (Ensembl VEP `pick_order` slot 3).
     pub appris: Option<String>,
     /// CCDS ID.
     pub ccds: Option<String>,
@@ -674,8 +673,8 @@ pub struct TranscriptConsequence {
     pub feature_end: u64,
     /// Transcript structural context for consequence-filtering plugins (LoFTEE).
     /// Populated at consequence-construction time only when such a plugin is
-    /// active; `None` (and skipped during serialization) otherwise, so default
-    /// output is byte-identical. See [`LofteeContext`].
+    /// active; `None` otherwise, and absent from the serialization unless set.
+    /// See [`LofteeContext`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loftee_ctx: Option<Box<LofteeContext>>,
     /// The source transcript's [`Transcript::id_rank`]: `transcript_id`'s

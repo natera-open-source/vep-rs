@@ -48,7 +48,7 @@ impl PrefetchData {
     /// Downcast the inner data to a concrete type.
     ///
     /// Returns `Err(PluginError::Run)` if the downcast fails, which indicates
-    /// a bug in the plugin (prefetch/annotate type mismatch).
+    /// a defect in the plugin (prefetch/annotate type mismatch).
     pub fn downcast<T: 'static>(self) -> Result<T, PluginError> {
         self.0
             .downcast::<T>()

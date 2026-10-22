@@ -68,7 +68,7 @@ impl CaddPlugin {
     /// Reject a data file whose own assembly marker contradicts `--assembly`.
     ///
     /// CADD's first line is a provenance comment naming the build
-    /// (`##CADD GRCh38-v1.7 (c) University of Washington...`). Perl VEP's
+    /// (`##CADD GRCh38-v1.7 (c) University of Washington...`). Ensembl VEP's
     /// `CADD.pm` greps for the requested assembly and dies on a mismatch; without
     /// the guard a GRCh37 file in a GRCh38 run yields nothing or wrong-genome
     /// scores. A file with no marker is accepted: absence of evidence is not a
@@ -393,7 +393,7 @@ mod tests {
         write_tabix_fixture(dir, name, &lines, IndexSpec::standard())
     }
 
-    /// A GRCh37 CADD file in a GRCh38 run must be refused: Perl VEP's CADD.pm
+    /// A GRCh37 CADD file in a GRCh38 run must be refused: Ensembl VEP's CADD.pm
     /// greps the header for the assembly and dies.
     #[test]
     fn rejects_a_data_file_from_the_other_assembly() {

@@ -3,7 +3,7 @@
 
 //! GWAS plugin: Perl-compatible GWAS catalog semantics.
 //!
-//! Parses curated GWAS TSV rows and emits plugin fields aligned to Perl VEP's
+//! Parses curated GWAS TSV rows and emits plugin fields aligned to Ensembl VEP's
 //! GWAS plugin behavior.
 //!
 //! Output fields:

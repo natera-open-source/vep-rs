@@ -484,7 +484,8 @@ fn is_not_found(error: &anyhow::Error) -> bool {
 /// `<dest>.part` and renaming it at the end, so an interrupted transfer never
 /// leaves a truncated file under the final name (the part file is removed).
 /// The client has a connect timeout, TCP keepalive against a dead peer and a
-/// four-hour bound on the whole transfer, a 1.5 GB table dump at 100 KB/s.
+/// four-hour bound on the whole transfer, about the time a 1.5 GB table dump
+/// takes at 100 KB/s.
 fn download_file(url: &str, dest: &Path) -> Result<()> {
     info!("Downloading: {}", url);
 

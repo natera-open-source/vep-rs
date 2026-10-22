@@ -5,7 +5,7 @@
 //!
 //! This module handles consequence assignment for structural variants (symbolic
 //! alleles like `<DEL>`, `<DUP>`, `<INV>`, BND notation, etc.). The approach mirrors
-//! Perl VEP's `StructuralVariationOverlapAllele` logic.
+//! Ensembl VEP's `StructuralVariationOverlapAllele` logic.
 //!
 //! Perl citations name modules of ensembl-variation release/115
 //! (`Bio/EnsEMBL/Variation/...`).
@@ -25,7 +25,7 @@ use vep_core::variant::{InputVariant, VariantClass};
 
 /// Check whether an SV overlaps the mature miRNA subfeature of a miRNA transcript.
 ///
-/// Perl VEP emits `mature_miRNA_variant` when the SV overlaps the genomic region
+/// Ensembl VEP emits `mature_miRNA_variant` when the SV overlaps the genomic region
 /// corresponding to the cDNA range in the transcript's `miRNA` attribute. This
 /// mirrors `within_mature_miRNA` in `StructuralVariationOverlapAllele.pm`.
 pub(crate) fn is_mature_mirna_sv(transcript: &Transcript, sv_start: u64, sv_end: u64) -> bool {
@@ -200,7 +200,7 @@ pub(crate) fn transcript_introns(transcript: &Transcript) -> &[vep_core::transcr
     &transcript.introns
 }
 
-/// Check whether an SV overlaps any intron using Perl VEP's *trimmed* boundaries.
+/// Check whether an SV overlaps any intron using Ensembl VEP's *trimmed* boundaries.
 ///
 /// Perl's `_intron_effects` (BaseTranscriptVariationAllele.pm:143-150) sets the
 /// `intronic` flag with `overlap($r_start, $r_end, $intron_start + 2, $intron_end - 2)`
@@ -945,14 +945,14 @@ mod tests {
 
     #[test]
     fn test_dispatch_complex_structural() {
-        // Perl VEP annotates <CPX> with overlap-only consequences (despite vep_skip).
+        // Ensembl VEP annotates <CPX> with overlap-only consequences (despite vep_skip).
         // Route through CNV generic path for regional overlap consequences.
         let v = make_sv(VariantClass::ComplexStructural, Some(25_002_100));
         let tx = crate::test_helpers::make_test_transcript();
         let result = calculate_sv_consequences(&v, &tx, 5000, 5000);
         assert!(
             result.is_some(),
-            "Complex SV (<CPX>) should produce consequences (Perl VEP annotates these)"
+            "Complex SV (<CPX>) should produce consequences (Ensembl VEP annotates these)"
         );
     }
 

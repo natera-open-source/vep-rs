@@ -1103,7 +1103,7 @@ pub fn indexed_start_column(data_path: &Path) -> Result<Option<usize>, PluginErr
 /// Washington...`), which [`parse_header`] deliberately discards, since it keeps
 /// only the last `#` line as the column names.
 ///
-/// This is the same signal Perl VEP's `CADD.pm` uses: it greps the file's header
+/// This is the same signal Ensembl VEP's `CADD.pm` uses: it greps the file's header
 /// lines for the requested assembly string and **dies** on a mismatch; without
 /// the guard a GRCh38 run over a GRCh37 CADD file yields nothing or wrong-genome
 /// scores.
@@ -1332,8 +1332,8 @@ mod tests {
     /// and indexed twice, by `tabix` (`.tbi`) and `tabix -C` (`.csi`):
     /// `spans.tsv.gz` (`-s 1 -b 2 -e 3`; records that start before a query and
     /// reach into it) and `blocks.tsv.gz` (`-s 1 -b 2 -e 2`; 3,400 rows on
-    /// chromosome 21 at positions `5010000 + 7i`, 71,425 bytes, so the row at
-    /// 5031749 straddles the 65,280-byte bgzf block boundary).
+    /// chromosome 21 at positions `5010000 + 7i`, enough that the row at
+    /// 5031749 straddles the boundary between the file's two bgzf blocks).
     fn fixture(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/data")

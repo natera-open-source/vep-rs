@@ -4,8 +4,8 @@
 //! HGVS notation generation for variant-transcript consequences.
 //!
 //! Produces HGVSc (coding DNA) and HGVSp (protein) notation strings following
-//! the Human Genome Variation Society nomenclature conventions, matching Perl
-//! VEP's output.
+//! the Human Genome Variation Society nomenclature conventions, matching
+//! Ensembl VEP's output.
 //!
 //! Perl citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`).
@@ -662,7 +662,7 @@ pub fn generate_hgvs(
     }
 }
 
-/// Generate HGVSc notation for a variant-transcript pair: Perl VEP's
+/// Generate HGVSc notation for a variant-transcript pair: Ensembl VEP's
 /// `hgvs_transcript` (TranscriptVariationAllele.pm 1375) for an Ensembl
 /// transcript.
 ///

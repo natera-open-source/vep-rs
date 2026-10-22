@@ -1,7 +1,7 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Targeted concordance tests against Perl VEP.
+//! Targeted concordance tests against Ensembl VEP.
 //!
 //! Each test targets one divergence shape and asserts the **Perl-correct**
 //! behavior. A test marked `#[ignore]` pins a divergence this crate does not
@@ -2569,7 +2569,7 @@ fn concordance_hgvsp_h21_start_codon_reads_met_in_the_transcript_peptide() {
 /// local start and writes it back only after both loops, so its leading-stop
 /// return (`=`) discards the increment and the notation keeps start 282 and end
 /// 283; `_get_hgvs_protein_type` then reads `AX` against `AXG` as `delins` and
-/// the formatter prints the range. A port that moved `start` in place printed
+/// the formatter prints the range. Advancing `start` in place instead prints
 /// `Ala283delinsAlaTer`.
 #[test]
 fn concordance_hgvsp_h22_clip_leading_stop_return_keeps_start() {
@@ -3726,7 +3726,7 @@ fn concordance_frameshift_stop_gained_multicodon_span() {
     );
 }
 
-// start_lost / start_retained_variant asymmetry: Perl VEP's
+// start_lost / start_retained_variant asymmetry: Ensembl VEP's
 // `VariationEffect::inframe_insertion` returns 0 when start_lost fires, so the
 // Met-loss gate in classify_inframe_indel_by_peptide suppresses
 // inframe_insertion, while `inframe_deletion` has no start_lost gate: an inframe
@@ -4387,7 +4387,7 @@ fn concordance_five_prime_utr_deletion_destroying_atg_emits_start_lost() {
 }
 
 // Frameshift / inframe preserved across a splice. The predicate these
-// reproduce is Perl VEP's own, in `Utils::VariationEffect`; each case below
+// reproduce is Ensembl VEP's own, in `Utils::VariationEffect`; each case below
 // states the span shape it pins.
 //
 // Test transcript layout:

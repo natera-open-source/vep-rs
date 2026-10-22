@@ -23,7 +23,7 @@ use vep_core::transcript::{ExonCoordMapper, MapperPair, Transcript};
 
 /// Perl-style CDS/peptide bounds for a variant span.
 ///
-/// Perl VEP derives these via `TranscriptMapper->genomic2cds()` / `genomic2pep()`
+/// Ensembl VEP derives these via `TranscriptMapper->genomic2cds()` / `genomic2pep()`
 /// on the full variant interval, then takes the first/last mapped coordinates:
 /// `cds_start`, `cds_end`, `translation_start`, `translation_end`.
 ///
@@ -217,9 +217,9 @@ impl CdsSpanProjection {
 ///    edges when an endpoint is in a Gap region.
 ///
 /// The authoritative reference for the API shape, and for the truth table mapping
-/// span shapes to Perl's cds_start / cds_end / coding predicate outputs, is Perl
-/// VEP's own `TranscriptVariationAllele` and `VariationEffect` sources; the unit
-/// tests below pin each span shape this function must reproduce.
+/// span shapes to Perl's cds_start / cds_end / coding predicate outputs, is
+/// Ensembl VEP's own `TranscriptVariationAllele` and `VariationEffect` sources;
+/// the unit tests below pin each span shape this function must reproduce.
 pub fn map_genomic_span_to_cds_projection(
     span_start: u64,
     span_end: u64,
@@ -850,7 +850,7 @@ fn classify_cdna_position(
 ) -> TranscriptPosition {
     // Translation + mapper coding bounds, not biotype, decide coding: an NMD
     // transcript is not `protein_coding` yet carries CDS/UTR coordinates, and
-    // Perl VEP classifies it as a coding/UTR context.
+    // Ensembl VEP classifies it as a coding/UTR context.
     let has_coding_model = transcript.translation.is_some()
         && mapper.cdna_coding_start > 0
         && mapper.cdna_coding_end >= mapper.cdna_coding_start;
@@ -878,7 +878,7 @@ fn classify_cdna_position(
     }
 
     // With an incomplete CDS start (`cds_start_NF`) the mapper `start_phase` can
-    // be 1 or 2, and Perl VEP includes that offset in CDS numbering.
+    // be 1 or 2, and Ensembl VEP includes that offset in CDS numbering.
     let start_phase_offset = u64::try_from(mapper.start_phase).unwrap_or(0);
     let cds_pos = cdna_pos - coding_start + 1 + start_phase_offset;
     let protein_pos = (cds_pos - 1) / 3 + 1;

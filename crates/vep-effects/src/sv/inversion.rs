@@ -3,9 +3,9 @@
 
 //! Structural inversion (`<INV>`) consequence calculation.
 //!
-//! Mirrors Perl VEP's `StructuralVariationOverlapAllele` logic for inversions.
+//! Mirrors Ensembl VEP's `StructuralVariationOverlapAllele` logic for inversions.
 //! Inversions disrupt the reading frame by reversing the strand of the affected
-//! region but do not remove or add sequence. Perl VEP consequently never assigns
+//! region but do not remove or add sequence. Ensembl VEP consequently never assigns
 //! `transcript_ablation` for inversions, even when the INV fully contains the
 //! transcript, and reports `coding_transcript_variant` for fully-contained
 //! protein-coding transcripts instead.
@@ -26,7 +26,7 @@ use vep_core::variant::InputVariant;
 
 /// Calculate consequences for a structural inversion against a transcript.
 ///
-/// Inversions produce region-based overlap consequences identical to Perl VEP:
+/// Inversions produce region-based overlap consequences identical to Ensembl VEP:
 /// - `coding_sequence_variant`, `5_prime_UTR_variant`, `3_prime_UTR_variant`,
 ///   `intron_variant` when the INV overlaps those regions
 /// - `coding_transcript_variant` for protein-coding transcripts fully contained
@@ -67,7 +67,7 @@ pub fn calculate(
 
     let mut consequences: ConsequenceList = SmallVec::new();
 
-    // Perl VEP `coding_transcript_variant` predicate:
+    // Ensembl VEP `coding_transcript_variant` predicate:
     //   (not coding_unknown) AND complete_overlap_feature AND within_coding_gene
     // An inversion (neither gain nor loss) fully containing the transcript gets
     // the context term as the sole consequence, with no regional breakdown.
@@ -183,7 +183,7 @@ fn calculate_non_coding_consequences(
     if overlaps_intron {
         push_unique(consequences, Consequence::IntronVariant);
     }
-    // Perl VEP adds non_coding_transcript_variant to a non-coding transcript when
+    // Ensembl VEP adds non_coding_transcript_variant to a non-coding transcript when
     // there is NO exon overlap and not mature_miRNA.
     if !overlaps_exon && !transcript.facts().is_nmd {
         push_unique(consequences, Consequence::NonCodingTranscriptVariant);
@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn test_inv_spanning_entire_transcript() {
-        // INV fully contains the transcript: Perl VEP assigns coding_transcript_variant
+        // INV fully contains the transcript: Ensembl VEP assigns coding_transcript_variant
         // as the sole consequence (not transcript_ablation, no regional breakdown).
         let tx = make_test_transcript();
         let v = make_inversion(24_999_000, 25_007_000);
@@ -658,7 +658,7 @@ mod tests {
     #[test]
     fn test_inv_non_coding_intron_only() {
         // Non-coding transcript with intron-only overlap.
-        // Perl VEP adds both intron_variant and non_coding_transcript_variant.
+        // Ensembl VEP adds both intron_variant and non_coding_transcript_variant.
         let mut tx = make_test_transcript();
         tx.biotype = "lncRNA".into();
         tx.coding_region_start = None;
@@ -685,7 +685,7 @@ mod tests {
 
     #[test]
     fn test_inv_non_coding_fully_contained() {
-        // Non-coding transcript fully within INV: Perl VEP assigns
+        // Non-coding transcript fully within INV: Ensembl VEP assigns
         // non_coding_transcript_variant as the sole consequence.
         let mut tx = make_test_transcript();
         tx.biotype = "lncRNA".into();

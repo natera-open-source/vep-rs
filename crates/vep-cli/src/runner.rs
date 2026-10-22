@@ -5411,7 +5411,7 @@ mod tests {
 
     #[test]
     fn test_append_bnd_mate_consequences_interchrom_annotates_mate() {
-        // Perl VEP annotates inter-chromosomal BND mate-side transcripts when the
+        // Ensembl VEP annotates inter-chromosomal BND mate-side transcripts when the
         // mate chromosome's cache is loaded; here every loaded transcript is
         // available, so the annotation is unconditional.
         let local_tx = make_runner_test_transcript("ENSTLOCAL", "ENSGLOCAL", "1", 1_000);
@@ -5931,12 +5931,12 @@ mod tests {
 
     #[test]
     fn test_annotate_imprecise_sv_uses_nominal_coordinates() {
-        // Perl VEP offline mode does not use outer_start/outer_end (CIPOS/CIEND
+        // Ensembl VEP offline mode does not use outer_start/outer_end (CIPOS/CIEND
         // expansion) for transcript overlap. Only nominal coordinates are used.
         let tx_inside = make_runner_test_transcript("ENST_INSIDE", "GENE_INSIDE", "21", 27255000);
         // tx_edge spans 27240000-27240999, well outside nominal DEL start (27254100)
         // plus upstream distance (5000bp). Even with CIPOS=-14500 it should not
-        // be annotated because Perl VEP offline mode uses nominal coordinates.
+        // be annotated because Ensembl VEP offline mode uses nominal coordinates.
         let tx_edge = make_runner_test_transcript("ENST_EDGE", "GENE_EDGE", "21", 27240000);
         let transcripts = TranscriptIndex::new(vec![tx_inside, tx_edge], 5_000, 5_000);
         let config = vep_effects::EffectsConfig::default();

@@ -624,7 +624,7 @@ impl LazyTranscriptIndexes {
         // No constructor produces this state, which is exactly why it must fail
         // loudly. Returning `Ok(())` would leave `contains_key` true while `get`
         // stays `None`, and that combination is the silent
-        // every-variant-is-`intergenic_variant`-with-exit-0 bug this type exists to
+        // every-variant-is-`intergenic_variant`-with-exit-0 defect this type exists to
         // prevent.
         let Some(shards) = self.shards.get(chr) else {
             anyhow::bail!(
@@ -1201,7 +1201,7 @@ mod tests {
     ///
     /// vep-rs annotates every variant against the complete transcript set for its
     /// chromosome, which is what makes its output deterministic and
-    /// batch-independent, in contrast to Perl VEP, whose annotation of a variant
+    /// batch-independent, in contrast to Ensembl VEP, whose annotation of a variant
     /// above `--max_sv_size` depends on whichever transcripts its batch happened to
     /// load. Lazy loading could plausibly break that, so
     /// query the same chromosome after different warm-up orders and require

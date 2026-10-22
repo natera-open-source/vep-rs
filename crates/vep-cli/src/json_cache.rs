@@ -3,7 +3,7 @@
 
 //! Load transcripts from the converted JSON cache directory.
 //!
-//! The JSON cache (written by `vep-cache-builder` or converted from a Perl VEP cache) uses field names that
+//! The JSON cache (written by `vep-cache-builder` or converted from an Ensembl VEP cache) uses field names that
 //! differ from the Rust `Transcript` struct (e.g. `dbID` vs `db_id`,
 //! `is_canonical` vs `canonical`). This module provides deserialization types
 //! that map the JSON format and converts them to the canonical Rust types.
@@ -964,7 +964,7 @@ fn compute_coding_region(mapper: &JsonMapper) -> (Option<u64>, Option<u64>) {
 /// covers. That matters beyond convenience: several Perl-parity predicates in
 /// `runner.rs` / `annotator.rs` branch on whether a chromosome is *present* in
 /// the cache (the `intergenic_variant` fallback, and the inter-chromosomal BND
-/// mate-annotation gate), mirroring Perl VEP's own cache-loading behavior. A
+/// mate-annotation gate), mirroring Ensembl VEP's own cache-loading behavior. A
 /// lazy loader must therefore be able to answer "is this chromosome in the
 /// cache?" without parsing it, which this function provides.
 ///

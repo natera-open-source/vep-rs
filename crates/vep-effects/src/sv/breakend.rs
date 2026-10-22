@@ -8,7 +8,7 @@
 //! mate breakpoint is on a different chromosome or distant position
 //! and is handled as a separate variant record.
 //!
-//! Consequence logic (mirrors Perl VEP `StructuralVariationOverlapAllele`):
+//! Consequence logic (mirrors Ensembl VEP `StructuralVariationOverlapAllele`):
 //!
 //! - **Within transcript body (exon, intron, or UTR)**: `feature_truncation`
 //!   when the allele's own breakend lies in the body (never for a single
@@ -59,7 +59,7 @@ pub fn calculate(
 
     let overlaps_transcript = bp >= transcript.start && bp <= transcript.end;
 
-    // Perl VEP adds feature_truncation to an upstream/downstream BND whose mate
+    // Ensembl VEP adds feature_truncation to an upstream/downstream BND whose mate
     // falls inside the transcript body.
     let same_chr_mate = variant
         .mate_chr
@@ -71,7 +71,7 @@ pub fn calculate(
         .map(|mp| mp >= transcript.start && mp <= transcript.end)
         .unwrap_or(false);
 
-    // Perl VEP emits upstream/downstream for a paired allele outside the body only
+    // Ensembl VEP emits upstream/downstream for a paired allele outside the body only
     // when the mate is also within the extended region; otherwise only the
     // single-breakend form gets those consequences.
     let is_paired_bnd = !variant.is_single_breakend && variant.mate_chr.is_some();
@@ -501,7 +501,7 @@ mod tests {
     #[test]
     fn test_bnd_upstream_paired_with_mate_inside_gets_truncation_and_upstream() {
         // Paired BND upstream of transcript, mate falls inside transcript body.
-        // Perl VEP: emits feature_truncation + upstream_gene_variant together.
+        // Ensembl VEP: emits feature_truncation + upstream_gene_variant together.
         let tx = make_test_transcript(); // 25_000_000 - 25_006_000
         let mut v = make_bnd(24_999_000); // 1000bp upstream
         v.mate_chr = Some("21".into());
@@ -514,7 +514,7 @@ mod tests {
         );
         assert!(
             tc.consequences.contains(&Consequence::UpstreamGeneVariant),
-            "Paired BND with mate inside should also get upstream_gene_variant (Perl VEP parity)"
+            "Paired BND with mate inside should also get upstream_gene_variant (Ensembl VEP parity)"
         );
         assert_eq!(tc.impact, Impact::HIGH);
         assert_eq!(tc.distance, Some(1000));
@@ -523,7 +523,7 @@ mod tests {
     #[test]
     fn test_bnd_upstream_paired_with_mate_outside_returns_none() {
         // Paired BND upstream of transcript, mate also outside → no consequences at all.
-        // Perl VEP: paired alleles outside the transcript body with no mate inside
+        // Ensembl VEP: paired alleles outside the transcript body with no mate inside
         // produce no transcript-level consequence.
         let tx = make_test_transcript();
         let mut v = make_bnd(24_999_000); // 1000bp upstream
@@ -621,7 +621,7 @@ mod tests {
         let tx = make_test_transcript();
         let v = make_bnd(25_001_000); // Middle of intron 1
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        // Perl VEP adds feature_truncation for all breakpoints within the
+        // Ensembl VEP adds feature_truncation for all breakpoints within the
         // transcript body, including introns.
         assert!(tc.consequences.contains(&Consequence::FeatureTruncation));
         assert!(tc.consequences.contains(&Consequence::IntronVariant));
@@ -633,7 +633,7 @@ mod tests {
     fn test_bnd_intron_near_donor_splice_site() {
         let tx = make_test_transcript();
         // Intron 1 starts at 25_000_300. Position +0 from donor = splice donor site.
-        // Perl VEP does not add splice_donor_variant for SVs, only polypyrimidine tract.
+        // Ensembl VEP does not add splice_donor_variant for SVs, only polypyrimidine tract.
         let v = make_bnd(25_000_300);
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
         assert!(tc.consequences.contains(&Consequence::FeatureTruncation));
@@ -642,7 +642,7 @@ mod tests {
         assert!(!tc.consequences.contains(&Consequence::IntronVariant));
         assert!(
             !tc.consequences.contains(&Consequence::SpliceDonorVariant),
-            "BNDs should not get splice_donor_variant (Perl VEP parity)"
+            "BNDs should not get splice_donor_variant (Ensembl VEP parity)"
         );
         assert_eq!(tc.impact, Impact::HIGH);
     }
@@ -651,7 +651,7 @@ mod tests {
     fn test_bnd_intron_near_acceptor_splice_site() {
         let tx = make_test_transcript();
         // Intron 1 ends at 25_001_999. Position at end = splice acceptor site.
-        // Perl VEP does not add splice_acceptor_variant for SVs.
+        // Ensembl VEP does not add splice_acceptor_variant for SVs.
         let v = make_bnd(25_001_999);
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
         assert!(tc.consequences.contains(&Consequence::FeatureTruncation));
@@ -660,7 +660,7 @@ mod tests {
         assert!(
             !tc.consequences
                 .contains(&Consequence::SpliceAcceptorVariant),
-            "BNDs should not get splice_acceptor_variant (Perl VEP parity)"
+            "BNDs should not get splice_acceptor_variant (Ensembl VEP parity)"
         );
         assert_eq!(tc.impact, Impact::HIGH);
     }
@@ -739,7 +739,7 @@ mod tests {
     #[test]
     fn test_bnd_intron_no_splice_donor_reverse_strand() {
         // Reverse strand: donor is at intron END (25_001_999).
-        // Perl VEP does not add splice_donor_variant for SVs.
+        // Ensembl VEP does not add splice_donor_variant for SVs.
         let mut tx = make_test_transcript();
         tx.strand = Strand::Reverse;
         if let Some(ref mut vefc) = tx.vefc {
@@ -757,7 +757,7 @@ mod tests {
         assert!(!tc.consequences.contains(&Consequence::IntronVariant));
         assert!(
             !tc.consequences.contains(&Consequence::SpliceDonorVariant),
-            "BNDs should not get splice_donor_variant (Perl VEP parity)"
+            "BNDs should not get splice_donor_variant (Ensembl VEP parity)"
         );
     }
 
@@ -854,7 +854,7 @@ mod tests {
 
         let v = make_bnd(25_001_000); // Intron 1
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        // Perl VEP adds feature_truncation for all BND positions within the
+        // Ensembl VEP adds feature_truncation for all BND positions within the
         // transcript body, including introns of non-coding transcripts.
         assert!(tc.consequences.contains(&Consequence::FeatureTruncation));
         assert!(tc.consequences.contains(&Consequence::IntronVariant));
@@ -915,13 +915,13 @@ mod tests {
     fn test_bnd_no_splice_donor_sub_terms() {
         let tx = make_test_transcript();
         // Intron 1 starts at 25_000_300. Position +4 = donor 5th base.
-        // Perl VEP does not add splice_donor_5th_base or splice_region for SVs.
+        // Ensembl VEP does not add splice_donor_5th_base or splice_region for SVs.
         let v = make_bnd(25_000_304);
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
         assert!(
             !tc.consequences
                 .contains(&Consequence::SpliceDonor5thBaseVariant),
-            "BNDs should not get splice sub-terms (Perl VEP parity)"
+            "BNDs should not get splice sub-terms (Ensembl VEP parity)"
         );
         assert!(!tc
             .consequences
@@ -933,17 +933,17 @@ mod tests {
     fn test_bnd_no_splice_donor_region() {
         let tx = make_test_transcript();
         // Intron 1 starts at 25_000_300. Position +3 = donor region.
-        // Perl VEP does not add splice_donor_region or splice_region for SVs.
+        // Ensembl VEP does not add splice_donor_region or splice_region for SVs.
         let v = make_bnd(25_000_303);
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
         assert!(
             !tc.consequences
                 .contains(&Consequence::SpliceDonorRegionVariant),
-            "BNDs should not get splice_donor_region (Perl VEP parity)"
+            "BNDs should not get splice_donor_region (Ensembl VEP parity)"
         );
         assert!(
             !tc.consequences.contains(&Consequence::SpliceRegionVariant),
-            "BNDs should not get splice_region_variant (Perl VEP parity)"
+            "BNDs should not get splice_region_variant (Ensembl VEP parity)"
         );
     }
 

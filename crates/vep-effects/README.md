@@ -27,7 +27,7 @@ same residue yields `synonymous_variant`, a different one `missense_variant`, a 
 `stop_gained`, a change in the start codon `start_lost`. Whole-span passes then add what
 a single endpoint cannot see (a splice-region window in a neighbouring intron, an
 untranslated region (UTR) the span runs into) and the suppression rules remove the pairs
-Perl VEP never writes together. The list is sorted by severity rank, the impact is the
+Ensembl VEP never writes together. The list is sorted by severity rank, the impact is the
 most severe term's, and `hgvs::generate_hgvs` adds HGVSc and HGVSp when `compute_hgvs`
 is set. Back in `calculate_consequences`, `display::display_fields` renders the
 five display columns (`cDNA_position`, `CDS_position`, `Protein_position`,

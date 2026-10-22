@@ -3,8 +3,8 @@
 
 //! CLI argument parsing for VEP using clap 4 derive API.
 //!
-//! All flags and aliases match the Perl VEP CLI interface so that users
-//! can switch between implementations with minimal changes. The Perl VEP
+//! All flags and aliases match the Ensembl VEP CLI interface so that users
+//! can switch between implementations with minimal changes. Ensembl VEP
 //! uses underscores in flag names (e.g., `--input_file`, `--dir_cache`),
 //! so every underscore-containing flag has an explicit `long = "..."`.
 //!
@@ -333,7 +333,7 @@ pub struct Args {
     #[arg(help_heading = "Cache / Offline", long = "cache_version")]
     pub cache_version: Option<u32>,
 
-    /// The cache directory itself, the one holding info.json and transcripts/ (built by vep-cache-builder or converted from a Perl VEP cache); it is read in place of the --dir_cache layout, and only --assembly is checked against its info.json
+    /// The cache directory itself, the one holding info.json and transcripts/ (built by vep-cache-builder or converted from an Ensembl VEP cache); it is read in place of the --dir_cache layout, and only --assembly is checked against its info.json
     #[arg(
         help_heading = "Cache / Offline",
         long = "json_cache",
@@ -490,9 +490,10 @@ pub struct Args {
 
     /// Number of parallel annotation worker threads (Ensembl VEP forks processes; vep-rs runs threads and is parallel by default).
     /// Default 0 = auto: uses the number of available logical CPUs, capped at
-    /// 32 (wall time stops improving past that and rises on wider hosts). Set
-    /// to 1 to force single-threaded annotation, or any positive value to pin
-    /// the worker count; user-supplied values are not capped.
+    /// 32 (one reader thread feeds the workers, so extra workers wait at the
+    /// batch barrier). Set to 1 to force single-threaded annotation, or any
+    /// positive value to pin the worker count; user-supplied values are not
+    /// capped.
     #[arg(
         help_heading = "Runtime",
         long,
@@ -503,16 +504,15 @@ pub struct Args {
 
     /// Number of BGZF decompression worker threads for a BGZF-compressed input
     /// (a plain gzip input is decompressed on one thread).
-    /// Default 0: uses the number of available logical CPUs, capped
-    /// at 10 (measured sweet-spot: throughput plateaus around 4-10 threads
-    /// and is flat past that). `auto` chooses the count from the input's
-    /// inflated bytes per record: a BGZF input with a .tbi or .csi index beside
-    /// it whose records inflate to at least 8,000 bytes gets 32 workers on an
-    /// aarch64 host, capped at the available logical CPUs; any other input, and
-    /// every input on another architecture, gets the 0 rule. `auto` is opt-in,
-    /// never the default. A positive value pins the worker count,
-    /// e.g. `--decompression_threads=1` for single-threaded; a value above the
-    /// number of available logical CPUs is lowered to that number.
+    /// Default 0: uses the number of available logical CPUs, capped at 10.
+    /// `auto` chooses the count from the input's inflated bytes per record: a
+    /// BGZF input with a .tbi or .csi index beside it whose records inflate to
+    /// at least 8,000 bytes gets 32 workers on an aarch64 host, capped at the
+    /// available logical CPUs; any other input, and every input on another
+    /// architecture, gets the 0 rule. `auto` is opt-in, never the default. A
+    /// positive value pins the worker count, e.g. `--decompression_threads=1`
+    /// for single-threaded; a value above the number of available logical CPUs
+    /// is lowered to that number.
     #[arg(
         help_heading = "Runtime",
         long = "decompression_threads",
@@ -1017,9 +1017,9 @@ pub struct Args {
     /// Drop RefSeq's predicted transcript models, the `XM_` and `XR_` accessions,
     /// by adding the filter `not stable_id match ^X._` after the --transcript_filter
     /// values, as Ensembl VEP's option set does. An Ensembl cache carries no
-    /// predicted model, so the flag changes nothing there; on a RefSeq or merged
-    /// cache the dropped models are covered by unit tests alone, not by a
-    /// comparison with Ensembl VEP's output.
+    /// predicted model, so the flag changes nothing there; it takes effect on a
+    /// converted RefSeq or merged cache (no RefSeq or merged cache is built
+    /// natively).
     #[arg(help_heading = "Filtering / Picking", long = "exclude_predicted")]
     pub exclude_predicted: bool,
 

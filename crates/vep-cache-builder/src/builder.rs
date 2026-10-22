@@ -29,10 +29,6 @@ use crate::mapper;
 const REGION_SIZE: u64 = 1_000_000;
 
 /// First 1-based position of the 1 Mb region containing `pos`.
-///
-/// Extracted so the binning test exercises this function rather than re-inlining the
-/// same arithmetic on literals: a test that recomputes the formula it is checking
-/// cannot fail when the formula changes.
 fn region_start(pos: u64) -> u64 {
     ((pos - 1) / REGION_SIZE) * REGION_SIZE + 1
 }

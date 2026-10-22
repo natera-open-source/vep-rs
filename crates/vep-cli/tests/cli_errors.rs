@@ -222,7 +222,7 @@ fn genomes_is_refused() {
 fn gp_is_refused() {
     assert_refused(
         &["--gp"],
-        "--gp is not supported: it reads 1000 Genomes pilot coordinates from INFO/GP, which no current VCF carries",
+        "--gp is not supported: it reads a GRCh37 chr:pos from the INFO/GP field that some 1000 Genomes VCFs carry",
     );
 }
 

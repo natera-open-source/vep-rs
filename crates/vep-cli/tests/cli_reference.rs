@@ -1063,7 +1063,7 @@ fn compatibility_flags(command: &Command) -> &'static [(&'static str, &'static s
     for (flag, _) in COMPATIBILITY_FLAGS {
         assert!(
             from_help.contains(flag),
-            "--{flag} no longer reads as accepted for compatibility: remove it from \
+            "--{flag}'s help does not read as accepted for compatibility: remove it from \
              COMPATIBILITY_FLAGS"
         );
     }

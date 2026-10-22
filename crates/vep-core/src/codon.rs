@@ -123,7 +123,7 @@ pub fn translate_codon(codon: &[u8]) -> u8 {
 
 /// Translate a DNA codon under the given NCBI translation table.
 ///
-/// Perl VEP selects the table per transcript from the slice's `codon_table`
+/// Ensembl VEP selects the table per transcript from the slice's `codon_table`
 /// attribute (`BaseTranscriptVariation::_codon_table`, defaulting to 1) and
 /// threads it into every translation. Human vertebrate-mitochondrial transcripts
 /// carry table 2, which differs from table 1 in exactly four codons: `ATA` codes

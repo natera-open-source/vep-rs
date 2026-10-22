@@ -55,7 +55,7 @@ pub enum VariantClass {
 impl VariantClass {
     /// Return the Sequence Ontology term for this variant class.
     ///
-    /// SO terms match Perl VEP's `%SO_TERMS` mapping exactly.
+    /// SO terms match Ensembl VEP's `%SO_TERMS` mapping exactly.
     pub fn so_term(self) -> &'static str {
         match self {
             VariantClass::Snv => "SNV",
@@ -64,7 +64,7 @@ impl VariantClass {
             VariantClass::Indel => "indel",
             VariantClass::Substitution => "substitution",
             VariantClass::SequenceAlteration => "sequence_alteration",
-            // Structural variant terms follow Perl VEP `%SO_TERMS`.
+            // Structural variant terms follow Ensembl VEP `%SO_TERMS`.
             VariantClass::StructuralDeletion => "deletion",
             VariantClass::StructuralInsertion => "insertion",
             VariantClass::Duplication => "duplication",
@@ -84,7 +84,7 @@ impl VariantClass {
     /// Whether this class is a symbolic structural allele annotated from POS+1 (true for every SV class).
     ///
     /// In VCF, POS is the anchor base preceding the structural event.
-    /// Perl VEP uses POS+1 as the start coordinate for all SV classes:
+    /// Ensembl VEP uses POS+1 as the start coordinate for all SV classes:
     /// span-based SVs (DEL, DUP, INV, CNV, CPX, TR) extend from POS+1 to END,
     /// while point-based SVs (INS, ME, BND) use POS+1 as a single position.
     pub fn is_span_type(self) -> bool {
@@ -601,7 +601,7 @@ impl InputVariant {
     /// The chromosome name is normalized at construction time (stripping `chr`
     /// prefix and converting `M` to `MT`) so that downstream matching against
     /// the Ensembl cache works regardless of the input naming convention.
-    /// The original chromosome name is preserved for output (matching Perl VEP
+    /// The original chromosome name is preserved for output (matching Ensembl VEP
     /// behavior of keeping the input naming convention in Location output).
     pub fn new(
         chr: String,
@@ -824,7 +824,7 @@ impl InputVariant {
 
     /// Appends [`Self::location`] to `out` without an intermediate `String`.
     pub fn write_location(&self, out: &mut Vec<u8>) {
-        // Perl VEP's `rejoin_variants_in_InputBuffer` restores a multi-allelic
+        // Ensembl VEP's `rejoin_variants_in_InputBuffer` restores a multi-allelic
         // record's shared window coordinates for output.
         let s = self.original_start.unwrap_or(self.start);
         let e = self.original_end.unwrap_or(self.end);
@@ -977,17 +977,17 @@ impl InputVariant {
     /// Allele string for the specific alt allele in display format.
     ///
     /// For a structural variant, the record's SO term ([`Self::record_so_term`], the
-    /// `class_SO_term` every row of the record prints in Perl VEP), or for a
+    /// `class_SO_term` every row of the record prints in Ensembl VEP), or for a
     /// variant built without one the term of its class, read from its own ALT for
     /// a mobile element. A bracket breakend prints its string as written
     /// (`A]21:33033339]`), the own breakend of a record that names a mate its `A.`
     /// or `.A`, and a translocation allele without a breakend string, a single
     /// breakend on its own or a bare `<BND>`, the class term `chromosome_breakpoint`:
-    /// Perl VEP's `$vfoa->{breakend}->{string} || $svf->class_SO_term`
+    /// Ensembl VEP's `$vfoa->{breakend}->{string} || $svf->class_SO_term`
     /// (`OutputFactory.pm:2029`). A type the term table lacks prints the type
-    /// string Perl VEP keeps as the `class_SO_term` ([`Self::structural_type_string`]:
+    /// string Ensembl VEP keeps as the `class_SO_term` ([`Self::structural_type_string`]:
     /// `<CPX>` for a bare `<CPX>`, `CPX` under `SVTYPE=CPX`).
-    /// For `<NON_REF>` alleles, returns the raw allele string since Perl VEP outputs
+    /// For `<NON_REF>` alleles, returns the raw allele string since Ensembl VEP outputs
     /// the literal `<NON_REF>` (it has no SO term mapping).
     /// For small variants, returns the actual allele bases.
     pub fn display_allele(&self) -> String {
@@ -996,7 +996,7 @@ impl InputVariant {
         written_text(out)
     }
 
-    /// Perl VEP's type string for a structural record (Parser/VCF.pm:469-475): the
+    /// Ensembl VEP's type string for a structural record (Parser/VCF.pm:469-475): the
     /// ALTs joined by `/`, or INFO/SVTYPE when that is true and the joined string
     /// opens outside the VCF 4.4 forms ([`sv_type_string`]). A type `%SO_TERMS`
     /// lacks keeps it as the record's `class_SO_term` (`:477-481`), so `<CPX>` prints
@@ -1025,7 +1025,7 @@ impl InputVariant {
             } else if let Some(term) = &self.record_so_term {
                 term
             } else if self.variant_class == VariantClass::ReferenceBlock {
-                // Perl VEP outputs the allele as written (no SO term mapping).
+                // Ensembl VEP outputs the allele as written (no SO term mapping).
                 &raw
             } else if let Some(type_string) = &type_string {
                 type_string
@@ -2455,8 +2455,8 @@ mod tests {
     }
 
     #[test]
-    fn test_sv_so_terms_match_perl_vep() {
-        // SO terms must match Perl VEP %SO_TERMS exactly.
+    fn test_sv_so_terms_match_ensembl_vep() {
+        // SO terms must match Ensembl VEP's `%SO_TERMS` exactly.
         assert_eq!(VariantClass::StructuralDeletion.so_term(), "deletion");
         assert_eq!(VariantClass::StructuralInsertion.so_term(), "insertion");
         assert_eq!(VariantClass::Duplication.so_term(), "duplication");
@@ -2675,7 +2675,7 @@ mod tests {
 
     #[test]
     fn test_display_allele_me_line_insertion() {
-        // Perl VEP only maps L1→LINE1, not LINE→LINE1. <INS:ME:LINE> falls
+        // Ensembl VEP only maps L1→LINE1, not LINE→LINE1. <INS:ME:LINE> falls
         // through to generic mobile_element_insertion.
         let v = make_me_variant(b"<INS:ME:LINE>");
         assert_eq!(v.display_allele(), "mobile_element_insertion");

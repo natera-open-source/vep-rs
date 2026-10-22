@@ -159,7 +159,7 @@ pub fn is_symbolic_alt(alt: &str) -> bool {
     if alt.is_empty() {
         return false;
     }
-    // Perl VEP's SV regex `[<\[\]][^\*]+[>\]\[]` excludes `<*>`: without INFO/SVTYPE
+    // Ensembl VEP's SV regex `[<\[\]][^\*]+[>\]\[]` excludes `<*>`: without INFO/SVTYPE
     // it is a non-SV allele at POS.
     if alt.starts_with('<') && alt.ends_with('>') && alt != "<*>" {
         return true;

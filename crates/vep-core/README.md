@@ -2,7 +2,7 @@
 
 The data model of vep-rs, a Rust reimplementation of the Ensembl Variant Effect Predictor (VEP): the variant, transcript, consequence and coordinate types every other crate reads and writes, plus the shared structural-variant, codon and prediction-matrix rules. All eight sibling crates depend on it: `vep-io` builds an `InputVariant` from each input line, `vep-effects` fills it with `TranscriptConsequence` rows, and `vep-cli`, `vep-builtins` and `vep-plugin` read and extend those rows. The crate writes no files; its product is the in-memory record the writers print.
 
-Throughout this README "Perl VEP" is the reference implementation, as in the [root README](../../README.md).
+Throughout this README "Ensembl VEP" is the reference implementation, `ensemblorg/ensembl-vep` release 116.2, the engine the [root README](../../README.md) measures vep-rs against.
 
 ## How it works
 
@@ -24,14 +24,14 @@ Take the VCF (Variant Call Format) line `chr21 25000100 . ACG A . . .`, a two-ba
 | `so_ontology.rs` | The `is_a` ancestry of the 41 consequence terms within the Sequence Ontology, 57 terms with their accessions and direct parents, whose `descendants` the `is_child` filter operator reads                           |
 | `spdi.rs`        | `spdi_genomic`, one allele's SPDI notation as Ensembl VEP writes it, and `ga4gh_vrs_from_spdi`, the GA4GH VRS (Variation Representation Specification) allele derived from it, for the `--spdi` and `--ga4gh_vrs` columns |
 | `sv_record.rs`   | `structural_variants`, which turns one structural VCF record into the variants it writes rows for: class, span, breakends and mates, tandem-repeat expansion, allele numbering                                        |
-| `sv_routing.rs`  | Whether a line is structural, how its `ALT` list is read, the type abbreviation Perl VEP derives from the joined ALTs and the SO term and class that abbreviation names                                                  |
-| `sv_span.rs`     | The start and end of a symbolic record from `POS`, `SVLEN` and `END` under the breakpoint, tandem and general rules, with the errors under which Perl VEP skips the record                                                   |
+| `sv_routing.rs`  | Whether a line is structural, how its `ALT` list is read, the type abbreviation Ensembl VEP derives from the joined ALTs and the SO term and class that abbreviation names                                               |
+| `sv_span.rs`     | The start and end of a symbolic record from `POS`, `SVLEN` and `END` under the breakpoint, tandem and general rules, with the errors under which Ensembl VEP skips the record                                                |
 | `synonyms.rs`    | `ChromosomeSynonyms`, the chromosome synonym table of a `chr_synonyms.txt` or `--synonyms` file (whitespace-split lines, the first token the reference name and every later token a synonym of it, both ways) and the name a source holds a chromosome under, as Ensembl VEP's `get_source_chr_name` resolves it |
 | `terms.rs`       | `Vocabulary`, the `--terms` choice (`SO`, `display` or `NCBI`) of the name a consequence prints under, each label falling back to the SO term                                                                        |
 | `transcript.rs`  | `Transcript` and its parts: `Exon`, `Intron`, `Translation`, `TranscriptVEFC`, the cDNA-to-genome `ExonCoordMapper`, protein features, prediction matrices, and the lazily computed per-transcript facts and ordinals |
-| `variant.rs`     | `InputVariant`, one allele of one input record with its annotation results; `VariantClass` and its SO term; `ColocatedVariant`; the output helpers that print a variant as Perl VEP names it                            |
+| `variant.rs`     | `InputVariant`, one allele of one input record with its annotation results; `VariantClass` and its SO term; `ColocatedVariant`; the output helpers that print a variant as Ensembl VEP names it                         |
 | `variation.rs`   | `CachedVariation`, one known variant from the variation cache: name, alleles, minor allele frequency, clinical significance, population frequencies                                                                   |
-| `vcf_info.rs`    | `INFO` column lookups that reproduce the hash Perl VEP's parser builds: the last occurrence wins, a bare key is a flag, keys match exactly                                                                               |
+| `vcf_info.rs`    | `INFO` column lookups that reproduce the hash Ensembl VEP's parser builds: the last occurrence wins, a bare key is a flag, keys match exactly                                                                            |
 
 ## Public API
 
@@ -41,10 +41,10 @@ The items a caller reaches for, by module. The record types (`InputVariant`, `Tr
 | ---------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `InputVariant`                                                   | `variant`     | One allele of one input record: coordinates, alleles, class, `transcript_consequences`, `colocated_variants`, `plugin_data`, the structural-variant fields |
 | `InputVariant::new`, `InputVariant::without_allele`              | `variant`     | Build a variant from a chromosome, span and allele pair; build the no-allele record of a non-variant line (`ALT` `.`) over its reference                     |
-| `location`, `uploaded_variation`, `variation_name`, `display_allele` | `variant` | The Location, `Uploaded_variation`, JSON `id` and Allele columns as Perl VEP prints them                                                                   |
-| `first_vcf_id`, `id_names_record`                                | `variant`     | A VCF record's name as Perl VEP's parser stores it (the first `;`-joined ID, `.` and `0` kept, an empty field or element none) and whether a stored name names its record in `Uploaded_variation` and as a mate stand-in (Perl-true and not `.`) |
+| `location`, `uploaded_variation`, `variation_name`, `display_allele` | `variant` | The Location, `Uploaded_variation`, JSON `id` and Allele columns as Ensembl VEP prints them                                                                |
+| `first_vcf_id`, `id_names_record`                                | `variant`     | A VCF record's name as Ensembl VEP's parser stores it (the first `;`-joined ID, `.` and `0` kept, an empty field or element none) and whether a stored name names its record in `Uploaded_variation` and as a mate stand-in (Perl-true and not `.`) |
 | `VariantClass`, `classify_variant`                               | `variant`     | The sequence and structural classes with `so_term()`, `is_structural()` and `is_span_type()`                                                              |
-| `ColocatedVariant`, `MatchedAllele`, `colocated_in_output_order` | `variant`     | A known variant co-located with the input record, the input and record alleles it matched (`applies_to_allele` gates a row), and Perl VEP's report order |
+| `ColocatedVariant`, `MatchedAllele`, `colocated_in_output_order` | `variant`     | A known variant co-located with the input record, the input and record alleles it matched (`applies_to_allele` gates a row), and Ensembl VEP's report order |
 | `Consequence`, `ConsequenceList`, `Impact`                       | `consequence` | The 41 terms with `rank()`, `impact()`, `so_term()`, `so_accession()`, `from_so_term()` and `most_severe()`; `Ord` follows rank                          |
 | `TranscriptConsequence`, `FeatureType`                           | `consequence` | One row of annotation against a transcript, regulatory feature or motif feature, with `feature_overlap()` for the structural-variant overlap columns     |
 | `LofteeContext`                                                  | `consequence` | Exons, introns, coding bounds and `cds_*_NF` flags attached to a row only when a consequence-filtering plugin is active                                    |
@@ -57,7 +57,7 @@ The items a caller reaches for, by module. The record types (`InputVariant`, `Tr
 | `structural_variants`, `tandem_repeat_allele_string`, `parse_ci_field` | `sv_record` | The variants of one structural record; a `<CNV:TR>` record's allele string over its reference run; a `CIPOS` or `CIEND` pair                        |
 | `trim_sequences`, `minimise_bi_allelic`, `apply_minimal_split`   | `minimal`     | Ensembl VEP's `--minimal`: the two-sided trim of one allele pair with its span, the bi-allelic record's minimisation and the split of a multi-allelic record whose alleles trim |
 | `routes_to_structural`, `written_alts`, `sv_type_string`, `sv_type_abbreviation`, `sv_so_term_and_class`, `perl_true` | `sv_routing` | The structural-path decision, the `ALT` list as Perl reads it, the record's type string, its abbreviation and SO term, and Perl's string truth (`""` and `0` are false, every other string is true), applied to an `SVTYPE` value and to a Perl-style plugin switch such as LoFTEE's `run_splice_predictions` |
-| `structural_start`, `structural_end`, `SpanClass`, `SpanError`   | `sv_span`     | A symbolic record's span and the reason Perl VEP would skip it                                                                                              |
+| `structural_start`, `structural_end`, `SpanClass`, `SpanError`   | `sv_span`     | A symbolic record's span and the reason Ensembl VEP would skip it                                                                                           |
 | `info_field`, `info_value`, `info_value_written`                 | `vcf_info`    | An `INFO` key as Perl's hash holds it: flag, written value or absent                                                                                          |
 | `CacheInfo`, `CachedVariation`, `ChromosomeSynonyms`             | `cache_info`, `variation`, `synonyms` | Cache metadata, a known variant from the variation cache, a chromosome name map                                                   |
 
@@ -81,6 +81,6 @@ cargo doc --no-deps -p vep-core
 - vep-core depends on no other workspace crate.
 - [docs/developers/writing-a-plugin.md](../../docs/developers/writing-a-plugin.md): the plugin interface, whose JSON documents are the serde form of `InputVariant` and `TranscriptConsequence`.
 - [docs/cache-predictions.md](../../docs/cache-predictions.md): where the prediction matrices come from and how the decoder prints them.
-- [docs/intended-divergences.md](../../docs/intended-divergences.md): the records Perl VEP drops before annotation, which `sv_routing` and `sv_record` carry under the `vep_skip` mark, and the symbolic `<CNV:TR>` reading of a record without a reference sequence.
+- [docs/intended-divergences.md](../../docs/intended-divergences.md): the records Ensembl VEP drops before annotation, which `sv_routing` and `sv_record` carry under the `vep_skip` mark, and the symbolic `<CNV:TR>` reading of a record without a reference sequence.
 - [docs/output-formats.md](../../docs/output-formats.md): the columns the output helpers of `InputVariant` and `Consequence` print.
 - [Root README](../../README.md): what vep-rs is, the plugin matrix and the documentation index.

@@ -425,7 +425,7 @@ fn sequence_variants(
             variant.end = variant.start + variant.ref_allele.len() as u64 - 1;
         }
 
-        // Secondary minimisation of a bi-allelic record. Perl VEP
+        // Secondary minimisation of a bi-allelic record. Ensembl VEP
         // (Parser.pm `post_process_vfs`) minimises a bi-allelic record whose
         // alleles differ in length whatever the flags, and under `--minimal`
         // every bi-allelic record (`minimise_alleles`, :852, :995): `trim_sequences`
@@ -1300,9 +1300,9 @@ mod tests {
         assert_eq!(e, 101);
     }
 
-    /// The gate actually elides the capture. Without this, a change that
-    /// hardcoded `capture_raw_input = true` would pass every other test while
-    /// silently restoring one line-length `String` allocation per variant.
+    /// The gate elides the capture: a parser that filled `raw_input` regardless
+    /// of it would pass every other test while costing one line-length `String`
+    /// allocation per variant.
     #[test]
     fn raw_input_not_captured_when_gated_off() {
         let line = "21\t25000100\trs123\tA\tG\t50\tPASS\t.";
@@ -2177,7 +2177,7 @@ mod tests {
 
     #[test]
     fn test_parse_vcf_line_ignores_star_for_joint_trimming() {
-        // * (spanning deletion) is filtered: Perl VEP does not annotate it.
+        // * (spanning deletion) is filtered: Ensembl VEP does not annotate it.
         let line = "1\t100\t.\tATAAT\tA,*\t50\tPASS\t.";
         let variants = parse_vcf_line(line, true).unwrap();
         assert_eq!(variants.len(), 1);
@@ -3818,7 +3818,7 @@ mod tests {
 
     #[test]
     fn test_parse_vcf_line_cpx_is_annotated() {
-        // <CPX> variants are annotated by Perl VEP (despite vep_skip flag) with
+        // <CPX> variants are annotated by Ensembl VEP (despite vep_skip flag) with
         // overlap-only consequences. Allele displayed as "CPX".
         let line = "21\t100\t.\tA\t<CPX>\t.\t.\tSVTYPE=CPX;END=500";
         let variants = parse_vcf_line(line, true).unwrap();
@@ -4633,7 +4633,7 @@ mod tests {
     #[test]
     fn test_parse_vcf_line_complex_substitution_suffix_trimmed() {
         // VCF: TAA -> GCTCA (3bp ref, 5bp alt: complex substitution)
-        // Perl VEP trims trailing A: ref=TA, alt=GCTC, end=27256844
+        // Ensembl VEP trims trailing A: ref=TA, alt=GCTC, end=27256844
         let line = "21\t27256843\t.\tTAA\tGCTCA\t50\tPASS\t.";
         let variants = parse_vcf_line(line, true).unwrap();
         assert_eq!(variants.len(), 1);
@@ -5154,7 +5154,7 @@ mod tests {
 
     #[test]
     fn test_parse_vcf_line_star_ref_block_not_filtered() {
-        // Perl VEP does not filter <*>: the SV regex explicitly excludes it, so without
+        // Ensembl VEP does not filter <*>: the SV regex explicitly excludes it, so without
         // INFO/SVTYPE it is a non-SV allele at position POS.
         let line = "21\t27253474\trefblock1\tT\t<*>\t.\tPASS\tEND=27255568;LEN=2094";
         let variants = parse_vcf_line(line, true).unwrap();
@@ -5518,7 +5518,7 @@ mod tests {
         assert_eq!(variants.len(), 1);
         let v = &variants[0];
         assert_eq!(v.variant_class, VariantClass::ComplexStructural);
-        // Perl VEP treats CTX as a translocation/BND; vep-rs does not.
+        // Ensembl VEP treats CTX as a translocation/BND; vep-rs does not.
     }
 
     /// The per-individual reading of `Parser/VCF.pm:595-665` on `21 100 x A G,T,*`

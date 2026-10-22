@@ -141,7 +141,7 @@ impl Clone for TranscriptDerived {
 }
 
 /// Per-transcript facts that every row against the transcript reads; the
-/// counterparts of what Perl VEP stores on the transcript's
+/// counterparts of what Ensembl VEP stores on the transcript's
 /// `_variation_effect_feature_cache` once and reads per allele.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TranscriptFacts {
@@ -773,7 +773,7 @@ impl Transcript {
 
     /// Whether this transcript has a CDS (coding sequence).
     /// This includes protein_coding and NMD transcripts, which have CDS/UTR
-    /// regions even though they are targeted for degradation. Perl VEP's SV
+    /// regions even though they are targeted for degradation. Ensembl VEP's SV
     /// annotation engine treats NMD transcripts as coding (they have CDS exons,
     /// 5'UTR, 3'UTR) and assigns coding_sequence_variant, stop_lost, etc.
     pub fn has_cds(&self) -> bool {
@@ -787,8 +787,8 @@ impl Transcript {
 
     /// Whether this transcript is non-coding for consequence-context purposes.
     ///
-    /// NMD is a separate context term (`NMD_transcript_variant`), mirroring Perl
-    /// VEP output, so NMD transcripts are excluded here.
+    /// NMD is a separate context term (`NMD_transcript_variant`), mirroring
+    /// Ensembl VEP output, so NMD transcripts are excluded here.
     pub fn is_non_coding_context_transcript(&self) -> bool {
         !self.is_protein_coding() && !self.is_nmd_transcript()
     }

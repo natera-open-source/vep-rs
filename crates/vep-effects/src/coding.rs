@@ -5,7 +5,7 @@
 //!
 //! Given a variant position within the CDS, this module extracts the affected codon(s),
 //! translates them using the standard genetic code, and compares reference vs alternate
-//! amino acids. Handles SNVs, inframe indels, and frameshifts, mirroring the Perl VEP
+//! amino acids. Handles SNVs, inframe indels, and frameshifts, mirroring the Ensembl VEP
 //! `TranscriptVariationAllele` codon/peptide logic for concordance.
 //!
 //! Perl citations name modules of ensembl-variation release/116
@@ -42,7 +42,7 @@ pub struct CodonChange {
 
 /// Compute frameshift status using CDS-mapped variant lengths (Perl parity).
 ///
-/// Perl VEP's `VariationEffect::frameshift` predicate uses:
+/// Ensembl VEP's `VariationEffect::frameshift` predicate uses:
 ///   `var_len = cds_end - cds_start + 1`  (not raw ref allele length)
 ///   `allele_len = seq_length`             (alt allele length)
 ///   `return abs(allele_len - var_len) % 3`
@@ -84,7 +84,7 @@ fn has_gained_stop_with_containment(ref_pep: &[u8], alt_pep: &[u8]) -> bool {
 }
 
 /// Classify an inframe indel using codon-level heuristics, mirroring
-/// Perl VEP's `inframe_deletion` / `inframe_insertion` / `protein_altering_variant`
+/// Ensembl VEP's `inframe_deletion` / `inframe_insertion` / `protein_altering_variant`
 /// predicate logic.
 ///
 /// Perl's `inframe_deletion` checks at the **codon string** level:
@@ -414,7 +414,7 @@ pub(crate) fn translate_to_peptide(cds: &[u8]) -> Vec<u8> {
 }
 
 /// Translate a local codon-window sequence to a peptide, adding a trailing `X` when a partial
-/// codon remains and the peptide is not exactly `*` (Perl VEP behavior).
+/// codon remains and the peptide is not exactly `*` (Ensembl VEP behavior).
 fn translate_codon_window_to_peptide(cds_window: &[u8]) -> Vec<u8> {
     let mut pep = Vec::with_capacity(cds_window.len().div_ceil(3));
     let (codons, rem) = cds_window.as_chunks::<3>();
@@ -638,7 +638,7 @@ pub fn compute_three_prime_utr_sequence(
     }
 }
 
-/// Replicate Perl VEP's `_ins_del_stop_altered` for deletions that span the
+/// Replicate Ensembl VEP's `_ins_del_stop_altered` for deletions that span the
 /// CDS into the 3' UTR.
 ///
 /// Perl's predicate (`VariationEffect::_ins_del_stop_altered`):
@@ -757,7 +757,7 @@ pub fn replicate_ins_del_stop_altered(
     Some(aa != b'*')
 }
 
-/// Replicate Perl VEP's `_ins_del_start_altered` for deletions/insertions at
+/// Replicate Ensembl VEP's `_ins_del_start_altered` for deletions/insertions at
 /// the 5'UTR/CDS boundary.
 ///
 /// Perl's predicate (`VariationEffect::_ins_del_start_altered`):
@@ -959,7 +959,7 @@ fn compute_full_peptide_alleles_impl(
 ///
 /// Applies the variant to the CDS, translates both, and trims common
 /// prefix/suffix so that the returned slices represent the minimal
-/// amino-acid change, mirroring Perl VEP's `_get_peptide_alleles`.
+/// amino-acid change, mirroring Ensembl VEP's `_get_peptide_alleles`.
 ///
 /// Returns `None` if the CDS or variant cannot be resolved.
 pub fn compute_peptide_alleles(
@@ -1623,7 +1623,7 @@ fn format_codon_display(codon: &[u8], variant_pos: usize) -> String {
     result
 }
 
-// Perl VEP coding predicates, ported whole.
+// Ensembl VEP coding predicates, ported whole.
 //
 // `perl_coding_terms` reproduces the coding SO terms Ensembl VEP assigns to a
 // non-SNV allele on a coding transcript: the `Bio::EnsEMBL::TranscriptMapper`
@@ -3851,7 +3851,7 @@ fn snv_in_first_codon(transcript: &Transcript, pos: u64) -> bool {
     false
 }
 
-/// The coding SO terms Perl VEP assigns to an allele on `transcript`: every
+/// The coding SO terms Ensembl VEP assigns to an allele on `transcript`: every
 /// non-SNV allele, and an SNV whose position lies in the first codon.
 ///
 /// `None` when the allele is an SNV outside the first codon, the transcript
