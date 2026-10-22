@@ -264,6 +264,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--cache_version 0`, an empty or `0` `--dir_cache` or `--dir_plugins`, and the `--dir` default without `HOME` fall back to their defaults, as Ensembl VEP's `||` reads them. (#N)
 - An output file vep-rs cannot create, a Parquet intermediate or an empty name included, ends the run with Ensembl VEP's `ERROR: [output] Could not write to output file <file>`. (#N)
 - A reference read on `Y` inside a GRCh37 or GRCh38 pseudoautosomal region is served from `X`, as Ensembl VEP serves it, so `--check_ref` and HGVS see the bases. (#N)
+- Under `--minimal`, every row of a split record lists the co-located variants and `SV` names of its first alternate allele's feature, as Ensembl VEP prints them. (#N)
+- A region file's empty `clin_sig_allele` or `clinical_impact` cell is a value, as Ensembl VEP reads it: `CLIN_SIG` is suppressed and `CLINVAR_SOMATIC_CLASSIFICATION` prints empty. (#N)
+- The JSON `frequencies` of a co-located variant are keyed by the record's own alleles, so a `--minimal` split allele's trimmed spelling finds none, as Ensembl VEP writes. (#N)
+- `CLIN_SIG` on a `--minimal` split row reads the ClinVar reference against the reference `REF_ALLELE` prints, not the allele's own trimmed one, as Ensembl VEP compares them. (#N)
 
 ### Security
 

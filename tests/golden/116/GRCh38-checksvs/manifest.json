@@ -4,16 +4,87 @@
  "generator_version": "2",
  "seed": 1,
  "exemplars_per_combination": 100,
+ "included_records": {
+  "GRCh38-checksvs": [
+   "21_5047000_T/A/TG",
+   "21_5047000_T/TG/A"
+  ]
+ },
+ "kept_records": 12,
  "max_span": 1000000,
  "covers": [
   "check_svs",
   "check-svs-offline-source"
  ],
+ "flag_sets": [
+  {
+   "name": "check-svs",
+   "flags": [
+    "--check_svs",
+    "structural_variants.vcf.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_check-svs",
+   "covers": [
+    "check_svs",
+    "check-svs-offline-source"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "SV"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  },
+  {
+   "name": "check-svs-minimal",
+   "flags": [
+    "--minimal",
+    "--check_svs",
+    "structural_variants.vcf.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_check-svs-minimal",
+   "covers": [
+    "check_svs",
+    "minimal"
+   ],
+   "perl_mode": "database",
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "SV"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  }
+ ],
  "suites": {
   "GRCh38-checksvs": {
    "reference": "reference.txt",
    "input": "candidates.vcf",
-   "rows": 28,
+   "rows": 32,
    "combinations": 5
   }
  },
@@ -27,8 +98,8 @@
    "exemplar_records": 1
   },
   "intergenic_variant": {
-   "observed_rows": 12,
-   "exemplar_records": 11
+   "observed_rows": 16,
+   "exemplar_records": 13
   },
   "intron_variant": {
    "observed_rows": 4,
@@ -42,7 +113,8 @@
  "variant_classes": {
   "deletion": 2,
   "insertion": 2,
-  "snv": 23,
+  "mnv_or_complex": 2,
+  "snv": 25,
   "symbolic_deletion": 1
  },
  "records": [
@@ -121,6 +193,26 @@
   },
   {
    "suite": "GRCh38-checksvs",
+   "vcf": "21\t5047000\t.\tT\tA,TG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ],
+   "strata": [
+    "multi_allelic_indel_trimmable"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
+   "vcf": "21\t5047000\t.\tT\tTG,A\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ],
+   "strata": [
+    "multi_allelic_indel_trimmable"
+   ]
+  },
+  {
+   "suite": "GRCh38-checksvs",
    "vcf": "21\t5047001\t.\tT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
@@ -143,38 +235,6 @@
  "multi_allelic_per_suite": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
- "flag_sets": [
-  {
-   "name": "check-svs",
-   "flags": [
-    "--check_svs",
-    "structural_variants.vcf.gz"
-   ],
-   "input": "variants.vcf",
-   "stdin": false,
-   "unordered": false,
-   "formats": [
-    "default",
-    "tab",
-    "vcf",
-    "json"
-   ],
-   "expected_dir": "expected_check-svs",
-   "covers": [
-    "check_svs",
-    "check-svs-offline-source"
-   ],
-   "divergences": [],
-   "vep_rs_only_tuples": [],
-   "divergence_summary": {},
-   "vep_rs_only_summary": {},
-   "fields_compared": [
-    "SV"
-   ],
-   "field_divergences": [],
-   "field_divergence_summary": {}
-  }
- ],
  "divergences": [],
  "vep_rs_only_tuples": [],
  "divergence_summary": {},

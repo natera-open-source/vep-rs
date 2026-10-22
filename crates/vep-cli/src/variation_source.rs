@@ -590,13 +590,22 @@ fn region_span(name: &str) -> Option<(u64, u64)> {
 
 /// Parses one record's fields into a variant, as
 /// `BaseCacheVariation.pm::parse_variation` (`:115-145` at release/116.2) does:
-/// field `i` is column `i` of `columns`, a `.` or an empty field is unset,
+/// field `i` is column `i` of `columns`, a `.` is unset and so is an empty
+/// field (other than `clin_sig_allele` and `clinical_impact`, see below),
 /// `failed`, `somatic` and `phenotype_or_disease` default to 0, `end` to
 /// `start` and `strand` to 1 (a `0` cell counts as unset there, as Perl's `||=`
 /// reads it), and every column outside the fixed set is a population frequency
 /// kept under its own name. With `old_maf` the `AFR`,
 /// `AMR`, `ASN` and `EUR` values are rewritten as `:131-137` does. A record
 /// without a numeric start is `None`.
+///
+/// An empty `clin_sig_allele` or `clinical_impact` cell inside the line is kept
+/// as the empty string: `parse_variation` (:121-124) splits the line as Perl's
+/// `split` does, which drops the empty fields at its end, turns a `.` into undef
+/// and leaves an empty cell, which the region files write for a value the
+/// record lacks (`Dumper/Variation.pm:245-261`), as the defined `''`; the output
+/// tests these two columns with `defined` (OutputFactory.pm:1093, 1097), where
+/// every other column is tested for truth.
 pub fn parse_record(
     columns: &VariationColumns,
     fields: &[&str],
@@ -609,8 +618,15 @@ pub fn parse_record(
     let mut clinvar = ClinVarDetail::default();
     let mut start = None;
     let mut end = None;
-    for (name, &value) in columns.names().iter().zip(fields) {
-        if value.is_empty() || value == "." {
+    let written = fields
+        .iter()
+        .rposition(|value| !value.is_empty())
+        .map_or(0, |last| last + 1);
+    for (name, &value) in columns.names().iter().zip(&fields[..written]) {
+        if value == "." {
+            continue;
+        }
+        if value.is_empty() && !matches!(name.as_str(), "clin_sig_allele" | "clinical_impact") {
             continue;
         }
         match name.as_str() {
@@ -1321,6 +1337,38 @@ mod tests {
         assert_eq!((record.start, record.end, record.strand), (100, 100, 1));
         let record = parse_record(&cols, &["rs1", "100", "101", "-1", "A/G"], false).unwrap();
         assert_eq!((record.start, record.end, record.strand), (100, 101, -1));
+    }
+
+    /// An empty `clin_sig_allele` or `clinical_impact` cell inside a region
+    /// line is the defined empty string, as Perl's `split` and `parse_variation`
+    /// read it (BaseCacheVariation.pm:121-124): on the fixture
+    /// `rs1 1  999999 1000000 AC/A  benign 1      T:0.1` both are `Some("")`,
+    /// while the other empty cells stay unset; a `.` stays unset, and so does an
+    /// empty cell at the end of the line, which `split` drops before the
+    /// columns are mapped (a tabix line writes `.` there, Dumper/Variation.pm:265).
+    #[test]
+    fn empty_clin_sig_allele_and_clinical_impact_cells_are_defined_inside_a_line() {
+        let cols = columns(GRCH38_COLS.strip_prefix("chr,").unwrap());
+        let fields: Vec<&str> = "rs1 1  999999 1000000 AC/A  benign 1      T:0.1"
+            .split(' ')
+            .collect();
+        let record = parse_record(&cols, &fields, false).unwrap();
+        let clinvar = record.clinvar.as_deref().expect("the two cells are set");
+        assert_eq!(clinvar.clin_sig_allele.as_deref(), Some(""));
+        assert_eq!(clinvar.clinical_impact.as_deref(), Some(""));
+        assert_eq!(clinvar.clin_sig_ref_allele, None);
+        assert_eq!(record.clin_sig.as_deref(), Some("benign"));
+        assert_eq!((record.pubmed, record.var_synonyms), (None, None));
+        assert_eq!(record.frequencies["AF"], "T:0.1");
+
+        let trailing: Vec<&str> = "rs2   1000000  A/G  benign 1      ".split(' ').collect();
+        let record = parse_record(&cols, &trailing, false).unwrap();
+        assert_eq!(record.clin_sig.as_deref(), Some("benign"));
+        assert!(record.clinvar.is_none(), "trailing empty cells are unset");
+
+        let dots: Vec<&str> = RS2838519.split('\t').collect();
+        let record = parse_record(&columns(GRCH38_COLS), &dots, false).unwrap();
+        assert!(record.clinvar.is_none(), "a `.` cell is unset");
     }
 
     #[test]

@@ -88,7 +88,9 @@ pub fn render_tab_record<'a>(
             }
             let start = out.len();
             fields::write_field_value(out, column, variant, tc, &formatter.options, ",");
-            if out.len() == start && !fields::empty_value_is_written(column, variant) {
+            if out.len() == start
+                && !fields::empty_value_is_written(column, variant, tc, &formatter.options)
+            {
                 out.push(b'-');
             }
         }
@@ -245,7 +247,9 @@ mod tests {
                     continue;
                 }
                 let v = fields::field_value(col, variant, tc, &formatter.options, ",");
-                if v.is_empty() && !fields::empty_value_is_written(col, variant) {
+                if v.is_empty()
+                    && !fields::empty_value_is_written(col, variant, tc, &formatter.options)
+                {
                     line.push('-');
                 } else {
                     line.push_str(&v);

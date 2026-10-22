@@ -4,6 +4,15 @@
  "generator_version": "2",
  "seed": 1,
  "exemplars_per_combination": 100,
+ "included_records": {
+  "GRCh38-colocated": [
+   "21_5030602_A/AA/G",
+   "21_5030602_A/G/AA",
+   "21_5230609_A/AT/C",
+   "21_5230609_A/C/AT"
+  ]
+ },
+ "kept_records": 29,
  "max_span": 1000000,
  "covers": [
   "variation-files-as-input",
@@ -30,11 +39,85 @@
   ],
   "reason": "COSMIC and HGMD-PUBLIC identifiers are not redistributed; the input records are chosen so that Ensembl VEP matches none of them"
  },
+ "flag_sets": [
+  {
+   "name": "colocated",
+   "flags": [
+    "--check_existing",
+    "--af",
+    "--af_1kg",
+    "--af_gnomade",
+    "--af_gnomadg",
+    "--max_af",
+    "--pubmed",
+    "--var_synonyms",
+    "--clinvar_somatic_classification",
+    "--failed",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_colocated",
+   "covers": [
+    "clin-sig-somatic-pheno-columns",
+    "clin_sig_allele",
+    "clin_sig_allele_revcomp_116",
+    "clinvar_somatic_classification",
+    "pubmed",
+    "var_synonyms",
+    "af",
+    "af_1kg",
+    "af_gnomade",
+    "af_gnomadg",
+    "max_af",
+    "max-af-computation",
+    "max-af-over-frequency-columns"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "colocated-minimal",
+   "flags": [
+    "--check_existing",
+    "--minimal",
+    "--failed",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_colocated-minimal",
+   "covers": [
+    "check_existing",
+    "minimal"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
  "suites": {
   "GRCh38-colocated": {
    "reference": "grch38-default.txt",
    "input": "grch38.vcf",
-   "rows": 181,
+   "rows": 189,
    "combinations": 14
   }
  },
@@ -52,16 +135,16 @@
    "exemplar_records": 1
   },
   "downstream_gene_variant": {
-   "observed_rows": 14,
-   "exemplar_records": 7
+   "observed_rows": 18,
+   "exemplar_records": 9
   },
   "frameshift_variant": {
    "observed_rows": 2,
    "exemplar_records": 1
   },
   "intergenic_variant": {
-   "observed_rows": 18,
-   "exemplar_records": 16
+   "observed_rows": 22,
+   "exemplar_records": 18
   },
   "intron_variant": {
    "observed_rows": 43,
@@ -99,7 +182,8 @@
  "variant_classes": {
   "deletion": 17,
   "insertion": 23,
-  "snv": 141
+  "mnv_or_complex": 4,
+  "snv": 145
  },
  "records": [
   {
@@ -139,7 +223,21 @@
   },
   {
    "suite": "GRCh38-colocated",
+   "vcf": "21\t5030602\t.\tA\tAA,G\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
    "vcf": "21\t5030602\t.\tA\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5030602\t.\tA\tG,AA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
    ]
@@ -209,7 +307,21 @@
   },
   {
    "suite": "GRCh38-colocated",
+   "vcf": "21\t5230609\t.\tA\tAT,C\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
    "vcf": "21\t5230609\t.\tA\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-colocated",
+   "vcf": "21\t5230609\t.\tA\tC,AT\t.\t.\t.",
    "combinations": [
     "downstream_gene_variant"
    ]
@@ -331,48 +443,5 @@
  "divergences": [],
  "vep_rs_only_tuples": [],
  "divergence_summary": {},
- "vep_rs_only_summary": {},
- "flag_sets": [
-  {
-   "name": "colocated",
-   "flags": [
-    "--check_existing",
-    "--af",
-    "--af_1kg",
-    "--af_gnomade",
-    "--af_gnomadg",
-    "--max_af",
-    "--pubmed",
-    "--var_synonyms",
-    "--clinvar_somatic_classification",
-    "--failed",
-    "1"
-   ],
-   "input": "variants.vcf",
-   "stdin": false,
-   "unordered": false,
-   "formats": [
-    "default",
-    "tab",
-    "vcf",
-    "json"
-   ],
-   "expected_dir": "expected_colocated",
-   "covers": [
-    "clin-sig-somatic-pheno-columns",
-    "clin_sig_allele",
-    "clin_sig_allele_revcomp_116",
-    "clinvar_somatic_classification",
-    "pubmed",
-    "var_synonyms",
-    "af",
-    "af_1kg",
-    "af_gnomade",
-    "af_gnomadg",
-    "max_af",
-    "max-af-computation",
-    "max-af-over-frequency-columns"
-   ]
-  }
- ]
+ "vep_rs_only_summary": {}
 }

@@ -905,6 +905,16 @@ pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: Option<u
 /// (`$vf->{overlapping_svs}`, `OutputFactory.pm:962-964`): every allele's rows
 /// print the union over the record's alleles, which differ only when a breakend
 /// allele's mate position reaches names its own position does not.
+///
+/// A `--minimal` split record's rows print the co-located variants and the
+/// known structural variants of its first feature, the first alternate allele
+/// trimmed on its own span: the rejoin (OutputFactory.pm:2272-2353) moves the
+/// later features' consequences into the first and leaves `existing` and
+/// `overlapping_svs` where they are, and every row is built from the first
+/// feature (:342-349, :1046, :962). Each row keeps the names that apply to its
+/// own allele (:1081-1083). A record whose first alternate allele writes no
+/// row has every allele annotated on that feature already
+/// (`vep_core::minimal::rowless_first_feature`).
 pub(crate) fn apply_record_rules(
     batch: &mut [InputVariant],
     loaded: Option<&LazyTranscriptIndexes>,
@@ -934,6 +944,24 @@ pub(crate) fn apply_record_rules(
                 .collect();
             for v in alleles.iter_mut() {
                 v.overlapping_svs.clone_from(&union);
+            }
+        }
+        // The first feature is the allele without a rejoin key prefix, not the
+        // allele at `allele_index` 0: the index counts the written ALTs, a gVCF
+        // `<NON_REF>` left out of the working string included.
+        let first_feature = alleles.iter().find(|v| {
+            v.original_start.is_some() && v.rejoin_key_prefix.is_none() && !v.reference_allele_row
+        });
+        if let Some(first_feature) = first_feature {
+            let colocated_variants = first_feature.colocated_variants.clone();
+            let overlapping_svs = first_feature.overlapping_svs.clone();
+            for v in alleles.iter_mut() {
+                v.existing_variation = variation_matcher::existing_variation_names(
+                    &colocated_variants,
+                    &v.display_allele(),
+                );
+                v.colocated_variants.clone_from(&colocated_variants);
+                v.overlapping_svs.clone_from(&overlapping_svs);
             }
         }
         // The reference row of a bi-allelic record prints the alternate allele's
@@ -5513,6 +5541,117 @@ mod tests {
         assert_eq!(batch[1].overlapping_svs, ["esv1", "nsv2", "nsv9"]);
         assert_eq!(batch[2].overlapping_svs, ["nsv5"]);
         assert_eq!(batch[3].overlapping_svs, ["nsv5"]);
+    }
+
+    /// A `--minimal` split record's rows print the first feature's co-located
+    /// variants and structural variant names (the rejoin leaves both on each
+    /// feature and the rows read the first, OutputFactory.pm:2272-2353, 1046,
+    /// 962), each row keeping the names matched on its own allele (:1081-1083):
+    /// on `21 5230609 A C,AT` Ensembl VEP 116.2 prints `rs1979841086,rs373402393`
+    /// on the C row and `rs1979841086`, the span match, on the T row, and under
+    /// `--check_svs` the same names on both rows (`21 5047000 T TG,A` prints the
+    /// insertion feature's five names on the A row). A reference row of the
+    /// record (`--process_ref_homs`) reads the same lists; a record the split
+    /// left alone and a bi-allelic record keep their own.
+    #[test]
+    fn minimal_split_record_rows_print_the_first_features_lists() {
+        use crate::vcf_parser::split_minimal_record;
+        use vep_core::variant::{ColocatedVariant, MatchedAllele};
+
+        let known = |id: &str, start: u64, end: u64, matched: &[&str]| ColocatedVariant {
+            id: id.to_string(),
+            start,
+            end,
+            allele_string: Some("A/C".to_string()),
+            strand: 1,
+            matched_alleles: matched
+                .iter()
+                .map(|allele| MatchedAllele {
+                    input_allele: allele.to_string(),
+                    input_index: 0,
+                    record_allele: allele.to_string(),
+                    record_index: 0,
+                })
+                .collect(),
+            ..ColocatedVariant::default()
+        };
+        let mut batch = Vec::new();
+        for (n, line) in [
+            "21\t5230609\t.\tA\tC,AT\t.\t.\t.",
+            "21\t5230700\t.\tG\tT,C\t.\t.\t.",
+            "21\t5230800\t.\tG\tGA\t.\t.\t.",
+        ]
+        .iter()
+        .enumerate()
+        {
+            for mut v in split_minimal_record(parse_vcf_line(line, true).unwrap()) {
+                v.input_record = n as u64 + 1;
+                batch.push(v);
+            }
+        }
+        assert_eq!(batch.len(), 5);
+        let mut reference_row = batch[0].reference_allele_row();
+        reference_row.input_record = 1;
+        batch.insert(0, reference_row);
+        assert!(batch[1].original_start.is_some() && batch[1].allele_index == 0);
+        assert!(batch[2].original_start.is_some() && batch[2].allele_index == 1);
+        batch[1].colocated_variants = vec![
+            known("rs1979841086", 5230609, 5230609, &[]),
+            known("rs373402393", 5230609, 5230609, &["C"]),
+        ];
+        batch[1].overlapping_svs = vec!["nsv1".to_string(), "nsv2".to_string()];
+        batch[2].colocated_variants = vec![known("rs2123086048", 5230610, 5230609, &["T"])];
+        batch[2].existing_variation = vec!["rs2123086048".to_string()];
+        batch[2].overlapping_svs = vec!["nsv1".to_string(), "nsv2".to_string(), "nsv3".to_string()];
+        batch[3].colocated_variants = vec![known("rs7", 5230700, 5230700, &["T"])];
+        batch[3].existing_variation = vec!["rs7".to_string()];
+        batch[4].colocated_variants = vec![known("rs8", 5230700, 5230700, &["C"])];
+        batch[4].existing_variation = vec!["rs8".to_string()];
+        batch[5].colocated_variants = vec![known("rs9", 5230801, 5230800, &["A"])];
+        batch[5].existing_variation = vec!["rs9".to_string()];
+        apply_record_rules(&mut batch, None);
+        let ids = |v: &InputVariant| -> Vec<String> {
+            v.colocated_variants
+                .iter()
+                .map(|cv| cv.id.clone())
+                .collect()
+        };
+        for v in &batch[..3] {
+            assert_eq!(ids(v), ["rs1979841086", "rs373402393"]);
+            assert_eq!(v.overlapping_svs, ["nsv1", "nsv2"]);
+        }
+        assert_eq!(batch[0].existing_variation, ["rs1979841086"]);
+        assert_eq!(batch[1].existing_variation, ["rs1979841086", "rs373402393"]);
+        assert_eq!(batch[2].existing_variation, ["rs1979841086"]);
+        assert!(batch[3].original_start.is_none(), "G/T/C does not split");
+        assert_eq!(batch[3].existing_variation, ["rs7"]);
+        assert_eq!(batch[4].existing_variation, ["rs8"]);
+        assert_eq!(batch[5].existing_variation, ["rs9"]);
+
+        // The first feature is the working string's first alternate allele: a gVCF
+        // `<NON_REF>` left out of the string keeps its written position in
+        // `allele_index`, so the G allele of `A <NON_REF>,G,GA` is the first
+        // feature with `allele_index` 1.
+        let mut gvcf = split_minimal_record(
+            parse_vcf_line("21\t5230900\t.\tA\t<NON_REF>,G,GA\t.\t.\t.", true).unwrap(),
+        );
+        assert_eq!(gvcf.len(), 2);
+        assert_eq!(
+            (gvcf[0].allele_index, gvcf[0].rejoin_key_prefix.as_deref()),
+            (1, None)
+        );
+        for v in &mut gvcf {
+            v.input_record = 4;
+        }
+        gvcf[0].colocated_variants = vec![known("rs10", 5230900, 5230900, &["G"])];
+        gvcf[0].existing_variation = vec!["rs10".to_string()];
+        gvcf[1].colocated_variants = vec![known("rs11", 5230901, 5230900, &["G"])];
+        gvcf[1].existing_variation = vec!["rs11".to_string()];
+        apply_record_rules(&mut gvcf, None);
+        assert_eq!(ids(&gvcf[1]), ["rs10"]);
+        // `A/GA` trims to `-/G`, so the first feature's G match applies to this row.
+        assert_eq!(gvcf[1].display_allele(), "G");
+        assert_eq!(gvcf[1].existing_variation, ["rs10"]);
     }
 
     /// The reference row of `--process_ref_homs` takes the alternate's `HGVSg`

@@ -183,28 +183,59 @@ pub fn apply_minimal_split(variant: &mut InputVariant, own: usize) -> MinimalSpl
 /// allele equal to the reference once trimmed included: its feature `-/-` writes
 /// the row and nothing else.
 pub fn split_reference_row(allele: &InputVariant, own: usize) -> InputVariant {
+    split_feature(allele, own)
+        .unwrap_or_else(|| allele.clone())
+        .reference_allele_row()
+}
+
+/// The feature of allele `own` of a `--minimal` split record, built from any
+/// allele of the record: the working string's alternate allele `own` trimmed
+/// against the reference over the record's span (InputBuffer.pm:658-676), with
+/// the key prefix of its place. `None` for an allele the split left alone.
+fn split_feature(allele: &InputVariant, own: usize) -> Option<InputVariant> {
+    let working = allele.record_allele_string_multi.as_deref()?;
+    let (start, end) = (allele.original_start?, allele.original_end?);
+    let mut parts = working.split('/');
+    let reference = parts.next().unwrap_or("");
+    let own_alt = parts.nth(own)?;
+    let (trimmed_ref, trimmed_alt, new_start, new_end, _) =
+        trim_sequences(reference.as_bytes(), own_alt.as_bytes(), start, end);
     let mut feature = allele.clone();
-    if let (Some(working), Some(start), Some(end)) = (
-        allele.record_allele_string_multi.as_deref(),
-        allele.original_start,
-        allele.original_end,
-    ) {
-        let mut parts = working.split('/');
-        let reference = parts.next().unwrap_or("");
-        if let Some(own_alt) = parts.nth(own) {
-            let (trimmed_ref, trimmed_alt, new_start, new_end, _) =
-                trim_sequences(reference.as_bytes(), own_alt.as_bytes(), start, end);
-            set_split_feature(
-                &mut feature,
-                own,
-                trimmed_ref,
-                trimmed_alt,
-                new_start,
-                new_end,
-            );
-        }
+    set_split_feature(
+        &mut feature,
+        own,
+        trimmed_ref,
+        trimmed_alt,
+        new_start,
+        new_end,
+    );
+    Some(feature)
+}
+
+/// The first feature of a `--minimal` split record whose first alternate
+/// allele writes no row, for the lookups the record's rows print. Ensembl VEP
+/// annotates every split feature on its own span and its rows print the first
+/// feature's co-located variants and overlapping structural variants: the
+/// rejoin (OutputFactory.pm:2272-2353) moves the later features' consequences
+/// into the first and leaves `existing` and `overlapping_svs` where they are,
+/// and the rows are built from the first feature (:342-349). An allele equal
+/// to the reference once trimmed, a `*` and a `<DEL:*>` write no row
+/// (VariationFeatureOverlap.pm:469-474, :481, :484), so when the first
+/// alternate allele is one of those no allele of the batch carries the
+/// feature, and each allele looks it up here. `None` for every other allele.
+pub fn rowless_first_feature(allele: &InputVariant) -> Option<InputVariant> {
+    let working = allele.record_allele_string_multi.as_deref()?;
+    allele.original_start?;
+    let mut parts = working.split('/');
+    let reference = parts.next()?;
+    let first = parts.next()?;
+    let (trimmed_ref, trimmed_alt, _, _, _) =
+        trim_sequences(reference.as_bytes(), first.as_bytes(), 0, 0);
+    let rowless = trimmed_ref == trimmed_alt || matches!(first, "*" | "<DEL:*>");
+    if !rowless {
+        return None;
     }
-    feature.reference_allele_row()
+    split_feature(allele, 0)
 }
 
 /// The `REF_ALLELE` of every row of a split record, `working` the record's
@@ -240,10 +271,8 @@ fn set_split_feature(
     start: u64,
     end: u64,
 ) {
-    if own > 0 {
-        variant.rejoin_key_prefix =
-            Some(format!("{}_", allele_pair(&trimmed_ref, &trimmed_alt)).into());
-    }
+    variant.rejoin_key_prefix =
+        (own > 0).then(|| format!("{}_", allele_pair(&trimmed_ref, &trimmed_alt)).into());
     set_alleles(variant, trimmed_ref, trimmed_alt, start, end);
 }
 
@@ -487,6 +516,62 @@ mod tests {
         assert_eq!(row.rejoin_key_prefix, None);
         assert_eq!(row.location(), "21:10542415");
         assert_eq!(row.class_so_term(), "sequence_alteration");
+    }
+
+    /// The first feature of a split record is built for an allele of the record
+    /// when the first alternate allele writes no row: `A/A/G` at 10542415 gives
+    /// `-/-` at 10542416-10542415 and `A/*/G/AT` at 100 gives `A/*` at 100, each
+    /// without a key prefix, as Ensembl VEP 116.2 splits `21 10542415 A A,G`
+    /// (`-/-` over 10542416-10542415, VARIANT_CLASS `sequence_alteration`) and
+    /// trims nothing off `*`. `A/AA/G`, whose first allele writes its rows, and a
+    /// record the split left alone give none.
+    #[test]
+    fn the_first_feature_is_built_when_its_allele_writes_no_row() {
+        let mut g = InputVariant::new(
+            "21".into(),
+            10542415,
+            10542415,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        );
+        g.allele_index = 1;
+        g.record_allele_string_multi = Some("A/A/G".into());
+        assert_eq!(apply_minimal_split(&mut g, 1), MinimalSplit::Trimmed);
+        let first = rowless_first_feature(&g).unwrap();
+        assert_eq!(
+            (first.start, first.end, first.allele_string.as_str()),
+            (10542416, 10542415, "-/-")
+        );
+        assert_eq!(first.rejoin_key_prefix, None);
+        assert_eq!(first.chr, "21");
+
+        let mut insertion = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"AT".to_vec());
+        insertion.allele_index = 2;
+        insertion.record_allele_string_multi = Some("A/*/G/AT".into());
+        assert_eq!(
+            apply_minimal_split(&mut insertion, 2),
+            MinimalSplit::Trimmed
+        );
+        assert_eq!((insertion.start, insertion.end), (101, 100));
+        let first = rowless_first_feature(&insertion).unwrap();
+        assert_eq!(
+            (first.start, first.end, first.allele_string.as_str()),
+            (100, 100, "A/*")
+        );
+
+        let mut a = InputVariant::new("21".into(), 5030602, 5030602, b"A".to_vec(), b"G".to_vec());
+        a.allele_index = 1;
+        a.record_allele_string_multi = Some("A/AA/G".into());
+        assert_eq!(apply_minimal_split(&mut a, 1), MinimalSplit::Trimmed);
+        assert!(rowless_first_feature(&a).is_none());
+
+        let mut unsplit = InputVariant::new("21".into(), 14, 14, b"G".to_vec(), b"C".to_vec());
+        unsplit.record_allele_string_multi = Some("G/T/C".into());
+        assert_eq!(
+            apply_minimal_split(&mut unsplit, 1),
+            MinimalSplit::Unchanged
+        );
+        assert!(rowless_first_feature(&unsplit).is_none());
     }
 
     /// A record none of whose alleles trims (`G/T/C`) is left as it stands with no

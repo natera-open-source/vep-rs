@@ -6,15 +6,15 @@
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
- "input": "variants.vcf",
+ "input": "variants.vcf: 29 records of the suite reference's exemplars and four multi-allelic records at two of their loci (21:5030602 A/AA,G and A/G,AA; 21:5230609 A/C,AT and A/AT,C), whose alleles trim to different spans under --minimal",
  "sha256": {
-  "default.txt": "87828bf1b7ba721db9d3c4f47f3fb9f29ea08de4bb4521421ced363627ef5e80",
-  "tab.txt": "985c9722f8d672573eb3720b45d1a39c3f22ffcc5ad11784660865d6431c5499",
-  "vcf.vcf": "2da79ab5de37f6026304d05b5c55ff7eec7c69ed08dbdf4997cf2f9257e504ba",
-  "json.jsonl": "242fecd5c7a2a69c9ecac44c0538f9814daec1aba309b562f55da9f2c01287cf"
+  "default.txt": "e775e665d7d62c829f543696d80e247c0b5192ab408ab1bc13e730c989914127",
+  "tab.txt": "d85b10841a0e0283c14177c27f0ff8f4052a9f475ac2b9a988c432442737d10a",
+  "vcf.vcf": "3317b9ea493b689ced758f5772e85d8f802cd8251c8e363b07d8cfd76da41504",
+  "json.jsonl": "7a97343e9940c72a01739fb8bf6b9e545bb4a7fe670b3f5f5455fa2e52dbac7e"
  },
- "variants_vcf_sha256": "2d664d2a59a0c5c4166d5514742200be6e5988fee135c634049707dbb8e67619",
- "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "variants_vcf_sha256": "c15831fc540b0190e0c5ea9c2213f4218003a206778001333c15d396021f23f8",
+ "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; the flag sets' outputs from the vep command recorded under each flag_sets entry, one container run per format; scripts/golden/build_golden_corpus.py flag-set; scripts/golden/build_golden_corpus.py classify",
  "variation_slice": {
   "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
   "window": "records whose start lies within one base of an input record's span",
@@ -49,10 +49,27 @@
    "input": "variants.vcf",
    "expected_dir": "expected_colocated",
    "sha256": {
-    "default.txt": "42ff731331cd7e764116b476781b0aa195d723891a61e682f25f86e339cb9d0c",
-    "tab.txt": "157aefc391c5c30a19ec87e016474e7cc257fe98e12f51d68f4df2928841f3c6",
-    "vcf.vcf": "2feb077e6cfde992b1f2154ef96e516db94ae37917ca3da7fcb3820fc07b78dc",
-    "json.jsonl": "24046b572cd782ff554fe584981e274e0439ddc33b4554d155a4203fe382812e"
+    "default.txt": "6c179094e9e8243a08af26c1ecd260cc877767442582d18495bf054ac2fd7d27",
+    "tab.txt": "25e11e859ed252e74217e7d18807cfc44bbf0a2d9ff705155d70b2dd7eb5e5d1",
+    "vcf.vcf": "33c0d8b6c0cbd06d24461f697c445c4d948a6c9d01bd0ce318a6295b78e3779d",
+    "json.jsonl": "e2bf6d9dbd3f393d60a2af44a382cdcb4b2b6b396d839858066e4e531182ce7a"
+   }
+  },
+  "colocated-minimal": {
+   "flags": [
+    "--check_existing",
+    "--minimal",
+    "--failed",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_colocated-minimal",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --check_existing --minimal --failed 1 [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "68c403ae7927d7627a6dbebbb05d83df2d7d3dcfc304db2ad6289ecc52f7429f",
+    "tab.txt": "d25fe1aef6dbe4a0e66b68cc220c4e5a088c9cf61deb22d5bd83cfa22d6595c8",
+    "vcf.vcf": "8006de8e7912b2e44aab848710cfaffde2b898b8f920637f57575edea3013e21",
+    "json.jsonl": "ce41a53c2327bc756d9051d1a196ac1a3f6c9deaa24e39a2f6ab68b25c8fc836"
    }
   }
  }

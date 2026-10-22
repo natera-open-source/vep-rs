@@ -418,7 +418,9 @@ mod tests {
         let mut first = true;
         for key in extra_keys_with(&plan.flag_fields, variant, tc, options) {
             let value = field_value(key, variant, tc, options, ",");
-            if value.is_empty() && !vep_io::output::fields::empty_value_is_written(key, variant) {
+            if value.is_empty()
+                && !vep_io::output::fields::empty_value_is_written(key, variant, tc, options)
+            {
                 continue;
             }
             if !first {

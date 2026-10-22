@@ -1214,7 +1214,7 @@ mod tests {
     use crate::variation_source::VariationSource;
     use std::io::Write;
     use vep_core::variation::CachedVariation;
-    use vep_io::output::fields::FieldOptions;
+    use vep_io::output::fields::{ClinSigAllele, FieldOptions};
 
     /// A directory without `transcripts/`, or whose `transcripts/` holds no
     /// shard, loads nothing and says so: an empty transcript set would annotate
@@ -1661,22 +1661,32 @@ mod tests {
         )
     }
 
-    /// The default-format rows for a missense SNV at 21:1004 against one transcript.
-    fn missense_rows(transcript_json: &str, variations: Option<Arc<VariationSource>>) -> String {
+    /// The default-format rows for a missense SNV at 21:1004 against one
+    /// transcript, under `options`.
+    fn missense_rows_under(
+        transcript_json: &str,
+        variations: Option<Arc<VariationSource>>,
+        options: FieldOptions,
+    ) -> String {
         let jt: JsonTranscript = serde_json::from_str(transcript_json).unwrap();
         let mut raw = HashMap::new();
         raw.insert("21".to_string(), vec![convert_transcript(jt, "21")]);
         let transcripts = Arc::new(LazyTranscriptIndexes::from_loaded(raw, 5_000, 5_000));
-        let options = FieldOptions {
-            check_existing: variations.is_some(),
-            ..Default::default()
-        };
         crate::runner::default_rows_for_test(
             "21\t1004\tsnv\tC\tA\t.\t.\t.",
             transcripts,
             variations,
             options,
         )
+    }
+
+    /// The default-format rows for a missense SNV at 21:1004 against one transcript.
+    fn missense_rows(transcript_json: &str, variations: Option<Arc<VariationSource>>) -> String {
+        let options = FieldOptions {
+            check_existing: variations.is_some(),
+            ..Default::default()
+        };
+        missense_rows_under(transcript_json, variations, options)
     }
 
     /// The fixed columns of a variation record on the region layout, which has
@@ -1706,6 +1716,24 @@ mod tests {
         encoder.finish().unwrap();
     }
 
+    /// A variation source over chromosome 21 whose one region file, in the
+    /// cache's own `<start>-<end>_var.gz` layout, holds `line`, a record under
+    /// the fixed columns then `extra_columns`. The directory must outlive the
+    /// source, which parses the file on first use.
+    fn region_source(
+        extra_columns: &[&str],
+        line: &str,
+    ) -> (tempfile::TempDir, Arc<VariationSource>) {
+        let dir = tempfile::tempdir().unwrap();
+        let region_dir = dir.path().join("variations").join("21");
+        std::fs::create_dir_all(&region_dir).unwrap();
+        write_region_file(&region_dir.join("1-1000000_var.gz"), line);
+        let source = VariationSource::open(dir.path(), &region_cache_info(extra_columns), false)
+            .unwrap()
+            .expect("a region file is a variation source");
+        (dir, Arc::new(source))
+    }
+
     /// A variation source over chromosome 21 holding one record in the
     /// cache's own `<start>-<end>_var.gz` layout: `extra_columns` extends the
     /// fixed columns, `extra_fields` the record's cells in the same order. The
@@ -1714,18 +1742,11 @@ mod tests {
         extra_columns: &[&str],
         extra_fields: &[&str],
     ) -> (tempfile::TempDir, Arc<VariationSource>) {
-        let dir = tempfile::tempdir().unwrap();
-        let region_dir = dir.path().join("variations").join("21");
-        std::fs::create_dir_all(&region_dir).unwrap();
         let mut fields = vec![
             "rs1", "0", "0", "1004", "", "C/A", "1", "", "0", "", "", "", "", "",
         ];
         fields.extend_from_slice(extra_fields);
-        write_region_file(&region_dir.join("1-1000000_var.gz"), &fields.join(" "));
-        let source = VariationSource::open(dir.path(), &region_cache_info(extra_columns), false)
-            .unwrap()
-            .expect("a region file is a variation source");
-        (dir, Arc::new(source))
+        region_source(extra_columns, &fields.join(" "))
     }
 
     /// The one record of such a source, as the reader parses it.
@@ -1753,6 +1774,53 @@ mod tests {
             "{rows}"
         );
         assert_eq!(rows, missense_rows(&transcript, Some(without)));
+    }
+
+    /// A region line whose `clin_sig_allele` and `clinical_impact` cells are empty
+    /// inside the line prints as Ensembl VEP 116.2 prints a region-layout cache
+    /// (`21 10602054 ATA A` against rs149363218):
+    /// `CLIN_SIG` is left out under the default `--clin_sig_allele 1`
+    /// (OutputFactory.pm:1097, 1121, 1125 on the defined `''`), `CLIN_SIG=benign`
+    /// prints under `--clin_sig_allele 0`, and `--clinvar_somatic_classification`
+    /// writes `CLINVAR_SOMATIC_CLASSIFICATION=` (:1093). A line ending after
+    /// `phenotype_or_disease` leaves both cells undefined, so `CLIN_SIG=benign`
+    /// prints under the default and the classification key is not written.
+    #[test]
+    fn region_line_empty_clinvar_cells_print_as_ensembl_vep_does() {
+        let rows_for = |line: &str, options: FieldOptions| {
+            let (_dir, source) = region_source(&["AFR"], line);
+            missense_rows_under(&coding_transcript_json(""), Some(source), options)
+        };
+        let defined_empty = "rs1 0 0 1004  C/A 1 benign 1      A:0.01";
+        let trailing = "rs1 0 0 1004  C/A 1 benign 1";
+        let default = FieldOptions {
+            check_existing: true,
+            ..Default::default()
+        };
+        let whole = FieldOptions {
+            clin_sig_allele: ClinSigAllele::WholeVariant,
+            ..default.clone()
+        };
+        let somatic = FieldOptions {
+            clinvar_somatic_classification: true,
+            ..default.clone()
+        };
+        let rows = rows_for(defined_empty, default.clone());
+        assert!(
+            rows.contains("\trs1\t") && !rows.contains("CLIN_SIG"),
+            "{rows}"
+        );
+        assert!(
+            rows_for(defined_empty, whole).contains("CLIN_SIG=benign"),
+            "the whole-variant term prints"
+        );
+        let rows = rows_for(defined_empty, somatic.clone());
+        assert!(
+            rows.contains(";CLINVAR_SOMATIC_CLASSIFICATION=;PHENO=1"),
+            "the key is written with an empty value: {rows}"
+        );
+        assert!(rows_for(trailing, default).contains("CLIN_SIG=benign"));
+        assert!(!rows_for(trailing, somatic).contains("CLINVAR_SOMATIC_CLASSIFICATION"));
     }
 
     /// A variation record's `minor_allele` and `minor_allele_freq` columns change

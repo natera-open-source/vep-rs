@@ -89,9 +89,10 @@ impl JsonOutputFormatter {
             .find(|v| !v.is_single_breakend)
             .copied()
             .unwrap_or(first);
+        let allele_string = string_source.working_allele_string();
         root.insert(
             "allele_string".to_string(),
-            Value::String(string_source.working_allele_string()),
+            Value::String(allele_string.clone()),
         );
         if let Some(asm) = &self.assembly {
             root.insert("assembly_name".to_string(), Value::String(asm.clone()));
@@ -196,7 +197,7 @@ impl JsonOutputFormatter {
             let cvs: Vec<Value> = first
                 .colocated_variants
                 .iter()
-                .map(|cv| Value::Object(colocated_variant_object(cv, record, &groups)))
+                .map(|cv| Value::Object(colocated_variant_object(cv, &allele_string, &groups)))
                 .collect();
             root.insert("colocated_variants".to_string(), Value::Array(cvs));
         }
@@ -605,17 +606,19 @@ const FREQ_FIELDS: &[&str] = &[
 /// (:98-112), `clin_sig` and `pubmed` as lists, `var_synonyms` as
 /// `{source: [ids]}` split on `--`, `::` and `,` (:449-471), `clinical_impact` as
 /// the raw string under `clinvar_somatic_classification`, and the frequency
-/// columns replaced by `frequencies`: for each alternate allele of the record
-/// the frequencies the text formats would print on that allele's rows under
-/// `groups` (JSON.pm:276-284 builds one frequency hash per allele through
-/// `add_colocated_frequency_data`), `AF` under `af` and each other column
-/// under its lower-cased name (:419-431). Every value is numberified except
-/// the identifiers (:288, `%NUMBERIFY_EXEMPT`).
+/// columns replaced by `frequencies`: for each alternate allele of the record's
+/// allele string the frequencies the text formats would print on that allele's
+/// rows under `groups` (JSON.pm:276-284 splits the record's `allele_string` and
+/// builds one frequency hash per allele through `add_colocated_frequency_data`,
+/// so an allele of a `--minimal` split record is read by its spelling in the
+/// record's string, not its trimmed one, and matches nothing), `AF` under `af`
+/// and each other column under its lower-cased name (:419-431). Every value is
+/// numberified except the identifiers (:288, `%NUMBERIFY_EXEMPT`).
 ///
-/// `record` is every allele split from the input line.
+/// `allele_string` is the record's, as the object's parent prints it.
 fn colocated_variant_object(
     cv: &vep_core::variant::ColocatedVariant,
-    record: &[&InputVariant],
+    allele_string: &str,
     groups: &FrequencyGroups,
 ) -> serde_json::Map<String, Value> {
     let mut obj: IndexMap<String, Value> = IndexMap::new();
@@ -662,12 +665,10 @@ fn colocated_variant_object(
         obj.insert("var_synonyms".to_string(), var_synonyms_by_source(synonyms));
     }
     let mut frequencies: IndexMap<String, Value> = IndexMap::new();
-    for allele in record {
-        let row_allele = allele.display_allele();
+    for row_allele in allele_string.split('/').skip(1) {
         let mut by_population: IndexMap<String, Value> = IndexMap::new();
         for population in FREQ_FIELDS {
-            if let Some(value) = frequency::reported_frequency(cv, population, &row_allele, groups)
-            {
+            if let Some(value) = frequency::reported_frequency(cv, population, row_allele, groups) {
                 by_population.insert(
                     population.to_lowercase(),
                     numberify("frequency", value.text()),
@@ -676,7 +677,7 @@ fn colocated_variant_object(
         }
         if !by_population.is_empty() {
             frequencies.insert(
-                row_allele,
+                row_allele.to_string(),
                 Value::Object(serde_json::Map::from_iter(by_population)),
             );
         }
@@ -1539,6 +1540,60 @@ mod tests {
         b.colocated_variants = vec![none];
         let parsed = fmt(FieldOptions::default()).format_record_value(&[&a, &b]);
         assert!(parsed["colocated_variants"][0].get("frequencies").is_none());
+    }
+
+    /// The alleles the frequencies are read for are those of the record's own
+    /// allele string (OutputFactory/JSON.pm:276-284 splits `allele_string`), so
+    /// under `--minimal` a split record's trimmed allele is looked up by its
+    /// written spelling and finds no entry: Ensembl VEP 116.2 writes
+    /// rs1370167485 on `21 5030602 A AA,G` of the `GRCh38-colocated` corpus with
+    /// no `frequencies` key under `--check_existing --minimal`, and with
+    /// `{"A": {...}}` on the bi-allelic `21 5030602 A AA`, whose string is `-/A`.
+    #[test]
+    fn colocated_frequencies_are_keyed_by_the_records_own_alleles() {
+        let matched = vep_core::variant::MatchedAllele {
+            input_allele: "A".into(),
+            input_index: 0,
+            record_allele: "AA".into(),
+            record_index: 0,
+        };
+        let rs = vep_core::variant::ColocatedVariant {
+            chr: Some("21".into()),
+            id: "rs1370167485".into(),
+            start: 5030602,
+            end: 5030602,
+            allele_string: Some("A/AA".into()),
+            strand: 1,
+            matched_alleles: vec![matched],
+            frequency_strings: [("gnomADg".to_string(), "AA:0.0001735".to_string())].into(),
+            ..Default::default()
+        };
+        let mut split =
+            InputVariant::new("21".into(), 5030603, 5030602, b"-".to_vec(), b"A".to_vec());
+        split.record_allele_string_multi = Some("A/AA/G".into());
+        split.original_start = Some(5030602);
+        split.original_end = Some(5030602);
+        split.minimised = true;
+        split.colocated_variants = vec![rs.clone()];
+        let mut g = split.clone();
+        g.allele_index = 1;
+        g.alt_alleles = vec![b"G".to_vec()];
+        g.allele_string = "A/G".into();
+        g.start = 5030602;
+        let parsed = fmt(FieldOptions::default()).format_record_value(&[&split, &g]);
+        assert_eq!(parsed["allele_string"], "A/AA/G");
+        assert!(parsed["colocated_variants"][0].get("frequencies").is_none());
+
+        let mut bi_allelic =
+            InputVariant::new("21".into(), 5030603, 5030602, b"-".to_vec(), b"A".to_vec());
+        bi_allelic.minimised = true;
+        bi_allelic.colocated_variants = vec![rs];
+        let parsed = fmt(FieldOptions::default()).format_record_value(&[&bi_allelic]);
+        assert_eq!(parsed["allele_string"], "-/A");
+        assert_eq!(
+            parsed["colocated_variants"][0]["frequencies"],
+            json!({"A": {"gnomadg": 0.0001735}})
+        );
     }
 
     /// The consequence object of the annotated variant under the attribute

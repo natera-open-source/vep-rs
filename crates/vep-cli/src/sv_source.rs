@@ -23,12 +23,14 @@
 //! out (`:174`, `:891-899`). A variant overlaps a record when their spans meet
 //! (`InputBuffer.pm:324`, `overlap`), on the variant's own chromosome: Ensembl
 //! VEP asks its buffer for the overlapping variants without a chromosome
-//! (`InputBuffer.pm:286-295`, `:348-351`), so a buffer spanning two chromosomes
-//! matches across them there. A breakend's mate position is read as well
+//! (`InputBuffer.pm:286-295`, `:348-351`), and a buffer holds one chromosome
+//! (`:183-186`, `:224-231`). A breakend's mate position is read as well
 //! (`InputBuffer.pm:334-342`, the regions of `AnnotationSource.pm:249-257`), on
 //! the mate's chromosome, and the names are the record's, every allele's rows
 //! printing the union over the record (`$vf->{overlapping_svs}`,
-//! `OutputFactory.pm:962-964`; `runner::apply_record_rules`).
+//! `OutputFactory.pm:962-964`; `runner::apply_record_rules`). The alleles of a
+//! `--minimal` split record print the first feature's names
+//! ([`rowless_first_feature`]).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -39,6 +41,7 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use vep_builtins::tabix::{BatchQueryResult, TabixAnnotator, TabixConfig, TabixRecord};
 use vep_builtins::PluginError;
+use vep_core::minimal::rowless_first_feature;
 use vep_core::variant::InputVariant;
 
 use crate::variation_source::{merge_windows, ReadFailure};
@@ -234,16 +237,23 @@ fn mate_span(variant: &InputVariant) -> Option<(&str, u64, u64)> {
 
 /// Attaches to `variant` the names of the known structural variants it
 /// overlaps, its mate's position included for a breakend allele, for the `SV`
-/// column and the JSON `colocated_structural_variants`. A failure to read the
-/// file is recorded in `failure` for the batch driver to end the run with
-/// (`runner::check_variation_reads`): a variant annotated without it would read
-/// as overlapping no known structural variant.
+/// column and the JSON `colocated_structural_variants`. An allele of a
+/// `--minimal` split record is looked up on its own trimmed span, the span of
+/// the feature Ensembl VEP annotates (InputBuffer.pm:265,
+/// `Database/StructuralVariation.pm:82-91`), unless the record's first
+/// alternate allele writes no row, when the first feature's span is looked up
+/// ([`rowless_first_feature`]); `runner::apply_record_rules` then gives every
+/// allele of the record the first feature's names, the ones Ensembl VEP's rows
+/// print. A failure to read the file is recorded in `failure` for the batch
+/// driver to end the run with (`runner::check_variation_reads`): a variant
+/// annotated without it would read as overlapping no known structural variant.
 pub fn annotate_overlapping_svs(
     variant: &mut InputVariant,
     source: &SvSource,
     failure: &ReadFailure,
 ) {
-    match overlapping_names(variant, source) {
+    let first_feature = rowless_first_feature(variant);
+    match overlapping_names(first_feature.as_ref().unwrap_or(variant), source) {
         Ok(names) => variant.overlapping_svs = names,
         Err(error) => failure.record_under("check_svs", format!("{error:#}")),
     }
@@ -537,6 +547,56 @@ mod tests {
         );
         annotate_overlapping_svs(&mut variant, &source, &ReadFailure::default());
         assert_eq!(variant.overlapping_svs, ["esv2", "nsv9"]);
+    }
+
+    /// An allele of a `--minimal` split record is looked up on its own trimmed
+    /// span, and on the first feature's span when the record's first alternate
+    /// allele writes no row. `21 5030005 T A,TG` splits into `T/A` at 5030005
+    /// and `-/G` at 5030006-5030005, each reaching the records spanning its own
+    /// bases. `21 5030005 T T,TG` is `-/-/G` at 5030006-5030005 once the shared
+    /// base is chopped, and Ensembl VEP's first feature is `-/-` at
+    /// 5030007-5030005 (`trim_sequences` trims the `-` of `-/-`,
+    /// InputBuffer.pm:665), which overlaps nsv9 (5030001-5030010) and not esvC
+    /// (5030004-5030006), a record the G allele's own span would reach.
+    #[test]
+    fn a_split_record_with_a_rowless_first_allele_reads_the_first_features_span() {
+        use crate::vcf_parser::{parse_vcf_line, split_minimal_record};
+
+        let dir = tempfile::tempdir().unwrap();
+        let source = source(
+            dir.path(),
+            &[
+                "21\t5030000\tnsv9\tN\t<deletion>\t.\t.\tSVTYPE=deletion;END=5030010",
+                "21\t5030003\tesvC\tN\t<duplication>\t.\t.\tSVTYPE=duplication;END=5030006",
+                "21\t5030004\tesvA\tN\t<duplication>\t.\t.\tSVTYPE=duplication;END=5030005",
+            ],
+        );
+        let line = "21\t5030005\t.\tT\tA,TG\t.\t.\t.";
+        let mut alleles = split_minimal_record(parse_vcf_line(line, true).unwrap());
+        assert_eq!(alleles.len(), 2);
+        for allele in &mut alleles {
+            annotate_overlapping_svs(allele, &source, &ReadFailure::default());
+        }
+        assert_eq!(
+            alleles[0].overlapping_svs,
+            ["esvA", "esvC", "nsv9"],
+            "T/A at 5030005"
+        );
+        assert_eq!(
+            alleles[1].overlapping_svs,
+            ["esvC", "nsv9"],
+            "-/G at 5030006-5030005"
+        );
+
+        let line = "21\t5030005\t.\tT\tT,TG\t.\t.\t.";
+        let alleles = split_minimal_record(parse_vcf_line(line, true).unwrap());
+        let [mut g] = <[InputVariant; 1]>::try_from(alleles).unwrap();
+        assert_eq!(
+            (g.start, g.end, g.allele_string.as_str()),
+            (5030006, 5030005, "-/G")
+        );
+        annotate_overlapping_svs(&mut g, &source, &ReadFailure::default());
+        assert_eq!(g.overlapping_svs, ["nsv9"]);
     }
 
     /// A breakend allele reads its mate's position as well (`InputBuffer.pm:334-342`):

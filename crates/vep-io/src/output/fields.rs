@@ -14,6 +14,7 @@
 //! descriptions, the flag-to-field order, the value of any field for a row, and
 //! the order in which one input record's rows come out.
 
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 
 use vep_core::consequence::{Consequence, OwnSpanPositions, TranscriptConsequence};
@@ -1247,20 +1248,7 @@ fn write_row_field_value(
         // A structural row carries neither `REF_ALLELE` nor `UPLOADED_ALLELE`
         // (OutputFactory.pm `BaseStructuralVariationOverlapAllele_to_output_hash`).
         "REF_ALLELE" if variant.is_structural => {}
-        // Every row of a `--minimal` split prints the record feature's reference:
-        // the record's own when the first feature wrote no row before the rejoin
-        // (`split_first_feature_rowless`), else the first feature's.
-        "REF_ALLELE" => match variant.record_allele_string_multi.as_deref() {
-            Some(record) if variant.split_first_feature_rowless => {
-                out.extend_from_slice(record.split('/').next().unwrap_or_default().as_bytes())
-            }
-            Some(record) if variant.original_start.is_some() => {
-                let reference =
-                    vep_core::minimal::rejoined_reference(record, options.process_ref_homs);
-                out.extend_from_slice(reference.as_bytes());
-            }
-            _ => out.extend_from_slice(String::from_utf8_lossy(&variant.ref_allele).as_bytes()),
-        },
+        "REF_ALLELE" => out.extend_from_slice(feature_reference(variant, options).as_bytes()),
         "UPLOADED_ALLELE" => push_opt(out, variant.uploaded_allele(options.minimal).as_deref()),
         "DISTANCE" => {
             if let Some(d) = tc
@@ -1587,7 +1575,8 @@ pub fn colocated_field(field: &str) -> bool {
 /// [`ClinSigAllele::WholeVariant`], the terms of the variants read before the
 /// first one with allele-specific entries, duplicates kept (:1125). Every
 /// entry allele of a variant whose `clin_sig_ref_allele` differs from the
-/// input's reference allele is reverse-complemented first (:1049, 1100-1112).
+/// reference `REF_ALLELE` prints ([`feature_reference`]) is reverse-complemented
+/// first (:1049, 1100-1112).
 fn colocated_column(
     field: &str,
     variant: &InputVariant,
@@ -1598,8 +1587,7 @@ fn colocated_column(
         return String::new();
     }
     let allele = variant.display_allele();
-    let mut ordered = colocated_in_output_order(&variant.colocated_variants);
-    ordered.retain(|cv| cv.applies_to_allele(&allele));
+    let ordered = colocated_on_row(variant, &allele);
     match field {
         "CLIN_SIG" => clin_sig_column(variant, &allele, &ordered, options, list_sep),
         "SOMATIC" => zero_one_list(ordered.iter().map(|cv| cv.somatic), list_sep),
@@ -1624,6 +1612,15 @@ fn colocated_column(
     }
 }
 
+/// The co-located variants that print on the row of `allele`, in output order:
+/// every matched variant, a variant matched by allele only on the rows of an
+/// allele it matched (OutputFactory.pm:1069-1083).
+fn colocated_on_row<'v>(variant: &'v InputVariant, allele: &str) -> Vec<&'v ColocatedVariant> {
+    let mut ordered = colocated_in_output_order(&variant.colocated_variants);
+    ordered.retain(|cv| cv.applies_to_allele(allele));
+    ordered
+}
+
 /// `0` or `1` per value joined by `list_sep`, or nothing when every value is
 /// false (OutputFactory.pm:1129-1138).
 fn zero_one_list(values: impl Iterator<Item = bool> + Clone, list_sep: &str) -> String {
@@ -1636,6 +1633,27 @@ fn zero_one_list(values: impl Iterator<Item = bool> + Clone, list_sep: &str) -> 
         .join(list_sep)
 }
 
+/// The reference allele Ensembl VEP reads as the record feature's
+/// (`$vf->ref_allele_string`, VariationFeature.pm:1533-1539), which `REF_ALLELE`
+/// prints (OutputFactory.pm:1357) and the ClinVar entry alleles are read against
+/// (:1049-1051). Every row of a `--minimal` split record reads the reference
+/// cached on the record's feature before the rejoin restored the record's
+/// string: the first allele's trimmed reference
+/// (`vep_core::minimal::rejoined_reference`), or the record's own when the first
+/// feature wrote no row (`split_first_feature_rowless`). Every other row reads
+/// the variant's own reference.
+fn feature_reference<'v>(variant: &'v InputVariant, options: &FieldOptions) -> Cow<'v, str> {
+    match variant.record_allele_string_multi.as_deref() {
+        Some(record) if variant.split_first_feature_rowless => {
+            Cow::Borrowed(record.split('/').next().unwrap_or_default())
+        }
+        Some(record) if variant.original_start.is_some() => Cow::Owned(
+            vep_core::minimal::rejoined_reference(record, options.process_ref_homs),
+        ),
+        _ => String::from_utf8_lossy(&variant.ref_allele),
+    }
+}
+
 /// The `CLIN_SIG` of a row over the variants that print on it, in order
 /// (`colocated_column`).
 fn clin_sig_column(
@@ -1645,7 +1663,7 @@ fn clin_sig_column(
     options: &FieldOptions,
     list_sep: &str,
 ) -> String {
-    let ref_allele = String::from_utf8_lossy(&variant.ref_allele);
+    let ref_allele = feature_reference(variant, options);
     let per_allele = options.clin_sig_allele == ClinSigAllele::PerAllele;
     let mut terms: Vec<&str> = Vec::new();
     let mut by_allele: Vec<String> = Vec::new();
@@ -1713,11 +1731,37 @@ fn sv_overlap(variant: &InputVariant, tc: Option<&TranscriptConsequence>) -> Opt
 /// Whether a field whose value is empty is still written, as `NEAREST=` in the
 /// default format and an empty tab column: on a chromosome with no
 /// protein-coding transcription start site Ensembl VEP sets `NEAREST` to an
-/// empty list, which is a value (`OutputFactory.pm:1017`), and the default and
-/// tab writers print every key set (`VEP_output.pm:117`, `Tab.pm:128`). Every
-/// other empty value stands for an absent key.
-pub fn empty_value_is_written(field: &str, variant: &InputVariant) -> bool {
-    field == "NEAREST" && variant.nearest.as_ref().is_some_and(Vec::is_empty)
+/// empty list, which is a value (`OutputFactory.pm:1017`), and under
+/// `--clinvar_somatic_classification` it sets `CLINVAR_SOMATIC_CLASSIFICATION`
+/// to every defined `clinical_impact` of the row's variants in turn (:1093),
+/// the empty cell of a region file included; the default and tab writers print
+/// every key set (`VEP_output.pm:117`, `Tab.pm:128`). Every other empty value
+/// stands for an absent key. A `--summary` or `--most_severe` row is the
+/// record's hash alone (`summary_only`, OutputFactory.pm:426-458) and carries
+/// the variant-level fields and nothing else, as [`write_field_value`] writes
+/// it, so only a variant-level field's empty value is written on it; `tc` is
+/// the row's transcript consequence, as [`write_field_value`] takes it.
+pub fn empty_value_is_written(
+    field: &str,
+    variant: &InputVariant,
+    tc: Option<&TranscriptConsequence>,
+    options: &FieldOptions,
+) -> bool {
+    let summary_row = tc.is_none() && variant.summary_terms.is_some();
+    if summary_row && !is_vf_level_field(field) {
+        return false;
+    }
+    match field {
+        "NEAREST" => variant.nearest.as_ref().is_some_and(Vec::is_empty),
+        "CLINVAR_SOMATIC_CLASSIFICATION" => {
+            options.clinvar_somatic_classification
+                && colocated_on_row(variant, &variant.display_allele())
+                    .iter()
+                    .filter_map(|cv| cv.clinvar.as_deref())
+                    .any(|clinvar| clinvar.clinical_impact.is_some())
+        }
+        _ => false,
+    }
 }
 
 /// Whether a `-` value is a value of the field rather than an absent key, for
@@ -3600,7 +3644,7 @@ mod tests {
         let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         assert_eq!(field_value("NEAREST", &v, None, &options, ","), "");
         assert!(
-            !empty_value_is_written("NEAREST", &v),
+            !empty_value_is_written("NEAREST", &v, None, &options),
             "no list: an absent key"
         );
         v.nearest = Some(vec!["GENE1".into(), "GENE2".into()]);
@@ -3618,7 +3662,7 @@ mod tests {
             field_value("NEAREST", &v, None, &options, "&"),
             "GENE1&GENE2"
         );
-        assert!(!empty_value_is_written("NEAREST", &v));
+        assert!(!empty_value_is_written("NEAREST", &v, None, &options));
         v.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
         assert_eq!(
             field_value("NEAREST", &v, None, &options, ","),
@@ -3629,8 +3673,8 @@ mod tests {
         v.summary_terms = None;
         v.nearest = Some(Vec::new());
         assert_eq!(field_value("NEAREST", &v, None, &options, ","), "");
-        assert!(empty_value_is_written("NEAREST", &v));
-        assert!(!empty_value_is_written("VARIANT_CLASS", &v));
+        assert!(empty_value_is_written("NEAREST", &v, None, &options));
+        assert!(!empty_value_is_written("VARIANT_CLASS", &v, None, &options));
         assert!(flag_fields(&options).contains(&"NEAREST"));
         assert!(!flag_fields(&FieldOptions::default()).contains(&"NEAREST"));
     }
@@ -5531,6 +5575,73 @@ mod tests {
         );
     }
 
+    /// The ClinVar entry alleles of a `--minimal` split record's rows are read
+    /// against the reference `REF_ALLELE` prints, the one cached on the record's
+    /// feature (`$vf->ref_allele_string`, OutputFactory.pm:1049), not against
+    /// each allele's own trimmed reference. Ensembl VEP 116.2 on the GRCh38 cache
+    /// under `--check_existing --minimal --show_ref_allele` (rs7278737 at
+    /// 21:14109044 is `G/A/T` with `clin_sig` `benign` and the entry `T:benign`
+    /// against `G`): `21 14109044 G T,GT` prints `REF_ALLELE=G` and
+    /// `CLIN_SIG=benign` on the `G/T` rows and on the `-/T` rows, whose Allele is
+    /// `T` as well; `21 14109044 G A,GA` prints `REF_ALLELE=G` and no `CLIN_SIG`
+    /// on either allele's rows, the `-/A` rows included, which the insertion's own
+    /// reference `-` would read as a match once the entry allele is complemented.
+    #[test]
+    fn clin_sig_of_a_split_row_reads_the_record_features_reference() {
+        let options = with_check_existing(|o| o.show_ref_allele = true);
+        let rs7278737 = |matched: &str| {
+            known(
+                "rs7278737",
+                "G/A/T",
+                &[(matched, matched)],
+                &["benign"],
+                Some(ClinVarDetail {
+                    clin_sig_allele: Some("T:benign".into()),
+                    clin_sig_ref_allele: Some("G".into()),
+                    clinical_impact: None,
+                }),
+            )
+        };
+        let split = |working: &str, alt: &str, own: usize, cv: ColocatedVariant| {
+            let mut v = InputVariant::new(
+                "21".into(),
+                14_109_044,
+                14_109_044,
+                b"G".to_vec(),
+                alt.as_bytes().to_vec(),
+            );
+            v.allele_index = own;
+            v.record_allele_string_multi = Some(Arc::from(working));
+            assert_eq!(
+                vep_core::minimal::apply_minimal_split(&mut v, own),
+                vep_core::minimal::MinimalSplit::Trimmed
+            );
+            v.colocated_variants = vec![cv];
+            v
+        };
+        let snv = split("G/T/GT", "T", 0, rs7278737("T"));
+        let insertion = split("G/T/GT", "GT", 1, rs7278737("T"));
+        assert_eq!(
+            (
+                insertion.start,
+                insertion.end,
+                insertion.allele_string.as_str(),
+                insertion.display_allele()
+            ),
+            (14_109_045, 14_109_044, "-/T", "T".to_string())
+        );
+        for row in [&snv, &insertion] {
+            assert_eq!(field_value("REF_ALLELE", row, None, &options, ","), "G");
+            assert_eq!(field_value("CLIN_SIG", row, None, &options, ","), "benign");
+        }
+        let snv = split("G/A/GA", "A", 0, rs7278737("A"));
+        let insertion = split("G/A/GA", "GA", 1, rs7278737("A"));
+        for row in [&snv, &insertion] {
+            assert_eq!(field_value("REF_ALLELE", row, None, &options, ","), "G");
+            assert_eq!(field_value("CLIN_SIG", row, None, &options, ","), "");
+        }
+    }
+
     /// `--clin_sig_allele 0` ignores the allele-specific entries: every
     /// co-located variant's record-level terms print on every row
     /// (OutputFactory.pm:1097 is skipped, :1125 pushes each variant's terms).
@@ -5669,6 +5780,105 @@ mod tests {
             field_description("CLINVAR_SOMATIC_CLASSIFICATION"),
             Some("ClinVar somatic classification of the dbSNP variant")
         );
+    }
+
+    /// A region file's empty `clin_sig_allele` and `clinical_impact` cells are the
+    /// defined empty string, and Ensembl VEP 116.2 on such a cache prints, for
+    /// `21 10602054 ATA A` co-located with rs149363218 (`clin_sig`
+    /// `uncertain_significance`, both cells empty): no `CLIN_SIG` under the default
+    /// `--clin_sig_allele 1` (the defined cell sets `clin_sig_allele_exists`,
+    /// OutputFactory.pm:1097, 1121, and :1125 skips the record's term),
+    /// `CLIN_SIG=uncertain_significance` under `--clin_sig_allele 0`, and under
+    /// `--clinvar_somatic_classification` the key with an empty value
+    /// (`CLINVAR_SOMATIC_CLASSIFICATION=` in the default format, an empty tab cell:
+    /// :1093 sets the key to the defined `''`). A record whose cell is unset
+    /// prints the term, and the key only when the flag is set; a `--summary` row
+    /// never carries the key.
+    #[test]
+    fn region_file_empty_clinvar_cells_suppress_clin_sig_and_write_an_empty_key() {
+        let region = |clinvar: Option<ClinVarDetail>| {
+            let cv = known(
+                "rs149363218",
+                "ATA/A",
+                &[("-", "-")],
+                &["uncertain_significance"],
+                clinvar,
+            );
+            record("TA", &["-"], vec![cv])
+        };
+        let defined_empty = region(Some(ClinVarDetail {
+            clin_sig_allele: Some(String::new()),
+            clin_sig_ref_allele: None,
+            clinical_impact: Some(String::new()),
+        }));
+        let unset = region(None);
+        let default = with_check_existing(|_| {});
+        let whole = with_check_existing(|o| o.clin_sig_allele = ClinSigAllele::WholeVariant);
+        let somatic = with_check_existing(|o| o.clinvar_somatic_classification = true);
+        assert_eq!(
+            field_value("CLIN_SIG", &defined_empty[0], None, &default, ","),
+            ""
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &defined_empty[0], None, &whole, ","),
+            "uncertain_significance"
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &unset[0], None, &default, ","),
+            "uncertain_significance"
+        );
+        for (alleles, options, written) in [
+            (&defined_empty, &somatic, true),
+            (&defined_empty, &default, false),
+            (&unset, &somatic, false),
+        ] {
+            assert_eq!(
+                field_value(
+                    "CLINVAR_SOMATIC_CLASSIFICATION",
+                    &alleles[0],
+                    None,
+                    options,
+                    ","
+                ),
+                ""
+            );
+            assert_eq!(
+                empty_value_is_written(
+                    "CLINVAR_SOMATIC_CLASSIFICATION",
+                    &alleles[0],
+                    None,
+                    options
+                ),
+                written
+            );
+        }
+        // The `--summary` row is the record's hash alone (OutputFactory.pm:426-458)
+        // and carries no co-located key, so the empty value is not written there.
+        let mut summary = defined_empty[0].clone();
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(
+            field_value(
+                "CLINVAR_SOMATIC_CLASSIFICATION",
+                &summary,
+                None,
+                &somatic,
+                ","
+            ),
+            ""
+        );
+        assert!(!empty_value_is_written(
+            "CLINVAR_SOMATIC_CLASSIFICATION",
+            &summary,
+            None,
+            &somatic
+        ));
+        let tc = TranscriptConsequence::default();
+        assert!(empty_value_is_written(
+            "CLINVAR_SOMATIC_CLASSIFICATION",
+            &summary,
+            Some(&tc),
+            &somatic
+        ));
     }
 
     /// `docs/output/known-variants.md` states the subset: the cache's
